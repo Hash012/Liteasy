@@ -14,10 +14,10 @@ Liteasy 是一个面向论文阅读与学习的桌面优先产品。当前仓库
 - 知道怎么启动 `desktop`
 - 知道哪些目录是源码，哪些只是开发产物
 
-## 0. 本README除0之外是ai生成，0为人性化的开工指南。
+## 0. 本README除0之外是ai生成。0或为人性化的开工指南。
 1. 本项目使用 Linux (Ubuntu)开发。
 2. 项目结构可以通过README中的其他部分了解。
-3. 建议新建分支后开发，提交pr合并
+3. 建议新建分支后开发，提交pr合并。提交pr后群里发一下开发了什么并展示一下效果。
 4. 建议人工阅读产品方案原文(`docs/Liteasy_功能与UI设计文档1.0.md`)，技术和产品蓝图( `docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md`)，以上都可修改。
 5. 让ai开发可以根据`docs/superpowers/plans`，分阶段开发。每个阶段要喂给ai产品方案原文和每阶段任务（`docs/superpowers/plans`中），并补充强调plans中忽视或理解错误的点。
 6. ai开发中可以复用的经验、提示词要留痕，例如`docs/开发协作提示词历史_5.10.md`。新的开发也要借鉴旧的痕迹（尽量不冗余，上例在这点做的不好）。
