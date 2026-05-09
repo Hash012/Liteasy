@@ -1,0 +1,12 @@
+.superpowers/
+
+# Desktop app dependencies and build outputs
+desktop/node_modules/
+desktop/dist/
+desktop/.vite/
+desktop/.vite-temp/
+desktop/src-tauri/target/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

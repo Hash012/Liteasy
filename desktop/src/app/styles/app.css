@@ -1,0 +1,228 @@
+:root {
+  color: #34465a;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 18%),
+    linear-gradient(180deg, #dde8f2 0%, #edf4fa 34%, #f4f8fb 100%);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 18%),
+    linear-gradient(180deg, #dde8f2 0%, #edf4fa 34%, #f4f8fb 100%);
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+}
+
+.app-frame {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  height: 100vh;
+  padding: 10px 12px 12px;
+  overflow: hidden;
+}
+
+.app-topbar {
+  display: flex;
+  align-items: center;
+  min-height: 72px;
+  padding: 10px 16px;
+  border: 1px solid #cad9e6;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(250, 253, 255, 0.97) 0%, rgba(233, 241, 248, 0.95) 100%);
+  box-shadow:
+    0 14px 28px rgba(111, 142, 171, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 160px;
+  max-width: 24vw;
+  height: auto;
+  display: block;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(99, 130, 159, 0.08);
+}
+
+.brand-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.brand-name {
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 800;
+  color: #214c73;
+  letter-spacing: 0.01em;
+}
+
+.brand-tagline {
+  font-size: 12px;
+  color: #6f8398;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 280px 1fr 340px;
+  gap: 14px;
+  min-height: 0;
+  height: 100%;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid #c8d8e6;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(253, 254, 255, 0.95) 0%, rgba(241, 247, 252, 0.94) 100%);
+  box-shadow:
+    0 18px 36px rgba(111, 142, 171, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.pane-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid #d5e2ee;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #42576b;
+  background: linear-gradient(180deg, rgba(240, 246, 252, 0.92) 0%, rgba(230, 239, 247, 0.92) 100%);
+}
+
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+  color: #4e6175;
+  line-height: 1.7;
+  overflow: auto;
+}
+
+.assistant-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.mode-button {
+  border: 1px solid #c7d8e7;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #5a6f85;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.mode-button.active {
+  background: linear-gradient(180deg, #fefefe 0%, #edf5fb 100%);
+  color: #2b4965;
+  border-color: #8fb3d3;
+}
+
+.assistant-mode-label {
+  font-size: 13px;
+  color: #7a8ea3;
+}
+
+.assistant-messages {
+  flex: 1;
+  min-height: 0;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(242, 248, 252, 0.94) 100%);
+  border: 1px solid #dce8f1;
+  overflow: auto;
+}
+
+.assistant-message {
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f2f7fb 100%);
+  border: 1px solid #d8e4ee;
+  padding: 12px 14px;
+  color: #485d72;
+}
+
+.assistant-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assistant-input {
+  width: 100%;
+  border: 1px solid #cdddeb;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #405366;
+  padding: 12px;
+  resize: vertical;
+}
+
+.assistant-send {
+  align-self: flex-end;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fefefe 0%, #d9e9f7 100%);
+  color: #35516d;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #bfd3e3;
+}
+
+@media (max-width: 1080px) {
+  .app-topbar {
+    min-height: auto;
+  }
+
+  .brand {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .brand-logo {
+    max-width: 100%;
+    width: 150px;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .pane {
+    min-height: auto;
+  }
+}
