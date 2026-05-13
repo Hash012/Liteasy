@@ -1,4 +1,8 @@
-import type { Paper, WorkspaceState } from "./workspace.types";
+import type {
+  Paper,
+  SelectedDocumentSet,
+  WorkspaceState
+} from "./workspace.types";
 
 export function createWorkspaceStore() {
   const state: WorkspaceState = {
@@ -25,6 +29,12 @@ export function createWorkspaceStore() {
     },
     unlockSelection() {
       state.selectionLocked = false;
+    },
+    getSelectedDocumentSet(): SelectedDocumentSet {
+      return {
+        documentIds: [...state.selectedPaperIds],
+        locked: state.selectionLocked
+      };
     },
     getState() {
       return state;

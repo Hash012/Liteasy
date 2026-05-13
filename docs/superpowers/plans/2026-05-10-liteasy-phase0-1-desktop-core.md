@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first usable Liteasy slice for individual researchers: a desktop workbench that supports document import, workspace management, AI conversation, source-grounded answers, command-driven setting changes, and one or two asynchronous learning artifacts.
+**Goal:** Build the first usable Liteasy slice for individual researchers: a desktop workbench that supports workspace management, selected-document-set ingest, modality-button-driven analysis, AI conversation, source-grounded answers, skill-driven software control, and one or two asynchronous learning artifacts.
 
 **Architecture:** The first slice centers on a Tauri desktop shell with a React UI, a Rust-backed local capability layer, a local SQLite-based workspace/document store, and a thin cloud integration seam. The plan intentionally prioritizes the end-to-end user loop over platform completeness and leaves organization, advanced governance, and heavy multimodal generation to follow-up plans.
 
@@ -189,7 +189,7 @@ git add desktop/src/app/features/workspace desktop/src/app/features/library desk
 git commit -m "feat: add workspace selection and lock flow"
 ```
 
-### Task 3: Local document import and parse job state
+### Task 3: Selected-document-set ingest and parse job state
 
 **Files:**
 - Create: `desktop/src/app/features/import/import.types.ts`
@@ -242,7 +242,7 @@ Expose a Rust command that accepts a local path and returns:
 
 This command is a temporary seam so the UI can exercise import flow before full PDF parsing exists.
 
-- [ ] **Step 5: Show import status in the library pane**
+- [ ] **Step 5: Show ingest status on document items in the library pane**
 
 Update the UI so a user can click an import button and see:
 
@@ -250,6 +250,8 @@ Update the UI so a user can click an import button and see:
 - parsing
 - parsed
 - failed
+
+The status should be shown on the corresponding document row, rather than in a separate standalone import-status module. The ingest target is the selected document set, not the whole workspace directory view.
 
 - [ ] **Step 6: Commit the import flow**
 
@@ -374,14 +376,15 @@ git add desktop/src/app/features/retrieval desktop/src/app/features/assistant/an
 git commit -m "feat: display source-grounded answers"
 ```
 
-### Task 6: Command-driven settings control
+### Task 6: Skill-driven software control
 
 **Files:**
-- Create: `desktop/src/app/features/settings/settings.types.ts`
-- Create: `desktop/src/app/features/settings/settings.store.ts`
-- Create: `desktop/src/app/features/settings/settingsRegistry.ts`
-- Create: `desktop/src/app/features/assistant/commandRouter.ts`
-- Create: `desktop/src/tests/commandRouter.test.ts`
+- Create or modify: `desktop/src/app/features/settings/settings.types.ts`
+- Create or modify: `desktop/src/app/features/settings/settings.store.ts`
+- Create: `desktop/src/app/features/skills/skillRegistry.ts`
+- Create: `desktop/src/app/features/skills/actionRegistry.ts`
+- Modify or replace: `desktop/src/app/features/assistant/commandRouter.ts`
+- Modify or replace: `desktop/src/tests/commandRouter.test.ts`
 
 - [ ] **Step 1: Write the failing command routing test**
 
@@ -404,7 +407,7 @@ test("maps closing network recommendation to a typed settings command", () => {
 Run: `cd desktop && npm test -- commandRouter.test.ts`
 Expected: FAIL because the command router does not exist yet
 
-- [ ] **Step 3: Implement a whitelist settings registry**
+- [ ] **Step 3: Implement a skill registry and action registry**
 
 Start with these keys:
 
@@ -413,9 +416,9 @@ Start with these keys:
 - `assistant.default_output_mode`
 - `assistant.language`
 
-- [ ] **Step 4: Implement the command router and settings store**
+- [ ] **Step 4: Implement the intent router and settings action store**
 
-The router may start rule-based. It does not need a live LLM in the first cut, but it must return structured commands and reject unknown settings.
+The router may start rule-based. It does not need a live LLM in the first cut, but it must return structured skill invocations, ensure that only registered actions can mutate software state, and reject unknown targets.
 
 Run: `cd desktop && npm test -- commandRouter.test.ts`
 Expected: PASS
@@ -428,11 +431,11 @@ When a user sends a settings command, show:
 - affected setting
 - new value
 
-- [ ] **Step 6: Commit settings control**
+- [ ] **Step 6: Commit skill-driven control**
 
 ```bash
 git add desktop/src/app/features/settings desktop/src/app/features/assistant/commandRouter.ts desktop/src/tests/commandRouter.test.ts
-git commit -m "feat: add command-driven settings control"
+git commit -m "feat: add skill-driven software control"
 ```
 
 ### Task 7: One asynchronous learning artifact flow
@@ -482,13 +485,15 @@ And create an open tab entry on completion.
 Run: `cd desktop && npm test -- artifact.store.test.ts`
 Expected: PASS
 
-- [ ] **Step 4: Add a “generate mind map” action from the assistant**
+- [ ] **Step 4: Add the first artifact flow with middle-pane modality buttons as the target entry**
 
 The initial version may produce mock content, but it must:
 
 - create a task
 - update task status
 - open a new center tab on completion
+
+The product target is that fixed modality buttons in the middle pane are the main entry for analysis. Natural language in the assistant is a post-ingest branch trigger and may be used as a temporary prototype seam before the button flow is fully implemented.
 
 - [ ] **Step 5: Commit the first async artifact flow**
 
@@ -572,3 +577,22 @@ Known limitations before Phase 2:
 git add docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md
 git commit -m "docs: mark Liteasy Phase 0-1 verification gate"
 ```
+
+---
+
+## Current Gate Status (2026-05-13)
+
+Phase 0-1 is functionally near the verification gate and should still be treated as the active implementation plan.
+
+- Focused automated verification has passed in the current workspace.
+- The desktop app can be started with `npm run tauri dev` in the current environment.
+- The non-developer QA guide exists and has been updated to reflect the current mainline:
+  selected document set import in the left pane, modality-button-driven analysis in the center pane, and post-import branch skills in the assistant pane.
+- A full human visual/manual walkthrough still needs to be performed against `docs/qa/phase1-test-guide.md` on an interactive desktop session and recorded by the tester.
+
+Known limitations before Phase 2:
+- retrieval is fixture-backed or mocked
+- import is still a mock parse/index flow, not real PDF ingestion
+- center-pane artifacts are still mock/static outputs rather than generated end products
+- cloud sync is not yet active
+- organization flows are intentionally out of scope

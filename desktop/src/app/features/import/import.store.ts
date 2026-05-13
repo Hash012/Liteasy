@@ -1,3 +1,4 @@
+import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { ImportJob } from "./import.types";
 
 export function createImportStore() {
@@ -5,10 +6,13 @@ export function createImportStore() {
   let sequence = 0;
 
   return {
-    startImport(sourcePath: string) {
+    startImport(input: string | { documentId: string; sourcePath: string }) {
+      const documentId = typeof input === "string" ? input : input.documentId;
+      const sourcePath = typeof input === "string" ? input : input.sourcePath;
       sequence += 1;
       const job: ImportJob = {
         id: `job-${sequence}`,
+        documentId,
         sourcePath,
         status: "queued"
       };
@@ -20,11 +24,12 @@ export function createImportStore() {
       if (!job) return;
       job.status = "parsing";
     },
-    markParsed(id: string, payload: { paperId: string }) {
+    markParsed(id: string, payload: { paperId: string; chunks?: RetrievalChunk[] }) {
       const job = jobs.get(id);
       if (!job) return;
       job.status = "parsed";
       job.paperId = payload.paperId;
+      job.parsedChunks = payload.chunks ?? [];
     },
     markFailed(id: string) {
       const job = jobs.get(id);
@@ -33,6 +38,18 @@ export function createImportStore() {
     },
     getJob(id: string) {
       return jobs.get(id);
+    },
+    getLatestJobByDocumentId(documentId: string) {
+      const matchingJobs = Array.from(jobs.values()).filter(
+        (job) => job.documentId === documentId
+      );
+      return matchingJobs[matchingJobs.length - 1];
+    },
+    getParsedChunksByDocumentId(documentId: string) {
+      return this.getLatestJobByDocumentId(documentId)?.parsedChunks ?? [];
+    },
+    listJobs() {
+      return Array.from(jobs.values());
     }
   };
 }

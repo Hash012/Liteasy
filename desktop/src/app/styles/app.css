@@ -35,6 +35,7 @@ body {
 .app-topbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   min-height: 72px;
   padding: 10px 16px;
   border: 1px solid #cad9e6;
@@ -49,6 +50,58 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.account-status-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid #d1dfeb;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(236, 244, 250, 0.95) 100%);
+}
+
+.account-status-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #4d6983;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.account-status-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #264d72;
+}
+
+.account-status-email,
+.account-status-meta,
+.account-status-message {
+  font-size: 12px;
+  color: #667f95;
+}
+
+.account-status-button {
+  border: 1px solid #b7d0e5;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #e0edf8 100%);
+  color: #2c506f;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.account-status-button.ghost {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.account-status-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .brand-logo {
@@ -126,8 +179,93 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.right-pane-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   height: 100%;
   min-height: 0;
+}
+
+.model-policy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(236, 244, 250, 0.95) 100%);
+  border: 1px solid #d8e4ee;
+}
+
+.model-policy-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #47627c;
+}
+
+.model-policy-summary,
+.model-policy-footnote {
+  font-size: 12px;
+  color: #6a8198;
+}
+
+.model-policy-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6a8198;
+}
+
+.model-policy-status.syncing {
+  color: #8a6b2f;
+}
+
+.model-policy-status.success {
+  color: #2f6c43;
+}
+
+.model-policy-status.error {
+  color: #8a4242;
+}
+
+.model-policy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #526a82;
+}
+
+.model-policy-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.policy-button {
+  border: 1px solid #c7d8e7;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #567087;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.policy-button.sync {
+  align-self: flex-start;
+}
+
+.policy-button.active {
+  background: linear-gradient(180deg, #ffffff 0%, #e2edf8 100%);
+  border-color: #8fb3d3;
+  color: #2f4f6d;
+}
+
+.policy-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .mode-switch {
@@ -174,10 +312,171 @@ body {
   color: #485d72;
 }
 
+.assistant-message-title {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #53708b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.assistant-answer-text {
+  white-space: pre-line;
+  line-height: 1.8;
+}
+
+.assistant-citation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #eef5fa;
+  color: #567188;
+  font-size: 13px;
+}
+
 .assistant-input-wrap {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.assistant-command-feedback {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f3f8fc;
+  border: 1px solid #d9e5ef;
+  color: #617b93;
+  font-size: 13px;
+}
+
+.artifact-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+}
+
+.artifact-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.artifact-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(240, 247, 251, 0.96) 100%);
+  border: 1px solid #d7e4ee;
+}
+
+.artifact-mode-summary,
+.artifact-analysis-hint {
+  font-size: 13px;
+  color: #657b91;
+}
+
+.artifact-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.artifact-mode-button {
+  border: 1px solid #bfd4e5;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #deebf7 100%);
+  color: #35536f;
+  padding: 12px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.artifact-mode-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.artifact-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #45617b;
+}
+
+.artifact-status-badge {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #dbf2e3;
+  color: #2f6c43;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.artifact-empty {
+  padding: 18px;
+  border: 1px dashed #c8d8e6;
+  border-radius: 16px;
+  color: #73889d;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.artifact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  padding: 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(239, 246, 251, 0.96) 100%);
+  border: 1px solid #d7e4ee;
+}
+
+.artifact-card-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #3f5b75;
+}
+
+.artifact-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+}
+
+.mindmap-node {
+  min-width: 128px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #cedeea;
+  text-align: center;
+  color: #4d647b;
+  box-shadow: 0 8px 18px rgba(116, 143, 170, 0.08);
+}
+
+.mindmap-node.root {
+  background: linear-gradient(180deg, #ffffff 0%, #dcecf8 100%);
+  color: #2d4f6f;
+  font-weight: 800;
+}
+
+.mindmap-children {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
 }
 
 .assistant-input {

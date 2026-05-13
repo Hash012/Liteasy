@@ -17,6 +17,9 @@ export function createAssistantStore() {
     setPending(pending: boolean) {
       state.pending = pending;
     },
+    clearMessages() {
+      state.messages = [];
+    },
     getState() {
       return state;
     }

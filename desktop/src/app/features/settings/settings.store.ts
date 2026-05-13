@@ -1,0 +1,27 @@
+import type { SettingsState, UpdateSettingCommand } from "./settings.types";
+
+export function createSettingsStore() {
+  const state: SettingsState = {
+    "network.recommendation.enabled": true,
+    "network.recommendation.sort_mode": "relevance",
+    "profile.enabled": false,
+    "assistant.default_output_mode": "mindmap",
+    "assistant.language": "zh-CN",
+    "models.access_mode": "cloud_proxy",
+    "models.local_direct_enabled": false,
+    "models.default_provider": "openai",
+    "models.cloud_proxy_endpoint": "mock://cloud-proxy",
+    "models.local_direct_endpoint": "mock://local-direct",
+    "models.control_plane_endpoint": "mock://control-plane"
+  };
+
+  return {
+    apply(command: UpdateSettingCommand) {
+      state[command.target] = command.value as never;
+      return state[command.target];
+    },
+    getState() {
+      return state;
+    }
+  };
+}

@@ -1,0 +1,109 @@
+import type { ArtifactType } from "../artifacts/artifact.types";
+import { settingsRegistry } from "../settings/settingsRegistry";
+import type { UpdateSettingCommand } from "../settings/settings.types";
+
+export type SettingsStoreLike = {
+  apply: (command: UpdateSettingCommand) => boolean | string;
+};
+
+export type ActionContext = {
+  importSelectedSet?: () => string;
+  settingsStore?: SettingsStoreLike;
+  startArtifactAnalysis?: (artifactType: ArtifactType) => string;
+  syncCloudPolicy?: () => Promise<string>;
+};
+
+export type ActionResult = {
+  message: string;
+};
+
+function formatSettingValue(
+  target: UpdateSettingCommand["target"],
+  value: UpdateSettingCommand["value"]
+) {
+  if (target === "network.recommendation.sort_mode") {
+    return value === "retrieved_at" ? "按检索时间" : "按关联度";
+  }
+
+  return String(value);
+}
+
+export type ActionInvocation =
+  | {
+      actionId: "settings.update";
+      input: {
+        target: UpdateSettingCommand["target"];
+        value: UpdateSettingCommand["value"];
+      };
+    }
+  | {
+      actionId: "selected_set.import";
+      input: {
+        source: "selected_document_set";
+      };
+    }
+  | {
+      actionId: "artifact.start_analysis";
+      input: {
+        artifactType: ArtifactType;
+        source: "selected_document_set";
+      };
+    }
+  | {
+      actionId: "settings.sync_model_policy";
+      input: {
+        source: "cloud_control_plane";
+      };
+    };
+
+export async function executeAction(
+  invocation: ActionInvocation,
+  context: ActionContext
+): Promise<ActionResult> {
+  if (invocation.actionId === "settings.update") {
+    if (!context.settingsStore) {
+      throw new Error("settings.update requires a settings store");
+    }
+
+    context.settingsStore.apply({
+      intent: "update_setting",
+      target: invocation.input.target,
+      value: invocation.input.value
+    });
+
+    return {
+      message: `已更新 ${settingsRegistry[invocation.input.target].label}：${formatSettingValue(
+        invocation.input.target,
+        invocation.input.value
+      )}`
+    };
+  }
+
+  if (invocation.actionId === "selected_set.import") {
+    if (!context.importSelectedSet) {
+      throw new Error("selected_set.import requires an import handler");
+    }
+
+    return {
+      message: context.importSelectedSet()
+    };
+  }
+
+  if (invocation.actionId === "settings.sync_model_policy") {
+    if (!context.syncCloudPolicy) {
+      throw new Error("settings.sync_model_policy requires a cloud policy sync handler");
+    }
+
+    return {
+      message: await context.syncCloudPolicy()
+    };
+  }
+
+  if (!context.startArtifactAnalysis) {
+    throw new Error("artifact.start_analysis requires an artifact analysis handler");
+  }
+
+  return {
+    message: context.startArtifactAnalysis(invocation.input.artifactType)
+  };
+}

@@ -1,11 +1,23 @@
 # Liteasy
 
-Liteasy 是一个面向论文阅读与学习的桌面优先产品。当前仓库已经开始搭建 `desktop` 端原型，目标是逐步实现：
+Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作台。当前仓库已经开始搭建 `desktop` 端原型，目标是逐步实现：
 
 - 本地文献库与工作区
-- AI 助手问答、解释、命令控制
+- AI 助手问答、解释、技能驱动的软件控制
 - 多模态学习产物
 - 用户画像与后续云端扩展能力
+
+当前更准确的理解是：Liteasy 分为“用户交互层”和“agent 工作流层”，桌面 UI 负责承载工作区、对话与结果，真正的理解、检索、生成与审计在 agent workflow 中完成；所有会修改软件状态的行为，都应收敛到受控的 skill/action 边界。
+
+当前术语以这套为准：
+
+- `工作区`：左栏当前可见的目录视图
+- `选中文献集`：在当前工作区里勾选并锁定、准备交给 AI 的文件集合
+- `导入`：把选中文献集送入 AI 知识引擎，完成解析、切块、索引等预处理
+- `分析`：在已导入的选中文献集上，按指定模态启动主工作流
+
+主干是：`工作区 -> 勾选文件 -> 形成选中文献集 -> 导入 -> 选择模态按钮 -> 启动分析`  
+右栏自然语言 skill 是导入后的分支能力，不替代中栏模态按钮这条主干。
 
 这份 README 的目标不是写给开发高手，而是让团队里没有软件开发基础的成员也能：
 
@@ -98,8 +110,13 @@ Liteasy 是一个面向论文阅读与学习的桌面优先产品。当前仓库
 - `workspace.store.test.ts`
 - `import.store.test.ts`
 - `assistant.store.test.ts`
+- `answerFormatter.test.ts`
+- `commandRouter.test.ts`
+- `artifact.store.test.ts`
 
 也就是说，现在已经不是“纯静态图”，而是一个开始进入可运行开发状态的桌面端原型。
+
+需要注意：当前代码里仍有一部分原型级的 `commandRouter + settings` 实现，但文档上的目标架构已经明确收敛到 `skill registry / action registry` 方向。
 
 ## 4. 没有开发基础的人应该先看什么
 
@@ -203,4 +220,3 @@ source "$HOME/.cargo/env"
 - **实施计划**：`docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md`
 - 环境启动手册：`docs/qa/environment-startup-guide.md`
 - 开发协作提示词：`docs/开发协作提示词历史_5.10.md`
-

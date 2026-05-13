@@ -12,3 +12,18 @@ test("locks selected papers after workspace lock", () => {
   expect(store.getState().selectedPaperIds).toEqual(["p1"]);
   expect(store.getState().selectionLocked).toBe(true);
 });
+
+test("builds a selected document set from locked papers", () => {
+  const store = createWorkspaceStore();
+
+  store.addPaper({ id: "p1", title: "Paper 1" });
+  store.addPaper({ id: "p2", title: "Paper 2" });
+  store.toggleSelection("p1");
+  store.toggleSelection("p2");
+  store.lockSelection();
+
+  expect(store.getSelectedDocumentSet()).toEqual({
+    documentIds: ["p1", "p2"],
+    locked: true
+  });
+});

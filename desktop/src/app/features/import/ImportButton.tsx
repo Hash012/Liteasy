@@ -1,11 +1,12 @@
 type ImportButtonProps = {
-  onImport: () => void;
+  onImport: () => void | Promise<void>;
+  label?: string;
 };
 
-export function ImportButton({ onImport }: ImportButtonProps) {
+export function ImportButton({ onImport, label = "导入文献" }: ImportButtonProps) {
   return (
     <button className="library-button" type="button" onClick={onImport}>
-      导入文献
+      {label}
     </button>
   );
 }

@@ -29,7 +29,7 @@ cargo --version
 2. 进入项目工作区目录
 
 ```bash
-cd /tmp/Liteasy-phase0-1/desktop
+cd /home/octopus/Liteasy/desktop
 ```
 
 ## 3. 第一次启动前要做什么
@@ -52,6 +52,7 @@ npm install
 在 `desktop` 目录下执行：
 
 ```bash
+source "$HOME/.cargo/env"
 npm run tauri dev
 ```
 
@@ -59,6 +60,12 @@ npm run tauri dev
 
 1. 终端里出现开发服务启动日志
 2. 桌面上弹出一个名为 `Liteasy` 的应用窗口
+
+如果桌面窗口一时打不开，也可以先看前端预览：
+
+```bash
+npm run dev
+```
 
 ## 5. 看到什么才算启动成功
 
@@ -68,7 +75,7 @@ npm run tauri dev
 2. 中栏标题是 `Reader`
 3. 右栏标题是 `Assistant`
 
-三个区域都应可见，不应只有空白页，也不应只有浏览器默认文本。
+三个区域都应可见，不应只有空白页，也不应只有浏览器默认文本。左栏应能看到工作区文献列表与“交给AI流程”按钮；中栏初始可能显示空态提示；右栏应能看到模式切换和输入框。
 
 ## 6. 常见问题先看什么
 
