@@ -105,6 +105,8 @@
 #### 1. 专注度管理系统：
 检测用户与本软件、其他站点的交互和切换情况，根据交互情况检测用户犯困、久坐、注意力涣散，并当即或以某段时间为单位一并提醒用户。
 
+请参考此项目: https://github.com/super-productivity/super-productivity, 内置详细的任务设置 project 规划 休息检测 久坐提醒等等.
+
 #### 2. TODO List
 
 
