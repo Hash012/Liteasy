@@ -10,3 +10,4 @@ desktop/src-tauri/target/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+.omx/
