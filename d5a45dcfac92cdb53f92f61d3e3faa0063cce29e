@@ -1,0 +1,684 @@
+docs/Liteasy_功能与UI设计文档1.0.md
+  84ed8f6a33797553 1,4,6,8-26,30-59,61-70,73,75,78-84,87-90,93,95-96,98,100,103-120,122-123,125-128,130-131,133-137,139-143,145-146,148,150-151,153,156,158-159,161,163,165,167,169,171,173-174,176-188,190-199,203-246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "d5a45dcfac92cdb53f92f61d3e3faa0063cce29e",
+  "prompts": {
+    "84ed8f6a33797553": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2225-9ad1-7052-9ae3-b398810a7627",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Exyeus <1728827724@qq.com>",
+      "messages": [
+        {
+          "type": "user",
+          "text": "<environment_context>\n  <cwd>/home/tianjiaming/proj/Liteasy</cwd>\n  <shell>bash</shell>\n  <current_date>2026-05-14</current_date>\n  <timezone>Asia/Shanghai</timezone>\n</environment_context>",
+          "timestamp": "2026-05-13T16:22:46.994Z"
+        },
+        {
+          "type": "user",
+          "text": "# Context from my IDE setup:\n\n## Open tabs:\n- Liteasy_功能与UI设计文档1.0.md: docs/Liteasy_功能与UI设计文档1.0.md\n- Features-OpenClaw.md: docs/Features-OpenClaw.md\n- liteasy-openclaw-architecture.html: docs/liteasy-openclaw-architecture.html\n- liteasy-openclaw-architecture(1).html: docs/liteasy-openclaw-architecture(1).html\n- index.html: desktop/index.html\n\n## My request for Codex:\n[Liteasy_功能与UI设计文档1.0.md](docs/Liteasy_功能与UI设计文档1.0.md) , 依据这个, 摸清当前项目的技术栈. 最新的一个重要创想, 在于: 该项目即将路演, 我们必须结合 OpenClaw 的 features 来说明我们的项目, 参考 [Features-OpenClaw.md](docs/Features-OpenClaw.md) . 另外, 我们的情况是, 即将在评委面前路演答辩, 而讲解人是一个文科生, 评委也需要短时间内理解知识, 所以必须有一个很顺的关于技术的讲解思路, 绝对不能有误, 要串成一条线, 如同讲故事一般.\n任务:\n1. 重构并且尽量少改动那个 功能与UI设计文档, 并将里面的 T_IM 补丁增加到设计之中;\n2. 根据 [liteasy-openclaw-architecture.html](docs/liteasy-openclaw-architecture.html) , 进行里面思路的梳理, 这个思路将会有助于上台同学的宣讲以及团队成员的答辩. 梳理过程中, 关于选用什么技术, 以及如何呈现它的一个重要原则是: 我们必须向 OpenClaw 的 features 靠齐, 但是: 假如 OpenClaw 使用了 ABCDE 技术, 其中 E 技术是促成其亮点 F 的关键技术, 那么我们可以用 E 技术, 也可以用同样取得 F 的 G 技术(与当前所假设的技术栈相类似的优先), 关键在于, 说明我们作品跟上了 OpenClaw 的效果范式的进展, 有很好的效果. 这个有利于理解/能够形成一条有逻辑的故事线的技术层次逻辑, 务必考虑较多的呈现顺序, 并且给出备选项. 用 Markdown 的 mermaid 呈现, 或者用 HTML 呈现.",
+          "timestamp": "2026-05-13T16:22:47.298Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我会先把现有文档和项目结构对齐起来，确认真实技术栈、现有设计稿里的叙事逻辑，以及 `OpenClaw` 特性文档里哪些点最适合映射到我们当前方案。接着我会在尽量少改原文结构的前提下重构设计文档，并补一份适合路演讲解/答辩的技术故事线产物。",
+          "timestamp": "2026-05-13T16:23:05.515Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg --files",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:05.812Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' docs/Liteasy_功能与UI设计文档1.0.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:05.813Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' docs/Features-OpenClaw.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:05.814Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' docs/liteasy-openclaw-architecture.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:05.815Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/index.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:05.818Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我已经拿到核心产品文档、OpenClaw 特性摘要，以及现有架构展示页。下一步我会把“文档里写的设想”和“仓库里真正已经落下来的技术栈”对起来，这样我们后面的路演故事线不会出现技术口径不一致。",
+          "timestamp": "2026-05-13T16:23:20.219Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' /home/tianjiaming/.codex/skills/analyze/SKILL.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:20.227Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/package.json",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:20.227Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src/App.tsx",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:20.228Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src/main.tsx",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:20.237Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src-tauri/Cargo.toml",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:20.237Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src-tauri/src/main.rs",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:20.238Z"
+        },
+        {
+          "type": "assistant",
+          "text": "仓库里的“落地层”目前很清晰：这是一个 `Tauri 2 + React 18 + TypeScript + Vite + Vitest` 的桌面应用雏形，Rust 端现在还是很薄的壳，主逻辑都在前端状态与界面层。接下来我会顺着 `AppShell -> feature panes -> stores/tests` 把“已经有的核心能力”和“文档里规划中的能力”对应起来。",
+          "timestamp": "2026-05-13T16:23:34.458Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,280p' desktop/src/app/layout/AppShell.tsx",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:34.458Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,280p' desktop/src/app/styles/app.css",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:34.458Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src/app/features/library/LibraryPane.tsx",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:34.511Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src/app/features/assistant/AssistantPane.tsx",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:34.513Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src/app/features/assistant/assistant.store.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:34.514Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src/app/features/workspace/workspace.store.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:34.528Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/src/app/features/import/import.store.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:34.529Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '260,520p' docs/liteasy-openclaw-architecture.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:48.040Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/src/app/features/assistant/ModeSwitch.tsx",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:48.076Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/src/app/features/assistant/assistant.types.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:48.077Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/src/app/features/workspace/workspace.types.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:48.078Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/src/tests/assistant.store.test.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:48.079Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/src/tests/workspace.store.test.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:48.112Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' desktop/src/tests/import.store.test.ts",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:23:48.112Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '520,760p' docs/liteasy-openclaw-architecture.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:04.604Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,240p' README.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:04.714Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' desktop/README.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:04.714Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' docs/qa/environment-startup-guide.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:04.716Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg -n \"SQLite|sqlite|Tauri|React|Rust|Vitest|skills|OpenClaw|plugin|plugins|OCR|vector|embedding|gateway|workspace|selectionLocked|双模型|双模型机制|T_IM|划线|concept map\" docs desktop README.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:04.716Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我已经把“现状代码栈”和“蓝图里计划中的技术层”分开了：路演时不能把未来设想讲成已经实现，所以我会把文档重构成“当前原型已落地 + 接下来按 OpenClaw 范式扩展”的两层口径。再补一份可直接拿去排练的故事线文档，里面会给主讲顺序和备选顺序。",
+          "timestamp": "2026-05-13T16:24:23.620Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '200,320p' docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:23.861Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '620,780p' docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:24.211Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,120p' docs/superpowers/plans/2026-05-10-liteasy-implementation-roadmap.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:24:24.212Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我准备开始落文档了，分成两部分一起做：一份是“尽量少改原结构”的产品/UI文档重构，把 `T_IM` 补丁并回各模块；另一份是单独给路演和答辩用的技术故事线文档，用 `OpenClaw feature -> Liteasy 对应范式 -> 我们为什么这样讲` 的方式串起来。",
+          "timestamp": "2026-05-13T16:24:46.611Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "apply_patch",
+          "input": "*** Begin Patch\n*** Delete File: /home/tianjiaming/proj/Liteasy/docs/Liteasy_功能与UI设计文档1.0.md\n*** Add File: /home/tianjiaming/proj/Liteasy/docs/Liteasy_功能与UI设计文档1.0.md\n+# Liteasy 功能与 UI 设计文档\n+\n+## 总述\n+`LiteasyClaw` 是一款面向学术文献深度解析与定制化学习的桌面优先智能辅助平台。\n+\n+它的产品目标不是只做一个“能聊天的论文助手”，而是做一个把文献管理、精读、问答、多模态讲解、个性化学习和后续组织协作串成闭环的科研工作台。用户通过自然语言和可视化工作区协同操作，可以在一个界面内完成“导入文献 -> 选择分析对象 -> 提问/下命令 -> 获得带依据的讲解与产物”这一整条学习链路。\n+\n+在技术理念上，Liteasy 借鉴 OpenClaw 的 runtime 范式，但不照搬它的产品形态：\n+\n+1. 在产品层，Liteasy 仍然是一个面向科研学习的桌面工作台。\n+2. 在运行时层，系统采用 `skills/workflows + actions + allowlist/policy + direct dispatch` 的思路，让 AI 能稳定、可控地调用软件能力。\n+3. 在能力层，系统通过多模态模型、文献解析链路、用户画像和后续插件机制，持续扩展讲解深度与个性化能力。\n+\n+Liteasy 的目标，是成为用户可信、顺手、能长期陪伴科研学习的下一代研究伴侣。\n+\n+## 用户端功能与 UI 设计\n+\n+### 主页面\n+主页面采用类似 VS Code 的“左 - 中 - 右”三栏布局。\n+\n+- 【左栏】是文献库与推荐区，负责组织用户当前工作区。\n+- 【中间栏】是阅读与多模态产物区，承担主学习链路。\n+- 【右栏】是智能助手区，承担问答、解释、命令控制与分支交互。\n+- 【最左侧窄边栏】用于组织、个人中心、设置等全局入口。\n+\n+其中，【中间栏】采用多标签页机制，是主要阅读窗口；【右栏】不是主工作流入口，而是围绕主工作流提供解释、控制、补充产物和答疑。\n+\n+可参考：![alt text](imgs/主页面.png)\n+\n+#### 【右栏】智能助手功能设计\n+1. 整体布局类似网页版 DeepSeek：底部为输入框，支持后续扩展语音输入；支持新建会话；需要提供一个按钮调出历史会话。\n+2. 在新会话初始态，【右栏】中上部展示虚拟形象 ![alt text](../logos/虚拟形象.jpg)，周围环绕 3 个模式按钮。开始对话后，虚拟形象与按钮淡出，由对话内容占据右栏主体，并在背景或顶部轻量标记当前模式名称。新会话开始时恢复初始态。\n+3. 右栏所有涉及论文内容的回答，都应能回链到【中间栏】的原文定位、划线讲解或多模态产物，而不是停留在“只在聊天框里说完”。\n+\n+##### 1. 按钮 1：名词解释\n+在这个模式下，软件调用“名词解释”专属工作流，针对用户提问的术语、概念或方法，结合用户画像，用用户能听懂的语言解释。\n+\n+- 用户可在本栏通过按钮设置是否联网。\n+- 若联网，则结合在线信息源与当前工作区文献。\n+- 若不联网，则优先使用工作区已选中文献，其次是其他本地信息源与模型知识。\n+- 简短解释以对话回复形式显示在【右栏】。\n+- 若涉及图示、概念分层图、思维导图等更适合可视化呈现的结果，则在【中间栏】新建标签页展示。\n+\n+##### 2. 按钮 2：命令\n+这是默认模式；若用户未手动切换模式而直接输入，自然进入本模式。\n+\n+在这个模式下，用户的自然语言控制会被映射为系统内部的结构化命令，再由相应的 `skill/workflow` 触发软件功能或配置变更。\n+\n+例如：\n+\n+- “关闭联网功能”\n+- “帮我为这篇论文生成思维导图”\n+- “打开用户画像功能”\n+- “把刚才那段讲解固定到中间栏”\n+\n+用户第一次使用本软件时，AI 也会在本模式下引导其完成基本配置。\n+\n+##### 3. 按钮 3：问答\n+这是核心学习功能。\n+\n+在本模式下，用户围绕当前工作区已选定文献提出专业问题，AI 根据文献内容、上下文历史和用户理解水平，进行带依据的深度回答。\n+\n+- 简短文本反馈显示在【右栏】。\n+- 图示、导图、结构化讲义、定位讲解等内容显示在【中间栏】。\n+- 每条涉及原文的回答都必须能回到论文原文定位。\n+- 对关键回答，系统可以同步在 PDF 中生成连续划线与旁注，形成“像教授精讲论文一样”的精读轨迹。\n+\n+#### 【最左侧边栏】\n+自上而下包含：组织、个人中心、设置。\n+\n+后两者的图标可参考下图：\n+![alt text](imgs/左边栏图标.png)\n+\n+#### 1. 个人中心\n+点击个人中心图标后，个人中心弹出并铺满左侧边栏。窗口内布局可参考下图：\n+![alt text](imgs/用户画像.png)\n+\n+1. 展示用户昵称、ID、所在团队等基本信息。\n+2. 用户可配置性别、年龄、学段、研究方向等信息。\n+3. 提供用户画像功能开关。开启后，可在用户授权范围内采样软件内的身份数据、文献与交互记录；若未来接入微信、飞书等外部数据，必须单独授权。\n+4. 开启用户画像后，系统统计已阅读论文数，并给出用户学术人格分析，末端分类可参考：![alt text](imgs/学术人格.png)\n+5. 开启画像后，其他模块可使用相关数据进行个性化优化。\n+6. 本窗口下部提供“学术档案”入口，用于查看与画像有关的配置与分析记录。\n+7. 提供“清空用户画像”按钮，但不包括昵称、ID、头像；清空时必须鉴权确认。\n+\n+#### 2. 组织\n+1. 用户可以加入或创建组织。组织拥有共享的、可配置时效与容量的云端文献库。\n+2. 云端共享文献库可由平台提供，也可为高级用户提供兼容部署方案，部署在其自有服务器上并接入本软件。\n+3. 点击后弹出组织列表；进入某个组织后可查看成员、公告通知，以及有权限成员的文献上传与文献库结构变更通知。\n+4. 组织共享文献库可在文献阅读工作区中打开。\n+\n+#### 3. 设置\n+点击后弹出新窗口，承载软件其他必要配置项与权限设置。\n+\n+#### 【左栏】文献库相关功能\n+文献库可存在于本地或云端，以多级目录组织。用户当前在左栏中打开并操作的部分称为“工作区”。\n+\n+工作区以某一级目录为锚点，即选定某一级目录作为“母目录”后，其子目录共同出现在工作区中；下述【收藏】和【关联推荐】的缓存也都与当前工作区锚定。\n+\n+从前端看，【左栏】结构类似 VS Code 资源管理器，各区域可折叠。自上而下为：【我的文献库】、【收藏】、【关联推荐】。\n+\n+#### 1. 我的文献库\n+1. 类似 VS Code 中打开的文件夹，各文献依目录结构展开；用户在前端对文献结构的调整，后端数据库应同步。\n+2. 每个条目后带复选框，用于选中 AI 直接分析的对象，即支持多文献联读。\n+3. 区域顶部有“锁定选择”按钮。锁定后，复选框勾选情况不可变更，以保证当前分析上下文稳定。\n+4. 【我的文献库】既可以打开本地某一级目录下的全部文件，也可以打开云端文献库某一级目录下的全部文件。\n+\n+#### 2. 收藏\n+1. 用户可拖动【关联推荐】中的文献、链接或数据资源到【收藏】区。\n+2. 收藏区内容不会随工作区关闭而自动清空。\n+3. 用户也可将【收藏】区和【关联推荐】区内容拖回【我的文献库】。\n+\n+#### 3. 关联推荐\n+1. 该功能支持开启或关闭。\n+2. 联网检索可以通过公开检索 API、兼容爬虫 API，或在必要时通过浏览器自动化完成；对非公开站点，需要用户本地配置 token、cookie 等鉴权信息。\n+3. 当用户向 AI 下达“查找/为我推荐相关文献”命令时，本功能启动，并将结果缓存在本区域；AI 在解析文献或回答问题时触发的联网补充结果，也会回写到这里。\n+4. 相关论文、代码链接、数据集、项目主页等信息都可作为推荐条目缓存。\n+5. 检索结果用渐变色、标签或说明文字标记其与当前已选文献的关联强度，并标注主要关联对象。\n+6. 推荐排序支持按检索时间、文献时间、与选中文献的关联度、与用户画像的综合匹配度等方式排序；用户也可通过命令模式调整排序规则。\n+7. 关联推荐缓存默认在关闭当前工作区时清空。\n+\n+#### 【中间栏】\n+【中间栏】是 Liteasy 的主学习舞台。它不仅显示 PDF，还负责承载精读、跳转、结构化讲解与多模态学习产物。\n+\n+##### 1. 标签页与阅读区\n+1. 【中间栏】支持多个标签页。\n+2. 如果不同模态无法在同一标签页自然呈现，则拆分到不同标签页，但这些标签页之间需要有明确的互链关系。\n+3. 支持同一篇论文的多个竖向阅读栏并排打开，方便用户同时查看摘要、方法、实验等不同位置。\n+\n+##### 2. PDF 精读视图\n+这是 `T_IM` 补丁并入后的核心增强部分。\n+\n+1. 在 PDF 中增加 AI 划线/高亮功能。AI 可以对关键段落进行连续划线，并给每条划线附上解释、提示、疑难点说明或上下文引导。\n+2. 这些 AI 划线不是孤立批注，而要能形成连续讲解链，让用户像听资深教授精讲论文一样逐段理解。\n+3. 用户点击划线后，可以展开对应讲解；也可以从右栏回答一键跳转到相应划线位置。\n+4. 高亮、批注、定位信息不依赖 PDF 原生超链接，而由软件自身的数据结构维护，以支持后续跳转、引用、同步与扩展。\n+5. 后续可以扩展到跨文献链接，但首期优先支持同一篇 PDF 内部的稳定跳转与定位。\n+\n+##### 3. Concept Map 与概念分层讲解\n+1. 系统支持生成 Concept Map，用于把论文中的概念、方法、实验和结论做成层级化关系图。\n+2. 视觉效果可参考：![](./imgs/Deepwiki-AI-explanation-effect.png)\n+3. Concept Map 中的节点应能反向跳转到原文定位、划线讲解或对应多模态产物。\n+4. 对不涉及代码的用户，跳转目标主要是 PDF 内定位与概念节点；若未来支持代码论文联动，再扩展到代码定位。\n+\n+##### 4. 中栏模态入口\n+【中间栏】靠近【左栏】的一侧有悬浮按钮区。用户点击某个模态按钮后，系统将以该模态解析当前“已选定并锁定”的文献集。\n+\n+支持的模态包括：\n+\n+1. 树形展开\n+从整体到细节地分多层、多分枝结构化文献。每个节点都应根据关联知识和用户水平补全逻辑链，让用户可以按兴趣自主下钻，且每深入一层都“开卷有益、读有所获”。\n+\n+每个节点占一个标签页，采用“图 + 文 + 表”的复合模态。用户在节点中选中一句或几句话后，可以继续进入子节点，在新标签页中做更深分析。若该节点下还有导图、图示、问答等附属结果，主节点标签页应给出链接。\n+\n+2. PPT\n+将文献整合为适合讲授或汇报的 PPT。\n+\n+3. 视频讲解\n+用户可指定有权限的人物形象、声音等参数，由虚拟人物讲解文献。\n+\n+4. 播客\n+\n+5. 思维导图\n+\n+6. 问题 - 答案式\n+\n+7. 数据可视化\n+\n+8. 流程图\n+\n+9. 过程动图\n+\n+10. 苏格拉底问答\n+生成一个 AI 对话标签页，先向用户分步介绍文献整体，再不断追问用户不懂的点与当前理解，并给予针对性讲解，直到用户真正理解。\n+\n+11. 费曼学习法\n+生成一个 AI 对话标签页。适用于用户已经通过其他方式学完选定文献、希望查缺补漏的场景。AI 以学习者身份向用户请教，持续比对用户回答与论文内容，直到判断用户已较好掌握。\n+\n+##### 5. 双模型机制\n+文献解读和【右栏】问答都可由双模型完成：\n+\n+1. 一个模型负责主生成、讲解与产物大纲。\n+2. 另一个模型负责打分、发现问题、纠偏与可信度提示。\n+3. 用户鼠标悬浮在 AI 输出、划线讲解或结构化结论上时，可看到可信度与是否经过复核。\n+4. 短命令类操作不必强制走双模型；深度分析、精读、PPT/导图大纲等关键结果应优先走双模型。\n+\n+### 插件\n+插件应有独立入口，但不应打断三栏主工作台的核心链路。插件更适合作为“能力扩展层”，由运行时统一调用，而不是直接把逻辑写死在页面上。\n+\n+#### 1. 专注度管理系统\n+检测用户与本软件、其他站点的交互与切换情况，根据交互情况检测犯困、久坐、注意力涣散，并即时或按时间段提醒用户。\n+\n+可参考项目：\n+<https://github.com/super-productivity/super-productivity>\n+\n+其项目中的任务设置、project 规划、休息检测、久坐提醒等能力都可作为插件设计参考。\n+\n+#### 2. TODO List\n+作为轻量任务管理插件，负责承接学习过程中的待办、复习计划、追问点和后续行动项。\n+\n+## 技术构想\n+\n+### 1. 技术原则\n+1. Liteasy 借鉴 OpenClaw 的核心不是“把聊天入口做得更复杂”，而是把其 `skills + actions + policy + plugin-friendly runtime` 的运行时思想嵌入科研产品。\n+2. AI 助手不应直接改动软件状态，而应通过注册过的结构化 action 执行。\n+3. 中栏模态按钮是主工作流入口，右栏 Assistant 是围绕主工作流的解释、问答和控制分支。\n+\n+### 2. 当前项目已落地的技术栈\n+1. 桌面端：`Tauri 2`\n+2. 前端：`React 18 + TypeScript + Vite`\n+3. 测试：`Vitest`\n+4. 桌面壳语言：`Rust`\n+\n+当前仓库已经落地的是桌面原型骨架、三栏工作台、基础状态管理与测试；Rust 端目前还是较薄的桌面壳。\n+\n+### 3. 目标技术分层\n+1. 用户端软件：\n+   - 三栏桌面工作台\n+   - 标签页阅读与多模态产物视图\n+   - AI 助手交互区\n+2. 本地能力层：\n+   - 文件系统访问\n+   - PDF 解析、OCR、切块、索引\n+   - SQLite / 全文检索 / 本地缓存\n+   - 权限控制、日志、通知\n+3. Agent Runtime：\n+   - Skill Registry\n+   - Action Registry\n+   - Allowlist / Policy\n+   - Direct Dispatch\n+   - 双模型生成与审计\n+4. 云端服务层：\n+   - 账号、同步、组织、推荐、订阅\n+   - 异步任务执行\n+   - 模型网关\n+5. 管理员端网页或软件：\n+   - 组织与资源治理\n+   - 用户与订阅管理\n+   - 后台任务与风险审计\n+\n+### 4. 与 OpenClaw 范式的结合点\n+1. OpenClaw 的 `skills` 对应 Liteasy 的任务工作流，如 `paper.qa`、`concept.explain`、`artifact.generate`、`settings.adjust`。\n+2. OpenClaw 的 `tools/plugins` 对应 Liteasy 的结构化 action 与插件扩展能力。\n+3. OpenClaw 的 `routing` 思路可用于 Liteasy 的模式路由、工作区隔离与任务分发。\n+4. OpenClaw 的多模态能力，对应 Liteasy 的导图、PPT、视频、播客、数据可视化等学习产物。\n+5. Liteasy 不照搬 OpenClaw 的多渠道消息入口，而是优先保留桌面科研工作台这一产品形态。\n*** End Patch\n",
+          "timestamp": "2026-05-13T16:27:05.923Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "apply_patch",
+          "input": "*** Begin Patch\n*** Add File: /home/tianjiaming/proj/Liteasy/docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md\n+# Liteasy x OpenClaw 路演技术讲解与答辩故事线\n+\n+这份文档服务两个对象：\n+\n+1. 上台宣讲的同学：需要一条顺口、像讲故事一样的技术主线。\n+2. 团队答辩成员：需要一套不说错、能和 OpenClaw 特性对齐的统一口径。\n+\n+## 一句话定位\n+Liteasy 不是“把论文丢给 AI 问一问”的工具，而是一个把文献导入、精读、问答、可视化讲解和个性化学习串成闭环的桌面科研工作台；它在底层借鉴 OpenClaw 的运行时范式，让 AI 能稳定、可控地调动软件能力。\n+\n+## 先统一口径：哪些是现在已有，哪些是明确设计方向\n+\n+### 当前仓库已能证明的技术栈\n+- 桌面客户端：`Tauri 2`\n+- 前端：`React 18 + TypeScript + Vite`\n+- 测试：`Vitest`\n+- 桌面壳语言：`Rust`\n+- 当前完成度：三栏工作台原型、基础状态管理、导入/选择/助手三类最小状态切片\n+\n+### 当前明确设计、适合路演讲述的目标分层\n+- 本地能力层：`Rust + SQLite + PDF 解析/OCR/索引/缓存`\n+- 运行时层：`Skill Registry + Action Registry + Allowlist/Policy + Direct Dispatch`\n+- 云端扩展层：`NestJS + PostgreSQL + Redis/BullMQ + S3 兼容存储 + 模型网关`\n+- 智能能力层：双模型生成与审计、多模态产物生成、联网推荐、用户画像\n+\n+答辩时要坚持这句：\n+\n+> 我们当前已经完成桌面工作台原型，底层扩展路线则按 OpenClaw 启发的 runtime 范式继续推进。\n+\n+不要把未来蓝图讲成“已经全部实现”。\n+\n+## 我们到底向 OpenClaw 学什么\n+\n+不是照搬它的“多聊天渠道”，而是对齐它已经证明有效的“能力组织方式”。\n+\n+| OpenClaw feature | Liteasy 对应讲法 | 为什么适合路演 |\n+|---|---|---|\n+| Skills | 把“名词解释、论文问答、产物生成、设置修改”收敛成可注册工作流 | 说明 AI 不是乱答，而是按任务类型走不同流程 |\n+| Tools / Plugin | 把系统能力做成结构化 action，把专注度/TODO 做成插件扩展 | 说明软件能扩展，而且是可控扩展 |\n+| Routing | 不同模式、不同工作区、不同任务走不同链路 | 说明不是“一句话进来全靠大模型猜” |\n+| Media | 文本、导图、PPT、视频、播客、Concept Map | 说明我们跟上了多模态效果范式 |\n+| Session isolation | 以工作区和已锁定文献集作为上下文边界 | 说明回答不会乱串上下文 |\n+| Control UI / App | 我们落在桌面三栏工作台，而不是做成纯聊天壳 | 说明产品形态更适合论文精读 |\n+\n+最重要的一句是：\n+\n+> 我们借鉴 OpenClaw 的，不是它长什么样，而是它如何把 AI 能力组织成稳定、可控、可扩展的运行时。\n+\n+## 推荐主讲故事线 A：从用户问题出发\n+\n+这是最适合文科生主讲、也最利于评委短时间理解的版本。\n+\n+### 讲法\n+1. 先讲痛点：论文难，不是因为没有答案，而是因为答案散、原文难跳、概念断层、多模态讲解不连续。\n+2. 再讲产品动作：用户把论文导入工作区，勾选并锁定当前要分析的文献。\n+3. 再讲核心差异：Liteasy 不是只给一个聊天框，而是把“阅读区”和“AI 区”打通。\n+4. 再讲关键亮点：AI 不只是回答，还能在 PDF 中连续划线、建立 Concept Map、回跳原文、生成导图/PPT。\n+5. 最后讲技术保证：底层借鉴 OpenClaw 的 runtime，把不同任务做成 skills，把软件操作做成 actions，再用权限策略保证安全与稳定。\n+\n+### 对应 mermaid\n+```mermaid\n+flowchart LR\n+    A[用户导入论文] --> B[左栏组织工作区]\n+    B --> C[勾选并锁定当前文献集]\n+    C --> D[中栏进入阅读与精读]\n+    D --> E[右栏发起解释/问答/命令]\n+    E --> F[Runtime 组装上下文]\n+    F --> G[按任务选择 Skill]\n+    G --> H[调用结构化 Action]\n+    H --> I[回填到聊天/划线/Concept Map/PPT]\n+    I --> J[用户沿着原文继续深入]\n+```\n+\n+### 适合上台时的 90 秒版本\n+“我们发现，读论文最痛苦的并不是搜不到答案，而是答案和原文、概念、图示、后续产物之间是断开的。所以 Liteasy 做的不是单纯聊天，而是一个桌面科研工作台。用户先把论文导入左侧工作区，勾选并锁定当前要分析的文献；中间是阅读主舞台，右边是 AI 助手。真正的亮点在于，AI 的回答不只停留在聊天框里，它可以直接回到 PDF 原文做连续划线讲解，生成 Concept Map、思维导图、PPT 等产物。底层上，我们借鉴了 OpenClaw 的运行时思想，把解释、问答、产物生成、设置修改做成不同 skills，把软件能力做成结构化 actions，再加上权限策略与双模型复核，让效果更稳、更容易扩展。” \n+\n+## 备选故事线 B：从 OpenClaw 对齐出发\n+\n+这个版本适合评委本身懂一点 AI agent，或者答辩时被问“你们和 OpenClaw 是什么关系”。\n+\n+### 讲法\n+1. OpenClaw 证明了一件事：复杂 AI 应用要靠 skills、routing、plugins、media、policy 来组织，而不是堆一个万能聊天框。\n+2. Liteasy 把这个范式迁移到科研学习场景。\n+3. 我们不照搬多渠道消息入口，而是保留桌面工作台，因为论文学习必须强依赖阅读区和可视化区。\n+4. 因此我们得到一套更适合学术场景的结构：中栏主工作流 + 右栏分支助手 + 本地知识引擎 + 多模态产物系统。\n+\n+### 对应 mermaid\n+```mermaid\n+flowchart TD\n+    OC[OpenClaw 有效范式] --> S1[Skills]\n+    OC --> S2[Routing]\n+    OC --> S3[Plugins]\n+    OC --> S4[Media]\n+    OC --> S5[Policy]\n+\n+    S1 --> L1[Liteasy 的论文问答/名词解释/产物生成/设置修改]\n+    S2 --> L2[模式路由 + 工作区上下文隔离]\n+    S3 --> L3[专注度插件 + TODO 插件 + 外部知识源插件]\n+    S4 --> L4[划线讲解 + Concept Map + 导图 + PPT + 视频]\n+    S5 --> L5[结构化 Action + Allowlist]\n+```\n+\n+### 这一版最关键的表述\n+“我们不是复制 OpenClaw 的产品外形，而是继承它已经被验证过的能力编排方式，然后把这种方式落到论文学习这一更强调原文定位、连续讲解和多模态理解的场景里。”\n+\n+## 备选故事线 C：从架构层次出发\n+\n+这个版本适合技术答辩成员，用来回答“系统是怎么分层的”。\n+\n+```mermaid\n+flowchart TB\n+    subgraph UI[用户交互层]\n+        U1[左栏 工作区/推荐/收藏]\n+        U2[中栏 PDF/标签页/Concept Map/多模态产物]\n+        U3[右栏 Assistant]\n+    end\n+\n+    subgraph RT[Agent Runtime]\n+        R1[Context Assembly]\n+        R2[Skill Registry]\n+        R3[Action Registry]\n+        R4[Allowlist Policy]\n+        R5[双模型生成与审计]\n+    end\n+\n+    subgraph LOCAL[本地能力层]\n+        L1[文件系统]\n+        L2[PDF解析 OCR 切块 索引]\n+        L3[SQLite 全文检索 缓存]\n+        L4[Rust Tauri 能力壳]\n+    end\n+\n+    subgraph CLOUD[云端扩展层]\n+        C1[账号 同步 组织]\n+        C2[推荐服务]\n+        C3[异步任务队列]\n+        C4[统一模型网关]\n+    end\n+\n+    UI --> RT --> LOCAL\n+    RT --> CLOUD\n+```\n+\n+### 这一版的核心解释\n+- 用户交互层负责“看见什么、点什么、问什么”。\n+- Runtime 决定“该走哪条任务链、能调用什么能力、如何保证安全和稳定”。\n+- 本地能力层负责“把论文真正变成可检索、可跳转、可引用的知识对象”。\n+- 云端扩展层负责“同步、推荐、重任务、多组织协作”。\n+\n+## 为什么 T_IM 补丁非常适合成为路演亮点\n+\n+因为它把“AI 回答”升级成了“AI 精读体验”。\n+\n+### 可以这样讲\n+1. 普通 AI 工具回答完就结束了。\n+2. Liteasy 会把回答重新绑定回 PDF 原文。\n+3. 它不仅能定位，还能连续划线、逐段解释。\n+4. 它还能从这些划线自动长出 Concept Map 和分层讲解路径。\n+5. 这让用户不是被动接收答案，而是在原文里被带着走一遍理解过程。\n+\n+这部分很适合成为整场演示的视觉高潮。\n+\n+## 推荐上台呈现顺序\n+\n+### 顺序 1：最推荐\n+1. 痛点\n+2. 三栏界面\n+3. T_IM 精读亮点\n+4. 多模态产物\n+5. OpenClaw runtime 对齐\n+6. 扩展能力与插件\n+\n+优点：最像讲故事，评委最容易跟上。\n+\n+### 顺序 2：偏技术型\n+1. 我们为什么参考 OpenClaw\n+2. 不照搬哪些，继承哪些\n+3. 三栏产品化落地\n+4. 本地引擎与运行时\n+5. T_IM 与多模态效果\n+\n+优点：适合被问“你们技术路线是否自洽”时使用。\n+\n+### 顺序 3：偏产品型\n+1. 用户旅程\n+2. 关键交互点\n+3. 亮点效果\n+4. 技术如何托住这些效果\n+\n+优点：适合初赛、展示赛、时间非常短的场合。\n+\n+## 答辩高频问题统一口径\n+\n+### 1. 你们为什么要参考 OpenClaw\n+因为它在复杂 AI 能力的组织方式上很成熟，尤其是 skill、routing、plugin、policy 这些 runtime 思想。我们借鉴这些能力编排方式，但产品形态仍然保持 Liteasy 自己的桌面科研工作台路线。\n+\n+### 2. 你们和普通论文问答工具有什么不同\n+我们的重点不是“回答一句话”，而是“把问答、原文定位、连续划线、Concept Map、多模态产物和后续学习动作接成一条线”。\n+\n+### 3. 为什么是桌面端，不是网页\n+因为论文学习强依赖本地文件、工作区、并排阅读、多标签页和系统级权限控制，桌面端更适合承载重交互阅读场景。\n+\n+### 4. 你们的 AI 为什么更可信\n+第一，回答尽量绑定原文定位；第二，关键分析结果走双模型生成与审计；第三，软件操作不靠模型随意执行，而是走结构化 action 和策略校验。\n+\n+### 5. 插件在这里的作用是什么\n+插件不是给页面塞更多按钮，而是把专注度管理、TODO、外部知识源等扩展能力接入同一个运行时，让产品后续能持续长大。\n+\n+## 最后给主讲人的一句总收束\n+\n+“如果说 OpenClaw 证明了 AI 应用应该怎样组织能力，那么 Liteasy 做的，就是把这套能力组织方式，真正变成一个适合论文精读、适合教学式讲解、也适合长期科研成长的桌面产品。”\n*** End Patch\n",
+          "timestamp": "2026-05-13T16:28:22.553Z"
+        },
+        {
+          "type": "assistant",
+          "text": "两份文档已经落下去了。现在我在做最后一轮自检，重点看三件事：`T_IM` 补丁有没有真正融入中栏设计、路演故事线有没有把 OpenClaw 说成“范式借鉴而非照搬产品”、以及“当前已实现”与“目标架构”有没有混淆。",
+          "timestamp": "2026-05-13T16:28:38.773Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' docs/Liteasy_功能与UI设计文档1.0.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:28:38.803Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,320p' docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:28:38.821Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg -n \"T_IM|PDF 精读视图|Concept Map|OpenClaw|当前仓库已能证明的技术栈|双模型|Action Registry|Skill Registry|Allowlist|Direct Dispatch\" docs/Liteasy_功能与UI设计文档1.0.md docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:28:38.896Z"
+        },
+        {
+          "type": "assistant",
+          "text": "已完成两份文档产物，并把口径统一成“当前原型已落地什么、未来按 OpenClaw 范式扩展什么”。\n\n重构后的产品/UI文档在 [docs/Liteasy_功能与UI设计文档1.0.md](/home/tianjiaming/proj/Liteasy/docs/Liteasy_功能与UI设计文档1.0.md)。我尽量保留了原有结构，但把叙事顺序理顺了，并把 `T_IM` 补丁正式并入【中间栏】设计：现在文档里已经把 `AI 连续划线/高亮`、`PDF 内部跳转`、`Concept Map`、`多竖栏并排阅读` 作为主设计的一部分，而不再是游离的补丁说明。\n\n路演/答辩故事线文档在 [docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md](/home/tianjiaming/proj/Liteasy/docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md)。里面我按 `OpenClaw feature -> Liteasy 对应范式 -> 为什么这样讲` 做了梳理，并给了 3 套讲法：\n1. 推荐版：从用户痛点讲到三栏工作台，再落到 T_IM 精读亮点和 OpenClaw runtime。\n2. 技术版：从“我们向 OpenClaw 学什么、不照搬什么”展开。\n3. 架构版：按 UI 层、Runtime、本地能力层、云端扩展层展开。\n文档里也补了 mermaid 图和一套统一答辩口径。\n\n当前项目真实已落地的技术栈，我也顺手对齐清楚了：前端是 `React 18 + TypeScript + Vite`，桌面壳是 `Tauri 2 + Rust`，测试是 `Vitest`，可直接从 [desktop/package.json](/home/tianjiaming/proj/Liteasy/desktop/package.json) 和 [desktop/src-tauri/Cargo.toml](/home/tianjiaming/proj/Liteasy/desktop/src-tauri/Cargo.toml) 看出来。后续路演里更适合讲成“桌面原型已落地，目标架构继续向 `Rust 本地文献引擎 + Skill/Action Runtime + 云端同步与异步任务` 推进”，这样最稳，不会讲过头。\n\n这次我做了文档自检和关键词核对，没有跑测试，因为只改了文档。若你愿意，我下一步可以直接继续把那份故事线再压成一版“3 分钟上台讲稿 + 可能追问答案卡片”。",
+          "timestamp": "2026-05-13T16:29:08.856Z"
+        },
+        {
+          "type": "user",
+          "text": "# Context from my IDE setup:\n\n## Active file: docs/Liteasy_功能与UI设计文档1.0.md\n\n## Open tabs:\n- Liteasy_功能与UI设计文档1.0.md: docs/Liteasy_功能与UI设计文档1.0.md\n- liteasy-openclaw-architecture.html: docs/liteasy-openclaw-architecture.html\n- Liteasy-OpenClaw-路演技术讲解与答辩故事线.md: docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md\n- Features-OpenClaw.md: docs/Features-OpenClaw.md\n- liteasy-openclaw-architecture(1).html: docs/liteasy-openclaw-architecture(1).html\n\n## My request for Codex:\n做一个 HTML 版本的答辩故事线, 放在 ./docs 文件夹下面.",
+          "timestamp": "2026-05-13T16:40:41.434Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我来把现有那份答辩故事线整理成一个可直接展示的 HTML 页面，放到 `docs/` 下面，并尽量沿用你们现在已有架构页那种适合路演展示的风格。",
+          "timestamp": "2026-05-13T16:40:52.237Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:40:52.282Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' docs/liteasy-openclaw-architecture.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:40:52.294Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '220,520p' docs/liteasy-openclaw-architecture.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:40:52.309Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我现在开始落这个展示页，会做成“可直接打开讲”的单文件 HTML：上面先给一句话定位和口径提醒，中间用卡片和流程块展示三套故事线，下面放高频答辩问答，尽量减少现场翻文档的负担。",
+          "timestamp": "2026-05-13T16:41:04.436Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "apply_patch",
+          "input": "*** Begin Patch\n*** Add File: /home/tianjiaming/proj/Liteasy/docs/liteasy-openclaw-defense-storyline.html\n+<!doctype html>\n+<html lang=\"zh-CN\">\n+  <head>\n+    <meta charset=\"UTF-8\" />\n+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n+    <title>Liteasy x OpenClaw 路演答辩故事线</title>\n+    <style>\n+      :root {\n+        --bg: #eef4f8;\n+        --panel: rgba(255, 255, 255, 0.86);\n+        --panel-strong: #ffffff;\n+        --ink: #183249;\n+        --muted: #5c7389;\n+        --line: #cad9e6;\n+        --accent: #2a6ca3;\n+        --accent-soft: #dbeaf6;\n+        --claw: #8c4fc5;\n+        --claw-soft: #efe2fb;\n+        --success: #2f8b69;\n+        --success-soft: #dbf0e7;\n+        --warn: #b56a28;\n+        --warn-soft: #fae9d3;\n+        --story: #0d5f7c;\n+        --story-soft: #d8edf5;\n+        --shadow: 0 18px 34px rgba(101, 126, 150, 0.12);\n+        --radius: 22px;\n+      }\n+\n+      * {\n+        box-sizing: border-box;\n+      }\n+\n+      body {\n+        margin: 0;\n+        min-height: 100vh;\n+        font-family: \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif;\n+        color: var(--ink);\n+        background:\n+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 20%),\n+          linear-gradient(180deg, #dde8f1 0%, #edf4f8 44%, #f6fafc 100%);\n+      }\n+\n+      .page {\n+        width: min(1480px, calc(100vw - 32px));\n+        margin: 16px auto 28px;\n+        display: grid;\n+        gap: 16px;\n+      }\n+\n+      .hero,\n+      .panel {\n+        background: var(--panel);\n+        border: 1px solid rgba(197, 214, 229, 0.95);\n+        border-radius: var(--radius);\n+        box-shadow: var(--shadow);\n+        backdrop-filter: blur(10px);\n+      }\n+\n+      .hero {\n+        padding: 24px 26px 26px;\n+        display: grid;\n+        gap: 16px;\n+      }\n+\n+      .hero-top {\n+        display: flex;\n+        align-items: start;\n+        justify-content: space-between;\n+        gap: 18px;\n+      }\n+\n+      h1 {\n+        margin: 0;\n+        font-size: 34px;\n+        line-height: 1.08;\n+        letter-spacing: 0.01em;\n+      }\n+\n+      .subtitle {\n+        max-width: 960px;\n+        margin-top: 10px;\n+        color: var(--muted);\n+        font-size: 15px;\n+        line-height: 1.72;\n+      }\n+\n+      .badges {\n+        display: flex;\n+        flex-wrap: wrap;\n+        gap: 10px;\n+        justify-content: flex-end;\n+      }\n+\n+      .badge {\n+        padding: 8px 12px;\n+        border-radius: 999px;\n+        font-size: 13px;\n+        font-weight: 700;\n+        color: #34526c;\n+        background: #edf4f9;\n+        border: 1px solid #d4e2ee;\n+      }\n+\n+      .quote {\n+        padding: 16px 18px;\n+        border-radius: 18px;\n+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 245, 249, 0.94) 100%);\n+        border: 1px solid #d9e5ef;\n+        color: #35536d;\n+        font-size: 18px;\n+        line-height: 1.7;\n+        font-weight: 600;\n+      }\n+\n+      .callouts {\n+        display: grid;\n+        grid-template-columns: repeat(3, minmax(0, 1fr));\n+        gap: 12px;\n+      }\n+\n+      .callout {\n+        padding: 14px 16px;\n+        border-radius: 18px;\n+        border: 1px solid #d7e4ee;\n+        background: rgba(255, 255, 255, 0.9);\n+      }\n+\n+      .callout h3 {\n+        margin: 0 0 8px;\n+        font-size: 15px;\n+      }\n+\n+      .callout p {\n+        margin: 0;\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.65;\n+      }\n+\n+      .grid {\n+        display: grid;\n+        grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);\n+        gap: 16px;\n+      }\n+\n+      .panel {\n+        padding: 18px;\n+      }\n+\n+      .section-title {\n+        margin: 0 0 14px;\n+        font-size: 19px;\n+        font-weight: 800;\n+      }\n+\n+      .section-subtitle {\n+        margin: -4px 0 14px;\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.65;\n+      }\n+\n+      .stack-grid,\n+      .story-list,\n+      .faq-list,\n+      .order-list {\n+        display: grid;\n+        gap: 12px;\n+      }\n+\n+      .stack-card,\n+      .story-card,\n+      .faq-card,\n+      .order-card,\n+      .focus-card {\n+        border: 1px solid #d8e5ee;\n+        border-radius: 18px;\n+        padding: 14px;\n+        background: rgba(255, 255, 255, 0.9);\n+      }\n+\n+      .stack-card h3,\n+      .story-card h3,\n+      .faq-card h3,\n+      .order-card h3,\n+      .focus-card h3 {\n+        margin: 0 0 8px;\n+        font-size: 15px;\n+      }\n+\n+      .stack-card p,\n+      .story-card p,\n+      .faq-card p,\n+      .order-card p,\n+      .focus-card p {\n+        margin: 0;\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.68;\n+      }\n+\n+      .chips {\n+        display: flex;\n+        flex-wrap: wrap;\n+        gap: 8px;\n+        margin-top: 10px;\n+      }\n+\n+      .chip {\n+        padding: 6px 10px;\n+        border-radius: 999px;\n+        font-size: 12px;\n+        font-weight: 700;\n+        border: 1px solid #d4e1eb;\n+        background: #f2f7fb;\n+        color: #43617b;\n+      }\n+\n+      .chip.claw {\n+        color: #6f4899;\n+        background: var(--claw-soft);\n+        border-color: rgba(140, 79, 197, 0.24);\n+      }\n+\n+      .chip.good {\n+        color: #267154;\n+        background: var(--success-soft);\n+        border-color: rgba(47, 139, 105, 0.22);\n+      }\n+\n+      .chip.warn {\n+        color: #96632b;\n+        background: var(--warn-soft);\n+        border-color: rgba(181, 106, 40, 0.18);\n+      }\n+\n+      .matrix {\n+        overflow: auto;\n+        border-radius: 18px;\n+        border: 1px solid #d8e5ee;\n+        background: rgba(255, 255, 255, 0.9);\n+      }\n+\n+      table {\n+        width: 100%;\n+        border-collapse: collapse;\n+        min-width: 680px;\n+      }\n+\n+      th,\n+      td {\n+        padding: 14px 14px;\n+        text-align: left;\n+        vertical-align: top;\n+        border-bottom: 1px solid #e0ebf3;\n+        font-size: 13px;\n+        line-height: 1.6;\n+      }\n+\n+      th {\n+        color: #32506a;\n+        background: #edf4f9;\n+        font-size: 12px;\n+        text-transform: uppercase;\n+        letter-spacing: 0.04em;\n+      }\n+\n+      tr:last-child td {\n+        border-bottom: 0;\n+      }\n+\n+      .story-tabs {\n+        display: flex;\n+        flex-wrap: wrap;\n+        gap: 10px;\n+        margin-bottom: 14px;\n+      }\n+\n+      .story-tab {\n+        border: 0;\n+        border-radius: 999px;\n+        padding: 10px 14px;\n+        font-size: 13px;\n+        font-weight: 700;\n+        cursor: pointer;\n+        color: #2f4d67;\n+        background: linear-gradient(180deg, #ffffff 0%, #ddebf7 100%);\n+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);\n+      }\n+\n+      .story-tab.active {\n+        color: white;\n+        background: linear-gradient(180deg, #4c87b8 0%, #2a6ca3 100%);\n+      }\n+\n+      .story-panel {\n+        display: none;\n+      }\n+\n+      .story-panel.active {\n+        display: grid;\n+        gap: 12px;\n+      }\n+\n+      .story-header {\n+        display: flex;\n+        align-items: center;\n+        justify-content: space-between;\n+        gap: 12px;\n+      }\n+\n+      .story-tag {\n+        padding: 6px 10px;\n+        border-radius: 999px;\n+        font-size: 12px;\n+        font-weight: 800;\n+        letter-spacing: 0.04em;\n+      }\n+\n+      .tag-recommend {\n+        color: #0c617d;\n+        background: var(--story-soft);\n+      }\n+\n+      .tag-tech {\n+        color: #6f4899;\n+        background: var(--claw-soft);\n+      }\n+\n+      .tag-arch {\n+        color: #2b6d51;\n+        background: var(--success-soft);\n+      }\n+\n+      .steps {\n+        display: grid;\n+        gap: 10px;\n+      }\n+\n+      .step {\n+        display: grid;\n+        grid-template-columns: 34px 1fr;\n+        gap: 12px;\n+        align-items: start;\n+        padding: 12px;\n+        border-radius: 16px;\n+        border: 1px solid #dbe6ef;\n+        background: rgba(255, 255, 255, 0.94);\n+      }\n+\n+      .step-index {\n+        width: 34px;\n+        height: 34px;\n+        border-radius: 50%;\n+        display: grid;\n+        place-items: center;\n+        font-size: 13px;\n+        font-weight: 800;\n+        color: white;\n+        background: linear-gradient(180deg, #4b85b7 0%, #2a6ca3 100%);\n+      }\n+\n+      .step strong {\n+        display: block;\n+        margin-bottom: 5px;\n+        font-size: 14px;\n+      }\n+\n+      .step span {\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.62;\n+      }\n+\n+      .flow {\n+        display: grid;\n+        gap: 10px;\n+        padding: 14px;\n+        border-radius: 18px;\n+        border: 1px solid #d8e5ee;\n+        background: linear-gradient(180deg, rgba(252, 254, 255, 0.97) 0%, rgba(240, 246, 251, 0.92) 100%);\n+      }\n+\n+      .flow-row {\n+        display: flex;\n+        flex-wrap: wrap;\n+        gap: 10px;\n+        align-items: center;\n+      }\n+\n+      .node,\n+      .arrow {\n+        padding: 10px 12px;\n+        border-radius: 14px;\n+        font-size: 13px;\n+        font-weight: 700;\n+      }\n+\n+      .node {\n+        background: #fff;\n+        border: 1px solid #d4e2ed;\n+      }\n+\n+      .node.claw {\n+        border-color: rgba(140, 79, 197, 0.42);\n+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 237, 255, 0.94) 100%);\n+      }\n+\n+      .arrow {\n+        padding-inline: 0;\n+        color: #6f879d;\n+        background: transparent;\n+      }\n+\n+      .speech {\n+        padding: 16px 18px;\n+        border-radius: 18px;\n+        border: 1px solid #dbe7ef;\n+        background: rgba(255, 255, 255, 0.94);\n+        color: #355069;\n+        font-size: 14px;\n+        line-height: 1.82;\n+      }\n+\n+      .speech strong {\n+        color: #1c4668;\n+      }\n+\n+      .arch-grid {\n+        display: grid;\n+        grid-template-columns: repeat(2, minmax(0, 1fr));\n+        gap: 10px;\n+      }\n+\n+      .arch-box {\n+        border-radius: 16px;\n+        padding: 12px;\n+        border: 1px solid #d8e5ee;\n+        background: rgba(255, 255, 255, 0.94);\n+      }\n+\n+      .arch-box h4 {\n+        margin: 0 0 6px;\n+        font-size: 14px;\n+      }\n+\n+      .arch-box p {\n+        margin: 0;\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.62;\n+      }\n+\n+      .focus-card {\n+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 249, 253, 0.94) 100%);\n+      }\n+\n+      .focus-list {\n+        display: grid;\n+        gap: 10px;\n+        margin-top: 10px;\n+      }\n+\n+      .focus-item {\n+        display: grid;\n+        grid-template-columns: 28px 1fr;\n+        gap: 10px;\n+        align-items: start;\n+      }\n+\n+      .focus-num {\n+        width: 28px;\n+        height: 28px;\n+        border-radius: 50%;\n+        display: grid;\n+        place-items: center;\n+        font-size: 12px;\n+        font-weight: 800;\n+        color: #8a511e;\n+        background: var(--warn-soft);\n+      }\n+\n+      .focus-item span {\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.62;\n+      }\n+\n+      .footnote {\n+        color: var(--muted);\n+        font-size: 12px;\n+        line-height: 1.7;\n+      }\n+\n+      @media (max-width: 1100px) {\n+        .grid,\n+        .callouts,\n+        .arch-grid {\n+          grid-template-columns: 1fr;\n+        }\n+\n+        .hero-top,\n+        .story-header {\n+          flex-direction: column;\n+          align-items: start;\n+        }\n+\n+        .badges {\n+          justify-content: flex-start;\n+        }\n+      }\n+    </style>\n+  </head>\n+  <body>\n+    <div class=\"page\">\n+      <section class=\"hero\">\n+        <div class=\"hero-top\">\n+          <div>\n+            <h1>Liteasy x OpenClaw 路演答辩故事线</h1>\n+            <div class=\"subtitle\">\n+              这份页面把 Liteasy 的技术讲解整理成一条适合路演和答辩的故事线：\n+              先讲用户为什么需要，再讲产品怎么解决，最后讲我们如何借鉴 OpenClaw\n+              的 runtime 范式把这些能力稳定、可控地组织起来。\n+            </div>\n+          </div>\n+          <div class=\"badges\">\n+            <span class=\"badge\">桌面科研工作台</span>\n+            <span class=\"badge\">OpenClaw-inspired runtime</span>\n+            <span class=\"badge\">T_IM 精读亮点</span>\n+            <span class=\"badge\">路演可直接使用</span>\n+          </div>\n+        </div>\n+\n+        <div class=\"quote\">\n+          Liteasy 不是“把论文丢给 AI 问一问”的工具，而是一个把文献导入、精读、问答、\n+          可视化讲解和个性化学习串成闭环的桌面科研工作台。\n+        </div>\n+\n+        <div class=\"callouts\">\n+          <div class=\"callout\">\n+            <h3>讲解原则</h3>\n+            <p>不要把未来蓝图讲成已经全部实现，要明确区分“当前原型已落地”和“明确的扩展方向”。</p>\n+          </div>\n+          <div class=\"callout\">\n+            <h3>OpenClaw 关系</h3>\n+            <p>我们借鉴的是能力编排方式，而不是照搬它的产品外形或多聊天渠道入口。</p>\n+          </div>\n+          <div class=\"callout\">\n+            <h3>最强亮点</h3>\n+            <p>`T_IM` 把普通 AI 问答升级成可回跳原文、连续划线、分层讲解的 AI 精读体验。</p>\n+          </div>\n+        </div>\n+      </section>\n+\n+      <div class=\"grid\">\n+        <section class=\"panel\">\n+          <h2 class=\"section-title\">先统一口径</h2>\n+          <div class=\"section-subtitle\">上台前先把“什么已经有，什么是清晰路线”讲稳，后面整条故事线都会更顺。</div>\n+\n+          <div class=\"stack-grid\">\n+            <div class=\"stack-card\">\n+              <h3>当前仓库已能证明的技术栈</h3>\n+              <p>当前可以明确讲的真实技术栈，是 `Tauri 2 + React 18 + TypeScript + Vite + Rust + Vitest`，并且已经有三栏工作台原型与基础状态切片。</p>\n+              <div class=\"chips\">\n+                <span class=\"chip good\">Tauri 2</span>\n+                <span class=\"chip good\">React 18</span>\n+                <span class=\"chip good\">TypeScript</span>\n+                <span class=\"chip good\">Vite</span>\n+                <span class=\"chip good\">Rust</span>\n+                <span class=\"chip good\">Vitest</span>\n+              </div>\n+            </div>\n+\n+            <div class=\"stack-card\">\n+              <h3>适合路演讲述的目标分层</h3>\n+              <p>未来扩展方向可以清晰讲成四层：本地能力层、运行时层、云端扩展层、智能能力层，但要保持“这是路线，不是假装已全部完成”。</p>\n+              <div class=\"chips\">\n+                <span class=\"chip\">Rust + SQLite</span>\n+                <span class=\"chip claw\">Skill / Action Registry</span>\n+                <span class=\"chip claw\">Allowlist / Direct Dispatch</span>\n+                <span class=\"chip\">NestJS + PostgreSQL</span>\n+                <span class=\"chip\">BullMQ + S3</span>\n+                <span class=\"chip\">双模型审计</span>\n+              </div>\n+            </div>\n+\n+            <div class=\"stack-card\">\n+              <h3>最重要的答辩提醒</h3>\n+              <p>推荐原句：<strong>“我们当前已经完成桌面工作台原型，底层扩展路线则按 OpenClaw 启发的 runtime 范式继续推进。”</strong></p>\n+              <div class=\"chips\">\n+                <span class=\"chip warn\">不要说成已全部实现</span>\n+                <span class=\"chip good\">强调原型已落地</span>\n+                <span class=\"chip claw\">强调范式借鉴</span>\n+              </div>\n+            </div>\n+          </div>\n+\n+          <h2 class=\"section-title\" style=\"margin-top: 18px\">我们向 OpenClaw 学什么</h2>\n+          <div class=\"matrix\">\n+            <table>\n+              <thead>\n+                <tr>\n+                  <th>OpenClaw Feature</th>\n+                  <th>Liteasy 对应讲法</th>\n+                  <th>路演价值</th>\n+                </tr>\n+              </thead>\n+              <tbody>\n+                <tr>\n+                  <td>Skills</td>\n+                  <td>把名词解释、论文问答、产物生成、设置修改收敛成可注册工作流</td>\n+                  <td>说明 AI 不是乱答，而是按任务类型走不同流程</td>\n+                </tr>\n+                <tr>\n+                  <td>Tools / Plugin</td>\n+                  <td>把系统能力做成结构化 action，把专注度与 TODO 做成插件扩展</td>\n+                  <td>说明软件可扩展，而且是可控扩展</td>\n+                </tr>\n+                <tr>\n+                  <td>Routing</td>\n+                  <td>不同模式、不同工作区、不同任务走不同链路</td>\n+                  <td>说明不是“一句话进来全靠模型猜”</td>\n+                </tr>\n+                <tr>\n+                  <td>Media</td>\n+                  <td>文本、导图、PPT、视频、播客、Concept Map、划线讲解</td>\n+                  <td>说明我们跟上了多模态效果范式</td>\n+                </tr>\n+                <tr>\n+                  <td>Session isolation</td>\n+                  <td>以工作区和已锁定文献集作为上下文边界</td>\n+                  <td>说明回答不会乱串上下文</td>\n+                </tr>\n+                <tr>\n+                  <td>Control UI / App</td>\n+                  <td>落在三栏桌面工作台，而不是纯聊天壳</td>\n+                  <td>说明产品形态更适合论文精读</td>\n+                </tr>\n+              </tbody>\n+            </table>\n+          </div>\n+\n+          <div class=\"speech\" style=\"margin-top: 14px\">\n+            <strong>一句总括：</strong>\n+            我们借鉴 OpenClaw 的，不是它长什么样，而是它如何把 AI 能力组织成稳定、可控、可扩展的运行时。\n+          </div>\n+        </section>\n+\n+        <aside class=\"panel\">\n+          <h2 class=\"section-title\">答辩侧重点</h2>\n+          <div class=\"story-list\">\n+            <div class=\"story-card\">\n+              <h3>主讲人适合怎么讲</h3>\n+              <p>先讲痛点和用户动作，再讲三栏工作台与 T_IM 的精读体验，最后再落到 OpenClaw 范式与技术托底。</p>\n+            </div>\n+            <div class=\"story-card\">\n+              <h3>评委最容易听懂的点</h3>\n+              <p>“AI 回答不只在聊天框里结束，而是会回到 PDF 原文中连续划线、解释、跳转，并长出 Concept Map。”</p>\n+            </div>\n+            <div class=\"story-card\">\n+              <h3>技术成员最该守住的口径</h3>\n+              <p>桌面工作台是产品形态，OpenClaw runtime 是底层范式；两者不是谁替代谁，而是前者承载场景，后者承载能力组织。</p>\n+            </div>\n+          </div>\n+\n+          <div class=\"focus-card\" style=\"margin-top: 14px\">\n+            <h3>T_IM 为什么是整场亮点</h3>\n+            <p>它把普通 AI 问答升级成了真正可视、可回溯、可分层的精读体验。</p>\n+            <div class=\"focus-list\">\n+              <div class=\"focus-item\">\n+                <div class=\"focus-num\">1</div>\n+                <span>回答重新绑定回 PDF 原文，而不是说完就结束。</span>\n+              </div>\n+              <div class=\"focus-item\">\n+                <div class=\"focus-num\">2</div>\n+                <span>AI 可以连续划线、逐段解释，形成像老师精讲论文一样的链条。</span>\n+              </div>\n+              <div class=\"focus-item\">\n+                <div class=\"focus-num\">3</div>\n+                <span>这些划线还能继续长出 Concept Map 与分层讲解路径。</span>\n+              </div>\n+              <div class=\"focus-item\">\n+                <div class=\"focus-num\">4</div>\n+                <span>用户不再只是听答案，而是在原文中被带着完成理解过程。</span>\n+              </div>\n+            </div>\n+          </div>\n+        </aside>\n+      </div>\n+\n+      <section class=\"panel\">\n+        <h2 class=\"section-title\">三套故事线</h2>\n+        <div class=\"section-subtitle\">默认推荐 A 版。它最像讲故事，也最适合让评委在短时间内跟上。</div>\n+\n+        <div class=\"story-tabs\">\n+          <button class=\"story-tab active\" data-story-tab=\"story-a\" type=\"button\">故事线 A：用户问题出发</button>\n+          <button class=\"story-tab\" data-story-tab=\"story-b\" type=\"button\">故事线 B：OpenClaw 对齐出发</button>\n+          <button class=\"story-tab\" data-story-tab=\"story-c\" type=\"button\">故事线 C：架构层次出发</button>\n+        </div>\n+\n+        <div class=\"story-panel active\" id=\"story-a\">\n+          <div class=\"story-header\">\n+            <h3 style=\"margin: 0\">推荐主讲故事线 A</h3>\n+            <span class=\"story-tag tag-recommend\">最适合文科生主讲</span>\n+          </div>\n+\n+          <div class=\"steps\">\n+            <div class=\"step\">\n+              <div class=\"step-index\">1</div>\n+              <div><strong>先讲痛点</strong><span>论文难，不是因为没有答案，而是答案散、原文难跳、概念断层、多模态讲解不连续。</span></div>\n+            </div>\n+            <div class=\"step\">\n+              <div class=\"step-index\">2</div>\n+              <div><strong>再讲产品动作</strong><span>用户把论文导入工作区，勾选并锁定当前要分析的文献，形成稳定的上下文边界。</span></div>\n+            </div>\n+            <div class=\"step\">\n+              <div class=\"step-index\">3</div>\n+              <div><strong>再讲核心差异</strong><span>Liteasy 不是只给一个聊天框，而是把阅读区和 AI 区打通，回答会回到原文里。</span></div>\n+            </div>\n+            <div class=\"step\">\n+              <div class=\"step-index\">4</div>\n+              <div><strong>再讲关键亮点</strong><span>AI 不只是回答，还能连续划线、建立 Concept Map、回跳原文、生成导图与 PPT。</span></div>\n+            </div>\n+            <div class=\"step\">\n+              <div class=\"step-index\">5</div>\n+              <div><strong>最后讲技术保证</strong><span>底层借鉴 OpenClaw runtime：不同任务走 skills，软件能力走 actions，再加权限策略和双模型复核。</span></div>\n+            </div>\n+          </div>\n+\n+          <div class=\"flow\">\n+            <div class=\"flow-row\">\n+              <div class=\"node\">用户导入论文</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">左栏组织工作区</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">勾选并锁定文献集</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">中栏进入阅读与精读</div>\n+            </div>\n+            <div class=\"flow-row\">\n+              <div class=\"node\">右栏发起解释/问答/命令</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node claw\">Runtime 组装上下文</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node claw\">按任务选择 Skill</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node claw\">调用结构化 Action</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">回填到聊天/划线/Concept Map/PPT</div>\n+            </div>\n+          </div>\n+\n+          <div class=\"speech\">\n+            <strong>90 秒讲稿骨架：</strong>\n+            我们发现，读论文最痛苦的并不是搜不到答案，而是答案和原文、概念、图示、后续产物之间是断开的。\n+            所以 Liteasy 做的不是单纯聊天，而是一个桌面科研工作台。用户先把论文导入左侧工作区，勾选并锁定当前要分析的文献；\n+            中间是阅读主舞台，右边是 AI 助手。真正的亮点在于，AI 的回答不只停留在聊天框里，它可以直接回到 PDF 原文做连续划线讲解，\n+            生成 Concept Map、思维导图、PPT 等产物。底层上，我们借鉴了 OpenClaw 的运行时思想，把解释、问答、产物生成、设置修改做成不同 skills，\n+            把软件能力做成结构化 actions，再加上权限策略与双模型复核，让效果更稳、更容易扩展。\n+          </div>\n+        </div>\n+\n+        <div class=\"story-panel\" id=\"story-b\">\n+          <div class=\"story-header\">\n+            <h3 style=\"margin: 0\">备选故事线 B</h3>\n+            <span class=\"story-tag tag-tech\">适合被问 OpenClaw 关系时</span>\n+          </div>\n+\n+          <div class=\"steps\">\n+            <div class=\"step\">\n+              <div class=\"step-index\">1</div>\n+              <div><strong>先说 OpenClaw 证明了什么</strong><span>复杂 AI 应用需要靠 skills、routing、plugins、media、policy 组织能力，而不是堆一个万能聊天框。</span></div>\n+            </div>\n+            <div class=\"step\">\n+              <div class=\"step-index\">2</div>\n+              <div><strong>再说 Liteasy 如何迁移</strong><span>我们把这套范式迁移到科研学习场景，但保留 Liteasy 自己的桌面工作台产品形态。</span></div>\n+            </div>\n+            <div class=\"step\">\n+              <div class=\"step-index\">3</div>\n+              <div><strong>再说为什么不照搬</strong><span>论文学习强依赖阅读区、并排阅读、多标签页与原文定位，所以不适合做成纯渠道聊天壳。</span></div>\n+            </div>\n+            <div class=\"step\">\n+              <div class=\"step-index\">4</div>\n+              <div><strong>最后收束</strong><span>于是我们得到的是：中栏主工作流 + 右栏分支助手 + 本地知识引擎 + 多模态产物系统。</span></div>\n+            </div>\n+          </div>\n+\n+          <div class=\"flow\">\n+            <div class=\"flow-row\">\n+              <div class=\"node claw\">OpenClaw: Skills</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">Liteasy: 论文问答/名词解释/产物生成/设置修改</div>\n+            </div>\n+            <div class=\"flow-row\">\n+              <div class=\"node claw\">OpenClaw: Routing</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">Liteasy: 模式路由 + 工作区上下文隔离</div>\n+            </div>\n+            <div class=\"flow-row\">\n+              <div class=\"node claw\">OpenClaw: Plugins + Media</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">Liteasy: 专注度/TODO + 划线讲解/Concept Map/PPT/视频</div>\n+            </div>\n+            <div class=\"flow-row\">\n+              <div class=\"node claw\">OpenClaw: Policy</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">Liteasy: 结构化 Action + Allowlist</div>\n+            </div>\n+          </div>\n+\n+          <div class=\"speech\">\n+            <strong>关键表述：</strong>\n+            我们不是复制 OpenClaw 的产品外形，而是继承它已经被验证过的能力编排方式，\n+            再把这种方式落到论文学习这个更强调原文定位、连续讲解和多模态理解的场景里。\n+          </div>\n+        </div>\n+\n+        <div class=\"story-panel\" id=\"story-c\">\n+          <div class=\"story-header\">\n+            <h3 style=\"margin: 0\">备选故事线 C</h3>\n+            <span class=\"story-tag tag-arch\">适合技术答辩成员</span>\n+          </div>\n+\n+          <div class=\"arch-grid\">\n+            <div class=\"arch-box\">\n+              <h4>用户交互层</h4>\n+              <p>左栏负责工作区、收藏、推荐；中栏负责 PDF、标签页、Concept Map 与多模态产物；右栏负责 Assistant 分支交互。</p>\n+            </div>\n+            <div class=\"arch-box\">\n+              <h4>Agent Runtime</h4>\n+              <p>Runtime 负责上下文装配、Skill Registry、Action Registry、Allowlist/Policy 与双模型生成审计。</p>\n+            </div>\n+            <div class=\"arch-box\">\n+              <h4>本地能力层</h4>\n+              <p>本地引擎把论文变成可检索、可跳转、可引用的知识对象，包括文件系统、PDF 解析、OCR、索引、SQLite 与缓存。</p>\n+            </div>\n+            <div class=\"arch-box\">\n+              <h4>云端扩展层</h4>\n+              <p>账号、同步、组织、推荐、异步任务和统一模型网关位于云端，负责托住重任务与协作能力。</p>\n+            </div>\n+          </div>\n+\n+          <div class=\"flow\">\n+            <div class=\"flow-row\">\n+              <div class=\"node\">用户交互层</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node claw\">Agent Runtime</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">本地能力层</div>\n+              <div class=\"arrow\">→</div>\n+              <div class=\"node\">云端扩展层</div>\n+            </div>\n+          </div>\n+\n+          <div class=\"speech\">\n+            <strong>核心解释：</strong>\n+            用户交互层负责“看见什么、点什么、问什么”；Runtime 决定“该走哪条任务链、能调用什么能力、如何保证安全与稳定”；\n+            本地能力层负责“把论文真正变成知识对象”；云端扩展层负责“同步、推荐、重任务与组织协作”。\n+          </div>\n+        </div>\n+      </section>\n+\n+      <section class=\"panel\">\n+        <h2 class=\"section-title\">推荐上台顺序</h2>\n+        <div class=\"order-list\">\n+          <div class=\"order-card\">\n+            <h3>顺序 1：最推荐</h3>\n+            <p>痛点 → 三栏界面 → T_IM 精读亮点 → 多模态产物 → OpenClaw runtime 对齐 → 扩展能力与插件</p>\n+          </div>\n+          <div class=\"order-card\">\n+            <h3>顺序 2：偏技术型</h3>\n+            <p>为什么参考 OpenClaw → 不照搬哪些/继承哪些 → 三栏产品化落地 → 本地引擎与 runtime → T_IM 与多模态效果</p>\n+          </div>\n+          <div class=\"order-card\">\n+            <h3>顺序 3：偏产品型</h3>\n+            <p>用户旅程 → 关键交互点 → 亮点效果 → 技术如何托住这些效果</p>\n+          </div>\n+        </div>\n+      </section>\n+\n+      <section class=\"panel\">\n+        <h2 class=\"section-title\">答辩高频问题</h2>\n+        <div class=\"faq-list\">\n+          <div class=\"faq-card\">\n+            <h3>1. 为什么参考 OpenClaw？</h3>\n+            <p>因为它在复杂 AI 能力的组织方式上很成熟，尤其是 skill、routing、plugin、policy 这些 runtime 思想。我们借鉴这些能力编排方式，但产品形态仍然保持 Liteasy 自己的桌面科研工作台路线。</p>\n+          </div>\n+          <div class=\"faq-card\">\n+            <h3>2. 你们和普通论文问答工具有什么不同？</h3>\n+            <p>我们的重点不是“回答一句话”，而是把问答、原文定位、连续划线、Concept Map、多模态产物和后续学习动作接成一条线。</p>\n+          </div>\n+          <div class=\"faq-card\">\n+            <h3>3. 为什么是桌面端，不是网页？</h3>\n+            <p>因为论文学习强依赖本地文件、工作区、并排阅读、多标签页和系统级权限控制，桌面端更适合承载重交互阅读场景。</p>\n+          </div>\n+          <div class=\"faq-card\">\n+            <h3>4. 你们的 AI 为什么更可信？</h3>\n+            <p>第一，回答尽量绑定原文定位；第二，关键分析结果走双模型生成与审计；第三，软件操作不靠模型随意执行，而是走结构化 action 和策略校验。</p>\n+          </div>\n+          <div class=\"faq-card\">\n+            <h3>5. 插件在这里的作用是什么？</h3>\n+            <p>插件不是给页面塞更多按钮，而是把专注度管理、TODO、外部知识源等扩展能力接入同一个运行时，让产品后续能持续长大。</p>\n+          </div>\n+        </div>\n+\n+        <div class=\"quote\" style=\"margin-top: 14px\">\n+          如果说 OpenClaw 证明了 AI 应用应该怎样组织能力，那么 Liteasy 做的，就是把这套能力组织方式，\n+          真正变成一个适合论文精读、适合教学式讲解、也适合长期科研成长的桌面产品。\n+        </div>\n+\n+        <div class=\"footnote\" style=\"margin-top: 12px\">\n+          建议配合 `docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md` 一起使用：HTML 适合展示与排练，Markdown 适合细改口径与继续补充。\n+        </div>\n+      </section>\n+    </div>\n+\n+    <script>\n+      const tabs = document.querySelectorAll(\"[data-story-tab]\");\n+      const panels = document.querySelectorAll(\".story-panel\");\n+\n+      tabs.forEach((tab) => {\n+        tab.addEventListener(\"click\", () => {\n+          const targetId = tab.getAttribute(\"data-story-tab\");\n+\n+          tabs.forEach((item) => item.classList.remove(\"active\"));\n+          panels.forEach((panel) => panel.classList.remove(\"active\"));\n+\n+          tab.classList.add(\"active\");\n+          document.getElementById(targetId)?.classList.add(\"active\");\n+        });\n+      });\n+    </script>\n+  </body>\n+</html>\n*** End Patch\n",
+          "timestamp": "2026-05-13T16:44:00.884Z"
+        },
+        {
+          "type": "assistant",
+          "text": "HTML 页面已经写好了。我再做一个很轻的检查，确认文件存在、标题正常、故事线切换脚本和主要段落都在，这样你打开就能直接拿去用。",
+          "timestamp": "2026-05-13T16:44:13.062Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "test -f docs/liteasy-openclaw-defense-storyline.html && echo PASS",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:44:13.332Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg -n \"<title>|故事线 A|故事线 B|故事线 C|答辩高频问题|T_IM|OpenClaw\" docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:44:13.334Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,220p' docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T16:44:13.334Z"
+        },
+        {
+          "type": "assistant",
+          "text": "HTML 版本已经放到 [docs/liteasy-openclaw-defense-storyline.html](/home/tianjiaming/proj/Liteasy/docs/liteasy-openclaw-defense-storyline.html)。\n\n这个页面是单文件展示页，适合直接打开排练或投屏使用。我把内容组织成了：\n- 顶部一句话定位 + 口径提醒\n- “当前已落地 / 目标扩展” 技术口径区\n- `OpenClaw feature -> Liteasy 对应讲法` 对照表\n- 3 套可切换的故事线 A/B/C\n- `T_IM` 亮点区\n- 高频答辩问答区\n\n我还做了一个轻量交互：点击页面里的故事线标签，可以在 A/B/C 三套讲法之间切换。文件存在性和关键段落我已经检查过了，没有跑额外构建，因为这次只新增了静态 HTML。\n\n如果你愿意，我下一步可以继续把这个 HTML 再增强成“更像路演大屏”的版本，比如加入：\n1. 更强的分步动画节奏\n2. 更明显的答辩提示词高亮\n3. 把现有 `architecture.html` 的结构图也嵌进同一页里，做成一份完整宣讲页",
+          "timestamp": "2026-05-13T16:44:27.289Z"
+        },
+        {
+          "type": "user",
+          "text": "# Context from my IDE setup:\n\n## Open tabs:\n- liteasy-openclaw-defense-storyline.html: docs/liteasy-openclaw-defense-storyline.html\n- Liteasy_功能与UI设计文档1.0.md: docs/Liteasy_功能与UI设计文档1.0.md\n- liteasy-openclaw-architecture.html: docs/liteasy-openclaw-architecture.html\n- Liteasy-OpenClaw-路演技术讲解与答辩故事线.md: docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md\n- Features-OpenClaw.md: docs/Features-OpenClaw.md\n\n## My request for Codex:\n继续精细化, 这些技术概念的含义也要让大家心中有数, 不能只是泛泛而谈. 概念也要更偏工程化, 更加具体, 准确, 不只是画饼. 继续完善这个 HTML",
+          "timestamp": "2026-05-13T17:03:45.214Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我会把这页从“讲得顺”继续推进到“讲得准”：先补一层工程化术语解释，把每个概念讲成“它在系统里具体负责什么、边界是什么、在 Liteasy 里长什么样”，再把现有故事线里的抽象词替换成更可落地的说法。",
+          "timestamp": "2026-05-13T17:04:19.861Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg -n \"Liteasy|OpenClaw|Skill Registry|Action Registry|Allowlist|Direct Dispatch|模型网关|OCR|切块|索引|上下文|命令结构化|双模型|异步任务\" /home/tianjiaming/.codex/memories/MEMORY.md",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:04:19.911Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg -n \"Skill Registry|Action Registry|Allowlist|Direct Dispatch|命令结构化|双模型|模型网关|OCR|切块|索引|工作区\" docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md docs/liteasy-openclaw-architecture.html docs/Liteasy-OpenClaw-路演技术讲解与答辩故事线.md docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:04:20.018Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '1,260p' docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:04:20.043Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '260,620p' docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:04:20.044Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '620,980p' docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:04:20.045Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我已经确认到一个关键问题：现在这页“讲法”是顺的，但“术语落地层”还不够硬。接下来我会补三块最关键的工程化内容：术语拆解、真实执行链路示例、当前原型和目标架构之间的清晰边界。",
+          "timestamp": "2026-05-13T17:04:40.264Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我准备直接改这页 HTML，重点会落在三处：\n- 把 `Skill Registry / Action Registry / Allowlist / Direct Dispatch / 模型网关 / 双模型` 全部拆成“是什么、不是什麽、在 Liteasy 里怎么落”\n- 加两条具体执行链路示例，把抽象名词变成真实的数据流和控制流\n- 明确“当前原型已经做到哪儿、下一阶段必须补什么”，避免评委觉得我们只是在画饼",
+          "timestamp": "2026-05-13T17:05:10.891Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "apply_patch",
+          "input": "*** Begin Patch\n*** Update File: /home/tianjiaming/proj/Liteasy/docs/liteasy-openclaw-defense-storyline.html\n@@\n       .story-list,\n       .faq-list,\n-      .order-list {\n+      .order-list,\n+      .term-grid,\n+      .lane-grid,\n+      .boundary-grid {\n         display: grid;\n         gap: 12px;\n       }\n@@\n       .focus-card {\n         border: 1px solid #d8e5ee;\n         border-radius: 18px;\n         padding: 14px;\n         background: rgba(255, 255, 255, 0.9);\n@@\n       .stack-card p,\n       .story-card p,\n       .faq-card p,\n       .order-card p,\n       .focus-card p {\n@@\n         line-height: 1.68;\n       }\n+\n+      .term-grid {\n+        grid-template-columns: repeat(2, minmax(0, 1fr));\n+      }\n+\n+      .term-card,\n+      .lane-card,\n+      .boundary-card {\n+        border: 1px solid #d8e5ee;\n+        border-radius: 18px;\n+        padding: 14px;\n+        background: rgba(255, 255, 255, 0.92);\n+      }\n+\n+      .term-card h3,\n+      .lane-card h3,\n+      .boundary-card h3 {\n+        margin: 0 0 8px;\n+        font-size: 15px;\n+      }\n+\n+      .term-line,\n+      .boundary-line {\n+        margin-top: 8px;\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.68;\n+      }\n+\n+      .term-line strong,\n+      .boundary-line strong {\n+        color: #2a4b66;\n+      }\n+\n+      .lane-grid,\n+      .boundary-grid {\n+        grid-template-columns: repeat(2, minmax(0, 1fr));\n+      }\n+\n+      .lane-card p,\n+      .boundary-card p {\n+        margin: 0;\n+        color: var(--muted);\n+        font-size: 13px;\n+        line-height: 1.7;\n+      }\n+\n+      .code-sample {\n+        margin-top: 12px;\n+        padding: 14px;\n+        border-radius: 16px;\n+        overflow: auto;\n+        border: 1px solid #d8e5ee;\n+        background: linear-gradient(180deg, #f8fbfd 0%, #eef4f8 100%);\n+      }\n+\n+      .code-sample pre {\n+        margin: 0;\n+        font-size: 12px;\n+        line-height: 1.7;\n+        color: #294860;\n+        font-family: \"SFMono-Regular\", Consolas, \"Liberation Mono\", Menlo, monospace;\n+        white-space: pre-wrap;\n+      }\n+\n+      .note-strip {\n+        padding: 14px 16px;\n+        border-radius: 18px;\n+        border: 1px solid #d8e5ee;\n+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(242, 247, 251, 0.94) 100%);\n+        color: #36536d;\n+        font-size: 14px;\n+        line-height: 1.75;\n+      }\n+\n+      .note-strip strong {\n+        color: #1e4868;\n+      }\n@@\n                 <tr>\n                   <td>Skills</td>\n-                  <td>把名词解释、论文问答、产物生成、设置修改收敛成可注册工作流</td>\n+                  <td>把 `concept.explain`、`paper.qa`、`artifact.generate`、`settings.adjust` 这类任务语义收敛成可注册工作流</td>\n                   <td>说明 AI 不是乱答，而是按任务类型走不同流程</td>\n                 </tr>\n                 <tr>\n                   <td>Tools / Plugin</td>\n-                  <td>把系统能力做成结构化 action，把专注度与 TODO 做成插件扩展</td>\n+                  <td>把 `settings.update`、`analysis.start`、`artifact.open_tab` 这类软件能力做成 typed action，把专注度与 TODO 做成插件扩展</td>\n                   <td>说明软件可扩展，而且是可控扩展</td>\n                 </tr>\n                 <tr>\n                   <td>Routing</td>\n-                  <td>不同模式、不同工作区、不同任务走不同链路</td>\n+                  <td>名词解释、问答、命令三种模式分别进入不同链路；中栏按钮可直接命中主工作流，右栏自然语言走解析与路由</td>\n                   <td>说明不是“一句话进来全靠模型猜”</td>\n                 </tr>\n                 <tr>\n                   <td>Media</td>\n-                  <td>文本、导图、PPT、视频、播客、Concept Map、划线讲解</td>\n+                  <td>文本回答之外，产物统一回填到 PDF 划线、Concept Map、导图、PPT、视频等可视化结果上</td>\n                   <td>说明我们跟上了多模态效果范式</td>\n                 </tr>\n                 <tr>\n                   <td>Session isolation</td>\n-                  <td>以工作区和已锁定文献集作为上下文边界</td>\n+                  <td>以 `workspace + selectedPaperIds + 当前对话` 作为上下文边界，避免不同论文、不同任务之间串上下文</td>\n                   <td>说明回答不会乱串上下文</td>\n                 </tr>\n                 <tr>\n                   <td>Control UI / App</td>\n@@\n           <div class=\"speech\" style=\"margin-top: 14px\">\n             <strong>一句总括：</strong>\n             我们借鉴 OpenClaw 的，不是它长什么样，而是它如何把 AI 能力组织成稳定、可控、可扩展的运行时。\n           </div>\n         </section>\n@@\n           </div>\n         </aside>\n       </div>\n+\n+      <section class=\"panel\">\n+        <h2 class=\"section-title\">关键概念，不要只停留在名词</h2>\n+        <div class=\"section-subtitle\">这一段是给主讲人和答辩成员“心里有数”用的。每个概念都要讲到：它具体负责什么、边界是什么、在 Liteasy 里会长成什么样。</div>\n+\n+        <div class=\"term-grid\">\n+          <div class=\"term-card\">\n+            <h3>工作区 vs 选中文献集</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>工作区是用户当前打开的文献树；选中文献集是当前真正送进 AI runtime 的分析对象，通常由 `selectedPaperIds` 表示。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是“打开了整个文件夹，AI 就默认理解整个文件夹全部内容”。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>左栏负责管理工作区，勾选并锁定后形成稳定分析边界，后续问答、导图、PPT 都优先基于这组已锁定文献。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>Context Assembly</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>在调用模型前，把 `selectedPaperIds`、当前页面锚点、对话历史、用户画像偏好、检索到的 chunk 一次性拼成上下文输入。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是把整篇 PDF 原样丢进模型，更不是只拿用户最后一句话去问。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>它决定 AI 到底是在回答哪几篇论文、哪一页、哪一段，以及要不要沿用之前的解释链。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>Skill Registry</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>任务语义注册表。它告诉系统“这是名词解释”“这是论文问答”“这是产物生成”“这是设置修改”。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是直接操作系统或直接改软件状态的底层接口。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>典型 skill 可以是 `concept.explain`、`paper.qa`、`artifact.generate`、`settings.adjust`。它决定流程模板，不负责真正落地执行。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>Action Registry</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>系统允许执行的结构化动作列表，每个 action 都有明确输入、输出和副作用。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是模型想到什么就能随便调用什么。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>可以长成 `settings.update`、`analysis.start`、`artifact.open_tab`、`workspace.lock_selection`。只有注册过的 action 才能真正改 UI 状态、开标签页或改设置。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>Allowlist / Policy</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>权限与风险策略层。它决定某个模式下、某个用户身份下、某类操作是否允许执行。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是“有 skill 就一定能跑”，也不是所有命令都默认放行。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>像“清空画像”“删除文献”“关闭同步”这类高风险动作，都应该先过 policy，再要求二次确认，默认 fail-closed。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>Direct Dispatch</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>当用户意图已经足够明确时，不再让模型猜，而是直接进入确定性的执行链。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是所有交互都必须先聊天、再让模型二次判断用户想干什么。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>中栏“思维导图 / PPT / 树形展开”按钮就是 direct dispatch；右栏自然语言命令则仍需先解析，再路由到对应 skill 和 action。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>Session Isolation</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>把一次问答或一次分析绑定在明确的上下文边界里，避免不同论文、不同工作区之间串台。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是所有会话共用一个大缓存，更不是今天讲过的论文自动污染明天的新工作区。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>边界至少包括 `workspace_id`、已锁定文献集、当前会话历史与当前模式。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>Local Knowledge Engine</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>把 PDF 从“文件”变成“可检索、可引用、可跳转知识对象”的本地引擎。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是简单把文件路径记下来，也不是只在前端展示一个 PDF 阅读器。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>它会负责 PDF 解析、OCR 回退、文献切块、全文索引、锚点映射和本地缓存，让问答与划线能精确回到原文位置。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>统一模型网关</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>统一接入 LLM、embedding、rerank、OCR、TTS、ASR 等模型能力的单一入口。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是每个业务模块自己随手连一个模型 API。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>这样才能统一记录 provider、model、token、耗时、失败重试与成本，也方便未来切换模型供应商。</div>\n+          </div>\n+\n+          <div class=\"term-card\">\n+            <h3>双模型生成与审计</h3>\n+            <div class=\"term-line\"><strong>是什么：</strong>一个模型负责生成，另一个模型负责检查“有没有答到点上、有没有乱引、有没有幻觉、引用是否足够”。</div>\n+            <div class=\"term-line\"><strong>不是什么：</strong>不是为了显得高级而无差别叠两层模型，也不是所有短命令都强制走双模型。</div>\n+            <div class=\"term-line\"><strong>在 Liteasy 里：</strong>深度文献分析、PPT/导图大纲、重要解释链优先走双模型；简单设置类命令可以只走单模型或不走模型。</div>\n+          </div>\n+        </div>\n+\n+        <div class=\"note-strip\" style=\"margin-top: 14px\">\n+          <strong>讲的时候可以用这句区分：</strong>\n+          skill 解决“这次任务属于哪一类”，action 解决“系统最后具体执行什么”，policy 解决“这件事能不能做”，direct dispatch 解决“用户已经说得很明确时，不要再让模型多猜一层”。\n+        </div>\n+      </section>\n+\n+      <section class=\"panel\">\n+        <h2 class=\"section-title\">两条最关键的工程执行链路</h2>\n+        <div class=\"section-subtitle\">如果评委追问“你们到底怎么做到”，这两条链路最值得讲，因为它们能把抽象概念落到真实控制流与数据流上。</div>\n+\n+        <div class=\"lane-grid\">\n+          <div class=\"lane-card\">\n+            <h3>链路 1：命令控制不是聊天，而是结构化执行</h3>\n+            <p>以“关闭联网推荐”为例，系统理想执行链是：自然语言先被识别为设置变更意图，再被结构化成命令对象，之后由 policy 校验，再落到一个明确 action 上执行。</p>\n+            <div class=\"code-sample\">\n+              <pre>{\n+  \"intent\": \"update_setting\",\n+  \"target\": \"network.recommendation.enabled\",\n+  \"value\": false,\n+  \"skill\": \"settings.adjust\",\n+  \"action\": \"settings.update\"\n+}</pre>\n+            </div>\n+            <div class=\"term-line\"><strong>工程含义：</strong>这样做的好处是，模型只负责理解用户意图，不直接接触高风险副作用；真正改设置的是可审计、可回滚、可测试的 action 层。</div>\n+          </div>\n+\n+          <div class=\"lane-card\">\n+            <h3>链路 2：论文问答不是只出答案，而是带依据地回链原文</h3>\n+            <p>以“解释这篇论文的 method”为例，系统理想执行链是：先装配上下文，再检索 chunk，主模型生成回答，审计模型给出评分与问题点，最后把答案回写到聊天与 PDF 锚点。</p>\n+            <div class=\"code-sample\">\n+              <pre>{\n+  \"workspace_id\": \"ws_001\",\n+  \"selected_paper_ids\": [\"paper_a\"],\n+  \"anchor_refs\": [\"paper_a:p12:para_03\"],\n+  \"skill\": \"paper.qa\",\n+  \"retrieval\": [\"chunk_42\", \"chunk_57\"],\n+  \"audit\": {\n+    \"score\": 0.84,\n+    \"issues\": [\"结论缺少实验段落引用\"],\n+    \"suggested_revision\": \"补充第 14 页实验设置定位\"\n+  }\n+}</pre>\n+            </div>\n+            <div class=\"term-line\"><strong>工程含义：</strong>最后产物不只是右栏的一段话，还应包括引用定位、PDF 划线、Concept Map 节点或新标签页产物。</div>\n+          </div>\n+        </div>\n+      </section>\n+\n+      <section class=\"panel\">\n+        <h2 class=\"section-title\">当前原型与下一阶段，要明确分界</h2>\n+        <div class=\"section-subtitle\">这部分是防止“讲大了”的关键。越讲工程化，越要把已经有的和下一步必须补的分开。</div>\n+\n+        <div class=\"boundary-grid\">\n+          <div class=\"boundary-card\">\n+            <h3>当前原型已经能支撑哪些说法</h3>\n+            <div class=\"boundary-line\"><strong>桌面形态：</strong>三栏工作台骨架已经存在，产品形态不是空想。</div>\n+            <div class=\"boundary-line\"><strong>状态切片：</strong>当前仓库已有工作区勾选锁定、助手模式切换、导入任务状态等最小状态切片。</div>\n+            <div class=\"boundary-line\"><strong>技术底座：</strong>`Tauri 2 + React + TypeScript + Rust + Vitest` 这条桌面技术栈已经落下来。</div>\n+            <div class=\"boundary-line\"><strong>可以讲的结论：</strong>“我们已经完成桌面原型与核心交互骨架，正在继续把文献引擎与 runtime 做实。”</div>\n+          </div>\n+\n+          <div class=\"boundary-card\">\n+            <h3>下一阶段必须补齐的工程件</h3>\n+            <div class=\"boundary-line\"><strong>本地文献引擎：</strong>PDF 解析、OCR、切块、索引、锚点映射，否则“划线回链”还只是设计。</div>\n+            <div class=\"boundary-line\"><strong>命令路由：</strong>从自然语言到 `skill + action` 的命令结构化层，否则“AI 控制软件”还不够可控。</div>\n+            <div class=\"boundary-line\"><strong>可信回答：</strong>检索、引用绑定、双模型审计，否则“更可信”还缺少工程抓手。</div>\n+            <div class=\"boundary-line\"><strong>异步任务：</strong>PPT、视频、复杂导图需要任务队列和 worker，否则前端会被长任务拖死。</div>\n+          </div>\n+        </div>\n+      </section>\n \n       <section class=\"panel\">\n         <h2 class=\"section-title\">三套故事线</h2>\n         <div class=\"section-subtitle\">默认推荐 A 版。它最像讲故事，也最适合让评委在短时间内跟上。</div>\n@@\n             <div class=\"step\">\n               <div class=\"step-index\">5</div>\n-              <div><strong>最后讲技术保证</strong><span>底层借鉴 OpenClaw runtime：不同任务走 skills，软件能力走 actions，再加权限策略和双模型复核。</span></div>\n+              <div><strong>最后讲技术保证</strong><span>底层借鉴 OpenClaw runtime：任务先被归到 `paper.qa / concept.explain / settings.adjust` 等 skill，再通过 `analysis.start / settings.update / artifact.open_tab` 等 action 落地，并受 policy 与双模型复核约束。</span></div>\n             </div>\n           </div>\n \n           <div class=\"flow\">\n             <div class=\"flow-row\">\n@@\n             </div>\n             <div class=\"flow-row\">\n               <div class=\"node\">右栏发起解释/问答/命令</div>\n               <div class=\"arrow\">→</div>\n-              <div class=\"node claw\">Runtime 组装上下文</div>\n+              <div class=\"node claw\">Context Assembly</div>\n               <div class=\"arrow\">→</div>\n-              <div class=\"node claw\">按任务选择 Skill</div>\n+              <div class=\"node claw\">选择 Skill: paper.qa</div>\n               <div class=\"arrow\">→</div>\n-              <div class=\"node claw\">调用结构化 Action</div>\n+              <div class=\"node claw\">执行 Action: artifact.open_tab</div>\n               <div class=\"arrow\">→</div>\n               <div class=\"node\">回填到聊天/划线/Concept Map/PPT</div>\n             </div>\n           </div>\n@@\n             <div class=\"flow-row\">\n               <div class=\"node claw\">OpenClaw: Skills</div>\n               <div class=\"arrow\">→</div>\n-              <div class=\"node\">Liteasy: 论文问答/名词解释/产物生成/设置修改</div>\n+              <div class=\"node\">Liteasy: concept.explain / paper.qa / artifact.generate / settings.adjust</div>\n             </div>\n             <div class=\"flow-row\">\n               <div class=\"node claw\">OpenClaw: Routing</div>\n               <div class=\"arrow\">→</div>\n-              <div class=\"node\">Liteasy: 模式路由 + 工作区上下文隔离</div>\n+              <div class=\"node\">Liteasy: 模式路由 + workspace/selectedPaperIds 会话隔离</div>\n             </div>\n             <div class=\"flow-row\">\n               <div class=\"node claw\">OpenClaw: Plugins + Media</div>\n               <div class=\"arrow\">→</div>\n@@\n             </div>\n             <div class=\"flow-row\">\n               <div class=\"node claw\">OpenClaw: Policy</div>\n               <div class=\"arrow\">→</div>\n-              <div class=\"node\">Liteasy: 结构化 Action + Allowlist</div>\n+              <div class=\"node\">Liteasy: typed action + allowlist + 二次确认</div>\n             </div>\n           </div>\n@@\n             <div class=\"arch-box\">\n               <h4>Agent Runtime</h4>\n-              <p>Runtime 负责上下文装配、Skill Registry、Action Registry、Allowlist/Policy 与双模型生成审计。</p>\n+              <p>Runtime 负责上下文装配、skill 选择、action 执行、policy 校验与双模型审计，是“用户一句话如何变成系统一次可控执行”的核心层。</p>\n             </div>\n             <div class=\"arch-box\">\n               <h4>本地能力层</h4>\n-              <p>本地引擎把论文变成可检索、可跳转、可引用的知识对象，包括文件系统、PDF 解析、OCR、索引、SQLite 与缓存。</p>\n+              <p>本地引擎把 PDF 从“文件”变成“知识对象”，具体包括文件系统访问、PDF 解析、OCR 回退、切块、全文索引、SQLite 缓存与锚点映射。</p>\n             </div>\n             <div class=\"arch-box\">\n               <h4>云端扩展层</h4>\n-              <p>账号、同步、组织、推荐、异步任务和统一模型网关位于云端，负责托住重任务与协作能力。</p>\n+              <p>账号、同步、组织、推荐、异步任务和统一模型网关位于云端，负责托住重任务、跨设备协同以及模型接入治理。</p>\n             </div>\n           </div>\n@@\n           <div class=\"faq-card\">\n             <h3>1. 为什么参考 OpenClaw？</h3>\n-            <p>因为它在复杂 AI 能力的组织方式上很成熟，尤其是 skill、routing、plugin、policy 这些 runtime 思想。我们借鉴这些能力编排方式，但产品形态仍然保持 Liteasy 自己的桌面科研工作台路线。</p>\n+            <p>因为它在复杂 AI 能力组织方式上很成熟，尤其是 skill、routing、plugin、policy 这些 runtime 思想。我们借鉴的是“怎么让 AI 走可控流程”，而不是把 Liteasy 做成另一个多渠道聊天壳。</p>\n           </div>\n@@\n           <div class=\"faq-card\">\n             <h3>4. 你们的 AI 为什么更可信？</h3>\n-            <p>第一，回答尽量绑定原文定位；第二，关键分析结果走双模型生成与审计；第三，软件操作不靠模型随意执行，而是走结构化 action 和策略校验。</p>\n+            <p>第一，回答尽量绑定原文定位与 chunk 引用；第二，关键分析结果走双模型生成与审计；第三，软件操作不靠模型随意执行，而是走结构化 command、typed action 和 policy 校验。</p>\n           </div>\n           <div class=\"faq-card\">\n             <h3>5. 插件在这里的作用是什么？</h3>\n-            <p>插件不是给页面塞更多按钮，而是把专注度管理、TODO、外部知识源等扩展能力接入同一个运行时，让产品后续能持续长大。</p>\n+            <p>插件不是给页面塞更多按钮，而是把专注度管理、TODO、外部知识源等能力以可管理、可授权的方式接入同一个 runtime，让扩展能力仍然遵守统一的 action 与 policy 边界。</p>\n           </div>\n         </div>\n*** End Patch\n",
+          "timestamp": "2026-05-13T17:06:57.617Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我已经把“术语解释层”和“执行链路层”补进去了。现在在做最后一轮检查，重点看三件事：这些术语有没有真正工程化、示例链路有没有把 skill/action/policy 讲清楚、以及移动端/小屏下版式有没有被我这轮新增内容撑坏。",
+          "timestamp": "2026-05-13T17:07:12.487Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg -n \"关键概念，不要只停留在名词|两条最关键的工程执行链路|当前原型与下一阶段|Context Assembly|Local Knowledge Engine|typed action|policy 校验\" docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:07:12.503Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '120,420p' docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:07:12.616Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "sed -n '420,900p' docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:07:12.616Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我看到一个小版式问题：我新加的术语区和执行链路区在小屏下还没有自动收成单列。我补一个响应式修正，这样这页在投屏前用笔记本预览时也不会显得太挤。",
+          "timestamp": "2026-05-13T17:07:22.837Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "apply_patch",
+          "input": "*** Begin Patch\n*** Update File: /home/tianjiaming/proj/Liteasy/docs/liteasy-openclaw-defense-storyline.html\n@@\n       @media (max-width: 1100px) {\n         .grid,\n         .callouts,\n-        .arch-grid {\n+        .arch-grid,\n+        .term-grid,\n+        .lane-grid,\n+        .boundary-grid {\n           grid-template-columns: 1fr;\n         }\n*** End Patch\n",
+          "timestamp": "2026-05-13T17:07:24.924Z"
+        },
+        {
+          "type": "assistant",
+          "text": "这轮内容已经基本成型了：页面现在不只是“告诉大家有哪些词”，而是开始说明这些词在系统中具体扮演什么角色、如何串成执行链。最后我再做一遍轻量检查，确认新增区块和响应式修正都在。",
+          "timestamp": "2026-05-13T17:07:38.641Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "test -f docs/liteasy-openclaw-defense-storyline.html && echo PASS",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:07:38.895Z"
+        },
+        {
+          "type": "tool_use",
+          "name": "shell_command",
+          "input": {
+            "command": "rg -n \"term-grid|lane-grid|boundary-grid|关键概念，不要只停留在名词|两条最关键的工程执行链路|当前原型与下一阶段，要明确分界|settings.update|paper.qa|policy 校验\" docs/liteasy-openclaw-defense-storyline.html",
+            "timeout_ms": 10000,
+            "workdir": "/home/tianjiaming/proj/Liteasy"
+          },
+          "timestamp": "2026-05-13T17:07:38.895Z"
+        },
+        {
+          "type": "assistant",
+          "text": "我已经继续把 HTML 做实了，更新在 [docs/liteasy-openclaw-defense-storyline.html](/home/tianjiaming/proj/Liteasy/docs/liteasy-openclaw-defense-storyline.html)。\n\n这次重点不是再加“新口号”，而是把抽象词压成更工程化的讲法。现在页面里新增了三块核心内容：\n- “关键概念，不要只停留在名词”：把 `工作区/选中文献集`、`Context Assembly`、`Skill Registry`、`Action Registry`、`Allowlist / Policy`、`Direct Dispatch`、`Session Isolation`、`Local Knowledge Engine`、`统一模型网关`、`双模型生成与审计` 都拆成了“是什么 / 不是什么 / 在 Liteasy 里怎么落”。\n- “两条最关键的工程执行链路”：用具体例子把“关闭联网推荐”和“解释论文 method”讲成真实的数据流和控制流，还补了结构化 command / audit payload 示例。\n- “当前原型与下一阶段，要明确分界”：把现在仓库能支撑的说法，和下一步必须补齐的工程件分开了，能更好避免答辩时讲成画饼。\n\n我也顺手把原有故事线里的表述改得更具体了，比如把 `skill` 和 `action` 换成更像真实系统接口的例子，把 `runtime` 的职责讲成“用户一句话如何变成一次可控执行”。另外补了响应式修正，小屏下新增区块会自动收成单列。\n\n我做了静态检查，确认文件存在、关键新章节和关键词都在；没有跑浏览器渲染或构建，因为这次只改了静态 HTML。如果你愿意，我下一步可以继续把这页再升级一层，做成“答辩模式”版本：把每个术语旁边加一句“上台怎么说”，或者给三套故事线加一键切换的“评委类型”视图。",
+          "timestamp": "2026-05-13T17:08:00.439Z"
+        }
+      ],
+      "total_additions": 205,
+      "total_deletions": 84,
+      "accepted_lines": 203,
+      "overriden_lines": 0
+    }
+  }
+}
