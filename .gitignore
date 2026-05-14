@@ -1,0 +1,17 @@
+.superpowers/
+.claude/
+
+# Desktop app dependencies and build outputs
+desktop/node_modules/
+desktop/dist/
+desktop/.vite/
+desktop/.vite-temp/
+desktop/src-tauri/target/
+
+# PDF.js auto-copied assets (regenerated on dev/build)
+desktop/public/cmaps/
+desktop/public/standard_fonts/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
