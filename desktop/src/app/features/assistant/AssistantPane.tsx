@@ -23,6 +23,7 @@ type AssistantPaneProps = {
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
   onGenerateArtifact: (artifactType: ArtifactType) => string;
   onModelExecution?: (trace: ModelExecutionTrace) => void;
+  onOpenOrganizationSharedLibrary?: () => string;
   onSettingsChanged?: (settings: SettingsState) => void;
   onSyncCloudPolicy?: () => Promise<string>;
   selectedPapers?: Paper[];
@@ -98,6 +99,7 @@ export function AssistantPane({
   importedChunksByPaperId = {},
   onGenerateArtifact,
   onModelExecution,
+  onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   onSyncCloudPolicy,
   selectedPapers = [],
@@ -144,6 +146,7 @@ export function AssistantPane({
 
       try {
         const result = await executeSkill(command, {
+          openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
           settingsStore: settingsStoreRef.current,
           startArtifactAnalysis: onGenerateArtifact,
           syncCloudPolicy: onSyncCloudPolicy

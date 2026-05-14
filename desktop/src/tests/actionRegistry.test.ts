@@ -87,3 +87,26 @@ test("executes a cloud model policy sync action", async () => {
   expect(synced).toBe(1);
   expect(result.message).toContain("已从云端同步模型策略");
 });
+
+
+test("executes an organization shared-library open action", async () => {
+  let opened = 0;
+
+  const result = await executeAction(
+    {
+      actionId: "organization.open_shared_library",
+      input: {
+        source: "organization_space"
+      }
+    },
+    {
+      openOrganizationSharedLibrary: () => {
+        opened += 1;
+        return "已打开组织共享文献库：组织共享文献库。";
+      }
+    }
+  );
+
+  expect(opened).toBe(1);
+  expect(result.message).toBe("已打开组织共享文献库：组织共享文献库。");
+});

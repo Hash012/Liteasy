@@ -16,46 +16,65 @@ export function usePolicySync({
   getSettings
 }: UsePolicySyncInput) {
   const hasAutoSyncedRef = useRef(false);
+  const mountedRef = useRef(true);
   const [policySyncPending, setPolicySyncPending] = useState(false);
   const [policySyncStatus, setPolicySyncStatus] = useState<PolicySyncStatus>("idle");
   const [policySyncMessage, setPolicySyncMessage] = useState<string | undefined>();
   const [policyVersion, setPolicyVersion] = useState<string | undefined>();
   const [lastSyncedAt, setLastSyncedAt] = useState<string | undefined>();
 
+  function updatePolicySyncState(update: () => void) {
+    if (mountedRef.current) {
+      update();
+    }
+  }
+
   async function syncCloudPolicy() {
-    setPolicySyncPending(true);
-    setPolicySyncStatus("syncing");
-    setPolicySyncMessage("正在从云端同步模型策略...");
+    updatePolicySyncState(() => {
+      setPolicySyncPending(true);
+      setPolicySyncStatus("syncing");
+      setPolicySyncMessage("正在从云端同步模型策略...");
+    });
 
     try {
       const result = await fetchModelPolicySnapshot(getSettings(), {
         transport: controlPlaneTransport
       });
-      applyModelPolicySnapshot(result.snapshot);
-      setPolicyVersion(result.policyVersion);
-      setLastSyncedAt(result.syncedAt);
+      updatePolicySyncState(() => {
+        applyModelPolicySnapshot(result.snapshot);
+        setPolicyVersion(result.policyVersion);
+        setLastSyncedAt(result.syncedAt);
+      });
       const message = "已从云端同步模型策略，当前以云端管理员下发配置为准。";
-      setPolicySyncStatus("success");
-      setPolicySyncMessage(message);
+      updatePolicySyncState(() => {
+        setPolicySyncStatus("success");
+        setPolicySyncMessage(message);
+      });
       return message;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "未知错误";
       const message = `云端策略同步失败，请检查控制平面配置。详细信息：${detail}`;
-      setPolicySyncStatus("error");
-      setPolicySyncMessage(message);
+      updatePolicySyncState(() => {
+        setPolicySyncStatus("error");
+        setPolicySyncMessage(message);
+      });
       return message;
     } finally {
-      setPolicySyncPending(false);
+      updatePolicySyncState(() => setPolicySyncPending(false));
     }
   }
 
   useEffect(() => {
-    if (hasAutoSyncedRef.current) {
-      return;
+    mountedRef.current = true;
+
+    if (!hasAutoSyncedRef.current) {
+      hasAutoSyncedRef.current = true;
+      void syncCloudPolicy();
     }
 
-    hasAutoSyncedRef.current = true;
-    void syncCloudPolicy();
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   return {

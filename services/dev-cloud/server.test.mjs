@@ -27,11 +27,52 @@ async function invokeHandler({ body, handlerOptions, headers = {}, method, url }
   await createDevCloudRequestHandler(handlerOptions)(request, response);
 
   return {
+    body: endedBody,
     headers: responseHeaders,
-    json: JSON.parse(endedBody),
+    json: endedBody.length > 0 ? JSON.parse(endedBody) : undefined,
     statusCode
   };
 }
+
+test("allows browser CORS preflight from the desktop dev server", async () => {
+  const response = await invokeHandler({
+    method: "OPTIONS",
+    headers: {
+      "access-control-request-headers": "content-type",
+      "access-control-request-method": "POST",
+      origin: "http://127.0.0.1:1420"
+    },
+    url: "/v1/org/summary"
+  });
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.headers["Access-Control-Allow-Origin"], "http://127.0.0.1:1420");
+  assert.equal(response.headers["Access-Control-Allow-Methods"], "GET,POST,OPTIONS");
+  assert.equal(response.headers["Access-Control-Allow-Headers"], "Content-Type");
+});
+
+test("returns a helpful service index from the root path", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.name, "Liteasy dev cloud");
+  assert.deepEqual(response.json.endpoints, [
+    "/v1/account/demo-login",
+    "/v1/admin/model-policy",
+    "/v1/model/generate",
+    "/v1/recommendations",
+    "/v1/documents/metadata-sync",
+    "/v1/org/list",
+    "/v1/org/summary",
+    "/v1/org/governance-summary"
+  ]);
+});
 
 test("returns a policy snapshot from the control plane endpoint", async () => {
   const response = await invokeHandler({
@@ -221,6 +262,220 @@ test("accepts document metadata sync snapshots", async () => {
       rejectedCount: 0,
       syncId: "metadata-demo-session-1-r0",
       syncedAt: "2026-05-14T10:20:00Z"
+    }
+  });
+});
+
+
+test("returns the demo organization list", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      sessionId: "demo-session-1"
+    }),
+    url: "/v1/org/list"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json, {
+    activeOrganizationId: "org-demo-1",
+    organizations: [
+      {
+        memberCount: 12,
+        myRole: "研究员",
+        name: "Liteasy AI Reading Lab",
+        organizationId: "org-demo-1",
+        sharedLibraryName: "组织共享文献库"
+      },
+      {
+        memberCount: 4,
+        myRole: "管理员",
+        name: "Liteasy Literature Ops",
+        organizationId: "org-demo-2",
+        sharedLibraryName: "文献运营共享库"
+      }
+    ]
+  });
+});
+
+test("returns a demo organization summary", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      sessionId: "demo-session-1"
+    }),
+    url: "/v1/org/summary"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json, {
+    summary: {
+      auditEvents: [
+        {
+          actor: "Admin",
+          description: "更新共享文献库上传权限",
+          id: "audit-1",
+          occurredAt: "2026-05-14T10:30:00Z"
+        }
+      ],
+      memberCount: 12,
+      members: [
+        {
+          id: "member-1",
+          name: "Liteasy Researcher",
+          role: "研究员"
+        },
+        {
+          id: "member-2",
+          name: "Admin",
+          role: "管理员"
+        }
+      ],
+      myRole: "研究员",
+      name: "Liteasy AI Reading Lab",
+      notifications: [
+        {
+          id: "notice-1",
+          message: "管理员发布了本周阅读主题。",
+          type: "announcement"
+        },
+        {
+          id: "notice-2",
+          message: "成员上传了 Graph Neural Networks 综述。",
+          type: "document_upload"
+        },
+        {
+          id: "notice-3",
+          message: "共享文献库结构新增 RAG 目录。",
+          type: "library_change"
+        }
+      ],
+      organizationId: "org-demo-1",
+      quota: {
+        periodEndsAt: "2026-06-01T00:00:00Z",
+        storageLimitGb: 100,
+        storageUsedGb: 38
+      },
+      sharedLibrary: {
+        documentCount: 48,
+        documents: [
+          {
+            id: "org-doc-1",
+            sourcePath: "org://org-demo-1/shared-library/org-doc-1.pdf",
+            title: "Organization Reading List: Retrieval-Augmented Generation"
+          },
+          {
+            id: "org-doc-2",
+            sourcePath: "org://org-demo-1/shared-library/org-doc-2.pdf",
+            title: "Team Notes on Long-Context Evaluation"
+          }
+        ],
+        name: "组织共享文献库",
+        status: "available"
+      },
+      taskSummary: {
+        failed: 1,
+        running: 2
+      }
+    }
+  });
+});
+
+test("returns a demo organization governance summary", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      organizationId: "org-demo-1",
+      sessionId: "demo-session-1"
+    }),
+    url: "/v1/org/governance-summary"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json, {
+    summary: {
+      auditQueue: {
+        highRisk: 1,
+        pendingReview: 3
+      },
+      quota: {
+        modelCallsLimit: 10000,
+        modelCallsUsed: 4200,
+        storageLimitGb: 100,
+        storageUsedGb: 38
+      },
+      recentAuditEvents: [
+        {
+          id: "audit-1",
+          label: "Admin 更新共享文献库上传权限",
+          risk: "medium"
+        }
+      ],
+      runningTasks: [
+        {
+          id: "task-1",
+          label: "组织共享文献库索引刷新",
+          status: "running"
+        }
+      ]
+    }
+  });
+});
+
+
+test("returns organization-specific governance summary", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      organizationId: "org-demo-2",
+      sessionId: "demo-session-1"
+    }),
+    url: "/v1/org/governance-summary"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json, {
+    summary: {
+      auditQueue: {
+        highRisk: 0,
+        pendingReview: 1
+      },
+      quota: {
+        modelCallsLimit: 5000,
+        modelCallsUsed: 900,
+        storageLimitGb: 50,
+        storageUsedGb: 12
+      },
+      recentAuditEvents: [
+        {
+          id: "audit-ops-1",
+          label: "Ops Admin 新增 QA 目录",
+          risk: "low"
+        }
+      ],
+      runningTasks: [
+        {
+          id: "task-ops-1",
+          label: "文献运营共享库目录同步",
+          status: "running"
+        }
+      ]
     }
   });
 });

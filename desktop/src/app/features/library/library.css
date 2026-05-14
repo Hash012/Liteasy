@@ -67,6 +67,13 @@
   color: #4d6074;
 }
 
+.library-workspace-label {
+  margin-bottom: 8px;
+  color: #4f6578;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
 .library-selection-summary {
   margin-bottom: 12px;
   font-size: 12px;

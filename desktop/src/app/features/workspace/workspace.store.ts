@@ -21,6 +21,12 @@ export function createWorkspaceStore() {
       state.papers.push(paper);
       return true;
     },
+    openWorkspace(papers: Paper[]) {
+      state.papers = [...papers];
+      state.selectedPaperIds = [];
+      state.selectionLocked = false;
+      state.workspaceRevision += 1;
+    },
     toggleSelection(id: string) {
       if (state.selectionLocked) {
         return;

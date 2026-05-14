@@ -8,6 +8,7 @@ export type SettingsStoreLike = {
 
 export type ActionContext = {
   importSelectedSet?: () => string;
+  openOrganizationSharedLibrary?: () => string;
   settingsStore?: SettingsStoreLike;
   startArtifactAnalysis?: (artifactType: ArtifactType) => string;
   syncCloudPolicy?: () => Promise<string>;
@@ -54,6 +55,12 @@ export type ActionInvocation =
       input: {
         source: "cloud_control_plane";
       };
+    }
+  | {
+      actionId: "organization.open_shared_library";
+      input: {
+        source: "organization_space";
+      };
     };
 
 export async function executeAction(
@@ -96,6 +103,16 @@ export async function executeAction(
 
     return {
       message: await context.syncCloudPolicy()
+    };
+  }
+
+  if (invocation.actionId === "organization.open_shared_library") {
+    if (!context.openOrganizationSharedLibrary) {
+      throw new Error("organization.open_shared_library requires an organization shared-library handler");
+    }
+
+    return {
+      message: context.openOrganizationSharedLibrary()
     };
   }
 

@@ -23,6 +23,12 @@ export type SkillInvocation =
       input: {
         source: "cloud_control_plane";
       };
+    }
+  | {
+      skillId: "organization.open_shared_library";
+      input: {
+        source: "organization_space";
+      };
     };
 
 export async function executeSkill(
@@ -43,6 +49,16 @@ export async function executeSkill(
     return executeAction(
       {
         actionId: "settings.sync_model_policy",
+        input: invocation.input
+      },
+      context
+    );
+  }
+
+  if (invocation.skillId === "organization.open_shared_library") {
+    return executeAction(
+      {
+        actionId: "organization.open_shared_library",
         input: invocation.input
       },
       context

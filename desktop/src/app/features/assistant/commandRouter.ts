@@ -133,5 +133,14 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
+  if (normalized === "打开组织共享文献库") {
+    return {
+      skillId: "organization.open_shared_library",
+      input: {
+        source: "organization_space"
+      }
+    };
+  }
+
   return null;
 }

@@ -1,10 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useMemo, useRef, useState } from "react";
-import type { CollectionItem } from "../features/collection/collection.types";
-import {
-  loadStoredCollectionItems,
-  storeCollectionItems
-} from "../features/collection/collectionStorage";
+import { useCollectionItems } from "../features/collection/useCollectionItems";
 import { LibraryPane } from "../features/library/LibraryPane";
 import { AssistantPane } from "../features/assistant/AssistantPane";
 import liteasyClawLogo from "../../assets/liteasyclaw-logo.jpg";
@@ -23,6 +19,10 @@ import { buildArtifactPreview } from "../features/artifacts/artifactPreview";
 import { createSettingsStore } from "../features/settings/settings.store";
 import type { SettingsState } from "../features/settings/settings.types";
 import { ModelAccessPanel } from "../features/models/ModelAccessPanel";
+import { AcademicArchiveDialog } from "../features/profile/AcademicArchiveDialog";
+import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfirmDialog";
+import { PersonalCenterPanel } from "../features/profile/PersonalCenterPanel";
+import { useProfileActions } from "../features/profile/useProfileActions";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
 import { formatModelExecutionLabel, type ModelExecutionTrace } from "../features/models/modelExecution";
 import { usePolicySync } from "../features/models/usePolicySync";
@@ -33,6 +33,22 @@ import { useRecommendations } from "../features/recommendations/useRecommendatio
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
 import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
+import { OrganizationEntryDialog } from "../features/organization/OrganizationEntryDialog";
+import { OrganizationCreateDialog } from "../features/organization/OrganizationCreateDialog";
+import { OrganizationInviteConfirmDialog } from "../features/organization/OrganizationInviteConfirmDialog";
+import { OrganizationJoinDialog } from "../features/organization/OrganizationJoinDialog";
+import { OrganizationLeaveConfirmDialog } from "../features/organization/OrganizationLeaveConfirmDialog";
+import { OrganizationSidebarPanel } from "../features/organization/OrganizationSidebarPanel";
+import type { OrganizationSummary } from "../features/organization/organization.types";
+import { useOrganizationActions } from "../features/organization/useOrganizationActions";
+import { useOrganizationNotifications } from "../features/organization/useOrganizationNotifications";
+import { useOrganizationWorkspace } from "../features/organization/useOrganizationWorkspace";
+import { useOrganizationUiState } from "../features/organization/useOrganizationUiState";
+import { useLeftRailNavigation } from "./useLeftRailNavigation";
+import type { OrganizationGovernanceTransport } from "../features/organization/organizationGovernanceClient";
+import type { OrganizationListTransport } from "../features/organization/organizationListClient";
+import type { OrganizationSummaryTransport } from "../features/organization/organizationSummaryClient";
+import { useOrganizationData } from "../features/organization/useOrganizationData";
 
 const starterPapers: Paper[] = [
   {
@@ -95,6 +111,9 @@ type AppShellProps = {
   controlPlaneTransport?: ControlPlaneTransport;
   documentMetadataTransport?: DocumentMetadataTransport;
   initialSettings?: Partial<SettingsState>;
+  organizationGovernanceTransport?: OrganizationGovernanceTransport;
+  organizationListTransport?: OrganizationListTransport;
+  organizationTransport?: OrganizationSummaryTransport;
   recommendationTransport?: RecommendationTransport;
 };
 
@@ -103,6 +122,9 @@ export function AppShell({
   controlPlaneTransport,
   documentMetadataTransport,
   initialSettings,
+  organizationGovernanceTransport,
+  organizationListTransport,
+  organizationTransport,
   recommendationTransport
 }: AppShellProps = {}) {
   const workspaceStoreRef = useRef(createWorkspaceStore());
@@ -122,15 +144,19 @@ export function AppShell({
     cloneSettingsState(settingsStoreRef.current.getState())
   );
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
-  const [collectionItems, setCollectionItems] = useState<CollectionItem[]>(() =>
-    loadStoredCollectionItems()
-  );
   const [artifactTasks, setArtifactTasks] = useState<ArtifactTask[]>([]);
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏模态按钮启动分析。"
   );
   const [lastModelExecution, setLastModelExecution] = useState<ModelExecutionTrace | undefined>();
+  const [workspaceLabel, setWorkspaceLabel] = useState("本地文献库");
+  const collection = useCollectionItems();
+  const leftRail = useLeftRailNavigation();
+  const profileActions = useProfileActions();
+  const organizationUi = useOrganizationUiState();
+  const organizationActions = useOrganizationActions({ onAnalysisHint: setAnalysisHint });
+  const organizationNotifications = useOrganizationNotifications({ onAnalysisHint: setAnalysisHint });
 
   function syncWorkspace() {
     setWorkspaceState(cloneWorkspaceState(workspaceStoreRef.current.getState()));
@@ -150,23 +176,6 @@ export function AppShell({
     setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
   }
 
-  function collectRecommendation(recommendation: {
-    id: string;
-    reason: string;
-    source: string;
-    title: string;
-  }) {
-    const nextItems = [
-      {
-        ...recommendation,
-        savedAt: new Date().toISOString()
-      },
-      ...collectionItems.filter((item) => item.id !== recommendation.id)
-    ];
-    setCollectionItems(nextItems);
-    storeCollectionItems(nextItems);
-  }
-
   function addExternalPaperToLibrary(item: { id: string; source: string; title: string }) {
     const added = workspaceStoreRef.current.addPaper({
       id: item.id,
@@ -181,6 +190,13 @@ export function AppShell({
     }
 
     setAnalysisHint(`《${item.title}》已经在我的文献库中。`);
+  }
+
+  function logoutAndClearOrganizationState() {
+    logoutFromCloudAccount();
+    organizationNotifications.clearOrganizationNotifications();
+    organizationActions.resetOrganizationActions();
+    organizationUi.resetOrganizationSelection();
   }
 
   function syncArtifacts(taskId?: string) {
@@ -437,6 +453,13 @@ export function AppShell({
     syncSettings();
   }
 
+  function applyLocalDevCloudDefaults() {
+    applyModelPolicySnapshot({
+      "models.cloud_proxy_endpoint": "http://127.0.0.1:8787",
+      "models.control_plane_endpoint": "http://127.0.0.1:8787"
+    });
+  }
+
   function setLocalDirectEnabled(enabled: boolean) {
     settingsStoreRef.current.apply({
       intent: "update_setting",
@@ -505,9 +528,86 @@ export function AppShell({
     transport: documentMetadataTransport,
     workspaceRevision: workspaceState.workspaceRevision
   });
+  const {
+    organizationGovernanceMessage,
+    organizationGovernanceStatus,
+    organizationGovernanceSummary,
+    organizationList,
+    organizationListMessage,
+    organizationListStatus,
+    organizationSummary,
+    organizationSummaryMessage,
+    organizationSummaryStatus
+  } = useOrganizationData({
+    accountSession,
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
+    getActiveOrganizationId: organizationUi.getActiveOrganizationId,
+    organizationGovernanceTransport,
+    organizationListTransport,
+    organizationTransport
+  });
+
+  const organizationWorkspace = useOrganizationWorkspace({
+    defaultSummary: organizationSummary,
+    onAnalysisHint: setAnalysisHint,
+    onLeftRailView: leftRail.setLeftRailView,
+    onWorkspaceLabel: setWorkspaceLabel,
+    onWorkspaceSync: syncWorkspace,
+    starterPapers,
+    workspaceStoreRef
+  });
 
   return (
     <div className="app-frame">
+      {profileActions.clearProfileConfirmOpen ? (
+        <ClearProfileConfirmDialog
+          onCancel={() => profileActions.closeClearProfileConfirm()}
+          onConfirm={profileActions.clearUserProfile}
+        />
+      ) : null}
+      {profileActions.academicArchiveOpen ? (
+        <AcademicArchiveDialog
+          accountSession={accountSession}
+          onClose={() => profileActions.closeAcademicArchive()}
+          readPaperCount={workspaceState.papers.length}
+        />
+      ) : null}
+      {organizationActions.createOpen ? (
+        <OrganizationCreateDialog
+          onCancel={() => organizationActions.closeCreateDialog()}
+          onConfirm={organizationActions.createDemoOrganizationRequest}
+        />
+      ) : null}
+      {organizationActions.joinOpen ? (
+        <OrganizationJoinDialog
+          onCancel={() => organizationActions.closeJoinDialog()}
+          onConfirm={organizationActions.createDemoOrganizationJoinRequest}
+        />
+      ) : null}
+      {organizationActions.inviteSummary ? (
+        <OrganizationInviteConfirmDialog
+          onCancel={() => organizationActions.closeInviteDialog()}
+          onConfirm={organizationActions.sendDemoOrganizationInvite}
+          summary={organizationActions.inviteSummary}
+        />
+      ) : null}
+      {organizationActions.leaveSummary ? (
+        <OrganizationLeaveConfirmDialog
+          onCancel={() => organizationActions.closeLeaveDialog()}
+          onConfirm={organizationActions.createDemoOrganizationLeaveRequest}
+          summary={organizationActions.leaveSummary}
+        />
+      ) : null}
+      {organizationUi.organizationDialogOpen ? (
+        <OrganizationEntryDialog
+          list={organizationList}
+          listMessage={organizationListMessage}
+          onClose={() => organizationUi.closeOrganizationDialog()}
+          onOpenSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
+          onSelectOrganization={organizationUi.selectOrganization}
+          summary={organizationSummary}
+        />
+      ) : null}
       <header className="app-topbar">
         <div className="brand">
           <img alt="LiteasyClaw Logo" className="brand-logo" src={liteasyClawLogo} />
@@ -515,41 +615,147 @@ export function AppShell({
             <div className="brand-name">LiteasyClaw</div>
             <div className="brand-tagline">AI-driven paper-assisted reading platform</div>
           </div>
+          <div className="model-mini-indicator">
+            模型：{settingsState["models.access_mode"] === "cloud_proxy" ? "云代理" : "本地直连"}
+          </div>
         </div>
         <AccountStatusPanel
           message={accountMessage}
           onLogin={() => {
+            applyLocalDevCloudDefaults();
             void loginToCloudAccount();
           }}
-          onLogout={logoutFromCloudAccount}
+          onLogout={logoutAndClearOrganizationState}
           pending={accountPending}
           session={accountSession}
         />
       </header>
 
       <div className="app-shell">
+        <nav aria-label="左边栏导航" className="activity-bar">
+          <button
+            className={leftRail.leftRailView === "library" ? "activity-button active" : "activity-button"}
+            onClick={() => leftRail.openLibrary()}
+            title="文献库"
+            type="button"
+          >
+            文献库
+          </button>
+          <button
+            className={leftRail.leftRailView === "organization" ? "activity-button active" : "activity-button"}
+            onClick={leftRail.openOrganization}
+            title="组织"
+            type="button"
+          >
+            组织
+          </button>
+          <button
+            className={leftRail.leftRailView === "profile" ? "activity-button active" : "activity-button"}
+            onClick={leftRail.openProfile}
+            title="个人中心"
+            type="button"
+          >
+            个人中心
+          </button>
+          <button
+            className={leftRail.leftRailView === "settings" ? "activity-button active" : "activity-button"}
+            onClick={leftRail.openSettings}
+            title="设置"
+            type="button"
+          >
+            设置
+          </button>
+        </nav>
         <aside className="pane left">
-          <div className="pane-header">Library</div>
+          <div className="pane-header">
+            {leftRail.paneHeader}
+          </div>
           <div className="pane-body">
-            <LibraryPane
-              collectionItems={collectionItems}
-              importJobs={importJobsByDocumentId}
-              onAddExternalPaper={addExternalPaperToLibrary}
-              onCollectRecommendation={collectRecommendation}
-              onCloseWorkspace={closeWorkspace}
-              onImportSelectedSet={() => {
-                void handleImportSelectedSet();
-              }}
-              onToggleLock={toggleSelectionLock}
-              onToggleSelection={toggleSelection}
-              papers={workspaceState.papers}
-              recommendationItems={recommendationItems}
-              recommendationMessage={recommendationMessage}
-              recommendationPending={recommendationPending}
-              recommendationStatus={recommendationStatus}
-              selectedPaperIds={workspaceState.selectedPaperIds}
-              selectionLocked={workspaceState.selectionLocked}
-            />
+            {leftRail.leftRailView === "organization" ? (
+              <OrganizationSidebarPanel
+                governanceMessage={organizationGovernanceMessage}
+                governanceStatus={organizationGovernanceStatus}
+                governanceSummary={organizationGovernanceSummary}
+                list={organizationList}
+                listMessage={organizationListMessage}
+                listStatus={organizationListStatus}
+                onClose={leftRail.openLibrary}
+                onCreateOrganization={organizationActions.openCreateDialog}
+                onInviteMember={organizationActions.openInviteDialog}
+                onJoinOrganization={organizationActions.openJoinDialog}
+                onLeaveOrganization={organizationActions.openLeaveDialog}
+                onMarkNotificationsRead={organizationNotifications.markOrganizationNotificationsRead}
+                onOpenSharedLibrary={(summary) => {
+                  void organizationWorkspace.openOrganizationSharedLibrary(summary);
+                }}
+                onOpenWindow={() => organizationUi.openOrganizationDialog()}
+                onSelectOrganization={organizationUi.selectOrganization}
+                readNotificationIds={organizationNotifications.readNotificationIds}
+                summary={organizationSummary}
+                summaryMessage={organizationSummaryMessage}
+                summaryStatus={organizationSummaryStatus}
+              />
+            ) : leftRail.leftRailView === "profile" ? (
+              <PersonalCenterPanel
+                accountSession={accountSession}
+                onClearProfile={profileActions.openClearProfileConfirm}
+                onClose={leftRail.openLibrary}
+                onOpenAcademicArchive={profileActions.openAcademicArchive}
+                onToggleProfileSampling={profileActions.toggleProfileSampling}
+                organizationSummary={organizationSummary}
+                profileClearMessage={profileActions.profileClearMessage}
+                profileSamplingEnabled={profileActions.profileSamplingEnabled}
+                readPaperCount={workspaceState.papers.length}
+              />
+            ) : leftRail.leftRailView === "settings" ? (
+              <section aria-label="左边栏设置" className="settings-panel">
+                <div className="settings-panel-title">设置</div>
+                <div className="settings-model-indicator">模型：{settingsState["models.access_mode"] === "cloud_proxy" ? "云代理" : "本地直连"}</div>
+                <ModelAccessPanel
+                  latestExecutionLabel={
+                    lastModelExecution ? formatModelExecutionLabel(lastModelExecution) : undefined
+                  }
+                  onSyncCloudPolicy={() => {
+                    void syncCloudPolicy();
+                  }}
+                  onSetAccessMode={setModelAccessMode}
+                  onToggleLocalDirectEnabled={setLocalDirectEnabled}
+                  policyVersion={policyVersion}
+                  settings={settingsState}
+                  syncedAt={lastSyncedAt}
+                  syncMessage={policySyncMessage}
+                  syncPending={policySyncPending}
+                  syncStatus={policySyncStatus}
+                />
+                <DocumentMetadataSyncPanel
+                  lastResult={documentMetadataSyncResult}
+                  message={documentMetadataSyncMessage}
+                  status={documentMetadataSyncStatus}
+                />
+              </section>
+            ) : (
+              <LibraryPane
+                canReturnToLocalWorkspace={workspaceLabel !== "本地文献库"}
+                collectionItems={collection.collectionItems}
+                importJobs={importJobsByDocumentId}
+                onAddExternalPaper={addExternalPaperToLibrary}
+                onCollectRecommendation={collection.collectRecommendation}
+                onImportSelectedSet={() => {
+                  void handleImportSelectedSet();
+                }}
+                onReturnToLocalWorkspace={organizationWorkspace.openLocalLibraryWorkspace}
+                onToggleLock={toggleSelectionLock}
+                onToggleSelection={toggleSelection}
+                papers={workspaceState.papers}
+                recommendationItems={recommendationItems}
+                recommendationMessage={recommendationMessage}
+                recommendationPending={recommendationPending}
+                recommendationStatus={recommendationStatus}
+                selectedPaperIds={workspaceState.selectedPaperIds}
+                selectionLocked={workspaceState.selectionLocked}
+                workspaceLabel={workspaceLabel}
+              />
+            )}
           </div>
         </aside>
         <main className="pane center">
@@ -570,46 +776,24 @@ export function AppShell({
             />
           </div>
         </main>
-        <section className="pane right">
-          <div className="pane-header">Assistant</div>
+        <section aria-label="右栏AI助手" className="pane right assistant-only-pane">
+          <div className="pane-header">AI Assistant</div>
           <div className="pane-body">
-            <div className="right-pane-stack">
-              <ModelAccessPanel
-                latestExecutionLabel={
-                  lastModelExecution ? formatModelExecutionLabel(lastModelExecution) : undefined
-                }
-                onSyncCloudPolicy={() => {
-                  void syncCloudPolicy();
-                }}
-                onSetAccessMode={setModelAccessMode}
-                onToggleLocalDirectEnabled={setLocalDirectEnabled}
-                policyVersion={policyVersion}
-                settings={settingsState}
-                syncedAt={lastSyncedAt}
-                syncMessage={policySyncMessage}
-                syncPending={policySyncPending}
-                syncStatus={policySyncStatus}
-              />
-              <DocumentMetadataSyncPanel
-                lastResult={documentMetadataSyncResult}
-                message={documentMetadataSyncMessage}
-                status={documentMetadataSyncStatus}
-              />
-              <AssistantPane
-                importedChunksByPaperId={importedChunksByPaperId}
-                onGenerateArtifact={handleAssistantArtifact}
-                onModelExecution={setLastModelExecution}
-                onSettingsChanged={handleSettingsChanged}
-                onSyncCloudPolicy={syncCloudPolicy}
-                selectedPapers={selectedPapers}
-                selectedSetStatus={{
-                  importedCount: importedSelectedCount,
-                  selectedCount: workspaceState.selectedPaperIds.length,
-                  selectionLocked: workspaceState.selectionLocked
-                }}
-                settingsStore={settingsStoreRef.current}
-              />
-            </div>
+            <AssistantPane
+              importedChunksByPaperId={importedChunksByPaperId}
+              onGenerateArtifact={handleAssistantArtifact}
+              onModelExecution={setLastModelExecution}
+              onOpenOrganizationSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
+              onSettingsChanged={handleSettingsChanged}
+              onSyncCloudPolicy={syncCloudPolicy}
+              selectedPapers={selectedPapers}
+              selectedSetStatus={{
+                importedCount: importedSelectedCount,
+                selectedCount: workspaceState.selectedPaperIds.length,
+                selectionLocked: workspaceState.selectionLocked
+              }}
+              settingsStore={settingsStoreRef.current}
+            />
           </div>
         </section>
       </div>

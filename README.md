@@ -96,7 +96,7 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 
 ## 3. 当前已经做了什么
 
-当前 `desktop` 已经具备 Phase 2 可验收能力：
+当前 `desktop` 已经具备 Phase 2 可验收能力，并开始进入 Phase 3 组织空间原型：
 
 - 三栏桌面工作台骨架
 - 顶部品牌区与 Logo
@@ -109,10 +109,13 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 - 推荐或收藏拖入 `我的文献库`
 - 问答原文定位、模型链路、审计模型评分
 - 开发云模型生成和模型审计接口
+- Phase 3 VSCode 式左边栏、组织页/组织窗口、个人中心画像原型、学术档案页面、清空画像确认、组织空间摘要、已加入组织列表/切换、成员明细、通知明细和治理摘要
+- 组织共享文献库 demo 文献通过按钮或注册命令以“打开文件夹”方式切换为当前工作区，可显式返回本地文献库
+- 开发云服务索引 `/`、组织列表 `/v1/org/list`、组织摘要 `/v1/org/summary` 和治理摘要 `/v1/org/governance-summary`
 
-当前测试已经覆盖桌面端核心 store、导入流程、助手、模型策略、推荐、收藏拖拽、元数据同步、模型审计和开发云接口。
+当前测试已经覆盖桌面端核心 store、导入流程、助手、模型策略、推荐、收藏拖拽、元数据同步、模型审计、组织空间摘要、组织切换和开发云接口。
 
-需要注意：当前仍是 Phase 2 原型，推荐、解析、审计和账号系统中还有演示或 mock 部分。验收前请先阅读 `docs/qa/phase2-known-limitations.md`。
+需要注意：当前仍是原型阶段，推荐、解析、审计、账号系统和组织治理中还有演示或 mock 部分。验收前请先阅读 `docs/qa/phase2-known-limitations.md` 和 `docs/qa/phase3-governance-limitations.md`。
 
 ## 4. 没有开发基础的人应该先看什么
 
@@ -133,11 +136,14 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 5. 看 Phase 2 验收指南  
    路径：`docs/qa/phase2-test-guide.md`
 
-6. 真正启动一次 `desktop`
+6. 看 Phase 3 组织空间测试指南  
+   路径：`docs/qa/phase3-test-guide.md`
+
+7. 真正启动一次 `desktop`
 
 ## 5. 如何查看 desktop 当前效果
 
-如果要完整查看 Phase 2 效果，需要先启动开发云服务：
+如果要完整查看 Phase 2 效果或 Phase 3 组织空间入口，需要先启动开发云服务：
 
 ```bash
 node /home/octopus/Liteasy/services/dev-cloud/server.mjs
@@ -165,12 +171,13 @@ npm run tauri dev
 你当前应该能看到：
 
 - 顶部 LiteasyClaw 品牌区
-- 左栏 `Library`
+- 最左侧窄竖栏 `文献库 / 组织 / 个人中心 / 设置`
+- 左栏 `Library`，可切换到组织、个人中心或设置
 - 中栏 `Reader`
-- 右栏 `Assistant`
-- 右栏模型策略卡片和文献元数据同步卡片
+- 右栏 `AI Assistant` 极简对话框
+- 顶部微型模型状态指示，模型策略和文献元数据同步详情位于左边栏 `设置` 页面
 
-启动后如需完整验收，请按 `docs/qa/phase2-test-guide.md` 操作。
+启动后如需完整验收 Phase 2，请按 `docs/qa/phase2-test-guide.md` 操作；如需检查 Phase 3 组织空间入口，请按 `docs/qa/phase3-test-guide.md` 操作。
 
 ### 方式 B：只看前端页面
 
@@ -236,4 +243,6 @@ source "$HOME/.cargo/env"
 - 环境启动手册：`docs/qa/environment-startup-guide.md`
 - Phase 2 测试指南：`docs/qa/phase2-test-guide.md`
 - Phase 2 已知限制：`docs/qa/phase2-known-limitations.md`
+- Phase 3 组织空间测试指南：`docs/qa/phase3-test-guide.md`
+- Phase 3 组织与治理限制：`docs/qa/phase3-governance-limitations.md`
 - 开发协作提示词：`docs/开发协作提示词历史_5.10.md`

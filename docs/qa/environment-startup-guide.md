@@ -49,7 +49,7 @@ npm install
 
 ## 4. 如何启动开发云服务
 
-如果你要检查 Phase 2 的账号、云端策略、推荐、文献元数据同步和模型审计，请先在仓库根目录启动开发云服务：
+如果你要检查 Phase 2 的账号、云端策略、推荐、文献元数据同步、模型审计，以及 Phase 3 的组织空间入口，请先在仓库根目录启动开发云服务：
 
 ```bash
 cd /home/octopus/Liteasy
@@ -61,6 +61,8 @@ node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 ```text
 Liteasy dev cloud listening on http://127.0.0.1:8787
 ```
+
+浏览器访问 `http://127.0.0.1:8787/` 时会返回开发云服务索引 JSON；桌面端页面请打开 Tauri 窗口或 Vite 地址。
 
 这个终端窗口不要关闭。然后另开一个终端启动桌面端。
 
@@ -94,7 +96,7 @@ npm run dev
 2. 中栏标题是 `Reader`
 3. 右栏标题是 `Assistant`
 
-三个区域都应可见，不应只有空白页，也不应只有浏览器默认文本。左栏应能看到工作区文献列表与“交给AI流程”按钮；中栏初始可能显示空态提示；右栏应能看到模型策略、文献元数据同步、模式切换和输入框。
+三个区域都应可见，不应只有空白页，也不应只有浏览器默认文本。最左侧窄竖栏应能看到 `文献库 / 组织 / 个人中心 / 设置`；左栏默认显示工作区文献列表与“交给AI流程”按钮；中栏初始可能显示空态提示；右栏只应看到 AI 助手模式切换、输入框和发送按钮。模型策略与文献元数据同步在左边栏 `设置` 页面，组织空间与组织治理在左边栏 `组织` 页面。
 
 如果要完整检查 Phase 2，请继续按下面文档操作：
 
@@ -102,10 +104,22 @@ npm run dev
 /home/octopus/Liteasy/docs/qa/phase2-test-guide.md
 ```
 
+如果要检查 Phase 3 组织空间入口，请继续按下面文档操作：
+
+```text
+/home/octopus/Liteasy/docs/qa/phase3-test-guide.md
+```
+
 如果你只想了解当前阶段哪些能力还不是正式生产能力，请看：
 
 ```text
 /home/octopus/Liteasy/docs/qa/phase2-known-limitations.md
+```
+
+Phase 3 组织与治理原型边界请看：
+
+```text
+/home/octopus/Liteasy/docs/qa/phase3-governance-limitations.md
 ```
 
 ## 7. 常见问题先看什么

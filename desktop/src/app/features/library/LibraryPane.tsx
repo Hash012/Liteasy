@@ -15,12 +15,14 @@ type LibraryPaneProps = {
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
+  canReturnToLocalWorkspace: boolean;
   onAddExternalPaper: (item: CollectionItem | RecommendationItem) => void;
-  onCloseWorkspace: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
+  onReturnToLocalWorkspace: () => void;
   onToggleLock: () => void;
   onToggleSelection: (paperId: string) => void;
+  workspaceLabel: string;
 };
 
 function getRelevanceLabel(band: RecommendationItem["relevanceBand"]) {
@@ -45,12 +47,14 @@ export function LibraryPane({
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
+  canReturnToLocalWorkspace,
   onAddExternalPaper,
-  onCloseWorkspace,
   onCollectRecommendation,
   onImportSelectedSet,
+  onReturnToLocalWorkspace,
   onToggleLock,
-  onToggleSelection
+  onToggleSelection,
+  workspaceLabel
 }: LibraryPaneProps) {
   const selectedCount = selectedPaperIds.length;
 
@@ -61,9 +65,11 @@ export function LibraryPane({
         <button className="library-button ghost" type="button" onClick={onToggleLock}>
           {selectionLocked ? "解除锁定" : "锁定选择"}
         </button>
-        <button className="library-button danger" type="button" onClick={onCloseWorkspace}>
-          关闭工作区
-        </button>
+        {canReturnToLocalWorkspace ? (
+          <button className="library-button ghost" type="button" onClick={onReturnToLocalWorkspace}>
+            返回本地文献库
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -88,6 +94,7 @@ export function LibraryPane({
         }}
       >
         <div className="library-section-title">我的文献库</div>
+        <div className="library-workspace-label">当前工作区：{workspaceLabel}</div>
         <div className="library-selection-summary">
           当前选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
         </div>

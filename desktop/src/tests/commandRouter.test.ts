@@ -106,3 +106,15 @@ test("maps sorting recommendations by retrieval time to a settings skill invocat
     }
   });
 });
+
+
+test("maps opening the organization shared library to an organization skill invocation", () => {
+  const result = routeCommand("打开组织共享文献库");
+
+  expect(result).toEqual({
+    skillId: "organization.open_shared_library",
+    input: {
+      source: "organization_space"
+    }
+  });
+});
