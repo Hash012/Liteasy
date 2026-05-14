@@ -123,4 +123,29 @@ describe("useOrganizationData", () => {
       sessionId: "demo-session-1"
     });
   });
+  test("shows an actionable dev-cloud hint when organization requests cannot reach the service", async () => {
+    const networkFailure = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+
+    const { result } = renderHook(() =>
+      useOrganizationData({
+        accountSession,
+        controlPlaneEndpoint: "http://127.0.0.1:8787",
+        getActiveOrganizationId: () => undefined,
+        organizationGovernanceTransport: networkFailure,
+        organizationListTransport: networkFailure,
+        organizationTransport: networkFailure
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.organizationListStatus).toBe("error");
+      expect(result.current.organizationSummaryStatus).toBe("error");
+    });
+
+    expect(result.current.organizationListMessage).toContain("请确认已启动 http://127.0.0.1:8787");
+    expect(result.current.organizationSummaryMessage).toContain("请确认已启动 http://127.0.0.1:8787");
+  });
+
 });

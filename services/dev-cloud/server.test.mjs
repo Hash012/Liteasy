@@ -63,15 +63,51 @@ test("returns a helpful service index from the root path", async () => {
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.name, "Liteasy dev cloud");
   assert.deepEqual(response.json.endpoints, [
-    "/v1/account/demo-login",
-    "/v1/admin/model-policy",
-    "/v1/model/generate",
-    "/v1/recommendations",
-    "/v1/documents/metadata-sync",
-    "/v1/org/list",
-    "/v1/org/summary",
-    "/v1/org/governance-summary"
+    "GET /",
+    "GET /healthz",
+    "GET /v1/admin/model-policy",
+    "POST /v1/account/demo-login",
+    "POST /v1/model/generate",
+    "POST /v1/model/audit",
+    "POST /v1/recommendations",
+    "POST /v1/documents/metadata-sync",
+    "POST /v1/org/list",
+    "POST /v1/org/summary",
+    "POST /v1/org/governance-summary"
   ]);
+});
+
+
+test("explains that demo login must be called with POST", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/v1/account/demo-login"
+  });
+
+  assert.equal(response.statusCode, 405);
+  assert.equal(response.json.error, "method_not_allowed");
+  assert.equal(response.json.method, "POST");
+  assert.equal(response.json.endpoint, "/v1/account/demo-login");
+  assert.match(response.json.message, /浏览器直接打开/);
+});
+
+test("returns available endpoints for unknown paths", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/missing"
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json.error, "not_found");
+  assert.equal(response.json.path, "/missing");
+  assert.ok(response.json.availableEndpoints.includes("POST /v1/account/demo-login"));
+  assert.match(response.json.message, /Liteasy dev cloud/);
 });
 
 test("returns a policy snapshot from the control plane endpoint", async () => {

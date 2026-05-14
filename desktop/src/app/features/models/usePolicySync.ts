@@ -1,3 +1,4 @@
+import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import { useEffect, useRef, useState } from "react";
 import type { SettingsState } from "../settings/settings.types";
 import type { ControlPlaneTransport, ModelPolicySnapshot } from "./controlPlaneClient";
@@ -52,7 +53,7 @@ export function usePolicySync({
       });
       return message;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "未知错误";
+      const detail = formatCloudConnectionError(error);
       const message = `云端策略同步失败，请检查控制平面配置。详细信息：${detail}`;
       updatePolicySyncState(() => {
         setPolicySyncStatus("error");

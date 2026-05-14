@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import type { AccountSession } from "../account/account.types";
 import {
   createOrganizationGovernanceClient,
@@ -63,7 +64,7 @@ export function useOrganizationGovernance({
           return;
         }
 
-        const detail = error instanceof Error ? error.message : "未知错误";
+        const detail = formatCloudConnectionError(error);
         setMessage(`组织治理摘要加载失败。详细信息：${detail}`);
         setStatus("error");
         setSummary(null);

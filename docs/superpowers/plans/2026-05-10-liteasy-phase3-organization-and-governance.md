@@ -508,7 +508,7 @@ Create a left-pane panel that follows the core spec: basic identity, team, gende
 
 - [x] **Step 3: Wire the left-rail view state**
 
-Add `leftRailView` and `profileSamplingEnabled` state to `AppShell`; clicking `个人中心` replaces the library workspace in the left pane, and `返回文献库` restores it.
+Add `leftRailView` and `profileSamplingEnabled` state to `AppShell`; clicking `个人中心` replaces the library workspace in the left pane. Later cleanup moved return navigation back to the far-left activity bar instead of a pane-local `返回文献库` button.
 
 - [x] **Step 4: Keep data prototype-only**
 
@@ -1139,3 +1139,475 @@ Replace AppShell's local collection state and collect callback with hook outputs
 - [x] **Step 4: Run focused and full verification**
 
 Run collection hook tests, focused AppShell library/recommendation tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 26: Model settings action hook extraction
+
+**Context:** Model access settings actions were still wired directly in `AppShell`, including access-mode changes, cloud policy snapshots, local dev-cloud endpoint defaults, and local-direct fallback handling. Extracting these actions keeps model policy state transitions testable before the settings page grows into a full control surface.
+
+**Files:**
+- Create: `desktop/src/app/features/models/useModelSettingsActions.ts`
+- Create: `desktop/src/tests/useModelSettingsActions.test.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing model settings hook tests**
+
+Cover access-mode updates, cloud policy snapshot application, local dev-cloud endpoint defaults, and disabling local-direct while falling back to cloud proxy.
+
+- [x] **Step 2: Implement the model settings hook**
+
+Move settings store mutation and settings-state synchronization into `useModelSettingsActions` while keeping the settings store as the source of truth.
+
+- [x] **Step 3: Wire AppShell to the hook**
+
+Replace AppShell's inline model settings handlers with hook outputs for the settings panel, cloud login defaults, and cloud policy sync.
+
+- [x] **Step 4: Verify policy sync regression**
+
+Run focused model/AppShell tests and fix the hook wiring so cloud policy snapshots still update the visible model channel.
+
+- [x] **Step 5: Run full verification**
+
+Run full desktop tests, desktop build, and dev-cloud tests before continuing to the next Phase 3 stabilization slice.
+
+
+### Task 27: Workspace action hook extraction
+
+**Context:** Workspace selection, lock state, external paper drops, selected-set import queuing, and import job snapshots were still implemented inside `AppShell`. Extracting them into a workspace hook keeps the reading workspace behavior independently testable while leaving artifact rendering orchestration in the layout shell.
+
+**Files:**
+- Create: `desktop/src/app/features/workspace/useWorkspaceActions.ts`
+- Create: `desktop/src/tests/useWorkspaceActions.test.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing workspace action hook tests**
+
+Cover selection toggling, selection lock messages, external paper drops and duplicates, selected-set import queuing, parsed chunk exposure, and duplicate import avoidance.
+
+- [x] **Step 2: Implement the workspace action hook**
+
+Move workspace store synchronization, import job snapshots, selected paper derivation, selected-set import, and library drop handling into `useWorkspaceActions`.
+
+- [x] **Step 3: Wire AppShell to the hook**
+
+Replace AppShell's inline workspace action handlers with hook outputs while preserving artifact workflow entry points and organization workspace switching.
+
+- [x] **Step 4: Run full verification**
+
+Run focused workspace/AppShell tests, full desktop tests, desktop build, and dev-cloud tests before continuing to the next stabilization slice.
+
+
+### Task 28: Artifact action hook extraction
+
+**Context:** Multi-modal artifact task creation, task status snapshots, preview generation, and selected-set analysis entry checks were still implemented inside `AppShell`. Extracting them into an artifact hook keeps the reader workflow independently testable while preserving the command/action safety boundary.
+
+**Files:**
+- Create: `desktop/src/app/features/artifacts/useArtifactActions.ts`
+- Create: `desktop/src/tests/useArtifactActions.test.ts`
+- Modify: `desktop/src/app/features/workspace/useWorkspaceActions.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing artifact action hook tests**
+
+Cover selected-set requirements, lock requirements, deferred import-before-analysis behavior, immediate analysis for already imported sets, and assistant artifact commands.
+
+- [x] **Step 2: Implement the artifact action hook**
+
+Move artifact task lifecycle, preview generation, start-analysis guardrails, and assistant artifact delegation into `useArtifactActions`.
+
+- [x] **Step 3: Fix duplicate already-imported completion callbacks**
+
+Ensure `queueImportForPapers` returns `false` without calling completion callbacks when every selected paper is already parsed, preventing duplicate artifact task creation.
+
+- [x] **Step 4: Wire AppShell to the hook**
+
+Replace AppShell's inline artifact handlers with hook outputs for center-pane modal buttons and assistant artifact commands.
+
+- [x] **Step 5: Run full verification**
+
+Run artifact hook tests, focused AppShell artifact tests, full desktop tests, desktop build, and dev-cloud tests before continuing.
+
+
+### Task 29: Registered workspace action hook extraction
+
+**Context:** `AppShell` still wrapped selected-set import and artifact analysis calls with the action registry directly. Extracting the wrappers keeps registered command/action boundaries testable while reducing layout shell responsibility.
+
+**Files:**
+- Create: `desktop/src/app/features/workspace/useRegisteredWorkspaceActions.ts`
+- Create: `desktop/src/tests/useRegisteredWorkspaceActions.test.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing registered action hook tests**
+
+Cover selected-set import and artifact analysis through `executeAction` with analysis hint propagation.
+
+- [x] **Step 2: Implement the registered action hook**
+
+Move action-registry invocations for `selected_set.import` and `artifact.start_analysis` into `useRegisteredWorkspaceActions`.
+
+- [x] **Step 3: Wire AppShell to the hook**
+
+Replace AppShell's inline action wrappers with hook outputs while preserving LibraryPane and ArtifactTabs interactions.
+
+- [x] **Step 4: Run full verification**
+
+Run registered action hook tests, focused AppShell workflow tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 30: Cloud account action hook extraction
+
+**Context:** Cloud-account login and logout still had cross-feature side effects in `AppShell`: login first applies local dev-cloud endpoints, while logout clears organization notifications, pending organization action dialogs, and selected organization state. Extracting this orchestration makes the side-effect order testable.
+
+**Files:**
+- Create: `desktop/src/app/features/account/useCloudAccountActions.ts`
+- Create: `desktop/src/tests/useCloudAccountActions.test.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing cloud-account action tests**
+
+Cover applying local dev-cloud defaults before login and clearing organization session state on logout.
+
+- [x] **Step 2: Implement the cloud-account hook**
+
+Move login default application and logout cleanup orchestration into `useCloudAccountActions`.
+
+- [x] **Step 3: Wire AppShell topbar to the hook**
+
+Replace inline AccountStatusPanel login/logout handlers with hook outputs while preserving existing organization cleanup behavior.
+
+- [x] **Step 4: Run full verification**
+
+Run cloud-account hook tests, focused AppShell account/organization tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 31: AppShell state helper extraction
+
+**Context:** `AppShell` still owned starter paper fixtures plus workspace/settings snapshot helpers. Moving these helpers out makes the layout shell easier to scan and keeps initialization behavior independently covered.
+
+**Files:**
+- Create: `desktop/src/app/layout/starterPapers.ts`
+- Create: `desktop/src/app/features/workspace/workspaceStateHelpers.ts`
+- Create: `desktop/src/app/features/settings/settingsStateHelpers.ts`
+- Create: `desktop/src/tests/appShellStateHelpers.test.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing helper tests**
+
+Cover starter paper fixture identity, workspace/settings snapshot cloning, and seeded settings store overrides.
+
+- [x] **Step 2: Extract helper modules**
+
+Move starter papers, `cloneWorkspaceState`, `cloneSettingsState`, and `createSeededSettingsStore` into feature/layout helper modules.
+
+- [x] **Step 3: Wire AppShell to helper imports**
+
+Remove inline helper definitions from AppShell and import the new helper modules instead.
+
+- [x] **Step 4: Run full verification**
+
+Run helper tests, focused AppShell smoke tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 32: Activity bar component extraction
+
+**Context:** The VSCode-style left activity bar was still inlined in `AppShell`. Extracting it keeps the main shell focused on composition and gives the navigation rail its own rendering coverage.
+
+**Files:**
+- Create: `desktop/src/app/layout/ActivityBar.tsx`
+- Create: `desktop/src/tests/ActivityBar.test.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing ActivityBar component test**
+
+Cover library, organization, profile, and settings buttons plus the active state and view-selection callback.
+
+- [x] **Step 2: Implement ActivityBar**
+
+Move the left-rail button list and active-class logic into a reusable `ActivityBar` component.
+
+- [x] **Step 3: Wire AppShell to ActivityBar**
+
+Replace inline activity-bar JSX with `ActivityBar` while preserving `useLeftRailNavigation` state handling.
+
+- [x] **Step 4: Run full verification**
+
+Run ActivityBar tests, focused AppShell navigation tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 33: Import queue duplicate guard hardening
+
+**Context:** A code review of the extracted workspace/artifact hooks found that `queueImportForPapers` only skipped `parsed` jobs. Repeated clicks while a selected paper was still `queued` or `parsing` could enqueue duplicate import jobs, and the artifact hook still treated the queue result as a boolean.
+
+**Files:**
+- Modify: `desktop/src/app/features/workspace/useWorkspaceActions.ts`
+- Modify: `desktop/src/app/features/artifacts/useArtifactActions.ts`
+- Modify: `desktop/src/tests/useWorkspaceActions.test.ts`
+- Modify: `desktop/src/tests/useArtifactActions.test.ts`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add duplicate import regression tests**
+
+Cover repeated selected-set import while a paper is `queued` or `parsing`, and artifact analysis while the selected set is still importing.
+
+- [x] **Step 2: Return explicit import queue status**
+
+Change `queueImportForPapers` to return `started`, `importing`, `already_imported`, or `idle` instead of a boolean.
+
+- [x] **Step 3: Update workspace and artifact messages**
+
+Show a waiting message for in-progress imports and avoid duplicate artifact task creation until imports finish.
+
+- [x] **Step 4: Run focused regression tests**
+
+Run workspace hook, artifact hook, and AppShell selected-set/artifact workflow tests.
+
+
+### Task 34: App brand component extraction
+
+**Context:** The top-bar brand block and compact model channel indicator were still inlined in `AppShell`. Extracting them keeps shell composition smaller while preserving the user's request that model policy only appears as a small homepage indicator.
+
+**Files:**
+- Create: `desktop/src/app/layout/AppBrand.tsx`
+- Create: `desktop/src/tests/AppBrand.test.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing AppBrand tests**
+
+Cover logo/name/tagline rendering and compact cloud-proxy/local-direct model channel labels.
+
+- [x] **Step 2: Implement AppBrand**
+
+Move the brand logo, product name, tagline, and mini model indicator into `AppBrand`.
+
+- [x] **Step 3: Wire AppShell topbar to AppBrand**
+
+Replace inline top-bar brand JSX with `AppBrand` while preserving model access mode display.
+
+- [x] **Step 4: Run full verification**
+
+Run AppBrand tests, focused AppShell topbar/settings tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 35: Settings pane component extraction
+
+**Context:** The left-rail settings branch in `AppShell` still embedded model access and metadata sync panels directly. Extracting it keeps the shell focused on route composition and gives the settings surface standalone coverage.
+
+**Files:**
+- Create: `desktop/src/app/layout/SettingsPane.tsx`
+- Create: `desktop/src/tests/SettingsPane.test.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing SettingsPane test**
+
+Cover settings title, compact model indicator, model access panel, metadata sync panel, and sync button callback.
+
+- [x] **Step 2: Implement SettingsPane**
+
+Move settings-page layout, `ModelAccessPanel`, and `DocumentMetadataSyncPanel` composition into `SettingsPane`.
+
+- [x] **Step 3: Wire AppShell settings branch to SettingsPane**
+
+Replace inline settings JSX with `SettingsPane` while preserving cloud-policy sync and local-direct callbacks.
+
+- [x] **Step 4: Run full verification**
+
+Run SettingsPane tests, focused AppShell settings tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 36: Top bar and left pane component extraction
+
+**Context:** After extracting the brand and settings panes, `AppShell` still composed the top bar and the left-rail content switch directly. Extracting these shells keeps the main layout focused on data/action wiring and gives the UI composition separate coverage.
+
+**Files:**
+- Create: `desktop/src/app/layout/TopBar.tsx`
+- Create: `desktop/src/app/layout/LeftPane.tsx`
+- Create: `desktop/src/tests/TopBar.test.tsx`
+- Create: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing component tests**
+
+Cover top-bar brand/account rendering and settings-view rendering through the new left-pane composition boundary.
+
+- [x] **Step 2: Implement TopBar and reuse AppBrand**
+
+Move top-bar composition into `TopBar` while reusing `AppBrand` to avoid duplicated brand markup.
+
+- [x] **Step 3: Implement LeftPane and wire AppShell**
+
+Move the left-rail view switch for organization, profile, settings, and library panes into `LeftPane` and pass AppShell state/actions through props.
+
+- [x] **Step 4: Run full verification**
+
+Run TopBar/LeftPane tests, focused AppShell navigation tests, full desktop tests, desktop build, and dev-cloud tests.
+
+
+### Task 37: App dialog layer extraction
+
+**Context:** `AppShell` still owned profile and organization modal composition after the left pane split. Extracting a dedicated dialog layer keeps the shell focused on data/action wiring and protects organization shared-library opening as an explicit user action.
+
+**Files:**
+- Create: `desktop/src/app/layout/AppDialogs.tsx`
+- Create: `desktop/src/tests/AppDialogs.test.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing AppDialogs tests**
+
+Cover profile modals, organization create/join/invite/leave modals, organization entry dialog selection, and explicit shared-library opening.
+
+- [x] **Step 2: Implement AppDialogs**
+
+Move profile and organization modal composition into `AppDialogs` with typed props and no behavior changes.
+
+- [x] **Step 3: Wire AppShell to AppDialogs**
+
+Replace inline modal JSX in `AppShell`, preserving organization list selection and explicit shared-library open callbacks.
+
+- [x] **Step 4: Harden LeftPane branch coverage**
+
+Cover settings, library import action forwarding, organization summary rendering, and profile view rendering through `LeftPane`.
+
+- [x] **Step 5: Run full verification**
+
+Verified `npm test` in `desktop` (49 files / 157 tests), `npm run build` in `desktop`, and dev-cloud node tests (15 tests).
+
+
+### Task 38: Dev cloud browser diagnostics hardening
+
+**Context:** Users may open `http://127.0.0.1:8787/v1/account/demo-login` directly in a browser while diagnosing cloud-account connection issues. The endpoint is intentionally POST-only, but returning a bare `not_found` made normal method mismatch look like a broken account system.
+
+**Files:**
+- Modify: `services/dev-cloud/server.mjs`
+- Modify: `services/dev-cloud/server.test.mjs`
+- Modify: `README.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add method-mismatch regression tests**
+
+Cover browser GET access to `/v1/account/demo-login` and unknown paths returning an endpoint directory.
+
+- [x] **Step 2: Implement endpoint directory helpers**
+
+Expose method-qualified endpoint names from the root service index and reuse them for 404 diagnostics.
+
+- [x] **Step 3: Return friendly method errors**
+
+Return `405 method_not_allowed` with the required method and a browser-specific explanation for known paths called with the wrong method.
+
+- [x] **Step 4: Document 8787 vs 1420**
+
+Clarify in `README.md` that 8787 is the API service index and 1420 is the frontend page, and that demo login is POST-only.
+
+- [x] **Step 5: Run full verification**
+
+Verified `npm test` in `desktop` (49 files / 157 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 39: Cloud connection error guidance
+
+**Context:** When the development cloud is not running, browser `fetch` failures surface as terse messages such as `Failed to fetch`, which made account login and organization loading look broken instead of pointing users to start `http://127.0.0.1:8787`.
+
+**Files:**
+- Create: `desktop/src/app/features/network/cloudErrorMessage.ts`
+- Create: `desktop/src/tests/cloudErrorMessage.test.ts`
+- Create: `desktop/src/tests/useAccountSession.test.ts`
+- Modify: `desktop/src/app/features/account/useAccountSession.ts`
+- Modify: `desktop/src/app/features/models/usePolicySync.ts`
+- Modify: `desktop/src/app/features/metadata/useDocumentMetadataSync.ts`
+- Modify: `desktop/src/app/features/organization/useOrganizationList.ts`
+- Modify: `desktop/src/app/features/organization/useOrganizationSummary.ts`
+- Modify: `desktop/src/app/features/organization/useOrganizationGovernance.ts`
+- Modify: `desktop/src/app/features/recommendations/useRecommendations.ts`
+- Modify: `desktop/src/tests/useOrganizationData.test.ts`
+- Modify: `docs/qa/environment-startup-guide.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add network-failure regression tests**
+
+Cover organization data loading and account demo login when the browser reports `Failed to fetch`.
+
+- [x] **Step 2: Implement shared cloud error formatter**
+
+Map common browser network failures to a concise hint to start `http://127.0.0.1:8787` and check the control plane endpoint.
+
+- [x] **Step 3: Wire cloud-facing hooks**
+
+Use the formatter for account login, model policy sync, metadata sync, organization list/summary/governance, and recommendations.
+
+- [x] **Step 4: Update startup documentation**
+
+Document the new actionable failure message in the environment startup guide and keep the right-pane title wording aligned with the current UI.
+
+- [x] **Step 5: Run full verification**
+
+Verified focused cloud-error tests, `npm test` in `desktop` (51 files / 161 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 40: Left pane navigation semantics cleanup
+
+**Context:** The user clarified that `组织 / 个人中心 / 设置` live in the far-left VSCode-style activity bar. The organization and profile left panes still had their own `返回文献库` buttons, duplicating activity-bar navigation and making the left pane feel like a nested modal instead of a stable panel.
+
+**Files:**
+- Modify: `desktop/src/app/features/organization/OrganizationSidebarPanel.tsx`
+- Modify: `desktop/src/app/features/profile/PersonalCenterPanel.tsx`
+- Modify: `desktop/src/app/layout/LeftPane.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing navigation-semantics test**
+
+Cover that organization and profile panes do not render extra `返回文献库` buttons inside the left pane.
+
+- [x] **Step 2: Remove duplicated pane-local navigation**
+
+Delete the organization/profile internal return buttons and remove the now-unused `onClose` props.
+
+- [x] **Step 3: Clean dead styling**
+
+Remove the unused `.personal-center-close` rule after deleting the profile return button.
+
+- [x] **Step 4: Run full verification**
+
+Verified LeftPane/AppShell focused tests, `npm test` in `desktop` (51 files / 162 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 41: Restored cloud session endpoint defaults
+
+**Context:** A user saw `文献元数据同步失败` while the dev-cloud metadata endpoint itself was healthy. The likely path was a locally restored cloud-account session: `useAccountSession` restored the session from localStorage, but `AppShell` only applied `http://127.0.0.1:8787` defaults when the user clicked `连接开发云账号`, leaving restored sessions on `mock://control-plane`.
+
+**Files:**
+- Modify: `desktop/src/app/features/account/useAccountSession.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `desktop/src/tests/useAccountSession.test.ts`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add restored-session metadata regression test**
+
+Cover that a stored cloud session uses `http://127.0.0.1:8787/v1/documents/metadata-sync`, not `mock://control-plane`.
+
+- [x] **Step 2: Notify shell on restored sessions**
+
+Add an `onSessionRestored` callback to `useAccountSession` and guard it with a ref so the restore effect runs once without re-render loops.
+
+- [x] **Step 3: Apply local dev-cloud defaults on restore**
+
+Wire `AppShell` so restored cloud sessions apply the same local dev-cloud defaults as the explicit login button.
+
+- [x] **Step 4: Run full verification**
+
+Verified `npm test` in `desktop` (51 files / 164 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).

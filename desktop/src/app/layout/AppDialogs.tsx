@@ -1,0 +1,115 @@
+import type { AccountSession } from "../features/account/account.types";
+import { OrganizationEntryDialog } from "../features/organization/OrganizationEntryDialog";
+import { OrganizationCreateDialog } from "../features/organization/OrganizationCreateDialog";
+import { OrganizationInviteConfirmDialog } from "../features/organization/OrganizationInviteConfirmDialog";
+import { OrganizationJoinDialog } from "../features/organization/OrganizationJoinDialog";
+import { OrganizationLeaveConfirmDialog } from "../features/organization/OrganizationLeaveConfirmDialog";
+import type { OrganizationList, OrganizationSummary } from "../features/organization/organization.types";
+import { AcademicArchiveDialog } from "../features/profile/AcademicArchiveDialog";
+import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfirmDialog";
+
+export type AppDialogsProps = {
+  accountSession: AccountSession | null;
+  academicArchiveOpen: boolean;
+  clearProfileConfirmOpen: boolean;
+  createOrganizationOpen: boolean;
+  inviteSummary: OrganizationSummary | null;
+  joinOrganizationOpen: boolean;
+  leaveSummary: OrganizationSummary | null;
+  list: OrganizationList | null;
+  listMessage: string;
+  onCancelClearProfile: () => void;
+  onClearProfile: () => void;
+  onCloseAcademicArchive: () => void;
+  onCloseCreateOrganization: () => void;
+  onCloseInviteMember: () => void;
+  onCloseJoinOrganization: () => void;
+  onCloseLeaveOrganization: () => void;
+  onCloseOrganizationDialog: () => void;
+  onCreateOrganization: (organizationName: string) => void;
+  onInviteMember: () => void;
+  onJoinOrganization: (inviteCode: string) => void;
+  onLeaveOrganization: () => void;
+  onOpenSharedLibrary: (summary: OrganizationSummary) => void;
+  onSelectOrganization: (organizationId: string) => void;
+  organizationDialogOpen: boolean;
+  readPaperCount: number;
+  summary: OrganizationSummary | null;
+};
+
+export function AppDialogs({
+  accountSession,
+  academicArchiveOpen,
+  clearProfileConfirmOpen,
+  createOrganizationOpen,
+  inviteSummary,
+  joinOrganizationOpen,
+  leaveSummary,
+  list,
+  listMessage,
+  onCancelClearProfile,
+  onClearProfile,
+  onCloseAcademicArchive,
+  onCloseCreateOrganization,
+  onCloseInviteMember,
+  onCloseJoinOrganization,
+  onCloseLeaveOrganization,
+  onCloseOrganizationDialog,
+  onCreateOrganization,
+  onInviteMember,
+  onJoinOrganization,
+  onLeaveOrganization,
+  onOpenSharedLibrary,
+  onSelectOrganization,
+  organizationDialogOpen,
+  readPaperCount,
+  summary
+}: AppDialogsProps) {
+  return (
+    <>
+      {clearProfileConfirmOpen ? (
+        <ClearProfileConfirmDialog onCancel={onCancelClearProfile} onConfirm={onClearProfile} />
+      ) : null}
+      {academicArchiveOpen ? (
+        <AcademicArchiveDialog
+          accountSession={accountSession}
+          onClose={onCloseAcademicArchive}
+          readPaperCount={readPaperCount}
+        />
+      ) : null}
+      {createOrganizationOpen ? (
+        <OrganizationCreateDialog
+          onCancel={onCloseCreateOrganization}
+          onConfirm={onCreateOrganization}
+        />
+      ) : null}
+      {joinOrganizationOpen ? (
+        <OrganizationJoinDialog onCancel={onCloseJoinOrganization} onConfirm={onJoinOrganization} />
+      ) : null}
+      {inviteSummary ? (
+        <OrganizationInviteConfirmDialog
+          onCancel={onCloseInviteMember}
+          onConfirm={onInviteMember}
+          summary={inviteSummary}
+        />
+      ) : null}
+      {leaveSummary ? (
+        <OrganizationLeaveConfirmDialog
+          onCancel={onCloseLeaveOrganization}
+          onConfirm={onLeaveOrganization}
+          summary={leaveSummary}
+        />
+      ) : null}
+      {organizationDialogOpen ? (
+        <OrganizationEntryDialog
+          list={list}
+          listMessage={listMessage}
+          onClose={onCloseOrganizationDialog}
+          onOpenSharedLibrary={onOpenSharedLibrary}
+          onSelectOrganization={onSelectOrganization}
+          summary={summary}
+        />
+      ) : null}
+    </>
+  );
+}

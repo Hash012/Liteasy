@@ -1,0 +1,21 @@
+import liteasyClawLogo from "../../assets/liteasyclaw-logo.jpg";
+import type { SettingsState } from "../features/settings/settings.types";
+
+type AppBrandProps = {
+  modelAccessMode: SettingsState["models.access_mode"];
+};
+
+export function AppBrand({ modelAccessMode }: AppBrandProps) {
+  return (
+    <div className="brand">
+      <img alt="LiteasyClaw Logo" className="brand-logo" src={liteasyClawLogo} />
+      <div className="brand-meta">
+        <div className="brand-name">LiteasyClaw</div>
+        <div className="brand-tagline">AI-driven paper-assisted reading platform</div>
+      </div>
+      <div className="model-mini-indicator">
+        模型：{modelAccessMode === "cloud_proxy" ? "云代理" : "本地直连"}
+      </div>
+    </div>
+  );
+}

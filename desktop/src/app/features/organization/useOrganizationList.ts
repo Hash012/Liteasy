@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import type { AccountSession } from "../account/account.types";
 import {
   createOrganizationListClient,
@@ -54,7 +55,7 @@ export function useOrganizationList({
           return;
         }
 
-        const detail = error instanceof Error ? error.message : "未知错误";
+        const detail = formatCloudConnectionError(error);
         setList(null);
         setMessage(`组织列表加载失败。详细信息：${detail}`);
         setStatus("error");

@@ -3,7 +3,6 @@ import type { OrganizationSummary } from "../organization/organization.types";
 
 type PersonalCenterPanelProps = {
   accountSession: AccountSession | null;
-  onClose: () => void;
   onClearProfile: () => void;
   onOpenAcademicArchive: () => void;
   onToggleProfileSampling: () => void;
@@ -16,7 +15,6 @@ type PersonalCenterPanelProps = {
 export function PersonalCenterPanel({
   accountSession,
   onClearProfile,
-  onClose,
   onOpenAcademicArchive,
   onToggleProfileSampling,
   organizationSummary,
@@ -35,9 +33,6 @@ export function PersonalCenterPanel({
           <div className="personal-center-kicker">左边栏</div>
           <div className="personal-center-title">个人中心</div>
         </div>
-        <button className="personal-center-close" onClick={onClose} type="button">
-          返回文献库
-        </button>
       </div>
 
       <div className="personal-center-card primary">

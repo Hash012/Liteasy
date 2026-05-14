@@ -16,7 +16,6 @@ type OrganizationSidebarPanelProps = {
   list: OrganizationList | null;
   listMessage: string;
   listStatus: OrganizationListStatus;
-  onClose: () => void;
   onCreateOrganization?: () => void;
   onInviteMember?: (summary: OrganizationSummary) => void;
   onJoinOrganization?: () => void;
@@ -38,7 +37,6 @@ export function OrganizationSidebarPanel({
   list,
   listMessage,
   listStatus,
-  onClose,
   onCreateOrganization,
   onInviteMember,
   onJoinOrganization,
@@ -59,9 +57,6 @@ export function OrganizationSidebarPanel({
           <div className="organization-sidebar-kicker">Activity · Organization</div>
           <div className="organization-sidebar-title">组织</div>
         </div>
-        <button className="left-rail-button subtle" onClick={onClose} type="button">
-          返回文献库
-        </button>
       </div>
       <div className="organization-sidebar-actions">
         <button className="policy-button sync" onClick={onOpenWindow} type="button">

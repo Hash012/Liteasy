@@ -999,6 +999,69 @@ test("reuses cached recommendations until a collected paper is added to the libr
   expect(recommendationRequestCount).toBe(2);
 }, 10000);
 
+
+test("restored cloud account session uses local dev-cloud defaults for metadata sync", async () => {
+  const user = userEvent.setup();
+  const requestedUrls: string[] = [];
+
+  window.localStorage.setItem(
+    "liteasy.account.session.v1",
+    JSON.stringify({
+      email: "researcher@liteasy.dev",
+      expiresAt: "2026-05-15T09:30:00Z",
+      name: "Liteasy Researcher",
+      sessionId: "demo-session-1"
+    })
+  );
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input, init) => {
+      requestedUrls.push(String(input));
+
+      if (String(input).includes("/v1/documents/metadata-sync")) {
+        return {
+          json: async () => ({
+            result: {
+              acceptedCount: 2,
+              rejectedCount: 0,
+              syncId: "metadata-restored-session",
+              syncedAt: "2026-05-14T10:20:00Z"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({
+          cloudProxyEndpoint: "http://127.0.0.1:8787",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "dev-policy-v1",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(<AppShell />);
+
+  const settingsPane = await openSettingsPanel(user);
+
+  await waitFor(() => {
+    expect(within(settingsPane).getByText("文献同步：已同步 2 篇")).toBeInTheDocument();
+  });
+
+  expect(requestedUrls).toContain("http://127.0.0.1:8787/v1/documents/metadata-sync");
+  expect(requestedUrls.some((url) => url.startsWith("mock://"))).toBe(false);
+});
+
 test("syncs visible workspace document metadata after cloud account login", async () => {
   const user = userEvent.setup();
   const metadataRequests: string[] = [];

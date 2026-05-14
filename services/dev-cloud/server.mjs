@@ -14,6 +14,27 @@ const defaultConfig = {
   syncedAt: "2026-05-14T09:30:00Z"
 };
 
+const availableEndpoints = [
+  "GET /",
+  "GET /healthz",
+  "GET /v1/admin/model-policy",
+  "POST /v1/account/demo-login",
+  "POST /v1/model/generate",
+  "POST /v1/model/audit",
+  "POST /v1/recommendations",
+  "POST /v1/documents/metadata-sync",
+  "POST /v1/org/list",
+  "POST /v1/org/summary",
+  "POST /v1/org/governance-summary"
+];
+
+const endpointMethods = new Map(
+  availableEndpoints.map((endpoint) => {
+    const [method, path] = endpoint.split(" ");
+    return [path, method];
+  })
+);
+
 function buildOrigin(request) {
   const host = request.headers.host ?? "127.0.0.1:8787";
   return `http://${host}`;
@@ -480,16 +501,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "GET" && url.pathname === "/") {
       writeJson(request, response, 200, {
         name: "Liteasy dev cloud",
-        endpoints: [
-          "/v1/account/demo-login",
-          "/v1/admin/model-policy",
-          "/v1/model/generate",
-          "/v1/recommendations",
-          "/v1/documents/metadata-sync",
-          "/v1/org/list",
-          "/v1/org/summary",
-          "/v1/org/governance-summary"
-        ]
+        endpoints: availableEndpoints
       });
       return;
     }
@@ -633,8 +645,22 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
+    const expectedMethod = endpointMethods.get(url.pathname);
+    if (expectedMethod) {
+      writeJson(request, response, 405, {
+        endpoint: url.pathname,
+        error: "method_not_allowed",
+        message: `浏览器直接打开 ${url.pathname} 会使用 GET；Liteasy dev cloud 需要 ${expectedMethod} 请求。请从桌面应用触发，或用 curl 调用该接口。`,
+        method: expectedMethod
+      });
+      return;
+    }
+
     writeJson(request, response, 404, {
-      error: "not_found"
+      availableEndpoints,
+      error: "not_found",
+      message: "Liteasy dev cloud 未找到该路径。请访问根路径查看服务索引，或确认桌面端控制平面地址。",
+      path: url.pathname
     });
   };
 }

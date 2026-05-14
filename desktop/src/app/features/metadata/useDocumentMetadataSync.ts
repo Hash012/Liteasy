@@ -1,3 +1,4 @@
+import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import { useEffect, useMemo, useState } from "react";
 import type { AccountSession } from "../account/account.types";
 import type { Paper } from "../workspace/workspace.types";
@@ -81,7 +82,7 @@ export function useDocumentMetadataSync({
           return;
         }
 
-        const detail = error instanceof Error ? error.message : "未知错误";
+        const detail = formatCloudConnectionError(error);
         setLastResult(null);
         setStatus("error");
         setMessage(`文献元数据同步失败。详细信息：${detail}`);

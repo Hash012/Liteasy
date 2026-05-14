@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import type { AccountSession } from "../account/account.types";
 import type { SettingsState } from "../settings/settings.types";
 import { fetchCloudRecommendations } from "./recommendationRuntime";
@@ -135,7 +136,7 @@ export function useRecommendations({
           return;
         }
 
-        const detail = error instanceof Error ? error.message : "未知错误";
+        const detail = formatCloudConnectionError(error);
         setRecommendationItems([]);
         setRecommendationStatus("error");
         setRecommendationMessage(`关联推荐获取失败。详细信息：${detail}`);

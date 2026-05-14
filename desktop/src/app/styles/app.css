@@ -728,14 +728,6 @@ body {
   font-weight: 800;
 }
 
-.personal-center-close {
-  border: 1px solid #b7d0e5;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #2f5575;
-  cursor: pointer;
-  padding: 8px 12px;
-}
 
 .personal-center-card {
   border: 1px solid #d1dfeb;

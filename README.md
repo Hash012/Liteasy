@@ -155,6 +155,8 @@ node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 Liteasy dev cloud listening on http://127.0.0.1:8787
 ```
 
+注意：`http://127.0.0.1:8787/` 是开发云 API 服务索引，不是 Liteasy 前端页面；`http://127.0.0.1:1420/` 才是前端开发页面。浏览器直接打开 `http://127.0.0.1:8787/v1/account/demo-login` 会使用 GET，但该接口需要桌面端发起 POST 请求；现在服务端会返回带方法说明的 JSON，看到这个提示不代表账号系统坏了。
+
 ### 方式 A：直接看桌面窗口
 
 在终端执行：
