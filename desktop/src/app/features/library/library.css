@@ -32,6 +32,12 @@
   border: 1px solid #d3e1ec;
 }
 
+.library-button.danger {
+  background: rgba(255, 246, 240, 0.94);
+  color: #9a5d3b;
+  border: 1px solid #edc8b0;
+}
+
 .library-section {
   padding: 14px;
   border-radius: 16px;
@@ -47,6 +53,11 @@
 .library-section.has-collection {
   border-style: solid;
   border-color: #c8dde9;
+}
+
+.library-drop-zone {
+  outline: 1px dashed rgba(139, 182, 216, 0.42);
+  outline-offset: -5px;
 }
 
 .library-section-title {
@@ -137,6 +148,11 @@
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.75);
   border: 1px dashed #bfd3df;
+  cursor: grab;
+}
+
+.collection-item:active {
+  cursor: grabbing;
 }
 
 .collection-title {

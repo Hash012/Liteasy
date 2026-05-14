@@ -338,6 +338,33 @@ body {
   font-size: 13px;
 }
 
+.assistant-audit-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f7f0dc;
+  color: #6f623d;
+  font-size: 13px;
+}
+
+.assistant-audit-card.pass {
+  background: #edf7ee;
+  color: #426d48;
+}
+
+.assistant-audit-card.review {
+  background: #fff7df;
+  color: #80662c;
+}
+
+.assistant-audit-card.fail {
+  background: #f9e8e8;
+  color: #85494b;
+}
+
 .assistant-input-wrap {
   display: flex;
   flex-direction: column;

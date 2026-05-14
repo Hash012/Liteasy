@@ -96,6 +96,51 @@ POST /v1/model/generate
 
 如果已配置 `OPENAI_API_KEY`，则这里会返回真实 OpenAI 生成结果。
 
+### 模型审计
+
+```text
+POST /v1/model/audit
+```
+
+请求体示例：
+
+```json
+{
+  "answer": "开发云回答：BERT 的核心方法是什么？",
+  "citations": [
+    {
+      "paperId": "demo-2",
+      "page": 7,
+      "snippet": "deep bidirectional representations are pre-trained"
+    }
+  ],
+  "model": "gpt-5-mini-auditor",
+  "provider": "openai",
+  "question": "BERT 的核心方法是什么？",
+  "retrievalConfidence": 0.86,
+  "source": "cloud_proxy"
+}
+```
+
+当前开发版会返回确定性的审计回执：
+
+```json
+{
+  "audit": {
+    "model": "gpt-5-mini-auditor",
+    "rationale": "开发云审计确认回答包含可追溯引用。",
+    "score": 0.86,
+    "verdict": "pass"
+  }
+}
+```
+
+说明：
+
+- 桌面端在使用 `http` 云代理端点时，会在生成回答后调用这个审计接口
+- 如果审计接口不可用，桌面端会回退到本地审计 seam，保证问答流程不中断
+- 当前开发云审计仍是确定性规则，后续可以替换成第二个真实大模型调用
+
 ### 开发云账号
 
 ```text
@@ -162,6 +207,47 @@ POST /v1/recommendations
 - 目的是先把“账号已连接 -> 勾选文献 -> 左栏显示推荐”这条链路打通
 - 后续可以在这里替换成真实推荐、缓存和可信度排序服务
 
+### 文献元数据同步
+
+```text
+POST /v1/documents/metadata-sync
+```
+
+请求体示例：
+
+```json
+{
+  "documents": [
+    {
+      "id": "demo-1",
+      "sourcePath": "fixtures/attention-is-all-you-need.pdf",
+      "title": "Attention Is All You Need"
+    }
+  ],
+  "sessionId": "demo-session-1",
+  "workspaceRevision": 0
+}
+```
+
+当前开发版会返回固定的同步回执：
+
+```json
+{
+  "result": {
+    "acceptedCount": 1,
+    "rejectedCount": 0,
+    "syncId": "metadata-demo-session-1-r0",
+    "syncedAt": "2026-05-14T10:20:00Z"
+  }
+}
+```
+
+说明：
+
+- 当前只同步当前工作区可见文献的基础元数据
+- 不上传 PDF 原文或解析块内容
+- 目的是先打通“连接云账号 -> 当前工作区元数据同步 -> 桌面端可见回执”的链路
+
 ## 3. 如何和桌面端联调
 
 启动桌面端后，在右栏 `命令` 模式依次输入：
@@ -188,12 +274,26 @@ POST /v1/recommendations
 
 如果你已经配置 `OPENAI_API_KEY`，这里通常不会再看到 `开发云回答：` 前缀，而会得到真实模型输出。
 
+同一条问答回复下方还会显示 `模型审计` 卡片。使用开发云端点时，审计结果来自：
+
+```text
+POST /v1/model/audit
+```
+
+你应该能看到 `审计模型 gpt-5-mini-auditor`、`审计评分` 和审计理由。
+
 如果你要同时验证账号链路，可以在桌面端顶部点击 `连接开发云账号`，然后检查是否出现：
 
 - `Liteasy Researcher`
 - `researcher@liteasy.dev`
 
 关闭并重新启动桌面端后，上述会话应自动恢复。
+
+连接账号后，右栏还会显示 `文献元数据同步` 卡片。你应该看到：
+
+- `文献同步：已同步 2 篇`
+- `最近同步：2026-05-14T10:20:00Z`
+- `同步批次：metadata-demo-session-1-r0`
 
 如果你要验证推荐链路，可以在连接账号后于左栏勾选 `BERT: Pre-training of Deep Bidirectional Transformers`，然后检查 `关联推荐` 区域是否出现：
 

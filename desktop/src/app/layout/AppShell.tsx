@@ -30,6 +30,9 @@ import type { AccountTransport } from "../features/account/accountSessionClient"
 import { useAccountSession } from "../features/account/useAccountSession";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import { useRecommendations } from "../features/recommendations/useRecommendations";
+import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
+import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
+import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
 
 const starterPapers: Paper[] = [
   {
@@ -48,7 +51,8 @@ function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
   return {
     papers: [...state.papers],
     selectedPaperIds: [...state.selectedPaperIds],
-    selectionLocked: state.selectionLocked
+    selectionLocked: state.selectionLocked,
+    workspaceRevision: state.workspaceRevision
   };
 }
 
@@ -89,6 +93,7 @@ function getArtifactTitle(type: ArtifactType) {
 type AppShellProps = {
   accountTransport?: AccountTransport;
   controlPlaneTransport?: ControlPlaneTransport;
+  documentMetadataTransport?: DocumentMetadataTransport;
   initialSettings?: Partial<SettingsState>;
   recommendationTransport?: RecommendationTransport;
 };
@@ -96,15 +101,18 @@ type AppShellProps = {
 export function AppShell({
   accountTransport,
   controlPlaneTransport,
+  documentMetadataTransport,
   initialSettings,
   recommendationTransport
 }: AppShellProps = {}) {
   const workspaceStoreRef = useRef(createWorkspaceStore());
+  const workspaceSeededRef = useRef(false);
   const importStoreRef = useRef(createImportStore());
   const settingsStoreRef = useRef(createSeededSettingsStore(initialSettings));
   const artifactStore = useMemo(() => createArtifactStore(), []);
-  if (workspaceStoreRef.current.getState().papers.length === 0) {
+  if (!workspaceSeededRef.current) {
     starterPapers.forEach((paper) => workspaceStoreRef.current.addPaper(paper));
+    workspaceSeededRef.current = true;
   }
 
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(() =>
@@ -159,6 +167,22 @@ export function AppShell({
     storeCollectionItems(nextItems);
   }
 
+  function addExternalPaperToLibrary(item: { id: string; source: string; title: string }) {
+    const added = workspaceStoreRef.current.addPaper({
+      id: item.id,
+      sourcePath: `external://${item.source}/${item.id}`,
+      title: item.title
+    });
+
+    if (added) {
+      syncWorkspace();
+      setAnalysisHint(`已将《${item.title}》加入我的文献库。`);
+      return;
+    }
+
+    setAnalysisHint(`《${item.title}》已经在我的文献库中。`);
+  }
+
   function syncArtifacts(taskId?: string) {
     const nextTasks = taskId ? [artifactStore.getTask(taskId)!].filter(Boolean) : [];
     setArtifactTasks(nextTasks);
@@ -203,6 +227,15 @@ export function AppShell({
       workspaceStoreRef.current.lockSelection();
       setAnalysisHint("选中文献集已锁定。可以先交给AI流程，或直接用模态按钮开始分析。");
     }
+    syncWorkspace();
+  }
+
+  function closeWorkspace() {
+    workspaceStoreRef.current.closeWorkspace();
+    setImportJobsByDocumentId({});
+    setArtifactTasks([]);
+    setArtifactTabs([]);
+    setAnalysisHint("当前工作区已关闭。请打开或加入文献后继续。");
     syncWorkspace();
   }
 
@@ -458,7 +491,19 @@ export function AppShell({
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
-    selectedPapers
+    selectedPapers,
+    workspaceRevision: workspaceState.workspaceRevision
+  });
+  const {
+    lastResult: documentMetadataSyncResult,
+    message: documentMetadataSyncMessage,
+    status: documentMetadataSyncStatus
+  } = useDocumentMetadataSync({
+    accountSession,
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
+    documents: workspaceState.papers,
+    transport: documentMetadataTransport,
+    workspaceRevision: workspaceState.workspaceRevision
   });
 
   return (
@@ -489,7 +534,9 @@ export function AppShell({
             <LibraryPane
               collectionItems={collectionItems}
               importJobs={importJobsByDocumentId}
+              onAddExternalPaper={addExternalPaperToLibrary}
               onCollectRecommendation={collectRecommendation}
+              onCloseWorkspace={closeWorkspace}
               onImportSelectedSet={() => {
                 void handleImportSelectedSet();
               }}
@@ -542,6 +589,11 @@ export function AppShell({
                 syncMessage={policySyncMessage}
                 syncPending={policySyncPending}
                 syncStatus={policySyncStatus}
+              />
+              <DocumentMetadataSyncPanel
+                lastResult={documentMetadataSyncResult}
+                message={documentMetadataSyncMessage}
+                status={documentMetadataSyncStatus}
               />
               <AssistantPane
                 importedChunksByPaperId={importedChunksByPaperId}

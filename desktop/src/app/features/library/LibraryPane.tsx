@@ -15,6 +15,8 @@ type LibraryPaneProps = {
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
+  onAddExternalPaper: (item: CollectionItem | RecommendationItem) => void;
+  onCloseWorkspace: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
   onToggleLock: () => void;
@@ -43,6 +45,8 @@ export function LibraryPane({
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
+  onAddExternalPaper,
+  onCloseWorkspace,
   onCollectRecommendation,
   onImportSelectedSet,
   onToggleLock,
@@ -57,9 +61,32 @@ export function LibraryPane({
         <button className="library-button ghost" type="button" onClick={onToggleLock}>
           {selectionLocked ? "解除锁定" : "锁定选择"}
         </button>
+        <button className="library-button danger" type="button" onClick={onCloseWorkspace}>
+          关闭工作区
+        </button>
       </div>
 
-      <div className="library-section">
+      <div
+        aria-label="我的文献库投放区"
+        className="library-section library-drop-zone"
+        onDragOver={(event) => {
+          event.preventDefault();
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          const rawPayload = event.dataTransfer.getData("application/liteasy-library-item");
+          if (!rawPayload) {
+            return;
+          }
+
+          try {
+            const payload = JSON.parse(rawPayload) as CollectionItem | RecommendationItem;
+            onAddExternalPaper(payload);
+          } catch {
+            // Ignore malformed drag payloads from non-Liteasy sources.
+          }
+        }}
+      >
         <div className="library-section-title">我的文献库</div>
         <div className="library-selection-summary">
           当前选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
@@ -115,7 +142,17 @@ export function LibraryPane({
         ) : (
           <ul className="collection-list">
             {collectionItems.map((item) => (
-              <li className="collection-item" key={item.id}>
+              <li
+                className="collection-item"
+                draggable
+                key={item.id}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(
+                    "application/liteasy-library-item",
+                    JSON.stringify(item)
+                  );
+                }}
+              >
                 <div className="collection-title">{item.title}</div>
                 <div className="collection-meta">来源：{item.source}</div>
                 <div className="collection-reason">{item.reason}</div>
@@ -142,6 +179,7 @@ export function LibraryPane({
                     "application/liteasy-recommendation",
                     JSON.stringify(item)
                   );
+                  event.dataTransfer.setData("application/liteasy-library-item", JSON.stringify(item));
                 }}
               >
                 <div className="recommendation-title">{item.title}</div>

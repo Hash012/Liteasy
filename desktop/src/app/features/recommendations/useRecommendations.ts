@@ -16,6 +16,7 @@ type UseRecommendationsInput = {
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
   selectedPapers: Paper[];
+  workspaceRevision: number;
 };
 
 function buildSelectionCacheKey(selectedPapers: Paper[]) {
@@ -44,7 +45,8 @@ export function useRecommendations({
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
-  selectedPapers
+  selectedPapers,
+  workspaceRevision
 }: UseRecommendationsInput) {
   const cacheRef = useRef(new Map<string, RecommendationItem[]>());
   const selectionCacheKey = buildSelectionCacheKey(selectedPapers);
@@ -54,6 +56,14 @@ export function useRecommendations({
   );
   const [recommendationPending, setRecommendationPending] = useState(false);
   const [recommendationStatus, setRecommendationStatus] = useState<RecommendationStatus>("idle");
+
+  useEffect(() => {
+    cacheRef.current.clear();
+    setRecommendationItems([]);
+    setRecommendationPending(false);
+    setRecommendationStatus("idle");
+    setRecommendationMessage("勾选文献后，这里会显示与当前选中文献集相关的推荐。");
+  }, [workspaceRevision]);
 
   useEffect(() => {
     if (!recommendationsEnabled) {

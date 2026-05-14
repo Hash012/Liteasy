@@ -8,12 +8,18 @@ export function createWorkspaceStore() {
   const state: WorkspaceState = {
     papers: [],
     selectedPaperIds: [],
-    selectionLocked: false
+    selectionLocked: false,
+    workspaceRevision: 0
   };
 
   return {
     addPaper(paper: Paper) {
+      if (state.papers.some((item) => item.id === paper.id)) {
+        return false;
+      }
+
       state.papers.push(paper);
+      return true;
     },
     toggleSelection(id: string) {
       if (state.selectionLocked) {
@@ -29,6 +35,12 @@ export function createWorkspaceStore() {
     },
     unlockSelection() {
       state.selectionLocked = false;
+    },
+    closeWorkspace() {
+      state.papers = [];
+      state.selectedPaperIds = [];
+      state.selectionLocked = false;
+      state.workspaceRevision += 1;
     },
     getSelectedDocumentSet(): SelectedDocumentSet {
       return {

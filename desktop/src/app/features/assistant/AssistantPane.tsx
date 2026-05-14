@@ -82,6 +82,18 @@ function getAssistantErrorMessage(error: unknown) {
   return "模型服务暂时不可用，请检查当前模型端点配置或稍后重试。";
 }
 
+function getAuditVerdictLabel(verdict: "pass" | "review" | "fail") {
+  if (verdict === "pass") {
+    return "通过";
+  }
+
+  if (verdict === "review") {
+    return "需复核";
+  }
+
+  return "未通过";
+}
+
 export function AssistantPane({
   importedChunksByPaperId = {},
   onGenerateArtifact,
@@ -171,6 +183,7 @@ export function AssistantPane({
         settings: settingsStoreRef.current.getState()
       });
       const assistantMessage = createMessage("assistant", answer.content);
+      assistantMessage.audit = answer.audit;
       assistantMessage.citations = answer.citations;
       assistantMessage.confidence = answer.confidence;
       assistantMessage.executionTrace = answer.executionTrace;
@@ -216,6 +229,16 @@ export function AssistantPane({
                   </span>
                   <span>{message.citations[0].snippet}</span>
                   <span>可信度 {message.confidence?.toFixed(2)}</span>
+                </div>
+              ) : null}
+              {message.audit ? (
+                <div className={`assistant-audit-card ${message.audit.verdict}`}>
+                  <strong>模型审计</strong>
+                  <span>审计模型 {message.audit.model}</span>
+                  <span>
+                    审计评分 {message.audit.score.toFixed(2)} · {getAuditVerdictLabel(message.audit.verdict)}
+                  </span>
+                  <span>{message.audit.rationale}</span>
                 </div>
               ) : null}
               {message.executionTrace ? (

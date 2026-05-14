@@ -1,5 +1,6 @@
 import type { Citation } from "../retrieval/retrieval.types";
 import type { ModelExecutionTrace } from "../models/modelExecution";
+import type { AnswerAuditResult } from "./answerAuditor";
 
 export type AssistantMode = "explain" | "command" | "qa";
 
@@ -9,6 +10,7 @@ export type AssistantMessage = {
   content: string;
   citations?: Citation[];
   confidence?: number;
+  audit?: AnswerAuditResult;
   executionTrace?: ModelExecutionTrace;
 };
 

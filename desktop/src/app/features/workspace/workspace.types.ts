@@ -8,6 +8,7 @@ export type WorkspaceState = {
   papers: Paper[];
   selectedPaperIds: string[];
   selectionLocked: boolean;
+  workspaceRevision: number;
 };
 
 export type SelectedDocumentSet = {

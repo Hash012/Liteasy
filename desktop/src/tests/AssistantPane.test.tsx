@@ -51,6 +51,8 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
   expect(screen.getByText("总结这篇论文的核心方法")).toBeInTheDocument();
   expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
   expect(screen.getByText(/demo-1 p\.3/)).toBeInTheDocument();
+  expect(screen.getByText("审计模型 gpt-5-mini-auditor")).toBeInTheDocument();
+  expect(screen.getByText("审计评分 0.84 · 通过")).toBeInTheDocument();
 });
 
 test("records command execution feedback in message history", async () => {

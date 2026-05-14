@@ -125,6 +125,63 @@ function buildRecommendationPayload(body) {
   };
 }
 
+function buildDocumentMetadataSyncPayload(body) {
+  const documents = Array.isArray(body.documents) ? body.documents : [];
+  const validDocuments = documents.filter(
+    (document) =>
+      typeof document?.id === "string" &&
+      typeof document?.title === "string" &&
+      (typeof document?.sourcePath === "string" || typeof document?.sourcePath === "undefined")
+  );
+  const sessionId = typeof body.sessionId === "string" ? body.sessionId : "anonymous";
+  const workspaceRevision = Number.isFinite(body.workspaceRevision) ? body.workspaceRevision : 0;
+
+  return {
+    result: {
+      acceptedCount: validDocuments.length,
+      rejectedCount: documents.length - validDocuments.length,
+      syncId: `metadata-${sessionId}-r${workspaceRevision}`,
+      syncedAt: "2026-05-14T10:20:00Z"
+    }
+  };
+}
+
+function clampScore(score) {
+  return Math.max(0, Math.min(1, Number(score.toFixed(2))));
+}
+
+function getAuditVerdict(score) {
+  if (score >= 0.8) {
+    return "pass";
+  }
+
+  if (score >= 0.55) {
+    return "review";
+  }
+
+  return "fail";
+}
+
+function buildModelAuditPayload(body) {
+  const citations = Array.isArray(body.citations) ? body.citations : [];
+  const hasTraceableCitation = citations.some((citation) => typeof citation?.snippet === "string" && citation.snippet.length > 0);
+  const answer = typeof body.answer === "string" ? body.answer : "";
+  const retrievalConfidence = typeof body.retrievalConfidence === "number" ? body.retrievalConfidence : 0.5;
+  const score = clampScore(retrievalConfidence + (hasTraceableCitation ? 0 : -0.2) + (answer.length >= 12 ? 0 : -0.15));
+
+  return {
+    audit: {
+      model: "gpt-5-mini-auditor",
+      rationale:
+        hasTraceableCitation && answer.length >= 12
+          ? "开发云审计确认回答包含可追溯引用。"
+          : "开发云审计发现回答依据不足，需要人工复核。",
+      score,
+      verdict: getAuditVerdict(score)
+    }
+  };
+}
+
 async function generateAnswer(body, providers) {
   const providerId = typeof body.provider === "string" ? body.provider : "openai";
   const liveProvider = providers[providerId];
@@ -204,6 +261,22 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
+    if (method === "POST" && url.pathname === "/v1/model/audit") {
+      let body;
+
+      try {
+        body = await readJsonBody(request);
+      } catch {
+        writeJson(response, 400, {
+          error: "invalid_json"
+        });
+        return;
+      }
+
+      writeJson(response, 200, buildModelAuditPayload(body));
+      return;
+    }
+
     if (method === "POST" && url.pathname === "/v1/account/demo-login") {
       writeJson(response, 200, {
         session: {
@@ -229,6 +302,22 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
 
       writeJson(response, 200, buildRecommendationPayload(body));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/documents/metadata-sync") {
+      let body;
+
+      try {
+        body = await readJsonBody(request);
+      } catch {
+        writeJson(response, 400, {
+          error: "invalid_json"
+        });
+        return;
+      }
+
+      writeJson(response, 200, buildDocumentMetadataSyncPayload(body));
       return;
     }
 

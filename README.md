@@ -96,27 +96,23 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 
 ## 3. 当前已经做了什么
 
-当前 `desktop` 已经具备：
+当前 `desktop` 已经具备 Phase 2 可验收能力：
 
-- 三栏工作台骨架
+- 三栏桌面工作台骨架
 - 顶部品牌区与 Logo
-- 默认浅蓝灰 UI 配色
-- 左栏基础文献库区域
-- 右栏基础 AI 助手区域
-- Tauri 桌面壳可启动
+- 左栏 `我的文献库 / 收藏 / 关联推荐`
+- 选中文献集、锁定选择、导入、模态分析入口
+- 开发云账号连接与本地会话恢复
+- 云端模型策略同步
+- 当前工作区文献元数据同步
+- 关联推荐展示、排序、缓存清理
+- 推荐或收藏拖入 `我的文献库`
+- 问答原文定位、模型链路、审计模型评分
+- 开发云模型生成和模型审计接口
 
-当前已经写好的测试包括：
+当前测试已经覆盖桌面端核心 store、导入流程、助手、模型策略、推荐、收藏拖拽、元数据同步、模型审计和开发云接口。
 
-- `workspace.store.test.ts`
-- `import.store.test.ts`
-- `assistant.store.test.ts`
-- `answerFormatter.test.ts`
-- `commandRouter.test.ts`
-- `artifact.store.test.ts`
-
-也就是说，现在已经不是“纯静态图”，而是一个开始进入可运行开发状态的桌面端原型。
-
-需要注意：当前代码里仍有一部分原型级的 `commandRouter + settings` 实现，但文档上的目标架构已经明确收敛到 `skill registry / action registry` 方向。
+需要注意：当前仍是 Phase 2 原型，推荐、解析、审计和账号系统中还有演示或 mock 部分。验收前请先阅读 `docs/qa/phase2-known-limitations.md`。
 
 ## 4. 没有开发基础的人应该先看什么
 
@@ -129,14 +125,29 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
    路径：`docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md`
 
 3. 看实施计划  
-   路径：`docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md`
+   路径：`docs/superpowers/plans/2026-05-10-liteasy-phase2-sync-and-recommendation.md`
 
 4. 看桌面端启动说明  
    路径：`docs/qa/environment-startup-guide.md`
 
-5. 真正启动一次 `desktop`
+5. 看 Phase 2 验收指南  
+   路径：`docs/qa/phase2-test-guide.md`
+
+6. 真正启动一次 `desktop`
 
 ## 5. 如何查看 desktop 当前效果
+
+如果要完整查看 Phase 2 效果，需要先启动开发云服务：
+
+```bash
+node /home/octopus/Liteasy/services/dev-cloud/server.mjs
+```
+
+看到下面这行表示开发云启动成功：
+
+```text
+Liteasy dev cloud listening on http://127.0.0.1:8787
+```
 
 ### 方式 A：直接看桌面窗口
 
@@ -157,6 +168,9 @@ npm run tauri dev
 - 左栏 `Library`
 - 中栏 `Reader`
 - 右栏 `Assistant`
+- 右栏模型策略卡片和文献元数据同步卡片
+
+启动后如需完整验收，请按 `docs/qa/phase2-test-guide.md` 操作。
 
 ### 方式 B：只看前端页面
 
@@ -218,5 +232,8 @@ source "$HOME/.cargo/env"
 - **产品方案原文**：`docs/Liteasy_功能与UI设计文档1.0.md`
 - **技术方案**：`docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md`
 - **实施计划**：`docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md`
+- **Phase 2 计划**：`docs/superpowers/plans/2026-05-10-liteasy-phase2-sync-and-recommendation.md`
 - 环境启动手册：`docs/qa/environment-startup-guide.md`
+- Phase 2 测试指南：`docs/qa/phase2-test-guide.md`
+- Phase 2 已知限制：`docs/qa/phase2-known-limitations.md`
 - 开发协作提示词：`docs/开发协作提示词历史_5.10.md`

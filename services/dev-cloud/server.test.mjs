@@ -187,3 +187,76 @@ test("returns related recommendations for the selected document set", async () =
     ]
   });
 });
+
+test("accepts document metadata sync snapshots", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      documents: [
+        {
+          id: "demo-1",
+          sourcePath: "fixtures/attention-is-all-you-need.pdf",
+          title: "Attention Is All You Need"
+        },
+        {
+          id: "demo-2",
+          sourcePath: "fixtures/bert-pretraining.pdf",
+          title: "BERT: Pre-training of Deep Bidirectional Transformers"
+        }
+      ],
+      sessionId: "demo-session-1",
+      workspaceRevision: 0
+    }),
+    url: "/v1/documents/metadata-sync"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json, {
+    result: {
+      acceptedCount: 2,
+      rejectedCount: 0,
+      syncId: "metadata-demo-session-1-r0",
+      syncedAt: "2026-05-14T10:20:00Z"
+    }
+  });
+});
+
+test("returns an audit score from the model audit endpoint", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      answer: "开发云回答：BERT 的核心方法是什么？",
+      citations: [
+        {
+          page: 7,
+          paperId: "demo-2",
+          snippet: "deep bidirectional representations are pre-trained"
+        }
+      ],
+      model: "gpt-5-mini-auditor",
+      provider: "openai",
+      question: "BERT 的核心方法是什么？",
+      retrievalConfidence: 0.86,
+      source: "cloud_proxy"
+    }),
+    url: "/v1/model/audit"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json, {
+    audit: {
+      model: "gpt-5-mini-auditor",
+      rationale: "开发云审计确认回答包含可追溯引用。",
+      score: 0.86,
+      verdict: "pass"
+    }
+  });
+});

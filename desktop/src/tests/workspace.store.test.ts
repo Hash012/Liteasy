@@ -27,3 +27,29 @@ test("builds a selected document set from locked papers", () => {
     locked: true
   });
 });
+
+test("does not add the same paper twice", () => {
+  const store = createWorkspaceStore();
+
+  expect(store.addPaper({ id: "p1", title: "Paper 1" })).toBe(true);
+  expect(store.addPaper({ id: "p1", title: "Paper 1" })).toBe(false);
+
+  expect(store.getState().papers).toEqual([{ id: "p1", title: "Paper 1" }]);
+});
+
+test("closes the visible workspace and resets document selection", () => {
+  const store = createWorkspaceStore();
+
+  store.addPaper({ id: "p1", title: "Paper 1" });
+  store.addPaper({ id: "p2", title: "Paper 2" });
+  store.toggleSelection("p1");
+  store.lockSelection();
+  store.closeWorkspace();
+
+  expect(store.getState()).toEqual({
+    papers: [],
+    selectedPaperIds: [],
+    selectionLocked: false,
+    workspaceRevision: 1
+  });
+});

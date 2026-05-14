@@ -1,28 +1,52 @@
 import { formatAnswer } from "./answerFormatter";
 import type { AssistantMode } from "./assistant.types";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
+import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
+import type { ModelTransport } from "../models/modelHttpClient";
 import { getMockAnswer } from "../retrieval/mockRetriever";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
 import type { Paper } from "../workspace/workspace.types";
+import { auditAssistantAnswer } from "./answerAuditor";
 
 type GenerateAssistantAnswerInput = {
+  auditTransport?: ModelAuditTransport;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   mode: AssistantMode;
+  modelTransport?: ModelTransport;
   question: string;
   selectedPapers: Paper[];
   settings: SettingsState;
 };
 
+function isMockEndpoint(endpoint: string) {
+  return endpoint.startsWith("mock://");
+}
+
+function getActiveModelEndpoint(settings: SettingsState) {
+  return settings["models.access_mode"] === "local_direct"
+    ? settings["models.local_direct_endpoint"]
+    : settings["models.cloud_proxy_endpoint"];
+}
+
+function getActiveModelSource(settings: SettingsState) {
+  return settings["models.access_mode"] === "local_direct" ? "local_direct" : "cloud_proxy";
+}
+
 export async function generateAssistantAnswer({
+  auditTransport,
   importedChunksByPaperId,
   mode,
+  modelTransport,
   question,
   selectedPapers,
   settings
 }: GenerateAssistantAnswerInput) {
   const groundedAnswer = getMockAnswer(selectedPapers, importedChunksByPaperId, question);
-  const gateway = createModelGatewayFromSettings(settings);
+  const gateway = createModelGatewayFromSettings(settings, {
+    cloudTransport: modelTransport,
+    localTransport: modelTransport
+  });
   const prompt = [
     `问题：${question}`,
     `参考文献：${selectedPapers.map((paper) => paper.title).join("；")}`,
@@ -34,9 +58,31 @@ export async function generateAssistantAnswer({
     provider: settings["models.default_provider"]
   });
   const generatedAnswerText = generation.answer;
+  const localAudit = auditAssistantAnswer({
+    answer: generatedAnswerText,
+    citations: groundedAnswer.citations,
+    retrievalConfidence: groundedAnswer.confidence
+  });
+  const activeEndpoint = getActiveModelEndpoint(settings);
+  const activeSource = getActiveModelSource(settings);
+  const audit = isMockEndpoint(activeEndpoint)
+    ? localAudit
+    : await createHttpModelAuditClient({
+        endpoint: activeEndpoint,
+        source: activeSource,
+        transport: auditTransport
+      })({
+        answer: generatedAnswerText,
+        citations: groundedAnswer.citations,
+        model: "gpt-5-mini-auditor",
+        provider: settings["models.default_provider"],
+        question,
+        retrievalConfidence: groundedAnswer.confidence
+      }).catch(() => localAudit);
 
   return {
     answer: generatedAnswerText,
+    audit,
     citations: groundedAnswer.citations,
     confidence: groundedAnswer.confidence,
     executionTrace: generation.trace,
