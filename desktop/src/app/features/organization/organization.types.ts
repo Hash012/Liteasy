@@ -33,6 +33,31 @@ export type OrganizationSharedLibraryDocument = {
   title: string;
 };
 
+export type OrganizationSharedLibraryFolder = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  path: string;
+};
+
+export type OrganizationSharedLibraryManifestDocument = OrganizationSharedLibraryDocument & {
+  folderId: string;
+};
+
+export type OrganizationSharedLibraryManifest = {
+  documents: OrganizationSharedLibraryManifestDocument[];
+  folders: OrganizationSharedLibraryFolder[];
+  name: string;
+  organizationId: string;
+  rootFolderId: string;
+  status: OrganizationSharedLibraryStatus;
+};
+
+export type OrganizationSharedLibraryManifestInput = {
+  organizationId: string;
+  sessionId: string;
+};
+
 export type OrganizationSharedLibrary = {
   documentCount: number;
   documents: OrganizationSharedLibraryDocument[];
@@ -120,4 +145,4 @@ export type OrganizationGovernanceInput = {
   sessionId: string;
 };
 
-export type OrganizationGovernanceStatus = "unauthenticated" | "loading" | "success" | "error";
+export type OrganizationGovernanceStatus = "unauthenticated" | "waiting" | "loading" | "success" | "error";

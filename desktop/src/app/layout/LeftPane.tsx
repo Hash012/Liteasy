@@ -2,6 +2,7 @@ import { LibraryPane } from "../features/library/LibraryPane";
 import { OrganizationSidebarPanel } from "../features/organization/OrganizationSidebarPanel";
 import { PersonalCenterPanel } from "../features/profile/PersonalCenterPanel";
 import { SettingsPane } from "./SettingsPane";
+import type { AcademicProfile } from "../features/profile/profile.types";
 import type { AccountSession } from "../features/account/account.types";
 import type { ImportJob } from "../features/import/import.types";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
@@ -14,6 +15,7 @@ import type { LeftRailView } from "./useLeftRailNavigation";
 import type { PolicySyncStatus } from "../features/models/policySync.types";
 
 export type LeftPaneProps = {
+  academicProfile: AcademicProfile;
   accountSession: AccountSession | null;
   collectionItems: CollectionItem[];
   documentMetadataSyncMessage?: string;
@@ -28,9 +30,11 @@ export type LeftPaneProps = {
   leftRailView: LeftRailView;
   list: OrganizationList | null;
   listMessage: string;
+  organizationActionMessage?: string;
   listStatus: OrganizationListStatus;
   onAddExternalPaper: (item: { id: string; source: string; title: string }) => void;
   onClearProfile: () => void;
+  onClearRecommendations: () => void;
   onCollectRecommendation: (item: RecommendationItem) => void;
   onCreateOrganization?: () => void;
   onImportSelectedSet: () => void;
@@ -42,11 +46,14 @@ export type LeftPaneProps = {
   onOpenOrganizationDialog: () => void;
   onOpenSharedLibrary?: (summary: OrganizationSummary) => void;
   onReturnToLocalWorkspace: () => void;
+  onRetryDocumentMetadataSync?: () => void;
   onSelectOrganization?: (organizationId: string) => void;
   onSetAccessMode: (mode: SettingsState["models.access_mode"]) => void;
   onSyncCloudPolicy: () => void;
   onToggleLocalDirectEnabled: (enabled: boolean) => void;
+  onUseLocalDevCloudDefaults: () => void;
   onToggleProfileSampling: () => void;
+  onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   onToggleSelection: (paperId: string) => void;
   onToggleLock: () => void;
   organizationSummary: OrganizationSummary | null;
@@ -72,7 +79,24 @@ export type LeftPaneProps = {
   workspaceLabel: string;
 };
 
+function getPaneHeader(leftRailView: LeftRailView) {
+  if (leftRailView === "organization") {
+    return "组织";
+  }
+
+  if (leftRailView === "profile") {
+    return "个人中心";
+  }
+
+  if (leftRailView === "settings") {
+    return "设置";
+  }
+
+  return "文献库";
+}
+
 export function LeftPane({
+  academicProfile,
   accountSession,
   collectionItems,
   documentMetadataSyncMessage,
@@ -90,6 +114,7 @@ export function LeftPane({
   listStatus,
   onAddExternalPaper,
   onClearProfile,
+  onClearRecommendations,
   onCollectRecommendation,
   onCreateOrganization,
   onImportSelectedSet,
@@ -101,13 +126,17 @@ export function LeftPane({
   onOpenOrganizationDialog,
   onOpenSharedLibrary,
   onReturnToLocalWorkspace,
+  onRetryDocumentMetadataSync,
   onSelectOrganization,
   onSetAccessMode,
   onSyncCloudPolicy,
   onToggleLocalDirectEnabled,
+  onUseLocalDevCloudDefaults,
   onToggleProfileSampling,
+  onUpdateAcademicProfile,
   onToggleSelection,
   onToggleLock,
+  organizationActionMessage,
   organizationSummary,
   organizationSummaryMessage,
   organizationSummaryStatus,
@@ -132,10 +161,11 @@ export function LeftPane({
 }: LeftPaneProps) {
   return (
     <aside className="pane left">
-      <div className="pane-header">{leftRailView === "organization" ? "Organization" : leftRailView === "profile" ? "Profile" : leftRailView === "settings" ? "Settings" : "Library"}</div>
+      <div className="pane-header">{getPaneHeader(leftRailView)}</div>
       <div className="pane-body">
         {leftRailView === "organization" ? (
           <OrganizationSidebarPanel
+            actionMessage={organizationActionMessage}
             governanceMessage={governanceMessage}
             governanceStatus={governanceStatus}
             governanceSummary={governanceSummary}
@@ -157,10 +187,12 @@ export function LeftPane({
           />
         ) : leftRailView === "profile" ? (
           <PersonalCenterPanel
+            academicProfile={academicProfile}
             accountSession={accountSession}
             onClearProfile={onClearProfile}
             onOpenAcademicArchive={onOpenAcademicArchive}
             onToggleProfileSampling={onToggleProfileSampling}
+            onUpdateAcademicProfile={onUpdateAcademicProfile}
             organizationSummary={organizationSummary}
             profileClearMessage={profileClearMessage}
             profileSamplingEnabled={profileSamplingEnabled}
@@ -172,9 +204,11 @@ export function LeftPane({
             documentMetadataSyncResult={documentMetadataSyncResult}
             documentMetadataSyncStatus={documentMetadataSyncStatus}
             latestExecutionLabel={latestExecutionLabel}
+            onRetryDocumentMetadataSync={onRetryDocumentMetadataSync}
             onSetAccessMode={onSetAccessMode}
             onSyncCloudPolicy={onSyncCloudPolicy}
             onToggleLocalDirectEnabled={onToggleLocalDirectEnabled}
+            onUseLocalDevCloudDefaults={onUseLocalDevCloudDefaults}
             policySyncMessage={policySyncMessage}
             policySyncPending={policySyncPending}
             policySyncStatus={policySyncStatus}
@@ -188,6 +222,7 @@ export function LeftPane({
             collectionItems={collectionItems}
             importJobs={importJobs}
             onAddExternalPaper={onAddExternalPaper}
+            onClearRecommendations={onClearRecommendations}
             onCollectRecommendation={onCollectRecommendation}
             onImportSelectedSet={onImportSelectedSet}
             onReturnToLocalWorkspace={onReturnToLocalWorkspace}

@@ -25,6 +25,12 @@ export type SkillInvocation =
       };
     }
   | {
+      skillId: "settings.use_local_dev_cloud";
+      input: {
+        target: "local_dev_cloud";
+      };
+    }
+  | {
       skillId: "organization.open_shared_library";
       input: {
         source: "organization_space";
@@ -49,6 +55,16 @@ export async function executeSkill(
     return executeAction(
       {
         actionId: "settings.sync_model_policy",
+        input: invocation.input
+      },
+      context
+    );
+  }
+
+  if (invocation.skillId === "settings.use_local_dev_cloud") {
+    return executeAction(
+      {
+        actionId: "settings.use_local_dev_cloud",
         input: invocation.input
       },
       context

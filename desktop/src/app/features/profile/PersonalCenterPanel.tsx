@@ -1,11 +1,16 @@
 import type { AccountSession } from "../account/account.types";
 import type { OrganizationSummary } from "../organization/organization.types";
+import { AcademicProfileForm } from "./AcademicProfileForm";
+import type { AcademicProfile } from "./profile.types";
+import { formatAcademicProfile } from "./profile.types";
 
 type PersonalCenterPanelProps = {
+  academicProfile: AcademicProfile;
   accountSession: AccountSession | null;
   onClearProfile: () => void;
   onOpenAcademicArchive: () => void;
   onToggleProfileSampling: () => void;
+  onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   organizationSummary: OrganizationSummary | null;
   profileClearMessage?: string;
   profileSamplingEnabled: boolean;
@@ -13,10 +18,12 @@ type PersonalCenterPanelProps = {
 };
 
 export function PersonalCenterPanel({
+  academicProfile,
   accountSession,
   onClearProfile,
   onOpenAcademicArchive,
   onToggleProfileSampling,
+  onUpdateAcademicProfile,
   organizationSummary,
   profileClearMessage,
   profileSamplingEnabled,
@@ -46,7 +53,8 @@ export function PersonalCenterPanel({
 
       <div className="personal-center-card">
         <div className="personal-center-section-title">画像配置</div>
-        <div className="personal-center-row">画像配置：性别 未设置 · 年龄 未设置 · 学段 未设置</div>
+        <div className="personal-center-row">画像配置：{formatAcademicProfile(academicProfile)}</div>
+        <AcademicProfileForm academicProfile={academicProfile} onSave={onUpdateAcademicProfile} />
         <div className="personal-center-row">用户画像：{profileSamplingEnabled ? "已开启" : "已关闭"}</div>
         {profileClearMessage ? <div className="personal-center-row">{profileClearMessage}</div> : null}
         <button className="left-rail-button" onClick={onToggleProfileSampling} type="button">

@@ -13,7 +13,7 @@ const modes: Array<{ id: AssistantMode; label: string }> = [
 
 export function ModeSwitch({ mode, onChange }: ModeSwitchProps) {
   return (
-    <div className="mode-switch">
+    <div aria-label="对话模式切换" className="mode-switch">
       {modes.map((item) => (
         <button
           className={item.id === mode ? "mode-button active" : "mode-button"}

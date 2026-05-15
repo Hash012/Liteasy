@@ -33,7 +33,12 @@ export function useDocumentMetadataSync({
   const documentCacheKey = useMemo(() => buildDocumentCacheKey(documents), [documents]);
   const [lastResult, setLastResult] = useState<DocumentMetadataSyncResult | null>(null);
   const [message, setMessage] = useState("连接云账号后会同步当前工作区的文献元数据。");
+  const [retryCount, setRetryCount] = useState(0);
   const [status, setStatus] = useState<DocumentMetadataSyncStatus>("unauthenticated");
+
+  function retrySync() {
+    setRetryCount((current) => current + 1);
+  }
 
   useEffect(() => {
     if (!accountSession) {
@@ -91,11 +96,12 @@ export function useDocumentMetadataSync({
     return () => {
       active = false;
     };
-  }, [accountSession?.sessionId, controlPlaneEndpoint, documentCacheKey, transport, workspaceRevision]);
+  }, [accountSession?.sessionId, controlPlaneEndpoint, documentCacheKey, retryCount, transport, workspaceRevision]);
 
   return {
     lastResult,
     message,
+    retrySync,
     status
   };
 }

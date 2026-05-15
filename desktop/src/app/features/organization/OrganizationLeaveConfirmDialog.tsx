@@ -12,8 +12,8 @@ export function OrganizationLeaveConfirmDialog({
   summary
 }: OrganizationLeaveConfirmDialogProps) {
   return (
-    <div className="profile-dialog-backdrop">
-      <div aria-label="退出组织确认" className="profile-dialog" role="dialog">
+    <div className="workspace-dialog-backdrop profile-dialog-backdrop danger" data-testid="workspace-dialog-backdrop">
+      <div aria-label="退出组织确认" className="workspace-modal-panel profile-dialog" role="dialog">
         <div className="profile-dialog-header">
           <div>
             <div className="profile-dialog-kicker">Organization Leave</div>

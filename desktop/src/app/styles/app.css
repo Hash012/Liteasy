@@ -131,6 +131,7 @@ body {
 }
 
 .app-shell {
+  position: relative;
   display: grid;
   grid-template-columns: 64px 292px minmax(420px, 1fr) 320px;
   gap: 14px;
@@ -262,6 +263,79 @@ body {
   opacity: 0.5;
 }
 
+.assistant-session-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assistant-session-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.assistant-session-button {
+  border: 1px solid #d0deea;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #5c7186;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.assistant-history-panel {
+  border: 1px solid #dce8f1;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 12px;
+}
+
+.assistant-history-title {
+  color: #4d6983;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.assistant-history-empty,
+.assistant-history-item-meta {
+  color: #71879b;
+  font-size: 12px;
+}
+
+.assistant-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.assistant-history-item {
+  border: 1px solid #e0e9f1;
+  border-radius: 12px;
+  background: rgba(247, 250, 252, 0.82);
+  padding: 10px;
+}
+
+.assistant-history-restore {
+  border: 0;
+  background: transparent;
+  color: #3f5b75;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0;
+  text-align: left;
+}
+
+.assistant-history-restore:hover {
+  color: #1f4f78;
+  text-decoration: underline;
+}
+
 .mode-switch {
   display: flex;
   gap: 8px;
@@ -296,6 +370,80 @@ body {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(242, 248, 252, 0.94) 100%);
   border: 1px solid #dce8f1;
   overflow: auto;
+}
+
+.assistant-launcher {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.assistant-avatar {
+  align-items: center;
+  border: 1px solid #b9c8d6;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.95), rgba(222, 232, 240, 0.72) 42%, rgba(62, 78, 94, 0.08) 100%),
+    linear-gradient(180deg, #fdfefe 0%, #dbe5ee 100%);
+  box-shadow: 0 18px 38px rgba(48, 69, 88, 0.14);
+  color: #263d52;
+  display: flex;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 34px;
+  font-weight: 800;
+  height: 96px;
+  justify-content: center;
+  width: 96px;
+}
+
+.assistant-launcher-title {
+  color: #263d52;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.assistant-launcher-copy {
+  color: #6d7f90;
+  font-size: 12px;
+  line-height: 1.6;
+  max-width: 240px;
+}
+
+.assistant-launcher-modes {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 250px);
+}
+
+.assistant-launcher-mode {
+  border: 1px solid #d1dce6;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #40566c;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.assistant-launcher-mode span {
+  font-weight: 800;
+}
+
+.assistant-launcher-mode small {
+  color: #7a8c9d;
+}
+
+.assistant-launcher-mode.active {
+  border-color: #8daecb;
+  background: linear-gradient(180deg, #ffffff 0%, #e7eef5 100%);
+  color: #244b6d;
 }
 
 .assistant-message {
@@ -510,6 +658,27 @@ body {
   resize: vertical;
 }
 
+.assistant-voice-placeholder {
+  color: #6e8296;
+  font-size: 12px;
+}
+
+.assistant-composer-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.assistant-voice-button {
+  border: 1px solid #cbd9e5;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #5e7387;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 10px 12px;
+}
+
 .assistant-send {
   align-self: flex-end;
   border: 0;
@@ -538,6 +707,7 @@ body {
   }
 
   .app-shell {
+  position: relative;
     grid-template-columns: 1fr;
     overflow: auto;
   }
@@ -568,16 +738,41 @@ body {
   font-weight: 600;
 }
 
-.organization-dialog-backdrop {
-  position: fixed;
+
+.workspace-dialog-layer {
+  pointer-events: none;
+  position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: 18;
+}
+
+.workspace-dialog-layer:empty {
+  display: none;
+}
+
+.workspace-dialog-backdrop {
+  pointer-events: auto;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   background: rgba(44, 67, 88, 0.28);
   backdrop-filter: blur(6px);
+}
+
+.workspace-dialog-backdrop.danger {
+  background: rgba(70, 45, 45, 0.28);
+}
+
+.workspace-modal-panel {
+  max-height: calc(100% - 48px);
+  overflow: auto;
+}
+
+.organization-dialog-backdrop {
+  background: rgba(44, 67, 88, 0.28);
 }
 
 .organization-dialog {
@@ -770,18 +965,34 @@ body {
   font-weight: 800;
 }
 
+.personal-profile-form {
+  display: grid;
+  gap: 10px;
+}
+
+.personal-profile-field {
+  color: #40576d;
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.personal-profile-control {
+  border: 1px solid #c7d8e7;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #263d52;
+  font: inherit;
+  padding: 8px 10px;
+}
+
 .personal-center-footnote {
   line-height: 1.5;
 }
 
 .academic-archive-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 24;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
   background: rgba(44, 67, 88, 0.32);
   backdrop-filter: blur(8px);
 }
@@ -824,13 +1035,6 @@ body {
 }
 
 .clear-profile-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 28;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
   background: rgba(70, 45, 45, 0.28);
   backdrop-filter: blur(8px);
 }
@@ -928,6 +1132,29 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.organization-action-feedback {
+  border: 1px solid rgba(71, 124, 167, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(235, 244, 252, 0.92), rgba(248, 250, 252, 0.96));
+  color: #244b6d;
+  line-height: 1.45;
+  padding: 10px 12px;
+  box-shadow: 0 8px 22px rgba(31, 51, 69, 0.08);
+}
+
+.organization-action-feedback-title {
+  color: #16344f;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.organization-action-feedback-message {
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .organization-sidebar-kicker {

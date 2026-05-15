@@ -24,6 +24,18 @@ test("maps generating a mind map to an artifact skill invocation", () => {
   });
 });
 
+test("maps disabling profile sampling to a settings skill invocation", () => {
+  const result = routeCommand("关闭用户画像");
+
+  expect(result).toEqual({
+    skillId: "settings.adjust",
+    input: {
+      target: "profile.enabled",
+      value: false
+    }
+  });
+});
+
 test("maps enabling local direct model access to a settings skill invocation", () => {
   const result = routeCommand("允许本地直连");
 
@@ -107,6 +119,56 @@ test("maps sorting recommendations by retrieval time to a settings skill invocat
   });
 });
 
+
+
+
+test("maps local dev-cloud endpoint reset commands to a settings skill invocation", () => {
+  expect(routeCommand("使用本地开发云端点")).toEqual({
+    skillId: "settings.use_local_dev_cloud",
+    input: {
+      target: "local_dev_cloud"
+    }
+  });
+
+  expect(routeCommand("把端点恢复到本地开发云")).toEqual({
+    skillId: "settings.use_local_dev_cloud",
+    input: {
+      target: "local_dev_cloud"
+    }
+  });
+});
+
+test("maps natural language command aliases to safe actions", () => {
+  expect(routeCommand("帮我打开组织的共享文献库")).toEqual({
+    skillId: "organization.open_shared_library",
+    input: {
+      source: "organization_space"
+    }
+  });
+
+  expect(routeCommand("请帮我同步一下云端模型策略")).toEqual({
+    skillId: "settings.sync_policy",
+    input: {
+      source: "cloud_control_plane"
+    }
+  });
+
+  expect(routeCommand("别再联网推荐了")).toEqual({
+    skillId: "settings.adjust",
+    input: {
+      target: "network.recommendation.enabled",
+      value: false
+    }
+  });
+
+  expect(routeCommand("重新开启联网文献推荐")).toEqual({
+    skillId: "settings.adjust",
+    input: {
+      target: "network.recommendation.enabled",
+      value: true
+    }
+  });
+});
 
 test("maps opening the organization shared library to an organization skill invocation", () => {
   const result = routeCommand("打开组织共享文献库");

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Liteasy 睡眠开发验收报告 · 2026-05-15 01:51</title>
+  <style>
+    :root {
+      --ink: #1b2733;
+      --muted: #657386;
+      --paper: #f4efe7;
+      --card: #fffdf8;
+      --line: #d8d0c1;
+      --blue: #203f5f;
+      --green: #236548;
+      --amber: #8d651e;
+      --red: #884343;
+      --slate: #3d4b59;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #f4efe7 0%, #edf2f4 55%, #e7ecef 100%);
+      color: var(--ink);
+      font-family: ui-serif, "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+      line-height: 1.62;
+    }
+    header {
+      padding: 36px 46px 30px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.9);
+      box-shadow: 0 10px 30px rgba(28, 45, 62, .06);
+    }
+    h1 { margin: 0 0 8px; color: var(--blue); font-size: 34px; letter-spacing: .03em; }
+    h2 { margin: 0 0 14px; color: var(--blue); font-size: 22px; }
+    h3 { margin: 18px 0 8px; color: #2e526f; font-size: 17px; }
+    p { margin: 8px 0; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+    main { max-width: 1220px; margin: 0 auto; padding: 28px; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px; }
+    .card {
+      grid-column: span 6;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 253, 248, 0.94);
+      box-shadow: 0 18px 40px rgba(36, 54, 72, .08);
+    }
+    .wide { grid-column: span 12; }
+    .third { grid-column: span 4; }
+    .badge { display: inline-block; border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 800; }
+    .done { color: var(--green); }
+    .doing { color: var(--amber); }
+    .risk { color: var(--red); }
+    .neutral { color: var(--slate); }
+    .metric { margin-top: 8px; font-size: 32px; color: var(--blue); font-weight: 900; }
+    .small { color: var(--muted); font-size: 13px; }
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 6px 0; }
+    code { background: #efe8dc; border: 1px solid #ded3c1; border-radius: 6px; padding: 1px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #e1d8c8; padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--blue); font-weight: 900; }
+    .timeline { display: grid; gap: 10px; }
+    .timeline-row { border-left: 3px solid #b6c6d2; padding-left: 12px; }
+    @media (max-width: 880px) { .card, .third { grid-column: span 12; } header { padding: 26px; } main { padding: 18px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Liteasy 当前开发目标与完成进度</h1>
+    <div class="subtitle">生成时间：2026-05-15 01:51（CST） · 工作树：当前 <code>main</code>，未提交仓库 · 核心文档：<code>docs/Liteasy_功能与UI设计文档1.0.md</code></div>
+  </header>
+  <main>
+    <section class="grid">
+      <article class="card wide">
+        <h2>本次交付目标</h2>
+        <p>把 Liteasy Phase 3 组织空间、个人中心、设置与开发云调试体验推进为稳定可验收原型：左侧采用 VSCode 式最左竖栏导航，右栏只保留极简 AI Assistant；模型策略、文献同步、组织治理等管理能力放回左边栏对应页面；组织共享文献库必须由用户显式打开，并像“打开新文件夹”一样替换当前工作区。</p>
+      </article>
+
+      <article class="card third">
+        <div class="badge done">验证通过</div>
+        <div class="metric">176</div>
+        <div class="small">桌面端 Vitest 测试</div>
+      </article>
+      <article class="card third">
+        <div class="badge done">验证通过</div>
+        <div class="metric">17</div>
+        <div class="small">dev-cloud Node 测试</div>
+      </article>
+      <article class="card third">
+        <div class="badge done">验证通过</div>
+        <div class="metric">build</div>
+        <div class="small"><code>npm run build</code> 通过</div>
+      </article>
+
+      <article class="card">
+        <h2>睡前报告之后新增完成</h2>
+        <ul>
+          <li><span class="badge done">完成</span> 共享文献库助手命令新增前置条件提示：未登录/未加载组织时不切换工作区。</li>
+          <li><span class="badge done">完成</span> 共享库状态守卫：按钮禁用时，助手命令也不能绕过打开不可用共享库。</li>
+          <li><span class="badge done">完成</span> 左栏标题中文化：<code>文献库 / 组织 / 个人中心 / 设置</code>，减少英文残留。</li>
+          <li><span class="badge done">完成</span> 个人中心命令补齐：助手支持 <code>关闭用户画像</code>，并和左边栏状态同步。</li>
+          <li><span class="badge done">完成</span> 组织治理等待状态修正：组织空间仍在加载时显示 <code>组织治理：等待组织空间</code>，不再误报未连接。</li>
+          <li><span class="badge done">完成</span> 文献元数据同步失败后，设置页新增 <code>重新同步文献元数据</code> 手动重试。</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>此前已完成并保持</h2>
+        <ul>
+          <li>右栏保持极简 <code>AI Assistant</code>，不放模型策略、文献同步、组织空间或组织治理卡片。</li>
+          <li>模型接入策略、文献元数据同步保留在最左竖栏的 <code>设置</code> 页面。</li>
+          <li>组织空间、组织治理、成员通知和共享文献库入口保留在最左竖栏的 <code>组织</code> 页面。</li>
+          <li>连接开发云账号不会自动打开共享文献库，用户必须点击组织页按钮或输入安全助手命令。</li>
+          <li><code>http://127.0.0.1:8787/</code> 是服务索引；真实登录接口必须由桌面端用 POST 调用。</li>
+        </ul>
+      </article>
+
+      <article class="card wide">
+        <h2>验证证据</h2>
+        <table>
+          <thead><tr><th>验证项</th><th>命令/检查</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr><td>桌面端全量测试</td><td><code>cd desktop && npm test</code></td><td><span class="badge done">通过</span> 51 files / 176 tests</td></tr>
+            <tr><td>桌面端构建</td><td><code>cd desktop && npm run build</code></td><td><span class="badge done">通过</span> TypeScript + Vite build</td></tr>
+            <tr><td>开发云测试</td><td><code>node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs</code></td><td><span class="badge done">通过</span> 17 tests</td></tr>
+            <tr><td>开发云运行检查</td><td><code>curl http://127.0.0.1:8787/</code> / <code>/healthz</code> / POST demo-login</td><td><span class="badge done">通过</span> root、health、POST login 正常</td></tr>
+            <tr><td>前端运行检查</td><td><code>curl -I http://127.0.0.1:1420/</code></td><td><span class="badge done">通过</span> HTTP 200</td></tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="card wide">
+        <h2>当前可验收路径</h2>
+        <div class="timeline">
+          <div class="timeline-row"><strong>基础启动：</strong>打开 <code>http://127.0.0.1:1420/</code>，顶部显示云账号区，右栏只显示 AI Assistant。</div>
+          <div class="timeline-row"><strong>设置页：</strong>点最左侧 <code>设置</code>，可看模型策略、同步云端策略、文献元数据同步和手动重试按钮。</div>
+          <div class="timeline-row"><strong>组织页：</strong>点最左侧 <code>组织</code>，连接开发云账号后加载组织列表、空间、通知、共享库和治理摘要。</div>
+          <div class="timeline-row"><strong>共享库：</strong>连接账号不会自动打开；用户点击 <code>打开共享文献库</code> 或助手输入 <code>打开组织共享文献库</code> 后才替换工作区。</div>
+          <div class="timeline-row"><strong>个人中心：</strong>点最左侧 <code>个人中心</code>，按钮与助手命令 <code>开启用户画像</code>/<code>关闭用户画像</code> 状态一致。</div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>仍属原型范围</h2>
+        <ul>
+          <li><span class="badge risk">未完成正式能力</span> 组织创建、加入、邀请、退出仍是 demo 请求，没有真实后端审批。</li>
+          <li><span class="badge risk">未完成正式能力</span> 共享文献库还没有真实目录浏览、上传、删除、版本控制。</li>
+          <li><span class="badge risk">未完成正式能力</span> 模型策略和治理摘要来自开发云 demo 数据，不是正式管理员后台。</li>
+          <li><span class="badge risk">未完成正式能力</span> 用户画像授权、微信/飞书数据采样仍是 UI seam。</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>建议下轮目标</h2>
+        <ul>
+          <li>补真实共享库目录视图：文件夹、文献详情、上传/同步状态。</li>
+          <li>补组织操作真实状态机：创建/加入/邀请/退出的 pending、success、error。</li>
+          <li>继续压缩 <code>AppShell.test.tsx</code> 里的大型 fixture，提升长期维护性。</li>
+          <li>补截图级视觉验收，进一步打磨“学术严肃感”。</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { AppDialogs, type AppDialogsProps } from "../app/layout/AppDialogs";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
+import { defaultAcademicProfile } from "../app/features/profile/profile.types";
 
 const summary: OrganizationSummary = {
   auditEvents: [],
@@ -28,6 +29,7 @@ const summary: OrganizationSummary = {
 
 function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps {
   return {
+    academicProfile: defaultAcademicProfile,
     accountSession: null,
     clearProfileConfirmOpen: false,
     academicArchiveOpen: false,
@@ -59,6 +61,24 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
 }
 
 describe("AppDialogs", () => {
+
+  test("renders active dialogs in a workspace-scoped overlay", () => {
+    const { rerender } = render(
+      <AppDialogs {...createProps({ organizationDialogOpen: true, summary })} />
+    );
+
+    expect(screen.getByTestId("workspace-dialog-layer")).toHaveClass("workspace-dialog-layer");
+    expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
+    expect(screen.getByRole("dialog", { name: "组织窗口" })).toHaveClass("workspace-modal-panel");
+
+    rerender(<AppDialogs {...createProps({ academicArchiveOpen: true })} />);
+    expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
+    expect(screen.getByRole("dialog", { name: "学术档案页面" })).toHaveClass("workspace-modal-panel");
+
+    rerender(<AppDialogs {...createProps({ clearProfileConfirmOpen: true })} />);
+    expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
+    expect(screen.getByRole("dialog", { name: "清空用户画像确认" })).toHaveClass("workspace-modal-panel");
+  });
   test("renders only active profile dialogs and forwards actions", async () => {
     const user = userEvent.setup();
     const onClearProfile = vi.fn();

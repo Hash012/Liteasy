@@ -17,6 +17,11 @@ export function createAssistantStore() {
     setPending(pending: boolean) {
       state.pending = pending;
     },
+    restoreSession(mode: AssistantMode, messages: AssistantMessage[]) {
+      state.mode = mode;
+      state.messages = [...messages];
+      state.pending = false;
+    },
     clearMessages() {
       state.messages = [];
     },

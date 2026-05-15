@@ -4,6 +4,8 @@ import { ImportButton } from "../import/ImportButton";
 import type { ImportJob } from "../import/import.types";
 import type { RecommendationItem, RecommendationStatus } from "../recommendations/recommendation.types";
 import type { Paper } from "../workspace/workspace.types";
+import { parseLibraryDragPayload } from "./libraryDragPayload";
+import { groupWorkspacePapersByFolder } from "../workspace/workspaceFolderTree";
 
 type LibraryPaneProps = {
   papers: Paper[];
@@ -17,6 +19,7 @@ type LibraryPaneProps = {
   recommendationStatus: RecommendationStatus;
   canReturnToLocalWorkspace: boolean;
   onAddExternalPaper: (item: CollectionItem | RecommendationItem) => void;
+  onClearRecommendations: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
   onReturnToLocalWorkspace: () => void;
@@ -49,6 +52,7 @@ export function LibraryPane({
   recommendationStatus,
   canReturnToLocalWorkspace,
   onAddExternalPaper,
+  onClearRecommendations,
   onCollectRecommendation,
   onImportSelectedSet,
   onReturnToLocalWorkspace,
@@ -57,6 +61,7 @@ export function LibraryPane({
   workspaceLabel
 }: LibraryPaneProps) {
   const selectedCount = selectedPaperIds.length;
+  const folderGroups = groupWorkspacePapersByFolder(papers);
 
   return (
     <div className="library-pane">
@@ -80,46 +85,53 @@ export function LibraryPane({
         }}
         onDrop={(event) => {
           event.preventDefault();
-          const rawPayload = event.dataTransfer.getData("application/liteasy-library-item");
-          if (!rawPayload) {
-            return;
-          }
-
-          try {
-            const payload = JSON.parse(rawPayload) as CollectionItem | RecommendationItem;
+          const payload = parseLibraryDragPayload<CollectionItem | RecommendationItem>(
+            event.dataTransfer,
+            "application/liteasy-library-item"
+          );
+          if (payload) {
             onAddExternalPaper(payload);
-          } catch {
-            // Ignore malformed drag payloads from non-Liteasy sources.
           }
         }}
       >
         <div className="library-section-title">我的文献库</div>
         <div className="library-workspace-label">当前工作区：{workspaceLabel}</div>
+        <div className="library-workspace-root">工作区母目录：{workspaceLabel}</div>
         <div className="library-selection-summary">
           当前选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
         </div>
-        <ul className="library-list">
-          {papers.map((paper) => (
-            <li className="library-item" key={paper.id}>
-              <div className="paper-row">
-                <label>
-                  <input
-                    checked={selectedPaperIds.includes(paper.id)}
-                    disabled={selectionLocked}
-                    onChange={() => onToggleSelection(paper.id)}
-                    type="checkbox"
-                  />
-                  <span>{paper.title}</span>
-                </label>
-                {importJobs[paper.id] ? (
-                  <span className={`job-badge ${importJobs[paper.id].status}`}>
-                    {importJobs[paper.id].status}
-                  </span>
-                ) : null}
+        <div className="library-folder-tree" aria-label="工作区目录树">
+          {folderGroups.map((group) => (
+            <section className="library-folder-group" key={group.folder}>
+              <div className="library-folder-header">
+                <span>目录：{group.folder}</span>
+                <span>{group.papers.length} 篇文献</span>
               </div>
-            </li>
+              <ul className="library-list">
+                {group.papers.map((paper) => (
+                  <li className="library-item" key={paper.id}>
+                    <div className="paper-row">
+                      <label>
+                        <input
+                          checked={selectedPaperIds.includes(paper.id)}
+                          disabled={selectionLocked}
+                          onChange={() => onToggleSelection(paper.id)}
+                          type="checkbox"
+                        />
+                        <span>{paper.title}</span>
+                      </label>
+                      {importJobs[paper.id] ? (
+                        <span className={`job-badge ${importJobs[paper.id].status}`}>
+                          {importJobs[paper.id].status}
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       </div>
 
       <div
@@ -130,16 +142,12 @@ export function LibraryPane({
         }}
         onDrop={(event) => {
           event.preventDefault();
-          const rawPayload = event.dataTransfer.getData("application/liteasy-recommendation");
-          if (!rawPayload) {
-            return;
-          }
-
-          try {
-            const payload = JSON.parse(rawPayload) as RecommendationItem;
+          const payload = parseLibraryDragPayload<RecommendationItem>(
+            event.dataTransfer,
+            "application/liteasy-recommendation"
+          );
+          if (payload) {
             onCollectRecommendation(payload);
-          } catch {
-            // Ignore malformed drag payloads from non-Liteasy sources.
           }
         }}
       >
@@ -170,7 +178,17 @@ export function LibraryPane({
       </div>
 
       <div className="library-section muted">
-        <div className="library-section-title">关联推荐</div>
+        <div className="library-section-heading">
+          <div className="library-section-title">关联推荐</div>
+          <button
+            className="library-inline-button"
+            disabled={recommendationItems.length === 0 && recommendationStatus !== "ready"}
+            onClick={onClearRecommendations}
+            type="button"
+          >
+            清理关联推荐
+          </button>
+        </div>
         <p className={`library-recommendation-message ${recommendationStatus}`}>
           {recommendationPending ? "正在获取推荐..." : recommendationMessage}
         </p>

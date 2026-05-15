@@ -34,6 +34,22 @@ function getNotificationReadKey(organizationId: string, notificationId: string) 
   return `${organizationId}:${notificationId}`;
 }
 
+function getSharedLibraryOpenMessage(summary: OrganizationSummary) {
+  if (summary.sharedLibrary.status === "syncing") {
+    return "共享文献库状态：同步中，暂时不能打开。请稍后重试。";
+  }
+
+  if (summary.sharedLibrary.status === "unavailable") {
+    return "共享文献库状态：不可用，请联系组织管理员或稍后重试。";
+  }
+
+  if (summary.sharedLibrary.documentCount === 0) {
+    return "共享文献库状态：暂无可打开文献，请等待组织同步完成。";
+  }
+
+  return "共享文献库状态：可打开，会像 VSCode 打开文件夹一样切换当前工作区。";
+}
+
 function getStatusLabel(status: OrganizationSummaryStatus, summary: OrganizationSummary | null) {
   if (status === "success" && summary) {
     return `组织空间：${summary.name}`;
@@ -146,9 +162,10 @@ export function OrganizationSpacePanel({
               最近审计：{latestAuditEvent.actor} {latestAuditEvent.description}
             </div>
           ) : null}
+          <div className="model-policy-footnote">{getSharedLibraryOpenMessage(summary)}</div>
           <button
             className="policy-button sync"
-            disabled={summary.sharedLibrary.status !== "available"}
+            disabled={summary.sharedLibrary.status !== "available" || summary.sharedLibrary.documentCount === 0}
             onClick={() => onOpenSharedLibrary?.(summary)}
             type="button"
           >

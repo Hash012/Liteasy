@@ -7,8 +7,10 @@ import { OrganizationLeaveConfirmDialog } from "../features/organization/Organiz
 import type { OrganizationList, OrganizationSummary } from "../features/organization/organization.types";
 import { AcademicArchiveDialog } from "../features/profile/AcademicArchiveDialog";
 import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfirmDialog";
+import type { AcademicProfile } from "../features/profile/profile.types";
 
 export type AppDialogsProps = {
+  academicProfile: AcademicProfile;
   accountSession: AccountSession | null;
   academicArchiveOpen: boolean;
   clearProfileConfirmOpen: boolean;
@@ -38,6 +40,7 @@ export type AppDialogsProps = {
 };
 
 export function AppDialogs({
+  academicProfile,
   accountSession,
   academicArchiveOpen,
   clearProfileConfirmOpen,
@@ -66,12 +69,13 @@ export function AppDialogs({
   summary
 }: AppDialogsProps) {
   return (
-    <>
+    <div className="workspace-dialog-layer" data-testid="workspace-dialog-layer">
       {clearProfileConfirmOpen ? (
         <ClearProfileConfirmDialog onCancel={onCancelClearProfile} onConfirm={onClearProfile} />
       ) : null}
       {academicArchiveOpen ? (
         <AcademicArchiveDialog
+          academicProfile={academicProfile}
           accountSession={accountSession}
           onClose={onCloseAcademicArchive}
           readPaperCount={readPaperCount}
@@ -110,6 +114,6 @@ export function AppDialogs({
           summary={summary}
         />
       ) : null}
-    </>
+    </div>
   );
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { createDevCloudRequestHandler } from "./server.mjs";
 
-async function invokeHandler({ body, handlerOptions, headers = {}, method, url }) {
+async function invokeHandler({ body, handler, handlerOptions, headers = {}, method, url }) {
   const chunks = body ? [Buffer.from(body)] : [];
   const request = Readable.from(chunks);
   request.headers = headers;
@@ -24,12 +24,14 @@ async function invokeHandler({ body, handlerOptions, headers = {}, method, url }
     }
   };
 
-  await createDevCloudRequestHandler(handlerOptions)(request, response);
+  await (handler ?? createDevCloudRequestHandler(handlerOptions))(request, response);
+
+  const contentType = responseHeaders["Content-Type"] ?? "";
 
   return {
     body: endedBody,
     headers: responseHeaders,
-    json: endedBody.length > 0 ? JSON.parse(endedBody) : undefined,
+    json: endedBody.length > 0 && contentType.includes("application/json") ? JSON.parse(endedBody) : undefined,
     statusCode
   };
 }
@@ -65,7 +67,11 @@ test("returns a helpful service index from the root path", async () => {
   assert.deepEqual(response.json.endpoints, [
     "GET /",
     "GET /healthz",
+    "GET /admin",
+    "GET /admin/",
     "GET /v1/admin/model-policy",
+    "POST /v1/admin/model-policy",
+    "GET /v1/admin/governance-dashboard",
     "POST /v1/account/demo-login",
     "POST /v1/model/generate",
     "POST /v1/model/audit",
@@ -73,10 +79,84 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/documents/metadata-sync",
     "POST /v1/org/list",
     "POST /v1/org/summary",
+    "POST /v1/org/shared-library/manifest",
     "POST /v1/org/governance-summary"
   ]);
 });
 
+
+
+test("returns the demo admin console html", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/admin/"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
+  assert.match(response.body, /Liteasy Operations Console/);
+  assert.match(response.body, /内部运营与运维后台/);
+  assert.match(response.body, /客户桌面软件端/);
+  assert.match(response.body, /客户组织资源/);
+  assert.match(response.body, /API 策略/);
+  assert.match(response.body, /默认 Provider/);
+  assert.match(response.body, /运维下发 API 策略/);
+  assert.match(response.body, /保存 API 策略/);
+  assert.match(response.body, /fetch\("\/v1\/admin\/model-policy"/);
+  assert.match(response.body, /用户与账号/);
+  assert.match(response.body, /活跃客户用户/);
+  assert.match(response.body, /Liteasy AI Reading Lab/);
+  assert.match(response.body, /组织共享文献库索引刷新/);
+  assert.match(response.body, /Admin 更新共享文献库上传权限/);
+  assert.match(response.body, /42%/);
+  assert.match(response.body, /38 GB \/ 100 GB/);
+  assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
+});
+
+test("returns the demo admin console html without a trailing slash", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/admin"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
+  assert.match(response.body, /Liteasy Operations Console/);
+  assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
+});
+
+
+test("returns the demo admin governance dashboard payload", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/v1/admin/governance-dashboard"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.dashboard.name, "Liteasy Operations Governance Dashboard");
+  assert.equal(response.json.dashboard.environment, "local-demo");
+  assert.equal(response.json.dashboard.threeEndStatus.desktop.label, "客户桌面软件端");
+  assert.equal(response.json.dashboard.threeEndStatus.desktop.url, "http://127.0.0.1:1420/");
+  assert.equal(response.json.dashboard.threeEndStatus.devCloud.url, "http://127.0.0.1:8787/");
+  assert.equal(response.json.dashboard.threeEndStatus.adminConsole.label, "内部运营与运维后台");
+  assert.equal(response.json.dashboard.threeEndStatus.adminConsole.url, "http://127.0.0.1:8787/admin/");
+  assert.equal(response.json.dashboard.organizations.length, 2);
+  assert.equal(response.json.dashboard.apiPolicy.defaultProvider, "openai");
+  assert.equal(response.json.dashboard.apiPolicy.modelAccessMode, "cloud_proxy");
+  assert.equal(response.json.dashboard.users.activeUsers, 16);
+  assert.equal(response.json.dashboard.users.desktopCustomers, 2);
+  assert.equal(response.json.dashboard.auditQueue.pendingReview, 3);
+  assert.equal(response.json.dashboard.quota.storageUsedGb, 38);
+});
 
 test("explains that demo login must be called with POST", async () => {
   const response = await invokeHandler({
@@ -108,6 +188,47 @@ test("returns available endpoints for unknown paths", async () => {
   assert.equal(response.json.path, "/missing");
   assert.ok(response.json.availableEndpoints.includes("POST /v1/account/demo-login"));
   assert.match(response.json.message, /Liteasy dev cloud/);
+});
+
+
+test("lets internal operations update the demo model policy", async () => {
+  const handler = createDevCloudRequestHandler();
+  const updateResponse = await invokeHandler({
+    handler,
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      defaultProvider: "mock",
+      localDirectEnabled: true,
+      modelAccessMode: "local_direct"
+    }),
+    url: "/v1/admin/model-policy"
+  });
+
+  assert.equal(updateResponse.statusCode, 200);
+  assert.equal(updateResponse.json.policy.defaultProvider, "mock");
+  assert.equal(updateResponse.json.policy.localDirectEnabled, true);
+  assert.equal(updateResponse.json.policy.modelAccessMode, "local_direct");
+  assert.equal(updateResponse.json.policy.policyVersion, "ops-policy-v2");
+  assert.equal(updateResponse.json.updatedBy, "internal-ops-demo");
+
+  const getResponse = await invokeHandler({
+    handler,
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/v1/admin/model-policy"
+  });
+
+  assert.equal(getResponse.statusCode, 200);
+  assert.equal(getResponse.json.defaultProvider, "mock");
+  assert.equal(getResponse.json.localDirectEnabled, true);
+  assert.equal(getResponse.json.modelAccessMode, "local_direct");
+  assert.equal(getResponse.json.policyVersion, "ops-policy-v2");
 });
 
 test("returns a policy snapshot from the control plane endpoint", async () => {
@@ -244,6 +365,7 @@ test("returns related recommendations for the selected document set", async () =
   assert.deepEqual(response.json, {
     recommendations: [
       {
+        discoveredAt: "2026-05-14T08:15:00Z",
         id: "rec-bert-1",
         relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
         relevanceBand: "high",
@@ -253,6 +375,7 @@ test("returns related recommendations for the selected document set", async () =
         title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
       },
       {
+        discoveredAt: "2026-05-14T09:10:00Z",
         id: "rec-bert-2",
         relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
         relevanceBand: "medium",
@@ -424,6 +547,62 @@ test("returns a demo organization summary", async () => {
     }
   });
 });
+
+test("returns a demo organization shared library manifest", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      organizationId: "org-demo-1",
+      sessionId: "demo-session-1"
+    }),
+    url: "/v1/org/shared-library/manifest"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.manifest.organizationId, "org-demo-1");
+  assert.equal(response.json.manifest.name, "组织共享文献库");
+  assert.equal(response.json.manifest.status, "available");
+  assert.equal(response.json.manifest.rootFolderId, "org-demo-1-root");
+  assert.deepEqual(response.json.manifest.folders, [
+    {
+      id: "org-demo-1-root",
+      name: "组织共享文献库",
+      parentId: null,
+      path: "org://org-demo-1/shared-library"
+    },
+    {
+      id: "org-demo-1-rag",
+      name: "RAG",
+      parentId: "org-demo-1-root",
+      path: "org://org-demo-1/shared-library/RAG"
+    },
+    {
+      id: "org-demo-1-eval",
+      name: "Evaluation",
+      parentId: "org-demo-1-root",
+      path: "org://org-demo-1/shared-library/Evaluation"
+    }
+  ]);
+  assert.deepEqual(response.json.manifest.documents, [
+    {
+      folderId: "org-demo-1-rag",
+      id: "org-doc-1",
+      sourcePath: "org://org-demo-1/shared-library/RAG/org-doc-1.pdf",
+      title: "Organization Reading List: Retrieval-Augmented Generation"
+    },
+    {
+      folderId: "org-demo-1-eval",
+      id: "org-doc-2",
+      sourcePath: "org://org-demo-1/shared-library/Evaluation/org-doc-2.pdf",
+      title: "Team Notes on Long-Context Evaluation"
+    }
+  ]);
+});
+
 
 test("returns a demo organization governance summary", async () => {
   const response = await invokeHandler({

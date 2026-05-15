@@ -12,8 +12,8 @@ export function OrganizationCreateDialog({
   const [organizationName, setOrganizationName] = useState("Liteasy Demo Organization");
 
   return (
-    <div className="profile-dialog-backdrop">
-      <div aria-label="创建组织" className="profile-dialog" role="dialog">
+    <div className="workspace-dialog-backdrop profile-dialog-backdrop" data-testid="workspace-dialog-backdrop">
+      <div aria-label="创建组织" className="workspace-modal-panel profile-dialog" role="dialog">
         <div className="profile-dialog-header">
           <div>
             <div className="profile-dialog-kicker">Organization Creation</div>

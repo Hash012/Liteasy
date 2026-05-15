@@ -1,5 +1,52 @@
 import type { SkillInvocation } from "../skills/skillRegistry";
 
+function includesAny(input: string, phrases: string[]) {
+  return phrases.some((phrase) => input.includes(phrase));
+}
+
+function isRecommendationDisableCommand(input: string) {
+  return (
+    includesAny(input, [
+      "关闭联网推荐",
+      "停用联网推荐",
+      "禁用联网推荐",
+      "关闭联网文献推荐",
+      "停用联网文献推荐",
+      "禁用联网文献推荐"
+    ]) ||
+    (includesAny(input, ["联网推荐", "联网文献推荐"]) && includesAny(input, ["关闭", "停用", "禁用", "不要", "别再"]))
+  );
+}
+
+function isRecommendationEnableCommand(input: string) {
+  return (
+    includesAny(input, [
+      "开启联网推荐",
+      "打开联网推荐",
+      "启用联网推荐",
+      "开启联网文献推荐",
+      "打开联网文献推荐",
+      "启用联网文献推荐"
+    ]) ||
+    (includesAny(input, ["联网推荐", "联网文献推荐"]) && includesAny(input, ["开启", "打开", "启用", "恢复", "重新开启"]))
+  );
+}
+
+function isCloudPolicySyncCommand(input: string) {
+  return input.includes("同步") && includesAny(input, ["云端策略", "云端模型策略", "模型策略", "控制平面策略"]);
+}
+
+function isOpenOrganizationSharedLibraryCommand(input: string) {
+  return input.includes("打开") && input.includes("组织") && input.includes("共享文献库");
+}
+
+function isUseLocalDevCloudCommand(input: string) {
+  return (
+    input.includes("本地开发云") &&
+    includesAny(input, ["使用", "切换", "恢复", "重置", "设为", "端点"])
+  );
+}
+
 export function routeCommand(input: string): SkillInvocation | null {
   const normalized = input.trim();
   const setCloudProxyEndpoint = normalized.match(/^设置云代理端点为\s+(.+)$/);
@@ -24,6 +71,15 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
+  if (isUseLocalDevCloudCommand(normalized)) {
+    return {
+      skillId: "settings.use_local_dev_cloud",
+      input: {
+        target: "local_dev_cloud"
+      }
+    };
+  }
+
   if (normalized.includes("思维导图")) {
     return {
       skillId: "artifact.generate",
@@ -34,7 +90,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (normalized === "关闭联网推荐") {
+  if (isRecommendationDisableCommand(normalized)) {
     return {
       skillId: "settings.adjust",
       input: {
@@ -44,7 +100,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (normalized === "开启联网推荐") {
+  if (isRecommendationEnableCommand(normalized)) {
     return {
       skillId: "settings.adjust",
       input: {
@@ -80,6 +136,16 @@ export function routeCommand(input: string): SkillInvocation | null {
       input: {
         target: "profile.enabled",
         value: true
+      }
+    };
+  }
+
+  if (normalized === "关闭用户画像") {
+    return {
+      skillId: "settings.adjust",
+      input: {
+        target: "profile.enabled",
+        value: false
       }
     };
   }
@@ -124,7 +190,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (normalized === "同步云端策略") {
+  if (isCloudPolicySyncCommand(normalized)) {
     return {
       skillId: "settings.sync_policy",
       input: {
@@ -133,7 +199,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (normalized === "打开组织共享文献库") {
+  if (isOpenOrganizationSharedLibraryCommand(normalized)) {
     return {
       skillId: "organization.open_shared_library",
       input: {

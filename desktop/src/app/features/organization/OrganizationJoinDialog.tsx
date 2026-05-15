@@ -12,8 +12,8 @@ export function OrganizationJoinDialog({
   const [inviteCode, setInviteCode] = useState("LITEASY-DEMO-JOIN");
 
   return (
-    <div className="profile-dialog-backdrop">
-      <div aria-label="加入组织" className="profile-dialog" role="dialog">
+    <div className="workspace-dialog-backdrop profile-dialog-backdrop" data-testid="workspace-dialog-backdrop">
+      <div aria-label="加入组织" className="workspace-modal-panel profile-dialog" role="dialog">
         <div className="profile-dialog-header">
           <div>
             <div className="profile-dialog-kicker">Organization Join</div>

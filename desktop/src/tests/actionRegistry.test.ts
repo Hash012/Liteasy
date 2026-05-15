@@ -66,6 +66,27 @@ test("executes a selected-document-set import action", async () => {
   expect(result.message).toBe("已将当前选中文献集交给 AI 流程。");
 });
 
+
+test("executes local dev-cloud endpoint reset through the action registry", async () => {
+  const settingsStore = createSettingsStore();
+
+  const result = await executeAction(
+    {
+      actionId: "settings.use_local_dev_cloud",
+      input: {
+        target: "local_dev_cloud"
+      }
+    },
+    {
+      settingsStore
+    }
+  );
+
+  expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe("http://127.0.0.1:8787");
+  expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("http://127.0.0.1:8787");
+  expect(result.message).toBe("已切换为本地开发云端点：http://127.0.0.1:8787。");
+});
+
 test("executes a cloud model policy sync action", async () => {
   let synced = 0;
 
@@ -109,4 +130,24 @@ test("executes an organization shared-library open action", async () => {
 
   expect(opened).toBe(1);
   expect(result.message).toBe("已打开组织共享文献库：组织共享文献库。");
+});
+
+test("keeps local-direct access disabled when policy has not allowed it", async () => {
+  const settingsStore = createSettingsStore();
+
+  const result = await executeAction(
+    {
+      actionId: "settings.update",
+      input: {
+        target: "models.access_mode",
+        value: "local_direct"
+      }
+    },
+    {
+      settingsStore
+    }
+  );
+
+  expect(settingsStore.getState()["models.access_mode"]).toBe("cloud_proxy");
+  expect(result.message).toContain("本地直连未开放");
 });

@@ -5,8 +5,8 @@ type ClearProfileConfirmDialogProps = {
 
 export function ClearProfileConfirmDialog({ onCancel, onConfirm }: ClearProfileConfirmDialogProps) {
   return (
-    <div className="clear-profile-backdrop">
-      <div aria-label="清空用户画像确认" className="clear-profile-dialog" role="dialog">
+    <div className="workspace-dialog-backdrop clear-profile-backdrop danger" data-testid="workspace-dialog-backdrop">
+      <div aria-label="清空用户画像确认" className="workspace-modal-panel clear-profile-dialog" role="dialog">
         <div className="academic-archive-header">
           <div>
             <div className="personal-center-kicker">需鉴权操作</div>

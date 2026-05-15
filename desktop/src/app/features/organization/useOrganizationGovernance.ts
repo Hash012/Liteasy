@@ -29,9 +29,16 @@ export function useOrganizationGovernance({
   const [summary, setSummary] = useState<OrganizationGovernanceSummary | null>(null);
 
   useEffect(() => {
-    if (!accountSession || !organizationSummary) {
+    if (!accountSession) {
       setMessage("连接云账号后会加载组织治理摘要。");
       setStatus("unauthenticated");
+      setSummary(null);
+      return;
+    }
+
+    if (!organizationSummary) {
+      setMessage("组织空间加载完成后会同步组织治理摘要。");
+      setStatus("waiting");
       setSummary(null);
       return;
     }

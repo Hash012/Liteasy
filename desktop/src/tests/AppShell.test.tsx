@@ -23,6 +23,23 @@ async function openLibraryPanel(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByLabelText("我的文献库投放区");
 }
 
+
+function expectOrganizationActionFeedback(message: string) {
+  const organizationPanel = screen.getByLabelText("左边栏组织");
+  expect(within(organizationPanel).getByRole("status", { name: "组织操作反馈" })).toHaveTextContent(message);
+  expect(screen.getAllByText(message)).toHaveLength(2);
+}
+
+async function selectInitialAssistantMode(user: ReturnType<typeof userEvent.setup>, mode: "名词解释" | "命令" | "问答") {
+  const launcher = screen.queryByLabelText("AI助手初始模式入口");
+  if (launcher) {
+    await user.click(within(launcher).getByRole("button", { name: `${mode}模式` }));
+    return;
+  }
+
+  await user.click(screen.getByRole("button", { name: mode }));
+}
+
 test("grounds qa answers in the currently selected imported paper set", async () => {
   const user = userEvent.setup();
 
@@ -36,7 +53,7 @@ test("grounds qa answers in the currently selected imported paper set", async ()
     expect(screen.getByText("parsed")).toBeInTheDocument();
   }, { timeout: 2500 });
 
-  await user.click(screen.getByRole("button", { name: "问答" }));
+  await selectInitialAssistantMode(user, "问答");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
@@ -81,7 +98,7 @@ test("switches assistant generation to local-direct mode when cloud policy allow
   await user.click(screen.getByRole("checkbox", { name: "允许本地直连（模拟云端策略）" }));
   await user.click(screen.getByRole("button", { name: "使用本地直连" }));
   await openLibraryPanel(user);
-  await user.click(screen.getByRole("button", { name: "问答" }));
+  await selectInitialAssistantMode(user, "问答");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
@@ -110,7 +127,7 @@ test("falls back to cloud proxy when local-direct permission is turned off", asy
   await user.click(localToggle);
   await openLibraryPanel(user);
 
-  await user.click(screen.getByRole("button", { name: "问答" }));
+  await selectInitialAssistantMode(user, "问答");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
@@ -118,6 +135,22 @@ test("falls back to cloud proxy when local-direct permission is turned off", asy
     expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
   });
 }, 10000);
+
+
+test("does not let assistant commands bypass local-direct policy", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "切换到本地直连");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText(/本地直连未开放/)).toBeInTheDocument();
+  expect(screen.getByText(/模型：云代理/)).toBeInTheDocument();
+
+  const settingsPane = await openSettingsPanel(user);
+  expect(within(settingsPane).getByText(/当前通道：云代理/)).toBeInTheDocument();
+});
 
 test("allows assistant commands to switch model policy before qa generation", async () => {
   const user = userEvent.setup();
@@ -139,7 +172,7 @@ test("allows assistant commands to switch model policy before qa generation", as
 
   expect(screen.getByText(/模型：本地直连/)).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "问答" }));
+  await selectInitialAssistantMode(user, "问答");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
@@ -292,7 +325,7 @@ test("shows the latest model execution chain in the policy panel", async () => {
     expect(screen.getByText("parsed")).toBeInTheDocument();
   }, { timeout: 2500 });
 
-  await user.click(screen.getByRole("button", { name: "问答" }));
+  await selectInitialAssistantMode(user, "问答");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
@@ -859,6 +892,93 @@ test("drags collected and recommended papers into the local library without dupl
   ).toHaveLength(1);
 }, 10000);
 
+
+test("clears visible recommendation cache on user request", async () => {
+  const user = userEvent.setup();
+  let recommendationRequestCount = 0;
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      if (String(input).includes("/v1/account/demo-login")) {
+        return {
+          json: async () => ({
+            session: {
+              email: "researcher@liteasy.dev",
+              expiresAt: "2026-05-15T09:30:00Z",
+              name: "Liteasy Researcher",
+              sessionId: "demo-session-1"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/recommendations")) {
+        recommendationRequestCount += 1;
+        return {
+          json: async () => ({
+            recommendations: [
+              {
+                discoveredAt: "2026-05-14T08:15:00Z",
+                id: "rec-bert-1",
+                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                relevanceBand: "high",
+                relevanceScore: 0.92,
+                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                source: "Semantic Scholar",
+                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+              }
+            ]
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-dev-cloud-live",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(
+    <AppShell
+      initialSettings={{
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+    />
+  );
+
+  await user.click(screen.getByRole("button", { name: "连接开发云账号" }));
+  await waitFor(() => {
+    expect(screen.getByText("Liteasy Researcher")).toBeInTheDocument();
+  });
+
+  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await waitFor(() => {
+    expect(screen.getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")).toBeInTheDocument();
+  });
+  expect(recommendationRequestCount).toBe(1);
+
+  await user.click(screen.getByRole("button", { name: "清理关联推荐" }));
+
+  expect(screen.queryByLabelText("关联推荐列表")).not.toBeInTheDocument();
+  expect(screen.getByText("已清理当前工作区的关联推荐缓存。" )).toBeInTheDocument();
+  expect(recommendationRequestCount).toBe(1);
+});
+
 test("reuses cached recommendations until a collected paper is added to the library", async () => {
   const user = userEvent.setup();
   let recommendationRequestCount = 0;
@@ -1061,6 +1181,90 @@ test("restored cloud account session uses local dev-cloud defaults for metadata 
   expect(requestedUrls).toContain("http://127.0.0.1:8787/v1/documents/metadata-sync");
   expect(requestedUrls.some((url) => url.startsWith("mock://"))).toBe(false);
 });
+
+test("retries document metadata sync from settings after a failed attempt", async () => {
+  const user = userEvent.setup();
+  let metadataAttempts = 0;
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      if (String(input).includes("/v1/account/demo-login")) {
+        return {
+          json: async () => ({
+            session: {
+              email: "researcher@liteasy.dev",
+              expiresAt: "2026-05-15T09:30:00Z",
+              name: "Liteasy Researcher",
+              sessionId: "demo-session-1"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/documents/metadata-sync")) {
+        metadataAttempts += 1;
+
+        if (metadataAttempts === 1) {
+          throw new TypeError("Failed to fetch");
+        }
+
+        return {
+          json: async () => ({
+            result: {
+              acceptedCount: 2,
+              rejectedCount: 0,
+              syncId: "metadata-retry-success",
+              syncedAt: "2026-05-14T10:25:00Z"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-dev-cloud-live",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(
+    <AppShell
+      initialSettings={{
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+    />
+  );
+
+  await user.click(screen.getByRole("button", { name: "连接开发云账号" }));
+  const settingsPane = await openSettingsPanel(user);
+
+  await waitFor(() => {
+    expect(within(settingsPane).getByText("文献同步：失败")).toBeInTheDocument();
+  });
+
+  await user.click(within(settingsPane).getByRole("button", { name: "重新同步文献元数据" }));
+
+  await waitFor(() => {
+    expect(within(settingsPane).getByText("文献同步：已同步 2 篇")).toBeInTheDocument();
+  });
+
+  expect(within(settingsPane).getByText("同步批次：metadata-retry-success")).toBeInTheDocument();
+  expect(metadataAttempts).toBe(2);
+}, 10000);
 
 test("syncs visible workspace document metadata after cloud account login", async () => {
   const user = userEvent.setup();
@@ -2222,6 +2426,270 @@ test("shows organization governance summary after cloud account login", async ()
 }, 10000);
 
 
+test("explains organization shared-library command prerequisites before login", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "打开组织共享文献库");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(
+    screen.getByText("请先连接开发云账号，并在左边栏组织页加载组织空间后再打开共享文献库。")
+  ).toBeInTheDocument();
+  expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
+
+  const libraryZone = screen.getByLabelText("我的文献库投放区");
+  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "返回本地文献库" })).not.toBeInTheDocument();
+});
+
+
+test("does not let assistant commands open an unavailable organization shared library", async () => {
+  const user = userEvent.setup();
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      if (String(input).includes("/v1/account/demo-login")) {
+        return {
+          json: async () => ({
+            session: {
+              email: "researcher@liteasy.dev",
+              expiresAt: "2026-05-15T09:30:00Z",
+              name: "Liteasy Researcher",
+              sessionId: "demo-session-1"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/org/governance-summary")) {
+        return {
+          json: async () => ({
+            summary: {
+              auditQueue: { highRisk: 0, pendingReview: 0 },
+              quota: {
+                modelCallsLimit: 10000,
+                modelCallsUsed: 4200,
+                storageLimitGb: 100,
+                storageUsedGb: 38
+              },
+              recentAuditEvents: [],
+              runningTasks: []
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/org/summary")) {
+        return {
+          json: async () => ({
+            summary: {
+              auditEvents: [],
+              memberCount: 12,
+              members: [],
+              myRole: "研究员",
+              name: "Liteasy AI Reading Lab",
+              notifications: [],
+              organizationId: "org-demo-1",
+              quota: {
+                periodEndsAt: "2026-06-01T00:00:00Z",
+                storageLimitGb: 100,
+                storageUsedGb: 38
+              },
+              sharedLibrary: {
+                documentCount: 48,
+                documents: [
+                  {
+                    id: "org-doc-1",
+                    sourcePath: "org://org-demo-1/shared-library/org-doc-1.pdf",
+                    title: "Organization Reading List: Retrieval-Augmented Generation"
+                  }
+                ],
+                name: "组织共享文献库",
+                status: "unavailable"
+              },
+              taskSummary: {
+                failed: 0,
+                running: 0
+              }
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-dev-cloud-live",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(
+    <AppShell
+      initialSettings={{
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+    />
+  );
+
+  await user.click(screen.getByRole("button", { name: "连接开发云账号" }));
+  await openOrganizationPanel(user);
+
+  await waitFor(() => {
+    expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
+  });
+  expect(screen.getByRole("button", { name: "打开共享文献库" })).toBeDisabled();
+
+  await openLibraryPanel(user);
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "打开组织共享文献库");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("组织共享文献库当前不可用，请稍后在左边栏组织页查看状态。"))
+    .toBeInTheDocument();
+  expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
+
+  const libraryZone = screen.getByLabelText("我的文献库投放区");
+  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
+  expect(within(libraryZone).queryByText("Organization Reading List: Retrieval-Augmented Generation"))
+    .not.toBeInTheDocument();
+}, 10000);
+
+
+test("does not let assistant commands open an empty organization shared library", async () => {
+  const user = userEvent.setup();
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      if (String(input).includes("/v1/account/demo-login")) {
+        return {
+          json: async () => ({
+            session: {
+              email: "researcher@liteasy.dev",
+              expiresAt: "2026-05-15T09:30:00Z",
+              name: "Liteasy Researcher",
+              sessionId: "demo-session-1"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/org/governance-summary")) {
+        return {
+          json: async () => ({
+            summary: {
+              auditQueue: { highRisk: 0, pendingReview: 0 },
+              quota: {
+                modelCallsLimit: 10000,
+                modelCallsUsed: 4200,
+                storageLimitGb: 100,
+                storageUsedGb: 38
+              },
+              recentAuditEvents: [],
+              runningTasks: []
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/org/summary")) {
+        return {
+          json: async () => ({
+            summary: {
+              auditEvents: [],
+              memberCount: 12,
+              members: [],
+              myRole: "研究员",
+              name: "Liteasy AI Reading Lab",
+              notifications: [],
+              organizationId: "org-demo-1",
+              quota: {
+                periodEndsAt: "2026-06-01T00:00:00Z",
+                storageLimitGb: 100,
+                storageUsedGb: 38
+              },
+              sharedLibrary: {
+                documentCount: 0,
+                documents: [],
+                name: "组织共享文献库",
+                status: "available"
+              },
+              taskSummary: {
+                failed: 0,
+                running: 0
+              }
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-dev-cloud-live",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(
+    <AppShell
+      initialSettings={{
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+    />
+  );
+
+  await user.click(screen.getByRole("button", { name: "连接开发云账号" }));
+  await openOrganizationPanel(user);
+
+  await waitFor(() => {
+    expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
+  });
+
+  await openLibraryPanel(user);
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "打开组织共享文献库");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("组织共享文献库尚未下发可打开文献，请稍后在左边栏组织页查看同步状态。"))
+    .toBeInTheDocument();
+  expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
+
+  const libraryZone = screen.getByLabelText("我的文献库投放区");
+  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
+}, 10000);
+
+
 test("opens the organization shared library through a registered assistant command", async () => {
   const user = userEvent.setup();
 
@@ -3034,8 +3502,7 @@ test("opens a confirmation seam before sending a demo organization invite", asyn
   await user.click(within(dialog).getByRole("button", { name: "发送 demo 邀请" }));
 
   expect(screen.queryByRole("dialog", { name: "邀请成员确认" })).not.toBeInTheDocument();
-  expect(screen.getByText("已创建 Liteasy AI Reading Lab 的 demo 邀请，等待正式后端接入。"))
-    .toBeInTheDocument();
+  expectOrganizationActionFeedback("已创建 Liteasy AI Reading Lab 的 demo 邀请，等待正式后端接入。");
 }, 10000);
 
 
@@ -3246,8 +3713,7 @@ test("opens a confirmation seam before creating a demo organization leave reques
   await user.click(within(dialog).getByRole("button", { name: "创建 demo 退出请求" }));
 
   expect(screen.queryByRole("dialog", { name: "退出组织确认" })).not.toBeInTheDocument();
-  expect(screen.getByText("已创建退出 Liteasy AI Reading Lab 的 demo 请求，等待正式后端接入。"))
-    .toBeInTheDocument();
+  expectOrganizationActionFeedback("已创建退出 Liteasy AI Reading Lab 的 demo 请求，等待正式后端接入。");
   expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
 }, 10000);
 
@@ -3459,8 +3925,7 @@ test("opens a creation seam before creating a demo organization request", async 
   await user.click(within(dialog).getByRole("button", { name: "创建 demo 组织申请" }));
 
   expect(screen.queryByRole("dialog", { name: "创建组织" })).not.toBeInTheDocument();
-  expect(screen.getByText("已创建 Liteasy Demo Organization 的 demo 组织申请，等待正式后端接入。"))
-    .toBeInTheDocument();
+  expectOrganizationActionFeedback("已创建 Liteasy Demo Organization 的 demo 组织申请，等待正式后端接入。");
   expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
 }, 10000);
 
@@ -3672,8 +4137,7 @@ test("opens a join seam before creating a demo organization join request", async
   await user.click(within(dialog).getByRole("button", { name: "提交 demo 加入申请" }));
 
   expect(screen.queryByRole("dialog", { name: "加入组织" })).not.toBeInTheDocument();
-  expect(screen.getByText("已提交组织邀请码 LITEASY-DEMO-JOIN 的 demo 加入申请，等待正式后端接入。"))
-    .toBeInTheDocument();
+  expectOrganizationActionFeedback("已提交组织邀请码 LITEASY-DEMO-JOIN 的 demo 加入申请，等待正式后端接入。");
   expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
 }, 10000);
 
@@ -3867,6 +4331,28 @@ test("opens the organization entry dialog and shows selected organization detail
   expect(within(dialog).getByText("共享文献库：文献运营共享库 · 16 篇" )).toBeInTheDocument();
 }, 10000);
 
+
+test("keeps assistant profile commands in sync with the personal center", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await user.click(screen.getByRole("button", { name: "个人中心" }));
+  const leftPane = screen.getByLabelText("左边栏个人中心");
+
+  expect(within(leftPane).getByText("用户画像：已开启")).toBeInTheDocument();
+  expect(within(leftPane).getByRole("button", { name: "关闭用户画像" })).toBeInTheDocument();
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭用户画像");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(within(leftPane).getByText("用户画像：已关闭")).toBeInTheDocument();
+  expect(within(leftPane).getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
+});
+
 test("opens the personal center in the left rail and toggles user profile sampling", async () => {
   const user = userEvent.setup();
 
@@ -3977,6 +4463,31 @@ test("opens the personal center in the left rail and toggles user profile sampli
   expect(within(leftPane).getByText("学术人格：跨学科综述型" )).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "学术档案" })).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "清空用户画像（需鉴权）" })).toBeInTheDocument();
+}, 10000);
+
+
+test("updates academic profile configuration from the personal center and archive", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "个人中心" }));
+  const leftPane = screen.getByLabelText("左边栏个人中心");
+
+  await user.selectOptions(within(leftPane).getByLabelText("性别"), "女");
+  await user.clear(within(leftPane).getByLabelText("年龄"));
+  await user.type(within(leftPane).getByLabelText("年龄"), "28");
+  await user.selectOptions(within(leftPane).getByLabelText("学段"), "博士研究生");
+  await user.click(within(leftPane).getByRole("button", { name: "保存画像配置" }));
+
+  expect(within(leftPane).getByText("画像配置：性别 女 · 年龄 28 · 学段 博士研究生")).toBeInTheDocument();
+  expect(within(leftPane).getByText("画像配置已更新。")).toBeInTheDocument();
+
+  await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
+  await user.click(within(leftPane).getByRole("button", { name: "学术档案" }));
+
+  const archiveDialog = screen.getByRole("dialog", { name: "学术档案页面" });
+  expect(within(archiveDialog).getByText("身份配置：性别 女 · 年龄 28 · 学段 博士研究生")).toBeInTheDocument();
 }, 10000);
 
 test("opens the academic archive page from the personal center", async () => {
@@ -4181,6 +4692,13 @@ test("requires confirmation before clearing the user profile", async () => {
 
   await user.click(screen.getByRole("button", { name: "个人中心" }));
   const leftPane = screen.getByLabelText("左边栏个人中心");
+  await user.selectOptions(within(leftPane).getByLabelText("性别"), "女");
+  await user.clear(within(leftPane).getByLabelText("年龄"));
+  await user.type(within(leftPane).getByLabelText("年龄"), "28");
+  await user.selectOptions(within(leftPane).getByLabelText("学段"), "博士研究生");
+  await user.click(within(leftPane).getByRole("button", { name: "保存画像配置" }));
+  expect(within(leftPane).getByText("画像配置：性别 女 · 年龄 28 · 学段 博士研究生")).toBeInTheDocument();
+
   await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
   await user.click(within(leftPane).getByRole("button", { name: "清空用户画像（需鉴权）" }));
 
@@ -4192,8 +4710,30 @@ test("requires confirmation before clearing the user profile", async () => {
 
   expect(screen.queryByRole("dialog", { name: "清空用户画像确认" })).not.toBeInTheDocument();
   expect(within(leftPane).getByText("用户画像：已关闭")).toBeInTheDocument();
+  expect(within(leftPane).getByText("画像配置：性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
+  expect(within(leftPane).getByLabelText("性别")).toHaveValue("未设置");
+  expect(within(leftPane).getByLabelText("年龄")).toHaveValue("");
+  expect(within(leftPane).getByLabelText("学段")).toHaveValue("未设置");
   expect(within(leftPane).getByText("用户画像已清空，基础身份信息已保留。" )).toBeInTheDocument();
 }, 10000);
+
+test("keeps workspace dialogs below the top brand bar", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  const topBar = screen.getByText("LiteasyClaw").closest("header");
+  await openOrganizationPanel(user);
+  await user.click(screen.getByRole("button", { name: "打开组织窗口" }));
+
+  const dialogLayer = screen.getByTestId("workspace-dialog-layer");
+  const appShell = dialogLayer.closest(".app-shell");
+
+  expect(topBar).toHaveClass("app-topbar");
+  expect(appShell).toBeInTheDocument();
+  expect(appShell).not.toContainElement(topBar);
+  expect(dialogLayer).toContainElement(screen.getByRole("dialog", { name: "组织窗口" }));
+});
 
 test("keeps the right pane as a minimal AI assistant and moves admin panels out", async () => {
   render(<AppShell />);
@@ -4220,6 +4760,14 @@ test("opens settings from the activity bar and shows model policy details", asyn
   expect(within(settingsPane).getByText("设置")).toBeInTheDocument();
   expect(within(settingsPane).getByText("模型接入策略")).toBeInTheDocument();
   expect(within(settingsPane).getByRole("button", { name: "同步云端策略" })).toBeInTheDocument();
+  expect(within(settingsPane).getByText("开发云端点诊断")).toBeInTheDocument();
+  expect(within(settingsPane).getByText("云代理端点：mock://cloud-proxy")).toBeInTheDocument();
+  expect(within(settingsPane).getByText("控制平面端点：mock://control-plane")).toBeInTheDocument();
+
+  await user.click(within(settingsPane).getByRole("button", { name: "使用本地开发云端点" }));
+
+  expect(within(settingsPane).getByText("云代理端点：http://127.0.0.1:8787")).toBeInTheDocument();
+  expect(within(settingsPane).getByText("控制平面端点：http://127.0.0.1:8787")).toBeInTheDocument();
   expect(within(settingsPane).getByText("文献元数据同步")).toBeInTheDocument();
   expect(within(settingsPane).queryByText("组织空间")).not.toBeInTheDocument();
   expect(within(settingsPane).queryByText("组织治理")).not.toBeInTheDocument();

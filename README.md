@@ -96,7 +96,7 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 
 ## 3. 当前已经做了什么
 
-当前 `desktop` 已经具备 Phase 2 可验收能力，并开始进入 Phase 3 组织空间原型：
+当前 `desktop` 已经具备 Phase 2 可验收能力，并完成 Phase 3 组织空间与治理原型的可验收交付：
 
 - 三栏桌面工作台骨架
 - 顶部品牌区与 Logo
@@ -109,11 +109,14 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 - 推荐或收藏拖入 `我的文献库`
 - 问答原文定位、模型链路、审计模型评分
 - 开发云模型生成和模型审计接口
-- Phase 3 VSCode 式左边栏、组织页/组织窗口、个人中心画像原型、学术档案页面、清空画像确认、组织空间摘要、已加入组织列表/切换、成员明细、通知明细和治理摘要
+- Phase 3 VSCode 式左边栏、组织页/组织窗口、个人中心画像配置、学术档案页面、清空画像确认、组织空间摘要、已加入组织列表/切换、成员明细、通知明细、通知已读状态和治理摘要
 - 组织共享文献库 demo 文献通过按钮或注册命令以“打开文件夹”方式切换为当前工作区，可显式返回本地文献库
-- 开发云服务索引 `/`、组织列表 `/v1/org/list`、组织摘要 `/v1/org/summary` 和治理摘要 `/v1/org/governance-summary`
+- 右栏 AI Assistant 保持极简对话框，支持统一三模式入口、历史会话、新建会话、语音输入预留 seam、原文定位、模型链路和审计评分展示
+- 左栏文献库按工作区母目录显示目录树，支持关联推荐缓存清理、推荐/收藏拖放和组织/本地工作区显式切换
+- 左边栏设置承载模型接入策略、云端策略同步和文献元数据同步重试
+- 开发云服务索引 `/`、组织列表 `/v1/org/list`、组织摘要 `/v1/org/summary`、治理摘要 `/v1/org/governance-summary`、文献元数据同步和模型审计接口
 
-当前测试已经覆盖桌面端核心 store、导入流程、助手、模型策略、推荐、收藏拖拽、元数据同步、模型审计、组织空间摘要、组织切换和开发云接口。
+当前测试已经覆盖桌面端核心 store、导入流程、助手、模型策略、推荐、收藏拖拽、元数据同步、模型审计、组织空间摘要、组织切换、共享文献库切换、个人画像、设置页和开发云接口。最近验收命令为 `cd desktop && npm test`、`cd desktop && npm run build`、`node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs`。
 
 需要注意：当前仍是原型阶段，推荐、解析、审计、账号系统和组织治理中还有演示或 mock 部分。验收前请先阅读 `docs/qa/phase2-known-limitations.md` 和 `docs/qa/phase3-governance-limitations.md`。
 
@@ -143,7 +146,7 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 
 ## 5. 如何查看 desktop 当前效果
 
-如果要完整查看 Phase 2 效果或 Phase 3 组织空间入口，需要先启动开发云服务：
+如果要完整查看 Phase 2 效果或 Phase 3 组织空间与治理原型，需要先启动开发云服务：
 
 ```bash
 node /home/octopus/Liteasy/services/dev-cloud/server.mjs
@@ -155,7 +158,7 @@ node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 Liteasy dev cloud listening on http://127.0.0.1:8787
 ```
 
-注意：`http://127.0.0.1:8787/` 是开发云 API 服务索引，不是 Liteasy 前端页面；`http://127.0.0.1:1420/` 才是前端开发页面。浏览器直接打开 `http://127.0.0.1:8787/v1/account/demo-login` 会使用 GET，但该接口需要桌面端发起 POST 请求；现在服务端会返回带方法说明的 JSON，看到这个提示不代表账号系统坏了。
+注意：`http://127.0.0.1:8787/` 是开发云 API 服务索引，不是 Liteasy 前端页面；`http://127.0.0.1:1420/` 才是前端开发页面。Phase 4 三端 demo 还提供内部运营与运维后台 `http://127.0.0.1:8787/admin/`；它面向 Liteasy 运营/维护团队，用于配置 API、管理资源和查看用户/组织情况，客户使用的是 `http://127.0.0.1:1420/` 桌面软件端。浏览器直接打开 `http://127.0.0.1:8787/v1/account/demo-login` 会使用 GET，但该接口需要桌面端发起 POST 请求；现在服务端会返回带方法说明的 JSON，看到这个提示不代表账号系统坏了。
 
 ### 方式 A：直接看桌面窗口
 
@@ -179,7 +182,7 @@ npm run tauri dev
 - 右栏 `AI Assistant` 极简对话框
 - 顶部微型模型状态指示，模型策略和文献元数据同步详情位于左边栏 `设置` 页面
 
-启动后如需完整验收 Phase 2，请按 `docs/qa/phase2-test-guide.md` 操作；如需检查 Phase 3 组织空间入口，请按 `docs/qa/phase3-test-guide.md` 操作。
+启动后如需完整验收 Phase 2，请按 `docs/qa/phase2-test-guide.md` 操作；如需验收 Phase 3 组织空间与治理原型，请按 `docs/qa/phase3-test-guide.md` 操作。
 
 ### 方式 B：只看前端页面
 
@@ -247,4 +250,5 @@ source "$HOME/.cargo/env"
 - Phase 2 已知限制：`docs/qa/phase2-known-limitations.md`
 - Phase 3 组织空间测试指南：`docs/qa/phase3-test-guide.md`
 - Phase 3 组织与治理限制：`docs/qa/phase3-governance-limitations.md`
+- Phase 4 三端 Demo 验收指南：`docs/qa/phase4-three-end-demo-guide.md`
 - 开发协作提示词：`docs/开发协作提示词历史_5.10.md`

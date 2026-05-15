@@ -159,7 +159,16 @@ export function useRecommendations({
     selectionCacheKey
   ]);
 
+  function clearRecommendationCache() {
+    cacheRef.current.clear();
+    setRecommendationItems([]);
+    setRecommendationPending(false);
+    setRecommendationStatus("idle");
+    setRecommendationMessage("已清理当前工作区的关联推荐缓存。");
+  }
+
   return {
+    clearRecommendationCache,
     recommendationItems,
     recommendationMessage,
     recommendationPending,

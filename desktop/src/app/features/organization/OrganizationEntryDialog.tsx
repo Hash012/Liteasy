@@ -30,8 +30,8 @@ export function OrganizationEntryDialog({
   summary
 }: OrganizationEntryDialogProps) {
   return (
-    <div className="organization-dialog-backdrop">
-      <div aria-label="组织窗口" className="organization-dialog" role="dialog">
+    <div className="workspace-dialog-backdrop organization-dialog-backdrop" data-testid="workspace-dialog-backdrop">
+      <div aria-label="组织窗口" className="workspace-modal-panel organization-dialog" role="dialog">
         <div className="organization-dialog-header">
           <div>
             <div className="organization-dialog-kicker">左边栏 · 组织</div>

@@ -6,12 +6,19 @@ type UseOrganizationActionsOptions = {
 };
 
 export function useOrganizationActions({ onAnalysisHint }: UseOrganizationActionsOptions) {
+  const [actionMessage, setActionMessage] = useState<string | undefined>();
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [inviteSummary, setInviteSummary] = useState<OrganizationSummary | null>(null);
   const [leaveSummary, setLeaveSummary] = useState<OrganizationSummary | null>(null);
 
+  function recordActionMessage(message: string) {
+    setActionMessage(message);
+    onAnalysisHint(message);
+  }
+
   function openCreateDialog() {
+    setActionMessage(undefined);
     setCreateOpen(true);
   }
 
@@ -20,6 +27,7 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
   }
 
   function openJoinDialog() {
+    setActionMessage(undefined);
     setJoinOpen(true);
   }
 
@@ -28,6 +36,7 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
   }
 
   function openInviteDialog(summary: OrganizationSummary) {
+    setActionMessage(undefined);
     setInviteSummary(summary);
   }
 
@@ -36,6 +45,7 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
   }
 
   function openLeaveDialog(summary: OrganizationSummary) {
+    setActionMessage(undefined);
     setLeaveSummary(summary);
   }
 
@@ -46,13 +56,13 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
   function createDemoOrganizationRequest(organizationName: string) {
     const message = `已创建 ${organizationName} 的 demo 组织申请，等待正式后端接入。`;
     setCreateOpen(false);
-    onAnalysisHint(message);
+    recordActionMessage(message);
   }
 
   function createDemoOrganizationJoinRequest(inviteCode: string) {
     const message = `已提交组织邀请码 ${inviteCode} 的 demo 加入申请，等待正式后端接入。`;
     setJoinOpen(false);
-    onAnalysisHint(message);
+    recordActionMessage(message);
   }
 
   function sendDemoOrganizationInvite() {
@@ -62,7 +72,7 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
 
     const message = `已创建 ${inviteSummary.name} 的 demo 邀请，等待正式后端接入。`;
     setInviteSummary(null);
-    onAnalysisHint(message);
+    recordActionMessage(message);
   }
 
   function createDemoOrganizationLeaveRequest() {
@@ -72,10 +82,11 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
 
     const message = `已创建退出 ${leaveSummary.name} 的 demo 请求，等待正式后端接入。`;
     setLeaveSummary(null);
-    onAnalysisHint(message);
+    recordActionMessage(message);
   }
 
   function resetOrganizationActions() {
+    setActionMessage(undefined);
     setCreateOpen(false);
     setJoinOpen(false);
     setInviteSummary(null);
@@ -83,6 +94,7 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
   }
 
   return {
+    actionMessage,
     closeCreateDialog,
     closeInviteDialog,
     closeJoinDialog,

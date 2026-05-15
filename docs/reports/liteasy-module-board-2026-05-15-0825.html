@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Liteasy 功能模块可视化进度看板 · 2026-05-15 08:25</title>
+  <style>
+    :root {
+      --ink: #182431;
+      --muted: #667386;
+      --paper: #f4efe6;
+      --card: #fffdf8;
+      --line: #d7cdbc;
+      --blue: #203f5f;
+      --green: #236548;
+      --amber: #8a641f;
+      --red: #884343;
+      --slate: #455666;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top left, #fffaf0 0, #f4efe6 32%, #eaf0f2 100%);
+      color: var(--ink);
+      font-family: ui-serif, "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+      line-height: 1.6;
+    }
+    header {
+      padding: 34px 44px 28px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 248, .9);
+      box-shadow: 0 10px 34px rgba(22, 39, 57, .07);
+    }
+    h1 { margin: 0 0 8px; color: var(--blue); font-size: 34px; letter-spacing: .03em; }
+    h2 { margin: 0 0 12px; color: var(--blue); font-size: 22px; }
+    h3 { margin: 14px 0 8px; color: #2f5575; font-size: 17px; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+    main { max-width: 1280px; margin: 0 auto; padding: 26px; }
+    .summary-grid, .module-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 253, 248, .94);
+      box-shadow: 0 16px 36px rgba(34, 48, 65, .08);
+      padding: 20px;
+    }
+    .wide { grid-column: span 12; }
+    .metric { grid-column: span 3; }
+    .module { grid-column: span 4; min-height: 360px; display: flex; flex-direction: column; gap: 12px; }
+    .module header { all: unset; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .module-title { color: var(--blue); font-size: 20px; font-weight: 900; }
+    .module-subtitle { color: var(--muted); font-size: 13px; }
+    .badge { display: inline-block; border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 900; white-space: nowrap; }
+    .done { color: var(--green); }
+    .doing { color: var(--amber); }
+    .risk { color: var(--red); }
+    .neutral { color: var(--slate); }
+    .meter { height: 10px; border-radius: 999px; background: #ebe2d4; overflow: hidden; border: 1px solid #ddd0bd; }
+    .meter > span { display: block; height: 100%; background: linear-gradient(90deg, #294f70, #3d7a5c); }
+    .metric-number { font-size: 30px; font-weight: 900; color: var(--blue); }
+    .small { color: var(--muted); font-size: 13px; }
+    ul { margin: 6px 0 0 18px; padding: 0; }
+    li { margin: 5px 0; }
+    code { background: #efe8dc; border: 1px solid #ded3c1; border-radius: 6px; padding: 1px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .lane { border-left: 3px solid #b8c5cf; padding-left: 10px; }
+    .risk-list { background: #fff8ef; border: 1px dashed #dcc7a4; border-radius: 14px; padding: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border-bottom: 1px solid #e2d8c8; padding: 9px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--blue); }
+    @media (max-width: 980px) { .module, .metric { grid-column: span 12; } main { padding: 18px; } header { padding: 26px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Liteasy 功能模块可视化进度看板</h1>
+    <div class="subtitle">生成时间：2026-05-15 08:25（CST） · 当前 <code>main</code> 工作树，未提交 · 以核心文档 <code>docs/Liteasy_功能与UI设计文档1.0.md</code> 为目标</div>
+  </header>
+  <main>
+    <section class="summary-grid">
+      <article class="card wide">
+        <h2>整体目标</h2>
+        <p>以“桌面优先科研 agent 工作台”为主线：最左竖栏承载模块入口，左栏承载文献库/组织/个人中心/设置，中栏承载阅读与产物，右栏保持极简 AI Assistant。当前阶段重点是把组织空间、共享文献库、模型策略、文献同步和用户画像做成稳定可验收的 Phase 3 原型。</p>
+      </article>
+      <article class="card metric"><div class="badge done">测试基线</div><div class="metric-number">176</div><div class="small">桌面端测试已通过（上一轮全量）</div></article>
+      <article class="card metric"><div class="badge done">云端基线</div><div class="metric-number">17</div><div class="small">dev-cloud Node 测试已通过</div></article>
+      <article class="card metric"><div class="badge done">构建基线</div><div class="metric-number">build</div><div class="small">TypeScript + Vite 构建通过</div></article>
+      <article class="card metric"><div class="badge doing">本轮新增</div><div class="metric-number">Task 49</div><div class="small">空组织共享库防误开</div></article>
+    </section>
+
+    <section class="module-grid" style="margin-top: 18px;">
+      <article class="card module">
+        <header><div><div class="module-title">1. 文献库与工作区</div><div class="module-subtitle">本地文献、选中文献集、工作区替换</div></div><span class="badge done">高</span></header>
+        <div class="meter"><span style="width: 82%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>本地 starter 文献库与选中文献集锁定。</li><li>共享文献库打开时替换当前工作区，不取并集。</li><li>可显式返回本地文献库。</li><li>新增：空共享库不再替换成本地空工作区。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>真实目录树、上传、删除、版本控制。</li><li>共享库文件夹级权限与同步状态。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">2. 组织空间</div><div class="module-subtitle">组织列表、详情、成员、通知、治理</div></div><span class="badge done">高</span></header>
+        <div class="meter"><span style="width: 78%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>组织列表和 active organization 切换。</li><li>成员、通知、未读标记、本地持久化。</li><li>组织治理摘要和等待状态语义。</li><li>邀请、创建、加入、退出 demo seam。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>真实组织 CRUD 和后端审批。</li><li>配额、审计、任务的真实数据源。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">3. AI Assistant 右栏</div><div class="module-subtitle">极简对话框、命令路由、安全 action</div></div><span class="badge done">高</span></header>
+        <div class="meter"><span style="width: 76%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>右栏不放管理卡片，仅保留助手。</li><li>命令模式支持策略同步、组织共享库、推荐排序、用户画像。</li><li>本地直连和共享库打开都有策略守卫。</li><li>QA/名词解释共享统一入口。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>历史会话面板。</li><li>更完整自然语言 intent 解析。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">4. 设置与模型策略</div><div class="module-subtitle">左边栏设置、云策略、本地直连开关</div></div><span class="badge done">中高</span></header>
+        <div class="meter"><span style="width: 74%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>模型接入策略移出右栏，放入设置页。</li><li>云端策略同步和启动自动同步。</li><li>本地直连未开放时 UI 与助手命令均不能绕过。</li><li>顶部保留微型模型通道指示。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>正式管理员策略后台。</li><li>多 provider 凭证与密钥管理。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">5. 文献元数据同步</div><div class="module-subtitle">开发云同步、失败提示、手动重试</div></div><span class="badge done">中高</span></header>
+        <div class="meter"><span style="width: 70%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>设置页显示同步状态、批次、最近同步时间。</li><li>恢复云账号会话时默认走本地 dev-cloud 端点。</li><li>网络失败给出启动 <code>127.0.0.1:8787</code> 提示。</li><li>新增手动“重新同步文献元数据”。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>增量同步冲突处理。</li><li>真实云端 metadata schema 与缓存。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">6. 个人中心与用户画像</div><div class="module-subtitle">画像开关、学术档案、清空确认</div></div><span class="badge done">中</span></header>
+        <div class="meter"><span style="width: 66%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>最左竖栏个人中心入口。</li><li>画像开关与助手命令双向同步。</li><li>学术档案页面 seam。</li><li>清空用户画像确认 seam。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>真实授权与采样策略。</li><li>学术人格计算和隐私审计。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">7. 开发云与调试体验</div><div class="module-subtitle">8787 服务、POST 诊断、CORS、demo 数据</div></div><span class="badge done">高</span></header>
+        <div class="meter"><span style="width: 80%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li><code>GET /</code> 返回服务索引。</li><li><code>GET /v1/account/demo-login</code> 明确提示应使用 POST。</li><li>组织、推荐、metadata、模型策略端点齐备。</li><li>CORS preflight 已覆盖测试。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>真实鉴权与多用户数据隔离。</li><li>开发云健康状态在桌面端更明显展示。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">8. 中栏产物与检索</div><div class="module-subtitle">阅读窗口、思维导图、回答引用、审计</div></div><span class="badge doing">中</span></header>
+        <div class="meter"><span style="width: 58%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>选中文献集导入后可生成中栏产物。</li><li>QA 回答带选中文献引用定位。</li><li>模型链路与审计卡片已有基础展示。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>多标签阅读器和 PDF 原文定位。</li><li>PPT/图示等多模态产物真实生成。</li></ul></div>
+      </article>
+
+      <article class="card module">
+        <header><div><div class="module-title">9. 推荐与收藏</div><div class="module-subtitle">联网推荐、排序、收藏、拖拽入库</div></div><span class="badge done">中</span></header>
+        <div class="meter"><span style="width: 68%"></span></div>
+        <div class="lane"><strong>已完成</strong><ul><li>云端推荐和缓存。</li><li>关联度/检索时间排序命令。</li><li>推荐拖入收藏，收藏拖入本地库。</li><li>联网推荐可被助手开关。</li></ul></div>
+        <div class="risk-list"><strong>待补</strong><ul><li>真实外部文献源。</li><li>重复文献更强匹配和去重。</li></ul></div>
+      </article>
+
+      <article class="card wide">
+        <h2>模块验收路径</h2>
+        <table>
+          <thead><tr><th>模块</th><th>当前可点路径</th><th>重点观察</th></tr></thead>
+          <tbody>
+            <tr><td>文献库</td><td>最左侧 <code>文献库</code></td><td>本地工作区、锁定选择、返回本地文献库。</td></tr>
+            <tr><td>组织空间</td><td>顶部连接云账号 → 最左侧 <code>组织</code></td><td>组织列表、共享库、治理摘要；连接账号不会自动打开共享库。</td></tr>
+            <tr><td>设置</td><td>最左侧 <code>设置</code></td><td>模型策略、文献元数据同步、重新同步按钮。</td></tr>
+            <tr><td>个人中心</td><td>最左侧 <code>个人中心</code></td><td>画像开关、学术档案、清空画像确认。</td></tr>
+            <tr><td>AI Assistant</td><td>右栏输入命令</td><td><code>打开组织共享文献库</code>、<code>同步云端策略</code>、<code>关闭用户画像</code>。</td></tr>
+          </tbody>
+        </table>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

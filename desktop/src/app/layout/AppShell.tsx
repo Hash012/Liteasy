@@ -1,19 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { useCollectionItems } from "../features/collection/useCollectionItems";
-import { AssistantPane } from "../features/assistant/AssistantPane";
 import { useCloudAccountActions } from "../features/account/useCloudAccountActions";
-import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
-import { createArtifactStore } from "../features/artifacts/artifact.store";
 import { useArtifactActions } from "../features/artifacts/useArtifactActions";
 import type { ArtifactTask, ArtifactTab } from "../features/artifacts/artifact.types";
-import { createWorkspaceStore } from "../features/workspace/workspace.store";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
-import { createImportStore } from "../features/import/import.store";
 import type { ImportJob } from "../features/import/import.types";
 import type { WorkspaceState } from "../features/workspace/workspace.types";
-import { cloneSettingsState, createSeededSettingsStore } from "../features/settings/settingsStateHelpers";
+import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
 import { useProfileActions } from "../features/profile/useProfileActions";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
@@ -34,13 +29,18 @@ import { useLeftRailNavigation } from "./useLeftRailNavigation";
 import type { OrganizationGovernanceTransport } from "../features/organization/organizationGovernanceClient";
 import type { OrganizationListTransport } from "../features/organization/organizationListClient";
 import type { OrganizationSummaryTransport } from "../features/organization/organizationSummaryClient";
+import type { OrganizationSharedLibraryManifestTransport } from "../features/organization/organizationSharedLibraryManifestClient";
+import { createOrganizationSharedLibraryManifestClient } from "../features/organization/organizationSharedLibraryManifestClient";
 import { useOrganizationData } from "../features/organization/useOrganizationData";
-import { starterPapers } from "./starterPapers";
 import { ActivityBar } from "./ActivityBar";
 import { TopBar } from "./TopBar";
 import { LeftPane } from "./LeftPane";
 import { AppDialogs } from "./AppDialogs";
+import { ReaderPane } from "./ReaderPane";
+import { AssistantSidebar } from "./AssistantSidebar";
 import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
+import { useAppShellStores } from "./useAppShellStores";
+import { starterPapers } from "./starterPapers";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -49,6 +49,7 @@ type AppShellProps = {
   initialSettings?: Partial<SettingsState>;
   organizationGovernanceTransport?: OrganizationGovernanceTransport;
   organizationListTransport?: OrganizationListTransport;
+  organizationSharedLibraryManifestTransport?: OrganizationSharedLibraryManifestTransport;
   organizationTransport?: OrganizationSummaryTransport;
   recommendationTransport?: RecommendationTransport;
 };
@@ -60,18 +61,11 @@ export function AppShell({
   initialSettings,
   organizationGovernanceTransport,
   organizationListTransport,
+  organizationSharedLibraryManifestTransport,
   organizationTransport,
   recommendationTransport
 }: AppShellProps = {}) {
-  const workspaceStoreRef = useRef(createWorkspaceStore());
-  const workspaceSeededRef = useRef(false);
-  const importStoreRef = useRef(createImportStore());
-  const settingsStoreRef = useRef(createSeededSettingsStore(initialSettings));
-  const artifactStore = useMemo(() => createArtifactStore(), []);
-  if (!workspaceSeededRef.current) {
-    starterPapers.forEach((paper) => workspaceStoreRef.current.addPaper(paper));
-    workspaceSeededRef.current = true;
-  }
+  const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(initialSettings);
 
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(() =>
     cloneWorkspaceState(workspaceStoreRef.current.getState())
@@ -93,7 +87,17 @@ export function AppShell({
     settingsStore: settingsStoreRef.current
   });
   const leftRail = useLeftRailNavigation();
-  const profileActions = useProfileActions();
+  const profileActions = useProfileActions({
+    onProfileSamplingChanged: (enabled) => {
+      settingsStoreRef.current.apply({
+        intent: "update_setting",
+        target: "profile.enabled",
+        value: enabled
+      });
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    },
+    profileSamplingEnabled: settingsState["profile.enabled"]
+  });
   const organizationUi = useOrganizationUiState();
   const organizationActions = useOrganizationActions({ onAnalysisHint: setAnalysisHint });
   const organizationNotifications = useOrganizationNotifications({ onAnalysisHint: setAnalysisHint });
@@ -159,6 +163,7 @@ export function AppShell({
   const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
   const {
+    clearRecommendationCache,
     recommendationItems,
     recommendationMessage,
     recommendationPending,
@@ -175,6 +180,7 @@ export function AppShell({
   const {
     lastResult: documentMetadataSyncResult,
     message: documentMetadataSyncMessage,
+    retrySync: retryDocumentMetadataSync,
     status: documentMetadataSyncStatus
   } = useDocumentMetadataSync({
     accountSession,
@@ -203,47 +209,27 @@ export function AppShell({
   });
 
   const organizationWorkspace = useOrganizationWorkspace({
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     defaultSummary: organizationSummary,
+    manifestLoader: async ({ endpoint, organizationId, sessionId }) =>
+      createOrganizationSharedLibraryManifestClient({
+        endpoint,
+        transport: organizationSharedLibraryManifestTransport
+      })({
+        organizationId,
+        sessionId
+      }),
     onAnalysisHint: setAnalysisHint,
     onLeftRailView: leftRail.setLeftRailView,
     onWorkspaceLabel: setWorkspaceLabel,
     onWorkspaceSync: workspaceActions.syncWorkspace,
+    sessionId: accountSession?.sessionId,
     starterPapers,
     workspaceStoreRef
   });
 
   return (
     <div className="app-frame">
-      <AppDialogs
-        accountSession={accountSession}
-        academicArchiveOpen={profileActions.academicArchiveOpen}
-        clearProfileConfirmOpen={profileActions.clearProfileConfirmOpen}
-        createOrganizationOpen={organizationActions.createOpen}
-        inviteSummary={organizationActions.inviteSummary}
-        joinOrganizationOpen={organizationActions.joinOpen}
-        leaveSummary={organizationActions.leaveSummary}
-        list={organizationList}
-        listMessage={organizationListMessage}
-        onCancelClearProfile={profileActions.closeClearProfileConfirm}
-        onClearProfile={profileActions.clearUserProfile}
-        onCloseAcademicArchive={profileActions.closeAcademicArchive}
-        onCloseCreateOrganization={organizationActions.closeCreateDialog}
-        onCloseInviteMember={organizationActions.closeInviteDialog}
-        onCloseJoinOrganization={organizationActions.closeJoinDialog}
-        onCloseLeaveOrganization={organizationActions.closeLeaveDialog}
-        onCloseOrganizationDialog={organizationUi.closeOrganizationDialog}
-        onCreateOrganization={organizationActions.createDemoOrganizationRequest}
-        onInviteMember={organizationActions.sendDemoOrganizationInvite}
-        onJoinOrganization={organizationActions.createDemoOrganizationJoinRequest}
-        onLeaveOrganization={organizationActions.createDemoOrganizationLeaveRequest}
-        onOpenSharedLibrary={(summary) => {
-          void organizationWorkspace.openOrganizationSharedLibrary(summary);
-        }}
-        onSelectOrganization={organizationUi.selectOrganization}
-        organizationDialogOpen={organizationUi.organizationDialogOpen}
-        readPaperCount={workspaceState.papers.length}
-        summary={organizationSummary}
-      />
       <TopBar
         accountMessage={accountMessage}
         accountPending={accountPending}
@@ -258,6 +244,7 @@ export function AppShell({
       <div className="app-shell">
         <ActivityBar activeView={leftRail.leftRailView} onSelectView={leftRail.setLeftRailView} />
         <LeftPane
+          academicProfile={profileActions.academicProfile}
           accountSession={accountSession}
           collectionItems={collection.collectionItems}
           documentMetadataSyncMessage={documentMetadataSyncMessage}
@@ -275,6 +262,7 @@ export function AppShell({
           listStatus={organizationListStatus}
           onAddExternalPaper={workspaceActions.addExternalPaperToLibrary}
           onClearProfile={profileActions.openClearProfileConfirm}
+          onClearRecommendations={clearRecommendationCache}
           onCollectRecommendation={collection.collectRecommendation}
           onCreateOrganization={organizationActions.openCreateDialog}
           onImportSelectedSet={() => {
@@ -286,19 +274,23 @@ export function AppShell({
           onMarkNotificationsRead={organizationNotifications.markOrganizationNotificationsRead}
           onOpenAcademicArchive={profileActions.openAcademicArchive}
           onOpenOrganizationDialog={organizationUi.openOrganizationDialog}
+          organizationActionMessage={organizationActions.actionMessage}
           onOpenSharedLibrary={(summary) => {
             void organizationWorkspace.openOrganizationSharedLibrary(summary);
           }}
           onReturnToLocalWorkspace={organizationWorkspace.openLocalLibraryWorkspace}
+          onRetryDocumentMetadataSync={retryDocumentMetadataSync}
           onSelectOrganization={organizationUi.selectOrganization}
           onSetAccessMode={modelSettings.setModelAccessMode}
           onSyncCloudPolicy={() => {
             void syncCloudPolicy();
           }}
           onToggleLocalDirectEnabled={modelSettings.setLocalDirectEnabled}
+          onUseLocalDevCloudDefaults={modelSettings.applyLocalDevCloudDefaults}
           onToggleLock={workspaceActions.toggleSelectionLock}
           onToggleProfileSampling={profileActions.toggleProfileSampling}
           onToggleSelection={workspaceActions.toggleSelection}
+          onUpdateAcademicProfile={profileActions.updateAcademicProfile}
           organizationSummary={organizationSummary}
           organizationSummaryMessage={organizationSummaryMessage}
           organizationSummaryStatus={organizationSummaryStatus}
@@ -309,7 +301,7 @@ export function AppShell({
           policyVersion={policyVersion}
           profileClearMessage={profileActions.profileClearMessage}
           profileReadPaperCount={workspaceState.papers.length}
-          profileSamplingEnabled={profileActions.profileSamplingEnabled}
+          profileSamplingEnabled={settingsState["profile.enabled"]}
           recommendationItems={recommendationItems}
           recommendationMessage={recommendationMessage}
           recommendationPending={recommendationPending}
@@ -321,44 +313,60 @@ export function AppShell({
           summary={organizationSummary}
           workspaceLabel={workspaceLabel}
         />
-        <main className="pane center">
-          <div className="pane-header">Reader</div>
-          <div className="pane-body">
-            <ArtifactTabs
-              analysisHint={analysisHint}
-              canStartAnalysis={
-                workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
-              }
-              onStartAnalysis={(artifactType) => {
-                void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
-              }}
-              selectedCount={workspaceState.selectedPaperIds.length}
-              selectionLocked={workspaceState.selectionLocked}
-              tabs={artifactTabs}
-              tasks={artifactTasks}
-            />
-          </div>
-        </main>
-        <section aria-label="右栏AI助手" className="pane right assistant-only-pane">
-          <div className="pane-header">AI Assistant</div>
-          <div className="pane-body">
-            <AssistantPane
-              importedChunksByPaperId={importedChunksByPaperId}
-              onGenerateArtifact={artifactActions.handleAssistantArtifact}
-              onModelExecution={setLastModelExecution}
-              onOpenOrganizationSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
-              onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
-              onSyncCloudPolicy={syncCloudPolicy}
-              selectedPapers={selectedPapers}
-              selectedSetStatus={{
-                importedCount: importedSelectedCount,
-                selectedCount: workspaceState.selectedPaperIds.length,
-                selectionLocked: workspaceState.selectionLocked
-              }}
-              settingsStore={settingsStoreRef.current}
-            />
-          </div>
-        </section>
+        <AppDialogs
+          academicProfile={profileActions.academicProfile}
+          accountSession={accountSession}
+          academicArchiveOpen={profileActions.academicArchiveOpen}
+          clearProfileConfirmOpen={profileActions.clearProfileConfirmOpen}
+          createOrganizationOpen={organizationActions.createOpen}
+          inviteSummary={organizationActions.inviteSummary}
+          joinOrganizationOpen={organizationActions.joinOpen}
+          leaveSummary={organizationActions.leaveSummary}
+          list={organizationList}
+          listMessage={organizationListMessage}
+          onCancelClearProfile={profileActions.closeClearProfileConfirm}
+          onClearProfile={profileActions.clearUserProfile}
+          onCloseAcademicArchive={profileActions.closeAcademicArchive}
+          onCloseCreateOrganization={organizationActions.closeCreateDialog}
+          onCloseInviteMember={organizationActions.closeInviteDialog}
+          onCloseJoinOrganization={organizationActions.closeJoinDialog}
+          onCloseLeaveOrganization={organizationActions.closeLeaveDialog}
+          onCloseOrganizationDialog={organizationUi.closeOrganizationDialog}
+          onCreateOrganization={organizationActions.createDemoOrganizationRequest}
+          onInviteMember={organizationActions.sendDemoOrganizationInvite}
+          onJoinOrganization={organizationActions.createDemoOrganizationJoinRequest}
+          onLeaveOrganization={organizationActions.createDemoOrganizationLeaveRequest}
+          onOpenSharedLibrary={(summary) => {
+            void organizationWorkspace.openOrganizationSharedLibrary(summary);
+          }}
+          onSelectOrganization={organizationUi.selectOrganization}
+          organizationDialogOpen={organizationUi.organizationDialogOpen}
+          readPaperCount={workspaceState.papers.length}
+          summary={organizationSummary}
+        />
+        <ReaderPane
+          analysisHint={analysisHint}
+          artifactTabs={artifactTabs}
+          artifactTasks={artifactTasks}
+          onStartAnalysis={(artifactType) => {
+            void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+          }}
+          selectedPaperIds={workspaceState.selectedPaperIds}
+          selectionLocked={workspaceState.selectionLocked}
+        />
+        <AssistantSidebar
+          importedChunksByPaperId={importedChunksByPaperId}
+          importedSelectedCount={importedSelectedCount}
+          onGenerateArtifact={artifactActions.handleAssistantArtifact}
+          onModelExecution={setLastModelExecution}
+          onOpenOrganizationSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
+          onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
+          onSyncCloudPolicy={syncCloudPolicy}
+          selectedPaperCount={workspaceState.selectedPaperIds.length}
+          selectedPapers={selectedPapers}
+          selectionLocked={workspaceState.selectionLocked}
+          settingsStore={settingsStoreRef.current}
+        />
       </div>
     </div>
   );

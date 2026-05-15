@@ -123,6 +123,43 @@ describe("useOrganizationData", () => {
       sessionId: "demo-session-1"
     });
   });
+  test("keeps governance waiting while organization summary is still loading", async () => {
+    const neverResolveSummary = async () => new Promise<Response>(() => undefined);
+
+    const { result } = renderHook(() =>
+      useOrganizationData({
+        accountSession,
+        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+        getActiveOrganizationId: () => undefined,
+        organizationGovernanceTransport: async () => createJsonResponse({
+          summary: {
+            auditQueue: { highRisk: 0, pendingReview: 0 },
+            quota: {
+              modelCallsLimit: 10000,
+              modelCallsUsed: 0,
+              storageLimitGb: 100,
+              storageUsedGb: 0
+            },
+            recentAuditEvents: [],
+            runningTasks: []
+          }
+        }),
+        organizationListTransport: async () => createJsonResponse({
+          activeOrganizationId: "org-demo-1",
+          organizations: []
+        }),
+        organizationTransport: neverResolveSummary
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.organizationSummaryStatus).toBe("loading");
+    });
+
+    expect(result.current.organizationGovernanceStatus).toBe("waiting");
+    expect(result.current.organizationGovernanceMessage).toBe("组织空间加载完成后会同步组织治理摘要。");
+  });
+
   test("shows an actionable dev-cloud hint when organization requests cannot reach the service", async () => {
     const networkFailure = async () => {
       throw new TypeError("Failed to fetch");

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Liteasy 睡前开发进度与目标 · 2026-05-15 01:20</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #607084;
+      --paper: #f7f4ee;
+      --card: #fffdf8;
+      --line: #d8d0c1;
+      --blue: #244b6d;
+      --green: #246b4b;
+      --amber: #936c1f;
+      --red: #8a4242;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #f4efe5 0%, #eef3f6 100%);
+      color: var(--ink);
+      font-family: ui-serif, "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
+      line-height: 1.6;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.88);
+      padding: 34px 44px 28px;
+    }
+    h1 { margin: 0 0 8px; color: var(--blue); font-size: 34px; letter-spacing: .02em; }
+    h2 { margin: 0 0 14px; color: var(--blue); font-size: 22px; }
+    h3 { margin: 18px 0 8px; color: #2f5575; font-size: 17px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    main { max-width: 1180px; margin: 0 auto; padding: 28px; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px; }
+    .card {
+      grid-column: span 6;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 253, 248, 0.92);
+      box-shadow: 0 18px 42px rgba(36, 54, 72, .08);
+      padding: 22px;
+    }
+    .wide { grid-column: span 12; }
+    .third { grid-column: span 4; }
+    .badge { display: inline-block; border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+    .done { color: var(--green); }
+    .doing { color: var(--amber); }
+    .risk { color: var(--red); }
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 6px 0; }
+    code { background: #efe8db; border: 1px solid #ded3c1; border-radius: 6px; padding: 1px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #e1d8c8; padding: 9px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--blue); font-weight: 800; }
+    .metric { font-size: 30px; color: var(--blue); font-weight: 800; }
+    .small { color: var(--muted); font-size: 13px; }
+    @media (max-width: 860px) { .card, .third { grid-column: span 12; } header { padding: 26px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Liteasy 当前开发目标与进度</h1>
+    <div class="subtitle">生成时间：2026-05-15 01:20（本地） · 工作树：当前 <code>main</code>，不提交仓库 · 核心文档：<code>docs/Liteasy_功能与UI设计文档1.0.md</code></div>
+  </header>
+  <main>
+    <section class="grid">
+      <article class="card wide">
+        <h2>本次交付目标</h2>
+        <p>把 Liteasy Phase 3 的组织空间、个人中心、设置与开发云调试体验推进到可验收原型：左侧采用 VSCode 式 Activity Bar，右栏保持极简 AI Assistant，组织共享文献库像“打开文件夹”一样显式切换工作区，开发云连接/同步错误能给出可操作提示。</p>
+      </article>
+
+      <article class="card third">
+        <div class="badge done">已完成</div>
+        <div class="metric">164</div>
+        <div class="small">桌面端测试通过数（最近一次完整验证）</div>
+      </article>
+      <article class="card third">
+        <div class="badge done">已完成</div>
+        <div class="metric">17</div>
+        <div class="small">dev-cloud Node 测试通过数</div>
+      </article>
+      <article class="card third">
+        <div class="badge doing">开发中</div>
+        <div class="metric">6.5h</div>
+        <div class="small">接下来持续推进窗口</div>
+      </article>
+
+      <article class="card">
+        <h2>已经完成的产品目标</h2>
+        <ul>
+          <li><span class="badge done">完成</span> 最左侧 Activity Bar：<code>文献库 / 组织 / 个人中心 / 设置</code>。</li>
+          <li><span class="badge done">完成</span> 右栏保持极简 <code>AI Assistant</code>，组织治理和模型策略不放右栏。</li>
+          <li><span class="badge done">完成</span> 模型接入策略与文献元数据同步进入左边栏 <code>设置</code>。</li>
+          <li><span class="badge done">完成</span> 组织页展示组织空间、成员、通知、共享文献库、治理摘要。</li>
+          <li><span class="badge done">完成</span> 共享文献库必须用户显式打开；行为是替换当前工作区，不与本地文献取并集。</li>
+          <li><span class="badge done">完成</span> 开发云 8787/前端 1420 的误访问提示与文档说明。</li>
+          <li><span class="badge done">完成</span> 文献元数据同步失败的恢复会话端点问题已修复。</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>已完成的工程目标</h2>
+        <ul>
+          <li>拆分 <code>AppShell</code>：抽出 ActivityBar、TopBar、AppBrand、LeftPane、SettingsPane、AppDialogs。</li>
+          <li>抽出 workspace/artifact/account/model/profile/organization 等 action hooks。</li>
+          <li>加入重复导入保护，避免 queued/parsing 状态重复创建任务。</li>
+          <li>云端网络错误统一转换为“请启动 http://127.0.0.1:8787”的可操作提示。</li>
+          <li>恢复本地云账号会话时自动套用开发云默认端点，避免 metadata sync 走 <code>mock://control-plane</code>。</li>
+        </ul>
+      </article>
+
+      <article class="card wide">
+        <h2>当前仍然是原型/不能当正式能力验收</h2>
+        <table>
+          <thead><tr><th>领域</th><th>当前状态</th><th>后续方向</th></tr></thead>
+          <tbody>
+            <tr><td>组织创建/加入/邀请/退出</td><td>Demo seam，只显示确认和提示，不写真实后端。</td><td>补真实 membership 模型、邀请生命周期、审批与权限。</td></tr>
+            <tr><td>共享文献库</td><td>可切换 demo 工作区，不支持真实云端目录浏览/上传/删除/版本。</td><td>补云端元数据、对象存储、版本控制和权限。</td></tr>
+            <tr><td>组织治理</td><td>展示固定配额、任务、审计示例。</td><td>补真实风控事件、模型任务队列、管理员后台。</td></tr>
+            <tr><td>个人画像</td><td>固定画像配置与学术档案示例。</td><td>补授权采样、真实清空、本地/云端数据边界。</td></tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="card wide">
+        <h2>接下来我会继续推进的方向</h2>
+        <ol>
+          <li>继续检查已实现功能是否与产品文档/QA 文档一致，优先修复验收时会误导用户的问题。</li>
+          <li>补充 UI 组件和 hook 的边界测试，减少 AppShell 大集成测试压力。</li>
+          <li>继续消除残留 mock/端点/状态恢复类 bug，特别是开发云、组织切换、共享文献库工作区切换。</li>
+          <li>每个任务按 Red → Green → Refactor 做，结束一轮就跑聚焦测试；阶段性跑 <code>npm test</code>、<code>npm run build</code>、dev-cloud Node tests。</li>
+          <li>约 6.5 小时后生成新的 HTML 进度报告，列出新增完成项、剩余目标、验证结果和可验收路径。</li>
+        </ol>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

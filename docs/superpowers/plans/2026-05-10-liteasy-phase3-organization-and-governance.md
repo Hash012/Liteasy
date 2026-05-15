@@ -41,7 +41,7 @@ The product-blueprint spec is a technical interpretation of that source, not a r
 
 ## Current Phase 3 Slice
 
-Status: **organization-space summary, left-rail organization entry dialog, personal center profile prototype, academic archive page, clear-profile confirmation, joined organization list/switching, shared-library open, member/notification detail, governance summary, and registered organization action prototype slices implemented in the existing main working tree without committing**.
+Status: **Phase 3 organization, governance, shared-library workspace, personal-center/profile, settings relocation, right-pane assistant boundary, and module-boundary hardening are implemented in the existing main working tree without committing. The remaining boundaries are productionization items documented in `docs/qa/phase3-governance-limitations.md`.**.
 
 The current implemented slices introduce visible organization-space seams:
 
@@ -1611,3 +1611,1015 @@ Wire `AppShell` so restored cloud sessions apply the same local dev-cloud defaul
 - [x] **Step 4: Run full verification**
 
 Verified `npm test` in `desktop` (51 files / 164 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 42: Assistant command hint refresh
+
+**Context:** The right AI Assistant command-mode hint still only mentioned `关闭联网推荐`, even though the current prototype also supports cloud-policy sync and explicit organization shared-library opening through registered skill/action boundaries. This could hide the intended Phase 3 workflows from testers.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add failing command-hint test**
+
+Cover command mode showing current examples including `同步云端策略` and `打开组织共享文献库`.
+
+- [x] **Step 2: Refresh command-mode hint**
+
+Update the assistant command hint to mention policy sync, explicit organization shared-library opening, and recommendation toggles.
+
+- [x] **Step 3: Run full verification**
+
+Verified AssistantPane focused tests, `npm test` in `desktop` (51 files / 165 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 43: Profile setting state unification
+
+**Context:** The assistant command `开启用户画像` updated `settings.profile.enabled`, while the personal-center toggle used separate local state in `useProfileActions`. This made the right-pane command and left-pane profile UI disagree.
+
+**Files:**
+- Modify: `desktop/src/app/features/profile/useProfileActions.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `desktop/src/tests/useProfileActions.test.ts`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add assistant/profile sync regression test**
+
+Cover entering `开启用户画像` in the assistant and then opening personal center showing `用户画像：已开启`.
+
+- [x] **Step 2: Make profile actions controlled**
+
+Change `useProfileActions` so it receives `profileSamplingEnabled` from settings and emits profile enabled changes instead of owning duplicate local state.
+
+- [x] **Step 3: Wire AppShell profile setting updates**
+
+Wire the personal-center toggle and clear-profile flow to update `settingsStore.profile.enabled`, matching assistant commands.
+
+- [x] **Step 4: Run full verification**
+
+Verified profile focused tests, `npm test` in `desktop` (51 files / 166 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 44: Local-direct policy guard for assistant commands
+
+**Context:** The settings UI disables `使用本地直连` when cloud policy has not allowed local direct access, but assistant command routing could still execute `切换到本地直连` through the generic settings action. This bypassed the intended model access policy.
+
+**Files:**
+- Modify: `desktop/src/app/features/skills/actionRegistry.ts`
+- Modify: `desktop/src/tests/actionRegistry.test.ts`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add policy-bypass regression tests**
+
+Cover both the action registry and AppShell assistant command flow refusing local-direct mode when `models.local_direct_enabled` is false.
+
+- [x] **Step 2: Guard settings.update for local direct**
+
+Return a readable policy message and keep `models.access_mode` as `cloud_proxy` when local direct is not allowed.
+
+- [x] **Step 3: Run full verification**
+
+Verified action/AppShell focused tests, `npm test` in `desktop` (51 files / 168 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 45: Organization shared-library command guardrails
+
+**Context:** Opening an organization shared library should remain an explicit, safe workspace switch. The button already disables unavailable shared libraries, but the assistant command path needed the same guardrails and a more actionable pre-login prerequisite message.
+
+**Files:**
+- Modify: `desktop/src/app/features/organization/useOrganizationWorkspace.ts`
+- Modify: `desktop/src/tests/useOrganizationWorkspace.test.ts`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add missing-summary prerequisite regression**
+
+Cover entering `打开组织共享文献库` before login/loading organization data. It now leaves the local workspace intact and tells testers to connect the dev cloud account and load the organization page first.
+
+- [x] **Step 2: Add unavailable-library bypass regression**
+
+Cover assistant commands refusing to open a shared library whose organization status is not `available`, matching the disabled UI button.
+
+- [x] **Step 3: Guard organization workspace switching**
+
+Return readable messages for missing summaries and unavailable shared libraries without mutating the workspace store, label, left rail, or analysis hint.
+
+- [x] **Step 4: Run focused verification**
+
+Verified `useOrganizationWorkspace`, `AppShell`, `LeftPane`, and `commandRouter` focused suites together (4 files / 71 tests).
+
+
+### Task 46: Left pane academic localization and profile command parity
+
+**Context:** The left pane headers still used English labels (`Library`, `Organization`, `Profile`, `Settings`) and the assistant could turn on profile sampling but not turn it back off. Both conflicted with the Chinese academic UI direction in the core document and with the personal-center toggle behavior.
+
+**Files:**
+- Modify: `desktop/src/app/layout/LeftPane.tsx`
+- Modify: `desktop/src/app/features/assistant/commandRouter.ts`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `desktop/src/tests/commandRouter.test.ts`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add Chinese header regression**
+
+Cover the VSCode-style left pane showing `文献库 / 组织 / 个人中心 / 设置` as pane headers.
+
+- [x] **Step 2: Replace leftover English pane headers**
+
+Add a small header mapper in `LeftPane` so the surrounding shell aligns with the Chinese academic product language.
+
+- [x] **Step 3: Add profile shutdown command**
+
+Route `关闭用户画像` through the same safe settings skill/action boundary as `开启用户画像`.
+
+- [x] **Step 4: Verify profile UI parity**
+
+Extend the AppShell profile command regression so assistant commands can both enable and disable the personal-center profile state.
+
+- [x] **Step 5: Run focused verification**
+
+Verified `useOrganizationWorkspace`, `AppShell`, `LeftPane`, and `commandRouter` focused suites together (4 files / 71 tests).
+
+
+### Task 47: Organization governance loading semantics
+
+**Context:** When a cloud account exists but the organization summary is still loading, the governance card previously reused `unauthenticated`, showing `组织治理：未连接云账号`. That could confuse testers who had already connected the dev cloud account.
+
+**Files:**
+- Modify: `desktop/src/app/features/organization/organization.types.ts`
+- Modify: `desktop/src/app/features/organization/useOrganizationGovernance.ts`
+- Modify: `desktop/src/app/features/organization/OrganizationGovernancePanel.tsx`
+- Modify: `desktop/src/tests/useOrganizationData.test.ts`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add governance waiting regression**
+
+Cover a connected account with a still-loading organization summary and expect governance to report `waiting`, not `unauthenticated`.
+
+- [x] **Step 2: Add waiting status type**
+
+Extend `OrganizationGovernanceStatus` with `waiting` and set it while governance is blocked on organization summary data.
+
+- [x] **Step 3: Update governance panel copy**
+
+Render `组织治理：等待组织空间` with the footnote `组织空间加载完成后会同步组织治理摘要。`.
+
+- [x] **Step 4: Run focused verification**
+
+Verified organization data, left pane, AppShell, organization workspace, and command router suites together (5 files / 75 tests).
+
+
+### Task 48: Document metadata sync manual retry
+
+**Context:** A tester previously saw `文献元数据同步失败`. The hook already reported actionable errors, but the settings pane had no explicit retry control after transient failures.
+
+**Files:**
+- Modify: `desktop/src/app/features/metadata/useDocumentMetadataSync.ts`
+- Modify: `desktop/src/app/features/metadata/DocumentMetadataSyncPanel.tsx`
+- Modify: `desktop/src/app/layout/SettingsPane.tsx`
+- Modify: `desktop/src/app/layout/LeftPane.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/tests/SettingsPane.test.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add retry button regression**
+
+Cover the settings pane exposing `重新同步文献元数据` and forwarding the retry callback.
+
+- [x] **Step 2: Add failed-then-retry AppShell regression**
+
+Cover metadata sync failing once with `Failed to fetch`, then succeeding after the user clicks the retry button in the left settings pane.
+
+- [x] **Step 3: Add retry trigger to metadata hook**
+
+Add a small retry counter dependency and return `retrySync` so the same sync path can be re-run manually.
+
+- [x] **Step 4: Wire retry through settings**
+
+Pass the retry callback through `AppShell` → `LeftPane` → `SettingsPane` → `DocumentMetadataSyncPanel`, disabling the button while syncing or unauthenticated.
+
+- [x] **Step 5: Run full verification**
+
+Verified `npm test` in `desktop` (51 files / 176 tests), `npm run build` in `desktop`, and dev-cloud node tests (17 tests).
+
+
+### Task 49: Empty organization shared-library guardrail
+
+**Context:** A shared library can be `available` while the demo summary still has no openable documents. Opening that would replace the current local library with an empty workspace, which is surprising and weakens the “open shared library like a folder” mental model.
+
+**Files:**
+- Modify: `desktop/src/app/features/organization/useOrganizationWorkspace.ts`
+- Modify: `desktop/src/tests/useOrganizationWorkspace.test.ts`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add empty-library regression**
+
+Cover an `available` shared library whose `documents` array is empty and expect the local workspace to remain unchanged.
+
+- [x] **Step 2: Guard workspace replacement**
+
+Return `组织共享文献库尚未下发可打开文献，请稍后在左边栏组织页查看同步状态。` without mutating workspace state.
+
+- [x] **Step 3: Verify assistant command behavior**
+
+Cover the AppShell assistant command path so `打开组织共享文献库` cannot open an empty organization library.
+
+- [x] **Step 4: Run focused verification**
+
+Verified `useOrganizationWorkspace` and the AppShell empty-library command regression.
+
+
+### Task 50: Assistant session history seam
+
+**Context:** The core UI document says the right AI Assistant should support a button for historical conversations and new sessions. The right pane was intentionally simplified, but still lacked this conversation-level control.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add assistant history regression**
+
+Cover sending a command, clicking `新建会话`, clearing the visible conversation, and then opening `历史会话` to see the archived session title and message count.
+
+- [x] **Step 2: Add minimal session archive state**
+
+Keep an in-memory list of archived sessions inside `AssistantPane`, snapshotting messages before clearing the current assistant store.
+
+- [x] **Step 3: Render compact right-pane controls**
+
+Add `新建会话` and `历史会话` buttons above the mode label, plus a compact historical session panel that does not add admin/settings content to the right pane.
+
+- [x] **Step 4: Run focused verification**
+
+Verified `AssistantPane` component tests (8 tests).
+
+### Task 51: Assistant archived session restore
+
+**Context:** The right AI assistant now archives conversations when starting a new session, but historical sessions were display-only. Users need to reopen an archived conversation without adding non-assistant admin content to the right pane.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/assistant.store.ts`
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/assistant.store.test.ts`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add restore regressions**
+
+Cover the assistant store restoring a saved session snapshot and the UI reopening an archived command session from `历史会话`.
+
+- [x] **Step 2: Add minimal restore API**
+
+Add `restoreSession(mode, messages)` to the assistant store, replacing the current messages, restoring mode, and clearing pending state.
+
+- [x] **Step 3: Make history items actionable**
+
+Render each archived session as `恢复会话：{title}` and restore it into the active right-pane assistant conversation.
+
+- [x] **Step 4: Run focused verification**
+
+Verified assistant store and assistant pane restore regressions (2 files / 2 selected tests).
+
+### Task 52: Editable academic profile configuration
+
+**Context:** The personal center matched the required left activity bar placement, but its `画像配置` row was still hard-coded as `未设置`. The core UI document expects users to configure gender, age, and academic stage from the personal center, and have the academic archive reflect those profile files.
+
+**Files:**
+- Create: `desktop/src/app/features/profile/profile.types.ts`
+- Modify: `desktop/src/app/features/profile/useProfileActions.ts`
+- Modify: `desktop/src/app/features/profile/PersonalCenterPanel.tsx`
+- Modify: `desktop/src/app/features/profile/AcademicArchiveDialog.tsx`
+- Modify: `desktop/src/app/layout/AppDialogs.tsx`
+- Modify: `desktop/src/app/layout/LeftPane.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/useProfileActions.test.ts`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `desktop/src/tests/AppDialogs.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add editable profile regressions**
+
+Cover the profile hook storing academic identity fields, the personal center forwarding edits, and the AppShell showing the saved identity in both the left pane and academic archive.
+
+- [x] **Step 2: Add academic profile model**
+
+Introduce a shared `AcademicProfile` type, default profile values, and a formatter used by the personal center and academic archive.
+
+- [x] **Step 3: Wire profile state through UI**
+
+Keep editable profile state in `useProfileActions`, pass it through `AppShell`/`LeftPane`/`AppDialogs`, and reset it when clearing the user profile.
+
+- [x] **Step 4: Add compact profile controls**
+
+Render gender, age, and academic-stage controls in the personal center with `保存画像配置`, preserving the academic left-sidebar style.
+
+- [x] **Step 5: Keep form draft synchronized**
+
+After clearing a saved profile, sync the personal-center form draft back to the default `未设置` fields so stale selections cannot be submitted accidentally.
+
+- [x] **Step 6: Run focused verification**
+
+Verified profile hook, left pane, AppShell, and AppDialogs suites (4 files / 67 tests), plus the saved-then-cleared profile reset regression.
+
+### Task 53: Assistant initial avatar launcher
+
+**Context:** The core UI document specifies that the right AI assistant should show a virtual assistant and three mode buttons before a conversation starts, then let the conversation occupy the right pane after the first message. The existing right pane had mode buttons but only showed a generic explanatory card in the empty state.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add initial launcher regression**
+
+Cover an empty assistant session showing `Liteasy 学术助手`, the three mode launcher buttons, and hiding the launcher after a conversation starts.
+
+- [x] **Step 2: Render compact academic avatar**
+
+Add a stylized `研` avatar and concise copy inside the empty-state message area without introducing settings or organization controls into the right pane.
+
+- [x] **Step 3: Wire launcher mode buttons**
+
+Let the initial `名词解释模式` / `命令模式` / `问答模式` buttons reuse the same assistant mode state and task routing as the existing mode switch.
+
+- [x] **Step 4: Run assistant verification**
+
+Verified assistant pane, assistant store, and selected AppShell assistant regressions (3 files / 21 selected tests).
+
+### Task 54: Assistant mode launcher consolidation
+
+**Context:** After adding the initial avatar launcher, the empty right pane still rendered the old top `ModeSwitch`, creating two sets of mode controls before a conversation. The design document expects the three prominent mode buttons around the assistant only in the initial state, with the conversation taking over after the first message.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `desktop/src/app/features/assistant/ModeSwitch.tsx`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add duplicate-control regression**
+
+Assert that the empty assistant session has only the avatar launcher and no top `对话模式切换`, then confirms the compact switch appears after the conversation starts.
+
+- [x] **Step 2: Hide top switch in initial state**
+
+Render `ModeSwitch` only once there are messages, while keeping `新建会话` and `历史会话` available.
+
+- [x] **Step 3: Add mode-switch semantics**
+
+Give the compact conversation switch an `aria-label` so tests and accessibility tooling can distinguish it from the initial launcher.
+
+- [x] **Step 4: Update assistant tests**
+
+Route initial-mode selection through the avatar launcher in component and AppShell tests, with fallback to the conversation switch once messages exist.
+
+- [x] **Step 5: Run assistant verification**
+
+Verified assistant pane and selected AppShell assistant regressions (2 files / 20 selected tests).
+
+### Task 55: Library workspace folder grouping
+
+**Context:** The core document defines the left library workspace as a VSCode-like folder view rooted at a workspace mother directory, but the current left pane rendered all papers as a flat list. This made local and organization workspaces harder to understand as opened folders.
+
+**Files:**
+- Modify: `desktop/src/app/features/library/LibraryPane.tsx`
+- Modify: `desktop/src/app/features/library/library.css`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add folder grouping regression**
+
+Cover papers with different `sourcePath` parent folders and an unarchived item, expecting `工作区母目录` and directory group headers.
+
+- [x] **Step 2: Derive folders from source paths**
+
+Group papers by the parent directory of `sourcePath`, falling back to `未归档文献` when no path or only a filename exists.
+
+- [x] **Step 3: Render a lightweight directory tree**
+
+Show a compact `工作区目录树` with per-folder counts while preserving each paper checkbox and import-status badge.
+
+- [x] **Step 4: Run workspace verification**
+
+Verified LeftPane, AppShell library/shared-library regressions, and organization workspace hook tests (3 files / 17 selected tests).
+
+### Task 56: Recommendation cache manual clear
+
+**Context:** The core document says related-recommendation cache should expire when context changes or when the user explicitly clears it. The prototype already invalidated cache on workspace changes, but there was no visible clear action in the left library pane.
+
+**Files:**
+- Modify: `desktop/src/app/features/recommendations/useRecommendations.ts`
+- Modify: `desktop/src/app/features/library/LibraryPane.tsx`
+- Modify: `desktop/src/app/features/library/library.css`
+- Modify: `desktop/src/app/layout/LeftPane.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add manual-clear regression**
+
+Cover loading cloud recommendations, clicking `清理关联推荐`, hiding the visible list, and avoiding an extra recommendation request.
+
+- [x] **Step 2: Expose clear action from hook**
+
+Add `clearRecommendationCache()` to clear in-memory cache, visible items, pending state, and show `已清理当前工作区的关联推荐缓存。`.
+
+- [x] **Step 3: Wire clear button through left pane**
+
+Add a compact `清理关联推荐` action in the related-recommendation section and pass it through `AppShell`/`LeftPane`.
+
+- [x] **Step 4: Run recommendation verification**
+
+Verified AppShell recommendation/cache flows, LeftPane library tests, and recommendation client tests (3 files / 9 selected tests).
+
+### Task 57: Assistant voice-input placeholder seam
+
+**Context:** The right assistant spec reserves a voice-input option in the composer, but the prototype had no visible seam for it. Full speech recognition can come later; today the UI should make the future capability explicit without pretending it works.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add voice placeholder regression**
+
+Cover clicking `语音输入（预留）`, showing a clear placeholder message, and returning focus to the text composer.
+
+- [x] **Step 2: Add composer seam**
+
+Add a small `语音` action next to `发送`, intentionally reporting that current builds should use text input.
+
+- [x] **Step 3: Keep text flow primary**
+
+Use a textarea ref to focus text input after the placeholder action so the user can continue typing immediately.
+
+- [x] **Step 4: Run assistant verification**
+
+Verified assistant pane and selected AppShell assistant/right-pane regressions (2 files / 21 selected tests).
+
+### Task 58: Assistant session history module boundary
+
+**Context:** As the assistant right pane gained history, restore, initial launcher, and voice seams, `AssistantPane` started owning too much session-history business logic. The user explicitly asked to keep module boundaries clean while continuing development.
+
+**Files:**
+- Create: `desktop/src/app/features/assistant/assistantSessionHistory.ts`
+- Create: `desktop/src/tests/assistantSessionHistory.test.ts`
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add pure history-module tests**
+
+Cover archiving a non-empty assistant store state, skipping empty sessions, and restoring an archived session into the assistant store.
+
+- [x] **Step 2: Extract history operations**
+
+Move session history item typing, archive title/id generation, and restore lookup into `assistantSessionHistory.ts`.
+
+- [x] **Step 3: Keep UI as orchestration only**
+
+Update `AssistantPane` to snapshot current assistant state, call the history module, and only handle panel visibility/input reset.
+
+- [x] **Step 4: Fix async snapshot regression**
+
+Capture a cloned assistant state before clearing messages so React state batching cannot archive an already-cleared store.
+
+- [x] **Step 5: Run focused verification**
+
+Verified assistant history module, assistant pane, assistant store tests, and desktop build (3 test files / 16 tests).
+
+### Task 59: Workspace folder tree module boundary
+
+**Context:** The library pane now shows a VSCode-like workspace folder tree, but the `sourcePath` parsing and folder grouping lived inside the React component. To keep module boundaries clean, workspace tree derivation should live with workspace-domain utilities.
+
+**Files:**
+- Create: `desktop/src/app/features/workspace/workspaceFolderTree.ts`
+- Create: `desktop/src/tests/workspaceFolderTree.test.ts`
+- Modify: `desktop/src/app/features/library/LibraryPane.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add workspace tree utility tests**
+
+Cover grouping papers by parent folder while preserving order and falling back to `未归档文献` for loose/no-path papers.
+
+- [x] **Step 2: Extract folder derivation**
+
+Move parent-folder parsing and grouping into `workspaceFolderTree.ts` with exported `WorkspaceFolderGroup`.
+
+- [x] **Step 3: Slim down LibraryPane**
+
+Update `LibraryPane` to import `groupWorkspacePapersByFolder` and focus only on rendering/drag-drop callbacks.
+
+- [x] **Step 4: Run workspace verification**
+
+Verified workspace folder utility, LeftPane library grouping, selected AppShell library/shared-library flows, and desktop build (3 test files / 7 selected tests).
+
+
+### Task 60: Academic profile form module boundary
+
+**Context:** The personal-center panel still owned editable academic-profile draft state and form controls directly. Extracting draft normalization and form rendering keeps the profile module independently testable and keeps the left-pane panel focused on composition.
+
+**Files:**
+- Create: `desktop/src/app/features/profile/useAcademicProfileDraft.ts`
+- Create: `desktop/src/app/features/profile/AcademicProfileForm.tsx`
+- Create: `desktop/src/tests/useAcademicProfileDraft.test.ts`
+- Modify: `desktop/src/app/features/profile/PersonalCenterPanel.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add draft-hook regression**
+
+Cover trimming/saving editable academic-profile drafts and syncing the draft when the saved profile changes.
+
+- [x] **Step 2: Extract draft state hook**
+
+Move academic-profile draft state, age display fallback, and save normalization into `useAcademicProfileDraft`.
+
+- [x] **Step 3: Extract profile form component**
+
+Move gender/age/stage controls into `AcademicProfileForm` and let `PersonalCenterPanel` compose it with the saved profile summary.
+
+- [x] **Step 4: Run profile verification**
+
+Verified the academic-profile draft hook plus focused personal-center and profile update regressions (3 test files / 8 selected tests).
+
+### Task 61: Assistant presentation helper boundary
+
+**Context:** `AssistantPane` still contained pure presentation helpers for mode labels, hints, selected-set readiness copy, error messages, and audit verdict labels. Moving these into a tested helper module keeps the right-pane component focused on orchestration and rendering.
+
+**Files:**
+- Create: `desktop/src/app/features/assistant/assistantPresentation.ts`
+- Create: `desktop/src/tests/assistantPresentation.test.ts`
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add presentation helper regression**
+
+Cover mode labels/hints, selected-set readiness copy, assistant error formatting, and audit verdict labels.
+
+- [x] **Step 2: Extract pure helpers**
+
+Move launcher items and presentation text helpers from `AssistantPane` into `assistantPresentation.ts`.
+
+- [x] **Step 3: Slim down AssistantPane**
+
+Import presentation helpers from the new module while preserving session, command, and generation orchestration in the component.
+
+- [x] **Step 4: Run assistant verification**
+
+Verified the presentation helper tests plus focused AssistantPane and AppShell assistant regressions (3 test files / 25 selected tests).
+
+### Task 62: Reader pane layout extraction
+
+**Context:** `AppShell` still rendered the full center-reader pane inline, including the artifact action availability calculation. Extracting a `ReaderPane` keeps the shell focused on wiring stores/hooks and gives the center pane its own test seam.
+
+**Files:**
+- Create: `desktop/src/app/layout/ReaderPane.tsx`
+- Create: `desktop/src/tests/ReaderPane.test.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add ReaderPane regression**
+
+Cover the reader header, selected-set summary, disabled state before lock, and forwarding artifact start actions.
+
+- [x] **Step 2: Extract center-pane layout**
+
+Create `ReaderPane` as the owner of center-pane structure and `ArtifactTabs` composition.
+
+- [x] **Step 3: Replace AppShell inline JSX**
+
+Swap the inline reader `<main>` in `AppShell` for `ReaderPane` while keeping artifact action wiring in the shell.
+
+- [x] **Step 4: Run reader verification**
+
+Verified ReaderPane and focused AppShell reader/assistant/layout regressions (2 test files / 17 selected tests).
+
+### Task 63: Assistant sidebar layout extraction
+
+**Context:** `AppShell` still rendered the full right assistant pane wrapper inline and assembled the selected-set status object beside other shell wiring. Extracting an `AssistantSidebar` keeps the shell focused on data flow while preserving the strict minimal right-pane assistant design.
+
+**Files:**
+- Create: `desktop/src/app/layout/AssistantSidebar.tsx`
+- Create: `desktop/src/tests/AssistantSidebar.test.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add right-pane wrapper regression**
+
+Cover the `右栏AI助手` landmark, `AI Assistant` header, and initial assistant launcher inside the right pane.
+
+- [x] **Step 2: Extract AssistantSidebar**
+
+Move the right-pane structure and selected-set status composition into `AssistantSidebar`.
+
+- [x] **Step 3: Replace AppShell inline JSX**
+
+Swap AppShell's inline right `<section>` for `AssistantSidebar`, keeping model, organization, and settings callbacks wired from the shell.
+
+- [x] **Step 4: Run assistant-sidebar verification**
+
+Verified AssistantSidebar plus focused AssistantPane and AppShell assistant/right-pane regressions (3 test files / 17 selected tests).
+
+### Task 64: AppShell store initialization hook
+
+**Context:** `AppShell` still constructed workspace, import, settings, and artifact stores inline before wiring feature hooks. Extracting the initialization into a hook makes the shell's composition responsibilities clearer and protects the starter workspace seeding behavior with focused tests.
+
+**Files:**
+- Create: `desktop/src/app/layout/useAppShellStores.ts`
+- Create: `desktop/src/tests/useAppShellStores.test.ts`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add store-initialization regression**
+
+Cover one-time starter-paper seeding, stable workspace/import/artifact stores across rerenders, and initial settings injection.
+
+- [x] **Step 2: Extract useAppShellStores**
+
+Move workspace/import/settings/artifact store construction and one-time workspace seeding into `useAppShellStores`.
+
+- [x] **Step 3: Replace AppShell initialization**
+
+Use the new hook in `AppShell`, while keeping `starterPapers` explicitly available for local-library restore behavior.
+
+- [x] **Step 4: Run store verification**
+
+Verified the store hook plus focused AppShell reader/account regressions (2 test files / 5 selected tests).
+
+### Task 65: Assistant history panel extraction
+
+**Context:** `AssistantPane` still rendered the archived-session history list inline after history state/operations had already moved into a separate module. Extracting the history UI keeps the pane focused on session orchestration and gives the history list a focused component seam.
+
+**Files:**
+- Create: `desktop/src/app/features/assistant/AssistantHistoryPanel.tsx`
+- Create: `desktop/src/tests/AssistantHistoryPanel.test.tsx`
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add history-panel regression**
+
+Cover the empty history hint, archived-session metadata, and restore button callback.
+
+- [x] **Step 2: Extract AssistantHistoryPanel**
+
+Move history list rendering and mode-label formatting into `AssistantHistoryPanel`.
+
+- [x] **Step 3: Replace AssistantPane inline history**
+
+Let `AssistantPane` pass current history and restore callback into the new component.
+
+- [x] **Step 4: Run history verification**
+
+Verified the history panel plus focused AssistantPane archive/restore regressions (2 test files / 4 selected tests).
+
+### Task 66: Assistant message list extraction
+
+**Context:** `AssistantPane` still rendered the initial assistant launcher and all message cards inline. Extracting this rendering into `AssistantMessageList` keeps message presentation, citations, audit cards, and model-chain display independently testable.
+
+**Files:**
+- Create: `desktop/src/app/features/assistant/AssistantMessageList.tsx`
+- Create: `desktop/src/tests/AssistantMessageList.test.tsx`
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add message-list regression**
+
+Cover initial launcher mode selection plus assistant message rendering with citation, audit verdict, confidence, and execution trace.
+
+- [x] **Step 2: Extract AssistantMessageList**
+
+Move launcher and message-card rendering out of `AssistantPane` into a dedicated component.
+
+- [x] **Step 3: Keep AssistantPane as orchestrator**
+
+Let `AssistantPane` pass messages, current mode, and mode-change callback to the new message list.
+
+- [x] **Step 4: Run message-list verification**
+
+Verified the message list plus focused AssistantPane launcher/generation/error regressions (2 test files / 6 selected tests).
+
+### Task 67: Assistant composer extraction
+
+**Context:** `AssistantPane` still owned the full input composer JSX after message and history rendering were extracted. Moving the prompt feedback, voice placeholder, textarea, voice action, and send action into `AssistantComposer` keeps input presentation independently testable while preserving the pane's send/focus orchestration.
+
+**Files:**
+- Create: `desktop/src/app/features/assistant/AssistantComposer.tsx`
+- Create: `desktop/src/tests/AssistantComposer.test.tsx`
+- Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add composer regression**
+
+Cover mode-hint rendering, typed-input forwarding, send callback, pending text, voice placeholder, and voice action callback.
+
+- [x] **Step 2: Extract AssistantComposer**
+
+Move the controlled composer markup into `AssistantComposer` with explicit input, pending, and voice props.
+
+- [x] **Step 3: Keep pane orchestration intact**
+
+Let `AssistantPane` keep send logic, input state, and textarea focus ref while delegating composer rendering.
+
+- [x] **Step 4: Run composer verification**
+
+Verified the composer plus focused AssistantPane voice, command, and grounded-answer regressions (2 test files / 5 selected tests).
+
+### Task 68: Library drag-payload parser extraction
+
+**Context:** `LibraryPane` handled JSON drag payload parsing inline in both the workspace and collection drop zones. Extracting that parsing into a small helper removes duplicated try/catch logic and keeps drag-drop payload handling independently testable.
+
+**Files:**
+- Create: `desktop/src/app/features/library/libraryDragPayload.ts`
+- Create: `desktop/src/tests/libraryDragPayload.test.ts`
+- Modify: `desktop/src/app/features/library/LibraryPane.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add drag-payload parser regression**
+
+Cover parsing a valid Liteasy drag payload and returning `null` for missing or malformed payload data.
+
+- [x] **Step 2: Extract parser helper**
+
+Create `parseLibraryDragPayload` with a minimal `DataTransferLike` interface.
+
+- [x] **Step 3: Replace inline drop parsing**
+
+Use the parser in both the workspace drop zone and collection drop zone.
+
+- [x] **Step 4: Run library verification**
+
+Verified parser tests plus focused LeftPane and AppShell library/recommendation regressions (3 test files / 9 selected tests).
+
+
+### Task 69: Phase 3 completion documentation refresh
+
+**Context:** The implementation plan reached Task 68 with all checklist items completed, but tester-facing docs and README still described Phase 3 as an entry prototype. Refresh the delivery documents so Phase 3 can be reviewed as a complete prototype slice while keeping production limitations explicit.
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/qa/phase3-test-guide.md`
+- Modify: `docs/qa/phase3-governance-limitations.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Update README status**
+
+Change Phase 3 wording from “started entering” to “可验收交付” and list current assistant, workspace, settings, profile, and dev-cloud coverage.
+
+- [x] **Step 2: Refresh Phase 3 test guide**
+
+Document right-pane assistant checks, explicit shared-library workspace switching, editable academic profile, and automated verification commands.
+
+- [x] **Step 3: Refresh limitations log**
+
+Clarify that remaining gaps are productionization boundaries, not missing prototype screens.
+
+- [x] **Step 4: Run documentation checks**
+
+Verify Phase 3 docs mention the completed prototype scope and the current validation commands.
+
+### Task 70: Phase 3 final acceptance verification
+
+**Context:** After the completion documentation refresh, run the full automated acceptance suite and record the evidence in the Phase 3 plan so the prototype slice can be handed to manual UI review without relying on stale test counts.
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Run documentation checks**
+
+Verified README, Phase 3 test guide, Phase 3 limitations log, and the Phase 3 plan mention the completed prototype scope, right-pane assistant checks, productionization boundaries, and current validation commands.
+
+- [x] **Step 2: Run desktop full tests**
+
+Verified `cd desktop && npm test` passes with 62 test files and 210 tests.
+
+- [x] **Step 3: Run desktop production build**
+
+Verified `cd desktop && npm run build` passes through `tsc` and Vite production build.
+
+- [x] **Step 4: Run dev-cloud tests**
+
+Verified `node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs` passes with 17 tests.
+
+### Task 71: Workspace-scoped dialog placement
+
+**Context:** Product review clarified that every new window must not be squeezed above the logo/top brand bar. Modal-style windows should either open as centered popups inside the workspace or become center-pane tabs. Keep the existing popup behavior, but scope it to the main workspace below the topbar so the logo remains visible and untouched.
+
+**Files:**
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/app/layout/AppDialogs.tsx`
+- Modify: `desktop/src/app/features/organization/OrganizationEntryDialog.tsx`
+- Modify: `desktop/src/app/features/organization/OrganizationCreateDialog.tsx`
+- Modify: `desktop/src/app/features/organization/OrganizationJoinDialog.tsx`
+- Modify: `desktop/src/app/features/organization/OrganizationInviteConfirmDialog.tsx`
+- Modify: `desktop/src/app/features/organization/OrganizationLeaveConfirmDialog.tsx`
+- Modify: `desktop/src/app/features/profile/AcademicArchiveDialog.tsx`
+- Modify: `desktop/src/app/features/profile/ClearProfileConfirmDialog.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/AppDialogs.test.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add placement regressions**
+
+Cover that active dialogs render through `workspace-dialog-layer`, use `workspace-dialog-backdrop`, and stay inside `.app-shell` rather than the top brand bar.
+
+- [x] **Step 2: Move dialog composition below TopBar**
+
+Render `AppDialogs` at the end of `.app-shell` so popups are scoped to the left/center/right workspace area.
+
+- [x] **Step 3: Add shared workspace modal classes**
+
+Give every existing popup a shared workspace backdrop/panel class while preserving individual visual styling.
+
+- [x] **Step 4: Run dialog verification**
+
+Verified AppDialogs and AppShell dialog paths plus desktop production build (2 test files / 60 tests).
+
+### Task 72: Dev-cloud recommendation payload contract fix
+
+**Context:** Manual UI verification surfaced `关联推荐获取失败。详细信息：关联推荐返回格式无效`. Root cause: the desktop recommendation client requires `discoveredAt` on every recommendation item, while the dev-cloud `/v1/recommendations` response omitted that field.
+
+**Files:**
+- Modify: `services/dev-cloud/server.mjs`
+- Modify: `services/dev-cloud/server.test.mjs`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Reproduce the contract mismatch**
+
+Confirmed live `http://127.0.0.1:8787/v1/recommendations` returned recommendation items without `discoveredAt`, triggering desktop client schema rejection.
+
+- [x] **Step 2: Add failing server contract test**
+
+Updated the dev-cloud recommendation test to require deterministic `discoveredAt` values for returned recommendations.
+
+- [x] **Step 3: Fix dev-cloud payload**
+
+Added `discoveredAt` to BERT and Transformer recommendation payloads in `buildRecommendationPayload`.
+
+- [x] **Step 4: Verify recommendation chain**
+
+Verified `node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs` passes with 17 tests, and focused desktop recommendation/AppShell tests pass. Current live service on port 8787 must be restarted to pick up the fixed server code.
+
+### Task 73: Organization action feedback in left sidebar
+
+**Context:** Manual UI verification showed that after creating or joining an organization demo request, the only visible feedback lived in the middle analysis hint, making the organization page feel like it had no reaction. Keep the middle hint for workflow continuity, but surface the same result as a persistent status strip in the organization left sidebar.
+
+**Files:**
+- Modify: `desktop/src/app/features/organization/useOrganizationActions.ts`
+- Modify: `desktop/src/app/features/organization/OrganizationSidebarPanel.tsx`
+- Modify: `desktop/src/app/layout/LeftPane.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/useOrganizationActions.test.ts`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add local feedback regression tests**
+
+Added hook, LeftPane, and AppShell coverage requiring confirmed demo organization actions to expose a role=`status` message inside the organization left sidebar.
+
+- [x] **Step 2: Store organization action feedback in the hook**
+
+`useOrganizationActions` now records the latest confirmed demo action message, clears stale messages when opening a new organization action dialog, and resets feedback on organization action reset/logout paths.
+
+- [x] **Step 3: Render the sidebar status strip**
+
+Threaded the action message through `AppShell` and `LeftPane` into `OrganizationSidebarPanel`, then rendered an academic-style `organization-action-feedback` status strip below the organization action buttons.
+
+- [x] **Step 4: Verify organization feedback and regressions**
+
+Verified `cd desktop && npm test -- src/tests/useOrganizationActions.test.ts src/tests/LeftPane.test.tsx src/tests/AppShell.test.tsx src/tests/AppDialogs.test.tsx` passes with 71 tests, `cd desktop && npm run build` passes, full `cd desktop && npm test` passes with 62 test files and 213 tests, and `node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs` passes with 17 tests.
+
+### Task 74: Assistant command alias tolerance
+
+**Context:** The right assistant command mode showed example commands, but registered actions still required near-exact Chinese phrases. Product intent says natural language should route only through registered safe skills/actions; this slice keeps the safe action boundary while accepting common natural-language aliases for existing low-risk commands.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/commandRouter.ts`
+- Modify: `desktop/src/tests/commandRouter.test.ts`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add alias routing regressions**
+
+Added tests for natural phrases such as `帮我打开组织的共享文献库`, `请帮我同步一下云端模型策略`, `别再联网推荐了`, and `重新开启联网文献推荐`.
+
+- [x] **Step 2: Keep routing inside safe actions**
+
+Implemented conservative keyword guards that only map these aliases to existing registered skill/action targets: organization shared-library opening, cloud policy sync, and recommendation enable/disable.
+
+- [x] **Step 3: Verify assistant execution path**
+
+Added an AssistantPane regression proving a natural command alias is executed through the same command feedback path, then verified `cd desktop && npm test -- src/tests/commandRouter.test.ts src/tests/AssistantPane.test.tsx src/tests/AppShell.test.tsx` passes with 80 tests and `cd desktop && npm run build` passes.
+
+### Task 75: Visible organization action feedback label
+
+**Context:** Manual review clarified that the `组织操作反馈` status label was only present as an accessibility name, so users could see the result message but not the expected status-strip title. Make the label visible in the organization left sidebar while preserving the accessible `role=status` region.
+
+**Files:**
+- Modify: `desktop/src/app/features/organization/OrganizationSidebarPanel.tsx`
+- Modify: `desktop/src/app/styles/app.css`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Reproduce visible-label gap**
+
+Added a failing LeftPane test requiring `组织操作反馈` to be visible text inside the organization sidebar, not just an aria label.
+
+- [x] **Step 2: Render visible status title**
+
+Added a visible `organization-action-feedback-title` above the action result message and styled the title/message separately.
+
+- [x] **Step 3: Verify organization feedback**
+
+Verified `cd desktop && npm test -- src/tests/useOrganizationActions.test.ts src/tests/LeftPane.test.tsx src/tests/AppShell.test.tsx` passes with 67 tests and `cd desktop && npm run build` passes.
+
+### Task 76: Dev-cloud endpoint diagnostics in settings
+
+**Context:** Manual testing repeatedly confused the desktop page (`127.0.0.1:1420`) with the dev-cloud API (`127.0.0.1:8787`), and failed organization/metadata fetches can happen when endpoints remain on mock or an incorrect URL. Add a small settings diagnostic card so testers can see and reset the active cloud endpoints without using assistant commands.
+
+**Files:**
+- Add: `desktop/src/app/features/models/DevCloudEndpointPanel.tsx`
+- Modify: `desktop/src/app/layout/SettingsPane.tsx`
+- Modify: `desktop/src/app/layout/LeftPane.tsx`
+- Modify: `desktop/src/app/layout/AppShell.tsx`
+- Modify: `desktop/src/tests/SettingsPane.test.tsx`
+- Modify: `desktop/src/tests/AppShell.test.tsx`
+- Modify: `docs/qa/phase3-test-guide.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add endpoint diagnostic regressions**
+
+Added SettingsPane and AppShell coverage requiring the settings left sidebar to show `开发云端点诊断`, current cloud proxy/control-plane endpoints, and the `使用本地开发云端点` action.
+
+- [x] **Step 2: Render the diagnostic card**
+
+Added `DevCloudEndpointPanel` and threaded `applyLocalDevCloudDefaults` through AppShell -> LeftPane -> SettingsPane so the button resets both cloud proxy and control-plane endpoints to `http://127.0.0.1:8787`.
+
+- [x] **Step 3: Update tester guidance and verify**
+
+Updated the Phase 3 test guide to explain the 8787/1420 distinction inside settings, then verified `cd desktop && npm test -- src/tests/SettingsPane.test.tsx src/tests/LeftPane.test.tsx src/tests/useModelSettingsActions.test.ts src/tests/AppShell.test.tsx` passes with 69 tests and `cd desktop && npm run build` passes.
+
+### Task 77: Assistant command for local dev-cloud endpoint reset
+
+**Context:** Task 76 added a settings button for restoring local dev-cloud endpoints. The product design expects command mode to expose safe configuration operations through registered skills/actions, so add the same endpoint reset as a guarded assistant command without bypassing the action registry.
+
+**Files:**
+- Modify: `desktop/src/app/features/assistant/commandRouter.ts`
+- Modify: `desktop/src/app/features/skills/skillRegistry.ts`
+- Modify: `desktop/src/app/features/skills/actionRegistry.ts`
+- Modify: `desktop/src/tests/commandRouter.test.ts`
+- Modify: `desktop/src/tests/actionRegistry.test.ts`
+- Modify: `desktop/src/tests/AssistantPane.test.tsx`
+- Modify: `docs/qa/phase3-test-guide.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add endpoint reset command regressions**
+
+Added command-router and action-registry tests for `使用本地开发云端点` / `把端点恢复到本地开发云`, expecting a dedicated `settings.use_local_dev_cloud` skill/action.
+
+- [x] **Step 2: Implement the guarded action path**
+
+Added the skill/action union cases and action implementation that updates only `models.cloud_proxy_endpoint` and `models.control_plane_endpoint` to `http://127.0.0.1:8787`.
+
+- [x] **Step 3: Verify assistant execution path**
+
+Added an AssistantPane regression proving the command runs through the right-pane feedback flow, then verified `cd desktop && npm test -- src/tests/commandRouter.test.ts src/tests/actionRegistry.test.ts src/tests/AssistantPane.test.tsx src/tests/AppShell.test.tsx` passes with 89 tests and `cd desktop && npm run build` passes.
+
+### Task 78: Shared-library disabled-state explanation
+
+**Context:** The organization shared-library open button could be disabled when the library is syncing, unavailable, or empty, but the organization page did not explain why. Add inline state copy so testers understand the button is intentionally unavailable and what to wait for.
+
+**Files:**
+- Modify: `desktop/src/app/features/organization/OrganizationSpacePanel.tsx`
+- Modify: `desktop/src/tests/LeftPane.test.tsx`
+- Modify: `docs/qa/phase3-test-guide.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+
+- [x] **Step 1: Add disabled-state regression**
+
+Added a LeftPane test requiring a disabled `打开共享文献库` button to show `共享文献库状态：同步中，暂时不能打开。请稍后重试。`.
+
+- [x] **Step 2: Render explicit status copy**
+
+Added shared-library open-state messaging for syncing, unavailable, empty, and available libraries, and disabled the open button when no documents are available.
+
+- [x] **Step 3: Verify organization paths**
+
+Verified `cd desktop && npm test -- src/tests/LeftPane.test.tsx src/tests/useOrganizationWorkspace.test.ts src/tests/AppShell.test.tsx` passes with 71 tests and `cd desktop && npm run build` passes.

@@ -4,11 +4,12 @@ import type { UpdateSettingCommand } from "../settings/settings.types";
 
 export type SettingsStoreLike = {
   apply: (command: UpdateSettingCommand) => boolean | string;
+  getState: () => Record<UpdateSettingCommand["target"], boolean | string>;
 };
 
 export type ActionContext = {
   importSelectedSet?: () => string;
-  openOrganizationSharedLibrary?: () => string;
+  openOrganizationSharedLibrary?: () => string | Promise<string>;
   settingsStore?: SettingsStoreLike;
   startArtifactAnalysis?: (artifactType: ArtifactType) => string;
   syncCloudPolicy?: () => Promise<string>;
@@ -57,6 +58,12 @@ export type ActionInvocation =
       };
     }
   | {
+      actionId: "settings.use_local_dev_cloud";
+      input: {
+        target: "local_dev_cloud";
+      };
+    }
+  | {
       actionId: "organization.open_shared_library";
       input: {
         source: "organization_space";
@@ -72,6 +79,16 @@ export async function executeAction(
       throw new Error("settings.update requires a settings store");
     }
 
+    if (
+      invocation.input.target === "models.access_mode" &&
+      invocation.input.value === "local_direct" &&
+      context.settingsStore.getState()["models.local_direct_enabled"] !== true
+    ) {
+      return {
+        message: "本地直连未开放。请先同步云端策略，或在设置中启用允许本地直连。"
+      };
+    }
+
     context.settingsStore.apply({
       intent: "update_setting",
       target: invocation.input.target,
@@ -83,6 +100,27 @@ export async function executeAction(
         invocation.input.target,
         invocation.input.value
       )}`
+    };
+  }
+
+  if (invocation.actionId === "settings.use_local_dev_cloud") {
+    if (!context.settingsStore) {
+      throw new Error("settings.use_local_dev_cloud requires a settings store");
+    }
+
+    context.settingsStore.apply({
+      intent: "update_setting",
+      target: "models.cloud_proxy_endpoint",
+      value: "http://127.0.0.1:8787"
+    });
+    context.settingsStore.apply({
+      intent: "update_setting",
+      target: "models.control_plane_endpoint",
+      value: "http://127.0.0.1:8787"
+    });
+
+    return {
+      message: "已切换为本地开发云端点：http://127.0.0.1:8787。"
     };
   }
 
@@ -112,7 +150,7 @@ export async function executeAction(
     }
 
     return {
-      message: context.openOrganizationSharedLibrary()
+      message: await context.openOrganizationSharedLibrary()
     };
   }
 

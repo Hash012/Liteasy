@@ -15,6 +15,10 @@ function getStatusLabel(status: OrganizationGovernanceStatus) {
     return "组织治理：加载中";
   }
 
+  if (status === "waiting") {
+    return "组织治理：等待组织空间";
+  }
+
   if (status === "error") {
     return "组织治理：加载失败";
   }

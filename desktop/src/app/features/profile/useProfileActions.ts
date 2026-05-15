@@ -1,10 +1,20 @@
 import { useState } from "react";
+import type { AcademicProfile } from "./profile.types";
+import { defaultAcademicProfile } from "./profile.types";
 
-export function useProfileActions() {
+type UseProfileActionsInput = {
+  onProfileSamplingChanged?: (enabled: boolean) => void;
+  profileSamplingEnabled?: boolean;
+};
+
+export function useProfileActions({
+  onProfileSamplingChanged,
+  profileSamplingEnabled = false
+}: UseProfileActionsInput = {}) {
   const [academicArchiveOpen, setAcademicArchiveOpen] = useState(false);
+  const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(defaultAcademicProfile);
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
-  const [profileSamplingEnabled, setProfileSamplingEnabled] = useState(false);
 
   function openAcademicArchive() {
     setAcademicArchiveOpen(true);
@@ -24,17 +34,24 @@ export function useProfileActions() {
 
   function toggleProfileSampling() {
     setProfileClearMessage(undefined);
-    setProfileSamplingEnabled((enabled) => !enabled);
+    onProfileSamplingChanged?.(!profileSamplingEnabled);
+  }
+
+  function updateAcademicProfile(nextProfile: AcademicProfile) {
+    setAcademicProfile(nextProfile);
+    setProfileClearMessage("画像配置已更新。");
   }
 
   function clearUserProfile() {
+    setAcademicProfile(defaultAcademicProfile);
     setClearProfileConfirmOpen(false);
     setProfileClearMessage("用户画像已清空，基础身份信息已保留。");
-    setProfileSamplingEnabled(false);
+    onProfileSamplingChanged?.(false);
   }
 
   return {
     academicArchiveOpen,
+    academicProfile,
     clearProfileConfirmOpen,
     clearUserProfile,
     closeAcademicArchive,
@@ -43,6 +60,7 @@ export function useProfileActions() {
     openClearProfileConfirm,
     profileClearMessage,
     profileSamplingEnabled,
-    toggleProfileSampling
+    toggleProfileSampling,
+    updateAcademicProfile
   };
 }

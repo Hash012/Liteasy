@@ -10,6 +10,7 @@ import type {
 } from "./organization.types";
 
 type OrganizationSidebarPanelProps = {
+  actionMessage?: string;
   governanceMessage: string;
   governanceStatus: OrganizationGovernanceStatus;
   governanceSummary: OrganizationGovernanceSummary | null;
@@ -31,6 +32,7 @@ type OrganizationSidebarPanelProps = {
 };
 
 export function OrganizationSidebarPanel({
+  actionMessage,
   governanceMessage,
   governanceStatus,
   governanceSummary,
@@ -79,6 +81,12 @@ export function OrganizationSidebarPanel({
           </button>
         ) : null}
       </div>
+      {actionMessage ? (
+        <div aria-label="组织操作反馈" className="organization-action-feedback" role="status">
+          <div className="organization-action-feedback-title">组织操作反馈</div>
+          <div className="organization-action-feedback-message">{actionMessage}</div>
+        </div>
+      ) : null}
       <OrganizationSpacePanel
         list={list}
         listMessage={listMessage}
