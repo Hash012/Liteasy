@@ -87,7 +87,7 @@ export function useRecommendations({
       setRecommendationItems([]);
       setRecommendationPending(false);
       setRecommendationStatus("unauthenticated");
-      setRecommendationMessage("连接开发云账号后，可查看与当前选中文献集相关的推荐。");
+      setRecommendationMessage("当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。");
       return;
     }
 
@@ -136,7 +136,9 @@ export function useRecommendations({
           return;
         }
 
-        const detail = formatCloudConnectionError(error);
+        const detail = formatCloudConnectionError(error, {
+          controlPlaneEndpoint
+        });
         setRecommendationItems([]);
         setRecommendationStatus("error");
         setRecommendationMessage(`关联推荐获取失败。详细信息：${detail}`);

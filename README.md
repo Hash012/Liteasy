@@ -142,7 +142,10 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 6. 看 Phase 3 组织空间测试指南  
    路径：`docs/qa/phase3-test-guide.md`
 
-7. 真正启动一次 `desktop`
+7. 如果要做云端路演，先看  
+   路径：`docs/qa/roadshow-demo-guide.md`
+
+8. 真正启动一次 `desktop`
 
 ## 5. 如何查看 desktop 当前效果
 
@@ -159,6 +162,12 @@ Liteasy dev cloud listening on http://127.0.0.1:8787
 ```
 
 注意：`http://127.0.0.1:8787/` 是开发云 API 服务索引，不是 Liteasy 前端页面；`http://127.0.0.1:1420/` 才是前端开发页面。Phase 4 三端 demo 还提供内部运营与运维后台 `http://127.0.0.1:8787/admin/`；它面向 Liteasy 运营/维护团队，用于配置 API、管理资源和查看用户/组织情况，客户使用的是 `http://127.0.0.1:1420/` 桌面软件端。浏览器直接打开 `http://127.0.0.1:8787/v1/account/demo-login` 会使用 GET，但该接口需要桌面端发起 POST 请求；现在服务端会返回带方法说明的 JSON，看到这个提示不代表账号系统坏了。
+
+如果你要把当前 demo 服务部署到云端做路演，请优先阅读：
+
+```text
+/home/octopus/Liteasy/docs/qa/roadshow-demo-guide.md
+```
 
 ### 方式 A：直接看桌面窗口
 
@@ -251,4 +260,5 @@ source "$HOME/.cargo/env"
 - Phase 3 组织空间测试指南：`docs/qa/phase3-test-guide.md`
 - Phase 3 组织与治理限制：`docs/qa/phase3-governance-limitations.md`
 - Phase 4 三端 Demo 验收指南：`docs/qa/phase4-three-end-demo-guide.md`
+- 路演部署与演示指南：`docs/qa/roadshow-demo-guide.md`
 - 开发协作提示词：`docs/开发协作提示词历史_5.10.md`

@@ -171,27 +171,6 @@ test("restores an archived assistant session from history", async () => {
   expect(screen.getByText(/已更新 联网推荐：false/)).toBeInTheDocument();
 });
 
-test("executes local dev-cloud endpoint reset command through safe actions", async () => {
-  const user = userEvent.setup();
-
-  render(
-    <AssistantPane
-      onGenerateArtifact={() => "unused"}
-      selectedSetStatus={{
-        importedCount: 1,
-        selectedCount: 1,
-        selectionLocked: true
-      }}
-    />
-  );
-
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "使用本地开发云端点");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  expect(screen.getByText("使用本地开发云端点")).toBeInTheDocument();
-  expect(screen.getByText("已切换为本地开发云端点：http://127.0.0.1:8787。")).toBeInTheDocument();
-});
-
 test("executes natural language command aliases through safe actions", async () => {
   const user = userEvent.setup();
 

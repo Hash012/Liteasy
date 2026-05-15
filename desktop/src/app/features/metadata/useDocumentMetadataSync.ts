@@ -32,7 +32,7 @@ export function useDocumentMetadataSync({
 }: UseDocumentMetadataSyncInput) {
   const documentCacheKey = useMemo(() => buildDocumentCacheKey(documents), [documents]);
   const [lastResult, setLastResult] = useState<DocumentMetadataSyncResult | null>(null);
-  const [message, setMessage] = useState("连接云账号后会同步当前工作区的文献元数据。");
+  const [message, setMessage] = useState("当前已退化为本地阅读器，文献元数据同步不可用。联网并登录后，将自动恢复云端能力。");
   const [retryCount, setRetryCount] = useState(0);
   const [status, setStatus] = useState<DocumentMetadataSyncStatus>("unauthenticated");
 
@@ -44,7 +44,7 @@ export function useDocumentMetadataSync({
     if (!accountSession) {
       setLastResult(null);
       setStatus("unauthenticated");
-      setMessage("连接云账号后会同步当前工作区的文献元数据。");
+      setMessage("当前已退化为本地阅读器，文献元数据同步不可用。联网并登录后，将自动恢复云端能力。");
       return;
     }
 
@@ -87,7 +87,9 @@ export function useDocumentMetadataSync({
           return;
         }
 
-        const detail = formatCloudConnectionError(error);
+        const detail = formatCloudConnectionError(error, {
+          controlPlaneEndpoint
+        });
         setLastResult(null);
         setStatus("error");
         setMessage(`文献元数据同步失败。详细信息：${detail}`);

@@ -1,6 +1,7 @@
-import type { AccountSession } from "./account.types";
+import type { AccountMembershipTier, AccountSession } from "./account.types";
 
 const accountSessionStorageKey = "liteasy.account.session.v1";
+const suppressLoginReminderStorageKey = "liteasy.account.suppress-login-reminder.v1";
 
 export function loadStoredAccountSession() {
   if (typeof window === "undefined" || !window.localStorage) {
@@ -23,7 +24,13 @@ export function loadStoredAccountSession() {
       return null;
     }
 
-    return payload;
+    const membershipTier: AccountMembershipTier =
+      payload.membershipTier === "basic" ? "basic" : "pro";
+
+    return {
+      ...payload,
+      membershipTier
+    };
   } catch {
     return null;
   }
@@ -43,4 +50,20 @@ export function clearStoredAccountSession() {
   }
 
   window.localStorage.removeItem(accountSessionStorageKey);
+}
+
+export function loadSuppressLoginReminderPreference() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return false;
+  }
+
+  return window.localStorage.getItem(suppressLoginReminderStorageKey) === "true";
+}
+
+export function storeSuppressLoginReminderPreference(suppressed: boolean) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  window.localStorage.setItem(suppressLoginReminderStorageKey, String(suppressed));
 }

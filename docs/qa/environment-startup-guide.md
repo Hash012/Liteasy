@@ -70,6 +70,31 @@ Liteasy dev cloud listening on http://127.0.0.1:8787
 
 如果你只是想看最基础的桌面界面，可以暂时跳过这一步。
 
+### 路演或云端部署时怎么启动
+
+如果你要把当前 demo 服务部署到云端做路演，请先设置部署环境变量，再启动服务：
+
+```bash
+export LITEASY_DEV_CLOUD_HOST=0.0.0.0
+export LITEASY_DEV_CLOUD_PORT=8787
+export LITEASY_DEV_CLOUD_PUBLIC_ORIGIN=https://你的演示域名
+node /home/octopus/Liteasy/services/dev-cloud/server.mjs
+```
+
+启动后请优先检查：
+
+```text
+https://你的演示域名/
+https://你的演示域名/healthz
+https://你的演示域名/admin/
+```
+
+路演完整说明请看：
+
+```text
+/home/octopus/Liteasy/docs/qa/roadshow-demo-guide.md
+```
+
 ## 5. 如何启动界面
 
 在 `desktop` 目录下执行：

@@ -20,13 +20,13 @@ export function useOrganizationSummary({
   organizationId,
   transport
 }: UseOrganizationSummaryInput) {
-  const [message, setMessage] = useState("连接云账号后会加载组织空间。");
+  const [message, setMessage] = useState("当前已退化为本地阅读器，组织空间不可用。联网并登录后，将自动恢复云端能力。");
   const [status, setStatus] = useState<OrganizationSummaryStatus>("unauthenticated");
   const [summary, setSummary] = useState<OrganizationSummary | null>(null);
 
   useEffect(() => {
     if (!accountSession) {
-      setMessage("连接云账号后会加载组织空间。");
+      setMessage("当前已退化为本地阅读器，组织空间不可用。联网并登录后，将自动恢复云端能力。");
       setStatus("unauthenticated");
       setSummary(null);
       return;
@@ -57,7 +57,9 @@ export function useOrganizationSummary({
           return;
         }
 
-        const detail = formatCloudConnectionError(error);
+        const detail = formatCloudConnectionError(error, {
+          controlPlaneEndpoint
+        });
         setMessage(`组织空间加载失败。详细信息：${detail}`);
         setStatus("error");
         setSummary(null);

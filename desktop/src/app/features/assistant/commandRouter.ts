@@ -40,46 +40,8 @@ function isOpenOrganizationSharedLibraryCommand(input: string) {
   return input.includes("打开") && input.includes("组织") && input.includes("共享文献库");
 }
 
-function isUseLocalDevCloudCommand(input: string) {
-  return (
-    input.includes("本地开发云") &&
-    includesAny(input, ["使用", "切换", "恢复", "重置", "设为", "端点"])
-  );
-}
-
 export function routeCommand(input: string): SkillInvocation | null {
   const normalized = input.trim();
-  const setCloudProxyEndpoint = normalized.match(/^设置云代理端点为\s+(.+)$/);
-  if (setCloudProxyEndpoint?.[1]) {
-    return {
-      skillId: "settings.adjust",
-      input: {
-        target: "models.cloud_proxy_endpoint",
-        value: setCloudProxyEndpoint[1].trim()
-      }
-    };
-  }
-
-  const setControlPlaneEndpoint = normalized.match(/^设置云端控制平面端点为\s+(.+)$/);
-  if (setControlPlaneEndpoint?.[1]) {
-    return {
-      skillId: "settings.adjust",
-      input: {
-        target: "models.control_plane_endpoint",
-        value: setControlPlaneEndpoint[1].trim()
-      }
-    };
-  }
-
-  if (isUseLocalDevCloudCommand(normalized)) {
-    return {
-      skillId: "settings.use_local_dev_cloud",
-      input: {
-        target: "local_dev_cloud"
-      }
-    };
-  }
-
   if (normalized.includes("思维导图")) {
     return {
       skillId: "artifact.generate",

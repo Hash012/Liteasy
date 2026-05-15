@@ -12,6 +12,7 @@ type AccountSessionRuntimeDeps = {
 const mockAccountSession: AccountSession = {
   email: "researcher@liteasy.dev",
   expiresAt: "2026-05-15T09:30:00Z",
+  membershipTier: "pro",
   name: "Liteasy Researcher",
   sessionId: "demo-session-1"
 };

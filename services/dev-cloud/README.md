@@ -29,6 +29,22 @@ http://127.0.0.1:8787
 LITEASY_DEV_CLOUD_PORT=8790 node services/dev-cloud/server.mjs
 ```
 
+如果你要部署到云端做路演，可以进一步设置：
+
+```bash
+LITEASY_DEV_CLOUD_HOST=0.0.0.0 \
+LITEASY_DEV_CLOUD_PORT=8787 \
+LITEASY_DEV_CLOUD_PUBLIC_ORIGIN=https://你的演示域名 \
+node services/dev-cloud/server.mjs
+```
+
+说明：
+
+- `LITEASY_DEV_CLOUD_HOST` 控制监听地址
+- `LITEASY_DEV_CLOUD_PORT` 控制监听端口
+- `LITEASY_DEV_CLOUD_PUBLIC_ORIGIN` 控制根索引、策略返回和内部后台展示时使用的外部访问地址
+- `LITEASY_DESKTOP_PUBLIC_ORIGIN` 可选，用于在内部后台中展示桌面入口地址
+
 如果你希望它真正调用 OpenAI，而不是返回开发演示回答，请在启动前配置：
 
 ```bash

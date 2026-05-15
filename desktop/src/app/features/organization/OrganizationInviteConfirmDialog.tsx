@@ -25,14 +25,14 @@ export function OrganizationInviteConfirmDialog({
         </div>
         <div className="profile-archive-card">
           <div className="profile-archive-title">组织：{summary.name}</div>
-          <p>Demo 邀请不会发送真实邮件。正式版本需要组织权限校验。</p>
+          <p>当前演示环境会记录邀请动作，但不会真正发送邀请。正式版本将在此接入成员权限与邀请生命周期。</p>
         </div>
         <div className="profile-dialog-actions">
           <button className="left-rail-button subtle" onClick={onCancel} type="button">
             取消
           </button>
           <button className="left-rail-button" onClick={onConfirm} type="button">
-            发送 demo 邀请
+            发送邀请
           </button>
         </div>
       </div>

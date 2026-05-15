@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { createCloudAccountSession } from "./accountSessionRuntime";
 import {
   clearStoredAccountSession,
+  loadSuppressLoginReminderPreference,
   loadStoredAccountSession,
-  storeAccountSession
+  storeAccountSession,
+  storeSuppressLoginReminderPreference
 } from "./accountSessionStorage";
 import type { AccountTransport } from "./accountSessionClient";
 import type { AccountSession } from "./account.types";
@@ -22,6 +24,9 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
   const [accountSession, setAccountSession] = useState<AccountSession | null>(null);
   const [accountPending, setAccountPending] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | undefined>();
+  const [shouldShowLoginReminder, setShouldShowLoginReminder] = useState(
+    !loadSuppressLoginReminderPreference()
+  );
 
   useEffect(() => {
     const storedSession = loadStoredAccountSession();
@@ -34,7 +39,7 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
 
   async function loginToCloudAccount() {
     setAccountPending(true);
-    setAccountMessage("正在连接开发云账号...");
+    setAccountMessage("正在登录云账号...");
 
     try {
       const session = await createCloudAccountSession(getSettings(), {
@@ -42,10 +47,12 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
       });
       setAccountSession(session);
       storeAccountSession(session);
-      setAccountMessage("已连接开发云账号，会话已保存在本地。");
+      setAccountMessage("已登录云账号，会话已保存在本地。");
     } catch (error) {
-      const detail = formatCloudConnectionError(error);
-      setAccountMessage(`开发云账号连接失败。详细信息：${detail}`);
+      const detail = formatCloudConnectionError(error, {
+        controlPlaneEndpoint: getSettings()["models.control_plane_endpoint"]
+      });
+      setAccountMessage(`云账号登录失败。详细信息：${detail}`);
     } finally {
       setAccountPending(false);
     }
@@ -57,11 +64,18 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
     setAccountMessage("已断开当前云账号会话。");
   }
 
+  function setSuppressLoginReminder(suppressed: boolean) {
+    storeSuppressLoginReminderPreference(suppressed);
+    setShouldShowLoginReminder(!suppressed);
+  }
+
   return {
     accountMessage,
     accountPending,
     accountSession,
     loginToCloudAccount,
-    logoutFromCloudAccount
+    logoutFromCloudAccount,
+    setSuppressLoginReminder,
+    shouldShowLoginReminder
   };
 }

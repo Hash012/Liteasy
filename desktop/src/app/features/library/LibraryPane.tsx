@@ -8,10 +8,13 @@ import { parseLibraryDragPayload } from "./libraryDragPayload";
 import { groupWorkspacePapersByFolder } from "../workspace/workspaceFolderTree";
 
 type LibraryPaneProps = {
+  accountSessionAvailable?: boolean;
   papers: Paper[];
   selectedPaperIds: string[];
   selectionLocked: boolean;
   collectionItems: CollectionItem[];
+  collectionMessage: string;
+  collectionStatus: "idle" | "loading" | "ready" | "error";
   importJobs: Record<string, ImportJob>;
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
@@ -22,6 +25,8 @@ type LibraryPaneProps = {
   onClearRecommendations: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
+  onLoginRequired?: () => void;
+  onRetryCollectionSync?: () => void;
   onReturnToLocalWorkspace: () => void;
   onToggleLock: () => void;
   onToggleSelection: (paperId: string) => void;
@@ -41,10 +46,13 @@ function getRelevanceLabel(band: RecommendationItem["relevanceBand"]) {
 }
 
 export function LibraryPane({
+  accountSessionAvailable = false,
   papers,
   selectedPaperIds,
   selectionLocked,
   collectionItems,
+  collectionMessage,
+  collectionStatus,
   importJobs,
   recommendationItems,
   recommendationMessage,
@@ -55,6 +63,8 @@ export function LibraryPane({
   onClearRecommendations,
   onCollectRecommendation,
   onImportSelectedSet,
+  onLoginRequired,
+  onRetryCollectionSync,
   onReturnToLocalWorkspace,
   onToggleLock,
   onToggleSelection,
@@ -136,11 +146,17 @@ export function LibraryPane({
 
       <div
         aria-label="收藏投放区"
-        className={`library-section muted ${collectionItems.length > 0 ? "has-collection" : ""}`}
+        className={`library-section muted ${collectionItems.length > 0 ? "has-collection" : ""} ${!accountSessionAvailable ? "locked" : ""}`}
         onDragOver={(event) => {
+          if (!accountSessionAvailable) {
+            return;
+          }
           event.preventDefault();
         }}
         onDrop={(event) => {
+          if (!accountSessionAvailable) {
+            return;
+          }
           event.preventDefault();
           const payload = parseLibraryDragPayload<RecommendationItem>(
             event.dataTransfer,
@@ -152,8 +168,26 @@ export function LibraryPane({
         }}
       >
         <div className="library-section-title">收藏</div>
-        {collectionItems.length === 0 ? (
-          <p>把关联推荐拖到这里，收藏不会随着推荐刷新而消失。</p>
+        {!accountSessionAvailable ? (
+          <>
+            <p>登录后可用的云端收藏会显示在这里。</p>
+            <button className="library-inline-button" onClick={onLoginRequired} type="button">
+              登录后可用
+            </button>
+          </>
+        ) : collectionStatus === "loading" ? (
+          <p className="collection-status-message loading">{collectionMessage}</p>
+        ) : collectionStatus === "error" ? (
+          <>
+            <p className="collection-status-message error">{collectionMessage}</p>
+            <button className="library-inline-button" onClick={onRetryCollectionSync} type="button">
+              重试同步
+            </button>
+          </>
+        ) : collectionItems.length === 0 ? (
+          <p className="collection-status-message ready">
+            {collectionStatus === "ready" ? "把关联推荐拖到这里，收藏不会随着推荐刷新而消失。" : collectionMessage}
+          </p>
         ) : (
           <ul className="collection-list">
             {collectionItems.map((item) => (
@@ -177,12 +211,12 @@ export function LibraryPane({
         )}
       </div>
 
-      <div className="library-section muted">
+      <div className={`library-section muted ${!accountSessionAvailable ? "locked" : ""}`}>
         <div className="library-section-heading">
           <div className="library-section-title">关联推荐</div>
           <button
             className="library-inline-button"
-            disabled={recommendationItems.length === 0 && recommendationStatus !== "ready"}
+            disabled={!accountSessionAvailable || (recommendationItems.length === 0 && recommendationStatus !== "ready")}
             onClick={onClearRecommendations}
             type="button"
           >
@@ -192,6 +226,11 @@ export function LibraryPane({
         <p className={`library-recommendation-message ${recommendationStatus}`}>
           {recommendationPending ? "正在获取推荐..." : recommendationMessage}
         </p>
+        {!accountSessionAvailable ? (
+          <button className="library-inline-button" onClick={onLoginRequired} type="button">
+            登录后可用
+          </button>
+        ) : null}
         {recommendationItems.length > 0 ? (
           <ul aria-label="关联推荐列表" className="recommendation-list">
             {recommendationItems.map((item) => (

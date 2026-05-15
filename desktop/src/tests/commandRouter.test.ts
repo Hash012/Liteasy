@@ -71,30 +71,6 @@ test("maps syncing cloud policy to a dedicated settings skill invocation", () =>
   });
 });
 
-test("maps setting the cloud proxy endpoint to a typed settings skill invocation", () => {
-  const result = routeCommand("设置云代理端点为 http://127.0.0.1:8787");
-
-  expect(result).toEqual({
-    skillId: "settings.adjust",
-    input: {
-      target: "models.cloud_proxy_endpoint",
-      value: "http://127.0.0.1:8787"
-    }
-  });
-});
-
-test("maps setting the control plane endpoint to a typed settings skill invocation", () => {
-  const result = routeCommand("设置云端控制平面端点为 http://127.0.0.1:8787");
-
-  expect(result).toEqual({
-    skillId: "settings.adjust",
-    input: {
-      target: "models.control_plane_endpoint",
-      value: "http://127.0.0.1:8787"
-    }
-  });
-});
-
 test("maps sorting recommendations by relevance to a settings skill invocation", () => {
   const result = routeCommand("按关联度排序推荐");
 
@@ -122,20 +98,11 @@ test("maps sorting recommendations by retrieval time to a settings skill invocat
 
 
 
-test("maps local dev-cloud endpoint reset commands to a settings skill invocation", () => {
-  expect(routeCommand("使用本地开发云端点")).toEqual({
-    skillId: "settings.use_local_dev_cloud",
-    input: {
-      target: "local_dev_cloud"
-    }
-  });
-
-  expect(routeCommand("把端点恢复到本地开发云")).toEqual({
-    skillId: "settings.use_local_dev_cloud",
-    input: {
-      target: "local_dev_cloud"
-    }
-  });
+test("does not expose endpoint-switching commands to normal assistant routing", () => {
+  expect(routeCommand("使用本地开发云端点")).toBeNull();
+  expect(routeCommand("把端点恢复到本地开发云")).toBeNull();
+  expect(routeCommand("设置云代理端点为 http://127.0.0.1:8787")).toBeNull();
+  expect(routeCommand("设置云端控制平面端点为 http://127.0.0.1:8787")).toBeNull();
 });
 
 test("maps natural language command aliases to safe actions", () => {

@@ -8,6 +8,8 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
   return {
     accountSession: null,
     collectionItems: [],
+    collectionMessage: "已同步云端收藏。",
+    collectionStatus: "ready",
     documentMetadataSyncMessage: "等待云端账号连接后同步。",
     documentMetadataSyncResult: null,
     documentMetadataSyncStatus: "unauthenticated",
@@ -25,10 +27,12 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     onClearProfile: vi.fn(),
     onClearRecommendations: vi.fn(),
     onCollectRecommendation: vi.fn(),
+    onRetryCollectionSync: vi.fn(),
     onCreateOrganization: vi.fn(),
     onImportSelectedSet: vi.fn(),
     onInviteMember: vi.fn(),
     onJoinOrganization: vi.fn(),
+    onLoginRequired: vi.fn(),
     onLeaveOrganization: vi.fn(),
     onMarkNotificationsRead: vi.fn(),
     onOpenAcademicArchive: vi.fn(),
@@ -113,6 +117,54 @@ describe("LeftPane", () => {
     expect(onImportSelectedSet).toHaveBeenCalledTimes(1);
   });
 
+  test("shows collection loading state for logged-in cloud sync", () => {
+    render(
+      <LeftPane
+        {...createProps({
+          accountSession: {
+            email: "researcher@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            name: "Liteasy Researcher",
+            sessionId: "demo-session-1"
+          },
+          collectionMessage: "正在同步云端收藏...",
+          collectionStatus: "loading",
+          leftRailView: "library"
+        })}
+      />
+    );
+
+    const collectionZone = screen.getByLabelText("收藏投放区");
+    expect(within(collectionZone).getByText("正在同步云端收藏...")).toBeInTheDocument();
+  });
+
+  test("shows collection retry action when cloud sync fails", async () => {
+    const user = userEvent.setup();
+    const onRetryCollectionSync = vi.fn();
+
+    render(
+      <LeftPane
+        {...createProps({
+          accountSession: {
+            email: "researcher@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            name: "Liteasy Researcher",
+            sessionId: "demo-session-1"
+          },
+          collectionMessage: "云端收藏暂时不可用。",
+          collectionStatus: "error",
+          leftRailView: "library",
+          onRetryCollectionSync
+        })}
+      />
+    );
+
+    const collectionZone = screen.getByLabelText("收藏投放区");
+    expect(within(collectionZone).getByText("云端收藏暂时不可用。")).toBeInTheDocument();
+    await user.click(within(collectionZone).getByRole("button", { name: "重试同步" }));
+    expect(onRetryCollectionSync).toHaveBeenCalledTimes(1);
+  });
+
 
   test("groups library papers by workspace folders", () => {
     render(
@@ -142,7 +194,7 @@ describe("LeftPane", () => {
       <LeftPane
         {...createProps({
           leftRailView: "organization",
-          organizationActionMessage: "已创建 Liteasy Demo Organization 的 demo 组织申请，等待正式后端接入。"
+          organizationActionMessage: "已提交创建组织“Liteasy Demo Organization”的申请，当前为演示环境记录。"
         })}
       />
     );
@@ -150,7 +202,7 @@ describe("LeftPane", () => {
     const organizationPane = screen.getByLabelText("左边栏组织");
     expect(within(organizationPane).getByText("组织操作反馈")).toBeInTheDocument();
     expect(within(organizationPane).getByRole("status", { name: "组织操作反馈" })).toHaveTextContent(
-      "已创建 Liteasy Demo Organization 的 demo 组织申请，等待正式后端接入。"
+      "已提交创建组织“Liteasy Demo Organization”的申请，当前为演示环境记录。"
     );
   });
 
@@ -190,8 +242,11 @@ describe("LeftPane", () => {
     );
 
     const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).getByText("共享文献库状态：可打开，会像 VSCode 打开文件夹一样切换当前工作区。")).toBeInTheDocument();
     expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toBeEnabled();
+    expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toHaveAttribute(
+      "title",
+      "共享文献库状态：可打开，会像 VSCode 打开文件夹一样切换当前工作区。"
+    );
   });
 
   test("explains why an organization shared library cannot be opened", () => {
@@ -230,7 +285,10 @@ describe("LeftPane", () => {
 
     const organizationPane = screen.getByLabelText("左边栏组织");
     expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toBeDisabled();
-    expect(within(organizationPane).getByText("共享文献库状态：同步中，暂时不能打开。请稍后重试。")).toBeInTheDocument();
+    expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toHaveAttribute(
+      "title",
+      "共享文献库状态：同步中，暂时不能打开。请稍后重试。"
+    );
   });
 
   test("renders organization and profile views", () => {
@@ -281,6 +339,202 @@ describe("LeftPane", () => {
     );
     expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
     expect(screen.getByText("用户画像：已开启")).toBeInTheDocument();
+  });
+
+  test("hides organization creation for basic members and keeps join available", () => {
+    render(
+      <LeftPane
+        {...createProps({
+          accountSession: {
+            email: "reader@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            membershipTier: "basic",
+            name: "Liteasy Reader",
+            sessionId: "session-basic"
+          },
+          leftRailView: "organization",
+          list: {
+            activeOrganizationId: "org-demo-1",
+            organizations: [
+              {
+                memberCount: 12,
+                myRole: "研究员",
+                name: "Liteasy AI Reading Lab",
+                organizationId: "org-demo-1",
+                sharedLibraryName: "组织共享文献库"
+              }
+            ]
+          },
+          listStatus: "success",
+          organizationSummaryMessage: "已加载组织空间。",
+          organizationSummaryStatus: "success",
+          summary: {
+            auditEvents: [],
+            memberCount: 12,
+            members: [],
+            myRole: "研究员",
+            name: "Liteasy AI Reading Lab",
+            notifications: [],
+            organizationId: "org-demo-1",
+            quota: {
+              periodEndsAt: "2026-06-01T00:00:00.000Z",
+              storageLimitGb: 100,
+              storageUsedGb: 12
+            },
+            sharedLibrary: {
+              documentCount: 48,
+              documents: [],
+              name: "组织共享文献库",
+              status: "available"
+            },
+            taskSummary: { failed: 0, running: 1 }
+          }
+        })}
+      />
+    );
+
+    const organizationPane = screen.getByLabelText("左边栏组织");
+    expect(within(organizationPane).getByRole("button", { name: "创建组织" })).toBeDisabled();
+    expect(within(organizationPane).getByRole("button", { name: "加入组织" })).toBeInTheDocument();
+    expect(within(organizationPane).getByRole("button", { name: "加入组织" })).toHaveAttribute(
+      "title",
+      expect.stringContaining("当前账号权限：可加入组织，暂不可创建组织。")
+    );
+  });
+
+  test("shows organization creation for pro members", () => {
+    render(
+      <LeftPane
+        {...createProps({
+          accountSession: {
+            email: "researcher@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            membershipTier: "pro",
+            name: "Liteasy Researcher",
+            sessionId: "session-pro"
+          },
+          leftRailView: "organization",
+          list: {
+            activeOrganizationId: "org-demo-1",
+            organizations: [
+              {
+                memberCount: 12,
+                myRole: "研究员",
+                name: "Liteasy AI Reading Lab",
+                organizationId: "org-demo-1",
+                sharedLibraryName: "组织共享文献库"
+              }
+            ]
+          },
+          listStatus: "success",
+          organizationSummaryMessage: "已加载组织空间。",
+          organizationSummaryStatus: "success",
+          summary: {
+            auditEvents: [],
+            memberCount: 12,
+            members: [],
+            myRole: "研究员",
+            name: "Liteasy AI Reading Lab",
+            notifications: [],
+            organizationId: "org-demo-1",
+            quota: {
+              periodEndsAt: "2026-06-01T00:00:00.000Z",
+              storageLimitGb: 100,
+              storageUsedGb: 12
+            },
+            sharedLibrary: {
+              documentCount: 48,
+              documents: [],
+              name: "组织共享文献库",
+              status: "available"
+            },
+            taskSummary: { failed: 0, running: 1 }
+          }
+        })}
+      />
+    );
+
+    const organizationPane = screen.getByLabelText("左边栏组织");
+    expect(within(organizationPane).getByRole("button", { name: "创建组织" })).toBeInTheDocument();
+    expect(within(organizationPane).getByRole("button", { name: "创建组织" })).toHaveAttribute(
+      "title",
+      expect.stringContaining("当前账号权限：可创建组织，也可加入已有组织。")
+    );
+  });
+
+  test("hides invite-member action when current role lacks invitation permission", () => {
+    render(
+      <LeftPane
+        {...createProps({
+          accountSession: {
+            email: "reader@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            membershipTier: "pro",
+            name: "Liteasy Reader",
+            sessionId: "session-pro-reader"
+          },
+          leftRailView: "organization",
+          list: {
+            activeOrganizationId: "org-demo-1",
+            organizations: [
+              {
+                memberCount: 12,
+                myRole: "研究员",
+                name: "Liteasy AI Reading Lab",
+                organizationId: "org-demo-1",
+                sharedLibraryName: "组织共享文献库"
+              }
+            ]
+          },
+          listStatus: "success",
+          organizationSummaryMessage: "已加载组织空间。",
+          organizationSummaryStatus: "success",
+          summary: {
+            auditEvents: [],
+            memberCount: 12,
+            members: [],
+            myRole: "研究员",
+            name: "Liteasy AI Reading Lab",
+            notifications: [],
+            organizationId: "org-demo-1",
+            quota: {
+              periodEndsAt: "2026-06-01T00:00:00.000Z",
+              storageLimitGb: 100,
+              storageUsedGb: 12
+            },
+            sharedLibrary: {
+              documentCount: 48,
+              documents: [],
+              name: "组织共享文献库",
+              status: "available"
+            },
+            taskSummary: { failed: 0, running: 1 }
+          }
+        })}
+      />
+    );
+
+    const organizationPane = screen.getByLabelText("左边栏组织");
+    expect(within(organizationPane).queryByRole("button", { name: "邀请成员" })).not.toBeInTheDocument();
+  });
+
+  test("shows locked cloud sections in the library view while logged out", () => {
+    const onLoginRequired = vi.fn();
+
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          onLoginRequired,
+          recommendationMessage: "当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。"
+        })}
+      />
+    );
+
+    expect(screen.getByText("收藏")).toBeInTheDocument();
+    expect(screen.getByText("登录后可用的云端收藏会显示在这里。")).toBeInTheDocument();
+    expect(screen.getByText("当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "登录后可用" }).length).toBeGreaterThan(0);
   });
 
 

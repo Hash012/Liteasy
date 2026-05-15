@@ -39,6 +39,7 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
     leaveSummary: null,
     list: null,
     listMessage: "组织列表待加载。",
+    loginDialogOpen: false,
     onCancelClearProfile: vi.fn(),
     onClearProfile: vi.fn(),
     onCloseAcademicArchive: vi.fn(),
@@ -46,6 +47,9 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
     onCloseInviteMember: vi.fn(),
     onCloseJoinOrganization: vi.fn(),
     onCloseLeaveOrganization: vi.fn(),
+    onSkipLogin: vi.fn(),
+    onSubmitDemoLogin: vi.fn(),
+    onToggleSuppressLoginReminder: vi.fn(),
     onCloseOrganizationDialog: vi.fn(),
     onCreateOrganization: vi.fn(),
     onInviteMember: vi.fn(),
@@ -61,6 +65,31 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
 }
 
 describe("AppDialogs", () => {
+  test("shows the lightweight login dialog for logged-out startup", async () => {
+    const user = userEvent.setup();
+    const onSkipLogin = vi.fn();
+    const onSubmitDemoLogin = vi.fn();
+    const onToggleSuppressLoginReminder = vi.fn();
+
+    render(
+      <AppDialogs
+        {...createProps({
+          loginDialogOpen: true,
+          onSkipLogin,
+          onSubmitDemoLogin,
+          onToggleSuppressLoginReminder
+        })}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    expect(within(dialog).getByRole("button", { name: "一键 Demo 登录" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "跳过，进入本地阅读器" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("checkbox", { name: "不再提醒" })).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "跳过，进入本地阅读器" }));
+    expect(onSkipLogin).toHaveBeenCalledTimes(1);
+  });
 
   test("renders active dialogs in a workspace-scoped overlay", () => {
     const { rerender } = render(
@@ -113,7 +142,7 @@ describe("AppDialogs", () => {
     expect(onCloseAcademicArchive).toHaveBeenCalledTimes(1);
   });
 
-  test("renders organization action dialogs and forwards confirmations", async () => {
+  test("renders organization action dialogs and forwards productized confirmations", async () => {
     const user = userEvent.setup();
     const onCreateOrganization = vi.fn();
     const onInviteMember = vi.fn();
@@ -125,21 +154,21 @@ describe("AppDialogs", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "创建 demo 组织申请" }));
+    await user.click(screen.getByRole("button", { name: "提交创建组织申请" }));
     expect(onCreateOrganization).toHaveBeenCalledWith("Liteasy Demo Organization");
 
     rerender(<AppDialogs {...createProps({ joinOrganizationOpen: true, onJoinOrganization })} />);
-    await user.click(screen.getByRole("button", { name: "提交 demo 加入申请" }));
+    await user.click(screen.getByRole("button", { name: "提交加入组织请求" }));
     expect(onJoinOrganization).toHaveBeenCalledWith("LITEASY-DEMO-JOIN");
 
     rerender(<AppDialogs {...createProps({ inviteSummary: summary, onInviteMember })} />);
     expect(screen.getByRole("dialog", { name: "邀请成员确认" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "发送 demo 邀请" }));
+    await user.click(screen.getByRole("button", { name: "发送邀请" }));
     expect(onInviteMember).toHaveBeenCalledTimes(1);
 
     rerender(<AppDialogs {...createProps({ leaveSummary: summary, onLeaveOrganization })} />);
     expect(screen.getByRole("dialog", { name: "退出组织确认" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "创建 demo 退出请求" }));
+    await user.click(screen.getByRole("button", { name: "提交退出组织请求" }));
     expect(onLeaveOrganization).toHaveBeenCalledTimes(1);
   });
 

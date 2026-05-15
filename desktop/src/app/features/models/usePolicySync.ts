@@ -53,7 +53,9 @@ export function usePolicySync({
       });
       return message;
     } catch (error) {
-      const detail = formatCloudConnectionError(error);
+      const detail = formatCloudConnectionError(error, {
+        controlPlaneEndpoint: getSettings()["models.control_plane_endpoint"]
+      });
       const message = `云端策略同步失败，请检查控制平面配置。详细信息：${detail}`;
       updatePolicySyncState(() => {
         setPolicySyncStatus("error");

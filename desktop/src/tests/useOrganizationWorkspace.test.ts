@@ -304,7 +304,7 @@ describe("useOrganizationWorkspace", () => {
       message = await result.current.actions.openOrganizationSharedLibrary();
     });
 
-    expect(message).toBe("请先连接开发云账号，并在左边栏组织页加载组织空间后再打开共享文献库。");
+    expect(message).toBe("请先登录云账号，并在左边栏组织页加载组织空间后再打开共享文献库。");
     expect(result.current.workspaceStore.getState().papers).toEqual(starterPapers);
     expect(onWorkspaceSync).not.toHaveBeenCalled();
     expect(onWorkspaceLabel).not.toHaveBeenCalled();

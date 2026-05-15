@@ -33,7 +33,7 @@ export function OrganizationJoinDialog({
               value={inviteCode}
             />
           </label>
-          <p>Demo 加入不会校验真实邀请码或写入组织成员关系。正式版本需要邀请生命周期、组织权限与管理员审批。</p>
+          <p>当前演示环境会记录加入组织请求，但不会真正变更成员关系。正式版本将在此接入邀请码校验、组织审批与成员权限。</p>
         </div>
         <div className="profile-dialog-actions">
           <button className="left-rail-button subtle" onClick={onCancel} type="button">
@@ -45,7 +45,7 @@ export function OrganizationJoinDialog({
             onClick={() => onConfirm(inviteCode.trim())}
             type="button"
           >
-            提交 demo 加入申请
+            提交加入组织请求
           </button>
         </div>
       </div>

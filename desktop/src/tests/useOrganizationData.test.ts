@@ -6,6 +6,7 @@ import type { AccountSession } from "../app/features/account/account.types";
 const accountSession: AccountSession = {
   email: "researcher@liteasy.dev",
   expiresAt: "2026-05-15T09:30:00Z",
+  membershipTier: "pro",
   name: "Liteasy Researcher",
   sessionId: "demo-session-1"
 };
@@ -181,8 +182,29 @@ describe("useOrganizationData", () => {
       expect(result.current.organizationSummaryStatus).toBe("error");
     });
 
-    expect(result.current.organizationListMessage).toContain("请确认已启动 http://127.0.0.1:8787");
-    expect(result.current.organizationSummaryMessage).toContain("请确认已启动 http://127.0.0.1:8787");
+    expect(result.current.organizationListMessage).toContain("请确认服务已启动，并检查当前控制平面端点：http://127.0.0.1:8787");
+    expect(result.current.organizationSummaryMessage).toContain("请确认服务已启动，并检查当前控制平面端点：http://127.0.0.1:8787");
+  });
+
+  test("keeps organization space in local-reader guidance mode when logged out", async () => {
+    const { result } = renderHook(() =>
+      useOrganizationData({
+        accountSession: null,
+        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+        getActiveOrganizationId: () => undefined
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.organizationSummaryStatus).toBe("unauthenticated");
+    });
+
+    expect(result.current.organizationSummaryMessage).toBe(
+      "当前已退化为本地阅读器，组织空间不可用。联网并登录后，将自动恢复云端能力。"
+    );
+    expect(result.current.organizationListMessage).toBe(
+      "当前已退化为本地阅读器，组织列表不可用。联网并登录后，将自动恢复云端能力。"
+    );
   });
 
 });

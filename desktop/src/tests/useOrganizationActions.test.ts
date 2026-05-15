@@ -36,7 +36,7 @@ const organizationSummary: OrganizationSummary = {
 };
 
 describe("useOrganizationActions", () => {
-  test("tracks organization action dialogs and returns demo messages", () => {
+  test("tracks organization action dialogs and returns productized seam messages", () => {
     const onAnalysisHint = vi.fn();
     const { result } = renderHook(() => useOrganizationActions({ onAnalysisHint }));
 
@@ -46,10 +46,10 @@ describe("useOrganizationActions", () => {
     act(() => result.current.createDemoOrganizationRequest("Liteasy Demo Organization"));
     expect(result.current.createOpen).toBe(false);
     expect(result.current.actionMessage).toBe(
-      "已创建 Liteasy Demo Organization 的 demo 组织申请，等待正式后端接入。"
+      "已提交创建组织“Liteasy Demo Organization”的申请，当前为演示环境记录。"
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "已创建 Liteasy Demo Organization 的 demo 组织申请，等待正式后端接入。"
+      "已提交创建组织“Liteasy Demo Organization”的申请，当前为演示环境记录。"
     );
 
     act(() => result.current.openJoinDialog());
@@ -58,10 +58,10 @@ describe("useOrganizationActions", () => {
     act(() => result.current.createDemoOrganizationJoinRequest("LITEASY-DEMO-JOIN"));
     expect(result.current.joinOpen).toBe(false);
     expect(result.current.actionMessage).toBe(
-      "已提交组织邀请码 LITEASY-DEMO-JOIN 的 demo 加入申请，等待正式后端接入。"
+      "已提交加入组织的邀请码 LITEASY-DEMO-JOIN，当前为演示环境记录；你的组织角色与成员关系暂不会立即变更。"
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "已提交组织邀请码 LITEASY-DEMO-JOIN 的 demo 加入申请，等待正式后端接入。"
+      "已提交加入组织的邀请码 LITEASY-DEMO-JOIN，当前为演示环境记录；你的组织角色与成员关系暂不会立即变更。"
     );
 
     act(() => result.current.openInviteDialog(organizationSummary));
@@ -70,10 +70,10 @@ describe("useOrganizationActions", () => {
     act(() => result.current.sendDemoOrganizationInvite());
     expect(result.current.inviteSummary).toBeNull();
     expect(result.current.actionMessage).toBe(
-      "已创建 Liteasy AI Reading Lab 的 demo 邀请，等待正式后端接入。"
+      "已创建面向 Liteasy AI Reading Lab 的邀请，当前为演示环境记录。"
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "已创建 Liteasy AI Reading Lab 的 demo 邀请，等待正式后端接入。"
+      "已创建面向 Liteasy AI Reading Lab 的邀请，当前为演示环境记录。"
     );
 
     act(() => result.current.openLeaveDialog(organizationSummary));
@@ -82,10 +82,21 @@ describe("useOrganizationActions", () => {
     act(() => result.current.createDemoOrganizationLeaveRequest());
     expect(result.current.leaveSummary).toBeNull();
     expect(result.current.actionMessage).toBe(
-      "已创建退出 Liteasy AI Reading Lab 的 demo 请求，等待正式后端接入。"
+      "已提交退出 Liteasy AI Reading Lab 的请求，当前为演示环境记录。"
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "已创建退出 Liteasy AI Reading Lab 的 demo 请求，等待正式后端接入。"
+      "已提交退出 Liteasy AI Reading Lab 的请求，当前为演示环境记录。"
+    );
+  });
+
+  test("makes join feedback explicit that membership does not switch immediately", () => {
+    const onAnalysisHint = vi.fn();
+    const { result } = renderHook(() => useOrganizationActions({ onAnalysisHint }));
+
+    act(() => result.current.createDemoOrganizationJoinRequest("LITEASY-DEMO-JOIN"));
+
+    expect(result.current.actionMessage).toBe(
+      "已提交加入组织的邀请码 LITEASY-DEMO-JOIN，当前为演示环境记录；你的组织角色与成员关系暂不会立即变更。"
     );
   });
 

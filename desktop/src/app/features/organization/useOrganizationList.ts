@@ -19,13 +19,13 @@ export function useOrganizationList({
   transport
 }: UseOrganizationListInput) {
   const [list, setList] = useState<OrganizationList | null>(null);
-  const [message, setMessage] = useState("连接云账号后会加载组织列表。");
+  const [message, setMessage] = useState("当前已退化为本地阅读器，组织列表不可用。联网并登录后，将自动恢复云端能力。");
   const [status, setStatus] = useState<OrganizationListStatus>("unauthenticated");
 
   useEffect(() => {
     if (!accountSession) {
       setList(null);
-      setMessage("连接云账号后会加载组织列表。");
+      setMessage("当前已退化为本地阅读器，组织列表不可用。联网并登录后，将自动恢复云端能力。");
       setStatus("unauthenticated");
       return;
     }
@@ -55,7 +55,9 @@ export function useOrganizationList({
           return;
         }
 
-        const detail = formatCloudConnectionError(error);
+        const detail = formatCloudConnectionError(error, {
+          controlPlaneEndpoint
+        });
         setList(null);
         setMessage(`组织列表加载失败。详细信息：${detail}`);
         setStatus("error");

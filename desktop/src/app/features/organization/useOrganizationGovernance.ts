@@ -24,13 +24,13 @@ export function useOrganizationGovernance({
   organizationSummary,
   transport
 }: UseOrganizationGovernanceInput) {
-  const [message, setMessage] = useState("连接云账号后会加载组织治理摘要。");
+  const [message, setMessage] = useState("当前已退化为本地阅读器，组织治理摘要不可用。联网并登录后，将自动恢复云端能力。");
   const [status, setStatus] = useState<OrganizationGovernanceStatus>("unauthenticated");
   const [summary, setSummary] = useState<OrganizationGovernanceSummary | null>(null);
 
   useEffect(() => {
     if (!accountSession) {
-      setMessage("连接云账号后会加载组织治理摘要。");
+      setMessage("当前已退化为本地阅读器，组织治理摘要不可用。联网并登录后，将自动恢复云端能力。");
       setStatus("unauthenticated");
       setSummary(null);
       return;
@@ -71,7 +71,9 @@ export function useOrganizationGovernance({
           return;
         }
 
-        const detail = formatCloudConnectionError(error);
+        const detail = formatCloudConnectionError(error, {
+          controlPlaneEndpoint
+        });
         setMessage(`组织治理摘要加载失败。详细信息：${detail}`);
         setStatus("error");
         setSummary(null);

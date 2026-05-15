@@ -76,6 +76,9 @@ export function createAccountSessionClient({
       throw new Error("云账号登录返回格式无效");
     }
 
-    return payload.session;
+    return {
+      ...payload.session,
+      membershipTier: payload.session.membershipTier === "basic" ? "basic" : "pro"
+    };
   };
 }

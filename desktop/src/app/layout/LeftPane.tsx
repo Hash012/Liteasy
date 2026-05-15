@@ -18,6 +18,8 @@ export type LeftPaneProps = {
   academicProfile: AcademicProfile;
   accountSession: AccountSession | null;
   collectionItems: CollectionItem[];
+  collectionMessage: string;
+  collectionStatus: "idle" | "loading" | "ready" | "error";
   documentMetadataSyncMessage?: string;
   documentMetadataSyncResult: DocumentMetadataSyncResult | null;
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
@@ -36,10 +38,12 @@ export type LeftPaneProps = {
   onClearProfile: () => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (item: RecommendationItem) => void;
+  onRetryCollectionSync?: () => void;
   onCreateOrganization?: () => void;
   onImportSelectedSet: () => void;
   onInviteMember?: (summary: OrganizationSummary) => void;
   onJoinOrganization?: () => void;
+  onLoginRequired?: () => void;
   onLeaveOrganization?: (summary: OrganizationSummary) => void;
   onMarkNotificationsRead?: (summary: OrganizationSummary) => void;
   onOpenAcademicArchive: () => void;
@@ -51,7 +55,6 @@ export type LeftPaneProps = {
   onSetAccessMode: (mode: SettingsState["models.access_mode"]) => void;
   onSyncCloudPolicy: () => void;
   onToggleLocalDirectEnabled: (enabled: boolean) => void;
-  onUseLocalDevCloudDefaults: () => void;
   onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   onToggleSelection: (paperId: string) => void;
@@ -99,6 +102,8 @@ export function LeftPane({
   academicProfile,
   accountSession,
   collectionItems,
+  collectionMessage,
+  collectionStatus,
   documentMetadataSyncMessage,
   documentMetadataSyncResult,
   documentMetadataSyncStatus,
@@ -116,10 +121,12 @@ export function LeftPane({
   onClearProfile,
   onClearRecommendations,
   onCollectRecommendation,
+  onRetryCollectionSync,
   onCreateOrganization,
   onImportSelectedSet,
   onInviteMember,
   onJoinOrganization,
+  onLoginRequired,
   onLeaveOrganization,
   onMarkNotificationsRead,
   onOpenAcademicArchive,
@@ -131,7 +138,6 @@ export function LeftPane({
   onSetAccessMode,
   onSyncCloudPolicy,
   onToggleLocalDirectEnabled,
-  onUseLocalDevCloudDefaults,
   onToggleProfileSampling,
   onUpdateAcademicProfile,
   onToggleSelection,
@@ -165,6 +171,7 @@ export function LeftPane({
       <div className="pane-body">
         {leftRailView === "organization" ? (
           <OrganizationSidebarPanel
+            accountSession={accountSession}
             actionMessage={organizationActionMessage}
             governanceMessage={governanceMessage}
             governanceStatus={governanceStatus}
@@ -175,6 +182,7 @@ export function LeftPane({
             onCreateOrganization={onCreateOrganization}
             onInviteMember={onInviteMember}
             onJoinOrganization={onJoinOrganization}
+            onLoginRequired={onLoginRequired}
             onLeaveOrganization={onLeaveOrganization}
             onMarkNotificationsRead={onMarkNotificationsRead}
             onOpenSharedLibrary={onOpenSharedLibrary}
@@ -208,7 +216,6 @@ export function LeftPane({
             onSetAccessMode={onSetAccessMode}
             onSyncCloudPolicy={onSyncCloudPolicy}
             onToggleLocalDirectEnabled={onToggleLocalDirectEnabled}
-            onUseLocalDevCloudDefaults={onUseLocalDevCloudDefaults}
             policySyncMessage={policySyncMessage}
             policySyncPending={policySyncPending}
             policySyncStatus={policySyncStatus}
@@ -218,13 +225,18 @@ export function LeftPane({
           />
         ) : (
           <LibraryPane
+            accountSessionAvailable={accountSession !== null}
             canReturnToLocalWorkspace={workspaceLabel !== "本地文献库"}
             collectionItems={collectionItems}
+            collectionMessage={collectionMessage}
+            collectionStatus={collectionStatus}
             importJobs={importJobs}
             onAddExternalPaper={onAddExternalPaper}
             onClearRecommendations={onClearRecommendations}
             onCollectRecommendation={onCollectRecommendation}
             onImportSelectedSet={onImportSelectedSet}
+            onLoginRequired={onLoginRequired}
+            onRetryCollectionSync={onRetryCollectionSync}
             onReturnToLocalWorkspace={onReturnToLocalWorkspace}
             onToggleLock={onToggleLock}
             onToggleSelection={onToggleSelection}

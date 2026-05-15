@@ -162,11 +162,11 @@ export function OrganizationSpacePanel({
               最近审计：{latestAuditEvent.actor} {latestAuditEvent.description}
             </div>
           ) : null}
-          <div className="model-policy-footnote">{getSharedLibraryOpenMessage(summary)}</div>
           <button
             className="policy-button sync"
             disabled={summary.sharedLibrary.status !== "available" || summary.sharedLibrary.documentCount === 0}
             onClick={() => onOpenSharedLibrary?.(summary)}
+            title={getSharedLibraryOpenMessage(summary)}
             type="button"
           >
             打开共享文献库

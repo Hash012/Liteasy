@@ -1,5 +1,4 @@
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
-import { DevCloudEndpointPanel } from "../features/models/DevCloudEndpointPanel";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
 import { ModelAccessPanel } from "../features/models/ModelAccessPanel";
 import type { PolicySyncStatus } from "../features/models/policySync.types";
@@ -14,7 +13,6 @@ type SettingsPaneProps = {
   onSetAccessMode: (mode: SettingsState["models.access_mode"]) => void;
   onSyncCloudPolicy: () => void;
   onToggleLocalDirectEnabled: (enabled: boolean) => void;
-  onUseLocalDevCloudDefaults: () => void;
   policySyncMessage?: string;
   policySyncPending: boolean;
   policySyncStatus: PolicySyncStatus;
@@ -32,7 +30,6 @@ export function SettingsPane({
   onSetAccessMode,
   onSyncCloudPolicy,
   onToggleLocalDirectEnabled,
-  onUseLocalDevCloudDefaults,
   policySyncMessage,
   policySyncPending,
   policySyncStatus,
@@ -57,10 +54,6 @@ export function SettingsPane({
         syncMessage={policySyncMessage}
         syncPending={policySyncPending}
         syncStatus={policySyncStatus}
-      />
-      <DevCloudEndpointPanel
-        onUseLocalDevCloudDefaults={onUseLocalDevCloudDefaults}
-        settings={settings}
       />
       <DocumentMetadataSyncPanel
         lastResult={documentMetadataSyncResult}

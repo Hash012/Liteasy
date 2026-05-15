@@ -58,12 +58,6 @@ export type ActionInvocation =
       };
     }
   | {
-      actionId: "settings.use_local_dev_cloud";
-      input: {
-        target: "local_dev_cloud";
-      };
-    }
-  | {
       actionId: "organization.open_shared_library";
       input: {
         source: "organization_space";
@@ -100,27 +94,6 @@ export async function executeAction(
         invocation.input.target,
         invocation.input.value
       )}`
-    };
-  }
-
-  if (invocation.actionId === "settings.use_local_dev_cloud") {
-    if (!context.settingsStore) {
-      throw new Error("settings.use_local_dev_cloud requires a settings store");
-    }
-
-    context.settingsStore.apply({
-      intent: "update_setting",
-      target: "models.cloud_proxy_endpoint",
-      value: "http://127.0.0.1:8787"
-    });
-    context.settingsStore.apply({
-      intent: "update_setting",
-      target: "models.control_plane_endpoint",
-      value: "http://127.0.0.1:8787"
-    });
-
-    return {
-      message: "已切换为本地开发云端点：http://127.0.0.1:8787。"
     };
   }
 

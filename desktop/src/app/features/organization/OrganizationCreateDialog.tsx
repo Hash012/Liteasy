@@ -33,7 +33,7 @@ export function OrganizationCreateDialog({
               value={organizationName}
             />
           </label>
-          <p>Demo 创建不会写入真实后端或申请云端空间。正式版本需要套餐、权限与计费校验。</p>
+          <p>当前演示环境会记录创建组织请求，但不会真正开通组织空间。正式版本将在此接入会员权限、套餐与组织开通流程。</p>
         </div>
         <div className="profile-dialog-actions">
           <button className="left-rail-button subtle" onClick={onCancel} type="button">
@@ -45,7 +45,7 @@ export function OrganizationCreateDialog({
             onClick={() => onConfirm(organizationName.trim())}
             type="button"
           >
-            创建 demo 组织申请
+            提交创建组织申请
           </button>
         </div>
       </div>

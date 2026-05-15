@@ -4,6 +4,44 @@ import { useAccountSession } from "../app/features/account/useAccountSession";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 
 describe("useAccountSession", () => {
+  test("defaults to showing the lightweight login prompt when logged out", () => {
+    const settingsStore = createSeededSettingsStore();
+
+    const { result } = renderHook(() =>
+      useAccountSession({
+        getSettings: () => settingsStore.getState()
+      })
+    );
+
+    expect(result.current.shouldShowLoginReminder).toBe(true);
+  });
+
+  test("can persist suppressing the lightweight login reminder", async () => {
+    const settingsStore = createSeededSettingsStore();
+
+    const { result } = renderHook(() =>
+      useAccountSession({
+        getSettings: () => settingsStore.getState()
+      })
+    );
+
+    act(() => {
+      result.current.setSuppressLoginReminder(true);
+    });
+
+    expect(result.current.shouldShowLoginReminder).toBe(false);
+
+    const { result: nextResult } = renderHook(() =>
+      useAccountSession({
+        getSettings: () => settingsStore.getState()
+      })
+    );
+
+    await waitFor(() => {
+      expect(nextResult.current.shouldShowLoginReminder).toBe(false);
+    });
+  });
+
   test("shows a dev-cloud startup hint when demo login cannot reach the service", async () => {
     const settingsStore = createSeededSettingsStore({
       "models.control_plane_endpoint": "http://127.0.0.1:8787"
@@ -25,7 +63,7 @@ describe("useAccountSession", () => {
       expect(result.current.accountPending).toBe(false);
     });
     expect(result.current.accountSession).toBeNull();
-    expect(result.current.accountMessage).toContain("请确认已启动 http://127.0.0.1:8787");
+    expect(result.current.accountMessage).toContain("请确认服务已启动，并检查当前控制平面端点：http://127.0.0.1:8787");
   });
   test("notifies the shell when a stored session is restored", async () => {
     window.localStorage.setItem(
@@ -33,6 +71,7 @@ describe("useAccountSession", () => {
       JSON.stringify({
         email: "researcher@liteasy.dev",
         expiresAt: "2026-05-15T09:30:00Z",
+        membershipTier: "pro",
         name: "Liteasy Researcher",
         sessionId: "demo-session-1"
       })

@@ -7,6 +7,7 @@ type TopBarProps = {
   accountMessage?: string;
   accountPending?: boolean;
   accountSession: AccountSession | null;
+  cloudAvailabilityStatus?: "available" | "unavailable";
   modelAccessMode: SettingsState["models.access_mode"];
   onLogin: () => void;
   onLogout: () => void;
@@ -16,6 +17,7 @@ export function TopBar({
   accountMessage,
   accountPending,
   accountSession,
+  cloudAvailabilityStatus = "available",
   modelAccessMode,
   onLogin,
   onLogout
@@ -24,6 +26,7 @@ export function TopBar({
     <header className="app-topbar">
       <AppBrand modelAccessMode={modelAccessMode} />
       <AccountStatusPanel
+        cloudAvailabilityStatus={cloudAvailabilityStatus}
         message={accountMessage}
         onLogin={onLogin}
         onLogout={onLogout}

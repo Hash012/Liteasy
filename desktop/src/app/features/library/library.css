@@ -50,6 +50,11 @@
   color: #7b90a5;
 }
 
+.library-section.locked {
+  opacity: 0.82;
+  border-style: dashed;
+}
+
 .library-section.has-collection {
   border-style: solid;
   border-color: #c8dde9;
@@ -235,6 +240,24 @@
   color: #62788d;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.collection-status-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.collection-status-message.loading {
+  color: #6b7f93;
+}
+
+.collection-status-message.ready {
+  color: #667d91;
+}
+
+.collection-status-message.error {
+  color: #9b4250;
 }
 
 .library-recommendation-message {

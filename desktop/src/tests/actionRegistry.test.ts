@@ -66,27 +66,6 @@ test("executes a selected-document-set import action", async () => {
   expect(result.message).toBe("已将当前选中文献集交给 AI 流程。");
 });
 
-
-test("executes local dev-cloud endpoint reset through the action registry", async () => {
-  const settingsStore = createSettingsStore();
-
-  const result = await executeAction(
-    {
-      actionId: "settings.use_local_dev_cloud",
-      input: {
-        target: "local_dev_cloud"
-      }
-    },
-    {
-      settingsStore
-    }
-  );
-
-  expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe("http://127.0.0.1:8787");
-  expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("http://127.0.0.1:8787");
-  expect(result.message).toBe("已切换为本地开发云端点：http://127.0.0.1:8787。");
-});
-
 test("executes a cloud model policy sync action", async () => {
   let synced = 0;
 

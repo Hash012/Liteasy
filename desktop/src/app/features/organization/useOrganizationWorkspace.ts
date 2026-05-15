@@ -66,7 +66,7 @@ export function useOrganizationWorkspace({
 }: UseOrganizationWorkspaceOptions) {
   async function openOrganizationSharedLibrary(summary = defaultSummary) {
     if (!summary) {
-      return "请先连接开发云账号，并在左边栏组织页加载组织空间后再打开共享文献库。";
+      return "请先登录云账号，并在左边栏组织页加载组织空间后再打开共享文献库。";
     }
 
     if (summary.sharedLibrary.status !== "available") {

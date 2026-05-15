@@ -84,6 +84,49 @@ test("returns a helpful service index from the root path", async () => {
   ]);
 });
 
+test("prefers a configured public origin for deploy-facing links and policy payloads", async () => {
+  const handlerOptions = {
+    publicOrigin: "https://demo.liteasy.example"
+  };
+
+  const rootResponse = await invokeHandler({
+    handlerOptions,
+    method: "GET",
+    headers: {
+      host: "10.0.0.5:8787"
+    },
+    url: "/"
+  });
+
+  assert.equal(rootResponse.statusCode, 200);
+  assert.equal(rootResponse.json.publicOrigin, "https://demo.liteasy.example");
+
+  const policyResponse = await invokeHandler({
+    handlerOptions,
+    method: "GET",
+    headers: {
+      host: "10.0.0.5:8787"
+    },
+    url: "/v1/admin/model-policy"
+  });
+
+  assert.equal(policyResponse.statusCode, 200);
+  assert.equal(policyResponse.json.cloudProxyEndpoint, "https://demo.liteasy.example");
+
+  const adminResponse = await invokeHandler({
+    handlerOptions,
+    method: "GET",
+    headers: {
+      host: "10.0.0.5:8787"
+    },
+    url: "/admin/"
+  });
+
+  assert.equal(adminResponse.statusCode, 200);
+  assert.match(adminResponse.body, /https:\/\/demo\.liteasy\.example\/admin\//);
+  assert.doesNotMatch(adminResponse.body, /http:\/\/127\.0\.0\.1:8787\/admin\//);
+});
+
 
 
 test("returns the demo admin console html", async () => {
@@ -172,6 +215,51 @@ test("explains that demo login must be called with POST", async () => {
   assert.equal(response.json.method, "POST");
   assert.equal(response.json.endpoint, "/v1/account/demo-login");
   assert.match(response.json.message, /浏览器直接打开/);
+});
+
+test("stores and returns private cloud collection items for a demo session", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const saveResponse = await invokeHandler({
+    body: JSON.stringify({
+      item: {
+        id: "rec-bert-1",
+        reason: "同样关注大规模预训练语言模型的迁移能力。",
+        savedAt: "2026-05-14T10:30:00.000Z",
+        source: "Semantic Scholar",
+        title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+      },
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/collection/items"
+  });
+
+  assert.equal(saveResponse.statusCode, 200);
+  assert.equal(saveResponse.json.items.length, 1);
+  assert.equal(saveResponse.json.items[0].id, "rec-bert-1");
+
+  const getResponse = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/collection/list"
+  });
+
+  assert.equal(getResponse.statusCode, 200);
+  assert.equal(getResponse.json.items.length, 1);
+  assert.equal(getResponse.json.items[0].title, "RoBERTa: A Robustly Optimized BERT Pretraining Approach");
 });
 
 test("returns available endpoints for unknown paths", async () => {
@@ -336,6 +424,7 @@ test("returns a demo account session from the account login endpoint", async () 
     session: {
       email: "researcher@liteasy.dev",
       expiresAt: "2026-05-15T09:30:00Z",
+      membershipTier: "pro",
       name: "Liteasy Researcher",
       sessionId: "demo-session-1"
     }

@@ -54,13 +54,13 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
   }
 
   function createDemoOrganizationRequest(organizationName: string) {
-    const message = `已创建 ${organizationName} 的 demo 组织申请，等待正式后端接入。`;
+    const message = `已提交创建组织“${organizationName}”的申请，当前为演示环境记录。`;
     setCreateOpen(false);
     recordActionMessage(message);
   }
 
   function createDemoOrganizationJoinRequest(inviteCode: string) {
-    const message = `已提交组织邀请码 ${inviteCode} 的 demo 加入申请，等待正式后端接入。`;
+    const message = `已提交加入组织的邀请码 ${inviteCode}，当前为演示环境记录；你的组织角色与成员关系暂不会立即变更。`;
     setJoinOpen(false);
     recordActionMessage(message);
   }
@@ -70,7 +70,7 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
       return;
     }
 
-    const message = `已创建 ${inviteSummary.name} 的 demo 邀请，等待正式后端接入。`;
+    const message = `已创建面向 ${inviteSummary.name} 的邀请，当前为演示环境记录。`;
     setInviteSummary(null);
     recordActionMessage(message);
   }
@@ -80,7 +80,7 @@ export function useOrganizationActions({ onAnalysisHint }: UseOrganizationAction
       return;
     }
 
-    const message = `已创建退出 ${leaveSummary.name} 的 demo 请求，等待正式后端接入。`;
+    const message = `已提交退出 ${leaveSummary.name} 的请求，当前为演示环境记录。`;
     setLeaveSummary(null);
     recordActionMessage(message);
   }

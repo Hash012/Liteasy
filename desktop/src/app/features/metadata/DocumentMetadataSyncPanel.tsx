@@ -24,7 +24,7 @@ function getStatusLabel(status: DocumentMetadataSyncStatus, lastResult: Document
     return "无文献";
   }
 
-  return "未连接云账号";
+  return "当前已退化为本地阅读器";
 }
 
 export function DocumentMetadataSyncPanel({

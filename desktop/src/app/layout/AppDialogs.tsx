@@ -1,4 +1,5 @@
 import type { AccountSession } from "../features/account/account.types";
+import { LightweightLoginDialog } from "../features/account/LightweightLoginDialog";
 import { OrganizationEntryDialog } from "../features/organization/OrganizationEntryDialog";
 import { OrganizationCreateDialog } from "../features/organization/OrganizationCreateDialog";
 import { OrganizationInviteConfirmDialog } from "../features/organization/OrganizationInviteConfirmDialog";
@@ -20,6 +21,7 @@ export type AppDialogsProps = {
   leaveSummary: OrganizationSummary | null;
   list: OrganizationList | null;
   listMessage: string;
+  loginDialogOpen?: boolean;
   onCancelClearProfile: () => void;
   onClearProfile: () => void;
   onCloseAcademicArchive: () => void;
@@ -27,6 +29,9 @@ export type AppDialogsProps = {
   onCloseInviteMember: () => void;
   onCloseJoinOrganization: () => void;
   onCloseLeaveOrganization: () => void;
+  onSkipLogin?: () => void;
+  onSubmitDemoLogin?: () => void;
+  onToggleSuppressLoginReminder?: (checked: boolean) => void;
   onCloseOrganizationDialog: () => void;
   onCreateOrganization: (organizationName: string) => void;
   onInviteMember: () => void;
@@ -50,6 +55,7 @@ export function AppDialogs({
   leaveSummary,
   list,
   listMessage,
+  loginDialogOpen = false,
   onCancelClearProfile,
   onClearProfile,
   onCloseAcademicArchive,
@@ -57,6 +63,9 @@ export function AppDialogs({
   onCloseInviteMember,
   onCloseJoinOrganization,
   onCloseLeaveOrganization,
+  onSkipLogin,
+  onSubmitDemoLogin,
+  onToggleSuppressLoginReminder,
   onCloseOrganizationDialog,
   onCreateOrganization,
   onInviteMember,
@@ -70,6 +79,13 @@ export function AppDialogs({
 }: AppDialogsProps) {
   return (
     <div className="workspace-dialog-layer" data-testid="workspace-dialog-layer">
+      {loginDialogOpen ? (
+        <LightweightLoginDialog
+          onSkip={onSkipLogin ?? (() => undefined)}
+          onSubmitDemoLogin={onSubmitDemoLogin ?? (() => undefined)}
+          onToggleSuppressReminder={onToggleSuppressLoginReminder ?? (() => undefined)}
+        />
+      ) : null}
       {clearProfileConfirmOpen ? (
         <ClearProfileConfirmDialog onCancel={onCancelClearProfile} onConfirm={onClearProfile} />
       ) : null}
