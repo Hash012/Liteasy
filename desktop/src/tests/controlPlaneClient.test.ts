@@ -11,9 +11,6 @@ test("requests model policy snapshot from the control plane endpoint", async () 
         json: async () => ({
           cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
           defaultProvider: "openai",
-          localDirectEnabled: false,
-          localDirectEndpoint: "mock://local-direct",
-          modelAccessMode: "cloud_proxy",
           policyVersion: "policy-2026-05-14",
           syncedAt: "2026-05-14T09:30:00Z"
         }),
@@ -28,11 +25,8 @@ test("requests model policy snapshot from the control plane endpoint", async () 
   expect(result).toEqual({
     policyVersion: "policy-2026-05-14",
     snapshot: {
-      "models.access_mode": "cloud_proxy",
       "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy",
-      "models.default_provider": "openai",
-      "models.local_direct_enabled": false,
-      "models.local_direct_endpoint": "mock://local-direct"
+      "models.default_provider": "openai"
     },
     syncedAt: "2026-05-14T09:30:00Z"
   });

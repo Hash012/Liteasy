@@ -13,14 +13,14 @@ test("posts a session id to the organization list endpoint", async () => {
           organizations: [
             {
               memberCount: 12,
-              myRole: "研究员",
+              myRole: "member",
               name: "Liteasy AI Reading Lab",
               organizationId: "org-demo-1",
               sharedLibraryName: "组织共享文献库"
             },
             {
               memberCount: 4,
-              myRole: "管理员",
+              myRole: "admin",
               name: "Liteasy Literature Ops",
               organizationId: "org-demo-2",
               sharedLibraryName: "文献运营共享库"
@@ -44,4 +44,28 @@ test("posts a session id to the organization list endpoint", async () => {
     body: JSON.stringify({ sessionId: "demo-session-1" }),
     url: "https://liteasy.example.com/control-plane/v1/org/list"
   });
+});
+
+test("rejects organization list payloads with non-formal roles", async () => {
+  const client = createOrganizationListClient({
+    endpoint: "https://liteasy.example.com/control-plane",
+    transport: async () => ({
+      json: async () => ({
+        activeOrganizationId: "org-demo-1",
+        organizations: [
+          {
+            memberCount: 12,
+            myRole: "研究员",
+            name: "Liteasy AI Reading Lab",
+            organizationId: "org-demo-1",
+            sharedLibraryName: "组织共享文献库"
+          }
+        ]
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  await expect(client({ sessionId: "demo-session-1" })).rejects.toThrow("组织列表返回格式无效");
 });

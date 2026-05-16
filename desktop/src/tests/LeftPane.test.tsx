@@ -23,8 +23,6 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     governanceStatus: "idle",
     governanceSummary: null,
     importJobs: {},
-    lastSyncedAt: undefined,
-    latestExecutionLabel: undefined,
     leftRailView: "settings",
     list: null,
     listMessage: "组织列表",
@@ -47,9 +45,6 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     onOpenSharedLibrary: vi.fn(),
     onReturnToLocalWorkspace: vi.fn(),
     onSelectOrganization: vi.fn(),
-    onSetAccessMode: vi.fn(),
-    onSyncCloudPolicy: vi.fn(),
-    onToggleLocalDirectEnabled: vi.fn(),
     onToggleLock: vi.fn(),
     onToggleProfileSampling: vi.fn(),
     onToggleSelection: vi.fn(),
@@ -57,10 +52,6 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     organizationSummaryMessage: "组织摘要",
     organizationSummaryStatus: "idle",
     papers: [],
-    policySyncMessage: "策略",
-    policySyncPending: false,
-    policySyncStatus: "idle",
-    policyVersion: undefined,
     profileClearMessage: undefined,
     profileReadPaperCount: 0,
     academicProfile: { age: "未设置", gender: "未设置", stage: "未设置" },
@@ -378,7 +369,7 @@ describe("LeftPane", () => {
             organizations: [
               {
                 memberCount: 12,
-                myRole: "研究员",
+                myRole: "member",
                 name: "Liteasy AI Reading Lab",
                 organizationId: "org-demo-1",
                 sharedLibraryName: "组织共享文献库"
@@ -392,7 +383,7 @@ describe("LeftPane", () => {
             auditEvents: [],
             memberCount: 12,
             members: [],
-            myRole: "研究员",
+            myRole: "member",
             name: "Liteasy AI Reading Lab",
             notifications: [],
             organizationId: "org-demo-1",
@@ -439,7 +430,7 @@ describe("LeftPane", () => {
             organizations: [
               {
                 memberCount: 12,
-                myRole: "研究员",
+                myRole: "member",
                 name: "Liteasy AI Reading Lab",
                 organizationId: "org-demo-1",
                 sharedLibraryName: "组织共享文献库"
@@ -453,7 +444,7 @@ describe("LeftPane", () => {
             auditEvents: [],
             memberCount: 12,
             members: [],
-            myRole: "研究员",
+            myRole: "member",
             name: "Liteasy AI Reading Lab",
             notifications: [],
             organizationId: "org-demo-1",
@@ -499,7 +490,7 @@ describe("LeftPane", () => {
             organizations: [
               {
                 memberCount: 12,
-                myRole: "研究员",
+                myRole: "member",
                 name: "Liteasy AI Reading Lab",
                 organizationId: "org-demo-1",
                 sharedLibraryName: "组织共享文献库"
@@ -513,7 +504,7 @@ describe("LeftPane", () => {
             auditEvents: [],
             memberCount: 12,
             members: [],
-            myRole: "研究员",
+            myRole: "member",
             name: "Liteasy AI Reading Lab",
             notifications: [],
             organizationId: "org-demo-1",

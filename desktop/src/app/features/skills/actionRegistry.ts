@@ -13,7 +13,6 @@ export type ActionContext = {
   profileUnlocked?: boolean;
   settingsStore?: SettingsStoreLike;
   startArtifactAnalysis?: (artifactType: ArtifactType) => string;
-  syncCloudPolicy?: () => Promise<string>;
 };
 
 export type ActionResult = {
@@ -24,10 +23,6 @@ function formatSettingValue(
   target: UpdateSettingCommand["target"],
   value: UpdateSettingCommand["value"]
 ) {
-  if (target === "models.access_mode") {
-    return value === "local_direct" ? "本地直连" : "云代理";
-  }
-
   if (target === "network.recommendation.sort_mode") {
     return value === "retrieved_at" ? "按检索时间" : "按关联度";
   }
@@ -57,12 +52,6 @@ export type ActionInvocation =
       };
     }
   | {
-      actionId: "settings.sync_model_policy";
-      input: {
-        source: "cloud_control_plane";
-      };
-    }
-  | {
       actionId: "organization.open_shared_library";
       input: {
         source: "organization_space";
@@ -87,30 +76,11 @@ export async function executeAction(
       };
     }
 
-    if (
-      invocation.input.target === "models.access_mode" &&
-      invocation.input.value === "local_direct" &&
-      context.settingsStore.getState()["models.local_direct_enabled"] !== true
-    ) {
-      return {
-        message: "本地直连未开放。请先同步云端策略，或在设置中启用允许本地直连。模型：云代理"
-      };
-    }
-
     context.settingsStore.apply({
       intent: "update_setting",
       target: invocation.input.target,
       value: invocation.input.value
     });
-
-    if (invocation.input.target === "models.access_mode") {
-      return {
-        message: `已切换模型通道。模型：${formatSettingValue(
-          invocation.input.target,
-          invocation.input.value
-        )}`
-      };
-    }
 
     return {
       message: `已更新 ${settingsRegistry[invocation.input.target].label}：${formatSettingValue(
@@ -127,16 +97,6 @@ export async function executeAction(
 
     return {
       message: context.importSelectedSet()
-    };
-  }
-
-  if (invocation.actionId === "settings.sync_model_policy") {
-    if (!context.syncCloudPolicy) {
-      throw new Error("settings.sync_model_policy requires a cloud policy sync handler");
-    }
-
-    return {
-      message: await context.syncCloudPolicy()
     };
   }
 

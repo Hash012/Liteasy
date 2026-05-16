@@ -15,7 +15,6 @@ describe("TopBar", () => {
         accountPending={false}
         accountSession={null}
         cloudAvailabilityStatus="available"
-        modelAccessMode="cloud_proxy"
         onLogin={onLogin}
         onLogout={onLogout}
       />
@@ -42,7 +41,6 @@ describe("TopBar", () => {
         accountPending={false}
         accountSession={null}
         cloudAvailabilityStatus="unavailable"
-        modelAccessMode="cloud_proxy"
         onLogin={vi.fn()}
         onLogout={vi.fn()}
       />

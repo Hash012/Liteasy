@@ -16,7 +16,7 @@ describe("useCollectionItems", () => {
     sessionId: "demo-session-1"
   };
 
-  test("restores stored collection items", () => {
+  test("does not restore collection items from local browser storage while logged out", () => {
     window.localStorage.setItem(
       "liteasy.collection.online.v1",
       JSON.stringify([
@@ -32,18 +32,11 @@ describe("useCollectionItems", () => {
 
     const { result } = renderHook(() => useCollectionItems());
 
-    expect(result.current.collectionItems).toEqual([
-      {
-        id: "paper-1",
-        reason: "RAG baseline",
-        savedAt: "2026-05-14T00:00:00.000Z",
-        source: "semantic-scholar",
-        title: "Retrieval-Augmented Generation"
-      }
-    ]);
+    expect(result.current.collectionItems).toEqual([]);
+    expect(result.current.message).toBe("登录后可用的云端收藏会显示在这里。");
   });
 
-  test("collects recommendations at the top and replaces duplicates", () => {
+  test("collects recommendations in-memory while logged out without persisting them locally", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-14T10:30:00.000Z"));
     const { result } = renderHook(() => useCollectionItems());
@@ -89,8 +82,8 @@ describe("useCollectionItems", () => {
         title: "Long-Context Evaluation"
       }
     ]);
-    expect(JSON.parse(window.localStorage.getItem("liteasy.collection.online.v1") ?? "[]"))
-      .toEqual(result.current.collectionItems);
+    expect(window.localStorage.getItem("liteasy.collection.online.v1")).toBeNull();
+    expect(result.current.message).toBe("已更新本地收藏。");
   });
 
   test("uses a cloud transport when account session is available", async () => {

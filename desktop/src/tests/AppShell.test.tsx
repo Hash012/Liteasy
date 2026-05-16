@@ -265,261 +265,6 @@ test("keeps the three primary panes as direct grid items in the workbench", asyn
   expect(workbench.querySelector(":scope > section.pane.right.assistant-only-pane")).toBeInTheDocument();
 });
 
-test("switches assistant generation to local-direct mode when cloud policy allows it", async () => {
-  const user = userEvent.setup();
-
-  render(<AppShell />);
-
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
-  await user.click(screen.getByRole("button", { name: "锁定选择" }));
-  await user.click(screen.getByRole("button", { name: "交给AI流程" }));
-
-  await waitFor(() => {
-    expect(screen.getByText("parsed")).toBeInTheDocument();
-  }, { timeout: 2500 });
-
-  await openSettingsPanel(user);
-  await user.click(screen.getByRole("checkbox", { name: "允许本地直连（模拟云端策略）" }));
-  await user.click(screen.getByRole("button", { name: "使用本地直连" }));
-  await openLibraryPanel(user);
-  await selectInitialAssistantMode(user, "问答");
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  await waitFor(() => {
-    expect(screen.getByText(/本地直连回答：这篇论文的预训练目标是什么？/)).toBeInTheDocument();
-  });
-}, 10000);
-
-test("falls back to cloud proxy when local-direct permission is turned off", async () => {
-  const user = userEvent.setup();
-
-  render(<AppShell />);
-
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
-  await user.click(screen.getByRole("button", { name: "锁定选择" }));
-  await user.click(screen.getByRole("button", { name: "交给AI流程" }));
-
-  await waitFor(() => {
-    expect(screen.getByText("parsed")).toBeInTheDocument();
-  }, { timeout: 2500 });
-
-  await openSettingsPanel(user);
-  const localToggle = screen.getByRole("checkbox", { name: "允许本地直连（模拟云端策略）" });
-  await user.click(localToggle);
-  await user.click(screen.getByRole("button", { name: "使用本地直连" }));
-  await user.click(localToggle);
-  await openLibraryPanel(user);
-
-  await selectInitialAssistantMode(user, "问答");
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  await waitFor(() => {
-    expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
-  });
-}, 10000);
-
-
-test("does not let assistant commands bypass local-direct policy", async () => {
-  const user = userEvent.setup();
-
-  render(<AppShell />);
-
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "切换到本地直连");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  expect(screen.getByText(/本地直连未开放/)).toBeInTheDocument();
-  expect(screen.getByText(/模型：云代理/)).toBeInTheDocument();
-
-  const settingsPane = await openSettingsPanel(user);
-  expect(within(settingsPane).getByText(/当前通道：云代理/)).toBeInTheDocument();
-});
-
-test("allows assistant commands to switch model policy before qa generation", async () => {
-  const user = userEvent.setup();
-
-  render(<AppShell />);
-
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
-  await user.click(screen.getByRole("button", { name: "锁定选择" }));
-  await user.click(screen.getByRole("button", { name: "交给AI流程" }));
-
-  await waitFor(() => {
-    expect(screen.getByText("parsed")).toBeInTheDocument();
-  }, { timeout: 2500 });
-
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "允许本地直连");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "切换到本地直连");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  expect(screen.getByText(/模型：本地直连/)).toBeInTheDocument();
-
-  await selectInitialAssistantMode(user, "问答");
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  await waitFor(() => {
-    expect(screen.getByText(/本地直连回答：这篇论文的预训练目标是什么？/)).toBeInTheDocument();
-  });
-}, 10000);
-
-test("syncs model access policy from the cloud control plane", async () => {
-  const user = userEvent.setup();
-
-  render(<AppShell />);
-
-  await openSettingsPanel(user);
-  await user.click(screen.getByRole("checkbox", { name: "允许本地直连（模拟云端策略）" }));
-  await user.click(screen.getByRole("button", { name: "使用本地直连" }));
-  expect(screen.getByText(/当前通道：本地直连/)).toBeInTheDocument();
-
-  await user.click(screen.getByRole("button", { name: "同步云端策略" }));
-
-  await waitFor(() => {
-    expect(screen.getByText(/当前通道：云代理/)).toBeInTheDocument();
-  });
-
-  expect(
-    screen.getByText(/已从云端同步模型策略，当前以云端管理员下发配置为准。/)
-  ).toBeInTheDocument();
-  expect(
-    screen.getByRole("checkbox", { name: "允许本地直连（模拟云端策略）" })
-  ).not.toBeChecked();
-}, 10000);
-
-test("allows assistant commands to sync cloud model policy", async () => {
-  const user = userEvent.setup();
-
-  render(<AppShell />);
-
-  await openSettingsPanel(user);
-  await user.click(screen.getByRole("checkbox", { name: "允许本地直连（模拟云端策略）" }));
-  await user.click(screen.getByRole("button", { name: "使用本地直连" }));
-  expect(screen.getByText(/当前通道：本地直连/)).toBeInTheDocument();
-
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "同步云端策略");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  await waitFor(() => {
-    expect(screen.getByText(/当前通道：云代理/)).toBeInTheDocument();
-  });
-
-  expect(screen.getAllByText(/已从云端同步模型策略/).length).toBeGreaterThan(0);
-}, 10000);
-
-test("auto-syncs cloud model policy on startup", async () => {
-  render(
-    <AppShell
-      initialSettings={{
-        "models.access_mode": "local_direct",
-        "models.local_direct_enabled": true
-      }}
-    />
-  );
-
-  const settingsPane = await openSettingsPanel(userEvent.setup());
-
-  await waitFor(() => {
-    expect(within(settingsPane).getByText(/当前通道：云代理/)).toBeInTheDocument();
-  });
-
-  expect(within(settingsPane).getByText("同步状态：已同步")).toBeInTheDocument();
-  expect(screen.getByText("策略版本：mock-policy-v1")).toBeInTheDocument();
-  expect(screen.getByText("最近同步：2026-05-14T09:30:00Z")).toBeInTheDocument();
-}, 10000);
-
-test("shows a failed sync status when startup policy sync cannot reach the cloud", async () => {
-  render(
-    <AppShell
-      controlPlaneTransport={async () => ({
-        json: async () => ({
-          error: "unavailable"
-        }),
-        ok: false,
-        status: 503
-      })}
-      initialSettings={{
-        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
-      }}
-    />
-  );
-
-  const settingsPane = await openSettingsPanel(userEvent.setup());
-
-  await waitFor(() => {
-    expect(within(settingsPane).getByText("同步状态：失败")).toBeInTheDocument();
-  });
-
-  expect(within(settingsPane).getByText(/云端策略同步失败/)).toBeInTheDocument();
-}, 10000);
-
-test("shows the latest model execution chain in the policy panel", async () => {
-  const user = userEvent.setup();
-
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input) => {
-      if (String(input).includes("/v1/model/generate")) {
-        return {
-          json: async () => ({
-            answer: "真实服务回答",
-            execution: {
-              backend: "dev_cloud",
-              mode: "live",
-              provider: "openai"
-            }
-          }),
-          ok: true,
-          status: 200
-        };
-      }
-
-      return {
-        json: async () => ({
-          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
-          defaultProvider: "openai",
-          localDirectEnabled: false,
-          localDirectEndpoint: "mock://local-direct",
-          modelAccessMode: "cloud_proxy",
-          policyVersion: "policy-dev-cloud-live",
-          syncedAt: "2026-05-14T09:30:00Z"
-        }),
-        ok: true,
-        status: 200
-      };
-    })
-  );
-
-  render(
-    <AppShell
-      initialSettings={{
-        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy",
-        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
-      }}
-    />
-  );
-
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
-  await user.click(screen.getByRole("button", { name: "锁定选择" }));
-  await user.click(screen.getByRole("button", { name: "交给AI流程" }));
-
-  await waitFor(() => {
-    expect(screen.getByText("parsed")).toBeInTheDocument();
-  }, { timeout: 2500 });
-
-  await selectInitialAssistantMode(user, "问答");
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  const settingsPane = await openSettingsPanel(user);
-
-  await waitFor(() => {
-    expect(within(settingsPane).getByText("最近执行：云代理 -> 云端服务 -> OpenAI")).toBeInTheDocument();
-  });
-}, 10000);
-
 test("logs into the dev cloud account and restores the session on next render", async () => {
   const user = userEvent.setup();
 
@@ -566,9 +311,6 @@ test("logs into the dev cloud account and restores the session on next render", 
   );
 
   await openSettingsPanel(user);
-  await waitFor(() => {
-    expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
-  });
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
@@ -600,7 +342,6 @@ test("logs into the dev cloud account and restores the session on next render", 
     expect.stringContaining("已恢复本地云账号会话")
   );
   await openSettingsPanel(user);
-  expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
 }, 10000);
 
 test("shows cloud recommendations for the current selected document set after account login", async () => {
@@ -799,6 +540,52 @@ test("shows cloud recommendations for the current selected document set after ac
         };
       }
 
+      if (String(input).includes("/v1/recommendation-cache/get")) {
+        return {
+          json: async () => ({
+            cacheHit: recommendationRequestCount > 0,
+            recommendations:
+              recommendationRequestCount > 0
+                ? [
+                    {
+                      discoveredAt: "2026-05-14T08:15:00Z",
+                      id: "rec-bert-1",
+                      relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                      relevanceBand: "high",
+                      relevanceScore: 0.92,
+                      reason: "同样关注大规模预训练语言模型的迁移能力。",
+                      source: "Semantic Scholar",
+                      title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                    }
+                  ]
+                : []
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/recommendation-cache/put")) {
+        return {
+          json: async () => ({
+            cachedAt: "2026-05-14T08:15:00Z",
+            ok: true
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/recommendation-cache/clear")) {
+        return {
+          json: async () => ({
+            cleared: true
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
       return {
         json: async () => ({
           cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
@@ -824,9 +611,6 @@ test("shows cloud recommendations for the current selected document set after ac
   );
 
   await openSettingsPanel(user);
-  await waitFor(() => {
-    expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
-  });
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
@@ -1016,9 +800,6 @@ test("reorders recommendations after assistant command switches to retrieval-tim
   );
 
   await openSettingsPanel(user);
-  await waitFor(() => {
-    expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
-  });
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
@@ -1151,9 +932,6 @@ test("drags a recommendation into local collection and restores it on next rende
   );
 
   await openSettingsPanel(user);
-  await waitFor(() => {
-    expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
-  });
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
@@ -1320,9 +1098,6 @@ test("drags collected and recommended papers into the local library without dupl
   );
 
   await openSettingsPanel(user);
-  await waitFor(() => {
-    expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
-  });
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
@@ -1395,6 +1170,7 @@ test("drags collected and recommended papers into the local library without dupl
 test("clears visible recommendation cache on user request", async () => {
   const user = userEvent.setup();
   let recommendationRequestCount = 0;
+  let recommendationCacheGetCount = 0;
 
   vi.stubGlobal(
     "fetch",
@@ -1454,6 +1230,53 @@ test("clears visible recommendation cache on user request", async () => {
         };
       }
 
+      if (String(input).includes("/v1/recommendation-cache/get")) {
+        recommendationCacheGetCount += 1;
+        return {
+          json: async () => ({
+            cacheHit: recommendationRequestCount > 0,
+            recommendations:
+              recommendationRequestCount > 0
+                ? [
+                    {
+                      discoveredAt: "2026-05-14T08:15:00Z",
+                      id: "rec-bert-1",
+                      relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                      relevanceBand: "high",
+                      relevanceScore: 0.92,
+                      reason: "同样关注大规模预训练语言模型的迁移能力。",
+                      source: "Semantic Scholar",
+                      title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                    }
+                  ]
+                : []
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/recommendation-cache/put")) {
+        return {
+          json: async () => ({
+            cachedAt: "2026-05-14T08:15:00Z",
+            ok: true
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/recommendation-cache/clear")) {
+        return {
+          json: async () => ({
+            cleared: true
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
       return {
         json: async () => ({
           cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
@@ -1497,11 +1320,15 @@ test("clears visible recommendation cache on user request", async () => {
     "已清理当前工作区的关联推荐缓存。"
   );
   expect(recommendationRequestCount).toBe(1);
+  expect(recommendationCacheGetCount).toBeGreaterThanOrEqual(1);
 });
 
 test("reuses cached recommendations until a collected paper is added to the library", async () => {
   const user = userEvent.setup();
   let recommendationRequestCount = 0;
+  let recommendationCacheGetCount = 0;
+  let recommendationCachePutCount = 0;
+  let recommendationCacheClearCount = 0;
   let collectionItems: Array<{
     id: string;
     reason: string;
@@ -1579,6 +1406,55 @@ test("reuses cached recommendations until a collected paper is added to the libr
         };
       }
 
+      if (String(input).includes("/v1/recommendation-cache/get")) {
+        recommendationCacheGetCount += 1;
+        return {
+          json: async () => ({
+            cacheHit: recommendationRequestCount > 0,
+            recommendations:
+              recommendationRequestCount > 0
+                ? [
+                    {
+                      discoveredAt: "2026-05-14T08:15:00Z",
+                      id: "rec-bert-1",
+                      relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                      relevanceBand: "high",
+                      relevanceScore: 0.92,
+                      reason: "同样关注大规模预训练语言模型的迁移能力。",
+                      source: "Semantic Scholar",
+                      title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                    }
+                  ]
+                : []
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/recommendation-cache/put")) {
+        recommendationCachePutCount += 1;
+        return {
+          json: async () => ({
+            cachedAt: "2026-05-14T08:15:00Z",
+            ok: true
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/recommendation-cache/clear")) {
+        recommendationCacheClearCount += 1;
+        return {
+          json: async () => ({
+            cleared: true
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
       return {
         json: async () => ({
           cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
@@ -1604,9 +1480,6 @@ test("reuses cached recommendations until a collected paper is added to the libr
   );
 
   await openSettingsPanel(user);
-  await waitFor(() => {
-    expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
-  });
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
@@ -1660,6 +1533,8 @@ test("reuses cached recommendations until a collected paper is added to the libr
     expect(screen.getByText("已显示当前选中文献集的缓存推荐。")).toBeInTheDocument();
   });
   expect(recommendationRequestCount).toBe(1);
+  expect(recommendationCacheGetCount).toBeGreaterThanOrEqual(2);
+  expect(recommendationCachePutCount).toBe(1);
 
 
   const restoredCollectionZone = screen.getByLabelText("收藏投放区");
@@ -1675,9 +1550,11 @@ test("reuses cached recommendations until a collected paper is added to the libr
 
   await user.click(screen.getByLabelText("RoBERTa: A Robustly Optimized BERT Pretraining Approach"));
   await waitFor(() => {
-    expect(screen.getByText("已获取 1 条关联推荐。")).toBeInTheDocument();
+    expect(screen.getByText("已显示当前选中文献集的缓存推荐。")).toBeInTheDocument();
   });
-  expect(recommendationRequestCount).toBe(2);
+  expect(recommendationRequestCount).toBe(1);
+  expect(recommendationCacheGetCount).toBeGreaterThanOrEqual(3);
+  expect(recommendationCacheClearCount).toBe(0);
 }, 10000);
 
 
@@ -1891,9 +1768,6 @@ test("syncs visible workspace document metadata after cloud account login", asyn
   );
 
   await openSettingsPanel(user);
-  await waitFor(() => {
-    expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
-  });
 
   expect(screen.getByText("文献同步：当前已退化为本地阅读器")).toHaveAttribute(
     "title",

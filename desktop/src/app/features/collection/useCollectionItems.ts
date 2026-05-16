@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AccountSession } from "../account/account.types";
 import type { CollectionItem } from "./collection.types";
-import {
-  loadStoredCollectionItems,
-  storeCollectionItems
-} from "./collectionStorage";
 import { loadCloudCollectionItems, saveCloudCollectionItem } from "./collectionRuntime";
 import type { CollectionTransport } from "./collectionClient";
 
@@ -28,9 +24,7 @@ export function useCollectionItems({
   controlPlaneEndpoint = "mock://control-plane",
   transport
 }: UseCollectionItemsInput = {}) {
-  const [collectionItems, setCollectionItems] = useState<CollectionItem[]>(() =>
-    loadStoredCollectionItems()
-  );
+  const [collectionItems, setCollectionItems] = useState<CollectionItem[]>([]);
   const [status, setStatus] = useState<CollectionStatus>(accountSession ? "loading" : "idle");
   const [message, setMessage] = useState(
     accountSession ? "正在同步云端收藏..." : "登录后可用的云端收藏会显示在这里。"
@@ -57,7 +51,6 @@ export function useCollectionItems({
     );
 
     setCollectionItems(items);
-    storeCollectionItems(items);
     setStatus("ready");
     setMessage("已同步云端收藏。");
   }
@@ -89,7 +82,6 @@ export function useCollectionItems({
         }
 
         setCollectionItems(items);
-        storeCollectionItems(items);
         setStatus("ready");
         setMessage("已同步云端收藏。");
       })
@@ -131,14 +123,12 @@ export function useCollectionItems({
         }
       );
       setCollectionItems(cloudItems);
-      storeCollectionItems(cloudItems);
       setStatus("ready");
       setMessage("已同步云端收藏。");
       return;
     }
 
     setCollectionItems(nextItems);
-    storeCollectionItems(nextItems);
     setStatus("ready");
     setMessage("已更新本地收藏。");
   }

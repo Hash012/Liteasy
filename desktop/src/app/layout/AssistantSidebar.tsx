@@ -1,6 +1,5 @@
 import { AssistantPane } from "../features/assistant/AssistantPane";
 import type { ArtifactType } from "../features/artifacts/artifact.types";
-import type { ModelExecutionTrace } from "../features/models/modelExecution";
 import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import type { SettingsState } from "../features/settings/settings.types";
 import type { createSettingsStore } from "../features/settings/settings.store";
@@ -12,11 +11,9 @@ type AssistantSidebarProps = {
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
   onGenerateArtifact: (artifactType: ArtifactType) => string;
-  onModelExecution?: (trace: ModelExecutionTrace) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
-  onSyncCloudPolicy?: () => Promise<string>;
   selectedPaperCount: number;
   selectedPapers: Paper[];
   selectionLocked: boolean;
@@ -27,11 +24,9 @@ export function AssistantSidebar({
   importedChunksByPaperId,
   importedSelectedCount,
   onGenerateArtifact,
-  onModelExecution,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
-  onSyncCloudPolicy,
   selectedPaperCount,
   selectedPapers,
   selectionLocked,
@@ -44,11 +39,9 @@ export function AssistantSidebar({
         <AssistantPane
           importedChunksByPaperId={importedChunksByPaperId}
           onGenerateArtifact={onGenerateArtifact}
-          onModelExecution={onModelExecution}
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onSettingsChanged={onSettingsChanged}
           profileUnlocked={profileUnlocked}
-          onSyncCloudPolicy={onSyncCloudPolicy}
           selectedPapers={selectedPapers}
           selectedSetStatus={{
             importedCount: importedSelectedCount,

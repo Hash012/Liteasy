@@ -1,5 +1,5 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
-import type { OrganizationList, OrganizationListInput } from "./organization.types";
+import type { OrganizationList, OrganizationListInput, OrganizationRole } from "./organization.types";
 
 export type OrganizationListTransportRequest = {
   body: string;
@@ -33,6 +33,10 @@ function hasNumberField(record: Record<string, unknown>, field: string) {
   return typeof record[field] === "number";
 }
 
+function isOrganizationRole(value: unknown): value is OrganizationRole {
+  return value === "owner" || value === "admin" || value === "member";
+}
+
 function isOrganizationListPayload(payload: unknown): payload is OrganizationList {
   return (
     isRecord(payload) &&
@@ -42,10 +46,12 @@ function isOrganizationListPayload(payload: unknown): payload is OrganizationLis
       (organization) =>
         isRecord(organization) &&
         hasNumberField(organization, "memberCount") &&
-        hasStringField(organization, "myRole") &&
+        isOrganizationRole(organization.myRole) &&
         hasStringField(organization, "name") &&
         hasStringField(organization, "organizationId") &&
-        hasStringField(organization, "sharedLibraryName")
+        hasStringField(organization, "sharedLibraryName") &&
+        (typeof organization.canCreateOrganization === "boolean" || typeof organization.canCreateOrganization === "undefined") &&
+        (typeof organization.ownerUserId === "string" || typeof organization.ownerUserId === "undefined")
     )
   );
 }

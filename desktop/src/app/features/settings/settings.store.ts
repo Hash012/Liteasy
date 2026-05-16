@@ -7,11 +7,8 @@ export function createSettingsStore() {
     "profile.enabled": false,
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
-    "models.access_mode": "cloud_proxy",
-    "models.local_direct_enabled": false,
     "models.default_provider": "openai",
     "models.cloud_proxy_endpoint": "mock://cloud-proxy",
-    "models.local_direct_endpoint": "mock://local-direct",
     "models.control_plane_endpoint": "mock://control-plane"
   };
 

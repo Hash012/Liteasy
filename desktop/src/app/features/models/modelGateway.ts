@@ -1,11 +1,8 @@
-export type ModelAccessMode = "cloud_proxy" | "local_direct";
 import type { ModelExecutionTrace } from "./modelExecution";
 
 export type ModelPolicy = {
   allowedModels: string[];
   allowedProviders: string[];
-  localDirectEnabled: boolean;
-  modelAccessMode: ModelAccessMode;
 };
 
 export type GenerateAnswerInput = {
@@ -20,8 +17,7 @@ export type ModelGenerationResult = {
 };
 
 type ModelGatewayDeps = {
-  cloudProxy: (input: GenerateAnswerInput) => Promise<ModelGenerationResult>;
-  localDirect: (input: GenerateAnswerInput) => Promise<ModelGenerationResult>;
+  cloudModel: (input: GenerateAnswerInput) => Promise<ModelGenerationResult>;
   policy: ModelPolicy;
 };
 
@@ -36,15 +32,7 @@ export function createModelGateway(deps: ModelGatewayDeps) {
         throw new Error(`当前云端策略未开放该模型：${input.model}`);
       }
 
-      if (deps.policy.modelAccessMode === "cloud_proxy") {
-        return deps.cloudProxy(input);
-      }
-
-      if (!deps.policy.localDirectEnabled) {
-        throw new Error("当前云端策略未开放本地直连模型能力");
-      }
-
-      return deps.localDirect(input);
+      return deps.cloudModel(input);
     }
   };
 }

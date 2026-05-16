@@ -1,14 +1,12 @@
 import { AccountStatusPanel } from "../features/account/AccountStatusPanel";
 import { AppBrand } from "./AppBrand";
 import type { AccountSession } from "../features/account/account.types";
-import type { SettingsState } from "../features/settings/settings.types";
 
 type TopBarProps = {
   accountMessage?: string;
   accountPending?: boolean;
   accountSession: AccountSession | null;
   cloudAvailabilityStatus?: "available" | "unavailable";
-  modelAccessMode: SettingsState["models.access_mode"];
   onLogin: () => void;
   onLogout: () => void;
 };
@@ -18,13 +16,12 @@ export function TopBar({
   accountPending,
   accountSession,
   cloudAvailabilityStatus = "available",
-  modelAccessMode,
   onLogin,
   onLogout
 }: TopBarProps) {
   return (
     <header className="app-topbar">
-      <AppBrand modelAccessMode={modelAccessMode} />
+      <AppBrand />
       <AccountStatusPanel
         cloudAvailabilityStatus={cloudAvailabilityStatus}
         message={accountMessage}

@@ -4,11 +4,8 @@ export type SettingKey =
   | "profile.enabled"
   | "assistant.default_output_mode"
   | "assistant.language"
-  | "models.access_mode"
-  | "models.local_direct_enabled"
   | "models.default_provider"
   | "models.cloud_proxy_endpoint"
-  | "models.local_direct_endpoint"
   | "models.control_plane_endpoint";
 
 export type SettingsState = {
@@ -17,11 +14,8 @@ export type SettingsState = {
   "profile.enabled": boolean;
   "assistant.default_output_mode": string;
   "assistant.language": string;
-  "models.access_mode": "cloud_proxy" | "local_direct";
-  "models.local_direct_enabled": boolean;
   "models.default_provider": string;
   "models.cloud_proxy_endpoint": string;
-  "models.local_direct_endpoint": string;
   "models.control_plane_endpoint": string;
 };
 

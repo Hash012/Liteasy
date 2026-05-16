@@ -88,29 +88,6 @@ test("executes a selected-document-set import action", async () => {
   expect(result.message).toBe("已将当前选中文献集交给 AI 流程。");
 });
 
-test("executes a cloud model policy sync action", async () => {
-  let synced = 0;
-
-  const result = await executeAction(
-    {
-      actionId: "settings.sync_model_policy",
-      input: {
-        source: "cloud_control_plane"
-      }
-    },
-    {
-      syncCloudPolicy: async () => {
-        synced += 1;
-        return "已从云端同步模型策略，当前以云端管理员下发配置为准。";
-      }
-    }
-  );
-
-  expect(synced).toBe(1);
-  expect(result.message).toContain("已从云端同步模型策略");
-});
-
-
 test("executes an organization shared-library open action", async () => {
   let opened = 0;
 
@@ -131,50 +108,4 @@ test("executes an organization shared-library open action", async () => {
 
   expect(opened).toBe(1);
   expect(result.message).toBe("已打开组织共享文献库：组织共享文献库。");
-});
-
-test("keeps local-direct access disabled when policy has not allowed it", async () => {
-  const settingsStore = createSettingsStore();
-
-  const result = await executeAction(
-    {
-      actionId: "settings.update",
-      input: {
-        target: "models.access_mode",
-        value: "local_direct"
-      }
-    },
-    {
-      settingsStore
-    }
-  );
-
-  expect(settingsStore.getState()["models.access_mode"]).toBe("cloud_proxy");
-  expect(result.message).toContain("本地直连未开放");
-  expect(result.message).toContain("模型：云代理");
-});
-
-test("returns a user-facing model status message when switching access mode", async () => {
-  const settingsStore = createSettingsStore();
-  settingsStore.apply({
-    intent: "update_setting",
-    target: "models.local_direct_enabled",
-    value: true
-  });
-
-  const result = await executeAction(
-    {
-      actionId: "settings.update",
-      input: {
-        target: "models.access_mode",
-        value: "local_direct"
-      }
-    },
-    {
-      settingsStore
-    }
-  );
-
-  expect(settingsStore.getState()["models.access_mode"]).toBe("local_direct");
-  expect(result.message).toContain("模型：本地直连");
 });

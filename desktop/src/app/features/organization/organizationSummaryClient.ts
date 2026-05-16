@@ -1,5 +1,5 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
-import type { OrganizationSummary, OrganizationSummaryInput } from "./organization.types";
+import type { OrganizationRole, OrganizationSummary, OrganizationSummaryInput } from "./organization.types";
 
 export type OrganizationSummaryTransportRequest = {
   body: string;
@@ -31,6 +31,10 @@ function isNotificationType(value: unknown) {
 
 function isSharedLibraryStatus(value: unknown) {
   return value === "available" || value === "syncing" || value === "unavailable";
+}
+
+function isOrganizationRole(value: unknown): value is OrganizationRole {
+  return value === "owner" || value === "admin" || value === "member";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,9 +76,9 @@ function isOrganizationSummaryPayload(payload: unknown): payload is Organization
         isRecord(member) &&
         hasStringField(member, "id") &&
         hasStringField(member, "name") &&
-        hasStringField(member, "role")
+        isOrganizationRole(member.role)
     ) &&
-    hasStringField(summary, "myRole") &&
+    isOrganizationRole(summary.myRole) &&
     hasStringField(summary, "name") &&
     Array.isArray(summary.notifications) &&
     summary.notifications.every(
@@ -85,6 +89,8 @@ function isOrganizationSummaryPayload(payload: unknown): payload is Organization
         isNotificationType(notification.type)
     ) &&
     hasStringField(summary, "organizationId") &&
+    (typeof summary.canCreateOrganization === "boolean" || typeof summary.canCreateOrganization === "undefined") &&
+    (typeof summary.ownerUserId === "string" || typeof summary.ownerUserId === "undefined") &&
     hasStringField(summary.quota, "periodEndsAt") &&
     hasNumberField(summary.quota, "storageLimitGb") &&
     hasNumberField(summary.quota, "storageUsedGb") &&
@@ -98,6 +104,8 @@ function isOrganizationSummaryPayload(payload: unknown): payload is Organization
         hasStringField(document, "title")
     ) &&
     hasStringField(summary.sharedLibrary, "name") &&
+    (typeof summary.sharedLibrary.ownerUserId === "string" ||
+      typeof summary.sharedLibrary.ownerUserId === "undefined") &&
     isSharedLibraryStatus(summary.sharedLibrary.status) &&
     hasNumberField(summary.taskSummary, "failed") &&
     hasNumberField(summary.taskSummary, "running")

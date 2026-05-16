@@ -1,7 +1,7 @@
 import type { GenerateAnswerInput, ModelGenerationResult } from "./modelGateway";
 import type { ModelExecutionTrace } from "./modelExecution";
 
-export type ModelClientSource = "cloud_proxy" | "local_direct";
+export type ModelClientSource = "cloud_proxy";
 
 export type ModelTransportRequest = {
   body: string;

@@ -3,7 +3,7 @@ import { createModelGateway } from "../app/features/models/modelGateway";
 test("uses cloud proxy path by default when policy is cloud-governed", async () => {
   const calls: string[] = [];
   const gateway = createModelGateway({
-    cloudProxy: async ({ prompt }) => {
+    cloudModel: async ({ prompt }) => {
       calls.push(`cloud:${prompt}`);
       return {
         answer: "cloud answer",
@@ -16,24 +16,9 @@ test("uses cloud proxy path by default when policy is cloud-governed", async () 
         }
       };
     },
-    localDirect: async ({ prompt }) => {
-      calls.push(`local:${prompt}`);
-      return {
-        answer: "local answer",
-        trace: {
-          backend: "http_service",
-          endpoint: "https://example.com/local",
-          mode: "unknown",
-          provider: "openai",
-          source: "local_direct"
-        }
-      };
-    },
     policy: {
       allowedModels: ["gpt-5-mini"],
-      allowedProviders: ["openai"],
-      localDirectEnabled: false,
-      modelAccessMode: "cloud_proxy"
+      allowedProviders: ["openai"]
     }
   });
 

@@ -16,15 +16,6 @@ export function useModelSettingsActions({
     onSettingsChanged({ ...settingsStore.getState() });
   }
 
-  function setModelAccessMode(mode: SettingsState["models.access_mode"]) {
-    settingsStore.apply({
-      intent: "update_setting",
-      target: "models.access_mode",
-      value: mode
-    });
-    syncSettings();
-  }
-
   function applyModelPolicySnapshot(nextSettings: Partial<SettingsState>) {
     Object.entries(nextSettings).forEach(([target, value]) => {
       settingsStore.apply({
@@ -43,28 +34,8 @@ export function useModelSettingsActions({
     });
   }
 
-  function setLocalDirectEnabled(enabled: boolean) {
-    settingsStore.apply({
-      intent: "update_setting",
-      target: "models.local_direct_enabled",
-      value: enabled
-    });
-
-    if (!enabled && settingsStore.getState()["models.access_mode"] === "local_direct") {
-      settingsStore.apply({
-        intent: "update_setting",
-        target: "models.access_mode",
-        value: "cloud_proxy"
-      });
-    }
-
-    syncSettings();
-  }
-
   return {
     applyLocalDevCloudDefaults,
-    applyModelPolicySnapshot,
-    setLocalDirectEnabled,
-    setModelAccessMode
+    applyModelPolicySnapshot
   };
 }

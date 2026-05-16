@@ -12,7 +12,6 @@ import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
 import { useProfileActions } from "../features/profile/useProfileActions";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
-import { formatModelExecutionLabel, type ModelExecutionTrace } from "../features/models/modelExecution";
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import type { AccountTransport } from "../features/account/accountSessionClient";
@@ -91,7 +90,6 @@ export function AppShell({
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏模态按钮启动分析。"
   );
-  const [lastModelExecution, setLastModelExecution] = useState<ModelExecutionTrace | undefined>();
   const [loginDialogDismissedThisSession, setLoginDialogDismissedThisSession] = useState(false);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [workspaceLabel, setWorkspaceLabel] = useState("本地文献库");
@@ -141,14 +139,7 @@ export function AppShell({
     startArtifactAnalysis: artifactActions.startAnalysis
   });
 
-  const {
-    lastSyncedAt,
-    policySyncMessage,
-    policySyncPending,
-    policySyncStatus,
-    policyVersion,
-    syncCloudPolicy
-  } = usePolicySync({
+  usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
     controlPlaneTransport,
     getSettings: () => settingsStoreRef.current.getState()
@@ -190,11 +181,13 @@ export function AppShell({
   } = useRecommendations({
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
+    recommendationCacheTransport: recommendationTransport,
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
     selectedPapers,
-    workspaceRevision: workspaceState.workspaceRevision
+    workspaceRevision: workspaceState.workspaceRevision,
+    workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
   });
   const {
     lastResult: documentMetadataSyncResult,
@@ -300,7 +293,6 @@ export function AppShell({
         accountPending={accountPending}
         accountSession={accountSession}
         cloudAvailabilityStatus={cloudAvailabilityStatus}
-        modelAccessMode={settingsState["models.access_mode"]}
         onLogin={() => {
           setLoginDialogDismissedThisSession(false);
           setLoginDialogOpen(true);
@@ -345,8 +337,6 @@ export function AppShell({
             governanceStatus={organizationGovernanceStatus}
             governanceSummary={organizationGovernanceSummary}
             importJobs={importJobsByDocumentId}
-            lastSyncedAt={lastSyncedAt}
-            latestExecutionLabel={lastModelExecution ? formatModelExecutionLabel(lastModelExecution) : undefined}
             leftRailView={leftRail.leftRailView}
             list={organizationList}
             listMessage={organizationListMessage}
@@ -376,11 +366,6 @@ export function AppShell({
             onReturnToLocalWorkspace={organizationWorkspace.openLocalLibraryWorkspace}
             onRetryDocumentMetadataSync={retryDocumentMetadataSync}
             onSelectOrganization={organizationUi.selectOrganization}
-            onSetAccessMode={modelSettings.setModelAccessMode}
-            onSyncCloudPolicy={() => {
-              void syncCloudPolicy();
-            }}
-            onToggleLocalDirectEnabled={modelSettings.setLocalDirectEnabled}
             onToggleLock={workspaceActions.toggleSelectionLock}
             onToggleProfileSampling={profileActions.toggleProfileSampling}
             onToggleSelection={workspaceActions.toggleSelection}
@@ -389,10 +374,6 @@ export function AppShell({
             organizationSummaryMessage={organizationSummaryMessage}
             organizationSummaryStatus={organizationSummaryStatus}
             papers={workspaceState.papers}
-            policySyncMessage={policySyncMessage}
-            policySyncPending={policySyncPending}
-            policySyncStatus={policySyncStatus}
-            policyVersion={policyVersion}
             profileClearMessage={profileActions.profileClearMessage}
             profileReadPaperCount={workspaceState.papers.length}
             profileSamplingEnabled={settingsState["profile.enabled"]}
@@ -498,11 +479,9 @@ export function AppShell({
             importedChunksByPaperId={importedChunksByPaperId}
             importedSelectedCount={importedSelectedCount}
             onGenerateArtifact={artifactActions.handleAssistantArtifact}
-            onModelExecution={setLastModelExecution}
             onOpenOrganizationSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
             onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
             profileUnlocked={accountSession !== null}
-            onSyncCloudPolicy={syncCloudPolicy}
             selectedPaperCount={workspaceState.selectedPaperIds.length}
             selectedPapers={selectedPapers}
             selectionLocked={workspaceState.selectionLocked}

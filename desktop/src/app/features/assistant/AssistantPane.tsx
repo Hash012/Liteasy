@@ -23,7 +23,6 @@ import type { Paper } from "../workspace/workspace.types";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
 import { generateAssistantAnswer } from "./generateAssistantAnswer";
-import type { ModelExecutionTrace } from "../models/modelExecution";
 import {
   getAssistantErrorMessage,
   getModeHint,
@@ -36,11 +35,9 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 type AssistantPaneProps = {
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
   onGenerateArtifact: (artifactType: ArtifactType) => string;
-  onModelExecution?: (trace: ModelExecutionTrace) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
-  onSyncCloudPolicy?: () => Promise<string>;
   selectedPapers?: Paper[];
   selectedSetStatus: SelectedSetStatus;
   settingsStore?: SettingsStoreLike;
@@ -65,11 +62,9 @@ function createMessage(role: AssistantMessage["role"], content: string): Assista
 export function AssistantPane({
   importedChunksByPaperId = {},
   onGenerateArtifact,
-  onModelExecution,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
-  onSyncCloudPolicy,
   selectedPapers = [],
   selectedSetStatus,
   settingsStore
@@ -159,8 +154,7 @@ export function AssistantPane({
           openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
           profileUnlocked,
           settingsStore: settingsStoreRef.current,
-          startArtifactAnalysis: onGenerateArtifact,
-          syncCloudPolicy: onSyncCloudPolicy
+          startArtifactAnalysis: onGenerateArtifact
         });
 
         assistantStoreRef.current.addMessage(createMessage("assistant", result.message));
@@ -203,7 +197,6 @@ export function AssistantPane({
       assistantMessage.executionTrace = answer.executionTrace;
 
       assistantStoreRef.current.addMessage(assistantMessage);
-      onModelExecution?.(answer.executionTrace);
       setInput("");
     } catch (error) {
       assistantStoreRef.current.addMessage(

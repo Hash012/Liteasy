@@ -1,5 +1,5 @@
-import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { describe, expect, test, vi } from "vitest";
 import { useRecommendations } from "../app/features/recommendations/useRecommendations";
 import type { AccountSession } from "../app/features/account/account.types";
 import type { Paper } from "../app/features/workspace/workspace.types";
@@ -29,7 +29,8 @@ describe("useRecommendations", () => {
         recommendationsEnabled: true,
         recommendationSortMode: "relevance",
         selectedPapers,
-        workspaceRevision: 0
+        workspaceRevision: 0,
+        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
       })
     );
 
@@ -42,15 +43,42 @@ describe("useRecommendations", () => {
     );
   });
 
-  test("loads cloud recommendations when a cloud account is available", async () => {
+  test("loads cached recommendations before generating new ones", async () => {
+    const cacheGet = vi.fn(async () => ({
+      cacheHit: true,
+      recommendations: [
+        {
+          discoveredAt: "2026-05-14T08:15:00Z",
+          id: "rec-transformer-1",
+          relatedDocumentTitle: "Attention Is All You Need",
+          relevanceBand: "high" as const,
+          relevanceScore: 0.91,
+          reason: "cached",
+          source: "Semantic Scholar",
+          title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+        }
+      ]
+    }));
+    const recommendationFetch = vi.fn(async () => []);
+    const cachePut = vi.fn(async () => ({ cachedAt: "2026-05-14T08:15:00Z", ok: true as const }));
+
     const { result } = renderHook(() =>
       useRecommendations({
         accountSession,
-        controlPlaneEndpoint: "mock://control-plane",
+        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+        recommendationCacheDeps: {
+          clear: vi.fn(),
+          get: cacheGet,
+          put: cachePut
+        },
+        recommendationGeneratorDeps: {
+          fetch: recommendationFetch
+        },
         recommendationsEnabled: true,
         recommendationSortMode: "relevance",
         selectedPapers,
-        workspaceRevision: 0
+        workspaceRevision: 0,
+        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
       })
     );
 
@@ -58,6 +86,97 @@ describe("useRecommendations", () => {
       expect(result.current.recommendationStatus).toBe("ready");
     });
 
-    expect(result.current.recommendationItems.length).toBeGreaterThan(0);
+    expect(cacheGet).toHaveBeenCalledTimes(1);
+    expect(recommendationFetch).not.toHaveBeenCalled();
+    expect(cachePut).not.toHaveBeenCalled();
+    expect(result.current.recommendationMessage).toBe("已显示当前选中文献集的缓存推荐。");
+  });
+
+  test("generates recommendations on cache miss and writes them back to cache", async () => {
+    const generatedRecommendations = [
+      {
+        discoveredAt: "2026-05-14T08:15:00Z",
+        id: "rec-transformer-1",
+        relatedDocumentTitle: "Attention Is All You Need",
+        relevanceBand: "high" as const,
+        relevanceScore: 0.91,
+        reason: "fresh",
+        source: "Semantic Scholar",
+        title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+      }
+    ];
+    const cacheGet = vi.fn(async () => ({
+      cacheHit: false,
+      recommendations: []
+    }));
+    const recommendationFetch = vi.fn(async () => generatedRecommendations);
+    const cachePut = vi.fn(async () => ({ cachedAt: "2026-05-14T08:15:00Z", ok: true as const }));
+
+    const { result } = renderHook(() =>
+      useRecommendations({
+        accountSession,
+        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+        recommendationCacheDeps: {
+          clear: vi.fn(),
+          get: cacheGet,
+          put: cachePut
+        },
+        recommendationGeneratorDeps: {
+          fetch: recommendationFetch
+        },
+        recommendationsEnabled: true,
+        recommendationSortMode: "relevance",
+        selectedPapers,
+        workspaceRevision: 0,
+        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.recommendationStatus).toBe("ready");
+    });
+
+    expect(recommendationFetch).toHaveBeenCalledTimes(1);
+    expect(cachePut).toHaveBeenCalledTimes(1);
+    expect(result.current.recommendationItems).toEqual(generatedRecommendations);
+    expect(result.current.recommendationMessage).toBe("已获取 1 条关联推荐。");
+  });
+
+  test("clears recommendation cache without affecting recommendation status semantics", async () => {
+    const cacheClear = vi.fn(async () => ({ cleared: true }));
+    const { result } = renderHook(() =>
+      useRecommendations({
+        accountSession,
+        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+        recommendationCacheDeps: {
+          clear: cacheClear,
+          get: vi.fn(async () => ({
+            cacheHit: true,
+            recommendations: []
+          })),
+          put: vi.fn()
+        },
+        recommendationGeneratorDeps: {
+          fetch: vi.fn()
+        },
+        recommendationsEnabled: true,
+        recommendationSortMode: "relevance",
+        selectedPapers,
+        workspaceRevision: 0,
+        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.recommendationStatus).toBe("ready");
+    });
+
+    await act(async () => {
+      await result.current.clearRecommendationCache();
+    });
+
+    expect(cacheClear).toHaveBeenCalledTimes(1);
+    expect(result.current.recommendationItems).toEqual([]);
+    expect(result.current.recommendationMessage).toBe("已清理当前工作区的关联推荐缓存。");
   });
 });

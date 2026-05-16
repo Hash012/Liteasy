@@ -13,10 +13,12 @@ export type OrganizationAuditEvent = {
   occurredAt: string;
 };
 
+export type OrganizationRole = "owner" | "admin" | "member";
+
 export type OrganizationMember = {
   id: string;
   name: string;
-  role: string;
+  role: OrganizationRole;
 };
 
 export type OrganizationQuota = {
@@ -62,6 +64,7 @@ export type OrganizationSharedLibrary = {
   documentCount: number;
   documents: OrganizationSharedLibraryDocument[];
   name: string;
+  ownerUserId?: string;
   status: OrganizationSharedLibraryStatus;
 };
 
@@ -72,11 +75,13 @@ export type OrganizationTaskSummary = {
 
 export type OrganizationSummary = {
   auditEvents: OrganizationAuditEvent[];
+  canCreateOrganization?: boolean;
   memberCount: number;
   members: OrganizationMember[];
-  myRole: string;
+  myRole: OrganizationRole;
   name: string;
   notifications: OrganizationNotification[];
+  ownerUserId?: string;
   organizationId: string;
   quota: OrganizationQuota;
   sharedLibrary: OrganizationSharedLibrary;
@@ -84,9 +89,11 @@ export type OrganizationSummary = {
 };
 
 export type OrganizationListItem = {
+  canCreateOrganization?: boolean;
   memberCount: number;
-  myRole: string;
+  myRole: OrganizationRole;
   name: string;
+  ownerUserId?: string;
   organizationId: string;
   sharedLibraryName: string;
 };

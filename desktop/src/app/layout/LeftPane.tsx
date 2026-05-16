@@ -12,7 +12,6 @@ import type { RecommendationItem, RecommendationStatus } from "../features/recom
 import type { Paper } from "../features/workspace/workspace.types";
 import type { SettingsState } from "../features/settings/settings.types";
 import type { LeftRailView } from "./useLeftRailNavigation";
-import type { PolicySyncStatus } from "../features/models/policySync.types";
 
 export type LeftPaneProps = {
   academicProfile: AcademicProfile;
@@ -27,8 +26,6 @@ export type LeftPaneProps = {
   importJobs: Record<string, ImportJob>;
   governanceStatus: OrganizationGovernanceStatus;
   governanceSummary: OrganizationGovernanceSummary | null;
-  lastSyncedAt?: string;
-  latestExecutionLabel?: string;
   leftRailView: LeftRailView;
   list: OrganizationList | null;
   listMessage: string;
@@ -52,9 +49,6 @@ export type LeftPaneProps = {
   onReturnToLocalWorkspace: () => void;
   onRetryDocumentMetadataSync?: () => void;
   onSelectOrganization?: (organizationId: string) => void;
-  onSetAccessMode: (mode: SettingsState["models.access_mode"]) => void;
-  onSyncCloudPolicy: () => void;
-  onToggleLocalDirectEnabled: (enabled: boolean) => void;
   onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   onToggleSelection: (paperId: string) => void;
@@ -63,10 +57,6 @@ export type LeftPaneProps = {
   organizationSummaryMessage: string;
   organizationSummaryStatus: OrganizationSummaryStatus;
   papers: Paper[];
-  policySyncMessage?: string;
-  policySyncPending: boolean;
-  policySyncStatus: PolicySyncStatus;
-  policyVersion?: string;
   profileClearMessage?: string;
   profileReadPaperCount: number;
   profileSamplingEnabled: boolean;
@@ -111,8 +101,6 @@ export function LeftPane({
   importJobs,
   governanceStatus,
   governanceSummary,
-  lastSyncedAt,
-  latestExecutionLabel,
   leftRailView,
   list,
   listMessage,
@@ -135,9 +123,6 @@ export function LeftPane({
   onReturnToLocalWorkspace,
   onRetryDocumentMetadataSync,
   onSelectOrganization,
-  onSetAccessMode,
-  onSyncCloudPolicy,
-  onToggleLocalDirectEnabled,
   onToggleProfileSampling,
   onUpdateAcademicProfile,
   onToggleSelection,
@@ -147,10 +132,6 @@ export function LeftPane({
   organizationSummaryMessage,
   organizationSummaryStatus,
   papers,
-  policySyncMessage,
-  policySyncPending,
-  policySyncStatus,
-  policyVersion,
   profileClearMessage,
   profileReadPaperCount,
   profileSamplingEnabled,
@@ -232,17 +213,7 @@ export function LeftPane({
             documentMetadataSyncMessage={documentMetadataSyncMessage}
             documentMetadataSyncResult={documentMetadataSyncResult}
             documentMetadataSyncStatus={documentMetadataSyncStatus}
-            latestExecutionLabel={latestExecutionLabel}
             onRetryDocumentMetadataSync={onRetryDocumentMetadataSync}
-            onSetAccessMode={onSetAccessMode}
-            onSyncCloudPolicy={onSyncCloudPolicy}
-            onToggleLocalDirectEnabled={onToggleLocalDirectEnabled}
-            policySyncMessage={policySyncMessage}
-            policySyncPending={policySyncPending}
-            policySyncStatus={policySyncStatus}
-            policyVersion={policyVersion}
-            settings={settings}
-            syncedAt={lastSyncedAt}
           />
         ) : (
           <LibraryPane

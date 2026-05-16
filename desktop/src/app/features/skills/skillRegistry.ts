@@ -19,12 +19,6 @@ export type SkillInvocation =
       };
     }
   | {
-      skillId: "settings.sync_policy";
-      input: {
-        source: "cloud_control_plane";
-      };
-    }
-  | {
       skillId: "organization.open_shared_library";
       input: {
         source: "organization_space";
@@ -39,16 +33,6 @@ export async function executeSkill(
     return executeAction(
       {
         actionId: "settings.update",
-        input: invocation.input
-      },
-      context
-    );
-  }
-
-  if (invocation.skillId === "settings.sync_policy") {
-    return executeAction(
-      {
-        actionId: "settings.sync_model_policy",
         input: invocation.input
       },
       context

@@ -11,11 +11,8 @@ type ControlPlaneRuntimeDeps = {
 };
 
 const mockModelPolicySnapshot: ModelPolicySnapshot = {
-  "models.access_mode": "cloud_proxy",
   "models.cloud_proxy_endpoint": "mock://cloud-proxy",
-  "models.default_provider": "openai",
-  "models.local_direct_enabled": false,
-  "models.local_direct_endpoint": "mock://local-direct"
+  "models.default_provider": "openai"
 };
 
 const mockPolicySyncResult: ControlPlanePolicySnapshotResult = {

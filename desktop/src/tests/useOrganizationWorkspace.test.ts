@@ -23,7 +23,7 @@ const organizationSummary: OrganizationSummary = {
   auditEvents: [],
   memberCount: 12,
   members: [],
-  myRole: "研究员",
+  myRole: "member",
   name: "Liteasy AI Reading Lab",
   notifications: [],
   organizationId: "org-demo-1",

@@ -3,11 +3,8 @@ import type { ModelTransportResponse } from "./modelHttpClient";
 
 export type ModelPolicySnapshot = Pick<
   SettingsState,
-  | "models.access_mode"
   | "models.cloud_proxy_endpoint"
   | "models.default_provider"
-  | "models.local_direct_enabled"
-  | "models.local_direct_endpoint"
 >;
 
 export type ControlPlaneTransportRequest = {
@@ -34,9 +31,6 @@ type CreateControlPlaneClientInput = {
 type ControlPlanePayload = {
   cloudProxyEndpoint: string;
   defaultProvider: string;
-  localDirectEnabled: boolean;
-  localDirectEndpoint: string;
-  modelAccessMode: SettingsState["models.access_mode"];
   policyVersion?: string;
   syncedAt?: string;
 };
@@ -52,13 +46,7 @@ function isControlPlanePayload(payload: unknown): payload is ControlPlanePayload
     "cloudProxyEndpoint" in payload &&
     typeof payload.cloudProxyEndpoint === "string" &&
     "defaultProvider" in payload &&
-    typeof payload.defaultProvider === "string" &&
-    "localDirectEnabled" in payload &&
-    typeof payload.localDirectEnabled === "boolean" &&
-    "localDirectEndpoint" in payload &&
-    typeof payload.localDirectEndpoint === "string" &&
-    "modelAccessMode" in payload &&
-    (payload.modelAccessMode === "cloud_proxy" || payload.modelAccessMode === "local_direct")
+    typeof payload.defaultProvider === "string"
   );
 }
 
@@ -96,11 +84,8 @@ export function createControlPlaneClient({
     return {
       policyVersion: payload.policyVersion,
       snapshot: {
-        "models.access_mode": payload.modelAccessMode,
         "models.cloud_proxy_endpoint": payload.cloudProxyEndpoint,
-        "models.default_provider": payload.defaultProvider,
-        "models.local_direct_enabled": payload.localDirectEnabled,
-        "models.local_direct_endpoint": payload.localDirectEndpoint
+        "models.default_provider": payload.defaultProvider
       },
       syncedAt: payload.syncedAt
     };

@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { Readable } from "node:stream";
 import { createDevCloudRequestHandler } from "./server.mjs";
+
+const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-dev-cloud-test-"));
+process.env.LITEASY_DEV_CLOUD_DATA_DIR = testDataDir;
 
 async function invokeHandler({ body, handler, handlerOptions, headers = {}, method, url }) {
   const chunks = body ? [Buffer.from(body)] : [];
@@ -76,7 +82,14 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/model/generate",
     "POST /v1/model/audit",
     "POST /v1/recommendations",
+    "POST /v1/recommendation-cache/get",
+    "POST /v1/recommendation-cache/put",
+    "POST /v1/recommendation-cache/clear",
     "POST /v1/documents/metadata-sync",
+    "POST /v1/org/create",
+    "POST /v1/org/join",
+    "POST /v1/org/invite",
+    "POST /v1/org/leave",
     "POST /v1/org/list",
     "POST /v1/org/summary",
     "POST /v1/org/shared-library/manifest",
@@ -276,6 +289,153 @@ test("stores and returns private cloud collection items for a demo session", asy
   assert.equal(getResponse.statusCode, 200);
   assert.equal(getResponse.json.items.length, 1);
   assert.equal(getResponse.json.items[0].title, "RoBERTa: A Robustly Optimized BERT Pretraining Approach");
+});
+
+test("stores and reads recommendation cache separately from collection data", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const putResponse = await invokeHandler({
+    body: JSON.stringify({
+      recommendations: [
+        {
+          discoveredAt: "2026-05-14T08:15:00Z",
+          id: "rec-bert-1",
+          relatedDocumentTitle: "BERT",
+          relevanceBand: "high",
+          relevanceScore: 0.92,
+          reason: "cached",
+          source: "Semantic Scholar",
+          title: "RoBERTa"
+        }
+      ],
+      selectionKey: "demo-2",
+      sessionId: "demo-session-1",
+      sortMode: "relevance",
+      workspaceKey: "local:/tmp/LiteasyLibrary"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/recommendation-cache/put"
+  });
+
+  assert.equal(putResponse.statusCode, 200);
+  assert.equal(putResponse.json.ok, true);
+
+  const getResponse = await invokeHandler({
+    body: JSON.stringify({
+      selectionKey: "demo-2",
+      sessionId: "demo-session-1",
+      sortMode: "relevance",
+      workspaceKey: "local:/tmp/LiteasyLibrary"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/recommendation-cache/get"
+  });
+
+  assert.equal(getResponse.statusCode, 200);
+  assert.equal(getResponse.json.cacheHit, true);
+  assert.equal(getResponse.json.recommendations.length, 1);
+  assert.equal(getResponse.json.recommendations[0].id, "rec-bert-1");
+});
+
+test("clearing recommendation cache does not remove private cloud collection data", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  await invokeHandler({
+    body: JSON.stringify({
+      item: {
+        id: "rec-bert-1",
+        reason: "同样关注大规模预训练语言模型的迁移能力。",
+        savedAt: "2026-05-14T10:30:00.000Z",
+        source: "Semantic Scholar",
+        title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+      },
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/collection/items"
+  });
+
+  await invokeHandler({
+    body: JSON.stringify({
+      recommendations: [
+        {
+          discoveredAt: "2026-05-14T08:15:00Z",
+          id: "rec-bert-1",
+          relatedDocumentTitle: "BERT",
+          relevanceBand: "high",
+          relevanceScore: 0.92,
+          reason: "cached",
+          source: "Semantic Scholar",
+          title: "RoBERTa"
+        }
+      ],
+      selectionKey: "demo-2",
+      sessionId: "demo-session-1",
+      sortMode: "relevance",
+      workspaceKey: "local:/tmp/LiteasyLibrary"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/recommendation-cache/put"
+  });
+
+  const clearResponse = await invokeHandler({
+    body: JSON.stringify({
+      selectionKey: "demo-2",
+      sessionId: "demo-session-1",
+      sortMode: "relevance",
+      workspaceKey: "local:/tmp/LiteasyLibrary"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/recommendation-cache/clear"
+  });
+
+  assert.equal(clearResponse.statusCode, 200);
+  assert.equal(clearResponse.json.cleared, true);
+
+  const collectionResponse = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/collection/list"
+  });
+
+  assert.equal(collectionResponse.statusCode, 200);
+  assert.equal(collectionResponse.json.items.length, 1);
+  assert.equal(
+    collectionResponse.json.items[0].title,
+    "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+  );
 });
 
 test("returns available endpoints for unknown paths", async () => {
@@ -549,21 +709,136 @@ test("returns the demo organization list", async () => {
     activeOrganizationId: "org-demo-1",
     organizations: [
       {
+        canCreateOrganization: true,
         memberCount: 12,
-        myRole: "研究员",
+        myRole: "member",
         name: "Liteasy AI Reading Lab",
         organizationId: "org-demo-1",
+        ownerUserId: "demo-session-owner",
         sharedLibraryName: "组织共享文献库"
       },
       {
+        canCreateOrganization: true,
         memberCount: 4,
-        myRole: "管理员",
+        myRole: "member",
         name: "Liteasy Literature Ops",
         organizationId: "org-demo-2",
+        ownerUserId: "member-ops-1",
         sharedLibraryName: "文献运营共享库"
       }
     ]
   });
+});
+
+test("creates an organization and assigns the creator as owner", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      name: "Liteasy F3 Lab",
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/org/create"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.organization.ownerUserId, "demo-session-1");
+  assert.equal(response.json.organization.myRole, "owner");
+});
+
+test("joins an organization as member", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      organizationId: "org-demo-1",
+      sessionId: "demo-session-joiner"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/org/join"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.membership.role, "member");
+});
+
+test("rejects organization invites from members", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      organizationId: "org-demo-1",
+      role: "member",
+      sessionId: "demo-session-1",
+      targetUserId: "demo-invitee-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/org/invite"
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json.error, "organization_role_forbidden");
+});
+
+test("allows organization invites from admins", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      organizationId: "org-demo-1",
+      role: "admin",
+      sessionId: "demo-session-admin",
+      targetUserId: "demo-invitee-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/org/invite"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.invite.role, "admin");
+});
+
+test("blocks owner leave when owner transfer is not available", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      organizationId: "org-demo-1",
+      role: "owner",
+      sessionId: "demo-session-owner"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/org/leave"
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json.error, "organization_owner_leave_blocked");
 });
 
 test("returns a demo organization summary", async () => {
@@ -590,20 +865,26 @@ test("returns a demo organization summary", async () => {
           occurredAt: "2026-05-14T10:30:00Z"
         }
       ],
+      canCreateOrganization: true,
       memberCount: 12,
       members: [
         {
-          id: "member-1",
+          id: "demo-session-owner",
+          name: "Owner",
+          role: "owner"
+        },
+        {
+          id: "demo-session-1",
           name: "Liteasy Researcher",
-          role: "研究员"
+          role: "member"
         },
         {
           id: "member-2",
           name: "Admin",
-          role: "管理员"
+          role: "admin"
         }
       ],
-      myRole: "研究员",
+      myRole: "member",
       name: "Liteasy AI Reading Lab",
       notifications: [
         {
@@ -623,6 +904,7 @@ test("returns a demo organization summary", async () => {
         }
       ],
       organizationId: "org-demo-1",
+      ownerUserId: "demo-session-owner",
       quota: {
         periodEndsAt: "2026-06-01T00:00:00Z",
         storageLimitGb: 100,
@@ -643,6 +925,7 @@ test("returns a demo organization summary", async () => {
           }
         ],
         name: "组织共享文献库",
+        ownerUserId: "demo-session-owner",
         status: "available"
       },
       taskSummary: {

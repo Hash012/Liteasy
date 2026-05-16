@@ -36,37 +36,11 @@ test("maps disabling profile sampling to a settings skill invocation", () => {
   });
 });
 
-test("routes model-policy commands to safe settings skills", () => {
-  expect(routeCommand("允许本地直连")).toEqual({
-    skillId: "settings.adjust",
-    input: {
-      target: "models.local_direct_enabled",
-      value: true
-    }
-  });
-
-  expect(routeCommand("切换到本地直连")).toEqual({
-    skillId: "settings.adjust",
-    input: {
-      target: "models.access_mode",
-      value: "local_direct"
-    }
-  });
-
-  expect(routeCommand("切换到云代理")).toEqual({
-    skillId: "settings.adjust",
-    input: {
-      target: "models.access_mode",
-      value: "cloud_proxy"
-    }
-  });
-
-  expect(routeCommand("同步云端策略")).toEqual({
-    skillId: "settings.sync_policy",
-    input: {
-      source: "cloud_control_plane"
-    }
-  });
+test("does not expose removed model-policy commands in normal assistant routing", () => {
+  expect(routeCommand("允许本地直连")).toBeNull();
+  expect(routeCommand("切换到本地直连")).toBeNull();
+  expect(routeCommand("切换到云代理")).toBeNull();
+  expect(routeCommand("同步云端策略")).toBeNull();
 });
 
 test("maps sorting recommendations by relevance to a settings skill invocation", () => {
@@ -111,12 +85,7 @@ test("maps natural language command aliases to safe actions", () => {
     }
   });
 
-  expect(routeCommand("请帮我同步一下云端模型策略")).toEqual({
-    skillId: "settings.sync_policy",
-    input: {
-      source: "cloud_control_plane"
-    }
-  });
+  expect(routeCommand("请帮我同步一下云端模型策略")).toBeNull();
 
   expect(routeCommand("别再联网推荐了")).toEqual({
     skillId: "settings.adjust",

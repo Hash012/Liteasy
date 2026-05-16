@@ -23,15 +23,15 @@ test("posts a session id to the organization summary endpoint", async () => {
               {
                 id: "member-1",
                 name: "Liteasy Researcher",
-                role: "研究员"
+                role: "member"
               },
               {
                 id: "member-2",
                 name: "Admin",
-                role: "管理员"
+                role: "admin"
               }
             ],
-            myRole: "研究员",
+            myRole: "member",
             name: "Liteasy AI Reading Lab",
             notifications: [
               {
@@ -102,7 +102,7 @@ test("posts a selected organization id when loading organization summary", async
             auditEvents: [],
             memberCount: 4,
             members: [],
-            myRole: "管理员",
+            myRole: "admin",
             name: "Liteasy Literature Ops",
             notifications: [],
             organizationId: "org-demo-2",
@@ -138,4 +138,48 @@ test("posts a selected organization id when loading organization summary", async
       url: "https://liteasy.example.com/control-plane/v1/org/summary"
     }
   ]);
+});
+
+test("rejects organization summary payloads with non-formal roles", async () => {
+  const client = createOrganizationSummaryClient({
+    endpoint: "https://liteasy.example.com/control-plane",
+    transport: async () => ({
+      json: async () => ({
+        summary: {
+          auditEvents: [],
+          memberCount: 1,
+          members: [
+            {
+              id: "member-1",
+              name: "Legacy Member",
+              role: "研究员"
+            }
+          ],
+          myRole: "研究员",
+          name: "Legacy Organization",
+          notifications: [],
+          organizationId: "org-demo-legacy",
+          quota: {
+            periodEndsAt: "2026-06-01T00:00:00Z",
+            storageLimitGb: 10,
+            storageUsedGb: 1
+          },
+          sharedLibrary: {
+            documentCount: 0,
+            documents: [],
+            name: "旧共享文献库",
+            status: "available"
+          },
+          taskSummary: {
+            failed: 0,
+            running: 0
+          }
+        }
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  await expect(client({ sessionId: "demo-session-1" })).rejects.toThrow("组织空间返回格式无效");
 });

@@ -5,9 +5,10 @@ import type { OrganizationSummary } from "../app/features/organization/organizat
 
 const organizationSummary: OrganizationSummary = {
   auditEvents: [],
+  canCreateOrganization: false,
   memberCount: 12,
   members: [],
-  myRole: "研究员",
+  myRole: "member",
   name: "Liteasy AI Reading Lab",
   notifications: [
     {
@@ -17,6 +18,7 @@ const organizationSummary: OrganizationSummary = {
       type: "announcement"
     }
   ],
+  ownerUserId: "owner-1",
   organizationId: "org-demo-1",
   quota: {
     periodEndsAt: "2026-06-01T00:00:00Z",
@@ -38,7 +40,9 @@ const organizationSummary: OrganizationSummary = {
 describe("useOrganizationActions", () => {
   test("tracks organization action dialogs and returns productized seam messages", () => {
     const onAnalysisHint = vi.fn();
-    const { result } = renderHook(() => useOrganizationActions({ onAnalysisHint }));
+    const { result } = renderHook(() =>
+      useOrganizationActions({ canCreateOrganization: true, onAnalysisHint })
+    );
 
     act(() => result.current.openCreateDialog());
     expect(result.current.createOpen).toBe(true);
@@ -64,7 +68,12 @@ describe("useOrganizationActions", () => {
       "已提交加入组织的邀请码 LITEASY-DEMO-JOIN，当前为演示环境记录；你的组织角色与成员关系暂不会立即变更。"
     );
 
-    act(() => result.current.openInviteDialog(organizationSummary));
+    act(() =>
+      result.current.openInviteDialog({
+        ...organizationSummary,
+        myRole: "admin"
+      })
+    );
     expect(result.current.inviteSummary?.organizationId).toBe("org-demo-1");
 
     act(() => result.current.sendDemoOrganizationInvite());
@@ -76,7 +85,12 @@ describe("useOrganizationActions", () => {
       "已创建面向 Liteasy AI Reading Lab 的邀请，当前为演示环境记录。"
     );
 
-    act(() => result.current.openLeaveDialog(organizationSummary));
+    act(() =>
+      result.current.openLeaveDialog({
+        ...organizationSummary,
+        myRole: "admin"
+      })
+    );
     expect(result.current.leaveSummary?.organizationId).toBe("org-demo-1");
 
     act(() => result.current.createDemoOrganizationLeaveRequest());
@@ -102,7 +116,9 @@ describe("useOrganizationActions", () => {
 
   test("resets organization action dialogs without emitting messages", () => {
     const onAnalysisHint = vi.fn();
-    const { result } = renderHook(() => useOrganizationActions({ onAnalysisHint }));
+    const { result } = renderHook(() =>
+      useOrganizationActions({ canCreateOrganization: true, onAnalysisHint })
+    );
 
     act(() => {
       result.current.openCreateDialog();
@@ -119,5 +135,54 @@ describe("useOrganizationActions", () => {
     expect(result.current.leaveSummary).toBeNull();
     expect(result.current.actionMessage).toBeUndefined();
     expect(onAnalysisHint).not.toHaveBeenCalled();
+  });
+
+  test("blocks owner leave because owner transfer is out of scope", () => {
+    const onAnalysisHint = vi.fn();
+    const { result } = renderHook(() => useOrganizationActions({ onAnalysisHint }));
+
+    act(() =>
+      result.current.openLeaveDialog({
+        ...organizationSummary,
+        myRole: "owner"
+      })
+    );
+
+    act(() => result.current.createDemoOrganizationLeaveRequest());
+
+    expect(result.current.actionMessage).toBe(
+      "当前组织 owner 不能直接退出；请先转移 owner，当前版本暂未开放该流程。"
+    );
+  });
+
+  test("blocks member invite attempts and keeps the dialog closed", () => {
+    const onAnalysisHint = vi.fn();
+    const { result } = renderHook(() => useOrganizationActions({ onAnalysisHint }));
+
+    act(() =>
+      result.current.openInviteDialog({
+        ...organizationSummary,
+        myRole: "member"
+      })
+    );
+
+    act(() => result.current.sendDemoOrganizationInvite());
+
+    expect(result.current.inviteSummary).toBeNull();
+    expect(result.current.actionMessage).toBe(
+      "当前角色 member 无权邀请成员。"
+    );
+  });
+
+  test("blocks organization creation when account does not have create permission", () => {
+    const onAnalysisHint = vi.fn();
+    const { result } = renderHook(() => useOrganizationActions({ onAnalysisHint }));
+
+    act(() => result.current.openCreateDialog());
+    act(() => result.current.createDemoOrganizationRequest("Liteasy Demo Organization"));
+
+    expect(result.current.actionMessage).toBe(
+      "当前账号无创建组织权限；你可以加入已有组织。"
+    );
   });
 });

@@ -1,15 +1,15 @@
-import type { ModelAccessMode } from "./modelGateway";
+export type ModelExecutionSource = "cloud_proxy";
 
 export type ModelExecutionTrace = {
   backend: "desktop_mock" | "dev_cloud" | "http_service";
   endpoint: string;
   mode: "live" | "mock" | "mock_fallback" | "unknown";
   provider: string;
-  source: ModelAccessMode;
+  source: ModelExecutionSource;
 };
 
-function getSourceLabel(source: ModelAccessMode) {
-  return source === "cloud_proxy" ? "云代理" : "本地直连";
+function getSourceLabel(_source: ModelExecutionSource) {
+  return "云端模型能力";
 }
 
 function getBackendLabel(trace: ModelExecutionTrace) {

@@ -283,7 +283,7 @@ test("routes qa generation through the cloud-governed model gateway by default",
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText(/云端回答：这篇论文的预训练目标是什么？/)).toBeInTheDocument();
-  expect(screen.getByText("模型链路：云代理 -> 桌面内置 Mock")).toBeInTheDocument();
+  expect(screen.getByText("模型链路：云端模型能力 -> 桌面内置 Mock")).toBeInTheDocument();
 });
 
 test("shows a readable assistant error when the model backend is unavailable", async () => {

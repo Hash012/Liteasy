@@ -1,11 +1,5 @@
 import liteasyClawLogo from "../../assets/liteasyclaw-logo.jpg";
-import type { SettingsState } from "../features/settings/settings.types";
-
-type AppBrandProps = {
-  modelAccessMode: SettingsState["models.access_mode"];
-};
-
-export function AppBrand({ modelAccessMode }: AppBrandProps) {
+export function AppBrand() {
   return (
     <div className="brand">
       <img alt="LiteasyClaw Logo" className="brand-logo" src={liteasyClawLogo} />

@@ -5,12 +5,21 @@ import {
   buildCollectionSavePayload
 } from "./payloads/collectionPayloads.mjs";
 import {
+  buildRecommendationCacheClearPayload,
+  buildRecommendationCacheGetPayload,
+  buildRecommendationCachePutPayload
+} from "./payloads/recommendationCachePayloads.mjs";
+import {
   buildModelAuditPayload,
   buildProviderRegistry,
   generateAnswer
 } from "./payloads/modelPayloads.mjs";
 import {
+  buildOrganizationCreatePayload,
   buildOrganizationGovernancePayload,
+  buildOrganizationInvitePayload,
+  buildOrganizationJoinPayload,
+  buildOrganizationLeavePayload,
   buildOrganizationListPayload,
   buildOrganizationSharedLibraryManifestPayload,
   buildOrganizationSummaryPayload
@@ -36,7 +45,14 @@ const availableEndpoints = [
   "POST /v1/model/generate",
   "POST /v1/model/audit",
   "POST /v1/recommendations",
+  "POST /v1/recommendation-cache/get",
+  "POST /v1/recommendation-cache/put",
+  "POST /v1/recommendation-cache/clear",
   "POST /v1/documents/metadata-sync",
+  "POST /v1/org/create",
+  "POST /v1/org/join",
+  "POST /v1/org/invite",
+  "POST /v1/org/leave",
   "POST /v1/org/list",
   "POST /v1/org/summary",
   "POST /v1/org/shared-library/manifest",
@@ -235,6 +251,54 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
+    if (method === "POST" && url.pathname === "/v1/recommendation-cache/get") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      const payload = buildRecommendationCacheGetPayload(body);
+      if ("error" in payload) {
+        writeJson(request, response, 400, payload);
+        return;
+      }
+
+      writeJson(request, response, 200, payload);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/recommendation-cache/put") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      const payload = buildRecommendationCachePutPayload(body);
+      if ("error" in payload) {
+        writeJson(request, response, 400, payload);
+        return;
+      }
+
+      writeJson(request, response, 200, payload);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/recommendation-cache/clear") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      const payload = buildRecommendationCacheClearPayload(body);
+      if ("error" in payload) {
+        writeJson(request, response, 400, payload);
+        return;
+      }
+
+      writeJson(request, response, 200, payload);
+      return;
+    }
+
     if (method === "POST" && url.pathname === "/v1/collection/list") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
@@ -278,6 +342,85 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
 
       writeJson(request, response, 200, buildOrganizationListPayload(body));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/org/create") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      const payload = buildOrganizationCreatePayload(body);
+      if ("error" in payload) {
+        writeJson(
+          request,
+          response,
+          payload.error === "organization_create_forbidden" ? 403 : 400,
+          payload
+        );
+        return;
+      }
+
+      writeJson(request, response, 200, payload);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/org/join") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      const payload = buildOrganizationJoinPayload(body);
+      if ("error" in payload) {
+        writeJson(request, response, 400, payload);
+        return;
+      }
+
+      writeJson(request, response, 200, payload);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/org/invite") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      const payload = buildOrganizationInvitePayload(body);
+      if ("error" in payload) {
+        writeJson(
+          request,
+          response,
+          payload.error === "organization_role_forbidden" ? 403 : 400,
+          payload
+        );
+        return;
+      }
+
+      writeJson(request, response, 200, payload);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/org/leave") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      const payload = buildOrganizationLeavePayload(body);
+      if ("error" in payload) {
+        writeJson(
+          request,
+          response,
+          payload.error === "organization_owner_leave_blocked" ? 403 : 400,
+          payload
+        );
+        return;
+      }
+
+      writeJson(request, response, 200, payload);
       return;
     }
 

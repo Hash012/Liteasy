@@ -25,19 +25,17 @@ describe("AppShell state helpers", () => {
     expect(workspace.papers).toHaveLength(2);
 
     const settings = cloneSettingsState(createSeededSettingsStore().getState());
-    settings["models.access_mode"] = "local_direct";
-    expect(createSeededSettingsStore().getState()["models.access_mode"]).toBe("cloud_proxy");
+    settings["models.default_provider"] = "deepseek";
+    expect(createSeededSettingsStore().getState()["models.default_provider"]).toBe("openai");
   });
 
   test("creates a seeded settings store from partial settings", () => {
     const store = createSeededSettingsStore({
-      "models.access_mode": "local_direct",
-      "models.local_direct_enabled": true,
+      "models.default_provider": "deepseek",
       "network.recommendation.enabled": false
     });
 
-    expect(store.getState()["models.access_mode"]).toBe("local_direct");
-    expect(store.getState()["models.local_direct_enabled"]).toBe(true);
+    expect(store.getState()["models.default_provider"]).toBe("deepseek");
     expect(store.getState()["network.recommendation.enabled"]).toBe(false);
   });
 });

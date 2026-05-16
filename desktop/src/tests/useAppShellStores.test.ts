@@ -27,16 +27,16 @@ describe("useAppShellStores", () => {
   test("creates seeded settings and stable import/artifact stores", () => {
     const { result, rerender } = renderHook(() =>
       useAppShellStores({
-        "models.access_mode": "local_direct",
-        "models.local_direct_enabled": true
+        "models.default_provider": "deepseek",
+        "network.recommendation.enabled": false
       })
     );
 
     const importStore = result.current.importStoreRef.current;
     const artifactStore = result.current.artifactStore;
 
-    expect(result.current.settingsStoreRef.current.getState()["models.access_mode"]).toBe("local_direct");
-    expect(result.current.settingsStoreRef.current.getState()["models.local_direct_enabled"]).toBe(true);
+    expect(result.current.settingsStoreRef.current.getState()["models.default_provider"]).toBe("deepseek");
+    expect(result.current.settingsStoreRef.current.getState()["network.recommendation.enabled"]).toBe(false);
 
     rerender();
 

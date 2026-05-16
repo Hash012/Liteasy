@@ -45,44 +45,6 @@ test("generates cloud-proxy answers by default", async () => {
   });
 });
 
-test("generates local-direct answers when policy and mode both allow it", async () => {
-  const store = createSettingsStore();
-  store.apply({
-    intent: "update_setting",
-    target: "models.local_direct_enabled",
-    value: true
-  });
-  store.apply({
-    intent: "update_setting",
-    target: "models.access_mode",
-    value: "local_direct"
-  });
-
-  const result = await generateAssistantAnswer({
-    importedChunksByPaperId: {},
-    mode: "qa",
-    question: "总结这篇论文的核心方法",
-    selectedPapers: [
-      {
-        id: "demo-1",
-        title: "Attention Is All You Need"
-      }
-    ],
-    settings: store.getState()
-  });
-
-  expect(result.content).toContain("本地直连回答：总结这篇论文的核心方法");
-  expect(result.audit.model).toBe("gpt-5-mini-auditor");
-  expect(result.audit.score).toBeGreaterThanOrEqual(0.8);
-  expect(result.executionTrace).toEqual({
-    backend: "desktop_mock",
-    endpoint: "mock://local-direct",
-    mode: "mock",
-    provider: "openai",
-    source: "local_direct"
-  });
-});
-
 test("uses the cloud audit endpoint after http model generation", async () => {
   const store = createSettingsStore();
   const requests: Array<{ body: string; url: string }> = [];

@@ -12,7 +12,3 @@ function extractQuestion(prompt: string) {
 export async function generateCloudProxyAnswer(input: GenerateAnswerInput) {
   return `云端回答：${extractQuestion(input.prompt)}`;
 }
-
-export async function generateLocalDirectAnswer(input: GenerateAnswerInput) {
-  return `本地直连回答：${extractQuestion(input.prompt)}`;
-}

@@ -103,7 +103,10 @@ export function useOrganizationWorkspace({
       return "组织共享文献库尚未下发可打开文献，请稍后在左边栏组织页查看同步状态。";
     }
 
-    workspaceStoreRef.current.openWorkspace(papers);
+    workspaceStoreRef.current.openWorkspace(papers, {
+      rootPath: `org:${summary.organizationId}:${libraryName}`,
+      type: "organization_shared"
+    });
     onWorkspaceSync();
     onWorkspaceLabel(`${libraryName}（${summary.name}）`);
     onLeftRailView("library");
@@ -113,7 +116,10 @@ export function useOrganizationWorkspace({
   }
 
   function openLocalLibraryWorkspace() {
-    workspaceStoreRef.current.openWorkspace(starterPapers);
+    workspaceStoreRef.current.openWorkspace(starterPapers, {
+      rootPath: "本地文献库",
+      type: "local_library"
+    });
     onWorkspaceSync();
     onWorkspaceLabel("本地文献库");
     onLeftRailView("library");

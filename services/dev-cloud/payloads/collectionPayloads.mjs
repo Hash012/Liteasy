@@ -1,4 +1,4 @@
-const collectionItemsBySession = new Map();
+import { listCollection, saveCollectionItem } from "../db/collectionRepository.mjs";
 
 function isCollectionItemPayload(item) {
   return (
@@ -16,7 +16,7 @@ export function buildCollectionListPayload(body = {}) {
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : "anonymous";
 
   return {
-    items: [...(collectionItemsBySession.get(sessionId) ?? [])]
+    items: listCollection(sessionId)
   };
 }
 
@@ -30,11 +30,7 @@ export function buildCollectionSavePayload(body = {}) {
     };
   }
 
-  const currentItems = collectionItemsBySession.get(sessionId) ?? [];
-  const nextItems = [item, ...currentItems.filter((currentItem) => currentItem.id !== item.id)];
-  collectionItemsBySession.set(sessionId, nextItems);
-
   return {
-    items: nextItems
+    items: saveCollectionItem(sessionId, item)
   };
 }

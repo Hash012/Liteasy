@@ -24,13 +24,7 @@ function isMockEndpoint(endpoint: string) {
 }
 
 function getActiveModelEndpoint(settings: SettingsState) {
-  return settings["models.access_mode"] === "local_direct"
-    ? settings["models.local_direct_endpoint"]
-    : settings["models.cloud_proxy_endpoint"];
-}
-
-function getActiveModelSource(settings: SettingsState) {
-  return settings["models.access_mode"] === "local_direct" ? "local_direct" : "cloud_proxy";
+  return settings["models.cloud_proxy_endpoint"];
 }
 
 export async function generateAssistantAnswer({
@@ -44,8 +38,7 @@ export async function generateAssistantAnswer({
 }: GenerateAssistantAnswerInput) {
   const groundedAnswer = getMockAnswer(selectedPapers, importedChunksByPaperId, question);
   const gateway = createModelGatewayFromSettings(settings, {
-    cloudTransport: modelTransport,
-    localTransport: modelTransport
+    cloudTransport: modelTransport
   });
   const prompt = [
     `问题：${question}`,
@@ -64,12 +57,11 @@ export async function generateAssistantAnswer({
     retrievalConfidence: groundedAnswer.confidence
   });
   const activeEndpoint = getActiveModelEndpoint(settings);
-  const activeSource = getActiveModelSource(settings);
   const audit = isMockEndpoint(activeEndpoint)
     ? localAudit
     : await createHttpModelAuditClient({
         endpoint: activeEndpoint,
-        source: activeSource,
+        source: "cloud_proxy",
         transport: auditTransport
       })({
         answer: generatedAnswerText,

@@ -1,8 +1,8 @@
 import { createModelGateway } from "../app/features/models/modelGateway";
 
-test("uses local direct model access when policy allows it", async () => {
+test("uses the cloud model path when provider and model are allowed", async () => {
   const gateway = createModelGateway({
-    cloudProxy: async () => ({
+    cloudModel: async () => ({
       answer: "cloud answer",
       trace: {
         backend: "http_service",
@@ -12,21 +12,9 @@ test("uses local direct model access when policy allows it", async () => {
         source: "cloud_proxy"
       }
     }),
-    localDirect: async () => ({
-      answer: "local answer",
-      trace: {
-        backend: "http_service",
-        endpoint: "https://example.com/local",
-        mode: "unknown",
-        provider: "openai",
-        source: "local_direct"
-      }
-    }),
     policy: {
       allowedModels: ["gpt-5-mini"],
-      allowedProviders: ["openai"],
-      localDirectEnabled: true,
-      modelAccessMode: "local_direct"
+      allowedProviders: ["openai"]
     }
   });
 
@@ -36,12 +24,12 @@ test("uses local direct model access when policy allows it", async () => {
     provider: "openai"
   });
 
-  expect(result.answer).toBe("local answer");
+  expect(result.answer).toBe("cloud answer");
 });
 
-test("rejects local direct mode when cloud policy disables it", async () => {
+test("rejects a request when the model is not allowed by cloud policy", async () => {
   const gateway = createModelGateway({
-    cloudProxy: async () => ({
+    cloudModel: async () => ({
       answer: "cloud answer",
       trace: {
         backend: "http_service",
@@ -51,21 +39,9 @@ test("rejects local direct mode when cloud policy disables it", async () => {
         source: "cloud_proxy"
       }
     }),
-    localDirect: async () => ({
-      answer: "local answer",
-      trace: {
-        backend: "http_service",
-        endpoint: "https://example.com/local",
-        mode: "unknown",
-        provider: "openai",
-        source: "local_direct"
-      }
-    }),
     policy: {
-      allowedModels: ["gpt-5-mini"],
-      allowedProviders: ["openai"],
-      localDirectEnabled: false,
-      modelAccessMode: "local_direct"
+      allowedModels: ["gpt-4.1"],
+      allowedProviders: ["openai"]
     }
   });
 
@@ -75,5 +51,5 @@ test("rejects local direct mode when cloud policy disables it", async () => {
       prompt: "hello",
       provider: "openai"
     })
-  ).rejects.toThrow(/云端策略未开放本地直连模型能力/);
+  ).rejects.toThrow(/云端策略未开放该模型/);
 });
