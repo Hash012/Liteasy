@@ -47,6 +47,14 @@ cd desktop && npm run build
 - `desktop` 全量测试通过
 - `desktop` 构建通过
 
+如需在演示前恢复稳定状态，可依次执行：
+
+```bash
+node scripts/reset-demo-data.mjs
+node scripts/reseed-demo-data.mjs
+node scripts/smoke-roadshow.mjs http://127.0.0.1:8787
+```
+
 ## 4. 建议部署顺序
 
 ### 4.1 启动云端联调服务
@@ -93,6 +101,12 @@ npm run tauri dev
 7. 展示收藏、推荐、问答与模型链路
 8. 最后说明 `/admin/` 是平台内部运营/运维视角，而非客户组织后台
 
+进入 `/admin/` 时，建议重点讲：
+
+- 这是 Liteasy 平台内部视角
+- 可以看到活跃会话数、收藏总数、推荐缓存条目数、客户组织资源
+- 可以执行 `重置 Demo 数据` 和 `重新播种 Demo 数据`
+
 ## 6. 路演时需要注意
 
 - 用户侧界面不再暴露“开发云”“端点切换”等调试心智
@@ -100,6 +114,7 @@ npm run tauri dev
 - 组织管理员与平台管理员是两个不同概念
 - `basic` 会员只能加入组织，`pro` 可创建组织
 - `收藏` 是用户云端长期私有数据，`关联推荐` 是云端缓存；清理缓存不会影响收藏
+- 如果演示顺序被打乱，优先用 reset + reseed 把状态拉回稳定基线
 
 ## 7. 如果现场异常
 

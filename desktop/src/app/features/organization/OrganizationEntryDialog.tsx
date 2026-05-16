@@ -1,5 +1,21 @@
 import type { OrganizationList, OrganizationSummary } from "./organization.types";
 
+function getOrganizationRoleLabel(role: string) {
+  if (role === "owner") {
+    return "所有者";
+  }
+
+  if (role === "admin") {
+    return "管理员";
+  }
+
+  if (role === "member") {
+    return "研究员";
+  }
+
+  return role;
+}
+
 type OrganizationEntryDialogProps = {
   list: OrganizationList | null;
   listMessage: string;
@@ -61,7 +77,7 @@ export function OrganizationEntryDialog({
                   >
                     <span className="organization-list-name">{organization.name}</span>
                     <span className="organization-list-meta">
-                      {organization.name} · {organization.myRole} · {organization.memberCount} 人 · {organization.sharedLibraryName}
+                      {organization.name} · {getOrganizationRoleLabel(organization.myRole)} · {organization.memberCount} 人 · {organization.sharedLibraryName}
                     </span>
                     <span className="organization-list-action">打开 {organization.name} 详情</span>
                   </button>
@@ -76,10 +92,10 @@ export function OrganizationEntryDialog({
             {summary ? (
               <>
                 <div className="organization-dialog-section-title">组织详情：{summary.name}</div>
-                <div className="organization-detail-row">角色：{summary.myRole} · 成员 {summary.memberCount} 人</div>
+                <div className="organization-detail-row">角色：{getOrganizationRoleLabel(summary.myRole)} · 成员 {summary.memberCount} 人</div>
                 {summary.members.length > 0 ? (
                   <div className="organization-detail-row">
-                    成员：{summary.members.map((member) => `${member.name}（${member.role}）`).join("、")}
+                    成员：{summary.members.map((member) => `${member.name}（${getOrganizationRoleLabel(member.role)}）`).join("、")}
                   </div>
                 ) : null}
                 <div className="organization-detail-row">

@@ -4798,7 +4798,7 @@ test("opens the organization entry dialog and shows selected organization detail
     expect(within(dialog).getByText("组织详情：Liteasy Literature Ops")).toBeInTheDocument();
   });
 
-  expect(within(dialog).getByText("成员：Liteasy Researcher（管理员）、Ops Reviewer（审核员）")).toBeInTheDocument();
+  expect(within(dialog).getByText("成员：Liteasy Researcher（管理员）、Ops Reviewer（研究员）")).toBeInTheDocument();
   expect(within(dialog).getByText("通知：文献库变更 · 文献运营共享库新增 QA 目录。")).toBeInTheDocument();
   expect(within(dialog).getByText("共享文献库：文献运营共享库 · 16 篇" )).toBeInTheDocument();
 }, 10000);

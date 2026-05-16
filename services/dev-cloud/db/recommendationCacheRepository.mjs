@@ -57,3 +57,10 @@ export function clearRecommendationCache(scope) {
     cleared: true
   };
 }
+
+export function resetRecommendationCacheData() {
+  writeJsonFile(recommendationCacheFilename, {});
+  return {
+    reset: true
+  };
+}

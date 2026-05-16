@@ -46,7 +46,7 @@ test("posts a session id to the organization list endpoint", async () => {
   });
 });
 
-test("rejects organization list payloads with non-formal roles", async () => {
+test("normalizes legacy organization list roles into the formal role model", async () => {
   const client = createOrganizationListClient({
     endpoint: "https://liteasy.example.com/control-plane",
     transport: async () => ({
@@ -67,5 +67,7 @@ test("rejects organization list payloads with non-formal roles", async () => {
     })
   });
 
-  await expect(client({ sessionId: "demo-session-1" })).rejects.toThrow("组织列表返回格式无效");
+  const list = await client({ sessionId: "demo-session-1" });
+
+  expect(list.organizations[0].myRole).toBe("member");
 });

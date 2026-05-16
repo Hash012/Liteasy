@@ -59,7 +59,7 @@ export function OrganizationSidebarPanel({
 }: OrganizationSidebarPanelProps) {
   const loggedOut = summary === null && list === null && listStatus === "unauthenticated" && summaryStatus === "unauthenticated";
   const canCreateOrganization = accountSession !== null && (accountSession.membershipTier ?? "pro") === "pro";
-  const canInviteMembers = summary ? /管理员|owner|admin/i.test(summary.myRole) : false;
+  const canInviteMembers = summary ? summary.myRole === "owner" || summary.myRole === "admin" : false;
   const accountPermissionTooltip = canCreateOrganization
     ? "当前账号权限：可创建组织，也可加入已有组织。"
     : "当前账号权限：可加入组织，暂不可创建组织。";

@@ -5,6 +5,22 @@ import type {
   OrganizationSummaryStatus
 } from "./organization.types";
 
+function getOrganizationRoleLabel(role: string) {
+  if (role === "owner") {
+    return "所有者";
+  }
+
+  if (role === "admin") {
+    return "管理员";
+  }
+
+  if (role === "member") {
+    return "研究员";
+  }
+
+  return role;
+}
+
 type OrganizationSpacePanelProps = {
   list: OrganizationList | null;
   listMessage: string;
@@ -117,11 +133,13 @@ export function OrganizationSpacePanel({
       {summary ? (
         <>
           <div className="model-policy-summary">
-            角色：{summary.myRole} · 成员 {summary.memberCount} 人
+            角色：{getOrganizationRoleLabel(summary.myRole)} · 成员 {summary.memberCount} 人
           </div>
           {summary.members.length > 0 ? (
             <div className="model-policy-summary">
-              组织成员：{summary.members.map((member) => `${member.name}（${member.role}）`).join("、")}
+              组织成员：{summary.members
+                .map((member) => `${member.name}（${getOrganizationRoleLabel(member.role)}）`)
+                .join("、")}
             </div>
           ) : null}
           <div className="model-policy-summary">

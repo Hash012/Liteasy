@@ -140,7 +140,7 @@ test("posts a selected organization id when loading organization summary", async
   ]);
 });
 
-test("rejects organization summary payloads with non-formal roles", async () => {
+test("normalizes legacy organization summary roles into the formal role model", async () => {
   const client = createOrganizationSummaryClient({
     endpoint: "https://liteasy.example.com/control-plane",
     transport: async () => ({
@@ -181,5 +181,8 @@ test("rejects organization summary payloads with non-formal roles", async () => 
     })
   });
 
-  await expect(client({ sessionId: "demo-session-1" })).rejects.toThrow("组织空间返回格式无效");
+  const summary = await client({ sessionId: "demo-session-1" });
+
+  expect(summary.myRole).toBe("member");
+  expect(summary.members[0].role).toBe("member");
 });

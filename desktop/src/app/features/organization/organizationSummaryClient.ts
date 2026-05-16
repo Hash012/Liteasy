@@ -37,6 +37,26 @@ function isOrganizationRole(value: unknown): value is OrganizationRole {
   return value === "owner" || value === "admin" || value === "member";
 }
 
+function normalizeOrganizationRole(value: unknown): OrganizationRole | null {
+  if (value === "owner" || value === "admin" || value === "member") {
+    return value;
+  }
+
+  if (value === "管理员") {
+    return "admin";
+  }
+
+  if (value === "研究员" || value === "审核员" || value === "访客") {
+    return "member";
+  }
+
+  return null;
+}
+
+function isCompatibleOrganizationRole(value: unknown) {
+  return normalizeOrganizationRole(value) !== null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -76,9 +96,9 @@ function isOrganizationSummaryPayload(payload: unknown): payload is Organization
         isRecord(member) &&
         hasStringField(member, "id") &&
         hasStringField(member, "name") &&
-        isOrganizationRole(member.role)
+        isCompatibleOrganizationRole(member.role)
     ) &&
-    isOrganizationRole(summary.myRole) &&
+    isCompatibleOrganizationRole(summary.myRole) &&
     hasStringField(summary, "name") &&
     Array.isArray(summary.notifications) &&
     summary.notifications.every(
@@ -148,6 +168,13 @@ export function createOrganizationSummaryClient({
       throw new Error("组织空间返回格式无效");
     }
 
-    return payload.summary;
+    return {
+      ...payload.summary,
+      members: payload.summary.members.map((member) => ({
+        ...member,
+        role: normalizeOrganizationRole(member.role) ?? "member"
+      })),
+      myRole: normalizeOrganizationRole(payload.summary.myRole) ?? "member"
+    };
   };
 }

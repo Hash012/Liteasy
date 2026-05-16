@@ -20,6 +20,7 @@ function formatPercent(used, limit) {
 export function buildAdminGovernanceDashboardPayload(request, config, builders) {
   const organizationList = builders.buildOrganizationListPayload({});
   const governance = builders.buildOrganizationGovernancePayload({}).summary;
+  const demoState = builders.buildAdminDemoStatePayload();
   const publicOrigin = getPublicOrigin(request, config);
 
   return {
@@ -57,6 +58,7 @@ export function buildAdminGovernanceDashboardPayload(request, config, builders) 
       },
       organizations: organizationList.organizations,
       auditQueue: governance.auditQueue,
+      demoState,
       quota: governance.quota,
       runningTasks: governance.runningTasks,
       recentAuditEvents: governance.recentAuditEvents
@@ -100,6 +102,9 @@ export function buildAdminConsoleHtml(request, config, builders) {
     .join("");
   const recentAuditEvents = dashboard.recentAuditEvents
     .map((event) => `<li><strong>${escapeHtml(event.label)}</strong><span>${escapeHtml(event.risk)}</span></li>`)
+    .join("");
+  const demoActivities = dashboard.demoState.activities
+    .map((activity) => `<li><strong>${escapeHtml(activity.label)}</strong><span>${escapeHtml(activity.at)}</span></li>`)
     .join("");
 
   return `<!doctype html>
@@ -178,23 +183,37 @@ export function buildAdminConsoleHtml(request, config, builders) {
         <div class="grid">
           <div class="metric"><span>活跃客户用户</span><strong>${escapeHtml(dashboard.users.activeUsers)}</strong><span>来自 ${escapeHtml(dashboard.users.desktopCustomers)} 个客户组织</span></div>
           <div class="metric"><span>待处理支持请求</span><strong>${escapeHtml(dashboard.users.pendingSupportTickets)}</strong><span>demo 运维队列</span></div>
+          <div class="metric"><span>活跃会话数</span><strong>${escapeHtml(dashboard.demoState.summary.activeSessionCount)}</strong><span>来自当前 Demo 状态</span></div>
+          <div class="metric"><span>收藏总数</span><strong>${escapeHtml(dashboard.demoState.summary.collectionItemCount)}</strong><span>用户云端私有长期数据</span></div>
+          <div class="metric"><span>推荐缓存条目数</span><strong>${escapeHtml(dashboard.demoState.summary.recommendationCacheEntryCount)}</strong><span>当前云端缓存 scope</span></div>
         </div>
         <h2>客户组织资源</h2>
         <table>
           <thead><tr><th>客户组织</th><th>客户侧角色样例</th><th>成员</th><th>共享文献库</th></tr></thead>
           <tbody>${organizationRows}</tbody>
         </table>
+        <h2>最近活动</h2>
+        <ul class="stack">${demoActivities}</ul>
         <h2>后台任务</h2>
         <ul class="stack">${runningTasks}</ul>
         <h2>近期审计</h2>
         <ul class="stack">${recentAuditEvents}</ul>
+        <h2>Demo 运维动作</h2>
+        <form id="demo-ops-form">
+          <div class="label">Roadshow Controls</div>
+          <button type="button" id="demo-reset-button">重置 Demo 数据</button>
+          <button type="button" id="demo-reseed-button">重新播种 Demo 数据</button>
+          <div class="form-status" id="demo-ops-status"></div>
+        </form>
         <h2>运维数据接口</h2>
         <p><code>/v1/admin/governance-dashboard</code></p>
+        <p><code>/v1/admin/demo-state</code></p>
       </section>
     </main>
     <script>
       const form = document.getElementById("api-policy-form");
       const status = document.getElementById("api-policy-status");
+      const demoOpsStatus = document.getElementById("demo-ops-status");
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const formData = new FormData(form);
@@ -211,6 +230,24 @@ export function buildAdminConsoleHtml(request, config, builders) {
         status.textContent = response.ok
           ? "已保存策略：" + payload.policy.policyVersion
           : "策略保存失败";
+      });
+      document.getElementById("demo-reset-button")?.addEventListener("click", async () => {
+        const response = await fetch("/v1/admin/demo-reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const payload = await response.json();
+        demoOpsStatus.textContent = response.ok && payload.reset ? "已重置 Demo 数据" : "Demo 重置失败";
+      });
+      document.getElementById("demo-reseed-button")?.addEventListener("click", async () => {
+        const response = await fetch("/v1/admin/demo-reseed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const payload = await response.json();
+        demoOpsStatus.textContent = response.ok && payload.reseeded ? "已重新播种 Demo 数据" : "Demo 播种失败";
       });
     </script>
   </body>

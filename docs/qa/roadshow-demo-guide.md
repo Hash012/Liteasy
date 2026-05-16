@@ -71,6 +71,21 @@ node services/dev-cloud/server.mjs
 
 如果环境变量已经设置好，服务会按设定 host 和 port 监听。
 
+如果要在路演前恢复一个稳定起点，建议先执行：
+
+```bash
+node scripts/reset-demo-data.mjs
+node scripts/reseed-demo-data.mjs
+```
+
+启动成功后，再执行：
+
+```bash
+node scripts/smoke-roadshow.mjs http://127.0.0.1:8787
+```
+
+这会统一检查根索引、健康检查、运维端页面和 demo-state 接口。
+
 ## 5. 启动后先做哪些 smoke check
 
 路演前至少检查这几项：
@@ -78,16 +93,18 @@ node services/dev-cloud/server.mjs
 1. 服务根索引可访问
 2. `/healthz` 可访问
 3. `/admin/` 可访问
-4. 桌面端可以连接云账号
-5. 组织页可以加载
-6. 推荐流程可见
-7. 助手问答可返回结果
+4. `/v1/admin/demo-state` 可访问
+5. 桌面端可以连接云账号
+6. 组织页可以加载
+7. 推荐流程可见
+8. 助手问答可返回结果
 
 建议检查地址：
 
 - `https://你的演示域名/`
 - `https://你的演示域名/healthz`
 - `https://你的演示域名/admin/`
+- `https://你的演示域名/v1/admin/demo-state`
 
 ## 6. 桌面端如何连接部署后的云端
 
@@ -114,6 +131,15 @@ node services/dev-cloud/server.mjs
 7. 展示中栏产物
 8. 最后打开 `/admin/`，说明这是 Liteasy 平台内部运营/运维视角
 
+进入 `/admin/` 后，建议重点展示：
+
+- 活跃会话数
+- 收藏总数
+- 推荐缓存条目数
+- 客户组织资源表
+- 最近活动
+- `重置 Demo 数据` 与 `重新播种 Demo 数据` 按钮
+
 ## 8. 出现问题时的 fallback 动作
 
 如果现场环境不稳定，优先使用以下 fallback：
@@ -122,6 +148,7 @@ node services/dev-cloud/server.mjs
 - OpenAI 不稳定：回退到开发云演示回答
 - 组织接口异常：优先展示本地主工作台与助手主链路
 - `/admin/` 加载慢：直接用根索引和已准备好的页面截图说明边界
+- demo 状态脏了：直接执行 reset + reseed，再刷新 `/admin/`
 
 ## 9. 当前不建议重点演示的内容
 
@@ -139,6 +166,7 @@ node services/dev-cloud/server.mjs
 - 云端服务根索引正常
 - `/healthz` 正常
 - `/admin/` 正常
+- `/v1/admin/demo-state` 正常
 - 桌面端能连接云账号
 - 组织页正常
 - 推荐可见

@@ -1,4 +1,9 @@
 import { buildAdminConsoleHtml, buildAdminGovernanceDashboardPayload } from "./adminConsole.mjs";
+import {
+  buildAdminDemoResetPayload,
+  buildAdminDemoReseedPayload
+} from "./payloads/adminDemoActionPayloads.mjs";
+import { buildAdminDemoStatePayload } from "./payloads/adminDemoStatePayloads.mjs";
 import { defaultConfig, getPublicOrigin } from "./config.mjs";
 import {
   buildCollectionListPayload,
@@ -38,7 +43,11 @@ const availableEndpoints = [
   "GET /healthz",
   "GET /admin",
   "GET /admin/",
+  "GET /v1/admin/demo-state",
   "GET /v1/admin/model-policy",
+  "POST /v1/admin/demo-reset",
+  "POST /v1/admin/demo-reseed",
+  "POST /v1/admin/recommendation-cache/clear",
   "POST /v1/admin/model-policy",
   "GET /v1/admin/governance-dashboard",
   "POST /v1/account/demo-login",
@@ -163,6 +172,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         response,
         200,
         buildAdminConsoleHtml(request, config, {
+          buildAdminDemoStatePayload,
           buildOrganizationGovernancePayload,
           buildOrganizationListPayload
         })
@@ -170,8 +180,23 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
+    if (method === "GET" && url.pathname === "/v1/admin/demo-state") {
+      writeJson(request, response, 200, buildAdminDemoStatePayload());
+      return;
+    }
+
     if (method === "GET" && url.pathname === "/v1/admin/model-policy") {
       writeJson(request, response, 200, buildPolicyPayload(request, config));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/demo-reset") {
+      writeJson(request, response, 200, buildAdminDemoResetPayload());
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/demo-reseed") {
+      writeJson(request, response, 200, buildAdminDemoReseedPayload());
       return;
     }
 
@@ -191,6 +216,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         response,
         200,
         buildAdminGovernanceDashboardPayload(request, config, {
+          buildAdminDemoStatePayload,
           buildOrganizationGovernancePayload,
           buildOrganizationListPayload
         })

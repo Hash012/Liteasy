@@ -3,7 +3,11 @@ import { readJsonFile, writeJsonFile } from "./jsonFileStore.mjs";
 const organizationFilename = "organizations.json";
 
 function readOrganizationState() {
-  return readJsonFile(organizationFilename, {
+  return readJsonFile(organizationFilename, buildSeedOrganizationState());
+}
+
+function buildSeedOrganizationState() {
+  return {
     activeOrganizationIdBySession: {},
     nextOrganizationSequence: 1,
     organizations: {
@@ -104,7 +108,7 @@ function readOrganizationState() {
         }
       }
     }
-  });
+  };
 }
 
 function writeOrganizationState(state) {
@@ -300,4 +304,21 @@ export function leaveOrganization(organizationId, role, sessionId) {
     organizationId,
     sessionId
   };
+}
+
+export function resetOrganizationData() {
+  writeOrganizationState({
+    activeOrganizationIdBySession: {},
+    nextOrganizationSequence: 1,
+    organizations: {}
+  });
+  return {
+    reset: true
+  };
+}
+
+export function reseedOrganizationData() {
+  const nextState = buildSeedOrganizationState();
+  writeOrganizationState(nextState);
+  return nextState;
 }

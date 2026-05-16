@@ -21,3 +21,26 @@ export function saveCollectionItem(sessionId, item) {
 
   return nextItems;
 }
+
+export function resetCollectionData() {
+  writeJsonFile(collectionFilename, {});
+  return {
+    reset: true
+  };
+}
+
+export function reseedCollectionData() {
+  const nextState = {
+    "demo-session-1": [
+      {
+        id: "rec-bert-1",
+        reason: "同样关注大规模预训练语言模型的迁移能力。",
+        savedAt: "2026-05-14T10:30:00.000Z",
+        source: "Semantic Scholar",
+        title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+      }
+    ]
+  };
+  writeJsonFile(collectionFilename, nextState);
+  return nextState;
+}

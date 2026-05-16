@@ -37,6 +37,26 @@ function isOrganizationRole(value: unknown): value is OrganizationRole {
   return value === "owner" || value === "admin" || value === "member";
 }
 
+function normalizeOrganizationRole(value: unknown): OrganizationRole | null {
+  if (value === "owner" || value === "admin" || value === "member") {
+    return value;
+  }
+
+  if (value === "管理员") {
+    return "admin";
+  }
+
+  if (value === "研究员" || value === "审核员" || value === "访客") {
+    return "member";
+  }
+
+  return null;
+}
+
+function isCompatibleOrganizationRole(value: unknown) {
+  return normalizeOrganizationRole(value) !== null;
+}
+
 function isOrganizationListPayload(payload: unknown): payload is OrganizationList {
   return (
     isRecord(payload) &&
@@ -46,7 +66,7 @@ function isOrganizationListPayload(payload: unknown): payload is OrganizationLis
       (organization) =>
         isRecord(organization) &&
         hasNumberField(organization, "memberCount") &&
-        isOrganizationRole(organization.myRole) &&
+        isCompatibleOrganizationRole(organization.myRole) &&
         hasStringField(organization, "name") &&
         hasStringField(organization, "organizationId") &&
         hasStringField(organization, "sharedLibraryName") &&
@@ -91,6 +111,12 @@ export function createOrganizationListClient({
       throw new Error("组织列表返回格式无效");
     }
 
-    return payload;
+    return {
+      activeOrganizationId: payload.activeOrganizationId,
+      organizations: payload.organizations.map((organization) => ({
+        ...organization,
+        myRole: normalizeOrganizationRole(organization.myRole) ?? "member"
+      }))
+    };
   };
 }

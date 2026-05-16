@@ -6,8 +6,11 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { createDevCloudRequestHandler } from "./server.mjs";
 
-const testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-dev-cloud-test-"));
-process.env.LITEASY_DEV_CLOUD_DATA_DIR = testDataDir;
+test.beforeEach(() => {
+  process.env.LITEASY_DEV_CLOUD_DATA_DIR = fs.mkdtempSync(
+    path.join(os.tmpdir(), "liteasy-dev-cloud-test-")
+  );
+});
 
 async function invokeHandler({ body, handler, handlerOptions, headers = {}, method, url }) {
   const chunks = body ? [Buffer.from(body)] : [];
@@ -75,7 +78,11 @@ test("returns a helpful service index from the root path", async () => {
     "GET /healthz",
     "GET /admin",
     "GET /admin/",
+    "GET /v1/admin/demo-state",
     "GET /v1/admin/model-policy",
+    "POST /v1/admin/demo-reset",
+    "POST /v1/admin/demo-reseed",
+    "POST /v1/admin/recommendation-cache/clear",
     "POST /v1/admin/model-policy",
     "GET /v1/admin/governance-dashboard",
     "POST /v1/account/demo-login",
@@ -180,9 +187,15 @@ test("returns the demo admin console html", async () => {
   assert.match(response.body, /fetch\("\/v1\/admin\/model-policy"/);
   assert.match(response.body, /用户与账号/);
   assert.match(response.body, /活跃客户用户/);
+  assert.match(response.body, /活跃会话数/);
+  assert.match(response.body, /收藏总数/);
+  assert.match(response.body, /推荐缓存条目数/);
   assert.match(response.body, /Liteasy AI Reading Lab/);
   assert.match(response.body, /组织共享文献库索引刷新/);
   assert.match(response.body, /Admin 更新共享文献库上传权限/);
+  assert.match(response.body, /重置 Demo 数据/);
+  assert.match(response.body, /重新播种 Demo 数据/);
+  assert.match(response.body, /\/v1\/admin\/demo-state/);
   assert.match(response.body, /42%/);
   assert.match(response.body, /38 GB \/ 100 GB/);
   assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
@@ -228,6 +241,41 @@ test("returns the demo admin governance dashboard payload", async () => {
   assert.equal(response.json.dashboard.users.desktopCustomers, 2);
   assert.equal(response.json.dashboard.auditQueue.pendingReview, 3);
   assert.equal(response.json.dashboard.quota.storageUsedGb, 38);
+  assert.equal(typeof response.json.dashboard.demoState.summary.activeSessionCount, "number");
+  assert.equal(typeof response.json.dashboard.demoState.summary.collectionItemCount, "number");
+  assert.equal(typeof response.json.dashboard.demoState.summary.recommendationCacheEntryCount, "number");
+  assert.ok(Array.isArray(response.json.dashboard.demoState.activities));
+});
+
+test("returns a non-empty admin demo state summary", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/v1/admin/demo-state"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(typeof response.json.summary.organizationCount, "number");
+  assert.equal(typeof response.json.summary.collectionItemCount, "number");
+  assert.equal(typeof response.json.summary.recommendationCacheEntryCount, "number");
+  assert.equal(typeof response.json.summary.activeSessionCount, "number");
+});
+
+test("resets demo state through the admin reset endpoint", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({}),
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/admin/demo-reset"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.reset, true);
 });
 
 test("explains that demo login must be called with POST", async () => {

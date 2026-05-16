@@ -49,14 +49,14 @@ describe("useOrganizationData", () => {
         organizations: [
           {
             memberCount: 12,
-            myRole: "研究员",
+            myRole: "member",
             name: "Liteasy AI Reading Lab",
             organizationId: "org-demo-1",
             sharedLibraryName: "组织共享文献库"
           },
           {
             memberCount: 4,
-            myRole: "管理员",
+            myRole: "admin",
             name: "Liteasy Literature Ops",
             organizationId: "org-demo-2",
             sharedLibraryName: "文献运营共享库"
@@ -71,7 +71,7 @@ describe("useOrganizationData", () => {
           auditEvents: [],
           memberCount: 4,
           members: [],
-          myRole: "管理员",
+          myRole: "admin",
           name: "Liteasy Literature Ops",
           notifications: [],
           organizationId: "org-demo-2",

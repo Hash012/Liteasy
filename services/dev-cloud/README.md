@@ -45,6 +45,34 @@ node services/dev-cloud/server.mjs
 - `LITEASY_DEV_CLOUD_PUBLIC_ORIGIN` 控制根索引、策略返回和内部后台展示时使用的外部访问地址
 - `LITEASY_DESKTOP_PUBLIC_ORIGIN` 可选，用于在内部后台中展示桌面入口地址
 
+### 路演前重置或重新播种 Demo 数据
+
+如果你要在路演前恢复稳定演示状态，可以在仓库根目录运行：
+
+```bash
+node scripts/reset-demo-data.mjs
+node scripts/reseed-demo-data.mjs
+```
+
+说明：
+
+- `reset-demo-data.mjs` 会清空当前 demo 持久化数据
+- `reseed-demo-data.mjs` 会写回稳定的路演初始状态
+- 两个脚本都依赖当前 `services/dev-cloud/.liteasy-data/` JSON 文件型 demo 数据库
+
+如果你希望启动后先做统一 smoke check，可执行：
+
+```bash
+node scripts/smoke-roadshow.mjs http://127.0.0.1:8787
+```
+
+它会检查：
+
+- `/`
+- `/healthz`
+- `/admin/`
+- `/v1/admin/demo-state`
+
 如果你希望它真正调用 OpenAI，而不是返回开发演示回答，请在启动前配置：
 
 ```bash
@@ -79,6 +107,22 @@ GET /v1/admin/model-policy
 - `modelAccessMode`
 - `policyVersion`
 - `syncedAt`
+
+### Admin Demo State
+
+```text
+GET /v1/admin/demo-state
+```
+
+返回当前路演 demo 的聚合状态，例如：
+
+- 活跃会话数
+- 收藏总数
+- 推荐缓存条目数
+- 组织数
+- 最近活动列表
+
+这个接口主要给 `/admin/` 运维端使用。
 
 ### 模型生成
 

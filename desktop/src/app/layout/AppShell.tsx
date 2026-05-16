@@ -110,8 +110,6 @@ export function AppShell({
     profileSamplingEnabled: settingsState["profile.enabled"]
   });
   const organizationUi = useOrganizationUiState();
-  const organizationActions = useOrganizationActions({ onAnalysisHint: setAnalysisHint });
-  const organizationNotifications = useOrganizationNotifications({ onAnalysisHint: setAnalysisHint });
 
   const workspaceActions = useWorkspaceActions({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
@@ -157,6 +155,11 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState(),
     onSessionRestored: modelSettings.applyLocalDevCloudDefaults
   });
+  const organizationActions = useOrganizationActions({
+    canCreateOrganization: (accountSession?.membershipTier ?? "pro") !== "basic",
+    onAnalysisHint: setAnalysisHint
+  });
+  const organizationNotifications = useOrganizationNotifications({ onAnalysisHint: setAnalysisHint });
   const cloudAccountActions = useCloudAccountActions({
     applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
     clearOrganizationNotifications: organizationNotifications.clearOrganizationNotifications,

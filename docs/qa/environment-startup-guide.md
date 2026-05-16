@@ -89,6 +89,14 @@ https://你的演示域名/healthz
 https://你的演示域名/admin/
 ```
 
+如果要把环境恢复到路演稳定基线，再执行：
+
+```bash
+node scripts/reset-demo-data.mjs
+node scripts/reseed-demo-data.mjs
+node scripts/smoke-roadshow.mjs http://127.0.0.1:8787
+```
+
 路演完整说明请看：
 
 ```text

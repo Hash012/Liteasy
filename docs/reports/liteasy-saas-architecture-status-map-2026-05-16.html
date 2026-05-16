@@ -1,0 +1,1896 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Liteasy SaaS 架构全景</title>
+  <style>
+    :root {
+      --ink: #193247;
+      --muted: #627789;
+      --paper: #eef2ec;
+      --card: rgba(255, 255, 255, 0.9);
+      --line: #d4dbd1;
+      --shadow: 0 18px 40px rgba(34, 51, 67, 0.08);
+      --implemented: #246847;
+      --implemented-soft: #e4f3ea;
+      --partial: #a56a22;
+      --partial-soft: #f7ead7;
+      --planned: #7a4e96;
+      --planned-soft: #eee1f7;
+      --blue: #244966;
+      --blue-soft: #e4edf4;
+      --openclaw: #365f9f;
+      --openclaw-soft: #dde8f8;
+      --radius: 22px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 18%),
+        linear-gradient(135deg, #edf1eb 0%, #f4f1eb 50%, #eef3f6 100%);
+      color: var(--ink);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .page {
+      width: min(1600px, calc(100vw - 24px));
+      margin: 12px auto;
+      display: grid;
+      gap: 16px;
+      height: calc(100vh - 38px);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .hero,
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .hero {
+      padding: 16px 18px 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.08;
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      max-width: 920px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .hero-actions {
+      display: grid;
+      gap: 10px;
+      justify-items: end;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .control-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .chip,
+    .view-toggle,
+    .status-filter {
+      border: 1px solid #cfdbd3;
+      border-radius: 999px;
+      padding: 9px 13px;
+      background: linear-gradient(180deg, #fff 0%, #edf3f0 100%);
+      color: #2d485f;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .view-toggle.active,
+    .status-filter.active {
+      color: #fff;
+      background: linear-gradient(180deg, #2d597d 0%, #224966 100%);
+      border-color: #234a67;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 10px;
+      border: 1px solid #d6ddd5;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.75);
+      font-size: 12px;
+    }
+
+    .topology-strip {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+      gap: 10px;
+    }
+
+    .topology-band,
+    .stat-band {
+      border-radius: 18px;
+      border: 1px solid #d4ddda;
+      background: rgba(255, 255, 255, 0.76);
+      padding: 12px;
+    }
+
+    .flow-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .flow-node,
+    .flow-arrow {
+      padding: 8px 10px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .flow-node {
+      border: 1px solid #d7e4ee;
+      background: #fff;
+    }
+
+    .flow-openclaw {
+      color: #62428a;
+      background: #efe2fb;
+      border-color: #dbc6f3;
+    }
+
+    .flow-liteasy {
+      color: #234966;
+      background: #d8ebf7;
+      border-color: #c3ddef;
+    }
+
+    .flow-saas {
+      color: #2f8c6a;
+      background: #d9f1e8;
+      border-color: #c7e7da;
+    }
+
+    .flow-arrow {
+      color: #68829a;
+      background: rgba(240, 245, 249, 0.9);
+    }
+
+    .page-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .page-tab {
+      border: 1px solid #d4ddd6;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      color: #35536d;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 7px 11px;
+    }
+
+    .page-tab.active {
+      background: linear-gradient(180deg, #355d81 0%, #234966 100%);
+      border-color: #234966;
+      color: #fff;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-implemented { background: var(--implemented); }
+    .dot-partial { background: var(--partial); }
+    .dot-planned { background: var(--planned); }
+
+    .hero-grid {
+      display: none;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.9fr);
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .panel {
+      padding: 14px;
+      min-height: 0;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .section-title {
+      margin: 0 0 8px;
+      font-size: 17px;
+      color: var(--blue);
+    }
+
+    .map {
+      display: grid;
+      gap: 8px;
+      height: 100%;
+      overflow: hidden;
+      align-content: start;
+    }
+
+    .lane {
+      border-radius: 18px;
+      border: 1px solid #d9e0d6;
+      background: rgba(255, 255, 255, 0.78);
+      padding: 10px;
+    }
+
+    .lane-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .lane-head h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .status-implemented {
+      color: var(--implemented);
+      background: var(--implemented-soft);
+    }
+
+    .status-partial {
+      color: var(--partial);
+      background: var(--partial-soft);
+    }
+
+    .status-planned {
+      color: var(--planned);
+      background: var(--planned-soft);
+    }
+
+    .node-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .node-card {
+      width: auto;
+      min-width: 148px;
+      text-align: left;
+      border: 1px solid #d6ded4;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 9px 10px;
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+      position: relative;
+    }
+
+    .node-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(31, 45, 61, 0.08);
+      border-color: #c8d4cf;
+    }
+
+    .node-card.active {
+      border-color: #376084;
+      box-shadow: 0 0 0 2px rgba(54, 95, 159, 0.13);
+    }
+
+    .node-card[data-status="implemented"] {
+      background: linear-gradient(180deg, #ffffff 0%, #eef8f2 100%);
+    }
+
+    .node-card[data-status="partial"] {
+      background: linear-gradient(180deg, #ffffff 0%, #fbf4e8 100%);
+    }
+
+    .node-card[data-status="planned"] {
+      background: linear-gradient(180deg, #ffffff 0%, #f3ebfa 100%);
+    }
+
+    .node-card h4 {
+      margin: 0;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .node-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .meta-chip {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 10px;
+      font-weight: 800;
+      background: #edf2f6;
+      color: #486174;
+    }
+
+    .detail-shell {
+      position: sticky;
+      top: 14px;
+      display: grid;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .detail-card {
+      border-radius: 18px;
+      border: 1px solid #d8ddd6;
+      background: rgba(255, 255, 255, 0.84);
+      padding: 12px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .detail-title-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .detail-title-row h3 {
+      margin: 0;
+      font-size: 18px;
+      color: var(--blue);
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .detail-summary {
+      margin: 0;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .detail-section {
+      margin-top: 8px;
+    }
+
+    .detail-section h4 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--blue);
+    }
+
+    .detail-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .detail-chip {
+      border-radius: 999px;
+      border: 1px solid #d7ddd6;
+      background: rgba(255, 255, 255, 0.78);
+      color: #486174;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 5px 8px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #f0ece3;
+      border: 1px solid #ddd4c5;
+      border-radius: 6px;
+      padding: 1px 6px;
+      color: #3f4f61;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 1040px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-top {
+        flex-direction: column;
+      }
+
+      .hero-actions {
+        justify-items: start;
+      }
+
+      .detail-shell {
+        position: static;
+      }
+
+      body {
+        overflow: auto;
+      }
+
+      .page { height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="hero-top">
+        <div>
+          <h1>Liteasy SaaS 架构全景</h1>
+        </div>
+        <div class="hero-actions">
+          <div class="control-group">
+            <span class="control-label">视角</span>
+            <button class="view-toggle active" data-view="product" type="button">产品架构视角</button>
+            <button class="view-toggle" data-view="engineering" type="button">工程映射视角</button>
+          </div>
+          <div class="control-group">
+            <span class="control-label">状态筛选</span>
+            <button class="status-filter active" data-filter="all" type="button">全部</button>
+            <button class="status-filter" data-filter="implemented" type="button">已实现</button>
+            <button class="status-filter" data-filter="partial" type="button">部分实现</button>
+            <button class="status-filter" data-filter="planned" type="button">未实现</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><span class="dot dot-implemented"></span>已实现</div>
+        <div class="legend-item"><span class="dot dot-partial"></span>部分实现</div>
+        <div class="legend-item"><span class="dot dot-planned"></span>未实现</div>
+      </div>
+
+      <div class="topology-strip">
+        <section class="topology-band">
+          <div class="flow-row">
+            <div class="flow-node flow-openclaw">OpenClaw 范式</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node flow-liteasy">Workflow Runtime</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-node flow-saas">Liteasy SaaS</div>
+          </div>
+        </section>
+        <section class="stat-band">
+          <div class="flow-row">
+            <div class="flow-node"><span id="implemented-count">0</span> 已实现</div>
+            <div class="flow-node"><span id="partial-count">0</span> 部分实现</div>
+            <div class="flow-node"><span id="planned-count">0</span> 未实现</div>
+          </div>
+        </section>
+      </div>
+
+      <div class="page-tabs" id="page-tabs"></div>
+    </header>
+
+    <div class="workspace">
+      <main class="panel">
+        <h2 class="section-title" id="main-title">Liteasy SaaS 架构</h2>
+        <div class="map" id="map-root"></div>
+      </main>
+
+      <aside class="detail-shell">
+        <section class="detail-card">
+          <div class="eyebrow">节点详情</div>
+          <div id="detail-root"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const statusMeta = {
+      implemented: { label: "已实现", className: "status-implemented" },
+      partial: { label: "部分实现", className: "status-partial" },
+      planned: { label: "未实现", className: "status-planned" }
+    };
+
+    const detailNodes = {
+      relation_openclaw: {
+        id: "relation_openclaw",
+        label: "Liteasy 与 OpenClaw 的关系",
+        status: "partial",
+        category: "关系",
+        summary: "OpenClaw 范式 / Workflow / Skill-Action / SaaS 产品层",
+        responsibilities: [
+          "把 OpenClaw 作为 workflow 思路、skill/action 边界和 runtime 范式来源",
+          "把 Liteasy 定位成桌面端为入口的 SaaS 产品，而不是单一桌面应用",
+          "让产品层、云端层、内部后台层都围绕 agent runtime 统一收束"
+        ],
+        engineering: [
+          "<code>liteasy-openclaw-architecture.html</code>",
+          "<code>docs/Liteasy_功能与UI设计文档1.0.md</code>",
+          "<code>docs/Saas/Liteasy_SaaS纠偏设计与调整方案.md</code>",
+          "<code>desktop/src/app/features/skills/</code>",
+          "<code>services/dev-cloud/providers/openaiResponses.mjs</code>"
+        ],
+        evidence: [
+          "产品文档已经明确写出“用户交互层 + agent 工作流层”",
+          "仓库已存在 <code>skillRegistry.ts</code>、<code>actionRegistry.ts</code>、provider seam",
+          "但正式云端 workflow runtime、skill registry、model gateway 仍未独立成型"
+        ],
+        gaps: [
+          "还缺正式的云端 workflow runtime 作为 OpenClaw 范式的主要承载体",
+          "还缺 Git 管理的 skill 包、prompt 资产层和正式 model gateway",
+          "当前更多是“局部吸收 OpenClaw 思路”，不是完整 runtime 落地"
+        ],
+        openclaw: "底层范式 / Runtime 来源 / 不直接对外"
+      },
+      user_end: {
+        id: "user_end",
+        label: "用户端",
+        status: "partial",
+        category: "产品层",
+        summary: "用户端是 Liteasy 的客户入口层，当前以桌面端为主，负责工作区、阅读、问答、组织入口与结果承载。",
+        responsibilities: [
+          "工作区与文献库浏览",
+          "中栏阅读和多标签产物承载",
+          "右栏统一会话入口",
+          "组织入口、个人中心、设置和插件入口"
+        ],
+        engineering: [
+          "<code>desktop/</code>",
+          "<code>desktop/src/app/layout/</code>",
+          "<code>desktop/src/app/features/</code>"
+        ],
+        evidence: [
+          "桌面三栏工作台已存在",
+          "组织页、个人中心、设置页、AI Assistant 都已有真实组件"
+        ],
+        gaps: [
+          "整体仍以 prototype seam 为主，很多能力还依赖 mock 数据或 demo handler",
+          "插件入口和正式 workflow 驱动能力仍未正式化"
+        ],
+        openclaw: "入口层 / 结果承载"
+      },
+      desktop_workbench: {
+        id: "desktop_workbench",
+        label: "桌面工作台 UI",
+        status: "implemented",
+        category: "用户端子模块",
+        summary: "三栏工作台、最左活动栏、左栏/中栏/右栏骨架和核心页面已经落地，是当前完成度最高的部分。",
+        responsibilities: [
+          "文献库、组织、个人中心、设置导航",
+          "中栏 Reader / Artifact 承载",
+          "右栏 Assistant 承载"
+        ],
+        engineering: [
+          "<code>desktop/src/app/layout/AppShell.tsx</code>",
+          "<code>desktop/src/app/layout/ActivityBar.tsx</code>",
+          "<code>desktop/src/app/layout/ReaderPane.tsx</code>",
+          "<code>desktop/src/app/layout/AssistantSidebar.tsx</code>"
+        ],
+        evidence: [
+          "已有真实 React 组件和测试覆盖",
+          "可通过 <code>npm run dev</code> 或 Tauri 窗口直接查看"
+        ],
+        gaps: [
+          "视觉和状态处理仍偏 demo 语义",
+          "很多业务动作未来需要改由云端 workflow 主导"
+        ],
+        openclaw: "产品 UI / 非 Runtime 本体"
+      },
+      library_workspace: {
+        id: "library_workspace",
+        label: "文献库与工作区",
+        status: "partial",
+        category: "用户端子模块",
+        summary: "工作区、选中文献集、锁定、导入、收藏、推荐缓存语义已经建立，但底层资源边界仍未正式化。",
+        responsibilities: [
+          "展示当前工作区目录视图",
+          "形成选中文献集",
+          "承接导入和分析前置条件",
+          "收藏与关联推荐的交互"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/library/</code>",
+          "<code>desktop/src/app/features/workspace/</code>",
+          "<code>desktop/src/app/features/import/</code>",
+          "<code>desktop/src/app/features/collection/</code>"
+        ],
+        evidence: [
+          "左栏文献树、选中文献集、锁定与导入流程已存在",
+          "推荐/收藏拖拽与缓存也有测试和客户端代码"
+        ],
+        gaps: [
+          "本地文件夹、用户云私有、组织共享和缓存之间的正式资源模型还未重建",
+          "对象存储、元数据、索引和版本控制还没有正式平台模块"
+        ],
+        openclaw: "资源前置层 / Workflow 上下文"
+      },
+      assistant_ui: {
+        id: "assistant_ui",
+        label: "右栏 AI Assistant",
+        status: "partial",
+        category: "用户端子模块",
+        summary: "三模式入口、历史会话、新建会话、语音预留和带审计/引用展示的问答已经有原型闭环。",
+        responsibilities: [
+          "作为统一自然语言入口",
+          "承接 explain / command / qa 三种模式",
+          "呈现引用、可信度和执行痕迹"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/assistant/AssistantPane.tsx</code>",
+          "<code>desktop/src/app/features/assistant/ModeSwitch.tsx</code>",
+          "<code>desktop/src/app/features/assistant/generateAssistantAnswer.ts</code>"
+        ],
+        evidence: [
+          "问答、模式切换、历史会话、语音 seam 已有真实组件和测试",
+          "当前生成和审计已经能串起前端与 dev-cloud"
+        ],
+        gaps: [
+          "当前 prompt 组装和 workflow 仍主要在前端代码里",
+          "正式的云端 skill 路由和任务编排还未接管"
+        ],
+        openclaw: "统一入口 / 前端版"
+      },
+      org_management: {
+        id: "org_management",
+        label: "组织入口与组织内管理",
+        status: "partial",
+        category: "用户端子模块",
+        summary: "组织列表、组织摘要、治理摘要、共享库切换、创建/加入/邀请/退出原型已经存在，但仍是 demo 级多租户能力。",
+        responsibilities: [
+          "组织列表和成员/通知查看",
+          "组织共享文献库打开",
+          "组织内动作入口"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/organization/</code>",
+          "<code>services/dev-cloud/payloads/organizationPayloads.mjs</code>",
+          "<code>services/dev-cloud/db/organizationRepository.mjs</code>"
+        ],
+        evidence: [
+          "桌面端已有组织页与多种组织动作弹窗",
+          "dev-cloud 已有组织 repository 和相关接口"
+        ],
+        gaps: [
+          "正式多租户权限、事件流、共享库生命周期和真实存储都未完成",
+          "仍然偏向 demo payload + mock action flow"
+        ],
+        openclaw: "组织上下文 / 非组织模型本体"
+      },
+      profile_center: {
+        id: "profile_center",
+        label: "个人中心与画像配置",
+        status: "partial",
+        category: "用户端子模块",
+        summary: "个人中心、画像开关、学术档案和清空画像的 UI 已有，但正式画像推断和外部授权仍未实现。",
+        responsibilities: [
+          "展示用户基本信息",
+          "编辑基础画像配置",
+          "开启/关闭画像采样"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/profile/</code>"
+        ],
+        evidence: [
+          "个人中心真实组件和相关测试已存在",
+          "开关与清空行为已有交互闭环"
+        ],
+        gaps: [
+          "真正的画像推断、授权中心、外部数据接入和生命周期管理还没有",
+          "目前主要是产品 seam 和本地状态"
+        ],
+        openclaw: "画像上下文 / 非画像层本体"
+      },
+      plugin_entry: {
+        id: "plugin_entry",
+        label: "插件入口与生态",
+        status: "planned",
+        category: "用户端子模块",
+        summary: "插件在目标文档中很重要，但当前仓库没有正式插件入口、权限模型、挂载点或生命周期模块。",
+        responsibilities: [
+          "内建插件和后续扩展能力挂载",
+          "前端入口与权限提示"
+        ],
+        engineering: [
+          "<code>future: desktop plugin mount points</code>",
+          "<code>future: packages/skill-sdk/</code>",
+          "<code>future: services/skill-registry/</code>"
+        ],
+        evidence: [
+          "当前只有文档定义和阶段计划，没有正式代码模块"
+        ],
+        gaps: [
+          "缺插件宿主层、权限模型、事件总线和发布流程"
+        ],
+        openclaw: "未来可复用 Skill-Action"
+      },
+      cloud_platform: {
+        id: "cloud_platform",
+        label: "云端业务平台",
+        status: "partial",
+        category: "产品层",
+        summary: "云端业务平台是 Liteasy SaaS 的核心能力层；当前只有 dev-cloud 联调原型，不是正式平台。",
+        responsibilities: [
+          "账号、认证、会话与设备管理",
+          "用户云空间与组织共享空间",
+          "推荐、同步、任务编排、审计、通知"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/</code>",
+          "<code>future: services/workflow-runtime/</code>",
+          "<code>future: services/model-gateway/</code>"
+        ],
+        evidence: [
+          "当前已有本地可启动的 dev-cloud 服务和多类接口"
+        ],
+        gaps: [
+          "正式认证、多租户、对象存储、任务系统、版本控制和正式推荐仍缺失"
+        ],
+        openclaw: "云端主宿主"
+      },
+      account_session: {
+        id: "account_session",
+        label: "账号与会话",
+        status: "partial",
+        category: "云端子模块",
+        summary: "已有 demo 登录和本地会话恢复链路，但不是正式认证体系。",
+        responsibilities: [
+          "登录与会话建立",
+          "会话恢复和连接状态感知"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/account/</code>",
+          "<code>services/dev-cloud/requestHandler.mjs</code> -> <code>/v1/account/demo-login</code>"
+        ],
+        evidence: [
+          "桌面端已有 demo 登录按钮与会话恢复逻辑",
+          "dev-cloud 已有 POST 登录接口"
+        ],
+        gaps: [
+          "真实鉴权、设备管理、token 生命周期和权限体系未实现"
+        ],
+        openclaw: "会话上下文来源"
+      },
+      user_cloud_data: {
+        id: "user_cloud_data",
+        label: "用户云私有数据",
+        status: "partial",
+        category: "云端子模块",
+        summary: "收藏和推荐缓存已经开始云侧分离，但正式用户云私有空间还未成型。",
+        responsibilities: [
+          "收藏、私有产物、私有会话和个人云空间"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/db/collectionRepository.mjs</code>",
+          "<code>services/dev-cloud/db/recommendationCacheRepository.mjs</code>"
+        ],
+        evidence: [
+          "当前 dev-cloud 已有 collection 和 recommendation-cache 的持久化文件仓库"
+        ],
+        gaps: [
+          "正式对象存储、用户空间目录模型和长期资源边界未实现"
+        ],
+        openclaw: "私有数据上下文"
+      },
+      shared_library_service: {
+        id: "shared_library_service",
+        label: "组织共享文献库服务",
+        status: "partial",
+        category: "云端子模块",
+        summary: "共享文献库的 manifest、组织切换和打开语义已经存在，但还不是正式共享存储服务。",
+        responsibilities: [
+          "组织共享库目录、文献清单和打开入口",
+          "向桌面端返回共享库工作区所需元数据"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/payloads/organizationPayloads.mjs</code>",
+          "<code>/v1/org/shared-library/manifest</code>"
+        ],
+        evidence: [
+          "已有 manifest 接口支撑桌面端切换组织共享库工作区"
+        ],
+        gaps: [
+          "真实共享库存储、上传/删除/版本控制和正式权限流未实现"
+        ],
+        openclaw: "组织级上下文来源"
+      },
+      recommendation_service: {
+        id: "recommendation_service",
+        label: "推荐与缓存",
+        status: "partial",
+        category: "云端子模块",
+        summary: "推荐接口和缓存接口已经有 demo 路由与持久化，但仍是固定 payload 风格的演示服务。",
+        responsibilities: [
+          "返回相关文献推荐",
+          "按工作区和选中文献集管理缓存"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/payloads/recommendationPayloads.mjs</code>",
+          "<code>services/dev-cloud/payloads/recommendationCachePayloads.mjs</code>"
+        ],
+        evidence: [
+          "已有推荐生成、缓存 get/put/clear 路由与桌面端客户端"
+        ],
+        gaps: [
+          "真实召回、排序、联网搜索编排和画像驱动权重未完成"
+        ],
+        openclaw: "可编排推荐链路"
+      },
+      metadata_sync: {
+        id: "metadata_sync",
+        label: "文献元数据同步",
+        status: "partial",
+        category: "云端子模块",
+        summary: "元数据同步请求链路已存在，但还是 demo 回执，不是正式同步平台。",
+        responsibilities: [
+          "接收当前工作区文献元数据",
+          "返回同步回执和状态"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/metadata/</code>",
+          "<code>/v1/documents/metadata-sync</code>"
+        ],
+        evidence: [
+          "桌面端已有同步面板和重试动作",
+          "dev-cloud 已有 metadata-sync 路由"
+        ],
+        gaps: [
+          "真实索引、解析、版本控制和对象存储回写未完成"
+        ],
+        openclaw: "可追溯数据底座"
+      },
+      multimodal_orchestration: {
+        id: "multimodal_orchestration",
+        label: "多模态任务编排",
+        status: "planned",
+        category: "云端子模块",
+        summary: "多模态任务编排需要正式的 PPT、导图、流程图、视频、播客等异步任务系统；当前只有少量中栏原型入口。",
+        responsibilities: [
+          "多模态生成队列",
+          "长任务状态管理",
+          "结果回写和产物存储"
+        ],
+        engineering: [
+          "<code>future: services/workflow-runtime/</code>",
+          "<code>future: async task queue</code>",
+          "<code>future: artifact storage</code>"
+        ],
+        evidence: [
+          "当前仓库里仅有 <code>tree / mindmap / ppt</code> 原型入口"
+        ],
+        gaps: [
+          "缺正式异步任务系统、产物存储和状态回写机制"
+        ],
+        openclaw: "多模态输出层"
+      },
+      object_storage: {
+        id: "object_storage",
+        label: "正式对象存储 / 索引 / 版本控制",
+        status: "planned",
+        category: "云端子模块",
+        summary: "统一对象存储和文献索引底座当前仓库还没有正式模块。",
+        responsibilities: [
+          "对象存储",
+          "元数据索引",
+          "版本控制",
+          "组织/用户资源隔离"
+        ],
+        engineering: [
+          "<code>future: storage service</code>",
+          "<code>future: index service</code>"
+        ],
+        evidence: [
+          "当前只有 JSON demo 数据和前端语义，没有正式存储平台"
+        ],
+        gaps: [
+          "整体未实现"
+        ],
+        openclaw: "依赖存储底座"
+      },
+      internal_ops: {
+        id: "internal_ops",
+        label: "内部运营与运维后台",
+        status: "partial",
+        category: "产品层",
+        summary: "内部后台已经有真实 `/admin/` 页面和 JSON 数据接口，但仍是演示用样机，不是正式生产后台。",
+        responsibilities: [
+          "展示三端边界",
+          "API 策略与配额摘要",
+          "平台级组织/任务/审计概览"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/adminConsole.mjs</code>",
+          "<code>services/dev-cloud/requestHandler.mjs</code> -> <code>/admin/</code>, <code>/v1/admin/*</code>"
+        ],
+        evidence: [
+          "已存在 HTML 后台页",
+          "已存在治理 dashboard 和策略接口"
+        ],
+        gaps: [
+          "无真实登录、RBAC、计费、工单、告警和真实平台闭环"
+        ],
+        openclaw: "治理外层 / Runtime 外围"
+      },
+      admin_console: {
+        id: "admin_console",
+        label: "运维控制台页面",
+        status: "implemented",
+        category: "后台子模块",
+        summary: "作为 demo 页面，`/admin/` 已经真实存在，可直接展示三端状态、策略、任务和审计摘要。",
+        responsibilities: [
+          "作为路演中的内部后台入口",
+          "承载演示级运维视角"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/adminConsole.mjs</code>",
+          "<code>http://127.0.0.1:8787/admin/</code>"
+        ],
+        evidence: [
+          "已有 HTML 页面、测试和验收文档"
+        ],
+        gaps: [
+          "它是 demo 页面，不代表正式生产后台已经完成"
+        ],
+        openclaw: "平台视角"
+      },
+      policy_ops: {
+        id: "policy_ops",
+        label: "策略下发与治理摘要",
+        status: "partial",
+        category: "后台子模块",
+        summary: "已能通过 demo 后台和 API 改模型策略并查看治理摘要，但仍缺正式平台治理能力。",
+        responsibilities: [
+          "调整 provider / access mode / local direct policy",
+          "查看治理 dashboard"
+        ],
+        engineering: [
+          "<code>/v1/admin/model-policy</code>",
+          "<code>/v1/admin/governance-dashboard</code>"
+        ],
+        evidence: [
+          "GET/POST 模型策略接口和治理 dashboard 已存在"
+        ],
+        gaps: [
+          "真实审批、审计留痕、环境级发布和告警未实现"
+        ],
+        openclaw: "模型路由策略面"
+      },
+      prod_ops: {
+        id: "prod_ops",
+        label: "正式运维闭环与 RBAC",
+        status: "planned",
+        category: "后台子模块",
+        summary: "正式后台还应具备登录、RBAC、计费、审计、异常处理、人工干预和多环境治理；当前没有。",
+        responsibilities: [
+          "正式平台运维与运营能力"
+        ],
+        engineering: [
+          "<code>future: platform admin backend</code>"
+        ],
+        evidence: [
+          "当前纠偏文档已明确：`/admin/` 只是 demo seam"
+        ],
+        gaps: [
+          "整体未实现"
+        ],
+        openclaw: "稳定性与治理层"
+      },
+      workflow_layer: {
+        id: "workflow_layer",
+        label: "Agent Workflow",
+        status: "partial",
+        category: "产品层",
+        summary: "这应该是 Liteasy 长期最核心的层，但当前只落了局部 seam：统一入口、部分 skill-action 边界、部分审计链路。",
+        responsibilities: [
+          "意图路由",
+          "skill registry",
+          "action registry",
+          "上下文装配",
+          "任务编排",
+          "结果结构化与审计"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/assistant/</code>",
+          "<code>desktop/src/app/features/skills/</code>",
+          "<code>future: services/workflow-runtime/</code>"
+        ],
+        evidence: [
+          "当前已有三模式入口、commandRouter、skillRegistry 和 actionRegistry 雏形"
+        ],
+        gaps: [
+          "真正的云端 workflow runtime、技能包加载、正式任务生命周期都未独立出来"
+        ],
+        openclaw: "核心落点"
+      },
+      intent_routing: {
+        id: "intent_routing",
+        label: "意图路由与模式入口",
+        status: "partial",
+        category: "Workflow 子模块",
+        summary: "explain / command / qa 模式和 commandRouter 已有，但仍偏规则路由与前端内聚合。",
+        responsibilities: [
+          "理解用户当前模式和基础命令意图"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/assistant/ModeSwitch.tsx</code>",
+          "<code>desktop/src/app/features/assistant/commandRouter.ts</code>"
+        ],
+        evidence: [
+          "模式切换和部分命令规则已存在"
+        ],
+        gaps: [
+          "缺正式云端意图解析、skill 选择和上下文路由"
+        ],
+        openclaw: "统一入口雏形"
+      },
+      skill_action_boundary: {
+        id: "skill_action_boundary",
+        label: "Skill -> Action 安全边界",
+        status: "partial",
+        category: "Workflow 子模块",
+        summary: "当前已有明确的本地 skill 到 action 的调用边界，是仓库里最值得保留的架构主轴之一。",
+        responsibilities: [
+          "阻止自然语言直接修改软件状态",
+          "让已注册 skill 只能调用已注册 action"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/skills/skillRegistry.ts</code>",
+          "<code>desktop/src/app/features/skills/actionRegistry.ts</code>"
+        ],
+        evidence: [
+          "settings、artifact、organization 这几类 action 已纳入注册边界"
+        ],
+        gaps: [
+          "仍主要在桌面端本地实现，缺云端 registry、manifest 和 release 管理",
+          "action 覆盖范围仍然很小"
+        ],
+        openclaw: "安全边界主轴"
+      },
+      cloud_runtime: {
+        id: "cloud_runtime",
+        label: "正式云端 Workflow Runtime",
+        status: "planned",
+        category: "Workflow 子模块",
+        summary: "skill 选择、上下文装配、prompt 组装、模型调用和动作请求应主要在云端 runtime 中完成；当前没有独立服务。",
+        responsibilities: [
+          "统一 workflow 编排",
+          "加载 skill 包",
+          "下发 action request"
+        ],
+        engineering: [
+          "<code>future: services/workflow-runtime/</code>",
+          "<code>future: services/skill-registry/</code>"
+        ],
+        evidence: [
+          "目前仅有设计文档，没有正式工程目录"
+        ],
+        gaps: [
+          "整体未实现"
+        ],
+        openclaw: "正式 Runtime 核心"
+      },
+      dual_audit: {
+        id: "dual_audit",
+        label: "双模型审计",
+        status: "partial",
+        category: "Workflow 子模块",
+        summary: "生成后审计和可信度展示已经有链路，但当前审计仍主要是 demo 规则或开发云回执。",
+        responsibilities: [
+          "对回答做可信度与依据审计",
+          "把审计结果回写给前端"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/assistant/answerAuditor.ts</code>",
+          "<code>desktop/src/app/features/models/modelAuditClient.ts</code>",
+          "<code>/v1/model/audit</code>"
+        ],
+        evidence: [
+          "桌面端与 dev-cloud 已有审计接口和本地降级逻辑"
+        ],
+        gaps: [
+          "还不是正式第二模型审计体系",
+          "缺统一审计策略和平台治理闭环"
+        ],
+        openclaw: "可信执行链路"
+      },
+      long_task: {
+        id: "long_task",
+        label: "长任务与结果回写",
+        status: "planned",
+        category: "Workflow 子模块",
+        summary: "长任务与结果回写需要统一状态机；当前只有少量前端原型任务状态。",
+        responsibilities: [
+          "长任务队列",
+          "失败重试",
+          "结果回写和状态同步"
+        ],
+        engineering: [
+          "<code>future: queue / task lifecycle service</code>"
+        ],
+        evidence: [
+          "现有 artifact task 仍主要是前端原型状态"
+        ],
+        gaps: [
+          "整体未实现"
+        ],
+        openclaw: "任务生命周期"
+      },
+      infra_layer: {
+        id: "infra_layer",
+        label: "数据与模型基础设施",
+        status: "partial",
+        category: "产品层",
+        summary: "这层负责 provider 接入、模型策略、检索 grounding、skill registry 和后续插件 runtime；当前只有局部 seam。",
+        responsibilities: [
+          "provider 接入",
+          "模型策略",
+          "检索与 grounding",
+          "skill/action registry 底座"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/models/</code>",
+          "<code>services/dev-cloud/providers/</code>",
+          "<code>future: services/model-gateway/</code>"
+        ],
+        evidence: [
+          "provider seam、policy、grounded answer、registry 雏形已存在"
+        ],
+        gaps: [
+          "缺正式 model gateway、skill package registry 和插件/扩展 runtime"
+        ],
+        openclaw: "平台化底座"
+      },
+      provider_seam: {
+        id: "provider_seam",
+        label: "OpenAI-compatible Provider Seam",
+        status: "implemented",
+        category: "基础设施子模块",
+        summary: "dev-cloud 已经能通过 OpenAI Responses API provider 调用真实模型，是后续统一网关的最小雏形。",
+        responsibilities: [
+          "把 OpenAI-compatible 请求转成实际模型调用"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/providers/openaiResponses.mjs</code>",
+          "<code>services/dev-cloud/payloads/modelPayloads.mjs</code>"
+        ],
+        evidence: [
+          "当前配置 OPENAI_API_KEY 后可走真实 Responses API"
+        ],
+        gaps: [
+          "还只是 provider seam，不是正式 model gateway 服务"
+        ],
+        openclaw: "模型出口雏形"
+      },
+      model_gateway: {
+        id: "model_gateway",
+        label: "正式 Model Gateway",
+        status: "planned",
+        category: "基础设施子模块",
+        summary: "正式 model gateway 需要统一接入 provider、模型 allowlist、超时、重试和 trace；当前没有独立模块。",
+        responsibilities: [
+          "统一 provider 策略",
+          "统一模型访问入口",
+          "统一 trace / retry / timeout"
+        ],
+        engineering: [
+          "<code>future: services/model-gateway/</code>"
+        ],
+        evidence: [
+          "当前只有 <code>modelGateway.ts</code> 和 dev-cloud provider seam，不是正式服务"
+        ],
+        gaps: [
+          "整体未实现"
+        ],
+        openclaw: "标准模型出口"
+      },
+      retrieval_grounding: {
+        id: "retrieval_grounding",
+        label: "检索与原文 Grounding",
+        status: "partial",
+        category: "基础设施子模块",
+        summary: "当前已经能根据 selected papers 和 imported chunks 生成引用与 grounded answer，但仍偏本地原型。",
+        responsibilities: [
+          "从文献片段中构造引用依据",
+          "把回答锚定到原文"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/retrieval/</code>",
+          "<code>desktop/src/app/features/assistant/generateAssistantAnswer.ts</code>"
+        ],
+        evidence: [
+          "问答内容已能显示 citations 和 confidence"
+        ],
+        gaps: [
+          "真正的云端检索、向量索引和版本化 grounding 数据尚未形成"
+        ],
+        openclaw: "可信问答数据面"
+      },
+      skill_registry_future: {
+        id: "skill_registry_future",
+        label: "Skill Registry 包与发布体系",
+        status: "planned",
+        category: "基础设施子模块",
+        summary: "目标已经明确要把 skill 做成 Git 管理的声明式包，但仓库里还没有正式 `skills/` 目录和 registry 模块。",
+        responsibilities: [
+          "加载 manifest",
+          "版本控制",
+          "环境启用"
+        ],
+        engineering: [
+          "<code>future: skills/</code>",
+          "<code>future: services/skill-registry/</code>",
+          "<code>future: packages/skill-sdk/</code>"
+        ],
+        evidence: [
+          "目前只有设计文档和本地硬编码 skill union"
+        ],
+        gaps: [
+          "整体未实现"
+        ],
+        openclaw: "Skill 资产体系"
+      },
+      local_action_bridge: {
+        id: "local_action_bridge",
+        label: "本地 Action Registry 与能力桥",
+        status: "partial",
+        category: "基础设施子模块",
+        summary: "本地 action registry 已存在，但未来要承担“云端 workflow 请求 -> 本地受控执行”的正式桥接层。",
+        responsibilities: [
+          "校验本地可执行 action",
+          "承接未来云端 action request"
+        ],
+        engineering: [
+          "<code>desktop/src/app/features/skills/actionRegistry.ts</code>"
+        ],
+        evidence: [
+          "已有 settings / artifact / organization 类 action"
+        ],
+        gaps: [
+          "尚未承接正式云端 action request 协议",
+          "action scope 和 schema 还需扩展"
+        ],
+        openclaw: "本地能力闸门"
+      },
+      plugin_runtime: {
+        id: "plugin_runtime",
+        label: "插件与扩展运行时",
+        status: "planned",
+        category: "基础设施子模块",
+        summary: "插件生态需要正式的宿主、权限、事件总线和发布流；当前没有正式模块。",
+        responsibilities: [
+          "插件注册与权限",
+          "宿主挂载点",
+          "事件总线"
+        ],
+        engineering: [
+          "<code>future: plugin runtime</code>"
+        ],
+        evidence: [
+          "当前只有文档和阶段计划，没有正式代码"
+        ],
+        gaps: [
+          "整体未实现"
+        ],
+        openclaw: "扩展层 / 非任意代码"
+      },
+      eng_desktop: {
+        id: "eng_desktop",
+        label: "desktop/",
+        status: "partial",
+        category: "工程模块",
+        summary: "这是当前最完整的工程目录，承载用户端工作台、本地状态和部分本地边界逻辑。",
+        responsibilities: [
+          "产品 UI 主体",
+          "部分本地 assistant / registry seam"
+        ],
+        engineering: [
+          "<code>desktop/src/app/layout/</code>",
+          "<code>desktop/src/app/features/</code>",
+          "<code>desktop/src-tauri/</code>"
+        ],
+        evidence: [
+          "真实 React + Tauri 代码和大量测试已存在"
+        ],
+        gaps: [
+          "承载了过多 prototype workflow 逻辑，未来需要把编排迁回云端"
+        ],
+        openclaw: "本地入口宿主"
+      },
+      eng_dev_cloud: {
+        id: "eng_dev_cloud",
+        label: "services/dev-cloud/",
+        status: "partial",
+        category: "工程模块",
+        summary: "这是当前的开发云与演示云服务，支撑账号、推荐、组织、模型与后台联调。",
+        responsibilities: [
+          "演示级控制平面和模型接口",
+          "三端 demo 的服务端"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/requestHandler.mjs</code>",
+          "<code>services/dev-cloud/payloads/</code>",
+          "<code>services/dev-cloud/db/</code>",
+          "<code>services/dev-cloud/providers/</code>"
+        ],
+        evidence: [
+          "本地可启动，且有服务端测试"
+        ],
+        gaps: [
+          "它不是正式云平台，只是 dev/demo cloud"
+        ],
+        openclaw: "dev cloud seam"
+      },
+      eng_admin_route: {
+        id: "eng_admin_route",
+        label: "route /admin/",
+        status: "partial",
+        category: "工程模块",
+        summary: "`/admin/` 是挂在 dev-cloud 上的内部后台演示入口，不是独立后台工程。",
+        responsibilities: [
+          "内部后台展示路由"
+        ],
+        engineering: [
+          "<code>services/dev-cloud/adminConsole.mjs</code>",
+          "<code>services/dev-cloud/requestHandler.mjs</code>"
+        ],
+        evidence: [
+          "HTML 页面与 <code>/v1/admin/*</code> 接口都已存在"
+        ],
+        gaps: [
+          "缺正式后台工程分层和生产能力"
+        ],
+        openclaw: "策略与治理"
+      },
+      eng_docs: {
+        id: "eng_docs",
+        label: "docs/",
+        status: "implemented",
+        category: "工程模块",
+        summary: "文档体系已经比较丰富，当前很多产品与阶段边界都靠文档明确下来。",
+        responsibilities: [
+          "产品目标、SaaS 纠偏、计划、QA 和报告"
+        ],
+        engineering: [
+          "<code>docs/Saas/</code>",
+          "<code>docs/qa/</code>",
+          "<code>docs/superpowers/specs/</code>",
+          "<code>docs/superpowers/plans/</code>"
+        ],
+        evidence: [
+          "关键路线和边界都已有文档沉淀"
+        ],
+        gaps: [
+          "后续还需要让文档和正式实现同步收敛"
+        ],
+        openclaw: "定义最完整"
+      },
+      eng_workflow_runtime: {
+        id: "eng_workflow_runtime",
+        label: "future: services/workflow-runtime/",
+        status: "planned",
+        category: "工程模块",
+        summary: "正式云端 workflow runtime 目录，当前仓库还没有。",
+        responsibilities: [
+          "承载 skill 选择、prompt 组装、action request 与任务生命周期"
+        ],
+        engineering: [
+          "<code>future: services/workflow-runtime/</code>"
+        ],
+        evidence: [
+          "仅在设计和路线图文档中存在"
+        ],
+        gaps: [
+          "未实现"
+        ],
+        openclaw: "Runtime 目录"
+      },
+      eng_model_gateway: {
+        id: "eng_model_gateway",
+        label: "future: services/model-gateway/",
+        status: "planned",
+        category: "工程模块",
+        summary: "正式 model gateway 服务目录，当前只有局部 seam。",
+        responsibilities: [
+          "统一 provider / model / trace / retry 策略"
+        ],
+        engineering: [
+          "<code>future: services/model-gateway/</code>"
+        ],
+        evidence: [
+          "当前只有 <code>modelGateway.ts</code> 和 provider seam"
+        ],
+        gaps: [
+          "未实现"
+        ],
+        openclaw: "Gateway 目录"
+      },
+      eng_skill_registry: {
+        id: "eng_skill_registry",
+        label: "future: services/skill-registry/",
+        status: "planned",
+        category: "工程模块",
+        summary: "skill registry 服务目录，负责 manifest、版本与环境启用。",
+        responsibilities: [
+          "加载 skill 包",
+          "环境启用与版本固定"
+        ],
+        engineering: [
+          "<code>future: services/skill-registry/</code>"
+        ],
+        evidence: [
+          "当前仅有本地 TS 联合类型和设计文档"
+        ],
+        gaps: [
+          "未实现"
+        ],
+        openclaw: "Registry 目录"
+      },
+      eng_skills_dir: {
+        id: "eng_skills_dir",
+        label: "future: skills/",
+        status: "planned",
+        category: "工程模块",
+        summary: "技能资产目录，放 manifest、prompts、schemas 和 evals。",
+        responsibilities: [
+          "成为 Git 单一事实来源"
+        ],
+        engineering: [
+          "<code>future: skills/</code>"
+        ],
+        evidence: [
+          "当前仓库没有正式技能资产目录"
+        ],
+        gaps: [
+          "未实现"
+        ],
+        openclaw: "Skills 资产目录"
+      },
+      eng_skill_sdk: {
+        id: "eng_skill_sdk",
+        label: "future: packages/skill-sdk/",
+        status: "planned",
+        category: "工程模块",
+        summary: "内部工具包目录，用于 skill 校验、打包、评测和发布。",
+        responsibilities: [
+          "manifest schema",
+          "prompt renderer",
+          "eval runner"
+        ],
+        engineering: [
+          "<code>future: packages/skill-sdk/</code>"
+        ],
+        evidence: [
+          "当前只有设计文档，没有目录"
+        ],
+        gaps: [
+          "未实现"
+        ],
+        openclaw: "Skill 工具层"
+      }
+    };
+
+    const productPages = [
+      {
+        id: "product-overview",
+        label: "分层总览",
+        title: "Liteasy SaaS 架构",
+        sections: [
+          {
+            id: "product-overview-top",
+            label: "核心分层",
+            status: "partial",
+            summary: "产品层 / 平台层 / Runtime 层",
+            nodes: ["user_end", "cloud_platform", "internal_ops", "workflow_layer", "infra_layer"]
+          }
+        ]
+      },
+      {
+        id: "product-client",
+        label: "用户端",
+        title: "用户端",
+        sections: [
+          {
+            id: "product-user",
+            label: "桌面入口层",
+            status: "partial",
+            summary: "工作台 / 文献库 / 助手 / 组织 / 个人中心",
+            nodes: ["desktop_workbench", "library_workspace", "assistant_ui", "org_management", "profile_center", "plugin_entry"]
+          }
+        ]
+      },
+      {
+        id: "product-cloud",
+        label: "云平台",
+        title: "云端业务平台",
+        sections: [
+          {
+            id: "product-cloud-core",
+            label: "云端业务平台",
+            status: "partial",
+            summary: "账号 / 数据 / 推荐 / 共享库 / 同步",
+            nodes: ["account_session", "user_cloud_data", "shared_library_service", "recommendation_service", "metadata_sync", "object_storage"]
+          }
+        ]
+      },
+      {
+        id: "product-admin",
+        label: "内部后台",
+        title: "内部运营与运维后台",
+        sections: [
+          {
+            id: "product-admin",
+            label: "内部后台",
+            status: "partial",
+            summary: "控制台 / 策略 / 治理",
+            nodes: ["admin_console", "policy_ops", "prod_ops"]
+          }
+        ]
+      },
+      {
+        id: "product-workflow",
+        label: "Workflow",
+        title: "Agent Workflow",
+        sections: [
+          {
+            id: "product-workflow",
+            label: "Agent Workflow",
+            status: "partial",
+            summary: "路由 / 边界 / 审计 / 长任务",
+            nodes: ["intent_routing", "skill_action_boundary", "cloud_runtime", "dual_audit", "long_task"]
+          }
+        ]
+      },
+      {
+        id: "product-infra",
+        label: "基础设施",
+        title: "数据与模型基础设施",
+        sections: [
+          {
+            id: "product-infra",
+            label: "基础设施",
+            status: "partial",
+            summary: "Provider / Gateway / Grounding / Registry",
+            nodes: ["provider_seam", "model_gateway", "retrieval_grounding", "skill_registry_future", "local_action_bridge", "plugin_runtime"]
+          }
+        ]
+      }
+    ];
+
+    const engineeringPages = [
+      {
+        id: "engineering-current",
+        label: "当前工程",
+        title: "当前工程",
+        sections: [
+          {
+            id: "eng-current",
+            label: "已存在模块",
+            status: "partial",
+            summary: "已存在目录 / 路由",
+            nodes: ["eng_desktop", "eng_dev_cloud", "eng_admin_route", "eng_docs"]
+          }
+        ]
+      },
+      {
+        id: "engineering-future",
+        label: "新增模块",
+        title: "新增正式模块",
+        sections: [
+          {
+            id: "eng-future",
+            label: "待补齐目录",
+            status: "planned",
+            summary: "需新增正式模块",
+            nodes: ["eng_workflow_runtime", "eng_model_gateway", "eng_skill_registry", "eng_skills_dir", "eng_skill_sdk"]
+          }
+        ]
+      }
+    ];
+
+    const summaryNodes = Object.values(detailNodes).filter((node) => node.category !== "关系");
+
+    let currentView = "product";
+    let currentFilter = "all";
+    let currentPage = "product-overview";
+    let selectedNodeId = "relation_openclaw";
+
+    const mapRoot = document.getElementById("map-root");
+    const detailRoot = document.getElementById("detail-root");
+    const mainTitle = document.getElementById("main-title");
+    const pageTabsRoot = document.getElementById("page-tabs");
+
+    function updateSummary() {
+      const implemented = summaryNodes.filter((node) => node.status === "implemented").length;
+      const partial = summaryNodes.filter((node) => node.status === "partial").length;
+      const planned = summaryNodes.filter((node) => node.status === "planned").length;
+
+      document.getElementById("implemented-count").textContent = String(implemented);
+      document.getElementById("partial-count").textContent = String(partial);
+      document.getElementById("planned-count").textContent = String(planned);
+    }
+
+    function getStatusBadge(status) {
+      const meta = statusMeta[status];
+      return `<span class="status-badge ${meta.className}">${meta.label}</span>`;
+    }
+
+    function isVisibleByFilter(status) {
+      if (currentFilter === "all") {
+        return true;
+      }
+
+      return status === currentFilter;
+    }
+
+    function getPagesForView() {
+      return currentView === "product" ? productPages : engineeringPages;
+    }
+
+    function getCurrentPageConfig() {
+      const pages = getPagesForView();
+      return pages.find((page) => page.id === currentPage) ?? pages[0];
+    }
+
+    function ensureValidPage() {
+      const pages = getPagesForView();
+      if (!pages.some((page) => page.id === currentPage)) {
+        currentPage = pages[0].id;
+      }
+    }
+
+    function renderPageTabs() {
+      const pages = getPagesForView();
+      pageTabsRoot.innerHTML = pages
+        .map((page) => `<button class="page-tab${page.id === currentPage ? " active" : ""}" data-page="${page.id}" type="button">${page.label}</button>`)
+        .join("");
+    }
+
+    function getVisibleNodesFromSections(sections) {
+      return sections
+        .flatMap((section) => section.nodes)
+        .map((id) => detailNodes[id])
+        .filter((node) => isVisibleByFilter(node.status));
+    }
+
+    function ensureVisibleSelection(sections) {
+      const visibleNodes = getVisibleNodesFromSections(sections);
+      if (!visibleNodes.length) {
+        return;
+      }
+
+      if (!visibleNodes.some((node) => node.id === selectedNodeId)) {
+        selectedNodeId = visibleNodes[0].id;
+      }
+    }
+
+    function renderSections(sections) {
+      const html = sections
+        .map((section) => {
+          const visibleNodes = section.nodes
+            .map((id) => detailNodes[id])
+            .filter((node) => isVisibleByFilter(node.status));
+
+          if (!visibleNodes.length) {
+            return "";
+          }
+
+          const nodeCards = visibleNodes
+            .map((node) => {
+              const activeClass = node.id === selectedNodeId ? " active" : "";
+              const metaChips = [
+                `<span class="meta-chip">${node.category}</span>`,
+                ...node.engineering.slice(0, 2).map((path) => `<span class="meta-chip">${path.replace(/<[^>]+>/g, "")}</span>`)
+              ].join("");
+
+              return `
+                <button class="node-card${activeClass}" data-node-id="${node.id}" data-status="${node.status}" type="button">
+                  ${getStatusBadge(node.status)}
+                  <h4>${node.label}</h4>
+                  <div class="node-meta">${metaChips}</div>
+                </button>
+              `;
+            })
+            .join("");
+
+          return `
+            <section class="lane">
+              <div class="lane-head">
+                <div>
+                  <h3>${section.label}</h3>
+                </div>
+                ${getStatusBadge(section.status)}
+              </div>
+              <div class="node-grid">${nodeCards}</div>
+            </section>
+          `;
+        })
+        .join("");
+
+      mapRoot.innerHTML = html || `<section class="lane"><div class="lane-head"><div><h3>没有匹配节点</h3></div></div></section>`;
+    }
+
+    function renderEngineeringChips(items) {
+      return `<div class="detail-chip-row">${items.slice(0, 5).map((item) => `<span class="detail-chip">${item.replace(/<[^>]+>/g, "")}</span>`).join("")}</div>`;
+    }
+
+    function shortenText(text) {
+      return text
+        .replace(/<[^>]+>/g, "")
+        .split(/[，。；：]/)[0]
+        .trim();
+    }
+
+    function renderTagList(items) {
+      return `<div class="detail-chip-row">${items.slice(0, 4).map((item) => `<span class="detail-chip">${shortenText(item)}</span>`).join("")}</div>`;
+    }
+
+    function renderDetail(nodeId) {
+      const node = detailNodes[nodeId] || detailNodes.relation_openclaw;
+
+      detailRoot.innerHTML = `
+        <div class="detail-title-row">
+          <div>
+            <div class="eyebrow">${node.category}</div>
+            <h3>${node.label}</h3>
+          </div>
+          ${getStatusBadge(node.status)}
+        </div>
+        <p class="detail-summary">${node.summary}</p>
+
+        <div class="detail-section">
+          <h4>职责</h4>
+          ${renderTagList(node.responsibilities)}
+        </div>
+
+        <div class="detail-section">
+          <h4>工程落点</h4>
+          ${renderEngineeringChips(node.engineering)}
+        </div>
+
+        <div class="detail-section">
+          <h4>证据</h4>
+          ${renderTagList(node.evidence)}
+        </div>
+
+        <div class="detail-section">
+          <h4>差距</h4>
+          ${renderTagList(node.gaps)}
+        </div>
+
+        <div class="detail-section">
+          <h4>OpenClaw</h4>
+          <div class="detail-chip-row"><span class="detail-chip">${node.openclaw}</span></div>
+        </div>
+      `;
+    }
+
+    function render() {
+      ensureValidPage();
+      const page = getCurrentPageConfig();
+      mainTitle.textContent = page.title;
+      renderPageTabs();
+      ensureVisibleSelection(page.sections);
+      renderSections(page.sections);
+
+      renderDetail(selectedNodeId);
+    }
+
+    document.addEventListener("click", (event) => {
+      const target = event.target.closest("[data-node-id], .view-toggle, .status-filter, .page-tab");
+      if (!target) {
+        return;
+      }
+
+      if (target.classList.contains("view-toggle")) {
+        currentView = target.dataset.view;
+        document.querySelectorAll(".view-toggle").forEach((button) => {
+          button.classList.toggle("active", button.dataset.view === currentView);
+        });
+        ensureValidPage();
+        render();
+        return;
+      }
+
+      if (target.classList.contains("status-filter")) {
+        currentFilter = target.dataset.filter;
+        document.querySelectorAll(".status-filter").forEach((button) => {
+          button.classList.toggle("active", button.dataset.filter === currentFilter);
+        });
+        render();
+        return;
+      }
+
+      if (target.classList.contains("page-tab")) {
+        currentPage = target.dataset.page;
+        render();
+        return;
+      }
+
+      selectedNodeId = target.dataset.nodeId;
+      render();
+    });
+
+    updateSummary();
+    render();
+  </script>
+</body>
+</html>
