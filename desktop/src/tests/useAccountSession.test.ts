@@ -63,7 +63,7 @@ describe("useAccountSession", () => {
       expect(result.current.accountPending).toBe(false);
     });
     expect(result.current.accountSession).toBeNull();
-    expect(result.current.accountMessage).toContain("请确认服务已启动，并检查当前控制平面端点：http://127.0.0.1:8787");
+    expect(result.current.accountMessage).toContain("请确认服务已启动，并检查当前云端地址：http://127.0.0.1:8787");
   });
   test("notifies the shell when a stored session is restored", async () => {
     window.localStorage.setItem(

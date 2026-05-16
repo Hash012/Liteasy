@@ -157,6 +157,32 @@ body {
   height: 100%;
 }
 
+.activity-bar {
+  grid-column: 1;
+}
+
+.pane.left,
+.pane-rail.left {
+  grid-column: 2;
+}
+
+.pane-utility-column.left {
+  grid-column: 3;
+}
+
+.pane.center {
+  grid-column: 4;
+}
+
+.pane-utility-column.right {
+  grid-column: 5;
+}
+
+.pane.right,
+.pane-rail.right {
+  grid-column: 6;
+}
+
 .pane-utility-column {
   display: flex;
   flex-direction: column;
@@ -776,9 +802,20 @@ body {
   }
 
   .app-shell {
-  position: relative;
+    position: relative;
     grid-template-columns: 1fr;
     overflow: auto;
+  }
+
+  .activity-bar,
+  .pane.left,
+  .pane-rail.left,
+  .pane-utility-column.left,
+  .pane.center,
+  .pane-utility-column.right,
+  .pane.right,
+  .pane-rail.right {
+    grid-column: 1;
   }
 
   .pane {

@@ -14,10 +14,10 @@ export function formatCloudConnectionError(error: unknown, options: CloudConnect
       typeof options.controlPlaneEndpoint === "string" &&
       options.controlPlaneEndpoint.length > 0
     ) {
-      return `无法连接开发云服务。请确认服务已启动，并检查当前控制平面端点：${options.controlPlaneEndpoint}。`;
+      return `云端服务当前不可用。请确认服务已启动，并检查当前云端地址：${options.controlPlaneEndpoint}。`;
     }
 
-    return "无法连接开发云服务。请确认已启动 http://127.0.0.1:8787，并检查设置里的控制平面端点。";
+    return "云端服务当前不可用。请确认已启动 http://127.0.0.1:8787，并检查当前云端地址。";
   }
 
   if (error instanceof Error) {

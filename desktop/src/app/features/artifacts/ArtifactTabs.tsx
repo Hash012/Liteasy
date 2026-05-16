@@ -68,19 +68,17 @@ export function ArtifactTabs({
               disabled={!canStartAnalysis}
               key={mode.type}
               onClick={() => onStartAnalysis(mode.type)}
+              title={analysisHint}
               type="button"
             >
               {mode.label}
             </button>
           ))}
         </div>
-        <div className="artifact-analysis-hint">{analysisHint}</div>
       </div>
 
       {tabs.length === 0 ? (
-        <div className="artifact-empty">
-          先在左栏勾选并锁定文献形成选中文献集，再在这里选择模态按钮启动主分析流程。
-        </div>
+        <div className="artifact-empty" title={analysisHint} />
       ) : (
         <div className="artifact-card">
           <div className="artifact-card-title">{tabs[0].title}</div>

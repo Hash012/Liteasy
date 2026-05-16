@@ -12,6 +12,8 @@ describe("AssistantMessageList", () => {
     render(<AssistantMessageList messages={[]} mode="command" onModeChange={onModeChange} />);
 
     expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
+    expect(screen.queryByText("受控操作")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "命令模式" })).toHaveAttribute("title", "受控操作");
     await user.click(screen.getByRole("button", { name: "问答模式" }));
 
     expect(onModeChange).toHaveBeenCalledWith("qa");

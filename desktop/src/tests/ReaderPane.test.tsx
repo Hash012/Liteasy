@@ -21,6 +21,10 @@ describe("ReaderPane", () => {
 
     expect(screen.getByText("Reader", { selector: ".pane-header" })).toBeInTheDocument();
     expect(screen.getByText("选中文献集：1 篇 · 已锁定")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "思维导图" })).toHaveAttribute(
+      "title",
+      "可以启动中栏分析。"
+    );
 
     await user.click(screen.getByRole("button", { name: "思维导图" }));
 
@@ -40,5 +44,6 @@ describe("ReaderPane", () => {
     );
 
     expect(screen.getByRole("button", { name: "树形展开" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute("title", "请先锁定。");
   });
 });

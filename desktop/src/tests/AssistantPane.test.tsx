@@ -88,7 +88,11 @@ test("requires imported selected document set before qa mode can answer", async 
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("这篇论文讲了什么？")).toBeInTheDocument();
-  expect(screen.getByText(/请先将当前选中文献集导入 AI 流程/)).toBeInTheDocument();
+  expect(screen.queryByText(/请先将当前选中文献集导入 AI 流程/)).not.toBeInTheDocument();
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
+    "title",
+    "请先将当前选中文献集导入 AI 流程，再进行问答或解释。"
+  );
 });
 
 test("adds grounded user and assistant messages in qa mode when selected set is ready", async () => {
@@ -341,6 +345,8 @@ test("shows current command examples including organization and policy actions",
 
   await selectInitialAssistantMode(user, "命令");
 
-  expect(screen.getByText(/打开组织共享文献库/)).toBeInTheDocument();
-  expect(screen.getByText(/同步云端策略/)).toBeInTheDocument();
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
+    "title",
+    "命令模式可输入“同步云端策略”“打开组织共享文献库”“关闭联网推荐”等受控指令。"
+  );
 });

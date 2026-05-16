@@ -182,8 +182,8 @@ describe("useOrganizationData", () => {
       expect(result.current.organizationSummaryStatus).toBe("error");
     });
 
-    expect(result.current.organizationListMessage).toContain("请确认服务已启动，并检查当前控制平面端点：http://127.0.0.1:8787");
-    expect(result.current.organizationSummaryMessage).toContain("请确认服务已启动，并检查当前控制平面端点：http://127.0.0.1:8787");
+    expect(result.current.organizationListMessage).toContain("请确认服务已启动，并检查当前云端地址：http://127.0.0.1:8787");
+    expect(result.current.organizationSummaryMessage).toContain("请确认服务已启动，并检查当前云端地址：http://127.0.0.1:8787");
   });
 
   test("keeps organization space in local-reader guidance mode when logged out", async () => {

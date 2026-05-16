@@ -19,10 +19,10 @@ function getBackendLabel(trace: ModelExecutionTrace) {
 
   if (trace.backend === "dev_cloud") {
     if (trace.mode === "live") {
-      return `开发云 -> ${trace.provider === "openai" ? "OpenAI" : trace.provider}`;
+      return `云端服务 -> ${trace.provider === "openai" ? "OpenAI" : trace.provider}`;
     }
 
-    return "开发云回退 Mock";
+    return "云端服务回退 Mock";
   }
 
   return "HTTP 模型服务";

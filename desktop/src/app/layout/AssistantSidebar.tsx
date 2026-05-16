@@ -15,6 +15,7 @@ type AssistantSidebarProps = {
   onModelExecution?: (trace: ModelExecutionTrace) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
+  profileUnlocked?: boolean;
   onSyncCloudPolicy?: () => Promise<string>;
   selectedPaperCount: number;
   selectedPapers: Paper[];
@@ -29,6 +30,7 @@ export function AssistantSidebar({
   onModelExecution,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
+  profileUnlocked = false,
   onSyncCloudPolicy,
   selectedPaperCount,
   selectedPapers,
@@ -45,6 +47,7 @@ export function AssistantSidebar({
           onModelExecution={onModelExecution}
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onSettingsChanged={onSettingsChanged}
+          profileUnlocked={profileUnlocked}
           onSyncCloudPolicy={onSyncCloudPolicy}
           selectedPapers={selectedPapers}
           selectedSetStatus={{

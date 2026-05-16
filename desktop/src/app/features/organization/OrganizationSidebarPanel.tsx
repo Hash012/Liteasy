@@ -74,12 +74,13 @@ export function OrganizationSidebarPanel({
       </div>
       {loggedOut ? (
         <div className="organization-action-feedback">
-          <div className="organization-action-feedback-title">组织能力说明</div>
-          <div className="organization-action-feedback-message">
-            当前已退化为本地阅读器，组织空间不可用。登录后可加入组织、创建组织、查看共享文献库和组织通知。
-          </div>
           <div className="organization-sidebar-actions">
-            <button className="policy-button sync" onClick={onLoginRequired} type="button">
+            <button
+              className="policy-button sync"
+              onClick={onLoginRequired}
+              title="当前已退化为本地阅读器，组织空间不可用。登录后可加入组织、创建组织、查看共享文献库和组织通知。"
+              type="button"
+            >
               登录后查看组织能力
             </button>
           </div>

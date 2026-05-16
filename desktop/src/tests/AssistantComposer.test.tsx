@@ -19,7 +19,7 @@ describe("AssistantComposer", () => {
       />
     );
 
-    expect(screen.getByText("命令模式提示")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute("title", "命令模式提示");
     await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "同步云端策略");
     await user.click(screen.getByRole("button", { name: "发送" }));
 

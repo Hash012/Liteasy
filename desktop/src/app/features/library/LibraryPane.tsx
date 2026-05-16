@@ -169,12 +169,14 @@ export function LibraryPane({
       >
         <div className="library-section-title">收藏</div>
         {!accountSessionAvailable ? (
-          <>
-            <p>登录后可用的云端收藏会显示在这里。</p>
-            <button className="library-inline-button" onClick={onLoginRequired} type="button">
-              登录后可用
-            </button>
-          </>
+          <button
+            className="library-inline-button"
+            onClick={onLoginRequired}
+            title="登录后可用的云端收藏会显示在这里。"
+            type="button"
+          >
+            登录后可用
+          </button>
         ) : collectionStatus === "loading" ? (
           <p className="collection-status-message loading">{collectionMessage}</p>
         ) : collectionStatus === "error" ? (
@@ -218,19 +220,28 @@ export function LibraryPane({
             className="library-inline-button"
             disabled={!accountSessionAvailable || (recommendationItems.length === 0 && recommendationStatus !== "ready")}
             onClick={onClearRecommendations}
+            title={recommendationMessage}
             type="button"
           >
             清理关联推荐
           </button>
         </div>
-        <p className={`library-recommendation-message ${recommendationStatus}`}>
-          {recommendationPending ? "正在获取推荐..." : recommendationMessage}
-        </p>
+        {accountSessionAvailable && (recommendationPending || recommendationStatus === "error" || recommendationItems.length > 0) ? (
+          <p className={`library-recommendation-message ${recommendationStatus}`}>
+            {recommendationPending ? "正在获取推荐..." : recommendationMessage}
+          </p>
+        ) : null}
         {!accountSessionAvailable ? (
-          <button className="library-inline-button" onClick={onLoginRequired} type="button">
+          <button
+            className="library-inline-button"
+            onClick={onLoginRequired}
+            title={recommendationMessage}
+            type="button"
+          >
             登录后可用
           </button>
         ) : null}
+        {accountSessionAvailable || recommendationPending || recommendationStatus === "error" ? null : null}
         {recommendationItems.length > 0 ? (
           <ul aria-label="关联推荐列表" className="recommendation-list">
             {recommendationItems.map((item) => (

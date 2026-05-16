@@ -6,7 +6,13 @@ import { createSeededSettingsStore } from "../app/features/settings/settingsStat
 
 function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
   return {
-    accountSession: null,
+    accountSession: {
+      email: "researcher@liteasy.dev",
+      expiresAt: "2026-05-15T09:30:00Z",
+      membershipTier: "pro",
+      name: "Liteasy Researcher",
+      sessionId: "demo-session-1"
+    },
     collectionItems: [],
     collectionMessage: "已同步云端收藏。",
     collectionStatus: "ready",
@@ -524,6 +530,7 @@ describe("LeftPane", () => {
     render(
       <LeftPane
         {...createProps({
+          accountSession: null,
           leftRailView: "library",
           onLoginRequired,
           recommendationMessage: "当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。"
@@ -532,9 +539,15 @@ describe("LeftPane", () => {
     );
 
     expect(screen.getByText("收藏")).toBeInTheDocument();
-    expect(screen.getByText("登录后可用的云端收藏会显示在这里。")).toBeInTheDocument();
-    expect(screen.getByText("当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "登录后可用" }).length).toBeGreaterThan(0);
+    const loginButtons = screen.getAllByRole("button", { name: "登录后可用" });
+    expect(loginButtons.length).toBeGreaterThan(0);
+    expect(loginButtons[0]).toHaveAttribute("title", "登录后可用的云端收藏会显示在这里。");
+    expect(loginButtons[1]).toHaveAttribute(
+      "title",
+      "当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。"
+    );
+    expect(screen.queryByText("当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。"))
+      .not.toBeInTheDocument();
   });
 
 
@@ -565,6 +578,20 @@ describe("LeftPane", () => {
       gender: "女",
       stage: "博士研究生"
     });
+  });
+
+  test("does not render the editable personal center while logged out", () => {
+    render(
+      <LeftPane
+        {...createProps({
+          accountSession: null,
+          leftRailView: "profile"
+        })}
+      />
+    );
+
+    expect(screen.queryByLabelText("左边栏个人中心")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "登录后查看个人能力" })).toBeInTheDocument();
   });
 
   test("shows governance as waiting instead of disconnected while organization loads", () => {

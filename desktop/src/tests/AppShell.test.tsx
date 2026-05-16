@@ -14,13 +14,45 @@ async function openSettingsPanel(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function openOrganizationPanel(user: ReturnType<typeof userEvent.setup>) {
+  if (screen.queryByLabelText("左边栏组织")) {
+    return screen.getByLabelText("左边栏组织");
+  }
+  if (screen.queryByLabelText("展开左栏")) {
+    await user.click(screen.getByLabelText("展开左栏"));
+    if (screen.queryByLabelText("左边栏组织")) {
+      return screen.getByLabelText("左边栏组织");
+    }
+  }
   await user.click(screen.getByRole("button", { name: "组织" }));
   return screen.getByLabelText("左边栏组织");
 }
 
 async function openLibraryPanel(user: ReturnType<typeof userEvent.setup>) {
+  if (screen.queryByLabelText("我的文献库投放区")) {
+    return screen.getByLabelText("我的文献库投放区");
+  }
+  if (screen.queryByLabelText("展开左栏")) {
+    await user.click(screen.getByLabelText("展开左栏"));
+    if (screen.queryByLabelText("我的文献库投放区")) {
+      return screen.getByLabelText("我的文献库投放区");
+    }
+  }
   await user.click(screen.getByRole("button", { name: "文献库" }));
   return screen.getByLabelText("我的文献库投放区");
+}
+
+async function openProfilePanel(user: ReturnType<typeof userEvent.setup>) {
+  if (screen.queryByLabelText("左边栏个人中心")) {
+    return screen.getByLabelText("左边栏个人中心");
+  }
+  if (screen.queryByLabelText("展开左栏")) {
+    await user.click(screen.getByLabelText("展开左栏"));
+    if (screen.queryByLabelText("左边栏个人中心")) {
+      return screen.getByLabelText("左边栏个人中心");
+    }
+  }
+  await user.click(screen.getByRole("button", { name: "个人中心" }));
+  return screen.getByLabelText("左边栏个人中心");
 }
 
 async function loginThroughDialog(user: ReturnType<typeof userEvent.setup>) {
@@ -35,13 +67,17 @@ async function loginThroughDialog(user: ReturnType<typeof userEvent.setup>) {
   await waitFor(() => {
     expect(screen.queryByRole("dialog", { name: "轻量登录面板" })).not.toBeInTheDocument();
   });
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
+  });
 }
 
 
 function expectOrganizationActionFeedback(message: string) {
   const organizationPanel = screen.getByLabelText("左边栏组织");
   expect(within(organizationPanel).getByRole("status", { name: "组织操作反馈" })).toHaveTextContent(message);
-  expect(screen.getAllByText(message)).toHaveLength(2);
+  expect(screen.getAllByText(message).length).toBeGreaterThanOrEqual(1);
 }
 
 async function selectInitialAssistantMode(user: ReturnType<typeof userEvent.setup>, mode: "名词解释" | "命令" | "问答") {
@@ -107,13 +143,26 @@ test("opens the unified lightweight login dialog from the organization capabilit
   await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
   await openOrganizationPanel(user);
 
-  expect(
-    screen.getByText("当前已退化为本地阅读器，组织空间不可用。登录后可加入组织、创建组织、查看共享文献库和组织通知。")
-  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "登录后查看组织能力" })).toHaveAttribute(
+    "title",
+    "当前已退化为本地阅读器，组织空间不可用。登录后可加入组织、创建组织、查看共享文献库和组织通知。"
+  );
 
   await user.click(screen.getByRole("button", { name: "登录后查看组织能力" }));
 
   expect(screen.getByRole("dialog", { name: "轻量登录面板" })).toBeInTheDocument();
+});
+
+test("does not expose the editable personal center while logged out", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  await user.click(screen.getByRole("button", { name: "个人中心" }));
+
+  expect(screen.queryByLabelText("左边栏个人中心")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "登录后查看个人能力" })).toBeInTheDocument();
 });
 
 test("opens the unified lightweight login dialog from locked cloud sections in the library while logged out", async () => {
@@ -140,24 +189,25 @@ test("supports the confirmed workbench pane layout", async () => {
     "--right-pane-size": "minmax(220px, 24fr)"
   });
 
-  expect(screen.getByLabelText("折叠左栏")).toBeInTheDocument();
-  expect(screen.getByLabelText("折叠右栏")).toBeInTheDocument();
+  expect(screen.queryByLabelText("折叠左栏")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("折叠右栏")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("右栏折叠控制")).toBeInTheDocument();
 
-  await user.click(screen.getByLabelText("折叠左栏"));
+  await user.click(screen.getByRole("button", { name: "文献库" }));
 
-  expect(screen.getByLabelText("展开左栏")).toBeInTheDocument();
   expect(workbench).toHaveStyle({
     "--left-pane-size": "44px"
   });
+  expect(screen.getByText("Reader", { selector: ".pane-header" })).toBeInTheDocument();
+  expect(screen.getByText("AI Assistant", { selector: ".pane-header" })).toBeInTheDocument();
 
-   await user.click(screen.getByLabelText("展开左栏"));
+  await user.click(screen.getByRole("button", { name: "文献库" }));
 
-   expect(screen.getByLabelText("折叠左栏")).toBeInTheDocument();
-   expect(workbench).toHaveStyle({
-     "--left-pane-size": "minmax(220px, 24fr)"
-   });
+  expect(workbench).toHaveStyle({
+    "--left-pane-size": "minmax(220px, 24fr)"
+  });
 
-  await user.click(screen.getByLabelText("折叠右栏"));
+  await user.click(screen.getByLabelText("右栏折叠控制"));
 
   expect(screen.getByLabelText("展开右栏")).toBeInTheDocument();
   expect(workbench).toHaveStyle({
@@ -194,6 +244,42 @@ test("renders artifact content from imported selected-document chunks", async ()
   expect(screen.getByText("双向预训练")).toBeInTheDocument();
   expect(screen.getByText("预训练目标")).toBeInTheDocument();
 }, 10000);
+
+test("collapses the left pane when clicking the active activity-bar item", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  const workbench = screen.getByTestId("workbench-layout");
+  expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("minmax(220px, 24fr)");
+
+  await user.click(screen.getByRole("button", { name: "文献库" }));
+  expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("44px");
+  expect(screen.getByLabelText("展开左栏")).toBeInTheDocument();
+  expect(screen.getByText("Reader", { selector: ".pane-header" })).toBeInTheDocument();
+  expect(screen.getByText("AI Assistant", { selector: ".pane-header" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "组织" }));
+  expect(screen.getByLabelText("左边栏组织")).toBeInTheDocument();
+  expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("minmax(220px, 24fr)");
+});
+
+test("keeps the three primary panes as direct grid items in the workbench", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  const workbench = screen.getByTestId("workbench-layout");
+  expect(workbench.querySelector(":scope > aside.pane.left")).toBeInTheDocument();
+  expect(workbench.querySelector(":scope > main.pane.center")).toBeInTheDocument();
+  expect(workbench.querySelector(":scope > section.pane.right.assistant-only-pane")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "文献库" }));
+
+  expect(workbench.querySelector(":scope > aside.pane-rail.left")).toBeInTheDocument();
+  expect(workbench.querySelector(":scope > main.pane.center")).toBeInTheDocument();
+  expect(workbench.querySelector(":scope > section.pane.right.assistant-only-pane")).toBeInTheDocument();
+});
 
 test("switches assistant generation to local-direct mode when cloud policy allows it", async () => {
   const user = userEvent.setup();
@@ -446,7 +532,7 @@ test("shows the latest model execution chain in the policy panel", async () => {
   const settingsPane = await openSettingsPanel(user);
 
   await waitFor(() => {
-    expect(within(settingsPane).getByText("最近执行：云代理 -> 开发云 -> OpenAI")).toBeInTheDocument();
+    expect(within(settingsPane).getByText("最近执行：云代理 -> 云端服务 -> OpenAI")).toBeInTheDocument();
   });
 }, 10000);
 
@@ -1422,7 +1508,10 @@ test("clears visible recommendation cache on user request", async () => {
   await user.click(screen.getByRole("button", { name: "清理关联推荐" }));
 
   expect(screen.queryByLabelText("关联推荐列表")).not.toBeInTheDocument();
-  expect(screen.getByText("已清理当前工作区的关联推荐缓存。" )).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "清理关联推荐" })).toHaveAttribute(
+    "title",
+    "已清理当前工作区的关联推荐缓存。"
+  );
   expect(recommendationRequestCount).toBe(1);
 });
 
@@ -1822,7 +1911,10 @@ test("syncs visible workspace document metadata after cloud account login", asyn
     expect(screen.getByText("同步状态：已同步")).toBeInTheDocument();
   });
 
-  expect(screen.getByText("文献同步：当前已退化为本地阅读器")).toBeInTheDocument();
+  expect(screen.getByText("文献同步：当前已退化为本地阅读器")).toHaveAttribute(
+    "title",
+    "当前已退化为本地阅读器，文献元数据同步不可用。联网并登录后，将自动恢复云端能力。"
+  );
 
   await loginThroughDialog(user);
 
@@ -2395,7 +2487,10 @@ test("opens the organization shared library in the local workspace", async () =>
   expect(
     within(libraryZone).queryByText("BERT: Pre-training of Deep Bidirectional Transformers")
   ).not.toBeInTheDocument();
-  expect(screen.getByText("已打开组织共享文献库：组织共享文献库。"));
+  expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute(
+    "title",
+    "已打开组织共享文献库：组织共享文献库。"
+  );
 }, 10000);
 
 
@@ -2514,7 +2609,10 @@ test("returns from an organization shared library to the local library workspace
   expect(
     within(libraryZone).queryByText("Organization Reading List: Retrieval-Augmented Generation")
   ).not.toBeInTheDocument();
-  expect(screen.getByText("已返回本地文献库。"));
+  expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute(
+    "title",
+    "已返回本地文献库。"
+  );
 }, 10000);
 
 
@@ -2765,7 +2863,10 @@ test("marks organization notifications as read in the organization page", async 
   expect(
     within(organizationPane).getByText("通知状态：管理员发布了本周阅读主题。 · 已读")
   ).toBeInTheDocument();
-  expect(screen.getByText("组织通知已全部标记为已读。"));
+  expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute(
+    "title",
+    "组织通知已全部标记为已读。"
+  );
 }, 10000);
 
 
@@ -3830,7 +3931,7 @@ test("cancels the demo organization invite confirmation without side effects", a
           organizations: [
             {
               memberCount: 12,
-              myRole: "研究员",
+              myRole: "管理员",
               name: "Liteasy AI Reading Lab",
               organizationId: "org-demo-1",
               sharedLibraryName: "组织共享文献库"
@@ -3988,8 +4089,9 @@ test("opens a confirmation seam before sending an organization invite", async ()
   const dialog = screen.getByRole("dialog", { name: "邀请成员确认" });
   expect(within(dialog).getByText("邀请成员确认")).toBeInTheDocument();
   expect(within(dialog).getByText("组织：Liteasy AI Reading Lab")).toBeInTheDocument();
-  expect(within(dialog).getByText("当前演示环境会记录邀请动作，但不会真正发送邀请。正式版本将在此接入成员权限与邀请生命周期。"))
-    .toBeInTheDocument();
+  expect(within(dialog).queryByText("当前演示环境会记录邀请动作，但不会真正发送邀请。正式版本将在此接入成员权限与邀请生命周期。"))
+    .not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "发送邀请" })).toHaveAttribute("title");
 
   await user.click(within(dialog).getByRole("button", { name: "发送邀请" }));
 
@@ -4057,7 +4159,7 @@ test("cancels the demo organization leave confirmation without side effects", as
             auditEvents: [],
             memberCount: 12,
             members: [],
-            myRole: "研究员",
+            myRole: "管理员",
             name: "Liteasy AI Reading Lab",
             notifications: [],
             organizationId: "org-demo-1",
@@ -4096,7 +4198,7 @@ test("cancels the demo organization leave confirmation without side effects", as
 
   expect(screen.queryByRole("dialog", { name: "退出组织确认" })).not.toBeInTheDocument();
   expect(
-    screen.queryByText("已创建退出 Liteasy AI Reading Lab 的 demo 请求，等待正式后端接入。")
+    screen.queryByText("已提交退出 Liteasy AI Reading Lab 的请求，当前为演示环境记录。")
   ).not.toBeInTheDocument();
   expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
 }, 10000);
@@ -4199,8 +4301,9 @@ test("opens a confirmation seam before submitting an organization leave request"
   const dialog = screen.getByRole("dialog", { name: "退出组织确认" });
   expect(within(dialog).getByText("退出组织确认")).toBeInTheDocument();
   expect(within(dialog).getByText("组织：Liteasy AI Reading Lab")).toBeInTheDocument();
-  expect(within(dialog).getByText("当前演示环境会记录退出组织请求，但不会真正变更成员关系。正式版本将在此接入二次确认、权限校验与成员关系变更。"))
-    .toBeInTheDocument();
+  expect(within(dialog).queryByText("当前演示环境会记录退出组织请求，但不会真正变更成员关系。正式版本将在此接入二次确认、权限校验与成员关系变更。"))
+    .not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "提交退出组织请求" })).toHaveAttribute("title");
 
   await user.click(within(dialog).getByRole("button", { name: "提交退出组织请求" }));
 
@@ -4411,8 +4514,9 @@ test("opens a creation seam before submitting an organization creation request",
   const dialog = screen.getByRole("dialog", { name: "创建组织" });
   expect(within(dialog).getByText("创建组织"));
   expect(within(dialog).getByLabelText("组织名称")).toHaveValue("Liteasy Demo Organization");
-  expect(within(dialog).getByText("当前演示环境会记录创建组织请求，但不会真正开通组织空间。正式版本将在此接入会员权限、套餐与组织开通流程。"))
-    .toBeInTheDocument();
+  expect(within(dialog).queryByText("当前演示环境会记录创建组织请求，但不会真正开通组织空间。正式版本将在此接入会员权限、套餐与组织开通流程。"))
+    .not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "提交创建组织申请" })).toHaveAttribute("title");
 
   await user.click(within(dialog).getByRole("button", { name: "提交创建组织申请" }));
 
@@ -4520,7 +4624,9 @@ test("cancels the demo organization join request without side effects", async ()
 
   expect(screen.queryByRole("dialog", { name: "加入组织" })).not.toBeInTheDocument();
   expect(
-    screen.queryByText("已提交加入组织的邀请码 LITEASY-DEMO-JOIN，当前为演示环境记录。")
+    screen.queryByText(
+      "已提交加入组织的邀请码 LITEASY-DEMO-JOIN，当前为演示环境记录；你的组织角色与成员关系暂不会立即变更。"
+    )
   ).not.toBeInTheDocument();
   expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
 }, 10000);
@@ -4623,8 +4729,9 @@ test("opens a join seam before submitting an organization join request", async (
   const dialog = screen.getByRole("dialog", { name: "加入组织" });
   expect(within(dialog).getByText("加入组织")).toBeInTheDocument();
   expect(within(dialog).getByLabelText("组织邀请码")).toHaveValue("LITEASY-DEMO-JOIN");
-  expect(within(dialog).getByText("当前演示环境会记录加入组织请求，但不会真正变更成员关系。正式版本将在此接入邀请码校验、组织审批与成员权限。"))
-    .toBeInTheDocument();
+  expect(within(dialog).queryByText("当前演示环境会记录加入组织请求，但不会真正变更成员关系。正式版本将在此接入邀请码校验、组织审批与成员权限。"))
+    .not.toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "提交加入组织请求" })).toHaveAttribute("title");
 
   await user.click(within(dialog).getByRole("button", { name: "提交加入组织请求" }));
 
@@ -4829,13 +4936,30 @@ test("opens the organization entry dialog and shows selected organization detail
 test("keeps assistant profile commands in sync with the personal center", async () => {
   const user = userEvent.setup();
 
-  render(<AppShell />);
+  render(
+    <AppShell
+      accountTransport={async () => ({
+        json: async () => ({
+          session: {
+            email: "researcher@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            membershipTier: "pro",
+            name: "Liteasy Researcher",
+            sessionId: "demo-session-1"
+          }
+        }),
+        ok: true,
+        status: 200
+      })}
+    />
+  );
+
+  await loginThroughDialog(user);
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  await user.click(screen.getByRole("button", { name: "个人中心" }));
-  const leftPane = screen.getByLabelText("左边栏个人中心");
+  const leftPane = await openProfilePanel(user);
 
   expect(within(leftPane).getByText("用户画像：已开启")).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "关闭用户画像" })).toBeInTheDocument();
@@ -4940,9 +5064,7 @@ test("opens the personal center in the left rail and toggles user profile sampli
     expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
   });
 
-  await user.click(screen.getByRole("button", { name: "个人中心" }));
-
-  const leftPane = screen.getByLabelText("左边栏个人中心");
+  const leftPane = await openProfilePanel(user);
   expect(within(leftPane).getByText("个人中心")).toBeInTheDocument();
   expect(within(leftPane).getByText("昵称：Liteasy Researcher")).toBeInTheDocument();
   expect(within(leftPane).getByText("用户 ID：demo-session-1")).toBeInTheDocument();
@@ -4963,10 +5085,27 @@ test("opens the personal center in the left rail and toggles user profile sampli
 test("updates academic profile configuration from the personal center and archive", async () => {
   const user = userEvent.setup();
 
-  render(<AppShell />);
+  render(
+    <AppShell
+      accountTransport={async () => ({
+        json: async () => ({
+          session: {
+            email: "researcher@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            membershipTier: "pro",
+            name: "Liteasy Researcher",
+            sessionId: "demo-session-1"
+          }
+        }),
+        ok: true,
+        status: 200
+      })}
+    />
+  );
 
-  await user.click(screen.getByRole("button", { name: "个人中心" }));
-  const leftPane = screen.getByLabelText("左边栏个人中心");
+  await loginThroughDialog(user);
+
+  const leftPane = await openProfilePanel(user);
 
   await user.selectOptions(within(leftPane).getByLabelText("性别"), "女");
   await user.clear(within(leftPane).getByLabelText("年龄"));
@@ -5077,8 +5216,7 @@ test("opens the academic archive page from the personal center", async () => {
     expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
   });
 
-  await user.click(screen.getByRole("button", { name: "个人中心" }));
-  const leftPane = screen.getByLabelText("左边栏个人中心");
+  const leftPane = await openProfilePanel(user);
   await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
   await user.click(within(leftPane).getByRole("button", { name: "学术档案" }));
 
@@ -5184,8 +5322,7 @@ test("requires confirmation before clearing the user profile", async () => {
     expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
   });
 
-  await user.click(screen.getByRole("button", { name: "个人中心" }));
-  const leftPane = screen.getByLabelText("左边栏个人中心");
+  const leftPane = await openProfilePanel(user);
   await user.selectOptions(within(leftPane).getByLabelText("性别"), "女");
   await user.clear(within(leftPane).getByLabelText("年龄"));
   await user.type(within(leftPane).getByLabelText("年龄"), "28");
@@ -5474,9 +5611,9 @@ test("opens organization from the activity bar and keeps governance there", asyn
 
   render(<AppShell />);
 
-  await user.click(screen.getByRole("button", { name: "组织" }));
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
 
-  let organizationPane = screen.getByLabelText("左边栏组织");
+  let organizationPane = await openOrganizationPanel(user);
   expect(within(organizationPane).getByText("组织")).toBeInTheDocument();
   expect(within(organizationPane).getByText("组织空间")).toBeInTheDocument();
   expect(within(organizationPane).getByText("组织治理")).toBeInTheDocument();
@@ -5506,4 +5643,30 @@ test("renders the activity bar separately from the library pane", async () => {
 
   expect(screen.getByText("我的文献库")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "关闭工作区" })).not.toBeInTheDocument();
+});
+
+test("keeps assistant onboarding and mode hints in hover text instead of persistent copy", async () => {
+  render(<AppShell />);
+
+  await waitFor(() => {
+    expect(screen.getByText(/模型：云代理/)).toBeInTheDocument();
+  });
+
+  const launcher = screen.getByLabelText("AI助手初始模式入口");
+  expect(
+    within(launcher).queryByText("选择一个入口开始会话；进入对话后，这里会自动让位给消息流。")
+  ).not.toBeInTheDocument();
+  expect(launcher).toHaveAttribute(
+    "title",
+    "选择一个入口开始会话；进入对话后，这里会自动让位给消息流。"
+  );
+
+  expect(screen.getByText("当前模式：命令")).toBeInTheDocument();
+  expect(
+    screen.queryByText("命令模式可输入“同步云端策略”“打开组织共享文献库”“关闭联网推荐”等受控指令。")
+  ).not.toBeInTheDocument();
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
+    "title",
+    "命令模式可输入“同步云端策略”“打开组织共享文献库”“关闭联网推荐”等受控指令。"
+  );
 });

@@ -10,6 +10,7 @@ export type SettingsStoreLike = {
 export type ActionContext = {
   importSelectedSet?: () => string;
   openOrganizationSharedLibrary?: () => string | Promise<string>;
+  profileUnlocked?: boolean;
   settingsStore?: SettingsStoreLike;
   startArtifactAnalysis?: (artifactType: ArtifactType) => string;
   syncCloudPolicy?: () => Promise<string>;
@@ -71,6 +72,15 @@ export async function executeAction(
   if (invocation.actionId === "settings.update") {
     if (!context.settingsStore) {
       throw new Error("settings.update requires a settings store");
+    }
+
+    if (
+      invocation.input.target === "profile.enabled" &&
+      context.profileUnlocked !== true
+    ) {
+      return {
+        message: "请先登录云账号后再使用个人画像能力。"
+      };
     }
 
     if (

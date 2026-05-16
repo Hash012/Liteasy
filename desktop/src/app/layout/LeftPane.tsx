@@ -194,18 +194,39 @@ export function LeftPane({
             summaryStatus={organizationSummaryStatus}
           />
         ) : leftRailView === "profile" ? (
-          <PersonalCenterPanel
-            academicProfile={academicProfile}
-            accountSession={accountSession}
-            onClearProfile={onClearProfile}
-            onOpenAcademicArchive={onOpenAcademicArchive}
-            onToggleProfileSampling={onToggleProfileSampling}
-            onUpdateAcademicProfile={onUpdateAcademicProfile}
-            organizationSummary={organizationSummary}
-            profileClearMessage={profileClearMessage}
-            profileSamplingEnabled={profileSamplingEnabled}
-            readPaperCount={profileReadPaperCount}
-          />
+          accountSession ? (
+            <PersonalCenterPanel
+              academicProfile={academicProfile}
+              accountSession={accountSession}
+              onClearProfile={onClearProfile}
+              onOpenAcademicArchive={onOpenAcademicArchive}
+              onToggleProfileSampling={onToggleProfileSampling}
+              onUpdateAcademicProfile={onUpdateAcademicProfile}
+              organizationSummary={organizationSummary}
+              profileClearMessage={profileClearMessage}
+              profileSamplingEnabled={profileSamplingEnabled}
+              readPaperCount={profileReadPaperCount}
+            />
+          ) : (
+            <section aria-label="左边栏个人能力说明" className="organization-sidebar-panel">
+              <div className="organization-sidebar-header">
+                <div>
+                  <div className="organization-sidebar-kicker">Activity · Profile</div>
+                  <div className="organization-sidebar-title">个人中心</div>
+                </div>
+              </div>
+              <div className="organization-sidebar-actions">
+                <button
+                  className="policy-button sync"
+                  onClick={onLoginRequired}
+                  title="当前已退化为本地阅读器，个人画像、学术档案与云端身份信息不可用。登录后将自动恢复。"
+                  type="button"
+                >
+                  登录后查看个人能力
+                </button>
+              </div>
+            </section>
+          )
         ) : leftRailView === "settings" ? (
           <SettingsPane
             documentMetadataSyncMessage={documentMetadataSyncMessage}

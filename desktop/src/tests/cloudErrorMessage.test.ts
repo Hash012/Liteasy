@@ -8,11 +8,11 @@ describe("formatCloudConnectionError", () => {
         controlPlaneEndpoint: "https://demo.liteasy.example"
       })
     ).toBe(
-      "无法连接开发云服务。请确认服务已启动，并检查当前控制平面端点：https://demo.liteasy.example。"
+      "云端服务当前不可用。请确认服务已启动，并检查当前云端地址：https://demo.liteasy.example。"
     );
 
     expect(formatCloudConnectionError(new TypeError("Failed to fetch"))).toBe(
-      "无法连接开发云服务。请确认已启动 http://127.0.0.1:8787，并检查设置里的控制平面端点。"
+      "云端服务当前不可用。请确认已启动 http://127.0.0.1:8787，并检查当前云端地址。"
     );
   });
 

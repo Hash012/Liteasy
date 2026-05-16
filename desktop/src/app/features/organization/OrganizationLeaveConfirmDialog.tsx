@@ -25,13 +25,17 @@ export function OrganizationLeaveConfirmDialog({
         </div>
         <div className="profile-archive-card">
           <div className="profile-archive-title">组织：{summary.name}</div>
-          <p>当前演示环境会记录退出组织请求，但不会真正变更成员关系。正式版本将在此接入二次确认、权限校验与成员关系变更。</p>
         </div>
         <div className="profile-dialog-actions">
           <button className="left-rail-button subtle" onClick={onCancel} type="button">
             取消
           </button>
-          <button className="left-rail-button danger" onClick={onConfirm} type="button">
+          <button
+            className="left-rail-button danger"
+            onClick={onConfirm}
+            title="当前演示环境会记录退出组织请求，但不会真正变更成员关系。正式版本将在此接入二次确认、权限校验与成员关系变更。"
+            type="button"
+          >
             提交退出组织请求
           </button>
         </div>

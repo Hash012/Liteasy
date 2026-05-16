@@ -12,12 +12,13 @@ export function AssistantMessageList({ messages, mode, onModeChange }: Assistant
   if (messages.length === 0) {
     return (
       <div className="assistant-messages">
-        <div className="assistant-launcher" aria-label="AI助手初始模式入口">
+        <div
+          className="assistant-launcher"
+          aria-label="AI助手初始模式入口"
+          title="选择一个入口开始会话；进入对话后，这里会自动让位给消息流。"
+        >
           <div className="assistant-avatar" aria-hidden="true">研</div>
           <div className="assistant-launcher-title">Liteasy 学术助手</div>
-          <div className="assistant-launcher-copy">
-            选择一个入口开始会话；进入对话后，这里会自动让位给消息流。
-          </div>
           <div className="assistant-launcher-modes">
             {modeLauncherItems.map((item) => (
               <button
@@ -25,10 +26,10 @@ export function AssistantMessageList({ messages, mode, onModeChange }: Assistant
                 className={item.id === mode ? "assistant-launcher-mode active" : "assistant-launcher-mode"}
                 key={item.id}
                 onClick={() => onModeChange(item.id)}
+                title={item.summary}
                 type="button"
               >
                 <span>{item.label}模式</span>
-                <small>{item.summary}</small>
               </button>
             ))}
           </div>

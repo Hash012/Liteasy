@@ -23,9 +23,7 @@ export function AssistantComposer({
 }: AssistantComposerProps) {
   return (
     <div className="assistant-input-wrap">
-      <div className="assistant-command-feedback">
-        {pending ? "AI 正在整理回答..." : modeHint}
-      </div>
+      {pending ? <div className="assistant-command-feedback">AI 正在整理回答...</div> : null}
       {voiceInputMessage ? (
         <div className="assistant-voice-placeholder">{voiceInputMessage}</div>
       ) : null}
@@ -35,6 +33,7 @@ export function AssistantComposer({
         onChange={(event) => onInputChange(event.target.value)}
         placeholder="输入你的问题或命令"
         rows={4}
+        title={modeHint}
         value={input}
       />
       <div className="assistant-composer-actions">

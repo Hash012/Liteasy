@@ -39,6 +39,7 @@ type AssistantPaneProps = {
   onModelExecution?: (trace: ModelExecutionTrace) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
+  profileUnlocked?: boolean;
   onSyncCloudPolicy?: () => Promise<string>;
   selectedPapers?: Paper[];
   selectedSetStatus: SelectedSetStatus;
@@ -67,6 +68,7 @@ export function AssistantPane({
   onModelExecution,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
+  profileUnlocked = false,
   onSyncCloudPolicy,
   selectedPapers = [],
   selectedSetStatus,
@@ -155,6 +157,7 @@ export function AssistantPane({
       try {
         const result = await executeSkill(command, {
           openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
+          profileUnlocked,
           settingsStore: settingsStoreRef.current,
           startArtifactAnalysis: onGenerateArtifact,
           syncCloudPolicy: onSyncCloudPolicy
@@ -176,8 +179,8 @@ export function AssistantPane({
 
     const readyMessage = getSelectedSetReadyMessage(selectedSetStatus);
     if (readyMessage) {
-      assistantStoreRef.current.addMessage(createMessage("assistant", readyMessage));
       syncAssistant();
+      inputRef.current?.focus();
       setInput("");
       return;
     }
@@ -213,6 +216,9 @@ export function AssistantPane({
   }
 
   const conversationStarted = assistantState.messages.length > 0;
+  const readyMessage =
+    assistantState.mode === "command" ? null : getSelectedSetReadyMessage(selectedSetStatus);
+  const composerHint = readyMessage ?? getModeHint(assistantState.mode);
 
   return (
     <div className={conversationStarted ? "assistant-pane in-conversation" : "assistant-pane initial-session"}>
@@ -246,7 +252,7 @@ export function AssistantPane({
       <AssistantComposer
         input={input}
         inputRef={inputRef}
-        modeHint={getModeHint(assistantState.mode)}
+        modeHint={composerHint}
         onInputChange={setInput}
         onSend={handleSend}
         onVoiceInput={showVoiceInputPlaceholder}

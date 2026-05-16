@@ -299,104 +299,116 @@ export function AppShell({
           } as React.CSSProperties
         }
       >
-        <ActivityBar activeView={leftRail.leftRailView} onSelectView={leftRail.setLeftRailView} />
-        {paneLayout.collapsed.left ? (
+        <ActivityBar
+          activeView={leftRail.leftRailView}
+          onSelectView={(view) => {
+            leftRail.setLeftRailView(view);
+            if (paneLayout.collapsed.left) {
+              paneLayout.setCollapsed("left", false);
+            }
+          }}
+          onToggleActiveView={() => {
+            paneLayout.setCollapsed("left", !paneLayout.collapsed.left);
+          }}
+        />
+        {!paneLayout.collapsed.left ? (
+          <LeftPane
+            academicProfile={profileActions.academicProfile}
+            accountSession={accountSession}
+            collectionItems={collection.collectionItems}
+            collectionMessage={collection.message}
+            collectionStatus={collection.status}
+            documentMetadataSyncMessage={documentMetadataSyncMessage}
+            documentMetadataSyncResult={documentMetadataSyncResult ?? null}
+            documentMetadataSyncStatus={documentMetadataSyncStatus}
+            governanceMessage={organizationGovernanceMessage}
+            governanceStatus={organizationGovernanceStatus}
+            governanceSummary={organizationGovernanceSummary}
+            importJobs={importJobsByDocumentId}
+            lastSyncedAt={lastSyncedAt}
+            latestExecutionLabel={lastModelExecution ? formatModelExecutionLabel(lastModelExecution) : undefined}
+            leftRailView={leftRail.leftRailView}
+            list={organizationList}
+            listMessage={organizationListMessage}
+            listStatus={organizationListStatus}
+            onAddExternalPaper={workspaceActions.addExternalPaperToLibrary}
+            onClearProfile={profileActions.openClearProfileConfirm}
+            onClearRecommendations={clearRecommendationCache}
+            onCollectRecommendation={collection.collectRecommendation}
+            onRetryCollectionSync={collection.retry}
+            onCreateOrganization={organizationActions.openCreateDialog}
+            onImportSelectedSet={() => {
+              void registeredWorkspaceActions.handleImportSelectedSet();
+            }}
+            onInviteMember={organizationActions.openInviteDialog}
+            onJoinOrganization={organizationActions.openJoinDialog}
+            onLoginRequired={() => {
+              setLoginDialogOpen(true);
+            }}
+            onLeaveOrganization={organizationActions.openLeaveDialog}
+            onMarkNotificationsRead={organizationNotifications.markOrganizationNotificationsRead}
+            onOpenAcademicArchive={profileActions.openAcademicArchive}
+            onOpenOrganizationDialog={organizationUi.openOrganizationDialog}
+            organizationActionMessage={organizationActions.actionMessage}
+            onOpenSharedLibrary={(summary) => {
+              void organizationWorkspace.openOrganizationSharedLibrary(summary);
+            }}
+            onReturnToLocalWorkspace={organizationWorkspace.openLocalLibraryWorkspace}
+            onRetryDocumentMetadataSync={retryDocumentMetadataSync}
+            onSelectOrganization={organizationUi.selectOrganization}
+            onSetAccessMode={modelSettings.setModelAccessMode}
+            onSyncCloudPolicy={() => {
+              void syncCloudPolicy();
+            }}
+            onToggleLocalDirectEnabled={modelSettings.setLocalDirectEnabled}
+            onToggleLock={workspaceActions.toggleSelectionLock}
+            onToggleProfileSampling={profileActions.toggleProfileSampling}
+            onToggleSelection={workspaceActions.toggleSelection}
+            onUpdateAcademicProfile={profileActions.updateAcademicProfile}
+            organizationSummary={organizationSummary}
+            organizationSummaryMessage={organizationSummaryMessage}
+            organizationSummaryStatus={organizationSummaryStatus}
+            papers={workspaceState.papers}
+            policySyncMessage={policySyncMessage}
+            policySyncPending={policySyncPending}
+            policySyncStatus={policySyncStatus}
+            policyVersion={policyVersion}
+            profileClearMessage={profileActions.profileClearMessage}
+            profileReadPaperCount={workspaceState.papers.length}
+            profileSamplingEnabled={settingsState["profile.enabled"]}
+            recommendationItems={recommendationItems}
+            recommendationMessage={recommendationMessage}
+            recommendationPending={recommendationPending}
+            recommendationStatus={recommendationStatus}
+            readNotificationIds={organizationNotifications.readNotificationIds}
+            selectedPaperIds={workspaceState.selectedPaperIds}
+            selectionLocked={workspaceState.selectionLocked}
+            settings={settingsState}
+            summary={organizationSummary}
+            workspaceLabel={workspaceLabel}
+          />
+        ) : (
           <aside className="pane-rail left" aria-label="左栏折叠边栏">
-            <button aria-label="展开左栏" className="pane-rail-button" onClick={() => paneLayout.setCollapsed("left", false)} type="button">
-              文献库
+            <button
+              aria-label="展开左栏"
+              className="pane-rail-button"
+              onClick={() => paneLayout.setCollapsed("left", false)}
+              title="展开左栏"
+              type="button"
+            >
+              展开左栏
             </button>
           </aside>
-        ) : (
-          <LeftPane
-          academicProfile={profileActions.academicProfile}
-          accountSession={accountSession}
-          collectionItems={collection.collectionItems}
-          collectionMessage={collection.message}
-          collectionStatus={collection.status}
-          documentMetadataSyncMessage={documentMetadataSyncMessage}
-          documentMetadataSyncResult={documentMetadataSyncResult ?? null}
-          documentMetadataSyncStatus={documentMetadataSyncStatus}
-          governanceMessage={organizationGovernanceMessage}
-          governanceStatus={organizationGovernanceStatus}
-          governanceSummary={organizationGovernanceSummary}
-          importJobs={importJobsByDocumentId}
-          lastSyncedAt={lastSyncedAt}
-          latestExecutionLabel={lastModelExecution ? formatModelExecutionLabel(lastModelExecution) : undefined}
-          leftRailView={leftRail.leftRailView}
-          list={organizationList}
-          listMessage={organizationListMessage}
-          listStatus={organizationListStatus}
-          onAddExternalPaper={workspaceActions.addExternalPaperToLibrary}
-          onClearProfile={profileActions.openClearProfileConfirm}
-          onClearRecommendations={clearRecommendationCache}
-          onCollectRecommendation={collection.collectRecommendation}
-          onRetryCollectionSync={collection.retry}
-          onCreateOrganization={organizationActions.openCreateDialog}
-          onImportSelectedSet={() => {
-            void registeredWorkspaceActions.handleImportSelectedSet();
-          }}
-          onInviteMember={organizationActions.openInviteDialog}
-          onJoinOrganization={organizationActions.openJoinDialog}
-          onLoginRequired={() => {
-            setLoginDialogOpen(true);
-          }}
-          onLeaveOrganization={organizationActions.openLeaveDialog}
-          onMarkNotificationsRead={organizationNotifications.markOrganizationNotificationsRead}
-          onOpenAcademicArchive={profileActions.openAcademicArchive}
-          onOpenOrganizationDialog={organizationUi.openOrganizationDialog}
-          organizationActionMessage={organizationActions.actionMessage}
-          onOpenSharedLibrary={(summary) => {
-            void organizationWorkspace.openOrganizationSharedLibrary(summary);
-          }}
-          onReturnToLocalWorkspace={organizationWorkspace.openLocalLibraryWorkspace}
-          onRetryDocumentMetadataSync={retryDocumentMetadataSync}
-          onSelectOrganization={organizationUi.selectOrganization}
-          onSetAccessMode={modelSettings.setModelAccessMode}
-          onSyncCloudPolicy={() => {
-            void syncCloudPolicy();
-          }}
-          onToggleLocalDirectEnabled={modelSettings.setLocalDirectEnabled}
-          onToggleLock={workspaceActions.toggleSelectionLock}
-          onToggleProfileSampling={profileActions.toggleProfileSampling}
-          onToggleSelection={workspaceActions.toggleSelection}
-          onUpdateAcademicProfile={profileActions.updateAcademicProfile}
-          organizationSummary={organizationSummary}
-          organizationSummaryMessage={organizationSummaryMessage}
-          organizationSummaryStatus={organizationSummaryStatus}
-          papers={workspaceState.papers}
-          policySyncMessage={policySyncMessage}
-          policySyncPending={policySyncPending}
-          policySyncStatus={policySyncStatus}
-          policyVersion={policyVersion}
-          profileClearMessage={profileActions.profileClearMessage}
-          profileReadPaperCount={workspaceState.papers.length}
-          profileSamplingEnabled={settingsState["profile.enabled"]}
-          recommendationItems={recommendationItems}
-          recommendationMessage={recommendationMessage}
-          recommendationPending={recommendationPending}
-          recommendationStatus={recommendationStatus}
-          readNotificationIds={organizationNotifications.readNotificationIds}
-          selectedPaperIds={workspaceState.selectedPaperIds}
-          selectionLocked={workspaceState.selectionLocked}
-          settings={settingsState}
-          summary={organizationSummary}
-          workspaceLabel={workspaceLabel}
-        />
         )}
-        <div className="pane-utility-column">
+        <div className="pane-utility-column left">
           {!paneLayout.collapsed.left ? (
-            <>
-              <button aria-label="折叠左栏" className="pane-collapse-button" onClick={() => paneLayout.setCollapsed("left", true)} type="button">
-                折叠
-              </button>
-              <PaneResizer
-                ariaLabel="调整左栏宽度"
-                onResize={(deltaPixels) => {
-                  const shellWidth = window.innerWidth - 64 - 8 - 8;
-                  paneLayout.adjustLeft((deltaPixels / shellWidth) * 100);
-                }}
-              />
-            </>
+            <PaneResizer
+              ariaLabel="调整左栏宽度"
+              onResize={(deltaPixels) => {
+                const shellWidth = window.innerWidth - 64 - 8 - 8;
+                paneLayout.adjustLeft((deltaPixels / shellWidth) * 100);
+              }}
+            />
           ) : null}
         </div>
         <AppDialogs
@@ -455,40 +467,41 @@ export function AppShell({
         />
         <div className="pane-utility-column right">
           {!paneLayout.collapsed.right ? (
-            <>
-              <PaneResizer
-                ariaLabel="调整右栏宽度"
-                onResize={(deltaPixels) => {
-                  const shellWidth = window.innerWidth - 64 - 8 - 8;
-                  paneLayout.adjustRight((deltaPixels / shellWidth) * 100);
-                }}
-              />
-              <button aria-label="折叠右栏" className="pane-collapse-button" onClick={() => paneLayout.setCollapsed("right", true)} type="button">
-                折叠
-              </button>
-            </>
+            <PaneResizer
+              ariaLabel="调整右栏宽度"
+              onResize={(deltaPixels) => {
+                const shellWidth = window.innerWidth - 64 - 8 - 8;
+                paneLayout.adjustRight((deltaPixels / shellWidth) * 100);
+              }}
+            />
           ) : null}
+          <button
+            aria-label={paneLayout.collapsed.right ? "展开右栏" : "右栏折叠控制"}
+            className="pane-collapse-button edge-arrow"
+            onClick={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
+            title={paneLayout.collapsed.right ? "展开右栏" : "折叠右栏"}
+            type="button"
+          >
+            {paneLayout.collapsed.right ? "‹" : "›"}
+          </button>
         </div>
-        {paneLayout.collapsed.right ? (
-          <aside className="pane-rail right" aria-label="右栏折叠边栏">
-            <button aria-label="展开右栏" className="pane-rail-button" onClick={() => paneLayout.setCollapsed("right", false)} type="button">
-              助手
-            </button>
-          </aside>
+        {!paneLayout.collapsed.right ? (
+          <AssistantSidebar
+            importedChunksByPaperId={importedChunksByPaperId}
+            importedSelectedCount={importedSelectedCount}
+            onGenerateArtifact={artifactActions.handleAssistantArtifact}
+            onModelExecution={setLastModelExecution}
+            onOpenOrganizationSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
+            onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
+            profileUnlocked={accountSession !== null}
+            onSyncCloudPolicy={syncCloudPolicy}
+            selectedPaperCount={workspaceState.selectedPaperIds.length}
+            selectedPapers={selectedPapers}
+            selectionLocked={workspaceState.selectionLocked}
+            settingsStore={settingsStoreRef.current}
+          />
         ) : (
-        <AssistantSidebar
-          importedChunksByPaperId={importedChunksByPaperId}
-          importedSelectedCount={importedSelectedCount}
-          onGenerateArtifact={artifactActions.handleAssistantArtifact}
-          onModelExecution={setLastModelExecution}
-          onOpenOrganizationSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
-          onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
-          onSyncCloudPolicy={syncCloudPolicy}
-          selectedPaperCount={workspaceState.selectedPaperIds.length}
-          selectedPapers={selectedPapers}
-          selectionLocked={workspaceState.selectionLocked}
-          settingsStore={settingsStoreRef.current}
-        />
+          <aside className="pane-rail right" aria-label="右栏折叠边栏" />
         )}
       </div>
     </div>

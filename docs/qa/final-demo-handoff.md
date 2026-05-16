@@ -1,0 +1,117 @@
+# Liteasy 最终 Demo 交付说明
+
+本文档用于当前版本的最终交付。
+
+## 1. 当前可交付范围
+
+本版本可作为路演与演示使用，包含以下主链路：
+
+- 桌面端三栏工作台
+- 默认未登录进入，本地阅读器退化模式
+- 统一轻量登录面板
+- 登录后自动接入云端能力
+- 云端收藏、推荐、文献元数据同步
+- 组织入口、组织空间、组织共享文献库
+- 组织创建 / 加入 / 邀请 / 退出
+- 基于会员级别的创建组织权限门控
+- 基于组织角色的邀请成员权限门控
+- 中栏多模态入口
+- 右栏 AI Assistant 三模式入口
+
+## 2. 当前交付口径
+
+本版本是：
+
+- 可部署
+- 可演示
+- 可继续在其上开发
+
+本版本不是：
+
+- 完整正式 SaaS 成品
+- 完整正式认证 / 计费 / 多租户后端
+
+## 3. 已验证结果
+
+已完成以下验证：
+
+```bash
+node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs
+cd desktop && npm test
+cd desktop && npm run build
+```
+
+当前结果：
+
+- `services/dev-cloud` 服务测试通过
+- `desktop` 全量测试通过
+- `desktop` 构建通过
+
+## 4. 建议部署顺序
+
+### 4.1 启动云端联调服务
+
+本地：
+
+```bash
+cd /home/octopus/Liteasy
+node services/dev-cloud/server.mjs
+```
+
+云端部署时，请参考：
+
+- `docs/qa/roadshow-demo-guide.md`
+- `docs/qa/environment-startup-guide.md`
+
+### 4.2 启动桌面端
+
+前端开发预览：
+
+```bash
+cd /home/octopus/Liteasy/desktop
+npm run dev
+```
+
+桌面窗口：
+
+```bash
+cd /home/octopus/Liteasy/desktop
+source "$HOME/.cargo/env"
+npm run tauri dev
+```
+
+## 5. 推荐路演路径
+
+建议按以下顺序演示：
+
+1. 打开桌面端，展示三栏工作台
+2. 跳过登录，说明本地阅读器退化模式
+3. 打开统一轻量登录面板并完成 Demo 登录
+4. 进入组织页，展示组织空间、组织角色、权限门控
+5. 展示组织共享文献库切换
+6. 返回本地文献库，展示选中文献集和中栏多模态入口
+7. 展示收藏、推荐、问答与模型链路
+8. 最后说明 `/admin/` 是平台内部运营/运维视角，而非客户组织后台
+
+## 6. 路演时需要注意
+
+- 用户侧界面不再暴露“开发云”“端点切换”等调试心智
+- 说明性内容大多已收为 hover / tooltip
+- 组织管理员与平台管理员是两个不同概念
+- `basic` 会员只能加入组织，`pro` 可创建组织
+
+## 7. 如果现场异常
+
+优先检查：
+
+- 云端联调服务是否已启动
+- 演示环境地址是否正确
+- 桌面端是否已恢复或建立 Demo 会话
+
+如果推荐或同步异常，可先回到：
+
+- 组织空间展示
+- 本地文献库展示
+- 中栏多模态入口展示
+
+这三段是当前最稳定的演示主链。
