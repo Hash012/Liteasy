@@ -151,4 +151,30 @@ test("keeps local-direct access disabled when policy has not allowed it", async 
 
   expect(settingsStore.getState()["models.access_mode"]).toBe("cloud_proxy");
   expect(result.message).toContain("本地直连未开放");
+  expect(result.message).toContain("模型：云代理");
+});
+
+test("returns a user-facing model status message when switching access mode", async () => {
+  const settingsStore = createSettingsStore();
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "models.local_direct_enabled",
+    value: true
+  });
+
+  const result = await executeAction(
+    {
+      actionId: "settings.update",
+      input: {
+        target: "models.access_mode",
+        value: "local_direct"
+      }
+    },
+    {
+      settingsStore
+    }
+  );
+
+  expect(settingsStore.getState()["models.access_mode"]).toBe("local_direct");
+  expect(result.message).toContain("模型：本地直连");
 });

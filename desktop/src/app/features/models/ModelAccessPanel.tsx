@@ -2,6 +2,7 @@ import type { SettingsState } from "../settings/settings.types";
 import type { PolicySyncStatus } from "./policySync.types";
 
 type ModelAccessPanelProps = {
+  hideTitle?: boolean;
   latestExecutionLabel?: string;
   onSyncCloudPolicy: () => void;
   onSetAccessMode: (mode: SettingsState["models.access_mode"]) => void;
@@ -35,6 +36,7 @@ function getSyncStatusLabel(status: PolicySyncStatus) {
 }
 
 export function ModelAccessPanel({
+  hideTitle = false,
   latestExecutionLabel,
   onSyncCloudPolicy,
   onSetAccessMode,
@@ -50,7 +52,7 @@ export function ModelAccessPanel({
 
   return (
     <div className="model-policy-card">
-      <div className="model-policy-title">模型接入策略</div>
+      {hideTitle ? null : <div className="model-policy-title">模型接入策略</div>}
       <div className="model-policy-summary">
         当前通道：{getAccessModeLabel(settings["models.access_mode"])} · Provider：
         {settings["models.default_provider"]}

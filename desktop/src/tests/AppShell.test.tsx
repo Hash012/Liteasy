@@ -1926,6 +1926,19 @@ test("syncs visible workspace document metadata after cloud account login", asyn
   });
 }, 10000);
 
+test("loads the Liteasy local library root on startup", async () => {
+  render(
+    <AppShell
+      localLibraryLoader={async () => ({
+        entries: [],
+        rootPath: "/tmp/LiteasyLibrary"
+      })}
+    />
+  );
+
+  expect(await screen.findByText(/当前工作区：.*LiteasyLibrary/)).toBeInTheDocument();
+}, 10000);
+
 test("loads organization space from local dev cloud defaults after connecting", async () => {
   const user = userEvent.setup();
   const requestedUrls: string[] = [];
@@ -5448,7 +5461,7 @@ test("keeps workspace dialogs below the top brand bar", async () => {
 test("keeps the right pane as a minimal AI assistant and moves admin panels out", async () => {
   render(<AppShell />);
 
-  await screen.findByText(/模型：云代理/);
+  await screen.findByText(/云端模型能力/);
   const rightPane = screen.getByLabelText("右栏AI助手");
   expect(within(rightPane).getByPlaceholderText("输入你的问题或命令")).toBeInTheDocument();
   expect(within(rightPane).queryByText("模型接入策略")).not.toBeInTheDocument();
@@ -5456,10 +5469,10 @@ test("keeps the right pane as a minimal AI assistant and moves admin panels out"
   expect(within(rightPane).queryByText("组织空间")).not.toBeInTheDocument();
   expect(within(rightPane).queryByText("组织治理")).not.toBeInTheDocument();
 
-  expect(screen.getByText(/模型：云代理/)).toBeInTheDocument();
+  expect(screen.getByText(/云端模型能力/)).toBeInTheDocument();
 });
 
-test("opens settings from the activity bar and shows model policy details", async () => {
+test("opens settings from the activity bar and keeps only user-facing cloud capability details", async () => {
   const user = userEvent.setup();
 
   render(<AppShell />);
@@ -5468,8 +5481,8 @@ test("opens settings from the activity bar and shows model policy details", asyn
 
   const settingsPane = screen.getByLabelText("左边栏设置");
   expect(within(settingsPane).getByText("设置")).toBeInTheDocument();
-  expect(within(settingsPane).getByText("模型接入策略")).toBeInTheDocument();
-  expect(within(settingsPane).getByRole("button", { name: "同步云端策略" })).toBeInTheDocument();
+  expect(within(settingsPane).queryByText("模型接入策略")).not.toBeInTheDocument();
+  expect(within(settingsPane).getByText("云端模型能力")).toBeInTheDocument();
   expect(within(settingsPane).getByText("文献元数据同步")).toBeInTheDocument();
   expect(within(settingsPane).queryByText("组织空间")).not.toBeInTheDocument();
   expect(within(settingsPane).queryByText("组织治理")).not.toBeInTheDocument();
@@ -5618,7 +5631,7 @@ test("opens organization from the activity bar and keeps governance there", asyn
 test("renders the activity bar separately from the library pane", async () => {
   render(<AppShell />);
 
-  await screen.findByText(/模型：云代理/);
+  await screen.findByText(/云端模型能力/);
   const activityBar = screen.getByLabelText("左边栏导航");
   expect(within(activityBar).getByRole("button", { name: "文献库" })).toBeInTheDocument();
   expect(within(activityBar).getByRole("button", { name: "组织" })).toBeInTheDocument();
@@ -5633,7 +5646,7 @@ test("keeps assistant onboarding and mode hints in hover text instead of persist
   render(<AppShell />);
 
   await waitFor(() => {
-    expect(screen.getByText(/模型：云代理/)).toBeInTheDocument();
+    expect(screen.getByText(/云端模型能力/)).toBeInTheDocument();
   });
 
   const launcher = screen.getByLabelText("AI助手初始模式入口");
@@ -5647,10 +5660,10 @@ test("keeps assistant onboarding and mode hints in hover text instead of persist
 
   expect(screen.getByText("当前模式：命令")).toBeInTheDocument();
   expect(
-    screen.queryByText("命令模式可输入“同步云端策略”“打开组织共享文献库”“关闭联网推荐”等受控指令。")
+    screen.queryByText("命令模式可输入“打开组织共享文献库”“关闭联网推荐”“开启用户画像”等受控指令。")
   ).not.toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
-    "命令模式可输入“同步云端策略”“打开组织共享文献库”“关闭联网推荐”等受控指令。"
+    "命令模式可输入“打开组织共享文献库”“关闭联网推荐”“开启用户画像”等受控指令。"
   );
 });

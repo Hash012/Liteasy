@@ -32,12 +32,37 @@ function isRecommendationEnableCommand(input: string) {
   );
 }
 
-function isCloudPolicySyncCommand(input: string) {
-  return input.includes("同步") && includesAny(input, ["云端策略", "云端模型策略", "模型策略", "控制平面策略"]);
-}
-
 function isOpenOrganizationSharedLibraryCommand(input: string) {
   return input.includes("打开") && input.includes("组织") && input.includes("共享文献库");
+}
+
+function isEnableLocalDirectCommand(input: string) {
+  return includesAny(input, [
+    "允许本地直连",
+    "开启本地直连",
+    "启用本地直连",
+    "打开本地直连"
+  ]);
+}
+
+function isSwitchToLocalDirectCommand(input: string) {
+  return includesAny(input, [
+    "切换到本地直连",
+    "改用本地直连",
+    "使用本地直连"
+  ]);
+}
+
+function isSwitchToCloudProxyCommand(input: string) {
+  return includesAny(input, [
+    "切换到云代理",
+    "改用云代理",
+    "使用云代理"
+  ]);
+}
+
+function isSyncCloudPolicyCommand(input: string) {
+  return input.includes("同步") && input.includes("云端") && input.includes("策略");
 }
 
 export function routeCommand(input: string): SkillInvocation | null {
@@ -112,7 +137,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (normalized === "允许本地直连") {
+  if (isEnableLocalDirectCommand(normalized)) {
     return {
       skillId: "settings.adjust",
       input: {
@@ -122,17 +147,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (normalized === "禁止本地直连") {
-    return {
-      skillId: "settings.adjust",
-      input: {
-        target: "models.local_direct_enabled",
-        value: false
-      }
-    };
-  }
-
-  if (normalized === "切换到本地直连") {
+  if (isSwitchToLocalDirectCommand(normalized)) {
     return {
       skillId: "settings.adjust",
       input: {
@@ -142,7 +157,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (normalized === "切换到云代理") {
+  if (isSwitchToCloudProxyCommand(normalized)) {
     return {
       skillId: "settings.adjust",
       input: {
@@ -152,7 +167,7 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
-  if (isCloudPolicySyncCommand(normalized)) {
+  if (isSyncCloudPolicyCommand(normalized)) {
     return {
       skillId: "settings.sync_policy",
       input: {

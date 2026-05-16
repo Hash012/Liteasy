@@ -36,34 +36,32 @@ test("maps disabling profile sampling to a settings skill invocation", () => {
   });
 });
 
-test("maps enabling local direct model access to a settings skill invocation", () => {
-  const result = routeCommand("允许本地直连");
-
-  expect(result).toEqual({
+test("routes model-policy commands to safe settings skills", () => {
+  expect(routeCommand("允许本地直连")).toEqual({
     skillId: "settings.adjust",
     input: {
       target: "models.local_direct_enabled",
       value: true
     }
   });
-});
 
-test("maps switching to local direct mode to a settings skill invocation", () => {
-  const result = routeCommand("切换到本地直连");
-
-  expect(result).toEqual({
+  expect(routeCommand("切换到本地直连")).toEqual({
     skillId: "settings.adjust",
     input: {
       target: "models.access_mode",
       value: "local_direct"
     }
   });
-});
 
-test("maps syncing cloud policy to a dedicated settings skill invocation", () => {
-  const result = routeCommand("同步云端策略");
+  expect(routeCommand("切换到云代理")).toEqual({
+    skillId: "settings.adjust",
+    input: {
+      target: "models.access_mode",
+      value: "cloud_proxy"
+    }
+  });
 
-  expect(result).toEqual({
+  expect(routeCommand("同步云端策略")).toEqual({
     skillId: "settings.sync_policy",
     input: {
       source: "cloud_control_plane"

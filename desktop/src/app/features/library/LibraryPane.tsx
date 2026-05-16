@@ -80,6 +80,9 @@ export function LibraryPane({
         <button className="library-button ghost" type="button" onClick={onToggleLock}>
           {selectionLocked ? "解除锁定" : "锁定选择"}
         </button>
+        <button className="library-button ghost" type="button">
+          刷新本地文献库
+        </button>
         {canReturnToLocalWorkspace ? (
           <button className="library-button ghost" type="button" onClick={onReturnToLocalWorkspace}>
             返回本地文献库

@@ -50,6 +50,10 @@ test("closes the visible workspace and resets document selection", () => {
     papers: [],
     selectedPaperIds: [],
     selectionLocked: false,
+    workspaceSource: {
+      rootPath: "本地文献库",
+      type: "local_library"
+    },
     workspaceRevision: 1
   });
 });

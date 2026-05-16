@@ -24,6 +24,10 @@ function formatSettingValue(
   target: UpdateSettingCommand["target"],
   value: UpdateSettingCommand["value"]
 ) {
+  if (target === "models.access_mode") {
+    return value === "local_direct" ? "本地直连" : "云代理";
+  }
+
   if (target === "network.recommendation.sort_mode") {
     return value === "retrieved_at" ? "按检索时间" : "按关联度";
   }
@@ -89,7 +93,7 @@ export async function executeAction(
       context.settingsStore.getState()["models.local_direct_enabled"] !== true
     ) {
       return {
-        message: "本地直连未开放。请先同步云端策略，或在设置中启用允许本地直连。"
+        message: "本地直连未开放。请先同步云端策略，或在设置中启用允许本地直连。模型：云代理"
       };
     }
 
@@ -98,6 +102,15 @@ export async function executeAction(
       target: invocation.input.target,
       value: invocation.input.value
     });
+
+    if (invocation.input.target === "models.access_mode") {
+      return {
+        message: `已切换模型通道。模型：${formatSettingValue(
+          invocation.input.target,
+          invocation.input.value
+        )}`
+      };
+    }
 
     return {
       message: `已更新 ${settingsRegistry[invocation.input.target].label}：${formatSettingValue(

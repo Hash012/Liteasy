@@ -84,6 +84,22 @@ test("returns a helpful service index from the root path", async () => {
   ]);
 });
 
+test("returns a healthy status from the health endpoint", async () => {
+  const response = await invokeHandler({
+    method: "GET",
+    headers: {
+      host: "127.0.0.1:8787"
+    },
+    url: "/healthz"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers["Content-Type"], "application/json; charset=utf-8");
+  assert.deepEqual(response.json, {
+    ok: true
+  });
+});
+
 test("prefers a configured public origin for deploy-facing links and policy payloads", async () => {
   const handlerOptions = {
     publicOrigin: "https://demo.liteasy.example"

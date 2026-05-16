@@ -329,7 +329,7 @@ test("shows a readable assistant error when the model backend is unavailable", a
   });
 });
 
-test("shows current command examples including organization and policy actions", async () => {
+test("shows current command examples including organization and recommendation actions", async () => {
   const user = userEvent.setup();
 
   render(
@@ -347,6 +347,6 @@ test("shows current command examples including organization and policy actions",
 
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
-    "命令模式可输入“同步云端策略”“打开组织共享文献库”“关闭联网推荐”等受控指令。"
+    "命令模式可输入“打开组织共享文献库”“关闭联网推荐”“开启用户画像”等受控指令。"
   );
 });

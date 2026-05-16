@@ -46,6 +46,8 @@ import { useCloudAvailabilityProbe } from "../features/network/useCloudAvailabil
 import { getCloudAvailabilityStatus } from "./cloudAvailability";
 import { PaneResizer } from "./PaneResizer";
 import { usePaneLayout } from "./usePaneLayout";
+import { useLocalLibrary } from "../features/library/useLocalLibrary";
+import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -56,6 +58,7 @@ type AppShellProps = {
   organizationListTransport?: OrganizationListTransport;
   organizationSharedLibraryManifestTransport?: OrganizationSharedLibraryManifestTransport;
   organizationTransport?: OrganizationSummaryTransport;
+  localLibraryLoader?: () => Promise<LocalLibrarySnapshot>;
   recommendationTransport?: RecommendationTransport;
 };
 
@@ -68,9 +71,11 @@ export function AppShell({
   organizationListTransport,
   organizationSharedLibraryManifestTransport,
   organizationTransport,
+  localLibraryLoader,
   recommendationTransport
 }: AppShellProps = {}) {
   const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(initialSettings);
+  const localLibrarySnapshot = useLocalLibrary(localLibraryLoader);
   const { isOnline } = useConnectivity();
   const paneLayout = usePaneLayout();
 
@@ -257,6 +262,19 @@ export function AppShell({
   const rightPaneSize = paneLayout.collapsed.right
     ? "44px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
+
+  useEffect(() => {
+    if (!localLibrarySnapshot) {
+      return;
+    }
+
+    workspaceStoreRef.current.openWorkspace([], {
+      rootPath: localLibrarySnapshot.rootPath,
+      type: "local_library"
+    });
+    setWorkspaceState(cloneWorkspaceState(workspaceStoreRef.current.getState()));
+    setWorkspaceLabel(localLibrarySnapshot.rootPath);
+  }, [localLibrarySnapshot, workspaceStoreRef]);
 
   useEffect(() => {
     if (

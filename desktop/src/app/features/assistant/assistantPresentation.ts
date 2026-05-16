@@ -20,7 +20,7 @@ export function getModeLabel(mode: AssistantMode) {
 
 export function getModeHint(mode: AssistantMode) {
   if (mode === "command") {
-    return "命令模式可输入“同步云端策略”“打开组织共享文献库”“关闭联网推荐”等受控指令。";
+    return "命令模式可输入“打开组织共享文献库”“关闭联网推荐”“开启用户画像”等受控指令。";
   }
 
   if (mode === "qa") {

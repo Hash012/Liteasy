@@ -1,6 +1,7 @@
 import type {
   Paper,
   SelectedDocumentSet,
+  WorkspaceSource,
   WorkspaceState
 } from "./workspace.types";
 
@@ -9,6 +10,10 @@ export function createWorkspaceStore() {
     papers: [],
     selectedPaperIds: [],
     selectionLocked: false,
+    workspaceSource: {
+      rootPath: "本地文献库",
+      type: "local_library"
+    },
     workspaceRevision: 0
   };
 
@@ -21,10 +26,14 @@ export function createWorkspaceStore() {
       state.papers.push(paper);
       return true;
     },
-    openWorkspace(papers: Paper[]) {
+    openWorkspace(
+      papers: Paper[],
+      workspaceSource: WorkspaceSource = state.workspaceSource
+    ) {
       state.papers = [...papers];
       state.selectedPaperIds = [];
       state.selectionLocked = false;
+      state.workspaceSource = { ...workspaceSource };
       state.workspaceRevision += 1;
     },
     toggleSelection(id: string) {
@@ -46,6 +55,10 @@ export function createWorkspaceStore() {
       state.papers = [];
       state.selectedPaperIds = [];
       state.selectionLocked = false;
+      state.workspaceSource = {
+        rootPath: "本地文献库",
+        type: "local_library"
+      };
       state.workspaceRevision += 1;
     },
     getSelectedDocumentSet(): SelectedDocumentSet {

@@ -102,6 +102,20 @@ describe("LeftPane", () => {
     expect(screen.getByText("文献元数据同步")).toBeInTheDocument();
   });
 
+  test("shows the local library root and refresh affordance", () => {
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          workspaceLabel: "/home/test/LiteasyLibrary"
+        })}
+      />
+    );
+
+    expect(screen.getByText("工作区母目录：/home/test/LiteasyLibrary")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "刷新本地文献库" })).toBeInTheDocument();
+  });
+
   test("renders the library view and forwards import action", async () => {
     const user = userEvent.setup();
     const onImportSelectedSet = vi.fn();

@@ -14,6 +14,10 @@ describe("AppShell state helpers", () => {
       papers: [{ id: "p1", title: "Paper 1" }],
       selectedPaperIds: ["p1"],
       selectionLocked: true,
+      workspaceSource: {
+        rootPath: "本地文献库",
+        type: "local_library"
+      },
       workspaceRevision: 3
     });
     workspace.papers.push({ id: "p2", title: "Paper 2" });

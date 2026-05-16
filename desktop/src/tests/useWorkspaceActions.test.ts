@@ -10,6 +10,7 @@ function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
     papers: [...state.papers],
     selectedPaperIds: [...state.selectedPaperIds],
     selectionLocked: state.selectionLocked,
+    workspaceSource: { ...state.workspaceSource },
     workspaceRevision: state.workspaceRevision
   };
 }

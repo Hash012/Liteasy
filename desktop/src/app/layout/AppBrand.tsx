@@ -14,7 +14,7 @@ export function AppBrand({ modelAccessMode }: AppBrandProps) {
         <div className="brand-tagline">AI-driven paper-assisted reading platform</div>
       </div>
       <div className="model-mini-indicator">
-        模型：{modelAccessMode === "cloud_proxy" ? "云代理" : "本地直连"}
+        云端模型能力
       </div>
     </div>
   );

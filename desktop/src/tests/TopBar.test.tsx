@@ -22,7 +22,7 @@ describe("TopBar", () => {
     );
 
     expect(screen.getByText("LiteasyClaw")).toBeInTheDocument();
-    expect(screen.getByText(/模型：云代理/)).toBeInTheDocument();
+    expect(screen.getByText(/云端模型能力/)).toBeInTheDocument();
     expect(screen.getByLabelText("云端能力状态：可用")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "登录云账号" })).toBeInTheDocument();
     expect(screen.queryByText("当前未登录云账号。联网并登录后，可使用组织、推荐与云端能力；否则将退化为本地阅读器。")).not.toBeInTheDocument();
