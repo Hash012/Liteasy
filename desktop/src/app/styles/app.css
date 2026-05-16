@@ -151,7 +151,13 @@ body {
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-columns: 64px var(--left-pane-size, minmax(220px, 24fr)) 18px minmax(420px, 52fr) 18px var(--right-pane-size, minmax(220px, 24fr));
+  grid-template-columns:
+    64px
+    var(--left-pane-size, minmax(220px, 24fr))
+    var(--left-pane-utility-size, 18px)
+    minmax(420px, 52fr)
+    18px
+    var(--right-pane-size, minmax(220px, 24fr));
   gap: 0;
   min-height: 0;
   height: 100%;

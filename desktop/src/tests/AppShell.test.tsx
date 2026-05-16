@@ -17,12 +17,6 @@ async function openOrganizationPanel(user: ReturnType<typeof userEvent.setup>) {
   if (screen.queryByLabelText("左边栏组织")) {
     return screen.getByLabelText("左边栏组织");
   }
-  if (screen.queryByLabelText("展开左栏")) {
-    await user.click(screen.getByLabelText("展开左栏"));
-    if (screen.queryByLabelText("左边栏组织")) {
-      return screen.getByLabelText("左边栏组织");
-    }
-  }
   await user.click(screen.getByRole("button", { name: "组织" }));
   return screen.getByLabelText("左边栏组织");
 }
@@ -31,12 +25,6 @@ async function openLibraryPanel(user: ReturnType<typeof userEvent.setup>) {
   if (screen.queryByLabelText("我的文献库投放区")) {
     return screen.getByLabelText("我的文献库投放区");
   }
-  if (screen.queryByLabelText("展开左栏")) {
-    await user.click(screen.getByLabelText("展开左栏"));
-    if (screen.queryByLabelText("我的文献库投放区")) {
-      return screen.getByLabelText("我的文献库投放区");
-    }
-  }
   await user.click(screen.getByRole("button", { name: "文献库" }));
   return screen.getByLabelText("我的文献库投放区");
 }
@@ -44,12 +32,6 @@ async function openLibraryPanel(user: ReturnType<typeof userEvent.setup>) {
 async function openProfilePanel(user: ReturnType<typeof userEvent.setup>) {
   if (screen.queryByLabelText("左边栏个人中心")) {
     return screen.getByLabelText("左边栏个人中心");
-  }
-  if (screen.queryByLabelText("展开左栏")) {
-    await user.click(screen.getByLabelText("展开左栏"));
-    if (screen.queryByLabelText("左边栏个人中心")) {
-      return screen.getByLabelText("左边栏个人中心");
-    }
   }
   await user.click(screen.getByRole("button", { name: "个人中心" }));
   return screen.getByLabelText("左边栏个人中心");
@@ -195,8 +177,9 @@ test("supports the confirmed workbench pane layout", async () => {
 
   await user.click(screen.getByRole("button", { name: "文献库" }));
 
+  expect(screen.queryByLabelText("展开左栏")).not.toBeInTheDocument();
   expect(workbench).toHaveStyle({
-    "--left-pane-size": "44px"
+    "--left-pane-size": "0px"
   });
   expect(screen.getByText("Reader", { selector: ".pane-header" })).toBeInTheDocument();
   expect(screen.getByText("AI Assistant", { selector: ".pane-header" })).toBeInTheDocument();
@@ -254,8 +237,9 @@ test("collapses the left pane when clicking the active activity-bar item", async
   expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("minmax(220px, 24fr)");
 
   await user.click(screen.getByRole("button", { name: "文献库" }));
-  expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("44px");
-  expect(screen.getByLabelText("展开左栏")).toBeInTheDocument();
+  expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("0px");
+  expect(workbench.style.getPropertyValue("--left-pane-utility-size")).toBe("0px");
+  expect(screen.queryByLabelText("展开左栏")).not.toBeInTheDocument();
   expect(screen.getByText("Reader", { selector: ".pane-header" })).toBeInTheDocument();
   expect(screen.getByText("AI Assistant", { selector: ".pane-header" })).toBeInTheDocument();
 
@@ -276,7 +260,7 @@ test("keeps the three primary panes as direct grid items in the workbench", asyn
 
   await user.click(screen.getByRole("button", { name: "文献库" }));
 
-  expect(workbench.querySelector(":scope > aside.pane-rail.left")).toBeInTheDocument();
+  expect(workbench.querySelector(":scope > aside.pane-rail.left")).toBeNull();
   expect(workbench.querySelector(":scope > main.pane.center")).toBeInTheDocument();
   expect(workbench.querySelector(":scope > section.pane.right.assistant-only-pane")).toBeInTheDocument();
 });

@@ -251,8 +251,9 @@ export function AppShell({
     isOnline
   });
   const leftPaneSize = paneLayout.collapsed.left
-    ? "44px"
+    ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
+  const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "18px";
   const rightPaneSize = paneLayout.collapsed.right
     ? "44px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
@@ -295,6 +296,7 @@ export function AppShell({
         style={
           {
             "--left-pane-size": leftPaneSize,
+            "--left-pane-utility-size": leftPaneUtilitySize,
             "--right-pane-size": rightPaneSize
           } as React.CSSProperties
         }
@@ -387,19 +389,7 @@ export function AppShell({
             summary={organizationSummary}
             workspaceLabel={workspaceLabel}
           />
-        ) : (
-          <aside className="pane-rail left" aria-label="左栏折叠边栏">
-            <button
-              aria-label="展开左栏"
-              className="pane-rail-button"
-              onClick={() => paneLayout.setCollapsed("left", false)}
-              title="展开左栏"
-              type="button"
-            >
-              展开左栏
-            </button>
-          </aside>
-        )}
+        ) : null}
         <div className="pane-utility-column left">
           {!paneLayout.collapsed.left ? (
             <PaneResizer
