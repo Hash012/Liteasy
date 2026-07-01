@@ -23,80 +23,90 @@ LiteasyClaw 是一个面向论文阅读与学习的桌面优先科研 agent 工�
 
 - 知道这个仓库里有什么
 - 知道现阶段能看什么
-- 知道怎么启动 `desktop`
+- 知道怎么启动 `LiteasyClaw/desktop`
 - 知道哪些目录是源码，哪些只是开发产物
 
 ## 0. 本README除0之外是ai生成。0或为人性化的开工指南。
 1. 本项目使用 Linux (Ubuntu)开发。
 2. 项目结构可以通过README中的其他部分了解。
 3. 建议新建分支后开发，提交pr合并。提交pr后群里发一下开发了什么并展示一下效果。
-4. 建议人工阅读产品方案原文(`docs/LiteasyClaw_功能与UI设计文档1.0.md`)，技术和产品蓝图( `docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`)，以上都可修改。
-5. 让ai开发可以根据`docs/superpowers/plans`，分阶段开发。每个阶段要喂给ai产品方案原文和每阶段任务（`docs/superpowers/plans`中），并补充强调plans中忽视或理解错误的点。
-6. ai开发中可以复用的经验、提示词要留痕，例如`docs/开发协作提示词历史_5.10.md`。新的开发也要借鉴旧的痕迹（尽量不冗余，上例在这点做的不好）。
+4. 建议人工阅读产品方案原文(`project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`)，技术和产品蓝图( `project-docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`)，以上都可修改。
+5. 让ai开发可以根据`project-docs/superpowers/plans`，分阶段开发。每个阶段要喂给ai产品方案原文和每阶段任务（`project-docs/superpowers/plans`中），并补充强调plans中忽视或理解错误的点。
+6. ai开发中可以复用的经验、提示词要留痕，例如`archive/history/开发协作提示词历史_5.10.md`。新的开发也要借鉴旧的痕迹（尽量不冗余，上例在这点做的不好）。
 
 
 ## 1. 当前项目结构
 
-仓库里当前最重要的目录是：
+仓库现在按三类目录收敛：
 
-### `desktop/`
+### `LiteasyClaw/`
 
-桌面端原型代码目录。
+完整产品运行闭包。这里放构成当前产品的源码、服务、脚本和运行资产。
 
 其中：
 
-- `desktop/src/`
+- `LiteasyClaw/desktop/`
+  - Tauri 桌面端，也是用户真正使用的产品入口
+- `LiteasyClaw/desktop/src/`
   - React 前端界面
-- `desktop/src/app/layout/`
+- `LiteasyClaw/desktop/src/app/layout/`
   - 应用整体布局
-- `desktop/src/app/features/`
+- `LiteasyClaw/desktop/src/app/features/`
   - 功能模块
-- `desktop/src/assets/`
-  - 前端资源，例如 Logo
-- `desktop/src-tauri/`
+- `LiteasyClaw/desktop/src-tauri/`
   - Tauri + Rust 桌面壳
-- `desktop/src/tests/`
-  - 当前已有的前端测试
+- `LiteasyClaw/services/dev-cloud/`
+  - 本地开发云服务
+- `LiteasyClaw/scripts/`
+  - demo 数据和路演辅助脚本
+- `LiteasyClaw/logos/`
+  - 原始 Logo 与形象素材
 
-### `docs/`
+### `project-docs/`
 
-项目文档目录。
+核心项目文档。这里放产品方案、工程边界、QA 指南、实施计划和规格设计。
 
 其中：
 
-- `docs/LiteasyClaw_功能与UI设计文档1.0.md`
-  - 你的产品方案原文
-- `docs/qa/`
+- `project-docs/product/`
+  - 产品方案原文
+- `project-docs/engineering/`
+  - 工程边界和协作约束
+- `project-docs/qa/`
   - 面向非开发成员的启动和测试说明
-- `docs/superpowers/specs/`
+- `project-docs/superpowers/specs/`
   - 产品蓝图与技术方案
-- `docs/superpowers/plans/`
+- `project-docs/superpowers/plans/`
   - 分阶段实施计划
+- `project-docs/assets/`
+  - 文档使用的图片、草图和演示素材
 
-### `logos/`
+### `archive/`
 
-原始 Logo 与形象素材目录。
+日志、报告、历史提示词、研究评估和非核心生成物。这里的材料不参与当前产品运行闭包。
 
 ## 2. 哪些是源码，哪些不是
 
 如果你只是浏览项目，请重点看这些：
 
-- `desktop/src/`
-- `desktop/src-tauri/src/`
-- `docs/`
-- `logos/`
+- `LiteasyClaw/desktop/src/`
+- `LiteasyClaw/desktop/src-tauri/src/`
+- `LiteasyClaw/services/dev-cloud/`
+- `project-docs/`
+- `LiteasyClaw/logos/`
 
 下面这些通常不是“业务源码”，而是运行后自动生成的开发产物：
 
-- `desktop/node_modules/`
-- `desktop/src-tauri/target/`
-- `desktop/dist/`
+- `LiteasyClaw/desktop/node_modules/`
+- `LiteasyClaw/desktop/src-tauri/target/`
+- `LiteasyClaw/desktop/dist/`
+- `archive/generated/`
 
 它们主要用于本地运行，不需要逐个阅读。
 
 ## 3. 当前已经做了什么
 
-当前 `desktop` 已经具备 Phase 2 可验收能力，并完成 Phase 3 组织空间与治理原型的可验收交付：
+当前 `LiteasyClaw/desktop` 已经具备 Phase 2 可验收能力，并完成 Phase 3 组织空间与治理原型的可验收交付：
 
 - 三栏桌面工作台骨架
 - 顶部品牌区与 Logo
@@ -116,43 +126,43 @@ LiteasyClaw 是一个面向论文阅读与学习的桌面优先科研 agent 工�
 - 左边栏设置承载模型接入策略、云端策略同步和文献元数据同步重试
 - 云端服务索引 `/`、组织列表 `/v1/org/list`、组织摘要 `/v1/org/summary`、治理摘要 `/v1/org/governance-summary`、文献元数据同步和模型审计接口
 
-当前测试已经覆盖桌面端核心 store、导入流程、助手、模型策略、推荐、收藏拖拽、元数据同步、模型审计、组织空间摘要、组织切换、共享文献库切换、个人画像、设置页和开发云接口。最近验收命令为 `cd desktop && npm test`、`cd desktop && npm run build`、`node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs`。
+当前测试已经覆盖桌面端核心 store、导入流程、助手、模型策略、推荐、收藏拖拽、元数据同步、模型审计、组织空间摘要、组织切换、共享文献库切换、个人画像、设置页和开发云接口。最近验收命令为 `cd LiteasyClaw/desktop && npm test`、`cd LiteasyClaw/desktop && npm run build`、`node --test LiteasyClaw/services/dev-cloud/server.test.mjs LiteasyClaw/services/dev-cloud/providers/openaiResponses.test.mjs`。
 
-需要注意：当前仍是原型阶段，推荐、解析、审计、账号系统和组织治理中还有演示或 mock 部分。验收前请先阅读 `docs/qa/phase2-known-limitations.md` 和 `docs/qa/phase3-governance-limitations.md`。
+需要注意：当前仍是原型阶段，推荐、解析、审计、账号系统和组织治理中还有演示或 mock 部分。验收前请先阅读 `project-docs/qa/phase2-known-limitations.md` 和 `project-docs/qa/phase3-governance-limitations.md`。
 
 ## 4. 没有开发基础的人应该先看什么
 
 如果你不是开发人员，建议按这个顺序看：
 
 1. 看产品方案原文  
-   路径：`docs/LiteasyClaw_功能与UI设计文档1.0.md`
+   路径：`project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
 
 2. 看技术和产品蓝图  
-   路径：`docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`
+   路径：`project-docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`
 
 3. 看实施计划  
-   路径：`docs/superpowers/plans/2026-05-10-liteasyclaw-phase2-sync-and-recommendation.md`
+   路径：`project-docs/superpowers/plans/2026-05-10-liteasyclaw-phase2-sync-and-recommendation.md`
 
 4. 看桌面端启动说明  
-   路径：`docs/qa/environment-startup-guide.md`
+   路径：`project-docs/qa/environment-startup-guide.md`
 
 5. 看 Phase 2 验收指南  
-   路径：`docs/qa/phase2-test-guide.md`
+   路径：`project-docs/qa/phase2-test-guide.md`
 
 6. 看 Phase 3 组织空间测试指南  
-   路径：`docs/qa/phase3-test-guide.md`
+   路径：`project-docs/qa/phase3-test-guide.md`
 
 7. 如果要做云端路演，先看  
-   路径：`docs/qa/roadshow-demo-guide.md`
+   路径：`project-docs/qa/roadshow-demo-guide.md`
 
-8. 真正启动一次 `desktop`
+8. 真正启动一次 `LiteasyClaw/desktop`
 
 ## 5. 如何完整运行当前产品
 
 当前产品由两部分组成：
 
-- `services/dev-cloud/`：本地开发云服务，提供云账号、组织空间、推荐、模型策略、模型生成和模型审计等 demo API
-- `desktop/`：Tauri 桌面端，也是用户真正使用的 LiteasyClaw 产品入口
+- `LiteasyClaw/services/dev-cloud/`：本地开发云服务，提供云账号、组织空间、推荐、模型策略、模型生成和模型审计等 demo API
+- `LiteasyClaw/desktop/`：Tauri 桌面端，也是用户真正使用的 LiteasyClaw 产品入口
 
 如果要完整查看当前桌面端的云账号、组织空间、推荐和同步能力，需要打开两个终端：一个运行开发云服务，另一个运行桌面端。
 
@@ -162,7 +172,7 @@ LiteasyClaw 是一个面向论文阅读与学习的桌面优先科研 agent 工�
 
 ```bash
 cd /home/octopus/Liteasy
-node /home/octopus/Liteasy/services/dev-cloud/server.mjs
+node /home/octopus/Liteasy/LiteasyClaw/services/dev-cloud/server.mjs
 ```
 
 看到下面这行表示本地云端联调服务启动成功：
@@ -189,21 +199,21 @@ http://127.0.0.1:8787/admin/
 
 ```bash
 export OPENAI_API_KEY=你的密钥
-node /home/octopus/Liteasy/services/dev-cloud/server.mjs
+node /home/octopus/Liteasy/LiteasyClaw/services/dev-cloud/server.mjs
 ```
 
 如果你要把当前 demo 服务部署到云端做路演，请优先阅读：
 
 ```text
-/home/octopus/Liteasy/docs/qa/roadshow-demo-guide.md
+/home/octopus/Liteasy/project-docs/qa/roadshow-demo-guide.md
 ```
 
 ### 终端 2：启动桌面端完整产品
 
-另开一个终端，在 `desktop` 目录执行：
+另开一个终端，在 `LiteasyClaw/desktop` 目录执行：
 
 ```bash
-cd /home/octopus/Liteasy/desktop
+cd /home/octopus/Liteasy/LiteasyClaw/desktop
 source "$HOME/.cargo/env"
 npm install
 npm run tauri dev
@@ -214,7 +224,7 @@ npm run tauri dev
 如果已经安装过依赖，后续通常可以省略 `npm install`，直接执行：
 
 ```bash
-cd /home/octopus/Liteasy/desktop
+cd /home/octopus/Liteasy/LiteasyClaw/desktop
 source "$HOME/.cargo/env"
 npm run tauri dev
 ```
@@ -228,14 +238,14 @@ npm run tauri dev
 - 右栏 `AI Assistant` 极简对话框
 - 顶部微型模型状态指示，模型策略和文献元数据同步详情位于左边栏 `设置` 页面
 
-启动后如需完整验收 Phase 2，请按 `docs/qa/phase2-test-guide.md` 操作；如需验收 Phase 3 组织空间与治理原型，请按 `docs/qa/phase3-test-guide.md` 操作。
+启动后如需完整验收 Phase 2，请按 `project-docs/qa/phase2-test-guide.md` 操作；如需验收 Phase 3 组织空间与治理原型，请按 `project-docs/qa/phase3-test-guide.md` 操作。
 
 ### 可选：只看前端页面
 
 如果桌面窗口暂时打不开，也可以先看前端：
 
 ```bash
-cd /home/octopus/Liteasy/desktop
+cd /home/octopus/Liteasy/LiteasyClaw/desktop
 npm install
 npm run dev
 ```
@@ -279,23 +289,24 @@ source "$HOME/.cargo/env"
 团队成员协作时，请遵守这些简单规则：
 
 - **新建分支开发，提交pr**
-- 看源码优先看 `desktop/src/`，不要把 `node_modules` 当成项目代码
-- 不要随手删除 `desktop/package-lock.json`
-- 修改 UI 时尽量先在 `desktop/src/app/styles/` 和 `desktop/src/app/features/` 中找对应文件
+- 看源码优先看 `LiteasyClaw/desktop/src/`，不要把 `node_modules` 当成项目代码
+- 不要随手删除 `LiteasyClaw/desktop/package-lock.json`
+- 修改 UI 时尽量先在 `LiteasyClaw/desktop/src/app/styles/` 和 `LiteasyClaw/desktop/src/app/features/` 中找对应文件
+- 新功能优先写模块级测试，不要继续把普通场景塞进 `LiteasyClaw/desktop/src/tests/AppShell.test.tsx`；该文件只保留 smoke 和关键集成路径。
 - 不要把临时截图、导出文件、安装产物混进业务源码目录
-- 如果只是验收产品效果，优先看 `docs/qa/` 下的说明
+- 如果只是验收产品效果，优先看 `project-docs/qa/` 下的说明
 
 ## 8. 关键文档入口
 
-- **产品方案原文**：`docs/LiteasyClaw_功能与UI设计文档1.0.md`
-- **技术方案**：`docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`
-- **实施计划**：`docs/superpowers/plans/2026-05-10-liteasyclaw-phase0-1-desktop-core.md`
-- **Phase 2 计划**：`docs/superpowers/plans/2026-05-10-liteasyclaw-phase2-sync-and-recommendation.md`
-- 环境启动手册：`docs/qa/environment-startup-guide.md`
-- Phase 2 测试指南：`docs/qa/phase2-test-guide.md`
-- Phase 2 已知限制：`docs/qa/phase2-known-limitations.md`
-- Phase 3 组织空间测试指南：`docs/qa/phase3-test-guide.md`
-- Phase 3 组织与治理限制：`docs/qa/phase3-governance-limitations.md`
-- Phase 4 三端 Demo 验收指南：`docs/qa/phase4-three-end-demo-guide.md`
-- 路演部署与演示指南：`docs/qa/roadshow-demo-guide.md`
-- 开发协作提示词：`docs/开发协作提示词历史_5.10.md`
+- **产品方案原文**：`project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
+- **技术方案**：`project-docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`
+- **实施计划**：`project-docs/superpowers/plans/2026-05-10-liteasyclaw-phase0-1-desktop-core.md`
+- **Phase 2 计划**：`project-docs/superpowers/plans/2026-05-10-liteasyclaw-phase2-sync-and-recommendation.md`
+- 环境启动手册：`project-docs/qa/environment-startup-guide.md`
+- Phase 2 测试指南：`project-docs/qa/phase2-test-guide.md`
+- Phase 2 已知限制：`project-docs/qa/phase2-known-limitations.md`
+- Phase 3 组织空间测试指南：`project-docs/qa/phase3-test-guide.md`
+- Phase 3 组织与治理限制：`project-docs/qa/phase3-governance-limitations.md`
+- Phase 4 三端 Demo 验收指南：`project-docs/qa/phase4-three-end-demo-guide.md`
+- 路演部署与演示指南：`project-docs/qa/roadshow-demo-guide.md`
+- 开发协作提示词：`archive/history/开发协作提示词历史_5.10.md`

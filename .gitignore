@@ -1,11 +1,12 @@
 .superpowers/
 
 # Desktop app dependencies and build outputs
-desktop/node_modules/
-desktop/dist/
-desktop/.vite/
-desktop/.vite-temp/
-desktop/src-tauri/target/
+LiteasyClaw/desktop/node_modules/
+LiteasyClaw/desktop/dist/
+LiteasyClaw/desktop/.vite/
+LiteasyClaw/desktop/.vite-temp/
+LiteasyClaw/desktop/src-tauri/target/
+archive/generated/
 
 # OS/editor noise
 .DS_Store

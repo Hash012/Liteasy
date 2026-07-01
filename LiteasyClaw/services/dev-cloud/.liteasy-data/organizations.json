@@ -1,0 +1,122 @@
+{
+  "activeOrganizationIdBySession": {},
+  "nextOrganizationSequence": 1,
+  "organizations": {
+    "org-demo-1": {
+      "memberCount": 12,
+      "members": [
+        {
+          "id": "demo-session-owner",
+          "name": "Owner",
+          "role": "owner"
+        },
+        {
+          "id": "demo-session-1",
+          "name": "Liteasy Researcher",
+          "role": "member"
+        },
+        {
+          "id": "member-2",
+          "name": "Admin",
+          "role": "admin"
+        }
+      ],
+      "name": "Liteasy AI Reading Lab",
+      "notifications": [
+        {
+          "id": "notice-1",
+          "message": "管理员发布了本周阅读主题。",
+          "type": "announcement"
+        },
+        {
+          "id": "notice-2",
+          "message": "成员上传了 Graph Neural Networks 综述。",
+          "type": "document_upload"
+        },
+        {
+          "id": "notice-3",
+          "message": "共享文献库结构新增 RAG 目录。",
+          "type": "library_change"
+        }
+      ],
+      "organizationId": "org-demo-1",
+      "ownerUserId": "demo-session-owner",
+      "quota": {
+        "periodEndsAt": "2026-06-01T00:00:00Z",
+        "storageLimitGb": 100,
+        "storageUsedGb": 38
+      },
+      "sharedLibrary": {
+        "documentCount": 48,
+        "documents": [
+          {
+            "id": "org-doc-1",
+            "sourcePath": "org://org-demo-1/shared-library/org-doc-1.pdf",
+            "title": "Organization Reading List: Retrieval-Augmented Generation"
+          },
+          {
+            "id": "org-doc-2",
+            "sourcePath": "org://org-demo-1/shared-library/org-doc-2.pdf",
+            "title": "Team Notes on Long-Context Evaluation"
+          }
+        ],
+        "name": "组织共享文献库",
+        "ownerUserId": "demo-session-owner",
+        "status": "available"
+      },
+      "sharedLibraryName": "组织共享文献库",
+      "taskSummary": {
+        "failed": 1,
+        "running": 2
+      }
+    },
+    "org-demo-2": {
+      "memberCount": 4,
+      "members": [
+        {
+          "id": "member-ops-1",
+          "name": "Liteasy Researcher",
+          "role": "admin"
+        },
+        {
+          "id": "member-ops-2",
+          "name": "Ops Reviewer",
+          "role": "member"
+        }
+      ],
+      "name": "Liteasy Literature Ops",
+      "notifications": [
+        {
+          "id": "ops-notice-1",
+          "message": "文献运营共享库新增 QA 目录。",
+          "type": "library_change"
+        }
+      ],
+      "organizationId": "org-demo-2",
+      "ownerUserId": "member-ops-1",
+      "quota": {
+        "periodEndsAt": "2026-06-01T00:00:00Z",
+        "storageLimitGb": 50,
+        "storageUsedGb": 12
+      },
+      "sharedLibrary": {
+        "documentCount": 16,
+        "documents": [
+          {
+            "id": "org-ops-doc-1",
+            "sourcePath": "org://org-demo-2/shared-library/org-ops-doc-1.pdf",
+            "title": "Organization Ops Handbook"
+          }
+        ],
+        "name": "文献运营共享库",
+        "ownerUserId": "member-ops-1",
+        "status": "available"
+      },
+      "sharedLibraryName": "文献运营共享库",
+      "taskSummary": {
+        "failed": 0,
+        "running": 1
+      }
+    }
+  }
+}
