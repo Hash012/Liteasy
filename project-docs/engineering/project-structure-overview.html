@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiteasyClaw 项目结构总览</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d7dee8;
+      --blue: #2563eb;
+      --green: #0f766e;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --violet: #6d28d9;
+      --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    header {
+      background: #111827;
+      color: #f8fafc;
+      padding: 28px clamp(18px, 4vw, 48px);
+      border-bottom: 4px solid #2dd4bf;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: clamp(26px, 4vw, 42px);
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 980px;
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 15px;
+    }
+
+    main {
+      padding: 22px clamp(14px, 3vw, 36px) 40px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      background: rgba(247, 248, 251, 0.92);
+      backdrop-filter: blur(10px);
+      padding: 10px 0;
+    }
+
+    input[type="search"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px 13px;
+      font-size: 15px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 11px;
+      cursor: pointer;
+      font-weight: 650;
+    }
+
+    button.active {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .metric, .panel, .module-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .metric {
+      padding: 16px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 26px;
+      margin-bottom: 4px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .graph-wrap {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    svg {
+      min-width: 1280px;
+      width: 100%;
+      height: 620px;
+      display: block;
+      background: #fbfdff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .node rect {
+      fill: #fff;
+      stroke: #94a3b8;
+      stroke-width: 1.2;
+      rx: 8;
+    }
+
+    .node text {
+      fill: #0f172a;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .node .sub {
+      fill: #64748b;
+      font-size: 10.5px;
+      font-weight: 500;
+    }
+
+    .lane-title {
+      fill: #334155;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .flow-label {
+      fill: #475569;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .edge {
+      stroke: #64748b;
+      stroke-width: 1.6;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 14px;
+    }
+
+    .module-card {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge.foundation { background: var(--green); }
+    .badge.runtime { background: var(--blue); }
+    .badge.cloud { background: var(--violet); }
+    .badge.product { background: var(--amber); }
+    .badge.shell { background: #334155; }
+
+    .section {
+      display: grid;
+      gap: 6px;
+    }
+
+    .section-title {
+      color: #334155;
+      font-weight: 750;
+      font-size: 13px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    li {
+      margin: 3px 0;
+    }
+
+    code {
+      background: #eef2f7;
+      border: 1px solid #dde5ef;
+      border-radius: 6px;
+      color: #0f172a;
+      display: inline-block;
+      font-size: 12px;
+      line-height: 1.35;
+      margin: 2px 0;
+      padding: 2px 5px;
+      word-break: break-all;
+    }
+
+    details {
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--blue);
+      font-weight: 750;
+    }
+
+    .relation-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 10px;
+    }
+
+    .relation {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+
+    .relation strong {
+      color: #0f172a;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    @media (max-width: 780px) {
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+      .tabs {
+        justify-content: start;
+      }
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(130px, 1fr));
+      }
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>LiteasyClaw 项目结构总览</h1>
+    <p>基于当前模块边界与源码目录生成。核心依赖方向：shell -> controllers -> feature modules -> shared types / clients。页面支持搜索、按层筛选、展开文件路径和查看建议开发方向。</p>
+    <p>三人分工视图见：project-docs/engineering/three-person-worksplit.html</p>
+  </header>
+
+  <main>
+    <section class="toolbar" aria-label="筛选工具">
+      <input id="search" type="search" placeholder="搜索模块、功能、文件路径、建议方向..." />
+      <div class="tabs" id="tabs"></div>
+    </section>
+
+    <section class="summary-grid" id="summary"></section>
+
+    <section class="panel">
+      <h2>模块关系图</h2>
+      <div class="graph-wrap">
+        <svg viewBox="0 0 1320 620" role="img" aria-label="LiteasyClaw 详细模块关系图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#64748b"></path>
+            </marker>
+          </defs>
+          <text class="lane-title" x="40" y="34">Shell 组合层</text>
+          <text class="lane-title" x="250" y="34">Controller 缓冲层</text>
+          <text class="lane-title" x="520" y="34">Feature 领域层</text>
+          <text class="lane-title" x="1040" y="34">Service / Client 契约</text>
+
+          <path class="edge" d="M180 105 C210 105,220 105,250 105"></path>
+          <path class="edge" d="M440 105 C470 105,485 70,520 70"></path>
+          <path class="edge" d="M440 105 C470 105,485 120,520 120"></path>
+          <path class="edge" d="M440 105 C470 105,485 170,520 170"></path>
+          <path class="edge" d="M440 105 C470 105,485 235,520 235"></path>
+          <path class="edge" d="M440 105 C470 105,485 305,520 305"></path>
+
+          <path class="edge" d="M700 70 C730 70,748 105,780 105"></path>
+          <path class="edge" d="M700 120 C730 120,748 105,780 105"></path>
+          <path class="edge" d="M960 105 C990 105,1005 82,1040 82"></path>
+          <path class="edge" d="M960 105 C990 105,1005 145,1040 145"></path>
+          <path class="edge" d="M960 105 C990 105,1005 207,1040 207"></path>
+
+          <path class="edge" d="M700 170 C730 170,748 235,780 235"></path>
+          <path class="edge" d="M700 235 C730 235,748 235,780 235"></path>
+          <path class="edge" d="M960 235 C990 235,1005 270,1040 270"></path>
+          <path class="edge" d="M960 235 C990 235,1005 332,1040 332"></path>
+
+          <path class="edge" d="M700 305 C735 305,748 305,780 305"></path>
+          <path class="edge" d="M960 305 C990 305,1005 395,1040 395"></path>
+
+          <path class="edge" d="M180 465 C250 465,285 465,355 465"></path>
+          <path class="edge" d="M535 465 C600 465,625 465,690 465"></path>
+          <path class="edge" d="M870 465 C935 465,965 465,1030 465"></path>
+          <text class="flow-label" x="58" y="444">主链路：选择文献</text>
+          <text class="flow-label" x="375" y="444">检索证据</text>
+          <text class="flow-label" x="705" y="444">AI 规划/执行</text>
+          <text class="flow-label" x="1048" y="444">多模态表达</text>
+
+          <g class="node">
+            <rect x="40" y="58" width="140" height="92"></rect>
+            <text x="58" y="84">shell/layout</text>
+            <text class="sub" x="58" y="104">装配页面和 pane</text>
+            <text class="sub" x="58" y="122">不承载领域状态机</text>
+            <text class="sub" x="58" y="140">入口：AppShell</text>
+          </g>
+          <g class="node">
+            <rect x="250" y="58" width="190" height="92"></rect>
+            <text x="272" y="84">controllers</text>
+            <text class="sub" x="272" y="104">把功能封成 model/actions</text>
+            <text class="sub" x="272" y="122">隔离 shell 与领域模块</text>
+            <text class="sub" x="272" y="140">并行开发缓冲层</text>
+          </g>
+          <g class="node">
+            <rect x="520" y="46" width="180" height="58"></rect>
+            <text x="538" y="70">workspace</text>
+            <text class="sub" x="538" y="90">文献列表、工作区来源、revision</text>
+          </g>
+          <g class="node">
+            <rect x="520" y="112" width="180" height="58"></rect>
+            <text x="538" y="136">selection</text>
+            <text class="sub" x="538" y="156">锁定选中文献集和快照校验</text>
+          </g>
+          <g class="node">
+            <rect x="520" y="178" width="180" height="72"></rect>
+            <text x="538" y="202">ingestion/import</text>
+            <text class="sub" x="538" y="222">导入、解析、chunk job</text>
+            <text class="sub" x="538" y="240">当前用 fixture 支撑演示</text>
+          </g>
+          <g class="node">
+            <rect x="520" y="264" width="180" height="72"></rect>
+            <text x="538" y="288">knowledge-sync</text>
+            <text class="sub" x="538" y="308">收藏、推荐、元数据同步</text>
+            <text class="sub" x="538" y="326">统一给 shell 使用</text>
+          </g>
+          <g class="node">
+            <rect x="520" y="350" width="180" height="72"></rect>
+            <text x="538" y="374">organization</text>
+            <text class="sub" x="538" y="394">组织空间、治理、共享库</text>
+            <text class="sub" x="538" y="412">团队协作入口</text>
+          </g>
+          <g class="node">
+            <rect x="780" y="72" width="180" height="66"></rect>
+            <text x="798" y="96">retrieval</text>
+            <text class="sub" x="798" y="116">检索 chunks 和 citations</text>
+            <text class="sub" x="798" y="134">保证回答有来源</text>
+          </g>
+          <g class="node">
+            <rect x="780" y="202" width="180" height="76"></rect>
+            <text x="798" y="226">agent-runtime / actions</text>
+            <text class="sub" x="798" y="246">理解意图、规划动作</text>
+            <text class="sub" x="798" y="264">统一按钮/AI/快捷键</text>
+          </g>
+          <g class="node">
+            <rect x="780" y="312" width="180" height="74"></rect>
+            <text x="798" y="336">assistant</text>
+            <text class="sub" x="798" y="356">右侧 AI 对话和事件展示</text>
+            <text class="sub" x="798" y="374">触发 artifact 生成</text>
+          </g>
+          <g class="node">
+            <rect x="1040" y="52" width="220" height="60"></rect>
+            <text x="1062" y="76">models / settings</text>
+            <text class="sub" x="1062" y="96">模型路由、策略、控制面配置</text>
+          </g>
+          <g class="node">
+            <rect x="1040" y="124" width="220" height="60"></rect>
+            <text x="1062" y="148">artifacts</text>
+            <text class="sub" x="1062" y="168">脑图/报告/表格等多模态产物</text>
+          </g>
+          <g class="node">
+            <rect x="1040" y="196" width="220" height="60"></rect>
+            <text x="1062" y="220">collection / metadata</text>
+            <text class="sub" x="1062" y="240">云收藏、推荐缓存、文献元数据</text>
+          </g>
+          <g class="node">
+            <rect x="1040" y="268" width="220" height="60"></rect>
+            <text x="1062" y="292">library / profile</text>
+            <text class="sub" x="1062" y="312">本地文献库和个人研究画像</text>
+          </g>
+          <g class="node">
+            <rect x="1040" y="340" width="220" height="78"></rect>
+            <text x="1062" y="364">services/dev-cloud</text>
+            <text class="sub" x="1062" y="384">本地云服务契约</text>
+            <text class="sub" x="1062" y="402">账号/组织/推荐/模型接口</text>
+          </g>
+          <g class="node">
+            <rect x="40" y="470" width="140" height="58"></rect>
+            <text x="58" y="494">workspace selection</text>
+            <text class="sub" x="58" y="514">用户锁定分析对象</text>
+          </g>
+          <g class="node">
+            <rect x="355" y="470" width="180" height="58"></rect>
+            <text x="373" y="494">retrieval evidence</text>
+            <text class="sub" x="373" y="514">抽取可引用证据</text>
+          </g>
+          <g class="node">
+            <rect x="690" y="470" width="180" height="58"></rect>
+            <text x="708" y="494">AI runtime plan</text>
+            <text class="sub" x="708" y="514">生成动作和确认请求</text>
+          </g>
+          <g class="node">
+            <rect x="1030" y="470" width="210" height="58"></rect>
+            <text x="1048" y="494">multimodal artifacts</text>
+            <text class="sub" x="1048" y="514">准确表达并可追溯来源</text>
+          </g>
+          <text x="40" y="574" fill="#64748b" font-size="13">开发规则：新增功能先判断属于哪个领域模块；跨模块组合放 controller；状态改变走 action contract；AI 交互最终由 agent-runtime 产出事件，assistant 负责渲染。</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>关键关系</h2>
+      <div class="relation-list" id="relations"></div>
+    </section>
+
+    <section>
+      <div class="cards" id="moduleCards"></div>
+    </section>
+  </main>
+
+  <script>
+    const modules = [
+      {
+        name: "shell/layout",
+        layer: "shell",
+        status: "已收敛为组合层",
+        badge: "shell",
+        implemented: [
+          "三栏工作台布局、顶部账号栏、左侧导航、阅读区、右侧助手栏。",
+          "组合 controller 暴露的 model/actions，承载全局 dialog 与 pane sizing。",
+          "AppShell 已从 440 行降到约 410 行，领域编排已大量外移。"
+        ],
+        target: [
+          "继续保持只负责布局和跨模块装配。",
+          "不新增领域状态机，不直接组合 feature 内部 hook。"
+        ],
+        direction: [
+          "新增页面入口时优先新增 controller，再由 AppShell 连接。",
+          "保留 AppShell.test.tsx 作为 smoke/integration，不继续堆细节断言。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/layout/AppShell.tsx",
+          "LiteasyClaw/desktop/src/app/layout/ActivityBar.tsx",
+          "LiteasyClaw/desktop/src/app/layout/TopBar.tsx",
+          "LiteasyClaw/desktop/src/app/layout/LeftPane.tsx",
+          "LiteasyClaw/desktop/src/app/layout/ReaderPane.tsx",
+          "LiteasyClaw/desktop/src/app/layout/AssistantSidebar.tsx",
+          "LiteasyClaw/desktop/src/app/layout/AppDialogs.tsx",
+          "LiteasyClaw/desktop/src/app/layout/useAppShellStores.ts",
+          "LiteasyClaw/desktop/src/app/layout/usePaneLayout.ts",
+          "LiteasyClaw/desktop/src/app/layout/useLeftRailNavigation.ts"
+        ]
+      },
+      {
+        name: "controllers",
+        layer: "controllers",
+        status: "并行开发缓冲层已建立",
+        badge: "foundation",
+        implemented: [
+          "统一暴露小 model 与小 actions，隔离 shell 与 feature 内部实现。",
+          "已覆盖 workspace selection、cloud account、artifact workflow、knowledge sync、organization shell。"
+        ],
+        target: [
+          "所有跨模块组合优先进入 controllers。",
+          "让每个 feature 团队只维护自己的领域逻辑和测试。"
+        ],
+        direction: [
+          "下一个可抽对象：model/settings/profile 的 shell-facing 组合。",
+          "为每个新 controller 增加 focused hook test，避免把行为塞回 AppShell。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/controllers/useWorkspaceSelectionController.ts",
+          "LiteasyClaw/desktop/src/app/controllers/useCloudAccountController.ts",
+          "LiteasyClaw/desktop/src/app/controllers/useArtifactWorkflowController.ts",
+          "LiteasyClaw/desktop/src/app/controllers/useKnowledgeSyncController.ts",
+          "LiteasyClaw/desktop/src/app/controllers/useOrganizationShellController.ts"
+        ]
+      },
+      {
+        name: "workspace",
+        layer: "feature",
+        status: "核心文献工作区可用",
+        badge: "foundation",
+        implemented: [
+          "工作区 papers、selectedPaperIds、selectionLocked、workspaceSource、revision。",
+          "文献导入队列、选中文献集导入、共享库切换、文件夹树归一化。",
+          "通过 registered actions 接入 selected_set.import 与 artifact.start_analysis。"
+        ],
+        target: [
+          "成为本地/组织/云端文献源的统一 workspace state。",
+          "支持更真实的文件系统导入、拖放、多目录、多 revision 合并。"
+        ],
+        direction: [
+          "把 workspace source 与权限能力模型补细。",
+          "将导入生命周期与 ingestion 模块进一步解耦。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/workspace/workspace.store.ts",
+          "LiteasyClaw/desktop/src/app/features/workspace/workspace.types.ts",
+          "LiteasyClaw/desktop/src/app/features/workspace/useWorkspaceActions.ts",
+          "LiteasyClaw/desktop/src/app/features/workspace/useRegisteredWorkspaceActions.ts",
+          "LiteasyClaw/desktop/src/app/features/workspace/workspaceFolderTree.ts",
+          "LiteasyClaw/desktop/src/app/features/workspace/workspaceStateHelpers.ts"
+        ]
+      },
+      {
+        name: "selection",
+        layer: "feature",
+        status: "选中文献快照已建立",
+        badge: "foundation",
+        implemented: [
+          "SelectedDocumentSetSnapshot、ready validation、selection snapshot 构造。",
+          "分析类功能可以依赖快照，而不是直接依赖 checkbox UI state。"
+        ],
+        target: [
+          "成为所有 AI 分析、检索、artifact 生成的输入契约。",
+          "支持多 selection、命名 selection、历史 selection。"
+        ],
+        direction: [
+          "把 workspace selectedPaperIds 的读取逐步替换为 snapshot API。",
+          "补充选择集变更事件，供 agent-runtime 使用。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/selection/selection.types.ts",
+          "LiteasyClaw/desktop/src/app/features/selection/selectionSnapshot.ts",
+          "LiteasyClaw/desktop/src/app/features/selection/selectionValidation.ts"
+        ]
+      },
+      {
+        name: "agent-runtime",
+        layer: "feature",
+        status: "基础契约已落点",
+        badge: "runtime",
+        implemented: [
+          "运行时上下文类型与 context validation。",
+          "为 AI-native interaction 预留意图、事件、确认、技能执行的模块位置。"
+        ],
+        target: [
+          "承接自由文本、按钮、快捷键、多模态输入后的统一意图路由。",
+          "输出 runtime events，由 assistant UI 渲染，而不是 UI 推断隐藏行为。"
+        ],
+        direction: [
+          "优先实现 intent -> action planning -> confirmation -> execution 的闭环。",
+          "定义可审计 runtime event stream，支持可解释和可回放。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/agent-runtime/agentRuntime.types.ts",
+          "LiteasyClaw/desktop/src/app/features/agent-runtime/contextValidation.ts"
+        ]
+      },
+      {
+        name: "actions / skills",
+        layer: "feature",
+        status: "动作契约初步收敛",
+        badge: "runtime",
+        implemented: [
+          "action types、risk policy、resource policy、action registry。",
+          "workspace actions 已通过 registry 执行。"
+        ],
+        target: [
+          "按钮、AI 命令、快捷键共用同一 action contract。",
+          "高风险动作具备确认、审计、权限、撤销或补偿能力。"
+        ],
+        direction: [
+          "扩展 action schema：输入校验、权限、side effects、rollback hints。",
+          "将 organization、knowledge-sync、settings 的关键 mutation 注册为 actions。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/actions/action.types.ts",
+          "LiteasyClaw/desktop/src/app/features/actions/actionPolicy.ts",
+          "LiteasyClaw/desktop/src/app/features/resources/resourceActionPolicy.ts",
+          "LiteasyClaw/desktop/src/app/features/resources/resourceScope.types.ts",
+          "LiteasyClaw/desktop/src/app/features/skills/actionRegistry.ts",
+          "LiteasyClaw/desktop/src/app/features/skills/skillRegistry.ts"
+        ]
+      },
+      {
+        name: "assistant",
+        layer: "feature",
+        status: "右侧交互面板可用",
+        badge: "runtime",
+        implemented: [
+          "消息列表、输入框、模式切换、历史、展示格式化、回答审计。",
+          "基于 selected papers 与 imported chunks 生成 grounded answer。",
+          "可触发 artifact generation。"
+        ],
+        target: [
+          "成为 AI-native runtime events 的渲染面，而不是业务推理中心。",
+          "支持多轮上下文、明确引用、可操作建议、多模态输出入口。"
+        ],
+        direction: [
+          "把 commandRouter 的语义路由逐步迁入 agent-runtime。",
+          "补充 event timeline、引用交互、确认请求 UI。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/assistant/AssistantPane.tsx",
+          "LiteasyClaw/desktop/src/app/features/assistant/AssistantComposer.tsx",
+          "LiteasyClaw/desktop/src/app/features/assistant/AssistantMessageList.tsx",
+          "LiteasyClaw/desktop/src/app/features/assistant/AssistantHistoryPanel.tsx",
+          "LiteasyClaw/desktop/src/app/features/assistant/ModeSwitch.tsx",
+          "LiteasyClaw/desktop/src/app/features/assistant/assistant.store.ts",
+          "LiteasyClaw/desktop/src/app/features/assistant/commandRouter.ts",
+          "LiteasyClaw/desktop/src/app/features/assistant/generateAssistantAnswer.ts",
+          "LiteasyClaw/desktop/src/app/features/assistant/answerAuditor.ts",
+          "LiteasyClaw/desktop/src/app/features/assistant/answerFormatter.ts"
+        ]
+      },
+      {
+        name: "artifacts",
+        layer: "feature",
+        status: "多模态 artifact 工作流可用",
+        badge: "product",
+        implemented: [
+          "artifact task、tab、preview、mindmap 等生成入口。",
+          "直接分析和 assistant-triggered artifact 已由 ArtifactWorkflowController 收口。"
+        ],
+        target: [
+          "承载准确高性能的多模态表达：脑图、表格、图谱、时间线、结构化综述、可导出报告。",
+          "支持 renderer lifecycle、缓存、增量更新。"
+        ],
+        direction: [
+          "定义 ArtifactRenderer contract 与 artifact schema version。",
+          "扩展 citation-aware artifacts，保证每个结论可回溯来源。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/artifacts/artifact.store.ts",
+          "LiteasyClaw/desktop/src/app/features/artifacts/artifact.types.ts",
+          "LiteasyClaw/desktop/src/app/features/artifacts/artifactPreview.ts",
+          "LiteasyClaw/desktop/src/app/features/artifacts/useArtifactActions.ts",
+          "LiteasyClaw/desktop/src/app/features/artifacts/ArtifactTabs.tsx"
+        ]
+      },
+      {
+        name: "ingestion/import",
+        layer: "feature",
+        status: "演示导入链路可用",
+        badge: "foundation",
+        implemented: [
+          "import store、import job、fixture chunks、导入按钮。",
+          "当前通过 mock import 和 fixture chunk 支撑演示闭环。"
+        ],
+        target: [
+          "真实 parse/chunk/index pipeline。",
+          "支持 PDF、Markdown、网页、笔记、图片/OCR 等多模态输入。"
+        ],
+        direction: [
+          "拆分 parser、chunker、indexer、job scheduler。",
+          "建立导入失败重试、进度事件、内容 hash 去重。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/import/ImportButton.tsx",
+          "LiteasyClaw/desktop/src/app/features/import/import.store.ts",
+          "LiteasyClaw/desktop/src/app/features/import/import.types.ts",
+          "LiteasyClaw/desktop/src/app/features/import/importFixtures.ts"
+        ]
+      },
+      {
+        name: "retrieval",
+        layer: "feature",
+        status: "本地检索雏形可用",
+        badge: "foundation",
+        implemented: [
+          "retrieval types、mock retriever、local retriever。",
+          "assistant 和 artifact 可基于 imported chunks 做 source-grounded 输出。"
+        ],
+        target: [
+          "高准确检索：chunk scoring、citation、rerank、跨文献聚合。",
+          "为多模态表达提供可靠证据层。"
+        ],
+        direction: [
+          "引入 embedding index 与 reranker contract。",
+          "建立 retrieval evaluation fixtures，衡量召回率和引用准确率。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/retrieval/retrieval.types.ts",
+          "LiteasyClaw/desktop/src/app/features/retrieval/localRetriever.ts",
+          "LiteasyClaw/desktop/src/app/features/retrieval/mockRetriever.ts"
+        ]
+      },
+      {
+        name: "knowledge-sync",
+        layer: "controllers",
+        status: "云端知识流已收口",
+        badge: "cloud",
+        implemented: [
+          "组合 collection、recommendations、metadata sync 的 shell-facing 状态。",
+          "AppShell 不再直接组合三条云端知识流。"
+        ],
+        target: [
+          "成为本地知识库、云端收藏、推荐、元数据同步的协调层。",
+          "支持离线队列、同步冲突、增量同步。"
+        ],
+        direction: [
+          "增加 sync event 与 status timeline。",
+          "把收藏、推荐、元数据同步的错误处理统一为可操作恢复建议。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/controllers/useKnowledgeSyncController.ts",
+          "LiteasyClaw/desktop/src/app/features/collection/useCollectionItems.ts",
+          "LiteasyClaw/desktop/src/app/features/recommendations/useRecommendations.ts",
+          "LiteasyClaw/desktop/src/app/features/metadata/useDocumentMetadataSync.ts"
+        ]
+      },
+      {
+        name: "collection",
+        layer: "feature",
+        status: "收藏同步可用",
+        badge: "cloud",
+        implemented: [
+          "云端收藏 list/save client/runtime。",
+          "登录后同步云端收藏，未登录时内存收藏。"
+        ],
+        target: [
+          "支持收藏夹、标签、批量操作、离线缓存。",
+          "与推荐和 workspace 形成可追踪知识库。"
+        ],
+        direction: [
+          "补收藏实体 schema version 与冲突策略。",
+          "把收藏加入 action registry。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/collection/collection.types.ts",
+          "LiteasyClaw/desktop/src/app/features/collection/collectionClient.ts",
+          "LiteasyClaw/desktop/src/app/features/collection/collectionRuntime.ts",
+          "LiteasyClaw/desktop/src/app/features/collection/collectionStorage.ts",
+          "LiteasyClaw/desktop/src/app/features/collection/useCollectionItems.ts"
+        ]
+      },
+      {
+        name: "recommendations",
+        layer: "feature",
+        status: "关联推荐可用",
+        badge: "cloud",
+        implemented: [
+          "推荐 client/runtime、缓存 client/runtime、排序模式。",
+          "基于选中文献集和账号 session 获取或复用缓存推荐。"
+        ],
+        target: [
+          "个性化推荐、引用网络推荐、团队共享推荐。",
+          "支持解释、过滤、反馈学习。"
+        ],
+        direction: [
+          "增加 recommendation feedback contract。",
+          "把推荐结果和 retrieval/citation 连接，提高可解释性。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/recommendations/recommendation.types.ts",
+          "LiteasyClaw/desktop/src/app/features/recommendations/recommendationClient.ts",
+          "LiteasyClaw/desktop/src/app/features/recommendations/recommendationRuntime.ts",
+          "LiteasyClaw/desktop/src/app/features/recommendations/recommendationCache.types.ts",
+          "LiteasyClaw/desktop/src/app/features/recommendations/recommendationCacheClient.ts",
+          "LiteasyClaw/desktop/src/app/features/recommendations/recommendationCacheRuntime.ts",
+          "LiteasyClaw/desktop/src/app/features/recommendations/useRecommendations.ts"
+        ]
+      },
+      {
+        name: "metadata",
+        layer: "feature",
+        status: "文献元数据同步可用",
+        badge: "cloud",
+        implemented: [
+          "DocumentMetadataSyncPanel、metadata client、sync hook。",
+          "根据 workspace documents 与 revision 自动同步。"
+        ],
+        target: [
+          "准确补全 DOI、作者、机构、引用、摘要、领域标签。",
+          "支撑检索、推荐和 artifact 的结构化上下文。"
+        ],
+        direction: [
+          "增加 metadata merge policy 和 field confidence。",
+          "引入批量进度、失败重试、局部更新。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/metadata/DocumentMetadataSyncPanel.tsx",
+          "LiteasyClaw/desktop/src/app/features/metadata/documentMetadataClient.ts",
+          "LiteasyClaw/desktop/src/app/features/metadata/metadata.types.ts",
+          "LiteasyClaw/desktop/src/app/features/metadata/useDocumentMetadataSync.ts"
+        ]
+      },
+      {
+        name: "account / network",
+        layer: "feature",
+        status: "账号与可用性状态已收口",
+        badge: "cloud",
+        implemented: [
+          "账号 session client/runtime/storage、轻量登录 dialog、云端可用性状态。",
+          "network connectivity 与 cloud availability probe。"
+        ],
+        target: [
+          "真实账号体系、token refresh、权限 tier、离线降级。",
+          "稳定网络状态和重连策略。"
+        ],
+        direction: [
+          "统一 auth error model。",
+          "补 session lifecycle、过期提醒、权限能力矩阵。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/controllers/useCloudAccountController.ts",
+          "LiteasyClaw/desktop/src/app/features/account/useAccountSession.ts",
+          "LiteasyClaw/desktop/src/app/features/account/useCloudAccountActions.ts",
+          "LiteasyClaw/desktop/src/app/features/account/accountSessionClient.ts",
+          "LiteasyClaw/desktop/src/app/features/account/accountSessionRuntime.ts",
+          "LiteasyClaw/desktop/src/app/features/account/accountSessionStorage.ts",
+          "LiteasyClaw/desktop/src/app/features/network/cloudAvailability.ts",
+          "LiteasyClaw/desktop/src/app/features/network/useConnectivity.ts",
+          "LiteasyClaw/desktop/src/app/features/network/useCloudAvailabilityProbe.ts"
+        ]
+      },
+      {
+        name: "models / settings",
+        layer: "feature",
+        status: "模型配置与策略同步可用",
+        badge: "cloud",
+        implemented: [
+          "model gateway/runtime/http client、provider mock、model audit、control plane policy sync。",
+          "settings store/registry/helper 与 model setting actions。"
+        ],
+        target: [
+          "多模型路由、成本/速度/准确率策略、审计与降级。",
+          "为 AI-native runtime 提供可控执行层。"
+        ],
+        direction: [
+          "定义 model capability matrix：文本、视觉、长上下文、结构化输出。",
+          "把模型选择接入 artifact 与 retrieval 质量要求。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/models/modelGateway.ts",
+          "LiteasyClaw/desktop/src/app/features/models/modelRuntime.ts",
+          "LiteasyClaw/desktop/src/app/features/models/modelExecution.ts",
+          "LiteasyClaw/desktop/src/app/features/models/modelPolicy.ts",
+          "LiteasyClaw/desktop/src/app/features/models/useModelSettingsActions.ts",
+          "LiteasyClaw/desktop/src/app/features/models/usePolicySync.ts",
+          "LiteasyClaw/desktop/src/app/features/settings/settings.store.ts",
+          "LiteasyClaw/desktop/src/app/features/settings/settingsRegistry.ts",
+          "LiteasyClaw/desktop/src/app/features/settings/settingsStateHelpers.ts"
+        ]
+      },
+      {
+        name: "organization",
+        layer: "feature",
+        status: "组织空间已收口",
+        badge: "product",
+        implemented: [
+          "组织 list/summary/governance、通知、dialog actions、共享文献库 workspace entry。",
+          "OrganizationShellController 已统一暴露 shell model/actions。"
+        ],
+        target: [
+          "团队知识协作、权限治理、共享文献库、审计队列。",
+          "支持组织级 AI 流程和共享 artifact。"
+        ],
+        direction: [
+          "把组织动作接入 action registry 和权限策略。",
+          "增强 shared-library manifest 的增量同步与权限校验。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/controllers/useOrganizationShellController.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/useOrganizationData.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/useOrganizationActions.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/useOrganizationNotifications.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/useOrganizationWorkspace.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/organizationListClient.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/organizationSummaryClient.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/organizationGovernanceClient.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/organizationSharedLibraryManifestClient.ts",
+          "LiteasyClaw/desktop/src/app/features/organization/OrganizationSpacePanel.tsx",
+          "LiteasyClaw/desktop/src/app/features/organization/OrganizationGovernancePanel.tsx"
+        ]
+      },
+      {
+        name: "library / profile",
+        layer: "feature",
+        status: "本地库与个人中心可用",
+        badge: "product",
+        implemented: [
+          "LibraryPane、本地库 client/hook、拖拽 payload。",
+          "学术档案、个人中心、采样开关、清理确认。"
+        ],
+        target: [
+          "本地文献库长期管理、个人研究画像、个性化推荐输入。",
+          "支持阅读行为沉淀和跨设备同步。"
+        ],
+        direction: [
+          "把 profile 数据接入 recommendation/model routing。",
+          "本地库增加 folder/tag/search 与导入状态展示。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/app/features/library/LibraryPane.tsx",
+          "LiteasyClaw/desktop/src/app/features/library/localLibraryClient.ts",
+          "LiteasyClaw/desktop/src/app/features/library/useLocalLibrary.ts",
+          "LiteasyClaw/desktop/src/app/features/library/libraryDragPayload.ts",
+          "LiteasyClaw/desktop/src/app/features/profile/PersonalCenterPanel.tsx",
+          "LiteasyClaw/desktop/src/app/features/profile/AcademicProfileForm.tsx",
+          "LiteasyClaw/desktop/src/app/features/profile/AcademicArchiveDialog.tsx",
+          "LiteasyClaw/desktop/src/app/features/profile/useProfileActions.ts",
+          "LiteasyClaw/desktop/src/app/features/profile/useAcademicProfileDraft.ts"
+        ]
+      },
+      {
+        name: "services/dev-cloud",
+        layer: "service",
+        status: "本地云端演示服务可用",
+        badge: "cloud",
+        implemented: [
+          "dev-cloud server、request handler、demo data repositories、payload builders。",
+          "支持 sessions、collection、organization、recommendation cache、model provider mock/OpenAI Responses provider。"
+        ],
+        target: [
+          "成为桌面端云能力的本地开发替身和契约测试入口。",
+          "逐步按领域 route 拆分服务端模块。"
+        ],
+        direction: [
+          "拆分 requestHandler 为 account/model/collection/recommendation/organization routes。",
+          "把 .liteasy-data 的 schema 与 reset/reseed 流程文档化。"
+        ],
+        files: [
+          "LiteasyClaw/services/dev-cloud/server.mjs",
+          "LiteasyClaw/services/dev-cloud/requestHandler.mjs",
+          "LiteasyClaw/services/dev-cloud/config.mjs",
+          "LiteasyClaw/services/dev-cloud/db/sessionRepository.mjs",
+          "LiteasyClaw/services/dev-cloud/db/collectionRepository.mjs",
+          "LiteasyClaw/services/dev-cloud/db/organizationRepository.mjs",
+          "LiteasyClaw/services/dev-cloud/db/recommendationCacheRepository.mjs",
+          "LiteasyClaw/services/dev-cloud/payloads/modelPayloads.mjs",
+          "LiteasyClaw/services/dev-cloud/payloads/organizationPayloads.mjs",
+          "LiteasyClaw/services/dev-cloud/providers/openaiResponses.mjs",
+          "LiteasyClaw/services/dev-cloud/server.test.mjs"
+        ]
+      },
+      {
+        name: "tests / QA",
+        layer: "support",
+        status: "测试覆盖支撑模块化",
+        badge: "foundation",
+        implemented: [
+          "component tests、store tests、client tests、controller hook tests、AppShell integration tests。",
+          "新增边界测试防止 controller/features 反向依赖 layout。"
+        ],
+        target: [
+          "每个模块有 focused tests，AppShell 只保留高价值 smoke。",
+          "补 AI 输出质量、检索准确率、多模态 artifact 的评估测试。"
+        ],
+        direction: [
+          "增加 architecture boundary test 自动扫描 import 方向。",
+          "按模块拆分测试命令，支持并行 CI。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src/tests/AppShell.test.tsx",
+          "LiteasyClaw/desktop/src/tests/useWorkspaceSelectionController.test.ts",
+          "LiteasyClaw/desktop/src/tests/useCloudAccountController.test.ts",
+          "LiteasyClaw/desktop/src/tests/useArtifactWorkflowController.test.ts",
+          "LiteasyClaw/desktop/src/tests/useKnowledgeSyncController.test.ts",
+          "LiteasyClaw/desktop/src/tests/useOrganizationShellController.test.ts",
+          "LiteasyClaw/desktop/src/tests/cloudAvailabilityBoundary.test.ts",
+          "LiteasyClaw/services/dev-cloud/server.test.mjs",
+          "LiteasyClaw/services/dev-cloud/providers/openaiResponses.test.mjs"
+        ]
+      }
+    ];
+
+    const relations = [
+      ["shell/layout", "controllers", "只通过 model/actions 连接；shell 不直接持有领域状态机。"],
+      ["controllers", "workspace / selection", "workspace selection controller 提供 workspace state 与 selected-document snapshot。"],
+      ["controllers", "artifacts", "artifact workflow controller 组合导入 chunk、selected set 与 artifact actions。"],
+      ["controllers", "knowledge-sync", "knowledge sync controller 组合收藏、推荐、元数据同步。"],
+      ["controllers", "organization", "organization shell controller 组合组织动作、通知、数据和共享库入口。"],
+      ["assistant", "agent-runtime / actions", "目标是由 runtime event 驱动交互，actions 统一承接状态改变。"],
+      ["ingestion/import", "retrieval", "导入产出 chunks，检索提供 source-grounded context。"],
+      ["retrieval", "artifacts / assistant", "回答和多模态 artifact 必须可追溯来源。"],
+      ["models/settings", "assistant / artifacts / agent-runtime", "模型能力、策略和审计支撑 AI 执行层。"],
+      ["services/dev-cloud", "cloud feature modules", "本地开发云端契约：账号、模型、收藏、推荐、组织。"]
+    ];
+
+    const layers = [
+      ["all", "全部"],
+      ["shell", "Shell"],
+      ["controllers", "Controllers"],
+      ["feature", "Features"],
+      ["service", "Services"],
+      ["support", "Tests/QA"]
+    ];
+
+    let activeLayer = "all";
+    const search = document.getElementById("search");
+    const tabs = document.getElementById("tabs");
+    const cards = document.getElementById("moduleCards");
+
+    function moduleText(module) {
+      return [
+        module.name,
+        module.layer,
+        module.status,
+        ...module.implemented,
+        ...module.target,
+        ...module.direction,
+        ...module.files
+      ].join(" ").toLowerCase();
+    }
+
+    function renderTabs() {
+      tabs.innerHTML = "";
+      for (const [id, label] of layers) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.className = activeLayer === id ? "active" : "";
+        button.addEventListener("click", () => {
+          activeLayer = id;
+          render();
+        });
+        tabs.appendChild(button);
+      }
+    }
+
+    function renderSummary(filtered) {
+      const summary = document.getElementById("summary");
+      const fileCount = filtered.reduce((sum, module) => sum + module.files.length, 0);
+      const controllerCount = modules.find((module) => module.name === "controllers")?.files.length ?? 0;
+      summary.innerHTML = [
+        ["模块", filtered.length],
+        ["关联文件", fileCount],
+        ["Controller", controllerCount],
+        ["并行地基", "4/4"]
+      ].map(([label, value]) => `
+        <article class="metric">
+          <strong>${value}</strong>
+          <span>${label}</span>
+        </article>
+      `).join("");
+    }
+
+    function renderRelations() {
+      const list = document.getElementById("relations");
+      list.innerHTML = relations.map(([from, to, note]) => `
+        <div class="relation">
+          <strong>${from}</strong> -> <strong>${to}</strong>
+          <div class="muted">${note}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderCards(filtered) {
+      cards.innerHTML = filtered.map((module) => `
+        <article class="module-card" data-module="${module.name}">
+          <div class="card-head">
+            <div>
+              <h3>${module.name}</h3>
+              <div class="muted">${module.status}</div>
+            </div>
+            <span class="badge ${module.badge}">${module.layer}</span>
+          </div>
+          <div class="section">
+            <div class="section-title">已实现功能</div>
+            <ul>${module.implemented.map((item) => `<li>${item}</li>`).join("")}</ul>
+          </div>
+          <div class="section">
+            <div class="section-title">目标预期功能</div>
+            <ul>${module.target.map((item) => `<li>${item}</li>`).join("")}</ul>
+          </div>
+          <div class="section">
+            <div class="section-title">建议开发方向</div>
+            <ul>${module.direction.map((item) => `<li>${item}</li>`).join("")}</ul>
+          </div>
+          <details>
+            <summary>文件路径（${module.files.length}）</summary>
+            <div>${module.files.map((file) => `<code>${file}</code>`).join("<br>")}</div>
+          </details>
+        </article>
+      `).join("");
+    }
+
+    function render() {
+      const q = search.value.trim().toLowerCase();
+      const filtered = modules.filter((module) => {
+        const layerMatch = activeLayer === "all" || module.layer === activeLayer;
+        const queryMatch = q.length === 0 || moduleText(module).includes(q);
+        return layerMatch && queryMatch;
+      });
+      renderTabs();
+      renderSummary(filtered);
+      renderRelations();
+      renderCards(filtered);
+    }
+
+    search.addEventListener("input", render);
+    render();
+  </script>
+</body>
+</html>

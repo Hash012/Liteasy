@@ -1,4 +1,4 @@
-import type { AccountSession } from "../features/account/account.types";
+import type { AccountSession } from "../account/account.types";
 
 export type CloudAvailabilityStatus = "available" | "unavailable";
 

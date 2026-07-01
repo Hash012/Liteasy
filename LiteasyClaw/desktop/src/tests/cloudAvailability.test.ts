@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getCloudAvailabilityStatus } from "../app/layout/cloudAvailability";
+import { getCloudAvailabilityStatus } from "../app/features/network/cloudAvailability";
 
 describe("getCloudAvailabilityStatus", () => {
   test("returns unavailable when offline", () => {
