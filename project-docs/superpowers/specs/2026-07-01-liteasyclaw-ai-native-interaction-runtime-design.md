@@ -397,7 +397,136 @@ The milestone is successful when:
 5. One multimodal artifact path is initiated through the runtime and opens in the center pane.
 6. Tests cover runtime routing, context validation, action policy, confirmation behavior, and the representative artifact path.
 
-## 12. Recommended Next Plan
+## 12. Phase A-B Detailed Design
+
+The approved next slice is `LiteasyClaw AI-Native Interaction Runtime Phase A-B`.
+
+This slice should not add broad new product features. It should take the current working command path:
+
+```text
+AssistantPane -> commandRouter -> executeSkill -> executeAction
+```
+
+and move it behind a runtime boundary:
+
+```text
+AssistantPane -> agent-runtime -> intent plan -> confirmation policy -> skill executor -> runtime events
+```
+
+The visible assistant behavior should remain familiar. The architectural difference is that the assistant renders structured runtime events instead of directly interpreting free-form command routing and execution results.
+
+### 12.1 Runtime Modules
+
+Add focused files under:
+
+```text
+LiteasyClaw/desktop/src/app/features/agent-runtime/
+```
+
+Recommended files:
+
+- `intentRouter.ts`: maps natural-language input and assistant mode to a runtime plan.
+- `confirmationPolicy.ts`: classifies action requests as executable now or requiring confirmation.
+- `skillExecutor.ts`: executes a planned skill through the registered skill and action boundary.
+- `runtimeOrchestrator.ts`: coordinates routing, confirmation, execution, and event emission.
+
+The existing `agentRuntime.types.ts` should remain the shared contract file. It should gain only the types needed by this phase, such as runtime input, runtime plan, intent id, skill id, risk metadata, and event metadata.
+
+### 12.2 Initial Intents
+
+The first runtime router should cover the existing command examples rather than inventing a new broad natural-language system.
+
+Required initial intents:
+
+- `settings.update`: network recommendation enable/disable, recommendation sort mode, profile sampling enable/disable.
+- `organization.open_shared_library`: open the active organization's shared library.
+- `artifact.generate`: recognize mind map requests for the selected document set and emit structured artifact/task intent instead of expanding the multimodal implementation.
+- `unknown`: return a runtime error event for unregistered commands.
+
+This preserves the product rule that natural language can request an operation but cannot mutate state by itself.
+
+### 12.3 Runtime Events
+
+Phase A-B should render execution through event objects. At minimum:
+
+- `assistant_reply`: user-facing text result.
+- `action_request`: low-risk action that can execute immediately.
+- `confirmation_request`: action that must wait for user confirmation.
+- `task_request`: long-running or delegated work request.
+- `artifact_request`: request to open or create an artifact surface.
+- `runtime_error`: unsupported command, missing capability, missing context, or failed execution.
+
+For this phase, the assistant may still display most events as concise assistant messages. The important boundary is that the UI receives structured events and does not infer hidden actions from plain text.
+
+### 12.4 Safe Action Scope
+
+Phase A-B should include two low-risk direct actions and one confirmation-required action.
+
+Low-risk direct actions:
+
+- `settings.update` for `network.recommendation.enabled`.
+- `settings.update` for `network.recommendation.sort_mode`.
+
+Confirmation-required action:
+
+- `settings.update` for `profile.enabled`.
+
+The profile action currently has account gating. Phase A-B should keep that behavior and add runtime confirmation before mutating the setting. If the cloud account is unavailable, the runtime should return an `assistant_reply` or `runtime_error` event explaining that profile sampling requires login.
+
+### 12.5 Artifact Intent Boundary
+
+Mind map commands should be recognized, but Phase A-B should not implement full multimodal generation.
+
+When the user asks for a mind map, the runtime should:
+
+1. validate selected-document-set readiness through the existing agent context validation where context is available;
+2. emit a missing-context clarification if the selected set is empty, unlocked, or not ingested;
+3. otherwise emit a structured `task_request` or `artifact_request` for `artifactType: "mindmap"`;
+4. delegate actual artifact execution to the existing artifact action seam only when the current code path already supports it.
+
+This keeps A responsible for runtime semantics while leaving document processing and artifact rendering depth to the B module.
+
+### 12.6 Assistant Integration
+
+`AssistantPane` should stop importing and calling `routeCommand` and `executeSkill` directly for command mode.
+
+Instead, command mode should:
+
+1. create a runtime input from the user message, assistant mode, selected-set status, settings store, account/profile status, and available action handlers;
+2. call the local runtime orchestrator;
+3. append assistant messages derived from runtime events;
+4. call `onSettingsChanged` only after a runtime-executed settings action succeeds.
+
+Non-command QA and explanation paths may continue to use `generateAssistantAnswer` in this phase. They should not be refactored until the command runtime is stable.
+
+### 12.7 Testing Requirements
+
+Phase A-B must be test-first and focused.
+
+Required tests:
+
+- `intentRouter` maps current command examples to runtime plans.
+- `intentRouter` returns `unknown` for removed endpoint and model-policy commands.
+- `confirmationPolicy` allows low-risk recommendation settings and requires confirmation for profile sampling.
+- `skillExecutor` wraps successful skill execution into runtime events.
+- `skillExecutor` turns thrown execution errors into `runtime_error` events.
+- `runtimeOrchestrator` returns a clear unsupported-command event for unknown commands.
+- `AssistantPane` command mode renders runtime execution results without directly depending on `commandRouter`.
+
+Existing tests for `commandRouter`, `skillRegistry`, and `actionRegistry` should remain passing during the migration. Once the runtime router owns those examples, command router tests can be narrowed or marked as legacy coverage in a later cleanup.
+
+### 12.8 Acceptance Criteria For Phase A-B
+
+This slice is complete when:
+
+1. at least three existing natural-language commands are handled through `agent-runtime`;
+2. recommendation settings execute directly through runtime events;
+3. profile sampling produces a confirmation request before mutation;
+4. unsupported commands return a structured runtime event;
+5. `AssistantPane` no longer directly owns command skill execution;
+6. all affected unit and component tests pass.
+
+## 13. Recommended Next Plan
 
 Create an implementation plan for:
 
