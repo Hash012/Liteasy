@@ -1,9 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
-import { useCollectionItems } from "../features/collection/useCollectionItems";
-import { useCloudAccountActions } from "../features/account/useCloudAccountActions";
-import { useArtifactActions } from "../features/artifacts/useArtifactActions";
-import type { ArtifactTask, ArtifactTab } from "../features/artifacts/artifact.types";
+import { useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
 import type { ImportJob } from "../features/import/import.types";
@@ -14,39 +10,31 @@ import type { ControlPlaneTransport } from "../features/models/controlPlaneClien
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import type { AccountTransport } from "../features/account/accountSessionClient";
-import { useAccountSession } from "../features/account/useAccountSession";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
-import { useRecommendations } from "../features/recommendations/useRecommendations";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
-import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
-import { useOrganizationActions } from "../features/organization/useOrganizationActions";
-import { useOrganizationNotifications } from "../features/organization/useOrganizationNotifications";
-import { useOrganizationWorkspace } from "../features/organization/useOrganizationWorkspace";
-import { useOrganizationUiState } from "../features/organization/useOrganizationUiState";
 import { useLeftRailNavigation } from "./useLeftRailNavigation";
 import type { OrganizationGovernanceTransport } from "../features/organization/organizationGovernanceClient";
 import type { OrganizationListTransport } from "../features/organization/organizationListClient";
 import type { OrganizationSummaryTransport } from "../features/organization/organizationSummaryClient";
 import type { OrganizationSharedLibraryManifestTransport } from "../features/organization/organizationSharedLibraryManifestClient";
-import { createOrganizationSharedLibraryManifestClient } from "../features/organization/organizationSharedLibraryManifestClient";
-import { useOrganizationData } from "../features/organization/useOrganizationData";
 import { ActivityBar } from "./ActivityBar";
 import { TopBar } from "./TopBar";
 import { LeftPane } from "./LeftPane";
 import { AppDialogs } from "./AppDialogs";
 import { ReaderPane } from "./ReaderPane";
 import { AssistantSidebar } from "./AssistantSidebar";
-import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
 import { useAppShellStores } from "./useAppShellStores";
 import { starterPapers } from "./starterPapers";
 import { useConnectivity } from "../features/network/useConnectivity";
-import { useCloudAvailabilityProbe } from "../features/network/useCloudAvailabilityProbe";
-import { getCloudAvailabilityStatus } from "./cloudAvailability";
 import { PaneResizer } from "./PaneResizer";
 import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
+import { useCloudAccountController } from "../controllers/useCloudAccountController";
+import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
+import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
+import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -79,22 +67,20 @@ export function AppShell({
   const paneLayout = usePaneLayout();
 
   const workspaceSelection = useWorkspaceSelectionController({
+    localLibrarySnapshot,
     workspaceStore: workspaceStoreRef.current
   });
   const workspaceState = workspaceSelection.model.workspaceState;
+  const workspaceLabel = workspaceSelection.model.workspaceLabel;
+  const setWorkspaceLabel = workspaceSelection.actions.setWorkspaceLabel;
   const setWorkspaceState = workspaceSelection.actions.setWorkspaceState;
   const [settingsState, setSettingsState] = useState<SettingsState>(() =>
     cloneSettingsState(settingsStoreRef.current.getState())
   );
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
-  const [artifactTasks, setArtifactTasks] = useState<ArtifactTask[]>([]);
-  const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏模态按钮启动分析。"
   );
-  const [loginDialogDismissedThisSession, setLoginDialogDismissedThisSession] = useState(false);
-  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [workspaceLabel, setWorkspaceLabel] = useState("本地文献库");
   const modelSettings = useModelSettingsActions({
     onSettingsChanged: (nextSettings) => setSettingsState(cloneSettingsState(nextSettings)),
     settingsStore: settingsStoreRef.current
@@ -111,7 +97,6 @@ export function AppShell({
     },
     profileSamplingEnabled: settingsState["profile.enabled"]
   });
-  const organizationUi = useOrganizationUiState();
 
   const workspaceActions = useWorkspaceActions({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
@@ -122,21 +107,20 @@ export function AppShell({
     workspaceStore: workspaceStoreRef.current
   });
 
-  const artifactActions = useArtifactActions({
+  const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getSelectedDocumentSet: () => workspaceStoreRef.current.getSelectedDocumentSet(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
     onAnalysisHint: setAnalysisHint,
-    onArtifactTabsChanged: setArtifactTabs,
-    onArtifactTasksChanged: setArtifactTasks,
     queueImportForPapers: workspaceActions.queueImportForPapers
   });
+  const { artifactTabs, artifactTasks } = artifactWorkflow.model;
 
   const registeredWorkspaceActions = useRegisteredWorkspaceActions({
     importSelectedSet: workspaceActions.importSelectedSet,
     onAnalysisHint: setAnalysisHint,
-    startArtifactAnalysis: artifactActions.startAnalysis
+    startArtifactAnalysis: artifactWorkflow.actions.startAnalysis
   });
 
   usePolicySync({
@@ -144,49 +128,45 @@ export function AppShell({
     controlPlaneTransport,
     getSettings: () => settingsStoreRef.current.getState()
   });
+  const cloudAccount = useCloudAccountController({
+    accountTransport,
+    getSettings: () => settingsStoreRef.current.getState(),
+    applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
+    isOnline
+  });
   const {
     accountMessage,
     accountPending,
     accountSession,
-    loginToCloudAccount,
-    logoutFromCloudAccount,
-    setSuppressLoginReminder,
-    shouldShowLoginReminder
-  } = useAccountSession({
-    accountTransport,
-    getSettings: () => settingsStoreRef.current.getState(),
-    onSessionRestored: modelSettings.applyLocalDevCloudDefaults
-  });
-  const organizationActions = useOrganizationActions({
-    canCreateOrganization: (accountSession?.membershipTier ?? "pro") !== "basic",
-    onAnalysisHint: setAnalysisHint
-  });
-  const organizationNotifications = useOrganizationNotifications({ onAnalysisHint: setAnalysisHint });
-  const cloudAccountActions = useCloudAccountActions({
-    applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
-    clearOrganizationNotifications: organizationNotifications.clearOrganizationNotifications,
-    loginToCloudAccount,
-    logoutFromCloudAccount,
-    resetOrganizationActions: organizationActions.resetOrganizationActions,
-    resetOrganizationSelection: organizationUi.resetOrganizationSelection
-  });
-  const collection = useCollectionItems({
+    cloudAvailabilityStatus,
+    loginDialogOpen
+  } = cloudAccount.model;
+  const organizationShell = useOrganizationShellController({
     accountSession,
-    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"]
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
+    onAnalysisHint: setAnalysisHint,
+    onLeftRailView: leftRail.setLeftRailView,
+    onWorkspaceLabel: setWorkspaceLabel,
+    onWorkspaceSync: workspaceActions.syncWorkspace,
+    organizationGovernanceTransport,
+    organizationListTransport,
+    organizationSharedLibraryManifestTransport,
+    organizationTransport,
+    starterPapers,
+    workspaceStoreRef
   });
+  function logoutAndClearOrganizationState() {
+    cloudAccount.actions.logoutFromCloudAccount();
+    organizationShell.actions.resetOrganizationState();
+  }
   const selectedPapers = workspaceActions.getSelectedPapers();
   const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
-  const {
-    clearRecommendationCache,
-    recommendationItems,
-    recommendationMessage,
-    recommendationPending,
-    recommendationStatus
-  } = useRecommendations({
+  const knowledgeSync = useKnowledgeSyncController({
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
-    recommendationCacheTransport: recommendationTransport,
+    documentMetadataTransport,
+    documents: workspaceState.papers,
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
@@ -195,18 +175,24 @@ export function AppShell({
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
   });
   const {
-    lastResult: documentMetadataSyncResult,
-    message: documentMetadataSyncMessage,
-    retrySync: retryDocumentMetadataSync,
-    status: documentMetadataSyncStatus
-  } = useDocumentMetadataSync({
-    accountSession,
-    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
-    documents: workspaceState.papers,
-    transport: documentMetadataTransport,
-    workspaceRevision: workspaceState.workspaceRevision
-  });
+    collectionItems,
+    collectionMessage,
+    collectionStatus,
+    documentMetadataSyncMessage,
+    documentMetadataSyncResult,
+    documentMetadataSyncStatus,
+    recommendationItems,
+    recommendationMessage,
+    recommendationPending,
+    recommendationStatus
+  } = knowledgeSync.model;
   const {
+    actionMessage: organizationActionMessage,
+    createOpen: createOrganizationOpen,
+    inviteSummary,
+    joinOpen: joinOrganizationOpen,
+    leaveSummary,
+    organizationDialogOpen,
     organizationGovernanceMessage,
     organizationGovernanceStatus,
     organizationGovernanceSummary,
@@ -215,44 +201,9 @@ export function AppShell({
     organizationListStatus,
     organizationSummary,
     organizationSummaryMessage,
-    organizationSummaryStatus
-  } = useOrganizationData({
-    accountSession,
-    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
-    getActiveOrganizationId: organizationUi.getActiveOrganizationId,
-    organizationGovernanceTransport,
-    organizationListTransport,
-    organizationTransport
-  });
-
-  const organizationWorkspace = useOrganizationWorkspace({
-    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
-    defaultSummary: organizationSummary,
-    manifestLoader: async ({ endpoint, organizationId, sessionId }) =>
-      createOrganizationSharedLibraryManifestClient({
-        endpoint,
-        transport: organizationSharedLibraryManifestTransport
-      })({
-        organizationId,
-        sessionId
-      }),
-    onAnalysisHint: setAnalysisHint,
-    onLeftRailView: leftRail.setLeftRailView,
-    onWorkspaceLabel: setWorkspaceLabel,
-    onWorkspaceSync: workspaceActions.syncWorkspace,
-    sessionId: accountSession?.sessionId,
-    starterPapers,
-    workspaceStoreRef
-  });
-  const { isCloudReachable } = useCloudAvailabilityProbe({
-    enabled: isOnline && accountSession !== null,
-    endpoint: settingsState["models.control_plane_endpoint"]
-  });
-  const cloudAvailabilityStatus = getCloudAvailabilityStatus({
-    accountSession,
-    isCloudReachable,
-    isOnline
-  });
+    organizationSummaryStatus,
+    readNotificationIds
+  } = organizationShell.model;
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
@@ -261,36 +212,6 @@ export function AppShell({
     ? "44px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
 
-  useEffect(() => {
-    if (!localLibrarySnapshot) {
-      return;
-    }
-
-    workspaceStoreRef.current.openWorkspace([], {
-      rootPath: localLibrarySnapshot.rootPath,
-      type: "local_library"
-    });
-    setWorkspaceState(cloneWorkspaceState(workspaceStoreRef.current.getState()));
-    setWorkspaceLabel(localLibrarySnapshot.rootPath);
-  }, [localLibrarySnapshot, workspaceStoreRef]);
-
-  useEffect(() => {
-    if (
-      accountSession === null &&
-      accountPending === false &&
-      shouldShowLoginReminder &&
-      loginDialogDismissedThisSession === false
-    ) {
-      setLoginDialogOpen(true);
-    }
-  }, [accountPending, accountSession, loginDialogDismissedThisSession, shouldShowLoginReminder]);
-
-  useEffect(() => {
-    if (accountSession !== null) {
-      setLoginDialogDismissedThisSession(false);
-    }
-  }, [accountSession]);
-
   return (
     <div className="app-frame">
       <TopBar
@@ -298,11 +219,8 @@ export function AppShell({
         accountPending={accountPending}
         accountSession={accountSession}
         cloudAvailabilityStatus={cloudAvailabilityStatus}
-        onLogin={() => {
-          setLoginDialogDismissedThisSession(false);
-          setLoginDialogOpen(true);
-        }}
-        onLogout={cloudAccountActions.logoutAndClearOrganizationState}
+        onLogin={cloudAccount.actions.openLoginDialog}
+        onLogout={logoutAndClearOrganizationState}
       />
 
       <div
@@ -332,9 +250,9 @@ export function AppShell({
           <LeftPane
             academicProfile={profileActions.academicProfile}
             accountSession={accountSession}
-            collectionItems={collection.collectionItems}
-            collectionMessage={collection.message}
-            collectionStatus={collection.status}
+            collectionItems={collectionItems}
+            collectionMessage={collectionMessage}
+            collectionStatus={collectionStatus}
             documentMetadataSyncMessage={documentMetadataSyncMessage}
             documentMetadataSyncResult={documentMetadataSyncResult ?? null}
             documentMetadataSyncStatus={documentMetadataSyncStatus}
@@ -348,29 +266,27 @@ export function AppShell({
             listStatus={organizationListStatus}
             onAddExternalPaper={workspaceActions.addExternalPaperToLibrary}
             onClearProfile={profileActions.openClearProfileConfirm}
-            onClearRecommendations={clearRecommendationCache}
-            onCollectRecommendation={collection.collectRecommendation}
-            onRetryCollectionSync={collection.retry}
-            onCreateOrganization={organizationActions.openCreateDialog}
+            onClearRecommendations={knowledgeSync.actions.clearRecommendationCache}
+            onCollectRecommendation={knowledgeSync.actions.collectRecommendation}
+            onRetryCollectionSync={knowledgeSync.actions.retryCollectionSync}
+            onCreateOrganization={organizationShell.actions.openCreateDialog}
             onImportSelectedSet={() => {
               void registeredWorkspaceActions.handleImportSelectedSet();
             }}
-            onInviteMember={organizationActions.openInviteDialog}
-            onJoinOrganization={organizationActions.openJoinDialog}
-            onLoginRequired={() => {
-              setLoginDialogOpen(true);
-            }}
-            onLeaveOrganization={organizationActions.openLeaveDialog}
-            onMarkNotificationsRead={organizationNotifications.markOrganizationNotificationsRead}
+            onInviteMember={organizationShell.actions.openInviteDialog}
+            onJoinOrganization={organizationShell.actions.openJoinDialog}
+            onLoginRequired={cloudAccount.actions.openLoginDialog}
+            onLeaveOrganization={organizationShell.actions.openLeaveDialog}
+            onMarkNotificationsRead={organizationShell.actions.markOrganizationNotificationsRead}
             onOpenAcademicArchive={profileActions.openAcademicArchive}
-            onOpenOrganizationDialog={organizationUi.openOrganizationDialog}
-            organizationActionMessage={organizationActions.actionMessage}
+            onOpenOrganizationDialog={organizationShell.actions.openOrganizationDialog}
+            organizationActionMessage={organizationActionMessage}
             onOpenSharedLibrary={(summary) => {
-              void organizationWorkspace.openOrganizationSharedLibrary(summary);
+              void organizationShell.actions.openOrganizationSharedLibrary(summary);
             }}
-            onReturnToLocalWorkspace={organizationWorkspace.openLocalLibraryWorkspace}
-            onRetryDocumentMetadataSync={retryDocumentMetadataSync}
-            onSelectOrganization={organizationUi.selectOrganization}
+            onReturnToLocalWorkspace={organizationShell.actions.openLocalLibraryWorkspace}
+            onRetryDocumentMetadataSync={knowledgeSync.actions.retryDocumentMetadataSync}
+            onSelectOrganization={organizationShell.actions.selectOrganization}
             onToggleLock={workspaceActions.toggleSelectionLock}
             onToggleProfileSampling={profileActions.toggleProfileSampling}
             onToggleSelection={workspaceActions.toggleSelection}
@@ -386,7 +302,7 @@ export function AppShell({
             recommendationMessage={recommendationMessage}
             recommendationPending={recommendationPending}
             recommendationStatus={recommendationStatus}
-            readNotificationIds={organizationNotifications.readNotificationIds}
+            readNotificationIds={readNotificationIds}
             selectedPaperIds={workspaceState.selectedPaperIds}
             selectionLocked={workspaceState.selectionLocked}
             settings={settingsState}
@@ -410,41 +326,34 @@ export function AppShell({
           accountSession={accountSession}
           academicArchiveOpen={profileActions.academicArchiveOpen}
           clearProfileConfirmOpen={profileActions.clearProfileConfirmOpen}
-          createOrganizationOpen={organizationActions.createOpen}
-          inviteSummary={organizationActions.inviteSummary}
-          joinOrganizationOpen={organizationActions.joinOpen}
-          leaveSummary={organizationActions.leaveSummary}
+          createOrganizationOpen={createOrganizationOpen}
+          inviteSummary={inviteSummary}
+          joinOrganizationOpen={joinOrganizationOpen}
+          leaveSummary={leaveSummary}
           list={organizationList}
           listMessage={organizationListMessage}
           onCancelClearProfile={profileActions.closeClearProfileConfirm}
           onClearProfile={profileActions.clearUserProfile}
           onCloseAcademicArchive={profileActions.closeAcademicArchive}
-          onCloseCreateOrganization={organizationActions.closeCreateDialog}
-          onCloseInviteMember={organizationActions.closeInviteDialog}
-          onCloseJoinOrganization={organizationActions.closeJoinDialog}
-          onCloseLeaveOrganization={organizationActions.closeLeaveDialog}
-          onCloseOrganizationDialog={organizationUi.closeOrganizationDialog}
-          onCreateOrganization={organizationActions.createDemoOrganizationRequest}
-          onInviteMember={organizationActions.sendDemoOrganizationInvite}
-          onJoinOrganization={organizationActions.createDemoOrganizationJoinRequest}
-          onLeaveOrganization={organizationActions.createDemoOrganizationLeaveRequest}
-          onSkipLogin={() => {
-            setLoginDialogDismissedThisSession(true);
-            setLoginDialogOpen(false);
-          }}
+          onCloseCreateOrganization={organizationShell.actions.closeCreateDialog}
+          onCloseInviteMember={organizationShell.actions.closeInviteDialog}
+          onCloseJoinOrganization={organizationShell.actions.closeJoinOrganizationDialog}
+          onCloseLeaveOrganization={organizationShell.actions.closeLeaveDialog}
+          onCloseOrganizationDialog={organizationShell.actions.closeOrganizationDialog}
+          onCreateOrganization={organizationShell.actions.createDemoOrganizationRequest}
+          onInviteMember={organizationShell.actions.sendDemoOrganizationInvite}
+          onJoinOrganization={organizationShell.actions.createDemoOrganizationJoinRequest}
+          onLeaveOrganization={organizationShell.actions.createDemoOrganizationLeaveRequest}
+          onSkipLogin={cloudAccount.actions.skipLogin}
           onSubmitDemoLogin={() => {
-            setLoginDialogDismissedThisSession(true);
-            setLoginDialogOpen(false);
-            void cloudAccountActions.loginWithLocalDevCloudDefaults();
+            void cloudAccount.actions.submitDemoLogin();
           }}
-          onToggleSuppressLoginReminder={(checked) => {
-            setSuppressLoginReminder(checked);
-          }}
+          onToggleSuppressLoginReminder={cloudAccount.actions.setSuppressLoginReminder}
           onOpenSharedLibrary={(summary) => {
-            void organizationWorkspace.openOrganizationSharedLibrary(summary);
+            void organizationShell.actions.openOrganizationSharedLibrary(summary);
           }}
-          onSelectOrganization={organizationUi.selectOrganization}
-          organizationDialogOpen={organizationUi.organizationDialogOpen}
+          onSelectOrganization={organizationShell.actions.selectOrganization}
+          organizationDialogOpen={organizationDialogOpen}
           loginDialogOpen={loginDialogOpen}
           readPaperCount={workspaceState.papers.length}
           summary={organizationSummary}
@@ -483,8 +392,8 @@ export function AppShell({
           <AssistantSidebar
             importedChunksByPaperId={importedChunksByPaperId}
             importedSelectedCount={importedSelectedCount}
-            onGenerateArtifact={artifactActions.handleAssistantArtifact}
-            onOpenOrganizationSharedLibrary={organizationWorkspace.openOrganizationSharedLibrary}
+            onGenerateArtifact={artifactWorkflow.actions.handleAssistantArtifact}
+            onOpenOrganizationSharedLibrary={organizationShell.actions.openOrganizationSharedLibrary}
             onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
             profileUnlocked={accountSession !== null}
             selectedPaperCount={workspaceState.selectedPaperIds.length}

@@ -33,7 +33,20 @@ Feature modules must not import `AppShell` or shell components.
 - `assistant` owns the right-pane interaction surface and renders runtime events.
 - `artifacts` owns artifact tasks, tabs, previews, and renderer lifecycle.
 - `cloud` owns account, model, collection, recommendation, cache, and metadata-sync clients/controllers.
+- `knowledge-sync` is the shell-facing coordination layer for collection, recommendation, and metadata-sync state. It composes the underlying `collection`, `recommendations`, and `metadata` features without owning their domain logic.
 - `organization` owns organization membership, summary, notifications, shared-library manifests, and governance summaries.
+
+## Current Controllers
+
+- `LiteasyClaw/desktop/src/app/controllers/useWorkspaceSelectionController.ts` owns the shell-facing workspace model: cloned workspace state, selected-document-set snapshot, workspace label, and local-library snapshot synchronization.
+- `LiteasyClaw/desktop/src/app/controllers/useCloudAccountController.ts` owns the shell-facing account model: account session, account message/pending state, lightweight login dialog state, login reminder behavior, and cloud availability status.
+- `LiteasyClaw/desktop/src/app/controllers/useArtifactWorkflowController.ts` owns the shell-facing artifact workflow model: artifact tasks, artifact tabs, direct modal analysis entry, and assistant-triggered artifact generation entry.
+- `LiteasyClaw/desktop/src/app/controllers/useKnowledgeSyncController.ts` owns the shell-facing knowledge sync model: collection items/state, recommendation items/state, and document metadata sync state.
+- `LiteasyClaw/desktop/src/app/controllers/useOrganizationShellController.ts` owns the shell-facing organization model: organization dialogs/actions, notifications, list/summary/governance data, and shared-library workspace entry points.
+
+New controllers should follow the same rule: expose a small `model` object and a small `actions` object, while keeping feature modules free of shell imports.
+
+Cross-module cleanup should stay in shell composition unless a dedicated controller owns both sides. For example, cloud account logout is exposed by `useCloudAccountController`, while organization notification/action reset is composed in `AppShell`.
 
 ## Mutation Rule
 

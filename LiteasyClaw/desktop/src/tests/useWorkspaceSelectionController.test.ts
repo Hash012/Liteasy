@@ -44,3 +44,38 @@ test("exposes workspace state and selected document set snapshot", () => {
     }
   });
 });
+
+test("opens local library snapshots and exposes the workspace label", () => {
+  const workspaceStore = createWorkspaceStore();
+
+  const { result, rerender } = renderHook(
+    ({ rootPath }: { rootPath?: string }) =>
+      useWorkspaceSelectionController({
+        localLibrarySnapshot: rootPath ? { documents: [], rootPath } : null,
+        workspaceStore
+      }),
+    {
+      initialProps: {}
+    }
+  );
+
+  expect(result.current.model.workspaceLabel).toBe("本地文献库");
+
+  rerender({ rootPath: "/tmp/LiteasyLibrary" });
+
+  expect(result.current.model.workspaceLabel).toBe("/tmp/LiteasyLibrary");
+  expect(result.current.model.workspaceState).toMatchObject({
+    papers: [],
+    selectedPaperIds: [],
+    selectionLocked: false,
+    workspaceRevision: 1,
+    workspaceSource: {
+      rootPath: "/tmp/LiteasyLibrary",
+      type: "local_library"
+    }
+  });
+  expect(workspaceStore.getState().workspaceSource).toEqual({
+    rootPath: "/tmp/LiteasyLibrary",
+    type: "local_library"
+  });
+});
