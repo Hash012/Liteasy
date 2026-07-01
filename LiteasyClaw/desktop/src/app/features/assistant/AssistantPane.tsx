@@ -9,16 +9,16 @@ import type {
   AssistantState,
   SelectedSetStatus
 } from "./assistant.types";
-import { routeCommand } from "./commandRouter";
 import { createSettingsStore } from "../settings/settings.store";
 import type { ArtifactType } from "../artifacts/artifact.types";
-import { executeSkill } from "../skills/skillRegistry";
 import { createAssistantStore } from "./assistant.store";
 import {
   archiveAssistantSession,
   restoreAssistantSession,
   type AssistantSessionHistoryItem
 } from "./assistantSessionHistory";
+import { runAgentRuntime } from "../agent-runtime/runtimeOrchestrator";
+import type { AgentRuntimeEvent } from "../agent-runtime/agentRuntime.types";
 import type { Paper } from "../workspace/workspace.types";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
@@ -57,6 +57,30 @@ function createMessage(role: AssistantMessage["role"], content: string): Assista
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role
   };
+}
+
+function formatRuntimeEvent(event: AgentRuntimeEvent): string {
+  if (event.type === "assistant_reply" || event.type === "runtime_error") {
+    return event.message;
+  }
+
+  if (event.type === "confirmation_request") {
+    return event.summary;
+  }
+
+  if (event.type === "clarification_request") {
+    return event.question;
+  }
+
+  if (event.type === "action_request") {
+    return `准备执行受控动作：${event.action.actionId}`;
+  }
+
+  if (event.type === "artifact_request") {
+    return `准备打开产物：${event.artifact.artifactType}`;
+  }
+
+  return `任务已创建：${event.task.taskType}`;
 }
 
 export function AssistantPane({
@@ -136,29 +160,30 @@ export function AssistantPane({
     assistantStoreRef.current.addMessage(createMessage("user", normalizedInput));
 
     if (assistantState.mode === "command") {
-      const command = routeCommand(normalizedInput);
-      if (!command) {
-        assistantStoreRef.current.addMessage(
-          createMessage("assistant", "当前命令还没有注册到安全能力表中。")
-        );
-        syncAssistant();
-        setInput("");
-        return;
-      }
-
       assistantStoreRef.current.setPending(true);
       syncAssistant();
 
       try {
-        const result = await executeSkill(command, {
-          openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
-          profileUnlocked,
-          settingsStore: settingsStoreRef.current,
-          startArtifactAnalysis: onGenerateArtifact
+        const result = await runAgentRuntime(
+          {
+            message: normalizedInput,
+            mode: assistantState.mode
+          },
+          {
+            openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
+            profileUnlocked,
+            settingsStore: settingsStoreRef.current,
+            startArtifactAnalysis: onGenerateArtifact
+          }
+        );
+
+        result.events.forEach((event) => {
+          assistantStoreRef.current.addMessage(createMessage("assistant", formatRuntimeEvent(event)));
         });
 
-        assistantStoreRef.current.addMessage(createMessage("assistant", result.message));
-        onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
+        if (result.settingsChanged) {
+          onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
+        }
         setInput("");
       } catch (error) {
         assistantStoreRef.current.addMessage(

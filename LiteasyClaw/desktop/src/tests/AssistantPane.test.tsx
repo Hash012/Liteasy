@@ -149,7 +149,7 @@ test("archives the current assistant session when starting a new one", async () 
 
   expect(screen.getByText("历史会话")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
-  expect(screen.getByText("2 条消息 · 命令")).toBeInTheDocument();
+  expect(screen.getByText("3 条消息 · 命令")).toBeInTheDocument();
 });
 
 test("restores an archived assistant session from history", async () => {
@@ -353,4 +353,29 @@ test("shows current command examples including organization and recommendation a
     "title",
     "命令模式可输入“打开组织共享文献库”“关闭联网推荐”“开启用户画像”等受控指令。"
   );
+});
+
+test("routes command mode through runtime confirmation before profile sampling changes", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+
+  render(
+    <AssistantPane
+      onGenerateArtifact={() => "unused"}
+      profileUnlocked={true}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("开启用户画像")).toBeInTheDocument();
+  expect(screen.getByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")).toBeInTheDocument();
+  expect(settingsStore.getState()["profile.enabled"]).toBe(false);
 });
