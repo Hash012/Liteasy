@@ -13,6 +13,7 @@ shell -> controllers -> feature modules -> shared types / clients
 ## 快速入口
 
 - 项目结构可视化：`project-docs/engineering/project-structure-overview.html`
+- 三人分工可视化：`project-docs/engineering/three-person-worksplit.html`
 - 模块边界文档：`project-docs/engineering/module-boundaries.md`
 - 产品方案原文：`project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
 - 当前启动指南：`project-docs/qa/environment-startup-guide.md`
@@ -201,13 +202,14 @@ project-docs/engineering/project-structure-overview.html
 
 1. `README.md`
 2. `project-docs/engineering/project-structure-overview.html`
-3. `project-docs/engineering/module-boundaries.md`
-4. `LiteasyClaw/desktop/README.md`
-5. `LiteasyClaw/services/dev-cloud/README.md`
-6. `project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
-7. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-ai-native-interaction-runtime-design.md`
-8. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-modular-foundation-design.md`
-9. `project-docs/superpowers/plans/2026-07-01-liteasyclaw-modular-foundation-phase1.md`
+3. `project-docs/engineering/three-person-worksplit.html`
+4. `project-docs/engineering/module-boundaries.md`
+5. `LiteasyClaw/desktop/README.md`
+6. `LiteasyClaw/services/dev-cloud/README.md`
+7. `project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
+8. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-ai-native-interaction-runtime-design.md`
+9. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-modular-foundation-design.md`
+10. `project-docs/superpowers/plans/2026-07-01-liteasyclaw-modular-foundation-phase1.md`
 
 ## 启动失败先检查
 
