@@ -1,0 +1,23 @@
+.gitignore
+  5ea0322e17edd3f3 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "46d4e2b40fa2ba119ebd6e4f28592970e8fc4acd",
+  "prompts": {
+    "5ea0322e17edd3f3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e2f15-7f0a-7d31-83c9-6ecbdb8bd704",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Exyeus <1728827724@qq.com>",
+      "messages": [],
+      "total_additions": 66,
+      "total_deletions": 4,
+      "accepted_lines": 66,
+      "overriden_lines": 0
+    }
+  }
+}
