@@ -1,6 +1,8 @@
 import type { SettingsState } from "../settings/settings.types";
 import {
   createAccountSessionClient,
+  registerCloudAccount,
+  type AccountRegistrationInput,
   type AccountTransport
 } from "./accountSessionClient";
 import type { AccountSession } from "./account.types";
@@ -36,4 +38,18 @@ export async function createCloudAccountSession(
   });
 
   return client();
+}
+
+export async function createRegisteredCloudAccountSession(
+  settings: SettingsState,
+  registration: AccountRegistrationInput,
+  deps: AccountSessionRuntimeDeps = {}
+) {
+  const endpoint = settings["models.control_plane_endpoint"];
+
+  return registerCloudAccount({
+    ...registration,
+    endpoint,
+    transport: deps.transport
+  });
 }

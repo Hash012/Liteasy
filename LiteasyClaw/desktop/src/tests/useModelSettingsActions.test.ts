@@ -1,6 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+import type { SettingsState } from "../app/features/settings/settings.types";
+import { resolveLocalDevCloudEndpoint } from "../app/features/models/localDevCloudEndpoint";
 import { useModelSettingsActions } from "../app/features/models/useModelSettingsActions";
 
 function renderActions() {
@@ -40,7 +42,8 @@ describe("useModelSettingsActions", () => {
 
     act(() => result.current.applyLocalDevCloudDefaults());
 
-    expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe("http://127.0.0.1:8787");
-    expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("http://127.0.0.1:8787");
+    const endpoint = resolveLocalDevCloudEndpoint();
+    expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe(endpoint);
+    expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe(endpoint);
   });
 });

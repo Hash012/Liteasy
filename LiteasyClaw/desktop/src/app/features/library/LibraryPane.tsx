@@ -1,9 +1,10 @@
+import { useState } from "react";
 import type { CollectionItem } from "../collection/collection.types";
 import "./library.css";
 import { ImportButton } from "../import/ImportButton";
 import type { ImportJob } from "../import/import.types";
 import type { RecommendationItem, RecommendationStatus } from "../recommendations/recommendation.types";
-import type { Paper } from "../workspace/workspace.types";
+import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
 import { parseLibraryDragPayload } from "./libraryDragPayload";
 import { groupWorkspacePapersByFolder } from "../workspace/workspaceFolderTree";
 
@@ -20,18 +21,43 @@ type LibraryPaneProps = {
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
-  canReturnToLocalWorkspace: boolean;
+  canOpenOrganizationWorkspace: boolean;
+  organizationWorkspaceLabel?: string;
   onAddExternalPaper: (item: CollectionItem | RecommendationItem) => void;
+  onAddDroppedPdfFiles?: (files: File[]) => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
   onLoginRequired?: () => void;
+  onOpenOrganizationWorkspace: () => void;
   onRetryCollectionSync?: () => void;
   onReturnToLocalWorkspace: () => void;
   onToggleLock: () => void;
   onToggleSelection: (paperId: string) => void;
   workspaceLabel: string;
+  workspaceSourceType: WorkspaceSourceType;
 };
+
+type LibraryCollectionId =
+  | "my-library"
+  | "courses"
+  | "vector-search"
+  | "late-interaction"
+  | "vector-database";
+
+type LibraryCollection = {
+  id: LibraryCollectionId;
+  label: string;
+  level: "root" | "child" | "grandchild";
+};
+
+const libraryCollections: LibraryCollection[] = [
+  { id: "my-library", label: "My Library", level: "root" },
+  { id: "courses", label: "Courses", level: "child" },
+  { id: "vector-search", label: "Vector Search", level: "child" },
+  { id: "late-interaction", label: "Late Interaction", level: "grandchild" },
+  { id: "vector-database", label: "Vector Database", level: "grandchild" }
+];
 
 function getRelevanceLabel(band: RecommendationItem["relevanceBand"]) {
   if (band === "high") {
@@ -43,6 +69,28 @@ function getRelevanceLabel(band: RecommendationItem["relevanceBand"]) {
   }
 
   return "低关联";
+}
+
+function paperMatchesCollection(paper: Paper, collectionId: LibraryCollectionId) {
+  const searchableText = `${paper.title} ${paper.sourcePath ?? ""}`.toLowerCase();
+
+  if (collectionId === "my-library" || collectionId === "courses") {
+    return true;
+  }
+
+  if (collectionId === "late-interaction") {
+    return searchableText.includes("colbert") || searchableText.includes("late-interaction");
+  }
+
+  if (collectionId === "vector-database") {
+    return searchableText.includes("vector database");
+  }
+
+  return (
+    searchableText.includes("vector") ||
+    searchableText.includes("colbert") ||
+    searchableText.includes("acorn")
+  );
 }
 
 export function LibraryPane({
@@ -58,20 +106,29 @@ export function LibraryPane({
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
-  canReturnToLocalWorkspace,
+  canOpenOrganizationWorkspace,
+  organizationWorkspaceLabel = "组织共享文献库",
   onAddExternalPaper,
+  onAddDroppedPdfFiles,
   onClearRecommendations,
   onCollectRecommendation,
   onImportSelectedSet,
   onLoginRequired,
+  onOpenOrganizationWorkspace,
   onRetryCollectionSync,
   onReturnToLocalWorkspace,
   onToggleLock,
   onToggleSelection,
-  workspaceLabel
+  workspaceLabel,
+  workspaceSourceType
 }: LibraryPaneProps) {
   const selectedCount = selectedPaperIds.length;
-  const folderGroups = groupWorkspacePapersByFolder(papers);
+  const [activeCollectionId, setActiveCollectionId] = useState<LibraryCollectionId>("my-library");
+  const activeCollection =
+    libraryCollections.find((collection) => collection.id === activeCollectionId) ??
+    libraryCollections[0];
+  const visiblePapers = papers.filter((paper) => paperMatchesCollection(paper, activeCollection.id));
+  const folderGroups = groupWorkspacePapersByFolder(visiblePapers);
 
   return (
     <div className="library-pane">
@@ -83,11 +140,6 @@ export function LibraryPane({
         <button className="library-button ghost" type="button">
           刷新本地文献库
         </button>
-        {canReturnToLocalWorkspace ? (
-          <button className="library-button ghost" type="button" onClick={onReturnToLocalWorkspace}>
-            返回本地文献库
-          </button>
-        ) : null}
       </div>
 
       <div
@@ -98,6 +150,14 @@ export function LibraryPane({
         }}
         onDrop={(event) => {
           event.preventDefault();
+          const droppedPdfFiles = Array.from(event.dataTransfer.files ?? []).filter((file) =>
+            file.name.toLowerCase().endsWith(".pdf")
+          );
+          if (droppedPdfFiles.length > 0) {
+            onAddDroppedPdfFiles?.(droppedPdfFiles);
+            return;
+          }
+
           const payload = parseLibraryDragPayload<CollectionItem | RecommendationItem>(
             event.dataTransfer,
             "application/liteasy-library-item"
@@ -108,42 +168,103 @@ export function LibraryPane({
         }}
       >
         <div className="library-section-title">我的文献库</div>
-        <div className="library-workspace-label">当前工作区：{workspaceLabel}</div>
-        <div className="library-workspace-root">工作区母目录：{workspaceLabel}</div>
+        <div className="library-workspace-overview">
+          <div>
+            <div className="library-workspace-label">当前工作区：{workspaceLabel}</div>
+            <div className="library-workspace-root">工作区母目录：{workspaceLabel}</div>
+          </div>
+          <div aria-label="文献视图切换" className="library-workspace-switcher" role="group">
+            <button
+              aria-pressed={workspaceSourceType === "local_library"}
+              className={workspaceSourceType === "local_library" ? "active" : ""}
+              onClick={() => {
+                if (workspaceSourceType !== "local_library") {
+                  onReturnToLocalWorkspace();
+                }
+              }}
+              title="查看本地文献库，不会退出当前组织"
+              type="button"
+            >
+              本地
+            </button>
+            <button
+              aria-pressed={workspaceSourceType === "organization_shared"}
+              className={workspaceSourceType === "organization_shared" ? "active" : ""}
+              disabled={workspaceSourceType !== "organization_shared" && !canOpenOrganizationWorkspace}
+              onClick={() => {
+                if (workspaceSourceType !== "organization_shared" && canOpenOrganizationWorkspace) {
+                  onOpenOrganizationWorkspace();
+                }
+              }}
+              title={
+                canOpenOrganizationWorkspace || workspaceSourceType === "organization_shared"
+                  ? `查看${organizationWorkspaceLabel}`
+                  : "登录并加载组织空间后可切换到组织共享文献库"
+              }
+              type="button"
+            >
+              组织
+            </button>
+          </div>
+        </div>
         <div className="library-selection-summary">
           当前选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
         </div>
-        <div className="library-folder-tree" aria-label="工作区目录树">
-          {folderGroups.map((group) => (
-            <section className="library-folder-group" key={group.folder}>
-              <div className="library-folder-header">
-                <span>目录：{group.folder}</span>
-                <span>{group.papers.length} 篇文献</span>
-              </div>
-              <ul className="library-list">
-                {group.papers.map((paper) => (
-                  <li className="library-item" key={paper.id}>
-                    <div className="paper-row">
-                      <label>
-                        <input
-                          checked={selectedPaperIds.includes(paper.id)}
-                          disabled={selectionLocked}
-                          onChange={() => onToggleSelection(paper.id)}
-                          type="checkbox"
-                        />
-                        <span>{paper.title}</span>
-                      </label>
-                      {importJobs[paper.id] ? (
-                        <span className={`job-badge ${importJobs[paper.id].status}`}>
-                          {importJobs[paper.id].status}
-                        </span>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+        <div aria-label="PDF 文件拖拽导入区" className="library-file-drop-target">
+          拖入 PDF 添加到文献库
+        </div>
+        <div className="library-active-collection">当前 Collection：{activeCollection.label}</div>
+        <div className="library-collection-browser">
+          <nav aria-label="文献库 collections" className="library-collection-tree">
+            {libraryCollections.map((collection) => (
+              <button
+                aria-pressed={activeCollection.id === collection.id}
+                className={`library-tree-row ${collection.level} ${
+                  activeCollection.id === collection.id ? "active" : ""
+                }`}
+                key={collection.id}
+                onClick={() => setActiveCollectionId(collection.id)}
+                title={`切换到 ${collection.label}`}
+                type="button"
+              >
+                {collection.label}
+              </button>
+            ))}
+          </nav>
+          <div className="library-folder-tree" aria-label="工作区目录树">
+            {folderGroups.length > 0 ? folderGroups.map((group) => (
+              <section className="library-folder-group" key={group.folder}>
+                <div className="library-folder-header">
+                  <span>目录：{group.folder}</span>
+                  <span>{group.papers.length} 篇文献</span>
+                </div>
+                <ul className="library-list">
+                  {group.papers.map((paper) => (
+                    <li className="library-item" key={paper.id}>
+                      <div className="paper-row">
+                        <label>
+                          <input
+                            checked={selectedPaperIds.includes(paper.id)}
+                            disabled={selectionLocked}
+                            onChange={() => onToggleSelection(paper.id)}
+                            type="checkbox"
+                          />
+                          <span>{paper.title}</span>
+                        </label>
+                        {importJobs[paper.id] ? (
+                          <span className={`job-badge ${importJobs[paper.id].status}`}>
+                            {importJobs[paper.id].status}
+                          </span>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )) : (
+              <div className="library-empty-collection">当前 Collection 暂无文献</div>
+            )}
+          </div>
         </div>
       </div>
 

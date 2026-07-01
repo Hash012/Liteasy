@@ -6,7 +6,7 @@ test("completes a mind-map artifact task and opens a new tab", () => {
 
   store.completeTask(taskId, {
     artifactId: "a1",
-    title: "Transformer Mind Map",
+    title: "Literature Mind Map",
     type: "mindmap"
   });
 
@@ -20,7 +20,7 @@ test("opens a distinct tab for a tree analysis task", () => {
 
   store.completeTask(taskId, {
     artifactId: "a2",
-    title: "Transformer Tree Analysis",
+    title: "Literature Tree Analysis",
     type: "tree"
   });
 

@@ -9,7 +9,7 @@ import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../
 import type { OrganizationGovernanceStatus, OrganizationGovernanceSummary, OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "../features/organization/organization.types";
 import type { CollectionItem } from "../features/collection/collection.types";
 import type { RecommendationItem, RecommendationStatus } from "../features/recommendations/recommendation.types";
-import type { Paper } from "../features/workspace/workspace.types";
+import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
 import type { SettingsState } from "../features/settings/settings.types";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
@@ -32,6 +32,7 @@ export type LeftPaneProps = {
   organizationActionMessage?: string;
   listStatus: OrganizationListStatus;
   onAddExternalPaper: (item: { id: string; source: string; title: string }) => void;
+  onAddDroppedPdfFiles?: (files: File[]) => void;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (item: RecommendationItem) => void;
@@ -42,6 +43,7 @@ export type LeftPaneProps = {
   onJoinOrganization?: () => void;
   onLoginRequired?: () => void;
   onLeaveOrganization?: (summary: OrganizationSummary) => void;
+  onLogout: () => void;
   onMarkNotificationsRead?: (summary: OrganizationSummary) => void;
   onOpenAcademicArchive: () => void;
   onOpenOrganizationDialog: () => void;
@@ -70,6 +72,7 @@ export type LeftPaneProps = {
   settings: SettingsState;
   summary: OrganizationSummary | null;
   workspaceLabel: string;
+  workspaceSourceType: WorkspaceSourceType;
 };
 
 function getPaneHeader(leftRailView: LeftRailView) {
@@ -106,6 +109,7 @@ export function LeftPane({
   listMessage,
   listStatus,
   onAddExternalPaper,
+  onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
   onCollectRecommendation,
@@ -116,6 +120,7 @@ export function LeftPane({
   onJoinOrganization,
   onLoginRequired,
   onLeaveOrganization,
+  onLogout,
   onMarkNotificationsRead,
   onOpenAcademicArchive,
   onOpenOrganizationDialog,
@@ -144,8 +149,18 @@ export function LeftPane({
   selectionLocked,
   settings,
   summary,
-  workspaceLabel
+  workspaceLabel,
+  workspaceSourceType
 }: LeftPaneProps) {
+  const canOpenOrganizationWorkspace =
+    organizationSummary !== null &&
+    organizationSummary.sharedLibrary.status === "available" &&
+    organizationSummary.sharedLibrary.documentCount > 0 &&
+    typeof onOpenSharedLibrary === "function";
+  const organizationWorkspaceLabel = organizationSummary
+    ? `${organizationSummary.sharedLibrary.name}（${organizationSummary.name}）`
+    : "组织共享文献库";
+
   return (
     <aside className="pane left">
       <div className="pane-header">{getPaneHeader(leftRailView)}</div>
@@ -180,6 +195,7 @@ export function LeftPane({
               academicProfile={academicProfile}
               accountSession={accountSession}
               onClearProfile={onClearProfile}
+              onLogout={onLogout}
               onOpenAcademicArchive={onOpenAcademicArchive}
               onToggleProfileSampling={onToggleProfileSampling}
               onUpdateAcademicProfile={onUpdateAcademicProfile}
@@ -193,7 +209,10 @@ export function LeftPane({
               <div className="organization-sidebar-header">
                 <div>
                   <div className="organization-sidebar-kicker">Activity · Profile</div>
-                  <div className="organization-sidebar-title">个人中心</div>
+                  <div className="organization-sidebar-title-row">
+                    <div className="organization-sidebar-title">个人中心</div>
+                    <span className="profile-login-status">未登录</span>
+                  </div>
                 </div>
               </div>
               <div className="organization-sidebar-actions">
@@ -218,20 +237,27 @@ export function LeftPane({
         ) : (
           <LibraryPane
             accountSessionAvailable={accountSession !== null}
-            canReturnToLocalWorkspace={workspaceLabel !== "本地文献库"}
+            canOpenOrganizationWorkspace={canOpenOrganizationWorkspace}
             collectionItems={collectionItems}
             collectionMessage={collectionMessage}
             collectionStatus={collectionStatus}
             importJobs={importJobs}
             onAddExternalPaper={onAddExternalPaper}
+            onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
             onCollectRecommendation={onCollectRecommendation}
             onImportSelectedSet={onImportSelectedSet}
             onLoginRequired={onLoginRequired}
+            onOpenOrganizationWorkspace={() => {
+              if (organizationSummary) {
+                onOpenSharedLibrary?.(organizationSummary);
+              }
+            }}
             onRetryCollectionSync={onRetryCollectionSync}
             onReturnToLocalWorkspace={onReturnToLocalWorkspace}
             onToggleLock={onToggleLock}
             onToggleSelection={onToggleSelection}
+            organizationWorkspaceLabel={organizationWorkspaceLabel}
             papers={papers}
             recommendationItems={recommendationItems}
             recommendationMessage={recommendationMessage}
@@ -240,6 +266,7 @@ export function LeftPane({
             selectedPaperIds={selectedPaperIds}
             selectionLocked={selectionLocked}
             workspaceLabel={workspaceLabel}
+            workspaceSourceType={workspaceSourceType}
           />
         )}
       </div>

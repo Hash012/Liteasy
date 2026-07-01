@@ -34,7 +34,7 @@ export function AssistantSidebar({
 }: AssistantSidebarProps) {
   return (
     <section aria-label="右栏AI助手" className="pane right assistant-only-pane">
-      <div className="pane-header">AI Assistant</div>
+      <div className="pane-header">Liteasy Chat</div>
       <div className="pane-body">
         <AssistantPane
           importedChunksByPaperId={importedChunksByPaperId}

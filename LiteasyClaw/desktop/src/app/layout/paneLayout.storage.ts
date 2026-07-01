@@ -36,6 +36,14 @@ function isPaneCollapseState(value: unknown): value is PaneCollapseState {
   );
 }
 
+function normalizePaneCollapseState(value: PaneCollapseState): PaneCollapseState {
+  return {
+    bottom: typeof value.bottom === "boolean" ? value.bottom : defaultPaneCollapseState.bottom,
+    left: value.left,
+    right: value.right
+  };
+}
+
 export function loadPaneLayoutPreference(): PaneLayoutPreference {
   const raw = window.localStorage.getItem(storageKey);
   if (!raw) {
@@ -56,7 +64,10 @@ export function loadPaneLayoutPreference(): PaneLayoutPreference {
     }
 
     if (parsed && isPaneLayout(parsed.layout) && isPaneCollapseState(parsed.collapsed)) {
-      return parsed;
+      return {
+        collapsed: normalizePaneCollapseState(parsed.collapsed),
+        layout: parsed.layout
+      };
     }
   } catch {
     // Fall back to defaults when stored data is malformed.

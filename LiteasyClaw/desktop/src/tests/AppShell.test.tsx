@@ -17,7 +17,7 @@ async function openOrganizationPanel(user: ReturnType<typeof userEvent.setup>) {
   if (screen.queryByLabelText("左边栏组织")) {
     return screen.getByLabelText("左边栏组织");
   }
-  await user.click(screen.getByRole("button", { name: "组织" }));
+  await user.click(within(screen.getByLabelText("左边栏导航")).getByRole("button", { name: "组织" }));
   return screen.getByLabelText("左边栏组织");
 }
 
@@ -37,12 +37,31 @@ async function openProfilePanel(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByLabelText("左边栏个人中心");
 }
 
-async function loginThroughDialog(user: ReturnType<typeof userEvent.setup>) {
-  const loginDialog = screen.queryByRole("dialog", { name: "轻量登录面板" });
-
-  if (!loginDialog) {
-    await user.click(screen.getByRole("button", { name: "登录云账号" }));
+async function openLoginDialogFromPersonalCenter(user: ReturnType<typeof userEvent.setup>) {
+  if (screen.queryByRole("dialog", { name: "轻量登录面板" })) {
+    return screen.getByRole("dialog", { name: "轻量登录面板" });
   }
+
+  await user.click(screen.getByRole("button", { name: "个人中心" }));
+  const profileGate = screen.getByLabelText("左边栏个人能力说明");
+  await user.click(within(profileGate).getByRole("button", { name: "登录后查看个人能力" }));
+  return screen.getByRole("dialog", { name: "轻量登录面板" });
+}
+
+function getStoredAccountSession() {
+  const rawSession = window.localStorage.getItem("liteasy.account.session.v1");
+  return rawSession ? (JSON.parse(rawSession) as { name: string; sessionId: string }) : null;
+}
+
+async function expectStoredAccountSession(sessionId = "demo-session-1") {
+  await waitFor(() => {
+    expect(getStoredAccountSession()?.sessionId).toBe(sessionId);
+  });
+  expect(screen.queryByRole("button", { name: "已登录" })).not.toBeInTheDocument();
+}
+
+async function loginThroughDialog(user: ReturnType<typeof userEvent.setup>) {
+  await openLoginDialogFromPersonalCenter(user);
 
   await user.click(screen.getByRole("button", { name: "一键 Demo 登录" }));
 
@@ -50,9 +69,7 @@ async function loginThroughDialog(user: ReturnType<typeof userEvent.setup>) {
     expect(screen.queryByRole("dialog", { name: "轻量登录面板" })).not.toBeInTheDocument();
   });
 
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 }
 
 
@@ -77,7 +94,7 @@ test("grounds qa answers in the currently selected imported paper set", async ()
 
   render(<AppShell />);
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await user.click(screen.getByRole("button", { name: "锁定选择" }));
   await user.click(screen.getByRole("button", { name: "交给AI流程" }));
 
@@ -102,8 +119,9 @@ test("shows the unified lightweight login dialog on logged-out startup and respe
 
   await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
   expect(screen.queryByRole("dialog", { name: "轻量登录面板" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "登录云账号" })).not.toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "登录云账号" }));
+  await openLoginDialogFromPersonalCenter(user);
   expect(screen.getByRole("dialog", { name: "轻量登录面板" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("checkbox", { name: "不再提醒" }));
@@ -135,6 +153,92 @@ test("opens the unified lightweight login dialog from the organization capabilit
   expect(screen.getByRole("dialog", { name: "轻量登录面板" })).toBeInTheDocument();
 });
 
+test("registered personal accounts unlock organization creation", async () => {
+  const user = userEvent.setup();
+  const requestedUrls: string[] = [];
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      requestedUrls.push(String(input));
+
+      if (String(input).includes("/v1/account/register")) {
+        return {
+          json: async () => ({
+            session: {
+              email: "tian@example.com",
+              expiresAt: "2026-12-31T23:59:59.000Z",
+              membershipTier: "pro",
+              name: "Tian",
+              sessionId: "account-session-tian-example-com"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/org/summary")) {
+        return {
+          json: async () => ({
+            summary: {
+              auditEvents: [],
+              memberCount: 1,
+              members: [{ id: "member-1", name: "Tian", role: "owner" }],
+              myRole: "owner",
+              name: "Liteasy AI Reading Lab",
+              notifications: [],
+              organizationId: "org-demo-1",
+              quota: {
+                periodEndsAt: "2026-06-01T00:00:00.000Z",
+                storageLimitGb: 100,
+                storageUsedGb: 12
+              },
+              sharedLibrary: {
+                documentCount: 1,
+                documents: [],
+                name: "组织共享文献库",
+                status: "available"
+              },
+              taskSummary: { failed: 0, running: 0 }
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({
+          list: {
+            activeOrganizationId: "org-demo-1",
+            organizations: []
+          }
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(<AppShell />);
+
+  const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+  await user.type(within(dialog).getByLabelText("昵称"), "Tian");
+  await user.type(within(dialog).getByLabelText("邮箱"), "tian@example.com");
+  await user.type(within(dialog).getByLabelText("密码"), "private-password-1");
+  await user.click(within(dialog).getByRole("button", { name: "注册并登录" }));
+
+  await expectStoredAccountSession("account-session-tian-example-com");
+
+  await openOrganizationPanel(user);
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "创建组织" })).toBeEnabled();
+  });
+  expect(requestedUrls).toContain("http://127.0.0.1:8787/v1/account/register");
+});
+
 test("does not expose the editable personal center while logged out", async () => {
   const user = userEvent.setup();
 
@@ -144,6 +248,8 @@ test("does not expose the editable personal center while logged out", async () =
   await user.click(screen.getByRole("button", { name: "个人中心" }));
 
   expect(screen.queryByLabelText("左边栏个人中心")).not.toBeInTheDocument();
+  const profileGate = screen.getByLabelText("左边栏个人能力说明");
+  expect(within(profileGate).getByText("未登录")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "登录后查看个人能力" })).toBeInTheDocument();
 });
 
@@ -168,33 +274,42 @@ test("supports the confirmed workbench pane layout", async () => {
   const workbench = screen.getByTestId("workbench-layout");
   expect(workbench).toHaveStyle({
     "--left-pane-size": "minmax(220px, 24fr)",
+    "--reader-artifact-row-size": "minmax(220px, 0.65fr)",
     "--right-pane-size": "minmax(220px, 24fr)"
   });
 
-  expect(screen.queryByLabelText("折叠左栏")).not.toBeInTheDocument();
-  expect(screen.queryByLabelText("折叠右栏")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("右栏折叠控制")).toBeInTheDocument();
+  const readerHeader = screen.getByLabelText("Reader 标题栏");
+  const layoutControls = within(readerHeader).getByRole("toolbar", { name: "阅读区布局控制" });
+  expect(within(layoutControls).getByRole("button", { name: "折叠左侧栏" })).toBeInTheDocument();
+  expect(within(layoutControls).getByRole("button", { name: "折叠下栏" })).toBeInTheDocument();
+  expect(within(layoutControls).getByRole("button", { name: "折叠右侧栏" })).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "文献库" }));
+  await user.click(within(layoutControls).getByRole("button", { name: "折叠左侧栏" }));
 
-  expect(screen.queryByLabelText("展开左栏")).not.toBeInTheDocument();
   expect(workbench).toHaveStyle({
     "--left-pane-size": "0px"
   });
-  expect(screen.getByText("Reader", { selector: ".pane-header" })).toBeInTheDocument();
-  expect(screen.getByText("AI Assistant", { selector: ".pane-header" })).toBeInTheDocument();
+  expect(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "展开左侧栏" })).toBeInTheDocument();
+  expect(screen.getByText("Liteasy Chat", { selector: ".pane-header" })).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "文献库" }));
+  await user.click(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "展开左侧栏" }));
 
   expect(workbench).toHaveStyle({
     "--left-pane-size": "minmax(220px, 24fr)"
   });
 
-  await user.click(screen.getByLabelText("右栏折叠控制"));
+  await user.click(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "折叠下栏" }));
 
-  expect(screen.getByLabelText("展开右栏")).toBeInTheDocument();
+  expect(screen.queryByLabelText("多模态产物区域")).not.toBeInTheDocument();
   expect(workbench).toHaveStyle({
-    "--right-pane-size": "44px"
+    "--reader-artifact-row-size": "0px"
+  });
+
+  await user.click(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "折叠右侧栏" }));
+
+  expect(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "展开右侧栏" })).toBeInTheDocument();
+  expect(workbench).toHaveStyle({
+    "--right-pane-size": "0px"
   });
 
   fireEvent.pointerDown(screen.getByLabelText("调整左栏宽度"), {
@@ -213,19 +328,19 @@ test("renders artifact content from imported selected-document chunks", async ()
 
   render(<AppShell />);
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await user.click(screen.getByRole("button", { name: "锁定选择" }));
   await user.click(screen.getByRole("button", { name: "思维导图" }));
 
   await waitFor(() => {
-    expect(screen.getByText("Transformer Mind Map")).toBeInTheDocument();
+    expect(screen.getByText("Literature Mind Map")).toBeInTheDocument();
   }, { timeout: 3000 });
 
   expect(
-    screen.getAllByText("BERT: Pre-training of Deep Bidirectional Transformers").length
+    screen.getAllByText("Survey of Vector Database Management Systems").length
   ).toBeGreaterThan(1);
-  expect(screen.getByText("双向预训练")).toBeInTheDocument();
-  expect(screen.getByText("预训练目标")).toBeInTheDocument();
+  expect(screen.getByText("向量数据库管理系统")).toBeInTheDocument();
+  expect(screen.getByText("向量索引")).toBeInTheDocument();
 }, 10000);
 
 test("collapses the left pane when clicking the active activity-bar item", async () => {
@@ -240,8 +355,8 @@ test("collapses the left pane when clicking the active activity-bar item", async
   expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("0px");
   expect(workbench.style.getPropertyValue("--left-pane-utility-size")).toBe("0px");
   expect(screen.queryByLabelText("展开左栏")).not.toBeInTheDocument();
-  expect(screen.getByText("Reader", { selector: ".pane-header" })).toBeInTheDocument();
-  expect(screen.getByText("AI Assistant", { selector: ".pane-header" })).toBeInTheDocument();
+  expect(within(screen.getByLabelText("Reader 标题栏")).getByText("Reader", { selector: ".reader-pane-title" })).toBeInTheDocument();
+  expect(screen.getByText("Liteasy Chat", { selector: ".pane-header" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "组织" }));
   expect(screen.getByLabelText("左边栏组织")).toBeInTheDocument();
@@ -264,6 +379,83 @@ test("keeps the three primary panes as direct grid items in the workbench", asyn
   expect(workbench.querySelector(":scope > main.pane.center")).toBeInTheDocument();
   expect(workbench.querySelector(":scope > section.pane.right.assistant-only-pane")).toBeInTheDocument();
 });
+
+test("shows the unified cloud model capability in settings", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  const settingsPane = await openSettingsPanel(user);
+
+  expect(within(settingsPane).getByText("云端模型能力")).toBeInTheDocument();
+  expect(
+    within(settingsPane).getByText("Liteasy 面向普通用户统一通过云端模型能力提供问答、解释和产物生成服务。")
+  ).toBeInTheDocument();
+  expect(within(settingsPane).queryByText(/本地直连/)).not.toBeInTheDocument();
+});
+
+test("shows the latest cloud model execution chain in the assistant message", async () => {
+  const user = userEvent.setup();
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      if (String(input).includes("/v1/model/generate")) {
+        return {
+          json: async () => ({
+            answer: "真实服务回答",
+            execution: {
+              backend: "dev_cloud",
+              mode: "live",
+              provider: "openai"
+            }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-dev-cloud-live",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(
+    <AppShell
+      initialSettings={{
+        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy",
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+    />
+  );
+
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
+  await user.click(screen.getByRole("button", { name: "锁定选择" }));
+  await user.click(screen.getByRole("button", { name: "交给AI流程" }));
+
+  await waitFor(() => {
+    expect(screen.getByText("parsed")).toBeInTheDocument();
+  }, { timeout: 2500 });
+
+  await selectInitialAssistantMode(user, "问答");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇综述如何定义向量数据库系统？");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await waitFor(() => {
+    expect(screen.getByText("模型链路：云端模型能力 -> 云端服务 -> OpenAI")).toBeInTheDocument();
+  });
+}, 10000);
 
 test("logs into the dev cloud account and restores the session on next render", async () => {
   const user = userEvent.setup();
@@ -314,15 +506,10 @@ test("logs into the dev cloud account and restores the session on next render", 
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
+  expect(screen.queryByRole("button", { name: "登录云账号" })).not.toBeInTheDocument();
 
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
-
-  expect(screen.getByRole("button", { name: "已登录" })).toHaveAttribute(
-    "title",
-    expect.stringContaining("已登录云账号")
-  );
+  const profilePanel = await openProfilePanel(user);
+  expect(within(profilePanel).getByText("昵称：Liteasy Researcher")).toBeInTheDocument();
   unmount();
 
   render(
@@ -333,14 +520,9 @@ test("logs into the dev cloud account and restores the session on next render", 
     />
   );
 
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
-
-  expect(screen.getByRole("button", { name: "已登录" })).toHaveAttribute(
-    "title",
-    expect.stringContaining("已恢复本地云账号会话")
-  );
+  await expectStoredAccountSession();
+  const restoredProfilePanel = await openProfilePanel(user);
+  expect(within(restoredProfilePanel).getByText("昵称：Liteasy Researcher")).toBeInTheDocument();
   await openSettingsPanel(user);
 }, 10000);
 
@@ -371,23 +553,23 @@ test("shows cloud recommendations for the current selected document set after ac
             recommendations: [
               {
                 discoveredAt: "2026-05-14T08:15:00Z",
-                id: "rec-bert-1",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-1",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "high",
                 relevanceScore: 0.92,
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               },
               {
                 discoveredAt: "2026-05-14T09:10:00Z",
-                id: "rec-bert-2",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-2",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "medium",
                 relevanceScore: 0.78,
-                reason: "延续 BERT 路线，强调参数共享与效率优化。",
+                reason: "补充开源向量数据库系统实现，便于和综述框架对照。",
                 source: "arXiv Watch",
-                title: "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"
+                title: "Milvus: A Purpose-Built Vector Data Management System"
               }
             ]
           }),
@@ -401,11 +583,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -419,11 +601,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -437,11 +619,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -455,11 +637,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -473,11 +655,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -491,11 +673,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -509,11 +691,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -527,11 +709,11 @@ test("shows cloud recommendations for the current selected document set after ac
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -615,26 +797,24 @@ test("shows cloud recommendations for the current selected document set after ac
 
   await loginThroughDialog(user);
 
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
 
   await waitFor(() => {
     expect(
       within(screen.getByLabelText("关联推荐列表")).getByText(
-        "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+        "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       )
     ).toBeInTheDocument();
   });
 
   expect(within(screen.getByLabelText("关联推荐列表")).getByText("Semantic Scholar")).toBeInTheDocument();
   expect(
-    within(screen.getByLabelText("关联推荐列表")).getByText("同样关注大规模预训练语言模型的迁移能力。")
+    within(screen.getByLabelText("关联推荐列表")).getByText("同样关注向量数据库系统架构与相似度检索能力。")
   ).toBeInTheDocument();
   expect(
-    screen.getAllByText("关联：BERT: Pre-training of Deep Bidirectional Transformers").length
+    screen.getAllByText("关联：Survey of Vector Database Management Systems").length
   ).toBeGreaterThan(0);
   expect(screen.getByText("高关联")).toBeInTheDocument();
 }, 10000);
@@ -666,23 +846,23 @@ test("reorders recommendations after assistant command switches to retrieval-tim
             recommendations: [
               {
                 discoveredAt: "2026-05-14T08:15:00Z",
-                id: "rec-bert-1",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-1",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "high",
                 relevanceScore: 0.92,
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               },
               {
                 discoveredAt: "2026-05-14T09:10:00Z",
-                id: "rec-bert-2",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-2",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "medium",
                 relevanceScore: 0.78,
-                reason: "延续 BERT 路线，强调参数共享与效率优化。",
+                reason: "补充开源向量数据库系统实现，便于和综述框架对照。",
                 source: "arXiv Watch",
-                title: "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"
+                title: "Milvus: A Purpose-Built Vector Data Management System"
               }
             ]
           }),
@@ -696,39 +876,11 @@ test("reorders recommendations after assistant command switches to retrieval-tim
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
-              }
-            ]
-          }),
-          ok: true,
-          status: 200
-        };
-      }
-
-      if (String(input).includes("/v1/collection/list")) {
-        return {
-          json: async () => ({
-            items: []
-          }),
-          ok: true,
-          status: 200
-        };
-      }
-
-      if (String(input).includes("/v1/collection/items")) {
-        return {
-          json: async () => ({
-            items: [
-              {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
-                savedAt: "2026-05-14T10:30:00.000Z",
-                source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -752,11 +904,39 @@ test("reorders recommendations after assistant command switches to retrieval-tim
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
+              }
+            ]
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/collection/list")) {
+        return {
+          json: async () => ({
+            items: []
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).includes("/v1/collection/items")) {
+        return {
+          json: async () => ({
+            items: [
+              {
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
+                savedAt: "2026-05-14T10:30:00.000Z",
+                source: "Semantic Scholar",
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -803,18 +983,16 @@ test("reorders recommendations after assistant command switches to retrieval-tim
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
-    expect(screen.getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")).toBeInTheDocument();
+    expect(screen.getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")).toBeInTheDocument();
   });
 
   const recommendationList = screen.getByLabelText("关联推荐列表");
   expect(within(recommendationList).getAllByRole("listitem")[0]).toHaveTextContent(
-    "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+    "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
   );
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "按检索时间排序推荐");
@@ -825,7 +1003,7 @@ test("reorders recommendations after assistant command switches to retrieval-tim
   });
 
   expect(within(recommendationList).getAllByRole("listitem")[0]).toHaveTextContent(
-    "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"
+    "Milvus: A Purpose-Built Vector Data Management System"
   );
 }, 10000);
 
@@ -863,13 +1041,13 @@ test("drags a recommendation into local collection and restores it on next rende
             recommendations: [
               {
                 discoveredAt: "2026-05-14T08:15:00Z",
-                id: "rec-bert-1",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-1",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "high",
                 relevanceScore: 0.92,
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -936,15 +1114,13 @@ test("drags a recommendation into local collection and restores it on next rende
 
   await loginThroughDialog(user);
 
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
 
   await waitFor(() => {
     expect(
-      screen.getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+      screen.getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
 
@@ -959,7 +1135,7 @@ test("drags a recommendation into local collection and restores it on next rende
   };
 
   const recommendationCard = screen
-    .getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+    .getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     .closest("li");
   expect(recommendationCard).not.toBeNull();
   fireEvent.dragStart(recommendationCard!, { dataTransfer });
@@ -970,7 +1146,7 @@ test("drags a recommendation into local collection and restores it on next rende
 
   await waitFor(() => {
     expect(
-      within(collectionZone).getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+      within(collectionZone).getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
 
@@ -989,7 +1165,7 @@ test("drags a recommendation into local collection and restores it on next rende
   await waitFor(() => {
     expect(
       within(restoredCollectionZone).getByText(
-        "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+        "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       )
     ).toBeInTheDocument();
   });
@@ -1029,13 +1205,13 @@ test("drags collected and recommended papers into the local library without dupl
             recommendations: [
               {
                 discoveredAt: "2026-05-14T08:15:00Z",
-                id: "rec-bert-1",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-1",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "high",
                 relevanceScore: 0.92,
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -1101,14 +1277,12 @@ test("drags collected and recommended papers into the local library without dupl
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
     expect(
-      screen.getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+      screen.getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
 
@@ -1123,7 +1297,7 @@ test("drags collected and recommended papers into the local library without dupl
   };
 
   const recommendationCard = screen
-    .getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+    .getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     .closest("li");
   expect(recommendationCard).not.toBeNull();
 
@@ -1136,12 +1310,12 @@ test("drags collected and recommended papers into the local library without dupl
 
   await waitFor(() => {
     expect(
-      within(libraryZone).getByLabelText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+      within(libraryZone).getByLabelText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
 
   expect(
-    within(libraryZone).getAllByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+    within(libraryZone).getAllByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
   ).toHaveLength(1);
 
   const collectionZone = screen.getByLabelText("收藏投放区");
@@ -1149,11 +1323,11 @@ test("drags collected and recommended papers into the local library without dupl
   fireEvent.drop(collectionZone, { dataTransfer });
   await waitFor(() => {
     expect(
-      within(collectionZone).getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+      within(collectionZone).getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
   const collectedCard = within(collectionZone)
-    .getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+    .getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     .closest("li");
   expect(collectedCard).not.toBeNull();
 
@@ -1162,7 +1336,7 @@ test("drags collected and recommended papers into the local library without dupl
   fireEvent.drop(libraryZone, { dataTransfer });
 
   expect(
-    within(libraryZone).getAllByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+    within(libraryZone).getAllByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
   ).toHaveLength(1);
 }, 10000);
 
@@ -1197,13 +1371,13 @@ test("clears visible recommendation cache on user request", async () => {
             recommendations: [
               {
                 discoveredAt: "2026-05-14T08:15:00Z",
-                id: "rec-bert-1",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-1",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "high",
                 relevanceScore: 0.92,
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -1217,11 +1391,11 @@ test("clears visible recommendation cache on user request", async () => {
           json: async () => ({
             items: [
               {
-                id: "rec-bert-1",
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                id: "rec-vdbms-1",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 savedAt: "2026-05-14T10:30:00.000Z",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -1302,13 +1476,11 @@ test("clears visible recommendation cache on user request", async () => {
   );
 
   await loginThroughDialog(user);
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
-    expect(screen.getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")).toBeInTheDocument();
+    expect(screen.getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")).toBeInTheDocument();
   });
   expect(recommendationRequestCount).toBe(1);
 
@@ -1362,13 +1534,13 @@ test("reuses cached recommendations until a collected paper is added to the libr
             recommendations: [
               {
                 discoveredAt: "2026-05-14T08:15:00Z",
-                id: "rec-bert-1",
-                relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+                id: "rec-vdbms-1",
+                relatedDocumentTitle: "Survey of Vector Database Management Systems",
                 relevanceBand: "high",
                 relevanceScore: 0.92,
-                reason: "同样关注大规模预训练语言模型的迁移能力。",
+                reason: "同样关注向量数据库系统架构与相似度检索能力。",
                 source: "Semantic Scholar",
-                title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+                title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
               }
             ]
           }),
@@ -1483,15 +1655,13 @@ test("reuses cached recommendations until a collected paper is added to the libr
   await openLibraryPanel(user);
 
   await loginThroughDialog(user);
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
     expect(
       within(screen.getByLabelText("关联推荐列表")).getByText(
-        "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+        "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       )
     ).toBeInTheDocument();
   });
@@ -1511,7 +1681,7 @@ test("reuses cached recommendations until a collected paper is added to the libr
     .getByLabelText("关联推荐列表")
     .querySelector("li");
   expect(recommendationCard).not.toBeNull();
-  expect(within(recommendationCard!).getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")).toBeInTheDocument();
+  expect(within(recommendationCard!).getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")).toBeInTheDocument();
   const collectionZone = screen.getByLabelText("收藏投放区");
   fireEvent.dragStart(recommendationCard!, { dataTransfer });
   fireEvent.dragOver(collectionZone, { dataTransfer });
@@ -1519,16 +1689,16 @@ test("reuses cached recommendations until a collected paper is added to the libr
 
   await waitFor(() => {
     expect(
-      within(collectionZone).getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+      within(collectionZone).getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
     expect(screen.queryByLabelText("关联推荐列表")).not.toBeInTheDocument();
   });
 
-  await user.click(screen.getByLabelText("BERT: Pre-training of Deep Bidirectional Transformers"));
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
     expect(screen.getByText("已显示当前选中文献集的缓存推荐。")).toBeInTheDocument();
   });
@@ -1540,7 +1710,7 @@ test("reuses cached recommendations until a collected paper is added to the libr
   const restoredCollectionZone = screen.getByLabelText("收藏投放区");
   fireEvent.dragStart(
     within(restoredCollectionZone)
-      .getByText("RoBERTa: A Robustly Optimized BERT Pretraining Approach")
+      .getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
       .closest("li")!,
     { dataTransfer }
   );
@@ -1548,7 +1718,7 @@ test("reuses cached recommendations until a collected paper is added to the libr
   fireEvent.dragOver(libraryZone, { dataTransfer });
   fireEvent.drop(libraryZone, { dataTransfer });
 
-  await user.click(screen.getByLabelText("RoBERTa: A Robustly Optimized BERT Pretraining Approach"));
+  await user.click(screen.getByLabelText("VBASE: Unifying Online Vector Similarity Search and Relational Queries"));
   await waitFor(() => {
     expect(screen.getByText("已显示当前选中文献集的缓存推荐。")).toBeInTheDocument();
   });
@@ -1581,7 +1751,7 @@ test("restored cloud account session uses local dev-cloud defaults for metadata 
         return {
           json: async () => ({
             result: {
-              acceptedCount: 2,
+              acceptedCount: 3,
               rejectedCount: 0,
               syncId: "metadata-restored-session",
               syncedAt: "2026-05-14T10:20:00Z"
@@ -1613,7 +1783,7 @@ test("restored cloud account session uses local dev-cloud defaults for metadata 
   const settingsPane = await openSettingsPanel(user);
 
   await waitFor(() => {
-    expect(within(settingsPane).getByText("文献同步：已同步 2 篇")).toBeInTheDocument();
+    expect(within(settingsPane).getByText("文献同步：已同步 3 篇")).toBeInTheDocument();
   });
 
   expect(requestedUrls).toContain("http://127.0.0.1:8787/v1/documents/metadata-sync");
@@ -1652,7 +1822,7 @@ test("retries document metadata sync from settings after a failed attempt", asyn
         return {
           json: async () => ({
             result: {
-              acceptedCount: 2,
+              acceptedCount: 3,
               rejectedCount: 0,
               syncId: "metadata-retry-success",
               syncedAt: "2026-05-14T10:25:00Z"
@@ -1697,7 +1867,7 @@ test("retries document metadata sync from settings after a failed attempt", asyn
   await user.click(within(settingsPane).getByRole("button", { name: "重新同步文献元数据" }));
 
   await waitFor(() => {
-    expect(within(settingsPane).getByText("文献同步：已同步 2 篇")).toBeInTheDocument();
+    expect(within(settingsPane).getByText("文献同步：已同步 3 篇")).toBeInTheDocument();
   });
 
   expect(within(settingsPane).getByText("同步批次：metadata-retry-success")).toBeInTheDocument();
@@ -1732,7 +1902,7 @@ test("syncs visible workspace document metadata after cloud account login", asyn
         return {
           json: async () => ({
             result: {
-              acceptedCount: 2,
+              acceptedCount: 3,
               rejectedCount: 0,
               syncId: "metadata-sync-1",
               syncedAt: "2026-05-14T10:20:00Z"
@@ -1777,7 +1947,7 @@ test("syncs visible workspace document metadata after cloud account login", asyn
   await loginThroughDialog(user);
 
   await waitFor(() => {
-    expect(screen.getByText("文献同步：已同步 2 篇")).toBeInTheDocument();
+    expect(screen.getByText("文献同步：已同步 3 篇")).toBeInTheDocument();
   });
 
   expect(screen.getByText("最近同步：2026-05-14T10:20:00Z")).toBeInTheDocument();
@@ -1786,13 +1956,18 @@ test("syncs visible workspace document metadata after cloud account login", asyn
     documents: [
       {
         id: "demo-1",
-        sourcePath: "fixtures/attention-is-all-you-need.pdf",
-        title: "Attention Is All You Need"
+        sourcePath: "/papers/colbert-late-interaction.pdf",
+        title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
       },
       {
         id: "demo-2",
-        sourcePath: "fixtures/bert-pretraining.pdf",
-        title: "BERT: Pre-training of Deep Bidirectional Transformers"
+        sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+        title: "Survey of Vector Database Management Systems"
+      },
+      {
+        id: "demo-3",
+        sourcePath: "/papers/acorn-vector-search.pdf",
+        title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
       }
     ],
     sessionId: "demo-session-1",
@@ -1929,7 +2104,7 @@ test("loads organization space from local dev cloud defaults after connecting", 
         return {
           json: async () => ({
             result: {
-              acceptedCount: 2,
+              acceptedCount: 3,
               rejectedCount: 0,
               syncId: "metadata-sync-1",
               syncedAt: "2026-05-14T10:20:00Z"
@@ -2208,8 +2383,8 @@ test("does not open the organization shared library just by connecting", async (
 
   await openLibraryPanel(user);
   const libraryZone = screen.getByLabelText("我的文献库投放区");
-  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
-  expect(within(libraryZone).getByText("BERT: Pre-training of Deep Bidirectional Transformers")).toBeInTheDocument();
+  expect(within(libraryZone).getByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).toBeInTheDocument();
+  expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
   expect(
     within(libraryZone).queryByText("Organization Reading List: Retrieval-Augmented Generation")
   ).not.toBeInTheDocument();
@@ -2350,13 +2525,16 @@ test("opens the organization shared library in the local workspace", async () =>
 
   const libraryZone = screen.getByLabelText("我的文献库投放区");
   expect(screen.getByText("当前工作区：组织共享文献库（Liteasy AI Reading Lab）")).toBeInTheDocument();
+  const workspaceSwitcher = within(libraryZone).getByRole("group", { name: "文献视图切换" });
+  expect(within(workspaceSwitcher).getByRole("button", { name: "组织" })).toHaveAttribute("aria-pressed", "true");
+  expect(within(workspaceSwitcher).getByRole("button", { name: "本地" })).toHaveAttribute("aria-pressed", "false");
   expect(
     within(libraryZone).getByText("Organization Reading List: Retrieval-Augmented Generation")
   ).toBeInTheDocument();
   expect(within(libraryZone).getByText("Team Notes on Long-Context Evaluation")).toBeInTheDocument();
-  expect(within(libraryZone).queryByText("Attention Is All You Need")).not.toBeInTheDocument();
+  expect(within(libraryZone).queryByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).not.toBeInTheDocument();
   expect(
-    within(libraryZone).queryByText("BERT: Pre-training of Deep Bidirectional Transformers")
+    within(libraryZone).queryByText("Survey of Vector Database Management Systems")
   ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute(
     "title",
@@ -2469,13 +2647,15 @@ test("returns from an organization shared library to the local library workspace
     expect(screen.getByText("当前工作区：组织共享文献库（Liteasy AI Reading Lab）")).toBeInTheDocument();
   });
 
-  await user.click(screen.getByRole("button", { name: "返回本地文献库" }));
+  let libraryZone = screen.getByLabelText("我的文献库投放区");
+  const organizationSwitcher = within(libraryZone).getByRole("group", { name: "文献视图切换" });
+  await user.click(within(organizationSwitcher).getByRole("button", { name: "本地" }));
 
-  const libraryZone = screen.getByLabelText("我的文献库投放区");
+  libraryZone = screen.getByLabelText("我的文献库投放区");
   expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
-  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
+  expect(within(libraryZone).getByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).toBeInTheDocument();
   expect(
-    within(libraryZone).getByText("BERT: Pre-training of Deep Bidirectional Transformers")
+    within(libraryZone).getByText("Survey of Vector Database Management Systems")
   ).toBeInTheDocument();
   expect(
     within(libraryZone).queryByText("Organization Reading List: Retrieval-Augmented Generation")
@@ -2484,6 +2664,16 @@ test("returns from an organization shared library to the local library workspace
     "title",
     "已返回本地文献库。"
   );
+
+  const localSwitcher = within(libraryZone).getByRole("group", { name: "文献视图切换" });
+  await user.click(within(localSwitcher).getByRole("button", { name: "组织" }));
+
+  await waitFor(() => {
+    expect(screen.getByText("当前工作区：组织共享文献库（Liteasy AI Reading Lab）")).toBeInTheDocument();
+  });
+  expect(
+    within(screen.getByLabelText("我的文献库投放区")).getByText("Organization Reading List: Retrieval-Augmented Generation")
+  ).toBeInTheDocument();
 }, 10000);
 
 
@@ -2900,8 +3090,10 @@ test("explains organization shared-library command prerequisites before login", 
   expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
 
   const libraryZone = screen.getByLabelText("我的文献库投放区");
-  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "返回本地文献库" })).not.toBeInTheDocument();
+  expect(within(libraryZone).getByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).toBeInTheDocument();
+  expect(
+    within(within(libraryZone).getByRole("group", { name: "文献视图切换" })).getByRole("button", { name: "组织" })
+  ).toBeDisabled();
 });
 
 
@@ -3026,7 +3218,7 @@ test("does not let assistant commands open an unavailable organization shared li
   expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
 
   const libraryZone = screen.getByLabelText("我的文献库投放区");
-  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
+  expect(within(libraryZone).getByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).toBeInTheDocument();
   expect(within(libraryZone).queryByText("Organization Reading List: Retrieval-Augmented Generation"))
     .not.toBeInTheDocument();
 }, 10000);
@@ -3146,7 +3338,7 @@ test("does not let assistant commands open an empty organization shared library"
   expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
 
   const libraryZone = screen.getByLabelText("我的文献库投放区");
-  expect(within(libraryZone).getByText("Attention Is All You Need")).toBeInTheDocument();
+  expect(within(libraryZone).getByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).toBeInTheDocument();
 }, 10000);
 
 
@@ -3274,8 +3466,10 @@ test("opens the organization shared library through a registered assistant comma
   expect(
     within(libraryZone).getByText("Organization Reading List: Retrieval-Augmented Generation")
   ).toBeInTheDocument();
-  expect(within(libraryZone).queryByText("Attention Is All You Need")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "返回本地文献库" })).toBeInTheDocument();
+  expect(within(libraryZone).queryByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).not.toBeInTheDocument();
+  expect(
+    within(within(libraryZone).getByRole("group", { name: "文献视图切换" })).getByRole("button", { name: "组织" })
+  ).toHaveAttribute("aria-pressed", "true");
 }, 10000);
 
 
@@ -3307,11 +3501,10 @@ test("clears organization notification read state after cloud account logout", a
   );
 
   await loginThroughDialog(user);
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "已登录" })).toBeInTheDocument();
-  });
+  await expectStoredAccountSession();
 
-  await user.click(screen.getByRole("button", { name: "已登录" }));
+  const profilePanel = await openProfilePanel(user);
+  await user.click(within(profilePanel).getByRole("button", { name: "退出登录" }));
 
   expect(window.localStorage.getItem("liteasy.organization.notifications.read.v1")).toBeNull();
 }, 10000);
@@ -4946,7 +5139,7 @@ test("opens the personal center in the left rail and toggles user profile sampli
   await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
 
   expect(within(leftPane).getByText("用户画像：已开启")).toBeInTheDocument();
-  expect(within(leftPane).getByText("已阅读论文数：2")).toBeInTheDocument();
+  expect(within(leftPane).getByText("已阅读论文数：3")).toBeInTheDocument();
   expect(within(leftPane).getByText("学术人格：跨学科综述型" )).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "学术档案" })).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "清空用户画像（需鉴权）" })).toBeInTheDocument();
@@ -5095,7 +5288,7 @@ test("opens the academic archive page from the personal center", async () => {
   expect(within(archiveDialog).getByText("学术档案" )).toBeInTheDocument();
   expect(within(archiveDialog).getByText("档案所有者：Liteasy Researcher" )).toBeInTheDocument();
   expect(within(archiveDialog).getByText("身份配置：性别 未设置 · 年龄 未设置 · 学段 未设置" )).toBeInTheDocument();
-  expect(within(archiveDialog).getByText("阅读统计：已阅读 2 篇论文" )).toBeInTheDocument();
+  expect(within(archiveDialog).getByText("阅读统计：已阅读 3 篇论文" )).toBeInTheDocument();
   expect(within(archiveDialog).getByText("学术人格分析：跨学科综述型" )).toBeInTheDocument();
   expect(within(archiveDialog).getByText("授权状态：微信/飞书/本地文件 未授权" )).toBeInTheDocument();
 }, 10000);
@@ -5219,7 +5412,7 @@ test("requires confirmation before clearing the user profile", async () => {
   expect(within(leftPane).getByText("用户画像已清空，基础身份信息已保留。" )).toBeInTheDocument();
 }, 10000);
 
-test("keeps workspace dialogs below the top brand bar", async () => {
+test("keeps workspace dialogs inside the workbench after removing the top account bar", async () => {
   const user = userEvent.setup();
 
   vi.stubGlobal(
@@ -5318,7 +5511,8 @@ test("keeps workspace dialogs below the top brand bar", async () => {
 
   render(<AppShell />);
 
-  const topBar = screen.getByText("LiteasyClaw").closest("header");
+  expect(document.querySelector(".app-topbar")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "登录云账号" })).not.toBeInTheDocument();
   await loginThroughDialog(user);
   await openOrganizationPanel(user);
   await user.click(screen.getByRole("button", { name: "打开组织窗口" }));
@@ -5326,16 +5520,14 @@ test("keeps workspace dialogs below the top brand bar", async () => {
   const dialogLayer = screen.getByTestId("workspace-dialog-layer");
   const appShell = dialogLayer.closest(".app-shell");
 
-  expect(topBar).toHaveClass("app-topbar");
   expect(appShell).toBeInTheDocument();
-  expect(appShell).not.toContainElement(topBar);
   expect(dialogLayer).toContainElement(screen.getByRole("dialog", { name: "组织窗口" }));
 });
 
 test("keeps the right pane as a minimal AI assistant and moves admin panels out", async () => {
   render(<AppShell />);
 
-  await screen.findByText(/云端模型能力/);
+  const readerHeader = await screen.findByLabelText("Reader 标题栏");
   const rightPane = screen.getByLabelText("右栏AI助手");
   expect(within(rightPane).getByPlaceholderText("输入你的问题或命令")).toBeInTheDocument();
   expect(within(rightPane).queryByText("模型接入策略")).not.toBeInTheDocument();
@@ -5343,7 +5535,8 @@ test("keeps the right pane as a minimal AI assistant and moves admin panels out"
   expect(within(rightPane).queryByText("组织空间")).not.toBeInTheDocument();
   expect(within(rightPane).queryByText("组织治理")).not.toBeInTheDocument();
 
-  expect(screen.getByText(/云端模型能力/)).toBeInTheDocument();
+  expect(within(readerHeader).getByText("云端模型能力")).toBeInTheDocument();
+  expect(within(readerHeader).getByText("LiteasyClaw")).toBeInTheDocument();
 });
 
 test("opens settings from the activity bar and keeps only user-facing cloud capability details", async () => {
@@ -5505,7 +5698,7 @@ test("opens organization from the activity bar and keeps governance there", asyn
 test("renders the activity bar separately from the library pane", async () => {
   render(<AppShell />);
 
-  await screen.findByText(/云端模型能力/);
+  await screen.findByLabelText("Reader 标题栏");
   const activityBar = screen.getByLabelText("左边栏导航");
   expect(within(activityBar).getByRole("button", { name: "文献库" })).toBeInTheDocument();
   expect(within(activityBar).getByRole("button", { name: "组织" })).toBeInTheDocument();
@@ -5520,16 +5713,16 @@ test("keeps assistant onboarding and mode hints in hover text instead of persist
   render(<AppShell />);
 
   await waitFor(() => {
-    expect(screen.getByText(/云端模型能力/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Reader 标题栏")).toBeInTheDocument();
   });
 
   const launcher = screen.getByLabelText("AI助手初始模式入口");
   expect(
-    within(launcher).queryByText("选择一个入口开始会话；进入对话后，这里会自动让位给消息流。")
+    within(launcher).queryByText("选择一个入口开始会话。")
   ).not.toBeInTheDocument();
   expect(launcher).toHaveAttribute(
     "title",
-    "选择一个入口开始会话；进入对话后，这里会自动让位给消息流。"
+    "选择一个入口开始会话。"
   );
 
   expect(screen.getByText("当前模式：命令")).toBeInTheDocument();

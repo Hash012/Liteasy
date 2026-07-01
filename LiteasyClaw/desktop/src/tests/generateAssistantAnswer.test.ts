@@ -8,34 +8,67 @@ test("generates cloud-proxy answers by default", async () => {
     importedChunksByPaperId: {
       "demo-2": [
         {
-          page: 8,
+          page: 4,
           paperId: "demo-2",
-          paperTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
-          snippet: "masked language model and next sentence prediction are used for pre-training",
-          summary: "预训练目标主要包括掩码语言模型和下一句预测。",
-          tags: ["预训练目标"]
+          paperTitle: "Survey of Vector Database Management Systems",
+          snippet: "vector database management systems manage unstructured data embeddings with indexes and query processing",
+          summary: "这篇综述把向量数据库管理系统概括为围绕向量表示、索引和查询处理组织的系统。",
+          tags: ["向量数据库", "索引", "查询处理"]
         }
       ]
     },
     mode: "qa",
-    question: "这篇论文的预训练目标是什么？",
+    question: "这篇综述如何定义向量数据库系统？",
     selectedPapers: [
       {
         id: "demo-2",
-        title: "BERT: Pre-training of Deep Bidirectional Transformers"
+        title: "Survey of Vector Database Management Systems"
       }
     ],
     settings
   });
 
-  expect(result.content).toContain("云端回答：这篇论文的预训练目标是什么？");
-  expect(result.content).toContain("demo-2 p.8");
+  expect(result.content).toContain("云端回答：这篇综述如何定义向量数据库系统？");
+  expect(result.content).toContain("demo-2 p.4");
   expect(result.audit).toEqual({
     model: "gpt-5-mini-auditor",
     rationale: "回答包含可追溯引用，且引用片段覆盖问题关键词。",
     score: 0.86,
     verdict: "pass"
   });
+  expect(result.executionTrace).toEqual({
+    backend: "desktop_mock",
+    endpoint: "mock://cloud-proxy",
+    mode: "mock",
+    provider: "openai",
+    source: "cloud_proxy"
+  });
+});
+
+test("keeps generation on the unified cloud model path when stale local-direct settings exist", async () => {
+  const store = createSettingsStore();
+  const settingsWithStaleLocalDirectKeys = {
+    ...store.getState(),
+    "models.access_mode": "local_direct",
+    "models.local_direct_enabled": true
+  };
+
+  const result = await generateAssistantAnswer({
+    importedChunksByPaperId: {},
+    mode: "qa",
+    question: "总结这篇论文的核心方法",
+    selectedPapers: [
+      {
+        id: "demo-1",
+        title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+      }
+    ],
+    settings: settingsWithStaleLocalDirectKeys
+  });
+
+  expect(result.content).toContain("云端回答：总结这篇论文的核心方法");
+  expect(result.audit.model).toBe("gpt-5-mini-auditor");
+  expect(result.audit.score).toBeGreaterThanOrEqual(0.8);
   expect(result.executionTrace).toEqual({
     backend: "desktop_mock",
     endpoint: "mock://cloud-proxy",
@@ -89,7 +122,7 @@ test("uses the cloud audit endpoint after http model generation", async () => {
     selectedPapers: [
       {
         id: "demo-1",
-        title: "Attention Is All You Need"
+        title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
       }
     ],
     settings: store.getState()

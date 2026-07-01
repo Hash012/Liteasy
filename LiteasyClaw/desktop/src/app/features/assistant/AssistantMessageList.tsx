@@ -11,15 +11,13 @@ type AssistantMessageListProps = {
 export function AssistantMessageList({ messages, mode, onModeChange }: AssistantMessageListProps) {
   if (messages.length === 0) {
     return (
-      <div className="assistant-messages">
+      <div className="assistant-messages assistant-messages-empty">
         <div
           className="assistant-launcher"
           aria-label="AI助手初始模式入口"
-          title="选择一个入口开始会话；进入对话后，这里会自动让位给消息流。"
+          title="选择一个入口开始会话。"
         >
-          <div className="assistant-avatar" aria-hidden="true">研</div>
-          <div className="assistant-launcher-title">Liteasy 学术助手</div>
-          <div className="assistant-launcher-modes">
+          <div className="assistant-launcher-modes" aria-label="输入前模式选择">
             {modeLauncherItems.map((item) => (
               <button
                 aria-label={`${item.label}模式`}

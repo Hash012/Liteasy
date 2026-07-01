@@ -65,6 +65,61 @@ describe("useAccountSession", () => {
     expect(result.current.accountSession).toBeNull();
     expect(result.current.accountMessage).toContain("请确认服务已启动，并检查当前云端地址：http://127.0.0.1:8787");
   });
+
+  test("registers a personal account and persists the returned session", async () => {
+    const settingsStore = createSeededSettingsStore({
+      "models.control_plane_endpoint": "http://127.0.0.1:8787"
+    });
+    const requests: string[] = [];
+    const { result } = renderHook(() =>
+      useAccountSession({
+        accountTransport: async (request) => {
+          requests.push(request.body);
+
+          return {
+            json: async () => ({
+              session: {
+                email: "tian@example.com",
+                expiresAt: "2026-06-30T09:30:00Z",
+                membershipTier: "pro",
+                name: "Tian",
+                sessionId: "account-session-tian-example-com"
+              }
+            }),
+            ok: true,
+            status: 200
+          };
+        },
+        getSettings: () => settingsStore.getState()
+      })
+    );
+
+    await act(async () => {
+      await result.current.registerPersonalAccount({
+        displayName: "Tian",
+        email: "tian@example.com",
+        password: "private-password-1"
+      });
+    });
+
+    expect(requests).toEqual([
+      JSON.stringify({
+        displayName: "Tian",
+        email: "tian@example.com",
+        password: "private-password-1"
+      })
+    ]);
+    expect(result.current.accountSession).toEqual({
+      email: "tian@example.com",
+      expiresAt: "2026-06-30T09:30:00Z",
+      membershipTier: "pro",
+      name: "Tian",
+      sessionId: "account-session-tian-example-com"
+    });
+    expect(result.current.accountMessage).toBe("已注册并登录云账号，会话已保存在本地。");
+    expect(window.localStorage.getItem("liteasy.account.session.v1")).toContain("tian@example.com");
+  });
+
   test("notifies the shell when a stored session is restored", async () => {
     window.localStorage.setItem(
       "liteasy.account.session.v1",

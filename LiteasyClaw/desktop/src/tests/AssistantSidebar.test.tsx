@@ -4,7 +4,7 @@ import { createSeededSettingsStore } from "../app/features/settings/settingsStat
 import { AssistantSidebar } from "../app/layout/AssistantSidebar";
 
 describe("AssistantSidebar", () => {
-  test("renders the minimal AI assistant right pane", () => {
+  test("renders a conventional chat panel with compact controls", () => {
     render(
       <AssistantSidebar
         importedChunksByPaperId={{}}
@@ -18,7 +18,9 @@ describe("AssistantSidebar", () => {
     );
 
     expect(screen.getByLabelText("右栏AI助手")).toBeInTheDocument();
-    expect(screen.getByText("AI Assistant", { selector: ".pane-header" })).toBeInTheDocument();
+    expect(screen.getByText("Liteasy Chat", { selector: ".pane-header" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建" })).toHaveAttribute("title", "开始一个新的 AI 对话");
+    expect(screen.getByRole("button", { name: "历史" })).toHaveAttribute("title", "查看历史会话");
     expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
   });
 });

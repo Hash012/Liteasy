@@ -8,7 +8,8 @@ describe("useAppShellStores", () => {
 
     expect(result.current.workspaceStoreRef.current.getState().papers.map((paper) => paper.id)).toEqual([
       "demo-1",
-      "demo-2"
+      "demo-2",
+      "demo-3"
     ]);
 
     const workspaceStore = result.current.workspaceStoreRef.current;
@@ -20,6 +21,7 @@ describe("useAppShellStores", () => {
     expect(result.current.workspaceStoreRef.current.getState().papers.map((paper) => paper.id)).toEqual([
       "demo-1",
       "demo-2",
+      "demo-3",
       "paper-3"
     ]);
   });

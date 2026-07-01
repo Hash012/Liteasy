@@ -239,7 +239,7 @@ POST /v1/recommendations
   "selectedDocuments": [
     {
       "id": "demo-2",
-      "title": "BERT: Pre-training of Deep Bidirectional Transformers"
+      "title": "Survey of Vector Database Management Systems"
     }
   ],
   "sessionId": "demo-session-1"
@@ -252,10 +252,10 @@ POST /v1/recommendations
 {
   "recommendations": [
     {
-      "id": "rec-bert-1",
-      "reason": "同样关注大规模预训练语言模型的迁移能力。",
+      "id": "rec-vdbms-1",
+      "reason": "同样关注向量数据库系统架构与相似度检索能力。",
       "source": "Semantic Scholar",
-      "title": "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+      "title": "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
     }
   ]
 }
@@ -280,8 +280,8 @@ POST /v1/documents/metadata-sync
   "documents": [
     {
       "id": "demo-1",
-      "sourcePath": "fixtures/attention-is-all-you-need.pdf",
-      "title": "Attention Is All You Need"
+      "sourcePath": "/papers/colbert-late-interaction.pdf",
+      "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
     }
   ],
   "sessionId": "demo-session-1",
@@ -351,13 +351,13 @@ POST /v1/model/audit
 
 连接账号后，点击最左侧窄竖栏的 `设置`，左栏会显示 `文献元数据同步` 卡片。你应该看到：
 
-- `文献同步：已同步 2 篇`
+- `文献同步：已同步 3 篇`
 - `最近同步：2026-05-14T10:20:00Z`
 - `同步批次：metadata-demo-session-1-r0`
 
-如果你要验证推荐链路，可以在连接账号后于左栏勾选 `BERT: Pre-training of Deep Bidirectional Transformers`，然后检查 `关联推荐` 区域是否出现：
+如果你要验证推荐链路，可以在连接账号后于左栏勾选 `Survey of Vector Database Management Systems`，然后检查 `关联推荐` 区域是否出现：
 
-- `RoBERTa: A Robustly Optimized BERT Pretraining Approach`
+- `VBASE: Unifying Online Vector Similarity Search and Relational Queries`
 - 推荐来源，例如 `Semantic Scholar`
 - 推荐理由文字
 

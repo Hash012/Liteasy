@@ -20,14 +20,14 @@ type UseArtifactActionsInput = {
 
 function getArtifactTitle(type: ArtifactType) {
   if (type === "tree") {
-    return "Transformer Tree Analysis";
+    return "Literature Tree Analysis";
   }
 
   if (type === "ppt") {
-    return "Transformer PPT Outline";
+    return "Literature PPT Outline";
   }
 
-  return "Transformer Mind Map";
+  return "Literature Mind Map";
 }
 
 export function useArtifactActions({

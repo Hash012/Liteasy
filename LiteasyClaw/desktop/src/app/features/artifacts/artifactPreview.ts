@@ -3,6 +3,30 @@ import type { Paper } from "../workspace/workspace.types";
 import type { ArtifactPreview } from "./artifact.types";
 
 function getRepresentativeNode(chunk: RetrievalChunk) {
+  if (chunk.tags.includes("向量数据库管理系统")) {
+    return "向量数据库管理系统";
+  }
+
+  if (chunk.tags.includes("向量索引")) {
+    return "向量索引";
+  }
+
+  if (chunk.tags.includes("结构化过滤")) {
+    return "结构化过滤";
+  }
+
+  if (chunk.tags.includes("predicate-agnostic")) {
+    return "Predicate-agnostic Search";
+  }
+
+  if (chunk.tags.includes("late interaction")) {
+    return "Late Interaction";
+  }
+
+  if (chunk.tags.includes("MaxSim")) {
+    return "MaxSim";
+  }
+
   if (chunk.tags.includes("预训练目标")) {
     return "预训练目标";
   }
@@ -37,7 +61,7 @@ export function buildArtifactPreview(
   ).slice(0, 4);
 
   return {
-    nodes: nodes.length ? nodes : ["核心方法", "关键结构", "研究结论"],
+    nodes: nodes.length ? nodes : ["核心方法", "系统结构", "研究结论"],
     rootLabel: primaryPaper.title
   };
 }

@@ -94,11 +94,11 @@ describe("useCollectionItems", () => {
         json: async () => ({
           items: [
             {
-              id: "rec-bert-1",
-              reason: "同样关注大规模预训练语言模型的迁移能力。",
+              id: "rec-vdbms-1",
+              reason: "同样关注向量数据库系统架构与相似度检索能力。",
               savedAt: "2026-05-14T10:30:00.000Z",
               source: "Semantic Scholar",
-              title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+              title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
             }
           ]
         }),
@@ -117,10 +117,10 @@ describe("useCollectionItems", () => {
 
     await act(async () => {
       await result.current.collectRecommendation({
-        id: "rec-bert-1",
-        reason: "同样关注大规模预训练语言模型的迁移能力。",
+        id: "rec-vdbms-1",
+        reason: "同样关注向量数据库系统架构与相似度检索能力。",
         source: "Semantic Scholar",
-        title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+        title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       });
     });
 
@@ -133,7 +133,7 @@ describe("useCollectionItems", () => {
       method: "POST",
       url: "https://liteasy.example.com/control-plane/v1/collection/items"
     });
-    expect(result.current.collectionItems[0].id).toBe("rec-bert-1");
+    expect(result.current.collectionItems[0].id).toBe("rec-vdbms-1");
     expect(result.current.status).toBe("ready");
     expect(result.current.message).toBe("已同步云端收藏。");
   });

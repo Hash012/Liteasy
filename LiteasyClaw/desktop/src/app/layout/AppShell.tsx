@@ -31,7 +31,6 @@ import type { OrganizationSharedLibraryManifestTransport } from "../features/org
 import { createOrganizationSharedLibraryManifestClient } from "../features/organization/organizationSharedLibraryManifestClient";
 import { useOrganizationData } from "../features/organization/useOrganizationData";
 import { ActivityBar } from "./ActivityBar";
-import { TopBar } from "./TopBar";
 import { LeftPane } from "./LeftPane";
 import { AppDialogs } from "./AppDialogs";
 import { ReaderPane } from "./ReaderPane";
@@ -39,9 +38,6 @@ import { AssistantSidebar } from "./AssistantSidebar";
 import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
 import { useAppShellStores } from "./useAppShellStores";
 import { starterPapers } from "./starterPapers";
-import { useConnectivity } from "../features/network/useConnectivity";
-import { useCloudAvailabilityProbe } from "../features/network/useCloudAvailabilityProbe";
-import { getCloudAvailabilityStatus } from "./cloudAvailability";
 import { PaneResizer } from "./PaneResizer";
 import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
@@ -75,7 +71,6 @@ export function AppShell({
 }: AppShellProps = {}) {
   const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(initialSettings);
   const localLibrarySnapshot = useLocalLibrary(localLibraryLoader);
-  const { isOnline } = useConnectivity();
   const paneLayout = usePaneLayout();
 
   const workspaceSelection = useWorkspaceSelectionController({
@@ -145,11 +140,11 @@ export function AppShell({
     getSettings: () => settingsStoreRef.current.getState()
   });
   const {
-    accountMessage,
     accountPending,
     accountSession,
     loginToCloudAccount,
     logoutFromCloudAccount,
+    registerPersonalAccount,
     setSuppressLoginReminder,
     shouldShowLoginReminder
   } = useAccountSession({
@@ -244,22 +239,15 @@ export function AppShell({
     starterPapers,
     workspaceStoreRef
   });
-  const { isCloudReachable } = useCloudAvailabilityProbe({
-    enabled: isOnline && accountSession !== null,
-    endpoint: settingsState["models.control_plane_endpoint"]
-  });
-  const cloudAvailabilityStatus = getCloudAvailabilityStatus({
-    accountSession,
-    isCloudReachable,
-    isOnline
-  });
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
   const leftPaneUtilitySize = paneLayout.collapsed.left ? "0px" : "18px";
   const rightPaneSize = paneLayout.collapsed.right
-    ? "44px"
+    ? "0px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
+  const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "18px";
+  const readerArtifactRowSize = paneLayout.collapsed.bottom ? "0px" : "minmax(220px, 0.65fr)";
 
   useEffect(() => {
     if (!localLibrarySnapshot) {
@@ -293,18 +281,6 @@ export function AppShell({
 
   return (
     <div className="app-frame">
-      <TopBar
-        accountMessage={accountMessage}
-        accountPending={accountPending}
-        accountSession={accountSession}
-        cloudAvailabilityStatus={cloudAvailabilityStatus}
-        onLogin={() => {
-          setLoginDialogDismissedThisSession(false);
-          setLoginDialogOpen(true);
-        }}
-        onLogout={cloudAccountActions.logoutAndClearOrganizationState}
-      />
-
       <div
         className="app-shell"
         data-testid="workbench-layout"
@@ -312,12 +288,15 @@ export function AppShell({
           {
             "--left-pane-size": leftPaneSize,
             "--left-pane-utility-size": leftPaneUtilitySize,
+            "--reader-artifact-row-size": readerArtifactRowSize,
+            "--right-pane-utility-size": rightPaneUtilitySize,
             "--right-pane-size": rightPaneSize
           } as React.CSSProperties
         }
       >
         <ActivityBar
           activeView={leftRail.leftRailView}
+          accountSessionAvailable={accountSession !== null}
           onSelectView={(view) => {
             leftRail.setLeftRailView(view);
             if (paneLayout.collapsed.left) {
@@ -347,6 +326,7 @@ export function AppShell({
             listMessage={organizationListMessage}
             listStatus={organizationListStatus}
             onAddExternalPaper={workspaceActions.addExternalPaperToLibrary}
+            onAddDroppedPdfFiles={workspaceActions.addDroppedPdfFiles}
             onClearProfile={profileActions.openClearProfileConfirm}
             onClearRecommendations={clearRecommendationCache}
             onCollectRecommendation={collection.collectRecommendation}
@@ -361,6 +341,7 @@ export function AppShell({
               setLoginDialogOpen(true);
             }}
             onLeaveOrganization={organizationActions.openLeaveDialog}
+            onLogout={cloudAccountActions.logoutAndClearOrganizationState}
             onMarkNotificationsRead={organizationNotifications.markOrganizationNotificationsRead}
             onOpenAcademicArchive={profileActions.openAcademicArchive}
             onOpenOrganizationDialog={organizationUi.openOrganizationDialog}
@@ -392,6 +373,7 @@ export function AppShell({
             settings={settingsState}
             summary={organizationSummary}
             workspaceLabel={workspaceLabel}
+            workspaceSourceType={workspaceState.workspaceSource.type}
           />
         ) : null}
         <div className="pane-utility-column left">
@@ -432,6 +414,12 @@ export function AppShell({
             setLoginDialogDismissedThisSession(true);
             setLoginDialogOpen(false);
           }}
+          onSubmitAccountRegistration={(registration) => {
+            modelSettings.applyLocalDevCloudDefaults();
+            setLoginDialogDismissedThisSession(true);
+            setLoginDialogOpen(false);
+            void registerPersonalAccount(registration);
+          }}
           onSubmitDemoLogin={() => {
             setLoginDialogDismissedThisSession(true);
             setLoginDialogOpen(false);
@@ -453,9 +441,14 @@ export function AppShell({
           analysisHint={analysisHint}
           artifactTabs={artifactTabs}
           artifactTasks={artifactTasks}
+          layoutCollapsed={paneLayout.collapsed}
           onStartAnalysis={(artifactType) => {
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
+          onToggleBottomPane={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
+          onToggleLeftPane={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
+          onToggleRightPane={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
+          selectedPapers={selectedPapers}
           selectedPaperIds={workspaceState.selectedPaperIds}
           selectionLocked={workspaceState.selectionLocked}
         />
@@ -469,15 +462,6 @@ export function AppShell({
               }}
             />
           ) : null}
-          <button
-            aria-label={paneLayout.collapsed.right ? "展开右栏" : "右栏折叠控制"}
-            className="pane-collapse-button edge-arrow"
-            onClick={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
-            title={paneLayout.collapsed.right ? "展开右栏" : "折叠右栏"}
-            type="button"
-          >
-            {paneLayout.collapsed.right ? "‹" : "›"}
-          </button>
         </div>
         {!paneLayout.collapsed.right ? (
           <AssistantSidebar
@@ -492,9 +476,7 @@ export function AppShell({
             selectionLocked={workspaceState.selectionLocked}
             settingsStore={settingsStoreRef.current}
           />
-        ) : (
-          <aside className="pane-rail right" aria-label="右栏折叠边栏" />
-        )}
+        ) : null}
       </div>
     </div>
   );

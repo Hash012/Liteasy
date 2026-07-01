@@ -12,6 +12,7 @@ describe("ActivityBar", () => {
     render(
       <ActivityBar
         activeView="organization"
+        accountSessionAvailable={false}
         onSelectView={onSelectView}
         onToggleActiveView={onToggleActiveView}
       />
@@ -20,7 +21,9 @@ describe("ActivityBar", () => {
     const activityBar = screen.getByLabelText("左边栏导航");
     expect(within(activityBar).getByRole("button", { name: "文献库" })).toBeInTheDocument();
     expect(within(activityBar).getByRole("button", { name: "组织" })).toHaveClass("active");
-    expect(within(activityBar).getByRole("button", { name: "个人中心" })).toBeInTheDocument();
+    const profileButton = within(activityBar).getByRole("button", { name: "个人中心" });
+    expect(profileButton).toBeInTheDocument();
+    expect(within(profileButton).getByText("未登录")).toBeInTheDocument();
     expect(within(activityBar).getByRole("button", { name: "设置" })).toBeInTheDocument();
 
     await user.click(within(activityBar).getByRole("button", { name: "设置" }));
@@ -28,5 +31,20 @@ describe("ActivityBar", () => {
 
     await user.click(within(activityBar).getByRole("button", { name: "组织" }));
     expect(onToggleActiveView).toHaveBeenCalledWith("organization");
+  });
+
+  test("hides the profile login badge when a cloud account session exists", () => {
+    render(
+      <ActivityBar
+        activeView="profile"
+        accountSessionAvailable={true}
+        onSelectView={vi.fn()}
+        onToggleActiveView={vi.fn()}
+      />
+    );
+
+    const profileButton = screen.getByRole("button", { name: "个人中心" });
+    expect(profileButton).toHaveClass("active");
+    expect(within(profileButton).queryByText("未登录")).not.toBeInTheDocument();
   });
 });

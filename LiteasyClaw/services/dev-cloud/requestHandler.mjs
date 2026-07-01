@@ -37,6 +37,7 @@ import {
   buildDocumentMetadataSyncPayload,
   buildRecommendationPayload
 } from "./payloads/recommendationPayloads.mjs";
+import { createHash } from "node:crypto";
 
 const availableEndpoints = [
   "GET /",
@@ -51,6 +52,8 @@ const availableEndpoints = [
   "POST /v1/admin/model-policy",
   "GET /v1/admin/governance-dashboard",
   "POST /v1/account/demo-login",
+  "POST /v1/account/login",
+  "POST /v1/account/register",
   "POST /v1/model/generate",
   "POST /v1/model/audit",
   "POST /v1/recommendations",
@@ -133,6 +136,52 @@ async function readJsonOrWriteError(request, response) {
   }
 }
 
+function normalizeEmail(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function normalizeDisplayName(value, email) {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
+  }
+
+  return email.split("@")[0] || "Liteasy User";
+}
+
+function hashPassword(password) {
+  return createHash("sha256").update(`liteasy-dev-cloud:${password}`).digest("hex");
+}
+
+function isValidRegistrationBody(body) {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    normalizeEmail(body.email).includes("@") &&
+    typeof body.password === "string" &&
+    body.password.length >= 8
+  );
+}
+
+function isValidLoginBody(body) {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    normalizeEmail(body.email).includes("@") &&
+    typeof body.password === "string" &&
+    body.password.length > 0
+  );
+}
+
+function buildAccountSession(account) {
+  return {
+    email: account.email,
+    expiresAt: "2026-12-31T23:59:59.000Z",
+    membershipTier: "pro",
+    name: account.displayName,
+    sessionId: `account-session-${account.email.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`
+  };
+}
+
 export function createDevCloudRequestHandler(customConfig = {}) {
   const config = {
     ...defaultConfig,
@@ -142,6 +191,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     ...buildProviderRegistry(config),
     ...(customConfig.providers ?? {})
   };
+  const localAccounts = new Map();
 
   return async (request, response) => {
     const method = request.method ?? "GET";
@@ -263,6 +313,72 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           name: "Liteasy Researcher",
           sessionId: "demo-session-1"
         }
+      });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/account/register") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      if (!isValidRegistrationBody(body)) {
+        writeJson(request, response, 400, {
+          error: "invalid_account_registration",
+          message: "请填写有效邮箱，并使用至少 8 位密码。"
+        });
+        return;
+      }
+
+      const email = normalizeEmail(body.email);
+      if (localAccounts.has(email)) {
+        writeJson(request, response, 409, {
+          error: "account_exists",
+          message: "该邮箱已经注册，请直接登录。"
+        });
+        return;
+      }
+
+      const account = {
+        displayName: normalizeDisplayName(body.displayName, email),
+        email,
+        passwordHash: hashPassword(body.password)
+      };
+      localAccounts.set(email, account);
+
+      writeJson(request, response, 200, {
+        session: buildAccountSession(account)
+      });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/account/login") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      if (!isValidLoginBody(body)) {
+        writeJson(request, response, 400, {
+          error: "invalid_account_login",
+          message: "请填写有效邮箱和密码。"
+        });
+        return;
+      }
+
+      const email = normalizeEmail(body.email);
+      const account = localAccounts.get(email);
+      if (!account || account.passwordHash !== hashPassword(body.password)) {
+        writeJson(request, response, 401, {
+          error: "invalid_credentials",
+          message: "邮箱或密码不正确。"
+        });
+        return;
+      }
+
+      writeJson(request, response, 200, {
+        session: buildAccountSession(account)
       });
       return;
     }

@@ -1,5 +1,6 @@
 import type { createSettingsStore } from "../settings/settings.store";
 import type { SettingsState } from "../settings/settings.types";
+import { resolveLocalDevCloudEndpoint } from "./localDevCloudEndpoint";
 
 type SettingsStore = ReturnType<typeof createSettingsStore>;
 
@@ -28,9 +29,10 @@ export function useModelSettingsActions({
   }
 
   function applyLocalDevCloudDefaults() {
+    const endpoint = resolveLocalDevCloudEndpoint();
     applyModelPolicySnapshot({
-      "models.cloud_proxy_endpoint": "http://127.0.0.1:8787",
-      "models.control_plane_endpoint": "http://127.0.0.1:8787"
+      "models.cloud_proxy_endpoint": endpoint,
+      "models.control_plane_endpoint": endpoint
     });
   }
 

@@ -23,8 +23,8 @@ export function getMockAnswer(
     citations: [
       {
         paperId: "demo-1",
-        page: 3,
-        snippet: "self-attention replaces recurrence"
+        page: 2,
+        snippet: "late interaction independently encodes query and document tokens"
       }
     ],
     confidence: 0.84

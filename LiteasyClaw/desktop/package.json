@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 1420",
+    "dev": "node scripts/dev-with-cloud.mjs --dev:cloud --dev:desktop",
+    "dev:cloud": "node ../services/dev-cloud/server.mjs",
+    "dev:cloud-and-desktop": "node scripts/dev-with-cloud.mjs",
+    "dev:desktop": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -12,6 +15,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
+    "pdfjs-dist": "^5.6.205",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

@@ -5,8 +5,17 @@ import { cloneSettingsState, createSeededSettingsStore } from "../app/features/s
 
 describe("AppShell state helpers", () => {
   test("provides starter papers without sharing mutable arrays", () => {
-    expect(starterPapers.map((paper) => paper.id)).toEqual(["demo-1", "demo-2"]);
-    expect(starterPapers[0].title).toBe("Attention Is All You Need");
+    expect(starterPapers.map((paper) => paper.id)).toEqual(["demo-1", "demo-2", "demo-3"]);
+    expect(starterPapers.map((paper) => paper.title)).toEqual([
+      "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+      "Survey of Vector Database Management Systems",
+      "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+    ]);
+    expect(starterPapers.map((paper) => paper.sourcePath)).toEqual([
+      "/papers/colbert-late-interaction.pdf",
+      "/papers/survey-vector-database-management-systems.pdf",
+      "/papers/acorn-vector-search.pdf"
+    ]);
   });
 
   test("clones workspace and settings state snapshots", () => {

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
+import type { OrganizationSummary } from "../app/features/organization/organization.types";
 
 function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
   return {
@@ -38,6 +39,7 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     onJoinOrganization: vi.fn(),
     onLoginRequired: vi.fn(),
     onLeaveOrganization: vi.fn(),
+    onLogout: vi.fn(),
     onMarkNotificationsRead: vi.fn(),
     onOpenAcademicArchive: vi.fn(),
     onOpenOrganizationDialog: vi.fn(),
@@ -66,6 +68,7 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     settings: createSeededSettingsStore().getState(),
     summary: null,
     workspaceLabel: "本地文献库",
+    workspaceSourceType: "local_library",
     ...overrides
   };
 }
@@ -115,7 +118,7 @@ describe("LeftPane", () => {
         {...createProps({
           leftRailView: "library",
           onImportSelectedSet,
-          papers: [{ id: "demo-1", title: "Attention Is All You Need" }],
+          papers: [{ id: "demo-1", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" }],
           selectedPaperIds: ["demo-1"],
           selectionLocked: true
         })}
@@ -126,6 +129,162 @@ describe("LeftPane", () => {
     expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "交给AI流程" }));
     expect(onImportSelectedSet).toHaveBeenCalledTimes(1);
+  });
+
+  test("switches between local and organization library views from the literature list", async () => {
+    const user = userEvent.setup();
+    const onReturnToLocalWorkspace = vi.fn();
+    const onOpenSharedLibrary = vi.fn();
+    const organizationSummary: OrganizationSummary = {
+      auditEvents: [],
+      memberCount: 12,
+      members: [],
+      myRole: "member",
+      name: "Liteasy AI Reading Lab",
+      notifications: [],
+      organizationId: "org-demo-1",
+      quota: {
+        periodEndsAt: "2026-06-01T00:00:00Z",
+        storageLimitGb: 100,
+        storageUsedGb: 38
+      },
+      sharedLibrary: {
+        documentCount: 2,
+        documents: [],
+        name: "组织共享文献库",
+        status: "available"
+      },
+      taskSummary: { failed: 0, running: 1 }
+    };
+
+    const { rerender } = render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          onOpenSharedLibrary,
+          onReturnToLocalWorkspace,
+          organizationSummary,
+          workspaceLabel: "本地文献库",
+          workspaceSourceType: "local_library"
+        })}
+      />
+    );
+
+    const localSwitcher = within(screen.getByLabelText("我的文献库投放区")).getByRole("group", {
+      name: "文献视图切换"
+    });
+    expect(within(localSwitcher).getByRole("button", { name: "本地" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(localSwitcher).getByRole("button", { name: "组织" }));
+    expect(onOpenSharedLibrary).toHaveBeenCalledWith(organizationSummary);
+
+    rerender(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          onOpenSharedLibrary,
+          onReturnToLocalWorkspace,
+          organizationSummary,
+          workspaceLabel: "组织共享文献库（Liteasy AI Reading Lab）",
+          workspaceSourceType: "organization_shared"
+        })}
+      />
+    );
+
+    const organizationSwitcher = within(screen.getByLabelText("我的文献库投放区")).getByRole("group", {
+      name: "文献视图切换"
+    });
+    expect(within(organizationSwitcher).getByRole("button", { name: "组织" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(organizationSwitcher).getByRole("button", { name: "本地" }));
+    expect(onReturnToLocalWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  test("renders a Zotero-style collection tree and PDF file drop target", () => {
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          papers: [
+            {
+              id: "demo-1",
+              sourcePath: "/papers/search/colbert-late-interaction.pdf",
+              title:
+                "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+            },
+            {
+              id: "demo-2",
+              sourcePath: "/papers/vector-database/survey-vector-database-management-systems.pdf",
+              title: "Survey of Vector Database Management Systems"
+            },
+            {
+              id: "demo-3",
+              sourcePath: "/papers/vector-search/acorn-vector-search.pdf",
+              title:
+                "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+            }
+          ]
+        })}
+      />
+    );
+
+    const libraryZone = screen.getByLabelText("我的文献库投放区");
+    expect(within(libraryZone).getByLabelText("文献库 collections")).toBeInTheDocument();
+    expect(within(libraryZone).getByText("My Library")).toBeInTheDocument();
+    expect(within(libraryZone).getByText("Courses")).toBeInTheDocument();
+    expect(within(libraryZone).getByText("Vector Search")).toBeInTheDocument();
+    expect(within(libraryZone).getByLabelText("PDF 文件拖拽导入区")).toHaveTextContent(
+      "拖入 PDF 添加到文献库"
+    );
+    expect(within(libraryZone).getByText(/ColBERT/)).toBeInTheDocument();
+    expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
+    expect(within(libraryZone).getByText(/ACORN/)).toBeInTheDocument();
+  });
+
+  test("switches visible papers when clicking My Library collections", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          papers: [
+            {
+              id: "demo-1",
+              sourcePath: "/papers/colbert-late-interaction.pdf",
+              title:
+                "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+            },
+            {
+              id: "demo-2",
+              sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+              title: "Survey of Vector Database Management Systems"
+            },
+            {
+              id: "demo-3",
+              sourcePath: "/papers/acorn-vector-search.pdf",
+              title:
+                "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+            }
+          ]
+        })}
+      />
+    );
+
+    const libraryZone = screen.getByLabelText("我的文献库投放区");
+    expect(within(libraryZone).getByText("当前 Collection：My Library")).toBeInTheDocument();
+
+    await user.click(within(libraryZone).getByRole("button", { name: "Vector Database" }));
+
+    expect(within(libraryZone).getByText("当前 Collection：Vector Database")).toBeInTheDocument();
+    expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
+    expect(within(libraryZone).queryByText(/ColBERT/)).not.toBeInTheDocument();
+    expect(within(libraryZone).queryByText(/ACORN/)).not.toBeInTheDocument();
+
+    await user.click(within(libraryZone).getByRole("button", { name: "My Library" }));
+
+    expect(within(libraryZone).getByText("当前 Collection：My Library")).toBeInTheDocument();
+    expect(within(libraryZone).getByText(/ColBERT/)).toBeInTheDocument();
+    expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
+    expect(within(libraryZone).getByText(/ACORN/)).toBeInTheDocument();
   });
 
   test("shows collection loading state for logged-in cloud sync", () => {
@@ -177,14 +336,16 @@ describe("LeftPane", () => {
   });
 
 
-  test("groups library papers by workspace folders", () => {
+  test("groups library papers by workspace folders", async () => {
+    const user = userEvent.setup();
+
     render(
       <LeftPane
         {...createProps({
           leftRailView: "library",
           papers: [
-            { id: "demo-1", sourcePath: "fixtures/transformer/attention.pdf", title: "Attention Is All You Need" },
-            { id: "demo-2", sourcePath: "fixtures/language-models/bert.pdf", title: "BERT: Pre-training of Deep Bidirectional Transformers" },
+            { id: "demo-1", sourcePath: "/papers/colbert-late-interaction.pdf", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" },
+            { id: "demo-2", sourcePath: "/papers/survey-vector-database-management-systems.pdf", title: "Survey of Vector Database Management Systems" },
             { id: "demo-3", title: "Untitled Local Note" }
           ]
         })}
@@ -192,11 +353,13 @@ describe("LeftPane", () => {
     );
 
     const libraryZone = screen.getByLabelText("我的文献库投放区");
+    await user.click(within(libraryZone).getByRole("button", { name: "My Library" }));
+
     expect(within(libraryZone).getByText("工作区母目录：本地文献库")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("目录：fixtures/transformer")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("目录：fixtures/language-models")).toBeInTheDocument();
+    expect(within(libraryZone).getByText("目录：/papers")).toBeInTheDocument();
     expect(within(libraryZone).getByText("目录：未归档文献")).toBeInTheDocument();
-    expect(within(libraryZone).getAllByText("1 篇文献")).toHaveLength(3);
+    expect(within(libraryZone).getByText("2 篇文献")).toBeInTheDocument();
+    expect(within(libraryZone).getByText("1 篇文献")).toBeInTheDocument();
   });
 
 
@@ -596,7 +759,26 @@ describe("LeftPane", () => {
     );
 
     expect(screen.queryByLabelText("左边栏个人中心")).not.toBeInTheDocument();
+    expect(screen.getByText("未登录")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "登录后查看个人能力" })).toBeInTheDocument();
+  });
+
+  test("forwards logout from the logged-in personal center", async () => {
+    const user = userEvent.setup();
+    const onLogout = vi.fn();
+
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "profile",
+          onLogout
+        })}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "退出登录" }));
+
+    expect(onLogout).toHaveBeenCalledTimes(1);
   });
 
   test("shows governance as waiting instead of disconnected while organization loads", () => {

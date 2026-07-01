@@ -5,6 +5,7 @@ export type PaneLayout = {
 };
 
 export type PaneCollapseState = {
+  bottom: boolean;
   left: boolean;
   right: boolean;
 };
@@ -16,6 +17,7 @@ export const defaultPaneLayout: PaneLayout = {
 };
 
 export const defaultPaneCollapseState: PaneCollapseState = {
+  bottom: false,
   left: false,
   right: false
 };

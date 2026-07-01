@@ -1,5 +1,6 @@
 import type { Paper } from "../workspace/workspace.types";
 import type { AnswerPayload, RetrievalChunk } from "./retrieval.types";
+import { demoKnowledgeBase } from "./demoKnowledgeBase";
 
 type RetrievalRequest = {
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
@@ -7,45 +8,7 @@ type RetrievalRequest = {
   selectedPapers: Paper[];
 };
 
-const fixtureKnowledgeBase: Record<string, RetrievalChunk[]> = {
-  "demo-1": [
-    {
-      paperId: "demo-1",
-      paperTitle: "Attention Is All You Need",
-      page: 3,
-      snippet: "self-attention replaces recurrence and convolutions entirely",
-      summary: "核心方法是用自注意力替代循环结构，以并行方式建模序列关系。",
-      tags: ["核心方法", "方法", "自注意力", "attention", "transformer", "并行"]
-    },
-    {
-      paperId: "demo-1",
-      paperTitle: "Attention Is All You Need",
-      page: 5,
-      snippet: "multi-head attention allows the model to jointly attend to information",
-      summary: "多头注意力让模型可以同时从多个子空间抽取关系特征。",
-      tags: ["多头注意力", "结构", "attention head", "模型结构"]
-    }
-  ],
-  "demo-2": [
-    {
-      paperId: "demo-2",
-      paperTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
-      page: 7,
-      snippet:
-        "deep bidirectional representations are pre-trained by jointly conditioning on left and right context",
-      summary: "核心方法是先做深度双向预训练，再把表示迁移到下游语言理解任务。",
-      tags: ["核心方法", "方法", "双向预训练", "bert", "bidirectional", "pre-training"]
-    },
-    {
-      paperId: "demo-2",
-      paperTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
-      page: 8,
-      snippet: "masked language model and next sentence prediction are used for pre-training",
-      summary: "预训练目标主要包括掩码语言模型和下一句预测。",
-      tags: ["掩码语言模型", "下一句预测", "预训练目标", "masked language model"]
-    }
-  ]
-};
+const fixtureKnowledgeBase: Record<string, RetrievalChunk[]> = demoKnowledgeBase;
 
 function scoreChunk(question: string, chunk: RetrievalChunk) {
   const normalizedQuestion = question.toLowerCase();
@@ -61,8 +24,8 @@ function getFallbackAnswer(): AnswerPayload {
     citations: [
       {
         paperId: "demo-1",
-        page: 3,
-        snippet: "self-attention replaces recurrence"
+        page: 2,
+        snippet: "late interaction independently encodes query and document tokens"
       }
     ],
     confidence: 0.84

@@ -1,4 +1,5 @@
 import type { AccountSession } from "../features/account/account.types";
+import type { AccountRegistrationInput } from "../features/account/accountSessionClient";
 import { LightweightLoginDialog } from "../features/account/LightweightLoginDialog";
 import { OrganizationEntryDialog } from "../features/organization/OrganizationEntryDialog";
 import { OrganizationCreateDialog } from "../features/organization/OrganizationCreateDialog";
@@ -30,6 +31,7 @@ export type AppDialogsProps = {
   onCloseJoinOrganization: () => void;
   onCloseLeaveOrganization: () => void;
   onSkipLogin?: () => void;
+  onSubmitAccountRegistration?: (registration: AccountRegistrationInput) => void;
   onSubmitDemoLogin?: () => void;
   onToggleSuppressLoginReminder?: (checked: boolean) => void;
   onCloseOrganizationDialog: () => void;
@@ -64,6 +66,7 @@ export function AppDialogs({
   onCloseJoinOrganization,
   onCloseLeaveOrganization,
   onSkipLogin,
+  onSubmitAccountRegistration,
   onSubmitDemoLogin,
   onToggleSuppressLoginReminder,
   onCloseOrganizationDialog,
@@ -82,6 +85,7 @@ export function AppDialogs({
       {loginDialogOpen ? (
         <LightweightLoginDialog
           onSkip={onSkipLogin ?? (() => undefined)}
+          onSubmitAccountRegistration={onSubmitAccountRegistration ?? (() => undefined)}
           onSubmitDemoLogin={onSubmitDemoLogin ?? (() => undefined)}
           onToggleSuppressReminder={onToggleSuppressLoginReminder ?? (() => undefined)}
         />

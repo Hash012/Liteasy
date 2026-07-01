@@ -9,13 +9,13 @@ import type { OrganizationSharedLibraryManifest, OrganizationSummary } from "../
 const starterPapers: Paper[] = [
   {
     id: "demo-1",
-    sourcePath: "fixtures/attention-is-all-you-need.pdf",
-    title: "Attention Is All You Need"
+    sourcePath: "/papers/colbert-late-interaction.pdf",
+    title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
   },
   {
     id: "demo-2",
-    sourcePath: "fixtures/bert-pretraining.pdf",
-    title: "BERT: Pre-training of Deep Bidirectional Transformers"
+    sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+    title: "Survey of Vector Database Management Systems"
   }
 ];
 
@@ -244,6 +244,30 @@ describe("useOrganizationWorkspace", () => {
     expect(onWorkspaceLabel).toHaveBeenLastCalledWith("本地文献库");
     expect(onLeftRailView).toHaveBeenLastCalledWith("library");
     expect(onAnalysisHint).toHaveBeenLastCalledWith("已返回本地文献库。");
+  });
+
+  test("restores the local workspace snapshot that existed before opening the organization library", async () => {
+    const { result } = renderOrganizationWorkspaceHook();
+    const customLocalPaper = {
+      id: "local-added-paper",
+      sourcePath: "/local/papers/added-paper.pdf",
+      title: "My Existing Local Paper"
+    };
+    act(() => {
+      result.current.workspaceStore.addPaper(customLocalPaper);
+    });
+
+    await act(async () => {
+      await result.current.actions.openOrganizationSharedLibrary();
+    });
+
+    expect(result.current.workspaceStore.getState().papers).not.toContainEqual(customLocalPaper);
+
+    act(() => {
+      result.current.actions.openLocalLibraryWorkspace();
+    });
+
+    expect(result.current.workspaceStore.getState().papers).toContainEqual(customLocalPaper);
   });
 
   test("does not mutate the workspace when the shared library is unavailable", async () => {

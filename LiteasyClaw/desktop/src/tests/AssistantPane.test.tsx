@@ -14,7 +14,7 @@ async function selectInitialAssistantMode(user: ReturnType<typeof userEvent.setu
 }
 
 
-test("shows the assistant avatar mode launcher before a conversation starts", async () => {
+test("shows compact mode chips above the composer before a conversation starts", async () => {
   const user = userEvent.setup();
 
   render(
@@ -30,7 +30,11 @@ test("shows the assistant avatar mode launcher before a conversation starts", as
 
   const launcher = screen.getByLabelText("AI助手初始模式入口");
   expect(screen.queryByLabelText("对话模式切换")).not.toBeInTheDocument();
-  expect(within(launcher).getByText("Liteasy 学术助手")).toBeInTheDocument();
+  expect(within(launcher).queryByText("Liteasy 学术助手")).not.toBeInTheDocument();
+  expect(within(launcher).queryByText("研")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("输入前模式选择")).toContainElement(
+    within(launcher).getByRole("button", { name: "名词解释模式" })
+  );
   expect(within(launcher).getByRole("button", { name: "名词解释模式" })).toBeInTheDocument();
   expect(within(launcher).getByRole("button", { name: "命令模式" })).toBeInTheDocument();
   expect(within(launcher).getByRole("button", { name: "问答模式" })).toBeInTheDocument();
@@ -115,7 +119,7 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
 
   expect(screen.getByText("总结这篇论文的核心方法")).toBeInTheDocument();
   expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
-  expect(screen.getByText(/demo-1 p\.3/)).toBeInTheDocument();
+  expect(screen.getByText(/demo-1 p\.2/)).toBeInTheDocument();
   expect(screen.getByText("审计模型 gpt-5-mini-auditor")).toBeInTheDocument();
   expect(screen.getByText("审计评分 0.84 · 通过")).toBeInTheDocument();
 });
@@ -137,11 +141,11 @@ test("archives the current assistant session when starting a new one", async () 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  await user.click(screen.getByRole("button", { name: "新建会话" }));
+  await user.click(screen.getByRole("button", { name: "新建" }));
 
   expect(screen.queryByText("关闭联网推荐")).not.toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "历史会话" }));
+  await user.click(screen.getByRole("button", { name: "历史" }));
 
   expect(screen.getByText("历史会话")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
@@ -164,8 +168,8 @@ test("restores an archived assistant session from history", async () => {
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
-  await user.click(screen.getByRole("button", { name: "新建会话" }));
-  await user.click(screen.getByRole("button", { name: "历史会话" }));
+  await user.click(screen.getByRole("button", { name: "新建" }));
+  await user.click(screen.getByRole("button", { name: "历史" }));
 
   await user.click(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" }));
 
@@ -226,7 +230,7 @@ test("uses the user question to retrieve a different cited chunk", async () => {
       selectedPapers={[
         {
           id: "demo-2",
-          title: "BERT: Pre-training of Deep Bidirectional Transformers"
+          title: "Survey of Vector Database Management Systems"
         }
       ]}
       selectedSetStatus={{
@@ -238,12 +242,12 @@ test("uses the user question to retrieve a different cited chunk", async () => {
   );
 
   await selectInitialAssistantMode(user, "问答");
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇综述如何定义向量数据库系统？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText(/云端回答：这篇论文的预训练目标是什么？/)).toBeInTheDocument();
-  expect(screen.getByText(/demo-2 · 第 8 页/)).toBeInTheDocument();
-  expect(screen.getByText(/masked language model/)).toBeInTheDocument();
+  expect(screen.getByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
+  expect(screen.getByText(/demo-2 · 第 4 页/)).toBeInTheDocument();
+  expect(screen.getByText(/vector database management systems/)).toBeInTheDocument();
 });
 
 test("routes qa generation through the cloud-governed model gateway by default", async () => {
@@ -254,12 +258,12 @@ test("routes qa generation through the cloud-governed model gateway by default",
       importedChunksByPaperId={{
         "demo-2": [
           {
-            page: 8,
+            page: 4,
             paperId: "demo-2",
-            paperTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
-            snippet: "masked language model and next sentence prediction are used for pre-training",
-            summary: "预训练目标主要包括掩码语言模型和下一句预测。",
-            tags: ["预训练目标", "掩码语言模型"]
+            paperTitle: "Survey of Vector Database Management Systems",
+            snippet: "vector database management systems manage unstructured data embeddings with indexes and query processing",
+            summary: "向量数据库管理系统围绕向量表示、索引和查询处理组织能力。",
+            tags: ["向量数据库管理系统", "索引", "查询处理"]
           }
         ]
       }}
@@ -267,7 +271,7 @@ test("routes qa generation through the cloud-governed model gateway by default",
       selectedPapers={[
         {
           id: "demo-2",
-          title: "BERT: Pre-training of Deep Bidirectional Transformers"
+          title: "Survey of Vector Database Management Systems"
         }
       ]}
       selectedSetStatus={{
@@ -279,10 +283,10 @@ test("routes qa generation through the cloud-governed model gateway by default",
   );
 
   await selectInitialAssistantMode(user, "问答");
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇综述如何定义向量数据库系统？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText(/云端回答：这篇论文的预训练目标是什么？/)).toBeInTheDocument();
+  expect(screen.getByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
   expect(screen.getByText("模型链路：云端模型能力 -> 桌面内置 Mock")).toBeInTheDocument();
 });
 
@@ -308,7 +312,7 @@ test("shows a readable assistant error when the model backend is unavailable", a
       selectedPapers={[
         {
           id: "demo-2",
-          title: "BERT: Pre-training of Deep Bidirectional Transformers"
+          title: "Survey of Vector Database Management Systems"
         }
       ]}
       selectedSetStatus={{
@@ -321,7 +325,7 @@ test("shows a readable assistant error when the model backend is unavailable", a
   );
 
   await selectInitialAssistantMode(user, "问答");
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的预训练目标是什么？");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇综述如何定义向量数据库系统？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {

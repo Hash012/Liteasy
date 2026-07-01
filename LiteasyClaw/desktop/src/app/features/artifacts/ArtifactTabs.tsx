@@ -19,8 +19,8 @@ const artifactModes: Array<{ type: ArtifactType; label: string }> = [
 function getFallbackPreview(type: ArtifactType) {
   if (type === "mindmap") {
     return {
-      nodes: ["核心概念", "模型结构", "应用场景"],
-      rootLabel: "Transformer Paper"
+      nodes: ["核心概念", "系统结构", "应用场景"],
+      rootLabel: "Literature Paper"
     };
   }
 

@@ -218,15 +218,21 @@ export function AssistantPane({
       <div className="assistant-session-toolbar">
         {conversationStarted ? <ModeSwitch mode={assistantState.mode} onChange={setMode} /> : null}
         <div className="assistant-session-actions">
-          <button className="assistant-session-button" onClick={startNewSession} type="button">
-            新建会话
+          <button
+            className="assistant-session-button"
+            onClick={startNewSession}
+            title="开始一个新的 AI 对话"
+            type="button"
+          >
+            新建
           </button>
           <button
             className="assistant-session-button"
             onClick={() => setHistoryOpen((current) => !current)}
+            title="查看历史会话"
             type="button"
           >
-            {historyOpen ? "隐藏历史" : "历史会话"}
+            {historyOpen ? "隐藏" : "历史"}
           </button>
         </div>
       </div>

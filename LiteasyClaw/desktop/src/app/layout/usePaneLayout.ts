@@ -80,6 +80,7 @@ export function usePaneLayout() {
     syncPreference(loadPaneLayoutPreference());
     syncPreference({
       collapsed: {
+        bottom: false,
         left: false,
         right: false
       },

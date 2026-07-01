@@ -1,0 +1,790 @@
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
+import type { Paper } from "../workspace/workspace.types";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+type AnnotationKind = "highlight" | "underline" | "note";
+
+type PdfAnnotationRect = {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
+type PdfAnnotation = {
+  excerpt: string;
+  id: string;
+  kind: AnnotationKind;
+  note?: string;
+  page: number;
+  rects: PdfAnnotationRect[];
+  text: string;
+};
+
+type PdfSelection = {
+  excerpt: string;
+  menuLeft: number;
+  menuTop: number;
+  page: number;
+  rects: PdfAnnotationRect[];
+};
+
+type PdfSidebarMode = "thumbnails" | "annotations";
+
+type PdfReaderProps = {
+  selectedPapers: Paper[];
+  zoom: number;
+};
+
+const fallbackExcerpt = "Liteasy 将在这里显示清晰 PDF 页面，并把文本选区绑定到批注与 AI 问答。";
+
+function resolvePdfDisplaySource(sourcePath: string | undefined) {
+  if (!sourcePath) {
+    return undefined;
+  }
+
+  const trimmed = sourcePath.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (lower.startsWith("fixtures/") && lower.split("?")[0].endsWith(".pdf")) {
+    return `/${trimmed}`;
+  }
+
+  if (lower.startsWith("./fixtures/") && lower.split("?")[0].endsWith(".pdf")) {
+    return trimmed.slice(1);
+  }
+
+  if (lower.startsWith("blob:") || lower.startsWith("data:application/pdf")) {
+    return trimmed;
+  }
+
+  if (lower.startsWith("/") && lower.split("?")[0].endsWith(".pdf")) {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const canDisplay =
+      ["http:", "https:", "file:"].includes(url.protocol) &&
+      url.pathname.toLowerCase().endsWith(".pdf");
+    return canDisplay ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getAnnotationLabel(kind: AnnotationKind) {
+  if (kind === "highlight") {
+    return "高亮";
+  }
+
+  if (kind === "underline") {
+    return "划线";
+  }
+
+  return "注释";
+}
+
+function getOverlayLabel(kind: AnnotationKind) {
+  if (kind === "highlight") {
+    return "高亮标注";
+  }
+
+  if (kind === "underline") {
+    return "划线标注";
+  }
+
+  return "旁注";
+}
+
+function getAnnotationText(kind: AnnotationKind, excerpt: string) {
+  if (kind === "note") {
+    return "注释：这段内容可以稍后接入选中文段和 AI 问答。";
+  }
+
+  return `${getAnnotationLabel(kind)}批注：${excerpt}`;
+}
+
+function clampPercent(value: number, fallback: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(100, value));
+}
+
+function getElementFromRange(range: Range) {
+  const node = range.commonAncestorContainer;
+  if (!node) {
+    return null;
+  }
+
+  return node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+}
+
+function getSelectionPageElement(range: Range, stageElement: HTMLElement) {
+  const ancestorElement = getElementFromRange(range);
+  if (!ancestorElement || !stageElement.contains(ancestorElement)) {
+    return null;
+  }
+
+  if (!ancestorElement.closest(".pdf-text-layer")) {
+    return null;
+  }
+
+  return ancestorElement.closest<HTMLElement>(".pdf-page-shell");
+}
+
+function getRangeClientRects(range: Range) {
+  const rects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 1 && rect.height > 1
+  );
+
+  if (rects.length > 0) {
+    return rects;
+  }
+
+  const fallbackRect = range.getBoundingClientRect();
+  return fallbackRect.width > 1 && fallbackRect.height > 1 ? [fallbackRect] : [];
+}
+
+function getLineHeightPercent(rect: DOMRect, pageHeight: number) {
+  return Math.max(1.1, Math.min(2.8, (rect.height / pageHeight) * 100));
+}
+
+function buildAnnotationRects(range: Range, pageRect: DOMRect | undefined) {
+  const pageWidth = pageRect?.width && pageRect.width > 0 ? pageRect.width : 760;
+  const pageHeight = pageRect?.height && pageRect.height > 0 ? pageRect.height : 980;
+  const pageLeft = pageRect?.left ?? 0;
+  const pageTop = pageRect?.top ?? 0;
+
+  return getRangeClientRects(range)
+    .filter((rect) => {
+      const pageBottom = pageTop + pageHeight;
+      const pageRight = pageLeft + pageWidth;
+      return rect.bottom >= pageTop && rect.top <= pageBottom && rect.right >= pageLeft && rect.left <= pageRight;
+    })
+    .map((rect) => ({
+      height: getLineHeightPercent(rect, pageHeight),
+      left: clampPercent(((rect.left - pageLeft) / pageWidth) * 100, 16),
+      top: clampPercent(((rect.top - pageTop) / pageHeight) * 100, 22),
+      width: Math.max(4, clampPercent((rect.width / pageWidth) * 100, 48))
+    }));
+}
+
+function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection): PdfSelection | null {
+  const excerpt = selection.toString().trim().replace(/\s+/g, " ");
+  if (!excerpt || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  const rangeRect = range.getBoundingClientRect();
+  const pageElement = getSelectionPageElement(range, stageElement);
+  if (!pageElement) {
+    return null;
+  }
+
+  const pageRect = pageElement?.getBoundingClientRect();
+  const pageNumber = Number(pageElement?.dataset.page ?? "1");
+  const rects = buildAnnotationRects(range, pageRect);
+  if (rects.length === 0) {
+    return null;
+  }
+
+  const stageRect = stageElement.getBoundingClientRect();
+
+  return {
+    excerpt,
+    menuLeft: Math.max(12, rangeRect.left - stageRect.left + stageElement.scrollLeft),
+    menuTop: Math.max(12, rangeRect.top - stageRect.top + stageElement.scrollTop - 44),
+    page: Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : 1,
+    rects
+  };
+}
+
+function getInitialSelection(activePaper: Paper | null): PdfSelection {
+  return {
+    excerpt: activePaper
+      ? `当前选中文段来自《${activePaper.title}》第 1 页，后续会接入真实 PDF 文本选区。`
+      : fallbackExcerpt,
+    menuLeft: 120,
+    menuTop: 120,
+    page: 1,
+    rects: [{ height: 2.4, left: 16, top: 22, width: 58 }]
+  };
+}
+
+function getPageNumbers(pageCount: number) {
+  return Array.from({ length: Math.max(1, pageCount) }, (_, index) => index + 1);
+}
+
+function getScaleForStage(baseViewport: PageViewport, stageWidth: number, zoom: number) {
+  const availableWidth = Math.max(420, stageWidth - 72);
+  return Math.max(0.6, Math.min(2.8, (availableWidth / baseViewport.width) * (zoom / 100)));
+}
+
+function isJsdomRuntime() {
+  return typeof navigator !== "undefined" && navigator.userAgent.toLowerCase().includes("jsdom");
+}
+
+function getCanvasContext(canvas: HTMLCanvasElement) {
+  if (isJsdomRuntime()) {
+    return null;
+  }
+
+  return canvas.getContext("2d");
+}
+
+function drawCanvasFallback(canvas: HTMLCanvasElement | null, title: string, pageNumber: number, compact = false) {
+  if (!canvas) {
+    return;
+  }
+
+  const width = compact ? 108 : 760;
+  const height = compact ? 146 : 980;
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+
+  const context = getCanvasContext(canvas);
+  if (!context) {
+    return;
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#d9e5ef";
+  context.fillRect(compact ? 14 : 72, compact ? 22 : 110, compact ? 80 : 500, compact ? 6 : 16);
+  context.fillRect(compact ? 14 : 72, compact ? 38 : 150, compact ? 58 : 430, compact ? 5 : 12);
+  context.fillStyle = "#1b66b3";
+  context.font = compact ? "700 18px sans-serif" : "700 28px sans-serif";
+  context.fillText(String(pageNumber), compact ? 12 : 72, compact ? 128 : 900);
+  context.fillStyle = "#5d6978";
+  context.font = compact ? "700 8px sans-serif" : "700 18px sans-serif";
+  context.fillText(title.slice(0, compact ? 18 : 52), compact ? 14 : 72, compact ? 18 : 78);
+}
+
+function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect): CSSProperties {
+  if (kind === "note") {
+    return {
+      height: "2%",
+      left: `${Math.min(97, rect.left + rect.width + 0.7)}%`,
+      top: `${rect.top}%`,
+      width: "2%"
+    };
+  }
+
+  return {
+    height: `${rect.height}%`,
+    left: `${rect.left}%`,
+    top: `${rect.top}%`,
+    width: `${rect.width}%`
+  };
+}
+
+type PdfPageViewProps = {
+  annotations: PdfAnnotation[];
+  activePaper: Paper | null;
+  pageNumber: number;
+  pdfDocument: PDFDocumentProxy | null;
+  stageWidth: number;
+  zoom: number;
+};
+
+function PdfPageView({
+  activePaper,
+  annotations,
+  pageNumber,
+  pdfDocument,
+  stageWidth,
+  zoom
+}: PdfPageViewProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
+  const pageTitle = activePaper?.title ?? "选择文献后开始阅读";
+  const [pageSize, setPageSize] = useState({ height: 980, width: 760 });
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
+
+    async function renderPage() {
+      if (!pdfDocument) {
+        drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      const textLayer = textLayerRef.current;
+      if (!canvas || !textLayer) {
+        return;
+      }
+
+      try {
+        const page: PDFPageProxy = await pdfDocument.getPage(pageNumber);
+        if (cancelled) {
+          return;
+        }
+
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({
+          scale: getScaleForStage(baseViewport, stageWidth, zoom)
+        });
+        const outputScale = window.devicePixelRatio || 1;
+        const context = getCanvasContext(canvas);
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+        textLayer.style.width = `${viewport.width}px`;
+        textLayer.style.height = `${viewport.height}px`;
+        setPageSize({ height: viewport.height, width: viewport.width });
+
+        if (context) {
+          context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+          renderTask = page.render({ canvas, canvasContext: context, viewport });
+          await renderTask.promise;
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        textLayer.innerHTML = "";
+        const textContent = await page.getTextContent();
+        const layer = new pdfjsLib.TextLayer({
+          container: textLayer,
+          textContentSource: textContent,
+          viewport
+        });
+        await layer.render();
+      } catch {
+        drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
+      }
+    }
+
+    void renderPage();
+
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
+  }, [pageNumber, pageTitle, pdfDocument, stageWidth, zoom]);
+
+  const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
+
+  return (
+    <article
+      aria-label={`PDF.js 页面 ${pageNumber}`}
+      className="pdf-page-shell"
+      data-page={pageNumber}
+      style={{ minHeight: pageSize.height, width: pageSize.width }}
+    >
+      <canvas aria-label={`PDF.js 页面画布 ${pageNumber}`} className="pdf-page-canvas" ref={canvasRef} />
+      <div aria-hidden="true" className="pdf-page-shadow" />
+      <div className="textLayer pdf-text-layer" ref={textLayerRef}>
+        <span>{fallbackExcerpt}</span>
+      </div>
+      <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
+        {pageAnnotations.map((annotation) =>
+          annotation.rects.map((rect, index) => (
+            <div
+              className={`pdf-overlay-mark ${annotation.kind}`}
+              key={`${annotation.id}-${index}`}
+              style={getOverlayStyle(annotation.kind, rect)}
+              title={`第 ${annotation.page} 页：${annotation.excerpt}`}
+            >
+              <span className="pdf-overlay-label">{getOverlayLabel(annotation.kind)}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </article>
+  );
+}
+
+type PdfThumbnailProps = {
+  active: boolean;
+  activePaper: Paper | null;
+  pageNumber: number;
+  pdfDocument: PDFDocumentProxy | null;
+};
+
+function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumbnailProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const title = activePaper?.title ?? "PDF";
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
+
+    async function renderThumbnail() {
+      if (!pdfDocument) {
+        drawCanvasFallback(canvasRef.current, title, pageNumber, true);
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        return;
+      }
+
+      try {
+        const page = await pdfDocument.getPage(pageNumber);
+        if (cancelled) {
+          return;
+        }
+
+        const viewport = page.getViewport({ scale: 0.18 });
+        const context = getCanvasContext(canvas);
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = "100%";
+        canvas.style.height = "auto";
+
+        if (context) {
+          renderTask = page.render({ canvas, canvasContext: context, viewport });
+          await renderTask.promise;
+        }
+      } catch {
+        drawCanvasFallback(canvasRef.current, title, pageNumber, true);
+      }
+    }
+
+    void renderThumbnail();
+
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
+  }, [pageNumber, pdfDocument, title]);
+
+  return (
+    <li className={active ? "active" : ""}>
+      <canvas aria-label={`PDF.js 缩略图 ${pageNumber}`} className="pdf-thumbnail-canvas" ref={canvasRef} />
+      <span className="pdf-thumbnail-number">{pageNumber}</span>
+    </li>
+  );
+}
+
+export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
+  const activePaper = selectedPapers[0] ?? null;
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
+  const [annotationDraft, setAnnotationDraft] = useState("");
+  const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [pageCount, setPageCount] = useState(1);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
+  const [stageWidth, setStageWidth] = useState(960);
+  const [status, setStatus] = useState("选择文段后可添加高亮、划线、注释，或把选中文段交给 AI。");
+  const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
+  const pageNumbers = useMemo(() => getPageNumbers(pageCount), [pageCount]);
+
+  useEffect(() => {
+    const stageElement = stageRef.current;
+    if (!stageElement) {
+      return undefined;
+    }
+
+    function updateStageWidth() {
+      setStageWidth(Math.max(520, stageElement?.clientWidth || 960));
+    }
+
+    updateStageWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateStageWidth);
+      return () => window.removeEventListener("resize", updateStageWidth);
+    }
+
+    const observer = new ResizeObserver(updateStageWidth);
+    observer.observe(stageElement);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setAnnotations([]);
+    setActiveAnnotationId(null);
+    setAnnotationDraft("");
+    setSelection(null);
+    setPageCount(1);
+
+    if (!pdfDisplaySource) {
+      setPdfDocument(null);
+      setStatus(
+        activePaper?.sourcePath
+          ? "浏览器不能直接打开此 PDF 路径。"
+          : "选择文献后开始阅读，可在 PDF 文本层上选中文段。"
+      );
+      return undefined;
+    }
+
+    if (isJsdomRuntime()) {
+      setPdfDocument(null);
+      setStatus("PDF.js 测试画布已准备，可在浏览器中渲染真实 PDF。");
+      return undefined;
+    }
+
+    let cancelled = false;
+    const loadingTask = pdfjsLib.getDocument({
+      url: pdfDisplaySource
+    });
+    setStatus("正在用 PDF.js 加载文档。");
+
+    loadingTask.promise
+      .then((document) => {
+        if (cancelled) {
+          void document.destroy();
+          return;
+        }
+
+        setPdfDocument(document);
+        setPageCount(document.numPages);
+        setStatus(`已加载 ${document.numPages} 页 PDF，可直接选中文本批注。`);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPdfDocument(null);
+          setStatus("PDF.js 暂时无法解析该文件，已保留应用内阅读画布。");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      void loadingTask.destroy();
+    };
+  }, [activePaper?.sourcePath, pdfDisplaySource]);
+
+  function clearBrowserSelection() {
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function handleTextSelection(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest(".pdf-selection-menu")) {
+      return;
+    }
+
+    const stageElement = stageRef.current;
+    const browserSelection = window.getSelection();
+    if (!stageElement || !browserSelection) {
+      return;
+    }
+
+    const nextSelection = buildSelectionFromRange(stageElement, browserSelection);
+    setSelection(nextSelection);
+  }
+
+  function addAnnotation(kind: AnnotationKind) {
+    const activeSelection = selection ?? getInitialSelection(activePaper);
+    const annotation: PdfAnnotation = {
+      excerpt: activeSelection.excerpt,
+      id: `${kind}-${Date.now()}-${annotations.length}`,
+      kind,
+      page: activeSelection.page,
+      rects: activeSelection.rects,
+      text: getAnnotationText(kind, activeSelection.excerpt)
+    };
+    setAnnotations((current) => [...current, annotation]);
+    setStatus(`已创建${getAnnotationLabel(kind)}批注。`);
+    setSidebarMode("annotations");
+    setSidebarCollapsed(false);
+    setSelection(null);
+    clearBrowserSelection();
+  }
+
+  function openAnnotationEditor(annotation: PdfAnnotation) {
+    setActiveAnnotationId(annotation.id);
+    setAnnotationDraft(annotation.note ?? "");
+  }
+
+  function saveAnnotationNote(annotationId: string) {
+    const note = annotationDraft.trim();
+    setAnnotations((current) =>
+      current.map((annotation) =>
+        annotation.id === annotationId
+          ? {
+              ...annotation,
+              note
+            }
+          : annotation
+      )
+    );
+    setActiveAnnotationId(null);
+    setAnnotationDraft("");
+    setStatus(note ? "已保存批注补充笔记。" : "已清空批注补充笔记。");
+  }
+
+  return (
+    <section
+      aria-label="PDF 阅读器"
+      className="pdf-reader fluid"
+      data-pdf-source={pdfDisplaySource ?? ""}
+    >
+      <div
+        aria-label="PDF 阅读工作区"
+        className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"}`}
+      >
+        <aside aria-label="PDF 左侧批注栏" className="pdf-left-sidebar">
+          {sidebarCollapsed ? (
+            <button
+              aria-label="展开 PDF 左侧栏"
+              className="pdf-sidebar-collapse-button"
+              onClick={() => setSidebarCollapsed(false)}
+              title="展开 PDF 左侧栏"
+              type="button"
+            >
+              展开
+            </button>
+          ) : (
+            <>
+              <div className="pdf-sidebar-switcher">
+                <button
+                  className={sidebarMode === "thumbnails" ? "active" : ""}
+                  onClick={() => setSidebarMode("thumbnails")}
+                  title="显示页面缩略图"
+                  type="button"
+                >
+                  缩略图
+                </button>
+                <button
+                  className={sidebarMode === "annotations" ? "active" : ""}
+                  onClick={() => setSidebarMode("annotations")}
+                  title="显示当前文档批注"
+                  type="button"
+                >
+                  批注
+                </button>
+                <button
+                  aria-label="收起 PDF 左侧栏"
+                  className="pdf-sidebar-collapse-button"
+                  onClick={() => setSidebarCollapsed(true)}
+                  title="收起 PDF 左侧栏"
+                  type="button"
+                >
+                  收起
+                </button>
+              </div>
+
+              {sidebarMode === "thumbnails" ? (
+                <ol className="pdf-thumbnail-list">
+                  {pageNumbers.map((pageNumber) => (
+                    <PdfThumbnail
+                      active={pageNumber === 1}
+                      activePaper={activePaper}
+                      key={pageNumber}
+                      pageNumber={pageNumber}
+                      pdfDocument={pdfDocument}
+                    />
+                  ))}
+                </ol>
+              ) : (
+                <div className="pdf-sidebar-annotations">
+                  <div aria-live="polite" className="pdf-status">
+                    {status}
+                  </div>
+                  {annotations.length > 0 ? (
+                    <ul className="pdf-annotation-list">
+                      {annotations.map((annotation) => (
+                        <li className={`pdf-annotation-item ${annotation.kind}`} key={annotation.id}>
+                          <button
+                            aria-label={`编辑批注：${annotation.excerpt}`}
+                            className="pdf-annotation-summary"
+                            onClick={() => openAnnotationEditor(annotation)}
+                            title="打开此批注的补充笔记"
+                            type="button"
+                          >
+                            <span>{annotation.text}</span>
+                            <span className="pdf-annotation-excerpt">选中文段：{annotation.excerpt}</span>
+                          </button>
+                          {annotation.note ? (
+                            <div className="pdf-annotation-note">补充：{annotation.note}</div>
+                          ) : null}
+                          {activeAnnotationId === annotation.id ? (
+                            <div className="pdf-annotation-editor">
+                              <textarea
+                                aria-label="补充批注笔记"
+                                onChange={(event) => setAnnotationDraft(event.target.value)}
+                                placeholder="为这条批注补充笔记"
+                                value={annotationDraft}
+                              />
+                              <button onClick={() => saveAnnotationNote(annotation.id)} type="button">
+                                保存笔记
+                              </button>
+                            </div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="pdf-empty-note">暂无批注</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </aside>
+
+        <section aria-label="PDF 页面预览" className="pdf-main-stage">
+          <div
+            aria-label="PDF 页面滚动区"
+            className="pdf-stage"
+            onMouseUp={handleTextSelection}
+            ref={stageRef}
+          >
+            <div aria-label="PDF.js 页面列表" className="pdf-page-list responsive">
+              {pageNumbers.map((pageNumber) => (
+                <PdfPageView
+                  activePaper={activePaper}
+                  annotations={annotations}
+                  key={pageNumber}
+                  pageNumber={pageNumber}
+                  pdfDocument={pdfDocument}
+                  stageWidth={stageWidth}
+                  zoom={zoom}
+                />
+              ))}
+            </div>
+            {selection ? (
+              <div
+                aria-label="选中文本批注菜单"
+                className="pdf-selection-menu"
+                style={{ left: selection.menuLeft, top: selection.menuTop }}
+              >
+                <button onClick={() => addAnnotation("highlight")} title="高亮选中文段" type="button">
+                  高亮
+                </button>
+                <button onClick={() => addAnnotation("underline")} title="给选中文段添加下划线" type="button">
+                  划线
+                </button>
+                <button onClick={() => addAnnotation("note")} title="给选中文段添加旁注" type="button">
+                  注释
+                </button>
+                <button
+                  onClick={() => {
+                    setStatus("已预留：后续会把当前选中文段发送给 AI。");
+                    setSelection(null);
+                    clearBrowserSelection();
+                  }}
+                  title="预留接口：后续会把选中文段发送给 AI"
+                  type="button"
+                >
+                  问 AI
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}

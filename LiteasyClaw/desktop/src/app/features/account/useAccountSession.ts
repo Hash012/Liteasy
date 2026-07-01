@@ -1,6 +1,9 @@
 import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import { useEffect, useRef, useState } from "react";
-import { createCloudAccountSession } from "./accountSessionRuntime";
+import {
+  createCloudAccountSession,
+  createRegisteredCloudAccountSession
+} from "./accountSessionRuntime";
 import {
   clearStoredAccountSession,
   loadSuppressLoginReminderPreference,
@@ -8,7 +11,7 @@ import {
   storeAccountSession,
   storeSuppressLoginReminderPreference
 } from "./accountSessionStorage";
-import type { AccountTransport } from "./accountSessionClient";
+import type { AccountRegistrationInput, AccountTransport } from "./accountSessionClient";
 import type { AccountSession } from "./account.types";
 import type { SettingsState } from "../settings/settings.types";
 
@@ -58,6 +61,27 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
     }
   }
 
+  async function registerPersonalAccount(registration: AccountRegistrationInput) {
+    setAccountPending(true);
+    setAccountMessage("正在注册云账号...");
+
+    try {
+      const session = await createRegisteredCloudAccountSession(getSettings(), registration, {
+        transport: accountTransport
+      });
+      setAccountSession(session);
+      storeAccountSession(session);
+      setAccountMessage("已注册并登录云账号，会话已保存在本地。");
+    } catch (error) {
+      const detail = formatCloudConnectionError(error, {
+        controlPlaneEndpoint: getSettings()["models.control_plane_endpoint"]
+      });
+      setAccountMessage(`云账号注册失败。详细信息：${detail}`);
+    } finally {
+      setAccountPending(false);
+    }
+  }
+
   function logoutFromCloudAccount() {
     setAccountSession(null);
     clearStoredAccountSession();
@@ -75,6 +99,7 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
     accountSession,
     loginToCloudAccount,
     logoutFromCloudAccount,
+    registerPersonalAccount,
     setSuppressLoginReminder,
     shouldShowLoginReminder
   };

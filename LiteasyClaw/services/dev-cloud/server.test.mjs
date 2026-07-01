@@ -86,6 +86,8 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/admin/model-policy",
     "GET /v1/admin/governance-dashboard",
     "POST /v1/account/demo-login",
+    "POST /v1/account/login",
+    "POST /v1/account/register",
     "POST /v1/model/generate",
     "POST /v1/model/audit",
     "POST /v1/recommendations",
@@ -294,17 +296,95 @@ test("explains that demo login must be called with POST", async () => {
   assert.match(response.json.message, /浏览器直接打开/);
 });
 
+test("registers a personal account and rejects duplicate email addresses", async () => {
+  const handler = createDevCloudRequestHandler();
+  const registerBody = JSON.stringify({
+    displayName: "Tian",
+    email: "tian@example.com",
+    password: "private-password-1"
+  });
+
+  const firstResponse = await invokeHandler({
+    body: registerBody,
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+
+  assert.equal(firstResponse.statusCode, 200);
+  assert.equal(firstResponse.json.session.email, "tian@example.com");
+  assert.equal(firstResponse.json.session.name, "Tian");
+  assert.equal(firstResponse.json.session.membershipTier, "pro");
+  assert.match(firstResponse.json.session.sessionId, /^account-session-/);
+
+  const duplicateResponse = await invokeHandler({
+    body: registerBody,
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+
+  assert.equal(duplicateResponse.statusCode, 409);
+  assert.equal(duplicateResponse.json.error, "account_exists");
+  assert.match(duplicateResponse.json.message, /已经注册/);
+});
+
+test("logs in a previously registered personal account", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  await invokeHandler({
+    body: JSON.stringify({
+      displayName: "Tian",
+      email: "tian@example.com",
+      password: "private-password-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+
+  const loginResponse = await invokeHandler({
+    body: JSON.stringify({
+      email: "tian@example.com",
+      password: "private-password-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/login"
+  });
+
+  assert.equal(loginResponse.statusCode, 200);
+  assert.equal(loginResponse.json.session.email, "tian@example.com");
+  assert.equal(loginResponse.json.session.name, "Tian");
+});
+
 test("stores and returns private cloud collection items for a demo session", async () => {
   const handler = createDevCloudRequestHandler();
 
   const saveResponse = await invokeHandler({
     body: JSON.stringify({
       item: {
-        id: "rec-bert-1",
-        reason: "同样关注大规模预训练语言模型的迁移能力。",
+        id: "rec-vdbms-1",
+        reason: "同样关注向量数据库系统架构与相似度检索能力。",
         savedAt: "2026-05-14T10:30:00.000Z",
         source: "Semantic Scholar",
-        title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+        title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       },
       sessionId: "demo-session-1"
     }),
@@ -319,7 +399,7 @@ test("stores and returns private cloud collection items for a demo session", asy
 
   assert.equal(saveResponse.statusCode, 200);
   assert.equal(saveResponse.json.items.length, 1);
-  assert.equal(saveResponse.json.items[0].id, "rec-bert-1");
+  assert.equal(saveResponse.json.items[0].id, "rec-vdbms-1");
 
   const getResponse = await invokeHandler({
     body: JSON.stringify({
@@ -336,7 +416,7 @@ test("stores and returns private cloud collection items for a demo session", asy
 
   assert.equal(getResponse.statusCode, 200);
   assert.equal(getResponse.json.items.length, 1);
-  assert.equal(getResponse.json.items[0].title, "RoBERTa: A Robustly Optimized BERT Pretraining Approach");
+  assert.equal(getResponse.json.items[0].title, "VBASE: Unifying Online Vector Similarity Search and Relational Queries");
 });
 
 test("stores and reads recommendation cache separately from collection data", async () => {
@@ -666,7 +746,7 @@ test("returns related recommendations for the selected document set", async () =
       selectedDocuments: [
         {
           id: "demo-2",
-          title: "BERT: Pre-training of Deep Bidirectional Transformers"
+          title: "Survey of Vector Database Management Systems"
         }
       ],
       sessionId: "demo-session-1"
@@ -679,23 +759,23 @@ test("returns related recommendations for the selected document set", async () =
     recommendations: [
       {
         discoveredAt: "2026-05-14T08:15:00Z",
-        id: "rec-bert-1",
-        relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+        id: "rec-vdbms-1",
+        relatedDocumentTitle: "Survey of Vector Database Management Systems",
         relevanceBand: "high",
         relevanceScore: 0.92,
-        reason: "同样关注大规模预训练语言模型的迁移能力。",
+        reason: "同样关注向量数据库系统架构与相似度检索能力。",
         source: "Semantic Scholar",
-        title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+        title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       },
       {
         discoveredAt: "2026-05-14T09:10:00Z",
-        id: "rec-bert-2",
-        relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+        id: "rec-vdbms-2",
+        relatedDocumentTitle: "Survey of Vector Database Management Systems",
         relevanceBand: "medium",
         relevanceScore: 0.78,
-        reason: "延续 BERT 路线，强调参数共享与效率优化。",
+        reason: "补充开源向量数据库系统实现，便于和综述框架对照。",
         source: "arXiv Watch",
-        title: "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations"
+        title: "Milvus: A Purpose-Built Vector Data Management System"
       }
     ]
   });
@@ -712,13 +792,18 @@ test("accepts document metadata sync snapshots", async () => {
       documents: [
         {
           id: "demo-1",
-          sourcePath: "fixtures/attention-is-all-you-need.pdf",
-          title: "Attention Is All You Need"
+          sourcePath: "/papers/colbert-late-interaction.pdf",
+          title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
         },
         {
           id: "demo-2",
-          sourcePath: "fixtures/bert-pretraining.pdf",
-          title: "BERT: Pre-training of Deep Bidirectional Transformers"
+          sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+          title: "Survey of Vector Database Management Systems"
+        },
+        {
+          id: "demo-3",
+          sourcePath: "/papers/acorn-vector-search.pdf",
+          title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
         }
       ],
       sessionId: "demo-session-1",
@@ -730,7 +815,7 @@ test("accepts document metadata sync snapshots", async () => {
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json, {
     result: {
-      acceptedCount: 2,
+      acceptedCount: 3,
       rejectedCount: 0,
       syncId: "metadata-demo-session-1-r0",
       syncedAt: "2026-05-14T10:20:00Z"

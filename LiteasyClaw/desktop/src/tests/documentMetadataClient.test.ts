@@ -10,7 +10,7 @@ test("posts visible workspace document metadata to the cloud endpoint", async ()
       return {
         json: async () => ({
           result: {
-            acceptedCount: 2,
+            acceptedCount: 3,
             rejectedCount: 0,
             syncId: "metadata-sync-1",
             syncedAt: "2026-05-14T10:20:00Z"
@@ -26,13 +26,18 @@ test("posts visible workspace document metadata to the cloud endpoint", async ()
     documents: [
       {
         id: "demo-1",
-        sourcePath: "fixtures/attention-is-all-you-need.pdf",
-        title: "Attention Is All You Need"
+        sourcePath: "/papers/colbert-late-interaction.pdf",
+        title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
       },
       {
         id: "demo-2",
-        sourcePath: "fixtures/bert-pretraining.pdf",
-        title: "BERT: Pre-training of Deep Bidirectional Transformers"
+        sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+        title: "Survey of Vector Database Management Systems"
+      },
+      {
+        id: "demo-3",
+        sourcePath: "/papers/acorn-vector-search.pdf",
+        title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
       }
     ],
     sessionId: "demo-session-1",
@@ -40,7 +45,7 @@ test("posts visible workspace document metadata to the cloud endpoint", async ()
   });
 
   expect(result).toEqual({
-    acceptedCount: 2,
+    acceptedCount: 3,
     rejectedCount: 0,
     syncId: "metadata-sync-1",
     syncedAt: "2026-05-14T10:20:00Z"
@@ -51,13 +56,18 @@ test("posts visible workspace document metadata to the cloud endpoint", async ()
         documents: [
           {
             id: "demo-1",
-            sourcePath: "fixtures/attention-is-all-you-need.pdf",
-            title: "Attention Is All You Need"
+            sourcePath: "/papers/colbert-late-interaction.pdf",
+            title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
           },
           {
             id: "demo-2",
-            sourcePath: "fixtures/bert-pretraining.pdf",
-            title: "BERT: Pre-training of Deep Bidirectional Transformers"
+            sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+            title: "Survey of Vector Database Management Systems"
+          },
+          {
+            id: "demo-3",
+            sourcePath: "/papers/acorn-vector-search.pdf",
+            title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
           }
         ],
         sessionId: "demo-session-1",

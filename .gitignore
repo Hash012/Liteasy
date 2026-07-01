@@ -1,6 +1,7 @@
 .superpowers/
 
 # Desktop app dependencies and build outputs
+/desktop/
 LiteasyClaw/desktop/node_modules/
 LiteasyClaw/desktop/dist/
 LiteasyClaw/desktop/.vite/
@@ -11,3 +12,6 @@ archive/generated/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+.omx/
+ICS2-13-Network-复习讲解.html
+tmp/

@@ -2,6 +2,7 @@ import type { LeftRailView } from "./useLeftRailNavigation";
 
 type ActivityBarProps = {
   activeView: LeftRailView;
+  accountSessionAvailable?: boolean;
   onToggleActiveView?: (view: LeftRailView) => void;
   onSelectView: (view: LeftRailView) => void;
 };
@@ -15,6 +16,7 @@ const activityItems: Array<{ label: string; view: LeftRailView }> = [
 
 export function ActivityBar({
   activeView,
+  accountSessionAvailable = true,
   onToggleActiveView,
   onSelectView
 }: ActivityBarProps) {
@@ -22,6 +24,7 @@ export function ActivityBar({
     <nav aria-label="左边栏导航" className="activity-bar">
       {activityItems.map((item) => (
         <button
+          aria-label={item.label}
           className={activeView === item.view ? "activity-button active" : "activity-button"}
           key={item.view}
           onClick={() =>
@@ -32,7 +35,10 @@ export function ActivityBar({
           title={item.label}
           type="button"
         >
-          {item.label}
+          <span className="activity-button-label">{item.label}</span>
+          {item.view === "profile" && !accountSessionAvailable ? (
+            <span className="activity-login-badge">未登录</span>
+          ) : null}
         </button>
       ))}
     </nav>

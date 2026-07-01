@@ -100,7 +100,7 @@ describe("useWorkspaceActions", () => {
   });
 
   test("imports the selected set and exposes imported chunks after timers complete", async () => {
-    const paper = { id: "demo-1", sourcePath: "fixtures/demo-1.pdf", title: "Attention Is All You Need" };
+    const paper = { id: "demo-1", sourcePath: "fixtures/demo-1.pdf", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" };
     const { importStore, onAnalysisHint, onImportJobsChanged, result, workspaceStore } = renderWorkspaceActions([paper]);
 
     act(() => result.current.toggleSelection(paper.id));
@@ -131,7 +131,7 @@ describe("useWorkspaceActions", () => {
   });
 
   test("does not queue duplicate imports while a selected paper is already queued or parsing", async () => {
-    const paper = { id: "demo-1", sourcePath: "fixtures/demo-1.pdf", title: "Attention Is All You Need" };
+    const paper = { id: "demo-1", sourcePath: "fixtures/demo-1.pdf", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" };
     const { importStore, result } = renderWorkspaceActions([paper]);
 
     act(() => result.current.toggleSelection(paper.id));
@@ -159,7 +159,7 @@ describe("useWorkspaceActions", () => {
   });
 
   test("returns the already-imported message without queuing duplicate imports", async () => {
-    const paper = { id: "demo-1", sourcePath: "fixtures/demo-1.pdf", title: "Attention Is All You Need" };
+    const paper = { id: "demo-1", sourcePath: "fixtures/demo-1.pdf", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" };
     const { importStore, result } = renderWorkspaceActions([paper]);
 
     act(() => result.current.toggleSelection(paper.id));

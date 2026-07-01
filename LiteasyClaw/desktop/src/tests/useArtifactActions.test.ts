@@ -9,7 +9,7 @@ import { useArtifactActions } from "../app/features/artifacts/useArtifactActions
 const paper: Paper = {
   id: "demo-1",
   sourcePath: "fixtures/demo-1.pdf",
-  title: "Attention Is All You Need"
+  title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
 };
 
 function renderArtifactActions(options: {
@@ -109,7 +109,7 @@ describe("useArtifactActions", () => {
       await vi.advanceTimersByTimeAsync(1200);
     });
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
-      expect.objectContaining({ title: "Transformer Mind Map", type: "mindmap" })
+      expect.objectContaining({ title: "Literature Mind Map", type: "mindmap" })
     ]);
     expect(onAnalysisHint).toHaveBeenLastCalledWith("导入完成，已按指定模态启动主工作流。");
   });
@@ -134,7 +134,7 @@ describe("useArtifactActions", () => {
       await vi.advanceTimersByTimeAsync(1200);
     });
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
-      expect.objectContaining({ title: "Transformer PPT Outline", type: "ppt" })
+      expect.objectContaining({ title: "Literature PPT Outline", type: "ppt" })
     ]);
   });
 

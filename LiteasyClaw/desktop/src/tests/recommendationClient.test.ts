@@ -12,13 +12,13 @@ test("posts the selected document set to the cloud recommendation endpoint", asy
           recommendations: [
             {
               discoveredAt: "2026-05-14T08:15:00Z",
-              id: "rec-bert-1",
-              relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+              id: "rec-vdbms-1",
+              relatedDocumentTitle: "Survey of Vector Database Management Systems",
               relevanceBand: "high",
               relevanceScore: 0.92,
-              reason: "同样关注大规模预训练语言模型的迁移能力。",
+              reason: "同样关注向量数据库系统架构与相似度检索能力。",
               source: "Semantic Scholar",
-              title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+              title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
             }
           ]
         }),
@@ -32,7 +32,7 @@ test("posts the selected document set to the cloud recommendation endpoint", asy
     selectedDocuments: [
       {
         id: "demo-2",
-        title: "BERT: Pre-training of Deep Bidirectional Transformers"
+        title: "Survey of Vector Database Management Systems"
       }
     ],
     sessionId: "demo-session-1"
@@ -41,13 +41,13 @@ test("posts the selected document set to the cloud recommendation endpoint", asy
   expect(recommendations).toEqual([
     {
       discoveredAt: "2026-05-14T08:15:00Z",
-      id: "rec-bert-1",
-      relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+      id: "rec-vdbms-1",
+      relatedDocumentTitle: "Survey of Vector Database Management Systems",
       relevanceBand: "high",
       relevanceScore: 0.92,
-      reason: "同样关注大规模预训练语言模型的迁移能力。",
+      reason: "同样关注向量数据库系统架构与相似度检索能力。",
       source: "Semantic Scholar",
-      title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+      title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
     }
   ]);
   expect(requests).toEqual([
@@ -56,7 +56,7 @@ test("posts the selected document set to the cloud recommendation endpoint", asy
         selectedDocuments: [
           {
             id: "demo-2",
-            title: "BERT: Pre-training of Deep Bidirectional Transformers"
+            title: "Survey of Vector Database Management Systems"
           }
         ],
         sessionId: "demo-session-1"

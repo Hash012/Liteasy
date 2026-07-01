@@ -48,6 +48,7 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
     onCloseJoinOrganization: vi.fn(),
     onCloseLeaveOrganization: vi.fn(),
     onSkipLogin: vi.fn(),
+    onSubmitAccountRegistration: vi.fn(),
     onSubmitDemoLogin: vi.fn(),
     onToggleSuppressLoginReminder: vi.fn(),
     onCloseOrganizationDialog: vi.fn(),
@@ -89,6 +90,32 @@ describe("AppDialogs", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "跳过，进入本地阅读器" }));
     expect(onSkipLogin).toHaveBeenCalledTimes(1);
+  });
+
+  test("submits a personal account registration from the lightweight login dialog", async () => {
+    const user = userEvent.setup();
+    const onSubmitAccountRegistration = vi.fn();
+
+    render(
+      <AppDialogs
+        {...createProps({
+          loginDialogOpen: true,
+          onSubmitAccountRegistration
+        })}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    await user.type(within(dialog).getByLabelText("昵称"), "Tian");
+    await user.type(within(dialog).getByLabelText("邮箱"), "tian@example.com");
+    await user.type(within(dialog).getByLabelText("密码"), "private-password-1");
+    await user.click(within(dialog).getByRole("button", { name: "注册并登录" }));
+
+    expect(onSubmitAccountRegistration).toHaveBeenCalledWith({
+      displayName: "Tian",
+      email: "tian@example.com",
+      password: "private-password-1"
+    });
   });
 
   test("renders active dialogs in a workspace-scoped overlay", () => {

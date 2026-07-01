@@ -1,20 +1,20 @@
 import { retrieveAnswer } from "../app/features/retrieval/localRetriever";
 
-test("retrieves a bert-grounded answer for a core-method question", () => {
+test("retrieves a vector-database-grounded answer for a core-method question", () => {
   const result = retrieveAnswer({
-    question: "总结这篇论文的核心方法",
+    question: "向量数据库管理系统的核心组件是什么？",
     selectedPapers: [
       {
         id: "demo-2",
-        title: "BERT: Pre-training of Deep Bidirectional Transformers"
+        title: "Survey of Vector Database Management Systems"
       }
     ]
   });
 
-  expect(result.answer).toContain("双向预训练");
+  expect(result.answer).toContain("向量数据库管理系统");
   expect(result.citations[0]?.paperId).toBe("demo-2");
-  expect(result.citations[0]?.page).toBe(7);
-  expect(result.citations[0]?.snippet).toContain("left and right context");
+  expect(result.citations[0]?.page).toBe(4);
+  expect(result.citations[0]?.snippet).toContain("vector database management systems");
 });
 
 test("prefers imported parsed chunks over built-in fixture knowledge", () => {
@@ -24,23 +24,23 @@ test("prefers imported parsed chunks over built-in fixture knowledge", () => {
         {
           page: 10,
           paperId: "demo-2",
-          paperTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
-          snippet: "custom imported chunk about token-level supervision",
-          summary: "导入结果显示这里重点讨论 token-level supervision。",
-          tags: ["token-level supervision", "监督信号"]
+          paperTitle: "Survey of Vector Database Management Systems",
+          snippet: "custom imported chunk about filtered ANN query processing",
+          summary: "导入结果显示这里重点讨论 filtered ANN query processing。",
+          tags: ["filtered ANN", "过滤查询"]
         }
       ]
     },
-    question: "token-level supervision 是什么？",
+    question: "filtered ANN 是什么？",
     selectedPapers: [
       {
         id: "demo-2",
-        title: "BERT: Pre-training of Deep Bidirectional Transformers"
+        title: "Survey of Vector Database Management Systems"
       }
     ]
   });
 
-  expect(result.answer).toContain("token-level supervision");
+  expect(result.answer).toContain("filtered ANN");
   expect(result.citations[0]?.page).toBe(10);
   expect(result.citations[0]?.snippet).toContain("custom imported chunk");
 });

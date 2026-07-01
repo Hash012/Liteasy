@@ -15,6 +15,17 @@ type ExternalLibraryItem = {
   title: string;
 };
 
+function normalizeDroppedFileTitle(name: string) {
+  return name.replace(/\.pdf$/i, "");
+}
+
+function buildDroppedPaperId(file: File) {
+  return `dropped-${file.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")}-${file.size}`;
+}
+
 type UseWorkspaceActionsInput = {
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
@@ -73,6 +84,41 @@ export function useWorkspaceActions({
     }
 
     onAnalysisHint(`《${item.title}》已经在我的文献库中。`);
+  }
+
+  function addDroppedPdfFiles(files: File[]) {
+    const pdfFiles = files.filter((file) => file.name.toLowerCase().endsWith(".pdf"));
+
+    if (pdfFiles.length === 0) {
+      onAnalysisHint("请拖入 PDF 文件。");
+      return;
+    }
+
+    let addedCount = 0;
+    pdfFiles.forEach((file) => {
+      const title = normalizeDroppedFileTitle(file.name);
+      const sourcePath =
+        typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+          ? URL.createObjectURL(file)
+          : `dropped://${encodeURIComponent(file.name)}`;
+      const added = workspaceStore.addPaper({
+        id: buildDroppedPaperId(file),
+        sourcePath,
+        title
+      });
+
+      if (added) {
+        addedCount += 1;
+      }
+    });
+
+    if (addedCount > 0) {
+      syncWorkspace();
+      onAnalysisHint(`已将 ${addedCount} 个 PDF 加入文献库。`);
+      return;
+    }
+
+    onAnalysisHint("拖入的 PDF 已经在文献库中。");
   }
 
   function toggleSelection(paperId: string) {
@@ -207,6 +253,7 @@ export function useWorkspaceActions({
   }
 
   return {
+    addDroppedPdfFiles,
     addExternalPaperToLibrary,
     getImportedChunksByPaperId,
     getImportedSelectedCount,

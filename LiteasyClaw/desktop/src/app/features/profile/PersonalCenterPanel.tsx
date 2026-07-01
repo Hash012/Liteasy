@@ -8,6 +8,7 @@ type PersonalCenterPanelProps = {
   academicProfile: AcademicProfile;
   accountSession: AccountSession | null;
   onClearProfile: () => void;
+  onLogout: () => void;
   onOpenAcademicArchive: () => void;
   onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
@@ -21,6 +22,7 @@ export function PersonalCenterPanel({
   academicProfile,
   accountSession,
   onClearProfile,
+  onLogout,
   onOpenAcademicArchive,
   onToggleProfileSampling,
   onUpdateAcademicProfile,
@@ -40,6 +42,14 @@ export function PersonalCenterPanel({
           <div className="personal-center-kicker">左边栏</div>
           <div className="personal-center-title">个人中心</div>
         </div>
+        <button
+          className="personal-center-logout"
+          onClick={onLogout}
+          title="断开当前云账号会话"
+          type="button"
+        >
+          退出登录
+        </button>
       </div>
 
       <div className="personal-center-card primary">
