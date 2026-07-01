@@ -1,8 +1,8 @@
-# Liteasy Phase 4 Three-End Demo Implementation Plan
+# LiteasyClaw Phase 4 Three-End Demo Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a demo-stage three-end loop: customer desktop software, deployable dev-cloud server APIs, and a lightweight Liteasy internal operations/maintenance console served by the same local dev-cloud process.
+**Goal:** Build a demo-stage three-end loop: customer desktop software, deployable dev-cloud server APIs, and a lightweight LiteasyClaw internal operations/maintenance console served by the same local dev-cloud process.
 
 **Architecture:** Keep the current desktop app as the customer endpoint and `services/dev-cloud/server.mjs` as the server endpoint. Add a minimal internal operations console under `GET /admin/` plus JSON operations APIs under `/v1/admin/*`, using deterministic demo data already present in dev-cloud so no production database, auth, or deployment security is introduced yet.
 
@@ -12,7 +12,7 @@
 
 ## Scope Boundary
 
-This plan intentionally builds a demo internal operations interface for Liteasy operators/maintainers, not a customer-facing organization workspace and not a production operations backend. It should show the shape of platform governance while avoiding premature implementation of multi-tenant auth, billing, persistent database migrations, object storage, upload/delete permissions, or real operator RBAC.
+This plan intentionally builds a demo internal operations interface for LiteasyClaw operators/maintainers, not a customer-facing organization workspace and not a production operations backend. It should show the shape of platform governance while avoiding premature implementation of multi-tenant auth, billing, persistent database migrations, object storage, upload/delete permissions, or real operator RBAC.
 
 ## File Responsibilities
 
@@ -20,7 +20,7 @@ This plan intentionally builds a demo internal operations interface for Liteasy 
 - `services/dev-cloud/server.test.mjs`: Verifies operations routes, service index discoverability, and payload contracts.
 - `docs/qa/phase4-three-end-demo-guide.md`: Explains how non-developers open the three endpoints and what to verify.
 - `README.md`: Adds a short pointer from current effect-viewing instructions to the three-end demo guide.
-- `docs/superpowers/plans/2026-05-15-liteasy-phase4-three-end-demo.md`: Tracks implementation progress.
+- `docs/superpowers/plans/2026-05-15-liteasyclaw-phase4-three-end-demo.md`: Tracks implementation progress.
 
 ### Task 1: Admin Console Service Routes
 
@@ -44,7 +44,7 @@ test("returns the demo operations console html", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
-  assert.match(response.body, /Liteasy Operations Console/);
+  assert.match(response.body, /LiteasyClaw Operations Console/);
   assert.match(response.body, /内部运营与运维后台 Demo/);
   assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
 });
@@ -73,7 +73,7 @@ if (method === "GET" && url.pathname === "/admin/") {
 
 Add `buildAdminConsoleHtml()` near other payload builders. It must return a full HTML string containing:
 
-- `Liteasy Operations Console`
+- `LiteasyClaw Operations Console`
 - `内部运营与运维后台 Demo`
 - `/v1/admin/governance-dashboard`
 - links or labels for user desktop `http://127.0.0.1:1420/`, dev-cloud `http://127.0.0.1:8787/`, and operations console `http://127.0.0.1:8787/admin/`
@@ -109,7 +109,7 @@ test("returns the demo admin governance dashboard payload", async () => {
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.dashboard.name, "Liteasy Operations Governance Dashboard");
+  assert.equal(response.json.dashboard.name, "LiteasyClaw Operations Governance Dashboard");
   assert.equal(response.json.dashboard.environment, "local-demo");
   assert.equal(response.json.dashboard.threeEndStatus.desktop.url, "http://127.0.0.1:1420/");
   assert.equal(response.json.dashboard.threeEndStatus.devCloud.url, "http://127.0.0.1:8787/");
@@ -137,7 +137,7 @@ Add `GET /v1/admin/governance-dashboard` to `services/dev-cloud/server.mjs`. Ret
 ```js
 {
   dashboard: {
-    name: "Liteasy Operations Governance Dashboard",
+    name: "LiteasyClaw Operations Governance Dashboard",
     environment: "local-demo",
     generatedAt: "2026-05-15T00:00:00Z",
     threeEndStatus: {
@@ -187,7 +187,7 @@ Expected: all server tests pass.
 Create `docs/qa/phase4-three-end-demo-guide.md` with these sections:
 
 ```md
-# Liteasy Phase 4 内部运营与运维后台 Demo 验收指南
+# LiteasyClaw Phase 4 内部运营与运维后台 Demo 验收指南
 
 ## 1. 三端分别是什么
 
@@ -203,7 +203,7 @@ Create `docs/qa/phase4-three-end-demo-guide.md` with these sections:
 
 ## 3. 内部运营与运维后台应该看到什么
 
-- `Liteasy Operations Console`
+- `LiteasyClaw Operations Console`
 - `内部运营与运维后台 Demo`
 - 客户桌面端、服务器部署端、内部运营/运维后台链接和状态
 - 组织、配额、任务和审计队列摘要
@@ -230,7 +230,7 @@ Expected: all three endpoint references are present.
 ### Task 4: Final Three-End Verification
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-05-15-liteasy-phase4-three-end-demo.md`
+- Modify: `docs/superpowers/plans/2026-05-15-liteasyclaw-phase4-three-end-demo.md`
 
 - [ ] **Step 1: Run server tests**
 
@@ -274,7 +274,7 @@ Append a short verification note to this plan with exact test counts from the co
 
 ## Completed Scope
 
-- [x] `GET /admin/` serves a lightweight `Liteasy Operations Console` HTML page for the internal operations/maintenance endpoint.
+- [x] `GET /admin/` serves a lightweight `LiteasyClaw Operations Console` HTML page for the internal operations/maintenance endpoint.
 - [x] `GET /v1/admin/governance-dashboard` returns deterministic three-end, organization, quota, task, and audit summary JSON.
 - [x] Root service index advertises `GET /admin/` and `GET /v1/admin/governance-dashboard`.
 - [x] `docs/qa/phase4-three-end-demo-guide.md` documents how to open the user desktop endpoint, dev-cloud endpoint, and operations endpoint.
@@ -299,10 +299,10 @@ Append a short verification note to this plan with exact test counts from the co
 
 ## Follow-up: Admin Role Boundary Correction
 
-- [x] Reframed `/admin` as the Liteasy internal operations/maintenance console, not a customer-facing organization space.
+- [x] Reframed `/admin` as the LiteasyClaw internal operations/maintenance console, not a customer-facing organization space.
 - [x] Updated dashboard labels so the desktop endpoint is the customer software endpoint and the operations endpoint is the internal operations backend.
 - [x] Added internal-ops sections for API policy and user/account overview so `/admin` is about platform configuration and resource/customer operations rather than customer organization work.
-- [x] Updated QA docs and README to state that customers use the desktop app, while Liteasy operations/maintenance staff use the admin page to configure APIs, manage resources, and inspect user/organization status.
+- [x] Updated QA docs and README to state that customers use the desktop app, while LiteasyClaw operations/maintenance staff use the admin page to configure APIs, manage resources, and inspect user/organization status.
 - [x] Verification: `node --test services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs` passed with 21 server/provider tests after the role-boundary correction.
 - [x] Verification: `cd desktop && npm test && npm run build` passed with 63 desktop test files, 223 desktop tests, and a successful production build.
 

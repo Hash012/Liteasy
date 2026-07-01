@@ -72,7 +72,7 @@ test("returns a helpful service index from the root path", async () => {
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.name, "Liteasy dev cloud");
+  assert.equal(response.json.name, "LiteasyClaw dev cloud");
   assert.deepEqual(response.json.endpoints, [
     "GET /",
     "GET /healthz",
@@ -176,7 +176,7 @@ test("returns the demo admin console html", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
-  assert.match(response.body, /Liteasy Operations Console/);
+  assert.match(response.body, /LiteasyClaw Operations Console/);
   assert.match(response.body, /内部运营与运维后台/);
   assert.match(response.body, /客户桌面软件端/);
   assert.match(response.body, /客户组织资源/);
@@ -212,7 +212,7 @@ test("returns the demo admin console html without a trailing slash", async () =>
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
-  assert.match(response.body, /Liteasy Operations Console/);
+  assert.match(response.body, /LiteasyClaw Operations Console/);
   assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
 });
 
@@ -227,7 +227,7 @@ test("returns the demo admin governance dashboard payload", async () => {
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.dashboard.name, "Liteasy Operations Governance Dashboard");
+  assert.equal(response.json.dashboard.name, "LiteasyClaw Operations Governance Dashboard");
   assert.equal(response.json.dashboard.environment, "local-demo");
   assert.equal(response.json.dashboard.threeEndStatus.desktop.label, "客户桌面软件端");
   assert.equal(response.json.dashboard.threeEndStatus.desktop.url, "http://127.0.0.1:1420/");
@@ -499,7 +499,7 @@ test("returns available endpoints for unknown paths", async () => {
   assert.equal(response.json.error, "not_found");
   assert.equal(response.json.path, "/missing");
   assert.ok(response.json.availableEndpoints.includes("POST /v1/account/demo-login"));
-  assert.match(response.json.message, /Liteasy dev cloud/);
+  assert.match(response.json.message, /LiteasyClaw dev cloud/);
 });
 
 

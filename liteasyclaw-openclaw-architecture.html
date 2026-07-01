@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Liteasy x OpenClaw Architecture</title>
+    <title>LiteasyClaw x OpenClaw Architecture</title>
     <style>
       :root {
         --bg: #eef4f8;
@@ -373,9 +373,9 @@
       <section class="hero">
         <div class="hero-top">
           <div>
-            <h1>Liteasy 最终理想技术架构</h1>
+            <h1>LiteasyClaw 最终理想技术架构</h1>
             <div class="subtitle">
-              这张图把 Liteasy 作为“桌面优先科研 agent 工作台”的完整理想架构拆成主干、分支、边界、云端与基础设施五层。
+              这张图把 LiteasyClaw 作为“桌面优先科研 agent 工作台”的完整理想架构拆成主干、分支、边界、云端与基础设施五层。
               其中紫色高亮部分代表与 OpenClaw 范式直接相关的架构单元，包括 skills、tools/action boundary、allowlist、direct dispatch 和 plugin-friendly runtime。
             </div>
           </div>
@@ -532,45 +532,45 @@
             </div>
             <div class="legend-item">
               <div class="legend-dot dot-main"></div>
-              <div>绿色主干：Liteasy 自己的固定科研产品主链路，不应被纯聊天入口替代</div>
+              <div>绿色主干：LiteasyClaw 自己的固定科研产品主链路，不应被纯聊天入口替代</div>
             </div>
             <div class="legend-item">
               <div class="legend-dot dot-ui"></div>
-              <div>蓝色 UI：Liteasy 的产品化、桌面化、可视化交互层</div>
+              <div>蓝色 UI：LiteasyClaw 的产品化、桌面化、可视化交互层</div>
             </div>
           </div>
 
           <div class="map-list" style="margin-top: 16px">
             <div class="map-item">
-              <h3>OpenClaw 的 Tools → Liteasy 的 Action Registry</h3>
-              <p>Liteasy 不应让 assistant 直接改软件，而应通过 `settings.update`、`analysis.start`、`artifact.open_tab` 这类 typed action 执行。</p>
+              <h3>OpenClaw 的 Tools → LiteasyClaw 的 Action Registry</h3>
+              <p>LiteasyClaw 不应让 assistant 直接改软件，而应通过 `settings.update`、`analysis.start`、`artifact.open_tab` 这类 typed action 执行。</p>
             </div>
             <div class="map-item">
-              <h3>OpenClaw 的 Skills → Liteasy 的 Skill Registry</h3>
+              <h3>OpenClaw 的 Skills → LiteasyClaw 的 Skill Registry</h3>
               <p>`settings.adjust`、`artifact.generate`、`paper.qa`、`concept.explain` 等都属于任务语义层，不直接等于底层执行。</p>
             </div>
             <div class="map-item">
-              <h3>OpenClaw 的 Allow/Deny → Liteasy 的模式/身份/风险控制</h3>
+              <h3>OpenClaw 的 Allow/Deny → LiteasyClaw 的模式/身份/风险控制</h3>
               <p>不是“系统里有 skill 就能调用”，而是必须按当前模式、用户身份和风险等级决定是否允许执行。</p>
             </div>
             <div class="map-item">
-              <h3>OpenClaw 的 Direct Dispatch → Liteasy 的中栏模态按钮</h3>
+              <h3>OpenClaw 的 Direct Dispatch → LiteasyClaw 的中栏模态按钮</h3>
               <p>用户已经明确指定模态，所以系统应该确定性直达主工作流，而不是再让模型猜“你是要导图还是 PPT”。</p>
             </div>
             <div class="map-item">
-              <h3>OpenClaw 的 Plugin + Skill → Liteasy 后续插件生态</h3>
+              <h3>OpenClaw 的 Plugin + Skill → LiteasyClaw 后续插件生态</h3>
               <p>专注度插件、TODO、外部学术检索、组织知识源都适合用 plugin 提供能力、skill 提供工作流约束。</p>
             </div>
             <div class="map-item">
               <h3>不照搬的部分</h3>
-              <p>Liteasy 不应该把用户主交互做成 slash command 式 skill 面板。它首先是科研产品，其次才是在内部借鉴 OpenClaw runtime。</p>
+              <p>LiteasyClaw 不应该把用户主交互做成 slash command 式 skill 面板。它首先是科研产品，其次才是在内部借鉴 OpenClaw runtime。</p>
             </div>
           </div>
 
           <div class="panel" style="margin-top: 16px; padding: 14px">
             <h2 class="section-title" style="font-size: 16px; margin-bottom: 10px">最终判断</h2>
             <div class="footnote">
-              Liteasy 最合理的落法不是“把 OpenClaw 做成 Liteasy”，而是“把 OpenClaw 式 runtime 装进 Liteasy 这个科研产品里”。
+              LiteasyClaw 最合理的落法不是“把 OpenClaw 做成 LiteasyClaw”，而是“把 OpenClaw 式 runtime 装进 LiteasyClaw 这个科研产品里”。
               所以真正的组合是：
               <strong>中栏固定模态按钮主干 + 右栏 skill/action 分支 + 底层 allowlist 与 direct dispatch 边界</strong>。
             </div>

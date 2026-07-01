@@ -1,4 +1,4 @@
-# Liteasy 功能与UI设计文档
+# LiteasyClaw 功能与UI设计文档
 
 ## 总述：
    “LiteasyClaw”是一款agent驱动的以文献阅读工具为主要角色的SaaS平台，专注学术文献深度解析与定制化学习。

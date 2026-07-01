@@ -1,14 +1,14 @@
-# Liteasy Model Gateway, Prompt Engineering, and Internal Skill Lifecycle Design
+# LiteasyClaw Model Gateway, Prompt Engineering, and Internal Skill Lifecycle Design
 
 ## 1. Purpose
 
-This document defines the first formal design for three closely related Liteasy foundations:
+This document defines the first formal design for three closely related LiteasyClaw foundations:
 
 - model access and provider routing
 - prompt engineering structure and versioning
 - internal skill packaging, validation, and release lifecycle
 
-The goal is not to build a public plugin ecosystem. The goal is to formalize a stable internal architecture that supports Liteasy's future SaaS workflow runtime without breaking the current safety boundary:
+The goal is not to build a public plugin ecosystem. The goal is to formalize a stable internal architecture that supports LiteasyClaw's future SaaS workflow runtime without breaking the current safety boundary:
 
 - desktop remains the user entry point
 - cloud workflow owns orchestration
@@ -58,7 +58,7 @@ However, the current state is still prototype-level:
 
 ## 4. Goal
 
-This milestone must establish the first durable architecture for Liteasy's AI runtime with these guarantees:
+This milestone must establish the first durable architecture for LiteasyClaw's AI runtime with these guarantees:
 
 1. all model access is centralized behind a cloud-owned model gateway
 2. prompts are treated as versioned assets, not scattered string literals
@@ -90,7 +90,7 @@ This milestone must establish the first durable architecture for Liteasy's AI ru
 
 ## 6. Architecture Overview
 
-Liteasy should evolve toward four explicit layers.
+LiteasyClaw should evolve toward four explicit layers.
 
 ### 6.1 Desktop entry layer
 
@@ -122,7 +122,7 @@ Responsibilities:
 - structured result assembly
 - action request generation
 
-This is the real Liteasy agent runtime.
+This is the real LiteasyClaw agent runtime.
 
 ### 6.3 Model gateway
 
@@ -180,7 +180,7 @@ This preserves the critical safety rule:
 
 The first version should standardize on an OpenAI-compatible gateway model.
 
-This means Liteasy can support providers that expose compatible request/response semantics by varying:
+This means LiteasyClaw can support providers that expose compatible request/response semantics by varying:
 
 - `base_url`
 - API key secret reference
@@ -288,7 +288,7 @@ This should produce a final rendered prompt bundle rather than one giant unstruc
 
 ### 9.3 Global system layer
 
-This layer defines Liteasy-wide invariants, such as:
+This layer defines LiteasyClaw-wide invariants, such as:
 
 - do not fabricate citations
 - do not claim unsupported certainty
@@ -774,7 +774,7 @@ The first formal governance rules for this system should be:
 - all environment enablement must be explicit
 - audit-worthy workflows must declare `audit_required`
 
-This keeps the system aligned with Liteasy's long-term `skill registry / action registry / scope validation` architecture.
+This keeps the system aligned with LiteasyClaw's long-term `skill registry / action registry / scope validation` architecture.
 
 ## 17. Migration Guidance From Current Prototype
 

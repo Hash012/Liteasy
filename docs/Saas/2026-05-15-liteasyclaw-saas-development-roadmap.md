@@ -1,8 +1,8 @@
-# Liteasy SaaS Development Roadmap Implementation Plan
+# LiteasyClaw SaaS Development Roadmap Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver a cloud-deployable Liteasy demo quickly for roadshow use while building only those foundations that remain valid for the formal SaaS product after the roadshow.
+**Goal:** Deliver a cloud-deployable LiteasyClaw demo quickly for roadshow use while building only those foundations that remain valid for the formal SaaS product after the roadshow.
 
 **Architecture:** The roadmap is split into two coordinated tracks. The demo-delivery track focuses on a cloud-deployable, stable, presenter-friendly slice built from the current `desktop` customer entry point plus a deployable server and internal operations surface. The foundation track runs in parallel and formalizes only the resource boundaries, data ownership rules, and workflow seams that the later SaaS program will definitely keep.
 
@@ -16,8 +16,8 @@ This roadmap does not rename or rewrite the historical `phase0-4` documents.
 
 This roadmap defines a new SaaS program line governed by:
 
-- `docs/Liteasy_功能与UI设计文档1.0.md`
-- `docs/Saas/Liteasy_SaaS纠偏设计与调整方案.md`
+- `docs/LiteasyClaw_功能与UI设计文档1.0.md`
+- `docs/Saas/LiteasyClaw_SaaS纠偏设计与调整方案.md`
 
 ## Delivery Objective
 
@@ -114,7 +114,7 @@ This track runs in parallel, but only on foundations that remain valid after the
 
 **Detailed plan:**
 
-- `docs/Saas/2026-05-15-liteasy-m1-resource-boundary-local-library-plan.md`
+- `docs/Saas/2026-05-15-liteasyclaw-m1-resource-boundary-local-library-plan.md`
 
 #### F2: User Cloud Private Data and Cache Separation
 
@@ -186,10 +186,10 @@ Each foundation milestone must satisfy:
 
 ## Files and Document Responsibilities
 
-- `docs/Saas/Liteasy_SaaS纠偏设计与调整方案.md`: SaaS alignment source.
-- `docs/Saas/2026-05-15-liteasy-saas-development-roadmap.md`: dual-track roadmap for roadshow plus formal SaaS foundations.
-- `docs/Saas/2026-05-15-liteasy-m1-resource-boundary-local-library-plan.md`: first formal foundation plan.
-- `docs/Saas/2026-05-15-liteasy-d1-deployable-demo-cloud-plan.md`: first demo-delivery execution plan.
+- `docs/Saas/LiteasyClaw_SaaS纠偏设计与调整方案.md`: SaaS alignment source.
+- `docs/Saas/2026-05-15-liteasyclaw-saas-development-roadmap.md`: dual-track roadmap for roadshow plus formal SaaS foundations.
+- `docs/Saas/2026-05-15-liteasyclaw-m1-resource-boundary-local-library-plan.md`: first formal foundation plan.
+- `docs/Saas/2026-05-15-liteasyclaw-d1-deployable-demo-cloud-plan.md`: first demo-delivery execution plan.
 
 ## Immediate Next Step
 

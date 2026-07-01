@@ -1,8 +1,8 @@
-# Liteasy F2 Cloud-Private Data and Recommendation Cache Separation Design
+# LiteasyClaw F2 Cloud-Private Data and Recommendation Cache Separation Design
 
 ## 1. Purpose
 
-This document defines the first formal `F2` milestone for Liteasy:
+This document defines the first formal `F2` milestone for LiteasyClaw:
 
 - keep the existing user-facing library entry names `收藏` and `关联推荐`
 - formally separate them in product language, code boundaries, and dev-cloud persistence

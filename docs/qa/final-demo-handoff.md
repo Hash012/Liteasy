@@ -1,4 +1,4 @@
-# Liteasy 最终 Demo 交付说明
+# LiteasyClaw 最终 Demo 交付说明
 
 本文档用于当前版本的最终交付。
 
@@ -103,7 +103,7 @@ npm run tauri dev
 
 进入 `/admin/` 时，建议重点讲：
 
-- 这是 Liteasy 平台内部视角
+- 这是 LiteasyClaw 平台内部视角
 - 可以看到活跃会话数、收藏总数、推荐缓存条目数、客户组织资源
 - 可以执行 `重置 Demo 数据` 和 `重新播种 Demo 数据`
 

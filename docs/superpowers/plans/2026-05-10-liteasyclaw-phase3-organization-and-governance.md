@@ -1,4 +1,4 @@
-# Liteasy Phase 3 Organization and Governance Implementation Plan
+# LiteasyClaw Phase 3 Organization and Governance Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +12,7 @@
 
 ## Scope Summary
 
-- Depends on: `docs/superpowers/plans/2026-05-10-liteasy-phase2-sync-and-recommendation.md`
+- Depends on: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase2-sync-and-recommendation.md`
 - Primary outcomes:
   - organization space in the desktop client
   - shared library browsing
@@ -28,7 +28,7 @@
 
 ## Source of Truth
 
-Phase 3 must stay grounded in `docs/Liteasy_功能与UI设计文档1.0.md`, especially:
+Phase 3 must stay grounded in `docs/LiteasyClaw_功能与UI设计文档1.0.md`, especially:
 
 - `左边栏` includes `组织、个人中心、设置`.
 - `组织` lets users join or create organizations.
@@ -99,7 +99,7 @@ test("posts a session id to the organization summary endpoint", async () => {
             ],
             memberCount: 12,
             myRole: "研究员",
-            name: "Liteasy AI Reading Lab",
+            name: "LiteasyClaw AI Reading Lab",
             notifications: [
               {
                 id: "notice-1",
@@ -132,7 +132,7 @@ test("posts a session id to the organization summary endpoint", async () => {
 
   const summary = await client({ sessionId: "demo-session-1" });
 
-  expect(summary.name).toBe("Liteasy AI Reading Lab");
+  expect(summary.name).toBe("LiteasyClaw AI Reading Lab");
   expect(summary.sharedLibrary.documentCount).toBe(48);
   expect(requests).toEqual([
     {
@@ -187,7 +187,7 @@ Expected: both pass.
 
 Add a test that stubs `/v1/account/demo-login` and `/v1/org/summary`, logs in, and expects:
 
-- `组织空间：Liteasy AI Reading Lab`
+- `组织空间：LiteasyClaw AI Reading Lab`
 - `角色：研究员 · 成员 12 人`
 - `共享文献库：组织共享文献库 · 48 篇`
 - `通知：管理员发布了本周阅读主题。`
@@ -236,7 +236,7 @@ Expected: PASS.
 
 - [x] **Step 1: Write the failing shared-library open test**
 
-Add an AppShell test that logs into the demo account, waits for `组织空间：Liteasy AI Reading Lab`, clicks `打开共享文献库`, and expects the left `我的文献库` workspace to switch to the organization shared-library root with:
+Add an AppShell test that logs into the demo account, waits for `组织空间：LiteasyClaw AI Reading Lab`, clicks `打开共享文献库`, and expects the left `我的文献库` workspace to switch to the organization shared-library root with:
 
 - `Organization Reading List: Retrieval-Augmented Generation`
 - `Team Notes on Long-Context Evaluation`
@@ -285,7 +285,7 @@ Expected: both commands pass.
 
 Add an AppShell test that logs into the demo account and expects:
 
-- `组织成员：Liteasy Researcher（研究员）、Admin（管理员）`
+- `组织成员：LiteasyClaw Researcher（研究员）、Admin（管理员）`
 - `通知：公告 · 管理员发布了本周阅读主题。`
 - `通知：文献上传 · 成员上传了 Graph Neural Networks 综述。`
 - `通知：文献库变更 · 共享文献库结构新增 RAG 目录。`
@@ -378,8 +378,8 @@ Expected: both pass.
 Add tests for:
 
 - `createOrganizationListClient` posts `{ sessionId }` to `/v1/org/list`.
-- AppShell renders `已加入组织：Liteasy AI Reading Lab、Liteasy Literature Ops`.
-- Clicking `查看 Liteasy Literature Ops` reloads organization details and governance for `org-demo-2`.
+- AppShell renders `已加入组织：LiteasyClaw AI Reading Lab、LiteasyClaw Literature Ops`.
+- Clicking `查看 LiteasyClaw Literature Ops` reloads organization details and governance for `org-demo-2`.
 - Dev-cloud returns a deterministic two-organization demo list.
 
 - [x] **Step 2: Implement organization list client and hook**
@@ -396,7 +396,7 @@ Show the joined organization list in `OrganizationSpacePanel`, disable the curre
 
 - [x] **Step 5: Extend dev-cloud demo data**
 
-Add `/v1/org/list`, add a second demo organization (`Liteasy Literature Ops`), and return organization-specific summary/governance payloads.
+Add `/v1/org/list`, add a second demo organization (`LiteasyClaw Literature Ops`), and return organization-specific summary/governance payloads.
 
 - [x] **Step 6: Run focused tests to verify green**
 
@@ -461,10 +461,10 @@ Expected: command passes.
 
 - [x] **Step 1: Write failing organization-entry dialog test**
 
-Add an AppShell test that logs into the demo cloud account, clicks the left `组织` entry, expects a `组织窗口` dialog, then clicks `打开 Liteasy Literature Ops 详情` and verifies:
+Add an AppShell test that logs into the demo cloud account, clicks the left `组织` entry, expects a `组织窗口` dialog, then clicks `打开 LiteasyClaw Literature Ops 详情` and verifies:
 
-- `组织详情：Liteasy Literature Ops`
-- `成员：Liteasy Researcher（管理员）、Ops Reviewer（审核员）`
+- `组织详情：LiteasyClaw Literature Ops`
+- `成员：LiteasyClaw Researcher（管理员）、Ops Reviewer（审核员）`
 - `通知：文献库变更 · 文献运营共享库新增 QA 目录。`
 - `共享文献库：文献运营共享库 · 16 篇`
 
@@ -625,7 +625,7 @@ Expected: all commands pass and print organization-space references.
 ### Task 8: Phase 3 slice verification
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Run the focused test suite**
 
@@ -929,7 +929,7 @@ Update QA and limitations to clarify that organization joining is a UI seam only
 - Create: `desktop/src/app/features/organization/useOrganizationActions.ts`
 - Create: `desktop/src/tests/useOrganizationActions.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing hook tests**
 
@@ -956,7 +956,7 @@ Run hook tests, focused organization AppShell tests, full desktop tests, desktop
 - Create: `desktop/src/app/features/organization/useOrganizationNotifications.ts`
 - Create: `desktop/src/tests/useOrganizationNotifications.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing notification hook tests**
 
@@ -983,7 +983,7 @@ Run notification hook tests, focused AppShell notification/logout tests, full de
 - Create: `desktop/src/app/features/organization/useOrganizationWorkspace.ts`
 - Create: `desktop/src/tests/useOrganizationWorkspace.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing workspace hook tests**
 
@@ -1014,7 +1014,7 @@ Run workspace hook tests, focused AppShell shared-library tests, full desktop te
 - Create: `desktop/src/app/features/profile/useProfileActions.ts`
 - Create: `desktop/src/tests/useProfileActions.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing profile hook tests**
 
@@ -1041,7 +1041,7 @@ Run profile hook tests, focused AppShell profile tests, full desktop tests, desk
 - Create: `desktop/src/app/layout/useLeftRailNavigation.ts`
 - Create: `desktop/src/tests/useLeftRailNavigation.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing navigation hook tests**
 
@@ -1068,7 +1068,7 @@ Run navigation hook tests, focused AppShell layout tests, full desktop tests, de
 - Create: `desktop/src/app/features/organization/useOrganizationUiState.ts`
 - Create: `desktop/src/tests/useOrganizationUiState.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing organization UI hook tests**
 
@@ -1095,7 +1095,7 @@ Run organization UI hook tests, focused AppShell organization tests, full deskto
 - Create: `desktop/src/app/features/organization/useOrganizationData.ts`
 - Create: `desktop/src/tests/useOrganizationData.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing organization data hook tests**
 
@@ -1122,7 +1122,7 @@ Run organization data hook tests, focused AppShell organization tests, full desk
 - Create: `desktop/src/app/features/collection/useCollectionItems.ts`
 - Create: `desktop/src/tests/useCollectionItems.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing collection hook tests**
 
@@ -1149,7 +1149,7 @@ Run collection hook tests, focused AppShell library/recommendation tests, full d
 - Create: `desktop/src/app/features/models/useModelSettingsActions.ts`
 - Create: `desktop/src/tests/useModelSettingsActions.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing model settings hook tests**
 
@@ -1180,7 +1180,7 @@ Run full desktop tests, desktop build, and dev-cloud tests before continuing to 
 - Create: `desktop/src/app/features/workspace/useWorkspaceActions.ts`
 - Create: `desktop/src/tests/useWorkspaceActions.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing workspace action hook tests**
 
@@ -1208,7 +1208,7 @@ Run focused workspace/AppShell tests, full desktop tests, desktop build, and dev
 - Create: `desktop/src/tests/useArtifactActions.test.ts`
 - Modify: `desktop/src/app/features/workspace/useWorkspaceActions.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing artifact action hook tests**
 
@@ -1239,7 +1239,7 @@ Run artifact hook tests, focused AppShell artifact tests, full desktop tests, de
 - Create: `desktop/src/app/features/workspace/useRegisteredWorkspaceActions.ts`
 - Create: `desktop/src/tests/useRegisteredWorkspaceActions.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing registered action hook tests**
 
@@ -1266,7 +1266,7 @@ Run registered action hook tests, focused AppShell workflow tests, full desktop 
 - Create: `desktop/src/app/features/account/useCloudAccountActions.ts`
 - Create: `desktop/src/tests/useCloudAccountActions.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing cloud-account action tests**
 
@@ -1295,7 +1295,7 @@ Run cloud-account hook tests, focused AppShell account/organization tests, full 
 - Create: `desktop/src/app/features/settings/settingsStateHelpers.ts`
 - Create: `desktop/src/tests/appShellStateHelpers.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing helper tests**
 
@@ -1322,7 +1322,7 @@ Run helper tests, focused AppShell smoke tests, full desktop tests, desktop buil
 - Create: `desktop/src/app/layout/ActivityBar.tsx`
 - Create: `desktop/src/tests/ActivityBar.test.tsx`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing ActivityBar component test**
 
@@ -1350,7 +1350,7 @@ Run ActivityBar tests, focused AppShell navigation tests, full desktop tests, de
 - Modify: `desktop/src/app/features/artifacts/useArtifactActions.ts`
 - Modify: `desktop/src/tests/useWorkspaceActions.test.ts`
 - Modify: `desktop/src/tests/useArtifactActions.test.ts`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add duplicate import regression tests**
 
@@ -1377,7 +1377,7 @@ Run workspace hook, artifact hook, and AppShell selected-set/artifact workflow t
 - Create: `desktop/src/app/layout/AppBrand.tsx`
 - Create: `desktop/src/tests/AppBrand.test.tsx`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing AppBrand tests**
 
@@ -1404,7 +1404,7 @@ Run AppBrand tests, focused AppShell topbar/settings tests, full desktop tests, 
 - Create: `desktop/src/app/layout/SettingsPane.tsx`
 - Create: `desktop/src/tests/SettingsPane.test.tsx`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing SettingsPane test**
 
@@ -1433,7 +1433,7 @@ Run SettingsPane tests, focused AppShell settings tests, full desktop tests, des
 - Create: `desktop/src/tests/TopBar.test.tsx`
 - Create: `desktop/src/tests/LeftPane.test.tsx`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing component tests**
 
@@ -1461,7 +1461,7 @@ Run TopBar/LeftPane tests, focused AppShell navigation tests, full desktop tests
 - Create: `desktop/src/tests/AppDialogs.test.tsx`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing AppDialogs tests**
 
@@ -1492,7 +1492,7 @@ Verified `npm test` in `desktop` (49 files / 157 tests), `npm run build` in `des
 - Modify: `services/dev-cloud/server.mjs`
 - Modify: `services/dev-cloud/server.test.mjs`
 - Modify: `README.md`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add method-mismatch regression tests**
 
@@ -1532,7 +1532,7 @@ Verified `npm test` in `desktop` (49 files / 157 tests), `npm run build` in `des
 - Modify: `desktop/src/app/features/recommendations/useRecommendations.ts`
 - Modify: `desktop/src/tests/useOrganizationData.test.ts`
 - Modify: `docs/qa/environment-startup-guide.md`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add network-failure regression tests**
 
@@ -1566,7 +1566,7 @@ Verified focused cloud-error tests, `npm test` in `desktop` (51 files / 161 test
 - Modify: `desktop/src/app/layout/AppShell.tsx`
 - Modify: `desktop/src/app/styles/app.css`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing navigation-semantics test**
 
@@ -1594,7 +1594,7 @@ Verified LeftPane/AppShell focused tests, `npm test` in `desktop` (51 files / 16
 - Modify: `desktop/src/app/layout/AppShell.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
 - Modify: `desktop/src/tests/useAccountSession.test.ts`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add restored-session metadata regression test**
 
@@ -1620,7 +1620,7 @@ Verified `npm test` in `desktop` (51 files / 164 tests), `npm run build` in `des
 **Files:**
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add failing command-hint test**
 
@@ -1644,7 +1644,7 @@ Verified AssistantPane focused tests, `npm test` in `desktop` (51 files / 165 te
 - Modify: `desktop/src/app/layout/AppShell.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
 - Modify: `desktop/src/tests/useProfileActions.test.ts`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add assistant/profile sync regression test**
 
@@ -1671,7 +1671,7 @@ Verified profile focused tests, `npm test` in `desktop` (51 files / 166 tests), 
 - Modify: `desktop/src/app/features/skills/actionRegistry.ts`
 - Modify: `desktop/src/tests/actionRegistry.test.ts`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add policy-bypass regression tests**
 
@@ -1694,7 +1694,7 @@ Verified action/AppShell focused tests, `npm test` in `desktop` (51 files / 168 
 - Modify: `desktop/src/app/features/organization/useOrganizationWorkspace.ts`
 - Modify: `desktop/src/tests/useOrganizationWorkspace.test.ts`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add missing-summary prerequisite regression**
 
@@ -1723,7 +1723,7 @@ Verified `useOrganizationWorkspace`, `AppShell`, `LeftPane`, and `commandRouter`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
 - Modify: `desktop/src/tests/commandRouter.test.ts`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add Chinese header regression**
 
@@ -1756,7 +1756,7 @@ Verified `useOrganizationWorkspace`, `AppShell`, `LeftPane`, and `commandRouter`
 - Modify: `desktop/src/app/features/organization/OrganizationGovernancePanel.tsx`
 - Modify: `desktop/src/tests/useOrganizationData.test.ts`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add governance waiting regression**
 
@@ -1787,7 +1787,7 @@ Verified organization data, left pane, AppShell, organization workspace, and com
 - Modify: `desktop/src/app/layout/AppShell.tsx`
 - Modify: `desktop/src/tests/SettingsPane.test.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add retry button regression**
 
@@ -1818,7 +1818,7 @@ Verified `npm test` in `desktop` (51 files / 176 tests), `npm run build` in `des
 - Modify: `desktop/src/app/features/organization/useOrganizationWorkspace.ts`
 - Modify: `desktop/src/tests/useOrganizationWorkspace.test.ts`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add empty-library regression**
 
@@ -1845,7 +1845,7 @@ Verified `useOrganizationWorkspace` and the AppShell empty-library command regre
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
 - Modify: `desktop/src/app/styles/app.css`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add assistant history regression**
 
@@ -1873,7 +1873,7 @@ Verified `AssistantPane` component tests (8 tests).
 - Modify: `desktop/src/app/styles/app.css`
 - Modify: `desktop/src/tests/assistant.store.test.ts`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add restore regressions**
 
@@ -1908,7 +1908,7 @@ Verified assistant store and assistant pane restore regressions (2 files / 2 sel
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
 - Modify: `desktop/src/tests/AppDialogs.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add editable profile regressions**
 
@@ -1942,11 +1942,11 @@ Verified profile hook, left pane, AppShell, and AppDialogs suites (4 files / 67 
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
 - Modify: `desktop/src/app/styles/app.css`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add initial launcher regression**
 
-Cover an empty assistant session showing `Liteasy 学术助手`, the three mode launcher buttons, and hiding the launcher after a conversation starts.
+Cover an empty assistant session showing `LiteasyClaw 学术助手`, the three mode launcher buttons, and hiding the launcher after a conversation starts.
 
 - [x] **Step 2: Render compact academic avatar**
 
@@ -1969,7 +1969,7 @@ Verified assistant pane, assistant store, and selected AppShell assistant regres
 - Modify: `desktop/src/app/features/assistant/ModeSwitch.tsx`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add duplicate-control regression**
 
@@ -1999,7 +1999,7 @@ Verified assistant pane and selected AppShell assistant regressions (2 files / 2
 - Modify: `desktop/src/app/features/library/LibraryPane.tsx`
 - Modify: `desktop/src/app/features/library/library.css`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add folder grouping regression**
 
@@ -2029,7 +2029,7 @@ Verified LeftPane, AppShell library/shared-library regressions, and organization
 - Modify: `desktop/src/app/layout/AppShell.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add manual-clear regression**
 
@@ -2055,7 +2055,7 @@ Verified AppShell recommendation/cache flows, LeftPane library tests, and recomm
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
 - Modify: `desktop/src/app/styles/app.css`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add voice placeholder regression**
 
@@ -2081,7 +2081,7 @@ Verified assistant pane and selected AppShell assistant/right-pane regressions (
 - Create: `desktop/src/app/features/assistant/assistantSessionHistory.ts`
 - Create: `desktop/src/tests/assistantSessionHistory.test.ts`
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add pure history-module tests**
 
@@ -2111,7 +2111,7 @@ Verified assistant history module, assistant pane, assistant store tests, and de
 - Create: `desktop/src/app/features/workspace/workspaceFolderTree.ts`
 - Create: `desktop/src/tests/workspaceFolderTree.test.ts`
 - Modify: `desktop/src/app/features/library/LibraryPane.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add workspace tree utility tests**
 
@@ -2139,7 +2139,7 @@ Verified workspace folder utility, LeftPane library grouping, selected AppShell 
 - Create: `desktop/src/app/features/profile/AcademicProfileForm.tsx`
 - Create: `desktop/src/tests/useAcademicProfileDraft.test.ts`
 - Modify: `desktop/src/app/features/profile/PersonalCenterPanel.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add draft-hook regression**
 
@@ -2165,7 +2165,7 @@ Verified the academic-profile draft hook plus focused personal-center and profil
 - Create: `desktop/src/app/features/assistant/assistantPresentation.ts`
 - Create: `desktop/src/tests/assistantPresentation.test.ts`
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add presentation helper regression**
 
@@ -2191,7 +2191,7 @@ Verified the presentation helper tests plus focused AssistantPane and AppShell a
 - Create: `desktop/src/app/layout/ReaderPane.tsx`
 - Create: `desktop/src/tests/ReaderPane.test.tsx`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add ReaderPane regression**
 
@@ -2217,7 +2217,7 @@ Verified ReaderPane and focused AppShell reader/assistant/layout regressions (2 
 - Create: `desktop/src/app/layout/AssistantSidebar.tsx`
 - Create: `desktop/src/tests/AssistantSidebar.test.tsx`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add right-pane wrapper regression**
 
@@ -2243,7 +2243,7 @@ Verified AssistantSidebar plus focused AssistantPane and AppShell assistant/righ
 - Create: `desktop/src/app/layout/useAppShellStores.ts`
 - Create: `desktop/src/tests/useAppShellStores.test.ts`
 - Modify: `desktop/src/app/layout/AppShell.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add store-initialization regression**
 
@@ -2269,7 +2269,7 @@ Verified the store hook plus focused AppShell reader/account regressions (2 test
 - Create: `desktop/src/app/features/assistant/AssistantHistoryPanel.tsx`
 - Create: `desktop/src/tests/AssistantHistoryPanel.test.tsx`
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add history-panel regression**
 
@@ -2295,7 +2295,7 @@ Verified the history panel plus focused AssistantPane archive/restore regression
 - Create: `desktop/src/app/features/assistant/AssistantMessageList.tsx`
 - Create: `desktop/src/tests/AssistantMessageList.test.tsx`
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add message-list regression**
 
@@ -2321,7 +2321,7 @@ Verified the message list plus focused AssistantPane launcher/generation/error r
 - Create: `desktop/src/app/features/assistant/AssistantComposer.tsx`
 - Create: `desktop/src/tests/AssistantComposer.test.tsx`
 - Modify: `desktop/src/app/features/assistant/AssistantPane.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add composer regression**
 
@@ -2347,11 +2347,11 @@ Verified the composer plus focused AssistantPane voice, command, and grounded-an
 - Create: `desktop/src/app/features/library/libraryDragPayload.ts`
 - Create: `desktop/src/tests/libraryDragPayload.test.ts`
 - Modify: `desktop/src/app/features/library/LibraryPane.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add drag-payload parser regression**
 
-Cover parsing a valid Liteasy drag payload and returning `null` for missing or malformed payload data.
+Cover parsing a valid LiteasyClaw drag payload and returning `null` for missing or malformed payload data.
 
 - [x] **Step 2: Extract parser helper**
 
@@ -2374,7 +2374,7 @@ Verified parser tests plus focused LeftPane and AppShell library/recommendation 
 - Modify: `README.md`
 - Modify: `docs/qa/phase3-test-guide.md`
 - Modify: `docs/qa/phase3-governance-limitations.md`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Update README status**
 
@@ -2397,7 +2397,7 @@ Verify Phase 3 docs mention the completed prototype scope and the current valida
 **Context:** After the completion documentation refresh, run the full automated acceptance suite and record the evidence in the Phase 3 plan so the prototype slice can be handed to manual UI review without relying on stale test counts.
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Run documentation checks**
 
@@ -2432,7 +2432,7 @@ Verified `node --test services/dev-cloud/server.test.mjs services/dev-cloud/prov
 - Modify: `desktop/src/app/styles/app.css`
 - Modify: `desktop/src/tests/AppDialogs.test.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add placement regressions**
 
@@ -2457,7 +2457,7 @@ Verified AppDialogs and AppShell dialog paths plus desktop production build (2 t
 **Files:**
 - Modify: `services/dev-cloud/server.mjs`
 - Modify: `services/dev-cloud/server.test.mjs`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Reproduce the contract mismatch**
 
@@ -2488,7 +2488,7 @@ Verified `node --test services/dev-cloud/server.test.mjs services/dev-cloud/prov
 - Modify: `desktop/src/tests/useOrganizationActions.test.ts`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add local feedback regression tests**
 
@@ -2514,7 +2514,7 @@ Verified `cd desktop && npm test -- src/tests/useOrganizationActions.test.ts src
 - Modify: `desktop/src/app/features/assistant/commandRouter.ts`
 - Modify: `desktop/src/tests/commandRouter.test.ts`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add alias routing regressions**
 
@@ -2536,7 +2536,7 @@ Added an AssistantPane regression proving a natural command alias is executed th
 - Modify: `desktop/src/app/features/organization/OrganizationSidebarPanel.tsx`
 - Modify: `desktop/src/app/styles/app.css`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Reproduce visible-label gap**
 
@@ -2562,7 +2562,7 @@ Verified `cd desktop && npm test -- src/tests/useOrganizationActions.test.ts src
 - Modify: `desktop/src/tests/SettingsPane.test.tsx`
 - Modify: `desktop/src/tests/AppShell.test.tsx`
 - Modify: `docs/qa/phase3-test-guide.md`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add endpoint diagnostic regressions**
 
@@ -2588,7 +2588,7 @@ Updated the Phase 3 test guide to explain the 8787/1420 distinction inside setti
 - Modify: `desktop/src/tests/actionRegistry.test.ts`
 - Modify: `desktop/src/tests/AssistantPane.test.tsx`
 - Modify: `docs/qa/phase3-test-guide.md`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add endpoint reset command regressions**
 
@@ -2610,7 +2610,7 @@ Added an AssistantPane regression proving the command runs through the right-pan
 - Modify: `desktop/src/app/features/organization/OrganizationSpacePanel.tsx`
 - Modify: `desktop/src/tests/LeftPane.test.tsx`
 - Modify: `docs/qa/phase3-test-guide.md`
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 
 - [x] **Step 1: Add disabled-state regression**
 

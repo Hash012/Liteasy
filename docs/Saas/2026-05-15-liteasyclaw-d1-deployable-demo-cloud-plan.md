@@ -1,8 +1,8 @@
-# Liteasy D1 Deployable Demo Cloud Plan
+# LiteasyClaw D1 Deployable Demo Cloud Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Produce a roadshow-ready Liteasy demo environment that can be deployed on a cloud server and exercised reliably by a presenter.
+**Goal:** Produce a roadshow-ready LiteasyClaw demo environment that can be deployed on a cloud server and exercised reliably by a presenter.
 
 **Architecture:** This plan keeps the existing `desktop` app and current `services/dev-cloud` service shape, but hardens them into a deployment-oriented demo baseline. It focuses on environment configuration, deployability, server start paths, smoke checks, presentation-safe defaults, and documentation, while avoiding work that would be thrown away immediately after the roadshow.
 
@@ -27,7 +27,7 @@ This plan is intentionally demo-first. It does not formalize the full cloud plat
 - `README.md`: must link to the roadshow deployment flow and clarify the three-end demo shape.
 - `docs/qa/environment-startup-guide.md`: must include a roadshow deploy/start checklist.
 - `docs/qa/roadshow-demo-guide.md`: must describe the presenter path and smoke checks.
-- `docs/Saas/2026-05-15-liteasy-d1-deployable-demo-cloud-plan.md`: tracks this milestone.
+- `docs/Saas/2026-05-15-liteasyclaw-d1-deployable-demo-cloud-plan.md`: tracks this milestone.
 
 ### Task 1: Stabilize deploy-time server configuration
 
@@ -79,7 +79,7 @@ Expected: PASS
 
 ```bash
 git add services/dev-cloud/server.mjs services/dev-cloud/server.test.mjs
-git commit -m "docs-plan: harden Liteasy demo cloud deploy configuration"
+git commit -m "docs-plan: harden LiteasyClaw demo cloud deploy configuration"
 ```
 
 ### Task 2: Write the roadshow deployment guide
@@ -127,7 +127,7 @@ Expected: PASS with matches in all expected docs
 
 ```bash
 git add README.md docs/qa/environment-startup-guide.md docs/qa/roadshow-demo-guide.md
-git commit -m "docs-plan: add Liteasy roadshow deployment guide"
+git commit -m "docs-plan: add LiteasyClaw roadshow deployment guide"
 ```
 
 ### Task 3: Add presenter-oriented smoke checks
@@ -155,7 +155,7 @@ Write a short list of unstable or still-demo-only flows that a presenter should 
 
 ```bash
 git add docs/qa/roadshow-demo-guide.md
-git commit -m "docs-plan: refine Liteasy roadshow smoke checks"
+git commit -m "docs-plan: refine LiteasyClaw roadshow smoke checks"
 ```
 
 ## D1 Verification Checklist

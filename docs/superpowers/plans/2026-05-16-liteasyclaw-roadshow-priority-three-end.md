@@ -1,8 +1,8 @@
-# Liteasy Roadshow-Priority Three-End Demo Implementation Plan
+# LiteasyClaw Roadshow-Priority Three-End Demo Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver a stable, presentable three-end Liteasy roadshow slice with a stronger internal operations console, resettable demo data, and repeatable smoke checks.
+**Goal:** Deliver a stable, presentable three-end LiteasyClaw roadshow slice with a stronger internal operations console, resettable demo data, and repeatable smoke checks.
 
 **Architecture:** This plan does not expand the formal SaaS model further. It strengthens the current three-end demo by making the dev-cloud service expose real aggregated demo state, by adding reset/reseed operations, and by turning `/admin/` into a more convincing internal operations surface that reflects actual collection, recommendation-cache, organization, and session state.
 

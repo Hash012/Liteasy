@@ -1,4 +1,4 @@
-# Liteasy Phase 2 测试指南
+# LiteasyClaw Phase 2 测试指南
 
 这份文档面向没有开发经验的测试成员，目标是帮助你检查当前已经接入的 Phase 2 可见能力：
 
@@ -24,7 +24,7 @@ node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 看到下面这行表示成功：
 
 ```text
-Liteasy dev cloud listening on http://127.0.0.1:8787
+LiteasyClaw dev cloud listening on http://127.0.0.1:8787
 ```
 
 ## 2. 启动桌面端
@@ -60,7 +60,7 @@ npm run tauri dev
 
 通过标准：
 
-- 顶部显示 `Liteasy Researcher`
+- 顶部显示 `LiteasyClaw Researcher`
 - 顶部显示 `researcher@liteasy.dev`
 - 顶部显示会话有效期
 

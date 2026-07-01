@@ -19,7 +19,7 @@ async function startFromCli() {
   });
 
   server.listen(port, host, () => {
-    console.log(`Liteasy dev cloud listening on http://${host}:${port}`);
+    console.log(`LiteasyClaw dev cloud listening on http://${host}:${port}`);
   });
 }
 

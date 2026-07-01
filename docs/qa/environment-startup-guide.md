@@ -1,6 +1,6 @@
-# Liteasy 环境启动手册
+# LiteasyClaw 环境启动手册
 
-这份文档面向没有软件开发经验的成员，目标是让你可以独立把 Liteasy 当前版本跑起来并检查界面是否正常。
+这份文档面向没有软件开发经验的成员，目标是让你可以独立把 LiteasyClaw 当前版本跑起来并检查界面是否正常。
 
 ## 1. 你需要准备什么
 
@@ -59,7 +59,7 @@ node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 看到下面这行表示成功：
 
 ```text
-Liteasy dev cloud listening on http://127.0.0.1:8787
+LiteasyClaw dev cloud listening on http://127.0.0.1:8787
 ```
 
 浏览器访问 `http://127.0.0.1:8787/` 时会返回云端联调服务索引 JSON；桌面端页面请打开 Tauri 窗口或 Vite 地址。
@@ -115,7 +115,7 @@ npm run tauri dev
 正常情况下会发生两件事：
 
 1. 终端里出现开发服务启动日志
-2. 桌面上弹出一个名为 `Liteasy` 的应用窗口
+2. 桌面上弹出一个名为 `LiteasyClaw` 的应用窗口
 
 如果桌面窗口一时打不开，也可以先看前端预览：
 

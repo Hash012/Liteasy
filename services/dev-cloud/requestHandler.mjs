@@ -159,7 +159,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
 
     if (method === "GET" && url.pathname === "/") {
       writeJson(request, response, 200, {
-        name: "Liteasy dev cloud",
+        name: "LiteasyClaw dev cloud",
         endpoints: availableEndpoints,
         publicOrigin: getPublicOrigin(request, config)
       });
@@ -490,7 +490,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       writeJson(request, response, 405, {
         endpoint: url.pathname,
         error: "method_not_allowed",
-        message: `浏览器直接打开 ${url.pathname} 会使用 GET；Liteasy dev cloud 需要 ${expectedMethod} 请求。请从桌面应用触发，或用 curl 调用该接口。`,
+        message: `浏览器直接打开 ${url.pathname} 会使用 GET；LiteasyClaw dev cloud 需要 ${expectedMethod} 请求。请从桌面应用触发，或用 curl 调用该接口。`,
         method: expectedMethod
       });
       return;
@@ -499,7 +499,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     writeJson(request, response, 404, {
       availableEndpoints,
       error: "not_found",
-      message: "Liteasy dev cloud 未找到该路径。请访问根路径查看服务索引，或确认桌面端控制平面地址。",
+      message: "LiteasyClaw dev cloud 未找到该路径。请访问根路径查看服务索引，或确认桌面端控制平面地址。",
       path: url.pathname
     });
   };

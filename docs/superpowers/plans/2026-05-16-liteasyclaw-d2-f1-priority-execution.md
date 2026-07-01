@@ -1,4 +1,4 @@
-# Liteasy D2-F1 Priority Execution Plan
+# LiteasyClaw D2-F1 Priority Execution Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -14,8 +14,8 @@
 
 Execute this coordinator together with these two detailed plan docs:
 
-- `docs/Saas/2026-05-15-liteasy-d2-roadshow-core-user-loop-plan.md`
-- `docs/Saas/2026-05-15-liteasy-m1-resource-boundary-local-library-plan.md`
+- `docs/Saas/2026-05-15-liteasyclaw-d2-roadshow-core-user-loop-plan.md`
+- `docs/Saas/2026-05-15-liteasyclaw-m1-resource-boundary-local-library-plan.md`
 
 This file answers one question only: **what should be done next, in what order, and what must be true before switching tracks.**
 
@@ -35,8 +35,8 @@ At the time this plan was written, the repository state was:
 ### Task 1: Lock the Baseline Before New Work
 
 **Files:**
-- Read: `docs/Saas/2026-05-15-liteasy-d2-roadshow-core-user-loop-plan.md`
-- Read: `docs/Saas/2026-05-15-liteasy-m1-resource-boundary-local-library-plan.md`
+- Read: `docs/Saas/2026-05-15-liteasyclaw-d2-roadshow-core-user-loop-plan.md`
+- Read: `docs/Saas/2026-05-15-liteasyclaw-m1-resource-boundary-local-library-plan.md`
 - Read: `services/dev-cloud/server.mjs`
 - Read: `desktop/src/app/layout/useAppShellStores.ts`
 - Read: `desktop/src-tauri/src/main.rs`
@@ -144,7 +144,7 @@ Expected: no unrelated files are dragged into these two milestones.
 Read and execute the detailed steps from:
 
 ```text
-docs/Saas/2026-05-15-liteasy-d2-roadshow-core-user-loop-plan.md
+docs/Saas/2026-05-15-liteasyclaw-d2-roadshow-core-user-loop-plan.md
 ```
 
 Required D2 outcome before moving on:
@@ -232,7 +232,7 @@ Expected: PASS
 
 ```bash
 git add services/dev-cloud/server.mjs services/dev-cloud/requestHandler.mjs services/dev-cloud/payloads services/dev-cloud/server.test.mjs services/dev-cloud/providers/openaiResponses.test.mjs
-git commit -m "refactor: split Liteasy dev cloud request handling"
+git commit -m "refactor: split LiteasyClaw dev cloud request handling"
 ```
 
 Expected: one commit for the server split, with no F1 code mixed in.
@@ -297,7 +297,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/features/network/cloudErrorMessage.ts desktop/src/app/features/organization/useOrganizationWorkspace.ts desktop/src/tests/cloudErrorMessage.test.ts desktop/src/tests/useOrganizationWorkspace.test.ts desktop/src/tests/AppShell.test.tsx docs/qa/roadshow-demo-guide.md
-git commit -m "test: harden Liteasy roadshow-critical desktop loop"
+git commit -m "test: harden LiteasyClaw roadshow-critical desktop loop"
 ```
 
 Expected: one commit for D2 desktop hardening only.
@@ -371,7 +371,7 @@ Expected: F1 starts from a stable demo baseline rather than while the roadshow p
 Read and execute these exact sections:
 
 ```text
-docs/Saas/2026-05-15-liteasy-m1-resource-boundary-local-library-plan.md
+docs/Saas/2026-05-15-liteasyclaw-m1-resource-boundary-local-library-plan.md
 - Task 1: Add five resource-class types and policy tests
 - Task 2: Add a file-backed local library runtime seam
 ```
@@ -406,7 +406,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/features/resources desktop/src/app/features/library/localLibrary.types.ts desktop/src/app/features/library/localLibraryClient.ts desktop/src/tests/resourceActionPolicy.test.ts desktop/src/tests/localLibraryClient.test.ts desktop/src-tauri/src/local_library.rs desktop/src-tauri/src/main.rs
-git commit -m "feat: add Liteasy resource classes and local library seam"
+git commit -m "feat: add LiteasyClaw resource classes and local library seam"
 ```
 
 Expected: the first F1 commit contains only resource typing and runtime seam work.
@@ -428,7 +428,7 @@ Expected: the first F1 commit contains only resource typing and runtime seam wor
 Read and execute these exact sections:
 
 ```text
-docs/Saas/2026-05-15-liteasy-m1-resource-boundary-local-library-plan.md
+docs/Saas/2026-05-15-liteasyclaw-m1-resource-boundary-local-library-plan.md
 - Task 3: Load the workspace from the local library root
 - Task 4: Surface the local library root in the left pane
 - Task 5: Document local library verification
@@ -446,7 +446,7 @@ Run:
 
 ```bash
 cd desktop && npm test -- src/tests/resourceActionPolicy.test.ts
-cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the Liteasy local library root on startup"
+cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the LiteasyClaw local library root on startup"
 cd desktop && npm test -- src/tests/LeftPane.test.tsx -t "shows the local library root and refresh affordance"
 ```
 
@@ -468,7 +468,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/layout/AppShell.tsx desktop/src/app/layout/useAppShellStores.ts desktop/src/app/features/library/LibraryPane.tsx desktop/src/app/features/workspace/workspace.types.ts desktop/src/app/features/workspace/workspace.store.ts desktop/src/tests/AppShell.test.tsx desktop/src/tests/LeftPane.test.tsx docs/qa/environment-startup-guide.md
-git commit -m "feat: bootstrap Liteasy from a file-backed local library"
+git commit -m "feat: bootstrap LiteasyClaw from a file-backed local library"
 ```
 
 Expected: the second F1 commit contains only workspace bootstrap, UI surfacing, and docs.

@@ -1,12 +1,12 @@
-# Liteasy F3 In-App Organization Management Formalization Design
+# LiteasyClaw F3 In-App Organization Management Formalization Design
 
 ## 1. Purpose
 
-This document defines Liteasy `F3`: formalize organization-side management inside the user software rather than moving it into a separate customer admin backend.
+This document defines LiteasyClaw `F3`: formalize organization-side management inside the user software rather than moving it into a separate customer admin backend.
 
 The first formal `F3` milestone must:
 
-- keep organization management inside the Liteasy desktop entry point
+- keep organization management inside the LiteasyClaw desktop entry point
 - formalize organization roles as `owner / admin / member`
 - formalize organization creation permission, join rules, invite rules, leave rules, and shared-library ownership
 - preserve the current shared-library interaction pattern: opening an organization shared library replaces the current workspace like opening a new folder in VSCode
@@ -38,7 +38,7 @@ However, the current state is still only partially formal:
 
 `F3` must deliver a clear first formal organization model with these guarantees:
 
-1. organization management remains inside the Liteasy software
+1. organization management remains inside the LiteasyClaw software
 2. roles are explicitly `owner / admin / member`
 3. organization creation is gated by creation permission
 4. join, invite, and leave are constrained by role rules
@@ -72,7 +72,7 @@ However, the current state is still only partially formal:
 
 This is a hard product rule.
 
-Customer organization-side management must happen through the Liteasy user software:
+Customer organization-side management must happen through the LiteasyClaw user software:
 
 - create organization
 - join organization

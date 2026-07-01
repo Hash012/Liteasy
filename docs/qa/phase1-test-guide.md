@@ -1,4 +1,4 @@
-# Liteasy Phase 1 测试指南
+# LiteasyClaw Phase 1 测试指南
 
 这份文档面向没有软件开发基础的测试成员，目标是让你可以按步骤检查当前 `desktop` 原型是否达到 Phase 1 的基础可体验状态。
 
@@ -77,7 +77,7 @@ npm run dev
 
 点击 `连接开发云账号` 后，界面应显示：
 
-- `Liteasy Researcher`
+- `LiteasyClaw Researcher`
 - `researcher@liteasy.dev`
 - 会话有效期
 
@@ -315,7 +315,7 @@ node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 看到类似下面这行就表示启动成功：
 
 ```text
-Liteasy dev cloud listening on http://127.0.0.1:8787
+LiteasyClaw dev cloud listening on http://127.0.0.1:8787
 ```
 
 ### 步骤 2：启动桌面端
@@ -336,7 +336,7 @@ npm run tauri dev
 通过标准：
 
 - 顶部账号卡片从“未连接”切换为已连接状态
-- 显示 `Liteasy Researcher`
+- 显示 `LiteasyClaw Researcher`
 - 显示 `researcher@liteasy.dev`
 
 ### 步骤 4：把桌面端切到开发云

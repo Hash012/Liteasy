@@ -1,4 +1,4 @@
-# Liteasy Phase 3 组织空间测试指南
+# LiteasyClaw Phase 3 组织空间测试指南
 
 这份文档面向没有软件开发经验的成员，用来验收 Phase 3“组织空间、组织治理、个人中心、设置左边栏和右栏助手边界”是否能在桌面端正常工作。
 
@@ -32,7 +32,7 @@ node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 看到下面这行表示成功：
 
 ```text
-Liteasy dev cloud listening on http://127.0.0.1:8787
+LiteasyClaw dev cloud listening on http://127.0.0.1:8787
 ```
 
 浏览器直接打开 `http://127.0.0.1:8787/` 时应看到开发云服务索引 JSON，而不是空白页或 `not_found`。这个地址只是开发云 API 服务，不是桌面端页面。
@@ -67,7 +67,7 @@ http://127.0.0.1:1420/
 - 最左侧窄竖栏显示 `文献库 / 组织 / 个人中心 / 设置`
 - 左栏默认是 `Library`，展示 `我的文献库`
 - 中栏是 `Reader`
-- 右栏是 `AI Assistant`，初始态显示 Liteasy 学术助手、三种模式入口、历史会话/新建会话按钮、输入框、语音预留和发送按钮
+- 右栏是 `AI Assistant`，初始态显示 LiteasyClaw 学术助手、三种模式入口、历史会话/新建会话按钮、输入框、语音预留和发送按钮
 
 右栏不应出现 `模型接入策略`、`文献元数据同步`、`组织空间` 或 `组织治理` 卡片。
 
@@ -75,7 +75,7 @@ http://127.0.0.1:1420/
 
 在右栏初始态确认：
 
-- 显示 `Liteasy 学术助手`
+- 显示 `LiteasyClaw 学术助手`
 - 显示 `名词解释模式`、`命令模式`、`问答模式`
 - 显示 `新建会话` 和 `历史会话`
 - 点击 `语音` 后出现 `语音输入接口已预留，当前版本请先使用文本输入。`
@@ -91,7 +91,7 @@ http://127.0.0.1:1420/
 
 ## 5. 连接开发云账号
 
-在 Liteasy 窗口顶部找到 `云账号` 卡片，点击：
+在 LiteasyClaw 窗口顶部找到 `云账号` 卡片，点击：
 
 ```text
 连接开发云账号
@@ -99,7 +99,7 @@ http://127.0.0.1:1420/
 
 正常结果：
 
-- 顶部显示 `Liteasy Researcher`
+- 顶部显示 `LiteasyClaw Researcher`
 - 邮箱显示 `researcher@liteasy.dev`
 - 账号状态提示会话已经保存在本地
 
@@ -137,10 +137,10 @@ http://127.0.0.1:1420/
 
 左栏会切换为 `组织`。连接账号后应该能看到：
 
-- `组织空间：Liteasy AI Reading Lab`
-- `已加入组织：Liteasy AI Reading Lab、Liteasy Literature Ops`
+- `组织空间：LiteasyClaw AI Reading Lab`
+- `已加入组织：LiteasyClaw AI Reading Lab、LiteasyClaw Literature Ops`
 - `角色：研究员 · 成员 12 人`
-- `组织成员：Liteasy Researcher（研究员）、Admin（管理员）`
+- `组织成员：LiteasyClaw Researcher（研究员）、Admin（管理员）`
 - `共享文献库：组织共享文献库 · 48 篇`
 - `通知：公告 · 管理员发布了本周阅读主题。`
 - `通知：文献上传 · 成员上传了 Graph Neural Networks 综述。`
@@ -151,25 +151,25 @@ http://127.0.0.1:1420/
 
 组织页还包含 `打开组织窗口`，用于查看更完整的组织列表和详情。
 
-点击 `创建组织` 会出现 `创建组织` 弹窗，默认组织名称为 `Liteasy Demo Organization`。当前为 demo seam：点击 `创建 demo 组织申请` 会在组织左边栏显示同文案的操作反馈，并同步更新中栏提示 `已创建 Liteasy Demo Organization 的 demo 组织申请，等待正式后端接入。`，不会写入真实组织列表、申请云端空间或触发计费；点击 `取消` 或 `关闭` 不会创建提示。
+点击 `创建组织` 会出现 `创建组织` 弹窗，默认组织名称为 `LiteasyClaw Demo Organization`。当前为 demo seam：点击 `创建 demo 组织申请` 会在组织左边栏显示同文案的操作反馈，并同步更新中栏提示 `已创建 LiteasyClaw Demo Organization 的 demo 组织申请，等待正式后端接入。`，不会写入真实组织列表、申请云端空间或触发计费；点击 `取消` 或 `关闭` 不会创建提示。
 
 点击 `加入组织` 会出现 `加入组织` 弹窗，默认邀请码为 `LITEASY-DEMO-JOIN`。当前为 demo seam：点击 `提交 demo 加入申请` 会在组织左边栏显示同文案的操作反馈，并同步更新中栏提示 `已提交组织邀请码 LITEASY-DEMO-JOIN 的 demo 加入申请，等待正式后端接入。`，不会校验真实邀请码、写入成员关系或触发管理员审批；点击 `取消` 或 `关闭` 不会创建提示。
 
-点击 `邀请成员` 会出现 `邀请成员确认` 弹窗。当前为 demo seam：点击 `发送 demo 邀请` 会在组织左边栏显示同文案的操作反馈，并同步更新中栏提示 `已创建 Liteasy AI Reading Lab 的 demo 邀请，等待正式后端接入。`，不会发送真实邮件；点击 `取消` 或 `关闭` 不会创建提示。
+点击 `邀请成员` 会出现 `邀请成员确认` 弹窗。当前为 demo seam：点击 `发送 demo 邀请` 会在组织左边栏显示同文案的操作反馈，并同步更新中栏提示 `已创建 LiteasyClaw AI Reading Lab 的 demo 邀请，等待正式后端接入。`，不会发送真实邮件；点击 `取消` 或 `关闭` 不会创建提示。
 
-点击 `退出组织` 会出现 `退出组织确认` 弹窗。当前为 demo seam：点击 `创建 demo 退出请求` 会在组织左边栏显示同文案的操作反馈，并同步更新中栏提示 `已创建退出 Liteasy AI Reading Lab 的 demo 请求，等待正式后端接入。`，不会移除组织列表、成员关系或共享文献库访问；点击 `取消` 或 `关闭` 不会创建提示。
+点击 `退出组织` 会出现 `退出组织确认` 弹窗。当前为 demo seam：点击 `创建 demo 退出请求` 会在组织左边栏显示同文案的操作反馈，并同步更新中栏提示 `已创建退出 LiteasyClaw AI Reading Lab 的 demo 请求，等待正式后端接入。`，不会移除组织列表、成员关系或共享文献库访问；点击 `取消` 或 `关闭` 不会创建提示。
 
 ## 8. 切换已加入组织
 
 在组织页中点击：
 
 ```text
-查看 Liteasy Literature Ops
+查看 LiteasyClaw Literature Ops
 ```
 
 正常结果：
 
-- 组织空间标题变为 `组织空间：Liteasy Literature Ops`
+- 组织空间标题变为 `组织空间：LiteasyClaw Literature Ops`
 - 角色摘要变为 `角色：管理员 · 成员 4 人`
 - 共享文献库摘要变为 `共享文献库：文献运营共享库 · 16 篇`
 - 组织治理摘要变为 `治理后台：待复核 1 项，高风险 0 项`
@@ -200,7 +200,7 @@ http://127.0.0.1:1420/
 - 页面中央出现 `组织窗口`
 - 左侧显示组织列表
 - 右侧显示选中组织的成员、通知和共享文献库详情
-- 可以点击 `打开 Liteasy Literature Ops 详情` 查看第二个 demo 组织
+- 可以点击 `打开 LiteasyClaw Literature Ops 详情` 查看第二个 demo 组织
 
 ## 11. 打开组织共享文献库
 
@@ -213,7 +213,7 @@ http://127.0.0.1:1420/
 正常结果：
 
 - 左栏自动切回 `文献库`
-- 左栏显示 `当前工作区：组织共享文献库（Liteasy AI Reading Lab）`
+- 左栏显示 `当前工作区：组织共享文献库（LiteasyClaw AI Reading Lab）`
 - 左栏 `我的文献库` 中出现 `Organization Reading List: Retrieval-Augmented Generation`
 - 左栏 `我的文献库` 中出现 `Team Notes on Long-Context Evaluation`
 - 本地 starter 文献不再显示在当前工作区中
@@ -257,9 +257,9 @@ http://127.0.0.1:1420/
 正常结果：
 
 - 左栏文献库区域切换为 `个人中心`
-- 显示 `昵称：Liteasy Researcher`
+- 显示 `昵称：LiteasyClaw Researcher`
 - 显示 `用户 ID：demo-session-1`
-- 显示 `所在团队：Liteasy AI Reading Lab`
+- 显示 `所在团队：LiteasyClaw AI Reading Lab`
 - 显示 `画像配置：性别 未设置 · 年龄 未设置 · 学段 未设置`
 - 可在 `画像配置表单` 中选择性别、填写年龄、选择学段，并点击 `保存画像配置`
 - 显示 `用户画像：已关闭`

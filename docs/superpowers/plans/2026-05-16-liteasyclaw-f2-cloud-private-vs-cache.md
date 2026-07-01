@@ -1,4 +1,4 @@
-# Liteasy F2 Cloud-Private Data and Recommendation Cache Separation Implementation Plan
+# LiteasyClaw F2 Cloud-Private Data and Recommendation Cache Separation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -591,7 +591,7 @@ Expected: matches for the new cloud-private and cache wording, and removal or re
 
 ```bash
 git add docs/qa/phase2-test-guide.md docs/qa/phase2-known-limitations.md docs/qa/final-demo-handoff.md
-git commit -m "docs: align Liteasy QA docs with cloud collection and cache split"
+git commit -m "docs: align LiteasyClaw QA docs with cloud collection and cache split"
 ```
 
 ## Final Verification

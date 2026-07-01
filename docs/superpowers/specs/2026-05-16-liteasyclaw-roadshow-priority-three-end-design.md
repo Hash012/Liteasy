@@ -1,8 +1,8 @@
-# Liteasy Roadshow-Priority Three-End Demo Design
+# LiteasyClaw Roadshow-Priority Three-End Demo Design
 
 ## 1. Purpose
 
-This document defines the near-term roadshow-priority Liteasy delivery slice.
+This document defines the near-term roadshow-priority LiteasyClaw delivery slice.
 
 The goal is not to finish the formal SaaS program first. The goal is to produce a three-end demo that is:
 
@@ -17,9 +17,9 @@ This slice should preserve work that remains useful later, but its primary decis
 
 The primary roadshow narrative is:
 
-- Liteasy has a customer-side desktop entry point
-- Liteasy has a deployable service side
-- Liteasy has an internal operations/maintenance surface
+- LiteasyClaw has a customer-side desktop entry point
+- LiteasyClaw has a deployable service side
+- LiteasyClaw has an internal operations/maintenance surface
 - actions in the customer-side flow create visible state that the operations side can inspect or manage
 
 The audience should leave with the impression that this is a SaaS system with three linked surfaces, not a single isolated desktop mockup.

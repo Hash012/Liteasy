@@ -1,4 +1,4 @@
-# Liteasy Desktop
+# LiteasyClaw Desktop
 
 桌面端开发目录，当前包含：
 

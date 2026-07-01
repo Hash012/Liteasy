@@ -1,8 +1,8 @@
-# Liteasy D2 Roadshow Core User Loop Plan
+# LiteasyClaw D2 Roadshow Core User Loop Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Harden the presenter-critical Liteasy user loop for roadshow use while performing only the structural refactors that directly improve stability, deployability, and follow-on development speed.
+**Goal:** Harden the presenter-critical LiteasyClaw user loop for roadshow use while performing only the structural refactors that directly improve stability, deployability, and follow-on development speed.
 
 **Architecture:** This milestone keeps the existing desktop app and deployable demo cloud baseline, but improves the live-demo path end-to-end: login, organization loading, recommendation flow, assistant answers, and artifact entry points. Structural cleanup is limited to high-value boundary splits, especially in `services/dev-cloud/server.mjs`, so the roadshow baseline becomes easier to maintain without losing momentum.
 

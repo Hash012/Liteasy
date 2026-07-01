@@ -1,4 +1,4 @@
-# Liteasy Phase 2 已知限制日志
+# LiteasyClaw Phase 2 已知限制日志
 
 本文档记录 Phase 2 当前可验收版本的边界，避免团队成员把开发演示能力误认为正式生产能力。
 

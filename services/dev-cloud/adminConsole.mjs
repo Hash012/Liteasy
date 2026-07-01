@@ -25,7 +25,7 @@ export function buildAdminGovernanceDashboardPayload(request, config, builders) 
 
   return {
     dashboard: {
-      name: "Liteasy Operations Governance Dashboard",
+      name: "LiteasyClaw Operations Governance Dashboard",
       environment: "local-demo",
       generatedAt: "2026-05-15T00:00:00Z",
       apiPolicy: {
@@ -112,7 +112,7 @@ export function buildAdminConsoleHtml(request, config, builders) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Liteasy Operations Console</title>
+    <title>LiteasyClaw Operations Console</title>
     <style>
       :root { color-scheme: light; }
       body { margin: 0; background: #f4f1ea; color: #1f3345; font-family: ui-serif, "Noto Serif SC", serif; }
@@ -145,8 +145,8 @@ export function buildAdminConsoleHtml(request, config, builders) {
     <main>
       <section class="card">
         <div class="label">内部运营与运维后台</div>
-        <h1>Liteasy Operations Console</h1>
-        <p>这是 Liteasy 内部运营和运维团队使用的本地 demo 后台，用于配置 API 策略、观察客户组织资源、配额、后台任务和审计队列；桌面软件端才是客户使用的产品。生成时间：${escapeHtml(dashboard.generatedAt)}。</p>
+        <h1>LiteasyClaw Operations Console</h1>
+        <p>这是 LiteasyClaw 内部运营和运维团队使用的本地 demo 后台，用于配置 API 策略、观察客户组织资源、配额、后台任务和审计队列；桌面软件端才是客户使用的产品。生成时间：${escapeHtml(dashboard.generatedAt)}。</p>
         <div class="grid">${endpointCards}</div>
         <h2>平台资源摘要</h2>
         <div class="grid">

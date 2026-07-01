@@ -1,8 +1,8 @@
-# Liteasy Phase 0-1 Desktop Core Implementation Plan
+# LiteasyClaw Phase 0-1 Desktop Core Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first usable Liteasy slice for individual researchers: a desktop workbench that supports workspace management, selected-document-set ingest, modality-button-driven analysis, AI conversation, source-grounded answers, skill-driven software control, and one or two asynchronous learning artifacts.
+**Goal:** Build the first usable LiteasyClaw slice for individual researchers: a desktop workbench that supports workspace management, selected-document-set ingest, modality-button-driven analysis, AI conversation, source-grounded answers, skill-driven software control, and one or two asynchronous learning artifacts.
 
 **Architecture:** The first slice centers on a Tauri desktop shell with a React UI, a Rust-backed local capability layer, a local SQLite-based workspace/document store, and a thin cloud integration seam. The plan intentionally prioritizes the end-to-end user loop over platform completeness and leaves organization, advanced governance, and heavy multimodal generation to follow-up plans.
 
@@ -92,7 +92,7 @@ Expected: a desktop window opens showing three visible panes
 
 ```bash
 git add desktop docs/qa/environment-startup-guide.md
-git commit -m "feat: scaffold Liteasy desktop shell"
+git commit -m "feat: scaffold LiteasyClaw desktop shell"
 ```
 
 ### Task 2: Workspace and local library model
@@ -548,7 +548,7 @@ git commit -m "docs: add Phase 1 non-developer test guide"
 ### Task 9: Phase gate verification
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md`
+- Modify: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase0-1-desktop-core.md`
 
 - [ ] **Step 1: Run the focused test suite**
 
@@ -574,8 +574,8 @@ Known limitations before Phase 2:
 - [ ] **Step 4: Commit the verified phase gate**
 
 ```bash
-git add docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md
-git commit -m "docs: mark Liteasy Phase 0-1 verification gate"
+git add docs/superpowers/plans/2026-05-10-liteasyclaw-phase0-1-desktop-core.md
+git commit -m "docs: mark LiteasyClaw Phase 0-1 verification gate"
 ```
 
 ---

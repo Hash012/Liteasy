@@ -1,4 +1,4 @@
-# Liteasy 与 OpenClaw 范式关系评估
+# LiteasyClaw 与 OpenClaw 范式关系评估
 
 更新时间：2026-05-13
 
@@ -7,17 +7,17 @@
 这份文档回答四个问题：
 
 1. OpenClaw 范式到底是什么
-2. Liteasy 和 OpenClaw 的关系与异同是什么
-3. 在 Liteasy 中应用 OpenClaw 范式有没有意义
+2. LiteasyClaw 和 OpenClaw 的关系与异同是什么
+3. 在 LiteasyClaw 中应用 OpenClaw 范式有没有意义
 4. 如果要应用，应该怎么应用，应用到什么程度
 
 结论先写在前面：
 
 - **有意义应用**
-- **但不应该把 Liteasy 直接做成 OpenClaw 的外壳产品**
+- **但不应该把 LiteasyClaw 直接做成 OpenClaw 的外壳产品**
 - **正确做法是借用 OpenClaw 的“内部 agent 架构范式”，而不是照搬它的产品交互方式**
 
-也就是说，Liteasy 应该是：
+也就是说，LiteasyClaw 应该是：
 
 - 面向科研用户的桌面优先产品
 - 以固定工作流和可视化界面为主
@@ -46,7 +46,7 @@
    plugin 可以注册工具，也可以附带 skill。也就是说，plugin 是能力扩展包，tool 是能力接口，skill 是能力使用说明和流程约束。  
    参考：<https://docs.openclaw.ai/tools>
 
-OpenClaw 还有几个对 Liteasy 特别重要的机制：
+OpenClaw 还有几个对 LiteasyClaw 特别重要的机制：
 
 ### 2.1 技能位置和技能可见性是分开的
 
@@ -61,7 +61,7 @@ OpenClaw 官方文档明确说：
 - 不等于
 - “当前 agent 被允许使用某个 skill”
 
-这和 Liteasy 当前想要的安全边界高度一致。  
+这和 LiteasyClaw 当前想要的安全边界高度一致。  
 参考：<https://docs.openclaw.ai/tools/skills>
 
 ### 2.2 工具允许列表和拒绝列表是第一层安全边界
@@ -70,7 +70,7 @@ OpenClaw 官方文档支持 `tools.allow` / `tools.deny`。而且它是 fail-clo
 如果 allowlist 最终没有解析出可调用工具，运行会直接停止，而不是装作能做。  
 参考：<https://docs.openclaw.ai/tools>
 
-这个思想对 Liteasy 很重要，因为你们不希望 assistant 因为自然语言失控而“瞎改软件”。
+这个思想对 LiteasyClaw 很重要，因为你们不希望 assistant 因为自然语言失控而“瞎改软件”。
 
 ### 2.3 Skill 可以是模型触发，也可以是确定性直达工具
 
@@ -80,7 +80,7 @@ OpenClaw 文档里提到：
 - skill 还可以声明 `command-dispatch: tool`
 - 这样某些 skill 可以**不经过模型自由发挥**，而是直接、确定性地派发到工具
 
-这对 Liteasy 非常关键，因为：
+这对 LiteasyClaw 非常关键，因为：
 
 - 你们的中栏固定模态按钮，本质上就不是“让模型猜要做什么”
 - 而是“用户已经明确指定模态，系统应该确定性地派发到对应主工作流”
@@ -89,11 +89,11 @@ OpenClaw 文档里提到：
 - <https://docs.openclaw.ai/tools/slash-commands>
 - <https://docs.openclaw.ai/skills>
 
-## 3. Liteasy 和 OpenClaw 的关系
+## 3. LiteasyClaw 和 OpenClaw 的关系
 
 ### 3.1 相同点
 
-Liteasy 和 OpenClaw 在“内部运行逻辑”上有很多共性：
+LiteasyClaw 和 OpenClaw 在“内部运行逻辑”上有很多共性：
 
 - 都不是单纯把自然语言直接丢给一个模型
 - 都需要模型之外的结构化能力
@@ -101,11 +101,11 @@ Liteasy 和 OpenClaw 在“内部运行逻辑”上有很多共性：
 - 都需要对 agent 能调用什么能力做边界控制
 - 都需要把“可见能力”和“实际允许调用的能力”分开
 
-从这个意义上说，**Liteasy 的 agent runtime 非常适合借用 OpenClaw 范式**。
+从这个意义上说，**LiteasyClaw 的 agent runtime 非常适合借用 OpenClaw 范式**。
 
 ### 3.2 不同点
 
-但 Liteasy 不是 OpenClaw 的简单垂直版，两者定位不同。
+但 LiteasyClaw 不是 OpenClaw 的简单垂直版，两者定位不同。
 
 #### OpenClaw 更像“通用 agent 宿主”
 
@@ -118,9 +118,9 @@ OpenClaw 面向的是：
 
 它更像一套 agent OS / runtime。
 
-#### Liteasy 是“科研产品”
+#### LiteasyClaw 是“科研产品”
 
-Liteasy 面向的是：
+LiteasyClaw 面向的是：
 
 - 个人科研用户
 - 论文阅读与学习
@@ -128,7 +128,7 @@ Liteasy 面向的是：
 - 固定主链路
 - 可视化工作台
 
-Liteasy 的核心不是“开放式 agent 控制一切”，而是：
+LiteasyClaw 的核心不是“开放式 agent 控制一切”，而是：
 
 - 有清晰主干
 - 有固定 UI 入口
@@ -138,9 +138,9 @@ Liteasy 的核心不是“开放式 agent 控制一切”，而是：
 所以二者关系应理解为：
 
 - **OpenClaw 是内部架构范式参考**
-- **Liteasy 是面向最终用户的垂直产品**
+- **LiteasyClaw 是面向最终用户的垂直产品**
 
-## 4. Liteasy 里哪些部分适合用 OpenClaw 范式
+## 4. LiteasyClaw 里哪些部分适合用 OpenClaw 范式
 
 ### 4.1 适合：右栏 assistant 的分支能力
 
@@ -161,7 +161,7 @@ Liteasy 的核心不是“开放式 agent 控制一切”，而是：
 
 ### 4.2 适合：软件内能力的注册与权限边界
 
-Liteasy 应该把下面这些统一做成结构化能力：
+LiteasyClaw 应该把下面这些统一做成结构化能力：
 
 - 设置变更
 - 启动选中文献集导入
@@ -191,11 +191,11 @@ Liteasy 应该把下面这些统一做成结构化能力：
 
 - plugin 提供工具能力
 - skill 提供工作流约束
-- Liteasy 再决定哪些对用户暴露
+- LiteasyClaw 再决定哪些对用户暴露
 
 ### 4.4 部分适合：组织能力与多 agent 协作
 
-OpenClaw 对多 agent / workspace / visibility 的处理思路，也适合未来 Liteasy 的：
+OpenClaw 对多 agent / workspace / visibility 的处理思路，也适合未来 LiteasyClaw 的：
 
 - 组织空间
 - 共享知识库
@@ -204,11 +204,11 @@ OpenClaw 对多 agent / workspace / visibility 的处理思路，也适合未来
 
 但这不是当前 Phase 0-1 最优先的事情。
 
-## 5. Liteasy 里哪些部分不应该直接照搬 OpenClaw
+## 5. LiteasyClaw 里哪些部分不应该直接照搬 OpenClaw
 
 ### 5.1 不应该把“用户主交互”做成 skill 命令式界面
 
-Liteasy 的主干不是 slash command，也不是 `/skill xxx`。
+LiteasyClaw 的主干不是 slash command，也不是 `/skill xxx`。
 
 你们已经确认过的主干是：
 
@@ -225,7 +225,7 @@ Liteasy 的主干不是 slash command，也不是 `/skill xxx`。
 
 ### 5.2 不应该让核心主干完全依赖模型自由路由
 
-OpenClaw 允许 skill 通过模型或命令触发，但 Liteasy 的主干不该主要依赖模型判断。
+OpenClaw 允许 skill 通过模型或命令触发，但 LiteasyClaw 的主干不该主要依赖模型判断。
 
 对于你们的中栏固定模态按钮，更合理的是：
 
@@ -240,12 +240,12 @@ OpenClaw 允许 skill 通过模型或命令触发，但 Liteasy 的主干不该�
 
 - open-ended model routing
 
-### 5.3 不应该把 Liteasy 早期做成“开放技能市场产品”
+### 5.3 不应该把 LiteasyClaw 早期做成“开放技能市场产品”
 
 OpenClaw 有 ClawHub、workspace skill 目录、安装/更新 skill 等生态要素。  
-这对 Liteasy 长期有参考价值，但对早期产品不是必要前提。
+这对 LiteasyClaw 长期有参考价值，但对早期产品不是必要前提。
 
-Liteasy 在早期阶段最重要的是：
+LiteasyClaw 在早期阶段最重要的是：
 
 - 跑通主链路
 - 做稳主干
@@ -254,7 +254,7 @@ Liteasy 在早期阶段最重要的是：
 
 而不是一上来就让终端用户自己装各种 skill。
 
-## 6. 在 Liteasy 中应用 OpenClaw 范式，有没有意义
+## 6. 在 LiteasyClaw 中应用 OpenClaw 范式，有没有意义
 
 结论：**有，而且是高价值应用，但应该是“选择性应用”。**
 
@@ -262,7 +262,7 @@ Liteasy 在早期阶段最重要的是：
 
 #### 意义 1：把“会说话的 assistant”变成“可控的 agent runtime”
 
-如果不用 OpenClaw 范式，Liteasy 很容易滑向：
+如果不用 OpenClaw 范式，LiteasyClaw 很容易滑向：
 
 - 右栏是个聊天框
 - UI 组件里东一块西一块写分支逻辑
@@ -290,11 +290,11 @@ OpenClaw 范式正好提供了非常成熟的思路：
 - direct dispatch
 - fail closed
 
-这和 Liteasy 需求是同向的。
+这和 LiteasyClaw 需求是同向的。
 
 #### 意义 3：对未来扩展友好
 
-Liteasy 后面无论扩到：
+LiteasyClaw 后面无论扩到：
 
 - 组织
 - 插件
@@ -306,9 +306,9 @@ Liteasy 后面无论扩到：
 
 ### 6.2 没有意义的地方
 
-#### 没必要把 OpenClaw 整套产品体验搬进 Liteasy
+#### 没必要把 OpenClaw 整套产品体验搬进 LiteasyClaw
 
-Liteasy 不是拿来替代 OpenClaw 的通用 agent 面板。
+LiteasyClaw 不是拿来替代 OpenClaw 的通用 agent 面板。
 
 如果硬搬，会带来问题：
 
@@ -327,11 +327,11 @@ Liteasy 不是拿来替代 OpenClaw 的通用 agent 面板。
 
 ### 7.1 统一的三层映射
 
-在 Liteasy 中，可以这样映射 OpenClaw 三层：
+在 LiteasyClaw 中，可以这样映射 OpenClaw 三层：
 
-#### Liteasy 的 Tool / Action 层
+#### LiteasyClaw 的 Tool / Action 层
 
-对应 OpenClaw 的 tools，但对 Liteasy 来说，更贴近“action registry”：
+对应 OpenClaw 的 tools，但对 LiteasyClaw 来说，更贴近“action registry”：
 
 - `settings.update`
 - `selected_set.import`
@@ -348,7 +348,7 @@ Liteasy 不是拿来替代 OpenClaw 的通用 agent 面板。
 - 可确认
 - 可 deny
 
-#### Liteasy 的 Skill 层
+#### LiteasyClaw 的 Skill 层
 
 对应 OpenClaw 的 skills：
 
@@ -366,7 +366,7 @@ Liteasy 不是拿来替代 OpenClaw 的通用 agent 面板。
 - 允许调用检索/模型/审计
 - 必须受 allowlist 控制
 
-#### Liteasy 的 Plugin 层
+#### LiteasyClaw 的 Plugin 层
 
 对应 OpenClaw 的 plugins：
 
@@ -378,7 +378,7 @@ Liteasy 不是拿来替代 OpenClaw 的通用 agent 面板。
 
 ### 7.2 主干不走自由文本，走确定性 dispatch
 
-Liteasy 主干应当这样做：
+LiteasyClaw 主干应当这样做：
 
 - 中栏固定模态按钮 = 用户明确声明目标模态
 - 系统不让模型猜“要不要导图还是 PPT”
@@ -414,7 +414,7 @@ Liteasy 主干应当这样做：
 
 ### 7.4 allowlist 应按“模式 / 身份 / 风险等级”三维控制
 
-Liteasy 不应只有一个全局 skill 表。
+LiteasyClaw 不应只有一个全局 skill 表。
 
 建议至少按三维限制：
 
@@ -439,10 +439,10 @@ Liteasy 不应只有一个全局 skill 表。
 
 ### 7.5 把“选中文献集”作为 skill runtime 的默认上下文对象
 
-这是 Liteasy 相比 OpenClaw 的一个关键垂直化改造。
+这是 LiteasyClaw 相比 OpenClaw 的一个关键垂直化改造。
 
 OpenClaw 更偏通用 workspace 语义。  
-Liteasy 则应强制围绕：
+LiteasyClaw 则应强制围绕：
 
 - 当前工作区
 - 当前选中文献集
@@ -451,7 +451,7 @@ Liteasy 则应强制围绕：
 
 来组织运行时上下文。
 
-也就是说，Liteasy 的大多数 skill 不应直接面对“整个文件系统”，而应默认面对：
+也就是说，LiteasyClaw 的大多数 skill 不应直接面对“整个文件系统”，而应默认面对：
 
 - 已锁定
 - 已导入
@@ -459,7 +459,7 @@ Liteasy 则应强制围绕：
 
 的选中文献集。
 
-## 8. 对当前 Liteasy 阶段的具体建议
+## 8. 对当前 LiteasyClaw 阶段的具体建议
 
 ### 8.1 当前阶段应该做
 
@@ -474,22 +474,22 @@ Liteasy 则应强制围绕：
 1. 不要把核心主干改造成纯自然语言入口
 2. 不要开放通用 skill 安装市场给终端用户
 3. 不要让 assistant 直接获得“任意软件控制权”
-4. 不要把 OpenClaw 的通用 agent UI 心智直接移植到 Liteasy
+4. 不要把 OpenClaw 的通用 agent UI 心智直接移植到 LiteasyClaw
 
 ## 9. 最终判断
 
 最终判断很明确：
 
-### 9.1 Liteasy 和 OpenClaw 的关系
+### 9.1 LiteasyClaw 和 OpenClaw 的关系
 
 - **不是同一个产品**
 - **不是简单套壳关系**
 - **是“垂直产品”对“通用 agent runtime 范式”的借鉴关系**
 
-### 9.2 OpenClaw 范式在 Liteasy 中有没有意义
+### 9.2 OpenClaw 范式在 LiteasyClaw 中有没有意义
 
 - **有意义**
-- 而且对 Liteasy 的长期架构是高价值参考
+- 而且对 LiteasyClaw 的长期架构是高价值参考
 
 ### 9.3 该怎么应用
 
@@ -506,7 +506,7 @@ Liteasy 则应强制围绕：
 
 ### 9.4 一句话结论
 
-**Liteasy 应该做成“OpenClaw-inspired agent runtime inside a research product”，而不是“把 OpenClaw 本身做成 Liteasy”。**
+**LiteasyClaw 应该做成“OpenClaw-inspired agent runtime inside a research product”，而不是“把 OpenClaw 本身做成 LiteasyClaw”。**
 
 ## 10. 参考资料
 
@@ -519,8 +519,8 @@ Liteasy 则应强制围绕：
 - OpenClaw Browser plugin guidance: <https://docs.openclaw.ai/browser>
 - OpenClaw CLI skills: <https://docs.openclaw.ai/cli/skills>
 
-其中关于以下判断，属于我基于官方资料结合 Liteasy 当前产品定义作出的工程推断：
+其中关于以下判断，属于我基于官方资料结合 LiteasyClaw 当前产品定义作出的工程推断：
 
 - “中栏固定模态按钮应更接近 direct dispatch，而不是自由文本入口”
-- “Liteasy 应借范式，不应照搬 OpenClaw 的最终用户交互方式”
-- “选中文献集应成为 Liteasy skill runtime 的默认上下文对象”
+- “LiteasyClaw 应借范式，不应照搬 OpenClaw 的最终用户交互方式”
+- “选中文献集应成为 LiteasyClaw skill runtime 的默认上下文对象”

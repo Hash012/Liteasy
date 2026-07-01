@@ -1,4 +1,4 @@
-# Liteasy Phase 2 Sync and Recommendation Implementation Plan
+# LiteasyClaw Phase 2 Sync and Recommendation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +12,7 @@
 
 ## Scope Summary
 
-- Depends on: `docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md`
+- Depends on: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase0-1-desktop-core.md`
 - Primary outcomes:
   - cloud account login and session persistence
   - document metadata sync

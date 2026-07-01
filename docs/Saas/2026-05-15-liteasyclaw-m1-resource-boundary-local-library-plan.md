@@ -1,8 +1,8 @@
-# Liteasy M1 Resource Boundary and Local Library Plan
+# LiteasyClaw M1 Resource Boundary and Local Library Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Formalize Liteasy's first real SaaS-era foundation by turning the prototype local library into a real file-backed local library and codifying the five resource classes in the desktop app and local runtime seam.
+**Goal:** Formalize LiteasyClaw's first real SaaS-era foundation by turning the prototype local library into a real file-backed local library and codifying the five resource classes in the desktop app and local runtime seam.
 
 **Architecture:** This milestone works entirely inside the existing desktop entry point and local runtime seam. It introduces explicit resource-scope types, a local-library Tauri capability, file-backed workspace loading, and action-policy guards so that later cloud favorites, organization resources, and cache services can build on stable ownership rules instead of demo semantics.
 
@@ -148,7 +148,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/features/resources desktop/src/tests/resourceActionPolicy.test.ts
-git commit -m "docs-plan: define Liteasy resource classes and action policies"
+git commit -m "docs-plan: define LiteasyClaw resource classes and action policies"
 ```
 
 ### Task 2: Add a file-backed local library runtime seam
@@ -274,7 +274,7 @@ fn main() {
             local_library::load_local_library_snapshot
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Liteasy desktop");
+        .expect("error while running LiteasyClaw desktop");
 }
 ```
 
@@ -287,7 +287,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/features/library/localLibrary.types.ts desktop/src/app/features/library/localLibraryClient.ts desktop/src/tests/localLibraryClient.test.ts desktop/src-tauri/src/local_library.rs desktop/src-tauri/src/main.rs
-git commit -m "docs-plan: add Liteasy local library runtime seam"
+git commit -m "docs-plan: add LiteasyClaw local library runtime seam"
 ```
 
 ### Task 3: Load the workspace from the local library root
@@ -302,7 +302,7 @@ git commit -m "docs-plan: add Liteasy local library runtime seam"
 - [ ] **Step 1: Write the failing AppShell bootstrap test**
 
 ```ts
-test("loads the Liteasy local library root on startup", async () => {
+test("loads the LiteasyClaw local library root on startup", async () => {
   render(<AppShell />);
 
   expect(await screen.findByText(/当前工作区：.*LiteasyLibrary/)).toBeInTheDocument();
@@ -311,7 +311,7 @@ test("loads the Liteasy local library root on startup", async () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the Liteasy local library root on startup"`
+Run: `cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the LiteasyClaw local library root on startup"`
 Expected: FAIL because startup still uses static starter workspace data only.
 
 - [ ] **Step 3: Add a local-library hook and workspace source metadata**
@@ -356,14 +356,14 @@ In `AppShell.tsx`, load the snapshot and replace the startup label with the retu
 
 - [ ] **Step 4: Run the focused AppShell test to verify green**
 
-Run: `cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the Liteasy local library root on startup"`
+Run: `cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the LiteasyClaw local library root on startup"`
 Expected: PASS
 
 - [ ] **Step 5: Commit the file-backed workspace bootstrap**
 
 ```bash
 git add desktop/src/app/features/library/useLocalLibrary.ts desktop/src/app/features/workspace/workspace.types.ts desktop/src/app/features/workspace/workspace.store.ts desktop/src/app/layout/AppShell.tsx desktop/src/tests/AppShell.test.tsx
-git commit -m "docs-plan: bootstrap workspace from Liteasy local library root"
+git commit -m "docs-plan: bootstrap workspace from LiteasyClaw local library root"
 ```
 
 ### Task 4: Surface the local library root in the left pane
@@ -456,7 +456,7 @@ Expected: at least one match for the new local-library instructions
 
 ```bash
 git add docs/qa/environment-startup-guide.md
-git commit -m "docs-plan: document Liteasy local library root verification"
+git commit -m "docs-plan: document LiteasyClaw local library root verification"
 ```
 
 ## M1 Verification Checklist
@@ -466,7 +466,7 @@ Before declaring M1 complete, run all of these:
 ```bash
 cd desktop && npm test -- src/tests/resourceActionPolicy.test.ts
 cd desktop && npm test -- src/tests/localLibraryClient.test.ts
-cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the Liteasy local library root on startup"
+cd desktop && npm test -- src/tests/AppShell.test.tsx -t "loads the LiteasyClaw local library root on startup"
 cd desktop && npm test -- src/tests/LeftPane.test.tsx -t "shows the local library root and refresh affordance"
 cd desktop && npm run build
 ```

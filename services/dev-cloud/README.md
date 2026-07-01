@@ -1,6 +1,6 @@
-# Liteasy Dev Cloud
+# LiteasyClaw Dev Cloud
 
-这个目录提供一个最小开发后端，用来在本地模拟 Liteasy 的“云侧”两类能力：
+这个目录提供一个最小开发后端，用来在本地模拟 LiteasyClaw 的“云侧”两类能力：
 
 - 控制平面策略接口
 - 模型生成接口
@@ -214,7 +214,7 @@ POST /v1/account/demo-login
   "session": {
     "email": "researcher@liteasy.dev",
     "expiresAt": "2026-05-15T09:30:00Z",
-    "name": "Liteasy Researcher",
+    "name": "LiteasyClaw Researcher",
     "sessionId": "demo-session-1"
   }
 }
@@ -344,7 +344,7 @@ POST /v1/model/audit
 
 如果你要同时验证账号链路，可以在桌面端顶部点击 `连接开发云账号`，然后检查是否出现：
 
-- `Liteasy Researcher`
+- `LiteasyClaw Researcher`
 - `researcher@liteasy.dev`
 
 关闭并重新启动桌面端后，上述会话应自动恢复。

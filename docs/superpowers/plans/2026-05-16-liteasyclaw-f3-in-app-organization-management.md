@@ -1,8 +1,8 @@
-# Liteasy F3 In-App Organization Management Formalization Implementation Plan
+# LiteasyClaw F3 In-App Organization Management Formalization Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Formalize Liteasy organization management inside the software with explicit `owner / admin / member` roles, creation permission, role-gated invite/join/leave rules, and shared-library ownership semantics.
+**Goal:** Formalize LiteasyClaw organization management inside the software with explicit `owner / admin / member` roles, creation permission, role-gated invite/join/leave rules, and shared-library ownership semantics.
 
 **Architecture:** This milestone keeps the existing desktop organization UI and shared-library workspace-switch flow, but replaces the current demo seam semantics with a formal role and ownership model. On the dev-cloud side, add a dedicated organization repository and explicit organization action endpoints so role rules are enforced in both desktop gating and server-side action handling.
 
@@ -132,7 +132,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/features/organization/organization.types.ts desktop/src/tests/LeftPane.test.tsx desktop/src/tests/useOrganizationWorkspace.test.ts
-git commit -m "feat: formalize Liteasy organization role and ownership types"
+git commit -m "feat: formalize LiteasyClaw organization role and ownership types"
 ```
 
 ## Task 2: Formalize Desktop Action Gating for Create / Invite / Join / Leave
@@ -228,7 +228,7 @@ test("creates an organization and assigns the creator as owner", async () => {
 
   const response = await invokeHandler({
     body: JSON.stringify({
-      name: "Liteasy F3 Lab",
+      name: "LiteasyClaw F3 Lab",
       sessionId: "demo-session-1"
     }),
     handler,

@@ -8,7 +8,7 @@ if (!baseUrl) {
 const checks = [
   { expectJson: true, path: "/" },
   { expectJson: true, path: "/healthz" },
-  { expectText: "Liteasy Operations Console", path: "/admin/" },
+  { expectText: "LiteasyClaw Operations Console", path: "/admin/" },
   { expectJson: true, path: "/v1/admin/demo-state" }
 ];
 

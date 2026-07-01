@@ -1,8 +1,8 @@
-# Liteasy User Workbench UI Implementation Plan
+# LiteasyClaw User Workbench UI Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement the confirmed Liteasy user-workbench UI and interaction model: a B1-style academic workbench, `24 / 52 / 24` resizable three-pane layout, unified lightweight login modal, and a local-reader fallback mode when cloud capability is unavailable.
+**Goal:** Implement the confirmed LiteasyClaw user-workbench UI and interaction model: a B1-style academic workbench, `24 / 52 / 24` resizable three-pane layout, unified lightweight login modal, and a local-reader fallback mode when cloud capability is unavailable.
 
 **Architecture:** This plan works inside the existing desktop client and refines the customer-facing workbench layer without changing the larger product boundary. It introduces a persistent pane-layout model, a unified login-modal flow, local-reader fallback states across cloud-facing entry points, and a more disciplined, non-floating visual language grounded in the confirmed B1 design direction.
 
@@ -184,7 +184,7 @@ Update `AppShell.tsx` to call `usePaneLayout()` and pass the current ratios into
 
 ```bash
 git add desktop/src/app/layout/paneLayout.types.ts desktop/src/app/layout/paneLayout.storage.ts desktop/src/app/layout/usePaneLayout.ts desktop/src/tests/usePaneLayout.test.ts desktop/src/app/layout/AppShell.tsx
-git commit -m "docs-plan: add persistent Liteasy pane layout state"
+git commit -m "docs-plan: add persistent LiteasyClaw pane layout state"
 ```
 
 ### Task 2: Implement draggable left/right pane resizing and collapse rails
@@ -240,7 +240,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/layout/PaneResizer.tsx desktop/src/app/layout/AppShell.tsx desktop/src/app/styles/app.css desktop/src/tests/AppShell.test.tsx
-git commit -m "docs-plan: add Liteasy resizable and collapsible workbench panes"
+git commit -m "docs-plan: add LiteasyClaw resizable and collapsible workbench panes"
 ```
 
 ### Task 3: Add the unified lightweight login modal
@@ -299,7 +299,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/features/account/LightweightLoginDialog.tsx desktop/src/app/layout/AppDialogs.tsx desktop/src/app/features/account/useAccountSession.ts desktop/src/app/features/account/AccountStatusPanel.tsx desktop/src/tests/AppDialogs.test.tsx desktop/src/tests/useAccountSession.test.ts
-git commit -m "docs-plan: add unified Liteasy lightweight login dialog"
+git commit -m "docs-plan: add unified LiteasyClaw lightweight login dialog"
 ```
 
 ### Task 4: Implement local-reader fallback states in left rail and organization entry
@@ -354,7 +354,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/features/library/LibraryPane.tsx desktop/src/app/features/organization/OrganizationSidebarPanel.tsx desktop/src/app/features/recommendations/useRecommendations.ts desktop/src/app/features/organization/useOrganizationSummary.ts desktop/src/app/features/organization/useOrganizationList.ts desktop/src/app/features/organization/useOrganizationGovernance.ts desktop/src/app/features/organization/useOrganizationWorkspace.ts desktop/src/tests/useRecommendations.test.ts desktop/src/tests/useOrganizationData.test.ts desktop/src/tests/useOrganizationWorkspace.test.ts
-git commit -m "docs-plan: add Liteasy local-reader fallback behavior"
+git commit -m "docs-plan: add LiteasyClaw local-reader fallback behavior"
 ```
 
 ### Task 5: Finalize B1 workbench styling without floating panels
@@ -403,7 +403,7 @@ Expected: PASS
 
 ```bash
 git add desktop/src/app/styles/app.css desktop/src/tests/TopBar.test.tsx desktop/src/tests/SettingsPane.test.tsx desktop/src/tests/AppShell.test.tsx
-git commit -m "docs-plan: finalize Liteasy B1 workbench styling"
+git commit -m "docs-plan: finalize LiteasyClaw B1 workbench styling"
 ```
 
 ## Verification Checklist

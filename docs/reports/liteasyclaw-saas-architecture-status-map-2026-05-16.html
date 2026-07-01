@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Liteasy SaaS 架构全景</title>
+  <title>LiteasyClaw SaaS 架构全景</title>
   <style>
     :root {
       --ink: #193247;
@@ -503,7 +503,7 @@
     <header class="hero">
       <div class="hero-top">
         <div>
-          <h1>Liteasy SaaS 架构全景</h1>
+          <h1>LiteasyClaw SaaS 架构全景</h1>
         </div>
         <div class="hero-actions">
           <div class="control-group">
@@ -534,7 +534,7 @@
             <div class="flow-arrow">→</div>
             <div class="flow-node flow-liteasy">Workflow Runtime</div>
             <div class="flow-arrow">→</div>
-            <div class="flow-node flow-saas">Liteasy SaaS</div>
+            <div class="flow-node flow-saas">LiteasyClaw SaaS</div>
           </div>
         </section>
         <section class="stat-band">
@@ -551,7 +551,7 @@
 
     <div class="workspace">
       <main class="panel">
-        <h2 class="section-title" id="main-title">Liteasy SaaS 架构</h2>
+        <h2 class="section-title" id="main-title">LiteasyClaw SaaS 架构</h2>
         <div class="map" id="map-root"></div>
       </main>
 
@@ -574,19 +574,19 @@
     const detailNodes = {
       relation_openclaw: {
         id: "relation_openclaw",
-        label: "Liteasy 与 OpenClaw 的关系",
+        label: "LiteasyClaw 与 OpenClaw 的关系",
         status: "partial",
         category: "关系",
         summary: "OpenClaw 范式 / Workflow / Skill-Action / SaaS 产品层",
         responsibilities: [
           "把 OpenClaw 作为 workflow 思路、skill/action 边界和 runtime 范式来源",
-          "把 Liteasy 定位成桌面端为入口的 SaaS 产品，而不是单一桌面应用",
+          "把 LiteasyClaw 定位成桌面端为入口的 SaaS 产品，而不是单一桌面应用",
           "让产品层、云端层、内部后台层都围绕 agent runtime 统一收束"
         ],
         engineering: [
-          "<code>liteasy-openclaw-architecture.html</code>",
-          "<code>docs/Liteasy_功能与UI设计文档1.0.md</code>",
-          "<code>docs/Saas/Liteasy_SaaS纠偏设计与调整方案.md</code>",
+          "<code>liteasyclaw-openclaw-architecture.html</code>",
+          "<code>docs/LiteasyClaw_功能与UI设计文档1.0.md</code>",
+          "<code>docs/Saas/LiteasyClaw_SaaS纠偏设计与调整方案.md</code>",
           "<code>desktop/src/app/features/skills/</code>",
           "<code>services/dev-cloud/providers/openaiResponses.mjs</code>"
         ],
@@ -607,7 +607,7 @@
         label: "用户端",
         status: "partial",
         category: "产品层",
-        summary: "用户端是 Liteasy 的客户入口层，当前以桌面端为主，负责工作区、阅读、问答、组织入口与结果承载。",
+        summary: "用户端是 LiteasyClaw 的客户入口层，当前以桌面端为主，负责工作区、阅读、问答、组织入口与结果承载。",
         responsibilities: [
           "工作区与文献库浏览",
           "中栏阅读和多标签产物承载",
@@ -788,7 +788,7 @@
         label: "云端业务平台",
         status: "partial",
         category: "产品层",
-        summary: "云端业务平台是 Liteasy SaaS 的核心能力层；当前只有 dev-cloud 联调原型，不是正式平台。",
+        summary: "云端业务平台是 LiteasyClaw SaaS 的核心能力层；当前只有 dev-cloud 联调原型，不是正式平台。",
         responsibilities: [
           "账号、认证、会话与设备管理",
           "用户云空间与组织共享空间",
@@ -1059,7 +1059,7 @@
         label: "Agent Workflow",
         status: "partial",
         category: "产品层",
-        summary: "这应该是 Liteasy 长期最核心的层，但当前只落了局部 seam：统一入口、部分 skill-action 边界、部分审计链路。",
+        summary: "这应该是 LiteasyClaw 长期最核心的层，但当前只落了局部 seam：统一入口、部分 skill-action 边界、部分审计链路。",
         responsibilities: [
           "意图路由",
           "skill registry",
@@ -1552,7 +1552,7 @@
       {
         id: "product-overview",
         label: "分层总览",
-        title: "Liteasy SaaS 架构",
+        title: "LiteasyClaw SaaS 架构",
         sections: [
           {
             id: "product-overview-top",

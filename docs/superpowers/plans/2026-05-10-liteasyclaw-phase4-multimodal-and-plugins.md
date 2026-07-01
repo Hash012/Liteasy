@@ -1,8 +1,8 @@
-# Liteasy Phase 4 Multimodal and Plugins Implementation Plan
+# LiteasyClaw Phase 4 Multimodal and Plugins Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extend Liteasy into a platform-style product with advanced multimodal outputs, plugin runtime controls, and optional external-consent capability seams.
+**Goal:** Extend LiteasyClaw into a platform-style product with advanced multimodal outputs, plugin runtime controls, and optional external-consent capability seams.
 
 **Architecture:** This plan depends on the Phase 3 organization and governance baseline being complete. It expands asynchronous generation, plugin lifecycle control, and advanced permissioned extensions while preserving the stable core document-learning flow.
 
@@ -12,7 +12,7 @@
 
 ## Scope Summary
 
-- Depends on: `docs/superpowers/plans/2026-05-10-liteasy-phase3-organization-and-governance.md`
+- Depends on: `docs/superpowers/plans/2026-05-10-liteasyclaw-phase3-organization-and-governance.md`
 - Primary outcomes:
   - podcast, video, and animated artifact pipelines
   - plugin lifecycle and permission boundaries

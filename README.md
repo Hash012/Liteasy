@@ -1,13 +1,13 @@
-# Liteasy
+# LiteasyClaw
 
-Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作台。当前仓库已经开始搭建 `desktop` 端原型，目标是逐步实现：
+LiteasyClaw 是一个面向论文阅读与学习的桌面优先科研 agent 工作台。当前仓库已经开始搭建 `desktop` 端原型，目标是逐步实现：
 
 - 本地文献库与工作区
 - AI 助手问答、解释、技能驱动的软件控制
 - 多模态学习产物
 - 用户画像与后续云端扩展能力
 
-当前更准确的理解是：Liteasy 分为“用户交互层”和“agent 工作流层”，桌面 UI 负责承载工作区、对话与结果，真正的理解、检索、生成与审计在 agent workflow 中完成；所有会修改软件状态的行为，都应收敛到受控的 skill/action 边界。
+当前更准确的理解是：LiteasyClaw 分为“用户交互层”和“agent 工作流层”，桌面 UI 负责承载工作区、对话与结果，真正的理解、检索、生成与审计在 agent workflow 中完成；所有会修改软件状态的行为，都应收敛到受控的 skill/action 边界。
 
 当前术语以这套为准：
 
@@ -30,7 +30,7 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 1. 本项目使用 Linux (Ubuntu)开发。
 2. 项目结构可以通过README中的其他部分了解。
 3. 建议新建分支后开发，提交pr合并。提交pr后群里发一下开发了什么并展示一下效果。
-4. 建议人工阅读产品方案原文(`docs/Liteasy_功能与UI设计文档1.0.md`)，技术和产品蓝图( `docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md`)，以上都可修改。
+4. 建议人工阅读产品方案原文(`docs/LiteasyClaw_功能与UI设计文档1.0.md`)，技术和产品蓝图( `docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`)，以上都可修改。
 5. 让ai开发可以根据`docs/superpowers/plans`，分阶段开发。每个阶段要喂给ai产品方案原文和每阶段任务（`docs/superpowers/plans`中），并补充强调plans中忽视或理解错误的点。
 6. ai开发中可以复用的经验、提示词要留痕，例如`docs/开发协作提示词历史_5.10.md`。新的开发也要借鉴旧的痕迹（尽量不冗余，上例在这点做的不好）。
 
@@ -64,7 +64,7 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 
 其中：
 
-- `docs/Liteasy_功能与UI设计文档1.0.md`
+- `docs/LiteasyClaw_功能与UI设计文档1.0.md`
   - 你的产品方案原文
 - `docs/qa/`
   - 面向非开发成员的启动和测试说明
@@ -125,13 +125,13 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 如果你不是开发人员，建议按这个顺序看：
 
 1. 看产品方案原文  
-   路径：`docs/Liteasy_功能与UI设计文档1.0.md`
+   路径：`docs/LiteasyClaw_功能与UI设计文档1.0.md`
 
 2. 看技术和产品蓝图  
-   路径：`docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md`
+   路径：`docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`
 
 3. 看实施计划  
-   路径：`docs/superpowers/plans/2026-05-10-liteasy-phase2-sync-and-recommendation.md`
+   路径：`docs/superpowers/plans/2026-05-10-liteasyclaw-phase2-sync-and-recommendation.md`
 
 4. 看桌面端启动说明  
    路径：`docs/qa/environment-startup-guide.md`
@@ -147,21 +147,50 @@ Liteasy 是一个面向论文阅读与学习的桌面优先科研 agent 工作�
 
 8. 真正启动一次 `desktop`
 
-## 5. 如何查看 desktop 当前效果
+## 5. 如何完整运行当前产品
 
-如果要完整查看当前桌面端的云账号、组织空间、推荐和同步能力，需要先启动本地云端联调服务：
+当前产品由两部分组成：
+
+- `services/dev-cloud/`：本地开发云服务，提供云账号、组织空间、推荐、模型策略、模型生成和模型审计等 demo API
+- `desktop/`：Tauri 桌面端，也是用户真正使用的 LiteasyClaw 产品入口
+
+如果要完整查看当前桌面端的云账号、组织空间、推荐和同步能力，需要打开两个终端：一个运行开发云服务，另一个运行桌面端。
+
+### 终端 1：启动本地开发云服务
+
+在仓库根目录执行：
 
 ```bash
+cd /home/octopus/Liteasy
 node /home/octopus/Liteasy/services/dev-cloud/server.mjs
 ```
 
 看到下面这行表示本地云端联调服务启动成功：
 
 ```text
-Liteasy dev cloud listening on http://127.0.0.1:8787
+LiteasyClaw dev cloud listening on http://127.0.0.1:8787
 ```
 
-注意：`http://127.0.0.1:8787/` 是开发云 API 服务索引，不是 Liteasy 前端页面；`http://127.0.0.1:1420/` 才是前端开发页面。Phase 4 三端 demo 还提供内部运营与运维后台 `http://127.0.0.1:8787/admin/`；它面向 Liteasy 运营/维护团队，用于配置 API、管理资源和查看用户/组织情况，客户使用的是 `http://127.0.0.1:1420/` 桌面软件端。浏览器直接打开 `http://127.0.0.1:8787/v1/account/demo-login` 会使用 GET，但该接口需要桌面端发起 POST 请求；现在服务端会返回带方法说明的 JSON，看到这个提示不代表账号系统坏了。
+这个终端不要关闭。开发云服务地址是：
+
+```text
+http://127.0.0.1:8787/
+```
+
+内部运营与运维后台地址是：
+
+```text
+http://127.0.0.1:8787/admin/
+```
+
+注意：`http://127.0.0.1:8787/` 是开发云 API 服务索引，不是 LiteasyClaw 前端页面；`http://127.0.0.1:1420/` 才是前端开发页面。Phase 4 三端 demo 的内部运营与运维后台 `http://127.0.0.1:8787/admin/` 面向 LiteasyClaw 运营/维护团队，用于配置 API、管理资源和查看用户/组织情况。客户使用的是 Tauri 桌面窗口；如果只看前端预览，才使用 `http://127.0.0.1:1420/`。浏览器直接打开 `http://127.0.0.1:8787/v1/account/demo-login` 会使用 GET，但该接口需要桌面端发起 POST 请求；现在服务端会返回带方法说明的 JSON，看到这个提示不代表账号系统坏了。
+
+如果要让模型生成接口调用真实 OpenAI，而不是内置开发演示回答，请在启动开发云服务前设置：
+
+```bash
+export OPENAI_API_KEY=你的密钥
+node /home/octopus/Liteasy/services/dev-cloud/server.mjs
+```
 
 如果你要把当前 demo 服务部署到云端做路演，请优先阅读：
 
@@ -169,9 +198,9 @@ Liteasy dev cloud listening on http://127.0.0.1:8787
 /home/octopus/Liteasy/docs/qa/roadshow-demo-guide.md
 ```
 
-### 方式 A：直接看桌面窗口
+### 终端 2：启动桌面端完整产品
 
-在终端执行：
+另开一个终端，在 `desktop` 目录执行：
 
 ```bash
 cd /home/octopus/Liteasy/desktop
@@ -181,6 +210,14 @@ npm run tauri dev
 ```
 
 正常情况下会弹出一个桌面窗口。
+
+如果已经安装过依赖，后续通常可以省略 `npm install`，直接执行：
+
+```bash
+cd /home/octopus/Liteasy/desktop
+source "$HOME/.cargo/env"
+npm run tauri dev
+```
 
 你当前应该能看到：
 
@@ -193,7 +230,7 @@ npm run tauri dev
 
 启动后如需完整验收 Phase 2，请按 `docs/qa/phase2-test-guide.md` 操作；如需验收 Phase 3 组织空间与治理原型，请按 `docs/qa/phase3-test-guide.md` 操作。
 
-### 方式 B：只看前端页面
+### 可选：只看前端页面
 
 如果桌面窗口暂时打不开，也可以先看前端：
 
@@ -250,10 +287,10 @@ source "$HOME/.cargo/env"
 
 ## 8. 关键文档入口
 
-- **产品方案原文**：`docs/Liteasy_功能与UI设计文档1.0.md`
-- **技术方案**：`docs/superpowers/specs/2026-05-10-liteasy-product-blueprint-design.md`
-- **实施计划**：`docs/superpowers/plans/2026-05-10-liteasy-phase0-1-desktop-core.md`
-- **Phase 2 计划**：`docs/superpowers/plans/2026-05-10-liteasy-phase2-sync-and-recommendation.md`
+- **产品方案原文**：`docs/LiteasyClaw_功能与UI设计文档1.0.md`
+- **技术方案**：`docs/superpowers/specs/2026-05-10-liteasyclaw-product-blueprint-design.md`
+- **实施计划**：`docs/superpowers/plans/2026-05-10-liteasyclaw-phase0-1-desktop-core.md`
+- **Phase 2 计划**：`docs/superpowers/plans/2026-05-10-liteasyclaw-phase2-sync-and-recommendation.md`
 - 环境启动手册：`docs/qa/environment-startup-guide.md`
 - Phase 2 测试指南：`docs/qa/phase2-test-guide.md`
 - Phase 2 已知限制：`docs/qa/phase2-known-limitations.md`

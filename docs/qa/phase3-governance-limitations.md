@@ -1,4 +1,4 @@
-# Liteasy Phase 3 组织与治理已知限制
+# LiteasyClaw Phase 3 组织与治理已知限制
 
 本文档记录 Phase 3“组织空间与治理原型交付”的边界，避免团队成员把演示能力误认为正式生产能力。
 
@@ -16,7 +16,7 @@
 
 ## 2. 当前仍是演示数据
 
-- 组织列表固定为 `Liteasy AI Reading Lab` 和 `Liteasy Literature Ops` 两个 demo 组织。
+- 组织列表固定为 `LiteasyClaw AI Reading Lab` 和 `LiteasyClaw Literature Ops` 两个 demo 组织。
 - 当前组织的成员数、成员明细、通知、共享文献库数量、共享文献条目、配额、任务和审计事件都是固定 demo 数据。
 - 组织选择只存在于当前桌面会话状态；通知已读状态会写入本机 localStorage，并在点击 `断开云账号` 时清理，但不会同步到云端或跨设备变化；已读 key 已按 `organizationId:notificationId` 隔离，避免不同组织中相同通知 id 串读。
 - 当前没有真实组织创建、加入或退出流程；`创建组织`、`加入组织`、`邀请成员` 和 `退出组织` 都只是 demo 确认 seam，不会申请云端空间、触发计费、校验真实邀请码、发送邮件、生成真实邀请码、写入或移除真实成员关系，也不会写入后端。
