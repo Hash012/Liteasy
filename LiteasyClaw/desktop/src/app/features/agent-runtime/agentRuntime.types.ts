@@ -93,6 +93,11 @@ export type AgentRuntimeEvent =
   | { artifact: ArtifactRequest; type: "artifact_request" }
   | { message: string; recovery?: string; type: "runtime_error" };
 
+export type RuntimeExecutionResult = {
+  events: AgentRuntimeEvent[];
+  settingsChanged: boolean;
+};
+
 export type AgentContextValidation =
   | { ok: true }
   | {
