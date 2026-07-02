@@ -90,6 +90,19 @@ export OPENAI_BASE_URL=https://api.openai.com/v1
 - 配置了 `OPENAI_API_KEY`：`POST /v1/model/generate` 会走真实 OpenAI Responses API
 - 没配置 `OPENAI_API_KEY`：会自动回退到内置开发回答，便于本地演示
 
+如果你希望改用 DeepSeek，请配置 DeepSeek key 和默认 provider：
+
+```bash
+export DEEPSEEK_API_KEY=你的密钥
+export DEEPSEEK_BASE_URL=https://api.deepseek.com
+export LITEASY_MODEL_PROVIDER=deepseek
+```
+
+说明：
+
+- 配置了 `DEEPSEEK_API_KEY` 且请求体 `provider` 为 `deepseek`：`POST /v1/model/generate` 会走 DeepSeek Chat Completions API
+- 桌面端在默认 provider 为 `deepseek` 时会使用 `deepseek-v4-flash`
+
 ## 2. 提供的接口
 
 ### 控制平面
@@ -155,6 +168,17 @@ POST /v1/model/generate
 ```
 
 如果已配置 `OPENAI_API_KEY`，则这里会返回真实 OpenAI 生成结果。
+
+DeepSeek 请求体示例：
+
+```json
+{
+  "model": "deepseek-v4-flash",
+  "prompt": "问题：LiteasyClaw 的命令模式应该做什么？",
+  "provider": "deepseek",
+  "source": "cloud_proxy"
+}
+```
 
 ### 模型审计
 

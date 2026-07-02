@@ -51,7 +51,7 @@ export async function executeSkill(
 
   return executeAction(
     {
-      actionId: "artifact.start_analysis",
+      actionId: "artifact.generate",
       input: invocation.input
     },
     context

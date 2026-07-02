@@ -1,15 +1,21 @@
 import type { createSettingsStore } from "../settings/settings.store";
 import type { SettingsState } from "../settings/settings.types";
-import { resolveLocalDevCloudEndpoint } from "./localDevCloudEndpoint";
+import {
+  hasInjectedLocalDevCloudEndpoint,
+  resolveLocalDevCloudEndpoint,
+  type DevCloudEnvLike
+} from "./localDevCloudEndpoint";
 
 type SettingsStore = ReturnType<typeof createSettingsStore>;
 
 type UseModelSettingsActionsInput = {
+  localDevCloudEnv?: DevCloudEnvLike;
   onSettingsChanged: (nextSettings: SettingsState) => void;
   settingsStore: SettingsStore;
 };
 
 export function useModelSettingsActions({
+  localDevCloudEnv,
   onSettingsChanged,
   settingsStore
 }: UseModelSettingsActionsInput) {
@@ -29,14 +35,23 @@ export function useModelSettingsActions({
   }
 
   function applyLocalDevCloudDefaults() {
-    const endpoint = resolveLocalDevCloudEndpoint();
+    const endpoint = resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv);
     applyModelPolicySnapshot({
       "models.cloud_proxy_endpoint": endpoint,
       "models.control_plane_endpoint": endpoint
     });
   }
 
+  function applyInjectedLocalDevCloudDefaults() {
+    if (!hasInjectedLocalDevCloudEndpoint(localDevCloudEnv)) {
+      return;
+    }
+
+    applyLocalDevCloudDefaults();
+  }
+
   return {
+    applyInjectedLocalDevCloudDefaults,
     applyLocalDevCloudDefaults,
     applyModelPolicySnapshot
   };

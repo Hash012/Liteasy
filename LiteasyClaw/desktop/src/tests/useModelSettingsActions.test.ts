@@ -46,4 +46,33 @@ describe("useModelSettingsActions", () => {
     expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe(endpoint);
     expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe(endpoint);
   });
+
+  test("applies injected dev cloud endpoint only when the dev script provides a port", () => {
+    const settingsStore = createSettingsStore();
+    const onSettingsChanged = vi.fn();
+    const hook = renderHook(() =>
+      useModelSettingsActions({
+        localDevCloudEnv: {
+          VITE_LITEASY_DEV_CLOUD_PORT: "8790"
+        },
+        onSettingsChanged,
+        settingsStore
+      })
+    );
+
+    act(() => hook.result.current.applyInjectedLocalDevCloudDefaults());
+
+    expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe("http://127.0.0.1:8790");
+    expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("http://127.0.0.1:8790");
+    expect(onSettingsChanged).toHaveBeenLastCalledWith(settingsStore.getState());
+  });
+
+  test("leaves endpoints unchanged when no dev cloud port is injected", () => {
+    const { result, settingsStore } = renderActions();
+
+    act(() => result.current.applyInjectedLocalDevCloudDefaults());
+
+    expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe("mock://cloud-proxy");
+    expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("mock://control-plane");
+  });
 });

@@ -3,17 +3,24 @@ import type { ArtifactType } from "../features/artifacts/artifact.types";
 import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import type { SettingsState } from "../features/settings/settings.types";
 import type { createSettingsStore } from "../features/settings/settings.store";
-import type { Paper } from "../features/workspace/workspace.types";
+import type { ActionContext } from "../features/skills/actionRegistry";
+import type { Paper, WorkspaceSource } from "../features/workspace/workspace.types";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantSidebarProps = {
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
+  onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
+  onApplyPanelAction?: ActionContext["applyPanelAction"];
+  onApplyThemePreset?: ActionContext["applyThemePreset"];
   onGenerateArtifact: (artifactType: ArtifactType) => string;
+  onImportSelectedSet?: ActionContext["importSelectedSet"];
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
+  runtimeOrganizationName?: string;
+  runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPaperCount: number;
   selectedPapers: Paper[];
   selectionLocked: boolean;
@@ -23,10 +30,16 @@ type AssistantSidebarProps = {
 export function AssistantSidebar({
   importedChunksByPaperId,
   importedSelectedCount,
+  onApplyLayoutPreset,
+  onApplyPanelAction,
+  onApplyThemePreset,
   onGenerateArtifact,
+  onImportSelectedSet,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
+  runtimeOrganizationName,
+  runtimeWorkspace,
   selectedPaperCount,
   selectedPapers,
   selectionLocked,
@@ -38,10 +51,16 @@ export function AssistantSidebar({
       <div className="pane-body">
         <AssistantPane
           importedChunksByPaperId={importedChunksByPaperId}
+          onApplyLayoutPreset={onApplyLayoutPreset}
+          onApplyPanelAction={onApplyPanelAction}
+          onApplyThemePreset={onApplyThemePreset}
           onGenerateArtifact={onGenerateArtifact}
+          onImportSelectedSet={onImportSelectedSet}
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onSettingsChanged={onSettingsChanged}
           profileUnlocked={profileUnlocked}
+          runtimeOrganizationName={runtimeOrganizationName}
+          runtimeWorkspace={runtimeWorkspace}
           selectedPapers={selectedPapers}
           selectedSetStatus={{
             importedCount: importedSelectedCount,

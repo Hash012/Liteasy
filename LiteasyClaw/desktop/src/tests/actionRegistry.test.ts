@@ -1,4 +1,8 @@
-import { executeAction } from "../app/features/skills/actionRegistry";
+import {
+  executeAction,
+  getRegisteredActionMetadata,
+  getRuntimeActionPolicy
+} from "../app/features/skills/actionRegistry";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
 test("executes a settings update through the action registry", async () => {
@@ -66,6 +70,103 @@ test("executes a direct artifact analysis action without going through skill rou
   expect(result.message).toBe("已按树形展开主干启动分析。");
 });
 
+test("executes a semantic artifact generation action through the action registry", async () => {
+  const invoked: string[] = [];
+
+  const result = await executeAction(
+    {
+      actionId: "artifact.generate",
+      input: {
+        artifactType: "ppt",
+        source: "selected_document_set"
+      }
+    },
+    {
+      startArtifactAnalysis: (artifactType) => {
+        invoked.push(artifactType);
+        return "已开始 PPT 分析。";
+      }
+    }
+  );
+
+  expect(invoked).toEqual(["ppt"]);
+  expect(result.message).toBe("已开始 PPT 分析。");
+});
+
+test("exposes registered action metadata for runtime planning and safety checks", () => {
+  const metadata = getRegisteredActionMetadata();
+
+  expect(metadata.map((action) => action.actionId)).toEqual([
+    "artifact.generate",
+    "artifact.start_analysis",
+    "layout.split_two",
+    "layout.reset",
+    "theme.apply_preset",
+    "theme.reset",
+    "panel.open",
+    "panel.close",
+    "panel.toggle",
+    "settings.update",
+    "selected_set.import",
+    "organization.open_shared_library",
+    "workspace.delete_documents",
+    "workspace.overwrite_documents",
+    "workspace.batch_update_documents",
+    "cloud.upload_documents",
+    "cloud.sync_workspace"
+  ]);
+  expect(metadata.find((action) => action.actionId === "artifact.generate")).toMatchObject({
+    requiredContext: ["selected_document_set"],
+    requiresConfirmation: false,
+    riskLevel: "low"
+  });
+  expect(metadata.find((action) => action.actionId === "cloud.sync_workspace")).toMatchObject({
+    requiredContext: ["workspace"],
+    requiresConfirmation: true,
+    riskLevel: "high"
+  });
+});
+
+test("derives confirmation policy from registered action metadata and invocation payload", () => {
+  expect(
+    getRuntimeActionPolicy({
+      actionId: "settings.update",
+      input: {
+        target: "profile.enabled",
+        value: true
+      }
+    })
+  ).toMatchObject({
+    requiresConfirmation: true,
+    riskLevel: "medium"
+  });
+
+  expect(
+    getRuntimeActionPolicy({
+      actionId: "settings.update",
+      input: {
+        target: "network.recommendation.enabled",
+        value: false
+      }
+    })
+  ).toMatchObject({
+    requiresConfirmation: false,
+    riskLevel: "low"
+  });
+
+  expect(
+    getRuntimeActionPolicy({
+      actionId: "workspace.delete_documents",
+      input: {
+        scope: "selected_document_set"
+      }
+    })
+  ).toMatchObject({
+    requiresConfirmation: true,
+    riskLevel: "high"
+  });
+});
+
 test("executes a selected-document-set import action", async () => {
   let imported = 0;
 
@@ -108,4 +209,70 @@ test("executes an organization shared-library open action", async () => {
 
   expect(opened).toBe(1);
   expect(result.message).toBe("已打开组织共享文献库：组织共享文献库。");
+});
+
+test("executes a layout preset action through the action registry", async () => {
+  const applyLayoutPreset = vi.fn(() => "已切换为双栏布局。");
+
+  const result = await executeAction(
+    {
+      actionId: "layout.split_two",
+      input: {
+        preset: "two_column"
+      }
+    },
+    {
+      applyLayoutPreset
+    }
+  );
+
+  expect(applyLayoutPreset).toHaveBeenCalledWith({
+    preset: "two_column"
+  });
+  expect(result.message).toBe("已切换为双栏布局。");
+});
+
+test("executes a theme preset action through the action registry", async () => {
+  const applyThemePreset = vi.fn(() => "已应用卡通风格。");
+
+  const result = await executeAction(
+    {
+      actionId: "theme.apply_preset",
+      input: {
+        preset: "playful",
+        tone: "cartoon"
+      }
+    },
+    {
+      applyThemePreset
+    }
+  );
+
+  expect(applyThemePreset).toHaveBeenCalledWith({
+    preset: "playful",
+    tone: "cartoon"
+  });
+  expect(result.message).toBe("已应用卡通风格。");
+});
+
+test("executes a panel action through the action registry", async () => {
+  const applyPanelAction = vi.fn(() => "已打开设置面板。");
+
+  const result = await executeAction(
+    {
+      actionId: "panel.open",
+      input: {
+        panel: "settings"
+      }
+    },
+    {
+      applyPanelAction
+    }
+  );
+
+  expect(applyPanelAction).toHaveBeenCalledWith({
+    operation: "open",
+    panel: "settings"
+  });
+  expect(result.message).toBe("已打开设置面板。");
 });

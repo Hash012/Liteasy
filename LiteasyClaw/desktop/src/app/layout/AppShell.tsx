@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
 import type { ImportJob } from "../features/import/import.types";
@@ -9,6 +9,7 @@ import { useProfileActions } from "../features/profile/useProfileActions";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
+import type { DevCloudEnvLike } from "../features/models/localDevCloudEndpoint";
 import type { AccountTransport } from "../features/account/accountSessionClient";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
@@ -34,12 +35,14 @@ import { useCloudAccountController } from "../controllers/useCloudAccountControl
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
 import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
+import type { ActionContext } from "../features/skills/actionRegistry";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
   controlPlaneTransport?: ControlPlaneTransport;
   documentMetadataTransport?: DocumentMetadataTransport;
   initialSettings?: Partial<SettingsState>;
+  localDevCloudEnv?: DevCloudEnvLike;
   organizationGovernanceTransport?: OrganizationGovernanceTransport;
   organizationListTransport?: OrganizationListTransport;
   organizationSharedLibraryManifestTransport?: OrganizationSharedLibraryManifestTransport;
@@ -53,6 +56,7 @@ export function AppShell({
   controlPlaneTransport,
   documentMetadataTransport,
   initialSettings,
+  localDevCloudEnv,
   organizationGovernanceTransport,
   organizationListTransport,
   organizationSharedLibraryManifestTransport,
@@ -64,6 +68,7 @@ export function AppShell({
   const localLibrarySnapshot = useLocalLibrary(localLibraryLoader);
   const paneLayout = usePaneLayout();
   const { isOnline } = useConnectivity();
+  const [runtimeTheme, setRuntimeTheme] = useState<"default" | "playful">("default");
 
   const workspaceSelection = useWorkspaceSelectionController({
     localLibrarySnapshot,
@@ -81,6 +86,7 @@ export function AppShell({
     "先勾选并锁定文献形成选中文献集，再用中栏模态按钮启动分析。"
   );
   const modelSettings = useModelSettingsActions({
+    localDevCloudEnv,
     onSettingsChanged: (nextSettings) => setSettingsState(cloneSettingsState(nextSettings)),
     settingsStore: settingsStoreRef.current
   });
@@ -122,6 +128,10 @@ export function AppShell({
     startArtifactAnalysis: artifactWorkflow.actions.startAnalysis
   });
 
+  useEffect(() => {
+    modelSettings.applyInjectedLocalDevCloudDefaults();
+  }, []);
+
   usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
     controlPlaneTransport,
@@ -158,6 +168,59 @@ export function AppShell({
   const selectedPapers = workspaceActions.getSelectedPapers();
   const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
+  const applyRuntimeLayoutPreset: ActionContext["applyLayoutPreset"] = (input) => {
+    if (input.preset === "two_column") {
+      paneLayout.setCollapsed("left", true);
+      return "已切换为双栏布局。";
+    }
+
+    paneLayout.resetLayout();
+    return "已恢复默认布局。";
+  };
+  const applyRuntimeThemePreset: ActionContext["applyThemePreset"] = (input) => {
+    if (input.preset === "playful" || input.tone === "cartoon") {
+      setRuntimeTheme("playful");
+      return "已应用卡通风格。";
+    }
+
+    setRuntimeTheme("default");
+    return "已恢复默认风格。";
+  };
+  const applyRuntimePanelAction: ActionContext["applyPanelAction"] = (input) => {
+    const setPaneOpen = (pane: "bottom" | "left" | "right") => {
+      if (input.operation === "toggle") {
+        paneLayout.setCollapsed(pane, !paneLayout.collapsed[pane]);
+        return;
+      }
+
+      paneLayout.setCollapsed(pane, input.operation === "close");
+    };
+
+    if (input.panel === "left" || input.panel === "right" || input.panel === "bottom") {
+      setPaneOpen(input.panel);
+      const paneLabel = input.panel === "left" ? "左栏" : input.panel === "right" ? "右栏" : "下栏";
+      const actionLabel =
+        input.operation === "close" ? "关闭" : input.operation === "toggle" ? "切换" : "打开";
+      return `已${actionLabel}${paneLabel}。`;
+    }
+
+    leftRail.setLeftRailView(input.panel);
+    paneLayout.setCollapsed("left", false);
+
+    if (input.panel === "settings") {
+      return "已打开设置面板。";
+    }
+
+    if (input.panel === "organization") {
+      return "已打开组织面板。";
+    }
+
+    if (input.panel === "profile") {
+      return "已打开个人中心。";
+    }
+
+    return "已打开文献库面板。";
+  };
   const knowledgeSync = useKnowledgeSyncController({
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
@@ -211,7 +274,7 @@ export function AppShell({
   const readerArtifactRowSize = paneLayout.collapsed.bottom ? "0px" : "minmax(220px, 0.65fr)";
 
   return (
-    <div className="app-frame">
+    <div className={`app-frame${runtimeTheme === "playful" ? " theme-playful" : ""}`}>
       <div
         className="app-shell"
         data-testid="workbench-layout"
@@ -386,10 +449,16 @@ export function AppShell({
           <AssistantSidebar
             importedChunksByPaperId={importedChunksByPaperId}
             importedSelectedCount={importedSelectedCount}
+            onApplyLayoutPreset={applyRuntimeLayoutPreset}
+            onApplyPanelAction={applyRuntimePanelAction}
+            onApplyThemePreset={applyRuntimeThemePreset}
             onGenerateArtifact={artifactWorkflow.actions.handleAssistantArtifact}
+            onImportSelectedSet={registeredWorkspaceActions.handleImportSelectedSet}
             onOpenOrganizationSharedLibrary={organizationShell.actions.openOrganizationSharedLibrary}
             onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
             profileUnlocked={accountSession !== null}
+            runtimeOrganizationName={organizationSummary?.name}
+            runtimeWorkspace={workspaceState.workspaceSource}
             selectedPaperCount={workspaceState.selectedPaperIds.length}
             selectedPapers={selectedPapers}
             selectionLocked={workspaceState.selectionLocked}

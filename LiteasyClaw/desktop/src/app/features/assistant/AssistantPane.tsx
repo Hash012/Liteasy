@@ -17,12 +17,17 @@ import {
   restoreAssistantSession,
   type AssistantSessionHistoryItem
 } from "./assistantSessionHistory";
+import { buildAgentRuntimeContextView } from "../agent-runtime/contextView";
+import { createModelSemanticPlanner } from "../agent-runtime/modelSemanticPlanner";
 import { runAgentRuntime } from "../agent-runtime/runtimeOrchestrator";
 import type { AgentRuntimeEvent } from "../agent-runtime/agentRuntime.types";
-import type { Paper } from "../workspace/workspace.types";
+import type { ModelTransport } from "../models/modelHttpClient";
+import type { ActionContext } from "../skills/actionRegistry";
+import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
 import { generateAssistantAnswer } from "./generateAssistantAnswer";
+import { AssistantContextPanel } from "./AssistantContextPanel";
 import {
   getAssistantErrorMessage,
   getModeHint,
@@ -34,10 +39,17 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantPaneProps = {
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
+  modelTransport?: ModelTransport;
+  onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
+  onApplyPanelAction?: ActionContext["applyPanelAction"];
+  onApplyThemePreset?: ActionContext["applyThemePreset"];
   onGenerateArtifact: (artifactType: ArtifactType) => string;
+  onImportSelectedSet?: ActionContext["importSelectedSet"];
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
+  runtimeOrganizationName?: string;
+  runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPapers?: Paper[];
   selectedSetStatus: SelectedSetStatus;
   settingsStore?: SettingsStoreLike;
@@ -60,6 +72,10 @@ function createMessage(role: AssistantMessage["role"], content: string): Assista
 }
 
 function formatRuntimeEvent(event: AgentRuntimeEvent): string {
+  if (event.type === "plan_preview") {
+    return `计划：${event.plan.summary}`;
+  }
+
   if (event.type === "assistant_reply" || event.type === "runtime_error") {
     return event.message;
   }
@@ -85,10 +101,17 @@ function formatRuntimeEvent(event: AgentRuntimeEvent): string {
 
 export function AssistantPane({
   importedChunksByPaperId = {},
+  modelTransport,
+  onApplyLayoutPreset,
+  onApplyPanelAction,
+  onApplyThemePreset,
   onGenerateArtifact,
+  onImportSelectedSet,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
+  runtimeOrganizationName,
+  runtimeWorkspace,
   selectedPapers = [],
   selectedSetStatus,
   settingsStore
@@ -103,12 +126,39 @@ export function AssistantPane({
   const [input, setInput] = useState("");
   const [voiceInputMessage, setVoiceInputMessage] = useState<string | undefined>();
   const [sessionHistory, setSessionHistory] = useState<AssistantSessionHistoryItem[]>([]);
+  const runtimeContext = buildAgentRuntimeContextView({
+    importedCount: selectedSetStatus.importedCount,
+    organizationName: runtimeOrganizationName,
+    profileEnabled: Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
+    profileUnlocked,
+    selectedCount: selectedSetStatus.selectedCount,
+    selectionLocked: selectedSetStatus.selectionLocked,
+    workspace: runtimeWorkspace
+  });
 
   function syncAssistant() {
     setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
   }
 
   function setMode(mode: AssistantMode) {
+    assistantStoreRef.current.setMode(mode);
+    syncAssistant();
+  }
+
+  function switchModeAsNewSession(mode: AssistantMode) {
+    const currentState = assistantStoreRef.current.getState();
+    if (currentState.mode === mode) {
+      return;
+    }
+
+    if (currentState.messages.length > 0) {
+      archiveCurrentSession();
+      assistantStoreRef.current.clearMessages();
+      setHistoryOpen(false);
+      setInput("");
+      setVoiceInputMessage(undefined);
+    }
+
     assistantStoreRef.current.setMode(mode);
     syncAssistant();
   }
@@ -170,8 +220,17 @@ export function AssistantPane({
             mode: assistantState.mode
           },
           {
+            contextView: runtimeContext,
+            applyLayoutPreset: onApplyLayoutPreset,
+            applyPanelAction: onApplyPanelAction,
+            applyThemePreset: onApplyThemePreset,
+            importSelectedSet: onImportSelectedSet,
             openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
             profileUnlocked,
+            semanticPlanner: createModelSemanticPlanner({
+              modelTransport,
+              settings: settingsStoreRef.current.getState()
+            }),
             settingsStore: settingsStoreRef.current,
             startArtifactAnalysis: onGenerateArtifact
           }
@@ -198,6 +257,7 @@ export function AssistantPane({
 
     const readyMessage = getSelectedSetReadyMessage(selectedSetStatus);
     if (readyMessage) {
+      assistantStoreRef.current.addMessage(createMessage("assistant", readyMessage));
       syncAssistant();
       inputRef.current?.focus();
       setInput("");
@@ -210,6 +270,7 @@ export function AssistantPane({
     try {
       const answer = await generateAssistantAnswer({
         importedChunksByPaperId,
+        modelTransport,
         mode: assistantState.mode,
         question: normalizedInput,
         selectedPapers,
@@ -241,8 +302,7 @@ export function AssistantPane({
   return (
     <div className={conversationStarted ? "assistant-pane in-conversation" : "assistant-pane initial-session"}>
       <div className="assistant-session-toolbar">
-        {conversationStarted ? <ModeSwitch mode={assistantState.mode} onChange={setMode} /> : null}
-        <div className="assistant-session-actions">
+        <div aria-label="会话操作" className="assistant-session-actions">
           <button
             className="assistant-session-button"
             onClick={startNewSession}
@@ -260,6 +320,11 @@ export function AssistantPane({
             {historyOpen ? "隐藏" : "历史"}
           </button>
         </div>
+        {conversationStarted ? (
+          <div className="assistant-mode-controls">
+            <ModeSwitch mode={assistantState.mode} onChange={switchModeAsNewSession} />
+          </div>
+        ) : null}
       </div>
       <div className="assistant-mode-label">当前模式：{getModeLabel(assistantState.mode)}</div>
 
@@ -267,10 +332,12 @@ export function AssistantPane({
         <AssistantHistoryPanel history={sessionHistory} onRestoreSession={restoreArchivedSession} />
       ) : null}
 
+      <AssistantContextPanel context={runtimeContext} />
+
       <AssistantMessageList
         messages={assistantState.messages}
         mode={assistantState.mode}
-        onModeChange={setMode}
+        onModeChange={switchModeAsNewSession}
       />
 
       <AssistantComposer

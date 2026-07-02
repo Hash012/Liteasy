@@ -27,6 +27,10 @@ function getArtifactTitle(type: ArtifactType) {
     return "Literature PPT Outline";
   }
 
+  if (type === "comparison_table") {
+    return "Literature Comparison Table";
+  }
+
   return "Literature Mind Map";
 }
 

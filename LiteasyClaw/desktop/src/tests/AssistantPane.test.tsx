@@ -92,7 +92,7 @@ test("requires imported selected document set before qa mode can answer", async 
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("这篇论文讲了什么？")).toBeInTheDocument();
-  expect(screen.queryByText(/请先将当前选中文献集导入 AI 流程/)).not.toBeInTheDocument();
+  expect(screen.getByText("请先将当前选中文献集导入 AI 流程，再进行问答或解释。")).toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
     "请先将当前选中文献集导入 AI 流程，再进行问答或解释。"
@@ -149,7 +149,7 @@ test("archives the current assistant session when starting a new one", async () 
 
   expect(screen.getByText("历史会话")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
-  expect(screen.getByText("3 条消息 · 命令")).toBeInTheDocument();
+  expect(screen.getByText("4 条消息 · 命令")).toBeInTheDocument();
 });
 
 test("restores an archived assistant session from history", async () => {
@@ -177,6 +177,64 @@ test("restores an archived assistant session from history", async () => {
   expect(screen.getByText("当前模式：命令")).toBeInTheDocument();
   expect(screen.getByText("关闭联网推荐")).toBeInTheDocument();
   expect(screen.getByText(/已更新 联网推荐：false/)).toBeInTheDocument();
+});
+
+test("starts a separate session when switching modes during a conversation", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <AssistantPane
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await user.click(within(screen.getByLabelText("对话模式切换")).getByRole("button", { name: "问答" }));
+
+  expect(screen.queryByText("关闭联网推荐")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
+  expect(within(screen.getByLabelText("AI助手初始模式入口")).getByRole("button", { name: "问答模式" })).toHaveClass(
+    "active"
+  );
+
+  await user.click(screen.getByRole("button", { name: "历史" }));
+
+  expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
+  expect(screen.getByText("4 条消息 · 命令")).toBeInTheDocument();
+});
+
+test("separates session actions from in-conversation mode switching controls", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <AssistantPane
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  const sessionActions = screen.getByLabelText("会话操作");
+  const modeControls = screen.getByLabelText("对话模式切换");
+
+  expect(within(sessionActions).getByRole("button", { name: "新建" })).toBeInTheDocument();
+  expect(within(sessionActions).getByRole("button", { name: "历史" })).toBeInTheDocument();
+  expect(within(sessionActions).queryByRole("button", { name: "命令" })).not.toBeInTheDocument();
+  expect(within(modeControls).getByRole("button", { name: "命令" })).toBeInTheDocument();
+  expect(within(modeControls).queryByRole("button", { name: "新建" })).not.toBeInTheDocument();
 });
 
 test("executes natural language command aliases through safe actions", async () => {
@@ -378,4 +436,192 @@ test("routes command mode through runtime confirmation before profile sampling c
   expect(screen.getByText("开启用户画像")).toBeInTheDocument();
   expect(screen.getByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")).toBeInTheDocument();
   expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+});
+
+test("renders the expandable runtime context panel inside the assistant", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <AssistantPane
+      onGenerateArtifact={() => "unused"}
+      profileUnlocked={true}
+      runtimeOrganizationName="Liteasy AI Reading Lab"
+      runtimeWorkspace={{
+        rootPath: "/tmp/LiteasyLibrary",
+        type: "local_library"
+      }}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 2,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  expect(
+    screen.getByText("上下文 · 选中 2 篇 · 已锁定 · 已导入 1/2 · 云账号已连接 · 画像关闭")
+  ).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: /运行时上下文/ }));
+
+  expect(screen.getByText("Selection")).toBeInTheDocument();
+  expect(screen.getByText("需导入")).toBeInTheDocument();
+  expect(screen.getByText("本地文献库 · /tmp/LiteasyLibrary")).toBeInTheDocument();
+  expect(screen.getByText("已连接 · Liteasy AI Reading Lab")).toBeInTheDocument();
+});
+
+test("uses runtime context readiness before starting a mind map from the assistant", async () => {
+  const user = userEvent.setup();
+  const onGenerateArtifact = vi.fn(() => "已开始思维导图分析。");
+
+  render(
+    <AssistantPane
+      onGenerateArtifact={onGenerateArtifact}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 2,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成思维导图");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("请先导入当前选中文献集，再生成思维导图。")).toBeInTheDocument();
+  expect(onGenerateArtifact).not.toHaveBeenCalled();
+});
+
+test("shows semantic command plan previews in command mode", async () => {
+  const user = userEvent.setup();
+  const onApplyLayoutPreset = vi.fn(() => "已切换为双栏布局。");
+
+  render(
+    <AssistantPane
+      onApplyLayoutPreset={onApplyLayoutPreset}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 0,
+        selectedCount: 0,
+        selectionLocked: false
+      }}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "把窗口切分成两个");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("计划：切换为双栏布局")).toBeInTheDocument();
+  expect(screen.getByText("已切换为双栏布局。")).toBeInTheDocument();
+  expect(onApplyLayoutPreset).toHaveBeenCalledWith({
+    preset: "two_column"
+  });
+});
+
+test("uses the model semantic planner for command mode when it returns valid JSON", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const onApplyThemePreset = vi.fn(() => "已应用卡通风格。");
+
+  render(
+    <AssistantPane
+      modelTransport={async () => ({
+        json: async () => ({
+          answer: JSON.stringify({
+            actions: [
+              {
+                actionId: "theme.apply_preset",
+                input: {
+                  preset: "playful",
+                  tone: "cartoon"
+                }
+              }
+            ],
+            confidence: "high",
+            intentId: "theme.apply",
+            planId: "model-plan-theme",
+            requiredContext: [],
+            requiresConfirmation: false,
+            riskLevel: "low",
+            summary: "应用卡通风格"
+          }),
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      })}
+      onApplyThemePreset={onApplyThemePreset}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 0,
+        selectedCount: 0,
+        selectionLocked: false
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让界面像儿童科普书");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("计划：应用卡通风格")).toBeInTheDocument();
+  expect(screen.getByText("已应用卡通风格。")).toBeInTheDocument();
+  expect(onApplyThemePreset).toHaveBeenCalledWith({
+    preset: "playful",
+    tone: "cartoon"
+  });
+});
+
+test("falls back to the local semantic planner when model command planning fails", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const onApplyLayoutPreset = vi.fn(() => "已切换为双栏布局。");
+
+  render(
+    <AssistantPane
+      modelTransport={async () => ({
+        json: async () => ({
+          answer: "bad-json",
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      })}
+      onApplyLayoutPreset={onApplyLayoutPreset}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 0,
+        selectedCount: 0,
+        selectionLocked: false
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "把窗口切分成两个");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("计划：切换为双栏布局")).toBeInTheDocument();
+  expect(screen.getByText("已切换为双栏布局。")).toBeInTheDocument();
+  expect(onApplyLayoutPreset).toHaveBeenCalledWith({
+    preset: "two_column"
+  });
 });

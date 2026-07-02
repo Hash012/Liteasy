@@ -161,6 +161,7 @@ export function buildAdminConsoleHtml(request, config, builders) {
           <label>默认 Provider
             <select name="defaultProvider">
               <option value="openai"${dashboard.apiPolicy.defaultProvider === "openai" ? " selected" : ""}>openai</option>
+              <option value="deepseek"${dashboard.apiPolicy.defaultProvider === "deepseek" ? " selected" : ""}>deepseek</option>
               <option value="mock"${dashboard.apiPolicy.defaultProvider === "mock" ? " selected" : ""}>mock</option>
             </select>
           </label>

@@ -1,5 +1,7 @@
 export const defaultConfig = {
-  defaultProvider: "openai",
+  deepseekApiBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY,
+  defaultProvider: process.env.LITEASY_MODEL_PROVIDER ?? "openai",
   localDirectEnabled: false,
   localDirectEndpoint: "http://127.0.0.1:8788",
   modelAccessMode: "cloud_proxy",

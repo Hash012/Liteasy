@@ -1,3 +1,4 @@
+import { createDeepSeekChatCompletionsProvider } from "../providers/deepseekChatCompletions.mjs";
 import { createOpenAIResponsesProvider } from "../providers/openaiResponses.mjs";
 import { generateMockAnswer } from "../providers/mockProvider.mjs";
 
@@ -25,8 +26,16 @@ export function buildProviderRegistry(config) {
           apiKey: config.openaiApiKey
         })
       : null;
+  const deepseekProvider =
+    config.deepseekApiKey && config.deepseekApiKey.length > 0
+      ? createDeepSeekChatCompletionsProvider({
+          apiBaseUrl: config.deepseekApiBaseUrl,
+          apiKey: config.deepseekApiKey
+        })
+      : null;
 
   return {
+    deepseek: deepseekProvider,
     mock: generateMockAnswer,
     openai: openaiProvider
   };

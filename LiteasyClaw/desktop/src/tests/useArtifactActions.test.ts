@@ -138,6 +138,27 @@ describe("useArtifactActions", () => {
     ]);
   });
 
+  test("starts comparison-table analysis as a first-class artifact type", async () => {
+    const { onArtifactTabsChanged, onArtifactTasksChanged, result } = renderArtifactActions({
+      imported: true
+    });
+
+    act(() => {
+      result.current.startAnalysis("comparison_table");
+    });
+
+    expect(onArtifactTasksChanged).toHaveBeenLastCalledWith([
+      { id: "artifact-task-1", status: "queued", type: "comparison_table" }
+    ]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
+    expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
+      expect.objectContaining({ title: "Literature Comparison Table", type: "comparison_table" })
+    ]);
+  });
+
   test("does not start duplicate analysis while selected papers are still importing", () => {
     const artifactStore = createArtifactStore();
     const onAnalysisHint = vi.fn();

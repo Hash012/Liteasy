@@ -13,7 +13,8 @@ type ArtifactTabsProps = {
 const artifactModes: Array<{ type: ArtifactType; label: string }> = [
   { type: "tree", label: "树形展开" },
   { type: "mindmap", label: "思维导图" },
-  { type: "ppt", label: "PPT" }
+  { type: "ppt", label: "PPT" },
+  { type: "comparison_table", label: "对比表" }
 ];
 
 function getFallbackPreview(type: ArtifactType) {
@@ -28,6 +29,13 @@ function getFallbackPreview(type: ArtifactType) {
     return {
       nodes: ["方法动机", "模型组成", "实验结论"],
       rootLabel: "总体结构"
+    };
+  }
+
+  if (type === "comparison_table") {
+    return {
+      nodes: ["研究对象", "方法差异", "实验指标"],
+      rootLabel: "论文对比表"
     };
   }
 

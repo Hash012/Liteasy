@@ -1,5 +1,6 @@
 import { formatAnswer } from "./answerFormatter";
 import type { AssistantMode } from "./assistant.types";
+import { getDefaultModelForProvider } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
 import type { ModelTransport } from "../models/modelHttpClient";
@@ -45,10 +46,11 @@ export async function generateAssistantAnswer({
     `参考文献：${selectedPapers.map((paper) => paper.title).join("；")}`,
     `参考片段：${groundedAnswer.citations.map((citation) => citation.snippet).join("；")}`
   ].join("\n");
+  const provider = settings["models.default_provider"];
   const generation = await gateway.generateAnswer({
-    model: "gpt-5-mini",
+    model: getDefaultModelForProvider(provider),
     prompt,
-    provider: settings["models.default_provider"]
+    provider
   });
   const generatedAnswerText = generation.answer;
   const localAudit = auditAssistantAnswer({

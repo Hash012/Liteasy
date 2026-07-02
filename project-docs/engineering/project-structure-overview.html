@@ -514,11 +514,15 @@
         files: [
           "LiteasyClaw/desktop/src/app/layout/AppShell.tsx",
           "LiteasyClaw/desktop/src/app/layout/ActivityBar.tsx",
-          "LiteasyClaw/desktop/src/app/layout/TopBar.tsx",
           "LiteasyClaw/desktop/src/app/layout/LeftPane.tsx",
           "LiteasyClaw/desktop/src/app/layout/ReaderPane.tsx",
           "LiteasyClaw/desktop/src/app/layout/AssistantSidebar.tsx",
           "LiteasyClaw/desktop/src/app/layout/AppDialogs.tsx",
+          "LiteasyClaw/desktop/src/app/layout/SettingsPane.tsx",
+          "LiteasyClaw/desktop/src/app/layout/PaneResizer.tsx",
+          "LiteasyClaw/desktop/src/app/layout/paneLayout.storage.ts",
+          "LiteasyClaw/desktop/src/app/layout/paneLayout.types.ts",
+          "LiteasyClaw/desktop/src/app/layout/starterPapers.ts",
           "LiteasyClaw/desktop/src/app/layout/useAppShellStores.ts",
           "LiteasyClaw/desktop/src/app/layout/usePaneLayout.ts",
           "LiteasyClaw/desktop/src/app/layout/useLeftRailNavigation.ts"
@@ -704,7 +708,7 @@
         ]
       },
       {
-        name: "ingestion/import",
+        name: "pdf / ingestion/import",
         layer: "feature",
         status: "演示导入链路可用",
         badge: "foundation",
@@ -721,6 +725,7 @@
           "建立导入失败重试、进度事件、内容 hash 去重。"
         ],
         files: [
+          "LiteasyClaw/desktop/src/app/features/pdf/PdfReader.tsx",
           "LiteasyClaw/desktop/src/app/features/import/ImportButton.tsx",
           "LiteasyClaw/desktop/src/app/features/import/import.store.ts",
           "LiteasyClaw/desktop/src/app/features/import/import.types.ts",
@@ -746,6 +751,7 @@
         ],
         files: [
           "LiteasyClaw/desktop/src/app/features/retrieval/retrieval.types.ts",
+          "LiteasyClaw/desktop/src/app/features/retrieval/demoKnowledgeBase.ts",
           "LiteasyClaw/desktop/src/app/features/retrieval/localRetriever.ts",
           "LiteasyClaw/desktop/src/app/features/retrieval/mockRetriever.ts"
         ]
@@ -901,6 +907,7 @@
           "LiteasyClaw/desktop/src/app/features/models/modelRuntime.ts",
           "LiteasyClaw/desktop/src/app/features/models/modelExecution.ts",
           "LiteasyClaw/desktop/src/app/features/models/modelPolicy.ts",
+          "LiteasyClaw/desktop/src/app/features/models/localDevCloudEndpoint.ts",
           "LiteasyClaw/desktop/src/app/features/models/useModelSettingsActions.ts",
           "LiteasyClaw/desktop/src/app/features/models/usePolicySync.ts",
           "LiteasyClaw/desktop/src/app/features/settings/settings.store.ts",
@@ -969,6 +976,32 @@
         ]
       },
       {
+        name: "desktop native shell",
+        layer: "support",
+        status: "Tauri 原生命令闭包可用",
+        badge: "shell",
+        implemented: [
+          "Tauri/Rust 桌面壳、导入命令、本地文献库命令。",
+          "tauri.conf.json 连接前端 devUrl/dist 与桌面窗口。"
+        ],
+        target: [
+          "承接真实文件系统、原生窗口、系统权限和桌面集成。",
+          "保持 Rust 命令窄接口，避免把业务逻辑搬进原生壳。"
+        ],
+        direction: [
+          "新增原生命令前先定义前端 client contract。",
+          "把文件访问、权限失败、平台差异做成可测试错误模型。"
+        ],
+        files: [
+          "LiteasyClaw/desktop/src-tauri/src/main.rs",
+          "LiteasyClaw/desktop/src-tauri/src/import.rs",
+          "LiteasyClaw/desktop/src-tauri/src/local_library.rs",
+          "LiteasyClaw/desktop/src-tauri/Cargo.toml",
+          "LiteasyClaw/desktop/src-tauri/tauri.conf.json",
+          "LiteasyClaw/desktop/src-tauri/build.rs"
+        ]
+      },
+      {
         name: "services/dev-cloud",
         layer: "service",
         status: "本地云端演示服务可用",
@@ -1024,6 +1057,9 @@
           "LiteasyClaw/desktop/src/tests/useKnowledgeSyncController.test.ts",
           "LiteasyClaw/desktop/src/tests/useOrganizationShellController.test.ts",
           "LiteasyClaw/desktop/src/tests/cloudAvailabilityBoundary.test.ts",
+          "LiteasyClaw/desktop/src/tests/localDevCloudEndpoint.test.ts",
+          "LiteasyClaw/desktop/src/tests/layoutStyleContract.test.ts",
+          "LiteasyClaw/desktop/src/tests/devScript.test.ts",
           "LiteasyClaw/services/dev-cloud/server.test.mjs",
           "LiteasyClaw/services/dev-cloud/providers/openaiResponses.test.mjs"
         ]

@@ -9,6 +9,12 @@ LiteasyClaw/desktop/.vite-temp/
 LiteasyClaw/desktop/src-tauri/target/
 archive/generated/
 
+# Local secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

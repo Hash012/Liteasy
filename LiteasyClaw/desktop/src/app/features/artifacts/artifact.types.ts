@@ -1,5 +1,5 @@
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed";
-export type ArtifactType = "mindmap" | "tree" | "ppt";
+export type ArtifactType = "comparison_table" | "mindmap" | "tree" | "ppt";
 
 export type ArtifactTask = {
   id: string;

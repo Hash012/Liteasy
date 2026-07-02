@@ -144,3 +144,66 @@ test("uses the cloud audit endpoint after http model generation", async () => {
     source: "cloud_proxy"
   });
 });
+
+test("uses the DeepSeek default model for assistant generation when provider is deepseek", async () => {
+  const store = createSettingsStore();
+  const requests: Array<{ body: string; url: string }> = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  store.apply({
+    intent: "update_setting",
+    target: "models.default_provider",
+    value: "deepseek"
+  });
+
+  await generateAssistantAnswer({
+    auditTransport: async () => ({
+      json: async () => ({
+        audit: {
+          model: "gpt-5-mini-auditor",
+          rationale: "云端审计确认回答有引用支撑。",
+          score: 0.91,
+          verdict: "pass"
+        }
+      }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {},
+    mode: "qa",
+    modelTransport: async (request) => {
+      requests.push({ body: request.body, url: request.url });
+
+      return {
+        json: async () => ({
+          answer: "DeepSeek 模型回答",
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "deepseek"
+          }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "总结这篇论文的核心方法",
+    selectedPapers: [
+      {
+        id: "demo-1",
+        title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+      }
+    ],
+    settings: store.getState()
+  });
+
+  expect(requests[0].url).toBe("https://liteasy.example.com/model-proxy/v1/model/generate");
+  expect(JSON.parse(requests[0].body)).toMatchObject({
+    model: "deepseek-v4-flash",
+    provider: "deepseek",
+    source: "cloud_proxy"
+  });
+});

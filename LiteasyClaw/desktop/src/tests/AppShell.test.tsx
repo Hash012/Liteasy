@@ -153,6 +153,62 @@ test("opens the unified lightweight login dialog from the organization capabilit
   expect(screen.getByRole("dialog", { name: "轻量登录面板" })).toBeInTheDocument();
 });
 
+test("applies a semantic command theme action to the workbench", async () => {
+  const user = userEvent.setup();
+  const { container } = render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让 UI 变成卡通风格");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(container.querySelector(".app-frame")).toHaveClass("theme-playful");
+  expect(screen.getByText("已应用卡通风格。")).toBeInTheDocument();
+});
+
+test("executes a semantic command layout action against pane state", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  expect(screen.getByLabelText("我的文献库投放区")).toBeInTheDocument();
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "把窗口切分成两个");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.queryByLabelText("我的文献库投放区")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("右栏AI助手")).toBeInTheDocument();
+  expect(screen.getByText("已切换为双栏布局。")).toBeInTheDocument();
+});
+
+test("executes a semantic command panel navigation action", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  expect(screen.getByLabelText("我的文献库投放区")).toBeInTheDocument();
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "打开设置面板");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByLabelText("左边栏设置")).toBeInTheDocument();
+  expect(screen.getByText("已打开设置面板。")).toBeInTheDocument();
+});
+
+test("executes a semantic selected-set import action through the workspace handler", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "导入当前选中文献集");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.getByText("计划：导入当前选中文献集")).toBeInTheDocument();
+  expect(screen.getAllByText("请先在工作区勾选文件，形成选中文献集。").length).toBeGreaterThanOrEqual(1);
+});
+
 test("registered personal accounts unlock organization creation", async () => {
   const user = userEvent.setup();
   const requestedUrls: string[] = [];
@@ -2135,6 +2191,58 @@ test("loads organization space from local dev cloud defaults after connecting", 
   expect(requestedUrls).toContain("http://127.0.0.1:8787/v1/account/demo-login");
   expect(requestedUrls).toContain("http://127.0.0.1:8787/v1/org/summary");
   expect(requestedUrls.some((url) => url.startsWith("mock://"))).toBe(false);
+}, 10000);
+
+test("aligns model endpoints to the injected dev cloud port before policy sync", async () => {
+  const requestedUrls: string[] = [];
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      requestedUrls.push(String(input));
+
+      if (String(input).includes("/v1/admin/model-policy")) {
+        return {
+          json: async () => ({
+            cloudProxyEndpoint: "http://127.0.0.1:8790",
+            defaultProvider: "deepseek",
+            localDirectEnabled: false,
+            localDirectEndpoint: "mock://local-direct",
+            modelAccessMode: "cloud_proxy",
+            policyVersion: "dev-policy-v1",
+            syncedAt: "2026-05-14T09:30:00Z"
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      return {
+        json: async () => ({}),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(
+    <AppShell
+      initialSettings={{
+        "models.cloud_proxy_endpoint": "http://127.0.0.1:8787",
+        "models.control_plane_endpoint": "http://127.0.0.1:8787",
+        "models.default_provider": "openai"
+      }}
+      localDevCloudEnv={{
+        VITE_LITEASY_DEV_CLOUD_PORT: "8790"
+      }}
+    />
+  );
+
+  await waitFor(() => {
+    expect(requestedUrls).toContain("http://127.0.0.1:8790/v1/admin/model-policy");
+  });
+
+  expect(requestedUrls).not.toContain("http://127.0.0.1:8787/v1/admin/model-policy");
 }, 10000);
 
 test("shows organization space summary after cloud account login", async () => {

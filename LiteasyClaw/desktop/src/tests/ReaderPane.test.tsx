@@ -92,6 +92,10 @@ describe("ReaderPane", () => {
       "title",
       "可以启动中栏分析。"
     );
+    expect(screen.getByRole("button", { name: "对比表" })).toHaveAttribute(
+      "title",
+      "可以启动中栏分析。"
+    );
 
     await user.click(screen.getByRole("button", { name: "思维导图" }));
 
