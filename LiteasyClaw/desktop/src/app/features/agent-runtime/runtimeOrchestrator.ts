@@ -1,25 +1,6 @@
 import { routeAgentIntent } from "./intentRouter";
 import { executeRuntimeSkill } from "./skillExecutor";
-import type {
-  AgentRuntimeEvent,
-  AgentRuntimeExecutionContext,
-  AgentRuntimeInput,
-  RuntimeExecutionResult
-} from "./agentRuntime.types";
-
-function createArtifactContextEvents(context: AgentRuntimeExecutionContext): AgentRuntimeEvent[] | null {
-  if (!context.startArtifactAnalysis) {
-    return [
-      {
-        missing: ["selected_document_set"],
-        question: "请先勾选并锁定要分析的文献，再生成思维导图。",
-        type: "clarification_request"
-      }
-    ];
-  }
-
-  return null;
-}
+import type { AgentRuntimeExecutionContext, AgentRuntimeInput, RuntimeExecutionResult } from "./agentRuntime.types";
 
 export async function runAgentRuntime(
   input: AgentRuntimeInput,
@@ -40,10 +21,16 @@ export async function runAgentRuntime(
   }
 
   if (plan.kind === "artifact") {
-    const contextEvents = createArtifactContextEvents(context);
-    if (contextEvents) {
+    const startArtifactAnalysis = context.startArtifactAnalysis;
+    if (!startArtifactAnalysis) {
       return {
-        events: contextEvents,
+        events: [
+          {
+            missing: ["selected_document_set"],
+            question: "请先勾选并锁定要分析的文献，再生成思维导图。",
+            type: "clarification_request"
+          }
+        ],
         settingsChanged: false
       };
     }
@@ -58,7 +45,7 @@ export async function runAgentRuntime(
           type: "artifact_request"
         },
         {
-          message: context.startArtifactAnalysis(plan.artifact.artifactType),
+          message: startArtifactAnalysis(plan.artifact.artifactType),
           type: "assistant_reply"
         }
       ],

@@ -4997,7 +4997,7 @@ test("opens the organization entry dialog and shows selected organization detail
 }, 10000);
 
 
-test("keeps assistant profile commands in sync with the personal center", async () => {
+test("keeps assistant profile commands behind runtime confirmation before personal center changes", async () => {
   const user = userEvent.setup();
 
   render(
@@ -5023,13 +5023,9 @@ test("keeps assistant profile commands in sync with the personal center", async 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
+  expect(screen.getByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")).toBeInTheDocument();
+
   const leftPane = await openProfilePanel(user);
-
-  expect(within(leftPane).getByText("用户画像：已开启")).toBeInTheDocument();
-  expect(within(leftPane).getByRole("button", { name: "关闭用户画像" })).toBeInTheDocument();
-
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭用户画像");
-  await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(within(leftPane).getByText("用户画像：已关闭")).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
