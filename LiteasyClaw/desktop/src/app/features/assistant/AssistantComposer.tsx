@@ -1,9 +1,11 @@
 import type { RefObject } from "react";
 
 type AssistantComposerProps = {
+  editing?: boolean;
   input: string;
   inputRef?: RefObject<HTMLTextAreaElement>;
   modeHint: string;
+  onCancelEdit?: () => void;
   onInputChange: (value: string) => void;
   onSend: () => void;
   onVoiceInput: () => void;
@@ -12,9 +14,11 @@ type AssistantComposerProps = {
 };
 
 export function AssistantComposer({
+  editing = false,
   input,
   inputRef,
   modeHint,
+  onCancelEdit,
   onInputChange,
   onSend,
   onVoiceInput,
@@ -24,6 +28,14 @@ export function AssistantComposer({
   return (
     <div className="assistant-input-wrap">
       {pending ? <div className="assistant-command-feedback">AI 正在整理回答...</div> : null}
+      {editing ? (
+        <div className="assistant-editing-banner">
+          <span>正在重新编辑上一条输入</span>
+          <button className="assistant-editing-cancel" onClick={onCancelEdit} type="button">
+            取消编辑
+          </button>
+        </div>
+      ) : null}
       {voiceInputMessage ? (
         <div className="assistant-voice-placeholder">{voiceInputMessage}</div>
       ) : null}
@@ -31,6 +43,16 @@ export function AssistantComposer({
         className="assistant-input"
         ref={inputRef}
         onChange={(event) => onInputChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+            return;
+          }
+
+          event.preventDefault();
+          if (!pending) {
+            onSend();
+          }
+        }}
         placeholder="输入你的问题或命令"
         rows={4}
         title={modeHint}
@@ -45,8 +67,8 @@ export function AssistantComposer({
         >
           语音
         </button>
-        <button className="assistant-send" type="button" onClick={onSend}>
-          发送
+        <button className="assistant-send" type="button" onClick={onSend} disabled={pending}>
+          {editing ? "更新并发送" : "发送"}
         </button>
       </div>
     </div>

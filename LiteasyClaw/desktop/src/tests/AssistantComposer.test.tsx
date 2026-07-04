@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
@@ -49,5 +50,35 @@ describe("AssistantComposer", () => {
     await user.click(screen.getByRole("button", { name: "语音输入（预留）" }));
 
     expect(onVoiceInput).toHaveBeenCalledTimes(1);
+  });
+
+  test("sends with Enter while keeping Shift Enter as a newline", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+
+    function ControlledComposer() {
+      const [input, setInput] = useState("");
+
+      return (
+        <AssistantComposer
+          input={input}
+          modeHint="问答提示"
+          onInputChange={setInput}
+          onSend={onSend}
+          onVoiceInput={vi.fn()}
+        />
+      );
+    }
+
+    render(<ControlledComposer />);
+
+    const textarea = screen.getByPlaceholderText("输入你的问题或命令");
+    await user.type(textarea, "第一行{Shift>}{Enter}{/Shift}第二行");
+
+    expect(textarea).toHaveValue("第一行\n第二行");
+
+    await user.keyboard("{Enter}");
+
+    expect(onSend).toHaveBeenCalledTimes(1);
   });
 });

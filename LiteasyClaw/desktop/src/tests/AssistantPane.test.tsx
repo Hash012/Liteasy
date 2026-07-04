@@ -348,6 +348,165 @@ test("routes qa generation through the cloud-governed model gateway by default",
   expect(screen.getByText("模型链路：云端模型能力 -> 桌面内置 Mock")).toBeInTheDocument();
 });
 
+test("lets users edit a previous prompt and replaces the following answer", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <AssistantPane
+      onGenerateArtifact={() => "unused"}
+      selectedPapers={[
+        {
+          id: "demo-1",
+          title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        }
+      ]}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  await selectInitialAssistantMode(user, "问答");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await user.click(screen.getByRole("button", { name: "重新编辑：总结这篇论文的核心方法" }));
+
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("总结这篇论文的核心方法");
+
+  await user.clear(screen.getByPlaceholderText("输入你的问题或命令"));
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文的实验结论是什么？");
+  await user.click(screen.getByRole("button", { name: "更新并发送" }));
+
+  expect(screen.queryByText("总结这篇论文的核心方法")).not.toBeInTheDocument();
+  expect(screen.queryByText(/云端回答：总结这篇论文的核心方法/)).not.toBeInTheDocument();
+  expect(screen.getByText("这篇论文的实验结论是什么？")).toBeInTheDocument();
+  expect(screen.getByText(/云端回答：这篇论文的实验结论是什么？/)).toBeInTheDocument();
+});
+
+test("regenerates the latest model answer from the previous user prompt", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+  const answers = ["第一次模型回答", "第二次模型回答"];
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  render(
+    <AssistantPane
+      modelTransport={async () => ({
+        json: async () => ({
+          answer: answers.shift() ?? "备用模型回答",
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      })}
+      onGenerateArtifact={() => "unused"}
+      selectedPapers={[
+        {
+          id: "demo-1",
+          title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        }
+      ]}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await selectInitialAssistantMode(user, "问答");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(await screen.findByText(/第一次模型回答/)).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "重新生成回复" }));
+
+  await waitFor(() => {
+    expect(screen.queryByText(/第一次模型回答/)).not.toBeInTheDocument();
+  });
+  expect(await screen.findByText(/第二次模型回答/)).toBeInTheDocument();
+});
+
+test("does not submit duplicate prompts while a model answer is pending", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+  let resolveAnswer: ((value: {
+    answer: string;
+    execution: {
+      backend: "dev_cloud";
+      mode: "live";
+      provider: "openai";
+    };
+  }) => void) | undefined;
+  const modelTransport = vi.fn(
+    async () =>
+      ({
+        json: async () =>
+          new Promise((resolve) => {
+            resolveAnswer = resolve;
+          }),
+        ok: true,
+        status: 200
+      }) as const
+  );
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  render(
+    <AssistantPane
+      modelTransport={modelTransport}
+      onGenerateArtifact={() => "unused"}
+      selectedPapers={[
+        {
+          id: "demo-1",
+          title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        }
+      ]}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await selectInitialAssistantMode(user, "问答");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(modelTransport).toHaveBeenCalledTimes(1);
+  expect(screen.getAllByText("你的输入")).toHaveLength(1);
+
+  resolveAnswer?.({
+    answer: "模型回答",
+    execution: {
+      backend: "dev_cloud",
+      mode: "live",
+      provider: "openai"
+    }
+  });
+
+  expect(await screen.findByText(/模型回答/)).toBeInTheDocument();
+});
+
 test("shows a readable assistant error when the model backend is unavailable", async () => {
   vi.stubGlobal(
     "fetch",

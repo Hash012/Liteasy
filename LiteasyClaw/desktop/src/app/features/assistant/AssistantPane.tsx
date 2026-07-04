@@ -124,6 +124,7 @@ export function AssistantPane({
   );
   const [historyOpen, setHistoryOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [voiceInputMessage, setVoiceInputMessage] = useState<string | undefined>();
   const [sessionHistory, setSessionHistory] = useState<AssistantSessionHistoryItem[]>([]);
   const runtimeContext = buildAgentRuntimeContextView({
@@ -156,6 +157,7 @@ export function AssistantPane({
       assistantStoreRef.current.clearMessages();
       setHistoryOpen(false);
       setInput("");
+      setEditingMessageId(null);
       setVoiceInputMessage(undefined);
     }
 
@@ -178,6 +180,7 @@ export function AssistantPane({
     assistantStoreRef.current.clearMessages();
     setHistoryOpen(false);
     setInput("");
+    setEditingMessageId(null);
     syncAssistant();
   }
 
@@ -193,6 +196,7 @@ export function AssistantPane({
 
     setHistoryOpen(false);
     setInput("");
+    setEditingMessageId(null);
     syncAssistant();
   }
 
@@ -201,66 +205,58 @@ export function AssistantPane({
     inputRef.current?.focus();
   }
 
-  async function handleSend() {
-    const normalizedInput = input.trim();
-    if (normalizedInput.length === 0) {
-      return;
-    }
+  async function runCommandMessage(message: string) {
+    assistantStoreRef.current.setPending(true);
+    syncAssistant();
 
-    assistantStoreRef.current.addMessage(createMessage("user", normalizedInput));
-
-    if (assistantState.mode === "command") {
-      assistantStoreRef.current.setPending(true);
-      syncAssistant();
-
-      try {
-        const result = await runAgentRuntime(
-          {
-            message: normalizedInput,
-            mode: assistantState.mode
-          },
-          {
-            contextView: runtimeContext,
-            applyLayoutPreset: onApplyLayoutPreset,
-            applyPanelAction: onApplyPanelAction,
-            applyThemePreset: onApplyThemePreset,
-            importSelectedSet: onImportSelectedSet,
-            openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
-            profileUnlocked,
-            semanticPlanner: createModelSemanticPlanner({
-              modelTransport,
-              settings: settingsStoreRef.current.getState()
-            }),
-            settingsStore: settingsStoreRef.current,
-            startArtifactAnalysis: onGenerateArtifact
-          }
-        );
-
-        result.events.forEach((event) => {
-          assistantStoreRef.current.addMessage(createMessage("assistant", formatRuntimeEvent(event)));
-        });
-
-        if (result.settingsChanged) {
-          onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
+    try {
+      const result = await runAgentRuntime(
+        {
+          message,
+          mode: "command"
+        },
+        {
+          contextView: runtimeContext,
+          applyLayoutPreset: onApplyLayoutPreset,
+          applyPanelAction: onApplyPanelAction,
+          applyThemePreset: onApplyThemePreset,
+          importSelectedSet: onImportSelectedSet,
+          openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
+          profileUnlocked,
+          semanticPlanner: createModelSemanticPlanner({
+            modelTransport,
+            settings: settingsStoreRef.current.getState()
+          }),
+          settingsStore: settingsStoreRef.current,
+          startArtifactAnalysis: onGenerateArtifact
         }
-        setInput("");
-      } catch (error) {
-        assistantStoreRef.current.addMessage(
-          createMessage("assistant", getAssistantErrorMessage(error))
-        );
-      } finally {
-        assistantStoreRef.current.setPending(false);
-        syncAssistant();
-      }
-      return;
-    }
+      );
 
+      result.events.forEach((event) => {
+        assistantStoreRef.current.addMessage(createMessage("assistant", formatRuntimeEvent(event)));
+      });
+
+      if (result.settingsChanged) {
+        onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
+      }
+      setInput("");
+      setEditingMessageId(null);
+    } catch (error) {
+      assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error)));
+    } finally {
+      assistantStoreRef.current.setPending(false);
+      syncAssistant();
+    }
+  }
+
+  async function runKnowledgeMessage(question: string, mode: Exclude<AssistantMode, "command">) {
     const readyMessage = getSelectedSetReadyMessage(selectedSetStatus);
     if (readyMessage) {
       assistantStoreRef.current.addMessage(createMessage("assistant", readyMessage));
       syncAssistant();
       inputRef.current?.focus();
       setInput("");
+      setEditingMessageId(null);
       return;
     }
 
@@ -271,8 +267,8 @@ export function AssistantPane({
       const answer = await generateAssistantAnswer({
         importedChunksByPaperId,
         modelTransport,
-        mode: assistantState.mode,
-        question: normalizedInput,
+        mode,
+        question,
         selectedPapers,
         settings: settingsStoreRef.current.getState()
       });
@@ -284,6 +280,7 @@ export function AssistantPane({
 
       assistantStoreRef.current.addMessage(assistantMessage);
       setInput("");
+      setEditingMessageId(null);
     } catch (error) {
       assistantStoreRef.current.addMessage(
         createMessage("assistant", getAssistantErrorMessage(error))
@@ -292,6 +289,90 @@ export function AssistantPane({
       assistantStoreRef.current.setPending(false);
       syncAssistant();
     }
+  }
+
+  async function handleSend() {
+    const normalizedInput = input.trim();
+    if (normalizedInput.length === 0) {
+      return;
+    }
+
+    const currentState = assistantStoreRef.current.getState();
+    if (currentState.pending) {
+      return;
+    }
+
+    const activeMode = currentState.mode;
+
+    if (editingMessageId) {
+      const messageIndex = currentState.messages.findIndex(
+        (message) => message.id === editingMessageId && message.role === "user"
+      );
+      if (messageIndex >= 0) {
+        assistantStoreRef.current.replaceMessages(currentState.messages.slice(0, messageIndex));
+      }
+    }
+
+    assistantStoreRef.current.addMessage(createMessage("user", normalizedInput));
+
+    if (activeMode === "command") {
+      await runCommandMessage(normalizedInput);
+      return;
+    }
+
+    await runKnowledgeMessage(normalizedInput, activeMode);
+  }
+
+  function handleEditMessage(messageId: string) {
+    const message = assistantStoreRef.current
+      .getState()
+      .messages.find((candidate) => candidate.id === messageId && candidate.role === "user");
+
+    if (!message) {
+      return;
+    }
+
+    setEditingMessageId(message.id);
+    setInput(message.content);
+    setVoiceInputMessage(undefined);
+    inputRef.current?.focus();
+  }
+
+  function cancelEdit() {
+    setEditingMessageId(null);
+    setInput("");
+    inputRef.current?.focus();
+  }
+
+  async function handleRegenerateMessage(messageId: string) {
+    const currentState = assistantStoreRef.current.getState();
+    if (currentState.mode === "command" || currentState.pending) {
+      return;
+    }
+
+    const assistantIndex = currentState.messages.findIndex(
+      (message) => message.id === messageId && message.role === "assistant"
+    );
+    if (assistantIndex < 0) {
+      return;
+    }
+
+    let previousUserIndex = -1;
+    for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+      if (currentState.messages[index].role === "user") {
+        previousUserIndex = index;
+        break;
+      }
+    }
+    if (previousUserIndex < 0) {
+      return;
+    }
+
+    const previousUserMessage = currentState.messages[previousUserIndex];
+    assistantStoreRef.current.replaceMessages(currentState.messages.slice(0, assistantIndex));
+    setEditingMessageId(null);
+    setInput("");
+    await runKnowledgeMessage(previousUserMessage.content, currentState.mode);
   }
 
   const conversationStarted = assistantState.messages.length > 0;
@@ -337,13 +418,17 @@ export function AssistantPane({
       <AssistantMessageList
         messages={assistantState.messages}
         mode={assistantState.mode}
+        onEditMessage={handleEditMessage}
         onModeChange={switchModeAsNewSession}
+        onRegenerateMessage={handleRegenerateMessage}
       />
 
       <AssistantComposer
+        editing={Boolean(editingMessageId)}
         input={input}
         inputRef={inputRef}
         modeHint={composerHint}
+        onCancelEdit={cancelEdit}
         onInputChange={setInput}
         onSend={handleSend}
         onVoiceInput={showVoiceInputPlaceholder}

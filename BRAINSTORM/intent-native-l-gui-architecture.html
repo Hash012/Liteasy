@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intent-Native L-GUI Architecture</title>
+    <style>
+      :root {
+        --bg: #090b0d;
+        --panel: #15191f;
+        --panel-2: #101419;
+        --ink: #f7fafc;
+        --muted: #a7b0bd;
+        --line: #2c3440;
+        --accent: #d9ff7a;
+        --blue: #7dd3fc;
+        --green: #86efac;
+        --violet: #c4b5fd;
+        --rose: #fda4af;
+        --amber: #fcd34d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 18% 8%, rgba(217, 255, 122, 0.11), transparent 28%),
+          var(--bg);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+      }
+
+      main {
+        width: min(1440px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 34px 0 46px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 58px);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .accent {
+        color: var(--accent);
+      }
+
+      .lead {
+        max-width: 980px;
+        margin: 16px 0 28px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+
+      .map {
+        display: grid;
+        grid-template-columns: 1fr 1.1fr 1.1fr 1fr;
+        gap: 14px;
+      }
+
+      .lane {
+        min-height: 690px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(21, 25, 31, 0.9);
+      }
+
+      .lane h2 {
+        margin: 0 0 14px;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .card {
+        padding: 13px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.045);
+      }
+
+      .card strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 14px;
+      }
+
+      .card span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .blue strong {
+        color: var(--blue);
+      }
+
+      .green strong {
+        color: var(--green);
+      }
+
+      .violet strong {
+        color: var(--violet);
+      }
+
+      .rose strong {
+        color: var(--rose);
+      }
+
+      .amber strong {
+        color: var(--amber);
+      }
+
+      .principle {
+        margin-top: 18px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-2);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 5px;
+        background: #202832;
+        color: var(--accent);
+      }
+
+      @media (max-width: 1120px) {
+        main {
+          width: min(760px, calc(100vw - 28px));
+          padding-top: 22px;
+        }
+
+        .map {
+          grid-template-columns: 1fr;
+        }
+
+        .lane {
+          min-height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Intent-Native <span class="accent">L-GUI</span> Architecture</h1>
+      <p class="lead">
+        双内核范式：Intent Runtime 负责理解、计划、权限、执行和审计；Generative UI Runtime 负责 UI DSL、虚拟视图树、组件工厂、布局求解和动态画布。模型提供候选结构，系统拥有最终裁决权。
+      </p>
+
+      <section class="map" aria-label="Intent-native L-GUI architecture map">
+        <div class="lane">
+          <h2>1. Interaction</h2>
+          <div class="stack">
+            <div class="card blue">
+              <strong>Natural Language</strong>
+              <span>用户用目标表达需求，而不是寻找固定按钮路径。</span>
+            </div>
+            <div class="card blue">
+              <strong>Default UI</strong>
+              <span>稳定兜底界面，模型失败时仍然可用。</span>
+            </div>
+            <div class="card blue">
+              <strong>Dynamic Canvas</strong>
+              <span>接收受控 UI DSL，渲染动态组件树。</span>
+            </div>
+            <div class="card blue">
+              <strong>Confirmation UI</strong>
+              <span>高风险计划必须解释后由用户确认。</span>
+            </div>
+            <div class="card blue">
+              <strong>Audit UI</strong>
+              <span>展示系统理解、计划、风险、动作和状态差异。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <h2>2. Intent Runtime</h2>
+          <div class="stack">
+            <div class="card green">
+              <strong>Context Manager</strong>
+              <span>读取当前状态、权限、选择对象和可用能力。</span>
+            </div>
+            <div class="card green">
+              <strong>LLM Gateway</strong>
+              <span>兼容 OpenAI、DeepSeek 和本地模型，只负责规划。</span>
+            </div>
+            <div class="card green">
+              <strong>Semantic Planner</strong>
+              <span>把自然语言转成 IntentPlan，而不是直接执行。</span>
+            </div>
+            <div class="card green">
+              <strong>Plan Validator</strong>
+              <span>校验 schema、能力、参数和步骤依赖。</span>
+            </div>
+            <div class="card green">
+              <strong>Capability Graph</strong>
+              <span>系统能做什么、风险如何、需要哪些权限。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <h2>3. Generative UI Runtime</h2>
+          <div class="stack">
+            <div class="card violet">
+              <strong>UI DSL</strong>
+              <span>模型输出配置，不输出任意 HTML、CSS 或 JS。</span>
+            </div>
+            <div class="card violet">
+              <strong>Component Cards</strong>
+              <span>告诉模型可用组件、props、children 和限制。</span>
+            </div>
+            <div class="card violet">
+              <strong>Design Tokens</strong>
+              <span>视觉由语义 token 控制，保持审美一致。</span>
+            </div>
+            <div class="card violet">
+              <strong>Layout Solver</strong>
+              <span>解决区域、尺寸、响应式和可访问性约束。</span>
+            </div>
+            <div class="card violet">
+              <strong>Component Factory</strong>
+              <span>把 DSL 节点映射为真实组件实例。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <h2>4. Security And State</h2>
+          <div class="stack">
+            <div class="card rose">
+              <strong>Action Router</strong>
+              <span>动态按钮只触发 ActionRef，不运行任意代码。</span>
+            </div>
+            <div class="card rose">
+              <strong>Policy Engine</strong>
+              <span>独立裁决 allow、clarify、confirm 或 deny。</span>
+            </div>
+            <div class="card rose">
+              <strong>Data Engine</strong>
+              <span>动态 UI 通过数据源名访问数据，不能直连数据库。</span>
+            </div>
+            <div class="card rose">
+              <strong>Transactional Executor</strong>
+              <span>唯一能改变状态的层，支持失败恢复和审计。</span>
+            </div>
+            <div class="card amber">
+              <strong>Execution Journal</strong>
+              <span>记录输入、上下文摘要、计划、策略、事件和状态差异。</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <p class="principle">
+        范式约束：
+        <code>Intent is free</code>,
+        <code>Plan is structured</code>,
+        <code>UI is DSL</code>,
+        <code>Component is registered</code>,
+        <code>Token controls taste</code>,
+        <code>Policy is authoritative</code>,
+        <code>Execution is sandboxed</code>,
+        <code>Audit is mandatory</code>.
+      </p>
+    </main>
+  </body>
+</html>

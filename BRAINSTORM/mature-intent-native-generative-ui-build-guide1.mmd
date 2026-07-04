@@ -1,0 +1,108 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "fontFamily": "Inter, Noto Sans SC, Microsoft YaHei, sans-serif"}}}%%
+flowchart TB
+  UserIn([用户表达目标<br/>自然语言 / 语音 / 默认 UI / 自动化])
+  UserOut([用户看到结果<br/>继续操作 / 撤销 / 恢复默认])
+
+  Legend["图例<br/>橙色虚线边框 = 需要或可以调用大模型 API<br/>普通节点 = 确定性工程模块<br/>所有执行都必须经过契约、策略、日志"]
+
+  subgraph Input["一、输入标准化"]
+    direction TB
+    I["意图输入适配器<br/>统一来源、用户、目标、载荷"]
+    C["上下文构建器<br/>生成规划上下文与策略上下文"]
+  end
+
+  subgraph Registry["二、契约注册中心"]
+    direction TB
+    REG["注册表与协议<br/>Capability Graph / Component Cards<br/>DataSource Registry / Design Tokens<br/>Agent-UI Protocol / Event Bus<br/><br/>后续 Planner、Validator、Renderer、Action Router<br/>都只能读取这里暴露的契约"]
+  end
+
+  subgraph Intent["三、意图运行时"]
+    direction TB
+    LLM["大模型 API 网关<br/>OpenAI / DeepSeek / 本地模型<br/>鉴权、限流、结构化输出"]
+    P["语义规划器<br/>规则规划器 + 大模型规划器<br/>【大模型 API 介入】"]
+    IP["结构化意图计划<br/>IntentPlan"]
+    PV["计划校验器<br/>校验能力、参数、依赖、限深限长"]
+  end
+
+  subgraph Policy["四、安全与策略闸门"]
+    direction TB
+    PE["策略引擎<br/>独立裁决权限、风险、确认"]
+    HC["人工确认界面<br/>解释高风险计划"]
+    CL["澄清问题生成<br/>上下文不足时追问<br/>【大模型 API 可介入】"]
+    DN["拒绝与恢复建议<br/>越权或危险时返回原因"]
+  end
+
+  subgraph Exec["五、受控执行与状态"]
+    direction TB
+    AR["动作路由器<br/>ActionRef -> Capability<br/>动态 UI 事件唯一入口"]
+    EX["事务执行器<br/>唯一可改变状态的层"]
+    DE["数据代理引擎<br/>权限、脱敏、分页、缓存、流式更新"]
+    SK["状态内核<br/>应用真实状态的唯一事实源"]
+    J["执行日志<br/>记录输入、计划、策略、事件、状态差异"]
+  end
+
+  subgraph GenUI["六、生成式 UI 运行时"]
+    direction TB
+    UG["UI DSL 生成器<br/>只生成声明式界面配置<br/>【大模型 API 介入】"]
+    SP["流式解析与增量 Patch<br/>Plan Preview / Skeleton / Component Patch"]
+    DSL["UI DSL 文档<br/>组件、布局、数据源、动作引用"]
+    DV["DSL 校验器<br/>拒绝未知组件、属性、动作、数据源"]
+    VT["虚拟 UI 树<br/>把 DSL 转为组件树"]
+    CF["组件工厂<br/>按注册组件与设计令牌实例化"]
+    LS["布局求解器<br/>处理区域、尺寸、响应式约束"]
+    UV["用户体验校验器<br/>遮挡、弹窗、可达性、误导、重置入口"]
+    UXM["多模态 UX 评估<br/>截图 / 框选 / 内容一致性<br/>【大模型 API 可介入】"]
+    UXD{"体验风险?"}
+    FB["默认与回退 UI<br/>重置入口始终可达"]
+    DC["动态画布<br/>渲染最终界面"]
+  end
+
+  subgraph Feedback["七、反馈与审计"]
+    direction TB
+    AU["审计解释生成<br/>展示理解、过程、风险与结果<br/>【大模型 API 可介入】"]
+  end
+
+  UserIn --> I --> C --> REG --> P
+  LLM -.结构化输出服务.-> P
+  P --> IP --> PV --> PE
+
+  PE -->|允许执行| EX
+  PE -->|需要确认| HC -->|用户同意| EX
+  PE -->|需要补充信息| CL --> UserOut
+  PE -->|拒绝执行| DN --> FB
+
+  EX --> DE --> SK
+  EX --> J
+
+  IP --> UG
+  SK --> UG
+  UG --> SP --> DSL --> DV --> VT --> CF --> LS --> UV
+  UV -->|需要视觉语义判断| UXM --> UXD
+  UV --> UXD
+  UXD -->|通过| DC
+  UXD -->|风险| FB --> DC
+  DC --> UserOut
+
+  UserOut -->|继续操作事件| AR --> PE
+
+  J --> AU --> UserOut
+
+  classDef input fill:#dbeafe,stroke:#2563eb,color:#172554
+  classDef registry fill:#ecfeff,stroke:#0891b2,color:#164e63
+  classDef intent fill:#dcfce7,stroke:#16a34a,color:#052e16
+  classDef policy fill:#ffe4e6,stroke:#e11d48,color:#4c0519
+  classDef exec fill:#fef3c7,stroke:#d97706,color:#422006
+  classDef genui fill:#f3e8ff,stroke:#9333ea,color:#3b0764
+  classDef feedback fill:#e2e8f0,stroke:#475569,color:#0f172a
+  classDef llm fill:#ffedd5,stroke:#f97316,stroke-width:3px,stroke-dasharray: 6 4,color:#7c2d12
+  classDef legend fill:#fff7ed,stroke:#fb923c,stroke-width:2px,color:#7c2d12
+
+  class I,C input
+  class REG registry
+  class IP,PV intent
+  class PE,HC,DN policy
+  class AR,EX,DE,SK,J exec
+  class SP,DSL,DV,VT,CF,LS,UV,UXD,DC,FB genui
+  class AU feedback
+  class LLM,P,CL,UG,UXM,AU llm
+  class Legend legend

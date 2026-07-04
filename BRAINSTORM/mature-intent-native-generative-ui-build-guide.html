@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mature Intent-Native Generative UI Build Guide</title>
+    <style>
+      :root {
+        --bg: #0b0d10;
+        --panel: #151a20;
+        --panel-2: #101419;
+        --ink: #f7fafc;
+        --muted: #aab4c2;
+        --line: #2b3440;
+        --accent: #d9ff7a;
+        --blue: #93c5fd;
+        --green: #86efac;
+        --violet: #c4b5fd;
+        --rose: #fda4af;
+        --amber: #fcd34d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 12% 8%, rgba(217, 255, 122, 0.13), transparent 26%),
+          linear-gradient(180deg, #0b0d10 0%, #080a0c 100%);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+      }
+
+      main {
+        width: min(1480px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 32px 0 46px;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 1120px;
+        font-size: clamp(30px, 4vw, 58px);
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      h1 span {
+        color: var(--accent);
+      }
+
+      .lead {
+        max-width: 1040px;
+        margin: 16px 0 26px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+
+      .lane {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(21, 26, 32, 0.92);
+        min-height: 620px;
+      }
+
+      .lane h2 {
+        margin: 0 0 14px;
+        font-size: 15px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .card {
+        padding: 13px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.045);
+      }
+
+      .card strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 14px;
+      }
+
+      .card span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .blue strong {
+        color: var(--blue);
+      }
+
+      .green strong {
+        color: var(--green);
+      }
+
+      .violet strong {
+        color: var(--violet);
+      }
+
+      .rose strong {
+        color: var(--rose);
+      }
+
+      .amber strong {
+        color: var(--amber);
+      }
+
+      .build {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+      }
+
+      .step {
+        min-height: 130px;
+        padding: 13px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-2);
+      }
+
+      .step b {
+        display: block;
+        color: var(--accent);
+        font-size: 13px;
+        margin-bottom: 7px;
+      }
+
+      .step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .principle {
+        margin-top: 16px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-2);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 5px;
+        background: #202832;
+        color: var(--accent);
+      }
+
+      @media (max-width: 1180px) {
+        .grid,
+        .build {
+          grid-template-columns: 1fr;
+        }
+
+        .lane {
+          min-height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>成熟版 <span>Intent-Native Generative UI</span> 构建地图</h1>
+      <p class="lead">
+        最现实的路线是受控声明式 GenUI：模型输出 IntentPlan 和 UI DSL，系统用能力图、Schema、Policy、UX Validator 和事务执行器控制边界。下面按构建顺序展示从 0 到生产级的路径。
+      </p>
+
+      <section class="grid" aria-label="architecture map">
+        <div class="lane">
+          <h2>1. Registries First</h2>
+          <div class="stack">
+            <div class="card amber">
+              <strong>Component Registry</strong>
+              <span>先定义能画什么：Panel、Button、Table、Chart、Form。</span>
+            </div>
+            <div class="card amber">
+              <strong>Capability Graph</strong>
+              <span>再定义能做什么：布局、数据、文件、任务、集成。</span>
+            </div>
+            <div class="card amber">
+              <strong>DataSource Registry</strong>
+              <span>动态 UI 只能引用数据源名，不能直连数据库。</span>
+            </div>
+            <div class="card amber">
+              <strong>Risk Rules</strong>
+              <span>删除、上传、重启、付费、权限变更默认高风险。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <h2>2. Intent Runtime</h2>
+          <div class="stack">
+            <div class="card green">
+              <strong>IntentInput</strong>
+              <span>自然语言、GUI、API 都标准化为同一种输入。</span>
+            </div>
+            <div class="card green">
+              <strong>Context Builder</strong>
+              <span>给模型脱敏上下文，给策略引擎完整上下文。</span>
+            </div>
+            <div class="card green">
+              <strong>Semantic Planner</strong>
+              <span>规则或 LLM 生成 IntentPlan，但不执行。</span>
+            </div>
+            <div class="card green">
+              <strong>Plan Validator</strong>
+              <span>校验 capability、参数、依赖和禁止组合。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <h2>3. Generative UI Runtime</h2>
+          <div class="stack">
+            <div class="card violet">
+              <strong>UI DSL</strong>
+              <span>模型写配置，不写 HTML/CSS/JS。</span>
+            </div>
+            <div class="card violet">
+              <strong>Virtual UI Tree</strong>
+              <span>DSL 被解释成虚拟组件树。</span>
+            </div>
+            <div class="card violet">
+              <strong>Layout Solver</strong>
+              <span>求解尺寸、区域、响应式和可访问性约束。</span>
+            </div>
+            <div class="card violet">
+              <strong>Dynamic Canvas</strong>
+              <span>渲染动态界面，但 reset 始终可见。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane">
+          <h2>4. Safety And Quality</h2>
+          <div class="stack">
+            <div class="card rose">
+              <strong>Action Router</strong>
+              <span>动态按钮只触发 ActionRef，不能运行任意代码。</span>
+            </div>
+            <div class="card rose">
+              <strong>Policy Engine</strong>
+              <span>最终裁决 allow、clarify、confirm、deny。</span>
+            </div>
+            <div class="card rose">
+              <strong>UX Validator</strong>
+              <span>检查遮挡、弹窗、关闭入口、可达性、内容一致性。</span>
+            </div>
+            <div class="card rose">
+              <strong>Execution Journal</strong>
+              <span>记录输入、计划、DSL、策略、事件和状态差异。</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="build" aria-label="step by step build path">
+        <div class="step">
+          <b>Step 0</b>
+          <p>列清单：组件、能力、数据源、风险。不要先接模型。</p>
+        </div>
+        <div class="step">
+          <b>Step 1</b>
+          <p>定义 DSL 和 Schema：IntentPlan、UIDsl、ActionRef、DataSourceRef。</p>
+        </div>
+        <div class="step">
+          <b>Step 2</b>
+          <p>实现 Dynamic Canvas：手写 DSL 能渲染，错误 DSL 会拒绝。</p>
+        </div>
+        <div class="step">
+          <b>Step 3</b>
+          <p>实现 Action Router + Policy：所有动作先裁决再执行。</p>
+        </div>
+        <div class="step">
+          <b>Step 4</b>
+          <p>接入规则 Planner：不用 LLM 也能跑完整链路。</p>
+        </div>
+        <div class="step">
+          <b>Step 5</b>
+          <p>接入 LLM Gateway：结构化输出，失败回退到规则 planner。</p>
+        </div>
+        <div class="step">
+          <b>Step 6</b>
+          <p>加入 UX Validator：防遮挡、防坏弹窗、防误导。</p>
+        </div>
+        <div class="step">
+          <b>Step 7</b>
+          <p>加入 Streaming UI：先预览计划，再显示骨架，最后逐步挂载组件。</p>
+        </div>
+        <div class="step">
+          <b>Step 8</b>
+          <p>建立测试矩阵：golden intent、schema、policy、visual、red team。</p>
+        </div>
+        <div class="step">
+          <b>Step 9</b>
+          <p>插件化：插件可注册组件和能力，但永远不能绕过 policy。</p>
+        </div>
+      </section>
+
+      <p class="principle">
+        生产级原则：
+        <code>Intent is flexible</code>,
+        <code>Plan is structured</code>,
+        <code>UI is declarative</code>,
+        <code>Action is capability-bound</code>,
+        <code>Policy is authoritative</code>,
+        <code>UX is validated</code>,
+        <code>Fallback is permanent</code>.
+      </p>
+    </main>
+  </body>
+</html>

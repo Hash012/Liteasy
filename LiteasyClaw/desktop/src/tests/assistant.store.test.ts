@@ -49,3 +49,27 @@ test("restores a saved assistant session snapshot", () => {
   });
 });
 
+test("replaces the current message snapshot", () => {
+  const store = createAssistantStore();
+
+  store.addMessage({
+    content: "旧问题",
+    id: "message-1",
+    role: "user"
+  });
+  store.replaceMessages([
+    {
+      content: "新问题",
+      id: "message-2",
+      role: "user"
+    }
+  ]);
+
+  expect(store.getState().messages).toEqual([
+    {
+      content: "新问题",
+      id: "message-2",
+      role: "user"
+    }
+  ]);
+});

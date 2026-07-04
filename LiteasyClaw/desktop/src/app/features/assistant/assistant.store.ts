@@ -14,6 +14,9 @@ export function createAssistantStore() {
     addMessage(message: AssistantMessage) {
       state.messages.push(message);
     },
+    replaceMessages(messages: AssistantMessage[]) {
+      state.messages = [...messages];
+    },
     setPending(pending: boolean) {
       state.pending = pending;
     },

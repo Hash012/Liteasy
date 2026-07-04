@@ -1,0 +1,1306 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>意图原生生成式 UI 模块级架构设计文档</title><style>
+:root { color-scheme: light; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif; line-height: 1.68; color: #172033; max-width: 1060px; margin: 0 auto; padding: 48px 56px; background: #fff; }
+h1 { font-size: 34px; line-height: 1.2; margin: 0 0 24px; }
+h2 { font-size: 25px; margin-top: 42px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+h3 { font-size: 19px; margin-top: 30px; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 24px; }
+li { margin: 4px 0; }
+code { background: #f3f4f6; color: #7c2d12; padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+pre { background: #0f172a; color: #e5e7eb; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+pre code { background: transparent; color: inherit; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th, td { border: 1px solid #d8dee9; padding: 8px 10px; vertical-align: top; }
+th { background: #f8fafc; text-align: left; }
+figure { margin: 20px 0; padding: 12px; border: 1px solid #e5e7eb; background: #fff; }
+figure img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+figcaption { color: #64748b; font-size: 13px; margin-top: 8px; text-align: center; }
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+hr { border: 0; border-top: 1px solid #e5e7eb; margin: 28px 0; }
+@page { size: A4; margin: 14mm; }
+</style></head><body><h1>意图原生生成式 UI 模块级架构设计文档</h1>
+<p>版本：v1.0</p>
+<p>日期：2026-07-05</p>
+<p>适用范围：Web、桌面端、移动端、插件化业务应用、内部工具、AI Agent 应用</p>
+<p>核心范式：Controlled Declarative Generative UI + Agentic Intent Runtime</p>
+<p>中文名：受控声明式生成 UI + 意图智能体运行时</p>
+<hr>
+<h2>摘要</h2>
+<p>本文给出一种通用的软件架构范式：用户通过自然语言、语音、默认 UI、自动化事件表达目标，系统通过意图运行时、契约注册层、安全策略、受控执行、生成式 UI 运行时和审计反馈，把目标转化为可执行、可验证、可恢复的界面与动作。</p>
+<p>这套架构不是“让大模型自由写 UI 代码”，也不是“让 Agent 直接操作 DOM 或数据库”。成熟路线是：</p>
+<pre><code class="language-text">用户意图
+  -&gt; 结构化意图计划 IntentPlan
+  -&gt; 契约注册层校验
+  -&gt; 策略引擎裁决
+  -&gt; 受控执行与状态更新
+  -&gt; UI DSL 生成
+  -&gt; DSL / UX 双重校验
+  -&gt; 动态画布渲染
+  -&gt; 动作事件再次进入策略闭环</code></pre>
+<p>大模型在本架构中是概率性推理与生成组件，不是主权层。主权层属于 schema、registry、policy、state kernel、journal 和 runtime validator。</p>
+<hr>
+<h2>1. 设计出处与参考依据</h2>
+<p>本文综合以下资料形成模块划分与工程边界。</p>
+<h3>1.1 工业界依据</h3>
+<ol start="1">
+<li><strong>Vercel AI SDK</strong></li>
+</ol>
+<p>AI SDK 提供结构化对象生成、工具调用和流式 UI 相关能力，说明生成式 UI 的工程化方向并非让模型直接写任意前端代码，而是让模型输出受控对象、工具调用或组件映射，再由应用运行时渲染。本文中的 <code>LLM Gateway</code>、<code>Structured Output</code>、<code>Streaming Patch</code>、<code>Tool / Action Invocation</code> 设计受此启发。</p>
+<ol start="2">
+<li><strong>Google Cloud: Generative UI</strong></li>
+</ol>
+<p>Google Cloud 对 Generative UI 的定义强调：AI agent 根据用户目标实时编排组件、数据和布局。生产级系统应使用固定组件库和受控协议，而不是让模型生成任意视觉代码。本文中的 <code>Component Cards</code>、<code>UI DSL</code>、<code>Dynamic Canvas</code>、<code>DataSource Registry</code> 和 <code>Policy-aware Orchestration</code> 采用这一原则。</p>
+<ol start="3">
+<li><strong>CopilotKit Generative UI / Agentic UI Protocols</strong></li>
+</ol>
+<p>CopilotKit 生态强调 agent 与应用前端之间需要协议、状态共享和事件桥接，而不是只靠 prompt。本文中的 <code>Agent-UI Protocol</code>、<code>Runtime Event Bus</code>、<code>Application State Bridge</code>、<code>Tool Invocation Boundary</code> 采用这一思路。</p>
+<ol start="4">
+<li><strong>OpenAI Structured Outputs / Function Calling</strong></li>
+</ol>
+<p>OpenAI 官方文档强调结构化输出与函数调用可使模型输出符合开发者提供的 schema。本文将所有模型输出约束为 <code>IntentPlan</code>、<code>UIDslDocument</code>、<code>ClarificationRequest</code>、<code>AuditNarrative</code> 等结构化对象，并要求失败时 retry、降级或拒绝。</p>
+<h3>1.2 学术依据</h3>
+<ol start="5">
+<li><strong>Reasoning for Mobile User Experience with Multimodal LLMs: Task, Benchmark, and Approach</strong></li>
+</ol>
+<p>该论文提出 UXBench，用 2,000 个真实 UI 截图 VQA 样本评估多模态大模型的 UI-UX reasoning 能力。论文强调 UI 看起来正确并不等于 UX 合格，很多问题来自遮挡、弹窗、内容不一致、可点击区域不可达、信任破坏等。本文中的 <code>UX Validator</code>、<code>Multimodal UX Evaluator</code>、<code>UX Risk Decision</code>、<code>Fallback UI</code> 直接吸收了这一结论。</p>
+<h3>1.3 本地参考文件</h3>
+<ul>
+<li><code>BRAINSTORM/reference/reference.md</code></li>
+<li><code>BRAINSTORM/reference/reading-notes.md</code></li>
+<li><code>BRAINSTORM/reference/guide.md</code></li>
+<li><code>BRAINSTORM/reference/reasoning-for-mobile-user-experience-with-multimodal-llms-2606.13192.pdf</code></li>
+<li><code>BRAINSTORM/mature-intent-native-generative-ui-build-guide1.md</code></li>
+</ul>
+<hr>
+<h2>2. 总体架构图</h2>
+<p>下图是本文的模块级总览。橙色虚线边框代表需要或可以调用大模型 API 的模块；普通节点代表确定性工程模块。</p>
+<figure><img src="mature-intent-native-generative-ui-build-guide1-mermaid.svg" alt="修正版意图原生生成式 UI 架构图"><figcaption>修正版意图原生生成式 UI 架构图</figcaption></figure>
+<p>图中最重要的阅读方式：</p>
+<ol start="1">
+<li>左上到中部是意图链路：输入、上下文、契约、规划、校验、策略。</li>
+<li>中部到右侧是执行链路：策略允许后，事务执行器和数据代理引擎改变状态。</li>
+<li>右侧到下方是界面链路：状态和计划被转成 UI DSL，经 DSL 校验和 UX 校验后渲染。</li>
+<li>底部是事件闭环：动态 UI 的用户操作不会直接调用业务 API，而是进入 Action Router，再次回到 Policy Engine。</li>
+<li>反馈和审计贯穿全程：日志是原始事实，AI 只可生成解释，不可篡改日志。</li>
+</ol>
+<hr>
+<h2>3. 核心设计原则</h2>
+<h3>3.1 模型不拥有系统主权</h3>
+<p>模型可以提出计划、生成 UI DSL、生成澄清问题、生成审计解释，但不能：</p>
+<ul>
+<li>直接写生产 UI 代码。</li>
+<li>直接操作 DOM。</li>
+<li>直接访问数据库。</li>
+<li>直接调用文件、网络、支付、权限、系统 API。</li>
+<li>自己裁决风险。</li>
+<li>自己绕过确认。</li>
+</ul>
+<h3>3.2 一切可执行能力必须注册</h3>
+<p>用户“有权控制的一切”必须以 <code>CapabilityDefinition</code> 注册。未注册能力不存在，模型不能凭空发明。</p>
+<pre><code class="language-ts">export type CapabilityDefinition = {
+  id: string;
+  domain: &quot;ui&quot; | &quot;data&quot; | &quot;file&quot; | &quot;task&quot; | &quot;integration&quot; | &quot;settings&quot; | &quot;automation&quot;;
+  title: string;
+  description: string;
+  inputSchema: JsonSchema;
+  outputSchema: JsonSchema;
+  requiredPermissions: string[];
+  risk: RiskProfile;
+  reversible: boolean;
+  execute: CapabilityExecutor;
+};</code></pre>
+<h3>3.3 UI 是声明式投影</h3>
+<p>UI 不是真实业务状态本身。真实状态在 <code>State Kernel</code>。动态 UI 只是基于状态、意图计划和用户上下文生成的一种视图投影。</p>
+<h3>3.4 风险不是 prompt 能解决的问题</h3>
+<p>安全策略、权限检查、确认流程、审计日志和回退机制必须由确定性系统实现。Prompt 只能帮助模型理解禁止事项，不能替代安全系统。</p>
+<h3>3.5 UX 是架构约束，不是美化阶段</h3>
+<p>UX Validator 是运行时质量门，不是设计评审文档。它应检查遮挡、弹窗、可达性、误导、内容一致性、认知负担和默认恢复入口。</p>
+<hr>
+<h2>4. 架构分层与模块总览</h2>
+<table><thead><tr><th>层</th><th>模块</th><th>本质职责</th><th>是否可调用大模型</th></tr></thead><tbody>
+<tr><td>输入标准化</td><td>Intent Input Adapter</td><td>统一自然语言、语音、默认 UI、自动化输入</td><td>否</td></tr>
+<tr><td>输入标准化</td><td>Context Builder</td><td>构造规划上下文和策略上下文</td><td>否</td></tr>
+<tr><td>契约注册</td><td>Contract Registry Center</td><td>管理能力、组件、数据源、设计令牌、事件协议</td><td>否</td></tr>
+<tr><td>意图运行时</td><td>LLM Gateway</td><td>封装模型 provider、结构化输出、限流、重试</td><td>是</td></tr>
+<tr><td>意图运行时</td><td>Semantic Planner</td><td>把目标变成 IntentPlan</td><td>是</td></tr>
+<tr><td>意图运行时</td><td>IntentPlan</td><td>结构化计划文档</td><td>否</td></tr>
+<tr><td>意图运行时</td><td>Plan Validator</td><td>校验计划合法性和边界</td><td>否</td></tr>
+<tr><td>策略闸门</td><td>Policy Engine</td><td>权限、风险、确认、拒绝、澄清裁决</td><td>否</td></tr>
+<tr><td>策略闸门</td><td>Human Confirmation UI</td><td>人类确认高风险动作</td><td>否</td></tr>
+<tr><td>策略闸门</td><td>Clarification Generator</td><td>生成澄清问题</td><td>可选</td></tr>
+<tr><td>策略闸门</td><td>Deny and Recovery</td><td>拒绝原因与恢复建议</td><td>可选</td></tr>
+<tr><td>执行状态</td><td>Action Router</td><td>将 UI 事件转成 ActionRef 并进入策略</td><td>否</td></tr>
+<tr><td>执行状态</td><td>Transactional Executor</td><td>执行已授权能力</td><td>否</td></tr>
+<tr><td>执行状态</td><td>Data Proxy Engine</td><td>受控读取、脱敏、分页、缓存、流式数据</td><td>否</td></tr>
+<tr><td>执行状态</td><td>State Kernel</td><td>应用状态唯一事实源</td><td>否</td></tr>
+<tr><td>执行状态</td><td>Execution Journal</td><td>不可抵赖执行记录</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>UI DSL Generator</td><td>生成声明式 UI DSL</td><td>是</td></tr>
+<tr><td>生成式 UI</td><td>Streaming Patch Parser</td><td>流式解析和增量 patch</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>UI DSL Document</td><td>声明式 UI 文档</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>DSL Validator</td><td>校验 UI DSL</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>Virtual UI Tree</td><td>中间组件树</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>Component Factory</td><td>实例化注册组件</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>Layout Solver</td><td>响应式布局求解</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>UX Validator</td><td>UX 风险检查</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>Multimodal UX Evaluator</td><td>截图级 UX reasoning</td><td>可选</td></tr>
+<tr><td>生成式 UI</td><td>Dynamic Canvas</td><td>渲染最终界面</td><td>否</td></tr>
+<tr><td>生成式 UI</td><td>Fallback UI</td><td>默认恢复入口</td><td>否</td></tr>
+<tr><td>反馈审计</td><td>Audit Explanation Generator</td><td>把日志解释给用户</td><td>可选</td></tr>
+</tbody></table>
+<hr>
+<h2>5. 端到端数据流</h2>
+<pre><code class="language-mermaid">sequenceDiagram
+  autonumber
+  participant U as 用户
+  participant IA as 输入适配器
+  participant CTX as 上下文构建器
+  participant REG as 契约注册中心
+  participant PLAN as 语义规划器
+  participant LLM as 大模型 API 网关
+  participant VAL as 计划校验器
+  participant POL as 策略引擎
+  participant EXE as 事务执行器
+  participant ST as 状态内核
+  participant UI as UI DSL 生成器
+  participant UX as UX 校验器
+  participant CAN as 动态画布
+
+  U-&gt;&gt;IA: 自然语言/语音/默认 UI 事件
+  IA-&gt;&gt;CTX: IntentInput
+  CTX-&gt;&gt;REG: 请求可见契约卡片
+  CTX-&gt;&gt;PLAN: PlannerContext
+  PLAN-&gt;&gt;LLM: 结构化计划请求
+  LLM--&gt;&gt;PLAN: IntentPlan 草案
+  PLAN-&gt;&gt;VAL: IntentPlan
+  VAL-&gt;&gt;REG: 校验 capability / dataSource / schema
+  VAL-&gt;&gt;POL: Normalized IntentPlan
+  POL-&gt;&gt;EXE: allow / confirm 后执行
+  EXE-&gt;&gt;ST: 状态变更
+  ST-&gt;&gt;UI: 状态快照
+  UI-&gt;&gt;LLM: 结构化 UI DSL 请求
+  LLM--&gt;&gt;UI: UI DSL 草案
+  UI-&gt;&gt;UX: DSL 渲染前后校验
+  UX-&gt;&gt;CAN: 通过后渲染
+  CAN--&gt;&gt;U: 动态界面</code></pre>
+<hr>
+<h2>6. 模块级详细设计</h2>
+<h3>6.1 Intent Input Adapter</h3>
+<p>职责：</p>
+<ul>
+<li>接收自然语言、语音转写、默认 UI 按钮、快捷键、自动化规则、API 事件。</li>
+<li>统一成 <code>IntentInput</code>。</li>
+<li>给每个输入绑定 actor、source、traceId、locale、timestamp。</li>
+</ul>
+<p>输入：</p>
+<pre><code class="language-ts">type RawInput =
+  | { kind: &quot;text&quot;; text: string }
+  | { kind: &quot;voice&quot;; transcript: string; confidence: number }
+  | { kind: &quot;ui_event&quot;; eventName: string; payload: unknown }
+  | { kind: &quot;automation&quot;; ruleId: string; payload: unknown };</code></pre>
+<p>输出：</p>
+<pre><code class="language-ts">export type IntentInput = {
+  id: string;
+  actorId: string;
+  source: &quot;natural_language&quot; | &quot;voice&quot; | &quot;default_ui&quot; | &quot;automation&quot; | &quot;api&quot;;
+  utterance?: string;
+  event?: { name: string; payload: unknown };
+  locale: string;
+  createdAt: string;
+  traceId: string;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li>所有入口必须进入 <code>IntentInput</code>，不允许默认 UI 绕过策略系统。</li>
+<li>自动化事件也必须拥有 actor 和权限上下文。</li>
+<li>原始输入不得直接进入执行器。</li>
+</ul>
+<p>失败模式：</p>
+<ul>
+<li>语音置信度低：进入澄清流程。</li>
+<li>输入过长：摘要后保留原文哈希。</li>
+<li>来源未知：拒绝或标记为 untrusted source。</li>
+</ul>
+<p>测试：</p>
+<ul>
+<li>Golden input tests：不同入口能生成同构 <code>IntentInput</code>。</li>
+<li>Abuse tests：伪造 actor、缺失 traceId、恶意 payload 必须拒绝。</li>
+</ul>
+<hr>
+<h3>6.2 Context Builder</h3>
+<p>职责：</p>
+<ul>
+<li>构造两类上下文：给模型看的 <code>PlannerContext</code>，给策略引擎看的 <code>PolicyContext</code>。</li>
+<li>控制模型可见信息，避免 secret、敏感数据和无关状态泄露。</li>
+<li>注入可见能力卡片、组件卡片、数据源卡片、设计令牌摘要。</li>
+</ul>
+<p>关键区分：</p>
+<pre><code class="language-text">PlannerContext
+  面向模型。
+  只包含摘要、可见能力、可见组件、可见数据源、当前任务状态。
+
+PolicyContext
+  面向策略引擎。
+  包含真实权限、组织规则、资源状态、风险上下文。</code></pre>
+<p>不变量：</p>
+<ul>
+<li>模型上下文永远不是完整数据库快照。</li>
+<li>模型上下文不包含 API key、token、系统 secret。</li>
+<li>PolicyContext 比 PlannerContext 更完整，但只给确定性策略系统。</li>
+</ul>
+<p>失败模式：</p>
+<ul>
+<li>上下文不足：返回 clarify。</li>
+<li>上下文过大：做任务相关摘要，记录摘要版本。</li>
+<li>权限不明：策略默认拒绝或要求重新鉴权。</li>
+</ul>
+<p>测试：</p>
+<ul>
+<li>Secret leakage scan。</li>
+<li>Token budget test。</li>
+<li>Context determinism test：同一状态构造出的上下文可复现。</li>
+</ul>
+<hr>
+<h3>6.3 Contract Registry Center</h3>
+<p>职责：</p>
+<ul>
+<li>统一管理系统可暴露给模型和动态 UI 的所有契约。</li>
+<li>包含五类注册表：能力、组件、数据源、设计令牌、Agent-UI 协议。</li>
+</ul>
+<p>组成：</p>
+<pre><code class="language-text">Contract Registry Center
+  Capability Graph
+  Component Cards
+  DataSource Registry
+  Design Tokens
+  Agent-UI Protocol / Event Bus</code></pre>
+<p>为什么需要它：</p>
+<ul>
+<li>防止模型幻觉出不存在的组件、能力或数据源。</li>
+<li>让不同前端框架、后端服务、插件和 Agent 可以通过统一协议协作。</li>
+<li>为 validator、renderer、action router、policy engine 提供共同事实源。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>未注册能力不可调用。</li>
+<li>未注册组件不可渲染。</li>
+<li>未注册数据源不可读取。</li>
+<li>未注册事件不可路由。</li>
+<li>设计样式只能使用 design tokens，不允许任意像素和颜色。</li>
+</ul>
+<p>测试：</p>
+<ul>
+<li>Registry snapshot test。</li>
+<li>Compatibility test：旧 DSL 在新 registry 上能否迁移。</li>
+<li>Plugin isolation test：插件注册能力不能绕过 policy。</li>
+</ul>
+<hr>
+<h3>6.4 Capability Graph</h3>
+<p>职责：</p>
+<ul>
+<li>定义软件“用户可控制的一切”。</li>
+<li>描述能力依赖、权限、风险、输入输出 schema、可逆性、执行器。</li>
+</ul>
+<p>示例：</p>
+<pre><code class="language-text">ui.layout.applyPreset
+ui.theme.applyTokens
+data.query
+file.export
+file.delete
+integration.sync
+server.restart
+automation.createRule</code></pre>
+<p>设计要点：</p>
+<ul>
+<li>Capability 是可执行世界的最小安全单元。</li>
+<li>IntentPlan 的 step 只能引用 Capability ID。</li>
+<li>Policy Engine 依据 Capability 的 risk/effects/reversible 做裁决。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>Capability 的 <code>execute</code> 不暴露给模型。</li>
+<li>Capability 输入必须通过 schema 校验。</li>
+<li>高危 Capability 默认需要 confirm 或 deny。</li>
+</ul>
+<hr>
+<h3>6.5 Component Cards</h3>
+<p>职责：</p>
+<ul>
+<li>向模型描述有哪些 UI 组件可用。</li>
+<li>不暴露 React/Vue/Svelte/Native 源码。</li>
+<li>描述组件角色、props schema、状态、限制、数据绑定方式和 action 插槽。</li>
+</ul>
+<p>示例：</p>
+<pre><code class="language-ts">export type ComponentCard = {
+  component: string;
+  visualRole: &quot;container&quot; | &quot;display&quot; | &quot;input&quot; | &quot;navigation&quot; | &quot;feedback&quot;;
+  description: string;
+  propsSchema: JsonSchema;
+  allowedDataSources?: string[];
+  allowedActions?: string[];
+  layoutConstraints: LayoutConstraint[];
+  states: [&quot;loading&quot;, &quot;empty&quot;, &quot;error&quot;, &quot;ready&quot;];
+  accessibility: AccessibilityContract;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li>Component Card 是模型看到的组件世界。</li>
+<li>Component Factory 是真实组件实例化者。</li>
+<li>模型不能发明组件 props。</li>
+</ul>
+<hr>
+<h3>6.6 DataSource Registry</h3>
+<p>职责：</p>
+<ul>
+<li>注册动态 UI 可以引用的数据源。</li>
+<li>定义参数 schema、结果 schema、权限、隐私等级、分页和流式能力。</li>
+</ul>
+<p>设计原则：</p>
+<ul>
+<li>UI DSL 只引用 <code>DataSourceRef</code>。</li>
+<li>Dynamic Canvas 不直接访问数据库。</li>
+<li>Data Proxy Engine 负责真实读取。</li>
+</ul>
+<p>示例：</p>
+<pre><code class="language-ts">export type DataSourceDefinition = {
+  id: string;
+  paramsSchema: JsonSchema;
+  resultSchema: JsonSchema;
+  requiredPermissions: string[];
+  privacy: &quot;public&quot; | &quot;internal&quot; | &quot;private&quot; | &quot;sensitive&quot;;
+  supportsStreaming: boolean;
+  read: DataSourceReader;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li>敏感数据必须脱敏后进入 UI。</li>
+<li>查询参数必须通过 schema。</li>
+<li>数据源错误必须返回可渲染错误状态。</li>
+</ul>
+<hr>
+<h3>6.7 Design Tokens</h3>
+<p>职责：</p>
+<ul>
+<li>约束生成式 UI 的视觉自由度。</li>
+<li>提供颜色、字号、间距、圆角、阴影、密度、动效、可达性模式。</li>
+</ul>
+<p>反模式：</p>
+<pre><code class="language-json">{ &quot;style&quot;: { &quot;left&quot;: &quot;317px&quot;, &quot;color&quot;: &quot;#ff3311&quot; } }</code></pre>
+<p>推荐：</p>
+<pre><code class="language-json">{
+  &quot;tone&quot;: &quot;danger&quot;,
+  &quot;density&quot;: &quot;comfortable&quot;,
+  &quot;spacing&quot;: &quot;md&quot;,
+  &quot;surface&quot;: &quot;raised&quot;
+}</code></pre>
+<p>不变量：</p>
+<ul>
+<li>UI DSL 不允许任意 CSS。</li>
+<li>高对比度、减弱动效、字号偏好必须由 tokens 支持。</li>
+<li>品牌视觉由 token 系统控制，而不是由模型自由发挥。</li>
+</ul>
+<hr>
+<h3>6.8 Agent-UI Protocol / Runtime Event Bus</h3>
+<p>职责：</p>
+<ul>
+<li>连接 Agent 推理状态、应用状态和 UI 渲染状态。</li>
+<li>承载 UI 事件、工具调用状态、流式 patch、错误、确认请求。</li>
+</ul>
+<p>事件类型：</p>
+<pre><code class="language-text">intent.received
+plan.created
+policy.confirm_required
+execution.started
+state.changed
+ui.patch
+ui.action
+ux.risk_detected
+journal.appended</code></pre>
+<p>不变量：</p>
+<ul>
+<li>事件可追踪、可重放、可审计。</li>
+<li>UI 事件只能通过 Action Router 进入执行链路。</li>
+<li>Agent 推理状态不能覆盖应用真实状态。</li>
+</ul>
+<hr>
+<h3>6.9 LLM Gateway</h3>
+<p>职责：</p>
+<ul>
+<li>统一 OpenAI、DeepSeek、本地模型等 provider。</li>
+<li>支持 structured outputs、function/tool calling、streaming、retry、timeout、fallback。</li>
+<li>对模型请求做审计、限流、成本统计、脱敏。</li>
+</ul>
+<p>接口：</p>
+<pre><code class="language-ts">export type LLMGateway = {
+  createIntentPlan(input: PlannerRequest): Promise&lt;IntentPlan&gt;;
+  createUIDsl(input: UIDslRequest): Promise&lt;UIDslDocument&gt;;
+  createClarification(input: ClarificationRequest): Promise&lt;ClarificationQuestion&gt;;
+  createAuditNarrative(input: AuditRequest): Promise&lt;AuditNarrative&gt;;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li>LLM Gateway 不直接改状态。</li>
+<li>LLM Gateway 不直接执行工具。</li>
+<li>所有输出必须有 schema。</li>
+<li>输出失败必须 retry 或 fallback。</li>
+</ul>
+<p>失败模式：</p>
+<ul>
+<li>Provider timeout：切换 provider 或 fallback 到规则 planner。</li>
+<li>Schema invalid：要求模型修正一次，仍失败则拒绝。</li>
+<li>费用过高：降级模型或关闭多模态评估。</li>
+</ul>
+<p>测试：</p>
+<ul>
+<li>Mock provider tests。</li>
+<li>Schema conformance tests。</li>
+<li>Timeout and retry tests。</li>
+<li>Prompt injection tests。</li>
+</ul>
+<hr>
+<h3>6.10 Semantic Planner</h3>
+<p>职责：</p>
+<ul>
+<li>把用户目标转成 <code>IntentPlan</code>。</li>
+<li>可以先用规则 planner 打通链路，再引入 LLM planner。</li>
+<li>不拥有执行权。</li>
+</ul>
+<p>成熟流程：</p>
+<pre><code class="language-text">IntentInput + PlannerContext + Contract Cards
+  -&gt; Rule Planner pre-check
+  -&gt; LLM structured planning
+  -&gt; IntentPlan draft
+  -&gt; Plan Validator</code></pre>
+<p>不变量：</p>
+<ul>
+<li>Planner 只生成计划，不执行。</li>
+<li>Planner 输出必须限长、限深、限步数。</li>
+<li>Planner 不可输出 chain-of-thought 作为执行输入。</li>
+</ul>
+<p>为什么限长限深：</p>
+<p>UXBench 论文指出 reasoning 模型可能因冗长推理导致解析失败或延迟升高。产品架构中，推理可以存在，但执行输入必须是短而结构化的计划。</p>
+<hr>
+<h3>6.11 IntentPlan</h3>
+<p>职责：</p>
+<ul>
+<li>表示自然语言目标的结构化计划。</li>
+<li>是模型世界进入可执行世界的第一份正式文档。</li>
+</ul>
+<p>示例：</p>
+<pre><code class="language-ts">export type IntentPlan = {
+  id: string;
+  userGoal: string;
+  assumptions: string[];
+  steps: IntentPlanStep[];
+  uiIntent?: {
+    preferredView?: string;
+    requiredComponents?: string[];
+    explanationLevel?: &quot;brief&quot; | &quot;normal&quot; | &quot;detailed&quot;;
+  };
+  riskHints?: string[];
+};
+
+export type IntentPlanStep = {
+  id: string;
+  capabilityId: string;
+  input: unknown;
+  dependsOn?: string[];
+  expectedEffect: string;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li><code>capabilityId</code> 必须注册。</li>
+<li><code>input</code> 必须符合 capability schema。</li>
+<li><code>dependsOn</code> 不能成环。</li>
+<li><code>riskHints</code> 只能作为提示，不能作为策略结论。</li>
+</ul>
+<hr>
+<h3>6.12 Plan Validator</h3>
+<p>职责：</p>
+<ul>
+<li>在策略前拒绝结构错误、越界引用和危险组合。</li>
+<li>只做确定性校验，不猜测模型意图。</li>
+</ul>
+<p>检查项：</p>
+<ul>
+<li>IntentPlan schema。</li>
+<li>Capability 是否存在。</li>
+<li>输入参数是否符合 schema。</li>
+<li>依赖图是否成环。</li>
+<li>step 数量和嵌套深度。</li>
+<li>是否引用不可见能力。</li>
+<li>是否包含未知字段。</li>
+</ul>
+<p>失败处理：</p>
+<ul>
+<li>结构错误：要求重新生成一次。</li>
+<li>引用不存在能力：拒绝并记录 hallucination。</li>
+<li>参数缺失：进入 clarify。</li>
+<li>危险组合：交给 Policy Engine deny 或 confirm。</li>
+</ul>
+<hr>
+<h3>6.13 Policy Engine</h3>
+<p>职责：</p>
+<ul>
+<li>系统主权层。</li>
+<li>独立裁决权限、风险、确认、澄清、拒绝。</li>
+<li>不听从模型对风险的自我判断。</li>
+</ul>
+<p>输入：</p>
+<pre><code class="language-text">actor
+PolicyContext
+normalized IntentPlan
+CapabilityDefinition
+DataSourceDefinition
+organization policy
+runtime mode
+UX risk signal</code></pre>
+<p>输出：</p>
+<pre><code class="language-ts">export type PolicyDecision =
+  | { type: &quot;allow&quot;; planId: string }
+  | { type: &quot;clarify&quot;; question: string; choices?: ClarificationChoice[] }
+  | { type: &quot;confirm&quot;; request: ConfirmationRequest }
+  | { type: &quot;deny&quot;; reason: string; recovery?: string }
+  | { type: &quot;fallback&quot;; reason: string };</code></pre>
+<p>风险矩阵：</p>
+<table><thead><tr><th>风险</th><th>示例</th><th>默认处理</th></tr></thead><tbody>
+<tr><td>none</td><td>打开面板、聚焦视图</td><td>allow</td></tr>
+<tr><td>low</td><td>可撤销布局、局部过滤、只读查询</td><td>allow</td></tr>
+<tr><td>medium</td><td>长任务、外部读取、偏好变更</td><td>confirm 或 allow</td></tr>
+<tr><td>high</td><td>删除、覆盖、上传、重启、付费</td><td>confirm</td></tr>
+<tr><td>critical</td><td>权限变更、不可恢复删除、跨组织迁移</td><td>deny 或强确认</td></tr>
+<tr><td>ux-risk</td><td>遮挡确认按钮、不可关闭弹窗、误导内容</td><td>fallback 或 deny</td></tr>
+</tbody></table>
+<p>不变量：</p>
+<ul>
+<li>模型说 low risk 不算数。</li>
+<li>策略必须可以解释。</li>
+<li>策略决策必须写入 journal。</li>
+</ul>
+<hr>
+<h3>6.14 Human Confirmation UI</h3>
+<p>职责：</p>
+<ul>
+<li>在高风险动作前给用户明确、不可遮挡、可取消的确认界面。</li>
+<li>展示将要执行的能力、影响范围、可逆性、风险等级。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>确认层不能被动态 UI 遮挡。</li>
+<li>默认焦点不能落在危险确认按钮。</li>
+<li>用户必须能取消。</li>
+<li>critical 操作可以要求二次确认或强制拒绝。</li>
+</ul>
+<p>测试：</p>
+<ul>
+<li>Modal z-index and focus tests。</li>
+<li>Keyboard accessibility tests。</li>
+<li>Screen reader label tests。</li>
+<li>Dynamic UI cannot cover confirmation tests。</li>
+</ul>
+<hr>
+<h3>6.15 Clarification Generator</h3>
+<p>职责：</p>
+<ul>
+<li>当上下文不足或意图歧义时生成澄清问题。</li>
+<li>可以调用模型，但问题必须短、具体、可回答。</li>
+</ul>
+<p>示例：</p>
+<pre><code class="language-json">{
+  &quot;question&quot;: &quot;你想统计哪个时间范围的数据？&quot;,
+  &quot;choices&quot;: [&quot;本月&quot;, &quot;上月&quot;, &quot;自定义&quot;]
+}</code></pre>
+<p>不变量：</p>
+<ul>
+<li>澄清问题不能诱导用户授权高风险操作。</li>
+<li>澄清问题不能泄露用户无权查看的信息。</li>
+<li>澄清答案再次进入 Intent Input Adapter。</li>
+</ul>
+<hr>
+<h3>6.16 Deny and Recovery</h3>
+<p>职责：</p>
+<ul>
+<li>在拒绝执行时给出原因和可恢复路径。</li>
+<li>可以调用模型生成更友好的解释，但原始拒绝原因来自 Policy Engine。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>AI 解释不能改变拒绝事实。</li>
+<li>恢复建议只能引用用户有权使用的能力。</li>
+<li>拒绝结果必须写入 journal。</li>
+</ul>
+<hr>
+<h3>6.17 Action Router</h3>
+<p>职责：</p>
+<ul>
+<li>动态 UI 事件唯一入口。</li>
+<li>将按钮点击、表单提交、拖拽、快捷键、自动化事件转成 <code>ActionRef</code>。</li>
+<li>再进入 <code>Capability -&gt; Policy -&gt; Executor</code>。</li>
+</ul>
+<p>流程：</p>
+<pre><code class="language-text">Dynamic Canvas event
+  -&gt; ActionRef
+  -&gt; Capability lookup
+  -&gt; Policy Engine
+  -&gt; Transactional Executor</code></pre>
+<p>不变量：</p>
+<ul>
+<li>组件内不能直接调用业务 API。</li>
+<li>ActionRef 未注册则拒绝。</li>
+<li>高危 ActionRef 必须触发确认。</li>
+</ul>
+<hr>
+<h3>6.18 Transactional Executor</h3>
+<p>职责：</p>
+<ul>
+<li>执行已授权能力。</li>
+<li>负责事务边界、幂等、回滚、补偿、状态差异生成。</li>
+</ul>
+<p>接口：</p>
+<pre><code class="language-ts">export type ExecutionResult = {
+  executionId: string;
+  status: &quot;success&quot; | &quot;partial&quot; | &quot;failed&quot;;
+  outputs: Record&lt;string, unknown&gt;;
+  stateDiff?: StateDiff;
+  compensation?: CompensationPlan;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li>Executor 不解析自然语言。</li>
+<li>Executor 只执行 Policy 已允许的能力。</li>
+<li>所有副作用必须记录。</li>
+</ul>
+<p>失败模式：</p>
+<ul>
+<li>可回滚失败：自动 rollback。</li>
+<li>不可回滚失败：生成 compensation plan。</li>
+<li>部分成功：进入 journal 和 audit。</li>
+</ul>
+<hr>
+<h3>6.19 Data Proxy Engine</h3>
+<p>职责：</p>
+<ul>
+<li>为动态 UI 和能力执行提供受控数据读取。</li>
+<li>统一权限、脱敏、分页、缓存、错误状态、流式更新。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>Dynamic Canvas 不能直接访问数据库。</li>
+<li>UI DSL 只能使用 <code>DataSourceRef</code>。</li>
+<li>敏感字段默认不出现在模型上下文中。</li>
+</ul>
+<p>测试：</p>
+<ul>
+<li>Permission tests。</li>
+<li>PII redaction tests。</li>
+<li>Pagination and streaming tests。</li>
+<li>Cache invalidation tests。</li>
+</ul>
+<hr>
+<h3>6.20 State Kernel</h3>
+<p>职责：</p>
+<ul>
+<li>应用真实状态唯一事实源。</li>
+<li>接收事务执行器提交的 state diff。</li>
+<li>向 UI runtime 提供状态快照和订阅。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>UI 不能直接修改 State Kernel。</li>
+<li>LLM 不能直接写 State Kernel。</li>
+<li>状态更新必须来自已授权执行。</li>
+</ul>
+<p>建议实现：</p>
+<pre><code class="language-text">State Kernel
+  immutable snapshot
+  event-sourced journal
+  derived selectors
+  optimistic view state
+  undo / redo snapshots</code></pre>
+<hr>
+<h3>6.21 Execution Journal</h3>
+<p>职责：</p>
+<ul>
+<li>记录输入、计划、校验、策略、确认、执行、状态差异、UX 风险、审计解释。</li>
+<li>作为系统可审计性的基础。</li>
+</ul>
+<p>记录格式：</p>
+<pre><code class="language-ts">export type JournalEntry = {
+  id: string;
+  traceId: string;
+  type:
+    | &quot;intent&quot;
+    | &quot;plan&quot;
+    | &quot;validation&quot;
+    | &quot;policy&quot;
+    | &quot;confirmation&quot;
+    | &quot;execution&quot;
+    | &quot;state_diff&quot;
+    | &quot;ux_risk&quot;
+    | &quot;audit&quot;;
+  actorId?: string;
+  timestamp: string;
+  payloadHash: string;
+  redactedPayload: unknown;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li>Journal 不记录 secret。</li>
+<li>AI 解释不能覆盖原始 journal。</li>
+<li>高风险操作必须可追溯到用户确认。</li>
+</ul>
+<hr>
+<h3>6.22 UI DSL Generator</h3>
+<p>职责：</p>
+<ul>
+<li>根据 IntentPlan、State Snapshot、Component Cards、DataSource Cards、Design Tokens 生成 UI DSL。</li>
+<li>只生成声明式配置。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>不输出 JS。</li>
+<li>不输出任意 CSS。</li>
+<li>不绑定未注册 action。</li>
+<li>不引用未注册 dataSource。</li>
+</ul>
+<p>输入：</p>
+<pre><code class="language-text">IntentPlan
+State summary
+Visible Component Cards
+Visible DataSource Cards
+Design Tokens
+Output Schema
+Forbidden Rules</code></pre>
+<p>输出：</p>
+<pre><code class="language-ts">export type UIDslDocument = {
+  version: number;
+  intentPlanId: string;
+  layout: LayoutSpec;
+  root: UIDslNode;
+  metadata: {
+    generatedBy: &quot;rule&quot; | &quot;llm&quot;;
+    traceId: string;
+  };
+};</code></pre>
+<hr>
+<h3>6.23 Streaming Patch Parser</h3>
+<p>职责：</p>
+<ul>
+<li>降低生成式 UI 延迟。</li>
+<li>支持从 plan preview、layout skeleton 到 component patch 的渐进式体验。</li>
+</ul>
+<p>三阶段：</p>
+<pre><code class="language-text">阶段 A：Plan Preview
+阶段 B：Layout Skeleton
+阶段 C：Component Patch</code></pre>
+<p>不变量：</p>
+<ul>
+<li>部分 patch 也必须符合 patch schema。</li>
+<li>未通过 DSL Validator 的 patch 不进入画布。</li>
+<li>流式失败时回退到 skeleton 或默认 UI。</li>
+</ul>
+<hr>
+<h3>6.24 UI DSL Document</h3>
+<p>职责：</p>
+<ul>
+<li>作为模型与渲染器之间的声明式协议。</li>
+<li>描述布局、组件、数据源引用、动作引用。</li>
+</ul>
+<p>示例：</p>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;intentPlanId&quot;: &quot;plan_001&quot;,
+  &quot;layout&quot;: {
+    &quot;strategy&quot;: &quot;split&quot;,
+    &quot;regions&quot;: [
+      { &quot;id&quot;: &quot;main&quot;, &quot;role&quot;: &quot;primary&quot;, &quot;preferredSize&quot;: 0.62 },
+      { &quot;id&quot;: &quot;inspector&quot;, &quot;role&quot;: &quot;inspector&quot;, &quot;preferredSize&quot;: 0.38 }
+    ]
+  },
+  &quot;root&quot;: {
+    &quot;id&quot;: &quot;incident-panel&quot;,
+    &quot;component&quot;: &quot;Panel&quot;,
+    &quot;props&quot;: {
+      &quot;title&quot;: &quot;异常日志&quot;,
+      &quot;tone&quot;: &quot;danger&quot;,
+      &quot;density&quot;: &quot;comfortable&quot;
+    },
+    &quot;dataSource&quot;: {
+      &quot;id&quot;: &quot;server.errorLogs&quot;,
+      &quot;params&quot;: { &quot;range&quot;: &quot;latest&quot; }
+    },
+    &quot;children&quot;: []
+  }
+}</code></pre>
+<p>不变量：</p>
+<ul>
+<li>DSL 是协议，不是代码。</li>
+<li>DSL 可以版本化、迁移和 diff。</li>
+<li>DSL 中的 action 只是 ActionRef。</li>
+</ul>
+<hr>
+<h3>6.25 DSL Validator</h3>
+<p>职责：</p>
+<ul>
+<li>拒绝非法 UI DSL。</li>
+<li>校验组件、props、dataSource、action、layout、版本和未知字段。</li>
+</ul>
+<p>检查项：</p>
+<ul>
+<li>JSON schema。</li>
+<li>Component exists。</li>
+<li>Props schema。</li>
+<li>DataSourceRef exists。</li>
+<li>ActionRef exists。</li>
+<li>Layout constraints。</li>
+<li>Token constraints。</li>
+<li>Depth and node count limits。</li>
+</ul>
+<p>失败处理：</p>
+<ul>
+<li>非法组件：拒绝。</li>
+<li>props 错误：尝试一次结构化修正。</li>
+<li>过深/过大：降级为简化布局。</li>
+<li>危险 action：交给 Policy Engine。</li>
+</ul>
+<hr>
+<h3>6.26 Virtual UI Tree</h3>
+<p>职责：</p>
+<ul>
+<li>将 UI DSL 转成运行时组件树的中间表示。</li>
+<li>支持 diff、patch、memoization、错误边界。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>Virtual UI Tree 不能执行任意脚本。</li>
+<li>Tree node 必须可追溯到 DSL node。</li>
+<li>错误节点不能让整个应用崩溃。</li>
+</ul>
+<hr>
+<h3>6.27 Component Factory</h3>
+<p>职责：</p>
+<ul>
+<li>把 Virtual UI Tree 节点映射为真实组件。</li>
+<li>注入 design tokens、data binding、action binding、loading/error/empty states。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>只实例化注册组件。</li>
+<li>Action binding 只绑定到 Action Router。</li>
+<li>Data binding 只绑定到 Data Proxy Engine。</li>
+<li>组件错误被局部边界捕获。</li>
+</ul>
+<hr>
+<h3>6.28 Layout Solver</h3>
+<p>职责：</p>
+<ul>
+<li>求解区域、尺寸、响应式断点、最小点击尺寸、内容溢出。</li>
+<li>避免模型生成视觉上不可用的布局。</li>
+</ul>
+<p>建议规则：</p>
+<ul>
+<li>不允许关键按钮小于平台最小触控尺寸。</li>
+<li>不允许文本溢出按钮或卡片。</li>
+<li>不允许模态层遮挡系统确认层。</li>
+<li>宽屏、多栏、移动端必须有各自约束。</li>
+</ul>
+<hr>
+<h3>6.29 UX Validator</h3>
+<p>职责：</p>
+<ul>
+<li>检查生成 UI 是否造成用户体验风险。</li>
+<li>是 schema validator 之后的第二道质量门。</li>
+</ul>
+<p>检查维度：</p>
+<ol start="1">
+<li>Usability：操作是否清晰，控件是否可达。</li>
+<li>Efficiency：是否增加不必要步骤或认知成本。</li>
+<li>Trustworthiness：文案、徽标、功能、落地内容是否一致。</li>
+</ol>
+<p>对应 UXBench 任务：</p>
+<ul>
+<li>文本浮层遮挡页面文字。</li>
+<li>文本浮层遮挡可点击区域。</li>
+<li>弹窗缺少关闭控件。</li>
+<li>弹窗遮挡原生关闭按钮。</li>
+<li>多个模态弹窗堆叠。</li>
+<li>推广徽标与落地页不一致。</li>
+<li>服务名与页面内容不一致。</li>
+<li>服务描述与实际功能不一致。</li>
+</ul>
+<p>实现分层：</p>
+<pre><code class="language-text">规则层：DOM/layout 静态检查
+视觉层：截图 + bounding boxes
+多模态层：MLLM/UX model 做体验推理</code></pre>
+<p>MVP：</p>
+<ul>
+<li>先实现规则层。</li>
+<li>再做视觉回归。</li>
+<li>最后引入多模态 UX evaluator。</li>
+</ul>
+<hr>
+<h3>6.30 Multimodal UX Evaluator</h3>
+<p>职责：</p>
+<ul>
+<li>在规则无法判断时，对截图、bounding boxes、文案和交互状态做多模态推理。</li>
+<li>可使用通用 MLLM 或领域化 UX 模型。</li>
+</ul>
+<p>输入：</p>
+<pre><code class="language-text">screenshot
+DOM bounding boxes
+visible text
+active modal stack
+interaction target map
+policy context summary</code></pre>
+<p>输出：</p>
+<pre><code class="language-ts">export type UXRiskAssessment = {
+  risk: &quot;none&quot; | &quot;low&quot; | &quot;medium&quot; | &quot;high&quot;;
+  categories: string[];
+  evidence: string[];
+  recommendedAction: &quot;render&quot; | &quot;fallback&quot; | &quot;confirm&quot; | &quot;deny&quot;;
+};</code></pre>
+<p>不变量：</p>
+<ul>
+<li>多模态模型结论只是 UX risk signal。</li>
+<li>最终是否 fallback 由 Policy Engine 或 UX Decision Gate 裁决。</li>
+<li>不把长推理链作为执行输入。</li>
+</ul>
+<hr>
+<h3>6.31 UX Decision Gate</h3>
+<p>职责：</p>
+<ul>
+<li>汇总 UX Validator 和 Multimodal UX Evaluator 的结果。</li>
+<li>决定通过、回退、要求确认或进入策略引擎。</li>
+</ul>
+<p>决策：</p>
+<pre><code class="language-text">none/low -&gt; render
+medium -&gt; render with guard 或 confirm
+high -&gt; fallback
+critical -&gt; policy deny</code></pre>
+<p>不变量：</p>
+<ul>
+<li>reset/default UI 始终可达。</li>
+<li>确认层优先级高于动态 UI。</li>
+<li>UX 风险必须写入 journal。</li>
+</ul>
+<hr>
+<h3>6.32 Fallback UI</h3>
+<p>职责：</p>
+<ul>
+<li>在模型失败、DSL 错误、UX 风险、策略拒绝、网络失败时提供可用界面。</li>
+<li>保证系统不是“AI 挂了就不可用”。</li>
+</ul>
+<p>内容：</p>
+<ul>
+<li>默认导航。</li>
+<li>任务历史。</li>
+<li>重置布局。</li>
+<li>手动执行安全能力。</li>
+<li>错误与恢复建议。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>Fallback UI 不依赖 LLM。</li>
+<li>Fallback UI 不能被动态 UI 遮挡。</li>
+<li>Fallback UI 应可通过固定入口恢复。</li>
+</ul>
+<hr>
+<h3>6.33 Dynamic Canvas</h3>
+<p>职责：</p>
+<ul>
+<li>渲染最终界面。</li>
+<li>承载动态组件树、状态订阅、action binding、局部错误边界。</li>
+</ul>
+<p>不变量：</p>
+<ul>
+<li>Canvas 不直接访问数据库。</li>
+<li>Canvas 不直接执行 capability。</li>
+<li>Canvas 发出的事件全部进入 Action Router。</li>
+<li>Canvas 保留默认恢复入口。</li>
+</ul>
+<hr>
+<h3>6.34 Audit Explanation Generator</h3>
+<p>职责：</p>
+<ul>
+<li>把 journal 中的原始事实解释给用户或管理员。</li>
+<li>可调用大模型生成更易读的摘要。</li>
+</ul>
+<p>输入：</p>
+<pre><code class="language-text">redacted journal entries
+policy decisions
+execution results
+state diff summary
+ux risk events</code></pre>
+<p>输出：</p>
+<pre><code class="language-text">系统理解了什么
+执行了哪些步骤
+哪些风险被拦截或确认
+当前结果是什么
+用户可以如何恢复</code></pre>
+<p>不变量：</p>
+<ul>
+<li>审计解释不能篡改 journal。</li>
+<li>对外展示前必须脱敏。</li>
+<li>高风险操作必须能追溯到确认记录。</li>
+</ul>
+<hr>
+<h2>7. 三个关键闭环</h2>
+<h3>7.1 意图闭环</h3>
+<pre><code class="language-mermaid">flowchart LR
+  A[IntentInput] --&gt; B[PlannerContext]
+  B --&gt; C[Semantic Planner]
+  C --&gt; D[IntentPlan]
+  D --&gt; E[Plan Validator]
+  E --&gt; F[Policy Engine]</code></pre>
+<p>意义：自然语言必须先变成结构化计划，再进入校验和策略。</p>
+<h3>7.2 动作闭环</h3>
+<pre><code class="language-mermaid">flowchart LR
+  A[Dynamic Canvas] --&gt; B[UI Event]
+  B --&gt; C[Action Router]
+  C --&gt; D[ActionRef]
+  D --&gt; E[Capability Graph]
+  E --&gt; F[Policy Engine]
+  F --&gt; G[Transactional Executor]</code></pre>
+<p>意义：动态 UI 生成的按钮也不能绕过权限。</p>
+<h3>7.3 UX 闭环</h3>
+<pre><code class="language-mermaid">flowchart LR
+  A[UI DSL] --&gt; B[DSL Validator]
+  B --&gt; C[Layout Solver]
+  C --&gt; D[UX Validator]
+  D --&gt; E{UX Risk?}
+  E --&gt;|No| F[Dynamic Canvas]
+  E --&gt;|Yes| G[Fallback UI]
+  E --&gt;|High| H[Policy Engine]</code></pre>
+<p>意义：UI 能渲染不等于能上线；体验风险必须能阻断和回退。</p>
+<hr>
+<h2>8. 安全模型</h2>
+<h3>8.1 信任边界</h3>
+<table><thead><tr><th>边界</th><th>不信任对象</th><th>防护</th></tr></thead><tbody>
+<tr><td>用户输入边界</td><td>prompt injection、伪造事件</td><td>IntentInput schema、actor binding</td></tr>
+<tr><td>模型输出边界</td><td>幻觉、越权、错误 JSON</td><td>Structured Outputs、Validator、retry</td></tr>
+<tr><td>执行边界</td><td>危险 capability</td><td>Policy Engine、Human Confirmation</td></tr>
+<tr><td>数据边界</td><td>敏感数据泄露</td><td>Data Proxy、redaction、privacy levels</td></tr>
+<tr><td>UI 边界</td><td>遮挡、误导、不可达</td><td>UX Validator、Fallback UI</td></tr>
+<tr><td>审计边界</td><td>解释篡改事实</td><td>Journal immutability、redacted narrative</td></tr>
+</tbody></table>
+<h3>8.2 最小权限</h3>
+<p>每次请求只暴露：</p>
+<ul>
+<li>当前用户有权使用的 capabilities。</li>
+<li>当前任务需要的 component cards。</li>
+<li>当前视图允许的数据源。</li>
+<li>当前品牌和可达性 token。</li>
+</ul>
+<h3>8.3 Prompt Injection 防护</h3>
+<p>模型输入中所有外部内容都视为 untrusted content。策略：</p>
+<ul>
+<li>把用户内容和系统指令分离。</li>
+<li>不把网页、文档、日志中的指令当系统指令。</li>
+<li>所有模型输出走 schema。</li>
+<li>所有执行走 policy。</li>
+</ul>
+<hr>
+<h2>9. 观测、评估与测试</h2>
+<h3>9.1 Golden Tests</h3>
+<ul>
+<li>自然语言到 IntentPlan。</li>
+<li>IntentPlan 到 PolicyDecision。</li>
+<li>State + IntentPlan 到 UI DSL。</li>
+<li>UI DSL 到 Virtual UI Tree。</li>
+</ul>
+<h3>9.2 Schema Tests</h3>
+<ul>
+<li>错误 capability 被拒绝。</li>
+<li>错误 props 被拒绝。</li>
+<li>未注册 dataSource 被拒绝。</li>
+<li>过深 UI tree 被拒绝。</li>
+</ul>
+<h3>9.3 Safety Tests</h3>
+<ul>
+<li>删除、覆盖、重启、权限变更触发确认或拒绝。</li>
+<li>动态 UI 不能绕过 Action Router。</li>
+<li>模型说“这是低风险”不会影响策略裁决。</li>
+</ul>
+<h3>9.4 UX Tests</h3>
+<ul>
+<li>弹窗必须可关闭。</li>
+<li>多个 modal 不能同时 active。</li>
+<li>确认按钮不能被遮挡。</li>
+<li>reset/default UI 始终可达。</li>
+<li>文案和功能不能自相矛盾。</li>
+</ul>
+<h3>9.5 Visual and Multimodal Tests</h3>
+<ul>
+<li>screenshot diff。</li>
+<li>bounding box overlap detection。</li>
+<li>accessibility audit。</li>
+<li>UXBench-style golden cases。</li>
+</ul>
+<h3>9.6 Observability</h3>
+<p>每个 trace 应能回答：</p>
+<pre><code class="language-text">用户说了什么？
+系统理解成什么？
+模型输出了什么？
+哪些 schema 通过或失败？
+策略为什么允许、确认或拒绝？
+执行产生了哪些状态变化？
+UI 为什么这样生成？
+是否出现 UX 风险？
+用户如何恢复？</code></pre>
+<hr>
+<h2>10. 渐进式实现路线</h2>
+<h3>Phase 0: Registry First</h3>
+<p>先建：</p>
+<ul>
+<li>Capability Graph。</li>
+<li>Component Cards。</li>
+<li>DataSource Registry。</li>
+<li>Design Tokens。</li>
+</ul>
+<p>验收：未接模型也能手写 DSL 并渲染。</p>
+<h3>Phase 1: DSL Runtime</h3>
+<p>实现：</p>
+<ul>
+<li>UI DSL schema。</li>
+<li>DSL Validator。</li>
+<li>Virtual UI Tree。</li>
+<li>Component Factory。</li>
+<li>Dynamic Canvas。</li>
+</ul>
+<p>验收：错误 DSL 被拒绝，正确 DSL 可渲染。</p>
+<h3>Phase 2: Intent Runtime</h3>
+<p>实现：</p>
+<ul>
+<li>IntentInput。</li>
+<li>Context Builder。</li>
+<li>Rule Planner。</li>
+<li>Plan Validator。</li>
+<li>Policy Engine。</li>
+</ul>
+<p>验收：不接模型也能完成简单意图。</p>
+<h3>Phase 3: LLM Gateway</h3>
+<p>实现：</p>
+<ul>
+<li>OpenAI provider。</li>
+<li>DeepSeek provider。</li>
+<li>Structured output。</li>
+<li>retry/fallback。</li>
+</ul>
+<p>验收：模型输出不合法时不会进入执行。</p>
+<h3>Phase 4: Controlled GenUI</h3>
+<p>实现：</p>
+<ul>
+<li>UI DSL Generator。</li>
+<li>Component Card prompt。</li>
+<li>DataSourceRef binding。</li>
+</ul>
+<p>验收：模型只能用注册组件生成界面。</p>
+<h3>Phase 5: Streaming UI</h3>
+<p>实现：</p>
+<ul>
+<li>Plan preview。</li>
+<li>Layout skeleton。</li>
+<li>Component patch。</li>
+</ul>
+<p>验收：500ms 内用户看到反馈。</p>
+<h3>Phase 6: UX Validator</h3>
+<p>实现：</p>
+<ul>
+<li>规则层。</li>
+<li>视觉层。</li>
+<li>可选多模态层。</li>
+</ul>
+<p>验收：遮挡确认层、坏弹窗、不可达 reset 会被拦截。</p>
+<h3>Phase 7: Agent-UI Protocol</h3>
+<p>实现：</p>
+<ul>
+<li>Event Bus。</li>
+<li>State Bridge。</li>
+<li>Tool Invocation Boundary。</li>
+<li>插件注册协议。</li>
+</ul>
+<p>验收：插件可扩展组件和能力，但不能绕过 policy。</p>
+<hr>
+<h2>11. 成熟度模型</h2>
+<table><thead><tr><th>等级</th><th>能力</th><th>风险</th></tr></thead><tbody>
+<tr><td>L0 静态 UI</td><td>固定页面和按钮</td><td>低，但自由度低</td></tr>
+<tr><td>L1 Controlled GenUI</td><td>模型选择少量预设组件</td><td>可控，适合 MVP</td></tr>
+<tr><td>L2 Declarative GenUI</td><td>模型输出 UI DSL</td><td>成熟主路线</td></tr>
+<tr><td>L3 Agentic UI Protocol</td><td>Agent、应用、插件通过协议协作</td><td>复杂度上升</td></tr>
+<tr><td>L4 Limited Open-ended Sandbox</td><td>受限沙箱内开放式生成</td><td>仅适合探索和低风险区域</td></tr>
+</tbody></table>
+<p>本文推荐从 L1 到 L2 开始，逐步走向 L3，不建议一开始进入 L4。</p>
+<hr>
+<h2>12. 常见反模式</h2>
+<ol start="1">
+<li>让模型直接写 React/Vue 代码。</li>
+</ol>
+<p>问题：安全、审美、可维护性、可测试性都失控。</p>
+<ol start="2">
+<li>动态按钮直接调用后端 API。</li>
+</ol>
+<p>问题：绕过 policy，破坏审计。</p>
+<ol start="3">
+<li>把 prompt 当权限系统。</li>
+</ol>
+<p>问题：prompt injection 和模型幻觉无法根治。</p>
+<ol start="4">
+<li>只做 JSON schema，不做 UX 校验。</li>
+</ol>
+<p>问题：界面能渲染但可能遮挡、误导、不可达。</p>
+<ol start="5">
+<li>把 Agent 状态当应用状态。</li>
+</ol>
+<p>问题：推理过程会污染真实业务状态。</p>
+<ol start="6">
+<li>没有默认 UI。</li>
+</ol>
+<p>问题：模型失败时应用不可用。</p>
+<hr>
+<h2>13. 最小可行产品定义</h2>
+<p>一个合格 MVP 至少应包含：</p>
+<ul>
+<li>10 个以内核心 Capability。</li>
+<li>8 到 12 个高质量组件卡片。</li>
+<li>3 到 5 个 DataSource。</li>
+<li>一个 JSON UI DSL schema。</li>
+<li>一个规则 planner。</li>
+<li>一个 LLM planner。</li>
+<li>一个 Policy Engine。</li>
+<li>一个 Action Router。</li>
+<li>一个 Dynamic Canvas。</li>
+<li>一个 Fallback UI。</li>
+<li>一个 Execution Journal。</li>
+<li>基础 UX Validator。</li>
+</ul>
+<p>MVP 不必包含：</p>
+<ul>
+<li>完整多模态 UX 模型。</li>
+<li>完全开放式 UI 生成。</li>
+<li>跨应用 Agent 协议生态。</li>
+<li>复杂插件市场。</li>
+</ul>
+<hr>
+<h2>14. 参考文献</h2>
+<p>[1] Vercel. <em>AI SDK Documentation</em>. https://sdk.vercel.ai/docs. Accessed 2026-07-05.</p>
+<p>[2] Google Cloud. <em>What is Generative UI? Building Agent-Powered Interfaces</em>. https://cloud.google.com/discover/generative-ui. Accessed 2026-07-05.</p>
+<p>[3] CopilotKit. <em>Generative UI Patterns and Agentic UI Protocols</em>. https://github.com/CopilotKit/generative-ui. Accessed 2026-07-05.</p>
+<p>[4] OpenAI. <em>Structured Outputs</em>. https://platform.openai.com/docs/guides/structured-outputs. Accessed 2026-07-05.</p>
+<p>[5] Ruichao Mao, Zhou Fang, Teng Guo, Hao Yang, Yaping Li, Shaohua Peng, Maji Huang, Xiaoyu Lin, Shuoyang Liu, Xuepeng Li, Yuyu Zhang, Hai Rao. <em>Reasoning for Mobile User Experience with Multimodal LLMs: Task, Benchmark, and Approach</em>. arXiv:2606.13192, 2026. Local file: <code>BRAINSTORM/reference/reasoning-for-mobile-user-experience-with-multimodal-llms-2606.13192.pdf</code>.</p>
+<p>[6] <code>BRAINSTORM/reference/reading-notes.md</code>. Local research notes on Generative UI, Intent-Driven UI, Agentic UI, UXBench, and implementation implications.</p>
+<p>[7] <code>BRAINSTORM/mature-intent-native-generative-ui-build-guide1.md</code>. Current architecture guide and build manual for Intent-Native Generative UI.</p>
+<hr>
+<h2>15. 结论</h2>
+<p>意图原生生成式 UI 的成熟架构不是“自然语言直接变界面”，而是一个受控系统：</p>
+<pre><code class="language-text">模型负责理解和生成候选结构。
+契约负责限定可用世界。
+校验器负责拒绝非法结构。
+策略引擎负责主权裁决。
+执行器负责可审计副作用。
+状态内核负责真实状态。
+UI 运行时负责声明式投影。
+UX Validator 负责体验风险。
+Fallback UI 负责可恢复性。
+Journal 负责事实记录。</code></pre>
+<p>只有把这些模块分清，才能同时获得自然语言交互的自由度、传统软件的可靠性、生产系统的安全性和高质量 UI 的可维护性。</p></body></html>

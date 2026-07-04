@@ -472,7 +472,7 @@ body {
 
 .assistant-session-toolbar {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .assistant-session-actions {
@@ -500,7 +500,7 @@ body {
 
 .assistant-history-panel {
   border: 1px solid #dce8f1;
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.78);
   padding: 12px;
 }
@@ -529,7 +529,7 @@ body {
 
 .assistant-history-item {
   border: 1px solid #e0e9f1;
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(247, 250, 252, 0.82);
   padding: 10px;
 }
@@ -650,11 +650,14 @@ body {
 }
 
 .assistant-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   flex: 1;
   min-height: 0;
-  padding: 16px;
-  border-radius: 12px;
-  background: rgba(251, 252, 248, 0.82);
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(247, 250, 252, 0.72);
   border: 1px solid var(--line-1);
   overflow: auto;
 }
@@ -682,7 +685,7 @@ body {
 
 .assistant-launcher-mode {
   border: 1px solid var(--line-1);
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
   color: var(--ink-1);
   cursor: pointer;
@@ -704,21 +707,34 @@ body {
 }
 
 .assistant-message {
-  max-width: 92%;
-  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 94%;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line-1);
   padding: 12px 14px;
   color: var(--ink-1);
-  margin-bottom: 12px;
 }
 
 .assistant-message:has(.assistant-message-title:first-child) {
   box-shadow: 0 10px 26px rgba(24, 34, 47, 0.05);
 }
 
+.assistant-message.user {
+  align-self: flex-end;
+  max-width: 86%;
+  background: #eef6ff;
+  border-color: rgba(27, 102, 179, 0.18);
+}
+
+.assistant-message.assistant {
+  align-self: flex-start;
+  width: min(94%, 640px);
+}
+
 .assistant-message-title {
-  margin-bottom: 10px;
   font-size: 13px;
   font-weight: 800;
   color: var(--accent-1);
@@ -728,15 +744,15 @@ body {
 .assistant-answer-text {
   white-space: pre-line;
   line-height: 1.8;
+  overflow-wrap: anywhere;
 }
 
 .assistant-citation-card {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 12px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #f1ece4;
   color: #70685f;
   font-size: 13px;
@@ -746,9 +762,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 10px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #f7f0dc;
   color: #6f623d;
   font-size: 13px;
@@ -773,15 +788,43 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 10px;
 }
 
 .assistant-command-feedback {
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: #f1ece4;
   border: 1px solid #ddd3c5;
   color: #776d64;
   font-size: 13px;
+}
+
+.assistant-editing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(27, 102, 179, 0.2);
+  border-radius: 8px;
+  background: #eef6ff;
+  color: #315f89;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.assistant-editing-cancel {
+  border: 0;
+  background: transparent;
+  color: var(--accent-1);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0;
 }
 
 .artifact-layout {
@@ -912,12 +955,14 @@ body {
 
 .assistant-input {
   width: 100%;
-  border: 1px solid var(--line-1);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.94);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink-1);
-  padding: 12px;
+  min-height: 88px;
+  padding: 2px;
   resize: none;
+  outline: none;
 }
 
 .assistant-voice-placeholder {
@@ -933,23 +978,60 @@ body {
 
 .assistant-voice-button {
   border: 1px solid var(--line-1);
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
   color: var(--ink-2);
   cursor: pointer;
   font-weight: 700;
-  padding: 10px 12px;
+  min-height: 34px;
+  padding: 7px 12px;
 }
 
 .assistant-send {
   align-self: flex-end;
-  border-radius: 999px;
+  border-radius: 8px;
   background: linear-gradient(180deg, #2475c5 0%, #1b66b3 100%);
   color: #ffffff;
-  padding: 10px 16px;
+  min-height: 34px;
+  padding: 7px 14px;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid rgba(27, 102, 179, 0.35);
+}
+
+.assistant-send:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.assistant-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.assistant-message.assistant .assistant-message-actions {
+  justify-content: flex-start;
+}
+
+.assistant-message-action {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #60778d;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 28px;
+  padding: 4px 8px;
+}
+
+.assistant-message-action:hover,
+.assistant-message-action:focus-visible {
+  border-color: var(--line-1);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--accent-1);
 }
 
 .pdf-reader {

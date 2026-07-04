@@ -5,10 +5,18 @@ import { getAuditVerdictLabel, modeLauncherItems } from "./assistantPresentation
 type AssistantMessageListProps = {
   messages: AssistantMessage[];
   mode: AssistantMode;
+  onEditMessage?: (messageId: string) => void;
   onModeChange: (mode: AssistantMode) => void;
+  onRegenerateMessage?: (messageId: string) => void;
 };
 
-export function AssistantMessageList({ messages, mode, onModeChange }: AssistantMessageListProps) {
+export function AssistantMessageList({
+  messages,
+  mode,
+  onEditMessage,
+  onModeChange,
+  onRegenerateMessage
+}: AssistantMessageListProps) {
   if (messages.length === 0) {
     return (
       <div className="assistant-messages assistant-messages-empty">
@@ -38,39 +46,67 @@ export function AssistantMessageList({ messages, mode, onModeChange }: Assistant
 
   return (
     <div className="assistant-messages">
-      {messages.map((message) => (
-        <div className="assistant-message" key={message.id}>
-          <div className="assistant-message-title">
-            {message.role === "user" ? "你的输入" : "助手回复"}
+      {messages.map((message, index) => {
+        const canRegenerate =
+          message.role === "assistant" &&
+          mode !== "command" &&
+          messages.slice(0, index).some((candidate) => candidate.role === "user");
+
+        return (
+          <div className={`assistant-message ${message.role}`} key={message.id}>
+            <div className="assistant-message-title">
+              {message.role === "user" ? "你的输入" : "助手回复"}
+            </div>
+            <div className="assistant-answer-text">{message.content}</div>
+            {message.citations?.length ? (
+              <div className="assistant-citation-card">
+                <strong>原文定位</strong>
+                <span>
+                  {message.citations[0].paperId} · 第 {message.citations[0].page} 页
+                </span>
+                <span>{message.citations[0].snippet}</span>
+                <span>可信度 {message.confidence?.toFixed(2)}</span>
+              </div>
+            ) : null}
+            {message.audit ? (
+              <div className={`assistant-audit-card ${message.audit.verdict}`}>
+                <strong>模型审计</strong>
+                <span>审计模型 {message.audit.model}</span>
+                <span>
+                  审计评分 {message.audit.score.toFixed(2)} · {getAuditVerdictLabel(message.audit.verdict)}
+                </span>
+                <span>{message.audit.rationale}</span>
+              </div>
+            ) : null}
+            {message.executionTrace ? (
+              <div className="assistant-execution-trace">
+                模型链路：{formatModelExecutionLabel(message.executionTrace)}
+              </div>
+            ) : null}
+            <div className="assistant-message-actions">
+              {message.role === "user" ? (
+                <button
+                  aria-label={`重新编辑：${message.content}`}
+                  className="assistant-message-action"
+                  onClick={() => onEditMessage?.(message.id)}
+                  type="button"
+                >
+                  重新编辑
+                </button>
+              ) : null}
+              {canRegenerate ? (
+                <button
+                  className="assistant-message-action"
+                  onClick={() => onRegenerateMessage?.(message.id)}
+                  type="button"
+                >
+                  重新生成回复
+                </button>
+              ) : null}
+            </div>
           </div>
-          <div className="assistant-answer-text">{message.content}</div>
-          {message.citations?.length ? (
-            <div className="assistant-citation-card">
-              <strong>原文定位</strong>
-              <span>
-                {message.citations[0].paperId} · 第 {message.citations[0].page} 页
-              </span>
-              <span>{message.citations[0].snippet}</span>
-              <span>可信度 {message.confidence?.toFixed(2)}</span>
-            </div>
-          ) : null}
-          {message.audit ? (
-            <div className={`assistant-audit-card ${message.audit.verdict}`}>
-              <strong>模型审计</strong>
-              <span>审计模型 {message.audit.model}</span>
-              <span>
-                审计评分 {message.audit.score.toFixed(2)} · {getAuditVerdictLabel(message.audit.verdict)}
-              </span>
-              <span>{message.audit.rationale}</span>
-            </div>
-          ) : null}
-          {message.executionTrace ? (
-            <div className="assistant-execution-trace">
-              模型链路：{formatModelExecutionLabel(message.executionTrace)}
-            </div>
-          ) : null}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

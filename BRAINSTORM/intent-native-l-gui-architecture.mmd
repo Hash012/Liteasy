@@ -1,0 +1,132 @@
+flowchart TB
+  %% Intent-Native L-GUI Architecture
+
+  subgraph U["User Expression"]
+    NL["Natural Language"]
+    Voice["Voice"]
+    Cmd["Command Palette"]
+    GUI["Default GUI"]
+    Auto["Automation / API"]
+  end
+
+  subgraph I["1. Interaction Layer"]
+    Input["Intent Input Adapter"]
+    DefaultUI["Default Fallback UI"]
+    Canvas["Dynamic Canvas"]
+    ConfirmUI["Confirmation UI"]
+    AuditUI["Audit UI"]
+  end
+
+  subgraph C["2. Context And Knowledge"]
+    Context["Context Manager"]
+    CapGraph["Capability Graph"]
+    Components["Component Cards"]
+    Tokens["Design Tokens"]
+    DataSources["DataSource Registry"]
+    Schemas["Schema Registry"]
+  end
+
+  subgraph R["3. Reasoning And Orchestration"]
+    Prompt["Prompt Builder"]
+    Gateway["LLM Gateway\nOpenAI / DeepSeek / Local"]
+    Planner["Semantic Planner"]
+    PlanValidator["Plan Validator"]
+    IntentPlan["Intent Plan"]
+  end
+
+  subgraph G["4. Generative UI Runtime"]
+    UIDSL["UI DSL Document"]
+    DSLValidator["DSL Validator"]
+    Interpreter["DSL Interpreter"]
+    VirtualTree["Virtual UI Tree"]
+    Factory["Component Factory"]
+    Layout["Layout Solver"]
+  end
+
+  subgraph S["5. Execution And Security Sandbox"]
+    ActionRouter["Action Router"]
+    Policy["Policy Engine"]
+    Permission["Permission Middleware"]
+    DataEngine["Data Engine"]
+    Executor["Transactional Executor"]
+    SystemAPI["System API Adapter"]
+    Journal["Execution Journal"]
+  end
+
+  subgraph State["6. State And Feedback"]
+    StateKernel["State Kernel"]
+    StateBus["Reactive State Bus"]
+    Events["Runtime Event Bus"]
+  end
+
+  NL --> Input
+  Voice --> Input
+  Cmd --> Input
+  GUI --> Input
+  Auto --> Input
+
+  Input --> Context
+  Context --> Prompt
+  CapGraph --> Prompt
+  Components --> Prompt
+  Tokens --> Prompt
+  DataSources --> Prompt
+  Schemas --> Prompt
+
+  Prompt --> Gateway
+  Gateway --> Planner
+  Planner --> IntentPlan
+  IntentPlan --> PlanValidator
+  Schemas --> PlanValidator
+  CapGraph --> PlanValidator
+
+  PlanValidator --> Policy
+  CapGraph --> Policy
+  Policy -->|clarify| Events
+  Policy -->|deny| Events
+  Policy -->|confirm| ConfirmUI
+  ConfirmUI -->|approved| Executor
+  Policy -->|allow| Executor
+
+  IntentPlan --> UIDSL
+  Gateway --> UIDSL
+  UIDSL --> DSLValidator
+  Components --> DSLValidator
+  Tokens --> DSLValidator
+  Schemas --> DSLValidator
+  DSLValidator --> Interpreter
+  Interpreter --> VirtualTree
+  VirtualTree --> Layout
+  Layout --> Factory
+  Factory --> Canvas
+  DefaultUI --> Canvas
+
+  Canvas -->|user event| ActionRouter
+  ActionRouter --> Policy
+  ActionRouter --> Permission
+  Permission --> Executor
+  Executor --> DataEngine
+  Executor --> SystemAPI
+  Executor --> StateKernel
+  Executor --> Journal
+
+  DataEngine --> StateKernel
+  StateKernel --> StateBus
+  StateBus --> Events
+  Events --> Canvas
+  Journal --> AuditUI
+  Events --> AuditUI
+
+  classDef user fill:#dbeafe,stroke:#2563eb,color:#172554
+  classDef ui fill:#fef3c7,stroke:#d97706,color:#422006
+  classDef brain fill:#dcfce7,stroke:#16a34a,color:#052e16
+  classDef gen fill:#f3e8ff,stroke:#9333ea,color:#3b0764
+  classDef safe fill:#ffe4e6,stroke:#e11d48,color:#4c0519
+  classDef state fill:#e2e8f0,stroke:#475569,color:#0f172a
+
+  class NL,Voice,Cmd,GUI,Auto user
+  class Input,DefaultUI,Canvas,ConfirmUI,AuditUI ui
+  class Context,CapGraph,Components,Tokens,DataSources,Schemas,Prompt,Gateway,Planner,PlanValidator,IntentPlan brain
+  class UIDSL,DSLValidator,Interpreter,VirtualTree,Factory,Layout gen
+  class ActionRouter,Policy,Permission,DataEngine,Executor,SystemAPI,Journal safe
+  class StateKernel,StateBus,Events state
