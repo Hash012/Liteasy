@@ -1,7 +1,11 @@
 import type { SettingsState } from "../settings/settings.types";
 import {
   createAccountSessionClient,
+  loginCloudAccount,
+  logoutCloudAccount,
   registerCloudAccount,
+  validateCloudAccountSession,
+  type AccountLoginInput,
   type AccountRegistrationInput,
   type AccountTransport
 } from "./accountSessionClient";
@@ -50,6 +54,50 @@ export async function createRegisteredCloudAccountSession(
   return registerCloudAccount({
     ...registration,
     endpoint,
+    transport: deps.transport
+  });
+}
+
+export async function createAuthenticatedCloudAccountSession(
+  settings: SettingsState,
+  login: AccountLoginInput,
+  deps: AccountSessionRuntimeDeps = {}
+) {
+  return loginCloudAccount({
+    ...login,
+    endpoint: settings["models.control_plane_endpoint"],
+    transport: deps.transport
+  });
+}
+
+export async function validateStoredCloudAccountSession(
+  settings: SettingsState,
+  sessionId: string,
+  deps: AccountSessionRuntimeDeps = {}
+) {
+  if (isMockEndpoint(settings["models.control_plane_endpoint"])) {
+    return mockAccountSession;
+  }
+
+  return validateCloudAccountSession({
+    endpoint: settings["models.control_plane_endpoint"],
+    sessionId,
+    transport: deps.transport
+  });
+}
+
+export async function revokeCloudAccountSession(
+  settings: SettingsState,
+  sessionId: string,
+  deps: AccountSessionRuntimeDeps = {}
+) {
+  if (isMockEndpoint(settings["models.control_plane_endpoint"])) {
+    return;
+  }
+
+  await logoutCloudAccount({
+    endpoint: settings["models.control_plane_endpoint"],
+    sessionId,
     transport: deps.transport
   });
 }

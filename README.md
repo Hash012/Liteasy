@@ -15,6 +15,7 @@ shell -> controllers -> feature modules -> shared types / clients
 - 项目结构可视化：`project-docs/engineering/project-structure-overview.html`
 - 三人分工可视化：`project-docs/engineering/three-person-worksplit.html`
 - 模块边界文档：`project-docs/engineering/module-boundaries.md`
+- Dock 工作台与新功能 UI 归位规范：`project-docs/engineering/dock-workbench-ui-placement.md`
 - 产品方案原文：`project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
 - 当前启动指南：`project-docs/qa/environment-startup-guide.md`
 - 路演指南：`project-docs/qa/roadshow-demo-guide.md`
@@ -57,7 +58,7 @@ archive/                历史记录、报告、日志、非核心生成物
 - 多模态 artifact 工作流雏形：任务、标签页、预览、脑图等入口
 - 模块化 controller 地基，支持多人并行开发
 
-注意：当前仍有 demo/mock 部分，尤其是导入解析、推荐、审计、账号系统和组织治理。验收前请看 `project-docs/qa/` 下的限制说明。
+注意：当前仍有 demo/mock 部分，尤其是导入解析、推荐、审计和组织治理。账号注册、登录和会话已经使用本地 SQLite 持久化；验收前请看 `project-docs/qa/` 下的限制说明。
 
 ## 如何完整运行
 
@@ -66,8 +67,9 @@ archive/                历史记录、报告、日志、非核心生成物
 ### 终端 1：开发云服务
 
 ```bash
-cd /home/octopus/Liteasy
-node LiteasyClaw/services/dev-cloud/server.mjs
+cd LiteasyClaw/services/dev-cloud
+npm install
+npm start
 ```
 
 看到下面输出表示启动成功：
@@ -92,13 +94,13 @@ http://127.0.0.1:8787/admin/
 
 ```bash
 export OPENAI_API_KEY=你的密钥
-node LiteasyClaw/services/dev-cloud/server.mjs
+npm start
 ```
 
 ### 终端 2：桌面端
 
 ```bash
-cd /home/octopus/Liteasy/LiteasyClaw/desktop
+cd LiteasyClaw/desktop
 source "$HOME/.cargo/env"
 npm install
 npm run tauri dev
@@ -107,7 +109,7 @@ npm run tauri dev
 后续依赖已安装时，通常可以直接：
 
 ```bash
-cd /home/octopus/Liteasy/LiteasyClaw/desktop
+cd LiteasyClaw/desktop
 source "$HOME/.cargo/env"
 npm run tauri dev
 ```
@@ -115,7 +117,7 @@ npm run tauri dev
 如果暂时不打开 Tauri 桌面窗口，只看前端页面：
 
 ```bash
-cd /home/octopus/Liteasy/LiteasyClaw/desktop
+cd LiteasyClaw/desktop
 npm install
 npm run dev
 ```
@@ -131,7 +133,7 @@ http://127.0.0.1:1420/
 桌面端：
 
 ```bash
-cd /home/octopus/Liteasy/LiteasyClaw/desktop
+cd LiteasyClaw/desktop
 npm test
 npm run build
 ```
@@ -139,8 +141,8 @@ npm run build
 开发云：
 
 ```bash
-cd /home/octopus/Liteasy
-node --test LiteasyClaw/services/dev-cloud/server.test.mjs LiteasyClaw/services/dev-cloud/providers/openaiResponses.test.mjs
+cd LiteasyClaw/services/dev-cloud
+npm test
 ```
 
 路演前恢复 demo 数据：
@@ -204,12 +206,13 @@ project-docs/engineering/project-structure-overview.html
 2. `project-docs/engineering/project-structure-overview.html`
 3. `project-docs/engineering/three-person-worksplit.html`
 4. `project-docs/engineering/module-boundaries.md`
-5. `LiteasyClaw/desktop/README.md`
-6. `LiteasyClaw/services/dev-cloud/README.md`
-7. `project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
-8. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-ai-native-interaction-runtime-design.md`
-9. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-modular-foundation-design.md`
-10. `project-docs/superpowers/plans/2026-07-01-liteasyclaw-modular-foundation-phase1.md`
+5. `project-docs/engineering/dock-workbench-ui-placement.md`
+6. `LiteasyClaw/desktop/README.md`
+7. `LiteasyClaw/services/dev-cloud/README.md`
+8. `project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
+9. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-ai-native-interaction-runtime-design.md`
+10. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-modular-foundation-design.md`
+11. `project-docs/superpowers/plans/2026-07-01-liteasyclaw-modular-foundation-phase1.md`
 
 ## 启动失败先检查
 

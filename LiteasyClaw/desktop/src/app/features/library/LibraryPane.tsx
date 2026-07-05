@@ -240,7 +240,13 @@ export function LibraryPane({
                 </div>
                 <ul className="library-list">
                   {group.papers.map((paper) => (
-                    <li className="library-item" key={paper.id}>
+                    <li
+                      className={`library-item ${
+                        selectedPaperIds.includes(paper.id) ? "selected" : ""
+                      }`}
+                      data-selected={selectedPaperIds.includes(paper.id)}
+                      key={paper.id}
+                    >
                       <div className="paper-row">
                         <label>
                           <input

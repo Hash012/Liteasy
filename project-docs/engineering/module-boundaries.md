@@ -23,6 +23,7 @@ Feature modules must not import `AppShell` or shell components.
 ## Module Rules
 
 - `shell` owns layout, pane sizing, top bar, activity rail, and global dialog hosting.
+- `dock` owns DockItem registration, tab groups, cross-region dragging, layout-tree persistence, region sizing, and empty-region presentation. The canonical placement rules live in `project-docs/engineering/dock-workbench-ui-placement.md`.
 - `controllers` adapt feature modules into shell-ready models and actions.
 - `workspace` owns workspace source, papers, revision, and folder-tree normalization.
 - `selection` owns selected-document-set snapshots and readiness validation. This module is introduced by the modular foundation work; until then, selection state still lives in `workspace` as `selectedPaperIds` and `selectionLocked`.
@@ -74,3 +75,16 @@ Until `agent-runtime` is available, new assistant behavior should be isolated so
 ## AppShell Rule
 
 `AppShell` should compose controllers and panes. It should not keep accumulating domain-specific orchestration logic.
+
+## Dock Placement Rule
+
+New independently openable UI must first be classified as a `DockItem`; it must not be appended directly to a fixed pane.
+
+- resource discovery and navigation default to the left region;
+- primary reading, editing, and final visual artifacts default to the main region;
+- contextual tools and assistant interaction default to the right region;
+- tasks, logs, generation runs, and intermediate outputs default to the bottom region.
+
+The left, right, and bottom region toggles only control region visibility. If a user expands one of those regions while it has no tabs, the region renders the shared Logo-only `DockEmptyState` and remains a valid drop target.
+
+Feature state is independent from Dock location. Moving or closing a tab must not delete its domain data.

@@ -1,4 +1,9 @@
 export const defaultConfig = {
+  accountSessionDurationMs: 7 * 24 * 60 * 60 * 1000,
+  authRateLimit: {
+    limit: 8,
+    windowMs: 15 * 60 * 1000
+  },
   defaultProvider: "openai",
   localDirectEnabled: false,
   localDirectEndpoint: "http://127.0.0.1:8788",
@@ -33,7 +38,13 @@ export function resolveHost() {
 }
 
 export function resolveCliRuntimeConfig() {
+  const allowedOrigins = (process.env.LITEASY_DEV_CLOUD_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   return {
+    allowedOrigins,
     desktopOrigin: process.env.LITEASY_DESKTOP_PUBLIC_ORIGIN,
     publicOrigin: process.env.LITEASY_DEV_CLOUD_PUBLIC_ORIGIN
   };

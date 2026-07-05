@@ -1,5 +1,8 @@
 import type { AccountSession } from "../features/account/account.types";
-import type { AccountRegistrationInput } from "../features/account/accountSessionClient";
+import type {
+  AccountLoginInput,
+  AccountRegistrationInput
+} from "../features/account/accountSessionClient";
 import { LightweightLoginDialog } from "../features/account/LightweightLoginDialog";
 import { OrganizationEntryDialog } from "../features/organization/OrganizationEntryDialog";
 import { OrganizationCreateDialog } from "../features/organization/OrganizationCreateDialog";
@@ -14,6 +17,8 @@ import type { AcademicProfile } from "../features/profile/profile.types";
 export type AppDialogsProps = {
   academicProfile: AcademicProfile;
   accountSession: AccountSession | null;
+  accountMessage?: string;
+  accountPending?: boolean;
   academicArchiveOpen: boolean;
   clearProfileConfirmOpen: boolean;
   createOrganizationOpen: boolean;
@@ -31,6 +36,7 @@ export type AppDialogsProps = {
   onCloseJoinOrganization: () => void;
   onCloseLeaveOrganization: () => void;
   onSkipLogin?: () => void;
+  onSubmitAccountLogin?: (login: AccountLoginInput) => void;
   onSubmitAccountRegistration?: (registration: AccountRegistrationInput) => void;
   onSubmitDemoLogin?: () => void;
   onToggleSuppressLoginReminder?: (checked: boolean) => void;
@@ -48,6 +54,8 @@ export type AppDialogsProps = {
 
 export function AppDialogs({
   academicProfile,
+  accountMessage,
+  accountPending,
   accountSession,
   academicArchiveOpen,
   clearProfileConfirmOpen,
@@ -66,6 +74,7 @@ export function AppDialogs({
   onCloseJoinOrganization,
   onCloseLeaveOrganization,
   onSkipLogin,
+  onSubmitAccountLogin,
   onSubmitAccountRegistration,
   onSubmitDemoLogin,
   onToggleSuppressLoginReminder,
@@ -84,7 +93,10 @@ export function AppDialogs({
     <div className="workspace-dialog-layer" data-testid="workspace-dialog-layer">
       {loginDialogOpen ? (
         <LightweightLoginDialog
+          accountMessage={accountMessage}
+          accountPending={accountPending}
           onSkip={onSkipLogin ?? (() => undefined)}
+          onSubmitAccountLogin={onSubmitAccountLogin ?? (() => undefined)}
           onSubmitAccountRegistration={onSubmitAccountRegistration ?? (() => undefined)}
           onSubmitDemoLogin={onSubmitDemoLogin ?? (() => undefined)}
           onToggleSuppressReminder={onToggleSuppressLoginReminder ?? (() => undefined)}

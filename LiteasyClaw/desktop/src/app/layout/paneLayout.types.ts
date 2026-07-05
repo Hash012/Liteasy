@@ -1,4 +1,5 @@
 export type PaneLayout = {
+  bottom: number;
   center: number;
   left: number;
   right: number;
@@ -11,6 +12,7 @@ export type PaneCollapseState = {
 };
 
 export const defaultPaneLayout: PaneLayout = {
+  bottom: 32,
   center: 52,
   left: 24,
   right: 24

@@ -3,6 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { ReaderPane } from "../app/layout/ReaderPane";
 
+const readerTestPaper = {
+  id: "paper-1",
+  sourcePath: "/papers/colbert-late-interaction.pdf",
+  title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -73,6 +79,7 @@ describe("ReaderPane", () => {
         artifactTabs={[]}
         artifactTasks={[]}
         onStartAnalysis={onStartAnalysis}
+        selectedPapers={[readerTestPaper]}
         selectedPaperIds={["paper-1"]}
         selectionLocked={true}
       />
@@ -84,7 +91,7 @@ describe("ReaderPane", () => {
     expect(within(readerHeader).getByText("AI-driven paper-assisted reading platform")).toBeInTheDocument();
     expect(within(readerHeader).getByText("云端模型能力")).toBeInTheDocument();
     expect(within(readerHeader).getByRole("toolbar", { name: "PDF 阅读批注工具栏" })).toBeInTheDocument();
-    expect(within(readerHeader).getByText("选择文献后开始阅读")).toBeInTheDocument();
+    expect(within(readerHeader).getByText(readerTestPaper.title)).toBeInTheDocument();
     expect(within(readerHeader).getByText("显示比例 100%")).toBeInTheDocument();
     expect(document.querySelector(".pdf-toolbar")).not.toBeInTheDocument();
     expect(screen.getByText("选中文献集：1 篇 · 已锁定")).toBeInTheDocument();
@@ -96,6 +103,25 @@ describe("ReaderPane", () => {
     await user.click(screen.getByRole("button", { name: "思维导图" }));
 
     expect(onStartAnalysis).toHaveBeenCalledWith("mindmap");
+  });
+
+  test("shows only the LiteasyClaw logo in the reader body when no paper is open", () => {
+    render(
+      <ReaderPane
+        analysisHint="请选择文献。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPaperIds={[]}
+        selectionLocked={false}
+      />
+    );
+
+    const emptyState = screen.getByLabelText("Reader 空状态");
+    expect(within(emptyState).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
+    expect(screen.queryByText("选择文献后开始阅读")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("PDF 阅读器")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("多模态产物区域")).not.toBeInTheDocument();
   });
 
   test("keeps file controls in the reader title row and collapses the artifact area", async () => {
@@ -241,7 +267,8 @@ describe("ReaderPane", () => {
 
     await user.click(within(selectionMenu).getByRole("button", { name: "高亮" }));
     expect(screen.getByText("已创建高亮批注。")).toBeInTheDocument();
-    expect(screen.getByText("选中文段：vector database systems")).toBeInTheDocument();
+    expect(screen.getByText("vector database systems")).toBeInTheDocument();
+    expect(screen.getAllByText("vector database systems")).toHaveLength(1);
     expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByText("高亮标注")).toBeInTheDocument();
 
     mockPdfSelection({
@@ -251,7 +278,7 @@ describe("ReaderPane", () => {
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
-    expect(screen.getByText("注释：这段内容可以稍后接入选中文段和 AI 问答。")).toBeInTheDocument();
+    expect(screen.getByText("注释")).toBeInTheDocument();
     expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByText("旁注")).toBeInTheDocument();
   });
 
@@ -296,6 +323,75 @@ describe("ReaderPane", () => {
     });
   });
 
+  test("merges overlapping PDF.js fragments on the same visual line", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={["paper-1"]}
+        selectionLocked={true}
+      />
+    );
+
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: makeRect({ height: 20, left: 160, top: 130, width: 250 }),
+      clientRects: [
+        makeRect({ height: 18, left: 160, top: 130, width: 170 }),
+        makeRect({ height: 18, left: 220, top: 130, width: 190 }),
+        makeRect({ height: 20, left: 160, top: 129, width: 250 })
+      ],
+      text: "one visual line from fragmented PDF text"
+    });
+
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
+
+    expect(document.querySelectorAll(".pdf-overlay-mark.highlight")).toHaveLength(1);
+  });
+
+  test("does not stack duplicate highlights for the same selected text", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={["paper-1"]}
+        selectionLocked={true}
+      />
+    );
+    const selectionRect = makeRect({ height: 18, left: 160, top: 130, width: 210 });
+
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: selectionRect,
+      text: "the same highlighted sentence"
+    });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
+
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: selectionRect,
+      text: "the same highlighted sentence"
+    });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
+
+    expect(document.querySelectorAll(".pdf-overlay-mark.highlight")).toHaveLength(1);
+    expect(screen.getAllByText("the same highlighted sentence")).toHaveLength(1);
+    expect(screen.getByText("该文段已经有高亮批注。")).toBeInTheDocument();
+  });
+
   test("renders note annotations as compact side markers instead of text-height overlays", async () => {
     const user = userEvent.setup();
 
@@ -305,6 +401,7 @@ describe("ReaderPane", () => {
         artifactTabs={[]}
         artifactTasks={[]}
         onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
         selectedPaperIds={["paper-1"]}
         selectionLocked={true}
       />
@@ -333,6 +430,7 @@ describe("ReaderPane", () => {
         artifactTabs={[]}
         artifactTasks={[]}
         onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
         selectedPaperIds={["paper-1"]}
         selectionLocked={true}
       />
@@ -358,6 +456,7 @@ describe("ReaderPane", () => {
         artifactTabs={[]}
         artifactTasks={[]}
         onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
         selectedPaperIds={["paper-1"]}
         selectionLocked={true}
       />
@@ -411,6 +510,7 @@ describe("ReaderPane", () => {
         artifactTabs={[]}
         artifactTasks={[]}
         onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
         selectedPaperIds={["paper-1"]}
         selectionLocked={true}
       />
@@ -460,6 +560,7 @@ describe("ReaderPane", () => {
         artifactTabs={[]}
         artifactTasks={[]}
         onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
         selectedPaperIds={["paper-1"]}
         selectionLocked={true}
       />
@@ -486,6 +587,7 @@ describe("ReaderPane", () => {
         artifactTabs={[]}
         artifactTasks={[]}
         onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
         selectedPaperIds={["paper-1"]}
         selectionLocked={false}
       />

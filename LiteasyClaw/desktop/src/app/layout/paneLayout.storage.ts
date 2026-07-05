@@ -12,17 +12,29 @@ type PaneLayoutPreference = {
 
 const storageKey = "liteasy.ui.pane-layout.v1";
 
-function isPaneLayout(value: unknown): value is PaneLayout {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "left" in value &&
-    typeof value.left === "number" &&
-    "center" in value &&
-    typeof value.center === "number" &&
-    "right" in value &&
-    typeof value.right === "number"
-  );
+function parsePaneLayout(value: unknown): PaneLayout | null {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("left" in value) ||
+    typeof value.left !== "number" ||
+    !("center" in value) ||
+    typeof value.center !== "number" ||
+    !("right" in value) ||
+    typeof value.right !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    bottom:
+      "bottom" in value && typeof value.bottom === "number"
+        ? value.bottom
+        : defaultPaneLayout.bottom,
+    center: value.center,
+    left: value.left,
+    right: value.right
+  };
 }
 
 function isPaneCollapseState(value: unknown): value is PaneCollapseState {
@@ -56,17 +68,28 @@ export function loadPaneLayoutPreference(): PaneLayoutPreference {
   try {
     const parsed = JSON.parse(raw);
 
-    if (isPaneLayout(parsed)) {
+    const directLayout = parsePaneLayout(parsed);
+    if (directLayout) {
       return {
         collapsed: defaultPaneCollapseState,
-        layout: parsed
+        layout: directLayout
       };
     }
 
-    if (parsed && isPaneLayout(parsed.layout) && isPaneCollapseState(parsed.collapsed)) {
+    const nestedLayout =
+      parsed && typeof parsed === "object" && "layout" in parsed
+        ? parsePaneLayout(parsed.layout)
+        : null;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "collapsed" in parsed &&
+      nestedLayout &&
+      isPaneCollapseState(parsed.collapsed)
+    ) {
       return {
         collapsed: normalizePaneCollapseState(parsed.collapsed),
-        layout: parsed.layout
+        layout: nestedLayout
       };
     }
   } catch {

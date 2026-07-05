@@ -7,6 +7,13 @@ LiteasyClaw/desktop/dist/
 LiteasyClaw/desktop/.vite/
 LiteasyClaw/desktop/.vite-temp/
 LiteasyClaw/desktop/src-tauri/target/
+LiteasyClaw/services/dev-cloud/node_modules/
+LiteasyClaw/services/dev-cloud/.liteasy-data/
+LiteasyClaw/services/dev-cloud/*.sqlite
+LiteasyClaw/services/dev-cloud/*.sqlite-shm
+LiteasyClaw/services/dev-cloud/*.sqlite-wal
+LiteasyClaw/services/dev-cloud/.env
+LiteasyClaw/services/dev-cloud/.env.*
 archive/generated/
 
 # OS/editor noise

@@ -1,20 +1,23 @@
 # LiteasyClaw Dev Cloud
 
-这个目录提供一个最小开发后端，用来在本地模拟 LiteasyClaw 的“云侧”两类能力：
+这个目录提供 LiteasyClaw 的本地开发后端：
 
 - 控制平面策略接口
 - 模型生成接口
-- 开发云账号演示登录接口
+- 持久化账号注册、登录、会话校验与退出
 - 关联推荐接口
+- 可迁移的 AI 内容数据模型
 
-它的目标不是替代正式云服务，而是让桌面端在开发阶段可以走真实 `http` 链路，而不是只依赖 `mock://` 端点。
+它让当前设备充当单机开发服务器。默认只监听回环地址；若进入公网或不可信局域网，必须在前方部署 HTTPS 反向代理。
 
 ## 1. 启动方式
 
-在仓库根目录执行：
+第一次启动先安装服务端依赖：
 
 ```bash
-node LiteasyClaw/services/dev-cloud/server.mjs
+cd LiteasyClaw/services/dev-cloud
+npm install
+npm start
 ```
 
 默认会监听：
@@ -26,7 +29,7 @@ http://127.0.0.1:8787
 如果你需要改端口，可以先设置环境变量：
 
 ```bash
-LITEASY_DEV_CLOUD_PORT=8790 node LiteasyClaw/services/dev-cloud/server.mjs
+LITEASY_DEV_CLOUD_PORT=8790 npm start
 ```
 
 如果你要部署到云端做路演，可以进一步设置：
@@ -35,7 +38,8 @@ LITEASY_DEV_CLOUD_PORT=8790 node LiteasyClaw/services/dev-cloud/server.mjs
 LITEASY_DEV_CLOUD_HOST=0.0.0.0 \
 LITEASY_DEV_CLOUD_PORT=8787 \
 LITEASY_DEV_CLOUD_PUBLIC_ORIGIN=https://你的演示域名 \
-node LiteasyClaw/services/dev-cloud/server.mjs
+LITEASY_DEV_CLOUD_ALLOWED_ORIGINS=https://你的桌面Web域名 \
+npm start
 ```
 
 说明：
@@ -44,8 +48,61 @@ node LiteasyClaw/services/dev-cloud/server.mjs
 - `LITEASY_DEV_CLOUD_PORT` 控制监听端口
 - `LITEASY_DEV_CLOUD_PUBLIC_ORIGIN` 控制根索引、策略返回和内部后台展示时使用的外部访问地址
 - `LITEASY_DESKTOP_PUBLIC_ORIGIN` 可选，用于在内部后台中展示桌面入口地址
+- `LITEASY_DEV_CLOUD_ALLOWED_ORIGINS` 是额外允许的浏览器 Origin，多个值用英文逗号分隔
+- `LITEASY_DEV_CLOUD_DATABASE_PATH` 可覆盖 SQLite 文件位置
 
-### 路演前重置或重新播种 Demo 数据
+默认数据库位于：
+
+```text
+LiteasyClaw/services/dev-cloud/.liteasy-data/liteasy.sqlite
+```
+
+服务首次启动会自动执行 `db/migrations/` 中尚未应用的迁移。SQLite 使用 WAL、外键约束和 busy timeout；数据库目录权限收紧为 `0700`，数据库及 WAL 文件为 `0600`。
+
+## 2. 账号与安全
+
+桌面端登录面板支持创建账号和已有账号登录。账号重启服务后仍然存在。
+
+```text
+POST /v1/account/register
+POST /v1/account/login
+POST /v1/account/session
+POST /v1/account/logout
+```
+
+注册请求示例：
+
+```json
+{
+  "displayName": "Tian",
+  "email": "tian@example.com",
+  "password": "a long private passphrase"
+}
+```
+
+安全边界：
+
+- 密码要求 12–128 位，使用带独立随机盐的 Argon2id 哈希；明文密码不会落盘。
+- 登录令牌由 256-bit 安全随机数生成，数据库只保存 SHA-256 摘要。
+- 会话默认 7 天有效，可校验和主动撤销。
+- 注册与登录有单进程限速；反向代理仍应增加 IP 级限流。
+- JSON 请求限制为 64 KiB，并设置 `no-store`、`nosniff` 等响应头。
+- 浏览器 CORS 默认只允许 localhost/127.0.0.1；额外来源必须显式配置。
+
+不要把本服务以裸 HTTP 直接暴露到公网。HTTPS 是保护传输中密码和会话令牌的必要条件。
+
+## 3. 可扩展数据模型
+
+`001_identity_and_content.sql` 已建立以下稳定关系：
+
+- `users` / `password_credentials` / `auth_sessions`
+- `projects`
+- `artifacts` / `artifact_versions`
+- `generation_runs` / `generation_steps`
+
+流程图、思维导图、动画等类型使用 `artifact_type` 区分；具体结构进入版本化 JSON 载荷。模型输入、运行状态和中间生成产物分别进入 run/step，避免覆盖最终成品，也便于以后审计、重放和迁移到 PostgreSQL 或对象存储。
+
+### 路演前重置或重新播种旧 Demo 数据
 
 如果你要在路演前恢复稳定演示状态，可以在仓库根目录运行：
 
@@ -58,7 +115,7 @@ node LiteasyClaw/scripts/reseed-demo-data.mjs
 
 - `reset-demo-data.mjs` 会清空当前 demo 持久化数据
 - `reseed-demo-data.mjs` 会写回稳定的路演初始状态
-- 两个脚本都依赖当前 `LiteasyClaw/services/dev-cloud/.liteasy-data/` JSON 文件型 demo 数据库
+- 两个脚本只重置旧组织、收藏、推荐缓存等 JSON demo 数据，不删除真实账号 SQLite 数据
 
 如果你希望启动后先做统一 smoke check，可执行：
 
@@ -90,7 +147,7 @@ export OPENAI_BASE_URL=https://api.openai.com/v1
 - 配置了 `OPENAI_API_KEY`：`POST /v1/model/generate` 会走真实 OpenAI Responses API
 - 没配置 `OPENAI_API_KEY`：会自动回退到内置开发回答，便于本地演示
 
-## 2. 提供的接口
+## 4. 其他接口
 
 ### 控制平面
 
@@ -201,7 +258,7 @@ POST /v1/model/audit
 - 如果审计接口不可用，桌面端会回退到本地审计 seam，保证问答流程不中断
 - 当前开发云审计仍是确定性规则，后续可以替换成第二个真实大模型调用
 
-### 开发云账号
+### 兼容 Demo 账号
 
 ```text
 POST /v1/account/demo-login

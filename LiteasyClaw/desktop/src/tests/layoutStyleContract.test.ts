@@ -48,4 +48,14 @@ describe("layout style contract", () => {
     expect(responsiveBlock).not.toMatch(/\.app-shell\s*\{[^}]*grid-template-columns:\s*1fr\s*;/);
     expect(responsiveBlock).not.toMatch(/\.pane\.left[\s\S]*grid-column:\s*1\s*;/);
   });
+
+  test("keeps the PDF.js text layer aligned with the rendered canvas scale", () => {
+    const textLayerBlock = extractBlock(".pdf-text-layer");
+
+    expect(textLayerBlock).toContain("--text-scale-factor:");
+    expect(css).toMatch(
+      /\.pdf-text-layer\s+>\s+:not\(\.markedContent\)[\s\S]*font-size:\s*calc\(var\(--text-scale-factor\)\s*\*\s*var\(--font-height\)\)/
+    );
+    expect(css).toContain("scaleX(var(--scale-x, 1))");
+  });
 });

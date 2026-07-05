@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { createDevCloudRequestHandler } from "./server.mjs";
+import { createDatabase } from "./db/database.mjs";
 
 test.beforeEach(() => {
   process.env.LITEASY_DEV_CLOUD_DATA_DIR = fs.mkdtempSync(
@@ -62,6 +63,20 @@ test("allows browser CORS preflight from the desktop dev server", async () => {
   assert.equal(response.headers["Access-Control-Allow-Headers"], "Content-Type");
 });
 
+test("does not reflect an untrusted browser origin", async () => {
+  const response = await invokeHandler({
+    method: "OPTIONS",
+    headers: {
+      "access-control-request-method": "POST",
+      origin: "https://attacker.example"
+    },
+    url: "/v1/account/login"
+  });
+
+  assert.equal(response.statusCode, 204);
+  assert.equal("Access-Control-Allow-Origin" in response.headers, false);
+});
+
 test("returns a helpful service index from the root path", async () => {
   const response = await invokeHandler({
     method: "GET",
@@ -87,7 +102,9 @@ test("returns a helpful service index from the root path", async () => {
     "GET /v1/admin/governance-dashboard",
     "POST /v1/account/demo-login",
     "POST /v1/account/login",
+    "POST /v1/account/logout",
     "POST /v1/account/register",
+    "POST /v1/account/session",
     "POST /v1/model/generate",
     "POST /v1/model/audit",
     "POST /v1/recommendations",
@@ -315,11 +332,12 @@ test("registers a personal account and rejects duplicate email addresses", async
     url: "/v1/account/register"
   });
 
-  assert.equal(firstResponse.statusCode, 200);
+  assert.equal(firstResponse.statusCode, 201);
   assert.equal(firstResponse.json.session.email, "tian@example.com");
   assert.equal(firstResponse.json.session.name, "Tian");
   assert.equal(firstResponse.json.session.membershipTier, "pro");
-  assert.match(firstResponse.json.session.sessionId, /^account-session-/);
+  assert.match(firstResponse.json.session.sessionId, /^ltsy_[A-Za-z0-9_-]{43}$/);
+  assert.equal(typeof firstResponse.json.session.userId, "string");
 
   const duplicateResponse = await invokeHandler({
     body: registerBody,
@@ -372,6 +390,266 @@ test("logs in a previously registered personal account", async () => {
   assert.equal(loginResponse.statusCode, 200);
   assert.equal(loginResponse.json.session.email, "tian@example.com");
   assert.equal(loginResponse.json.session.name, "Tian");
+});
+
+test("persists accounts across request handler restarts and stores an Argon2id hash", async () => {
+  const password = "private-password-1";
+  const registrationResponse = await invokeHandler({
+    body: JSON.stringify({
+      displayName: "Persistent Tian",
+      email: "persistent@example.com",
+      password
+    }),
+    handler: createDevCloudRequestHandler(),
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+
+  assert.equal(registrationResponse.statusCode, 201);
+
+  const database = createDatabase();
+  const credential = database
+    .prepare("SELECT password_hash FROM password_credentials")
+    .get();
+  assert.match(credential.password_hash, /^\$argon2id\$/);
+  assert.equal(credential.password_hash.includes(password), false);
+  database.close();
+
+  const loginResponse = await invokeHandler({
+    body: JSON.stringify({
+      email: "persistent@example.com",
+      password
+    }),
+    handler: createDevCloudRequestHandler(),
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/login"
+  });
+
+  assert.equal(loginResponse.statusCode, 200);
+  assert.equal(loginResponse.json.session.name, "Persistent Tian");
+  assert.notEqual(
+    loginResponse.json.session.sessionId,
+    registrationResponse.json.session.sessionId
+  );
+});
+
+test("validates and revokes an opaque account session", async () => {
+  const handler = createDevCloudRequestHandler();
+  const registrationResponse = await invokeHandler({
+    body: JSON.stringify({
+      displayName: "Session User",
+      email: "session@example.com",
+      password: "private-password-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+  const sessionId = registrationResponse.json.session.sessionId;
+
+  const validationResponse = await invokeHandler({
+    body: JSON.stringify({ sessionId }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/session"
+  });
+  assert.equal(validationResponse.statusCode, 200);
+  assert.equal(validationResponse.json.session.email, "session@example.com");
+
+  const logoutResponse = await invokeHandler({
+    body: JSON.stringify({ sessionId }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/logout"
+  });
+  assert.equal(logoutResponse.statusCode, 200);
+  assert.deepEqual(logoutResponse.json, { loggedOut: true });
+
+  const revokedResponse = await invokeHandler({
+    body: JSON.stringify({ sessionId }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/session"
+  });
+  assert.equal(revokedResponse.statusCode, 401);
+  assert.equal(revokedResponse.json.error, "invalid_session");
+});
+
+test("scopes private account data to the stable user identity behind session tokens", async () => {
+  const handler = createDevCloudRequestHandler();
+  const password = "private-password-1";
+  const registrationResponse = await invokeHandler({
+    body: JSON.stringify({
+      displayName: "Collection User",
+      email: "collection@example.com",
+      password
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+  const firstSession = registrationResponse.json.session;
+  const collectionItem = {
+    id: "artifact-reference-1",
+    reason: "账号级持久化测试",
+    savedAt: "2026-07-03T12:00:00.000Z",
+    source: "Liteasy",
+    title: "Persistent private item"
+  };
+
+  const saveResponse = await invokeHandler({
+    body: JSON.stringify({
+      item: collectionItem,
+      sessionId: firstSession.sessionId
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/collection/items"
+  });
+  assert.equal(saveResponse.statusCode, 200);
+
+  const loginResponse = await invokeHandler({
+    body: JSON.stringify({
+      email: "collection@example.com",
+      password
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/login"
+  });
+
+  const listResponse = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: loginResponse.json.session.sessionId
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/collection/list"
+  });
+  assert.deepEqual(listResponse.json.items, [collectionItem]);
+
+  const bypassResponse = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: `user:${firstSession.userId}`
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/collection/list"
+  });
+  assert.equal(bypassResponse.statusCode, 401);
+  assert.equal(bypassResponse.json.error, "invalid_session");
+});
+
+test("returns a generic error for an incorrect account password", async () => {
+  const handler = createDevCloudRequestHandler();
+  await invokeHandler({
+    body: JSON.stringify({
+      displayName: "Tian",
+      email: "tian@example.com",
+      password: "private-password-1"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      email: "tian@example.com",
+      password: "incorrect-password"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/login"
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.json, {
+    error: "invalid_credentials",
+    message: "邮箱或密码不正确。"
+  });
+});
+
+test("rejects short passwords and oversized JSON bodies", async () => {
+  const shortPasswordResponse = await invokeHandler({
+    body: JSON.stringify({
+      displayName: "Tian",
+      email: "tian@example.com",
+      password: "short"
+    }),
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/account/register"
+  });
+  assert.equal(shortPasswordResponse.statusCode, 400);
+  assert.equal(shortPasswordResponse.json.error, "invalid_account_registration");
+
+  const oversizedResponse = await invokeHandler({
+    body: JSON.stringify({ prompt: "x".repeat(70 * 1024) }),
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/model/generate"
+  });
+  assert.equal(oversizedResponse.statusCode, 413);
+  assert.equal(oversizedResponse.json.error, "request_body_too_large");
 });
 
 test("stores and returns private cloud collection items for a demo session", async () => {

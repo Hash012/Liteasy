@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { AccountRegistrationInput, AccountTransport } from "../features/account/accountSessionClient";
+import type {
+  AccountLoginInput,
+  AccountRegistrationInput,
+  AccountTransport
+} from "../features/account/accountSessionClient";
 import { useAccountSession } from "../features/account/useAccountSession";
 import type { AccountSession } from "../features/account/account.types";
 import { useCloudAvailabilityProbe } from "../features/network/useCloudAvailabilityProbe";
@@ -26,6 +30,7 @@ type CloudAccountActions = {
   openLoginDialog: () => void;
   setSuppressLoginReminder: (checked: boolean) => void;
   skipLogin: () => void;
+  submitAccountLogin: (login: AccountLoginInput) => Promise<void>;
   submitAccountRegistration: (registration: AccountRegistrationInput) => Promise<void>;
   submitDemoLogin: () => Promise<void>;
 };
@@ -45,6 +50,7 @@ export function useCloudAccountController({
     accountMessage,
     accountPending,
     accountSession,
+    loginPersonalAccount,
     loginToCloudAccount,
     logoutFromCloudAccount,
     registerPersonalAccount,
@@ -90,10 +96,21 @@ export function useCloudAccountController({
   }
 
   async function submitAccountRegistration(registration: AccountRegistrationInput) {
-    setLoginDialogDismissedThisSession(true);
-    setLoginDialogOpen(false);
     applyLocalDevCloudDefaults();
-    await registerPersonalAccount(registration);
+    const session = await registerPersonalAccount(registration);
+    if (session) {
+      setLoginDialogDismissedThisSession(true);
+      setLoginDialogOpen(false);
+    }
+  }
+
+  async function submitAccountLogin(login: AccountLoginInput) {
+    applyLocalDevCloudDefaults();
+    const session = await loginPersonalAccount(login);
+    if (session) {
+      setLoginDialogDismissedThisSession(true);
+      setLoginDialogOpen(false);
+    }
   }
 
   function skipLogin() {
@@ -110,6 +127,7 @@ export function useCloudAccountController({
       },
       setSuppressLoginReminder,
       skipLogin,
+      submitAccountLogin,
       submitAccountRegistration,
       submitDemoLogin
     },

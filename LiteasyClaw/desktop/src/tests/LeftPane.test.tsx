@@ -237,6 +237,9 @@ describe("LeftPane", () => {
     expect(within(libraryZone).getByText(/ColBERT/)).toBeInTheDocument();
     expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
     expect(within(libraryZone).getByText(/ACORN/)).toBeInTheDocument();
+    expect(within(libraryZone).getByText(/ColBERT/).closest(".library-item")).toHaveClass(
+      "library-item"
+    );
   });
 
   test("switches visible papers when clicking My Library collections", async () => {

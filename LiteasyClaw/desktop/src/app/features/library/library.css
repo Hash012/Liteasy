@@ -283,7 +283,33 @@
 }
 
 .library-item + .library-item {
-  margin-top: 10px;
+  margin-top: 8px;
+}
+
+.library-item {
+  border: 1px solid #d7e2eb;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 2px 8px rgba(36, 54, 72, 0.04);
+  padding: 10px 11px;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.library-item:hover {
+  border-color: #aac8df;
+  background: #f5faff;
+  box-shadow: 0 5px 14px rgba(36, 84, 124, 0.1);
+  transform: translateY(-1px);
+}
+
+.library-item.selected {
+  border-color: rgba(27, 102, 179, 0.42);
+  background: #eaf4fd;
+  box-shadow: 0 0 0 1px rgba(27, 102, 179, 0.08);
 }
 
 .paper-row {
@@ -299,10 +325,13 @@
   gap: 10px;
   color: #55697d;
   min-width: 0;
+  cursor: pointer;
+  width: 100%;
 }
 
 .library-item input {
   accent-color: #8bb6d8;
+  cursor: pointer;
 }
 
 .job-badge {

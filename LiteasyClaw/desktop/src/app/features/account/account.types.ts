@@ -6,4 +6,5 @@ export type AccountSession = {
   membershipTier?: AccountMembershipTier;
   name: string;
   sessionId: string;
+  userId?: string;
 };

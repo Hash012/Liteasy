@@ -248,5 +248,55 @@
         "title": "Dense Passage Retrieval for Open-Domain Question Answering"
       }
     ]
+  },
+  "account-session-tjminfo24-ruc-edu-cn::local_library:本地文献库::demo-1::relevance": {
+    "cachedAt": "2026-07-03T12:40:34.113Z",
+    "recommendations": [
+      {
+        "discoveredAt": "2026-05-14T07:30:00Z",
+        "id": "rec-colbert-1",
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relevanceBand": "high",
+        "relevanceScore": 0.91,
+        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
+        "source": "Semantic Scholar",
+        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
+      },
+      {
+        "discoveredAt": "2026-05-14T09:00:00Z",
+        "id": "rec-colbert-2",
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relevanceBand": "medium",
+        "relevanceScore": 0.75,
+        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
+        "source": "Connected Papers",
+        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
+      }
+    ]
+  },
+  "account-session-tjminfo24-ruc-edu-cn::local_library:本地文献库::demo-2::relevance": {
+    "cachedAt": "2026-07-03T12:43:33.146Z",
+    "recommendations": [
+      {
+        "discoveredAt": "2026-05-14T08:15:00Z",
+        "id": "rec-vdbms-1",
+        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
+        "relevanceBand": "high",
+        "relevanceScore": 0.92,
+        "reason": "同样关注向量数据库系统架构与相似度检索能力。",
+        "source": "Semantic Scholar",
+        "title": "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
+      },
+      {
+        "discoveredAt": "2026-05-14T09:10:00Z",
+        "id": "rec-vdbms-2",
+        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
+        "relevanceBand": "medium",
+        "relevanceScore": 0.78,
+        "reason": "补充开源向量数据库系统实现，便于和综述框架对照。",
+        "source": "arXiv Watch",
+        "title": "Milvus: A Purpose-Built Vector Data Management System"
+      }
+    ]
   }
 }
