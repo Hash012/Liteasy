@@ -46,7 +46,7 @@ export const dockItemRegistry: Record<DockItemId, DockItemDescriptor> = {
   artifacts: {
     allowedRegions: ["main", "bottom"],
     id: "artifacts",
-    preferredRegion: "bottom",
+    preferredRegion: "main",
     title: "多模态产物"
   }
 };

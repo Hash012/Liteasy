@@ -23,6 +23,7 @@ type ArtifactWorkflowModel = {
 };
 
 type ArtifactWorkflowActions = {
+  closeArtifactTab: (artifactId: string) => void;
   handleAssistantArtifact: (artifactType: ArtifactType) => string;
   startAnalysis: (artifactType: ArtifactType) => string;
 };
@@ -53,6 +54,7 @@ export function useArtifactWorkflowController({
 
   return {
     actions: {
+      closeArtifactTab: artifactActions.closeArtifactTab,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
       startAnalysis: artifactActions.startAnalysis
     },

@@ -50,6 +50,15 @@ function validateJsonSchema(
     return;
   }
 
+  if (allowedTypes.includes("array")) {
+    if (schema.items && Array.isArray(value)) {
+      value.forEach((item, index) => {
+        validateJsonSchema(item, schema.items as JsonSchema, `${path}[${index}]`, errors);
+      });
+    }
+    return;
+  }
+
   if (!allowedTypes.includes("object")) {
     return;
   }

@@ -189,6 +189,17 @@ function createUnsupportedPlan(
   });
 }
 
+function isBottomOpenWithoutDockItem(input: string) {
+  const compactInput = input.replace(/\s+/g, "");
+  const asksForBottomOpen =
+    /打开|展开|显示|调出/.test(compactInput) && /下栏|底栏|下面|下方|底部/.test(compactInput);
+  const mentionsDockItem =
+    /AI助手|助手|聊天助手|LiteasyChat|文献库|组织|个人中心|个人画像|画像|设置/.test(compactInput);
+  const mentionsDockMove = /放到|放在|移到|移动到|挪到|拖到|停靠到/.test(compactInput);
+
+  return asksForBottomOpen && !mentionsDockItem && !mentionsDockMove;
+}
+
 export function planSemanticCommand(
   input: AgentRuntimeInput,
   context?: SemanticPlannerContext
@@ -234,6 +245,15 @@ export function planSemanticCommand(
       kind: "ambiguous_action",
       missing: context.pendingClarification.clarification.missing,
       question: context.pendingClarification.clarification.question
+    });
+  }
+
+  if (isBottomOpenWithoutDockItem(message)) {
+    return createClarificationPlan(message, {
+      confidence: "medium",
+      kind: "missing_context",
+      missing: ["dock_item"],
+      question: "要把哪个标签页放到下栏？例如：把 AI 助手放到下栏。"
     });
   }
 

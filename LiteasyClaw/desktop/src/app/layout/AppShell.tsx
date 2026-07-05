@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
 import type { ImportJob } from "../features/import/import.types";
@@ -11,6 +12,7 @@ import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import type { DevCloudEnvLike } from "../features/models/localDevCloudEndpoint";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
+import { FloatingModalityButton } from "../features/artifacts/FloatingModalityButton";
 import type { AccountTransport } from "../features/account/accountSessionClient";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
@@ -36,7 +38,11 @@ import { useCloudAccountController } from "../controllers/useCloudAccountControl
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
 import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
-import type { ActionContext } from "../features/skills/actionRegistry";
+import type {
+  ActionContext,
+  DockMoveItemId,
+  DockMoveTargetRegion
+} from "../features/skills/actionRegistry";
 import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionExecutor";
 import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
@@ -45,6 +51,10 @@ import { DockRegion } from "../features/dock/DockRegion";
 import { useDockLayout } from "../features/dock/useDockLayout";
 import type { DockItemId, DockRegionId } from "../features/dock/dock.types";
 import { DockLayoutControls } from "./DockLayoutControls";
+import {
+  createGeneratedThemeStyle,
+  type GeneratedThemeInput
+} from "../features/theme/generatedTheme";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -59,6 +69,11 @@ type AppShellProps = {
   localLibraryLoader?: () => Promise<LocalLibrarySnapshot>;
   recommendationTransport?: RecommendationTransport;
 };
+
+type RuntimeTheme =
+  | { kind: "default" }
+  | { kind: "preset"; preset: "playful" }
+  | { kind: "generated"; theme: GeneratedThemeInput };
 
 export function AppShell({
   accountTransport,
@@ -78,8 +93,10 @@ export function AppShell({
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const { isOnline } = useConnectivity();
-  const [runtimeTheme, setRuntimeTheme] = useState<"default" | "playful">("default");
+  const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
+  const [activeCenterArtifactId, setActiveCenterArtifactId] = useState<string | null>(null);
+  const latestArtifactIdRef = useRef<string | null>(null);
 
   const workspaceSelection = useWorkspaceSelectionController({
     localLibrarySnapshot,
@@ -140,6 +157,22 @@ export function AppShell({
     queueImportForPapers: workspaceActions.queueImportForPapers
   });
   const { artifactTabs, artifactTasks } = artifactWorkflow.model;
+
+  useEffect(() => {
+    const latestArtifactId = artifactTabs[0]?.artifactId ?? null;
+    if (latestArtifactId && latestArtifactId !== latestArtifactIdRef.current) {
+      latestArtifactIdRef.current = latestArtifactId;
+      setActiveCenterArtifactId(latestArtifactId);
+      return;
+    }
+
+    if (
+      activeCenterArtifactId &&
+      !artifactTabs.some((tab) => tab.artifactId === activeCenterArtifactId)
+    ) {
+      setActiveCenterArtifactId(artifactTabs[0]?.artifactId ?? null);
+    }
+  }, [activeCenterArtifactId, artifactTabs]);
 
   const registeredWorkspaceActions = useRegisteredWorkspaceActions({
     importSelectedSet: workspaceActions.importSelectedSet,
@@ -211,10 +244,15 @@ export function AppShell({
   const applyRuntimeThemePreset: ActionContext["applyThemePreset"] = (input) => {
     let message: string;
     if (input.preset === "playful" || input.tone === "cartoon") {
-      setRuntimeTheme("playful");
+      setRuntimeTheme({
+        kind: "preset",
+        preset: "playful"
+      });
       message = "已应用卡通风格。";
     } else {
-      setRuntimeTheme("default");
+      setRuntimeTheme({
+        kind: "default"
+      });
       message = "已恢复默认风格。";
     }
 
@@ -228,6 +266,25 @@ export function AppShell({
           input
         },
         message
+      })
+    );
+    return message;
+  };
+  const applyRuntimeGeneratedTheme: ActionContext["applyGeneratedTheme"] = (input) => {
+    setRuntimeTheme({
+      kind: "generated",
+      theme: input
+    });
+    const scopeLabel = input.scope.join(" / ");
+    const message = `已根据命令生成${input.name}主题。`;
+
+    setWorkbenchOverlay(
+      generateWorkbenchOverlayUIDslDocument({
+        action: {
+          actionId: "theme.apply_generated",
+          input
+        },
+        message: input.rationale ? `${message}影响范围：${scopeLabel}。${input.rationale}` : message
       })
     );
     return message;
@@ -296,16 +353,47 @@ export function AppShell({
     );
     return message;
   };
+  const dockMoveItemLabels: Record<DockMoveItemId, string> = {
+    assistant: "Liteasy Chat",
+    library: "文献库",
+    organization: "组织",
+    profile: "个人中心",
+    settings: "设置"
+  };
+  const dockMoveRegionLabels: Record<DockMoveTargetRegion, string> = {
+    bottom: "下栏",
+    left: "左栏",
+    right: "右栏"
+  };
+  const moveRuntimeDockItem: ActionContext["moveDockItem"] = (input) => {
+    moveDockItem(input.itemId, input.targetRegion);
+    const message = `已将 ${dockMoveItemLabels[input.itemId]} 移到${dockMoveRegionLabels[input.targetRegion]}。`;
+    setWorkbenchOverlay(
+      generateWorkbenchOverlayUIDslDocument({
+        action: {
+          actionId: "dock.move_item",
+          input
+        },
+        message
+      })
+    );
+    return message;
+  };
   const runtimeActionContext: ActionContext = {
+    applyGeneratedTheme: applyRuntimeGeneratedTheme,
     applyLayoutPreset: applyRuntimeLayoutPreset,
     applyPanelAction: applyRuntimePanelAction,
     applyThemePreset: applyRuntimeThemePreset,
     importSelectedSet: registeredWorkspaceActions.handleImportSelectedSet,
+    moveDockItem: moveRuntimeDockItem,
     openAcademicArchive: () => {
       profileActions.openAcademicArchive();
       return "已打开学术档案。";
     },
     openArtifactTab: (input) => {
+      if (input.artifactId) {
+        setActiveCenterArtifactId(input.artifactId);
+      }
       const message = input.artifactType
         ? `已定位到中心产物：${input.artifactType}。`
         : "已定位到中心产物。";
@@ -375,14 +463,16 @@ export function AppShell({
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
   const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "18px";
-  const readerArtifactRowSize = paneLayout.collapsed.bottom ? "0px" : "minmax(220px, 0.65fr)";
-  const bottomPaneSize = paneLayout.collapsed.bottom
-    ? "0px"
-    : `minmax(180px, ${paneLayout.layout.bottom}fr)`;
-  const bottomPaneUtilitySize = paneLayout.collapsed.bottom ? "0px" : "12px";
-  const topPaneSize = paneLayout.collapsed.bottom
-    ? "minmax(0, 1fr)"
-    : `minmax(0, ${100 - paneLayout.layout.bottom}fr)`;
+  const bottomPaneVisible =
+    !paneLayout.collapsed.bottom && dock.layout.regions.bottom.itemIds.length > 0;
+  const readerArtifactRowSize = "0px";
+  const bottomPaneSize = bottomPaneVisible
+    ? `minmax(180px, ${paneLayout.layout.bottom}fr)`
+    : "0px";
+  const bottomPaneUtilitySize = bottomPaneVisible ? "12px" : "0px";
+  const topPaneSize = bottomPaneVisible
+    ? `minmax(0, ${100 - paneLayout.layout.bottom}fr)`
+    : "minmax(0, 1fr)";
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
     academicProfile: profileActions.academicProfile,
     accountSession,
@@ -458,6 +548,9 @@ export function AppShell({
   }
 
   function activateDockItem(regionId: DockRegionId, itemId: DockItemId) {
+    if (regionId === "main") {
+      setActiveCenterArtifactId(null);
+    }
     if (isLeftRailDockItem(itemId)) {
       leftRail.setLeftRailView(itemId);
     }
@@ -474,7 +567,30 @@ export function AppShell({
     }
   }
 
-  function renderDockItem(itemId: DockItemId) {
+  function renderArtifactSurface(tabs = artifactTabs) {
+    return (
+      <section aria-label="多模态产物区域" className="dock-artifact-surface">
+        <ArtifactTabs
+          analysisHint={analysisHint}
+          canStartAnalysis={
+            workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
+          }
+          onDynamicAction={(action) => {
+            void handleArtifactCanvasAction(action);
+          }}
+          onStartAnalysis={(artifactType) => {
+            void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+          }}
+          selectedCount={workspaceState.selectedPaperIds.length}
+          selectionLocked={workspaceState.selectionLocked}
+          tabs={tabs}
+          tasks={artifactTasks}
+        />
+      </section>
+    );
+  }
+
+  function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
     if (isLeftRailDockItem(itemId)) {
       return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
     }
@@ -515,18 +631,15 @@ export function AppShell({
           importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
           onApplyLayoutPreset={runtimeActionContext.applyLayoutPreset}
+          onApplyGeneratedTheme={runtimeActionContext.applyGeneratedTheme}
           onApplyPanelAction={runtimeActionContext.applyPanelAction}
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
           onGenerateArtifact={(artifactType) => {
             const message = artifactWorkflow.actions.handleAssistantArtifact(artifactType);
-            const artifactRegionId = dock.findItemRegion("artifacts") ?? "bottom";
-            dock.openItem("artifacts");
-            if (artifactRegionId !== "main") {
-              paneLayout.setCollapsed(artifactRegionId, false);
-            }
             return message;
           }}
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
+          onMoveDockItem={runtimeActionContext.moveDockItem}
           onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
           onOpenOrganizationSharedLibrary={
             organizationShell.actions.openOrganizationSharedLibrary
@@ -535,6 +648,7 @@ export function AppShell({
             setSettingsState(cloneSettingsState(nextSettings))
           }
           profileUnlocked={accountSession !== null}
+          regionId={regionId === "main" ? "right" : regionId}
           runtimeOrganizationName={organizationSummary?.name}
           runtimeWorkspace={workspaceState.workspaceSource}
           selectedPaperCount={workspaceState.selectedPaperIds.length}
@@ -545,36 +659,52 @@ export function AppShell({
       );
     }
 
-    return (
-      <section aria-label="多模态产物区域" className="dock-artifact-surface">
-        <ArtifactTabs
-          analysisHint={analysisHint}
-          canStartAnalysis={
-            workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
-          }
-          onDynamicAction={(action) => {
-            void handleArtifactCanvasAction(action);
-          }}
-          onStartAnalysis={(artifactType) => {
-            void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
-          }}
-          selectedCount={workspaceState.selectedPaperIds.length}
-          selectionLocked={workspaceState.selectionLocked}
-          tabs={artifactTabs}
-          tasks={artifactTasks}
-        />
-      </section>
-    );
+    return renderArtifactSurface();
   }
 
   function renderDockRegion(regionId: DockRegionId) {
     const showDetachedLayoutControls =
-      regionId === "main" && dock.layout.regions.main.activeItemId !== "reader";
+      regionId === "main" &&
+      (dock.layout.regions.main.activeItemId !== "reader" || activeCenterArtifactId !== null);
+    const centerArtifactTabs =
+      regionId === "main"
+        ? artifactTabs.map((tab) => ({
+            id: tab.artifactId,
+            onActivate: () => setActiveCenterArtifactId(tab.artifactId),
+            onClose: () => {
+              const remainingTabs = artifactTabs.filter(
+                (candidate) => candidate.artifactId !== tab.artifactId
+              );
+              artifactWorkflow.actions.closeArtifactTab(tab.artifactId);
+              if (activeCenterArtifactId === tab.artifactId) {
+                setActiveCenterArtifactId(remainingTabs[0]?.artifactId ?? null);
+              }
+            },
+            render: () => renderArtifactSurface([tab]),
+            selected: activeCenterArtifactId === tab.artifactId,
+            title: tab.title
+          }))
+        : [];
     return (
       <DockRegion
+        dynamicTabs={centerArtifactTabs}
         layout={dock.layout.regions[regionId]}
         onActivateItem={(itemId) => activateDockItem(regionId, itemId)}
+        onCloseItem={dock.closeItem}
         onMoveItem={moveDockItem}
+        overlay={
+          regionId === "main" ? (
+            <FloatingModalityButton
+              analysisHint={analysisHint}
+              canStartAnalysis={
+                workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
+              }
+              onStartAnalysis={(artifactType) => {
+                void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+              }}
+            />
+          ) : undefined
+        }
         regionId={regionId}
         regionActions={
           showDetachedLayoutControls ? (
@@ -597,8 +727,18 @@ export function AppShell({
     );
   }
 
+  const appFrameStyle =
+    runtimeTheme.kind === "generated"
+      ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
+      : undefined;
+  const appFrameClassName = `app-frame${
+    runtimeTheme.kind === "preset" && runtimeTheme.preset === "playful" ? " theme-playful" : ""
+  }${runtimeTheme.kind === "generated" ? " theme-generated" : ""}`;
+  const appFrameScope =
+    runtimeTheme.kind === "generated" ? runtimeTheme.theme.scope.join(" ") : undefined;
+
   return (
-    <div className={`app-frame${runtimeTheme === "playful" ? " theme-playful" : ""}`}>
+    <div className={appFrameClassName} data-theme-scope={appFrameScope} style={appFrameStyle}>
       <div
         className="app-shell"
         data-testid="workbench-layout"
@@ -612,7 +752,7 @@ export function AppShell({
             "--right-pane-utility-size": rightPaneUtilitySize,
             "--right-pane-size": rightPaneSize,
             "--top-pane-size": topPaneSize
-          } as React.CSSProperties
+          } as CSSProperties
         }
       >
         <ActivityBar
@@ -707,7 +847,7 @@ export function AppShell({
         </div>
         {!paneLayout.collapsed.right ? renderDockRegion("right") : null}
         <div className="pane-utility-row bottom">
-          {!paneLayout.collapsed.bottom ? (
+          {bottomPaneVisible ? (
             <PaneResizer
               ariaLabel="调整下栏高度"
               axis="vertical"
@@ -717,7 +857,7 @@ export function AppShell({
             />
           ) : null}
         </div>
-        {!paneLayout.collapsed.bottom ? renderDockRegion("bottom") : null}
+        {bottomPaneVisible ? renderDockRegion("bottom") : null}
         {workbenchOverlay ? (
           <section aria-label="工作台状态投影" className="workbench-overlay">
             <DynamicCanvas

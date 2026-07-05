@@ -27,3 +27,29 @@ test("opens a distinct tab for a tree analysis task", () => {
   expect(store.getTask(taskId)?.type).toBe("tree");
   expect(store.getOpenTabs()[0]?.type).toBe("tree");
 });
+
+test("keeps generated artifact history until a tab is closed", () => {
+  const store = createArtifactStore();
+  const firstTaskId = store.createTask("mindmap");
+  const secondTaskId = store.createTask("ppt");
+
+  store.completeTask(firstTaskId, {
+    artifactId: "artifact-1",
+    title: "Literature Mind Map",
+    type: "mindmap"
+  });
+  store.completeTask(secondTaskId, {
+    artifactId: "artifact-2",
+    title: "Literature PPT Outline",
+    type: "ppt"
+  });
+
+  expect(store.getOpenTabs().map((tab) => tab.artifactId)).toEqual([
+    "artifact-2",
+    "artifact-1"
+  ]);
+
+  store.closeTab("artifact-2");
+
+  expect(store.getOpenTabs().map((tab) => tab.artifactId)).toEqual(["artifact-1"]);
+});

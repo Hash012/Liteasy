@@ -69,6 +69,7 @@ const commandConcepts = new Set([
   "close",
   "create",
   "disable",
+  "dock_move",
   "enable",
   "export",
   "focus",
@@ -120,7 +121,7 @@ function compact(input: string) {
 }
 
 export function hasExplicitCommandVerb(input: string) {
-  return /打开|关闭|展开|显示|进入|切换|生成|制作|导入|同步|上传|删除|调整|开启|禁用|刷新|收藏/.test(input);
+  return /打开|关闭|展开|显示|进入|切换|生成|制作|导入|同步|上传|删除|调整|开启|禁用|刷新|收藏|放到|放在|移到|移动到|挪到|拖到|停靠到/.test(input);
 }
 
 function signalMatches(input: string, signal: SemanticActionSignal) {

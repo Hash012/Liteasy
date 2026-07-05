@@ -5,7 +5,14 @@ import type { ExecutionJournal } from "../generative-ui/executionJournal";
 import type { OrganizationSummary } from "../organization/organization.types";
 import type { SelectedDocumentSetSnapshot } from "../selection/selection.types";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
-import type { ActionContext, PanelActionTarget, RegisteredActionMetadata } from "../skills/actionRegistry";
+import type { GeneratedThemeInput } from "../theme/generatedTheme";
+import type {
+  ActionContext,
+  DockMoveItemId,
+  DockMoveTargetRegion,
+  PanelActionTarget,
+  RegisteredActionMetadata
+} from "../skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
 
 export type IngestionStatus = "not_started" | "queued" | "running" | "failed" | "ready";
@@ -126,11 +133,22 @@ export type RuntimeActionInvocation =
       };
     }
   | {
+      actionId: "dock.move_item";
+      input: {
+        itemId: DockMoveItemId;
+        targetRegion: DockMoveTargetRegion;
+      };
+    }
+  | {
       actionId: "theme.apply_preset" | "theme.reset";
       input: {
         preset?: "playful" | "default";
         tone?: "cartoon" | "quiet";
       };
+    }
+  | {
+      actionId: "theme.apply_generated";
+      input: GeneratedThemeInput;
     }
   | {
       actionId: "panel.open" | "panel.close" | "panel.toggle";
@@ -238,6 +256,7 @@ export type SemanticActionPlan = {
     | "artifact.generate"
     | "cloud.sync_workspace"
     | "cloud.upload_documents"
+    | "dock.move_item"
     | "layout.change"
     | "pane.focus"
     | "theme.apply"

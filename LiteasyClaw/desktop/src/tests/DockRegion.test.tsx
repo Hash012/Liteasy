@@ -34,6 +34,7 @@ describe("DockRegion", () => {
           itemIds: ["library", "organization"]
         }}
         onActivateItem={onActivateItem}
+        onCloseItem={vi.fn()}
         onMoveItem={vi.fn()}
         regionId="left"
         renderItem={(itemId) => <div>{itemId} content</div>}
@@ -56,6 +57,7 @@ describe("DockRegion", () => {
       <DockRegion
         layout={{ activeItemId: "assistant", itemIds: ["assistant"] }}
         onActivateItem={vi.fn()}
+        onCloseItem={vi.fn()}
         onMoveItem={onMoveItem}
         regionId="right"
         renderItem={() => <div>assistant</div>}
@@ -76,6 +78,7 @@ describe("DockRegion", () => {
       <DockRegion
         layout={{ activeItemId: null, itemIds: [] }}
         onActivateItem={vi.fn()}
+        onCloseItem={vi.fn()}
         onMoveItem={vi.fn()}
         regionId="right"
         renderItem={() => null}
@@ -94,6 +97,7 @@ describe("DockRegion", () => {
       <DockRegion
         layout={{ activeItemId: null, itemIds: [] }}
         onActivateItem={vi.fn()}
+        onCloseItem={vi.fn()}
         onMoveItem={onMoveItem}
         regionId="left"
         renderItem={() => null}
@@ -114,5 +118,24 @@ describe("DockRegion", () => {
     expect(region).not.toHaveClass("drop-active");
     fireEvent.drop(region, { dataTransfer: readerTransfer });
     expect(onMoveItem).toHaveBeenCalledTimes(1);
+  });
+
+  test("shows a close button for static dock tabs", async () => {
+    const user = userEvent.setup();
+    const onCloseItem = vi.fn();
+    render(
+      <DockRegion
+        layout={{ activeItemId: "assistant", itemIds: ["assistant"] }}
+        onActivateItem={vi.fn()}
+        onCloseItem={onCloseItem}
+        onMoveItem={vi.fn()}
+        regionId="right"
+        renderItem={() => <div>assistant</div>}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "关闭 Liteasy Chat" }));
+
+    expect(onCloseItem).toHaveBeenCalledWith("assistant");
   });
 });

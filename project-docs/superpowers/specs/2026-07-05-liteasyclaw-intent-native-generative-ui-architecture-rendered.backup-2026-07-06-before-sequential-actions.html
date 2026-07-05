@@ -74,8 +74,8 @@ flowchart TB
   subgraph IntentRuntime["三、意图运行时：理解目标但不直接执行"]
     ModeGate["Mode Gate<br/>command 可执行动作<br/>qa/explain 只展示证据与非破坏性产物入口"]
     SemanticPlanner["Semantic Planner<br/>规则 planner + DeepSeek/OpenAI 结构化 planner<br/>【LLM API 主链路】"]
-    IntentPlan["IntentPlan / SemanticActionPlan<br/>intentId、ordered actions[]、risk、requiredContext、summary<br/>复合命令按用户语义顺序拆解"]
-    PlanValidator["Plan Validator<br/>校验 actionId、schema、有序动作输入、上下文需求、模式边界"]
+    IntentPlan["IntentPlan / SemanticActionPlan<br/>intentId、actions、risk、requiredContext、summary"]
+    PlanValidator["Plan Validator<br/>校验 actionId、schema、上下文需求、模式边界"]
   end
 
   subgraph PolicyLayer["四、策略闸门：确定性裁决"]
@@ -86,7 +86,7 @@ flowchart TB
   end
 
   subgraph ExecutionLayer["五、受控执行与状态层"]
-    Executor["Sequential Transactional Executor<br/>按 actions[] 顺序串行执行 policy 允许的注册 action"]
+    Executor["Transactional Executor<br/>只执行 policy 允许的注册 action"]
     ProgressEvents["Runtime Progress Events<br/>plan_preview、progress_started、task_created、ui_dsl_ready、action_failed"]
     AppControllers["App Controllers / State Kernel<br/>工作区、选择集、artifact、组织、设置、布局真实状态"]
     Journal["Execution Journal<br/>traceId、输入、计划、策略、执行、UI DSL、用户点击可回放"]
@@ -241,8 +241,8 @@ flowchart TB
   subgraph IntentRuntime["三、意图运行时：理解目标但不直接执行"]
     ModeGate["Mode Gate&lt;br/&gt;command 可执行动作&lt;br/&gt;qa/explain 只展示证据与非破坏性产物入口"]
     SemanticPlanner["Semantic Planner&lt;br/&gt;规则 planner + DeepSeek/OpenAI 结构化 planner&lt;br/&gt;【LLM API 主链路】"]
-    IntentPlan["IntentPlan / SemanticActionPlan&lt;br/&gt;intentId、ordered actions[]、risk、requiredContext、summary&lt;br/&gt;复合命令按用户语义顺序拆解"]
-    PlanValidator["Plan Validator&lt;br/&gt;校验 actionId、schema、有序动作输入、上下文需求、模式边界"]
+    IntentPlan["IntentPlan / SemanticActionPlan&lt;br/&gt;intentId、actions、risk、requiredContext、summary"]
+    PlanValidator["Plan Validator&lt;br/&gt;校验 actionId、schema、上下文需求、模式边界"]
   end
 
   subgraph PolicyLayer["四、策略闸门：确定性裁决"]
@@ -253,7 +253,7 @@ flowchart TB
   end
 
   subgraph ExecutionLayer["五、受控执行与状态层"]
-    Executor["Sequential Transactional Executor&lt;br/&gt;按 actions[] 顺序串行执行 policy 允许的注册 action"]
+    Executor["Transactional Executor&lt;br/&gt;只执行 policy 允许的注册 action"]
     ProgressEvents["Runtime Progress Events&lt;br/&gt;plan_preview、progress_started、task_created、ui_dsl_ready、action_failed"]
     AppControllers["App Controllers / State Kernel&lt;br/&gt;工作区、选择集、artifact、组织、设置、布局真实状态"]
     Journal["Execution Journal&lt;br/&gt;traceId、输入、计划、策略、执行、UI DSL、用户点击可回放"]

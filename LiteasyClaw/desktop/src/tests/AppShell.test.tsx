@@ -174,6 +174,116 @@ test("applies a semantic command theme action to the workbench", async () => {
   });
 });
 
+test("applies a model-generated freeform theme to the workbench", async () => {
+  const user = userEvent.setup();
+  const modelFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/v1/model/generate")) {
+      const requestBody = JSON.parse(String(init?.body ?? "{}")) as { prompt?: string };
+      const isPlannerRequest = requestBody.prompt?.includes("语义动作规划器");
+      return {
+        json: async () => ({
+          answer: isPlannerRequest
+            ? JSON.stringify({
+                actions: [
+                  {
+                    actionId: "theme.apply_generated",
+                    input: {
+                      buttons: {
+                        borderWidth: 1,
+                        fill: "solid",
+                        hoverLift: 2,
+                        radius: 4,
+                        shadow: "crisp",
+                        weight: "strong"
+                      },
+                      intent: "冷静的赛博实验室，按钮锐利一点",
+                      name: "冷静赛博实验室",
+                      palette: {
+                        accent1: "#1B66B3",
+                        accent2: "#2F8F61",
+                        accent3: "#B06B19",
+                        ink1: "#101820",
+                        ink2: "#526071",
+                        line1: "#C7D3DF",
+                        line2: "#AEBCCD",
+                        paper0: "#F8FBFC",
+                        paper1: "#EEF5F8",
+                        paper2: "#E2EDF3"
+                      },
+                      rationale: "冷色背景和硬朗按钮表达精密实验感。",
+                      scope: ["global", "buttons"]
+                    }
+                  }
+                ],
+                confidence: "high",
+                intentId: "theme.apply",
+                planId: "model-plan-generated-theme",
+                requiredContext: [],
+                requiresConfirmation: false,
+                riskLevel: "low",
+                summary: "生成冷静赛博实验室主题"
+              })
+            : JSON.stringify({
+                summary: "生成主题 UI 已准备。",
+                verdict: "pass"
+              }),
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      } as Response;
+    }
+
+    return {
+      json: async () => ({
+        cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+        defaultProvider: "openai",
+        localDirectEnabled: false,
+        localDirectEndpoint: "mock://local-direct",
+        modelAccessMode: "cloud_proxy",
+        policyVersion: "policy-dev-cloud-live",
+        syncedAt: "2026-05-14T09:30:00Z"
+      }),
+      ok: true,
+      status: 200
+    } as Response;
+  });
+  vi.stubGlobal("fetch", modelFetch);
+
+  const { container } = render(
+    <AppShell
+      initialSettings={{
+        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+      }}
+    />
+  );
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  await user.type(
+    screen.getByPlaceholderText("输入你的问题或命令"),
+    "把界面调成冷静的赛博实验室，按钮锐利一点"
+  );
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await waitFor(() => {
+    expect(modelFetch).toHaveBeenCalledWith(
+      "https://liteasy.example.com/model-proxy/v1/model/generate",
+      expect.any(Object)
+    );
+  });
+  await waitFor(() => {
+    expect(container.querySelector(".app-frame")).toHaveStyle({
+      "--accent-1": "#1B66B3",
+      "--button-radius": "4px"
+    });
+  });
+  expect(screen.getAllByText("已根据命令生成冷静赛博实验室主题。").length).toBeGreaterThanOrEqual(1);
+});
+
 test("executes a semantic command layout action against pane state", async () => {
   const user = userEvent.setup();
 
@@ -211,6 +321,187 @@ test("executes a semantic command panel navigation action", async () => {
   expect(screen.getByLabelText("左边栏设置")).toBeInTheDocument();
   expect(screen.getAllByText("已打开设置面板。").length).toBeGreaterThanOrEqual(1);
 });
+
+test("moves an explicit dock tab to the bottom from command mode", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  expect(screen.queryByLabelText("下栏 Dock 区域")).not.toBeInTheDocument();
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "把 AI 助手放到下栏");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  const bottomRegion = await screen.findByLabelText("下栏 Dock 区域");
+  expect(within(bottomRegion).getByRole("tab", { name: "Liteasy Chat" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  expect(screen.queryByLabelText("右栏AI助手")).not.toBeInTheDocument();
+  expect(screen.getAllByText("已将 Liteasy Chat 移到下栏。").length).toBeGreaterThanOrEqual(1);
+});
+
+test("asks which tab should move when the command only opens the bottom region", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "打开下栏");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(await screen.findByText("要把哪个标签页放到下栏？例如：把 AI 助手放到下栏。")).toBeInTheDocument();
+  expect(screen.queryByLabelText("下栏 Dock 区域")).not.toBeInTheDocument();
+});
+
+test("executes compound model-planned commands as ordered actions", async () => {
+  const user = userEvent.setup();
+  const modelFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/v1/model/generate")) {
+      const requestBody = JSON.parse(String(init?.body ?? "{}")) as { prompt?: string };
+      const isPlannerRequest = requestBody.prompt?.includes("语义动作规划器");
+      return {
+        json: async () => ({
+          answer: isPlannerRequest
+            ? JSON.stringify({
+                actions: [
+                  {
+                    actionId: "dock.move_item",
+                    input: {
+                      itemId: "organization",
+                      targetRegion: "bottom"
+                    }
+                  },
+                  {
+                    actionId: "organization.open_shared_library",
+                    input: {
+                      source: "organization_space"
+                    }
+                  }
+                ],
+                confidence: "high",
+                intentId: "dock.move_item",
+                planId: "model-plan-compound-organization",
+                requiredContext: [],
+                requiresConfirmation: false,
+                riskLevel: "low",
+                summary: "将组织面板放到下栏后打开组织共享文献库"
+              })
+            : JSON.stringify({
+                summary: "复合命令按顺序执行。",
+                verdict: "pass"
+              }),
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      } as Response;
+    }
+
+    return {
+      json: async () => ({
+        cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+        defaultProvider: "openai",
+        localDirectEnabled: false,
+        localDirectEndpoint: "mock://local-direct",
+        modelAccessMode: "cloud_proxy",
+        policyVersion: "policy-dev-cloud-live",
+        syncedAt: "2026-05-14T09:30:00Z"
+      }),
+      ok: true,
+      status: 200
+    } as Response;
+  });
+  vi.stubGlobal("fetch", modelFetch);
+
+  render(
+    <AppShell
+      accountTransport={async () => ({
+        json: async () => ({
+          session: {
+            email: "researcher@liteasy.dev",
+            expiresAt: "2026-05-15T09:30:00Z",
+            name: "Liteasy Researcher",
+            sessionId: "demo-session-1"
+          }
+        }),
+        ok: true,
+        status: 200
+      })}
+      initialSettings={{
+        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy",
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+      organizationTransport={async () => ({
+        json: async () => ({
+          summary: {
+            auditEvents: [],
+            memberCount: 12,
+            members: [],
+            myRole: "研究员",
+            name: "Liteasy AI Reading Lab",
+            notifications: [],
+            organizationId: "org-demo-1",
+            quota: {
+              periodEndsAt: "2026-06-01T00:00:00Z",
+              storageLimitGb: 100,
+              storageUsedGb: 38
+            },
+            sharedLibrary: {
+              documentCount: 1,
+              documents: [
+                {
+                  id: "org-doc-seq-1",
+                  sourcePath: "org://org-demo-1/shared-library/org-doc-seq-1.pdf",
+                  title: "Sequential Organization Command Planning"
+                }
+              ],
+              name: "组织共享文献库",
+              status: "available"
+            },
+            taskSummary: {
+              failed: 0,
+              running: 0
+            }
+          }
+        }),
+        ok: true,
+        status: 200
+      })}
+    />
+  );
+
+  await loginThroughDialog(user);
+  await openOrganizationPanel(user);
+  await waitFor(() => {
+    expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
+  });
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "把组织面板打开到下栏后打开组织文库");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  const bottomRegion = await screen.findByLabelText("下栏 Dock 区域");
+  expect(within(bottomRegion).getByRole("tab", { name: "组织" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  await waitFor(() => {
+    expect(screen.getAllByText("已打开组织共享文献库：组织共享文献库。").length).toBeGreaterThanOrEqual(1);
+  });
+  expect(screen.getByText("当前工作区：组织共享文献库（Liteasy AI Reading Lab）")).toBeInTheDocument();
+  expect(screen.getByText("Sequential Organization Command Planning")).toBeInTheDocument();
+  const plannerCall = modelFetch.mock.calls.find(([input]) =>
+    String(input).includes("/v1/model/generate")
+  );
+  expect(
+    JSON.parse(String(plannerCall?.[1]?.body ?? "{}")).prompt
+  ).toContain("复合命令必须拆成多个有序 actions[]");
+}, 10000);
 
 test("executes a semantic selected-set import action through the workspace handler", async () => {
   const user = userEvent.setup();
@@ -350,14 +641,14 @@ test("supports the confirmed workbench pane layout", async () => {
   const workbench = screen.getByTestId("workbench-layout");
   expect(workbench).toHaveStyle({
     "--left-pane-size": "minmax(220px, 24fr)",
-    "--reader-artifact-row-size": "minmax(220px, 0.65fr)",
+    "--reader-artifact-row-size": "0px",
     "--right-pane-size": "minmax(220px, 24fr)"
   });
 
   const readerHeader = screen.getByLabelText("Reader 标题栏");
   const layoutControls = within(readerHeader).getByRole("toolbar", { name: "阅读区布局控制" });
   expect(within(layoutControls).getByRole("button", { name: "折叠左侧栏" })).toBeInTheDocument();
-  expect(within(layoutControls).getByRole("button", { name: "折叠下栏" })).toBeInTheDocument();
+  expect(within(layoutControls).getByRole("button", { name: "展开下栏" })).toBeInTheDocument();
   expect(within(layoutControls).getByRole("button", { name: "折叠右侧栏" })).toBeInTheDocument();
 
   await user.click(within(layoutControls).getByRole("button", { name: "折叠左侧栏" }));
@@ -373,8 +664,6 @@ test("supports the confirmed workbench pane layout", async () => {
   expect(workbench).toHaveStyle({
     "--left-pane-size": "minmax(220px, 24fr)"
   });
-
-  await user.click(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "折叠下栏" }));
 
   expect(screen.queryByLabelText("多模态产物区域")).not.toBeInTheDocument();
   expect(workbench).toHaveStyle({
@@ -406,10 +695,14 @@ test("renders artifact content from imported selected-document chunks", async ()
 
   await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await user.click(screen.getByRole("button", { name: "锁定选择" }));
+  await user.hover(screen.getByRole("button", { name: "模态选择" }));
   await user.click(screen.getByRole("button", { name: "思维导图" }));
 
   await waitFor(() => {
-    expect(screen.getAllByText("Literature Mind Map").length).toBeGreaterThan(1);
+    expect(screen.getByRole("tab", { name: "Literature Mind Map" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
   }, { timeout: 3000 });
 
   expect(
@@ -426,6 +719,11 @@ test("renders artifact content from imported selected-document chunks", async ()
       "已定位到中心产物：mindmap。"
     );
   });
+
+  await user.click(screen.getByRole("button", { name: "关闭 Literature Mind Map" }));
+
+  expect(screen.queryByRole("tab", { name: "Literature Mind Map" })).not.toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Reader" })).toHaveAttribute("aria-selected", "true");
 }, 10000);
 
 test("collapses the left pane when clicking the active activity-bar item", async () => {
@@ -457,11 +755,13 @@ test("composes the primary workbench areas through Dock regions", async () => {
   expect(within(workbench).getByLabelText("左栏 Dock 区域")).toBeInTheDocument();
   expect(within(workbench).getByLabelText("主内容区 Dock 区域")).toBeInTheDocument();
   expect(within(workbench).getByLabelText("右栏 Dock 区域")).toBeInTheDocument();
-  expect(within(workbench).getByLabelText("下栏 Dock 区域")).toBeInTheDocument();
+  expect(within(workbench).queryByLabelText("下栏 Dock 区域")).not.toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Reader" })).toHaveAttribute(
     "aria-selected",
     "true"
   );
+  expect(screen.queryByRole("tab", { name: "多模态产物" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "模态选择" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "文献库" }));
 
@@ -469,6 +769,15 @@ test("composes the primary workbench areas through Dock regions", async () => {
   expect(screen.queryByLabelText("左栏 Dock 区域")).not.toBeInTheDocument();
   expect(screen.getByLabelText("主内容区 Dock 区域")).toBeInTheDocument();
   expect(screen.getByLabelText("右栏 Dock 区域")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "组织" }));
+
+  const leftRegion = screen.getByLabelText("左栏 Dock 区域");
+  expect(within(leftRegion).getByRole("tab", { name: "组织" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  expect(within(leftRegion).queryByRole("tab", { name: "文献库" })).not.toBeInTheDocument();
 });
 
 test("drags a tool tab across Dock regions and leaves the source with the Logo empty state", () => {
@@ -503,20 +812,57 @@ test("drags a tool tab across Dock regions and leaves the source with the Logo e
   expect(within(rightRegion).queryByText(/暂无|请选择/)).not.toBeInTheDocument();
   expect(window.localStorage.getItem("liteasy.ui.dock-layout.v1")).toContain("assistant");
 
-  const bottomRegion = screen.getByLabelText("下栏 Dock 区域");
-  const mainRegion = screen.getByLabelText("主内容区 Dock 区域");
-  fireEvent.dragStart(within(bottomRegion).getByRole("tab", { name: "多模态产物" }), {
-    dataTransfer
-  });
-  fireEvent.dragOver(mainRegion, { dataTransfer });
-  fireEvent.drop(mainRegion, { dataTransfer });
+  expect(screen.queryByLabelText("下栏 Dock 区域")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("主内容区 Dock 区域")).toBeInTheDocument();
+});
 
-  expect(within(mainRegion).getByRole("tab", { name: "多模态产物" })).toHaveAttribute(
-    "aria-selected",
-    "true"
+test("does not restore legacy bottom artifact pane before any artifact is generated", () => {
+  window.localStorage.setItem(
+    "liteasy.ui.dock-layout.v1",
+    JSON.stringify({
+      regions: {
+        bottom: {
+          activeItemId: "artifacts",
+          itemIds: ["artifacts"]
+        },
+        left: {
+          activeItemId: "library",
+          itemIds: ["library"]
+        },
+        main: {
+          activeItemId: "reader",
+          itemIds: ["reader"]
+        },
+        right: {
+          activeItemId: "assistant",
+          itemIds: ["assistant"]
+        }
+      },
+      version: 1
+    })
   );
-  expect(within(bottomRegion).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
-  expect(within(mainRegion).getByRole("toolbar", { name: "阅读区布局控制" })).toBeInTheDocument();
+  window.localStorage.setItem(
+    "liteasy.ui.pane-layout.v1",
+    JSON.stringify({
+      collapsed: {
+        bottom: false,
+        left: false,
+        right: false
+      },
+      layout: {
+        bottom: 32,
+        center: 52,
+        left: 24,
+        right: 24
+      }
+    })
+  );
+
+  render(<AppShell />);
+
+  expect(screen.queryByLabelText("下栏 Dock 区域")).not.toBeInTheDocument();
+  expect(screen.queryByRole("tab", { name: "多模态产物" })).not.toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Reader" })).toHaveAttribute("aria-selected", "true");
 });
 
 test("shows the unified cloud model capability in settings", async () => {

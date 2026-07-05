@@ -40,7 +40,7 @@ function shouldBackground(metadata: RegisteredActionMetadata | undefined) {
   return Boolean(
     metadata &&
       (metadata.estimatedLatencyMs >= backgroundLatencyMs ||
-        metadata.progressEvents?.includes("task_created"))
+        (metadata.progressEvents?.length ?? 0) > 0)
   );
 }
 

@@ -18,7 +18,7 @@ function createRegion(itemIds: DockItemId[], activeItemId?: DockItemId): DockReg
 export function createDefaultDockLayout(): DockLayout {
   return {
     regions: {
-      bottom: createRegion(["artifacts"]),
+      bottom: createRegion([]),
       left: createRegion(["library"]),
       main: createRegion(["reader"]),
       right: createRegion(["assistant"])
@@ -37,21 +37,27 @@ function normalizeRegion(
   }
 
   const rawItemIds = "itemIds" in value && Array.isArray(value.itemIds) ? value.itemIds : [];
-  const itemIds = rawItemIds.filter((itemId): itemId is DockItemId => {
-    if (!isDockItemId(itemId) || claimedItems.has(itemId)) {
+  const regionItems = new Set<DockItemId>();
+  const candidateItemIds = rawItemIds.filter((itemId): itemId is DockItemId => {
+    if (!isDockItemId(itemId) || claimedItems.has(itemId) || regionItems.has(itemId)) {
+      return false;
+    }
+    if (itemId === "artifacts") {
       return false;
     }
     if (!dockItemRegistry[itemId].allowedRegions.includes(regionId)) {
       return false;
     }
-    claimedItems.add(itemId);
+    regionItems.add(itemId);
     return true;
   });
   const rawActiveItemId = "activeItemId" in value ? value.activeItemId : null;
   const activeItemId =
-    isDockItemId(rawActiveItemId) && itemIds.includes(rawActiveItemId)
+    isDockItemId(rawActiveItemId) && candidateItemIds.includes(rawActiveItemId)
       ? rawActiveItemId
-      : itemIds[0] ?? null;
+      : candidateItemIds[0] ?? null;
+  const itemIds = regionId === "left" && activeItemId ? [activeItemId] : candidateItemIds;
+  itemIds.forEach((itemId) => claimedItems.add(itemId));
 
   return {
     activeItemId,
@@ -133,6 +139,21 @@ export function activateDockItem(
   };
 }
 
+export function closeDockItem(layout: DockLayout, itemId: DockItemId): DockLayout {
+  const regionId = findDockItemRegion(layout, itemId);
+  if (!regionId) {
+    return layout;
+  }
+
+  return {
+    ...layout,
+    regions: {
+      ...layout.regions,
+      [regionId]: removeItem(layout.regions[regionId], itemId)
+    }
+  };
+}
+
 export function moveDockItem(
   layout: DockLayout,
   itemId: DockItemId,
@@ -151,7 +172,10 @@ export function moveDockItem(
   const targetRegion = nextRegions[targetRegionId];
   nextRegions[targetRegionId] = {
     activeItemId: itemId,
-    itemIds: [...targetRegion.itemIds.filter((currentId) => currentId !== itemId), itemId]
+    itemIds:
+      targetRegionId === "left"
+        ? [itemId]
+        : [...targetRegion.itemIds.filter((currentId) => currentId !== itemId), itemId]
   };
 
   return {

@@ -69,6 +69,298 @@ test("converts model JSON into a semantic action plan", async () => {
   });
 });
 
+test("uses the model planner to map free dock-move wording to dock.move_item", async () => {
+  const settings = createSettingsStore().getState();
+  const modelTransport = vi.fn(async () => ({
+    json: async () => ({
+      answer: JSON.stringify({
+        actions: [
+          {
+            actionId: "dock.move_item",
+            input: {
+              itemId: "assistant",
+              targetRegion: "bottom"
+            }
+          }
+        ],
+        confidence: "high",
+        intentId: "dock.move_item",
+        planId: "model-plan-dock-bottom",
+        requiredContext: [],
+        requiresConfirmation: false,
+        riskLevel: "low",
+        summary: "移动 Liteasy Chat 到下栏"
+      }),
+      execution: {
+        backend: "dev_cloud",
+        mode: "live",
+        provider: "openai"
+      }
+    }),
+    ok: true,
+    status: 200
+  }));
+  const planner = createModelSemanticPlanner({
+    modelTransport,
+    settings: {
+      ...settings,
+      "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+    }
+  });
+
+  await expect(
+    planner(
+      {
+        message: "把聊天助手停靠到下面",
+        mode: "command"
+      },
+      plannerContext
+    )
+  ).resolves.toMatchObject({
+    actions: [
+      {
+        actionId: "dock.move_item",
+        input: {
+          itemId: "assistant",
+          targetRegion: "bottom"
+        }
+      }
+    ],
+    intentId: "dock.move_item",
+    planId: "model-plan-dock-bottom"
+  });
+  expect(JSON.parse(modelTransport.mock.calls[0][0].body).prompt).toContain(
+    "下栏不能被单独打开"
+  );
+});
+
+test("uses the model planner to generate a structured freeform theme", async () => {
+  const settings = createSettingsStore().getState();
+  const modelTransport = vi.fn(async () => ({
+    json: async () => ({
+      answer: JSON.stringify({
+        actions: [
+          {
+            actionId: "theme.apply_generated",
+            input: {
+              buttons: {
+                borderWidth: 1,
+                fill: "solid",
+                hoverLift: 2,
+                radius: 4,
+                shadow: "crisp",
+                weight: "strong"
+              },
+              intent: "冷静的赛博实验室，按钮锐利一点",
+              name: "冷静赛博实验室",
+              palette: {
+                accent1: "#1B66B3",
+                accent2: "#2F8F61",
+                accent3: "#B06B19",
+                ink1: "#101820",
+                ink2: "#526071",
+                line1: "#C7D3DF",
+                line2: "#AEBCCD",
+                paper0: "#F8FBFC",
+                paper1: "#EEF5F8",
+                paper2: "#E2EDF3"
+              },
+              rationale: "冷色背景和硬朗按钮表达精密实验感。",
+              scope: ["global", "buttons"]
+            }
+          }
+        ],
+        confidence: "high",
+        intentId: "theme.apply",
+        planId: "model-plan-generated-theme",
+        requiredContext: [],
+        requiresConfirmation: false,
+        riskLevel: "low",
+        summary: "生成冷静赛博实验室主题"
+      }),
+      execution: {
+        backend: "dev_cloud",
+        mode: "live",
+        provider: "openai"
+      }
+    }),
+    ok: true,
+    status: 200
+  }));
+  const planner = createModelSemanticPlanner({
+    modelTransport,
+    settings: {
+      ...settings,
+      "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+    }
+  });
+
+  await expect(
+    planner(
+      {
+        message: "把界面调成冷静的赛博实验室，按钮锐利一点",
+        mode: "command"
+      },
+      plannerContext
+    )
+  ).resolves.toMatchObject({
+    actions: [
+      {
+        actionId: "theme.apply_generated",
+        input: {
+          buttons: {
+            radius: 4,
+            shadow: "crisp",
+            weight: "strong"
+          },
+          name: "冷静赛博实验室",
+          scope: ["global", "buttons"]
+        }
+      }
+    ],
+    intentId: "theme.apply",
+    planId: "model-plan-generated-theme"
+  });
+  expect(JSON.parse(modelTransport.mock.calls[0][0].body).prompt).toContain(
+    "描述性主题请求必须优先使用 theme.apply_generated"
+  );
+  expect(JSON.parse(modelTransport.mock.calls[0][0].body).prompt).toContain(
+    "不要输出任意 CSS"
+  );
+});
+
+test("keeps compound commands as ordered registered actions from the model planner", async () => {
+  const settings = createSettingsStore().getState();
+  const modelTransport = vi.fn(async () => ({
+    json: async () => ({
+      answer: JSON.stringify({
+        actions: [
+          {
+            actionId: "dock.move_item",
+            input: {
+              itemId: "organization",
+              targetRegion: "bottom"
+            }
+          },
+          {
+            actionId: "organization.open_shared_library",
+            input: {
+              source: "organization_space"
+            }
+          }
+        ],
+        confidence: "high",
+        intentId: "dock.move_item",
+        planId: "model-plan-sequential-organization",
+        requiredContext: [],
+        requiresConfirmation: false,
+        riskLevel: "low",
+        summary: "将组织面板放到下栏后打开组织共享文献库"
+      }),
+      execution: {
+        backend: "dev_cloud",
+        mode: "live",
+        provider: "openai"
+      }
+    }),
+    ok: true,
+    status: 200
+  }));
+  const planner = createModelSemanticPlanner({
+    modelTransport,
+    settings: {
+      ...settings,
+      "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+    }
+  });
+
+  await expect(
+    planner(
+      {
+        message: "把组织面板打开到下栏后打开组织文库",
+        mode: "command"
+      },
+      plannerContext
+    )
+  ).resolves.toMatchObject({
+    actions: [
+      {
+        actionId: "dock.move_item",
+        input: {
+          itemId: "organization",
+          targetRegion: "bottom"
+        }
+      },
+      {
+        actionId: "organization.open_shared_library",
+        input: {
+          source: "organization_space"
+        }
+      }
+    ],
+    planId: "model-plan-sequential-organization"
+  });
+  expect(JSON.parse(modelTransport.mock.calls[0][0].body).prompt).toContain(
+    "复合命令必须拆成多个有序 actions[]"
+  );
+});
+
+test("turns model bottom-open plans without a dock item into clarification", async () => {
+  const settings = createSettingsStore().getState();
+  const planner = createModelSemanticPlanner({
+    modelTransport: async () => ({
+      json: async () => ({
+        answer: JSON.stringify({
+          actions: [
+            {
+              actionId: "panel.open",
+              input: {
+                panel: "bottom"
+              }
+            }
+          ],
+          confidence: "high",
+          intentId: "panel.change",
+          planId: "model-plan-open-bottom",
+          requiredContext: [],
+          requiresConfirmation: false,
+          riskLevel: "low",
+          summary: "打开下栏"
+        }),
+        execution: {
+          backend: "dev_cloud",
+          mode: "live",
+          provider: "openai"
+        }
+      }),
+      ok: true,
+      status: 200
+    }),
+    settings: {
+      ...settings,
+      "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+    }
+  });
+
+  await expect(
+    planner(
+      {
+        message: "打开下栏",
+        mode: "command"
+      },
+      plannerContext
+    )
+  ).resolves.toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "missing_context",
+      missing: ["dock_item"],
+      question: "要把哪个标签页放到下栏？例如：把 AI 助手放到下栏。"
+    },
+    intentId: "unknown"
+  });
+});
+
 test("converts model ambiguous-action clarification candidates into a semantic plan", async () => {
   const settings = createSettingsStore().getState();
   const planner = createModelSemanticPlanner({

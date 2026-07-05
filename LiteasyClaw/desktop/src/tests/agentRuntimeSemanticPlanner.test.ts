@@ -127,6 +127,47 @@ test("plans panel and navigation actions from semantic UI instructions", () => {
   });
 });
 
+test("plans explicit dock item move commands and refuses empty bottom opening", () => {
+  expect(planSemanticCommand({ message: "把 AI 助手放到下栏", mode: "command" })).toMatchObject({
+    actions: [
+      {
+        actionId: "dock.move_item",
+        input: {
+          itemId: "assistant",
+          targetRegion: "bottom"
+        }
+      }
+    ],
+    intentId: "dock.move_item",
+    riskLevel: "low",
+    summary: "移动Liteasy Chat到下栏"
+  });
+
+  expect(planSemanticCommand({ message: "文献库挪到右侧", mode: "command" })).toMatchObject({
+    actions: [
+      {
+        actionId: "dock.move_item",
+        input: {
+          itemId: "library",
+          targetRegion: "right"
+        }
+      }
+    ],
+    intentId: "dock.move_item",
+    summary: "移动文献库到右栏"
+  });
+
+  expect(planSemanticCommand({ message: "打开下栏", mode: "command" })).toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "missing_context",
+      missing: ["dock_item"],
+      question: "要把哪个标签页放到下栏？例如：把 AI 助手放到下栏。"
+    },
+    intentId: "unknown"
+  });
+});
+
 test("returns ambiguous action candidates for broad organization commands", () => {
   const plan = planSemanticCommand({ message: "打开组织", mode: "command" });
 

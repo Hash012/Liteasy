@@ -138,9 +138,9 @@ describe("ArtifactTabs", () => {
 
     expect(screen.getByText("证据矩阵")).toBeInTheDocument();
     expect(screen.getByText("Late interaction preserves token-level evidence")).toBeInTheDocument();
-    expect(screen.getAllByText("思维导图").length).toBeGreaterThan(1);
-    expect(screen.getAllByText("树形展开").length).toBeGreaterThan(1);
-    expect(screen.getAllByText("PPT").length).toBeGreaterThan(1);
+    expect(screen.getByText("思维导图")).toBeInTheDocument();
+    expect(screen.getByText("树形展开")).toBeInTheDocument();
+    expect(screen.getByText("PPT")).toBeInTheDocument();
     expect(screen.getAllByText("ColBERT").length).toBeGreaterThan(1);
   });
 

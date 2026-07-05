@@ -105,7 +105,9 @@ test("exposes registered action metadata for runtime planning and safety checks"
       "layout.set_ratio",
       "layout.reset",
       "pane.focus",
+      "dock.move_item",
       "theme.apply_preset",
+      "theme.apply_generated",
       "theme.reset",
       "panel.open",
       "panel.close",
@@ -128,11 +130,106 @@ test("exposes registered action metadata for runtime planning and safety checks"
     requiresConfirmation: false,
     riskLevel: "low"
   });
+  expect(metadata.find((action) => action.actionId === "dock.move_item")).toMatchObject({
+    requiredContext: [],
+    requiresConfirmation: false,
+    riskLevel: "low"
+  });
+  expect(metadata.find((action) => action.actionId === "theme.apply_generated")).toMatchObject({
+    family: "theme",
+    inverseActionId: "theme.reset",
+    requiredContext: [],
+    requiresConfirmation: false,
+    riskLevel: "low"
+  });
   expect(metadata.find((action) => action.actionId === "cloud.sync_workspace")).toMatchObject({
     requiredContext: ["workspace"],
     requiresConfirmation: true,
     riskLevel: "high"
   });
+});
+
+test("registers generated theme metadata for model-assisted theme planning", () => {
+  const metadata = getRegisteredActionMetadata();
+  const action = metadata.find((item) => item.actionId === "theme.apply_generated");
+
+  expect(action).toMatchObject({
+    family: "theme",
+    inverseActionId: "theme.reset",
+    requiresConfirmation: false,
+    riskLevel: "low"
+  });
+  expect(action?.inputSchema.properties?.palette.type).toBe("object");
+  expect(action?.inputSchema.properties?.buttons.type).toBe("object");
+});
+
+test("executes a dock move action through the dock layout owner", async () => {
+  const moveDockItem = vi.fn(() => "已将 Liteasy Chat 移到下栏。");
+
+  const result = await executeAction(
+    {
+      actionId: "dock.move_item",
+      input: {
+        itemId: "assistant",
+        targetRegion: "bottom"
+      }
+    },
+    {
+      moveDockItem
+    }
+  );
+
+  expect(moveDockItem).toHaveBeenCalledWith({
+    itemId: "assistant",
+    targetRegion: "bottom"
+  });
+  expect(result.message).toBe("已将 Liteasy Chat 移到下栏。");
+});
+
+test("executes a generated theme through the generated theme handler", async () => {
+  const applyGeneratedTheme = vi.fn(() => "已根据命令生成冷静赛博实验室主题。");
+
+  const result = await executeAction(
+    {
+      actionId: "theme.apply_generated",
+      input: {
+        buttons: {
+          borderWidth: 1,
+          fill: "solid",
+          hoverLift: 2,
+          radius: 5,
+          shadow: "crisp",
+          weight: "strong"
+        },
+        intent: "冷静的赛博实验室",
+        name: "冷静赛博实验室",
+        palette: {
+          accent1: "#1B66B3",
+          accent2: "#2F8F61",
+          accent3: "#B06B19",
+          ink1: "#101820",
+          ink2: "#526071",
+          line1: "#C7D3DF",
+          line2: "#AEBCCD",
+          paper0: "#F8FBFC",
+          paper1: "#EEF5F8",
+          paper2: "#E2EDF3"
+        },
+        scope: ["global", "buttons"]
+      }
+    },
+    {
+      applyGeneratedTheme
+    }
+  );
+
+  expect(applyGeneratedTheme).toHaveBeenCalledWith(
+    expect.objectContaining({
+      name: "冷静赛博实验室",
+      scope: ["global", "buttons"]
+    })
+  );
+  expect(result.message).toBe("已根据命令生成冷静赛博实验室主题。");
 });
 
 test("executes architecture action-catalog handlers through injected feature owners", async () => {

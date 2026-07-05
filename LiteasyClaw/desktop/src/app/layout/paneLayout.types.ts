@@ -19,7 +19,7 @@ export const defaultPaneLayout: PaneLayout = {
 };
 
 export const defaultPaneCollapseState: PaneCollapseState = {
-  bottom: false,
+  bottom: true,
   left: false,
   right: false
 };

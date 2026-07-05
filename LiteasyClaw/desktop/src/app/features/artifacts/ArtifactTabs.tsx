@@ -13,13 +13,6 @@ type ArtifactTabsProps = {
   tabs: ArtifactTab[];
 };
 
-const artifactModes: Array<{ type: ArtifactType; label: string }> = [
-  { type: "tree", label: "树形展开" },
-  { type: "mindmap", label: "思维导图" },
-  { type: "ppt", label: "PPT" },
-  { type: "comparison_table", label: "对比表" }
-];
-
 function getFallbackPreview(type: ArtifactType) {
   if (type === "mindmap") {
     return {
@@ -69,28 +62,17 @@ export function ArtifactTabs({
         )}
       </div>
 
-      <div className="artifact-mode-panel">
-        <div className="artifact-mode-summary">
+      {tabs.length === 0 ? (
+        <div
+          className="artifact-empty"
+          title={
+            canStartAnalysis
+              ? "使用中间栏悬浮模态按钮生成新的多模态产物。"
+              : analysisHint
+          }
+        >
           选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
         </div>
-        <div className="artifact-mode-grid">
-          {artifactModes.map((mode) => (
-            <button
-              className="artifact-mode-button"
-              disabled={!canStartAnalysis}
-              key={mode.type}
-              onClick={() => onStartAnalysis(mode.type)}
-              title={analysisHint}
-              type="button"
-            >
-              {mode.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {tabs.length === 0 ? (
-        <div className="artifact-empty" title={analysisHint} />
       ) : (
         <div className="artifact-card">
           <div className="artifact-card-title">{tabs[0].title}</div>

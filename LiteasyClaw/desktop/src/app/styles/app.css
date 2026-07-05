@@ -209,6 +209,14 @@ body {
   scrollbar-width: thin;
 }
 
+.dock-dynamic-tab {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  min-width: 0;
+}
+
 .dock-region-actions {
   display: flex;
   align-items: center;
@@ -258,6 +266,25 @@ body {
   content: "";
 }
 
+.dock-tab-close {
+  flex: 0 0 auto;
+  width: 28px;
+  border: 0;
+  border-right: 1px solid rgba(201, 215, 230, 0.82);
+  background: transparent;
+  color: #6b7d8f;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dock-tab-close:hover,
+.dock-tab-close:focus-visible {
+  background: rgba(210, 225, 239, 0.74);
+  color: #1e3f5e;
+}
+
 .dock-tab:focus-visible {
   z-index: 1;
   outline: 2px solid rgba(27, 102, 179, 0.58);
@@ -269,6 +296,13 @@ body {
   min-width: 0;
   min-height: 0;
   height: 100%;
+}
+
+.dock-region-overlay {
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  pointer-events: none;
 }
 
 .dock-item-host {
@@ -328,6 +362,107 @@ body {
   padding: 14px 16px;
   overflow: auto;
   background: rgba(251, 252, 248, 0.74);
+}
+
+.floating-modality-launcher {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  z-index: 13;
+  width: 68px;
+  height: 68px;
+  pointer-events: auto;
+}
+
+.floating-modality-launcher.dragging {
+  cursor: grabbing;
+}
+
+.floating-modality-main,
+.floating-modality-option {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 16px 34px rgba(28, 48, 66, 0.18);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.floating-modality-main {
+  inset: 0;
+  background: linear-gradient(135deg, #166aa8 0%, #21826d 100%);
+  font-size: 14px;
+}
+
+.floating-modality-main:focus-visible,
+.floating-modality-option:focus-visible {
+  outline: 3px solid rgba(27, 102, 179, 0.32);
+  outline-offset: 3px;
+}
+
+.floating-modality-option {
+  top: 12px;
+  left: 12px;
+  width: 44px;
+  height: 44px;
+  opacity: 0;
+  transform: translate(0, 0) scale(0.68);
+  transition: opacity 150ms ease, transform 180ms ease;
+  font-size: 11px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.floating-modality-launcher:hover .floating-modality-option,
+.floating-modality-launcher:focus-within .floating-modality-option,
+.floating-modality-launcher.dragging .floating-modality-option {
+  opacity: 1;
+}
+
+.floating-modality-launcher:hover .floating-modality-option.tree,
+.floating-modality-launcher:focus-within .floating-modality-option.tree {
+  transform: translate(-74px, -42px) scale(1);
+}
+
+.floating-modality-launcher:hover .floating-modality-option.mindmap,
+.floating-modality-launcher:focus-within .floating-modality-option.mindmap {
+  transform: translate(2px, -88px) scale(1);
+}
+
+.floating-modality-launcher:hover .floating-modality-option.ppt,
+.floating-modality-launcher:focus-within .floating-modality-option.ppt {
+  transform: translate(78px, -42px) scale(1);
+}
+
+.floating-modality-launcher:hover .floating-modality-option.comparison,
+.floating-modality-launcher:focus-within .floating-modality-option.comparison {
+  transform: translate(48px, 66px) scale(1);
+}
+
+.floating-modality-option.tree {
+  background: #166aa8;
+}
+
+.floating-modality-option.mindmap {
+  background: #21826d;
+}
+
+.floating-modality-option.ppt {
+  background: #8a6418;
+}
+
+.floating-modality-option.comparison {
+  background: #5f5ab8;
+}
+
+.floating-modality-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+  filter: grayscale(0.35);
 }
 
 .pane-collapse-button,

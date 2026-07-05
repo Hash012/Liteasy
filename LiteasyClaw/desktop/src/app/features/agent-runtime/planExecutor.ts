@@ -108,6 +108,28 @@ function createActionFailedEvent(
   };
 }
 
+function createProgressStartedEvent(plan: SemanticActionPlan): AgentRuntimeEvent {
+  return {
+    planId: plan.planId,
+    summary: plan.summary,
+    traceId: getTraceId(plan),
+    type: "progress_started"
+  };
+}
+
+function createTaskCreatedEvent(
+  smoothPolicy: Extract<ReturnType<typeof evaluateSmoothExecutionPolicy>, { kind: "background" }>
+): AgentRuntimeEvent {
+  return {
+    task: {
+      payload: smoothPolicy.action.input as Record<string, unknown>,
+      taskId: smoothPolicy.taskId,
+      taskType: smoothPolicy.taskType
+    },
+    type: "task_created"
+  };
+}
+
 function createMissingHandlerError(
   plan: SemanticActionPlan,
   action: RuntimeActionInvocation
@@ -236,6 +258,29 @@ async function executeSemanticPlanWithOptions(
   }
 
   const runtimeContexts = buildIntentRuntimeContexts(context);
+  const validation = validateSemanticActionPlan(plan, {
+    mode: context.runtimeInput?.mode ?? "command",
+    registeredActions: runtimeContexts.policyContext.registeredActions
+  });
+  if (!validation.valid) {
+    const recovery = validation.errors.join("；");
+
+    return {
+      events: [
+        {
+          message: "语义计划未通过动作契约校验。",
+          recovery,
+          type: "runtime_error"
+        },
+        createRuntimeErrorFallbackEvent(plan, context, {
+          message: "语义计划未通过动作契约校验。",
+          recovery
+        })
+      ],
+      settingsChanged: false
+    };
+  }
+
   const policyDecision = evaluateSemanticPlanPolicy(
     plan,
     {
@@ -421,14 +466,7 @@ async function executeSemanticPlanWithOptions(
             ]),
         ...(smoothPolicy.kind === "background" &&
         smoothPolicy.progressEvents.includes("progress_started")
-          ? [
-              {
-                planId: plan.planId,
-                summary: plan.summary,
-                traceId: `trace-${plan.planId}`,
-                type: "progress_started" as const
-              }
-            ]
+          ? [createProgressStartedEvent(plan)]
           : []),
         {
           artifact: {
@@ -441,19 +479,7 @@ async function executeSemanticPlanWithOptions(
         },
         ...(smoothPolicy.kind === "background" &&
         smoothPolicy.progressEvents.includes("task_created")
-          ? [
-              {
-                task: {
-                  payload: {
-                    artifactType: artifactAction.input.artifactType,
-                    source: artifactAction.input.source
-                  },
-                  taskId: smoothPolicy.taskId,
-                  taskType: smoothPolicy.taskType
-                },
-                type: "task_created" as const
-              }
-            ]
+          ? [createTaskCreatedEvent(smoothPolicy)]
           : []),
         {
           message,
@@ -482,6 +508,12 @@ async function executeSemanticPlanWithOptions(
           }
         ])
   ];
+  if (
+    smoothPolicy.kind === "background" &&
+    smoothPolicy.progressEvents.includes("progress_started")
+  ) {
+    events.push(createProgressStartedEvent(plan));
+  }
 
   let lastActionMessage = "";
   for (const action of plan.actions) {
@@ -512,6 +544,13 @@ async function executeSemanticPlanWithOptions(
 
     if (message === null) {
       events.push(createActionEvent(action));
+      if (
+        smoothPolicy.kind === "background" &&
+        smoothPolicy.action.actionId === action.actionId &&
+        smoothPolicy.progressEvents.includes("task_created")
+      ) {
+        events.push(createTaskCreatedEvent(smoothPolicy));
+      }
       continue;
     }
 
@@ -521,6 +560,13 @@ async function executeSemanticPlanWithOptions(
     }
 
     events.push(createActionEvent(action));
+    if (
+      smoothPolicy.kind === "background" &&
+      smoothPolicy.action.actionId === action.actionId &&
+      smoothPolicy.progressEvents.includes("task_created")
+    ) {
+      events.push(createTaskCreatedEvent(smoothPolicy));
+    }
     events.push({
       message,
       type: "assistant_reply"

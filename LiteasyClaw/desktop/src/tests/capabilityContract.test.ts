@@ -6,6 +6,7 @@ const allowedFamilies = new Set([
   "artifact",
   "cloud",
   "collection",
+  "dock",
   "layout",
   "organization",
   "panel",
@@ -29,8 +30,11 @@ describe("capability metadata contract", () => {
       expect(typeof capability.label).toBe("string");
       expect(capability.label.length).toBeGreaterThan(0);
       expect(allowedFamilies.has(capability.family)).toBe(true);
+      expect(capability.ownerFeature).toBe(capability.family);
       expect(capability.inputSchema).toMatchObject({ type: "object" });
       expect(capability.outputSchema).toMatchObject({ type: "object" });
+      expect(typeof capability.failureRecovery).toBe("string");
+      expect(capability.failureRecovery.length).toBeGreaterThan(0);
       expect(typeof capability.reversible).toBe("boolean");
       expect(typeof capability.estimatedLatencyMs).toBe("number");
       expect(allowedCosts.has(capability.estimatedCost)).toBe(true);

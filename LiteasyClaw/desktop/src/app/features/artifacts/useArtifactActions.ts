@@ -35,6 +35,10 @@ function getArtifactTitle(type: ArtifactType) {
   return "Literature Mind Map";
 }
 
+function createArtifactId(taskId: string) {
+  return taskId.replace("artifact-task-", "artifact-");
+}
+
 export function useArtifactActions({
   artifactStore,
   getImportedChunksByPaperId,
@@ -65,7 +69,7 @@ export function useArtifactActions({
     }, 300);
 
     window.setTimeout(() => {
-      const artifactId = "artifact-demo-1";
+      const artifactId = createArtifactId(taskId);
       artifactStore.completeTask(taskId, {
         artifactId,
         preview: buildArtifactPreview(selectedPapers, importedChunksByPaperId),
@@ -134,7 +138,13 @@ export function useArtifactActions({
     return "已根据当前选中文献集触发分支 skill；如尚未导入，系统会先导入再开始生成产物。";
   }
 
+  function closeArtifactTab(artifactId: string) {
+    artifactStore.closeTab(artifactId);
+    syncArtifacts();
+  }
+
   return {
+    closeArtifactTab,
     handleAssistantArtifact,
     startAnalysis,
     startArtifactTask,

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   createDefaultDockLayout,
   findDockItemRegion,
+  closeDockItem,
   moveDockItem,
   normalizeDockLayout,
   openDockItem
@@ -17,7 +18,7 @@ describe("dock layout", () => {
     });
     expect(layout.regions.main.itemIds).toEqual(["reader"]);
     expect(layout.regions.right.itemIds).toEqual(["assistant"]);
-    expect(layout.regions.bottom.itemIds).toEqual(["artifacts"]);
+    expect(layout.regions.bottom.itemIds).toEqual([]);
   });
 
   test("moves a tab across allowed regions and leaves a real empty region", () => {
@@ -29,7 +30,7 @@ describe("dock layout", () => {
     });
     expect(layout.regions.bottom).toEqual({
       activeItemId: "assistant",
-      itemIds: ["artifacts", "assistant"]
+      itemIds: ["assistant"]
     });
     expect(findDockItemRegion(layout, "assistant")).toBe("bottom");
   });
@@ -43,8 +44,29 @@ describe("dock layout", () => {
   test("opens a missing activity item in its preferred region", () => {
     const layout = openDockItem(createDefaultDockLayout(), "organization");
 
-    expect(layout.regions.left.itemIds).toEqual(["library", "organization"]);
+    expect(layout.regions.left.itemIds).toEqual(["organization"]);
     expect(layout.regions.left.activeItemId).toBe("organization");
+  });
+
+  test("keeps the left region to a single tab when a new item opens there", () => {
+    const layout = moveDockItem(createDefaultDockLayout(), "assistant", "left");
+
+    expect(layout.regions.left).toEqual({
+      activeItemId: "assistant",
+      itemIds: ["assistant"]
+    });
+    expect(findDockItemRegion(layout, "library")).toBeNull();
+  });
+
+  test("closes a dock item and activates the nearest remaining tab", () => {
+    const layout = moveDockItem(createDefaultDockLayout(), "assistant", "bottom");
+    const closed = closeDockItem(layout, "assistant");
+
+    expect(closed.regions.bottom).toEqual({
+      activeItemId: null,
+      itemIds: []
+    });
+    expect(findDockItemRegion(closed, "assistant")).toBeNull();
   });
 
   test("normalizes duplicate, unknown and invalid stored items while restoring Reader", () => {
@@ -74,6 +96,65 @@ describe("dock layout", () => {
     expect(layout.regions.bottom.itemIds).toEqual([]);
     expect(layout.regions.right.itemIds).toEqual(["assistant"]);
     expect(layout.regions.main.itemIds).toEqual(["reader"]);
+  });
+
+  test("migrates legacy standalone artifact dock items out of stored layouts", () => {
+    const layout = normalizeDockLayout({
+      regions: {
+        bottom: {
+          activeItemId: "artifacts",
+          itemIds: ["artifacts"]
+        },
+        left: {
+          activeItemId: "library",
+          itemIds: ["library"]
+        },
+        main: {
+          activeItemId: "reader",
+          itemIds: ["reader"]
+        },
+        right: {
+          activeItemId: "assistant",
+          itemIds: ["assistant"]
+        }
+      },
+      version: 1
+    });
+
+    expect(layout.regions.bottom).toEqual({
+      activeItemId: null,
+      itemIds: []
+    });
+    expect(layout.regions.main.itemIds).toEqual(["reader"]);
+  });
+
+  test("migrates legacy multi-tab left regions to the active tab", () => {
+    const layout = normalizeDockLayout({
+      regions: {
+        bottom: {
+          activeItemId: null,
+          itemIds: []
+        },
+        left: {
+          activeItemId: "organization",
+          itemIds: ["library", "organization", "settings"]
+        },
+        main: {
+          activeItemId: "reader",
+          itemIds: ["reader"]
+        },
+        right: {
+          activeItemId: "assistant",
+          itemIds: ["assistant"]
+        }
+      },
+      version: 1
+    });
+
+    expect(layout.regions.left).toEqual({
+      activeItemId: "organization",
+      itemIds: ["organization"]
+    });
   });
 
   test("falls back safely when a future layout schema is not understood", () => {

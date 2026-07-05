@@ -69,8 +69,7 @@ function mockPdfSelection({
 }
 
 describe("ReaderPane", () => {
-  test("renders the reader header and forwards artifact start actions", async () => {
-    const user = userEvent.setup();
+  test("renders the reader header and leaves artifact generation to the floating launcher", () => {
     const onStartAnalysis = vi.fn();
 
     render(
@@ -95,18 +94,9 @@ describe("ReaderPane", () => {
     expect(within(readerHeader).getByText("显示比例 100%")).toBeInTheDocument();
     expect(document.querySelector(".pdf-toolbar")).not.toBeInTheDocument();
     expect(screen.getByText("选中文献集：1 篇 · 已锁定")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "思维导图" })).toHaveAttribute(
-      "title",
-      "可以启动中栏分析。"
-    );
-    expect(screen.getByRole("button", { name: "对比表" })).toHaveAttribute(
-      "title",
-      "可以启动中栏分析。"
-    );
-
-    await user.click(screen.getByRole("button", { name: "思维导图" }));
-
-    expect(onStartAnalysis).toHaveBeenCalledWith("mindmap");
+    expect(screen.queryByRole("button", { name: "思维导图" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "对比表" })).not.toBeInTheDocument();
+    expect(onStartAnalysis).not.toHaveBeenCalled();
   });
 
   test("shows only the LiteasyClaw logo in the reader body when no paper is open", () => {
@@ -584,7 +574,7 @@ describe("ReaderPane", () => {
     expect(screen.getByText("暂无批注")).toBeInTheDocument();
   });
 
-  test("disables artifact actions until selected papers are locked", () => {
+  test("shows artifact readiness without rendering generation actions", () => {
     render(
       <ReaderPane
         analysisHint="请先锁定。"
@@ -597,7 +587,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "树形展开" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute("title", "请先锁定。");
+    expect(screen.getByText("选中文献集：1 篇 · 未锁定")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "树形展开" })).not.toBeInTheDocument();
   });
 });

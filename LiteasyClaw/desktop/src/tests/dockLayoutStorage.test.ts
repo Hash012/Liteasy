@@ -11,7 +11,7 @@ test("persists and restores the dock tab arrangement", () => {
 
   const restored = loadDockLayout();
   expect(restored.regions.right.itemIds).toEqual([]);
-  expect(restored.regions.bottom.itemIds).toEqual(["artifacts", "assistant"]);
+  expect(restored.regions.bottom.itemIds).toEqual(["assistant"]);
   expect(restored.regions.bottom.activeItemId).toBe("assistant");
 });
 

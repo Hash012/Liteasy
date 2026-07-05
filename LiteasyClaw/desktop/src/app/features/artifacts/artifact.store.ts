@@ -27,6 +27,11 @@ export function createArtifactStore() {
       task.status = "completed";
       tabs.unshift(payload);
     },
+    closeTab(artifactId: string) {
+      const tabIndex = tabs.findIndex((tab) => tab.artifactId === artifactId);
+      if (tabIndex === -1) return;
+      tabs.splice(tabIndex, 1);
+    },
     failTask(id: string) {
       const task = tasks.get(id);
       if (!task) return;
@@ -36,7 +41,7 @@ export function createArtifactStore() {
       return tasks.get(id);
     },
     getOpenTabs() {
-      return tabs;
+      return [...tabs];
     }
   };
 }

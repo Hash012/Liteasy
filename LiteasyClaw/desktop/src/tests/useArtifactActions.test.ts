@@ -173,7 +173,7 @@ describe("useArtifactActions", () => {
               expect.objectContaining({
                 component: "ActionBar",
                 props: expect.objectContaining({
-                  actionIds: ["open-artifact-demo-1"]
+                  actionIds: ["open-artifact-1"]
                 })
               })
             ]),
@@ -182,9 +182,9 @@ describe("useArtifactActions", () => {
           actions: expect.arrayContaining([
             expect.objectContaining({
               actionId: "artifact.open_tab",
-              id: "open-artifact-demo-1",
+              id: "open-artifact-1",
               input: expect.objectContaining({
-                artifactId: "artifact-demo-1",
+                artifactId: "artifact-1",
                 artifactType: "comparison_table"
               })
             })
@@ -227,9 +227,9 @@ describe("useArtifactActions", () => {
           actions: expect.arrayContaining([
             expect.objectContaining({
               actionId: "artifact.open_tab",
-              id: "open-artifact-demo-1",
+              id: "open-artifact-1",
               input: expect.objectContaining({
-                artifactId: "artifact-demo-1",
+                artifactId: "artifact-1",
                 artifactType
               })
             })

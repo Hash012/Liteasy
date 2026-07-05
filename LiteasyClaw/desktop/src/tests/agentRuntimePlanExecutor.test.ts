@@ -312,6 +312,12 @@ test("executes registered selected-set import actions", async () => {
       type: "plan_preview"
     },
     {
+      planId: "plan-test",
+      summary: "导入当前选中文献集",
+      traceId: "trace-plan-test",
+      type: "progress_started"
+    },
+    {
       action: {
         actionId: "selected_set.import",
         payload: {

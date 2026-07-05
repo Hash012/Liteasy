@@ -2,6 +2,10 @@ import type { ArtifactType } from "../artifacts/artifact.types";
 import type { ActionRiskLevel } from "../resources/resourceActionPolicy";
 import { settingsRegistry } from "../settings/settingsRegistry";
 import type { UpdateSettingCommand } from "../settings/settings.types";
+import {
+  parseGeneratedThemeInput,
+  type GeneratedThemeInput
+} from "../theme/generatedTheme";
 
 export type SettingsStoreLike = {
   apply: (command: UpdateSettingCommand) => boolean | string;
@@ -16,6 +20,9 @@ export type PanelActionTarget =
   | "profile"
   | "right"
   | "settings";
+
+export type DockMoveItemId = "assistant" | "library" | "organization" | "profile" | "settings";
+export type DockMoveTargetRegion = "bottom" | "left" | "right";
 
 export type ActionContext = {
   applyLayoutPreset?: (input: {
@@ -33,6 +40,11 @@ export type ActionContext = {
   applyThemePreset?: (input: {
     preset?: "playful" | "default";
     tone?: "cartoon" | "quiet";
+  }) => string;
+  applyGeneratedTheme?: (input: GeneratedThemeInput) => string;
+  moveDockItem?: (input: {
+    itemId: DockMoveItemId;
+    targetRegion: DockMoveTargetRegion;
   }) => string;
   addToCollection?: (input: {
     scope: "selected_document_set";
@@ -99,11 +111,22 @@ export type ActionInvocation =
       };
     }
   | {
+      actionId: "dock.move_item";
+      input: {
+        itemId: DockMoveItemId;
+        targetRegion: DockMoveTargetRegion;
+      };
+    }
+  | {
       actionId: "theme.apply_preset" | "theme.reset";
       input: {
         preset?: "playful" | "default";
         tone?: "cartoon" | "quiet";
       };
+    }
+  | {
+      actionId: "theme.apply_generated";
+      input: GeneratedThemeInput;
     }
   | {
       actionId: "panel.open" | "panel.close" | "panel.toggle";
@@ -195,6 +218,7 @@ export type JsonSchemaType = "array" | "boolean" | "number" | "object" | "string
 
 export type JsonSchema = {
   enum?: readonly unknown[];
+  items?: JsonSchema;
   properties?: Record<string, JsonSchema>;
   required?: readonly string[];
   type: JsonSchemaType | readonly JsonSchemaType[];
@@ -204,6 +228,7 @@ export type CapabilityFamily =
   | "artifact"
   | "cloud"
   | "collection"
+  | "dock"
   | "layout"
   | "organization"
   | "panel"
@@ -255,11 +280,13 @@ export type CapabilityMetadata = {
   actionId: ActionInvocation["actionId"];
   estimatedCost: CapabilityCost;
   estimatedLatencyMs: number;
+  failureRecovery: string;
   family: CapabilityFamily;
   inputSchema: JsonSchema;
   inverseActionId?: ActionInvocation["actionId"];
   label: string;
   outputSchema: JsonSchema;
+  ownerFeature: CapabilityFamily;
   progressEvents?: string[];
   requiredContext: string[];
   requiresConfirmation: boolean;
@@ -310,8 +337,99 @@ const selectedScopeSchema: JsonSchema = {
   type: "object"
 };
 
-function capability(metadata: CapabilityMetadata): CapabilityMetadata {
-  return metadata;
+const generatedThemePaletteSchema: JsonSchema = {
+  properties: {
+    accent1: { type: "string" },
+    accent2: { type: "string" },
+    accent3: { type: "string" },
+    ink1: { type: "string" },
+    ink2: { type: "string" },
+    line1: { type: "string" },
+    line2: { type: "string" },
+    paper0: { type: "string" },
+    paper1: { type: "string" },
+    paper2: { type: "string" }
+  },
+  required: [
+    "accent1",
+    "accent2",
+    "accent3",
+    "ink1",
+    "ink2",
+    "line1",
+    "line2",
+    "paper0",
+    "paper1",
+    "paper2"
+  ],
+  type: "object"
+};
+
+const generatedThemeButtonsSchema: JsonSchema = {
+  properties: {
+    borderWidth: { type: "number" },
+    fill: {
+      enum: ["flat", "soft", "solid", "glass"],
+      type: "string"
+    },
+    hoverLift: { type: "number" },
+    radius: { type: "number" },
+    shadow: {
+      enum: ["none", "subtle", "raised", "crisp"],
+      type: "string"
+    },
+    weight: {
+      enum: ["quiet", "balanced", "strong"],
+      type: "string"
+    }
+  },
+  required: ["borderWidth", "fill", "hoverLift", "radius", "shadow", "weight"],
+  type: "object"
+};
+
+const generatedThemeSurfacesSchema: JsonSchema = {
+  properties: {
+    blur: { type: "number" },
+    surface1Alpha: { type: "number" },
+    surface2Alpha: { type: "number" }
+  },
+  type: "object"
+};
+
+const generatedThemeInputSchema: JsonSchema = {
+  properties: {
+    buttons: generatedThemeButtonsSchema,
+    density: {
+      enum: ["compact", "comfortable", "spacious"],
+      type: "string"
+    },
+    intent: { type: "string" },
+    name: { type: "string" },
+    palette: generatedThemePaletteSchema,
+    rationale: { type: "string" },
+    scope: {
+      items: {
+        enum: ["global", "reader", "panels", "tabs", "buttons", "floating_controls"],
+        type: "string"
+      },
+      type: "array"
+    },
+    surfaces: generatedThemeSurfacesSchema
+  },
+  required: ["buttons", "intent", "name", "palette", "scope"],
+  type: "object"
+};
+
+function capability(
+  metadata: Omit<CapabilityMetadata, "failureRecovery" | "ownerFeature"> &
+    Partial<Pick<CapabilityMetadata, "failureRecovery" | "ownerFeature">>
+): CapabilityMetadata {
+  return {
+    ...metadata,
+    failureRecovery:
+      metadata.failureRecovery ?? `请检查 ${metadata.label} 的 ${metadata.actionId} action 是否已连接。`,
+    ownerFeature: metadata.ownerFeature ?? metadata.family
+  };
 }
 
 function semanticSignal(
@@ -326,6 +444,80 @@ function semanticSignal(
     required,
     weight
   };
+}
+
+const dockMoveVerbs = ["放到", "放在", "移到", "移动到", "挪到", "拖到", "停靠到", "放去"];
+const dockMoveTargets: Array<{
+  label: string;
+  region: DockMoveTargetRegion;
+  signal: SemanticActionSignal;
+}> = [
+  {
+    label: "下栏",
+    region: "bottom",
+    signal: semanticSignal("target_bottom", ["下栏", "底栏", "下面", "下方", "底部"], 4, true)
+  },
+  {
+    label: "左栏",
+    region: "left",
+    signal: semanticSignal("target_left", ["左栏", "左侧栏", "左边", "左侧"], 4, true)
+  },
+  {
+    label: "右栏",
+    region: "right",
+    signal: semanticSignal("target_right", ["右栏", "右侧栏", "右边", "右侧"], 4, true)
+  }
+];
+const dockMoveItems: Array<{
+  itemId: DockMoveItemId;
+  label: string;
+  signal: SemanticActionSignal;
+}> = [
+  {
+    itemId: "assistant",
+    label: "Liteasy Chat",
+    signal: semanticSignal("dock_item_assistant", ["AI 助手", "AI助手", "助手", "聊天助手", "Liteasy Chat"], 5, true)
+  },
+  {
+    itemId: "library",
+    label: "文献库",
+    signal: semanticSignal("dock_item_library", ["文献库", "文献库面板", "library"], 5, true)
+  },
+  {
+    itemId: "organization",
+    label: "组织",
+    signal: semanticSignal("dock_item_organization", ["组织", "组织面板", "团队空间"], 5, true)
+  },
+  {
+    itemId: "profile",
+    label: "个人中心",
+    signal: semanticSignal("dock_item_profile", ["个人中心", "个人画像", "画像", "profile"], 5, true)
+  },
+  {
+    itemId: "settings",
+    label: "设置",
+    signal: semanticSignal("dock_item_settings", ["设置", "设置面板", "settings"], 5, true)
+  }
+];
+
+function createDockMoveSemanticFrames(): SemanticActionFrame[] {
+  return dockMoveItems.flatMap((item) =>
+    dockMoveTargets.map((target) => ({
+      clarificationLabel: `移动${item.label}到${target.label}`,
+      frameId: `dock.move_item.${item.itemId}.${target.region}`,
+      input: {
+        itemId: item.itemId,
+        targetRegion: target.region
+      },
+      intentId: "dock.move_item",
+      signals: [
+        semanticSignal("dock_move", dockMoveVerbs, 3, true),
+        item.signal,
+        target.signal
+      ],
+      summary: `移动${item.label}到${target.label}`
+    }))
+  );
 }
 
 const registeredActionMetadata: RegisteredActionMetadata[] = [
@@ -578,6 +770,35 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
     riskLevel: "low"
   }),
   capability({
+    actionId: "dock.move_item",
+    estimatedCost: "none",
+    estimatedLatencyMs: 150,
+    family: "dock",
+    inputSchema: {
+      properties: {
+        itemId: {
+          enum: ["assistant", "library", "organization", "profile", "settings"],
+          type: "string"
+        },
+        targetRegion: {
+          enum: ["bottom", "left", "right"],
+          type: "string"
+        }
+      },
+      required: ["itemId", "targetRegion"],
+      type: "object"
+    },
+    label: "移动 Dock 标签页",
+    outputSchema: actionResultSchema,
+    requiredContext: [],
+    requiresConfirmation: false,
+    reversible: true,
+    riskLevel: "low",
+    semantic: {
+      frames: createDockMoveSemanticFrames()
+    }
+  }),
+  capability({
     actionId: "theme.apply_preset",
     estimatedCost: "none",
     estimatedLatencyMs: 150,
@@ -621,6 +842,20 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
         }
       ]
     }
+  }),
+  capability({
+    actionId: "theme.apply_generated",
+    estimatedCost: "none",
+    estimatedLatencyMs: 150,
+    family: "theme",
+    inputSchema: generatedThemeInputSchema,
+    inverseActionId: "theme.reset",
+    label: "根据命令生成界面风格",
+    outputSchema: actionResultSchema,
+    requiredContext: [],
+    requiresConfirmation: false,
+    reversible: true,
+    riskLevel: "low"
   }),
   capability({
     actionId: "theme.reset",
@@ -762,19 +997,6 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
             semanticSignal("right_panel", ["右栏", "右侧栏", "AI 助手", "AI助手"], 4, true)
           ],
           summary: "打开右栏"
-        },
-        {
-          clarificationLabel: "打开下栏",
-          frameId: "panel.open.bottom",
-          input: {
-            panel: "bottom"
-          },
-          intentId: "panel.change",
-          signals: [
-            semanticSignal("open", ["打开", "展开", "显示"], 2, true),
-            semanticSignal("bottom_panel", ["下栏", "底栏", "产物区"], 4, true)
-          ],
-          summary: "打开下栏"
         }
       ]
     }
@@ -1340,6 +1562,33 @@ export async function executeAction(
 
     return {
       message: context.focusPane(invocation.input)
+    };
+  }
+
+  if (invocation.actionId === "dock.move_item") {
+    if (!context.moveDockItem) {
+      throw new Error("dock.move_item requires a dock move handler");
+    }
+
+    return {
+      message: context.moveDockItem(invocation.input)
+    };
+  }
+
+  if (invocation.actionId === "theme.apply_generated") {
+    if (!context.applyGeneratedTheme) {
+      throw new Error("theme.apply_generated requires a generated theme handler");
+    }
+
+    const parsed = parseGeneratedThemeInput(invocation.input);
+    if (!parsed.ok) {
+      return {
+        message: `生成主题未通过安全校验：${parsed.errors.join("；")}`
+      };
+    }
+
+    return {
+      message: context.applyGeneratedTheme(parsed.theme)
     };
   }
 

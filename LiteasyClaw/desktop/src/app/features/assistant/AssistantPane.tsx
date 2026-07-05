@@ -56,11 +56,13 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 type AssistantPaneProps = {
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
   modelTransport?: ModelTransport;
+  onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onGenerateArtifact: (artifactType: ArtifactType) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
+  onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
@@ -168,11 +170,13 @@ function getTraceIdFromRuntimeEvents(events: AgentRuntimeEvent[]) {
 export function AssistantPane({
   importedChunksByPaperId = {},
   modelTransport,
+  onApplyGeneratedTheme,
   onApplyLayoutPreset,
   onApplyPanelAction,
   onApplyThemePreset,
   onGenerateArtifact,
   onImportSelectedSet,
+  onMoveDockItem,
   onOpenAcademicArchive,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
@@ -301,6 +305,7 @@ export function AssistantPane({
         modelTransport,
         settings: settingsStoreRef.current.getState()
       }),
+      applyGeneratedTheme: onApplyGeneratedTheme,
       applyLayoutPreset: onApplyLayoutPreset,
       applyPanelAction: onApplyPanelAction,
       applyThemePreset: onApplyThemePreset,
@@ -310,6 +315,7 @@ export function AssistantPane({
       }),
       importSelectedSet: onImportSelectedSet,
       journal: executionJournalRef.current,
+      moveDockItem: onMoveDockItem,
       openAcademicArchive: onOpenAcademicArchive,
       openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
       pendingClarification: pendingCommandClarificationRef.current,

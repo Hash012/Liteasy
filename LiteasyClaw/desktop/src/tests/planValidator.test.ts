@@ -91,6 +91,53 @@ describe("validateSemanticActionPlan", () => {
     );
   });
 
+  test("rejects generated theme scopes outside the registered layer enum", () => {
+    const result = validateSemanticActionPlan(
+      basePlan({
+        actions: [
+          {
+            actionId: "theme.apply_generated",
+            input: {
+              buttons: {
+                borderWidth: 1,
+                fill: "solid",
+                hoverLift: 2,
+                radius: 4,
+                shadow: "crisp",
+                weight: "strong"
+              },
+              intent: "冷静的赛博实验室",
+              name: "冷静赛博实验室",
+              palette: {
+                accent1: "#1B66B3",
+                accent2: "#2F8F61",
+                accent3: "#B06B19",
+                ink1: "#101820",
+                ink2: "#526071",
+                line1: "#C7D3DF",
+                line2: "#AEBCCD",
+                paper0: "#F8FBFC",
+                paper1: "#EEF5F8",
+                paper2: "#E2EDF3"
+              },
+              scope: ["global", "raw_css_selector"]
+            }
+          } as SemanticActionPlan["actions"][number]
+        ],
+        intentId: "theme.apply"
+      }),
+      {
+        mode: "command",
+        registeredActions: getRegisteredActionMetadata()
+      }
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringContaining("scope[1] must be one of")])
+    );
+  });
+
   test("rejects executable actions outside command mode", () => {
     const result = validateSemanticActionPlan(
       basePlan({

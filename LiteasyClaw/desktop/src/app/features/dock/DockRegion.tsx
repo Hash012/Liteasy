@@ -6,12 +6,22 @@ import { DockEmptyState } from "./DockEmptyState";
 export const dockItemMimeType = "application/x-liteasy-dock-item";
 
 type DockRegionProps = {
+  dynamicTabs?: Array<{
+    id: string;
+    onActivate: () => void;
+    onClose?: () => void;
+    render: () => ReactNode;
+    selected: boolean;
+    title: string;
+  }>;
   layout: DockRegionLayout;
   onActivateItem: (itemId: DockItemId) => void;
+  onCloseItem: (itemId: DockItemId) => void;
   onMoveItem: (itemId: DockItemId, targetRegionId: DockRegionId) => void;
+  overlay?: ReactNode;
   regionId: DockRegionId;
   regionActions?: ReactNode;
-  renderItem: (itemId: DockItemId) => ReactNode;
+  renderItem: (itemId: DockItemId, regionId: DockRegionId) => ReactNode;
 };
 
 function hasDockPayload(event: DragEvent<HTMLElement>) {
@@ -35,15 +45,20 @@ function canAcceptDockPayload(
 }
 
 export function DockRegion({
+  dynamicTabs = [],
   layout,
   onActivateItem,
+  onCloseItem,
   onMoveItem,
+  overlay,
   regionId,
   regionActions,
   renderItem
 }: DockRegionProps) {
   const [dropActive, setDropActive] = useState(false);
   const regionLabel = dockRegionLabels[regionId];
+  const activeDynamicTab = dynamicTabs.find((tab) => tab.selected);
+  const hasTabs = layout.itemIds.length > 0 || dynamicTabs.length > 0;
 
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
@@ -119,40 +134,83 @@ export function DockRegion({
       }}
       onDrop={handleDrop}
     >
-      {layout.itemIds.length > 0 || regionActions ? (
+      {hasTabs || regionActions ? (
         <div className="dock-region-tab-row">
-          {layout.itemIds.length > 0 ? (
+          {hasTabs ? (
             <div aria-label={`${regionLabel}标签页`} className="dock-tab-strip" role="tablist">
               {layout.itemIds.map((itemId) => {
                 const descriptor = dockItemRegistry[itemId];
-                const active = layout.activeItemId === itemId;
+                const active = !activeDynamicTab && layout.activeItemId === itemId;
                 return (
-                  <button
-                    aria-selected={active}
-                    className={`dock-tab ${active ? "active" : ""}`}
-                    draggable={descriptor.allowedRegions.length > 1}
-                    id={`dock-tab-${regionId}-${itemId}`}
-                    key={itemId}
-                    onClick={() => onActivateItem(itemId)}
-                    onDragEnd={() => setDropActive(false)}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData(dockItemMimeType, itemId);
-                    }}
-                    onKeyDown={(event) => handleTabKeyDown(event, itemId)}
-                    role="tab"
-                    tabIndex={active ? 0 : -1}
-                    title={
-                      descriptor.allowedRegions.length > 1
-                        ? `拖动“${descriptor.title}”到其他区域`
-                        : descriptor.title
-                    }
-                    type="button"
-                  >
-                    {descriptor.title}
-                  </button>
+                  <div className="dock-dynamic-tab" key={itemId}>
+                    <button
+                      aria-selected={active}
+                      className={`dock-tab ${active ? "active" : ""}`}
+                      draggable={descriptor.allowedRegions.length > 1}
+                      id={`dock-tab-${regionId}-${itemId}`}
+                      onClick={() => onActivateItem(itemId)}
+                      onDragEnd={() => setDropActive(false)}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData(dockItemMimeType, itemId);
+                      }}
+                      onKeyDown={(event) => handleTabKeyDown(event, itemId)}
+                      role="tab"
+                      tabIndex={active ? 0 : -1}
+                      title={
+                        descriptor.allowedRegions.length > 1
+                          ? `拖动“${descriptor.title}”到其他区域`
+                          : descriptor.title
+                      }
+                      type="button"
+                    >
+                      {descriptor.title}
+                    </button>
+                    <button
+                      aria-label={`关闭 ${descriptor.title}`}
+                      className="dock-tab-close"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCloseItem(itemId);
+                      }}
+                      title={`关闭 ${descriptor.title}`}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </div>
                 );
               })}
+              {dynamicTabs.map((tab) => (
+                <div className="dock-dynamic-tab" key={tab.id}>
+                  <button
+                    aria-selected={tab.selected}
+                    className={`dock-tab ${tab.selected ? "active" : ""}`}
+                    id={`dock-tab-${regionId}-${tab.id}`}
+                    onClick={tab.onActivate}
+                    role="tab"
+                    tabIndex={tab.selected ? 0 : -1}
+                    title={tab.title}
+                    type="button"
+                  >
+                    {tab.title}
+                  </button>
+                  {tab.onClose ? (
+                    <button
+                      aria-label={`关闭 ${tab.title}`}
+                      className="dock-tab-close"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        tab.onClose?.();
+                      }}
+                      title={`关闭 ${tab.title}`}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              ))}
             </div>
           ) : null}
           {regionActions ? <div className="dock-region-actions">{regionActions}</div> : null}
@@ -160,25 +218,39 @@ export function DockRegion({
       ) : null}
 
       <div className="dock-region-body">
-        {layout.itemIds.length === 0 ? (
+        {layout.itemIds.length === 0 && dynamicTabs.length === 0 ? (
           <DockEmptyState />
         ) : (
-          layout.itemIds.map((itemId) => {
-            const active = layout.activeItemId === itemId;
-            return (
+          <>
+            {layout.itemIds.map((itemId) => {
+              const active = !activeDynamicTab && layout.activeItemId === itemId;
+              return (
+                <div
+                  aria-labelledby={`dock-tab-${regionId}-${itemId}`}
+                  className="dock-item-host"
+                  hidden={!active}
+                  key={itemId}
+                  role="tabpanel"
+                >
+                  {renderItem(itemId, regionId)}
+                </div>
+              );
+            })}
+            {dynamicTabs.map((tab) => (
               <div
-                aria-labelledby={`dock-tab-${regionId}-${itemId}`}
+                aria-labelledby={`dock-tab-${regionId}-${tab.id}`}
                 className="dock-item-host"
-                hidden={!active}
-                key={itemId}
+                hidden={!tab.selected}
+                key={tab.id}
                 role="tabpanel"
               >
-                {renderItem(itemId)}
+                {tab.render()}
               </div>
-            );
-          })
+            ))}
+          </>
         )}
       </div>
+      {overlay ? <div className="dock-region-overlay">{overlay}</div> : null}
       {dropActive ? <div aria-hidden="true" className="dock-drop-overlay" /> : null}
     </section>
   );

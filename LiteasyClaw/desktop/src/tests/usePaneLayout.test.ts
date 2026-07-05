@@ -11,7 +11,7 @@ test("starts with the confirmed default layout and persists user changes", () =>
     right: 24
   });
   expect(result.current.collapsed).toEqual({
-    bottom: false,
+    bottom: true,
     left: false,
     right: false
   });

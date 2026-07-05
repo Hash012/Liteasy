@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { loadPaneLayoutPreference, savePaneLayoutPreference } from "./paneLayout.storage";
 import type { PaneCollapseState, PaneLayout } from "./paneLayout.types";
 
@@ -32,55 +32,61 @@ function normalizeLayout(next: PaneLayout): PaneLayout {
 
 export function usePaneLayout() {
   const [preference, setPreference] = useState(loadPaneLayoutPreference);
+  const preferenceRef = useRef(preference);
 
   function syncPreference(next: { collapsed: PaneCollapseState; layout: PaneLayout }) {
+    preferenceRef.current = next;
     setPreference(next);
     savePaneLayoutPreference(next);
   }
 
   function setLayout(layout: PaneLayout) {
     syncPreference({
-      ...preference,
+      ...preferenceRef.current,
       layout: normalizeLayout(layout)
     });
   }
 
   function setCollapsed(side: PaneSide, collapsed: boolean) {
+    const current = preferenceRef.current;
     syncPreference({
-      ...preference,
+      ...current,
       collapsed: {
-        ...preference.collapsed,
+        ...current.collapsed,
         [side]: collapsed
       }
     });
   }
 
   function adjustLeft(deltaPercent: number) {
-    const nextLeft = preference.layout.left + deltaPercent;
-    const nextCenter = preference.layout.center - deltaPercent;
+    const current = preferenceRef.current;
+    const nextLeft = current.layout.left + deltaPercent;
+    const nextCenter = current.layout.center - deltaPercent;
 
     setLayout({
-      ...preference.layout,
+      ...current.layout,
       center: nextCenter,
       left: nextLeft
     });
   }
 
   function adjustRight(deltaPercent: number) {
-    const nextRight = preference.layout.right - deltaPercent;
-    const nextCenter = preference.layout.center + deltaPercent;
+    const current = preferenceRef.current;
+    const nextRight = current.layout.right - deltaPercent;
+    const nextCenter = current.layout.center + deltaPercent;
 
     setLayout({
-      ...preference.layout,
+      ...current.layout,
       center: nextCenter,
       right: nextRight
     });
   }
 
   function adjustBottom(deltaPercent: number) {
+    const current = preferenceRef.current;
     setLayout({
-      ...preference.layout,
-      bottom: preference.layout.bottom + deltaPercent
+      ...current.layout,
+      bottom: current.layout.bottom + deltaPercent
     });
   }
 
@@ -88,7 +94,7 @@ export function usePaneLayout() {
     syncPreference(loadPaneLayoutPreference());
     syncPreference({
       collapsed: {
-        bottom: false,
+        bottom: true,
         left: false,
         right: false
       },

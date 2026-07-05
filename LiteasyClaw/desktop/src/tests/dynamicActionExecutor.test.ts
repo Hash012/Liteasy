@@ -7,6 +7,52 @@ import { createExecutionJournal } from "../app/features/generative-ui/executionJ
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
 describe("executeUIDslActionRef", () => {
+  test("validates dynamic action input against the registered action schema before execution", async () => {
+    const applyLayoutRatio = vi.fn(() => "已调整工作台栏宽。");
+
+    const result = await executeUIDslActionRef(
+      {
+        actionId: "layout.set_ratio",
+        id: "unsafe-layout-ratio",
+        input: {
+          center: 0.5,
+          unknown: true
+        },
+        label: "调整栏宽",
+        riskLevel: "low"
+      },
+      {
+        applyLayoutRatio
+      },
+      {
+        mode: "command",
+        traceId: "trace-invalid-action-ref"
+      }
+    );
+
+    expect(applyLayoutRatio).not.toHaveBeenCalled();
+    expect(result.events).toEqual([
+      {
+        message: "语义计划未通过动作契约校验。",
+        recovery: "layout.set_ratio.unknown is not allowed",
+        type: "runtime_error"
+      },
+      {
+        document: expect.objectContaining({
+          dataSources: expect.arrayContaining([
+            expect.objectContaining({
+              params: expect.objectContaining({
+                reason: "runtime_error"
+              }),
+              sourceId: "runtime.context_view"
+            })
+          ])
+        }),
+        type: "ui_dsl_ready"
+      }
+    ]);
+  });
+
   test("keeps non-command dynamic actions behind the mode gate", async () => {
     const settingsStore = createSettingsStore();
 

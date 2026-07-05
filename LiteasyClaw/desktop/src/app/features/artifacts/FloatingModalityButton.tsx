@@ -1,0 +1,119 @@
+import { useEffect, useRef, useState } from "react";
+import type { ArtifactType } from "./artifact.types";
+
+type FloatingModalityButtonProps = {
+  analysisHint: string;
+  canStartAnalysis: boolean;
+  onStartAnalysis: (artifactType: ArtifactType) => void;
+};
+
+const modalityOptions: Array<{
+  className: string;
+  label: string;
+  type: ArtifactType;
+}> = [
+  { className: "tree", label: "树形展开", type: "tree" },
+  { className: "mindmap", label: "思维导图", type: "mindmap" },
+  { className: "ppt", label: "PPT", type: "ppt" },
+  { className: "comparison", label: "对比表", type: "comparison_table" }
+];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function FloatingModalityButton({
+  analysisHint,
+  canStartAnalysis,
+  onStartAnalysis
+}: FloatingModalityButtonProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!dragging) {
+      return;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const root = rootRef.current;
+      const parent = root?.parentElement;
+      if (!root || !parent) {
+        return;
+      }
+
+      const parentRect = parent.getBoundingClientRect();
+      const rootRect = root.getBoundingClientRect();
+      const nextX = event.clientX - parentRect.left - dragOffsetRef.current.x;
+      const nextY = event.clientY - parentRect.top - dragOffsetRef.current.y;
+
+      setPosition({
+        x: clamp(nextX, 8, Math.max(8, parentRect.width - rootRect.width - 8)),
+        y: clamp(nextY, 48, Math.max(48, parentRect.height - rootRect.height - 8))
+      });
+    }
+
+    function handlePointerUp() {
+      setDragging(false);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [dragging]);
+
+  return (
+    <div
+      aria-label="中间栏悬浮模态选择"
+      className={`floating-modality-launcher${dragging ? " dragging" : ""}`}
+      ref={rootRef}
+      style={
+        position
+          ? {
+              left: `${position.x}px`,
+              top: `${position.y}px`
+            }
+          : undefined
+      }
+    >
+      {modalityOptions.map((option) => (
+        <button
+          className={`floating-modality-option ${option.className}`}
+          disabled={!canStartAnalysis}
+          key={option.type}
+          onClick={() => onStartAnalysis(option.type)}
+          title={analysisHint}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
+      <button
+        aria-label="模态选择"
+        className="floating-modality-main"
+        onPointerDown={(event) => {
+          const root = rootRef.current;
+          if (!root) {
+            return;
+          }
+          const rect = root.getBoundingClientRect();
+          dragOffsetRef.current = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
+          };
+          setDragging(true);
+        }}
+        title={analysisHint}
+        type="button"
+      >
+        模态
+      </button>
+    </div>
+  );
+}

@@ -34,6 +34,13 @@ function createPlannerPrompt(input: AgentRuntimeInput, context: SemanticPlannerC
     "confidence 只能是 high、medium、low；riskLevel 只能是 high、medium、low；requiredContext 必须是字符串数组。",
     "actions 必须是数组；每个 action 必须使用 actions[].input 放参数，不要使用 parameters、args 或 payload。",
     "actions[].actionId 只能取已注册动作里的 actionId；无法理解时 actions 返回空数组并给 clarification.question。",
+    "复合命令必须拆成多个有序 actions[]，顺序必须与用户表达的先后关系一致；不要发明 macro、workflow 或 batch action。",
+    "主题生成规则：描述性主题请求必须优先使用 theme.apply_generated；重置默认风格使用 theme.reset；明确卡通预设才使用 theme.apply_preset。",
+    "theme.apply_generated 只能输出已注册 schema 中的结构化 token。不要输出任意 CSS、selector、className、style 字符串、URL、脚本、字体或布局开关。",
+    "theme.apply_generated 可根据语义选择 scope：global、reader、panels、tabs、buttons、floating_controls；主题动作不得打开/关闭面板、移动标签页或改变分屏。",
+    "theme.apply_generated 的 palette 颜色必须使用 #RRGGBB；buttons 只能使用 schema 中的枚举和有界数字。",
+    "UI 布局规则：下栏不能被单独打开。若用户只说打开下栏、展开底栏或显示下面区域，必须返回 missing_context 澄清，询问要把哪个标签页放到下栏。",
+    "如果用户明确说把某个标签页放到下栏、左栏或右栏，必须使用 dock.move_item，并从已注册 input enum 中选择 itemId 与 targetRegion。",
     `用户输入：${input.message}`,
     `模式：${input.mode}`,
     `运行时上下文：${JSON.stringify(context.contextView ?? null)}`,
@@ -48,6 +55,41 @@ function createPlannerPrompt(input: AgentRuntimeInput, context: SemanticPlannerC
   }
 
   return prompt.join("\n");
+}
+
+function createsEmptyBottomOpen(plan: SemanticActionPlan) {
+  return plan.actions.some(
+    (action) =>
+      action.actionId === "panel.open" &&
+      "panel" in action.input &&
+      action.input.panel === "bottom"
+  );
+}
+
+function createMissingDockItemPlan(input: AgentRuntimeInput, planId: string): SemanticActionPlan {
+  return {
+    actions: [],
+    clarification: {
+      kind: "missing_context",
+      missing: ["dock_item"],
+      question: "要把哪个标签页放到下栏？例如：把 AI 助手放到下栏。"
+    },
+    confidence: "medium",
+    intentId: "unknown",
+    planId,
+    requiredContext: [],
+    requiresConfirmation: false,
+    riskLevel: "low",
+    summary: "需要指定要移动到下栏的标签页"
+  };
+}
+
+function guardBottomOpenPlan(plan: SemanticActionPlan, input: AgentRuntimeInput) {
+  if (!createsEmptyBottomOpen(plan)) {
+    return plan;
+  }
+
+  return createMissingDockItemPlan(input, plan.planId);
 }
 
 function normalizeConfidence(value: unknown): RuntimePlanConfidence {
@@ -261,7 +303,10 @@ export function createModelSemanticPlanner({
           provider
         });
 
-        const modelPlan = normalizePlan(parseStructuredPlannerPayload(generation.answer), input, context);
+        const modelPlan = guardBottomOpenPlan(
+          normalizePlan(parseStructuredPlannerPayload(generation.answer), input, context),
+          input
+        );
         const validation = validateSemanticActionPlan(modelPlan, {
           mode: input.mode,
           registeredActions: context.registeredActions
