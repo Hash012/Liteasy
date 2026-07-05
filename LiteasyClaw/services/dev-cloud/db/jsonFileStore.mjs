@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultDataDir = path.resolve(currentDir, "..", ".liteasy-data");
 
-function getDataDir() {
+export function getDataDir() {
   return process.env.LITEASY_DEV_CLOUD_DATA_DIR || defaultDataDir;
 }
 

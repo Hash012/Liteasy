@@ -1,4 +1,9 @@
 export const defaultConfig = {
+  accountSessionDurationMs: 7 * 24 * 60 * 60 * 1000,
+  authRateLimit: {
+    limit: 8,
+    windowMs: 15 * 60 * 1000
+  },
   deepseekApiBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
   deepseekApiKey: process.env.DEEPSEEK_API_KEY,
   defaultProvider: process.env.LITEASY_MODEL_PROVIDER ?? "openai",
@@ -35,7 +40,13 @@ export function resolveHost() {
 }
 
 export function resolveCliRuntimeConfig() {
+  const allowedOrigins = (process.env.LITEASY_DEV_CLOUD_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   return {
+    allowedOrigins,
     desktopOrigin: process.env.LITEASY_DESKTOP_PUBLIC_ORIGIN,
     publicOrigin: process.env.LITEASY_DEV_CLOUD_PUBLIC_ORIGIN
   };

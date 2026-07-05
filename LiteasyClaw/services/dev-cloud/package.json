@@ -1,0 +1,17 @@
+{
+  "name": "@liteasy/dev-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "argon2": "^0.44.0",
+    "better-sqlite3": "^12.11.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

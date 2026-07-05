@@ -12,8 +12,9 @@ export function createDevCloudServer(customConfig = {}) {
 async function startFromCli() {
   const port = resolvePort();
   const host = resolveHost();
-  const { desktopOrigin, publicOrigin } = resolveCliRuntimeConfig();
+  const { allowedOrigins, desktopOrigin, publicOrigin } = resolveCliRuntimeConfig();
   const server = createDevCloudServer({
+    allowedOrigins,
     desktopOrigin,
     publicOrigin
   });

@@ -106,13 +106,41 @@ describe("AppDialogs", () => {
     );
 
     const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    await user.click(within(dialog).getByRole("button", { name: "创建账号" }));
     await user.type(within(dialog).getByLabelText("昵称"), "Tian");
     await user.type(within(dialog).getByLabelText("邮箱"), "tian@example.com");
-    await user.type(within(dialog).getByLabelText("密码"), "private-password-1");
+    await user.type(
+      within(dialog).getByLabelText("密码或密码短语（至少 12 位）"),
+      "private-password-1"
+    );
     await user.click(within(dialog).getByRole("button", { name: "注册并登录" }));
 
     expect(onSubmitAccountRegistration).toHaveBeenCalledWith({
       displayName: "Tian",
+      email: "tian@example.com",
+      password: "private-password-1"
+    });
+  });
+
+  test("submits an existing account login from the lightweight login dialog", async () => {
+    const user = userEvent.setup();
+    const onSubmitAccountLogin = vi.fn();
+
+    render(
+      <AppDialogs
+        {...createProps({
+          loginDialogOpen: true,
+          onSubmitAccountLogin
+        })}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    await user.type(within(dialog).getByLabelText("邮箱"), "tian@example.com");
+    await user.type(within(dialog).getByLabelText("密码"), "private-password-1");
+    await user.click(within(dialog).getByRole("button", { name: "登录" }));
+
+    expect(onSubmitAccountLogin).toHaveBeenCalledWith({
       email: "tian@example.com",
       password: "private-password-1"
     });

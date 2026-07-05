@@ -147,4 +147,52 @@ describe("useAccountSession", () => {
     expect(onSessionRestored).toHaveBeenCalledTimes(1);
   });
 
+  test("revalidates a persisted secure session with the server", async () => {
+    const sessionId = `ltsy_${"a".repeat(43)}`;
+    window.localStorage.setItem(
+      "liteasy.account.session.v1",
+      JSON.stringify({
+        email: "tian@example.com",
+        expiresAt: "2026-07-10T09:30:00Z",
+        membershipTier: "pro",
+        name: "Tian",
+        sessionId,
+        userId: "user-1"
+      })
+    );
+    const requestedUrls: string[] = [];
+    const settingsStore = createSeededSettingsStore({
+      "models.control_plane_endpoint": "http://127.0.0.1:8787"
+    });
+
+    const { result } = renderHook(() =>
+      useAccountSession({
+        accountTransport: async (request) => {
+          requestedUrls.push(request.url);
+          return {
+            json: async () => ({
+              session: {
+                email: "tian@example.com",
+                expiresAt: "2026-07-10T09:30:00Z",
+                membershipTier: "pro",
+                name: "Tian",
+                sessionId,
+                userId: "user-1"
+              }
+            }),
+            ok: true,
+            status: 200
+          };
+        },
+        getSettings: () => settingsStore.getState()
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.accountMessage).toBe("云账号会话有效。");
+    });
+    expect(requestedUrls).toEqual(["http://127.0.0.1:8787/v1/account/session"]);
+    expect(result.current.accountSession?.userId).toBe("user-1");
+  });
+
 });

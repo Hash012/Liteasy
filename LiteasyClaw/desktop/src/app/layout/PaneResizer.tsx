@@ -1,18 +1,27 @@
 type PaneResizerProps = {
   ariaLabel: string;
+  axis?: "horizontal" | "vertical";
   onResize: (deltaPixels: number) => void;
 };
 
-export function PaneResizer({ ariaLabel, onResize }: PaneResizerProps) {
+export function PaneResizer({ ariaLabel, axis = "horizontal", onResize }: PaneResizerProps) {
   return (
     <div
       aria-label={ariaLabel}
-      className="pane-resizer"
+      aria-orientation={axis === "horizontal" ? "vertical" : "horizontal"}
+      className={`pane-resizer ${axis}`}
       onPointerDown={(event) => {
-        const startX = event.clientX;
+        let previousX = event.clientX;
+        let previousY = event.clientY;
 
         function handlePointerMove(moveEvent: PointerEvent) {
-          onResize(moveEvent.clientX - startX);
+          const delta =
+            axis === "horizontal"
+              ? moveEvent.clientX - previousX
+              : moveEvent.clientY - previousY;
+          previousX = moveEvent.clientX;
+          previousY = moveEvent.clientY;
+          onResize(delta);
         }
 
         function handlePointerUp() {

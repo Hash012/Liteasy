@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import { AppShell } from "../app/layout/AppShell";
+import { dockItemMimeType } from "../app/features/dock/DockRegion";
 
 afterEach(() => {
   window.localStorage.clear();
@@ -22,8 +23,9 @@ async function openOrganizationPanel(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function openLibraryPanel(user: ReturnType<typeof userEvent.setup>) {
-  if (screen.queryByLabelText("我的文献库投放区")) {
-    return screen.getByLabelText("我的文献库投放区");
+  const existingLibrary = screen.queryByLabelText("我的文献库投放区");
+  if (existingLibrary && !existingLibrary.closest("[hidden]")) {
+    return existingLibrary;
   }
   await user.click(screen.getByRole("button", { name: "文献库" }));
   return screen.getByLabelText("我的文献库投放区");
@@ -294,9 +296,13 @@ test("registered personal accounts unlock organization creation", async () => {
   render(<AppShell />);
 
   const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+  await user.click(within(dialog).getByRole("button", { name: "创建账号" }));
   await user.type(within(dialog).getByLabelText("昵称"), "Tian");
   await user.type(within(dialog).getByLabelText("邮箱"), "tian@example.com");
-  await user.type(within(dialog).getByLabelText("密码"), "private-password-1");
+  await user.type(
+    within(dialog).getByLabelText("密码或密码短语（至少 12 位）"),
+    "private-password-1"
+  );
   await user.click(within(dialog).getByRole("button", { name: "注册并登录" }));
 
   await expectStoredAccountSession("account-session-tian-example-com");
@@ -442,21 +448,75 @@ test("collapses the left pane when clicking the active activity-bar item", async
   expect(workbench.style.getPropertyValue("--left-pane-size")).toBe("minmax(220px, 24fr)");
 });
 
-test("keeps the three primary panes as direct grid items in the workbench", async () => {
+test("composes the primary workbench areas through Dock regions", async () => {
   const user = userEvent.setup();
 
   render(<AppShell />);
 
   const workbench = screen.getByTestId("workbench-layout");
-  expect(workbench.querySelector(":scope > aside.pane.left")).toBeInTheDocument();
-  expect(workbench.querySelector(":scope > main.pane.center")).toBeInTheDocument();
-  expect(workbench.querySelector(":scope > section.pane.right.assistant-only-pane")).toBeInTheDocument();
+  expect(within(workbench).getByLabelText("左栏 Dock 区域")).toBeInTheDocument();
+  expect(within(workbench).getByLabelText("主内容区 Dock 区域")).toBeInTheDocument();
+  expect(within(workbench).getByLabelText("右栏 Dock 区域")).toBeInTheDocument();
+  expect(within(workbench).getByLabelText("下栏 Dock 区域")).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Reader" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
 
   await user.click(screen.getByRole("button", { name: "文献库" }));
 
   expect(workbench.querySelector(":scope > aside.pane-rail.left")).toBeNull();
-  expect(workbench.querySelector(":scope > main.pane.center")).toBeInTheDocument();
-  expect(workbench.querySelector(":scope > section.pane.right.assistant-only-pane")).toBeInTheDocument();
+  expect(screen.queryByLabelText("左栏 Dock 区域")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("主内容区 Dock 区域")).toBeInTheDocument();
+  expect(screen.getByLabelText("右栏 Dock 区域")).toBeInTheDocument();
+});
+
+test("drags a tool tab across Dock regions and leaves the source with the Logo empty state", () => {
+  render(<AppShell />);
+
+  const rightRegion = screen.getByLabelText("右栏 Dock 区域");
+  const leftRegion = screen.getByLabelText("左栏 Dock 区域");
+  const values = new Map<string, string>();
+  const dataTransfer = {
+    dropEffect: "none",
+    effectAllowed: "none",
+    getData: (type: string) => values.get(type) ?? "",
+    setData(type: string, value: string) {
+      values.set(type, value);
+      this.types = [...values.keys()];
+    },
+    types: [] as string[]
+  };
+
+  fireEvent.dragStart(within(rightRegion).getByRole("tab", { name: "Liteasy Chat" }), {
+    dataTransfer
+  });
+  expect(dataTransfer.getData(dockItemMimeType)).toBe("assistant");
+  fireEvent.dragOver(leftRegion, { dataTransfer });
+  fireEvent.drop(leftRegion, { dataTransfer });
+
+  expect(within(leftRegion).getByRole("tab", { name: "Liteasy Chat" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  expect(within(rightRegion).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
+  expect(within(rightRegion).queryByText(/暂无|请选择/)).not.toBeInTheDocument();
+  expect(window.localStorage.getItem("liteasy.ui.dock-layout.v1")).toContain("assistant");
+
+  const bottomRegion = screen.getByLabelText("下栏 Dock 区域");
+  const mainRegion = screen.getByLabelText("主内容区 Dock 区域");
+  fireEvent.dragStart(within(bottomRegion).getByRole("tab", { name: "多模态产物" }), {
+    dataTransfer
+  });
+  fireEvent.dragOver(mainRegion, { dataTransfer });
+  fireEvent.drop(mainRegion, { dataTransfer });
+
+  expect(within(mainRegion).getByRole("tab", { name: "多模态产物" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  );
+  expect(within(bottomRegion).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
+  expect(within(mainRegion).getByRole("toolbar", { name: "阅读区布局控制" })).toBeInTheDocument();
 });
 
 test("shows the unified cloud model capability in settings", async () => {
@@ -2667,10 +2727,7 @@ test("opens the organization shared library in the local workspace", async () =>
   expect(
     within(libraryZone).queryByText("Survey of Vector Database Management Systems")
   ).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute(
-    "title",
-    "已打开组织共享文献库：组织共享文献库。"
-  );
+  expect(screen.getByLabelText("Reader 空状态")).toBeInTheDocument();
 }, 10000);
 
 
@@ -2791,10 +2848,7 @@ test("returns from an organization shared library to the local library workspace
   expect(
     within(libraryZone).queryByText("Organization Reading List: Retrieval-Augmented Generation")
   ).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute(
-    "title",
-    "已返回本地文献库。"
-  );
+  expect(screen.getByLabelText("Reader 空状态")).toBeInTheDocument();
 
   const localSwitcher = within(libraryZone).getByRole("group", { name: "文献视图切换" });
   await user.click(within(localSwitcher).getByRole("button", { name: "组织" }));
@@ -3055,10 +3109,7 @@ test("marks organization notifications as read in the organization page", async 
   expect(
     within(organizationPane).getByText("通知状态：管理员发布了本周阅读主题。 · 已读")
   ).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "树形展开" })).toHaveAttribute(
-    "title",
-    "组织通知已全部标记为已读。"
-  );
+  expect(screen.getByLabelText("Reader 空状态")).toBeInTheDocument();
 }, 10000);
 
 

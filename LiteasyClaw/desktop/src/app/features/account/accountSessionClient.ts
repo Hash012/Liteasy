@@ -23,7 +23,17 @@ export type AccountRegistrationInput = {
   password: string;
 };
 
+export type AccountLoginInput = {
+  email: string;
+  password: string;
+};
+
 type AccountRegistrationClientInput = AccountRegistrationInput & {
+  endpoint: string;
+  transport?: AccountTransport;
+};
+
+type AccountLoginClientInput = AccountLoginInput & {
   endpoint: string;
   transport?: AccountTransport;
 };
@@ -38,6 +48,18 @@ function buildAccountUrl(endpoint: string) {
 
 function buildAccountRegistrationUrl(endpoint: string) {
   return `${endpoint.replace(/\/+$/, "")}/v1/account/register`;
+}
+
+function buildAccountLoginUrl(endpoint: string) {
+  return `${endpoint.replace(/\/+$/, "")}/v1/account/login`;
+}
+
+function buildAccountSessionUrl(endpoint: string) {
+  return `${endpoint.replace(/\/+$/, "")}/v1/account/session`;
+}
+
+function buildAccountLogoutUrl(endpoint: string) {
+  return `${endpoint.replace(/\/+$/, "")}/v1/account/logout`;
 }
 
 function isAccountSessionPayload(payload: unknown): payload is AccountSessionPayload {
@@ -146,4 +168,80 @@ export async function registerCloudAccount({
   }
 
   return normalizeAccountSession(payload);
+}
+
+export async function loginCloudAccount({
+  email,
+  endpoint,
+  password,
+  transport = defaultTransport
+}: AccountLoginClientInput): Promise<AccountSession> {
+  const response = await transport({
+    body: JSON.stringify({ email, password }),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    method: "POST",
+    url: buildAccountLoginUrl(endpoint)
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload, `云账号登录失败（${response.status}）`));
+  }
+  if (!isAccountSessionPayload(payload)) {
+    throw new Error("云账号登录返回格式无效");
+  }
+  return normalizeAccountSession(payload);
+}
+
+export async function validateCloudAccountSession({
+  endpoint,
+  sessionId,
+  transport = defaultTransport
+}: {
+  endpoint: string;
+  sessionId: string;
+  transport?: AccountTransport;
+}): Promise<AccountSession> {
+  const response = await transport({
+    body: JSON.stringify({ sessionId }),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    method: "POST",
+    url: buildAccountSessionUrl(endpoint)
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload, `云账号会话已失效（${response.status}）`));
+  }
+  if (!isAccountSessionPayload(payload)) {
+    throw new Error("云账号会话返回格式无效");
+  }
+  return normalizeAccountSession(payload);
+}
+
+export async function logoutCloudAccount({
+  endpoint,
+  sessionId,
+  transport = defaultTransport
+}: {
+  endpoint: string;
+  sessionId: string;
+  transport?: AccountTransport;
+}): Promise<void> {
+  const response = await transport({
+    body: JSON.stringify({ sessionId }),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    method: "POST",
+    url: buildAccountLogoutUrl(endpoint)
+  });
+
+  if (!response.ok) {
+    throw new Error(`云账号退出失败（${response.status}）`);
+  }
 }

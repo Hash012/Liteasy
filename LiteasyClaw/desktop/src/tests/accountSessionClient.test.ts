@@ -1,6 +1,9 @@
 import {
   createAccountSessionClient,
-  registerCloudAccount
+  loginCloudAccount,
+  logoutCloudAccount,
+  registerCloudAccount,
+  validateCloudAccountSession
 } from "../app/features/account/accountSessionClient";
 
 test("posts a demo login request to the cloud account endpoint", async () => {
@@ -107,4 +110,58 @@ test("surfaces the cloud account registration error message", async () => {
       })
     })
   ).rejects.toThrow("该邮箱已经注册，请直接登录。");
+});
+
+test("logs in, validates, and logs out a real cloud account session", async () => {
+  const requests: Array<{ body: string; url: string }> = [];
+  const session = {
+    email: "tian@example.com",
+    expiresAt: "2026-07-10T09:30:00Z",
+    membershipTier: "pro" as const,
+    name: "Tian",
+    sessionId: `ltsy_${"a".repeat(43)}`,
+    userId: "user-1"
+  };
+  const transport = async (request: {
+    body: string;
+    headers: Record<string, string>;
+    method: "POST";
+    url: string;
+  }) => {
+    requests.push({ body: request.body, url: request.url });
+    return {
+      json: async () => ({ session }),
+      ok: true,
+      status: 200
+    };
+  };
+
+  await expect(
+    loginCloudAccount({
+      email: "tian@example.com",
+      endpoint: "https://liteasy.example.com/control-plane",
+      password: "private-password-1",
+      transport
+    })
+  ).resolves.toEqual(session);
+
+  await expect(
+    validateCloudAccountSession({
+      endpoint: "https://liteasy.example.com/control-plane",
+      sessionId: session.sessionId,
+      transport
+    })
+  ).resolves.toEqual(session);
+
+  await logoutCloudAccount({
+    endpoint: "https://liteasy.example.com/control-plane",
+    sessionId: session.sessionId,
+    transport
+  });
+
+  expect(requests.map((request) => request.url)).toEqual([
+    "https://liteasy.example.com/control-plane/v1/account/login",
+    "https://liteasy.example.com/control-plane/v1/account/session",
+    "https://liteasy.example.com/control-plane/v1/account/logout"
+  ]);
 });

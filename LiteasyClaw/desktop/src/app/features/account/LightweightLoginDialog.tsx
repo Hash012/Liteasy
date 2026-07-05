@@ -1,28 +1,46 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import type { AccountRegistrationInput } from "./accountSessionClient";
+import type {
+  AccountLoginInput,
+  AccountRegistrationInput
+} from "./accountSessionClient";
 
 type LightweightLoginDialogProps = {
+  accountMessage?: string;
+  accountPending?: boolean;
   onSkip: () => void;
+  onSubmitAccountLogin: (login: AccountLoginInput) => void;
   onSubmitAccountRegistration: (registration: AccountRegistrationInput) => void;
   onSubmitDemoLogin: () => void;
   onToggleSuppressReminder: (checked: boolean) => void;
 };
 
 export function LightweightLoginDialog({
+  accountMessage,
+  accountPending = false,
   onSkip,
+  onSubmitAccountLogin,
   onSubmitAccountRegistration,
   onSubmitDemoLogin,
   onToggleSuppressReminder
 }: LightweightLoginDialogProps) {
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  function handleRegistrationSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onSubmitAccountRegistration({
-      displayName: displayName.trim(),
+    if (mode === "register") {
+      onSubmitAccountRegistration({
+        displayName: displayName.trim(),
+        email: email.trim(),
+        password
+      });
+      return;
+    }
+
+    onSubmitAccountLogin({
       email: email.trim(),
       password
     });
@@ -36,24 +54,47 @@ export function LightweightLoginDialog({
         role="dialog"
       >
         <div className="organization-dialog-kicker">账号</div>
-        <div className="organization-dialog-title">登录后开启云端能力</div>
+        <div className="organization-dialog-title">登录 LiteasyClaw</div>
         <div className="organization-dialog-empty">
-          注册你的专属账号后可开启组织、推荐、收藏和云端能力；也可以继续使用 Demo 登录或本地阅读器。
+          账号与内容保存在当前开发服务器；密码仅以安全哈希保存。
         </div>
-        <form className="account-registration-form" onSubmit={handleRegistrationSubmit}>
-          <label className="organization-form-field">
-            <span>昵称</span>
-            <input
-              className="organization-form-input"
-              onChange={(event) => setDisplayName(event.currentTarget.value)}
-              required
-              type="text"
-              value={displayName}
-            />
-          </label>
+        <div aria-label="账号操作" className="account-auth-mode-tabs" role="group">
+          <button
+            aria-pressed={mode === "login"}
+            className={`left-rail-button ${mode === "login" ? "active" : "muted"}`}
+            onClick={() => setMode("login")}
+            type="button"
+          >
+            已有账号登录
+          </button>
+          <button
+            aria-pressed={mode === "register"}
+            className={`left-rail-button ${mode === "register" ? "active" : "muted"}`}
+            onClick={() => setMode("register")}
+            type="button"
+          >
+            创建账号
+          </button>
+        </div>
+        <form className="account-registration-form" onSubmit={handleSubmit}>
+          {mode === "register" ? (
+            <label className="organization-form-field">
+              <span>昵称</span>
+              <input
+                autoComplete="name"
+                className="organization-form-input"
+                maxLength={80}
+                onChange={(event) => setDisplayName(event.currentTarget.value)}
+                required
+                type="text"
+                value={displayName}
+              />
+            </label>
+          ) : null}
           <label className="organization-form-field">
             <span>邮箱</span>
             <input
+              autoComplete="email"
               className="organization-form-input"
               onChange={(event) => setEmail(event.currentTarget.value)}
               required
@@ -62,23 +103,35 @@ export function LightweightLoginDialog({
             />
           </label>
           <label className="organization-form-field">
-            <span>密码</span>
+            <span>{mode === "register" ? "密码或密码短语（至少 12 位）" : "密码"}</span>
             <input
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
               className="organization-form-input"
-              minLength={8}
+              maxLength={128}
+              minLength={mode === "register" ? 12 : undefined}
               onChange={(event) => setPassword(event.currentTarget.value)}
               required
               type="password"
               value={password}
             />
           </label>
-          <button className="left-rail-button active" type="submit">
-            注册并登录
+          <button className="left-rail-button active" disabled={accountPending} type="submit">
+            {accountPending ? "请稍候…" : mode === "register" ? "注册并登录" : "登录"}
           </button>
         </form>
+        {accountMessage ? (
+          <div aria-live="polite" className="organization-dialog-empty">
+            {accountMessage}
+          </div>
+        ) : null}
         <div className="organization-form-field">
-          <span>路演版快捷入口</span>
-          <button className="left-rail-button active" onClick={onSubmitDemoLogin} type="button">
+          <span>仅用于路演兼容</span>
+          <button
+            className="left-rail-button muted"
+            disabled={accountPending}
+            onClick={onSubmitDemoLogin}
+            type="button"
+          >
             一键 Demo 登录
           </button>
         </div>

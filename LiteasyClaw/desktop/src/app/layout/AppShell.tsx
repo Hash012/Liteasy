@@ -10,16 +10,17 @@ import type { ControlPlaneTransport } from "../features/models/controlPlaneClien
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import type { DevCloudEnvLike } from "../features/models/localDevCloudEndpoint";
+import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { AccountTransport } from "../features/account/accountSessionClient";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
-import { useLeftRailNavigation } from "./useLeftRailNavigation";
+import { useLeftRailNavigation, type LeftRailView } from "./useLeftRailNavigation";
 import type { OrganizationGovernanceTransport } from "../features/organization/organizationGovernanceClient";
 import type { OrganizationListTransport } from "../features/organization/organizationListClient";
 import type { OrganizationSummaryTransport } from "../features/organization/organizationSummaryClient";
 import type { OrganizationSharedLibraryManifestTransport } from "../features/organization/organizationSharedLibraryManifestClient";
 import { ActivityBar } from "./ActivityBar";
-import { LeftPane } from "./LeftPane";
+import { LeftPane, type LeftPaneProps } from "./LeftPane";
 import { AppDialogs } from "./AppDialogs";
 import { ReaderPane } from "./ReaderPane";
 import { AssistantSidebar } from "./AssistantSidebar";
@@ -40,6 +41,10 @@ import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionEx
 import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
 import { generateWorkbenchOverlayUIDslDocument } from "../features/generative-ui/uiDslGenerator";
+import { DockRegion } from "../features/dock/DockRegion";
+import { useDockLayout } from "../features/dock/useDockLayout";
+import type { DockItemId, DockRegionId } from "../features/dock/dock.types";
+import { DockLayoutControls } from "./DockLayoutControls";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -71,6 +76,7 @@ export function AppShell({
   const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(initialSettings);
   const localLibrarySnapshot = useLocalLibrary(localLibraryLoader);
   const paneLayout = usePaneLayout();
+  const dock = useDockLayout();
   const { isOnline } = useConnectivity();
   const [runtimeTheme, setRuntimeTheme] = useState<"default" | "playful">("default");
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
@@ -96,6 +102,14 @@ export function AppShell({
     settingsStore: settingsStoreRef.current
   });
   const leftRail = useLeftRailNavigation();
+  function openDockedLeftRailView(view: LeftRailView) {
+    leftRail.setLeftRailView(view);
+    const regionId = dock.findItemRegion(view) ?? "left";
+    dock.openItem(view);
+    if (regionId !== "main") {
+      paneLayout.setCollapsed(regionId, false);
+    }
+  }
   const profileActions = useProfileActions({
     onProfileSamplingChanged: (enabled) => {
       settingsStoreRef.current.apply({
@@ -156,7 +170,7 @@ export function AppShell({
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     onAnalysisHint: setAnalysisHint,
-    onLeftRailView: leftRail.setLeftRailView,
+    onLeftRailView: openDockedLeftRailView,
     onWorkspaceLabel: setWorkspaceLabel,
     onWorkspaceSync: workspaceActions.syncWorkspace,
     organizationGovernanceTransport,
@@ -253,8 +267,7 @@ export function AppShell({
       return message;
     }
 
-    leftRail.setLeftRailView(input.panel);
-    paneLayout.setCollapsed("left", false);
+    openDockedLeftRailView(input.panel);
 
     let message = "已打开文献库面板。";
     if (input.panel === "settings") {
@@ -363,6 +376,226 @@ export function AppShell({
     : `minmax(220px, ${paneLayout.layout.right}fr)`;
   const rightPaneUtilitySize = paneLayout.collapsed.right ? "0px" : "18px";
   const readerArtifactRowSize = paneLayout.collapsed.bottom ? "0px" : "minmax(220px, 0.65fr)";
+  const bottomPaneSize = paneLayout.collapsed.bottom
+    ? "0px"
+    : `minmax(180px, ${paneLayout.layout.bottom}fr)`;
+  const bottomPaneUtilitySize = paneLayout.collapsed.bottom ? "0px" : "12px";
+  const topPaneSize = paneLayout.collapsed.bottom
+    ? "minmax(0, 1fr)"
+    : `minmax(0, ${100 - paneLayout.layout.bottom}fr)`;
+  const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
+    academicProfile: profileActions.academicProfile,
+    accountSession,
+    collectionItems,
+    collectionMessage,
+    collectionStatus,
+    documentMetadataSyncMessage,
+    documentMetadataSyncResult: documentMetadataSyncResult ?? null,
+    documentMetadataSyncStatus,
+    governanceMessage: organizationGovernanceMessage,
+    governanceStatus: organizationGovernanceStatus,
+    governanceSummary: organizationGovernanceSummary,
+    importJobs: importJobsByDocumentId,
+    list: organizationList,
+    listMessage: organizationListMessage,
+    listStatus: organizationListStatus,
+    onAddDroppedPdfFiles: workspaceActions.addDroppedPdfFiles,
+    onAddExternalPaper: workspaceActions.addExternalPaperToLibrary,
+    onClearProfile: profileActions.openClearProfileConfirm,
+    onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
+    onCollectRecommendation: knowledgeSync.actions.collectRecommendation,
+    onCreateOrganization: organizationShell.actions.openCreateDialog,
+    onImportSelectedSet: () => {
+      void registeredWorkspaceActions.handleImportSelectedSet();
+    },
+    onInviteMember: organizationShell.actions.openInviteDialog,
+    onJoinOrganization: organizationShell.actions.openJoinDialog,
+    onLeaveOrganization: organizationShell.actions.openLeaveDialog,
+    onLoginRequired: cloudAccount.actions.openLoginDialog,
+    onLogout: logoutAndClearOrganizationState,
+    onMarkNotificationsRead: organizationShell.actions.markOrganizationNotificationsRead,
+    onOpenAcademicArchive: profileActions.openAcademicArchive,
+    onOpenOrganizationDialog: organizationShell.actions.openOrganizationDialog,
+    onOpenSharedLibrary: (summary) => {
+      void organizationShell.actions.openOrganizationSharedLibrary(summary);
+    },
+    onRetryCollectionSync: knowledgeSync.actions.retryCollectionSync,
+    onRetryDocumentMetadataSync: knowledgeSync.actions.retryDocumentMetadataSync,
+    onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
+    onSelectOrganization: organizationShell.actions.selectOrganization,
+    onToggleLock: workspaceActions.toggleSelectionLock,
+    onToggleProfileSampling: profileActions.toggleProfileSampling,
+    onToggleSelection: workspaceActions.toggleSelection,
+    onUpdateAcademicProfile: profileActions.updateAcademicProfile,
+    organizationActionMessage,
+    organizationSummary,
+    organizationSummaryMessage,
+    organizationSummaryStatus,
+    papers: workspaceState.papers,
+    profileClearMessage: profileActions.profileClearMessage,
+    profileReadPaperCount: workspaceState.papers.length,
+    profileSamplingEnabled: settingsState["profile.enabled"],
+    recommendationItems,
+    recommendationMessage,
+    recommendationPending,
+    recommendationStatus,
+    readNotificationIds,
+    selectedPaperIds: workspaceState.selectedPaperIds,
+    selectionLocked: workspaceState.selectionLocked,
+    settings: settingsState,
+    summary: organizationSummary,
+    workspaceLabel,
+    workspaceSourceType: workspaceState.workspaceSource.type
+  };
+
+  function isLeftRailDockItem(itemId: DockItemId): itemId is LeftRailView {
+    return (
+      itemId === "library" ||
+      itemId === "organization" ||
+      itemId === "profile" ||
+      itemId === "settings"
+    );
+  }
+
+  function activateDockItem(regionId: DockRegionId, itemId: DockItemId) {
+    if (isLeftRailDockItem(itemId)) {
+      leftRail.setLeftRailView(itemId);
+    }
+    dock.activateItem(regionId, itemId);
+  }
+
+  function moveDockItem(itemId: DockItemId, targetRegionId: DockRegionId) {
+    if (isLeftRailDockItem(itemId)) {
+      leftRail.setLeftRailView(itemId);
+    }
+    dock.moveItem(itemId, targetRegionId);
+    if (targetRegionId !== "main") {
+      paneLayout.setCollapsed(targetRegionId, false);
+    }
+  }
+
+  function renderDockItem(itemId: DockItemId) {
+    if (isLeftRailDockItem(itemId)) {
+      return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
+    }
+
+    if (itemId === "reader") {
+      return (
+        <ReaderPane
+          analysisHint={analysisHint}
+          artifactTabs={artifactTabs}
+          artifactTasks={artifactTasks}
+          layoutCollapsed={paneLayout.collapsed}
+          onArtifactDynamicAction={(action) => {
+            void handleArtifactCanvasAction(action);
+          }}
+          onStartAnalysis={(artifactType) => {
+            void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+          }}
+          onToggleBottomPane={() =>
+            paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
+          }
+          onToggleLeftPane={() =>
+            paneLayout.setCollapsed("left", !paneLayout.collapsed.left)
+          }
+          onToggleRightPane={() =>
+            paneLayout.setCollapsed("right", !paneLayout.collapsed.right)
+          }
+          selectedPapers={selectedPapers}
+          selectedPaperIds={workspaceState.selectedPaperIds}
+          selectionLocked={workspaceState.selectionLocked}
+          showArtifactRegion={false}
+        />
+      );
+    }
+
+    if (itemId === "assistant") {
+      return (
+        <AssistantSidebar
+          importedChunksByPaperId={importedChunksByPaperId}
+          importedSelectedCount={importedSelectedCount}
+          onApplyLayoutPreset={runtimeActionContext.applyLayoutPreset}
+          onApplyPanelAction={runtimeActionContext.applyPanelAction}
+          onApplyThemePreset={runtimeActionContext.applyThemePreset}
+          onGenerateArtifact={(artifactType) => {
+            const message = artifactWorkflow.actions.handleAssistantArtifact(artifactType);
+            const artifactRegionId = dock.findItemRegion("artifacts") ?? "bottom";
+            dock.openItem("artifacts");
+            if (artifactRegionId !== "main") {
+              paneLayout.setCollapsed(artifactRegionId, false);
+            }
+            return message;
+          }}
+          onImportSelectedSet={runtimeActionContext.importSelectedSet}
+          onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
+          onOpenOrganizationSharedLibrary={
+            organizationShell.actions.openOrganizationSharedLibrary
+          }
+          onSettingsChanged={(nextSettings) =>
+            setSettingsState(cloneSettingsState(nextSettings))
+          }
+          profileUnlocked={accountSession !== null}
+          runtimeOrganizationName={organizationSummary?.name}
+          runtimeWorkspace={workspaceState.workspaceSource}
+          selectedPaperCount={workspaceState.selectedPaperIds.length}
+          selectedPapers={selectedPapers}
+          selectionLocked={workspaceState.selectionLocked}
+          settingsStore={settingsStoreRef.current}
+        />
+      );
+    }
+
+    return (
+      <section aria-label="多模态产物区域" className="dock-artifact-surface">
+        <ArtifactTabs
+          analysisHint={analysisHint}
+          canStartAnalysis={
+            workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
+          }
+          onDynamicAction={(action) => {
+            void handleArtifactCanvasAction(action);
+          }}
+          onStartAnalysis={(artifactType) => {
+            void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+          }}
+          selectedCount={workspaceState.selectedPaperIds.length}
+          selectionLocked={workspaceState.selectionLocked}
+          tabs={artifactTabs}
+          tasks={artifactTasks}
+        />
+      </section>
+    );
+  }
+
+  function renderDockRegion(regionId: DockRegionId) {
+    const showDetachedLayoutControls =
+      regionId === "main" && dock.layout.regions.main.activeItemId !== "reader";
+    return (
+      <DockRegion
+        layout={dock.layout.regions[regionId]}
+        onActivateItem={(itemId) => activateDockItem(regionId, itemId)}
+        onMoveItem={moveDockItem}
+        regionId={regionId}
+        regionActions={
+          showDetachedLayoutControls ? (
+            <DockLayoutControls
+              collapsed={paneLayout.collapsed}
+              onToggleBottom={() =>
+                paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
+              }
+              onToggleLeft={() =>
+                paneLayout.setCollapsed("left", !paneLayout.collapsed.left)
+              }
+              onToggleRight={() =>
+                paneLayout.setCollapsed("right", !paneLayout.collapsed.right)
+              }
+            />
+          ) : undefined
+        }
+        renderItem={renderDockItem}
+      />
+    );
+  }
 
   return (
     <div className={`app-frame${runtimeTheme === "playful" ? " theme-playful" : ""}`}>
@@ -371,11 +604,14 @@ export function AppShell({
         data-testid="workbench-layout"
         style={
           {
+            "--bottom-pane-size": bottomPaneSize,
+            "--bottom-pane-utility-size": bottomPaneUtilitySize,
             "--left-pane-size": leftPaneSize,
             "--left-pane-utility-size": leftPaneUtilitySize,
             "--reader-artifact-row-size": readerArtifactRowSize,
             "--right-pane-utility-size": rightPaneUtilitySize,
-            "--right-pane-size": rightPaneSize
+            "--right-pane-size": rightPaneSize,
+            "--top-pane-size": topPaneSize
           } as React.CSSProperties
         }
       >
@@ -383,82 +619,24 @@ export function AppShell({
           activeView={leftRail.leftRailView}
           accountSessionAvailable={accountSession !== null}
           onSelectView={(view) => {
-            leftRail.setLeftRailView(view);
-            if (paneLayout.collapsed.left) {
-              paneLayout.setCollapsed("left", false);
+            openDockedLeftRailView(view);
+          }}
+          onToggleActiveView={(view) => {
+            const regionId = dock.findItemRegion(view) ?? "left";
+            const region = dock.layout.regions[regionId];
+            if (region.activeItemId !== view) {
+              activateDockItem(regionId, view);
+              if (regionId !== "main") {
+                paneLayout.setCollapsed(regionId, false);
+              }
+              return;
+            }
+            if (regionId !== "main") {
+              paneLayout.setCollapsed(regionId, !paneLayout.collapsed[regionId]);
             }
           }}
-          onToggleActiveView={() => {
-            paneLayout.setCollapsed("left", !paneLayout.collapsed.left);
-          }}
         />
-        {!paneLayout.collapsed.left ? (
-          <LeftPane
-            academicProfile={profileActions.academicProfile}
-            accountSession={accountSession}
-            collectionItems={collectionItems}
-            collectionMessage={collectionMessage}
-            collectionStatus={collectionStatus}
-            documentMetadataSyncMessage={documentMetadataSyncMessage}
-            documentMetadataSyncResult={documentMetadataSyncResult ?? null}
-            documentMetadataSyncStatus={documentMetadataSyncStatus}
-            governanceMessage={organizationGovernanceMessage}
-            governanceStatus={organizationGovernanceStatus}
-            governanceSummary={organizationGovernanceSummary}
-            importJobs={importJobsByDocumentId}
-            leftRailView={leftRail.leftRailView}
-            list={organizationList}
-            listMessage={organizationListMessage}
-            listStatus={organizationListStatus}
-            onAddExternalPaper={workspaceActions.addExternalPaperToLibrary}
-            onAddDroppedPdfFiles={workspaceActions.addDroppedPdfFiles}
-            onClearProfile={profileActions.openClearProfileConfirm}
-            onClearRecommendations={knowledgeSync.actions.clearRecommendationCache}
-            onCollectRecommendation={knowledgeSync.actions.collectRecommendation}
-            onRetryCollectionSync={knowledgeSync.actions.retryCollectionSync}
-            onCreateOrganization={organizationShell.actions.openCreateDialog}
-            onImportSelectedSet={() => {
-              void registeredWorkspaceActions.handleImportSelectedSet();
-            }}
-            onInviteMember={organizationShell.actions.openInviteDialog}
-            onJoinOrganization={organizationShell.actions.openJoinDialog}
-            onLoginRequired={cloudAccount.actions.openLoginDialog}
-            onLeaveOrganization={organizationShell.actions.openLeaveDialog}
-            onLogout={logoutAndClearOrganizationState}
-            onMarkNotificationsRead={organizationShell.actions.markOrganizationNotificationsRead}
-            onOpenAcademicArchive={profileActions.openAcademicArchive}
-            onOpenOrganizationDialog={organizationShell.actions.openOrganizationDialog}
-            organizationActionMessage={organizationActionMessage}
-            onOpenSharedLibrary={(summary) => {
-              void organizationShell.actions.openOrganizationSharedLibrary(summary);
-            }}
-            onReturnToLocalWorkspace={organizationShell.actions.openLocalLibraryWorkspace}
-            onRetryDocumentMetadataSync={knowledgeSync.actions.retryDocumentMetadataSync}
-            onSelectOrganization={organizationShell.actions.selectOrganization}
-            onToggleLock={workspaceActions.toggleSelectionLock}
-            onToggleProfileSampling={profileActions.toggleProfileSampling}
-            onToggleSelection={workspaceActions.toggleSelection}
-            onUpdateAcademicProfile={profileActions.updateAcademicProfile}
-            organizationSummary={organizationSummary}
-            organizationSummaryMessage={organizationSummaryMessage}
-            organizationSummaryStatus={organizationSummaryStatus}
-            papers={workspaceState.papers}
-            profileClearMessage={profileActions.profileClearMessage}
-            profileReadPaperCount={workspaceState.papers.length}
-            profileSamplingEnabled={settingsState["profile.enabled"]}
-            recommendationItems={recommendationItems}
-            recommendationMessage={recommendationMessage}
-            recommendationPending={recommendationPending}
-            recommendationStatus={recommendationStatus}
-            readNotificationIds={readNotificationIds}
-            selectedPaperIds={workspaceState.selectedPaperIds}
-            selectionLocked={workspaceState.selectionLocked}
-            settings={settingsState}
-            summary={organizationSummary}
-            workspaceLabel={workspaceLabel}
-            workspaceSourceType={workspaceState.workspaceSource.type}
-          />
-        ) : null}
+        {!paneLayout.collapsed.left ? renderDockRegion("left") : null}
         <div className="pane-utility-column left">
           {!paneLayout.collapsed.left ? (
             <PaneResizer
@@ -472,6 +650,8 @@ export function AppShell({
         </div>
         <AppDialogs
           academicProfile={profileActions.academicProfile}
+          accountMessage={cloudAccount.model.accountMessage}
+          accountPending={cloudAccount.model.accountPending}
           accountSession={accountSession}
           academicArchiveOpen={profileActions.academicArchiveOpen}
           clearProfileConfirmOpen={profileActions.clearProfileConfirmOpen}
@@ -494,6 +674,9 @@ export function AppShell({
           onJoinOrganization={organizationShell.actions.createDemoOrganizationJoinRequest}
           onLeaveOrganization={organizationShell.actions.createDemoOrganizationLeaveRequest}
           onSkipLogin={cloudAccount.actions.skipLogin}
+          onSubmitAccountLogin={(login) => {
+            void cloudAccount.actions.submitAccountLogin(login);
+          }}
           onSubmitAccountRegistration={(registration) => {
             void cloudAccount.actions.submitAccountRegistration(registration);
           }}
@@ -510,24 +693,7 @@ export function AppShell({
           readPaperCount={workspaceState.papers.length}
           summary={organizationSummary}
         />
-        <ReaderPane
-          analysisHint={analysisHint}
-          artifactTabs={artifactTabs}
-          artifactTasks={artifactTasks}
-          layoutCollapsed={paneLayout.collapsed}
-          onArtifactDynamicAction={(action) => {
-            void handleArtifactCanvasAction(action);
-          }}
-          onStartAnalysis={(artifactType) => {
-            void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
-          }}
-          onToggleBottomPane={() => paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)}
-          onToggleLeftPane={() => paneLayout.setCollapsed("left", !paneLayout.collapsed.left)}
-          onToggleRightPane={() => paneLayout.setCollapsed("right", !paneLayout.collapsed.right)}
-          selectedPapers={selectedPapers}
-          selectedPaperIds={workspaceState.selectedPaperIds}
-          selectionLocked={workspaceState.selectionLocked}
-        />
+        {renderDockRegion("main")}
         <div className="pane-utility-column right">
           {!paneLayout.collapsed.right ? (
             <PaneResizer
@@ -539,27 +705,19 @@ export function AppShell({
             />
           ) : null}
         </div>
-        {!paneLayout.collapsed.right ? (
-          <AssistantSidebar
-            importedChunksByPaperId={importedChunksByPaperId}
-            importedSelectedCount={importedSelectedCount}
-            onApplyLayoutPreset={runtimeActionContext.applyLayoutPreset}
-            onApplyPanelAction={runtimeActionContext.applyPanelAction}
-            onApplyThemePreset={runtimeActionContext.applyThemePreset}
-            onGenerateArtifact={artifactWorkflow.actions.handleAssistantArtifact}
-            onImportSelectedSet={runtimeActionContext.importSelectedSet}
-            onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
-            onOpenOrganizationSharedLibrary={runtimeActionContext.openOrganizationSharedLibrary}
-            onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
-            profileUnlocked={accountSession !== null}
-            runtimeOrganizationName={organizationSummary?.name}
-            runtimeWorkspace={workspaceState.workspaceSource}
-            selectedPaperCount={workspaceState.selectedPaperIds.length}
-            selectedPapers={selectedPapers}
-            selectionLocked={workspaceState.selectionLocked}
-            settingsStore={settingsStoreRef.current}
-          />
-        ) : null}
+        {!paneLayout.collapsed.right ? renderDockRegion("right") : null}
+        <div className="pane-utility-row bottom">
+          {!paneLayout.collapsed.bottom ? (
+            <PaneResizer
+              ariaLabel="调整下栏高度"
+              axis="vertical"
+              onResize={(deltaPixels) => {
+                paneLayout.adjustBottom((-deltaPixels / window.innerHeight) * 100);
+              }}
+            />
+          ) : null}
+        </div>
+        {!paneLayout.collapsed.bottom ? renderDockRegion("bottom") : null}
         {workbenchOverlay ? (
           <section aria-label="工作台状态投影" className="workbench-overlay">
             <DynamicCanvas

@@ -23,6 +23,7 @@ function normalizeLayout(next: PaneLayout): PaneLayout {
   }
 
   return {
+    bottom: Number(Math.max(20, Math.min(55, next.bottom)).toFixed(2)),
     center: Number(center.toFixed(2)),
     left: Number(left.toFixed(2)),
     right: Number(right.toFixed(2))
@@ -76,6 +77,13 @@ export function usePaneLayout() {
     });
   }
 
+  function adjustBottom(deltaPercent: number) {
+    setLayout({
+      ...preference.layout,
+      bottom: preference.layout.bottom + deltaPercent
+    });
+  }
+
   function resetLayout() {
     syncPreference(loadPaneLayoutPreference());
     syncPreference({
@@ -85,6 +93,7 @@ export function usePaneLayout() {
         right: false
       },
       layout: {
+        bottom: 32,
         center: 52,
         left: 24,
         right: 24
@@ -93,6 +102,7 @@ export function usePaneLayout() {
   }
 
   return {
+    adjustBottom,
     adjustLeft,
     adjustRight,
     collapsed: preference.collapsed,

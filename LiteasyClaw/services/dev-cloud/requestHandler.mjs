@@ -1,4 +1,6 @@
 import { buildAdminConsoleHtml, buildAdminGovernanceDashboardPayload } from "./adminConsole.mjs";
+import { AuthError, createAuthService } from "./auth/authService.mjs";
+import { createRateLimiter } from "./auth/rateLimiter.mjs";
 import {
   buildAdminDemoResetPayload,
   buildAdminDemoReseedPayload
@@ -37,7 +39,11 @@ import {
   buildDocumentMetadataSyncPayload,
   buildRecommendationPayload
 } from "./payloads/recommendationPayloads.mjs";
-import { createHash } from "node:crypto";
+import { createAccountRepository } from "./db/accountRepository.mjs";
+import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
+import { createDatabase } from "./db/database.mjs";
+
+const maximumJsonBodyBytes = 64 * 1024;
 
 const availableEndpoints = [
   "GET /",
@@ -53,7 +59,9 @@ const availableEndpoints = [
   "GET /v1/admin/governance-dashboard",
   "POST /v1/account/demo-login",
   "POST /v1/account/login",
+  "POST /v1/account/logout",
   "POST /v1/account/register",
+  "POST /v1/account/session",
   "POST /v1/model/generate",
   "POST /v1/model/audit",
   "POST /v1/recommendations",
@@ -80,13 +88,44 @@ const endpointMethods = new Map(
 
 function buildCorsHeaders(request) {
   const origin = request.headers.origin;
+  const isLoopbackOrigin = (() => {
+    if (typeof origin !== "string") {
+      return false;
+    }
 
-  return {
+    try {
+      const parsedOrigin = new URL(origin);
+      return (
+        (parsedOrigin.protocol === "http:" || parsedOrigin.protocol === "https:") &&
+        (parsedOrigin.hostname === "127.0.0.1" || parsedOrigin.hostname === "localhost")
+      );
+    } catch {
+      return false;
+    }
+  })();
+  const configuredOrigins = request.liteasyAllowedOrigins;
+  const isConfiguredOrigin =
+    configuredOrigins instanceof Set &&
+    typeof origin === "string" &&
+    configuredOrigins.has(origin);
+  const allowOrigin =
+    typeof origin !== "string"
+      ? "*"
+      : isLoopbackOrigin || isConfiguredOrigin
+        ? origin
+        : undefined;
+
+  const headers = {
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Origin": typeof origin === "string" ? origin : "*",
     Vary: "Origin"
   };
+
+  if (allowOrigin) {
+    headers["Access-Control-Allow-Origin"] = allowOrigin;
+  }
+
+  return headers;
 }
 
 function writeCorsPreflight(request, response) {
@@ -97,7 +136,11 @@ function writeCorsPreflight(request, response) {
 function writeJson(request, response, statusCode, payload) {
   response.writeHead(statusCode, {
     ...buildCorsHeaders(request),
-    "Content-Type": "application/json; charset=utf-8"
+    "Cache-Control": "no-store",
+    "Content-Type": "application/json; charset=utf-8",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
   });
   response.end(JSON.stringify(payload));
 }
@@ -112,8 +155,15 @@ function writeHtml(request, response, statusCode, html) {
 
 async function readJsonBody(request) {
   const chunks = [];
+  let byteLength = 0;
 
   for await (const chunk of request) {
+    byteLength += chunk.length;
+    if (byteLength > maximumJsonBodyBytes) {
+      const error = new Error("request_body_too_large");
+      error.code = "REQUEST_BODY_TOO_LARGE";
+      throw error;
+    }
     chunks.push(chunk);
   }
 
@@ -128,7 +178,15 @@ async function readJsonBody(request) {
 async function readJsonOrWriteError(request, response) {
   try {
     return await readJsonBody(request);
-  } catch {
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "REQUEST_BODY_TOO_LARGE") {
+      writeJson(request, response, 413, {
+        error: "request_body_too_large",
+        message: "请求内容过大。"
+      });
+      return null;
+    }
+
     writeJson(request, response, 400, {
       error: "invalid_json"
     });
@@ -136,50 +194,53 @@ async function readJsonOrWriteError(request, response) {
   }
 }
 
-function normalizeEmail(value) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
+function getClientKey(request, action) {
+  const address = request.socket?.remoteAddress ?? "local";
+  return `${action}:${address}`;
 }
 
-function normalizeDisplayName(value, email) {
-  if (typeof value === "string" && value.trim().length > 0) {
-    return value.trim();
+function getClientLabel(request) {
+  const userAgent = request.headers["user-agent"];
+  return typeof userAgent === "string" ? userAgent.slice(0, 200) : "Liteasy desktop";
+}
+
+function writeAuthError(request, response, error) {
+  if (error instanceof AuthError) {
+    writeJson(request, response, error.statusCode, {
+      error: error.code,
+      message: error.message
+    });
+    return true;
   }
 
-  return email.split("@")[0] || "Liteasy User";
+  return false;
 }
 
-function hashPassword(password) {
-  return createHash("sha256").update(`liteasy-dev-cloud:${password}`).digest("hex");
-}
+function authorizeAccountScopedBody(request, response, body, authService) {
+  const sessionId =
+    typeof body === "object" && body !== null && typeof body.sessionId === "string"
+      ? body.sessionId
+      : "";
 
-function isValidRegistrationBody(body) {
-  return (
-    typeof body === "object" &&
-    body !== null &&
-    normalizeEmail(body.email).includes("@") &&
-    typeof body.password === "string" &&
-    body.password.length >= 8
-  );
-}
+  if (!sessionId.startsWith("ltsy_") && !sessionId.startsWith("user:")) {
+    // Preserve named demo identities used by the roadshow fixtures. Real account
+    // storage keys always use the protected user: namespace below.
+    return true;
+  }
 
-function isValidLoginBody(body) {
-  return (
-    typeof body === "object" &&
-    body !== null &&
-    normalizeEmail(body.email).includes("@") &&
-    typeof body.password === "string" &&
-    body.password.length > 0
-  );
-}
-
-function buildAccountSession(account) {
-  return {
-    email: account.email,
-    expiresAt: "2026-12-31T23:59:59.000Z",
-    membershipTier: "pro",
-    name: account.displayName,
-    sessionId: `account-session-${account.email.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`
-  };
+  try {
+    const session = authService.validateSession(sessionId);
+    body.sessionId = `user:${session.userId}`;
+    return true;
+  } catch (error) {
+    if (!writeAuthError(request, response, error)) {
+      writeJson(request, response, 401, {
+        error: "invalid_session",
+        message: "登录会话无效或已过期。"
+      });
+    }
+    return false;
+  }
 }
 
 export function createDevCloudRequestHandler(customConfig = {}) {
@@ -191,11 +252,27 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     ...buildProviderRegistry(config),
     ...(customConfig.providers ?? {})
   };
-  const localAccounts = new Map();
+  const database = customConfig.database ?? createDatabase({
+    databasePath: customConfig.databasePath
+  });
+  const accountRepository = createAccountRepository(database);
+  const sessionRepository = createAuthSessionRepository(database);
+  const authService = customConfig.authService ?? createAuthService({
+    accountRepository,
+    sessionDurationMs: config.accountSessionDurationMs,
+    sessionRepository
+  });
+  const authRateLimiter = createRateLimiter(config.authRateLimit);
 
   return async (request, response) => {
     const method = request.method ?? "GET";
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    request.liteasyAllowedOrigins = new Set(
+      [
+        config.desktopOrigin,
+        ...(Array.isArray(config.allowedOrigins) ? config.allowedOrigins : [])
+      ].filter((origin) => typeof origin === "string" && origin.length > 0)
+    );
 
     if (method === "OPTIONS") {
       writeCorsPreflight(request, response);
@@ -323,33 +400,31 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      if (!isValidRegistrationBody(body)) {
-        writeJson(request, response, 400, {
-          error: "invalid_account_registration",
-          message: "请填写有效邮箱，并使用至少 8 位密码。"
+      const rateLimitKey = getClientKey(request, "register");
+      const rateLimit = authRateLimiter.consume(rateLimitKey);
+      if (!rateLimit.allowed) {
+        response.setHeader?.("Retry-After", String(rateLimit.retryAfterSeconds));
+        writeJson(request, response, 429, {
+          error: "too_many_auth_attempts",
+          message: "尝试次数过多，请稍后再试。"
         });
         return;
       }
 
-      const email = normalizeEmail(body.email);
-      if (localAccounts.has(email)) {
-        writeJson(request, response, 409, {
-          error: "account_exists",
-          message: "该邮箱已经注册，请直接登录。"
+      try {
+        const session = await authService.register({
+          ...body,
+          clientLabel: getClientLabel(request)
         });
-        return;
+        writeJson(request, response, 201, { session });
+      } catch (error) {
+        if (!writeAuthError(request, response, error)) {
+          writeJson(request, response, 500, {
+            error: "account_registration_failed",
+            message: "账号注册失败，请稍后重试。"
+          });
+        }
       }
-
-      const account = {
-        displayName: normalizeDisplayName(body.displayName, email),
-        email,
-        passwordHash: hashPassword(body.password)
-      };
-      localAccounts.set(email, account);
-
-      writeJson(request, response, 200, {
-        session: buildAccountSession(account)
-      });
       return;
     }
 
@@ -359,26 +434,65 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      if (!isValidLoginBody(body)) {
-        writeJson(request, response, 400, {
-          error: "invalid_account_login",
-          message: "请填写有效邮箱和密码。"
+      const rateLimitKey = getClientKey(request, "login");
+      const rateLimit = authRateLimiter.consume(rateLimitKey);
+      if (!rateLimit.allowed) {
+        response.setHeader?.("Retry-After", String(rateLimit.retryAfterSeconds));
+        writeJson(request, response, 429, {
+          error: "too_many_auth_attempts",
+          message: "登录尝试次数过多，请稍后再试。"
         });
         return;
       }
 
-      const email = normalizeEmail(body.email);
-      const account = localAccounts.get(email);
-      if (!account || account.passwordHash !== hashPassword(body.password)) {
-        writeJson(request, response, 401, {
-          error: "invalid_credentials",
-          message: "邮箱或密码不正确。"
+      try {
+        const session = await authService.login({
+          ...body,
+          clientLabel: getClientLabel(request)
         });
+        authRateLimiter.reset(rateLimitKey);
+        writeJson(request, response, 200, { session });
+      } catch (error) {
+        if (!writeAuthError(request, response, error)) {
+          writeJson(request, response, 500, {
+            error: "account_login_failed",
+            message: "账号登录失败，请稍后重试。"
+          });
+        }
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/account/session") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
         return;
       }
 
+      try {
+        writeJson(request, response, 200, {
+          session: authService.validateSession(body.sessionId)
+        });
+      } catch (error) {
+        if (!writeAuthError(request, response, error)) {
+          writeJson(request, response, 500, {
+            error: "session_validation_failed",
+            message: "会话校验失败，请稍后重试。"
+          });
+        }
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/account/logout") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+
+      authService.logout(body.sessionId);
       writeJson(request, response, 200, {
-        session: buildAccountSession(account)
+        loggedOut: true
       });
       return;
     }
@@ -386,6 +500,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/recommendations") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 
@@ -396,6 +513,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/recommendation-cache/get") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 
@@ -414,6 +534,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
 
       const payload = buildRecommendationCachePutPayload(body);
       if ("error" in payload) {
@@ -428,6 +551,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/recommendation-cache/clear") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 
@@ -446,6 +572,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
 
       writeJson(request, response, 200, buildCollectionListPayload(body));
       return;
@@ -454,6 +583,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/collection/items") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 
@@ -472,6 +604,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
 
       writeJson(request, response, 200, buildDocumentMetadataSyncPayload(body));
       return;
@@ -482,6 +617,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
 
       writeJson(request, response, 200, buildOrganizationListPayload(body));
       return;
@@ -490,6 +628,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/org/create") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 
@@ -513,6 +654,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
 
       const payload = buildOrganizationJoinPayload(body);
       if ("error" in payload) {
@@ -527,6 +671,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/org/invite") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 
@@ -550,6 +697,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
 
       const payload = buildOrganizationLeavePayload(body);
       if ("error" in payload) {
@@ -571,6 +721,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
 
       writeJson(request, response, 200, buildOrganizationSummaryPayload(body));
       return;
@@ -579,6 +732,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/org/shared-library/manifest") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 
@@ -594,6 +750,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/org/governance-summary") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
 

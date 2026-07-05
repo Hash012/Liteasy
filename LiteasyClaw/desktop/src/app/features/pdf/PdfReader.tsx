@@ -101,12 +101,12 @@ function getOverlayLabel(kind: AnnotationKind) {
   return "旁注";
 }
 
-function getAnnotationText(kind: AnnotationKind, excerpt: string) {
+function getAnnotationText(kind: AnnotationKind) {
   if (kind === "note") {
-    return "注释：这段内容可以稍后接入选中文段和 AI 问答。";
+    return "注释";
   }
 
-  return `${getAnnotationLabel(kind)}批注：${excerpt}`;
+  return getAnnotationLabel(kind);
 }
 
 function clampPercent(value: number, fallback: number) {
@@ -156,18 +156,92 @@ function getLineHeightPercent(rect: DOMRect, pageHeight: number) {
   return Math.max(1.1, Math.min(2.8, (rect.height / pageHeight) * 100));
 }
 
+function getVerticalCenter(rect: DOMRect) {
+  return rect.top + rect.height / 2;
+}
+
+function mergeLineRects(rects: DOMRect[]) {
+  if (rects.length <= 1) {
+    return rects;
+  }
+
+  const sortedHeights = rects.map((rect) => rect.height).sort((left, right) => left - right);
+  const referenceHeight =
+    sortedHeights[Math.floor((sortedHeights.length - 1) * 0.25)] ?? sortedHeights[0] ?? 1;
+  const lineSizedRects = rects.filter(
+    (rect) => rect.height <= Math.max(referenceHeight * 1.8, referenceHeight + 4)
+  );
+  const sourceRects = lineSizedRects.length > 0 ? lineSizedRects : rects;
+  const sortedRects = [...sourceRects].sort(
+    (left, right) => left.top - right.top || left.left - right.left
+  );
+  const lines: DOMRect[][] = [];
+
+  for (const rect of sortedRects) {
+    const line = lines.find((candidate) => {
+      const lineCenter =
+        candidate.reduce((sum, item) => sum + getVerticalCenter(item), 0) / candidate.length;
+      const tolerance = Math.max(3, Math.min(rect.height, candidate[0]?.height ?? rect.height) * 0.55);
+      return Math.abs(getVerticalCenter(rect) - lineCenter) <= tolerance;
+    });
+
+    if (line) {
+      line.push(rect);
+    } else {
+      lines.push([rect]);
+    }
+  }
+
+  return lines.map((line) => {
+    const left = Math.min(...line.map((rect) => rect.left));
+    const right = Math.max(...line.map((rect) => rect.right));
+    const top = Math.min(...line.map((rect) => rect.top));
+    const bottom = Math.max(...line.map((rect) => rect.bottom));
+    return {
+      bottom,
+      height: bottom - top,
+      left,
+      right,
+      toJSON: () => ({}),
+      top,
+      width: right - left,
+      x: left,
+      y: top
+    } as DOMRect;
+  });
+}
+
 function buildAnnotationRects(range: Range, pageRect: DOMRect | undefined) {
   const pageWidth = pageRect?.width && pageRect.width > 0 ? pageRect.width : 760;
   const pageHeight = pageRect?.height && pageRect.height > 0 ? pageRect.height : 980;
   const pageLeft = pageRect?.left ?? 0;
   const pageTop = pageRect?.top ?? 0;
 
-  return getRangeClientRects(range)
+  const visibleRects = getRangeClientRects(range)
     .filter((rect) => {
       const pageBottom = pageTop + pageHeight;
       const pageRight = pageLeft + pageWidth;
       return rect.bottom >= pageTop && rect.top <= pageBottom && rect.right >= pageLeft && rect.left <= pageRight;
     })
+    .map((rect) => {
+      const left = Math.max(pageLeft, rect.left);
+      const right = Math.min(pageLeft + pageWidth, rect.right);
+      const top = Math.max(pageTop, rect.top);
+      const bottom = Math.min(pageTop + pageHeight, rect.bottom);
+      return {
+        bottom,
+        height: bottom - top,
+        left,
+        right,
+        toJSON: () => ({}),
+        top,
+        width: right - left,
+        x: left,
+        y: top
+      } as DOMRect;
+    });
+
+  return mergeLineRects(visibleRects)
     .map((rect) => ({
       height: getLineHeightPercent(rect, pageHeight),
       left: clampPercent(((rect.left - pageLeft) / pageWidth) * 100, 16),
@@ -344,6 +418,7 @@ function PdfPageView({
         canvas.style.height = `${viewport.height}px`;
         textLayer.style.width = `${viewport.width}px`;
         textLayer.style.height = `${viewport.height}px`;
+        textLayer.style.setProperty("--total-scale-factor", String(viewport.scale));
         setPageSize({ height: viewport.height, width: viewport.width });
 
         if (context) {
@@ -389,7 +464,7 @@ function PdfPageView({
       <canvas aria-label={`PDF.js 页面画布 ${pageNumber}`} className="pdf-page-canvas" ref={canvasRef} />
       <div aria-hidden="true" className="pdf-page-shadow" />
       <div className="textLayer pdf-text-layer" ref={textLayerRef}>
-        <span>{fallbackExcerpt}</span>
+        <span className="pdf-text-layer-fallback">{fallbackExcerpt}</span>
       </div>
       <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
         {pageAnnotations.map((annotation) =>
@@ -592,10 +667,22 @@ export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
       kind,
       page: activeSelection.page,
       rects: activeSelection.rects,
-      text: getAnnotationText(kind, activeSelection.excerpt)
+      text: getAnnotationText(kind)
     };
-    setAnnotations((current) => [...current, annotation]);
-    setStatus(`已创建${getAnnotationLabel(kind)}批注。`);
+    const duplicate = annotations.some(
+      (item) =>
+        item.kind === annotation.kind &&
+        item.page === annotation.page &&
+        item.excerpt === annotation.excerpt
+    );
+    if (!duplicate) {
+      setAnnotations((current) => [...current, annotation]);
+    }
+    setStatus(
+      duplicate
+        ? `该文段已经有${getAnnotationLabel(kind)}批注。`
+        : `已创建${getAnnotationLabel(kind)}批注。`
+    );
     setSidebarMode("annotations");
     setSidebarCollapsed(false);
     setSelection(null);
@@ -703,8 +790,8 @@ export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
                             title="打开此批注的补充笔记"
                             type="button"
                           >
-                            <span>{annotation.text}</span>
-                            <span className="pdf-annotation-excerpt">选中文段：{annotation.excerpt}</span>
+                            <span className="pdf-annotation-kind">{annotation.text}</span>
+                            <span className="pdf-annotation-excerpt">{annotation.excerpt}</span>
                           </button>
                           {annotation.note ? (
                             <div className="pdf-annotation-note">补充：{annotation.note}</div>
