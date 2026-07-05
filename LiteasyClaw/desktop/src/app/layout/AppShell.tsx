@@ -36,6 +36,10 @@ import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflo
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
 import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
 import type { ActionContext } from "../features/skills/actionRegistry";
+import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionExecutor";
+import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
+import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
+import { generateWorkbenchOverlayUIDslDocument } from "../features/generative-ui/uiDslGenerator";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -69,6 +73,7 @@ export function AppShell({
   const paneLayout = usePaneLayout();
   const { isOnline } = useConnectivity();
   const [runtimeTheme, setRuntimeTheme] = useState<"default" | "playful">("default");
+  const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
 
   const workspaceSelection = useWorkspaceSelectionController({
     localLibrarySnapshot,
@@ -169,22 +174,49 @@ export function AppShell({
   const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
   const applyRuntimeLayoutPreset: ActionContext["applyLayoutPreset"] = (input) => {
+    let message: string;
     if (input.preset === "two_column") {
       paneLayout.setCollapsed("left", true);
-      return "已切换为双栏布局。";
+      message = "已切换为双栏布局。";
+    } else {
+      paneLayout.resetLayout();
+      message = "已恢复默认布局。";
     }
 
-    paneLayout.resetLayout();
-    return "已恢复默认布局。";
+    setWorkbenchOverlay(
+      generateWorkbenchOverlayUIDslDocument({
+        action: {
+          actionId: input.preset === "two_column" ? "layout.split_two" : "layout.reset",
+          input
+        },
+        message
+      })
+    );
+    return message;
   };
   const applyRuntimeThemePreset: ActionContext["applyThemePreset"] = (input) => {
+    let message: string;
     if (input.preset === "playful" || input.tone === "cartoon") {
       setRuntimeTheme("playful");
-      return "已应用卡通风格。";
+      message = "已应用卡通风格。";
+    } else {
+      setRuntimeTheme("default");
+      message = "已恢复默认风格。";
     }
 
-    setRuntimeTheme("default");
-    return "已恢复默认风格。";
+    setWorkbenchOverlay(
+      generateWorkbenchOverlayUIDslDocument({
+        action: {
+          actionId:
+            input.preset === "playful" || input.tone === "cartoon"
+              ? "theme.apply_preset"
+              : "theme.reset",
+          input
+        },
+        message
+      })
+    );
+    return message;
   };
   const applyRuntimePanelAction: ActionContext["applyPanelAction"] = (input) => {
     const setPaneOpen = (pane: "bottom" | "left" | "right") => {
@@ -201,26 +233,85 @@ export function AppShell({
       const paneLabel = input.panel === "left" ? "左栏" : input.panel === "right" ? "右栏" : "下栏";
       const actionLabel =
         input.operation === "close" ? "关闭" : input.operation === "toggle" ? "切换" : "打开";
-      return `已${actionLabel}${paneLabel}。`;
+      const message = `已${actionLabel}${paneLabel}。`;
+      setWorkbenchOverlay(
+        generateWorkbenchOverlayUIDslDocument({
+          action: {
+            actionId:
+              input.operation === "close"
+                ? "panel.close"
+                : input.operation === "toggle"
+                  ? "panel.toggle"
+                  : "panel.open",
+            input: {
+              panel: input.panel
+            }
+          },
+          message
+        })
+      );
+      return message;
     }
 
     leftRail.setLeftRailView(input.panel);
     paneLayout.setCollapsed("left", false);
 
+    let message = "已打开文献库面板。";
     if (input.panel === "settings") {
-      return "已打开设置面板。";
+      message = "已打开设置面板。";
+    } else if (input.panel === "organization") {
+      message = "已打开组织面板。";
+    } else if (input.panel === "profile") {
+      message = "已打开个人中心。";
     }
 
-    if (input.panel === "organization") {
-      return "已打开组织面板。";
-    }
-
-    if (input.panel === "profile") {
-      return "已打开个人中心。";
-    }
-
-    return "已打开文献库面板。";
+    setWorkbenchOverlay(
+      generateWorkbenchOverlayUIDslDocument({
+        action: {
+          actionId:
+            input.operation === "close"
+              ? "panel.close"
+              : input.operation === "toggle"
+                ? "panel.toggle"
+                : "panel.open",
+          input: {
+            panel: input.panel
+          }
+        },
+        message
+      })
+    );
+    return message;
   };
+  const runtimeActionContext: ActionContext = {
+    applyLayoutPreset: applyRuntimeLayoutPreset,
+    applyPanelAction: applyRuntimePanelAction,
+    applyThemePreset: applyRuntimeThemePreset,
+    importSelectedSet: registeredWorkspaceActions.handleImportSelectedSet,
+    openAcademicArchive: () => {
+      profileActions.openAcademicArchive();
+      return "已打开学术档案。";
+    },
+    openArtifactTab: (input) => {
+      const message = input.artifactType
+        ? `已定位到中心产物：${input.artifactType}。`
+        : "已定位到中心产物。";
+      setAnalysisHint(message);
+      return message;
+    },
+    openOrganizationSharedLibrary: organizationShell.actions.openOrganizationSharedLibrary,
+    profileUnlocked: accountSession !== null,
+    settingsStore: settingsStoreRef.current,
+    startArtifactAnalysis: artifactWorkflow.actions.handleAssistantArtifact
+  };
+  async function handleWorkbenchOverlayAction(action: UIDslActionRef) {
+    await executeUIDslActionRef(action, runtimeActionContext, {
+      traceId: workbenchOverlay?.audit.traceId
+    });
+  }
+  async function handleArtifactCanvasAction(action: UIDslActionRef) {
+    await executeUIDslActionRef(action, runtimeActionContext);
+  }
   const knowledgeSync = useKnowledgeSyncController({
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
@@ -424,6 +515,9 @@ export function AppShell({
           artifactTabs={artifactTabs}
           artifactTasks={artifactTasks}
           layoutCollapsed={paneLayout.collapsed}
+          onArtifactDynamicAction={(action) => {
+            void handleArtifactCanvasAction(action);
+          }}
           onStartAnalysis={(artifactType) => {
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
@@ -449,12 +543,13 @@ export function AppShell({
           <AssistantSidebar
             importedChunksByPaperId={importedChunksByPaperId}
             importedSelectedCount={importedSelectedCount}
-            onApplyLayoutPreset={applyRuntimeLayoutPreset}
-            onApplyPanelAction={applyRuntimePanelAction}
-            onApplyThemePreset={applyRuntimeThemePreset}
+            onApplyLayoutPreset={runtimeActionContext.applyLayoutPreset}
+            onApplyPanelAction={runtimeActionContext.applyPanelAction}
+            onApplyThemePreset={runtimeActionContext.applyThemePreset}
             onGenerateArtifact={artifactWorkflow.actions.handleAssistantArtifact}
-            onImportSelectedSet={registeredWorkspaceActions.handleImportSelectedSet}
-            onOpenOrganizationSharedLibrary={organizationShell.actions.openOrganizationSharedLibrary}
+            onImportSelectedSet={runtimeActionContext.importSelectedSet}
+            onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
+            onOpenOrganizationSharedLibrary={runtimeActionContext.openOrganizationSharedLibrary}
             onSettingsChanged={(nextSettings) => setSettingsState(cloneSettingsState(nextSettings))}
             profileUnlocked={accountSession !== null}
             runtimeOrganizationName={organizationSummary?.name}
@@ -464,6 +559,16 @@ export function AppShell({
             selectionLocked={workspaceState.selectionLocked}
             settingsStore={settingsStoreRef.current}
           />
+        ) : null}
+        {workbenchOverlay ? (
+          <section aria-label="工作台状态投影" className="workbench-overlay">
+            <DynamicCanvas
+              document={workbenchOverlay}
+              onAction={(action) => {
+                void handleWorkbenchOverlayAction(action);
+              }}
+            />
+          </section>
         ) : null}
       </div>
     </div>

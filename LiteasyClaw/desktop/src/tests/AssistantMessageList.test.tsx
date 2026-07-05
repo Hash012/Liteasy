@@ -51,4 +51,57 @@ describe("AssistantMessageList", () => {
     expect(screen.getByText("审计评分 0.91 · 通过")).toBeInTheDocument();
     expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
   });
+
+  test("forwards dynamic action refs with their DSL trace id", async () => {
+    const user = userEvent.setup();
+    const onDynamicAction = vi.fn();
+    const messages: AssistantMessage[] = [
+      {
+        content: "",
+        id: "assistant-ui",
+        role: "assistant",
+        uiDsl: {
+          actions: [
+            {
+              actionId: "theme.reset",
+              id: "reset-theme",
+              input: {},
+              label: "恢复默认",
+              riskLevel: "low"
+            }
+          ],
+          audit: {
+            createdAt: "2026-07-05T00:00:00.000Z",
+            generatedBy: "rule",
+            traceId: "trace-message-ui"
+          },
+          dataSources: [],
+          id: "ui-message",
+          intentPlanId: "plan-message",
+          root: {
+            component: "ActionBar",
+            id: "actions",
+            props: {
+              actionIds: ["reset-theme"]
+            }
+          },
+          surface: "assistant",
+          version: "liteasy-ui-dsl/v1"
+        }
+      }
+    ];
+
+    render(
+      <AssistantMessageList
+        messages={messages}
+        mode="command"
+        onDynamicAction={onDynamicAction}
+        onModeChange={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "恢复默认" }));
+
+    expect(onDynamicAction).toHaveBeenCalledWith(messages[0].uiDsl?.actions[0], "trace-message-ui");
+  });
 });

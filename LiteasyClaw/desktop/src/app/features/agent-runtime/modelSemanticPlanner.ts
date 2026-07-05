@@ -7,33 +7,26 @@ import type {
   RuntimeActionInvocation,
   RuntimePlanConfidence,
   RuntimeRiskLevel,
+  SemanticClarificationCandidate,
   SemanticActionPlan,
   SemanticCommandPlanner,
   SemanticPlannerContext
 } from "./agentRuntime.types";
+import { createModelAssistedClarification } from "./modelClarification";
+import { validateSemanticActionPlan } from "./planValidator";
 import { planSemanticCommand } from "./semanticPlanner";
+import {
+  parseStructuredPlannerPayload,
+  type StructuredPlannerPayload
+} from "./structuredOutputAdapter";
 
 type CreateModelSemanticPlannerInput = {
   modelTransport?: ModelTransport;
   settings: SettingsState;
 };
 
-type ModelPlanPayload = {
-  actions?: unknown;
-  clarification?: unknown;
-  confidence?: unknown;
-  fallback?: unknown;
-  intentId?: unknown;
-  planId?: unknown;
-  requiredContext?: unknown;
-  requiresConfirmation?: unknown;
-  riskLevel?: unknown;
-  summary?: unknown;
-  unsupportedReason?: unknown;
-};
-
-function createPlannerPrompt(input: AgentRuntimeInput, context: SemanticPlannerContext) {
-  return [
+function createPlannerPrompt(input: AgentRuntimeInput, context: SemanticPlannerContext, retryReason?: string) {
+  const prompt = [
     "你是 LiteasyClaw Command Mode V2 的语义动作规划器。",
     "只输出 JSON，不要输出 Markdown。",
     "目标：把用户自然语言转成结构化 SemanticActionPlan；不得直接改 UI 或执行动作。",
@@ -45,21 +38,16 @@ function createPlannerPrompt(input: AgentRuntimeInput, context: SemanticPlannerC
     `模式：${input.mode}`,
     `运行时上下文：${JSON.stringify(context.contextView ?? null)}`,
     `已注册动作：${JSON.stringify(context.registeredActions)}`
-  ].join("\n");
-}
+  ];
 
-function parsePlan(answer: string): ModelPlanPayload {
-  const trimmed = answer.trim();
-  const jsonText = trimmed.startsWith("```")
-    ? trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
-    : trimmed;
-
-  const parsed = JSON.parse(jsonText) as unknown;
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error("模型 planner 返回的 JSON 不是对象。");
+  if (retryReason) {
+    prompt.push(
+      `上一次输出未通过结构化解析或动作契约校验：${retryReason}`,
+      "请修正为严格 JSON 对象，并确保 actions[].actionId 来自已注册动作、actions[].input 是对象。"
+    );
   }
 
-  return parsed as ModelPlanPayload;
+  return prompt.join("\n");
 }
 
 function normalizeConfidence(value: unknown): RuntimePlanConfidence {
@@ -87,7 +75,6 @@ function isRiskLevel(value: unknown): value is RuntimeRiskLevel {
 function normalizeActionInputAliases(actionId: string, input: Record<string, unknown>) {
   if (actionId === "theme.apply_preset" && input.preset === "cartoon") {
     return {
-      ...input,
       preset: "playful",
       tone: "cartoon"
     };
@@ -95,7 +82,6 @@ function normalizeActionInputAliases(actionId: string, input: Record<string, unk
 
   if (actionId === "layout.split_two" && typeof input.orientation === "string" && !input.preset) {
     return {
-      ...input,
       preset: "two_column"
     };
   }
@@ -132,8 +118,60 @@ function normalizeStringArray(value: unknown) {
   return value.filter((item): item is string => typeof item === "string");
 }
 
+function normalizeClarificationKind(value: unknown) {
+  if (
+    value === "ambiguous_action" ||
+    value === "not_command" ||
+    value === "unsupported_action" ||
+    value === "missing_context" ||
+    value === "command_mode"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeClarificationCandidates(
+  value: unknown,
+  registeredActionIds: Set<string>
+): SemanticClarificationCandidate[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value.flatMap((candidate) => {
+    if (typeof candidate !== "object" || candidate === null) {
+      return [];
+    }
+
+    const record = candidate as {
+      actionId?: unknown;
+      input?: unknown;
+      label?: unknown;
+    };
+    if (
+      typeof record.actionId !== "string" ||
+      !registeredActionIds.has(record.actionId) ||
+      typeof record.input !== "object" ||
+      record.input === null ||
+      typeof record.label !== "string"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        actionId: record.actionId,
+        input: record.input as Record<string, unknown>,
+        label: record.label
+      }
+    ] as SemanticClarificationCandidate[];
+  });
+}
+
 function normalizePlan(
-  payload: ModelPlanPayload,
+  payload: StructuredPlannerPayload,
   input: AgentRuntimeInput,
   context: SemanticPlannerContext
 ): SemanticActionPlan {
@@ -155,6 +193,11 @@ function normalizePlan(
     ...(typeof payload.clarification === "object" && payload.clarification !== null
       ? {
           clarification: {
+            candidates: normalizeClarificationCandidates(
+              (payload.clarification as { candidates?: unknown }).candidates,
+              registeredActionIds
+            ),
+            kind: normalizeClarificationKind((payload.clarification as { kind?: unknown }).kind),
             missing: normalizeStringArray((payload.clarification as { missing?: unknown }).missing),
             question:
               typeof (payload.clarification as { question?: unknown }).question === "string"
@@ -184,20 +227,57 @@ export function createModelSemanticPlanner({
   settings
 }: CreateModelSemanticPlannerInput): SemanticCommandPlanner {
   return async (input, context) => {
-    try {
-      const gateway = createModelGatewayFromSettings(settings, {
-        cloudTransport: modelTransport
-      });
-      const provider = settings["models.default_provider"];
-      const generation = await gateway.generateAnswer({
-        model: getDefaultModelForProvider(provider),
-        prompt: createPlannerPrompt(input, context),
-        provider
-      });
-
-      return normalizePlan(parsePlan(generation.answer), input, context);
-    } catch {
-      return planSemanticCommand(input, context);
+    const deterministicPlan = planSemanticCommand(input, context);
+    if (context.pendingClarification && deterministicPlan.actions.length > 0) {
+      return deterministicPlan;
     }
+
+    if (deterministicPlan.requiresConfirmation) {
+      return deterministicPlan;
+    }
+
+    if (deterministicPlan.clarification?.kind === "ambiguous_action") {
+      return createModelAssistedClarification({
+        modelTransport,
+        settings
+      })({
+        context,
+        input,
+        plan: deterministicPlan
+      });
+    }
+
+    const gateway = createModelGatewayFromSettings(settings, {
+      cloudTransport: modelTransport
+    });
+    const provider = settings["models.default_provider"];
+    let retryReason: string | undefined;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const generation = await gateway.generateAnswer({
+          model: getDefaultModelForProvider(provider),
+          prompt: createPlannerPrompt(input, context, retryReason),
+          provider
+        });
+
+        const modelPlan = normalizePlan(parseStructuredPlannerPayload(generation.answer), input, context);
+        const validation = validateSemanticActionPlan(modelPlan, {
+          mode: input.mode,
+          registeredActions: context.registeredActions
+        });
+
+        if (!validation.valid) {
+          retryReason = validation.errors.join("；");
+          continue;
+        }
+
+        return modelPlan;
+      } catch (error) {
+        retryReason = error instanceof Error ? error.message : "模型 planner 输出无效。";
+      }
+    }
+
+    return deterministicPlan;
   };
 }

@@ -1,21 +1,30 @@
 import { formatModelExecutionLabel } from "../models/modelExecution";
 import type { AssistantMessage, AssistantMode } from "./assistant.types";
 import { getAuditVerdictLabel, modeLauncherItems } from "./assistantPresentation";
+import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
+import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
+import type { HumanConfirmationRequest } from "../agent-runtime/agentRuntime.types";
 
 type AssistantMessageListProps = {
   messages: AssistantMessage[];
   mode: AssistantMode;
+  onConfirmRequest?: (confirmation: HumanConfirmationRequest) => void;
+  onDynamicAction?: (action: UIDslActionRef, traceId: string) => void;
   onEditMessage?: (messageId: string) => void;
   onModeChange: (mode: AssistantMode) => void;
   onRegenerateMessage?: (messageId: string) => void;
+  onRejectRequest?: (confirmation: HumanConfirmationRequest) => void;
 };
 
 export function AssistantMessageList({
   messages,
   mode,
+  onConfirmRequest,
+  onDynamicAction,
   onEditMessage,
   onModeChange,
-  onRegenerateMessage
+  onRegenerateMessage,
+  onRejectRequest
 }: AssistantMessageListProps) {
   if (messages.length === 0) {
     return (
@@ -57,7 +66,16 @@ export function AssistantMessageList({
             <div className="assistant-message-title">
               {message.role === "user" ? "你的输入" : "助手回复"}
             </div>
-            <div className="assistant-answer-text">{message.content}</div>
+            {message.content &&
+            (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
+              <div className="assistant-answer-text">{message.content}</div>
+            ) : null}
+            {message.uiDsl ? (
+              <DynamicCanvas
+                document={message.uiDsl}
+                onAction={(action) => onDynamicAction?.(action, message.uiDsl?.audit.traceId ?? "")}
+              />
+            ) : null}
             {message.citations?.length ? (
               <div className="assistant-citation-card">
                 <strong>原文定位</strong>
@@ -81,6 +99,24 @@ export function AssistantMessageList({
             {message.executionTrace ? (
               <div className="assistant-execution-trace">
                 模型链路：{formatModelExecutionLabel(message.executionTrace)}
+              </div>
+            ) : null}
+            {message.confirmation ? (
+              <div className="assistant-confirmation-actions">
+                <button
+                  className="assistant-message-action"
+                  onClick={() => onConfirmRequest?.(message.confirmation!)}
+                  type="button"
+                >
+                  确认执行
+                </button>
+                <button
+                  className="assistant-message-action"
+                  onClick={() => onRejectRequest?.(message.confirmation!)}
+                  type="button"
+                >
+                  取消
+                </button>
               </div>
             ) : null}
             <div className="assistant-message-actions">

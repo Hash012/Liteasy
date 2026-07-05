@@ -127,6 +127,106 @@ test("plans panel and navigation actions from semantic UI instructions", () => {
   });
 });
 
+test("returns ambiguous action candidates for broad organization commands", () => {
+  const plan = planSemanticCommand({ message: "打开组织", mode: "command" });
+
+  expect(plan).toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "ambiguous_action",
+      missing: ["ambiguous_action"],
+      candidates: [
+        {
+          actionId: "panel.open",
+          input: {
+            panel: "organization"
+          },
+          label: "打开组织面板"
+        },
+        {
+          actionId: "organization.open_shared_library",
+          input: {
+            source: "organization_space"
+          },
+          label: "打开组织共享文献库"
+        }
+      ]
+    },
+    confidence: "medium",
+    intentId: "unknown"
+  });
+});
+
+test("uses pending ambiguous command context to resolve a short follow-up phrase", () => {
+  const previousPlan = planSemanticCommand({ message: "打开组织", mode: "command" });
+  const plan = planSemanticCommand(
+    {
+      message: "组织面板",
+      mode: "command"
+    },
+    {
+      pendingClarification: {
+        clarification: previousPlan.clarification!,
+        previousInput: "打开组织"
+      },
+      registeredActions: getRegisteredActionMetadata()
+    }
+  );
+
+  expect(plan).toMatchObject({
+    actions: [
+      {
+        actionId: "panel.open",
+        input: {
+          panel: "organization"
+        }
+      }
+    ],
+    confidence: "high",
+    intentId: "panel.change",
+    summary: "打开组织面板"
+  });
+});
+
+test("keeps asking when a follow-up phrase still matches multiple pending candidates", () => {
+  const previousPlan = planSemanticCommand({ message: "打开组织", mode: "command" });
+  const plan = planSemanticCommand(
+    {
+      message: "组织",
+      mode: "command"
+    },
+    {
+      pendingClarification: {
+        clarification: previousPlan.clarification!,
+        previousInput: "打开组织"
+      },
+      registeredActions: getRegisteredActionMetadata()
+    }
+  );
+
+  expect(plan).toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "ambiguous_action"
+    },
+    intentId: "unknown"
+  });
+});
+
+test("plans academic archive commands as registered profile actions", () => {
+  expect(planSemanticCommand({ message: "打开学术人格里的学术档案", mode: "command" })).toMatchObject({
+    actions: [
+      {
+        actionId: "profile.open_academic_archive",
+        input: {}
+      }
+    ],
+    intentId: "profile.open_academic_archive",
+    riskLevel: "low",
+    summary: "打开学术档案"
+  });
+});
+
 test("plans selected document set import actions from semantic language", () => {
   expect(planSemanticCommand({ message: "导入当前选中文献集", mode: "command" })).toMatchObject({
     actions: [
@@ -152,12 +252,32 @@ test("returns clarification for unknown ambiguous command text", () => {
   expect(plan).toMatchObject({
     actions: [],
     clarification: {
-      missing: ["intent"],
+      kind: "not_command",
+      missing: ["not_command"],
       question:
-        "我理解你可能想让软件处理“ABC”，但当前上下文里它还没有对应到可执行对象或动作。请补充要打开、生成、切换、调整或分析的对象；也可以改说“打开设置面板”“生成思维导图”“导入当前选中文献集”。"
+        "我不确定“ABC”是在要求 LiteasyClaw 执行软件动作。你可以切换到问答/名词解释，或明确说要打开、生成、切换、导入、同步、上传、删除还是调整什么。"
     },
     confidence: "low",
     intentId: "unknown"
+  });
+});
+
+test("returns unsupported action clarification for commands outside the action catalog", () => {
+  const plan = planSemanticCommand({
+    message: "导出一段视频讲解",
+    mode: "command"
+  });
+
+  expect(plan).toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "unsupported_action",
+      missing: ["unsupported_action"],
+      question: "我理解你想导出视频讲解，但当前动作目录还没有可执行的视频导出能力。"
+    },
+    confidence: "medium",
+    intentId: "unknown",
+    unsupportedReason: "未注册 video.export 或等价动作。"
   });
 });
 
@@ -187,9 +307,10 @@ test("uses runtime context when clarifying ambiguous command text", () => {
   expect(plan).toMatchObject({
     actions: [],
     clarification: {
-      missing: ["intent"],
+      kind: "not_command",
+      missing: ["not_command"],
       question:
-        "我理解“ABC”可能是在指当前已锁定的 3 篇选中文献中的术语、缩写或对象，但它还没有对应到可执行动作。请补充要解释、生成、打开、同步、上传、删除或调整的对象；也可以改说“解释 ABC”“生成思维导图”“导入当前选中文献集”。"
+        "我不确定“ABC”是在要求 LiteasyClaw 执行软件动作。它也可能是在指当前已锁定的 3 篇选中文献中的术语、缩写或对象。你可以切换到问答/名词解释，或明确说要打开、生成、切换、导入、同步、上传、删除还是调整什么。"
     },
     fallback: {
       alternatives: ["解释 ABC", "生成思维导图", "导入当前选中文献集"],
@@ -237,7 +358,48 @@ test("plans existing settings and organization commands as semantic plans", () =
     summary: "关闭联网推荐"
   });
 
+  expect(planSemanticCommand({ message: "按检索时间排序推荐", mode: "command" })).toMatchObject({
+    actions: [
+      {
+        actionId: "settings.update",
+        input: {
+          target: "network.recommendation.sort_mode",
+          value: "retrieved_at"
+        }
+      }
+    ],
+    intentId: "settings.update",
+    summary: "按检索时间排序推荐"
+  });
+
+  expect(planSemanticCommand({ message: "按关联度排序推荐", mode: "command" })).toMatchObject({
+    actions: [
+      {
+        actionId: "settings.update",
+        input: {
+          target: "network.recommendation.sort_mode",
+          value: "relevance"
+        }
+      }
+    ],
+    intentId: "settings.update",
+    summary: "按关联度排序推荐"
+  });
+
   expect(planSemanticCommand({ message: "打开组织共享文献库", mode: "command" })).toMatchObject({
+    actions: [
+      {
+        actionId: "organization.open_shared_library",
+        input: {
+          source: "organization_space"
+        }
+      }
+    ],
+    intentId: "organization.open_shared_library",
+    summary: "打开组织共享文献库"
+  });
+
+  expect(planSemanticCommand({ message: "带我去团队资料区", mode: "command" })).toMatchObject({
     actions: [
       {
         actionId: "organization.open_shared_library",

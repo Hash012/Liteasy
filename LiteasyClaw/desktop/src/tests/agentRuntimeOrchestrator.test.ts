@@ -2,6 +2,35 @@ import { runAgentRuntime } from "../app/features/agent-runtime/runtimeOrchestrat
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import { vi } from "vitest";
 
+function expectFallbackUi(reason: "clarify" | "deny" | "runtime_error" = "clarify") {
+  return {
+    document: expect.objectContaining({
+      audit: expect.objectContaining({
+        generatedBy: "rule",
+        traceId: expect.any(String)
+      }),
+      dataSources: expect.arrayContaining([
+        expect.objectContaining({
+          params: expect.objectContaining({
+            reason
+          }),
+          sourceId: "runtime.context_view"
+        })
+      ]),
+      id: expect.stringMatching(new RegExp(`^fallback-.+-${reason}$`)),
+      root: expect.objectContaining({
+        children: expect.arrayContaining([
+          expect.objectContaining({
+            component: "StatusBanner"
+          })
+        ])
+      }),
+      surface: "assistant"
+    }),
+    type: "ui_dsl_ready"
+  };
+}
+
 test("returns clarifications for unsupported commands", async () => {
   await expect(
     runAgentRuntime(
@@ -14,11 +43,13 @@ test("returns clarifications for unsupported commands", async () => {
   ).resolves.toEqual({
     events: [
       {
-        missing: ["intent"],
+        kind: "unsupported_action",
+        missing: ["unsupported_action"],
         question:
           "我理解你可能想让软件处理“同步云端模型策略”，但当前上下文里它还没有对应到可执行对象或动作。请补充要打开、生成、切换、调整或分析的对象；也可以改说“打开设置面板”“生成思维导图”“导入当前选中文献集”。",
         type: "clarification_request"
-      }
+      },
+      expectFallbackUi()
     ],
     settingsChanged: false
   });
@@ -90,8 +121,100 @@ test("can execute a plan returned by an injected semantic planner", async () => 
     {
       message: "已应用卡通风格。",
       type: "assistant_reply"
+    },
+    {
+      document: expect.objectContaining({
+        actions: [
+          expect.objectContaining({
+            actionId: "theme.reset",
+            label: "恢复默认"
+          })
+        ],
+        intentPlanId: "ai-plan-1",
+        surface: "assistant"
+      }),
+      type: "ui_dsl_ready"
     }
   ]);
+});
+
+test("rejects injected semantic plans that fail the action contract validator", async () => {
+  const result = await runAgentRuntime(
+    {
+      message: "运行系统命令",
+      mode: "command"
+    },
+    {
+      semanticPlanner: () => ({
+        actions: [
+          {
+            actionId: "system.run_shell",
+            input: {
+              command: "rm -rf ."
+            }
+          } as never
+        ],
+        confidence: "high",
+        intentId: "unknown",
+        planId: "unsafe-plan",
+        requiredContext: [],
+        requiresConfirmation: false,
+        riskLevel: "low",
+        summary: "运行系统命令"
+      })
+    }
+  );
+
+  expect(result).toEqual({
+    events: [
+      {
+        message: "语义计划未通过动作契约校验。",
+        recovery: "Unknown action: system.run_shell",
+        type: "runtime_error"
+      },
+      expectFallbackUi("runtime_error")
+    ],
+    settingsChanged: false
+  });
+});
+
+test("does not fall back to legacy command routing after a semantic clarification plan", async () => {
+  const result = await runAgentRuntime(
+    {
+      message: "关闭联网推荐",
+      mode: "command"
+    },
+    {
+      semanticPlanner: () => ({
+        actions: [],
+        clarification: {
+          kind: "unsupported_action",
+          missing: ["unsupported_action"],
+          question: "语义规划器没有给出可执行动作。"
+        },
+        confidence: "low",
+        intentId: "unknown",
+        planId: "semantic-clarify-only",
+        requiredContext: [],
+        requiresConfirmation: false,
+        riskLevel: "low",
+        summary: "无法映射为动作"
+      })
+    }
+  );
+
+  expect(result).toEqual({
+    events: [
+      {
+        kind: "unsupported_action",
+        missing: ["unsupported_action"],
+        question: "语义规划器没有给出可执行动作。",
+        type: "clarification_request"
+      },
+      expectFallbackUi()
+    ],
+    settingsChanged: false
+  });
 });
 
 test("returns confirmation for high-risk semantic runtime actions before execution", async () => {
@@ -113,7 +236,7 @@ test("returns confirmation for high-risk semantic runtime actions before executi
         }),
         type: "plan_preview"
       },
-      {
+      expect.objectContaining({
         action: {
           actionId: "cloud.sync_workspace",
           payload: {
@@ -122,7 +245,7 @@ test("returns confirmation for high-risk semantic runtime actions before executi
         },
         summary: "请确认后再执行：同步当前工作区到云端",
         type: "confirmation_request"
-      }
+      })
     ],
     settingsChanged: false
   });
@@ -184,25 +307,25 @@ test("returns confirmation for profile sampling before mutation", async () => {
 
   expect(result).toEqual({
     events: [
-    {
-      plan: expect.objectContaining({
-        intentId: "settings.update",
-        riskLevel: "medium",
-        summary: "开启用户画像"
-      }),
-      type: "plan_preview"
-    },
-    {
-      action: {
-        actionId: "settings.update",
-        payload: {
+      {
+        plan: expect.objectContaining({
+          intentId: "settings.update",
+          riskLevel: "medium",
+          summary: "开启用户画像"
+        }),
+        type: "plan_preview"
+      },
+      expect.objectContaining({
+        action: {
+          actionId: "settings.update",
+          payload: {
             target: "profile.enabled",
             value: true
           }
         },
         summary: "用户画像会影响个性化采样与后续回答策略，请确认后再开启。",
         type: "confirmation_request"
-      }
+      })
     ],
     settingsChanged: false
   });
@@ -224,10 +347,58 @@ test("returns a clarification request when a mind map command lacks ready select
         missing: ["selected_document_set"],
         question: "请先勾选要分析的文献，再生成思维导图。",
         type: "clarification_request"
-      }
+      },
+      expectFallbackUi()
     ],
     settingsChanged: false
   });
+});
+
+test("refines policy clarification before rendering missing-context recovery", async () => {
+  const clarifySemanticPlan = vi.fn(({ plan }) => ({
+    ...plan,
+    clarification: {
+      ...plan.clarification!,
+      question: "我可以生成思维导图，但需要你先选择并锁定要分析的文献。"
+    }
+  }));
+
+  await expect(
+    runAgentRuntime(
+      {
+        message: "生成思维导图",
+        mode: "command"
+      },
+      {
+        clarifySemanticPlan
+      }
+    )
+  ).resolves.toEqual({
+    events: [
+      {
+        kind: "missing_context",
+        missing: ["selected_document_set"],
+        question: "我可以生成思维导图，但需要你先选择并锁定要分析的文献。",
+        type: "clarification_request"
+      },
+      expectFallbackUi()
+    ],
+    settingsChanged: false
+  });
+  expect(clarifySemanticPlan).toHaveBeenCalledWith(
+    expect.objectContaining({
+      input: {
+        message: "生成思维导图",
+        mode: "command"
+      },
+      plan: expect.objectContaining({
+        clarification: expect.objectContaining({
+          kind: "missing_context",
+          missing: ["selected_document_set"]
+        })
+      })
+    })
+  );
 });
 
 test("asks the user to lock the selected set before generating a mind map", async () => {
@@ -259,7 +430,8 @@ test("asks the user to lock the selected set before generating a mind map", asyn
         missing: ["selected_document_set"],
         question: "请先锁定当前选中文献集，再生成思维导图。",
         type: "clarification_request"
-      }
+      },
+      expectFallbackUi()
     ],
     settingsChanged: false
   });
@@ -294,7 +466,8 @@ test("asks the user to import selected papers before generating a mind map", asy
         missing: ["ingested_documents"],
         question: "请先导入当前选中文献集，再生成思维导图。",
         type: "clarification_request"
-      }
+      },
+      expectFallbackUi()
     ],
     settingsChanged: false
   });
@@ -329,7 +502,8 @@ test("derives mind map import readiness from selection counts even when issues a
         missing: ["ingested_documents"],
         question: "请先导入当前选中文献集，再生成思维导图。",
         type: "clarification_request"
-      }
+      },
+      expectFallbackUi()
     ],
     settingsChanged: false
   });
@@ -368,6 +542,12 @@ test("runs a mind map artifact request when context is ready", async () => {
         type: "plan_preview"
       },
       {
+        planId: expect.any(String),
+        summary: "生成思维导图",
+        traceId: expect.any(String),
+        type: "progress_started"
+      },
+      {
         artifact: {
           artifactType: "mindmap",
           payload: {
@@ -377,8 +557,36 @@ test("runs a mind map artifact request when context is ready", async () => {
         type: "artifact_request"
       },
       {
+        task: {
+          payload: {
+            artifactType: "mindmap",
+            source: "selected_document_set"
+          },
+          taskId: expect.any(String),
+          taskType: "artifact.generate"
+        },
+        type: "task_created"
+      },
+      {
         message: "已开始思维导图分析。",
         type: "assistant_reply"
+      },
+      {
+        document: expect.objectContaining({
+          intentPlanId: expect.any(String),
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                component: "ArtifactLauncher",
+                props: expect.objectContaining({
+                  artifactType: "mindmap"
+                })
+              })
+            ])
+          }),
+          surface: "assistant"
+        }),
+        type: "ui_dsl_ready"
       }
     ],
     settingsChanged: false
@@ -411,9 +619,10 @@ test("returns a runtime error when a ready mind map handler is not registered", 
     events: [
       {
         message: "产物执行能力尚未注册。",
-        recovery: "请检查 生成思维导图 的 artifact action 是否已连接。",
+        recovery: "请检查 生成思维导图 的 artifact.generate action 是否已连接。",
         type: "runtime_error"
-      }
+      },
+      expectFallbackUi("runtime_error")
     ],
     settingsChanged: false
   });
@@ -453,6 +662,19 @@ test("routes semantic layout instructions through command runtime plans", async 
       {
         message: "已切换为双栏布局。",
         type: "assistant_reply"
+      },
+      {
+        document: expect.objectContaining({
+          actions: [
+            expect.objectContaining({
+              actionId: "layout.reset",
+              label: "恢复默认布局"
+            })
+          ],
+          intentPlanId: expect.any(String),
+          surface: "assistant"
+        }),
+        type: "ui_dsl_ready"
       }
     ],
     settingsChanged: false
@@ -474,11 +696,75 @@ test("asks for clarification instead of returning a generic registry error for u
   ).resolves.toEqual({
     events: [
       {
-        missing: ["intent"],
+        kind: "not_command",
+        missing: ["not_command"],
         question:
-          "我理解你可能想让软件处理“ABC”，但当前上下文里它还没有对应到可执行对象或动作。请补充要打开、生成、切换、调整或分析的对象；也可以改说“打开设置面板”“生成思维导图”“导入当前选中文献集”。",
+          "我不确定“ABC”是在要求 LiteasyClaw 执行软件动作。你可以切换到问答/名词解释，或明确说要打开、生成、切换、导入、同步、上传、删除还是调整什么。",
         type: "clarification_request"
-      }
+      },
+      expectFallbackUi()
+    ],
+    settingsChanged: false
+  });
+});
+
+test("returns unsupported-action clarification when command semantics are outside the action catalog", async () => {
+  await expect(
+    runAgentRuntime(
+      {
+        message: "导出一段视频讲解",
+        mode: "command"
+      },
+      {}
+    )
+  ).resolves.toEqual({
+    events: [
+      {
+        kind: "unsupported_action",
+        missing: ["unsupported_action"],
+        question: "我理解你想导出视频讲解，但当前动作目录还没有可执行的视频导出能力。",
+        type: "clarification_request"
+      },
+      expectFallbackUi()
+    ],
+    settingsChanged: false
+  });
+});
+
+test("returns ambiguous-action candidates when command semantics match multiple registered actions", async () => {
+  await expect(
+    runAgentRuntime(
+      {
+        message: "打开组织",
+        mode: "command"
+      },
+      {}
+    )
+  ).resolves.toEqual({
+    events: [
+      {
+        candidates: [
+          {
+            actionId: "panel.open",
+            input: {
+              panel: "organization"
+            },
+            label: "打开组织面板"
+          },
+          {
+            actionId: "organization.open_shared_library",
+            input: {
+              source: "organization_space"
+            },
+            label: "打开组织共享文献库"
+          }
+        ],
+        kind: "ambiguous_action",
+        missing: ["ambiguous_action"],
+        question: "“打开组织”可能指打开组织面板，也可能指打开组织共享文献库。请选择要执行的动作。",
+        type: "clarification_request"
+      },
+      expectFallbackUi()
     ],
     settingsChanged: false
   });
@@ -517,6 +803,12 @@ test("executes semantic tree artifact commands through the runtime", async () =>
         type: "plan_preview"
       },
       {
+        planId: expect.any(String),
+        summary: "生成树状图",
+        traceId: expect.any(String),
+        type: "progress_started"
+      },
+      {
         artifact: {
           artifactType: "tree",
           payload: {
@@ -526,8 +818,35 @@ test("executes semantic tree artifact commands through the runtime", async () =>
         type: "artifact_request"
       },
       {
+        task: {
+          payload: {
+            artifactType: "tree",
+            source: "selected_document_set"
+          },
+          taskId: expect.any(String),
+          taskType: "artifact.generate"
+        },
+        type: "task_created"
+      },
+      {
         message: "已开始树状图分析。",
         type: "assistant_reply"
+      },
+      {
+        document: expect.objectContaining({
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                component: "ArtifactLauncher",
+                props: expect.objectContaining({
+                  artifactType: "tree"
+                })
+              })
+            ])
+          }),
+          surface: "assistant"
+        }),
+        type: "ui_dsl_ready"
       }
     ],
     settingsChanged: false

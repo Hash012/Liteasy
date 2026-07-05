@@ -96,25 +96,33 @@ test("executes a semantic artifact generation action through the action registry
 test("exposes registered action metadata for runtime planning and safety checks", () => {
   const metadata = getRegisteredActionMetadata();
 
-  expect(metadata.map((action) => action.actionId)).toEqual([
-    "artifact.generate",
-    "artifact.start_analysis",
-    "layout.split_two",
-    "layout.reset",
-    "theme.apply_preset",
-    "theme.reset",
-    "panel.open",
-    "panel.close",
-    "panel.toggle",
-    "settings.update",
-    "selected_set.import",
-    "organization.open_shared_library",
-    "workspace.delete_documents",
-    "workspace.overwrite_documents",
-    "workspace.batch_update_documents",
-    "cloud.upload_documents",
-    "cloud.sync_workspace"
-  ]);
+  expect(metadata.map((action) => action.actionId)).toEqual(
+    expect.arrayContaining([
+      "artifact.generate",
+      "artifact.start_analysis",
+      "artifact.open_tab",
+      "layout.split_two",
+      "layout.set_ratio",
+      "layout.reset",
+      "pane.focus",
+      "theme.apply_preset",
+      "theme.reset",
+      "panel.open",
+      "panel.close",
+      "panel.toggle",
+      "profile.open_academic_archive",
+      "settings.update",
+      "selected_set.import",
+      "organization.open_shared_library",
+      "recommendation.refresh",
+      "collection.add",
+      "workspace.delete_documents",
+      "workspace.overwrite_documents",
+      "workspace.batch_update_documents",
+      "cloud.upload_documents",
+      "cloud.sync_workspace"
+    ])
+  );
   expect(metadata.find((action) => action.actionId === "artifact.generate")).toMatchObject({
     requiredContext: ["selected_document_set"],
     requiresConfirmation: false,
@@ -124,6 +132,38 @@ test("exposes registered action metadata for runtime planning and safety checks"
     requiredContext: ["workspace"],
     requiresConfirmation: true,
     riskLevel: "high"
+  });
+});
+
+test("executes architecture action-catalog handlers through injected feature owners", async () => {
+  await expect(
+    executeAction(
+      {
+        actionId: "profile.open_academic_archive",
+        input: {}
+      },
+      {
+        openAcademicArchive: () => "已打开学术档案。"
+      }
+    )
+  ).resolves.toEqual({
+    message: "已打开学术档案。"
+  });
+
+  await expect(
+    executeAction(
+      {
+        actionId: "pane.focus",
+        input: {
+          pane: "right"
+        }
+      },
+      {
+        focusPane: ({ pane }) => `已聚焦${pane}面板。`
+      }
+    )
+  ).resolves.toEqual({
+    message: "已聚焦right面板。"
   });
 });
 

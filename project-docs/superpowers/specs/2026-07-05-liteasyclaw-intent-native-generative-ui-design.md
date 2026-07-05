@@ -198,6 +198,45 @@ shell/controllers -> action handlers -> feature modules
 
 `generative-ui` 不导入 `AppShell`。需要改变工作台时，只生成 `ActionRef` 或调用已注入 action handler。
 
+#### 6.1.1 模块内聚、原子性与扩展治理
+
+为了避免后续实现变成“大 runtime + 大 canvas + 大 registry”的耦合结构，各模块必须满足三个工程约束：高内聚、原子性、可扩展。
+
+| 模块 | 单一职责 | 允许依赖 | 禁止依赖 | 可替换点 |
+| --- | --- | --- | --- | --- |
+| `agent-runtime` | 把输入和上下文转成可验证 `IntentPlan`，发布 runtime event | model gateway、capability metadata、policy contract | React component、AppShell、DOM、具体 UI store | planner、event emitter、fallback planner |
+| `generative-ui` | 把 plan/state 投影成受控 `UIDslDocument` 并渲染 Dynamic Canvas | component/dataSource/token registry、ActionRef contract | AppShell、feature 内部 mutable state、任意 CSS/JS | generator、validator、renderer、fallback UI |
+| `skills/actionRegistry` | 描述系统能执行的能力和 schema | action metadata、policy tags、handler injection contract | assistant UI、LLM prompt、DSL renderer | action family、metadata schema、handler map |
+| `policy` | 对 action 和 DSL 交互做确定性裁决 | action metadata、context snapshot、journal facts | 模型自然语言承诺、UI 文案推断 | rule set、risk matrix、confirmation policy |
+| `artifacts` | 管理中心栏产物任务、标签页、生命周期 | artifact action contract、task store、retrieval evidence | assistant 具体布局、planner 细节 | artifact type renderer、task backend |
+| `assistant` | 组织右栏输入、模式、历史、runtime event 展示 | runtime event、context view、Dynamic Canvas props | action handler 内部实现、model provider 细节 | mode controller、message renderer |
+
+判定标准：
+
+- **高内聚**：一个模块的公开 API 必须能用一句话描述；如果 API 同时暴露“规划、执行、渲染、状态存储”，说明模块过大。
+- **原子性**：每个 action、validator rule、data source、component card 都应独立测试；不能为了测试一个 action 被迫启动完整 AppShell。
+- **可扩展**：新增一个模态或能力族时，应主要新增 registry card、schema、renderer 或 handler，不应修改 planner、canvas、policy 的核心分支。
+- **依赖单向**：输入层可调用 runtime，runtime 可读取 registry 和 policy contract，renderer 可发 `ActionRef`，但底层能力不得反向 import assistant 或 canvas。
+- **事实单源**：真实状态只来自 feature store/controllers；`UIDslDocument` 只是投影，不能成为布局、文献、artifact、组织或画像的事实源。
+
+最小扩展单元：
+
+| 扩展对象 | 原子单元 | 必填内容 | 不允许做的事 |
+| --- | --- | --- | --- |
+| 新 action | 一个 `CapabilityMetadata` + 一个 handler | input/output schema、risk、reversible、requiredContext、progress event | 在 handler 内顺便改多个无关 feature 状态 |
+| 新组件 | 一个 component card + renderer + props schema | supported surfaces、props schema、empty/error state、ActionRef slots | 接受任意 `style`、直接调用 action handler |
+| 新数据源 | 一个 data source card + resolver | owner feature、risk、cache/refresh policy、redaction rule | 从 canvas 直接读文件、网络或数据库 |
+| 新 artifact 模态 | 一个 artifact type card + task lifecycle + center renderer | task schema、evidence contract、cancel/retry/open action | 把长任务塞进右栏同步等待 |
+| 新主题风格 | 一个 token preset | color、density、radius、typography、tone mapping | 让模型输出任意 CSS |
+
+实现时的 code review 红线：
+
+- `generative-ui` 中出现 `AppShell`、`document.querySelector`、`eval`、任意 CSS 字符串拼接，应退回。
+- `agent-runtime` 中出现 React component import，应退回。
+- `ActionBar` 或动态按钮绕过 `ActionRefRouter -> Policy -> Executor`，应退回。
+- 一个 action 同时修改布局、主题、artifact 和推荐缓存，应拆成复合 plan。
+- 新 capability 只有自然语言描述、没有 schema/policy/journal 字段，应退回。
+
 ### 6.2 核心协议
 
 #### IntentPlan
@@ -385,6 +424,33 @@ selected_set.lock? -> selected_set.import -> artifact.generate
 ```
 
 这里 `selected_set.lock` 是否自动执行取决于产品策略：如果用户已经明确说“当前选中这些”，可低风险执行；如果选择状态不明确，应先澄清。
+
+#### 6.5.3 原子 action 拆分判定
+
+判断一个动作是否过大，使用以下检查：
+
+| 问题 | 如果答案是“是” | 处理 |
+| --- | --- | --- |
+| 是否修改两个以上 feature store？ | 例如同时改 layout、theme、artifact task | 拆成多个 action，由 `IntentPlan` 编排 |
+| 是否包含等待型任务和即时 UI 变更？ | 例如生成 PPT 同时切换布局 | 即时动作和长任务分离，长任务进入 task lifecycle |
+| 是否有不同风险等级的子步骤？ | 例如本地预览低风险，上传云端高风险 | 按风险拆分，高风险步骤单独确认 |
+| 是否需要不同失败恢复策略？ | 例如主题失败可回滚，导入失败需重试 | 拆分并分别定义 fallback |
+| 是否难以写独立输入/输出 schema？ | input 里出现多个无关对象 | 拆分 action 或抽出 data source |
+
+原子 action 的目标不是“动作越小越好”，而是让 planner 能自由组合、policy 能准确裁决、UI 能逐步反馈、失败能局部恢复。第一阶段每个 action 应尽量控制在一个 feature owner 内；跨 feature 行为由 plan 和 runtime event 串联。
+
+#### 6.5.4 可扩展能力接入流程
+
+新增能力族或模态时按固定流程接入：
+
+1. 定义 capability card：`family`、`actionId`、schema、风险、可逆性、上下文需求、进度事件。
+2. 在 owner feature 内实现 handler；handler 只处理该 feature 的真实状态变化。
+3. 把跨 feature 编排留给 `IntentPlan`，不要在 handler 里调用其他 family handler。
+4. 如需 UI 展示，新增 component/dataSource/artifact card，而不是让模型生成新组件名。
+5. 增加 policy rule、journal 字段和至少一个 schema/golden/integration 测试。
+6. 将 planner prompt 或规则 planner 更新为“可选择该 capability”，但不把业务规则写死在 prompt 中。
+
+这样扩展 video、podcast、chart、flow、animation、Socratic、Feynman 等模态时，不需要改变主架构，只需要追加 artifact family、任务生命周期和渲染器。
 
 ### 6.6 灵活性边界：自由表达，有限动作空间
 
@@ -682,6 +748,8 @@ LiteasyClaw 的基础 UX 指标：
 | Integration tests | `AssistantPane.test.tsx` | 右栏动态 UI 和模式边界 |
 | Artifact tests | `ArtifactTabs.test.tsx` | center artifact DSL 渲染 |
 | Red team tests | `promptInjectionGenerativeUi.test.ts` | “忽略规则直接删除/隐藏确认”等攻击 |
+| Boundary tests | `generativeUiBoundary.test.ts` | 禁止 runtime import React/AppShell、禁止 canvas 直接执行 action |
+| Extension tests | `capabilityContract.test.ts` | 新 capability 必须有 schema、risk、reversible、journal metadata |
 
 ## 11. 首批场景
 
@@ -786,6 +854,8 @@ flowchart TD
 | 延迟过高 | 等模型生成 UI | 规则 generator 先出 skeleton，模型 patch 后补 |
 | 审计不可信 | 只保存自然语言解释 | journal 保存原始输入、计划、策略、执行结果 |
 | AppShell 膨胀 | 新逻辑堆入 shell | controller/action handler 注入，feature 模块不 import shell |
+| 模块边界侵蚀 | runtime、canvas、assistant 互相 import 内部实现 | 依赖方向测试 + code review 红线 + barrel export 白名单 |
+| action 过大 | 一个 action 包含多个 feature mutation | 原子拆分判定表 + plan 编排 + per-action journal |
 
 ## 13. 第一阶段具体任务清单
 

@@ -3,6 +3,7 @@ flowchart TB
   %% 核心原则：用户表达自由，模型输出结构化，执行与渲染受控。
 
   User["用户<br/>自然语言 / 语音 / 默认 UI 事件"]
+  Legend["图例<br/>粗橙虚线 = 主链路需要大模型 API<br/>浅橙虚线 = 可选大模型 API<br/>普通节点 = 确定性工程模块<br/>模型只给结构化候选，不拥有执行权"]
 
   subgraph InputLayer["一、输入与上下文层"]
     InputAdapter["Intent Input Adapter<br/>统一文本、语音、按钮、自动化事件"]
@@ -18,9 +19,16 @@ flowchart TB
     TokenRegistry["Design Token Registry<br/>颜色、密度、间距、字号、语气 preset"]
   end
 
+  subgraph BoundaryLayer["二点五、模块边界与扩展治理"]
+    CohesionRules["高内聚边界<br/>runtime 只规划、GenUI 只投影、policy 只裁决、feature owner 只改本域状态"]
+    AtomicRules["原子能力规则<br/>一个 action 一个 owner、一个风险级别、一个失败恢复策略"]
+    ExtensionProtocol["扩展接入协议<br/>capability card + schema + handler + policy + journal + tests"]
+    DependencyRules["依赖方向规则<br/>assistant -> runtime -> registry/policy -> executor -> feature controllers"]
+  end
+
   subgraph IntentRuntime["三、意图运行时：理解目标但不直接执行"]
     ModeGate["Mode Gate<br/>command 可执行动作<br/>qa/explain 只展示证据与非破坏性产物入口"]
-    SemanticPlanner["Semantic Planner<br/>规则 planner + DeepSeek/OpenAI 结构化 planner"]
+    SemanticPlanner["Semantic Planner<br/>规则 planner + DeepSeek/OpenAI 结构化 planner<br/>【LLM API 主链路】"]
     IntentPlan["IntentPlan / SemanticActionPlan<br/>intentId、actions、risk、requiredContext、summary"]
     PlanValidator["Plan Validator<br/>校验 actionId、schema、上下文需求、模式边界"]
   end
@@ -28,7 +36,7 @@ flowchart TB
   subgraph PolicyLayer["四、策略闸门：确定性裁决"]
     PolicyEngine["Policy Engine<br/>权限、风险、可逆性、成本、隐私、确认规则"]
     HumanConfirm["Human Confirmation UI<br/>高风险 / 中风险动作人工确认"]
-    Clarify["Clarification / Recovery<br/>缺上下文、歧义、不可支持时给出恢复路径"]
+    Clarify["Clarification / Recovery<br/>缺上下文、歧义、不可支持时给出恢复路径<br/>【LLM API 可选】"]
     SmoothPolicy["丝滑执行策略<br/>低风险即时执行、长任务后台化、失败可恢复"]
   end
 
@@ -40,10 +48,10 @@ flowchart TB
   end
 
   subgraph GenUILayer["六、生成式 UI 运行时：声明式投影"]
-    UIDslGenerator["UI DSL Generator<br/>规则生成优先，模型生成受 schema 限制"]
+    UIDslGenerator["UI DSL Generator<br/>规则生成优先，模型生成受 schema 限制<br/>【LLM API 主链路】"]
     UIDslDoc["UIDslDocument<br/>root、dataSources、actions、audit、traceId"]
     DSLValidator["DSL Validator<br/>拒绝未知组件、未知 action、非法 props、任意 CSS"]
-    UXValidator["UX Validator<br/>遮挡、弹窗叠加、按钮不可达、证据矛盾、认知负担"]
+    UXValidator["UX Validator<br/>遮挡、弹窗叠加、按钮不可达、证据矛盾、认知负担<br/>【MLLM/UX API 可选】"]
     FallbackUI["Fallback UI<br/>模型失败、DSL 错误、UX 风险、策略拒绝时保持可用"]
   end
 
@@ -54,10 +62,10 @@ flowchart TB
     ActionRouter["ActionRef Router<br/>动态按钮只产生 ActionRef，再回到策略闸门"]
   end
 
-  subgraph ModelLayer["模型服务边界：概率性组件"]
-    ModelGateway["Model Gateway<br/>DeepSeek / OpenAI / Mock / 云端服务回退"]
-    StructuredOutput["Structured Output Adapter<br/>强制 JSON schema，失败重试或降级"]
-    AuditModel["Answer / UI Audit Model<br/>解释审计，不改写 journal 事实"]
+  subgraph ModelLayer["模型服务边界：概率性组件（LLM API）"]
+    ModelGateway["Model Gateway<br/>DeepSeek / OpenAI / Mock / 云端服务回退<br/>【LLM API 主链路】"]
+    StructuredOutput["Structured Output Adapter<br/>强制 JSON schema，失败重试或降级<br/>【LLM API 主链路】"]
+    AuditModel["Answer / UI Audit Model<br/>解释审计，不改写 journal 事实<br/>【LLM API 可选】"]
   end
 
   %% 主路径
@@ -78,6 +86,14 @@ flowchart TB
   DataSourceRegistry --> SemanticPlanner
   ComponentRegistry --> UIDslGenerator
   TokenRegistry --> UIDslGenerator
+  CohesionRules --> PlanValidator
+  AtomicRules --> CapabilityRegistry
+  AtomicRules --> PlanValidator
+  ExtensionProtocol --> CapabilityRegistry
+  ExtensionProtocol --> ComponentRegistry
+  ExtensionProtocol --> DataSourceRegistry
+  DependencyRules --> PlanValidator
+  DependencyRules --> DSLValidator
 
   IntentPlan --> PlanValidator
   PlanValidator --> CapabilityRegistry
@@ -129,13 +145,19 @@ flowchart TB
   classDef contract fill:#fff8e6,stroke:#b7791f,stroke-width:1.5px,color:#102033;
   classDef gate fill:#eef4ff,stroke:#2b6cb0,stroke-width:1.5px,color:#102033;
   classDef model fill:#fff0f3,stroke:#c53030,stroke-width:1.5px,color:#102033;
+  classDef llmRequired fill:#fff7ed,stroke:#ea580c,stroke-width:2.4px,stroke-dasharray:7 4,color:#7c2d12;
+  classDef llmOptional fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,stroke-dasharray:4 4,color:#78350f;
   classDef render fill:#f7f0ff,stroke:#6b46c1,stroke-width:1.5px,color:#102033;
   classDef doc fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#102033;
+  classDef boundary fill:#ecfeff,stroke:#0e7490,stroke-width:1.5px,color:#102033;
 
   class User user;
+  class Legend doc;
   class InputAdapter,ContextBuilder,ContextPanel,Executor,ProgressEvents,AppControllers,Journal deterministic;
   class CapabilityRegistry,ActionCatalog,ComponentRegistry,DataSourceRegistry,TokenRegistry contract;
-  class ModeGate,PlanValidator,PolicyEngine,HumanConfirm,Clarify,SmoothPolicy,DSLValidator,UXValidator gate;
-  class ModelGateway,StructuredOutput,AuditModel,SemanticPlanner,UIDslGenerator model;
+  class ModeGate,PlanValidator,PolicyEngine,HumanConfirm,SmoothPolicy,DSLValidator gate;
+  class ModelGateway,StructuredOutput,SemanticPlanner,UIDslGenerator llmRequired;
+  class Clarify,UXValidator,AuditModel llmOptional;
   class AssistantCanvas,ArtifactCanvas,WorkbenchOverlay,ActionRouter,FallbackUI render;
   class IntentPlan,UIDslDoc doc;
+  class CohesionRules,AtomicRules,ExtensionProtocol,DependencyRules boundary;

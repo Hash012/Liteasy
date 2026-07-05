@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
+import type { UIDslActionRef } from "../features/generative-ui/generativeUi.types";
 import { PdfReader } from "../features/pdf/PdfReader";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { PaneCollapseState } from "./paneLayout.types";
@@ -10,6 +11,7 @@ type ReaderPaneProps = {
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
   layoutCollapsed?: PaneCollapseState;
+  onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
@@ -71,6 +73,7 @@ export function ReaderPane({
   artifactTabs,
   artifactTasks,
   layoutCollapsed = defaultLayoutCollapsed,
+  onArtifactDynamicAction,
   onStartAnalysis,
   onToggleBottomPane,
   onToggleLeftPane,
@@ -145,6 +148,7 @@ export function ReaderPane({
             <ArtifactTabs
               analysisHint={analysisHint}
               canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
+              onDynamicAction={onArtifactDynamicAction}
               onStartAnalysis={onStartAnalysis}
               selectedCount={selectedPaperIds.length}
               selectionLocked={selectionLocked}

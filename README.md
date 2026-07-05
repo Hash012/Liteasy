@@ -95,6 +95,41 @@ export OPENAI_API_KEY=你的密钥
 node LiteasyClaw/services/dev-cloud/server.mjs
 ```
 
+如果要调用真实 DeepSeek：
+
+```bash
+export DEEPSEEK_API_KEY=你的密钥
+export DEEPSEEK_BASE_URL=https://api.deepseek.com
+export LITEASY_MODEL_PROVIDER=deepseek
+node LiteasyClaw/services/dev-cloud/server.mjs
+```
+
+更安全的本地写法是把 key 放到不会提交的 `.env.local`。根目录 `.gitignore` 已忽略 `.env` 和 `.env.*`：
+
+```bash
+cd /home/octopus/Liteasy
+printf 'DEEPSEEK_API_KEY=你的密钥\nDEEPSEEK_BASE_URL=https://api.deepseek.com\nLITEASY_MODEL_PROVIDER=deepseek\n' > .env.local
+set -a
+source .env.local
+set +a
+node LiteasyClaw/services/dev-cloud/server.mjs
+```
+
+验证开发云是否已经走 DeepSeek：
+
+```bash
+curl http://127.0.0.1:8787/v1/model/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-v4-flash",
+    "prompt": "用一句话回答：LiteasyClaw 的命令模式应该做什么？",
+    "provider": "deepseek",
+    "source": "cloud_proxy"
+  }'
+```
+
+返回里的 `execution.mode` 为 `live` 且 `execution.provider` 为 `deepseek`，说明已经通过当前开发云链路调用真实 DeepSeek。若没配置 key，请求 `deepseek` 会报“未注册 provider”；请求默认 OpenAI 且无 OpenAI key 时才会回退到内置 mock。
+
 ### 终端 2：桌面端
 
 ```bash

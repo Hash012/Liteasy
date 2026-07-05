@@ -18,9 +18,25 @@ import {
   type AssistantSessionHistoryItem
 } from "./assistantSessionHistory";
 import { buildAgentRuntimeContextView } from "../agent-runtime/contextView";
+import { executeUIDslActionRef } from "../agent-runtime/dynamicActionExecutor";
+import { adaptDefaultUiIntent, adaptTextIntent } from "../agent-runtime/intentInputAdapter";
+import { createModelAssistedClarification } from "../agent-runtime/modelClarification";
 import { createModelSemanticPlanner } from "../agent-runtime/modelSemanticPlanner";
+import {
+  executeConfirmedSemanticPlan,
+  rejectHumanConfirmation
+} from "../agent-runtime/planExecutor";
 import { runAgentRuntime } from "../agent-runtime/runtimeOrchestrator";
-import type { AgentRuntimeEvent } from "../agent-runtime/agentRuntime.types";
+import type {
+  AgentRuntimeEvent,
+  AgentRuntimeExecutionContext,
+  HumanConfirmationRequest,
+  PendingCommandClarification
+} from "../agent-runtime/agentRuntime.types";
+import { createExecutionJournal } from "../generative-ui/executionJournal";
+import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
+import { createModelAssistedJournalAuditModel } from "../generative-ui/journalAuditModel";
+import { createModelAssistedUIDslGenerator } from "../generative-ui/uiDslGenerator";
 import type { ModelTransport } from "../models/modelHttpClient";
 import type { ActionContext } from "../skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
@@ -45,6 +61,7 @@ type AssistantPaneProps = {
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onGenerateArtifact: (artifactType: ArtifactType) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
+  onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
@@ -92,11 +109,60 @@ function formatRuntimeEvent(event: AgentRuntimeEvent): string {
     return `准备执行受控动作：${event.action.actionId}`;
   }
 
+  if (event.type === "action_failed") {
+    return event.message;
+  }
+
+  if (event.type === "progress_started") {
+    return `开始执行：${event.summary}`;
+  }
+
   if (event.type === "artifact_request") {
     return `准备打开产物：${event.artifact.artifactType}`;
   }
 
-  return `任务已创建：${event.task.taskType}`;
+  if (event.type === "ui_dsl_ready") {
+    return "动态界面已准备。";
+  }
+
+  if (event.type === "task_created") {
+    return `任务已创建：${event.task.taskType}`;
+  }
+
+  return `任务请求：${event.task.taskType}`;
+}
+
+function isHumanConfirmationEvent(event: AgentRuntimeEvent): event is HumanConfirmationRequest {
+  return (
+    event.type === "confirmation_request" &&
+    "confirmationId" in event &&
+    "plan" in event &&
+    "traceId" in event
+  );
+}
+
+function getTraceIdFromRuntimeEvents(events: AgentRuntimeEvent[]) {
+  const progressEvent = events.find((event) => event.type === "progress_started");
+  if (progressEvent?.type === "progress_started") {
+    return progressEvent.traceId;
+  }
+
+  const confirmationEvent = events.find(isHumanConfirmationEvent);
+  if (confirmationEvent) {
+    return confirmationEvent.traceId;
+  }
+
+  const planEvent = events.find((event) => event.type === "plan_preview");
+  if (planEvent?.type === "plan_preview") {
+    return `trace-${planEvent.plan.planId}`;
+  }
+
+  const uiDslEvent = events.find((event) => event.type === "ui_dsl_ready");
+  if (uiDslEvent?.type === "ui_dsl_ready") {
+    return uiDslEvent.document.audit.traceId;
+  }
+
+  return undefined;
 }
 
 export function AssistantPane({
@@ -107,6 +173,7 @@ export function AssistantPane({
   onApplyThemePreset,
   onGenerateArtifact,
   onImportSelectedSet,
+  onOpenAcademicArchive,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
@@ -117,6 +184,8 @@ export function AssistantPane({
   settingsStore
 }: AssistantPaneProps) {
   const assistantStoreRef = useRef(createAssistantStore());
+  const executionJournalRef = useRef(createExecutionJournal());
+  const pendingCommandClarificationRef = useRef<PendingCommandClarification | undefined>();
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const settingsStoreRef = useRef(settingsStore ?? createSettingsStore());
   const [assistantState, setAssistantState] = useState<AssistantState>(() =>
@@ -142,13 +211,29 @@ export function AssistantPane({
   }
 
   function setMode(mode: AssistantMode) {
-    assistantStoreRef.current.setMode(mode);
+    const adapted = adaptDefaultUiIntent({
+      action: "select_mode",
+      mode
+    });
+    if (adapted.kind !== "mode_change") {
+      return;
+    }
+
+    assistantStoreRef.current.setMode(adapted.mode);
     syncAssistant();
   }
 
   function switchModeAsNewSession(mode: AssistantMode) {
+    const adapted = adaptDefaultUiIntent({
+      action: "select_mode",
+      mode
+    });
+    if (adapted.kind !== "mode_change") {
+      return;
+    }
+
     const currentState = assistantStoreRef.current.getState();
-    if (currentState.mode === mode) {
+    if (currentState.mode === adapted.mode) {
       return;
     }
 
@@ -161,7 +246,7 @@ export function AssistantPane({
       setVoiceInputMessage(undefined);
     }
 
-    assistantStoreRef.current.setMode(mode);
+    assistantStoreRef.current.setMode(adapted.mode);
     syncAssistant();
   }
 
@@ -205,6 +290,137 @@ export function AssistantPane({
     inputRef.current?.focus();
   }
 
+  function createRuntimeExecutionContext(
+    options: {
+      includeSemanticPlanner?: boolean;
+    } = {}
+  ): AgentRuntimeExecutionContext {
+    return {
+      contextView: runtimeContext,
+      clarifySemanticPlan: createModelAssistedClarification({
+        modelTransport,
+        settings: settingsStoreRef.current.getState()
+      }),
+      applyLayoutPreset: onApplyLayoutPreset,
+      applyPanelAction: onApplyPanelAction,
+      applyThemePreset: onApplyThemePreset,
+      generateUIDsl: createModelAssistedUIDslGenerator({
+        modelTransport,
+        settings: settingsStoreRef.current.getState()
+      }),
+      importSelectedSet: onImportSelectedSet,
+      journal: executionJournalRef.current,
+      openAcademicArchive: onOpenAcademicArchive,
+      openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
+      pendingClarification: pendingCommandClarificationRef.current,
+      profileUnlocked,
+      semanticPlanner: options.includeSemanticPlanner
+        ? createModelSemanticPlanner({
+            modelTransport,
+            settings: settingsStoreRef.current.getState()
+          })
+        : undefined,
+      settingsStore: settingsStoreRef.current,
+      startArtifactAnalysis: onGenerateArtifact
+    };
+  }
+
+  function appendRuntimeEvent(event: AgentRuntimeEvent) {
+    if (event.type === "ui_dsl_ready") {
+      const currentMessages = assistantStoreRef.current.getState().messages;
+      const lastMessage = currentMessages[currentMessages.length - 1];
+      if (lastMessage?.role === "assistant") {
+        assistantStoreRef.current.replaceMessages([
+          ...currentMessages.slice(0, -1),
+          {
+            ...lastMessage,
+            uiDsl: event.document
+          }
+        ]);
+        return;
+      }
+
+      const assistantMessage = createMessage("assistant", formatRuntimeEvent(event));
+      assistantMessage.uiDsl = event.document;
+      assistantStoreRef.current.addMessage(assistantMessage);
+      return;
+    }
+
+    const assistantMessage = createMessage("assistant", formatRuntimeEvent(event));
+    if (isHumanConfirmationEvent(event)) {
+      assistantMessage.confirmation = event;
+    }
+    assistantStoreRef.current.addMessage(assistantMessage);
+  }
+
+  function appendRuntimeEvents(events: AgentRuntimeEvent[]) {
+    events.forEach((event) => {
+      appendRuntimeEvent(event);
+    });
+  }
+
+  async function appendJournalAudit(traceId: string | undefined) {
+    if (!traceId) {
+      return;
+    }
+
+    const trace = executionJournalRef.current.getTrace(traceId);
+    const hasFinalizedFact = trace.some(
+      (entry) =>
+        entry.type === "action_result" ||
+        entry.type === "ui_dsl" ||
+        (entry.type === "confirmation" && entry.decision === "rejected")
+    );
+    if (!hasFinalizedFact) {
+      return;
+    }
+
+    const assistantMessage = createMessage("assistant", "执行审计");
+    assistantMessage.uiDsl = await createModelAssistedJournalAuditModel({
+      modelTransport,
+      settings: settingsStoreRef.current.getState()
+    })({
+      trace,
+      traceId
+    });
+    assistantStoreRef.current.addMessage(assistantMessage);
+  }
+
+  function clearConfirmationMessage(confirmationId: string) {
+    const currentMessages = assistantStoreRef.current.getState().messages;
+    assistantStoreRef.current.replaceMessages(
+      currentMessages.map((message) =>
+        message.confirmation?.confirmationId === confirmationId
+          ? {
+              ...message,
+              confirmation: undefined
+            }
+          : message
+      )
+    );
+  }
+
+  function updatePendingCommandClarification(input: string, events: AgentRuntimeEvent[]) {
+    const clarification = events.find(
+      (event) => event.type === "clarification_request" && event.kind === "ambiguous_action"
+    );
+
+    if (clarification?.type === "clarification_request") {
+      pendingCommandClarificationRef.current = {
+        clarification: {
+          candidates: clarification.candidates,
+          kind: clarification.kind,
+          missing: clarification.missing,
+          question: clarification.question
+        },
+        previousInput: input
+      };
+      return;
+    }
+
+    pendingCommandClarificationRef.current = undefined;
+  }
+
   async function runCommandMessage(message: string) {
     assistantStoreRef.current.setPending(true);
     syncAssistant();
@@ -215,26 +431,14 @@ export function AssistantPane({
           message,
           mode: "command"
         },
-        {
-          contextView: runtimeContext,
-          applyLayoutPreset: onApplyLayoutPreset,
-          applyPanelAction: onApplyPanelAction,
-          applyThemePreset: onApplyThemePreset,
-          importSelectedSet: onImportSelectedSet,
-          openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
-          profileUnlocked,
-          semanticPlanner: createModelSemanticPlanner({
-            modelTransport,
-            settings: settingsStoreRef.current.getState()
-          }),
-          settingsStore: settingsStoreRef.current,
-          startArtifactAnalysis: onGenerateArtifact
-        }
+        createRuntimeExecutionContext({
+          includeSemanticPlanner: true
+        })
       );
 
-      result.events.forEach((event) => {
-        assistantStoreRef.current.addMessage(createMessage("assistant", formatRuntimeEvent(event)));
-      });
+      appendRuntimeEvents(result.events);
+      updatePendingCommandClarification(message, result.events);
+      await appendJournalAudit(getTraceIdFromRuntimeEvents(result.events));
 
       if (result.settingsChanged) {
         onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
@@ -246,6 +450,78 @@ export function AssistantPane({
     } finally {
       assistantStoreRef.current.setPending(false);
       syncAssistant();
+    }
+  }
+
+  async function handleConfirmRequest(confirmation: HumanConfirmationRequest) {
+    assistantStoreRef.current.setPending(true);
+    clearConfirmationMessage(confirmation.confirmationId);
+    syncAssistant();
+
+    try {
+      const result = await executeConfirmedSemanticPlan(
+        confirmation,
+        createRuntimeExecutionContext()
+      );
+      appendRuntimeEvents(result.events);
+      await appendJournalAudit(confirmation.traceId);
+      if (result.settingsChanged) {
+        onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
+      }
+    } catch (error) {
+      assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error)));
+    } finally {
+      assistantStoreRef.current.setPending(false);
+      syncAssistant();
+      inputRef.current?.focus();
+    }
+  }
+
+  function handleRejectRequest(confirmation: HumanConfirmationRequest) {
+    clearConfirmationMessage(confirmation.confirmationId);
+    const result = rejectHumanConfirmation(confirmation, {
+      journal: executionJournalRef.current
+    });
+    appendRuntimeEvents(result.events);
+    void appendJournalAudit(confirmation.traceId).then(syncAssistant);
+    syncAssistant();
+    inputRef.current?.focus();
+  }
+
+  async function handleUIDslAction(action: UIDslActionRef, traceId: string) {
+    const adapted = adaptDefaultUiIntent({
+      action: "trigger_action",
+      actionRef: action,
+      activeMode: assistantStoreRef.current.getState().mode,
+      traceId
+    });
+    if (adapted.kind !== "dynamic_action") {
+      return;
+    }
+
+    assistantStoreRef.current.setPending(true);
+    syncAssistant();
+
+    try {
+      const result = await executeUIDslActionRef(
+        adapted.actionRef,
+        createRuntimeExecutionContext(),
+        {
+          mode: adapted.mode,
+          traceId: adapted.traceId
+        }
+      );
+      appendRuntimeEvents(result.events);
+      await appendJournalAudit(getTraceIdFromRuntimeEvents(result.events) ?? traceId);
+      if (result.settingsChanged) {
+        onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
+      }
+    } catch (error) {
+      assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error)));
+    } finally {
+      assistantStoreRef.current.setPending(false);
+      syncAssistant();
+      inputRef.current?.focus();
     }
   }
 
@@ -277,6 +553,7 @@ export function AssistantPane({
       assistantMessage.citations = answer.citations;
       assistantMessage.confidence = answer.confidence;
       assistantMessage.executionTrace = answer.executionTrace;
+      assistantMessage.uiDsl = answer.uiDsl;
 
       assistantStoreRef.current.addMessage(assistantMessage);
       setInput("");
@@ -292,17 +569,19 @@ export function AssistantPane({
   }
 
   async function handleSend() {
-    const normalizedInput = input.trim();
-    if (normalizedInput.length === 0) {
+    const currentState = assistantStoreRef.current.getState();
+    const adapted = adaptTextIntent({
+      activeMode: currentState.mode,
+      value: input
+    });
+
+    if (adapted.kind === "idle") {
       return;
     }
 
-    const currentState = assistantStoreRef.current.getState();
     if (currentState.pending) {
       return;
     }
-
-    const activeMode = currentState.mode;
 
     if (editingMessageId) {
       const messageIndex = currentState.messages.findIndex(
@@ -313,14 +592,14 @@ export function AssistantPane({
       }
     }
 
-    assistantStoreRef.current.addMessage(createMessage("user", normalizedInput));
+    assistantStoreRef.current.addMessage(createMessage("user", adapted.userMessageContent));
 
-    if (activeMode === "command") {
-      await runCommandMessage(normalizedInput);
+    if (adapted.runtimeInput.mode === "command") {
+      await runCommandMessage(adapted.runtimeInput.message);
       return;
     }
 
-    await runKnowledgeMessage(normalizedInput, activeMode);
+    await runKnowledgeMessage(adapted.runtimeInput.message, adapted.runtimeInput.mode);
   }
 
   function handleEditMessage(messageId: string) {
@@ -418,9 +697,16 @@ export function AssistantPane({
       <AssistantMessageList
         messages={assistantState.messages}
         mode={assistantState.mode}
+        onConfirmRequest={(confirmation) => {
+          void handleConfirmRequest(confirmation);
+        }}
+        onDynamicAction={(action, traceId) => {
+          void handleUIDslAction(action, traceId);
+        }}
         onEditMessage={handleEditMessage}
         onModeChange={switchModeAsNewSession}
         onRegenerateMessage={handleRegenerateMessage}
+        onRejectRequest={handleRejectRequest}
       />
 
       <AssistantComposer

@@ -4,6 +4,7 @@ import type { ImportQueueStatus } from "../workspace/useWorkspaceActions";
 import { buildArtifactPreview } from "./artifactPreview";
 import type { ArtifactTab, ArtifactTask, ArtifactType } from "./artifact.types";
 import type { createArtifactStore } from "./artifact.store";
+import { generateCenterArtifactUIDslDocument } from "../generative-ui/uiDslGenerator";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
@@ -64,11 +65,19 @@ export function useArtifactActions({
     }, 300);
 
     window.setTimeout(() => {
+      const artifactId = "artifact-demo-1";
       artifactStore.completeTask(taskId, {
-        artifactId: "artifact-demo-1",
+        artifactId,
         preview: buildArtifactPreview(selectedPapers, importedChunksByPaperId),
         title: getArtifactTitle(artifactType),
-        type: artifactType
+        type: artifactType,
+        uiDsl: generateCenterArtifactUIDslDocument({
+          artifactId,
+          artifactType,
+          importedChunksByPaperId,
+          selectedPapers,
+          title: getArtifactTitle(artifactType)
+        })
       });
       syncArtifacts(taskId);
     }, 1200);

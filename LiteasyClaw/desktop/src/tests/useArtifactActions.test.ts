@@ -155,7 +155,88 @@ describe("useArtifactActions", () => {
       await vi.advanceTimersByTimeAsync(1200);
     });
     expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
-      expect.objectContaining({ title: "Literature Comparison Table", type: "comparison_table" })
+      expect.objectContaining({
+        title: "Literature Comparison Table",
+        type: "comparison_table",
+        uiDsl: expect.objectContaining({
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                component: "ComparisonTable",
+                props: expect.objectContaining({
+                  title: "Literature Comparison Table"
+                })
+              }),
+              expect.objectContaining({
+                component: "EvidenceMatrix"
+              }),
+              expect.objectContaining({
+                component: "ActionBar",
+                props: expect.objectContaining({
+                  actionIds: ["open-artifact-demo-1"]
+                })
+              })
+            ]),
+            component: "Stack"
+          }),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              actionId: "artifact.open_tab",
+              id: "open-artifact-demo-1",
+              input: expect.objectContaining({
+                artifactId: "artifact-demo-1",
+                artifactType: "comparison_table"
+              })
+            })
+          ]),
+          surface: "center_artifact"
+        })
+      })
+    ]);
+  });
+
+  test.each([
+    ["mindmap", "MindMap"],
+    ["tree", "TreeOutline"],
+    ["ppt", "SlideDeck"]
+  ] as const)("creates a typed center artifact DSL for %s analysis", async (artifactType, component) => {
+    const { onArtifactTabsChanged, result } = renderArtifactActions({
+      imported: true
+    });
+
+    act(() => {
+      result.current.startAnalysis(artifactType);
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
+    });
+
+    expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        type: artifactType,
+        uiDsl: expect.objectContaining({
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                component: "ActionBar"
+              })
+            ]),
+            component
+          }),
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              actionId: "artifact.open_tab",
+              id: "open-artifact-demo-1",
+              input: expect.objectContaining({
+                artifactId: "artifact-demo-1",
+                artifactType
+              })
+            })
+          ]),
+          surface: "center_artifact"
+        })
+      })
     ]);
   });
 

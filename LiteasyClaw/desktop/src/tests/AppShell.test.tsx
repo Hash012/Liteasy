@@ -107,7 +107,7 @@ test("grounds qa answers in the currently selected imported paper set", async ()
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("总结这篇论文的核心方法")).toBeInTheDocument();
-  expect(screen.getByText(/demo-2 · 第/)).toBeInTheDocument();
+  expect(screen.getAllByText(/demo-2 · 第/).length).toBeGreaterThan(0);
 }, 10000);
 
 test("shows the unified lightweight login dialog on logged-out startup and respects suppress reminder", async () => {
@@ -162,7 +162,14 @@ test("applies a semantic command theme action to the workbench", async () => {
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(container.querySelector(".app-frame")).toHaveClass("theme-playful");
-  expect(screen.getByText("已应用卡通风格。")).toBeInTheDocument();
+  expect(screen.getAllByText("已应用卡通风格。").length).toBeGreaterThanOrEqual(1);
+  const overlay = screen.getByLabelText("工作台状态投影");
+  expect(within(overlay).getByText("已应用卡通风格。")).toBeInTheDocument();
+  await user.click(within(overlay).getByRole("button", { name: "恢复默认" }));
+
+  await waitFor(() => {
+    expect(container.querySelector(".app-frame")).not.toHaveClass("theme-playful");
+  });
 });
 
 test("executes a semantic command layout action against pane state", async () => {
@@ -178,7 +185,14 @@ test("executes a semantic command layout action against pane state", async () =>
 
   expect(screen.queryByLabelText("我的文献库投放区")).not.toBeInTheDocument();
   expect(screen.getByLabelText("右栏AI助手")).toBeInTheDocument();
-  expect(screen.getByText("已切换为双栏布局。")).toBeInTheDocument();
+  expect(screen.getAllByText("已切换为双栏布局。").length).toBeGreaterThanOrEqual(1);
+  const overlay = screen.getByLabelText("工作台状态投影");
+  expect(within(overlay).getByText("已切换为双栏布局。")).toBeInTheDocument();
+  await user.click(within(overlay).getByRole("button", { name: "恢复默认布局" }));
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("我的文献库投放区")).toBeInTheDocument();
+  });
 });
 
 test("executes a semantic command panel navigation action", async () => {
@@ -193,7 +207,7 @@ test("executes a semantic command panel navigation action", async () => {
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByLabelText("左边栏设置")).toBeInTheDocument();
-  expect(screen.getByText("已打开设置面板。")).toBeInTheDocument();
+  expect(screen.getAllByText("已打开设置面板。").length).toBeGreaterThanOrEqual(1);
 });
 
 test("executes a semantic selected-set import action through the workspace handler", async () => {
@@ -389,7 +403,7 @@ test("renders artifact content from imported selected-document chunks", async ()
   await user.click(screen.getByRole("button", { name: "思维导图" }));
 
   await waitFor(() => {
-    expect(screen.getByText("Literature Mind Map")).toBeInTheDocument();
+    expect(screen.getAllByText("Literature Mind Map").length).toBeGreaterThan(1);
   }, { timeout: 3000 });
 
   expect(
@@ -397,6 +411,15 @@ test("renders artifact content from imported selected-document chunks", async ()
   ).toBeGreaterThan(1);
   expect(screen.getByText("向量数据库管理系统")).toBeInTheDocument();
   expect(screen.getByText("向量索引")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "打开产物" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "对比表" })).toHaveAttribute(
+      "title",
+      "已定位到中心产物：mindmap。"
+    );
+  });
 }, 10000);
 
 test("collapses the left pane when clicking the active activity-bar item", async () => {
@@ -5131,7 +5154,9 @@ test("keeps assistant profile commands behind runtime confirmation before person
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")).toBeInTheDocument();
+  expect(
+    await screen.findByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")
+  ).toBeInTheDocument();
 
   const leftPane = await openProfilePanel(user);
 

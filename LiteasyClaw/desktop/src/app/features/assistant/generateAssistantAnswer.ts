@@ -9,11 +9,12 @@ import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
 import type { Paper } from "../workspace/workspace.types";
 import { auditAssistantAnswer } from "./answerAuditor";
+import { generateEvidenceUIDslDocument } from "../generative-ui/uiDslGenerator";
 
 type GenerateAssistantAnswerInput = {
   auditTransport?: ModelAuditTransport;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
-  mode: AssistantMode;
+  mode: Exclude<AssistantMode, "command">;
   modelTransport?: ModelTransport;
   question: string;
   selectedPapers: Paper[];
@@ -80,6 +81,13 @@ export async function generateAssistantAnswer({
     citations: groundedAnswer.citations,
     confidence: groundedAnswer.confidence,
     executionTrace: generation.trace,
+    uiDsl: generateEvidenceUIDslDocument({
+      answer: generatedAnswerText,
+      citations: groundedAnswer.citations,
+      confidence: groundedAnswer.confidence,
+      mode,
+      question
+    }),
     content:
       mode === "explain"
         ? `概念解释：${generatedAnswerText}\n引用: ${groundedAnswer.citations

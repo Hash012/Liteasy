@@ -1,8 +1,11 @@
 import type { ArtifactTab, ArtifactTask, ArtifactType } from "./artifact.types";
+import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
+import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 
 type ArtifactTabsProps = {
   analysisHint: string;
   canStartAnalysis: boolean;
+  onDynamicAction?: (action: UIDslActionRef) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   selectedCount: number;
   selectionLocked: boolean;
@@ -48,6 +51,7 @@ function getFallbackPreview(type: ArtifactType) {
 export function ArtifactTabs({
   analysisHint,
   canStartAnalysis,
+  onDynamicAction,
   onStartAnalysis,
   selectedCount,
   selectionLocked,
@@ -91,7 +95,9 @@ export function ArtifactTabs({
         <div className="artifact-card">
           <div className="artifact-card-title">{tabs[0].title}</div>
           <div className="artifact-card-body">
-            {activePreview ? (
+            {tabs[0].uiDsl ? (
+              <DynamicCanvas document={tabs[0].uiDsl} onAction={(action) => onDynamicAction?.(action)} />
+            ) : activePreview ? (
               <>
                 <div className="mindmap-node root">{activePreview.rootLabel}</div>
                 <div className="mindmap-children">

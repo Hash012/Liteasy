@@ -16,6 +16,7 @@ type AssistantSidebarProps = {
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onGenerateArtifact: (artifactType: ArtifactType) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
+  onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
@@ -35,6 +36,7 @@ export function AssistantSidebar({
   onApplyThemePreset,
   onGenerateArtifact,
   onImportSelectedSet,
+  onOpenAcademicArchive,
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
@@ -56,6 +58,7 @@ export function AssistantSidebar({
           onApplyThemePreset={onApplyThemePreset}
           onGenerateArtifact={onGenerateArtifact}
           onImportSelectedSet={onImportSelectedSet}
+          onOpenAcademicArchive={onOpenAcademicArchive}
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onSettingsChanged={onSettingsChanged}
           profileUnlocked={profileUnlocked}

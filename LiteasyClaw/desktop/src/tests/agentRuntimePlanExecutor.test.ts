@@ -1,7 +1,11 @@
-import { executeSemanticPlan } from "../app/features/agent-runtime/planExecutor";
+import {
+  executeConfirmedSemanticPlan,
+  executeSemanticPlan
+} from "../app/features/agent-runtime/planExecutor";
 import type { SemanticActionPlan } from "../app/features/agent-runtime/agentRuntime.types";
 import { vi } from "vitest";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+import { createExecutionJournal } from "../app/features/generative-ui/executionJournal";
 
 function createPlan(overrides: Partial<SemanticActionPlan> = {}): SemanticActionPlan {
   return {
@@ -62,6 +66,19 @@ test("executes registered low-risk layout actions", async () => {
       {
         message: "已切换为双栏布局。",
         type: "assistant_reply"
+      },
+      {
+        document: expect.objectContaining({
+          actions: [
+            expect.objectContaining({
+              actionId: "layout.reset",
+              id: "reset-layout"
+            })
+          ],
+          intentPlanId: "plan-test",
+          surface: "assistant"
+        }),
+        type: "ui_dsl_ready"
       }
     ],
     settingsChanged: false
@@ -115,8 +132,85 @@ test("executes registered low-risk theme actions", async () => {
     {
       message: "已应用卡通风格。",
       type: "assistant_reply"
+    },
+    {
+      document: expect.objectContaining({
+        actions: [
+          expect.objectContaining({
+            actionId: "theme.reset",
+            id: "reset-theme"
+          })
+        ],
+        intentPlanId: "plan-test",
+        surface: "assistant"
+      }),
+      type: "ui_dsl_ready"
     }
   ]);
+});
+
+test("delegates assistant feedback UI generation to the runtime UIDSL generator", async () => {
+  const applyThemePreset = vi.fn(() => "已应用卡通风格。");
+  const generateUIDsl = vi.fn(async ({ plan, statusText }) => ({
+    actions: [],
+    audit: {
+      createdAt: "2026-07-05T00:00:00.000Z",
+      generatedBy: "model" as const,
+      model: "mock-ui-model",
+      traceId: `trace-${plan.planId}`
+    },
+    dataSources: [],
+    id: "ui-model-theme",
+    intentPlanId: plan.planId,
+    root: {
+      component: "StatusBanner",
+      id: "model-status",
+      props: {
+        text: `模型投影：${statusText}`,
+        tone: "info"
+      }
+    },
+    surface: "assistant" as const,
+    version: "liteasy-ui-dsl/v1" as const
+  }));
+
+  const result = await executeSemanticPlan(
+    createPlan({
+      actions: [
+        {
+          actionId: "theme.apply_preset",
+          input: {
+            preset: "playful",
+            tone: "cartoon"
+          }
+        }
+      ],
+      intentId: "theme.apply",
+      summary: "应用卡通风格"
+    }),
+    {
+      applyThemePreset,
+      generateUIDsl
+    }
+  );
+
+  expect(generateUIDsl).toHaveBeenCalledWith({
+    plan: expect.objectContaining({
+      planId: "plan-test",
+      summary: "应用卡通风格"
+    }),
+    statusText: "已应用卡通风格。"
+  });
+  expect(result.events).toContainEqual({
+    document: expect.objectContaining({
+      audit: expect.objectContaining({
+        generatedBy: "model",
+        model: "mock-ui-model"
+      }),
+      id: "ui-model-theme"
+    }),
+    type: "ui_dsl_ready"
+  });
 });
 
 test("executes registered low-risk panel actions", async () => {
@@ -164,6 +258,24 @@ test("executes registered low-risk panel actions", async () => {
     {
       message: "已打开设置面板。",
       type: "assistant_reply"
+    },
+    {
+      document: expect.objectContaining({
+        actions: [],
+        intentPlanId: "plan-test",
+        root: expect.objectContaining({
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              component: "StatusBanner",
+              props: expect.objectContaining({
+                text: "已打开设置面板。"
+              })
+            })
+          ])
+        }),
+        surface: "assistant"
+      }),
+      type: "ui_dsl_ready"
     }
   ]);
 });
@@ -302,7 +414,7 @@ test("returns confirmation before registered medium-risk settings actions", asyn
         }),
         type: "plan_preview"
       },
-      {
+      expect.objectContaining({
         action: {
           actionId: "settings.update",
           payload: {
@@ -312,7 +424,7 @@ test("returns confirmation before registered medium-risk settings actions", asyn
         },
         summary: "用户画像会影响个性化采样与后续回答策略，请确认后再开启。",
         type: "confirmation_request"
-      }
+      })
     ],
     settingsChanged: false
   });
@@ -352,7 +464,7 @@ test("uses registered action policy to require confirmation even when a plan omi
       }),
       type: "plan_preview"
     },
-    {
+    expect.objectContaining({
       action: {
         actionId: "settings.update",
         payload: {
@@ -362,8 +474,90 @@ test("uses registered action policy to require confirmation even when a plan omi
       },
       summary: "用户画像会影响个性化采样与后续回答策略，请确认后再开启。",
       type: "confirmation_request"
+    })
+  ]);
+});
+
+test("executes a semantic plan after matching human confirmation", async () => {
+  const settingsStore = createSettingsStore();
+  const journal = createExecutionJournal();
+  const plan = createPlan({
+    actions: [
+      {
+        actionId: "settings.update",
+        input: {
+          target: "profile.enabled",
+          value: true
+        }
+      }
+    ],
+    intentId: "settings.update",
+    requiresConfirmation: true,
+    riskLevel: "medium",
+    summary: "开启用户画像"
+  });
+
+  const pending = await executeSemanticPlan(plan, {
+    journal,
+    profileUnlocked: true,
+    settingsStore
+  });
+  const confirmation = pending.events.find((event) => event.type === "confirmation_request");
+
+  expect(confirmation).toEqual(
+    expect.objectContaining({
+      confirmationId: "confirm-plan-test-settings.update",
+      plan: expect.objectContaining({
+        planId: "plan-test"
+      }),
+      traceId: "trace-plan-test",
+      type: "confirmation_request"
+    })
+  );
+
+  const result = await executeConfirmedSemanticPlan(confirmation, {
+    journal,
+    profileUnlocked: true,
+    settingsStore
+  });
+
+  expect(settingsStore.getState()["profile.enabled"]).toBe(true);
+  expect(result.events).toEqual([
+    {
+      action: {
+        actionId: "settings.update",
+        payload: {
+          target: "profile.enabled",
+          value: true
+        }
+      },
+      type: "action_request"
+    },
+    {
+      message: "已更新 用户画像：true",
+      type: "assistant_reply"
     }
   ]);
+  expect(journal.getTrace("trace-plan-test")).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        actionId: "settings.update",
+        confirmationId: "confirm-plan-test-settings.update",
+        decision: "accepted",
+        type: "confirmation"
+      }),
+      expect.objectContaining({
+        actionId: "settings.update",
+        result: "allow",
+        type: "policy"
+      }),
+      expect.objectContaining({
+        actionId: "settings.update",
+        message: "已更新 用户画像：true",
+        type: "action_result"
+      })
+    ])
+  );
 });
 
 test("executes registered organization actions", async () => {
@@ -440,9 +634,16 @@ test("returns a runtime error when a low-risk ui handler is missing", async () =
       type: "plan_preview"
     },
     {
+      action: {
+        actionId: "theme.apply_preset",
+        payload: {
+          preset: "playful",
+          tone: "cartoon"
+        }
+      },
       message: "UI 动作执行能力尚未注册。",
       recovery: "请检查 应用卡通风格 的 theme.apply_preset action 是否已连接。",
-      type: "runtime_error"
+      type: "action_failed"
     }
   ]);
 });
@@ -467,6 +668,27 @@ test("returns clarification events from ambiguous plans", async () => {
       question:
         "我理解你可能想让软件处理“ABC”，但当前上下文里它还没有对应到可执行对象或动作。请补充要打开、生成、切换、调整或分析的对象；也可以改说“打开设置面板”“生成思维导图”“导入当前选中文献集”。",
       type: "clarification_request"
+    },
+    {
+      document: expect.objectContaining({
+        audit: expect.objectContaining({
+          generatedBy: "rule",
+          traceId: "trace-plan-test"
+        }),
+        id: "fallback-plan-test-clarify",
+        root: expect.objectContaining({
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              component: "StatusBanner",
+              props: expect.objectContaining({
+                text: expect.stringContaining("请补充")
+              })
+            })
+          ])
+        }),
+        surface: "assistant"
+      }),
+      type: "ui_dsl_ready"
     }
   ]);
 });
@@ -486,6 +708,33 @@ test("returns unsupported explanations for understood missing capabilities", asy
       message: "当前还不能生成对比表，可用模态：思维导图、树状图、PPT",
       recovery: "对比表产物还没有注册到可执行 artifact action；可以先生成思维导图、树状图或 PPT。",
       type: "runtime_error"
+    },
+    {
+      document: expect.objectContaining({
+        audit: expect.objectContaining({
+          generatedBy: "rule",
+          traceId: "trace-plan-test"
+        }),
+        id: "fallback-plan-test-deny",
+        root: expect.objectContaining({
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              component: "StatusBanner",
+              props: expect.objectContaining({
+                text: "当前还不能生成对比表，可用模态：思维导图、树状图、PPT"
+              })
+            }),
+            expect.objectContaining({
+              component: "Panel",
+              props: expect.objectContaining({
+                text: "对比表产物还没有注册到可执行 artifact action；可以先生成思维导图、树状图或 PPT。"
+              })
+            })
+          ])
+        }),
+        surface: "assistant"
+      }),
+      type: "ui_dsl_ready"
     }
   ]);
 });
@@ -533,6 +782,12 @@ test("executes registered artifact plans through the artifact handler", async ()
         type: "plan_preview"
       },
       {
+        planId: "plan-test",
+        summary: "生成树状图",
+        traceId: "trace-plan-test",
+        type: "progress_started"
+      },
+      {
         artifact: {
           artifactType: "tree",
           payload: {
@@ -542,10 +797,110 @@ test("executes registered artifact plans through the artifact handler", async ()
         type: "artifact_request"
       },
       {
+        task: {
+          payload: {
+            artifactType: "tree",
+            source: "selected_document_set"
+          },
+          taskId: "task-plan-test",
+          taskType: "artifact.generate"
+        },
+        type: "task_created"
+      },
+      {
         message: "已开始树状图分析。",
         type: "assistant_reply"
+      },
+      {
+        document: expect.objectContaining({
+          intentPlanId: "plan-test",
+          root: expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                component: "ArtifactLauncher",
+                props: expect.objectContaining({
+                  artifactType: "tree"
+                })
+              })
+            ])
+          }),
+          surface: "assistant"
+        }),
+        type: "ui_dsl_ready"
       }
     ],
     settingsChanged: false
   });
+});
+
+test("returns fallback UI when a ready artifact plan has no registered handler", async () => {
+  const result = await executeSemanticPlan(
+    createPlan({
+      actions: [
+        {
+          actionId: "artifact.generate",
+          input: {
+            artifactType: "mindmap",
+            source: "selected_document_set"
+          }
+        }
+      ],
+      intentId: "artifact.generate",
+      requiredContext: ["selected_document_set"],
+      summary: "生成思维导图"
+    }),
+    {
+      contextView: {
+        cloud: { connected: true },
+        profile: { enabled: false, requiresConfirmation: true },
+        selection: {
+          importedCount: 2,
+          issues: [],
+          locked: true,
+          ready: true,
+          selectedCount: 2
+        },
+        workspace: { type: "local_library" }
+      }
+    }
+  );
+
+  expect(result.events).toEqual([
+    {
+      message: "产物执行能力尚未注册。",
+      recovery: "请检查 生成思维导图 的 artifact.generate action 是否已连接。",
+      type: "runtime_error"
+    },
+    {
+      document: expect.objectContaining({
+        dataSources: expect.arrayContaining([
+          expect.objectContaining({
+            params: expect.objectContaining({
+              reason: "runtime_error"
+            }),
+            sourceId: "runtime.context_view"
+          })
+        ]),
+        id: "fallback-plan-test-runtime_error",
+        root: expect.objectContaining({
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              component: "StatusBanner",
+              props: expect.objectContaining({
+                text: "产物执行能力尚未注册。"
+              })
+            }),
+            expect.objectContaining({
+              component: "Panel",
+              props: expect.objectContaining({
+                text: "请检查 生成思维导图 的 artifact.generate action 是否已连接。"
+              })
+            })
+          ])
+        }),
+        surface: "assistant"
+      }),
+      type: "ui_dsl_ready"
+    }
+  ]);
 });

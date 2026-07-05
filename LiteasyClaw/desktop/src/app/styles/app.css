@@ -180,6 +180,19 @@ body {
   overflow: hidden;
 }
 
+.workbench-overlay {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 30;
+  width: min(360px, calc(100vw - 48px));
+  pointer-events: none;
+}
+
+.workbench-overlay .genui-canvas {
+  pointer-events: auto;
+}
+
 .pane-header {
   padding: 18px 20px;
   border-bottom: 1px solid var(--line-1);
@@ -782,6 +795,148 @@ body {
 .assistant-audit-card.fail {
   background: #f9e8e8;
   color: #85494b;
+}
+
+.genui-canvas,
+.genui-stack,
+.genui-panel,
+.genui-evidence-card,
+.genui-evidence-matrix,
+.genui-artifact-launcher,
+.genui-mindmap,
+.genui-slide-deck,
+.genui-tree-outline,
+.genui-fallback {
+  display: flex;
+  flex-direction: column;
+}
+
+.genui-canvas {
+  gap: 8px;
+}
+
+.genui-stack {
+  gap: 8px;
+}
+
+.genui-stack.gap-sm {
+  gap: 6px;
+}
+
+.genui-stack.gap-lg {
+  gap: 12px;
+}
+
+.genui-status,
+.genui-panel,
+.genui-evidence-card,
+.genui-evidence-matrix,
+.genui-artifact-launcher,
+.genui-mindmap,
+.genui-slide-deck,
+.genui-tree-outline,
+.genui-fallback {
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.genui-status {
+  background: #edf7ee;
+  color: #426d48;
+  font-weight: 800;
+}
+
+.genui-status.info,
+.genui-panel {
+  background: #eef6ff;
+  color: #315f89;
+}
+
+.genui-status.warning,
+.genui-fallback {
+  background: #fff7df;
+  color: #80662c;
+}
+
+.genui-evidence-card,
+.genui-evidence-matrix,
+.genui-artifact-launcher,
+.genui-mindmap,
+.genui-slide-deck,
+.genui-tree-outline {
+  gap: 4px;
+  background: #f8fafc;
+  color: var(--ink-2);
+}
+
+.genui-comparison-table table,
+.genui-evidence-matrix table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.genui-comparison-table th,
+.genui-comparison-table td,
+.genui-evidence-matrix th,
+.genui-evidence-matrix td {
+  border-top: 1px solid var(--line-1);
+  padding: 6px 4px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.genui-node-cloud,
+.genui-slide-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.genui-node-chip,
+.genui-slide {
+  border: 1px solid rgba(27, 102, 179, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 6px 8px;
+}
+
+.genui-tree-outline ol,
+.genui-slide ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.genui-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.genui-action {
+  min-height: 30px;
+  border: 1px solid rgba(27, 102, 179, 0.22);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--accent-1);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 10px;
+}
+
+.genui-action.medium,
+.genui-action.high {
+  border-color: #d9b45f;
+  color: #80662c;
+}
+
+.genui-action:hover,
+.genui-action:focus-visible {
+  background: #e9f3ff;
 }
 
 .assistant-input-wrap {

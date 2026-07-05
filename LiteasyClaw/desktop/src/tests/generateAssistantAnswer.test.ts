@@ -45,6 +45,47 @@ test("generates cloud-proxy answers by default", async () => {
   });
 });
 
+test("qa answers include evidence ui dsl without state-changing actions", async () => {
+  const settings = createSettingsStore().getState();
+
+  const result = await generateAssistantAnswer({
+    importedChunksByPaperId: {
+      "demo-2": [
+        {
+          page: 4,
+          paperId: "demo-2",
+          paperTitle: "Survey of Vector Database Management Systems",
+          snippet: "vector database management systems manage unstructured data embeddings with indexes and query processing",
+          summary: "这篇综述把向量数据库管理系统概括为围绕向量表示、索引和查询处理组织的系统。",
+          tags: ["向量数据库", "索引", "查询处理"]
+        }
+      ]
+    },
+    mode: "qa",
+    question: "这篇综述如何定义向量数据库系统？",
+    selectedPapers: [
+      {
+        id: "demo-2",
+        title: "Survey of Vector Database Management Systems"
+      }
+    ],
+    settings
+  });
+
+  expect(result.uiDsl).toMatchObject({
+    actions: [],
+    dataSources: [
+      expect.objectContaining({
+        sourceId: "retrieval.citations"
+      })
+    ],
+    root: {
+      component: "Stack"
+    },
+    surface: "assistant"
+  });
+});
+
 test("keeps generation on the unified cloud model path when stale local-direct settings exist", async () => {
   const store = createSettingsStore();
   const settingsWithStaleLocalDirectKeys = {

@@ -52,6 +52,177 @@ test("shows compact mode chips above the composer before a conversation starts",
   expect(screen.getByLabelText("对话模式切换")).toBeInTheDocument();
 });
 
+test("renders command result DSL after a theme command while keeping the empty launcher as default UI", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <AssistantPane
+      onApplyThemePreset={() => "已应用卡通风格。"}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让 UI 变成卡通风格");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(screen.queryByLabelText("AI助手初始模式入口")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument();
+  expect(screen.getByText("执行审计：已回放 5 条 journal 事实。")).toBeInTheDocument();
+});
+
+test("renders model-assisted command result DSL when the model returns valid UI JSON", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const modelTransport = vi.fn(async (request) => ({
+    json: async () => ({
+      answer: String(request.body).includes("只输出 UIDslDocument JSON")
+        ? JSON.stringify({
+            actions: [],
+            audit: {
+              createdAt: "2026-07-05T00:00:00.000Z",
+              generatedBy: "model",
+              model: "gpt-5-mini",
+              traceId: "trace-model-runtime-ui"
+            },
+            dataSources: [],
+            id: "ui-model-runtime-theme",
+            intentPlanId: "plan-model-runtime-ui",
+            root: {
+              component: "StatusBanner",
+              id: "model-status",
+              props: {
+                text: "模型生成运行时 UI",
+                tone: "info"
+              }
+            },
+            surface: "assistant",
+            version: "liteasy-ui-dsl/v1"
+          })
+        : "not planner json",
+      execution: {
+        backend: "dev_cloud",
+        mode: "live",
+        provider: "openai"
+      }
+    }),
+    ok: true,
+    status: 200
+  }));
+
+  render(
+    <AssistantPane
+      modelTransport={modelTransport}
+      onApplyThemePreset={() => "已应用卡通风格。"}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让 UI 变成卡通风格");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await waitFor(() => {
+    expect(screen.getByText("模型生成运行时 UI")).toBeInTheDocument();
+  });
+  expect(modelTransport).toHaveBeenCalled();
+});
+
+test("renders model-assisted journal audit commentary after command execution", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const modelTransport = vi.fn(async (request) => {
+    const body = String(request.body);
+    return {
+      json: async () => ({
+        answer: body.includes("不改写 journal 事实")
+          ? JSON.stringify({
+              summary: "模型审计：journal 与动态 UI 事实一致。",
+              verdict: "pass"
+            })
+          : JSON.stringify({
+              actions: [],
+              audit: {
+                createdAt: "2026-07-05T00:00:00.000Z",
+                generatedBy: "model",
+                model: "gpt-5-mini",
+                traceId: "trace-model-runtime-ui"
+              },
+              dataSources: [],
+              id: "ui-model-runtime-theme",
+              intentPlanId: "plan-model-runtime-ui",
+              root: {
+                component: "StatusBanner",
+                id: "model-status",
+                props: {
+                  text: "模型生成运行时 UI",
+                  tone: "info"
+                }
+              },
+              surface: "assistant",
+              version: "liteasy-ui-dsl/v1"
+            }),
+        execution: {
+          backend: "dev_cloud",
+          mode: "live",
+          provider: "openai"
+        }
+      }),
+      ok: true,
+      status: 200
+    };
+  });
+
+  render(
+    <AssistantPane
+      modelTransport={modelTransport}
+      onApplyThemePreset={() => "已应用卡通风格。"}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让 UI 变成卡通风格");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await waitFor(() => {
+    expect(screen.getByText("模型审计：journal 与动态 UI 事实一致。")).toBeInTheDocument();
+  });
+  expect(screen.getByText("执行审计：已回放 5 条 journal 事实。")).toBeInTheDocument();
+  expect(
+    modelTransport.mock.calls.some(([request]) =>
+      String(request.body).includes("不改写 journal 事实")
+    )
+  ).toBe(true);
+});
+
 test("keeps a placeholder voice-input seam in the assistant composer", async () => {
   const user = userEvent.setup();
 
@@ -119,7 +290,7 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
 
   expect(screen.getByText("总结这篇论文的核心方法")).toBeInTheDocument();
   expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
-  expect(screen.getByText(/demo-1 p\.2/)).toBeInTheDocument();
+  expect(screen.getAllByText(/demo-1 p\.2/).length).toBeGreaterThan(0);
   expect(screen.getByText("审计模型 gpt-5-mini-auditor")).toBeInTheDocument();
   expect(screen.getByText("审计评分 0.84 · 通过")).toBeInTheDocument();
 });
@@ -149,7 +320,7 @@ test("archives the current assistant session when starting a new one", async () 
 
   expect(screen.getByText("历史会话")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
-  expect(screen.getByText("4 条消息 · 命令")).toBeInTheDocument();
+  expect(screen.getByText("5 条消息 · 命令")).toBeInTheDocument();
 });
 
 test("restores an archived assistant session from history", async () => {
@@ -207,7 +378,7 @@ test("starts a separate session when switching modes during a conversation", asy
   await user.click(screen.getByRole("button", { name: "历史" }));
 
   expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
-  expect(screen.getByText("4 条消息 · 命令")).toBeInTheDocument();
+  expect(screen.getByText("5 条消息 · 命令")).toBeInTheDocument();
 });
 
 test("separates session actions from in-conversation mode switching controls", async () => {
@@ -304,8 +475,8 @@ test("uses the user question to retrieve a different cited chunk", async () => {
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
-  expect(screen.getByText(/demo-2 · 第 4 页/)).toBeInTheDocument();
-  expect(screen.getByText(/vector database management systems/)).toBeInTheDocument();
+  expect(screen.getAllByText(/demo-2 · 第 4 页/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/vector database management systems/).length).toBeGreaterThan(0);
 });
 
 test("routes qa generation through the cloud-governed model gateway by default", async () => {
@@ -390,6 +561,21 @@ test("regenerates the latest model answer from the previous user prompt", async 
   const user = userEvent.setup();
   const settingsStore = createSettingsStore();
   const answers = ["第一次模型回答", "第二次模型回答"];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      json: async () => ({
+        audit: {
+          model: "gpt-5-mini-auditor",
+          rationale: "测试审计通过。",
+          score: 0.9,
+          verdict: "pass"
+        }
+      }),
+      ok: true,
+      status: 200
+    }))
+  );
   settingsStore.apply({
     intent: "update_setting",
     target: "models.cloud_proxy_endpoint",
@@ -443,6 +629,21 @@ test("regenerates the latest model answer from the previous user prompt", async 
 test("does not submit duplicate prompts while a model answer is pending", async () => {
   const user = userEvent.setup();
   const settingsStore = createSettingsStore();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      json: async () => ({
+        audit: {
+          model: "gpt-5-mini-auditor",
+          rationale: "测试审计通过。",
+          score: 0.9,
+          verdict: "pass"
+        }
+      }),
+      ok: true,
+      status: 200
+    }))
+  );
   let resolveAnswer: ((value: {
     answer: string;
     execution: {
@@ -572,6 +773,42 @@ test("shows current command examples including organization and recommendation a
   );
 });
 
+test("resolves short command follow-up phrases from the previous ambiguous command", async () => {
+  const user = userEvent.setup();
+  const onApplyPanelAction = vi.fn(() => "已打开组织面板。");
+
+  render(
+    <AssistantPane
+      onApplyPanelAction={onApplyPanelAction}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  await selectInitialAssistantMode(user, "命令");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "打开组织");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await waitFor(() => {
+    expect(screen.getByText(/请选择要执行的动作/)).toBeInTheDocument();
+  });
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "组织面板");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await waitFor(() => {
+    expect(onApplyPanelAction).toHaveBeenCalledWith({
+      operation: "open",
+      panel: "organization"
+    });
+  });
+  expect(screen.getByText("已打开组织面板。")).toBeInTheDocument();
+});
+
 test("routes command mode through runtime confirmation before profile sampling changes", async () => {
   const user = userEvent.setup();
   const settingsStore = createSettingsStore();
@@ -595,6 +832,36 @@ test("routes command mode through runtime confirmation before profile sampling c
   expect(screen.getByText("开启用户画像")).toBeInTheDocument();
   expect(screen.getByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")).toBeInTheDocument();
   expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+});
+
+test("continues a confirmed command from the human confirmation UI", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+
+  render(
+    <AssistantPane
+      onGenerateArtifact={() => "unused"}
+      profileUnlocked={true}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+
+  await user.click(screen.getByRole("button", { name: "确认执行" }));
+
+  await waitFor(() => {
+    expect(settingsStore.getState()["profile.enabled"]).toBe(true);
+  });
+  expect(screen.getByText("已更新 用户画像：true")).toBeInTheDocument();
 });
 
 test("renders the expandable runtime context panel inside the assistant", async () => {

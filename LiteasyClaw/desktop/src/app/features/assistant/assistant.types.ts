@@ -1,8 +1,11 @@
 import type { Citation } from "../retrieval/retrieval.types";
 import type { ModelExecutionTrace } from "../models/modelExecution";
 import type { AnswerAuditResult } from "./answerAuditor";
+import type { UIDslDocument } from "../generative-ui/generativeUi.types";
+import type { HumanConfirmationRequest } from "../agent-runtime/agentRuntime.types";
+import type { AssistantMode } from "../agent-runtime/agentRuntime.types";
 
-export type AssistantMode = "explain" | "command" | "qa";
+export type { AssistantMode };
 
 export type AssistantMessage = {
   id: string;
@@ -11,7 +14,9 @@ export type AssistantMessage = {
   citations?: Citation[];
   confidence?: number;
   audit?: AnswerAuditResult;
+  confirmation?: HumanConfirmationRequest;
   executionTrace?: ModelExecutionTrace;
+  uiDsl?: UIDslDocument;
 };
 
 export type AssistantState = {

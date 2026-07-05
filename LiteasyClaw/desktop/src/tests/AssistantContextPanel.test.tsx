@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AssistantContextPanel } from "../app/features/assistant/AssistantContextPanel";
+import { buildIntentRuntimeContexts } from "../app/features/agent-runtime/contextBuilder";
 import type { AgentRuntimeContextView } from "../app/features/agent-runtime/agentRuntime.types";
 
 function createContext(overrides: Partial<AgentRuntimeContextView> = {}): AgentRuntimeContextView {
@@ -55,4 +56,42 @@ test("expands grouped context details", async () => {
   expect(within(panel).getByText("已连接 · Liteasy AI Reading Lab")).toBeInTheDocument();
   expect(within(panel).getByText("Profile")).toBeInTheDocument();
   expect(within(panel).getByText("画像关闭 · 命令需确认")).toBeInTheDocument();
+});
+
+test("renders the same context view produced for planner and policy contexts", async () => {
+  const user = userEvent.setup();
+  const bundle = buildIntentRuntimeContexts({
+    contextView: createContext({
+      cloud: {
+        connected: false
+      },
+      profile: {
+        enabled: true,
+        requiresConfirmation: false
+      },
+      selection: {
+        importedCount: 0,
+        issues: ["selection_empty", "selection_unlocked", "workspace_unknown"],
+        locked: false,
+        ready: false,
+        selectedCount: 0
+      },
+      workspace: {
+        type: "unknown"
+      }
+    })
+  });
+
+  render(<AssistantContextPanel context={bundle.contextView!} />);
+
+  await user.click(screen.getByRole("button", { name: /运行时上下文/ }));
+
+  const panel = screen.getByLabelText("运行时上下文详情");
+  expect(within(panel).getByText("0 篇 · 未锁定 · 已导入 0/0")).toBeInTheDocument();
+  expect(within(panel).getByText("未选择")).toBeInTheDocument();
+  expect(within(panel).getByText("需锁定")).toBeInTheDocument();
+  expect(within(panel).getByText("工作区未知")).toBeInTheDocument();
+  expect(within(panel).getByText("未知工作区")).toBeInTheDocument();
+  expect(within(panel).getByText("未连接")).toBeInTheDocument();
+  expect(within(panel).getByText("画像开启 · 命令可直接执行")).toBeInTheDocument();
 });
