@@ -58,4 +58,17 @@ describe("layout style contract", () => {
     );
     expect(css).toContain("scaleX(var(--scale-x, 1))");
   });
+
+  test("renders generated themes through scoped CSS variables", () => {
+    expect(css).toContain('--paper-0: var(--generated-paper-0);');
+    expect(css).toContain('.app-frame.theme-generated[data-theme-scope~="reader"] .pane.center');
+    expect(css).toContain('.app-frame.theme-generated[data-theme-scope~="tabs"] .dock-region-tab-row');
+
+    const generatedButtonBlock = extractBlock(
+      '.app-frame.theme-generated[data-theme-scope~="buttons"] button'
+    );
+    expect(generatedButtonBlock).toContain('background: var(--button-background);');
+    expect(generatedButtonBlock).toContain('color: var(--button-color);');
+    expect(generatedButtonBlock).toContain('font-weight: var(--button-font-weight);');
+  });
 });

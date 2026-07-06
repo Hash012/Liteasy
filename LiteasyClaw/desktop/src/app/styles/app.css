@@ -14,6 +14,28 @@
   --accent-3: #b06b19;
   --surface-1: rgba(255, 255, 255, 0.88);
   --surface-2: rgba(251, 252, 248, 0.86);
+  --generated-paper-0: var(--paper-0);
+  --generated-paper-1: var(--paper-1);
+  --generated-paper-2: var(--paper-2);
+  --generated-ink-1: var(--ink-1);
+  --generated-ink-2: var(--ink-2);
+  --generated-line-1: var(--line-1);
+  --generated-line-2: var(--line-2);
+  --generated-accent-1: var(--accent-1);
+  --generated-accent-2: var(--accent-2);
+  --generated-accent-3: var(--accent-3);
+  --generated-surface-1: var(--surface-1);
+  --generated-surface-2: var(--surface-2);
+  --button-radius: 8px;
+  --button-border-width: 1px;
+  --button-background: rgba(255, 255, 255, 0.86);
+  --button-border-color: var(--line-1);
+  --button-color: var(--ink-1);
+  --button-font-weight: 750;
+  --button-hover-background: #e9f3ff;
+  --button-shadow: none;
+  --button-hover-transform: translateY(-1px);
+  --generated-theme-blur: 0px;
 }
 
 * {
@@ -73,6 +95,85 @@ body {
 
 .app-frame.theme-playful .pane-header {
   background: linear-gradient(90deg, rgba(255, 240, 244, 0.92), rgba(241, 251, 255, 0.92));
+}
+
+.app-frame.theme-generated[data-theme-scope~="global"],
+.app-frame.theme-generated[data-theme-scope~="panels"] .pane,
+.app-frame.theme-generated[data-theme-scope~="reader"] .pane.center,
+.app-frame.theme-generated[data-theme-scope~="tabs"] .dock-region-tab-row {
+  --paper-0: var(--generated-paper-0);
+  --paper-1: var(--generated-paper-1);
+  --paper-2: var(--generated-paper-2);
+  --ink-1: var(--generated-ink-1);
+  --ink-2: var(--generated-ink-2);
+  --line-1: var(--generated-line-1);
+  --line-2: var(--generated-line-2);
+  --accent-1: var(--generated-accent-1);
+  --accent-2: var(--generated-accent-2);
+  --accent-3: var(--generated-accent-3);
+  --surface-1: var(--generated-surface-1);
+  --surface-2: var(--generated-surface-2);
+}
+
+.app-frame.theme-generated[data-theme-scope~="global"] .pane,
+.app-frame.theme-generated[data-theme-scope~="panels"] .pane,
+.app-frame.theme-generated[data-theme-scope~="reader"] .pane.center {
+  border-color: var(--line-1);
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--accent-1) 14%, transparent);
+  backdrop-filter: blur(var(--generated-theme-blur));
+}
+
+.app-frame.theme-generated[data-theme-scope~="global"] .pane-header,
+.app-frame.theme-generated[data-theme-scope~="panels"] .pane-header,
+.app-frame.theme-generated[data-theme-scope~="reader"] .pane.center .pane-header {
+  border-color: var(--line-1);
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-1));
+}
+
+.app-frame.theme-generated[data-theme-scope~="tabs"] .dock-region-tab-row {
+  border-color: var(--line-1);
+  background: var(--surface-2);
+}
+
+.app-frame.theme-generated[data-theme-scope~="tabs"] .dock-tab.active {
+  background: var(--surface-1);
+  color: var(--ink-1);
+}
+
+.app-frame.theme-generated[data-theme-scope~="tabs"] .dock-tab.active::after {
+  background: var(--accent-1);
+}
+
+.app-frame.theme-generated[data-theme-scope~="buttons"] button,
+.app-frame.theme-generated[data-theme-scope~="global"] button {
+  border-color: var(--button-border-color);
+  border-style: solid;
+  border-width: var(--button-border-width);
+  border-radius: var(--button-radius);
+  background: var(--button-background);
+  color: var(--button-color);
+  font-weight: var(--button-font-weight);
+  box-shadow: var(--button-shadow);
+}
+
+.app-frame.theme-generated[data-theme-scope~="buttons"] button:hover:not(:disabled),
+.app-frame.theme-generated[data-theme-scope~="global"] button:hover:not(:disabled) {
+  background: var(--button-hover-background);
+  transform: var(--button-hover-transform);
+}
+
+.app-frame.theme-generated[data-theme-scope~="floating_controls"] .floating-modality-main,
+.app-frame.theme-generated[data-theme-scope~="floating_controls"] .floating-modality-option,
+.app-frame.theme-generated[data-theme-scope~="global"] .floating-modality-main,
+.app-frame.theme-generated[data-theme-scope~="global"] .floating-modality-option {
+  border-color: var(--button-border-color);
+  border-style: solid;
+  border-width: var(--button-border-width);
+  background: var(--button-background);
+  color: var(--button-color);
+  font-weight: var(--button-font-weight);
+  box-shadow: var(--button-shadow);
 }
 
 .app-shell {

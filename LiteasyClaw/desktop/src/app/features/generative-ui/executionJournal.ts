@@ -9,6 +9,7 @@ export type ExecutionJournalEntry =
     }
   | {
       planId: string;
+      plannerSource?: "fallback" | "model" | "rule";
       traceId: string;
       type: "plan";
     }

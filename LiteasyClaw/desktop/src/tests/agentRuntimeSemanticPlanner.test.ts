@@ -97,6 +97,21 @@ test("plans layout and theme actions from semantic UI instructions", () => {
   });
 });
 
+test("does not hard-code generated theme actions in the deterministic planner", () => {
+  expect(planSemanticCommand({ message: "打开暗夜模式", mode: "command" })).toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "unsupported_action"
+    },
+    intentId: "unknown"
+  });
+
+  expect(planSemanticCommand({ message: "颜色变为粉色", mode: "command" })).toMatchObject({
+    actions: [],
+    intentId: "unknown"
+  });
+});
+
 test("plans panel and navigation actions from semantic UI instructions", () => {
   expect(planSemanticCommand({ message: "打开设置面板", mode: "command" })).toMatchObject({
     actions: [

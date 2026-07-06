@@ -95,7 +95,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isBoundedNumber(value: unknown, min: number, max: number) {
+function isBoundedNumber(value: unknown, min: number, max: number): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
 }
 
@@ -114,6 +114,7 @@ function parsePalette(value: unknown, errors: string[]) {
     return null;
   }
 
+  const initialErrorCount = errors.length;
   const palette = {} as GeneratedThemePalette;
   for (const key of paletteKeys) {
     const color = value[key];
@@ -122,6 +123,10 @@ function parsePalette(value: unknown, errors: string[]) {
       continue;
     }
     palette[key] = color.toUpperCase();
+  }
+
+  if (errors.length > initialErrorCount) {
+    return null;
   }
 
   return palette;
@@ -176,25 +181,28 @@ function parseSurfaces(value: unknown, errors: string[]) {
   }
 
   const surfaces: GeneratedThemeSurfaces = {};
-  if (value.surface1Alpha !== undefined) {
-    if (!isBoundedNumber(value.surface1Alpha, 0.55, 1)) {
+  const surface1Alpha = value.surface1Alpha;
+  const surface2Alpha = value.surface2Alpha;
+  const blur = value.blur;
+  if (surface1Alpha !== undefined) {
+    if (!isBoundedNumber(surface1Alpha, 0.55, 1)) {
       errors.push("surfaces.surface1Alpha must be between 0.55 and 1");
     } else {
-      surfaces.surface1Alpha = value.surface1Alpha;
+      surfaces.surface1Alpha = surface1Alpha;
     }
   }
-  if (value.surface2Alpha !== undefined) {
-    if (!isBoundedNumber(value.surface2Alpha, 0.55, 1)) {
+  if (surface2Alpha !== undefined) {
+    if (!isBoundedNumber(surface2Alpha, 0.55, 1)) {
       errors.push("surfaces.surface2Alpha must be between 0.55 and 1");
     } else {
-      surfaces.surface2Alpha = value.surface2Alpha;
+      surfaces.surface2Alpha = surface2Alpha;
     }
   }
-  if (value.blur !== undefined) {
-    if (!isBoundedNumber(value.blur, 0, 20)) {
+  if (blur !== undefined) {
+    if (!isBoundedNumber(blur, 0, 20)) {
       errors.push("surfaces.blur must be between 0 and 20");
     } else {
-      surfaces.blur = value.blur;
+      surfaces.blur = blur;
     }
   }
 
@@ -276,6 +284,55 @@ function buttonShadowValue(shadow: GeneratedThemeButtonShadow) {
   return "0 6px 14px rgba(24, 34, 47, 0.10)";
 }
 
+function buttonWeightValue(weight: GeneratedThemeButtonWeight) {
+  if (weight === "quiet") {
+    return "650";
+  }
+  if (weight === "strong") {
+    return "850";
+  }
+
+  return "750";
+}
+
+function buttonFillValue(theme: GeneratedTheme) {
+  const { accent1, accent2, ink1, line1, paper0, paper1 } = theme.palette;
+
+  if (theme.buttons.fill === "flat") {
+    return {
+      background: "transparent",
+      borderColor: line1,
+      color: accent1,
+      hoverBackground: rgbaFromHex(accent1, 0.1)
+    };
+  }
+
+  if (theme.buttons.fill === "soft") {
+    return {
+      background: rgbaFromHex(accent1, 0.12),
+      borderColor: rgbaFromHex(accent1, 0.28),
+      color: ink1,
+      hoverBackground: rgbaFromHex(accent1, 0.18)
+    };
+  }
+
+  if (theme.buttons.fill === "glass") {
+    return {
+      background: rgbaFromHex(paper0, 0.68),
+      borderColor: rgbaFromHex(accent1, 0.34),
+      color: ink1,
+      hoverBackground: rgbaFromHex(paper1, 0.86)
+    };
+  }
+
+  return {
+    background: accent1,
+    borderColor: accent1,
+    color: paper0,
+    hoverBackground: accent2
+  };
+}
+
 export function parseGeneratedThemeInput(value: unknown): GeneratedThemeParseResult {
   const errors: string[] = [];
   if (!isRecord(value)) {
@@ -329,26 +386,32 @@ export function parseGeneratedThemeInput(value: unknown): GeneratedThemeParseRes
 export function createGeneratedThemeStyle(theme: GeneratedTheme): GeneratedThemeStyle {
   const surface1Alpha = theme.surfaces?.surface1Alpha ?? 0.9;
   const surface2Alpha = theme.surfaces?.surface2Alpha ?? 0.86;
+  const buttonFill = buttonFillValue(theme);
 
   return {
-    "--accent-1": theme.palette.accent1,
-    "--accent-2": theme.palette.accent2,
-    "--accent-3": theme.palette.accent3,
+    "--button-background": buttonFill.background,
+    "--button-border-color": buttonFill.borderColor,
     "--button-border-width": `${theme.buttons.borderWidth}px`,
+    "--button-color": buttonFill.color,
+    "--button-font-weight": buttonWeightValue(theme.buttons.weight),
+    "--button-hover-background": buttonFill.hoverBackground,
     "--button-hover-transform": `translateY(-${theme.buttons.hoverLift}px)`,
     "--button-radius": `${theme.buttons.radius}px`,
     "--button-shadow": buttonShadowValue(theme.buttons.shadow),
-    "--button-theme-fill": theme.buttons.fill,
-    "--button-theme-weight": theme.buttons.weight,
+    "--generated-accent-1": theme.palette.accent1,
+    "--generated-accent-2": theme.palette.accent2,
+    "--generated-accent-3": theme.palette.accent3,
+    "--generated-ink-1": theme.palette.ink1,
+    "--generated-ink-2": theme.palette.ink2,
+    "--generated-line-1": theme.palette.line1,
+    "--generated-line-2": theme.palette.line2,
+    "--generated-paper-0": theme.palette.paper0,
+    "--generated-paper-1": theme.palette.paper1,
+    "--generated-paper-2": theme.palette.paper2,
+    "--generated-surface-1": rgbaFromHex(theme.palette.paper0, surface1Alpha),
+    "--generated-surface-2": rgbaFromHex(theme.palette.paper1, surface2Alpha),
     "--generated-theme-blur": `${theme.surfaces?.blur ?? 0}px`,
-    "--ink-1": theme.palette.ink1,
-    "--ink-2": theme.palette.ink2,
-    "--line-1": theme.palette.line1,
-    "--line-2": theme.palette.line2,
-    "--paper-0": theme.palette.paper0,
-    "--paper-1": theme.palette.paper1,
-    "--paper-2": theme.palette.paper2,
-    "--surface-1": rgbaFromHex(theme.palette.paper0, surface1Alpha),
-    "--surface-2": rgbaFromHex(theme.palette.paper1, surface2Alpha)
+    "--generated-theme-fill": theme.buttons.fill,
+    "--generated-theme-weight": theme.buttons.weight
   };
 }

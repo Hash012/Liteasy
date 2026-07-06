@@ -72,6 +72,26 @@ describe("desktop dev script", () => {
     }
   });
 
+  test("does not override the dev cloud env file path by default", () => {
+    const env = buildChildEnv({
+      baseEnv: {},
+      host: "127.0.0.1",
+      port: 8787
+    });
+    const envWithExplicitSecretFile = buildChildEnv({
+      baseEnv: {
+        LITEASY_DEV_CLOUD_ENV_FILE: "/tmp/liteasy-dev-cloud.env"
+      },
+      host: "127.0.0.1",
+      port: 8787
+    });
+
+    expect(env.LITEASY_DEV_CLOUD_ENV_FILE).toBeUndefined();
+    expect(envWithExplicitSecretFile.LITEASY_DEV_CLOUD_ENV_FILE).toBe(
+      "/tmp/liteasy-dev-cloud.env"
+    );
+  });
+
   test("can expose the frontend and dev cloud for Windows browser access", () => {
     const desktopHost = resolveRequestedDesktopHost({
       LITEASY_DESKTOP_HOST: "0.0.0.0"

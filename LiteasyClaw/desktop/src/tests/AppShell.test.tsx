@@ -176,112 +176,155 @@ test("applies a semantic command theme action to the workbench", async () => {
 
 test("applies a model-generated freeform theme to the workbench", async () => {
   const user = userEvent.setup();
-  const modelFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (String(input).includes("/v1/model/generate")) {
-      const requestBody = JSON.parse(String(init?.body ?? "{}")) as { prompt?: string };
-      const isPlannerRequest = requestBody.prompt?.includes("语义动作规划器");
-      return {
-        json: async () => ({
-          answer: isPlannerRequest
-            ? JSON.stringify({
-                actions: [
-                  {
-                    actionId: "theme.apply_generated",
-                    input: {
-                      buttons: {
-                        borderWidth: 1,
-                        fill: "solid",
-                        hoverLift: 2,
-                        radius: 4,
-                        shadow: "crisp",
-                        weight: "strong"
-                      },
-                      intent: "冷静的赛博实验室，按钮锐利一点",
-                      name: "冷静赛博实验室",
-                      palette: {
-                        accent1: "#1B66B3",
-                        accent2: "#2F8F61",
-                        accent3: "#B06B19",
-                        ink1: "#101820",
-                        ink2: "#526071",
-                        line1: "#C7D3DF",
-                        line2: "#AEBCCD",
-                        paper0: "#F8FBFC",
-                        paper1: "#EEF5F8",
-                        paper2: "#E2EDF3"
-                      },
-                      rationale: "冷色背景和硬朗按钮表达精密实验感。",
-                      scope: ["global", "buttons"]
-                    }
-                  }
-                ],
-                confidence: "high",
-                intentId: "theme.apply",
-                planId: "model-plan-generated-theme",
-                requiredContext: [],
-                requiresConfirmation: false,
-                riskLevel: "low",
-                summary: "生成冷静赛博实验室主题"
-              })
-            : JSON.stringify({
-                summary: "生成主题 UI 已准备。",
-                verdict: "pass"
-              }),
-          execution: {
-            backend: "dev_cloud",
-            mode: "live",
-            provider: "openai"
-          }
-        }),
-        ok: true,
-        status: 200
-      } as Response;
-    }
-
+  const modelTransport = vi.fn(async (request) => {
+    const requestBody = JSON.parse(request.body) as { prompt?: string };
+    const isPlannerRequest = requestBody.prompt?.includes("语义动作规划器");
     return {
       json: async () => ({
-        cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
-        defaultProvider: "openai",
-        localDirectEnabled: false,
-        localDirectEndpoint: "mock://local-direct",
-        modelAccessMode: "cloud_proxy",
-        policyVersion: "policy-dev-cloud-live",
-        syncedAt: "2026-05-14T09:30:00Z"
+        answer: isPlannerRequest
+          ? JSON.stringify({
+              actions: [
+                {
+                  actionId: "theme.apply_generated",
+                  input: {
+                    buttons: {
+                      borderWidth: 1,
+                      fill: "solid",
+                      hoverLift: 2,
+                      radius: 4,
+                      shadow: "crisp",
+                      weight: "strong"
+                    },
+                    intent: "冷静的赛博实验室，按钮锐利一点",
+                    name: "冷静赛博实验室",
+                    palette: {
+                      accent1: "#1B66B3",
+                      accent2: "#2F8F61",
+                      accent3: "#B06B19",
+                      ink1: "#101820",
+                      ink2: "#526071",
+                      line1: "#C7D3DF",
+                      line2: "#AEBCCD",
+                      paper0: "#F8FBFC",
+                      paper1: "#EEF5F8",
+                      paper2: "#E2EDF3"
+                    },
+                    rationale: "冷色背景和硬朗按钮表达精密实验感。",
+                    scope: ["global", "buttons"]
+                  }
+                }
+              ],
+              confidence: "high",
+              intentId: "theme.apply",
+              planId: "model-plan-generated-theme",
+              requiredContext: [],
+              requiresConfirmation: false,
+              riskLevel: "low",
+              summary: "生成冷静赛博实验室主题"
+            })
+          : JSON.stringify({
+              summary: "生成主题 UI 已准备。",
+              verdict: "pass"
+            }),
+        execution: {
+          backend: "dev_cloud",
+          mode: "live",
+          provider: "openai"
+        }
       }),
       ok: true,
       status: 200
-    } as Response;
+    };
   });
-  vi.stubGlobal("fetch", modelFetch);
 
   const { container } = render(
     <AppShell
+      controlPlaneTransport={async () => ({
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-dev-cloud-live",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      })}
       initialSettings={{
-        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy",
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
       }}
+      modelTransport={modelTransport}
     />
   );
 
   await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
-  await user.type(
-    screen.getByPlaceholderText("输入你的问题或命令"),
-    "把界面调成冷静的赛博实验室，按钮锐利一点"
-  );
-  await user.click(screen.getByRole("button", { name: "发送" }));
+  await waitFor(() => {
+    expect(screen.queryByRole("dialog", { name: "轻量登录面板" })).not.toBeInTheDocument();
+  });
+  await selectInitialAssistantMode(user, "命令");
+  fireEvent.change(screen.getByPlaceholderText("输入你的问题或命令"), {
+    target: {
+      value: "把界面调成冷静的赛博实验室，按钮锐利一点"
+    }
+  });
+  fireEvent.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
-    expect(modelFetch).toHaveBeenCalledWith(
-      "https://liteasy.example.com/model-proxy/v1/model/generate",
-      expect.any(Object)
+    expect(modelTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://liteasy.example.com/model-proxy/v1/model/generate"
+      })
     );
   });
   await waitFor(() => {
     expect(container.querySelector(".app-frame")).toHaveStyle({
-      "--accent-1": "#1B66B3",
+      "--button-background": "#1B66B3",
+      "--button-font-weight": "850",
+      "--generated-accent-1": "#1B66B3",
       "--button-radius": "4px"
     });
   });
+  expect(container.querySelector(".app-frame")).toHaveAttribute("data-theme-scope", "global buttons");
   expect(screen.getAllByText("已根据命令生成冷静赛博实验室主题。").length).toBeGreaterThanOrEqual(1);
+});
+
+test("does not synthesize common generated themes when the model planner is unavailable", async () => {
+  const user = userEvent.setup();
+  const modelTransport = vi.fn(async () => {
+    throw new Error("model offline");
+  });
+
+  const { container } = render(
+    <AppShell
+      initialSettings={{
+        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy",
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+      modelTransport={modelTransport}
+    />
+  );
+
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  await waitFor(() => {
+    expect(screen.queryByRole("dialog", { name: "轻量登录面板" })).not.toBeInTheDocument();
+  });
+  await selectInitialAssistantMode(user, "命令");
+  fireEvent.change(screen.getByPlaceholderText("输入你的问题或命令"), {
+    target: {
+      value: "打开暗夜模式"
+    }
+  });
+  fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+  await waitFor(() => {
+    expect(modelTransport.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+  expect(container.querySelector(".app-frame")).not.toHaveAttribute("data-theme-scope");
+  expect(screen.getAllByText(/还没有对应到可执行对象或动作/).length).toBeGreaterThanOrEqual(1);
+  expect(screen.queryByText("已根据命令生成暗夜研究模式主题。")).not.toBeInTheDocument();
 });
 
 test("executes a semantic command layout action against pane state", async () => {

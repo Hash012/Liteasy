@@ -34,7 +34,14 @@ async function invokeHandler({ body, handler, handlerOptions, headers = {}, meth
     }
   };
 
-  await (handler ?? createDevCloudRequestHandler(handlerOptions))(request, response);
+  const isolatedHandlerOptions = {
+    deepseekApiKey: undefined,
+    defaultProvider: "openai",
+    openaiApiKey: undefined,
+    ...handlerOptions
+  };
+
+  await (handler ?? createDevCloudRequestHandler(isolatedHandlerOptions))(request, response);
 
   const contentType = responseHeaders["Content-Type"] ?? "";
 
@@ -944,6 +951,33 @@ test("returns a deterministic generated answer from the model endpoint", async (
       provider: "mock"
     }
   });
+});
+
+test("does not synthesize generated theme planner actions without an api key", async () => {
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      model: "gpt-5-mini",
+      prompt: [
+        "你是 LiteasyClaw Command Mode V2 的语义动作规划器。",
+        "只输出 JSON，不要输出 Markdown。",
+        "用户输入：颜色变为粉色",
+        "已注册动作：[]"
+      ].join("\n"),
+      provider: "openai",
+      source: "cloud_proxy"
+    }),
+    url: "/v1/model/generate"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.throws(() => JSON.parse(response.json.answer));
+  assert.match(response.json.answer, /^开发云回答：/);
+  assert.equal(response.json.execution.mode, "mock_fallback");
 });
 
 test("uses the configured openai provider when an api key is available", async () => {

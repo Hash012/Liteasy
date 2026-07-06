@@ -1,8 +1,8 @@
 import type { createSettingsStore } from "../settings/settings.store";
 import type { SettingsState } from "../settings/settings.types";
 import {
-  hasInjectedLocalDevCloudEndpoint,
   resolveLocalDevCloudEndpoint,
+  shouldApplyLocalDevCloudDefaults,
   type DevCloudEnvLike
 } from "./localDevCloudEndpoint";
 
@@ -43,7 +43,7 @@ export function useModelSettingsActions({
   }
 
   function applyInjectedLocalDevCloudDefaults() {
-    if (!hasInjectedLocalDevCloudEndpoint(localDevCloudEnv)) {
+    if (!shouldApplyLocalDevCloudDefaults(undefined, localDevCloudEnv)) {
       return;
     }
 

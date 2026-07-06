@@ -128,6 +128,49 @@ describe("createExecutionJournal", () => {
     });
   });
 
+  test("runtime records semantic planner source on the plan trace", async () => {
+    const journal = createExecutionJournal();
+
+    await runAgentRuntime(
+      {
+        message: "让 UI 变成卡通风格",
+        mode: "command"
+      },
+      {
+        applyThemePreset: () => "已应用卡通风格。",
+        journal,
+        semanticPlanner: () =>
+          ({
+            actions: [
+              {
+                actionId: "theme.apply_preset",
+                input: {
+                  preset: "playful",
+                  tone: "cartoon"
+                }
+              }
+            ],
+            confidence: "high",
+            intentId: "theme.apply",
+            planId: "plan-journal-source",
+            plannerSource: "model",
+            requiredContext: [],
+            requiresConfirmation: false,
+            riskLevel: "low",
+            summary: "应用卡通风格"
+          }) as never
+      }
+    );
+
+    expect(journal.getTrace("trace-plan-journal-source")).toContainEqual(
+      expect.objectContaining({
+        plannerSource: "model",
+        planId: "plan-journal-source",
+        type: "plan"
+      })
+    );
+  });
+
   test("action ref routing records dynamic action results", async () => {
     const journal = createExecutionJournal();
 

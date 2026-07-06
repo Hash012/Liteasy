@@ -136,6 +136,14 @@ node LiteasyClaw/scripts/smoke-roadshow.mjs http://127.0.0.1:8787
 export OPENAI_API_KEY=你的密钥
 ```
 
+也可以写入不会提交的本地文件，dev-cloud 启动时会自动读取：
+
+```bash
+cd LiteasyClaw/services/dev-cloud
+printf 'OPENAI_API_KEY=你的密钥\n' > .env.local
+node server.mjs
+```
+
 可选地，你也可以覆盖 OpenAI 基础地址：
 
 ```bash
@@ -145,7 +153,7 @@ export OPENAI_BASE_URL=https://api.openai.com/v1
 说明：
 
 - 配置了 `OPENAI_API_KEY`：`POST /v1/model/generate` 会走真实 OpenAI Responses API
-- 没配置 `OPENAI_API_KEY`：会自动回退到内置开发回答，便于本地演示
+- 没配置 `OPENAI_API_KEY`：会自动回退到内置开发回答，便于本地演示；命令模式 planner 不会再为主题命令合成结构化动作
 
 如果你希望改用 DeepSeek，请配置 DeepSeek key 和默认 provider：
 
@@ -153,6 +161,14 @@ export OPENAI_BASE_URL=https://api.openai.com/v1
 export DEEPSEEK_API_KEY=你的密钥
 export DEEPSEEK_BASE_URL=https://api.deepseek.com
 export LITEASY_MODEL_PROVIDER=deepseek
+```
+
+对应的 `.env.local` 写法：
+
+```bash
+cd LiteasyClaw/services/dev-cloud
+printf 'DEEPSEEK_API_KEY=你的密钥\nDEEPSEEK_BASE_URL=https://api.deepseek.com\nLITEASY_MODEL_PROVIDER=deepseek\n' > .env.local
+node server.mjs
 ```
 
 说明：

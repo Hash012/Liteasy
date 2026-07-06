@@ -1,3 +1,74 @@
+import fs from "node:fs";
+import path from "node:path";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const configDir = dirname(fileURLToPath(import.meta.url));
+
+function stripMatchingQuotes(value) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
+}
+
+function parseEnvLine(line) {
+  const normalized = line.trim();
+  if (normalized.length === 0 || normalized.startsWith("#")) {
+    return null;
+  }
+
+  const assignment = normalized.startsWith("export ")
+    ? normalized.slice("export ".length).trim()
+    : normalized;
+  const separatorIndex = assignment.indexOf("=");
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  const key = assignment.slice(0, separatorIndex).trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+    return null;
+  }
+
+  const value = stripMatchingQuotes(assignment.slice(separatorIndex + 1).trim());
+  return {
+    key,
+    value
+  };
+}
+
+export function loadSecretEnvFile(
+  envFilePath = process.env.LITEASY_DEV_CLOUD_ENV_FILE ?? path.join(configDir, ".env.local"),
+  env = process.env
+) {
+  if (!fs.existsSync(envFilePath)) {
+    return false;
+  }
+
+  const content = fs.readFileSync(envFilePath, "utf8");
+  content.split(/\r?\n/).forEach((line) => {
+    const parsed = parseEnvLine(line);
+    if (!parsed) {
+      return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(env, parsed.key) && env[parsed.key] !== "") {
+      return;
+    }
+
+    env[parsed.key] = parsed.value;
+  });
+
+  return true;
+}
+
+loadSecretEnvFile();
+
 export const defaultConfig = {
   accountSessionDurationMs: 7 * 24 * 60 * 60 * 1000,
   authRateLimit: {

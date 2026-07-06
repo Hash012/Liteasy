@@ -85,6 +85,81 @@ test("executes registered low-risk layout actions", async () => {
   });
 });
 
+test("stops compound execution and rolls back reversible actions after a later action fails", async () => {
+  const applyLayoutPreset = vi.fn((input) =>
+    input.preset === "two_column" ? "已切换为双栏布局。" : "已恢复默认布局。"
+  );
+  const applyThemePreset = vi.fn(() => "已应用卡通风格。");
+
+  const result = await executeSemanticPlan(
+    createPlan({
+      actions: [
+        {
+          actionId: "layout.split_two",
+          input: {
+            preset: "two_column"
+          }
+        },
+        {
+          actionId: "pane.focus",
+          input: {
+            pane: "bottom"
+          }
+        },
+        {
+          actionId: "theme.apply_preset",
+          input: {
+            preset: "playful",
+            tone: "cartoon"
+          }
+        }
+      ],
+      intentId: "layout.change",
+      summary: "切换布局后聚焦下栏并应用主题"
+    }),
+    {
+      applyLayoutPreset,
+      applyThemePreset
+    }
+  );
+
+  expect(applyLayoutPreset).toHaveBeenCalledTimes(2);
+  expect(applyLayoutPreset).toHaveBeenNthCalledWith(1, {
+    preset: "two_column"
+  });
+  expect(applyLayoutPreset).toHaveBeenNthCalledWith(2, {});
+  expect(applyThemePreset).not.toHaveBeenCalled();
+  expect(result.events).toEqual(
+    expect.arrayContaining([
+      {
+        action: {
+          actionId: "pane.focus",
+          payload: {
+            pane: "bottom"
+          }
+        },
+        message: "pane.focus requires a pane focus handler",
+        recovery: "已回滚此前成功执行的可逆动作。",
+        type: "action_failed"
+      },
+      {
+        message: "已回滚 layout.split_two：已恢复默认布局。",
+        type: "assistant_reply"
+      }
+    ])
+  );
+  expect(result.events).not.toContainEqual({
+    action: {
+      actionId: "theme.apply_preset",
+      payload: {
+        preset: "playful",
+        tone: "cartoon"
+      }
+    },
+    type: "action_request"
+  });
+});
+
 test("executes registered low-risk theme actions", async () => {
   const applyThemePreset = vi.fn(() => "已应用卡通风格。");
 

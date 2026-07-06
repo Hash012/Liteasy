@@ -8,6 +8,7 @@ import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
 import { useProfileActions } from "../features/profile/useProfileActions";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
+import type { ModelTransport } from "../features/models/modelHttpClient";
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import type { DevCloudEnvLike } from "../features/models/localDevCloudEndpoint";
@@ -67,6 +68,7 @@ type AppShellProps = {
   organizationSharedLibraryManifestTransport?: OrganizationSharedLibraryManifestTransport;
   organizationTransport?: OrganizationSummaryTransport;
   localLibraryLoader?: () => Promise<LocalLibrarySnapshot>;
+  modelTransport?: ModelTransport;
   recommendationTransport?: RecommendationTransport;
 };
 
@@ -86,6 +88,7 @@ export function AppShell({
   organizationSharedLibraryManifestTransport,
   organizationTransport,
   localLibraryLoader,
+  modelTransport,
   recommendationTransport
 }: AppShellProps = {}) {
   const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(initialSettings);
@@ -630,6 +633,7 @@ export function AppShell({
         <AssistantSidebar
           importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
+          modelTransport={modelTransport}
           onApplyLayoutPreset={runtimeActionContext.applyLayoutPreset}
           onApplyGeneratedTheme={runtimeActionContext.applyGeneratedTheme}
           onApplyPanelAction={runtimeActionContext.applyPanelAction}

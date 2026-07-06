@@ -104,6 +104,8 @@ export type RuntimeRiskLevel = "low" | "medium" | "high";
 
 export type RuntimePlanConfidence = "high" | "medium" | "low";
 
+export type SemanticPlannerSource = "fallback" | "model" | "rule";
+
 export type RuntimeActionInvocation =
   | {
       actionId: "artifact.generate";
@@ -272,6 +274,7 @@ export type SemanticActionPlan = {
     | "workspace.overwrite_documents"
     | "unknown";
   planId: string;
+  plannerSource?: SemanticPlannerSource;
   requiredContext: string[];
   requiresConfirmation: boolean;
   riskLevel: RuntimeRiskLevel;

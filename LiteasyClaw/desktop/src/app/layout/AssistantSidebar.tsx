@@ -1,5 +1,6 @@
 import { AssistantPane } from "../features/assistant/AssistantPane";
 import type { ArtifactType } from "../features/artifacts/artifact.types";
+import type { ModelTransport } from "../features/models/modelHttpClient";
 import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import type { SettingsState } from "../features/settings/settings.types";
 import type { createSettingsStore } from "../features/settings/settings.store";
@@ -12,6 +13,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 type AssistantSidebarProps = {
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
+  modelTransport?: ModelTransport;
   onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
@@ -35,6 +37,7 @@ type AssistantSidebarProps = {
 export function AssistantSidebar({
   importedChunksByPaperId,
   importedSelectedCount,
+  modelTransport,
   onApplyGeneratedTheme,
   onApplyLayoutPreset,
   onApplyPanelAction,
@@ -63,6 +66,7 @@ export function AssistantSidebar({
       <div className="pane-body">
         <AssistantPane
           importedChunksByPaperId={importedChunksByPaperId}
+          modelTransport={modelTransport}
           onApplyGeneratedTheme={onApplyGeneratedTheme}
           onApplyLayoutPreset={onApplyLayoutPreset}
           onApplyPanelAction={onApplyPanelAction}

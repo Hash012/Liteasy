@@ -66,7 +66,11 @@ function createsEmptyBottomOpen(plan: SemanticActionPlan) {
   );
 }
 
-function createMissingDockItemPlan(input: AgentRuntimeInput, planId: string): SemanticActionPlan {
+function createMissingDockItemPlan(
+  input: AgentRuntimeInput,
+  planId: string,
+  plannerSource: SemanticActionPlan["plannerSource"] = "rule"
+): SemanticActionPlan {
   return {
     actions: [],
     clarification: {
@@ -77,6 +81,7 @@ function createMissingDockItemPlan(input: AgentRuntimeInput, planId: string): Se
     confidence: "medium",
     intentId: "unknown",
     planId,
+    plannerSource,
     requiredContext: [],
     requiresConfirmation: false,
     riskLevel: "low",
@@ -89,7 +94,7 @@ function guardBottomOpenPlan(plan: SemanticActionPlan, input: AgentRuntimeInput)
     return plan;
   }
 
-  return createMissingDockItemPlan(input, plan.planId);
+  return createMissingDockItemPlan(input, plan.planId, plan.plannerSource);
 }
 
 function normalizeConfidence(value: unknown): RuntimePlanConfidence {
@@ -251,6 +256,7 @@ function normalizePlan(
     confidence: normalizeConfidence(payload.confidence),
     intentId: payload.intentId as SemanticActionPlan["intentId"],
     planId: typeof payload.planId === "string" ? payload.planId : `model-plan-${Date.now()}`,
+    plannerSource: "model",
     requiredContext: normalizeStringArray(payload.requiredContext),
     requiresConfirmation:
       typeof payload.requiresConfirmation === "boolean" ? payload.requiresConfirmation : false,
@@ -323,6 +329,9 @@ export function createModelSemanticPlanner({
       }
     }
 
-    return deterministicPlan;
+    return {
+      ...deterministicPlan,
+      plannerSource: "fallback"
+    };
   };
 }

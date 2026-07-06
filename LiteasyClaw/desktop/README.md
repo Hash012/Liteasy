@@ -46,6 +46,8 @@ cd /home/octopus/Liteasy
 node LiteasyClaw/services/dev-cloud/server.mjs
 ```
 
+dev-cloud 默认读取 `LiteasyClaw/services/dev-cloud/.env.local` 作为本地密钥配置。要使用 DeepSeek，请把 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL` 和 `LITEASY_MODEL_PROVIDER=deepseek` 写到该文件；只有显式设置 `LITEASY_DEV_CLOUD_ENV_FILE` 时才会改用其他 env 文件。
+
 ## 测试与构建
 
 ```bash

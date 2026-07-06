@@ -46,10 +46,29 @@ test("accepts a bounded generated theme and creates CSS variables", () => {
 
   expect(parsed.theme.scope).toEqual(["global", "buttons"]);
   expect(createGeneratedThemeStyle(parsed.theme)).toMatchObject({
-    "--accent-1": "#1B66B3",
+    "--generated-accent-1": "#1B66B3",
     "--button-border-width": "1px",
+    "--button-font-weight": "850",
     "--button-hover-transform": "translateY(-2px)",
     "--button-radius": "5px"
+  });
+});
+
+test("maps generated button fill and weight into renderable CSS tokens", () => {
+  const parsed = parseGeneratedThemeInput(validTheme);
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) {
+    return;
+  }
+
+  const style = createGeneratedThemeStyle(parsed.theme);
+
+  expect(style).toMatchObject({
+    "--button-background": "#1B66B3",
+    "--button-border-color": "#1B66B3",
+    "--button-color": "#F8FBFC",
+    "--button-font-weight": "850",
+    "--button-hover-background": "#2F8F61"
   });
 });
 
@@ -73,6 +92,30 @@ test("rejects unreadable generated palettes", () => {
     palette: {
       ...validTheme.palette,
       ink1: "#F8FBFC"
+    }
+  });
+
+  expect(parsed).toMatchObject({
+    ok: false
+  });
+});
+
+test("rejects invalid contrast colors without throwing", () => {
+  expect(() =>
+    parseGeneratedThemeInput({
+      ...validTheme,
+      palette: {
+        ...validTheme.palette,
+        paper0: "linear-gradient(red, blue)"
+      }
+    })
+  ).not.toThrow();
+
+  const parsed = parseGeneratedThemeInput({
+    ...validTheme,
+    palette: {
+      ...validTheme.palette,
+      paper0: "linear-gradient(red, blue)"
     }
   });
 

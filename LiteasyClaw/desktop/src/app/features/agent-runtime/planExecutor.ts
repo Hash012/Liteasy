@@ -15,7 +15,7 @@ import {
   evaluateSmoothExecutionPolicy,
   shouldCreateAssistantFeedbackUi
 } from "./smoothPolicy";
-import { executeAction } from "../skills/actionRegistry";
+import { executeAction, getRegisteredActionMetadata } from "../skills/actionRegistry";
 import { createFallbackUIDslDocument } from "../generative-ui/fallbackUi";
 import { generateUIDslFromSemanticPlan } from "../generative-ui/uiDslGenerator";
 
@@ -157,6 +157,87 @@ async function executeRegisteredAction(
   return (await executeAction(action, context)).message;
 }
 
+function getInverseAction(action: RuntimeActionInvocation): RuntimeActionInvocation | null {
+  const metadata = getRegisteredActionMetadata().find(
+    (registeredAction) => registeredAction.actionId === action.actionId
+  );
+  if (!metadata?.inverseActionId) {
+    return null;
+  }
+
+  return {
+    actionId: metadata.inverseActionId,
+    input: {}
+  } as RuntimeActionInvocation;
+}
+
+async function rollbackExecutedActions(
+  executedActions: RuntimeActionInvocation[],
+  context: AgentRuntimeExecutionContext,
+  traceId: string
+): Promise<{
+  events: AgentRuntimeEvent[];
+  rolledBackCount: number;
+}> {
+  const events: AgentRuntimeEvent[] = [];
+  let rolledBackCount = 0;
+
+  for (const executedAction of [...executedActions].reverse()) {
+    const inverseAction = getInverseAction(executedAction);
+    if (!inverseAction) {
+      continue;
+    }
+
+    try {
+      context.journal?.record({
+        actionId: inverseAction.actionId,
+        result: "allow",
+        traceId,
+        type: "policy"
+      });
+      const message = await executeRegisteredAction(inverseAction, context);
+      rolledBackCount += 1;
+      context.journal?.record({
+        actionId: inverseAction.actionId,
+        message,
+        traceId,
+        type: "action_result"
+      });
+      events.push({
+        message: `已回滚 ${executedAction.actionId}：${message}`,
+        type: "assistant_reply"
+      });
+    } catch (error) {
+      events.push(
+        createActionFailedEvent(
+          inverseAction,
+          error instanceof Error ? error.message : String(error),
+          `请手动恢复 ${executedAction.actionId} 的执行结果。`
+        )
+      );
+    }
+  }
+
+  return {
+    events,
+    rolledBackCount
+  };
+}
+
+function withRollbackRecovery(
+  event: AgentRuntimeEvent,
+  rolledBackCount: number
+): AgentRuntimeEvent {
+  if (event.type !== "action_failed" || rolledBackCount === 0) {
+    return event;
+  }
+
+  return {
+    ...event,
+    recovery: "已回滚此前成功执行的可逆动作。"
+  };
+}
+
 function getArtifactAction(plan: SemanticActionPlan) {
   return plan.actions.find((action) => action.actionId === "artifact.generate");
 }
@@ -252,6 +333,7 @@ async function executeSemanticPlanWithOptions(
   if (options.recordPlan !== false) {
     context.journal?.record({
       planId: plan.planId,
+      plannerSource: plan.plannerSource,
       traceId: getTraceId(plan),
       type: "plan"
     });
@@ -516,30 +598,31 @@ async function executeSemanticPlanWithOptions(
   }
 
   let lastActionMessage = "";
+  const executedActions: RuntimeActionInvocation[] = [];
+  const traceId = getTraceId(plan);
   for (const action of plan.actions) {
     let message: string | null | undefined;
     try {
       context.journal?.record({
         actionId: action.actionId,
         result: "allow",
-        traceId: getTraceId(plan),
+        traceId,
         type: "policy"
       });
       message = await executeRegisteredAction(action, context);
+      executedActions.push(action);
     } catch (error) {
-      if (isUiAction(action)) {
-        events.push(createMissingHandlerError(plan, action));
-        continue;
-      }
-
-      events.push(
-        createActionFailedEvent(
-          action,
-          error instanceof Error ? error.message : String(error),
-          `请检查 ${plan.summary} 的 ${action.actionId} action 是否已连接。`
-        )
-      );
-      continue;
+      const fallbackFailure = isUiAction(action)
+        ? createMissingHandlerError(plan, action)
+        : createActionFailedEvent(
+            action,
+            error instanceof Error ? error.message : String(error),
+            `请检查 ${plan.summary} 的 ${action.actionId} action 是否已连接。`
+          );
+      const rollbackResult = await rollbackExecutedActions(executedActions, context, traceId);
+      events.push(withRollbackRecovery(fallbackFailure, rollbackResult.rolledBackCount));
+      events.push(...rollbackResult.events);
+      break;
     }
 
     if (message === null) {
@@ -555,8 +638,11 @@ async function executeSemanticPlanWithOptions(
     }
 
     if (!message) {
-      events.push(createMissingHandlerError(plan, action));
-      continue;
+      const rollbackResult = await rollbackExecutedActions(executedActions, context, traceId);
+      const failure = createMissingHandlerError(plan, action);
+      events.push(withRollbackRecovery(failure, rollbackResult.rolledBackCount));
+      events.push(...rollbackResult.events);
+      break;
     }
 
     events.push(createActionEvent(action));
@@ -574,7 +660,7 @@ async function executeSemanticPlanWithOptions(
     context.journal?.record({
       actionId: action.actionId,
       message,
-      traceId: getTraceId(plan),
+      traceId,
       type: "action_result"
     });
     lastActionMessage = message;
@@ -595,7 +681,7 @@ async function executeSemanticPlanWithOptions(
 
   return {
     events,
-    settingsChanged: plan.actions.some((action) => action.actionId === "settings.update")
+    settingsChanged: executedActions.some((action) => action.actionId === "settings.update")
   };
 }
 

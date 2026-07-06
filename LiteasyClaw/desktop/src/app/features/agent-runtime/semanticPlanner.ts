@@ -25,6 +25,7 @@ function createBasePlan(input: string): Omit<SemanticActionPlan, "actions" | "in
   return {
     confidence: "high",
     planId: createPlanId(input),
+    plannerSource: "rule",
     requiredContext: [],
     requiresConfirmation: false,
     riskLevel: "low"

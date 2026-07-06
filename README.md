@@ -106,15 +106,12 @@ export LITEASY_MODEL_PROVIDER=deepseek
 node LiteasyClaw/services/dev-cloud/server.mjs
 ```
 
-更安全的本地写法是把 key 放到不会提交的 `.env.local`。根目录 `.gitignore` 已忽略 `.env` 和 `.env.*`：
+更安全的本地写法是把 key 放到不会提交的 `LiteasyClaw/services/dev-cloud/.env.local`。根目录 `.gitignore` 已忽略该文件，dev-cloud 启动时会自动读取：
 
 ```bash
-cd /home/octopus/Liteasy
+cd /home/octopus/Liteasy/LiteasyClaw/services/dev-cloud
 printf 'DEEPSEEK_API_KEY=你的密钥\nDEEPSEEK_BASE_URL=https://api.deepseek.com\nLITEASY_MODEL_PROVIDER=deepseek\n' > .env.local
-set -a
-source .env.local
-set +a
-node LiteasyClaw/services/dev-cloud/server.mjs
+node server.mjs
 ```
 
 验证开发云是否已经走 DeepSeek：

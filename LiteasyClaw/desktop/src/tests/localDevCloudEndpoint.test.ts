@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { resolveLocalDevCloudEndpoint } from "../app/features/models/localDevCloudEndpoint";
+import {
+  resolveLocalDevCloudEndpoint,
+  shouldApplyLocalDevCloudDefaults
+} from "../app/features/models/localDevCloudEndpoint";
 
 describe("resolveLocalDevCloudEndpoint", () => {
   test("uses the current browser host for LAN-accessed pages", () => {
@@ -41,5 +44,25 @@ describe("resolveLocalDevCloudEndpoint", () => {
         protocol: "tauri:"
       })
     ).toBe("http://127.0.0.1:8787");
+  });
+
+  test("enables local dev cloud defaults for the desktop Vite dev page", () => {
+    expect(
+      shouldApplyLocalDevCloudDefaults({
+        hostname: "127.0.0.1",
+        port: "1425",
+        protocol: "http:"
+      })
+    ).toBe(true);
+  });
+
+  test("does not enable local dev cloud defaults for unrelated browser pages", () => {
+    expect(
+      shouldApplyLocalDevCloudDefaults({
+        hostname: "localhost",
+        port: "3000",
+        protocol: "http:"
+      })
+    ).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ const FALLBACK_DEV_CLOUD_PORT = "8787";
 
 type BrowserLocationLike = {
   hostname: string;
+  port?: string;
   protocol: string;
 };
 
@@ -19,6 +20,19 @@ function normalizeHostname(hostname: string) {
   }
 
   return hostname;
+}
+
+function isLocalHostname(hostname: string) {
+  return normalizeHostname(hostname) === "127.0.0.1";
+}
+
+function isDesktopDevPort(port: string | undefined) {
+  if (!port) {
+    return false;
+  }
+
+  const parsed = Number(port);
+  return Number.isFinite(parsed) && parsed >= 1420 && parsed <= 1469;
 }
 
 export function resolveLocalDevCloudEndpoint(
@@ -50,6 +64,22 @@ export function hasInjectedLocalDevCloudEndpoint(envLike: DevCloudEnvLike = impo
     typeof envLike.VITE_LITEASY_DEV_CLOUD_PORT === "string" &&
     envLike.VITE_LITEASY_DEV_CLOUD_PORT.length > 0
   );
+}
+
+export function shouldApplyLocalDevCloudDefaults(
+  locationLike: BrowserLocationLike | undefined =
+    typeof window === "undefined" ? undefined : window.location,
+  envLike: DevCloudEnvLike = import.meta.env
+) {
+  if (hasInjectedLocalDevCloudEndpoint(envLike)) {
+    return true;
+  }
+
+  if (!locationLike || !hasHttpProtocol(locationLike.protocol)) {
+    return false;
+  }
+
+  return isLocalHostname(locationLike.hostname) && isDesktopDevPort(locationLike.port);
 }
 
 export type { DevCloudEnvLike };

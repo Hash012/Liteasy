@@ -64,6 +64,7 @@ test("converts model JSON into a semantic action plan", async () => {
       }
     ],
     intentId: "theme.apply",
+    plannerSource: "model",
     planId: "model-plan-1",
     summary: "应用卡通风格"
   });
@@ -227,6 +228,74 @@ test("uses the model planner to generate a structured freeform theme", async () 
   expect(JSON.parse(modelTransport.mock.calls[0][0].body).prompt).toContain(
     "不要输出任意 CSS"
   );
+});
+
+test("does not synthesize generated themes from the desktop mock planner", async () => {
+  const settings = createSettingsStore().getState();
+  const planner = createModelSemanticPlanner({
+    settings
+  });
+
+  await expect(
+    planner(
+      {
+        message: "打开暗夜模式",
+        mode: "command"
+      },
+      plannerContext
+    )
+  ).resolves.toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "unsupported_action"
+    },
+    intentId: "unknown"
+  });
+
+  await expect(
+    planner(
+      {
+        message: "颜色变为粉色",
+        mode: "command"
+      },
+      plannerContext
+    )
+  ).resolves.toMatchObject({
+    actions: [],
+    intentId: "unknown"
+  });
+});
+
+test("does not synthesize common generated themes when the model planner is unavailable", async () => {
+  const settings = createSettingsStore().getState();
+  const modelTransport = vi.fn(async () => {
+    throw new Error("model offline");
+  });
+  const planner = createModelSemanticPlanner({
+    modelTransport,
+    settings: {
+      ...settings,
+      "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+    }
+  });
+
+  await expect(
+    planner(
+      {
+        message: "打开暗夜模式",
+        mode: "command"
+      },
+      plannerContext
+    )
+  ).resolves.toMatchObject({
+    actions: [],
+    clarification: {
+      kind: "unsupported_action"
+    },
+    intentId: "unknown",
+    plannerSource: "fallback"
+  });
+  expect(modelTransport).toHaveBeenCalledTimes(2);
 });
 
 test("keeps compound commands as ordered registered actions from the model planner", async () => {

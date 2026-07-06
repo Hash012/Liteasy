@@ -47,7 +47,7 @@ describe("useModelSettingsActions", () => {
     expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe(endpoint);
   });
 
-  test("applies injected dev cloud endpoint only when the dev script provides a port", () => {
+  test("applies injected dev cloud endpoint when the dev script provides a port", () => {
     const settingsStore = createSettingsStore();
     const onSettingsChanged = vi.fn();
     const hook = renderHook(() =>
