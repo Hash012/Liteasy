@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useArtifactActions } from "../features/artifacts/useArtifactActions";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
+import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import type { createArtifactStore } from "../features/artifacts/artifact.store";
 import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import type { Paper, SelectedDocumentSet } from "../features/workspace/workspace.types";
@@ -25,7 +26,10 @@ type ArtifactWorkflowModel = {
 type ArtifactWorkflowActions = {
   closeArtifactTab: (artifactId: string) => void;
   handleAssistantArtifact: (artifactType: ArtifactType) => string;
+  openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
+  saveSkillDocument: (artifactId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
+  updateSkillDocument: (artifactId: string, markdown: string) => void;
 };
 
 export function useArtifactWorkflowController({
@@ -56,7 +60,10 @@ export function useArtifactWorkflowController({
     actions: {
       closeArtifactTab: artifactActions.closeArtifactTab,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
-      startAnalysis: artifactActions.startAnalysis
+      openSkillDocument: artifactActions.openSkillDocument,
+      saveSkillDocument: artifactActions.saveSkillDocument,
+      startAnalysis: artifactActions.startAnalysis,
+      updateSkillDocument: artifactActions.updateSkillDocument
     },
     model: {
       artifactTabs,

@@ -113,7 +113,7 @@ function createModeGateClarificationPlan(
     clarification: {
       kind: "command_mode",
       missing: ["command_mode"],
-      question: "当前模式不执行软件动作，请切换到命令模式。"
+      question: "软件动作需要用 / 开始输入命令。"
     },
     confidence: "low",
     intentId: "unknown",
@@ -121,7 +121,7 @@ function createModeGateClarificationPlan(
     requiredContext: [],
     requiresConfirmation: false,
     riskLevel: "low",
-    summary: "当前模式不执行软件动作"
+    summary: "当前输入不是软件命令"
   };
 }
 

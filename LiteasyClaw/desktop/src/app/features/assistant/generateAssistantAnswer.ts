@@ -10,8 +10,11 @@ import type { SettingsState } from "../settings/settings.types";
 import type { Paper } from "../workspace/workspace.types";
 import { auditAssistantAnswer } from "./answerAuditor";
 import { generateEvidenceUIDslDocument } from "../generative-ui/uiDslGenerator";
+import type { AgentCorePromptContext } from "../agent-core/contextAssembler";
+import { formatAgentCorePromptContext } from "../agent-core/contextAssembler";
 
 type GenerateAssistantAnswerInput = {
+  agentCoreContext?: AgentCorePromptContext;
   auditTransport?: ModelAuditTransport;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   mode: Exclude<AssistantMode, "command">;
@@ -30,6 +33,7 @@ function getActiveModelEndpoint(settings: SettingsState) {
 }
 
 export async function generateAssistantAnswer({
+  agentCoreContext,
   auditTransport,
   importedChunksByPaperId,
   mode,
@@ -43,10 +47,21 @@ export async function generateAssistantAnswer({
     cloudTransport: modelTransport
   });
   const prompt = [
+    /*
+     * Agent core 上下文放在问题和证据前面，作用类似稳定的 system prefix：
+     * - agent.md 约束回答边界。
+     * - memory 让跨轮偏好和项目事实可见。
+     * - capability/budget 摘要提醒模型不要假装有未注册工具。
+     *
+     * 这里仍然把文献片段作为明确“参考片段”传入，避免 memory 抢过证据优先级。
+     */
+    agentCoreContext ? `Agent核心上下文：\n${formatAgentCorePromptContext(agentCoreContext)}` : "",
     `问题：${question}`,
     `参考文献：${selectedPapers.map((paper) => paper.title).join("；")}`,
     `参考片段：${groundedAnswer.citations.map((citation) => citation.snippet).join("；")}`
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
   const provider = settings["models.default_provider"];
   const generation = await gateway.generateAnswer({
     model: getDefaultModelForProvider(provider),

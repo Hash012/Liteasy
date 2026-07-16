@@ -4,6 +4,7 @@ import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
 import type { UIDslActionRef } from "../features/generative-ui/generativeUi.types";
 import { PdfReader } from "../features/pdf/PdfReader";
+import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
@@ -14,10 +15,13 @@ type ReaderPaneProps = {
   artifactTasks: ArtifactTask[];
   layoutCollapsed?: PaneCollapseState;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
+  onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
+  onSaveMarkdownTab?: (artifactId: string) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
+  onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
   showArtifactRegion?: boolean;
   selectedPapers?: Paper[];
   selectedPaperIds: string[];
@@ -36,10 +40,13 @@ export function ReaderPane({
   artifactTasks,
   layoutCollapsed = defaultLayoutCollapsed,
   onArtifactDynamicAction,
+  onAddReaderContextToConversation,
+  onSaveMarkdownTab,
   onStartAnalysis,
   onToggleBottomPane,
   onToggleLeftPane,
   onToggleRightPane,
+  onUpdateMarkdownTab,
   selectedPapers = [],
   selectedPaperIds,
   selectionLocked,
@@ -101,14 +108,20 @@ export function ReaderPane({
               : "artifacts-detached"
           }`}
         >
-          <PdfReader selectedPapers={selectedPapers} zoom={zoom} />
+          <PdfReader
+            onAddSelectionToConversation={onAddReaderContextToConversation}
+            selectedPapers={selectedPapers}
+            zoom={zoom}
+          />
           {artifactRegionVisible ? (
           <section aria-label="多模态产物区域" className="reader-artifact-region">
             <ArtifactTabs
               analysisHint={analysisHint}
               canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
               onDynamicAction={onArtifactDynamicAction}
+              onSaveMarkdownTab={onSaveMarkdownTab}
               onStartAnalysis={onStartAnalysis}
+              onUpdateMarkdownTab={onUpdateMarkdownTab}
               selectedCount={selectedPaperIds.length}
               selectionLocked={selectionLocked}
               tabs={artifactTabs}

@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
+    "start:hardcoded": "LITEASY_USE_HARDCODED_DEV_SECRETS=1 LITEASY_DEV_CLOUD_PORT=8790 node server.mjs",
     "test": "node --test"
   },
   "dependencies": {
     "argon2": "^0.44.0",
-    "better-sqlite3": "^12.11.1"
+    "better-sqlite3": "^12.11.1",
+    "undici": "^6.27.0"
   },
   "engines": {
     "node": ">=20"

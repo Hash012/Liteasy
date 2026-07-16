@@ -9,8 +9,9 @@ afterEach(() => {
 });
 
 async function selectInitialAssistantMode(user: ReturnType<typeof userEvent.setup>, mode: "名词解释" | "命令" | "问答") {
-  const launcher = screen.getByLabelText("AI助手初始模式入口");
-  await user.click(within(launcher).getByRole("button", { name: `${mode}模式` }));
+  if (mode === "命令") {
+    await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/");
+  }
 }
 
 
@@ -32,15 +33,9 @@ test("shows compact mode chips above the composer before a conversation starts",
   expect(screen.queryByLabelText("对话模式切换")).not.toBeInTheDocument();
   expect(within(launcher).queryByText("Liteasy 学术助手")).not.toBeInTheDocument();
   expect(within(launcher).queryByText("研")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("输入前模式选择")).toContainElement(
-    within(launcher).getByRole("button", { name: "名词解释模式" })
-  );
-  expect(within(launcher).getByRole("button", { name: "名词解释模式" })).toBeInTheDocument();
-  expect(within(launcher).getByRole("button", { name: "命令模式" })).toBeInTheDocument();
-  expect(within(launcher).getByRole("button", { name: "问答模式" })).toBeInTheDocument();
-
-  await user.click(within(launcher).getByRole("button", { name: "问答模式" }));
-  expect(screen.getByText("当前模式：问答")).toBeInTheDocument();
+  expect(within(launcher).getByText("/ 命令")).toBeInTheDocument();
+  expect(within(launcher).getByText("PDF 选区问答")).toBeInTheDocument();
+  expect(screen.getByText("统一输入：/ 命令 · PDF 选区问答")).toBeInTheDocument();
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
@@ -49,7 +44,7 @@ test("shows compact mode chips above the composer before a conversation starts",
     expect(screen.queryByLabelText("AI助手初始模式入口")).not.toBeInTheDocument();
   });
   expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
-  expect(screen.getByLabelText("对话模式切换")).toBeInTheDocument();
+  expect(screen.getByText("/ 命令 · PDF 选区问答")).toBeInTheDocument();
 });
 
 test("renders command result DSL after a theme command while keeping the empty launcher as default UI", async () => {
@@ -69,7 +64,7 @@ test("renders command result DSL after a theme command while keeping the empty l
 
   expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让 UI 变成卡通风格");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/让 UI 变成卡通风格");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.queryByLabelText("AI助手初始模式入口")).not.toBeInTheDocument();
@@ -769,7 +764,7 @@ test("shows current command examples including organization and recommendation a
 
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
-    "命令模式可输入“打开组织共享文献库”“关闭联网推荐”“开启用户画像”等受控指令。"
+    "输入 / 开始软件命令；普通输入会结合 PDF 选区或当前文献上下文回答。"
   );
 });
 

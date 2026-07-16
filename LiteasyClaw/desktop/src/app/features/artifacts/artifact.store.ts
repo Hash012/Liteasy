@@ -27,6 +27,14 @@ export function createArtifactStore() {
       task.status = "completed";
       tabs.unshift(payload);
     },
+    upsertTab(payload: ArtifactTab) {
+      const existingIndex = tabs.findIndex((tab) => tab.artifactId === payload.artifactId);
+      if (existingIndex >= 0) {
+        tabs.splice(existingIndex, 1, payload);
+      } else {
+        tabs.unshift(payload);
+      }
+    },
     closeTab(artifactId: string) {
       const tabIndex = tabs.findIndex((tab) => tab.artifactId === artifactId);
       if (tabIndex === -1) return;

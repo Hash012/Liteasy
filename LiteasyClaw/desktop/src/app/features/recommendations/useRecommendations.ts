@@ -110,7 +110,7 @@ export function useRecommendations({
       setRecommendationItems([]);
       setRecommendationPending(false);
       setRecommendationStatus("disabled");
-      setRecommendationMessage("联网推荐已关闭，可在右栏命令模式重新开启。");
+      setRecommendationMessage("联网推荐已关闭，可在右栏输入 / 重新开启。");
       return;
     }
 

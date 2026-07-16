@@ -1,6 +1,6 @@
 import { formatModelExecutionLabel } from "../models/modelExecution";
 import type { AssistantMessage, AssistantMode } from "./assistant.types";
-import { getAuditVerdictLabel, modeLauncherItems } from "./assistantPresentation";
+import { getAuditVerdictLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import type { HumanConfirmationRequest } from "../agent-runtime/agentRuntime.types";
@@ -14,6 +14,7 @@ type AssistantMessageListProps = {
   onModeChange: (mode: AssistantMode) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onRejectRequest?: (confirmation: HumanConfirmationRequest) => void;
+  onRetryUserMessage?: (messageId: string) => void;
 };
 
 export function AssistantMessageList({
@@ -24,48 +25,30 @@ export function AssistantMessageList({
   onEditMessage,
   onModeChange,
   onRegenerateMessage,
-  onRejectRequest
+  onRejectRequest,
+  onRetryUserMessage
 }: AssistantMessageListProps) {
   if (messages.length === 0) {
     return (
-      <div className="assistant-messages assistant-messages-empty">
-        <div
-          className="assistant-launcher"
-          aria-label="AI助手初始模式入口"
-          title="选择一个入口开始会话。"
-        >
-          <div className="assistant-launcher-modes" aria-label="输入前模式选择">
-            {modeLauncherItems.map((item) => (
-              <button
-                aria-label={`${item.label}模式`}
-                className={item.id === mode ? "assistant-launcher-mode active" : "assistant-launcher-mode"}
-                key={item.id}
-                onClick={() => onModeChange(item.id)}
-                title={item.summary}
-                type="button"
-              >
-                <span>{item.label}模式</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <div aria-label="AI助手初始消息区" className="assistant-messages assistant-messages-empty" />
     );
   }
 
   return (
     <div className="assistant-messages">
       {messages.map((message, index) => {
-        const canRegenerate =
-          message.role === "assistant" &&
-          mode !== "command" &&
-          messages.slice(0, index).some((candidate) => candidate.role === "user");
-
         return (
           <div className={`assistant-message ${message.role}`} key={message.id}>
-            <div className="assistant-message-title">
-              {message.role === "user" ? "你的输入" : "助手回复"}
-            </div>
+            {message.contextTokens?.length ? (
+              <div className="assistant-message-token-row">
+                {message.contextTokens.map((token) => (
+                  <span className={`assistant-message-token ${token.kind}`} key={token.id}>
+                    <strong>{token.label}</strong>
+                    {token.detail ? <span>{token.detail}</span> : null}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {message.content &&
             (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
               <div className="assistant-answer-text">{message.content}</div>
@@ -121,23 +104,41 @@ export function AssistantMessageList({
             ) : null}
             <div className="assistant-message-actions">
               {message.role === "user" ? (
-                <button
-                  aria-label={`重新编辑：${message.content}`}
-                  className="assistant-message-action"
-                  onClick={() => onEditMessage?.(message.id)}
-                  type="button"
-                >
-                  重新编辑
-                </button>
-              ) : null}
-              {canRegenerate ? (
-                <button
-                  className="assistant-message-action"
-                  onClick={() => onRegenerateMessage?.(message.id)}
-                  type="button"
-                >
-                  重新生成回复
-                </button>
+                <>
+                  <button
+                    aria-label={`复制：${message.content}`}
+                    className="assistant-message-action"
+                    onClick={() => {
+                      const tokenText =
+                        message.contextTokens?.map((token) => `[${token.label}]`).join(" ") ?? "";
+                      void navigator.clipboard?.writeText(
+                        [tokenText, message.content].filter(Boolean).join(" ")
+                      );
+                    }}
+                    title="复制"
+                    type="button"
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    aria-label={`编辑：${message.content}`}
+                    className="assistant-message-action"
+                    onClick={() => onEditMessage?.(message.id)}
+                    title="编辑"
+                    type="button"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    aria-label={`重试：${message.content}`}
+                    className="assistant-message-action"
+                    onClick={() => onRetryUserMessage?.(message.id)}
+                    title="重试"
+                    type="button"
+                  >
+                    ↻
+                  </button>
+                </>
               ) : null}
             </div>
           </div>

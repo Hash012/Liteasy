@@ -1,7 +1,7 @@
 import type { UIDslDocument } from "../generative-ui/generativeUi.types";
 
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed";
-export type ArtifactType = "comparison_table" | "mindmap" | "tree" | "ppt";
+export type ArtifactType = "comparison_table" | "mindmap" | "ppt" | "skill_doc" | "tree";
 
 export type ArtifactTask = {
   id: string;
@@ -16,6 +16,8 @@ export type ArtifactPreview = {
 
 export type ArtifactTab = {
   artifactId: string;
+  markdown?: string;
+  sourcePath?: string;
   preview?: ArtifactPreview;
   title: string;
   type: ArtifactType;

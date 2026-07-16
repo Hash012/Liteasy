@@ -3,6 +3,7 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import type { Paper } from "../workspace/workspace.types";
+import type { ReaderConversationContext } from "../assistant/assistantContext.types";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -36,6 +37,7 @@ type PdfSelection = {
 type PdfSidebarMode = "thumbnails" | "annotations";
 
 type PdfReaderProps = {
+  onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
   selectedPapers: Paper[];
   zoom: number;
 };
@@ -548,7 +550,7 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
   );
 }
 
-export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
+export function PdfReader({ onAddSelectionToConversation, selectedPapers, zoom }: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
@@ -659,6 +661,36 @@ export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
     setSelection(nextSelection);
   }
 
+  function handleSelectionContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest(".pdf-selection-menu")) {
+      return;
+    }
+
+    const stageElement = stageRef.current;
+    const browserSelection = window.getSelection();
+    if (!stageElement || !browserSelection) {
+      return;
+    }
+
+    const nextSelection = buildSelectionFromRange(stageElement, browserSelection);
+    if (!nextSelection && !selection) {
+      return;
+    }
+
+    event.preventDefault();
+    const stageRect = stageElement.getBoundingClientRect();
+    if (nextSelection) {
+      setSelection({
+        ...nextSelection,
+        menuLeft: Math.max(12, event.clientX - stageRect.left + stageElement.scrollLeft),
+        menuTop: Math.max(12, event.clientY - stageRect.top + stageElement.scrollTop)
+      });
+    } else {
+      setSelection(selection);
+    }
+  }
+
   function addAnnotation(kind: AnnotationKind) {
     const activeSelection = selection ?? getInitialSelection(activePaper);
     const annotation: PdfAnnotation = {
@@ -685,6 +717,20 @@ export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
     );
     setSidebarMode("annotations");
     setSidebarCollapsed(false);
+    setSelection(null);
+    clearBrowserSelection();
+  }
+
+  function addSelectionToConversation() {
+    const activeSelection = selection ?? getInitialSelection(activePaper);
+    onAddSelectionToConversation?.({
+      excerpt: activeSelection.excerpt,
+      page: activeSelection.page,
+      paperId: activePaper?.id,
+      paperTitle: activePaper?.title,
+      source: "pdf_selection"
+    });
+    setStatus("已将选中文段加入对话上下文。");
     setSelection(null);
     clearBrowserSelection();
   }
@@ -825,6 +871,7 @@ export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
           <div
             aria-label="PDF 页面滚动区"
             className="pdf-stage"
+            onContextMenu={handleSelectionContextMenu}
             onMouseUp={handleTextSelection}
             ref={stageRef}
           >
@@ -857,15 +904,11 @@ export function PdfReader({ selectedPapers, zoom }: PdfReaderProps) {
                   注释
                 </button>
                 <button
-                  onClick={() => {
-                    setStatus("已预留：后续会把当前选中文段发送给 AI。");
-                    setSelection(null);
-                    clearBrowserSelection();
-                  }}
-                  title="预留接口：后续会把选中文段发送给 AI"
+                  onClick={addSelectionToConversation}
+                  title="把选中文段加入右侧对话上下文"
                   type="button"
                 >
-                  问 AI
+                  加入对话
                 </button>
               </div>
             ) : null}

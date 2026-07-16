@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AssistantComposer } from "./AssistantComposer";
 import { AssistantHistoryPanel } from "./AssistantHistoryPanel";
 import { AssistantMessageList } from "./AssistantMessageList";
-import { ModeSwitch } from "./ModeSwitch";
 import type {
   AssistantMessage,
+  AssistantComposerSuggestion,
+  AssistantContextToken,
   AssistantMode,
   AssistantState,
   SelectedSetStatus
@@ -42,14 +43,18 @@ import type { ActionContext } from "../skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
+import {
+  createAgentCoreSession,
+  type AgentCorePreparedTurn
+} from "../agent-core/agentCoreSession";
+import { defaultAgentCoreConfig } from "../agent-core/agentCoreConfig";
 import { generateAssistantAnswer } from "./generateAssistantAnswer";
 import { AssistantContextPanel } from "./AssistantContextPanel";
 import {
   getAssistantErrorMessage,
-  getModeHint,
-  getModeLabel,
   getSelectedSetReadyMessage
 } from "./assistantPresentation";
+import type { ReaderConversationContext } from "./assistantContext.types";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
@@ -67,6 +72,7 @@ type AssistantPaneProps = {
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
+  readerConversationContext?: ReaderConversationContext | null;
   runtimeOrganizationName?: string;
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPapers?: Paper[];
@@ -181,6 +187,7 @@ export function AssistantPane({
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
+  readerConversationContext = null,
   runtimeOrganizationName,
   runtimeWorkspace,
   selectedPapers = [],
@@ -188,9 +195,11 @@ export function AssistantPane({
   settingsStore
 }: AssistantPaneProps) {
   const assistantStoreRef = useRef(createAssistantStore());
+  const agentCoreRef = useRef(createAgentCoreSession());
   const executionJournalRef = useRef(createExecutionJournal());
   const pendingCommandClarificationRef = useRef<PendingCommandClarification | undefined>();
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastReaderContextKeyRef = useRef<string | null>(null);
   const settingsStoreRef = useRef(settingsStore ?? createSettingsStore());
   const [assistantState, setAssistantState] = useState<AssistantState>(() =>
     cloneAssistantState(assistantStoreRef.current.getState())
@@ -200,6 +209,8 @@ export function AssistantPane({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [voiceInputMessage, setVoiceInputMessage] = useState<string | undefined>();
   const [sessionHistory, setSessionHistory] = useState<AssistantSessionHistoryItem[]>([]);
+  const [composerContextTokens, setComposerContextTokens] = useState<AssistantContextToken[]>([]);
+  const [readerContexts, setReaderContexts] = useState<ReaderConversationContext[]>([]);
   const runtimeContext = buildAgentRuntimeContextView({
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
@@ -210,8 +221,140 @@ export function AssistantPane({
     workspace: runtimeWorkspace
   });
 
+  useEffect(() => {
+    if (!readerConversationContext) {
+      return;
+    }
+
+    const contextKey = [
+      readerConversationContext.paperId ?? "unknown-paper",
+      readerConversationContext.page,
+      readerConversationContext.excerpt
+    ].join("::");
+    if (lastReaderContextKeyRef.current === contextKey) {
+      return;
+    }
+
+    lastReaderContextKeyRef.current = contextKey;
+    setReaderContexts((currentContexts) => {
+      const withoutDuplicate = currentContexts.filter((context) => {
+        return !(
+          context.paperId === readerConversationContext.paperId &&
+          context.page === readerConversationContext.page &&
+          context.excerpt === readerConversationContext.excerpt
+        );
+      });
+
+      // 只保留最近几个 PDF 选区，避免用户连续框选时把模型上下文撑得过大。
+      return [...withoutDuplicate, readerConversationContext].slice(-4);
+    });
+    setComposerContextTokens((currentTokens) => [
+      ...currentTokens.filter((token) => token.id !== `pdf-selection-${contextKey}`),
+      {
+        detail: `第 ${readerConversationContext.page} 页`,
+        id: `pdf-selection-${contextKey}`,
+        kind: "pdf_selection",
+        label: readerConversationContext.paperTitle ?? "PDF 选区",
+        prompt: [
+          `PDF 选区：${readerConversationContext.paperTitle ?? "当前文档"} 第 ${
+            readerConversationContext.page
+          } 页`,
+          readerConversationContext.excerpt
+        ].join("\n")
+      }
+    ]);
+    inputRef.current?.focus();
+  }, [readerConversationContext]);
+
   function syncAssistant() {
     setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
+  }
+
+  function clearReaderConversationContexts() {
+    lastReaderContextKeyRef.current = null;
+    setReaderContexts([]);
+    setComposerContextTokens([]);
+  }
+
+  function addComposerContextToken(token: AssistantContextToken) {
+    setComposerContextTokens((currentTokens) => [
+      ...currentTokens.filter((currentToken) => currentToken.id !== token.id),
+      token
+    ]);
+  }
+
+  function removeComposerContextToken(tokenId: string) {
+    setComposerContextTokens((currentTokens) =>
+      currentTokens.filter((token) => token.id !== tokenId)
+    );
+  }
+
+  function buildComposerSuggestions(): AssistantComposerSuggestion[] {
+    const commandSuggestions: AssistantComposerSuggestion[] = [
+      "打开设置面板",
+      "打开组织共享文献库",
+      "关闭联网推荐",
+      "开启用户画像",
+      "生成思维导图",
+      "把窗口切分成两个",
+      "把 AI 助手放到下栏"
+    ].map((command) => ({
+      detail: "受控命令",
+      id: `command-${command}`,
+      insertText: `/${command}`,
+      label: command,
+      trigger: "/"
+    }));
+
+    const paperSuggestions: AssistantComposerSuggestion[] = selectedPapers.flatMap((paper) => {
+      const paperToken: AssistantContextToken = {
+        detail: "整篇论文",
+        id: `paper-${paper.id}`,
+        kind: "paper",
+        label: paper.title,
+        prompt: `用户指定论文上下文：${paper.title}（paperId=${paper.id}）`
+      };
+      const pageTokens: AssistantComposerSuggestion[] = Array.from({ length: 20 }, (_, index) => index + 1).map((page) => ({
+        detail: `${paper.title} · 第 ${page} 页`,
+        id: `page-${paper.id}-${page}`,
+        label: `${paper.title} p.${page}`,
+        token: {
+          detail: `第 ${page} 页`,
+          id: `page-${paper.id}-${page}`,
+          kind: "page",
+          label: paper.title,
+          prompt: `用户指定论文页面上下文：${paper.title}（paperId=${paper.id}），第 ${page} 页。`
+        },
+        trigger: "@" as const
+      }));
+
+      return [
+        {
+          detail: "整篇论文",
+          id: `paper-${paper.id}`,
+          label: paper.title,
+          token: paperToken,
+          trigger: "@" as const
+        },
+        ...pageTokens
+      ];
+    });
+
+    const skillSuggestions: AssistantComposerSuggestion[] = defaultAgentCoreConfig.skills.map((skill) => ({
+      detail: skill.description,
+      id: `skill-${skill.id}`,
+      label: skill.id,
+      token: {
+        detail: skill.label,
+        id: `skill-${skill.id}`,
+        kind: "skill",
+        label: skill.id,
+        prompt: `用户指定调用 skill：${skill.id}。目标：${skill.description}`
+      },
+      trigger: "$"
+    }));
+
+    return [...commandSuggestions, ...paperSuggestions, ...skillSuggestions];
   }
 
   function setMode(mode: AssistantMode) {
@@ -243,6 +386,8 @@ export function AssistantPane({
 
     if (currentState.messages.length > 0) {
       archiveCurrentSession();
+      agentCoreRef.current = createAgentCoreSession();
+      clearReaderConversationContexts();
       assistantStoreRef.current.clearMessages();
       setHistoryOpen(false);
       setInput("");
@@ -266,6 +411,8 @@ export function AssistantPane({
 
   function startNewSession() {
     archiveCurrentSession();
+    agentCoreRef.current = createAgentCoreSession();
+    clearReaderConversationContexts();
     assistantStoreRef.current.clearMessages();
     setHistoryOpen(false);
     setInput("");
@@ -283,6 +430,8 @@ export function AssistantPane({
       return;
     }
 
+    agentCoreRef.current = createAgentCoreSession();
+    clearReaderConversationContexts();
     setHistoryOpen(false);
     setInput("");
     setEditingMessageId(null);
@@ -296,10 +445,12 @@ export function AssistantPane({
 
   function createRuntimeExecutionContext(
     options: {
+      agentCoreTurn?: AgentCorePreparedTurn;
       includeSemanticPlanner?: boolean;
     } = {}
   ): AgentRuntimeExecutionContext {
     return {
+      agentCore: options.agentCoreTurn?.runtimeContext,
       contextView: runtimeContext,
       clarifySemanticPlan: createModelAssistedClarification({
         modelTransport,
@@ -431,17 +582,38 @@ export function AssistantPane({
     assistantStoreRef.current.setPending(true);
     syncAssistant();
 
+    let preparedTurn: AgentCorePreparedTurn | undefined;
+
     try {
+      const prepared = agentCoreRef.current.prepareTurn({
+        message,
+        mode: "command",
+        runtimeContext
+      });
+
+      if (!prepared.ok) {
+        appendRuntimeEvents(prepared.events);
+        setInput("");
+        setEditingMessageId(null);
+        return;
+      }
+      preparedTurn = prepared.turn;
+
       const result = await runAgentRuntime(
         {
           message,
           mode: "command"
         },
         createRuntimeExecutionContext({
+          agentCoreTurn: preparedTurn,
           includeSemanticPlanner: true
         })
       );
 
+      agentCoreRef.current.observeRuntimeTurn({
+        events: result.events,
+        turn: preparedTurn
+      });
       appendRuntimeEvents(result.events);
       updatePendingCommandClarification(message, result.events);
       await appendJournalAudit(getTraceIdFromRuntimeEvents(result.events));
@@ -452,6 +624,18 @@ export function AssistantPane({
       setInput("");
       setEditingMessageId(null);
     } catch (error) {
+      if (preparedTurn) {
+        agentCoreRef.current.observeRuntimeTurn({
+          events: [
+            {
+              message: getAssistantErrorMessage(error),
+              recovery: "请稍后重试，或缩小命令范围后重新发送。",
+              type: "runtime_error"
+            }
+          ],
+          turn: preparedTurn
+        });
+      }
       assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error)));
     } finally {
       assistantStoreRef.current.setPending(false);
@@ -531,8 +715,43 @@ export function AssistantPane({
     }
   }
 
-  async function runKnowledgeMessage(question: string, mode: Exclude<AssistantMode, "command">) {
-    const readyMessage = getSelectedSetReadyMessage(selectedSetStatus);
+  function buildReaderContextPrompt() {
+    if (readerContexts.length === 0) {
+      return "";
+    }
+
+    return readerContexts
+      .map((context, index) => {
+        const title = context.paperTitle ?? "当前 PDF";
+        return [
+          `PDF 选区 ${index + 1}：${title} 第 ${context.page} 页`,
+          context.excerpt
+        ].join("\n");
+      })
+      .join("\n\n");
+  }
+
+  function buildComposerTokenPrompt(tokens: AssistantContextToken[]) {
+    if (tokens.length === 0) {
+      return "";
+    }
+
+    return tokens
+      .map((token, index) => [`上下文 ${index + 1} [${token.kind}]：${token.label}`, token.prompt].join("\n"))
+      .join("\n\n");
+  }
+
+  async function runKnowledgeMessage(
+    question: string,
+    mode: Exclude<AssistantMode, "command">,
+    options: { attachedContextPrompt?: string } = {}
+  ) {
+    const readerContextPrompt = buildReaderContextPrompt();
+    const attachedContextPrompt = options.attachedContextPrompt ?? "";
+    const combinedContextPrompt =
+      attachedContextPrompt.length > 0 ? attachedContextPrompt : readerContextPrompt;
+    const readyMessage =
+      combinedContextPrompt.length > 0 ? null : getSelectedSetReadyMessage(selectedSetStatus);
     if (readyMessage) {
       assistantStoreRef.current.addMessage(createMessage("assistant", readyMessage));
       syncAssistant();
@@ -545,12 +764,36 @@ export function AssistantPane({
     assistantStoreRef.current.setPending(true);
     syncAssistant();
 
+    const prepared = agentCoreRef.current.prepareTurn({
+      // PDF 选区来自用户显式右键/按钮加入，应优先作为本轮问答的局部证据。
+      message:
+        combinedContextPrompt.length > 0
+          ? `${combinedContextPrompt}\n\n用户问题：${question}`
+          : question,
+      mode,
+      runtimeContext
+    });
+
+    if (!prepared.ok) {
+      appendRuntimeEvents(prepared.events);
+      assistantStoreRef.current.setPending(false);
+      setInput("");
+      setEditingMessageId(null);
+      syncAssistant();
+      inputRef.current?.focus();
+      return;
+    }
+
     try {
       const answer = await generateAssistantAnswer({
+        agentCoreContext: prepared.turn.runtimeContext.prompt,
         importedChunksByPaperId,
         modelTransport,
         mode,
-        question,
+        question:
+          combinedContextPrompt.length > 0
+            ? `${combinedContextPrompt}\n\n用户问题：${question}`
+            : question,
         selectedPapers,
         settings: settingsStoreRef.current.getState()
       });
@@ -561,10 +804,19 @@ export function AssistantPane({
       assistantMessage.executionTrace = answer.executionTrace;
       assistantMessage.uiDsl = answer.uiDsl;
 
+      agentCoreRef.current.observeKnowledgeTurn({
+        summary: answer.answer,
+        turn: prepared.turn
+      });
       assistantStoreRef.current.addMessage(assistantMessage);
       setInput("");
       setEditingMessageId(null);
     } catch (error) {
+      agentCoreRef.current.observeKnowledgeTurn({
+        failed: true,
+        summary: getAssistantErrorMessage(error),
+        turn: prepared.turn
+      });
       assistantStoreRef.current.addMessage(
         createMessage("assistant", getAssistantErrorMessage(error))
       );
@@ -576,9 +828,15 @@ export function AssistantPane({
 
   async function handleSend() {
     const currentState = assistantStoreRef.current.getState();
+    const trimmedInput = input.trim();
+    const isSlashCommand = trimmedInput.startsWith("/");
+    const commandMessage = isSlashCommand ? trimmedInput.slice(1).trim() : "";
+    const contextTokensForTurn = [...composerContextTokens];
+    const attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn);
+    const activeMode: AssistantMode = isSlashCommand ? "command" : "qa";
     const adapted = adaptTextIntent({
-      activeMode: currentState.mode,
-      value: input
+      activeMode,
+      value: isSlashCommand ? commandMessage : input
     });
 
     if (adapted.kind === "idle") {
@@ -598,14 +856,25 @@ export function AssistantPane({
       }
     }
 
-    assistantStoreRef.current.addMessage(createMessage("user", adapted.userMessageContent));
+    assistantStoreRef.current.setMode(activeMode);
+    const userMessage = createMessage(
+      "user",
+      isSlashCommand ? `/${adapted.userMessageContent}` : adapted.userMessageContent
+    );
+    userMessage.contextTokens = contextTokensForTurn;
+    assistantStoreRef.current.addMessage(userMessage);
+    setComposerContextTokens([]);
+    setReaderContexts([]);
+    lastReaderContextKeyRef.current = null;
 
     if (adapted.runtimeInput.mode === "command") {
       await runCommandMessage(adapted.runtimeInput.message);
       return;
     }
 
-    await runKnowledgeMessage(adapted.runtimeInput.message, adapted.runtimeInput.mode);
+    await runKnowledgeMessage(adapted.runtimeInput.message, adapted.runtimeInput.mode, {
+      attachedContextPrompt
+    });
   }
 
   function handleEditMessage(messageId: string) {
@@ -619,6 +888,7 @@ export function AssistantPane({
 
     setEditingMessageId(message.id);
     setInput(message.content);
+    setComposerContextTokens(message.contextTokens ?? []);
     setVoiceInputMessage(undefined);
     inputRef.current?.focus();
   }
@@ -626,6 +896,7 @@ export function AssistantPane({
   function cancelEdit() {
     setEditingMessageId(null);
     setInput("");
+    setComposerContextTokens([]);
     inputRef.current?.focus();
   }
 
@@ -660,10 +931,51 @@ export function AssistantPane({
     await runKnowledgeMessage(previousUserMessage.content, currentState.mode);
   }
 
+  async function handleRetryUserMessage(messageId: string) {
+    const currentState = assistantStoreRef.current.getState();
+    if (currentState.pending) {
+      return;
+    }
+
+    const messageIndex = currentState.messages.findIndex(
+      (message) => message.id === messageId && message.role === "user"
+    );
+    const message = currentState.messages[messageIndex];
+    if (!message || message.role !== "user") {
+      return;
+    }
+
+    assistantStoreRef.current.replaceMessages(currentState.messages.slice(0, messageIndex));
+    const rawContent = message.content;
+    const isSlashCommand = rawContent.trim().startsWith("/");
+    const runtimeMessage = isSlashCommand ? rawContent.trim().slice(1).trim() : rawContent;
+    const activeMode: AssistantMode = isSlashCommand ? "command" : "qa";
+    const attachedContextPrompt = buildComposerTokenPrompt(message.contextTokens ?? []);
+    const retriedMessage = createMessage("user", rawContent);
+    retriedMessage.contextTokens = message.contextTokens;
+    assistantStoreRef.current.setMode(activeMode);
+    assistantStoreRef.current.addMessage(retriedMessage);
+    setInput("");
+    setEditingMessageId(null);
+    setComposerContextTokens([]);
+    syncAssistant();
+
+    if (activeMode === "command") {
+      await runCommandMessage(runtimeMessage);
+      return;
+    }
+
+    await runKnowledgeMessage(runtimeMessage, activeMode, {
+      attachedContextPrompt
+    });
+  }
+
   const conversationStarted = assistantState.messages.length > 0;
   const readyMessage =
-    assistantState.mode === "command" ? null : getSelectedSetReadyMessage(selectedSetStatus);
-  const composerHint = readyMessage ?? getModeHint(assistantState.mode);
+    readerContexts.length > 0 ? null : getSelectedSetReadyMessage(selectedSetStatus);
+  const composerHint =
+    readyMessage ??
+    "输入 / 开始软件命令；普通输入会结合 PDF 选区或当前文献上下文回答。";
 
   return (
     <div className={conversationStarted ? "assistant-pane in-conversation" : "assistant-pane initial-session"}>
@@ -686,13 +998,7 @@ export function AssistantPane({
             {historyOpen ? "隐藏" : "历史"}
           </button>
         </div>
-        {conversationStarted ? (
-          <div className="assistant-mode-controls">
-            <ModeSwitch mode={assistantState.mode} onChange={switchModeAsNewSession} />
-          </div>
-        ) : null}
       </div>
-      <div className="assistant-mode-label">当前模式：{getModeLabel(assistantState.mode)}</div>
 
       {historyOpen ? (
         <AssistantHistoryPanel history={sessionHistory} onRestoreSession={restoreArchivedSession} />
@@ -713,18 +1019,25 @@ export function AssistantPane({
         onModeChange={switchModeAsNewSession}
         onRegenerateMessage={handleRegenerateMessage}
         onRejectRequest={handleRejectRequest}
+        onRetryUserMessage={(messageId) => {
+          void handleRetryUserMessage(messageId);
+        }}
       />
 
       <AssistantComposer
         editing={Boolean(editingMessageId)}
         input={input}
         inputRef={inputRef}
+        contextTokens={composerContextTokens}
         modeHint={composerHint}
+        onAddContextToken={addComposerContextToken}
         onCancelEdit={cancelEdit}
         onInputChange={setInput}
+        onRemoveContextToken={removeComposerContextToken}
         onSend={handleSend}
         onVoiceInput={showVoiceInputPlaceholder}
         pending={assistantState.pending}
+        suggestions={buildComposerSuggestions()}
         voiceInputMessage={voiceInputMessage}
       />
     </div>

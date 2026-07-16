@@ -44,6 +44,7 @@ import type {
   DockMoveItemId,
   DockMoveTargetRegion
 } from "../features/skills/actionRegistry";
+import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionExecutor";
 import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
@@ -99,6 +100,8 @@ export function AppShell({
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
   const [activeCenterArtifactId, setActiveCenterArtifactId] = useState<string | null>(null);
+  const [readerConversationContext, setReaderConversationContext] =
+    useState<ReaderConversationContext | null>(null);
   const latestArtifactIdRef = useRef<string | null>(null);
 
   const workspaceSelection = useWorkspaceSelectionController({
@@ -512,6 +515,10 @@ export function AppShell({
     onOpenSharedLibrary: (summary) => {
       void organizationShell.actions.openOrganizationSharedLibrary(summary);
     },
+    onOpenSkillDocument: (entry) => {
+      artifactWorkflow.actions.openSkillDocument(entry);
+      setActiveCenterArtifactId(`skill-doc-${entry.id}`);
+    },
     onRetryCollectionSync: knowledgeSync.actions.retryCollectionSync,
     onRetryDocumentMetadataSync: knowledgeSync.actions.retryDocumentMetadataSync,
     onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
@@ -581,9 +588,13 @@ export function AppShell({
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
           }}
+          onSaveMarkdownTab={(artifactId) => {
+            void artifactWorkflow.actions.saveSkillDocument(artifactId);
+          }}
           onStartAnalysis={(artifactType) => {
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
+          onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
           selectedCount={workspaceState.selectedPaperIds.length}
           selectionLocked={workspaceState.selectionLocked}
           tabs={tabs}
@@ -591,6 +602,15 @@ export function AppShell({
         />
       </section>
     );
+  }
+
+  function addReaderContextToConversation(context: ReaderConversationContext) {
+    setReaderConversationContext(context);
+    const assistantRegionId = dock.findItemRegion("assistant") ?? "right";
+    dock.openItem("assistant");
+    if (assistantRegionId !== "main") {
+      paneLayout.setCollapsed(assistantRegionId, false);
+    }
   }
 
   function renderDockItem(itemId: DockItemId, regionId: DockRegionId) {
@@ -611,6 +631,11 @@ export function AppShell({
           onStartAnalysis={(artifactType) => {
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
+          onAddReaderContextToConversation={addReaderContextToConversation}
+          onSaveMarkdownTab={(artifactId) => {
+            void artifactWorkflow.actions.saveSkillDocument(artifactId);
+          }}
+          onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
           onToggleBottomPane={() =>
             paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
           }
@@ -634,6 +659,7 @@ export function AppShell({
           importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
           modelTransport={modelTransport}
+          readerConversationContext={readerConversationContext}
           onApplyLayoutPreset={runtimeActionContext.applyLayoutPreset}
           onApplyGeneratedTheme={runtimeActionContext.applyGeneratedTheme}
           onApplyPanelAction={runtimeActionContext.applyPanelAction}

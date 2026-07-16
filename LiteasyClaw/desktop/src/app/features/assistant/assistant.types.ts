@@ -12,11 +12,29 @@ export type AssistantMessage = {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  contextTokens?: AssistantContextToken[];
   confidence?: number;
   audit?: AnswerAuditResult;
   confirmation?: HumanConfirmationRequest;
   executionTrace?: ModelExecutionTrace;
   uiDsl?: UIDslDocument;
+};
+
+export type AssistantContextToken = {
+  detail?: string;
+  id: string;
+  kind: "paper" | "page" | "pdf_selection" | "skill";
+  label: string;
+  prompt: string;
+};
+
+export type AssistantComposerSuggestion = {
+  detail?: string;
+  id: string;
+  insertText?: string;
+  label: string;
+  token?: AssistantContextToken;
+  trigger: "/" | "@" | "$";
 };
 
 export type AssistantState = {

@@ -1,3 +1,5 @@
+import { fetchWithConfiguredProxy } from "./proxyFetch.mjs";
+
 const defaultBaseUrl = "https://api.openai.com/v1";
 
 function extractOutputText(payload) {
@@ -40,7 +42,7 @@ async function readErrorMessage(response) {
 export function createOpenAIResponsesProvider({
   apiBaseUrl = defaultBaseUrl,
   apiKey,
-  fetchImpl = fetch
+  fetchImpl = fetchWithConfiguredProxy
 }) {
   return async (input) => {
     const response = await fetchImpl(`${apiBaseUrl.replace(/\/+$/, "")}/responses`, {

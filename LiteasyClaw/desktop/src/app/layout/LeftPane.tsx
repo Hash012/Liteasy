@@ -3,6 +3,7 @@ import { OrganizationSidebarPanel } from "../features/organization/OrganizationS
 import { PersonalCenterPanel } from "../features/profile/PersonalCenterPanel";
 import { SettingsPane } from "./SettingsPane";
 import type { AcademicProfile } from "../features/profile/profile.types";
+import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import type { AccountSession } from "../features/account/account.types";
 import type { ImportJob } from "../features/import/import.types";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
@@ -48,6 +49,7 @@ export type LeftPaneProps = {
   onOpenAcademicArchive: () => void;
   onOpenOrganizationDialog: () => void;
   onOpenSharedLibrary?: (summary: OrganizationSummary) => void;
+  onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
   onReturnToLocalWorkspace: () => void;
   onRetryDocumentMetadataSync?: () => void;
   onSelectOrganization?: (organizationId: string) => void;
@@ -125,6 +127,7 @@ export function LeftPane({
   onOpenAcademicArchive,
   onOpenOrganizationDialog,
   onOpenSharedLibrary,
+  onOpenSkillDocument,
   onReturnToLocalWorkspace,
   onRetryDocumentMetadataSync,
   onSelectOrganization,
@@ -232,6 +235,7 @@ export function LeftPane({
             documentMetadataSyncMessage={documentMetadataSyncMessage}
             documentMetadataSyncResult={documentMetadataSyncResult}
             documentMetadataSyncStatus={documentMetadataSyncStatus}
+            onOpenSkillDocument={onOpenSkillDocument}
             onRetryDocumentMetadataSync={onRetryDocumentMetadataSync}
           />
         ) : (

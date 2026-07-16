@@ -24,6 +24,16 @@ describe("SettingsPane", () => {
     expect(
       within(pane).getByText("Liteasy 面向普通用户统一通过云端模型能力提供问答、解释和产物生成服务。")
     ).toBeInTheDocument();
+    expect(within(pane).getByText("Agent 核心")).toBeInTheDocument();
+    expect(within(pane).getByText("运行中")).toBeInTheDocument();
+    expect(within(pane).getAllByText("agent.md")).toHaveLength(2);
+    expect(within(pane).getByText("Skill 条目")).toBeInTheDocument();
+    expect(within(pane).getByText("Plugin 条目")).toBeInTheDocument();
+    expect(within(pane).getByText("MCP 条目")).toBeInTheDocument();
+    expect(within(pane).getByText("Memory 条目")).toBeInTheDocument();
+    expect(within(pane).getByLabelText("Agent 循环预算")).toHaveTextContent("12");
+    expect(within(pane).getByText("高风险动作需要确认")).toBeInTheDocument();
+    expect(within(pane).getByText("记忆写入前扫描注入")).toBeInTheDocument();
     expect(within(pane).getByText("文献元数据同步")).toBeInTheDocument();
     expect(within(pane).queryByText("开发云端点诊断")).not.toBeInTheDocument();
     expect(within(pane).queryByText("云代理端点：mock://cloud-proxy")).not.toBeInTheDocument();

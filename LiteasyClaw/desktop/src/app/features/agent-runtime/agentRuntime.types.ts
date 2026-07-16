@@ -59,6 +59,7 @@ export type AgentRuntimeInput = {
 };
 
 export type AgentRuntimeExecutionContext = ActionContext & {
+  agentCore?: RuntimeAgentCoreContext;
   clarifySemanticPlan?: SemanticPlanClarifier;
   contextView?: AgentRuntimeContextView;
   generateUIDsl?: (input: {
@@ -98,6 +99,21 @@ export type AgentRuntimeContextView = {
     rootPath?: string;
     type: WorkspaceSource["type"] | "unknown";
   };
+};
+
+export type RuntimeAgentCoreContext = {
+  budget: {
+    maxIterations: number;
+    maxToolCalls: number;
+  };
+  prompt: {
+    agentMd: string;
+    budgetSummary: string;
+    capabilitySummary: string;
+    memorySummary: string;
+    runtimeSummary: string;
+  };
+  promptText: string;
 };
 
 export type RuntimeRiskLevel = "low" | "medium" | "high";
@@ -288,6 +304,7 @@ export type PendingCommandClarification = {
 };
 
 export type SemanticPlannerContext = {
+  agentCore?: RuntimeAgentCoreContext;
   contextView?: AgentRuntimeContextView;
   pendingClarification?: PendingCommandClarification;
   registeredActions: RegisteredActionMetadata[];

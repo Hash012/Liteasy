@@ -20,7 +20,9 @@ function getAuditVerdict(score) {
 
 export function buildProviderRegistry(config) {
   const openaiProvider =
-    config.openaiApiKey && config.openaiApiKey.length > 0
+    config.hardcodedDevForceLocalFakeModel
+      ? async (input) => `${config.hardcodedDevFakeAnswerPrefix ?? "实验默认回复"}：${input.prompt}`
+      : config.openaiApiKey && config.openaiApiKey.length > 0
       ? createOpenAIResponsesProvider({
           apiBaseUrl: config.openaiApiBaseUrl,
           apiKey: config.openaiApiKey

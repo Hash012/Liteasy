@@ -1,3 +1,5 @@
+import { fetchWithConfiguredProxy } from "./proxyFetch.mjs";
+
 const defaultBaseUrl = "https://api.deepseek.com";
 
 function extractAssistantContent(payload) {
@@ -22,7 +24,7 @@ async function readErrorMessage(response) {
 export function createDeepSeekChatCompletionsProvider({
   apiBaseUrl = defaultBaseUrl,
   apiKey,
-  fetchImpl = fetch
+  fetchImpl = fetchWithConfiguredProxy
 }) {
   return async (input) => {
     const response = await fetchImpl(`${apiBaseUrl.replace(/\/+$/, "")}/chat/completions`, {

@@ -19,13 +19,14 @@ export type IntentRuntimeContextBundle = {
 };
 
 export function buildIntentRuntimeContexts(
-  context: Pick<AgentRuntimeExecutionContext, "contextView" | "pendingClarification">
+  context: Pick<AgentRuntimeExecutionContext, "agentCore" | "contextView" | "pendingClarification">
 ): IntentRuntimeContextBundle {
   const registeredActions = getRegisteredActionMetadata();
 
   return {
     contextView: context.contextView,
     plannerContext: {
+      agentCore: context.agentCore,
       contextView: context.contextView,
       pendingClarification: context.pendingClarification,
       registeredActions

@@ -6,6 +6,8 @@ type ArtifactTabsProps = {
   analysisHint: string;
   canStartAnalysis: boolean;
   onDynamicAction?: (action: UIDslActionRef) => void;
+  onSaveMarkdownTab?: (artifactId: string) => void;
+  onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   selectedCount: number;
   selectionLocked: boolean;
@@ -45,6 +47,8 @@ export function ArtifactTabs({
   analysisHint,
   canStartAnalysis,
   onDynamicAction,
+  onSaveMarkdownTab,
+  onUpdateMarkdownTab,
   onStartAnalysis,
   selectedCount,
   selectionLocked,
@@ -52,6 +56,7 @@ export function ArtifactTabs({
   tabs
 }: ArtifactTabsProps) {
   const activePreview = tabs[0] ? (tabs[0].preview ?? getFallbackPreview(tabs[0].type)) : null;
+  const activeTab = tabs[0] ?? null;
 
   return (
     <div className="artifact-layout">
@@ -72,6 +77,30 @@ export function ArtifactTabs({
           }
         >
           选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
+        </div>
+      ) : activeTab?.type === "skill_doc" ? (
+        <div className="artifact-card skill-doc-card">
+          <div className="skill-doc-header">
+            <div>
+              <div className="artifact-card-title">{activeTab.title}</div>
+              {activeTab.sourcePath ? (
+                <div className="skill-doc-path">{activeTab.sourcePath}</div>
+              ) : null}
+            </div>
+            <button
+              className="skill-doc-save-button"
+              onClick={() => onSaveMarkdownTab?.(activeTab.artifactId)}
+              type="button"
+            >
+              保存文档
+            </button>
+          </div>
+          <textarea
+            aria-label={`编辑 Skill 文档：${activeTab.title}`}
+            className="skill-doc-editor"
+            onChange={(event) => onUpdateMarkdownTab?.(activeTab.artifactId, event.target.value)}
+            value={activeTab.markdown ?? ""}
+          />
         </div>
       ) : (
         <div className="artifact-card">

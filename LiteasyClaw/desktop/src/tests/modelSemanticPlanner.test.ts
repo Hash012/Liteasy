@@ -1,4 +1,5 @@
 import { createModelSemanticPlanner } from "../app/features/agent-runtime/modelSemanticPlanner";
+import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
 import { getRegisteredActionMetadata } from "../app/features/skills/actionRegistry";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import { vi } from "vitest";
@@ -228,6 +229,70 @@ test("uses the model planner to generate a structured freeform theme", async () 
   expect(JSON.parse(modelTransport.mock.calls[0][0].body).prompt).toContain(
     "不要输出任意 CSS"
   );
+});
+
+test("includes agent core context in model planner prompts", async () => {
+  const settings = createSettingsStore().getState();
+  const session = createAgentCoreSession();
+  const prepared = session.prepareTurn({
+    message: "打开组织资料区",
+    mode: "command"
+  });
+  if (!prepared.ok) {
+    throw new Error("expected prepared agent turn");
+  }
+  const modelTransport = vi.fn(async () => ({
+    json: async () => ({
+      answer: JSON.stringify({
+        actions: [
+          {
+            actionId: "organization.open_shared_library",
+            input: {
+              source: "organization_space"
+            }
+          }
+        ],
+        confidence: "high",
+        intentId: "organization.open_shared_library",
+        planId: "model-plan-agent-core-context",
+        requiredContext: [],
+        requiresConfirmation: false,
+        riskLevel: "medium",
+        summary: "打开组织资料区"
+      }),
+      execution: {
+        backend: "dev_cloud",
+        mode: "live",
+        provider: "openai"
+      }
+    }),
+    ok: true,
+    status: 200
+  }));
+  const planner = createModelSemanticPlanner({
+    modelTransport,
+    settings: {
+      ...settings,
+      "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
+    }
+  });
+
+  await planner(
+    {
+      message: "打开组织资料区",
+      mode: "command"
+    },
+    {
+      ...plannerContext,
+      agentCore: prepared.turn.runtimeContext
+    }
+  );
+
+  const prompt = JSON.parse(modelTransport.mock.calls[0][0].body).prompt;
+  expect(prompt).toContain("Agent核心上下文");
+  expect(prompt).toContain("Liteasy 学术工作台 Agent");
+  expect(prompt).toContain("organization.open_shared_library");
+  expect(prompt).toContain("Memory");
 });
 
 test("does not synthesize generated themes from the desktop mock planner", async () => {

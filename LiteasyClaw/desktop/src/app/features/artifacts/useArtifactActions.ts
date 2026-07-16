@@ -1,4 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
+import type { AgentCoreCatalogEntry } from "../agent-core/agentCoreConfig";
 import type { Paper, SelectedDocumentSet } from "../workspace/workspace.types";
 import type { ImportQueueStatus } from "../workspace/useWorkspaceActions";
 import { buildArtifactPreview } from "./artifactPreview";
@@ -143,11 +145,62 @@ export function useArtifactActions({
     syncArtifacts();
   }
 
+  function openSkillDocument(entry: AgentCoreCatalogEntry) {
+    const artifactId = `skill-doc-${entry.id}`;
+    artifactStore.upsertTab({
+      artifactId,
+      markdown: entry.docMarkdown ?? `# ${entry.id}\n\n${entry.description}`,
+      sourcePath: entry.docPath,
+      title: `${entry.id}.md`,
+      type: "skill_doc"
+    });
+    syncArtifacts();
+  }
+
+  function updateSkillDocument(artifactId: string, markdown: string) {
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId);
+    if (!existing || existing.type !== "skill_doc") {
+      return;
+    }
+
+    artifactStore.upsertTab({
+      ...existing,
+      markdown
+    });
+    syncArtifacts();
+  }
+
+  async function saveSkillDocument(artifactId: string) {
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId);
+    if (!existing || existing.type !== "skill_doc") {
+      return;
+    }
+
+    if (!existing.sourcePath) {
+      onAnalysisHint("当前 skill 文档缺少源路径，无法写回文件。");
+      return;
+    }
+
+    try {
+      // 写文件动作收敛到 Tauri 端做路径白名单校验，前端只传逻辑源路径和正文。
+      await invoke("save_skill_document", {
+        markdown: existing.markdown ?? "",
+        sourcePath: existing.sourcePath
+      });
+      onAnalysisHint(`已保存 skill 文档：${existing.title}`);
+    } catch (error) {
+      onAnalysisHint(`保存 skill 文档失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   return {
     closeArtifactTab,
     handleAssistantArtifact,
+    openSkillDocument,
+    saveSkillDocument,
     startAnalysis,
     startArtifactTask,
-    syncArtifacts
+    syncArtifacts,
+    updateSkillDocument
   };
 }

@@ -7,6 +7,7 @@ import type { createSettingsStore } from "../features/settings/settings.store";
 import type { ActionContext } from "../features/skills/actionRegistry";
 import type { DockRegionId } from "../features/dock/dock.types";
 import type { Paper, WorkspaceSource } from "../features/workspace/workspace.types";
+import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
@@ -25,6 +26,7 @@ type AssistantSidebarProps = {
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
+  readerConversationContext?: ReaderConversationContext | null;
   regionId?: Exclude<DockRegionId, "main">;
   runtimeOrganizationName?: string;
   runtimeWorkspace?: Partial<WorkspaceSource>;
@@ -49,6 +51,7 @@ export function AssistantSidebar({
   onOpenOrganizationSharedLibrary,
   onSettingsChanged,
   profileUnlocked = false,
+  readerConversationContext = null,
   regionId = "right",
   runtimeOrganizationName,
   runtimeWorkspace,
@@ -78,6 +81,7 @@ export function AssistantSidebar({
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onSettingsChanged={onSettingsChanged}
           profileUnlocked={profileUnlocked}
+          readerConversationContext={readerConversationContext}
           runtimeOrganizationName={runtimeOrganizationName}
           runtimeWorkspace={runtimeWorkspace}
           selectedPapers={selectedPapers}

@@ -1,11 +1,5 @@
 import type { AssistantMode, SelectedSetStatus } from "./assistant.types";
 
-export const modeLauncherItems: Array<{ id: AssistantMode; label: string; summary: string }> = [
-  { id: "explain", label: "名词解释", summary: "概念解释" },
-  { id: "command", label: "命令", summary: "受控操作" },
-  { id: "qa", label: "问答", summary: "原文定位" }
-];
-
 export function getModeLabel(mode: AssistantMode) {
   if (mode === "command") {
     return "命令";
@@ -16,18 +10,6 @@ export function getModeLabel(mode: AssistantMode) {
   }
 
   return "名词解释";
-}
-
-export function getModeHint(mode: AssistantMode) {
-  if (mode === "command") {
-    return "命令模式可输入“打开组织共享文献库”“关闭联网推荐”“开启用户画像”等受控指令。";
-  }
-
-  if (mode === "qa") {
-    return "问答模式会基于已导入的选中文献集给出带引用回答。";
-  }
-
-  return "名词解释模式会基于已导入文献给出概念说明。";
 }
 
 export function getSelectedSetReadyMessage(selectedSetStatus: SelectedSetStatus) {
