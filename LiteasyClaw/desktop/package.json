@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev-with-cloud.mjs --dev:cloud --dev:desktop",
+    "dev:test-api": "node scripts/dev-with-test-api.mjs",
     "dev:cloud": "node ../services/dev-cloud/server.mjs",
     "dev:cloud-and-desktop": "node scripts/dev-with-cloud.mjs",
     "dev:desktop": "vite --host 127.0.0.1 --port 1420",

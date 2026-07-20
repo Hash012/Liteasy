@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createOpenAIResponsesProvider } from "./openaiResponses.mjs";
+import { Readable } from "node:stream";
+import {
+  createOpenAIResponsesProvider,
+  createOpenAIResponsesStreamProvider
+} from "./openaiResponses.mjs";
 
 test("posts to the OpenAI Responses API and extracts text output", async () => {
   let capturedRequest;
@@ -76,4 +80,31 @@ test("throws a readable error when the OpenAI provider returns a non-ok status",
     }),
     /OpenAI Responses API 请求失败.*429.*quota exceeded/
   );
+});
+
+test("yields output_text deltas from the OpenAI Responses SSE stream", async () => {
+  let capturedBody;
+  const provider = createOpenAIResponsesStreamProvider({
+    apiKey: "sk-test",
+    fetchImpl: async (_url, init) => {
+      capturedBody = JSON.parse(init.body);
+      return {
+        body: Readable.from([
+          Buffer.from('data: {"type":"response.output_text.delta","delta":"Hello "}\n\n'),
+          Buffer.from('data: {"type":"response.output_text.delta","delta":"stream"}\n\n'),
+          Buffer.from('data: {"type":"response.completed"}\n\n')
+        ]),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+  const deltas = [];
+
+  for await (const delta of provider({ model: "gpt-5.5", prompt: "test" })) {
+    deltas.push(delta);
+  }
+
+  assert.deepEqual(deltas, ["Hello ", "stream"]);
+  assert.equal(capturedBody.stream, true);
 });

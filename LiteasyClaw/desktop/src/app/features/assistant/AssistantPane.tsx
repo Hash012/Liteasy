@@ -3,6 +3,7 @@ import { AssistantComposer } from "./AssistantComposer";
 import { AssistantHistoryPanel } from "./AssistantHistoryPanel";
 import { AssistantMessageList } from "./AssistantMessageList";
 import type {
+  AssistantConfirmationRequest,
   AssistantMessage,
   AssistantComposerSuggestion,
   AssistantContextToken,
@@ -10,6 +11,12 @@ import type {
   AssistantState,
   SelectedSetStatus
 } from "./assistant.types";
+import type { FrontendAgentClient } from "../agent-api/frontendAgentClient";
+import type {
+  AgentConfirmationRequest,
+  AgentEvent,
+  AgentRun
+} from "../agent-api/agentApi.types";
 import { createSettingsStore } from "../settings/settings.store";
 import type { ArtifactType } from "../artifacts/artifact.types";
 import { createAssistantStore } from "./assistant.store";
@@ -21,34 +28,30 @@ import {
 import { buildAgentRuntimeContextView } from "../agent-runtime/contextView";
 import { executeUIDslActionRef } from "../agent-runtime/dynamicActionExecutor";
 import { adaptDefaultUiIntent, adaptTextIntent } from "../agent-runtime/intentInputAdapter";
-import { createModelAssistedClarification } from "../agent-runtime/modelClarification";
-import { createModelSemanticPlanner } from "../agent-runtime/modelSemanticPlanner";
 import {
   executeConfirmedSemanticPlan,
   rejectHumanConfirmation
 } from "../agent-runtime/planExecutor";
-import { runAgentRuntime } from "../agent-runtime/runtimeOrchestrator";
 import type {
   AgentRuntimeEvent,
   AgentRuntimeExecutionContext,
-  HumanConfirmationRequest,
-  PendingCommandClarification
+  HumanConfirmationRequest
 } from "../agent-runtime/agentRuntime.types";
-import { createExecutionJournal } from "../generative-ui/executionJournal";
-import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
+import {
+  createExecutionJournal,
+  type ExecutionJournal
+} from "../generative-ui/executionJournal";
+import type { UIDslActionRef, UIDslDocument } from "../generative-ui/generativeUi.types";
+import { validateUIDslDocument } from "../generative-ui/uiDslValidator";
 import { createModelAssistedJournalAuditModel } from "../generative-ui/journalAuditModel";
 import { createModelAssistedUIDslGenerator } from "../generative-ui/uiDslGenerator";
 import type { ModelTransport } from "../models/modelHttpClient";
 import type { ActionContext } from "../skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
-import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
-import {
-  createAgentCoreSession,
-  type AgentCorePreparedTurn
-} from "../agent-core/agentCoreSession";
 import { defaultAgentCoreConfig } from "../agent-core/agentCoreConfig";
-import { generateAssistantAnswer } from "./generateAssistantAnswer";
+import type { AnswerAuditResult } from "./answerAuditor";
+import type { ModelExecutionTrace } from "../models/modelExecution";
 import { AssistantContextPanel } from "./AssistantContextPanel";
 import {
   getAssistantErrorMessage,
@@ -59,7 +62,8 @@ import type { ReaderConversationContext } from "./assistantContext.types";
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantPaneProps = {
-  importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
+  agentClient: FrontendAgentClient;
+  executionJournal?: ExecutionJournal;
   modelTransport?: ModelTransport;
   onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
@@ -79,6 +83,12 @@ type AssistantPaneProps = {
   selectedSetStatus: SelectedSetStatus;
   settingsStore?: SettingsStoreLike;
 };
+
+function isPublicConfirmation(
+  confirmation: AssistantConfirmationRequest
+): confirmation is AgentConfirmationRequest {
+  return !("plan" in confirmation);
+}
 
 function cloneAssistantState(state: AssistantState): AssistantState {
   return {
@@ -174,7 +184,8 @@ function getTraceIdFromRuntimeEvents(events: AgentRuntimeEvent[]) {
 }
 
 export function AssistantPane({
-  importedChunksByPaperId = {},
+  agentClient,
+  executionJournal,
   modelTransport,
   onApplyGeneratedTheme,
   onApplyLayoutPreset,
@@ -195,9 +206,8 @@ export function AssistantPane({
   settingsStore
 }: AssistantPaneProps) {
   const assistantStoreRef = useRef(createAssistantStore());
-  const agentCoreRef = useRef(createAgentCoreSession());
-  const executionJournalRef = useRef(createExecutionJournal());
-  const pendingCommandClarificationRef = useRef<PendingCommandClarification | undefined>();
+  const executionJournalRef = useRef(executionJournal ?? createExecutionJournal());
+  const processedAgentRunSequencesRef = useRef(new Map<string, number>());
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const lastReaderContextKeyRef = useRef<string | null>(null);
   const settingsStoreRef = useRef(settingsStore ?? createSettingsStore());
@@ -386,7 +396,8 @@ export function AssistantPane({
 
     if (currentState.messages.length > 0) {
       archiveCurrentSession();
-      agentCoreRef.current = createAgentCoreSession();
+      void agentClient?.close();
+      processedAgentRunSequencesRef.current.clear();
       clearReaderConversationContexts();
       assistantStoreRef.current.clearMessages();
       setHistoryOpen(false);
@@ -411,7 +422,8 @@ export function AssistantPane({
 
   function startNewSession() {
     archiveCurrentSession();
-    agentCoreRef.current = createAgentCoreSession();
+    void agentClient?.close();
+    processedAgentRunSequencesRef.current.clear();
     clearReaderConversationContexts();
     assistantStoreRef.current.clearMessages();
     setHistoryOpen(false);
@@ -430,7 +442,8 @@ export function AssistantPane({
       return;
     }
 
-    agentCoreRef.current = createAgentCoreSession();
+    void agentClient?.close();
+    processedAgentRunSequencesRef.current.clear();
     clearReaderConversationContexts();
     setHistoryOpen(false);
     setInput("");
@@ -443,19 +456,9 @@ export function AssistantPane({
     inputRef.current?.focus();
   }
 
-  function createRuntimeExecutionContext(
-    options: {
-      agentCoreTurn?: AgentCorePreparedTurn;
-      includeSemanticPlanner?: boolean;
-    } = {}
-  ): AgentRuntimeExecutionContext {
+  function createRuntimeExecutionContext(): AgentRuntimeExecutionContext {
     return {
-      agentCore: options.agentCoreTurn?.runtimeContext,
       contextView: runtimeContext,
-      clarifySemanticPlan: createModelAssistedClarification({
-        modelTransport,
-        settings: settingsStoreRef.current.getState()
-      }),
       applyGeneratedTheme: onApplyGeneratedTheme,
       applyLayoutPreset: onApplyLayoutPreset,
       applyPanelAction: onApplyPanelAction,
@@ -469,14 +472,7 @@ export function AssistantPane({
       moveDockItem: onMoveDockItem,
       openAcademicArchive: onOpenAcademicArchive,
       openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
-      pendingClarification: pendingCommandClarificationRef.current,
       profileUnlocked,
-      semanticPlanner: options.includeSemanticPlanner
-        ? createModelSemanticPlanner({
-            modelTransport,
-            settings: settingsStoreRef.current.getState()
-          })
-        : undefined,
       settingsStore: settingsStoreRef.current,
       startArtifactAnalysis: onGenerateArtifact
     };
@@ -514,6 +510,131 @@ export function AssistantPane({
     events.forEach((event) => {
       appendRuntimeEvent(event);
     });
+  }
+
+  function appendPublicAgentEvent(event: AgentEvent) {
+    if (event.type === "ui.render") {
+      const document = event.document as unknown as UIDslDocument;
+      const validation = validateUIDslDocument(document);
+      if (!validation.valid) {
+        assistantStoreRef.current.addMessage(
+          createMessage("assistant", `Agent 返回的界面数据无效：${validation.errors.join("；")}`)
+        );
+        return;
+      }
+
+      const currentMessages = assistantStoreRef.current.getState().messages;
+      const lastMessage = currentMessages[currentMessages.length - 1];
+      if (lastMessage?.role === "assistant") {
+        assistantStoreRef.current.replaceMessages([
+          ...currentMessages.slice(0, -1),
+          {
+            ...lastMessage,
+            uiDsl: document
+          }
+        ]);
+        return;
+      }
+      const assistantMessage = createMessage("assistant", "动态界面已准备。");
+      assistantMessage.uiDsl = document;
+      assistantStoreRef.current.addMessage(assistantMessage);
+      return;
+    }
+
+    if (event.type === "assistant.message") {
+      const assistantMessage = createMessage("assistant", event.message);
+      assistantMessage.citations = event.citations;
+      assistantMessage.confidence = event.confidence;
+      if (event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)) {
+        const metadata = event.metadata as {
+          audit?: AnswerAuditResult;
+          executionTrace?: ModelExecutionTrace;
+        };
+        assistantMessage.audit = metadata.audit;
+        assistantMessage.executionTrace = metadata.executionTrace;
+      }
+      assistantStoreRef.current.addMessage(assistantMessage);
+      return;
+    }
+
+    let message: string | null = null;
+    if (event.type === "plan.preview") {
+      message = `计划：${event.plan.summary}`;
+    } else if (event.type === "progress.started") {
+      message = `开始执行：${event.summary}`;
+    } else if (event.type === "clarification.required") {
+      message = event.question;
+    } else if (event.type === "confirmation.required") {
+      message = event.summary;
+    } else if (event.type === "action.requested") {
+      message = `准备执行受控动作：${event.action.actionId}`;
+    } else if (event.type === "action.failed" || event.type === "run.failed") {
+      message = event.message;
+    } else if (event.type === "task.requested") {
+      message = "后台任务已请求。";
+    } else if (event.type === "task.created") {
+      message = "后台任务已创建。";
+    } else if (event.type === "artifact.requested") {
+      message = "产物创建已请求。";
+    } else if (event.type === "run.cancelled") {
+      message = event.reason ? `运行已取消：${event.reason}` : "运行已取消。";
+    }
+
+    if (!message) {
+      return;
+    }
+    const assistantMessage = createMessage("assistant", message);
+    if (event.type === "confirmation.required") {
+      assistantMessage.confirmation = event;
+    }
+    assistantStoreRef.current.addMessage(assistantMessage);
+  }
+
+  function consumePublicAgentRun(run: AgentRun) {
+    const lastSequence = processedAgentRunSequencesRef.current.get(run.runId) ?? 0;
+    run.events
+      .filter((event) => event.sequence > lastSequence)
+      .forEach(appendPublicAgentEvent);
+    const latestSequence = run.events[run.events.length - 1]?.sequence ?? lastSequence;
+    processedAgentRunSequencesRef.current.set(run.runId, latestSequence);
+  }
+
+  function getTraceIdFromPublicRun(run: AgentRun) {
+    const progress = run.events.find((event) => event.type === "progress.started");
+    if (progress?.type === "progress.started") {
+      return progress.traceId;
+    }
+    const confirmation = run.events.find((event) => event.type === "confirmation.required");
+    if (confirmation?.type === "confirmation.required") {
+      return confirmation.traceId;
+    }
+    const plan = run.events.find((event) => event.type === "plan.preview");
+    return plan?.type === "plan.preview" ? `trace-${plan.plan.planId}` : undefined;
+  }
+
+  async function runPublicAgentMessage(message: string, mode: AssistantMode) {
+    assistantStoreRef.current.setPending(true);
+    syncAssistant();
+    try {
+      const result = await agentClient.send({ message, mode });
+      if (!result.ok) {
+        assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
+        return;
+      }
+      consumePublicAgentRun(result.data);
+      if (mode === "command") {
+        await appendJournalAudit(getTraceIdFromPublicRun(result.data));
+      }
+      setInput("");
+      setEditingMessageId(null);
+    } catch (error) {
+      assistantStoreRef.current.addMessage(
+        createMessage("assistant", getAssistantErrorMessage(error))
+      );
+    } finally {
+      assistantStoreRef.current.setPending(false);
+      syncAssistant();
+    }
   }
 
   async function appendJournalAudit(traceId: string | undefined) {
@@ -557,98 +678,25 @@ export function AssistantPane({
     );
   }
 
-  function updatePendingCommandClarification(input: string, events: AgentRuntimeEvent[]) {
-    const clarification = events.find(
-      (event) => event.type === "clarification_request" && event.kind === "ambiguous_action"
-    );
-
-    if (clarification?.type === "clarification_request") {
-      pendingCommandClarificationRef.current = {
-        clarification: {
-          candidates: clarification.candidates,
-          kind: clarification.kind,
-          missing: clarification.missing,
-          question: clarification.question
-        },
-        previousInput: input
-      };
-      return;
-    }
-
-    pendingCommandClarificationRef.current = undefined;
-  }
-
   async function runCommandMessage(message: string) {
-    assistantStoreRef.current.setPending(true);
-    syncAssistant();
-
-    let preparedTurn: AgentCorePreparedTurn | undefined;
-
-    try {
-      const prepared = agentCoreRef.current.prepareTurn({
-        message,
-        mode: "command",
-        runtimeContext
-      });
-
-      if (!prepared.ok) {
-        appendRuntimeEvents(prepared.events);
-        setInput("");
-        setEditingMessageId(null);
-        return;
-      }
-      preparedTurn = prepared.turn;
-
-      const result = await runAgentRuntime(
-        {
-          message,
-          mode: "command"
-        },
-        createRuntimeExecutionContext({
-          agentCoreTurn: preparedTurn,
-          includeSemanticPlanner: true
-        })
-      );
-
-      agentCoreRef.current.observeRuntimeTurn({
-        events: result.events,
-        turn: preparedTurn
-      });
-      appendRuntimeEvents(result.events);
-      updatePendingCommandClarification(message, result.events);
-      await appendJournalAudit(getTraceIdFromRuntimeEvents(result.events));
-
-      if (result.settingsChanged) {
-        onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
-      }
-      setInput("");
-      setEditingMessageId(null);
-    } catch (error) {
-      if (preparedTurn) {
-        agentCoreRef.current.observeRuntimeTurn({
-          events: [
-            {
-              message: getAssistantErrorMessage(error),
-              recovery: "请稍后重试，或缩小命令范围后重新发送。",
-              type: "runtime_error"
-            }
-          ],
-          turn: preparedTurn
-        });
-      }
-      assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error)));
-    } finally {
-      assistantStoreRef.current.setPending(false);
-      syncAssistant();
-    }
+    await runPublicAgentMessage(message, "command");
   }
 
-  async function handleConfirmRequest(confirmation: HumanConfirmationRequest) {
+  async function handleConfirmRequest(confirmation: AssistantConfirmationRequest) {
     assistantStoreRef.current.setPending(true);
     clearConfirmationMessage(confirmation.confirmationId);
     syncAssistant();
 
     try {
+      if (isPublicConfirmation(confirmation)) {
+        const result = await agentClient.confirm(confirmation.confirmationId, "approve");
+        if (!result.ok) {
+          throw new Error(result.error.message);
+        }
+        consumePublicAgentRun(result.data);
+        await appendJournalAudit(confirmation.traceId);
+        return;
+      }
       const result = await executeConfirmedSemanticPlan(
         confirmation,
         createRuntimeExecutionContext()
@@ -667,13 +715,25 @@ export function AssistantPane({
     }
   }
 
-  function handleRejectRequest(confirmation: HumanConfirmationRequest) {
+  async function handleRejectRequest(confirmation: AssistantConfirmationRequest) {
     clearConfirmationMessage(confirmation.confirmationId);
+    if (isPublicConfirmation(confirmation)) {
+      const result = await agentClient.confirm(confirmation.confirmationId, "reject");
+      if (!result.ok) {
+        assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
+      } else {
+        consumePublicAgentRun(result.data);
+        await appendJournalAudit(confirmation.traceId);
+      }
+      syncAssistant();
+      inputRef.current?.focus();
+      return;
+    }
     const result = rejectHumanConfirmation(confirmation, {
       journal: executionJournalRef.current
     });
     appendRuntimeEvents(result.events);
-    void appendJournalAudit(confirmation.traceId).then(syncAssistant);
+    await appendJournalAudit(confirmation.traceId);
     syncAssistant();
     inputRef.current?.focus();
   }
@@ -761,69 +821,11 @@ export function AssistantPane({
       return;
     }
 
-    assistantStoreRef.current.setPending(true);
-    syncAssistant();
-
-    const prepared = agentCoreRef.current.prepareTurn({
-      // PDF 选区来自用户显式右键/按钮加入，应优先作为本轮问答的局部证据。
-      message:
-        combinedContextPrompt.length > 0
-          ? `${combinedContextPrompt}\n\n用户问题：${question}`
-          : question,
-      mode,
-      runtimeContext
-    });
-
-    if (!prepared.ok) {
-      appendRuntimeEvents(prepared.events);
-      assistantStoreRef.current.setPending(false);
-      setInput("");
-      setEditingMessageId(null);
-      syncAssistant();
-      inputRef.current?.focus();
-      return;
-    }
-
-    try {
-      const answer = await generateAssistantAnswer({
-        agentCoreContext: prepared.turn.runtimeContext.prompt,
-        importedChunksByPaperId,
-        modelTransport,
-        mode,
-        question:
-          combinedContextPrompt.length > 0
-            ? `${combinedContextPrompt}\n\n用户问题：${question}`
-            : question,
-        selectedPapers,
-        settings: settingsStoreRef.current.getState()
-      });
-      const assistantMessage = createMessage("assistant", answer.content);
-      assistantMessage.audit = answer.audit;
-      assistantMessage.citations = answer.citations;
-      assistantMessage.confidence = answer.confidence;
-      assistantMessage.executionTrace = answer.executionTrace;
-      assistantMessage.uiDsl = answer.uiDsl;
-
-      agentCoreRef.current.observeKnowledgeTurn({
-        summary: answer.answer,
-        turn: prepared.turn
-      });
-      assistantStoreRef.current.addMessage(assistantMessage);
-      setInput("");
-      setEditingMessageId(null);
-    } catch (error) {
-      agentCoreRef.current.observeKnowledgeTurn({
-        failed: true,
-        summary: getAssistantErrorMessage(error),
-        turn: prepared.turn
-      });
-      assistantStoreRef.current.addMessage(
-        createMessage("assistant", getAssistantErrorMessage(error))
-      );
-    } finally {
-      assistantStoreRef.current.setPending(false);
-      syncAssistant();
-    }
+    const publicQuestion =
+      combinedContextPrompt.length > 0
+        ? `${combinedContextPrompt}\n\n用户问题：${question}`
+        : question;
+    await runPublicAgentMessage(publicQuestion, mode);
   }
 
   async function handleSend() {

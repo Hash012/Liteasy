@@ -150,9 +150,15 @@ node server.mjs
 export OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
+若兼容端点不提供默认的 `gpt-5-mini`，启动桌面开发进程前设置：
+
+```bash
+export VITE_LITEASY_OPENAI_MODEL=端点实际支持的模型ID
+```
+
 说明：
 
-- 配置了 `OPENAI_API_KEY`：`POST /v1/model/generate` 会走真实 OpenAI Responses API
+- 配置了 `OPENAI_API_KEY`：`POST /v1/model/generate` 会走真实 OpenAI Responses API；`POST /v1/model/generate-stream` 把 Responses SSE 转成浏览器易消费的 NDJSON delta
 - 没配置 `OPENAI_API_KEY`：会自动回退到内置开发回答，便于本地演示；命令模式 planner 不会再为主题命令合成结构化动作
 
 如果你希望改用 DeepSeek，请配置 DeepSeek key 和默认 provider：

@@ -1,4 +1,7 @@
-import { LibraryPane } from "../features/library/LibraryPane";
+import {
+  LibraryPane,
+  type LibraryPaperChildItem
+} from "../features/library/LibraryPane";
 import { OrganizationSidebarPanel } from "../features/organization/OrganizationSidebarPanel";
 import { PersonalCenterPanel } from "../features/profile/PersonalCenterPanel";
 import { SettingsPane } from "./SettingsPane";
@@ -15,6 +18,7 @@ import type { SettingsState } from "../features/settings/settings.types";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 export type LeftPaneProps = {
+  activePaperId?: string | null;
   academicProfile: AcademicProfile;
   accountSession: AccountSession | null;
   collectionItems: CollectionItem[];
@@ -25,6 +29,7 @@ export type LeftPaneProps = {
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
   governanceMessage: string;
   importJobs: Record<string, ImportJob>;
+  libraryPaperChildren?: Record<string, LibraryPaperChildItem[]>;
   governanceStatus: OrganizationGovernanceStatus;
   governanceSummary: OrganizationGovernanceSummary | null;
   leftRailView: LeftRailView;
@@ -48,6 +53,8 @@ export type LeftPaneProps = {
   onMarkNotificationsRead?: (summary: OrganizationSummary) => void;
   onOpenAcademicArchive: () => void;
   onOpenOrganizationDialog: () => void;
+  onOpenPaper?: (paperId: string) => void;
+  onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onOpenSharedLibrary?: (summary: OrganizationSummary) => void;
   onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
   onReturnToLocalWorkspace: () => void;
@@ -94,6 +101,7 @@ function getPaneHeader(leftRailView: LeftRailView) {
 }
 
 export function LeftPane({
+  activePaperId,
   academicProfile,
   accountSession,
   collectionItems,
@@ -104,6 +112,7 @@ export function LeftPane({
   documentMetadataSyncStatus,
   governanceMessage,
   importJobs,
+  libraryPaperChildren,
   governanceStatus,
   governanceSummary,
   leftRailView,
@@ -126,6 +135,8 @@ export function LeftPane({
   onMarkNotificationsRead,
   onOpenAcademicArchive,
   onOpenOrganizationDialog,
+  onOpenPaper,
+  onOpenPaperChild,
   onOpenSharedLibrary,
   onOpenSkillDocument,
   onReturnToLocalWorkspace,
@@ -241,11 +252,13 @@ export function LeftPane({
         ) : (
           <LibraryPane
             accountSessionAvailable={accountSession !== null}
+            activePaperId={activePaperId}
             canOpenOrganizationWorkspace={canOpenOrganizationWorkspace}
             collectionItems={collectionItems}
             collectionMessage={collectionMessage}
             collectionStatus={collectionStatus}
             importJobs={importJobs}
+            paperChildren={libraryPaperChildren}
             onAddExternalPaper={onAddExternalPaper}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
@@ -257,6 +270,8 @@ export function LeftPane({
                 onOpenSharedLibrary?.(organizationSummary);
               }
             }}
+            onOpenPaper={onOpenPaper}
+            onOpenPaperChild={onOpenPaperChild}
             onRetryCollectionSync={onRetryCollectionSync}
             onReturnToLocalWorkspace={onReturnToLocalWorkspace}
             onToggleLock={onToggleLock}

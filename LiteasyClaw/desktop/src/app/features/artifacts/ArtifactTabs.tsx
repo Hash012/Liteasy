@@ -1,11 +1,22 @@
-import type { ArtifactTab, ArtifactTask, ArtifactType } from "./artifact.types";
-import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
+import { useEffect, useState } from "react";
+import type {
+  ArtifactRegenerationRequest,
+  ArtifactTab,
+  ArtifactTask,
+  ArtifactType
+} from "./artifact.types";
+import { DynamicCanvas, OutlineTree } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 
 type ArtifactTabsProps = {
+  activeArtifactId?: string | null;
   analysisHint: string;
   canStartAnalysis: boolean;
+  onActivateArtifact?: (artifactId: string) => void;
   onDynamicAction?: (action: UIDslActionRef) => void;
+  onRegenerateArtifact?: (
+    request: ArtifactRegenerationRequest
+  ) => string | void | Promise<string | void>;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
@@ -43,10 +54,27 @@ function getFallbackPreview(type: ArtifactType) {
   };
 }
 
+const taskStatusLabels: Record<ArtifactTask["status"], string> = {
+  completed: "已完成",
+  failed: "失败",
+  queued: "准备中",
+  running: "分析中"
+};
+
+function cleanAgentAnswer(answer: string) {
+  return answer
+    .replace(/^\s*```(?:text|markdown|md)?\s*$/gim, "")
+    .replace(/^\s*```\s*$/gim, "")
+    .trim();
+}
+
 export function ArtifactTabs({
+  activeArtifactId,
   analysisHint,
   canStartAnalysis,
+  onActivateArtifact,
   onDynamicAction,
+  onRegenerateArtifact,
   onSaveMarkdownTab,
   onUpdateMarkdownTab,
   onStartAnalysis,
@@ -55,17 +83,108 @@ export function ArtifactTabs({
   tasks,
   tabs
 }: ArtifactTabsProps) {
-  const activePreview = tabs[0] ? (tabs[0].preview ?? getFallbackPreview(tabs[0].type)) : null;
-  const activeTab = tabs[0] ?? null;
+  const [regenerationOpen, setRegenerationOpen] = useState(false);
+  const [supplementalContext, setSupplementalContext] = useState("");
+  const [submittingRegeneration, setSubmittingRegeneration] = useState(false);
+  const activeTab = tabs.find((tab) => tab.artifactId === activeArtifactId) ?? tabs[0] ?? null;
+  const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
+  const activeTask = tasks[0] ?? null;
+
+  useEffect(() => {
+    setRegenerationOpen(false);
+    setSupplementalContext("");
+  }, [activeTab?.artifactId]);
+
+  async function submitRegeneration() {
+    if (!activeTab || activeTab.type === "skill_doc" || !onRegenerateArtifact) {
+      return;
+    }
+    const trimmedContext = supplementalContext.trim();
+    if (!trimmedContext) {
+      return;
+    }
+    setSubmittingRegeneration(true);
+    try {
+      await onRegenerateArtifact({
+        artifactId: activeTab.artifactId,
+        artifactType: activeTab.type,
+        papers: activeTab.papers ?? [],
+        supplementalContext: trimmedContext
+      });
+      setRegenerationOpen(false);
+      setSupplementalContext("");
+    } finally {
+      setSubmittingRegeneration(false);
+    }
+  }
 
   return (
     <div className="artifact-layout">
       <div className="artifact-toolbar">
         <span className="artifact-title">多模态产物</span>
-        {tasks.length > 0 && (
-          <span className="artifact-status-badge">{tasks[0].status}</span>
+        {activeTask && (
+          <span className={`artifact-status-badge ${activeTask.status}`}>
+            {taskStatusLabels[activeTask.status]}
+          </span>
         )}
       </div>
+
+      {tabs.length > 1 ? (
+        <nav aria-label="产物历史" className="artifact-history-list">
+          {tabs.map((tab) => (
+            <button
+              aria-current={tab.artifactId === activeTab?.artifactId ? "page" : undefined}
+              className={tab.artifactId === activeTab?.artifactId ? "active" : ""}
+              key={tab.artifactId}
+              onClick={() => onActivateArtifact?.(tab.artifactId)}
+              title={tab.title}
+              type="button"
+            >
+              <span>{tab.title}</span>
+              {tab.createdAt ? (
+                <time dateTime={tab.createdAt}>
+                  {new Date(tab.createdAt).toLocaleString("zh-CN", {
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    month: "2-digit"
+                  })}
+                </time>
+              ) : null}
+            </button>
+          ))}
+        </nav>
+      ) : null}
+
+      {activeTask && activeTask.status !== "completed" ? (
+        <section className={`artifact-progress-panel ${activeTask.status}`} aria-live="polite">
+          <div className="artifact-progress-copy">
+            <strong>{activeTask.message}</strong>
+            <span>{activeTask.progress}%</span>
+          </div>
+          <div
+            aria-label="Agent 分析进度"
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={activeTask.progress}
+            className="artifact-progress-track"
+            role="progressbar"
+          >
+            <span style={{ width: `${activeTask.progress}%` }} />
+          </div>
+          {activeTask.partialOutlineNodes && activeTask.partialOutlineNodes.length > 0 ? (
+            <div className="artifact-stream-tree" aria-label="正在生成的树形预览">
+              <OutlineTree
+                nodes={activeTask.partialOutlineNodes.map((node) => ({ ...node }))}
+                variant={activeTask.type === "mindmap" ? "mindmap" : "tree"}
+              />
+            </div>
+          ) : activeTask.partialAnswer ? (
+            <div className="artifact-stream-preview">{cleanAgentAnswer(activeTask.partialAnswer)}</div>
+          ) : null}
+          <small>PDF 解析完成只表示证据可检索；Agent 生成、审计和保存仍是后续独立阶段。</small>
+        </section>
+      ) : null}
 
       {tabs.length === 0 ? (
         <div
@@ -104,10 +223,57 @@ export function ArtifactTabs({
         </div>
       ) : (
         <div className="artifact-card">
-          <div className="artifact-card-title">{tabs[0].title}</div>
+          <div className="artifact-card-heading">
+            <div>
+              <div className="artifact-card-title">{activeTab.title}</div>
+              {activeTab.papers && activeTab.papers.length > 0 ? (
+                <div aria-label="产物来源论文" className="artifact-source-papers">
+                  <span>基于 {activeTab.papers.length} 篇论文</span>
+                  <ul>
+                    {activeTab.papers.map((paper) => (
+                      <li key={paper.id} title={paper.title}>{paper.title}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="artifact-source-papers missing">历史产物未记录来源论文</div>
+              )}
+            </div>
+            {onRegenerateArtifact && activeTab.papers && activeTab.papers.length > 0 ? (
+              <button
+                className="artifact-regenerate-button"
+                onClick={() => setRegenerationOpen(true)}
+                type="button"
+              >
+                补充资料并重新生成
+              </button>
+            ) : null}
+          </div>
+          {activeTab.resultPath ? (
+            <div className="artifact-result-meta">
+              已由 Agent 生成并保存 · {activeTab.resultPath}
+            </div>
+          ) : null}
+          {activeTab.regeneratedFromArtifactId ? (
+            <div className="artifact-result-meta">
+              从产物 {activeTab.regeneratedFromArtifactId} 补充资料后重新生成
+            </div>
+          ) : null}
+          {activeTab.answer ? (
+            <details className="artifact-agent-answer">
+              <summary>查看原始 Agent 分析记录</summary>
+              <div className="artifact-agent-answer-body">{cleanAgentAnswer(activeTab.answer)}</div>
+            </details>
+          ) : null}
+          {activeTab.outlineMarkdown ? (
+            <details className="artifact-outline-markdown">
+              <summary>查看可提交的 Markdown 大纲元数据</summary>
+              <pre>{activeTab.outlineMarkdown}</pre>
+            </details>
+          ) : null}
           <div className="artifact-card-body">
-            {tabs[0].uiDsl ? (
-              <DynamicCanvas document={tabs[0].uiDsl} onAction={(action) => onDynamicAction?.(action)} />
+            {activeTab.uiDsl ? (
+              <DynamicCanvas document={activeTab.uiDsl} onAction={(action) => onDynamicAction?.(action)} />
             ) : activePreview ? (
               <>
                 <div className="mindmap-node root">{activePreview.rootLabel}</div>
@@ -123,6 +289,57 @@ export function ArtifactTabs({
           </div>
         </div>
       )}
+
+      {regenerationOpen && activeTab && activeTab.type !== "skill_doc" ? (
+        <div
+          aria-label="补充资料并重新生成产物"
+          aria-modal="true"
+          className="artifact-regenerate-backdrop"
+          role="dialog"
+        >
+          <form
+            className="artifact-regenerate-dialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitRegeneration();
+            }}
+          >
+            <div className="artifact-regenerate-heading">
+              <div>
+                <strong>补充资料并重新生成</strong>
+                <p>仍基于原来的 {activeTab.papers?.length ?? 0} 篇论文，新结果会另存为历史产物。</p>
+              </div>
+              <button
+                aria-label="关闭补充资料对话框"
+                onClick={() => setRegenerationOpen(false)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <label htmlFor={`artifact-supplement-${activeTab.artifactId}`}>
+              补充文本、引用或分析要求
+            </label>
+            <textarea
+              autoFocus
+              id={`artifact-supplement-${activeTab.artifactId}`}
+              onChange={(event) => setSupplementalContext(event.target.value)}
+              placeholder="粘贴论文正文、引用、页码、读书笔记，或说明希望补强的章节……"
+              rows={10}
+              value={supplementalContext}
+            />
+            <div className="artifact-regenerate-actions">
+              <button onClick={() => setRegenerationOpen(false)} type="button">取消</button>
+              <button
+                disabled={!supplementalContext.trim() || submittingRegeneration}
+                type="submit"
+              >
+                {submittingRegeneration ? "正在启动…" : "另存并重新生成"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

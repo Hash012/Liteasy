@@ -21,6 +21,7 @@ archive/generated/
 .env.*
 !.env.example
 !.env.*.example
+project-docs/test-api.md
 
 # OS/editor noise
 .DS_Store

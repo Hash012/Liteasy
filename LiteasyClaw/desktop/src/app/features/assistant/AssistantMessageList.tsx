@@ -1,19 +1,22 @@
 import { formatModelExecutionLabel } from "../models/modelExecution";
-import type { AssistantMessage, AssistantMode } from "./assistant.types";
+import type {
+  AssistantConfirmationRequest,
+  AssistantMessage,
+  AssistantMode
+} from "./assistant.types";
 import { getAuditVerdictLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
-import type { HumanConfirmationRequest } from "../agent-runtime/agentRuntime.types";
 
 type AssistantMessageListProps = {
   messages: AssistantMessage[];
   mode: AssistantMode;
-  onConfirmRequest?: (confirmation: HumanConfirmationRequest) => void;
+  onConfirmRequest?: (confirmation: AssistantConfirmationRequest) => void;
   onDynamicAction?: (action: UIDslActionRef, traceId: string) => void;
   onEditMessage?: (messageId: string) => void;
   onModeChange: (mode: AssistantMode) => void;
   onRegenerateMessage?: (messageId: string) => void;
-  onRejectRequest?: (confirmation: HumanConfirmationRequest) => void;
+  onRejectRequest?: (confirmation: AssistantConfirmationRequest) => void;
   onRetryUserMessage?: (messageId: string) => void;
 };
 

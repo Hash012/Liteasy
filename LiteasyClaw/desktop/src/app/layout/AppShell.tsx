@@ -11,9 +11,20 @@ import type { ControlPlaneTransport } from "../features/models/controlPlaneClien
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
-import type { DevCloudEnvLike } from "../features/models/localDevCloudEndpoint";
+import {
+  resolveLocalDevCloudEndpoint,
+  type DevCloudEnvLike
+} from "../features/models/localDevCloudEndpoint";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import { FloatingModalityButton } from "../features/artifacts/FloatingModalityButton";
+import type {
+  ArtifactOutlineNode,
+  ArtifactTaskStage,
+  ArtifactType
+} from "../features/artifacts/artifact.types";
+import { createArtifactResultClient } from "../features/artifacts/artifactResultClient";
+import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
+import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { AccountTransport } from "../features/account/accountSessionClient";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
@@ -33,6 +44,7 @@ import { useConnectivity } from "../features/network/useConnectivity";
 import { PaneResizer } from "./PaneResizer";
 import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
+import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
@@ -57,6 +69,8 @@ import {
   createGeneratedThemeStyle,
   type GeneratedThemeInput
 } from "../features/theme/generatedTheme";
+import { useAssistantAgentController } from "../controllers/agent/useAssistantAgentController";
+import { runAgentArtifactAnalysis } from "../controllers/agent/runAgentArtifactAnalysis";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -93,6 +107,32 @@ export function AppShell({
   recommendationTransport
 }: AppShellProps = {}) {
   const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(initialSettings);
+  const agentArtifactRunnerRef = useRef<(
+    artifactType: ArtifactType,
+    onProgress: (input: {
+      message: string;
+      partialAnswer?: string;
+      partialOutlineNodes?: ArtifactOutlineNode[];
+      progress: number;
+      stage: ArtifactTaskStage;
+    }) => void,
+    options?: AgentArtifactGenerationOptions
+  ) => Promise<AgentRun>>(
+    async () => {
+      throw new Error("Agent artifact runner is not ready");
+    }
+  );
+  const artifactResultClientRef = useRef<ReturnType<typeof createArtifactResultClient> | null>(null);
+  if (!artifactResultClientRef.current) {
+    artifactResultClientRef.current = createArtifactResultClient({
+      getBaseEndpoint() {
+        const configured = settingsStoreRef.current.getState()["models.cloud_proxy_endpoint"];
+        return configured.startsWith("http://") || configured.startsWith("https://")
+          ? configured
+          : resolveLocalDevCloudEndpoint();
+      }
+    });
+  }
   const localLibrarySnapshot = useLocalLibrary(localLibraryLoader);
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
@@ -100,6 +140,8 @@ export function AppShell({
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
   const [activeCenterArtifactId, setActiveCenterArtifactId] = useState<string | null>(null);
+  const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
+  const agentArtifactPaperIdsOverrideRef = useRef<string[] | null>(null);
   const [readerConversationContext, setReaderConversationContext] =
     useState<ReaderConversationContext | null>(null);
   const latestArtifactIdRef = useRef<string | null>(null);
@@ -156,11 +198,14 @@ export function AppShell({
 
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
+    artifactResultClient: artifactResultClientRef.current,
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getSelectedDocumentSet: () => workspaceStoreRef.current.getSelectedDocumentSet(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
     onAnalysisHint: setAnalysisHint,
-    queueImportForPapers: workspaceActions.queueImportForPapers
+    queueImportForPapers: workspaceActions.queueImportForPapers,
+    runAgentAnalysis: (artifactType, onProgress, options) =>
+      agentArtifactRunnerRef.current(artifactType, onProgress, options)
   });
   const { artifactTabs, artifactTasks } = artifactWorkflow.model;
 
@@ -224,6 +269,13 @@ export function AppShell({
     organizationShell.actions.resetOrganizationState();
   }
   const selectedPapers = workspaceActions.getSelectedPapers();
+  const activeReaderPaper =
+    workspaceState.papers.find((paper) => paper.id === activeReaderPaperId) ??
+    selectedPapers[0] ??
+    null;
+  const readerPapers = activeReaderPaper
+    ? [activeReaderPaper, ...selectedPapers.filter((paper) => paper.id !== activeReaderPaper.id)]
+    : selectedPapers;
   const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
   const applyRuntimeLayoutPreset: ActionContext["applyLayoutPreset"] = (input) => {
@@ -411,6 +463,64 @@ export function AppShell({
     settingsStore: settingsStoreRef.current,
     startArtifactAnalysis: artifactWorkflow.actions.handleAssistantArtifact
   };
+  const assistantAgent = useAssistantAgentController({
+    getImportedChunksByPaperId: () => {
+      const sourcePaperIds = agentArtifactPaperIdsOverrideRef.current;
+      if (!sourcePaperIds) {
+        return workspaceActions.getImportedChunksByPaperId();
+      }
+      return Object.fromEntries(
+        sourcePaperIds.map((paperId) => [
+          paperId,
+          importStoreRef.current.getParsedChunksByDocumentId(paperId)
+        ])
+      );
+    },
+    getSelectedPapers: () => {
+      const sourcePaperIds = agentArtifactPaperIdsOverrideRef.current;
+      if (!sourcePaperIds) {
+        return workspaceActions.getSelectedPapers();
+      }
+      const sourcePaperIdSet = new Set(sourcePaperIds);
+      return workspaceStoreRef.current
+        .getState()
+        .papers.filter((paper) => sourcePaperIdSet.has(paper.id));
+    },
+    importedChunksByPaperId,
+    importedSelectedCount,
+    modelTransport,
+    onApplyGeneratedTheme: runtimeActionContext.applyGeneratedTheme,
+    onApplyLayoutPreset: runtimeActionContext.applyLayoutPreset,
+    onApplyPanelAction: runtimeActionContext.applyPanelAction,
+    onApplyThemePreset: runtimeActionContext.applyThemePreset,
+    onGenerateArtifact: artifactWorkflow.actions.handleAssistantArtifact,
+    onImportSelectedSet: runtimeActionContext.importSelectedSet,
+    onMoveDockItem: runtimeActionContext.moveDockItem,
+    onOpenAcademicArchive: runtimeActionContext.openAcademicArchive,
+    onOpenOrganizationSharedLibrary: organizationShell.actions.openOrganizationSharedLibrary,
+    onSettingsChanged: (nextSettings) =>
+      setSettingsState(cloneSettingsState(nextSettings)),
+    profileUnlocked: accountSession !== null,
+    runtimeOrganizationName: organizationShell.model.organizationSummary?.name,
+    runtimeWorkspace: workspaceState.workspaceSource,
+    selectedPaperCount: workspaceState.selectedPaperIds.length,
+    selectedPapers,
+    selectionLocked: workspaceState.selectionLocked,
+    settingsStore: settingsStoreRef.current
+  });
+  agentArtifactRunnerRef.current = async (artifactType, onProgress, options) => {
+    agentArtifactPaperIdsOverrideRef.current = options?.sourcePaperIds ?? null;
+    try {
+      return await runAgentArtifactAnalysis(
+        assistantAgent.agentClient,
+        artifactType,
+        onProgress,
+        options
+      );
+    } finally {
+      agentArtifactPaperIdsOverrideRef.current = null;
+    }
+  };
   async function handleWorkbenchOverlayAction(action: UIDslActionRef) {
     await executeUIDslActionRef(action, runtimeActionContext, {
       traceId: workbenchOverlay?.audit.traceId
@@ -479,7 +589,40 @@ export function AppShell({
   const topPaneSize = bottomPaneVisible
     ? `minmax(0, ${100 - paneLayout.layout.bottom}fr)`
     : "minmax(0, 1fr)";
+  const libraryPaperChildren = workspaceState.papers.reduce<
+    Record<string, LibraryPaperChildItem[]>
+  >((entries, paper) => {
+    entries[paper.id] = artifactTabs
+      .filter(
+        (tab) =>
+          tab.papers?.some((sourcePaper) => sourcePaper.id === paper.id) ||
+          tab.analysis?.run.coverage.selectedPaperIds.includes(paper.id)
+      )
+      .map((tab) => ({
+        id: tab.artifactId,
+        kind: "artifact" as const,
+        label: tab.title,
+        meta: tab.createdAt ? new Date(tab.createdAt).toLocaleString() : undefined
+      }));
+    return entries;
+  }, {});
+
+  function openPaperInReader(paperId: string) {
+    if (!workspaceState.papers.some((paper) => paper.id === paperId)) {
+      return;
+    }
+
+    setActiveReaderPaperId(paperId);
+    setActiveCenterArtifactId(null);
+    dock.openItem("reader");
+    const readerRegionId = dock.findItemRegion("reader") ?? "main";
+    if (readerRegionId !== "main") {
+      paneLayout.setCollapsed(readerRegionId, false);
+    }
+  }
+
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
+    activePaperId: activeReaderPaper?.id ?? null,
     academicProfile: profileActions.academicProfile,
     accountSession,
     collectionItems,
@@ -492,6 +635,7 @@ export function AppShell({
     governanceStatus: organizationGovernanceStatus,
     governanceSummary: organizationGovernanceSummary,
     importJobs: importJobsByDocumentId,
+    libraryPaperChildren,
     list: organizationList,
     listMessage: organizationListMessage,
     listStatus: organizationListStatus,
@@ -512,6 +656,12 @@ export function AppShell({
     onMarkNotificationsRead: organizationShell.actions.markOrganizationNotificationsRead,
     onOpenAcademicArchive: profileActions.openAcademicArchive,
     onOpenOrganizationDialog: organizationShell.actions.openOrganizationDialog,
+    onOpenPaper: openPaperInReader,
+    onOpenPaperChild: (item) => {
+      if (item.kind === "artifact") {
+        setActiveCenterArtifactId(item.id);
+      }
+    },
     onOpenSharedLibrary: (summary) => {
       void organizationShell.actions.openOrganizationSharedLibrary(summary);
     },
@@ -581,12 +731,17 @@ export function AppShell({
     return (
       <section aria-label="多模态产物区域" className="dock-artifact-surface">
         <ArtifactTabs
+          activeArtifactId={activeCenterArtifactId}
           analysisHint={analysisHint}
           canStartAnalysis={
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
           }
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
+          }}
+          onActivateArtifact={setActiveCenterArtifactId}
+          onRegenerateArtifact={(request) => {
+            artifactWorkflow.actions.regenerateArtifact(request);
           }}
           onSaveMarkdownTab={(artifactId) => {
             void artifactWorkflow.actions.saveSkillDocument(artifactId);
@@ -645,7 +800,7 @@ export function AppShell({
           onToggleRightPane={() =>
             paneLayout.setCollapsed("right", !paneLayout.collapsed.right)
           }
-          selectedPapers={selectedPapers}
+          selectedPapers={readerPapers}
           selectedPaperIds={workspaceState.selectedPaperIds}
           selectionLocked={workspaceState.selectionLocked}
           showArtifactRegion={false}
@@ -656,7 +811,8 @@ export function AppShell({
     if (itemId === "assistant") {
       return (
         <AssistantSidebar
-          importedChunksByPaperId={importedChunksByPaperId}
+          agentClient={assistantAgent.agentClient}
+          executionJournal={assistantAgent.executionJournal}
           importedSelectedCount={importedSelectedCount}
           modelTransport={modelTransport}
           readerConversationContext={readerConversationContext}

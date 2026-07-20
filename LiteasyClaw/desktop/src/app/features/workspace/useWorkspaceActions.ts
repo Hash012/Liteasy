@@ -1,5 +1,5 @@
 import type { ImportJob } from "../import/import.types";
-import { buildImportedChunksForPaper } from "../import/importFixtures";
+import { extractImportedChunksForPaper } from "../import/importFixtures";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper, WorkspaceState } from "./workspace.types";
 import type { createImportStore } from "../import/import.store";
@@ -27,6 +27,7 @@ function buildDroppedPaperId(file: File) {
 }
 
 type UseWorkspaceActionsInput = {
+  extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
   onAnalysisHint: (message: string) => void;
@@ -55,6 +56,7 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 }
 
 export function useWorkspaceActions({
+  extractPaperChunks = extractImportedChunksForPaper,
   importDocument,
   importStore,
   onAnalysisHint,
@@ -192,19 +194,28 @@ export function useWorkspaceActions({
       window.setTimeout(() => {
         importStore.markParsing(jobId);
         syncImportJobs();
-      }, 400);
-
-      window.setTimeout(() => {
-        importStore.markParsed(jobId, {
-          paperId: paper.id,
-          chunks: buildImportedChunksForPaper(paper)
-        });
-        syncImportJobs();
-        pending -= 1;
-        if (pending === 0) {
-          onComplete?.();
-        }
-      }, 1200);
+        void extractPaperChunks(paper)
+          .then((chunks) => {
+            if (chunks.length === 0) {
+              throw new Error("PDF did not contain extractable text");
+            }
+            importStore.markParsed(jobId, {
+              paperId: paper.id,
+              chunks
+            });
+          })
+          .catch(() => {
+            importStore.markFailed(jobId);
+            onAnalysisHint(`《${paper.title}》解析失败；请确认 PDF 可读取且包含文本层。`);
+          })
+          .finally(() => {
+            syncImportJobs();
+            pending -= 1;
+            if (pending === 0) {
+              onComplete?.();
+            }
+          });
+      }, 0);
     });
 
     if (pending > 0) {

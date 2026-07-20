@@ -4,8 +4,11 @@ import type { AnswerAuditResult } from "./answerAuditor";
 import type { UIDslDocument } from "../generative-ui/generativeUi.types";
 import type { HumanConfirmationRequest } from "../agent-runtime/agentRuntime.types";
 import type { AssistantMode } from "../agent-runtime/agentRuntime.types";
+import type { AgentConfirmationRequest } from "../agent-api/agentApi.types";
 
 export type { AssistantMode };
+
+export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
   id: string;
@@ -15,7 +18,7 @@ export type AssistantMessage = {
   contextTokens?: AssistantContextToken[];
   confidence?: number;
   audit?: AnswerAuditResult;
-  confirmation?: HumanConfirmationRequest;
+  confirmation?: AssistantConfirmationRequest;
   executionTrace?: ModelExecutionTrace;
   uiDsl?: UIDslDocument;
 };

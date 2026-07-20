@@ -5,6 +5,14 @@ export type WorkspaceFolderGroup = {
   papers: Paper[];
 };
 
+export type WorkspaceFolderNode = {
+  children: WorkspaceFolderNode[];
+  name: string;
+  paperCount: number;
+  papers: Paper[];
+  path: string;
+};
+
 export function getWorkspacePaperFolder(paper: Paper) {
   if (!paper.sourcePath) {
     return "未归档文献";
@@ -31,4 +39,64 @@ export function groupWorkspacePapersByFolder(papers: Paper[]): WorkspaceFolderGr
     folder,
     papers: folderPapers
   }));
+}
+
+function getFolderPathSegments(folder: string) {
+  if (folder === "未归档文献") {
+    return [{ name: folder, path: folder }];
+  }
+
+  const absolute = folder.startsWith("/");
+  const segments = folder.split("/").filter(Boolean);
+  return segments.map((name, index) => ({
+    name,
+    path: `${absolute ? "/" : ""}${segments.slice(0, index + 1).join("/")}`
+  }));
+}
+
+/**
+ * Builds a stable VS Code-style folder hierarchy while keeping papers attached
+ * to their immediate parent folder. `groupWorkspacePapersByFolder` remains as
+ * the small flat projection used by older callers.
+ */
+export function buildWorkspaceFolderTree(papers: Paper[]): WorkspaceFolderNode[] {
+  const roots: WorkspaceFolderNode[] = [];
+
+  groupWorkspacePapersByFolder(papers).forEach((group) => {
+    let siblings = roots;
+    let currentNode: WorkspaceFolderNode | undefined;
+
+    getFolderPathSegments(group.folder).forEach((segment) => {
+      currentNode = siblings.find((node) => node.path === segment.path);
+      if (!currentNode) {
+        currentNode = {
+          children: [],
+          name: segment.name,
+          paperCount: 0,
+          papers: [],
+          path: segment.path
+        };
+        siblings.push(currentNode);
+      }
+      siblings = currentNode.children;
+    });
+
+    if (currentNode) {
+      currentNode.papers.push(...group.papers);
+    }
+  });
+
+  function finalize(nodes: WorkspaceFolderNode[]) {
+    nodes.sort((left, right) => left.path.localeCompare(right.path));
+    nodes.forEach((node) => {
+      finalize(node.children);
+      node.papers.sort((left, right) => left.title.localeCompare(right.title));
+      node.paperCount =
+        node.papers.length +
+        node.children.reduce((total, child) => total + child.paperCount, 0);
+    });
+  }
+
+  finalize(roots);
+  return roots;
 }

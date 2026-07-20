@@ -6,7 +6,17 @@ import type { ImportJob } from "../import/import.types";
 import type { RecommendationItem, RecommendationStatus } from "../recommendations/recommendation.types";
 import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
 import { parseLibraryDragPayload } from "./libraryDragPayload";
-import { groupWorkspacePapersByFolder } from "../workspace/workspaceFolderTree";
+import {
+  buildWorkspaceFolderTree,
+  type WorkspaceFolderNode
+} from "../workspace/workspaceFolderTree";
+
+export type LibraryPaperChildItem = {
+  id: string;
+  kind: "artifact" | "note";
+  label: string;
+  meta?: string;
+};
 
 type LibraryPaneProps = {
   accountSessionAvailable?: boolean;
@@ -17,6 +27,8 @@ type LibraryPaneProps = {
   collectionMessage: string;
   collectionStatus: "idle" | "loading" | "ready" | "error";
   importJobs: Record<string, ImportJob>;
+  activePaperId?: string | null;
+  paperChildren?: Record<string, LibraryPaperChildItem[]>;
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
   recommendationPending: boolean;
@@ -30,6 +42,8 @@ type LibraryPaneProps = {
   onImportSelectedSet: () => void;
   onLoginRequired?: () => void;
   onOpenOrganizationWorkspace: () => void;
+  onOpenPaper?: (paperId: string) => void;
+  onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRetryCollectionSync?: () => void;
   onReturnToLocalWorkspace: () => void;
   onToggleLock: () => void;
@@ -49,6 +63,13 @@ type LibraryCollection = {
   id: LibraryCollectionId;
   label: string;
   level: "root" | "child" | "grandchild";
+};
+
+const importStatusLabels: Record<ImportJob["status"], string> = {
+  failed: "PDF 解析失败",
+  parsed: "PDF 已就绪",
+  parsing: "正在解析 PDF",
+  queued: "等待解析 PDF"
 };
 
 const libraryCollections: LibraryCollection[] = [
@@ -95,7 +116,9 @@ function paperMatchesCollection(paper: Paper, collectionId: LibraryCollectionId)
 
 export function LibraryPane({
   accountSessionAvailable = false,
+  activePaperId,
   papers,
+  paperChildren = {},
   selectedPaperIds,
   selectionLocked,
   collectionItems,
@@ -115,6 +138,8 @@ export function LibraryPane({
   onImportSelectedSet,
   onLoginRequired,
   onOpenOrganizationWorkspace,
+  onOpenPaper,
+  onOpenPaperChild,
   onRetryCollectionSync,
   onReturnToLocalWorkspace,
   onToggleLock,
@@ -128,7 +153,133 @@ export function LibraryPane({
     libraryCollections.find((collection) => collection.id === activeCollectionId) ??
     libraryCollections[0];
   const visiblePapers = papers.filter((paper) => paperMatchesCollection(paper, activeCollection.id));
-  const folderGroups = groupWorkspacePapersByFolder(visiblePapers);
+  const folderTree = buildWorkspaceFolderTree(visiblePapers);
+  const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<string[]>([]);
+  const [expandedPaperIds, setExpandedPaperIds] = useState<string[]>([]);
+
+  function toggleFolder(path: string) {
+    setCollapsedFolderPaths((current) =>
+      current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
+    );
+  }
+
+  function togglePaper(paperId: string) {
+    setExpandedPaperIds((current) =>
+      current.includes(paperId)
+        ? current.filter((item) => item !== paperId)
+        : [...current, paperId]
+    );
+  }
+
+  function renderPaper(paper: Paper, depth: number) {
+    const children = paperChildren[paper.id] ?? [];
+    const expanded = expandedPaperIds.includes(paper.id);
+    const selected = selectedPaperIds.includes(paper.id);
+    const active = activePaperId === paper.id;
+
+    return (
+      <li
+        className={`library-item${selected ? " selected" : ""}${active ? " active" : ""}`}
+        data-selected={selected}
+        key={paper.id}
+      >
+        <div className="paper-row" style={{ paddingLeft: `${depth * 14}px` }}>
+          <button
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "收起" : "展开"}${paper.title}的关联条目`}
+            className="library-disclosure"
+            onClick={() => togglePaper(paper.id)}
+            title={`${expanded ? "收起" : "展开"}相关产物和笔记`}
+            type="button"
+          >
+            <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+          </button>
+          <label className="library-paper-selector" title={selectionLocked ? "选中文献集已锁定" : "加入或移出选中文献集"}>
+            <input
+              aria-label={paper.title}
+              checked={selected}
+              disabled={selectionLocked}
+              onChange={() => onToggleSelection(paper.id)}
+              type="checkbox"
+            />
+          </label>
+          <button
+            className="library-paper-title"
+            onClick={() => onOpenPaper?.(paper.id)}
+            title={`在 Reader 中打开：${paper.title}`}
+            type="button"
+          >
+            <span aria-hidden="true" className="library-file-icon">PDF</span>
+            <span>{paper.title}</span>
+          </button>
+          {importJobs[paper.id] ? (
+            <span className={`job-badge ${importJobs[paper.id].status}`}>
+              {importStatusLabels[importJobs[paper.id].status]}
+            </span>
+          ) : null}
+        </div>
+        {expanded ? (
+          <ul aria-label={`${paper.title}的关联条目`} className="library-paper-children">
+            {children.length > 0 ? children.map((item) => (
+              <li key={`${item.kind}-${item.id}`}>
+                <button
+                  className="library-paper-child"
+                  onClick={() => onOpenPaperChild?.(item, paper)}
+                  title={item.meta ?? item.label}
+                  type="button"
+                >
+                  <span aria-hidden="true" className={`library-child-icon ${item.kind}`}>
+                    {item.kind === "artifact" ? "◇" : "✎"}
+                  </span>
+                  <span className="library-child-label">{item.label}</span>
+                  {item.meta ? <span className="library-child-meta">{item.meta}</span> : null}
+                </button>
+              </li>
+            )) : (
+              <li className="library-paper-child-empty">暂无已保存的多模态产物或用户笔记</li>
+            )}
+          </ul>
+        ) : null}
+      </li>
+    );
+  }
+
+  function renderFolder(node: WorkspaceFolderNode, depth = 0) {
+    const expanded = !collapsedFolderPaths.includes(node.path);
+    const folderLabel = depth === 0 ? `目录：${node.path}` : node.name;
+
+    return (
+      <li className="library-folder-node" key={node.path}>
+        <div className="library-folder-row" style={{ paddingLeft: `${depth * 14}px` }}>
+          <button
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "收起" : "展开"}目录 ${node.path}`}
+            className="library-disclosure"
+            onClick={() => toggleFolder(node.path)}
+            type="button"
+          >
+            <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+          </button>
+          <button
+            className="library-folder-name"
+            onClick={() => toggleFolder(node.path)}
+            title={node.path}
+            type="button"
+          >
+            <span aria-hidden="true" className="library-folder-icon">▱</span>
+            <span>{folderLabel}</span>
+          </button>
+          <span className="library-folder-count">{node.paperCount} 篇文献</span>
+        </div>
+        {expanded ? (
+          <ul className="library-tree-children">
+            {node.children.map((child) => renderFolder(child, depth + 1))}
+            {node.papers.map((paper) => renderPaper(paper, depth + 1))}
+          </ul>
+        ) : null}
+      </li>
+    );
+  }
 
   return (
     <div className="library-pane">
@@ -232,42 +383,9 @@ export function LibraryPane({
             ))}
           </nav>
           <div className="library-folder-tree" aria-label="工作区目录树">
-            {folderGroups.length > 0 ? folderGroups.map((group) => (
-              <section className="library-folder-group" key={group.folder}>
-                <div className="library-folder-header">
-                  <span>目录：{group.folder}</span>
-                  <span>{group.papers.length} 篇文献</span>
-                </div>
-                <ul className="library-list">
-                  {group.papers.map((paper) => (
-                    <li
-                      className={`library-item ${
-                        selectedPaperIds.includes(paper.id) ? "selected" : ""
-                      }`}
-                      data-selected={selectedPaperIds.includes(paper.id)}
-                      key={paper.id}
-                    >
-                      <div className="paper-row">
-                        <label>
-                          <input
-                            checked={selectedPaperIds.includes(paper.id)}
-                            disabled={selectionLocked}
-                            onChange={() => onToggleSelection(paper.id)}
-                            type="checkbox"
-                          />
-                          <span>{paper.title}</span>
-                        </label>
-                        {importJobs[paper.id] ? (
-                          <span className={`job-badge ${importJobs[paper.id].status}`}>
-                            {importJobs[paper.id].status}
-                          </span>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )) : (
+            {folderTree.length > 0 ? (
+              <ul className="library-resource-tree">{folderTree.map((node) => renderFolder(node))}</ul>
+            ) : (
               <div className="library-empty-collection">当前 Collection 暂无文献</div>
             )}
           </div>

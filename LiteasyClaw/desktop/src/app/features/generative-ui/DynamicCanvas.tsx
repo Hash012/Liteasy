@@ -17,16 +17,136 @@ function getStringArrayProp(props: Record<string, unknown>, key: string) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function getNumberProp(props: Record<string, unknown>, key: string, fallback = 0) {
-  const value = props[key];
-  return typeof value === "number" ? value : fallback;
-}
-
 function getRecordArrayProp(props: Record<string, unknown>, key: string) {
   const value = props[key];
   return Array.isArray(value)
     ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
     : [];
+}
+
+type VisualOutlineNode = {
+  evidenceIds: string[];
+  id: string;
+  kind: string;
+  label: string;
+  parentId?: string;
+};
+
+function normalizeOutlineNodes(records: Record<string, unknown>[]): VisualOutlineNode[] {
+  const hasExplicitParents = records.some((record) => typeof record.parentId === "string");
+  const levelParents = new Map<number, string>();
+
+  return records.map((record, index) => {
+    const id = getStringProp(record, "id", `outline-node-${index}`);
+    const level = typeof record.level === "number" ? Math.max(1, record.level) : 1;
+    const parentId = hasExplicitParents
+      ? getStringProp(record, "parentId") || undefined
+      : level > 1
+        ? levelParents.get(level - 1)
+        : undefined;
+    levelParents.set(level, id);
+    for (const storedLevel of [...levelParents.keys()]) {
+      if (storedLevel > level) {
+        levelParents.delete(storedLevel);
+      }
+    }
+    return {
+      evidenceIds: getStringArrayProp(record, "evidenceIds"),
+      id,
+      kind: getStringProp(record, "kind", parentId ? "evidence" : "root"),
+      label: getStringProp(record, "label"),
+      parentId
+    };
+  });
+}
+
+function OutlineBranch({
+  byParent,
+  depth,
+  node,
+  variant,
+  visited
+}: {
+  byParent: Map<string | undefined, VisualOutlineNode[]>;
+  depth: number;
+  node: VisualOutlineNode;
+  variant: "mindmap" | "tree";
+  visited: Set<string>;
+}) {
+  if (visited.has(node.id)) {
+    return null;
+  }
+  const nextVisited = new Set(visited).add(node.id);
+  const children = byParent.get(node.id) ?? [];
+  const content = (
+    <span className="genui-outline-label">
+      <span className={`genui-outline-kind ${node.kind}`} aria-hidden="true" />
+      <span>{node.label}</span>
+      {node.evidenceIds.length > 0 ? (
+        <small>{node.evidenceIds.length} 条证据</small>
+      ) : null}
+    </span>
+  );
+
+  return (
+    <li
+      className={`genui-outline-node kind-${node.kind}`}
+      style={{ animationDelay: `${Math.min(depth * 90, 450)}ms` }}
+    >
+      {children.length > 0 ? (
+        <details open={depth < 2}>
+          <summary>{content}</summary>
+          <ul>
+            {children.map((child) => (
+              <OutlineBranch
+                byParent={byParent}
+                depth={depth + 1}
+                key={child.id}
+                node={child}
+                variant={variant}
+                visited={nextVisited}
+              />
+            ))}
+          </ul>
+        </details>
+      ) : (
+        content
+      )}
+    </li>
+  );
+}
+
+export function OutlineTree({
+  nodes,
+  variant
+}: {
+  nodes: Record<string, unknown>[];
+  variant: "mindmap" | "tree";
+}) {
+  const normalized = normalizeOutlineNodes(nodes);
+  const ids = new Set(normalized.map((node) => node.id));
+  const byParent = new Map<string | undefined, VisualOutlineNode[]>();
+  normalized.forEach((node) => {
+    const parentId = node.parentId && ids.has(node.parentId) ? node.parentId : undefined;
+    const siblings = byParent.get(parentId) ?? [];
+    siblings.push(node);
+    byParent.set(parentId, siblings);
+  });
+
+  return (
+    <ul className={`genui-outline-tree ${variant}`}>
+      {(byParent.get(undefined) ?? []).map((node) => (
+        <OutlineBranch
+          byParent={byParent}
+          depth={0}
+          key={node.id}
+          node={node}
+          variant={variant}
+          visited={new Set()}
+        />
+      ))}
+    </ul>
+  );
 }
 
 function renderNode(
@@ -112,13 +232,7 @@ function renderNode(
     return (
       <section className="genui-mindmap" key={node.id}>
         <strong>{getStringProp(node.props, "title", "思维导图")}</strong>
-        <div className="genui-node-cloud">
-          {nodes.map((item, index) => (
-            <span className="genui-node-chip" key={`${node.id}-node-${index}`}>
-              {getStringProp(item, "label")}
-            </span>
-          ))}
-        </div>
+        <OutlineTree nodes={nodes} variant="mindmap" />
         {children}
       </section>
     );
@@ -180,16 +294,7 @@ function renderNode(
     return (
       <section className="genui-tree-outline" key={node.id}>
         <strong>{getStringProp(node.props, "title", "树形展开")}</strong>
-        <ol>
-          {nodes.map((item, index) => (
-            <li
-              key={`${node.id}-node-${index}`}
-              style={{ marginLeft: `${Math.max(0, getNumberProp(item, "level", 1) - 1) * 16}px` }}
-            >
-              {getStringProp(item, "label")}
-            </li>
-          ))}
-        </ol>
+        <OutlineTree nodes={nodes} variant="tree" />
         {children}
       </section>
     );

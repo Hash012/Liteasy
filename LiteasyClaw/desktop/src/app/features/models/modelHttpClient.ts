@@ -11,6 +11,7 @@ export type ModelTransportRequest = {
 };
 
 export type ModelTransportResponse = {
+  body?: ReadableStream<Uint8Array> | null;
   json: () => Promise<unknown>;
   ok: boolean;
   status: number;
@@ -26,8 +27,8 @@ type CreateHttpModelClientInput = {
   transport?: ModelTransport;
 };
 
-function buildModelServiceUrl(endpoint: string) {
-  return `${endpoint.replace(/\/+$/, "")}/v1/model/generate`;
+function buildModelServiceUrl(endpoint: string, stream = false) {
+  return `${endpoint.replace(/\/+$/, "")}/v1/model/${stream ? "generate-stream" : "generate"}`;
 }
 
 type AnswerPayload = {
@@ -46,6 +47,23 @@ function isAnswerPayload(payload: unknown): payload is AnswerPayload {
     "answer" in payload &&
     typeof payload.answer === "string"
   );
+}
+
+async function readBackendError(response: ModelTransportResponse) {
+  try {
+    const payload = await response.json();
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "error" in payload &&
+      typeof payload.error === "string"
+    ) {
+      return payload.error;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function buildExecutionTrace(
@@ -78,6 +96,72 @@ async function defaultTransport(request: ModelTransportRequest): Promise<ModelTr
   });
 }
 
+async function readStreamingAnswer(input: {
+  endpoint: string;
+  generateInput: GenerateAnswerInput;
+  response: ModelTransportResponse;
+  source: ModelClientSource;
+}) {
+  if (!input.response.body) {
+    throw new Error(`模型流式响应缺少可读数据（${input.source}）`);
+  }
+  const reader = input.response.body.getReader();
+  const decoder = new TextDecoder();
+  let answer = "";
+  let buffer = "";
+  let completedPayload: AnswerPayload | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) {
+        continue;
+      }
+      let event: unknown;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        throw new Error(`模型流式响应格式无效（${input.source}）`);
+      }
+      if (!event || typeof event !== "object") {
+        continue;
+      }
+      if ("type" in event && event.type === "error") {
+        const detail = "error" in event && typeof event.error === "string"
+          ? event.error
+          : "unknown_stream_error";
+        throw new Error(`模型流式请求失败（${input.source}）：${detail}`);
+      }
+      if (
+        "type" in event &&
+        event.type === "delta" &&
+        "delta" in event &&
+        typeof event.delta === "string"
+      ) {
+        answer += event.delta;
+        input.generateInput.onDelta?.(event.delta, answer);
+      }
+      if ("type" in event && event.type === "completed" && isAnswerPayload(event)) {
+        completedPayload = event;
+      }
+    }
+    if (done) {
+      break;
+    }
+  }
+
+  if (!completedPayload) {
+    throw new Error(`模型流式响应未正常完成（${input.source}）`);
+  }
+  return {
+    answer: completedPayload.answer || answer,
+    trace: buildExecutionTrace(completedPayload, input.endpoint, input.source)
+  };
+}
+
 export function createHttpModelClient({
   endpoint,
   source,
@@ -95,11 +179,25 @@ export function createHttpModelClient({
         "Content-Type": "application/json"
       },
       method: "POST",
-      url: buildModelServiceUrl(endpoint)
+      url: buildModelServiceUrl(endpoint, Boolean(input.onDelta))
     });
 
     if (!response.ok) {
-      throw new Error(`模型服务请求失败（${source} ${response.status}）`);
+      const detail = await readBackendError(response);
+      throw new Error(
+        detail
+          ? `模型服务请求失败（${source} ${response.status}）：${detail}`
+          : `模型服务请求失败（${source} ${response.status}）`
+      );
+    }
+
+    if (input.onDelta) {
+      return readStreamingAnswer({
+        endpoint,
+        generateInput: input,
+        response,
+        source
+      });
     }
 
     const payload = await response.json();

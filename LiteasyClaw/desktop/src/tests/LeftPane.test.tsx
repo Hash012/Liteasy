@@ -365,6 +365,86 @@ describe("LeftPane", () => {
     expect(within(libraryZone).getByText("1 篇文献")).toBeInTheDocument();
   });
 
+  test("opens a paper in Reader without changing a locked selection", async () => {
+    const user = userEvent.setup();
+    const onOpenPaper = vi.fn();
+    const onToggleSelection = vi.fn();
+
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          onOpenPaper,
+          onToggleSelection,
+          papers: [
+            {
+              id: "demo-1",
+              sourcePath: "/papers/colbert.pdf",
+              title: "ColBERT"
+            },
+            {
+              id: "demo-3",
+              sourcePath: "/papers/acorn.pdf",
+              title: "ACORN"
+            }
+          ],
+          selectedPaperIds: ["demo-1", "demo-3"],
+          selectionLocked: true
+        })}
+      />
+    );
+
+    expect(screen.getByLabelText("ACORN")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "ACORN" }));
+
+    expect(onOpenPaper).toHaveBeenCalledWith("demo-3");
+    expect(onToggleSelection).not.toHaveBeenCalled();
+  });
+
+  test("expands paper rows to expose saved artifacts and notes", async () => {
+    const user = userEvent.setup();
+    const onOpenPaperChild = vi.fn();
+
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          libraryPaperChildren: {
+            "demo-1": [
+              {
+                id: "artifact-1",
+                kind: "artifact",
+                label: "ColBERT 文献树"
+              },
+              {
+                id: "note-1",
+                kind: "note",
+                label: "MaxSim 阅读笔记"
+              }
+            ]
+          },
+          onOpenPaperChild,
+          papers: [
+            {
+              id: "demo-1",
+              sourcePath: "/papers/search/colbert.pdf",
+              title: "ColBERT"
+            }
+          ]
+        })}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "展开ColBERT的关联条目" }));
+    await user.click(screen.getByRole("button", { name: "ColBERT 文献树" }));
+
+    expect(screen.getByText("MaxSim 阅读笔记")).toBeInTheDocument();
+    expect(onOpenPaperChild).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "artifact-1", kind: "artifact" }),
+      expect.objectContaining({ id: "demo-1" })
+    );
+  });
+
 
   test("renders organization action feedback in the organization view", () => {
     render(

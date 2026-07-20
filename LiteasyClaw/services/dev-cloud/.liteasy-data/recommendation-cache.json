@@ -373,5 +373,30 @@
         "title": "Efficient Filtered Approximate Nearest Neighbor Search"
       }
     ]
+  },
+  "demo-session-1::local_library:本地文献库::demo-1|demo-3::relevance": {
+    "cachedAt": "2026-07-20T09:53:26.391Z",
+    "recommendations": [
+      {
+        "discoveredAt": "2026-05-14T08:15:00Z",
+        "id": "rec-acorn-1",
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+        "relevanceBand": "high",
+        "relevanceScore": 0.91,
+        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
+        "source": "Semantic Scholar",
+        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
+      },
+      {
+        "discoveredAt": "2026-05-14T09:10:00Z",
+        "id": "rec-acorn-2",
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+        "relevanceBand": "medium",
+        "relevanceScore": 0.79,
+        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
+        "source": "arXiv Watch",
+        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
+      }
+    ]
   }
 }

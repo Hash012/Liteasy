@@ -1,0 +1,276 @@
+{
+  "agent": {
+    "apiVersion": "liteasy.agent/v1",
+    "runId": "run-1784525590630-26",
+    "sessionId": "session-1784522757518-1",
+    "status": "completed"
+  },
+  "analysis": {
+    "citations": [
+      {
+        "page": 2,
+        "paperId": "demo-1",
+        "snippet": "late interaction independently encodes query and document tokens before efficient retrieval"
+      },
+      {
+        "page": 4,
+        "paperId": "demo-1",
+        "snippet": "MaxSim computes the maximum similarity between each query token and document tokens"
+      }
+    ],
+    "evidence": [
+      {
+        "analysisRunId": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+        "chunkId": "demo-1:p2:chunk-1",
+        "id": "evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e",
+        "page": 2,
+        "paperId": "demo-1",
+        "paperTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "quote": "late interaction independently encodes query and document tokens before efficient retrieval",
+        "relevance": 0.95,
+        "retrievalReason": "query_overlap_within_selected_paper",
+        "summary": "ColBERT 将查询和文档编码为上下文化 token 向量，并在检索阶段用 late interaction 保留细粒度匹配。"
+      },
+      {
+        "analysisRunId": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+        "chunkId": "demo-1:p4:chunk-2",
+        "id": "evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d",
+        "page": 4,
+        "paperId": "demo-1",
+        "paperTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "quote": "MaxSim computes the maximum similarity between each query token and document tokens",
+        "relevance": 0.2,
+        "retrievalReason": "per_paper_coverage_fallback",
+        "summary": "MaxSim 让每个查询 token 在文档 token 中找到最佳匹配，在效率和准确率之间折中。"
+      }
+    ],
+    "evidencePrompt": "[evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e] ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT p.2\n摘要：ColBERT 将查询和文档编码为上下文化 token 向量，并在检索阶段用 late interaction 保留细粒度匹配。\n原文：late interaction independently encodes query and document tokens before efficient retrieval\n\n[evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d] ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT p.4\n摘要：MaxSim 让每个查询 token 在文档 token 中找到最佳匹配，在效率和准确率之间折中。\n原文：MaxSim computes the maximum similarity between each query token and document tokens",
+    "paperClaims": [
+      {
+        "analysisRunId": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+        "confidence": 0.95,
+        "evidenceIds": [
+          "evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e"
+        ],
+        "id": "claim-4-cc8fc5be-9ea2-42d0-aa09-9f4bd99c656a",
+        "stance": "supported",
+        "text": "ColBERT 将查询和文档编码为上下文化 token 向量，并在检索阶段用 late interaction 保留细粒度匹配。"
+      },
+      {
+        "analysisRunId": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+        "confidence": 0.2,
+        "evidenceIds": [
+          "evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d"
+        ],
+        "id": "claim-5-853dfca3-107d-4e87-90e5-fe1c5c385f97",
+        "stance": "supported",
+        "text": "MaxSim 让每个查询 token 在文档 token 中找到最佳匹配，在效率和准确率之间折中。"
+      }
+    ],
+    "retrievalConfidence": 0.92,
+    "run": {
+      "coverage": {
+        "coveredPaperIds": [
+          "demo-1"
+        ],
+        "missingPaperIds": [],
+        "ratio": 1,
+        "selectedPaperIds": [
+          "demo-1"
+        ]
+      },
+      "createdAt": "2026-07-20T05:33:10.635Z",
+      "id": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+      "plan": {
+        "dimensions": [
+          "研究问题",
+          "方法",
+          "实验与结果",
+          "局限与分歧"
+        ],
+        "maxEvidencePerPaper": 2,
+        "maxTotalEvidence": 12,
+        "paperIds": [
+          "demo-1"
+        ],
+        "query": "基于当前锁定的选中文献集生成思维导图。提取可追溯证据，说明核心方法、结果、局限和证据不足项。"
+      },
+      "query": "基于当前锁定的选中文献集生成思维导图。提取可追溯证据，说明核心方法、结果、局限和证据不足项。",
+      "status": "completed",
+      "completedAt": "2026-07-20T05:33:52.487Z"
+    },
+    "claims": [
+      {
+        "analysisRunId": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+        "confidence": 0.95,
+        "evidenceIds": [
+          "evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e"
+        ],
+        "id": "claim-4-cc8fc5be-9ea2-42d0-aa09-9f4bd99c656a",
+        "stance": "supported",
+        "text": "ColBERT 将查询和文档编码为上下文化 token 向量，并在检索阶段用 late interaction 保留细粒度匹配。"
+      },
+      {
+        "analysisRunId": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+        "confidence": 0.2,
+        "evidenceIds": [
+          "evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d"
+        ],
+        "id": "claim-5-853dfca3-107d-4e87-90e5-fe1c5c385f97",
+        "stance": "supported",
+        "text": "MaxSim 让每个查询 token 在文档 token 中找到最佳匹配，在效率和准确率之间折中。"
+      },
+      {
+        "analysisRunId": "analysis-1-d53ba4c6-26fc-4a5a-ad5d-14fc3a1db036",
+        "confidence": 0.92,
+        "evidenceIds": [
+          "evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e",
+          "evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d"
+        ],
+        "id": "claim-1-967274c3-2cb2-4279-b45c-9f60c5eb13e1",
+        "stance": "supported",
+        "text": "下面是基于当前锁定文献集生成的思维导图草案。所有事实性节点均绑定到给定 evidence ID；未被证据覆盖的内容标为“证据不足”。\n\n```mermaid\nmindmap\n  root((ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT))\n    研究问题\n      \"面向 passage search 的高效且有效检索\"\n        \"证据不足：当前证据未直接给出完整问题表述、任务定义或对比对象\"\n    核心方法\n      \"上下文化 token 向量表示\"\n        \"查询和文档被编码为上下文化 token 向量\"\n        \"证据: evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e\"\n      \"Late Interaction\"\n        \"查询 token 与文档 token 先独立编码\"\n        \"检索阶段再进行交互，以保留细粒度匹配\"\n        \"证据: evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e\"\n      \"MaxSim 匹配机制\"\n        \"每个查询 token 在文档 token 中寻找最大相似度匹配\"\n        \"证据: evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d\"\n      \"效率-准确率折中\"\n        \"MaxSim 被用于在效率和准确率之间取得折中\"\n        \"证据: evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d\"\n    实验与结果\n      \"证据不足\"\n        \"当前证据矩阵未提供实验数据集、指标、baseline、数值结果或显著性分析\"\n        \"不能判断 ColBERT 相比 BM25、BERT reranker 或其他 dense retriever 的具体提升幅度\"\n    局限\n      \"证据不足\"\n        \"当前证据未覆盖索引体积、延迟、训练成本、内存开销、长文档处理或失败案例\"\n      \"可追溯的潜在限制项\"\n        \"仅能确认方法依赖 token 级向量与 MaxSim 交互\"\n        \"但其资源代价和适用边界没有由当前证据直接支持\"\n        \"证据: evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e, evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d\"\n    证据不足项\n      \"研究问题的完整动机\"\n        \"缺少作者对现有方法瓶颈的明确论述\"\n      \"实验设置\"\n        \"缺少数据集、评价指标、训练设置和检索流程细节\"\n      \"结果结论\"\n        \"缺少定量结果，无法确认有效性提升幅度\"\n      \"消融分析\"\n        \"缺少 late interaction、MaxSim、编码策略等组件的贡献拆解\"\n      \"局限与风险\"\n        \"缺少作者自述局限或失败场景\"\n    多论文比较\n      \"当前仅有 1 篇文献\"\n        \"共同点：不适用\"\n        \"分歧：不适用\"\n        \"未知项：无法与其他论文比较研究问题、方法、实验结果或局限\"\n```\n\n**证据矩阵摘要**\n\n| 维度 | 可支持结论 | Evidence ID |\n|---|---|---|\n| 方法 | ColBERT 将查询和文档编码为上下文化 token 向量 | `evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e` |\n| 方法 | late interaction 在检索阶段保留细粒度匹配 | `evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e` |\n| 方法 | MaxSim 为每个查询 token 寻找文档 token 中的最佳匹配 | `evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d` |\n| 方法/结果倾向 | MaxSim 体现效率与准确率之间的折中 | `evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d` |\n| 实验与结果 | 证据不足，不能生成定量结论 | 无 |\n| 局限 | 证据不足，不能归纳作者声明的局限 | 无 |"
+      }
+    ]
+  },
+  "answer": "下面是基于当前锁定文献集生成的思维导图草案。所有事实性节点均绑定到给定 evidence ID；未被证据覆盖的内容标为“证据不足”。\n\n```mermaid\nmindmap\n  root((ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT))\n    研究问题\n      \"面向 passage search 的高效且有效检索\"\n        \"证据不足：当前证据未直接给出完整问题表述、任务定义或对比对象\"\n    核心方法\n      \"上下文化 token 向量表示\"\n        \"查询和文档被编码为上下文化 token 向量\"\n        \"证据: evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e\"\n      \"Late Interaction\"\n        \"查询 token 与文档 token 先独立编码\"\n        \"检索阶段再进行交互，以保留细粒度匹配\"\n        \"证据: evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e\"\n      \"MaxSim 匹配机制\"\n        \"每个查询 token 在文档 token 中寻找最大相似度匹配\"\n        \"证据: evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d\"\n      \"效率-准确率折中\"\n        \"MaxSim 被用于在效率和准确率之间取得折中\"\n        \"证据: evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d\"\n    实验与结果\n      \"证据不足\"\n        \"当前证据矩阵未提供实验数据集、指标、baseline、数值结果或显著性分析\"\n        \"不能判断 ColBERT 相比 BM25、BERT reranker 或其他 dense retriever 的具体提升幅度\"\n    局限\n      \"证据不足\"\n        \"当前证据未覆盖索引体积、延迟、训练成本、内存开销、长文档处理或失败案例\"\n      \"可追溯的潜在限制项\"\n        \"仅能确认方法依赖 token 级向量与 MaxSim 交互\"\n        \"但其资源代价和适用边界没有由当前证据直接支持\"\n        \"证据: evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e, evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d\"\n    证据不足项\n      \"研究问题的完整动机\"\n        \"缺少作者对现有方法瓶颈的明确论述\"\n      \"实验设置\"\n        \"缺少数据集、评价指标、训练设置和检索流程细节\"\n      \"结果结论\"\n        \"缺少定量结果，无法确认有效性提升幅度\"\n      \"消融分析\"\n        \"缺少 late interaction、MaxSim、编码策略等组件的贡献拆解\"\n      \"局限与风险\"\n        \"缺少作者自述局限或失败场景\"\n    多论文比较\n      \"当前仅有 1 篇文献\"\n        \"共同点：不适用\"\n        \"分歧：不适用\"\n        \"未知项：无法与其他论文比较研究问题、方法、实验结果或局限\"\n```\n\n**证据矩阵摘要**\n\n| 维度 | 可支持结论 | Evidence ID |\n|---|---|---|\n| 方法 | ColBERT 将查询和文档编码为上下文化 token 向量 | `evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e` |\n| 方法 | late interaction 在检索阶段保留细粒度匹配 | `evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e` |\n| 方法 | MaxSim 为每个查询 token 寻找文档 token 中的最佳匹配 | `evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d` |\n| 方法/结果倾向 | MaxSim 体现效率与准确率之间的折中 | `evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d` |\n| 实验与结果 | 证据不足，不能生成定量结论 | 无 |\n| 局限 | 证据不足，不能归纳作者声明的局限 | 无 |\n引用: demo-1 p.2, demo-1 p.4\n可信度: 0.92",
+  "artifactId": "artifact-1-run-1784525590630-26",
+  "artifactType": "mindmap",
+  "citations": [
+    {
+      "page": 2,
+      "paperId": "demo-1",
+      "snippet": "late interaction independently encodes query and document tokens before efficient retrieval"
+    },
+    {
+      "page": 4,
+      "paperId": "demo-1",
+      "snippet": "MaxSim computes the maximum similarity between each query token and document tokens"
+    }
+  ],
+  "createdAt": "2026-07-20T05:33:52.489Z",
+  "outlineMarkdown": "- Literature Mind Map\n  - ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT\n    - ColBERT 将查询和文档编码为上下文化 token 向量，并在检索阶段用 late interaction 保留细粒度匹配。 <!-- evidence:evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e -->\n    - MaxSim 让每个查询 token 在文档 token 中找到最佳匹配，在效率和准确率之间折中。 <!-- evidence:evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d -->\n",
+  "outlineNodes": [
+    {
+      "id": "root",
+      "kind": "root",
+      "label": "Literature Mind Map"
+    },
+    {
+      "id": "paper-demo-1",
+      "kind": "paper",
+      "label": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+      "parentId": "root"
+    },
+    {
+      "evidenceIds": [
+        "evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e"
+      ],
+      "id": "outline-evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e",
+      "kind": "evidence",
+      "label": "ColBERT 将查询和文档编码为上下文化 token 向量，并在检索阶段用 late interaction 保留细粒度匹配。",
+      "parentId": "paper-demo-1"
+    },
+    {
+      "evidenceIds": [
+        "evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d"
+      ],
+      "id": "outline-evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d",
+      "kind": "evidence",
+      "label": "MaxSim 让每个查询 token 在文档 token 中找到最佳匹配，在效率和准确率之间折中。",
+      "parentId": "paper-demo-1"
+    }
+  ],
+  "papers": [
+    {
+      "id": "demo-1",
+      "title": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+    }
+  ],
+  "title": "Literature Mind Map",
+  "uiDsl": {
+    "actions": [
+      {
+        "actionId": "artifact.open_tab",
+        "id": "open-artifact-1-run-1784525590630-26",
+        "input": {
+          "artifactId": "artifact-1-run-1784525590630-26",
+          "artifactType": "mindmap"
+        },
+        "label": "打开产物",
+        "riskLevel": "low"
+      }
+    ],
+    "audit": {
+      "createdAt": "2026-07-20T05:33:52.489Z",
+      "generatedBy": "rule",
+      "traceId": "trace-artifact-1-run-1784525590630-26"
+    },
+    "dataSources": [
+      {
+        "id": "artifact-selected-set",
+        "params": {
+          "artifactType": "mindmap",
+          "paperIds": [
+            "demo-1"
+          ]
+        },
+        "sourceId": "selected_document_set.summary"
+      }
+    ],
+    "id": "ui-artifact-1-run-1784525590630-26",
+    "intentPlanId": "artifact-artifact-1-run-1784525590630-26",
+    "root": {
+      "children": [
+        {
+          "component": "ActionBar",
+          "id": "artifact-actions",
+          "props": {
+            "actionIds": [
+              "open-artifact-1-run-1784525590630-26"
+            ]
+          }
+        }
+      ],
+      "component": "MindMap",
+      "id": "artifact-mindmap",
+      "props": {
+        "nodes": [
+          {
+            "id": "root",
+            "kind": "root",
+            "label": "Literature Mind Map"
+          },
+          {
+            "id": "paper-demo-1",
+            "kind": "paper",
+            "label": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+            "parentId": "root"
+          },
+          {
+            "evidenceIds": [
+              "evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e"
+            ],
+            "id": "outline-evidence-2-e5bc4646-efd4-4d73-a4b8-ef610452da4e",
+            "kind": "evidence",
+            "label": "ColBERT 将查询和文档编码为上下文化 token 向量，并在检索阶段用 late interaction 保留细粒度匹配。",
+            "parentId": "paper-demo-1"
+          },
+          {
+            "evidenceIds": [
+              "evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d"
+            ],
+            "id": "outline-evidence-3-8fe12921-44d1-40d2-a45e-36614e50f13d",
+            "kind": "evidence",
+            "label": "MaxSim 让每个查询 token 在文档 token 中找到最佳匹配，在效率和准确率之间折中。",
+            "parentId": "paper-demo-1"
+          }
+        ],
+        "title": "Literature Mind Map"
+      }
+    },
+    "surface": "center_artifact",
+    "version": "liteasy-ui-dsl/v1"
+  },
+  "version": "liteasy.agent-artifact/v1"
+}

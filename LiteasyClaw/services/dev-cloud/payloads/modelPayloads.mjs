@@ -1,5 +1,8 @@
 import { createDeepSeekChatCompletionsProvider } from "../providers/deepseekChatCompletions.mjs";
-import { createOpenAIResponsesProvider } from "../providers/openaiResponses.mjs";
+import {
+  createOpenAIResponsesProvider,
+  createOpenAIResponsesStreamProvider
+} from "../providers/openaiResponses.mjs";
 import { generateMockAnswer } from "../providers/mockProvider.mjs";
 
 function clampScore(score) {
@@ -40,6 +43,18 @@ export function buildProviderRegistry(config) {
     deepseek: deepseekProvider,
     mock: generateMockAnswer,
     openai: openaiProvider
+  };
+}
+
+export function buildStreamingProviderRegistry(config) {
+  return {
+    openai:
+      config.openaiApiKey && config.openaiApiKey.length > 0
+        ? createOpenAIResponsesStreamProvider({
+            apiBaseUrl: config.openaiApiBaseUrl,
+            apiKey: config.openaiApiKey
+          })
+        : null
   };
 }
 
@@ -95,4 +110,39 @@ export async function generateAnswer(body, providers) {
       provider: "mock"
     }
   };
+}
+
+export async function* generateAnswerStream(body, providers, streamingProviders) {
+  const providerId = typeof body.provider === "string" ? body.provider : "openai";
+  const streamProvider = streamingProviders[providerId];
+
+  if (streamProvider) {
+    let answer = "";
+    let pendingDelta = "";
+    for await (const delta of streamProvider(body)) {
+      answer += delta;
+      pendingDelta += delta;
+      if (pendingDelta.length >= 80) {
+        yield { delta: pendingDelta, type: "delta" };
+        pendingDelta = "";
+      }
+    }
+    if (pendingDelta.length > 0) {
+      yield { delta: pendingDelta, type: "delta" };
+    }
+    yield {
+      answer,
+      execution: {
+        backend: "dev_cloud",
+        mode: "live",
+        provider: providerId
+      },
+      type: "completed"
+    };
+    return;
+  }
+
+  const completed = await generateAnswer(body, providers);
+  yield { delta: completed.answer, type: "delta" };
+  yield { ...completed, type: "completed" };
 }

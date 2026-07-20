@@ -26,7 +26,11 @@ async function invokeHandler({ body, handler, handlerOptions, headers = {}, meth
 
   const response = {
     end(payload = "") {
-      endedBody = String(payload);
+      endedBody += String(payload);
+    },
+    write(payload = "") {
+      endedBody += String(payload);
+      return true;
     },
     writeHead(nextStatusCode, nextHeaders) {
       statusCode = nextStatusCode;
@@ -113,7 +117,10 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/account/register",
     "POST /v1/account/session",
     "POST /v1/model/generate",
+    "POST /v1/model/generate-stream",
     "POST /v1/model/audit",
+    "GET /v1/agent-artifacts",
+    "POST /v1/agent-artifacts",
     "POST /v1/recommendations",
     "POST /v1/recommendation-cache/get",
     "POST /v1/recommendation-cache/put",
@@ -127,6 +134,35 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/org/summary",
     "POST /v1/org/shared-library/manifest",
     "POST /v1/org/governance-summary"
+  ]);
+});
+
+test("streams model deltas as NDJSON", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ model: "gpt-5.5", prompt: "stream", provider: "openai" }),
+    handlerOptions: {
+      streamingProviders: {
+        openai: async function* streamProvider() {
+          yield "Hello ";
+          yield "stream";
+        }
+      }
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/model/generate-stream"
+  });
+
+  const events = response.body.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers["Content-Type"], "application/x-ndjson; charset=utf-8");
+  assert.deepEqual(events, [
+    { delta: "Hello stream", type: "delta" },
+    {
+      answer: "Hello stream",
+      execution: { backend: "dev_cloud", mode: "live", provider: "openai" },
+      type: "completed"
+    }
   ]);
 });
 
@@ -629,7 +665,7 @@ test("returns a generic error for an incorrect account password", async () => {
   });
 });
 
-test("rejects short passwords and oversized JSON bodies", async () => {
+test("accepts deep-analysis prompts and rejects oversized JSON bodies", async () => {
   const shortPasswordResponse = await invokeHandler({
     body: JSON.stringify({
       displayName: "Tian",
@@ -646,8 +682,29 @@ test("rejects short passwords and oversized JSON bodies", async () => {
   assert.equal(shortPasswordResponse.statusCode, 400);
   assert.equal(shortPasswordResponse.json.error, "invalid_account_registration");
 
+  const deepAnalysisResponse = await invokeHandler({
+    body: JSON.stringify({
+      model: "gpt-5.5",
+      prompt: "x".repeat(128 * 1024),
+      provider: "openai"
+    }),
+    handlerOptions: {
+      providers: {
+        openai: async () => "deep analysis accepted"
+      }
+    },
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/model/generate"
+  });
+  assert.equal(deepAnalysisResponse.statusCode, 200);
+  assert.equal(deepAnalysisResponse.json.answer, "deep analysis accepted");
+
   const oversizedResponse = await invokeHandler({
-    body: JSON.stringify({ prompt: "x".repeat(70 * 1024) }),
+    body: JSON.stringify({ prompt: "x".repeat(520 * 1024) }),
     headers: {
       "content-type": "application/json",
       host: "127.0.0.1:8787"

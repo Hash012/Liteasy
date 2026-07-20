@@ -71,7 +71,7 @@ test("throws a readable error when the backend returns a non-ok status", async (
       prompt: "Explain BERT",
       provider: "openai"
     })
-  ).rejects.toThrow(/模型服务请求失败.*503/);
+  ).rejects.toThrow("模型服务请求失败（cloud_proxy 503）：quota exceeded");
 });
 
 test("throws a readable error when the backend response shape is invalid", async () => {
@@ -94,4 +94,45 @@ test("throws a readable error when the backend response shape is invalid", async
       provider: "openai"
     })
   ).rejects.toThrow(/模型服务返回格式无效/);
+});
+
+test("consumes NDJSON model deltas and reports accumulated output", async () => {
+  const encoder = new TextEncoder();
+  const onDelta = vi.fn();
+  let requestedUrl = "";
+  const client = createHttpModelClient({
+    endpoint: "https://liteasy.example.com/model-proxy",
+    source: "cloud_proxy",
+    transport: async (request) => {
+      requestedUrl = request.url;
+      return {
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('{"delta":"Hello ","type":"delta"}\n'));
+            controller.enqueue(encoder.encode('{"delta":"stream","type":"delta"}\n'));
+            controller.enqueue(encoder.encode(
+              '{"answer":"Hello stream","execution":{"backend":"dev_cloud","mode":"live","provider":"openai"},"type":"completed"}\n'
+            ));
+            controller.close();
+          }
+        }),
+        json: async () => ({}),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  const result = await client({
+    model: "gpt-5.5",
+    onDelta,
+    prompt: "stream",
+    provider: "openai"
+  });
+
+  expect(requestedUrl).toBe("https://liteasy.example.com/model-proxy/v1/model/generate-stream");
+  expect(onDelta).toHaveBeenNthCalledWith(1, "Hello ", "Hello ");
+  expect(onDelta).toHaveBeenNthCalledWith(2, "stream", "Hello stream");
+  expect(result.answer).toBe("Hello stream");
+  expect(result.trace.mode).toBe("live");
 });

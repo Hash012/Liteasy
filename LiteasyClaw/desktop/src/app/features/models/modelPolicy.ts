@@ -2,7 +2,11 @@ import type { SettingsState } from "../settings/settings.types";
 import type { ModelPolicy } from "./modelGateway";
 
 export function getDefaultModelForProvider(provider: string) {
-  return provider === "deepseek" ? "deepseek-v4-flash" : "gpt-5-mini";
+  if (provider === "deepseek") {
+    return "deepseek-v4-flash";
+  }
+  const injectedModel = import.meta.env.VITE_LITEASY_OPENAI_MODEL?.trim();
+  return injectedModel || "gpt-5-mini";
 }
 
 export function getModelPolicyFromSettings(settings: SettingsState): ModelPolicy {

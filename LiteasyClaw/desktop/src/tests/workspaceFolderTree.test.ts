@@ -1,4 +1,7 @@
-import { groupWorkspacePapersByFolder } from "../app/features/workspace/workspaceFolderTree";
+import {
+  buildWorkspaceFolderTree,
+  groupWorkspacePapersByFolder
+} from "../app/features/workspace/workspaceFolderTree";
 
 test("groups workspace papers by source parent folders", () => {
   const groups = groupWorkspacePapersByFolder([
@@ -28,5 +31,20 @@ test("groups workspace papers by source parent folders", () => {
         { id: "paper-4", title: "No Path" }
       ]
     }
+  ]);
+});
+
+test("builds nested folder nodes with descendant paper counts", () => {
+  const tree = buildWorkspaceFolderTree([
+    { id: "paper-1", sourcePath: "/papers/search/colbert.pdf", title: "ColBERT" },
+    { id: "paper-2", sourcePath: "/papers/search/acorn.pdf", title: "ACORN" },
+    { id: "paper-3", sourcePath: "/papers/database/survey.pdf", title: "Survey" }
+  ]);
+
+  expect(tree).toHaveLength(1);
+  expect(tree[0]).toMatchObject({ name: "papers", paperCount: 3, path: "/papers" });
+  expect(tree[0].children).toEqual([
+    expect.objectContaining({ name: "database", paperCount: 1, path: "/papers/database" }),
+    expect.objectContaining({ name: "search", paperCount: 2, path: "/papers/search" })
   ]);
 });

@@ -1,9 +1,41 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { ArtifactTabs } from "../app/features/artifacts/ArtifactTabs";
 import type { ArtifactTab } from "../app/features/artifacts/artifact.types";
 
 describe("ArtifactTabs", () => {
+  test("shows real Agent phase progress separately from PDF readiness", () => {
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[]}
+        tasks={[
+          {
+            id: "artifact-task-1",
+            message: "正在调用模型生成分析结构",
+            partialAnswer: "ColBERT 使用 late interaction。",
+            progress: 55,
+            stage: "generating_answer",
+            status: "running",
+            type: "tree"
+          }
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("progressbar", { name: "Agent 分析进度" })).toHaveAttribute(
+      "aria-valuenow",
+      "55"
+    );
+    expect(screen.getByText("正在调用模型生成分析结构")).toBeInTheDocument();
+    expect(screen.getByText("ColBERT 使用 late interaction。")).toBeInTheDocument();
+    expect(screen.getByText(/PDF 解析完成只表示证据可检索/)).toBeInTheDocument();
+  });
+
   test("renders center artifact ui dsl when a tab provides one", () => {
     const tab: ArtifactTab = {
       artifactId: "artifact-comparison",
@@ -222,5 +254,101 @@ describe("ArtifactTabs", () => {
         id: "open-artifact"
       })
     );
+  });
+
+  test("renders and activates the requested persisted artifact instead of always using the newest tab", () => {
+    const onActivateArtifact = vi.fn();
+    const tabs: ArtifactTab[] = [
+      {
+        artifactId: "artifact-new",
+        createdAt: "2026-07-20T04:00:00.000Z",
+        papers: [{ id: "demo-1", title: "ColBERT" }],
+        preview: { nodes: ["MaxSim"], rootLabel: "New artifact" },
+        title: "最新产物",
+        type: "tree"
+      },
+      {
+        artifactId: "artifact-acorn",
+        createdAt: "2026-07-19T04:00:00.000Z",
+        papers: [{ id: "demo-2", title: "ACORN" }],
+        preview: { nodes: ["Predicate subgraph"], rootLabel: "ACORN artifact" },
+        title: "ACORN 历史产物",
+        type: "mindmap"
+      }
+    ];
+
+    render(
+      <ArtifactTabs
+        activeArtifactId="artifact-acorn"
+        analysisHint=""
+        canStartAnalysis
+        onActivateArtifact={onActivateArtifact}
+        onStartAnalysis={vi.fn()}
+        selectedCount={2}
+        selectionLocked
+        tabs={tabs}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByText("ACORN artifact")).toBeInTheDocument();
+    expect(screen.getByText("Predicate subgraph")).toBeInTheDocument();
+    expect(screen.getByText("ACORN")).toBeInTheDocument();
+    expect(screen.queryByText("New artifact")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ACORN 历史产物/ })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /最新产物/ }));
+    expect(onActivateArtifact).toHaveBeenCalledWith("artifact-new");
+  });
+
+  test("collects supplemental references and requests regeneration for the original papers", async () => {
+    const onRegenerateArtifact = vi.fn(async () => undefined);
+    const tab: ArtifactTab = {
+      artifactId: "artifact-colbert-acorn",
+      papers: [
+        { id: "demo-1", title: "ColBERT" },
+        { id: "demo-2", title: "ACORN" }
+      ],
+      preview: { nodes: ["Methods"], rootLabel: "Comparison" },
+      title: "两篇论文对比",
+      type: "tree"
+    };
+
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onRegenerateArtifact={onRegenerateArtifact}
+        onStartAnalysis={vi.fn()}
+        selectedCount={2}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByText("基于 2 篇论文")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "补充资料并重新生成" }));
+    expect(screen.getByRole("dialog", { name: "补充资料并重新生成产物" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("补充文本、引用或分析要求"), {
+      target: { value: "ACORN §4 的过滤实验，以及 ColBERT Table 2。" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "另存并重新生成" }));
+
+    await waitFor(() => {
+      expect(onRegenerateArtifact).toHaveBeenCalledWith({
+        artifactId: "artifact-colbert-acorn",
+        artifactType: "tree",
+        papers: tab.papers,
+        supplementalContext: "ACORN §4 的过滤实验，以及 ColBERT Table 2。"
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 });

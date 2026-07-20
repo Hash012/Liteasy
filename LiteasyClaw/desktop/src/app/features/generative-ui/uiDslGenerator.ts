@@ -4,7 +4,7 @@ import {
   type ActionInvocation
 } from "../skills/actionRegistry";
 import type { Citation } from "../retrieval/retrieval.types";
-import type { ArtifactType } from "../artifacts/artifact.types";
+import type { ArtifactOutlineNode, ArtifactType } from "../artifacts/artifact.types";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper } from "../workspace/workspace.types";
 import { getDefaultModelForProvider } from "../models/modelPolicy";
@@ -593,21 +593,23 @@ function createTreeOutlineNodes(
     {
       id: "root",
       label: title,
-      level: 1
+      kind: "root"
     },
     ...selectedPapers.flatMap((paper) => {
       const chunks = importedChunksByPaperId[paper.id] ?? [];
       const evidenceNodes = (chunks.length > 0 ? chunks.slice(0, 3) : []).map((chunk, index) => ({
         id: `evidence-${paper.id}-${index}`,
+        kind: "evidence",
         label: chunk.summary || chunk.snippet,
-        level: 3
+        parentId: `paper-${paper.id}`
       }));
 
       return [
         {
           id: `paper-${paper.id}`,
+          kind: "paper",
           label: paper.title,
-          level: 2
+          parentId: "root"
         },
         ...evidenceNodes
       ];
@@ -671,6 +673,7 @@ function createCenterArtifactRoot(input: {
   actionBar: UIDslNode;
   artifactType: ArtifactType;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
+  outlineNodes?: ArtifactOutlineNode[];
   selectedPapers: Paper[];
   title: string;
 }): UIDslNode {
@@ -710,11 +713,13 @@ function createCenterArtifactRoot(input: {
       component: "TreeOutline",
       id: "artifact-tree-outline",
       props: {
-        nodes: createTreeOutlineNodes(
-          input.selectedPapers,
-          input.importedChunksByPaperId,
-          input.title
-        ),
+        nodes:
+          input.outlineNodes ??
+          createTreeOutlineNodes(
+            input.selectedPapers,
+            input.importedChunksByPaperId,
+            input.title
+          ),
         title: input.title
       }
     };
@@ -737,7 +742,9 @@ function createCenterArtifactRoot(input: {
     component: "MindMap",
     id: "artifact-mindmap",
     props: {
-      nodes: createMindMapNodes(input.selectedPapers, input.importedChunksByPaperId),
+      nodes:
+        input.outlineNodes ??
+        createMindMapNodes(input.selectedPapers, input.importedChunksByPaperId),
       title: input.title
     }
   };
@@ -747,6 +754,7 @@ export function generateCenterArtifactUIDslDocument(input: {
   artifactId: string;
   artifactType: ArtifactType;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
+  outlineNodes?: ArtifactOutlineNode[];
   selectedPapers: Paper[];
   title?: string;
 }): UIDslDocument {
@@ -759,6 +767,7 @@ export function generateCenterArtifactUIDslDocument(input: {
     actionBar: createArtifactActionBar(openArtifactAction),
     artifactType: input.artifactType,
     importedChunksByPaperId: input.importedChunksByPaperId,
+    outlineNodes: input.outlineNodes,
     selectedPapers: input.selectedPapers,
     title
   });

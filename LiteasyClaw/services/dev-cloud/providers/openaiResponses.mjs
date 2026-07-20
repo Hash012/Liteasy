@@ -75,3 +75,68 @@ export function createOpenAIResponsesProvider({
     return outputText;
   };
 }
+
+export function createOpenAIResponsesStreamProvider({
+  apiBaseUrl = defaultBaseUrl,
+  apiKey,
+  fetchImpl = fetchWithConfiguredProxy
+}) {
+  return async function* streamOpenAIResponse(input) {
+    const response = await fetchImpl(`${apiBaseUrl.replace(/\/+$/, "")}/responses`, {
+      body: JSON.stringify({
+        input: input.prompt,
+        model: input.model,
+        stream: true
+      }),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    });
+
+    if (!response.ok) {
+      const detail = await readErrorMessage(response);
+      throw new Error(
+        detail
+          ? `OpenAI Responses API 流式请求失败（${response.status}）：${detail}`
+          : `OpenAI Responses API 流式请求失败（${response.status}）`
+      );
+    }
+    if (!response.body) {
+      throw new Error("OpenAI Responses API 流式响应缺少 body");
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for await (const chunk of response.body) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        for (const line of frame.split("\n")) {
+          if (!line.startsWith("data:")) {
+            continue;
+          }
+          const data = line.slice(5).trim();
+          if (!data || data === "[DONE]") {
+            continue;
+          }
+          let payload;
+          try {
+            payload = JSON.parse(data);
+          } catch {
+            continue;
+          }
+          if (
+            payload?.type === "response.output_text.delta" &&
+            typeof payload.delta === "string" &&
+            payload.delta.length > 0
+          ) {
+            yield payload.delta;
+          }
+        }
+      }
+    }
+  };
+}

@@ -19,7 +19,9 @@ import {
 import {
   buildModelAuditPayload,
   buildProviderRegistry,
-  generateAnswer
+  buildStreamingProviderRegistry,
+  generateAnswer,
+  generateAnswerStream
 } from "./payloads/modelPayloads.mjs";
 import {
   buildOrganizationCreatePayload,
@@ -42,8 +44,12 @@ import {
 import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
+import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 
-const maximumJsonBodyBytes = 64 * 1024;
+// 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
+// 仍保留明确上限以防止本地开发服务被无界请求占满内存。
+const maximumJsonBodyBytes = 512 * 1024;
+const maximumAgentArtifactBodyBytes = 1024 * 1024;
 
 const availableEndpoints = [
   "GET /",
@@ -63,7 +69,10 @@ const availableEndpoints = [
   "POST /v1/account/register",
   "POST /v1/account/session",
   "POST /v1/model/generate",
+  "POST /v1/model/generate-stream",
   "POST /v1/model/audit",
+  "GET /v1/agent-artifacts",
+  "POST /v1/agent-artifacts",
   "POST /v1/recommendations",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
@@ -145,6 +154,28 @@ function writeJson(request, response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+async function writeNdjsonStream(request, response, stream) {
+  response.writeHead(200, {
+    ...buildCorsHeaders(request),
+    "Cache-Control": "no-store, no-transform",
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "X-Accel-Buffering": "no",
+    "X-Content-Type-Options": "nosniff"
+  });
+  try {
+    for await (const event of stream) {
+      response.write(`${JSON.stringify(event)}\n`);
+    }
+  } catch (error) {
+    response.write(`${JSON.stringify({
+      error: error instanceof Error ? error.message : "unknown_stream_error",
+      type: "error"
+    })}\n`);
+  } finally {
+    response.end();
+  }
+}
+
 function writeHtml(request, response, statusCode, html) {
   response.writeHead(statusCode, {
     ...buildCorsHeaders(request),
@@ -153,13 +184,13 @@ function writeHtml(request, response, statusCode, html) {
   response.end(html);
 }
 
-async function readJsonBody(request) {
+async function readJsonBody(request, maximumBytes = maximumJsonBodyBytes) {
   const chunks = [];
   let byteLength = 0;
 
   for await (const chunk of request) {
     byteLength += chunk.length;
-    if (byteLength > maximumJsonBodyBytes) {
+    if (byteLength > maximumBytes) {
       const error = new Error("request_body_too_large");
       error.code = "REQUEST_BODY_TOO_LARGE";
       throw error;
@@ -175,9 +206,13 @@ async function readJsonBody(request) {
   return JSON.parse(rawBody);
 }
 
-async function readJsonOrWriteError(request, response) {
+async function readJsonOrWriteError(
+  request,
+  response,
+  maximumBytes = maximumJsonBodyBytes
+) {
   try {
-    return await readJsonBody(request);
+    return await readJsonBody(request, maximumBytes);
   } catch (error) {
     if (error && typeof error === "object" && error.code === "REQUEST_BODY_TOO_LARGE") {
       writeJson(request, response, 413, {
@@ -252,6 +287,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     ...buildProviderRegistry(config),
     ...(customConfig.providers ?? {})
   };
+  const streamingProviders = {
+    ...buildStreamingProviderRegistry(config),
+    ...(customConfig.streamingProviders ?? {})
+  };
   const database = customConfig.database ?? createDatabase({
     databasePath: customConfig.databasePath
   });
@@ -263,6 +302,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     sessionRepository
   });
   const authRateLimiter = createRateLimiter(config.authRateLimit);
+  const agentArtifactRepository =
+    customConfig.agentArtifactRepository ?? createAgentArtifactRepository({
+      resultDirectory: customConfig.agentArtifactResultDirectory
+    });
 
   return async (request, response) => {
     const method = request.method ?? "GET";
@@ -290,6 +333,33 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         endpoints: availableEndpoints,
         publicOrigin: getPublicOrigin(request, config)
       });
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/v1/agent-artifacts") {
+      writeJson(request, response, 200, {
+        artifacts: agentArtifactRepository.list(),
+        resultDirectory: "project-docs/agent-results"
+      });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/agent-artifacts") {
+      const body = await readJsonOrWriteError(
+        request,
+        response,
+        maximumAgentArtifactBodyBytes
+      );
+      if (body === null) {
+        return;
+      }
+      try {
+        writeJson(request, response, 201, agentArtifactRepository.save(body));
+      } catch (error) {
+        writeJson(request, response, 400, {
+          error: error instanceof Error ? error.message : "invalid_agent_artifact"
+        });
+      }
       return;
     }
 
@@ -368,6 +438,19 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           error: message
         });
       }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/model/generate-stream") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      await writeNdjsonStream(
+        request,
+        response,
+        generateAnswerStream(body, providers, streamingProviders)
+      );
       return;
     }
 

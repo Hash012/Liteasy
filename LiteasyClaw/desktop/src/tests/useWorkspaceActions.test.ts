@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createImportStore } from "../app/features/import/import.store";
+import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
 import { createWorkspaceStore } from "../app/features/workspace/workspace.store";
 import type { Paper, WorkspaceState } from "../app/features/workspace/workspace.types";
 import { useWorkspaceActions } from "../app/features/workspace/useWorkspaceActions";
@@ -24,6 +25,9 @@ function renderWorkspaceActions(papers: Paper[] = []) {
   const onWorkspaceChanged = vi.fn();
   const hook = renderHook(() =>
     useWorkspaceActions({
+      extractPaperChunks: (paper) => new Promise((resolve) => {
+        window.setTimeout(() => resolve(buildImportedChunksForPaper(paper)), 800);
+      }),
       importDocument: vi.fn(() => Promise.resolve()),
       importStore,
       onAnalysisHint,

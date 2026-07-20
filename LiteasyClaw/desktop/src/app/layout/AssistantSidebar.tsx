@@ -8,11 +8,16 @@ import type { ActionContext } from "../features/skills/actionRegistry";
 import type { DockRegionId } from "../features/dock/dock.types";
 import type { Paper, WorkspaceSource } from "../features/workspace/workspace.types";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
+import type { FrontendAgentClient } from "../features/agent-api/frontendAgentClient";
+import type { ExecutionJournal } from "../features/generative-ui/executionJournal";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantSidebarProps = {
-  importedChunksByPaperId: Record<string, RetrievalChunk[]>;
+  agentClient: FrontendAgentClient;
+  executionJournal?: ExecutionJournal;
+  /** @deprecated Agent context is supplied by the AppShell controller. */
+  importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
   modelTransport?: ModelTransport;
   onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
@@ -37,7 +42,8 @@ type AssistantSidebarProps = {
 };
 
 export function AssistantSidebar({
-  importedChunksByPaperId,
+  agentClient,
+  executionJournal,
   importedSelectedCount,
   modelTransport,
   onApplyGeneratedTheme,
@@ -68,7 +74,8 @@ export function AssistantSidebar({
       <div className="pane-header">Liteasy Chat</div>
       <div className="pane-body">
         <AssistantPane
-          importedChunksByPaperId={importedChunksByPaperId}
+          agentClient={agentClient}
+          executionJournal={executionJournal}
           modelTransport={modelTransport}
           onApplyGeneratedTheme={onApplyGeneratedTheme}
           onApplyLayoutPreset={onApplyLayoutPreset}

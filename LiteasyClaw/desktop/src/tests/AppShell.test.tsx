@@ -101,7 +101,7 @@ test("grounds qa answers in the currently selected imported paper set", async ()
   await user.click(screen.getByRole("button", { name: "交给AI流程" }));
 
   await waitFor(() => {
-    expect(screen.getByText("parsed")).toBeInTheDocument();
+    expect(screen.getByText("PDF 已就绪")).toBeInTheDocument();
   }, { timeout: 2500 });
 
   await selectInitialAssistantMode(user, "问答");
@@ -973,7 +973,7 @@ test("shows the latest cloud model execution chain in the assistant message", as
   await user.click(screen.getByRole("button", { name: "交给AI流程" }));
 
   await waitFor(() => {
-    expect(screen.getByText("parsed")).toBeInTheDocument();
+    expect(screen.getByText("PDF 已就绪")).toBeInTheDocument();
   }, { timeout: 2500 });
 
   await selectInitialAssistantMode(user, "问答");

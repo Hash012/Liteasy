@@ -4,6 +4,69 @@ import { useArtifactWorkflowController } from "../app/controllers/useArtifactWor
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
+import type { AgentRun } from "../app/features/agent-api/agentApi.types";
+
+function completedRun(): AgentRun {
+  return {
+    apiVersion: "liteasy.agent/v1",
+    completedAt: "2026-07-20T02:00:00.000Z",
+    createdAt: "2026-07-20T01:00:00.000Z",
+    events: [{
+      apiVersion: "liteasy.agent/v1",
+      emittedAt: "2026-07-20T02:00:00.000Z",
+      eventId: "event-1",
+      message: "analysis",
+      metadata: {
+        analysis: {
+          citations: [],
+          claims: [],
+          evidence: [],
+          evidencePrompt: "",
+          paperClaims: [],
+          retrievalConfidence: 0,
+          run: {
+            completedAt: "2026-07-20T02:00:00.000Z",
+            coverage: {
+              coveredPaperIds: [],
+              missingPaperIds: ["demo-1"],
+              ratio: 0,
+              selectedPaperIds: ["demo-1"]
+            },
+            createdAt: "2026-07-20T01:00:00.000Z",
+            id: "analysis-1",
+            plan: {
+              dimensions: ["方法"],
+              maxEvidencePerPaper: 2,
+              maxTotalEvidence: 12,
+              paperIds: ["demo-1"],
+              query: "analysis"
+            },
+            query: "analysis",
+            status: "completed"
+          }
+        }
+      },
+      runId: "run-1",
+      sequence: 1,
+      sessionId: "session-1",
+      type: "assistant.message"
+    }],
+    idempotencyKey: "key-1",
+    input: { artifactType: "mindmap", message: "analysis", mode: "qa" },
+    runId: "run-1",
+    sessionId: "session-1",
+    status: "completed"
+  };
+}
+
+function artifactResultClient() {
+  return {
+    list: vi.fn(async () => []),
+    save: vi.fn(async (document: { artifactId: string }) =>
+      `project-docs/agent-results/${document.artifactId}.json`
+    )
+  };
+}
 
 const paper: Paper = {
   id: "demo-1",
@@ -26,11 +89,13 @@ describe("useArtifactWorkflowController", () => {
     const { result } = renderHook(() =>
       useArtifactWorkflowController({
         artifactStore,
+        artifactResultClient: artifactResultClient(),
         getImportedChunksByPaperId: () => ({}),
         getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
         getSelectedPapers: () => [],
         onAnalysisHint: vi.fn(),
-        queueImportForPapers: vi.fn(() => "idle")
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
       })
     );
 
@@ -45,13 +110,15 @@ describe("useArtifactWorkflowController", () => {
     const { result } = renderHook(() =>
       useArtifactWorkflowController({
         artifactStore,
+        artifactResultClient: artifactResultClient(),
         getImportedChunksByPaperId: () => ({
           [paper.id]: buildImportedChunksForPaper(paper)
         }),
         getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
         getSelectedPapers: () => [paper],
         onAnalysisHint,
-        queueImportForPapers: vi.fn(() => "already_imported")
+        queueImportForPapers: vi.fn(() => "already_imported"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
       })
     );
 
@@ -60,12 +127,13 @@ describe("useArtifactWorkflowController", () => {
     });
 
     expect(result.current.model.artifactTasks).toEqual([
-      { id: "artifact-task-1", status: "queued", type: "mindmap" }
+      expect.objectContaining({ status: "running", type: "mindmap" })
     ]);
     expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定模态启动分析。");
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1200);
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(result.current.model.artifactTabs).toEqual([
@@ -73,6 +141,66 @@ describe("useArtifactWorkflowController", () => {
         preview: expect.objectContaining({ rootLabel: "Attention Is All You Need" }),
         title: "Literature Mind Map",
         type: "mindmap"
+      })
+    ]);
+  });
+
+  test("restores previously saved Agent artifacts for later viewing", async () => {
+    const artifactStore = createArtifactStore();
+    const persisted = {
+      agent: {
+        apiVersion: "liteasy.agent/v1",
+        runId: "run-saved",
+        sessionId: "session-saved",
+        status: "completed" as const
+      },
+      answer: "saved analysis",
+      artifactId: "artifact-saved",
+      artifactType: "mindmap" as const,
+      citations: [],
+      createdAt: "2026-07-20T03:00:00.000Z",
+      papers: [{ id: paper.id, title: paper.title }],
+      title: "Saved Mind Map",
+      uiDsl: {
+        actions: [],
+        audit: {
+          createdAt: "2026-07-20T03:00:00.000Z",
+          generatedBy: "rule" as const,
+          traceId: "trace-saved"
+        },
+        dataSources: [],
+        root: { component: "MindMap" as const, id: "root", props: {} },
+        surface: "center_artifact" as const,
+        version: "liteasy.ui/v1" as const
+      },
+      version: "liteasy.agent-artifact/v1" as const
+    };
+    const client = {
+      list: vi.fn(async () => [persisted]),
+      save: vi.fn()
+    };
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactResultClient: client,
+        artifactStore,
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.model.artifactTabs).toEqual([
+      expect.objectContaining({
+        agentRunId: "run-saved",
+        artifactId: "artifact-saved",
+        resultPath: "project-docs/agent-results/artifact-saved.json"
       })
     ]);
   });

@@ -7,6 +7,7 @@ export type ModelPolicy = {
 
 export type GenerateAnswerInput = {
   model: string;
+  onDelta?: (delta: string, accumulated: string) => void;
   prompt: string;
   provider: string;
 };
