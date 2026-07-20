@@ -15,12 +15,17 @@ import type { ImportQueueStatus } from "../features/workspace/useWorkspaceAction
 import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { ArtifactResultClient } from "../features/artifacts/artifactResultClient";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
+import type { DuplicateArtifactGenerationConfirmation } from "../features/artifacts/useArtifactActions";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
 type UseArtifactWorkflowControllerInput = {
   artifactStore: ArtifactStore;
   artifactResultClient: ArtifactResultClient;
+  confirmDuplicateGeneration?: (
+    input: DuplicateArtifactGenerationConfirmation
+  ) => boolean;
+  cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
@@ -29,6 +34,7 @@ type UseArtifactWorkflowControllerInput = {
   runAgentAnalysis: (
     artifactType: ArtifactType,
     onProgress: (input: {
+      agentRunId?: string;
       message: string;
       partialAnswer?: string;
       partialOutlineNodes?: ArtifactTask["partialOutlineNodes"];
@@ -40,14 +46,18 @@ type UseArtifactWorkflowControllerInput = {
 };
 
 type ArtifactWorkflowModel = {
+  artifactCatalog: ArtifactTab[];
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
 };
 
 type ArtifactWorkflowActions = {
+  cancelArtifactTask: (taskId: string) => Promise<string>;
   closeArtifactTab: (artifactId: string) => void;
+  deleteArtifact: (artifactId: string) => Promise<string>;
   handleAssistantArtifact: (artifactType: ArtifactType) => string;
   openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
+  openArtifact: (artifactId: string) => string;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
   saveSkillDocument: (artifactId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
@@ -57,6 +67,8 @@ type ArtifactWorkflowActions = {
 export function useArtifactWorkflowController({
   artifactStore,
   artifactResultClient,
+  confirmDuplicateGeneration,
+  cancelAgentRun,
   getImportedChunksByPaperId,
   getSelectedDocumentSet,
   getSelectedPapers,
@@ -69,13 +81,17 @@ export function useArtifactWorkflowController({
 } {
   const [artifactTasks, setArtifactTasks] = useState<ArtifactTask[]>([]);
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
+  const [artifactCatalog, setArtifactCatalog] = useState<ArtifactTab[]>([]);
   const artifactActions = useArtifactActions({
     artifactStore,
     artifactResultClient,
+    confirmDuplicateGeneration,
+    cancelAgentRun,
     getImportedChunksByPaperId,
     getSelectedDocumentSet,
     getSelectedPapers,
     onAnalysisHint,
+    onArtifactCatalogChanged: setArtifactCatalog,
     onArtifactTabsChanged: setArtifactTabs,
     onArtifactTasksChanged: setArtifactTasks,
     queueImportForPapers,
@@ -106,8 +122,11 @@ export function useArtifactWorkflowController({
 
   return {
     actions: {
+      cancelArtifactTask: artifactActions.cancelArtifactTask,
       closeArtifactTab: artifactActions.closeArtifactTab,
+      deleteArtifact: artifactActions.deleteArtifact,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
+      openArtifact: artifactActions.openArtifact,
       openSkillDocument: artifactActions.openSkillDocument,
       regenerateArtifact: artifactActions.regenerateArtifact,
       saveSkillDocument: artifactActions.saveSkillDocument,
@@ -115,6 +134,7 @@ export function useArtifactWorkflowController({
       updateSkillDocument: artifactActions.updateSkillDocument
     },
     model: {
+      artifactCatalog,
       artifactTabs,
       artifactTasks
     }

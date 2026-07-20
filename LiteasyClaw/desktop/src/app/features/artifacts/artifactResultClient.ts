@@ -37,6 +37,21 @@ export function createArtifactResultClient(input: {
 }) {
   const transport = input.transport ?? fetch;
   return {
+    async delete(artifactId: string) {
+      const response = await transport(
+        `${endpoint(input.getBaseEndpoint())}/${encodeURIComponent(artifactId)}`,
+        { method: "DELETE" }
+      );
+      const payload = await response.json() as {
+        artifactId?: string;
+        deleted?: boolean;
+        error?: string;
+      };
+      if (!response.ok || payload.deleted !== true || payload.artifactId !== artifactId) {
+        throw new Error(payload.error ?? `删除 Agent 产物失败：HTTP ${response.status}`);
+      }
+    },
+
     async list() {
       const response = await transport(endpoint(input.getBaseEndpoint()));
       if (!response.ok) {

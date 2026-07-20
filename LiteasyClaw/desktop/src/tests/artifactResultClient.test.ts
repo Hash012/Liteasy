@@ -42,6 +42,11 @@ test("saves and lists Git-visible Agent artifact documents", async () => {
       json: async () => ({ artifacts: [document] }),
       ok: true,
       status: 200
+    })
+    .mockResolvedValueOnce({
+      json: async () => ({ artifactId: "artifact-1", deleted: true }),
+      ok: true,
+      status: 200
     });
   const client = createArtifactResultClient({
     getBaseEndpoint: () => "http://127.0.0.1:8787/",
@@ -52,6 +57,26 @@ test("saves and lists Git-visible Agent artifact documents", async () => {
     "project-docs/agent-results/artifact-1.json"
   );
   await expect(client.list()).resolves.toEqual([document]);
+  await expect(client.delete("artifact-1")).resolves.toBeUndefined();
   expect(transport.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/agent-artifacts");
   expect(transport.mock.calls[0][1]).toMatchObject({ method: "POST" });
+  expect(transport.mock.calls[2]).toEqual([
+    "http://127.0.0.1:8787/v1/agent-artifacts/artifact-1",
+    { method: "DELETE" }
+  ]);
+});
+
+test("reports a failed artifact deletion", async () => {
+  const client = createArtifactResultClient({
+    getBaseEndpoint: () => "http://127.0.0.1:8787",
+    transport: vi.fn(async () => ({
+      json: async () => ({ error: "agent_artifact_not_found" }),
+      ok: false,
+      status: 404
+    }))
+  });
+
+  await expect(client.delete("artifact-missing")).rejects.toThrow(
+    "agent_artifact_not_found"
+  );
 });

@@ -17,6 +17,7 @@ export async function runAgentArtifactAnalysis(
   client: FrontendAgentClient,
   artifactType: ArtifactType,
   onProgress?: (input: {
+    agentRunId?: string;
     message: string;
     partialAnswer?: string;
     partialOutlineNodes?: ReturnType<typeof parseStreamingOutlineMarkdown>;
@@ -46,10 +47,16 @@ export async function runAgentArtifactAnalysis(
   const message = `${sourceDescription}。完整梳理论文结构、术语关系、方法细节、实验设计与结论边界，并提取可追溯证据。${outlineInstruction}${supplementalInstruction}`;
   let targetRunId: string | null = null;
   let partialAnswer = "";
+  const subtaskDrafts = new Map<string, { content: string; label: string }>();
   const unsubscribe = client.subscribe((event) => {
     if (event.type === "run.started" && event.message === message) {
       targetRunId = event.runId;
-      onProgress?.({ message: "Agent 已接收分析任务", progress: 18, stage: "preparing_context" });
+      onProgress?.({
+        agentRunId: event.runId,
+        message: "Agent 已接收分析任务",
+        progress: 18,
+        stage: "preparing_context"
+      });
       return;
     }
     if (!targetRunId || event.runId !== targetRunId) {
@@ -73,6 +80,23 @@ export async function runAgentArtifactAnalysis(
         message: event.summary,
         progress: Math.max(25, Math.min(90, event.progress ?? 50)),
         stage
+      });
+      return;
+    }
+    if (event.type === "analysis.subtask.delta") {
+      const current = subtaskDrafts.get(event.subtaskId);
+      subtaskDrafts.set(event.subtaskId, {
+        content: `${current?.content ?? ""}${event.delta}`,
+        label: event.label
+      });
+      const visibleWorklog = [...subtaskDrafts.values()]
+        .map((draft) => `【SubAgent 工作记录 · ${draft.label}】\n${draft.content}`)
+        .join("\n\n");
+      onProgress?.({
+        message: `正在并行分析论文区段（${subtaskDrafts.size} 个 SubAgent 已返回内容）`,
+        partialAnswer: visibleWorklog.slice(-6_000),
+        progress: 48,
+        stage: "generating_answer"
       });
       return;
     }

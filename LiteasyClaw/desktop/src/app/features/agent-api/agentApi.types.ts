@@ -101,6 +101,12 @@ export type AgentEventPayload =
   | { inputMode: AgentMode; message: string; type: "run.started" }
   | { type: "context.prepared" }
   | { delta: string; type: "assistant.delta" }
+  | {
+      delta: string;
+      label: string;
+      subtaskId: string;
+      type: "analysis.subtask.delta";
+    }
   | { plan: AgentPlanSummary; type: "plan.preview" }
   | {
       phase?: string;

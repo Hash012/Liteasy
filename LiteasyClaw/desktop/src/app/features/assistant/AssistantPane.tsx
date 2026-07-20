@@ -18,11 +18,14 @@ import type {
   AgentRun
 } from "../agent-api/agentApi.types";
 import { createSettingsStore } from "../settings/settings.store";
-import type { ArtifactType } from "../artifacts/artifact.types";
+import type { ArtifactTask, ArtifactType } from "../artifacts/artifact.types";
 import { createAssistantStore } from "./assistant.store";
 import {
-  archiveAssistantSession,
-  restoreAssistantSession,
+  createArtifactTaskSession,
+  createAssistantSession,
+  getArtifactTaskSessionId,
+  snapshotAssistantSession,
+  upsertAssistantSession,
   type AssistantSessionHistoryItem
 } from "./assistantSessionHistory";
 import { buildAgentRuntimeContextView } from "../agent-runtime/contextView";
@@ -63,17 +66,21 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantPaneProps = {
   agentClient: FrontendAgentClient;
+  artifactTasks?: ArtifactTask[];
   executionJournal?: ExecutionJournal;
   modelTransport?: ModelTransport;
   onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
+  onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
+  onOpenArtifact?: (artifactId: string) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
+  onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
   readerConversationContext?: ReaderConversationContext | null;
@@ -185,17 +192,21 @@ function getTraceIdFromRuntimeEvents(events: AgentRuntimeEvent[]) {
 
 export function AssistantPane({
   agentClient,
+  artifactTasks = [],
   executionJournal,
   modelTransport,
   onApplyGeneratedTheme,
   onApplyLayoutPreset,
   onApplyPanelAction,
   onApplyThemePreset,
+  onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
   onMoveDockItem,
   onOpenAcademicArchive,
+  onOpenArtifact,
   onOpenOrganizationSharedLibrary,
+  onActiveSessionChange,
   onSettingsChanged,
   profileUnlocked = false,
   readerConversationContext = null,
@@ -206,21 +217,41 @@ export function AssistantPane({
   settingsStore
 }: AssistantPaneProps) {
   const assistantStoreRef = useRef(createAssistantStore());
+  const initialSessionRef = useRef(
+    createAssistantSession({
+      mode: "command"
+    })
+  );
+  const activeSessionIdRef = useRef(initialSessionRef.current.id);
+  const sessionRegistryRef = useRef<AssistantSessionHistoryItem[]>([
+    initialSessionRef.current
+  ]);
+  const knownArtifactTaskIdsRef = useRef(new Set<string>());
   const executionJournalRef = useRef(executionJournal ?? createExecutionJournal());
   const processedAgentRunSequencesRef = useRef(new Map<string, number>());
+  const activeConversationRunRef = useRef<{
+    cancelRequested: boolean;
+    cancelSent: boolean;
+    message: string;
+    runId?: string;
+  } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const lastReaderContextKeyRef = useRef<string | null>(null);
   const settingsStoreRef = useRef(settingsStore ?? createSettingsStore());
   const [assistantState, setAssistantState] = useState<AssistantState>(() =>
     cloneAssistantState(assistantStoreRef.current.getState())
   );
+  const [activeSessionId, setActiveSessionId] = useState(initialSessionRef.current.id);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [input, setInput] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [voiceInputMessage, setVoiceInputMessage] = useState<string | undefined>();
-  const [sessionHistory, setSessionHistory] = useState<AssistantSessionHistoryItem[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<AssistantSessionHistoryItem[]>([
+    initialSessionRef.current
+  ]);
   const [composerContextTokens, setComposerContextTokens] = useState<AssistantContextToken[]>([]);
   const [readerContexts, setReaderContexts] = useState<ReaderConversationContext[]>([]);
+  const [cancellingSession, setCancellingSession] = useState(false);
   const runtimeContext = buildAgentRuntimeContextView({
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
@@ -276,8 +307,110 @@ export function AssistantPane({
     inputRef.current?.focus();
   }, [readerConversationContext]);
 
+  useEffect(() => {
+    if (artifactTasks.length === 0) {
+      return;
+    }
+
+    let nextSessions = sessionRegistryRef.current;
+    const currentSession = nextSessions.find(
+      (session) => session.id === activeSessionIdRef.current
+    );
+    if (currentSession?.kind !== "artifact_generation") {
+      nextSessions = upsertAssistantSession(
+        nextSessions,
+        snapshotAssistantSession({
+          session: currentSession ?? initialSessionRef.current,
+          state: cloneAssistantState(assistantStoreRef.current.getState())
+        })
+      );
+    }
+
+    const newRunningTasks: ArtifactTask[] = [];
+    artifactTasks.forEach((task) => {
+      const sessionId = getArtifactTaskSessionId(task.id);
+      const previousSession = nextSessions.find((session) => session.id === sessionId);
+      nextSessions = upsertAssistantSession(
+        nextSessions,
+        createArtifactTaskSession(task, previousSession)
+      );
+      if (
+        !knownArtifactTaskIdsRef.current.has(task.id) &&
+        (task.status === "queued" || task.status === "running")
+      ) {
+        newRunningTasks.push(task);
+      }
+      knownArtifactTaskIdsRef.current.add(task.id);
+    });
+
+    const taskToOpen = newRunningTasks[newRunningTasks.length - 1];
+    const nextActiveSessionId = taskToOpen
+      ? getArtifactTaskSessionId(taskToOpen.id)
+      : activeSessionIdRef.current;
+    const activeArtifactSession = nextSessions.find(
+      (session) => session.id === nextActiveSessionId && session.kind === "artifact_generation"
+    );
+
+    sessionRegistryRef.current = nextSessions;
+    setSessionHistory([...nextSessions]);
+    if (activeArtifactSession) {
+      activeSessionIdRef.current = activeArtifactSession.id;
+      setActiveSessionId(activeArtifactSession.id);
+      assistantStoreRef.current.restoreSession(
+        activeArtifactSession.mode,
+        activeArtifactSession.messages
+      );
+      setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
+      if (taskToOpen) {
+        setHistoryOpen(false);
+        setInput("");
+        setEditingMessageId(null);
+      }
+    }
+  }, [artifactTasks]);
+
+  useEffect(() => {
+    const activeSession = sessionRegistryRef.current.find(
+      (session) => session.id === activeSessionId
+    );
+    if (activeSession) {
+      onActiveSessionChange?.(activeSession);
+    }
+  }, [activeSessionId, onActiveSessionChange, sessionHistory]);
+
   function syncAssistant() {
-    setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
+    const nextState = cloneAssistantState(assistantStoreRef.current.getState());
+    setAssistantState(nextState);
+    const activeSession = sessionRegistryRef.current.find(
+      (session) => session.id === activeSessionIdRef.current
+    );
+    if (!activeSession || activeSession.kind === "artifact_generation") {
+      return;
+    }
+    const nextSession = snapshotAssistantSession({
+      session: activeSession,
+      state: nextState
+    });
+    const nextSessions = upsertAssistantSession(sessionRegistryRef.current, nextSession);
+    sessionRegistryRef.current = nextSessions;
+    setSessionHistory([...nextSessions]);
+  }
+
+  function saveActiveConversation() {
+    const activeSession = sessionRegistryRef.current.find(
+      (session) => session.id === activeSessionIdRef.current
+    );
+    if (!activeSession || activeSession.kind === "artifact_generation") {
+      return;
+    }
+
+    const nextSession = snapshotAssistantSession({
+      session: activeSession,
+      state: cloneAssistantState(assistantStoreRef.current.getState())
+    });
+    const nextSessions = upsertAssistantSession(sessionRegistryRef.current, nextSession);
+    sessionRegistryRef.current = nextSessions;
+    setSessionHistory([...nextSessions]);
   }
 
   function clearReaderConversationContexts() {
@@ -395,56 +528,50 @@ export function AssistantPane({
     }
 
     if (currentState.messages.length > 0) {
-      archiveCurrentSession();
-      void agentClient?.close();
-      processedAgentRunSequencesRef.current.clear();
-      clearReaderConversationContexts();
-      assistantStoreRef.current.clearMessages();
-      setHistoryOpen(false);
-      setInput("");
-      setEditingMessageId(null);
-      setVoiceInputMessage(undefined);
+      startNewSession(adapted.mode);
+      return;
     }
 
     assistantStoreRef.current.setMode(adapted.mode);
     syncAssistant();
   }
 
-  function archiveCurrentSession() {
-    const currentState = cloneAssistantState(assistantStoreRef.current.getState());
-    setSessionHistory((currentHistory) =>
-      archiveAssistantSession({
-        currentHistory,
-        state: currentState
-      })
-    );
-  }
-
-  function startNewSession() {
-    archiveCurrentSession();
-    void agentClient?.close();
+  function startNewSession(mode: AssistantMode = "qa") {
+    if (assistantStoreRef.current.getState().pending) {
+      return;
+    }
+    saveActiveConversation();
+    const session = createAssistantSession({ mode });
+    const nextSessions = upsertAssistantSession(sessionRegistryRef.current, session);
+    sessionRegistryRef.current = nextSessions;
+    activeSessionIdRef.current = session.id;
+    setSessionHistory([...nextSessions]);
+    setActiveSessionId(session.id);
     processedAgentRunSequencesRef.current.clear();
     clearReaderConversationContexts();
-    assistantStoreRef.current.clearMessages();
+    assistantStoreRef.current.restoreSession(session.mode, session.messages);
     setHistoryOpen(false);
     setInput("");
     setEditingMessageId(null);
+    setVoiceInputMessage(undefined);
     syncAssistant();
   }
 
-  function restoreArchivedSession(sessionId: string) {
-    const restored = restoreAssistantSession({
-      history: sessionHistory,
-      sessionId,
-      store: assistantStoreRef.current
-    });
-    if (!restored) {
+  function openSession(sessionId: string) {
+    if (assistantStoreRef.current.getState().pending) {
+      return;
+    }
+    saveActiveConversation();
+    const session = sessionRegistryRef.current.find((candidate) => candidate.id === sessionId);
+    if (!session) {
       return;
     }
 
-    void agentClient?.close();
     processedAgentRunSequencesRef.current.clear();
     clearReaderConversationContexts();
+    activeSessionIdRef.current = session.id;
+    setActiveSessionId(session.id);
+    assistantStoreRef.current.restoreSession(session.mode, session.messages);
     setHistoryOpen(false);
     setInput("");
     setEditingMessageId(null);
@@ -613,6 +740,54 @@ export function AssistantPane({
   }
 
   async function runPublicAgentMessage(message: string, mode: AssistantMode) {
+    const trackedRun = {
+      cancelRequested: false,
+      cancelSent: false,
+      message
+    } as {
+      cancelRequested: boolean;
+      cancelSent: boolean;
+      message: string;
+      runId?: string;
+    };
+    activeConversationRunRef.current = trackedRun;
+    const cancelTrackedRun = async () => {
+      if (!trackedRun.runId || trackedRun.cancelSent) {
+        return;
+      }
+      trackedRun.cancelSent = true;
+      try {
+        const cancelled = await agentClient.cancel(trackedRun.runId, "用户终止了 AI 对话");
+        if (cancelled.ok) {
+          return;
+        }
+        trackedRun.cancelSent = false;
+        setCancellingSession(false);
+        assistantStoreRef.current.addMessage(
+          createMessage("assistant", `终止失败：${cancelled.error.message}`)
+        );
+        syncAssistant();
+      } catch (error) {
+        trackedRun.cancelSent = false;
+        setCancellingSession(false);
+        assistantStoreRef.current.addMessage(
+          createMessage("assistant", `终止失败：${getAssistantErrorMessage(error)}`)
+        );
+        syncAssistant();
+      }
+    };
+    const unsubscribe = agentClient.subscribe((event) => {
+      if (
+        event.type === "run.started" &&
+        event.message === message &&
+        activeConversationRunRef.current === trackedRun
+      ) {
+        trackedRun.runId = event.runId;
+        if (trackedRun.cancelRequested) {
+          void cancelTrackedRun();
+        }
+      }
+    });
     assistantStoreRef.current.setPending(true);
     syncAssistant();
     try {
@@ -622,6 +797,22 @@ export function AssistantPane({
         return;
       }
       consumePublicAgentRun(result.data);
+      if (result.data.status === "cancelled") {
+        const currentSession = sessionRegistryRef.current.find(
+          (session) => session.id === activeSessionIdRef.current
+        );
+        if (currentSession && currentSession.kind !== "artifact_generation") {
+          const cancelledSession = {
+            ...currentSession,
+            status: "cancelled" as const
+          };
+          sessionRegistryRef.current = upsertAssistantSession(
+            sessionRegistryRef.current,
+            cancelledSession
+          );
+          setSessionHistory([...sessionRegistryRef.current]);
+        }
+      }
       if (mode === "command") {
         await appendJournalAudit(getTraceIdFromPublicRun(result.data));
       }
@@ -632,7 +823,60 @@ export function AssistantPane({
         createMessage("assistant", getAssistantErrorMessage(error))
       );
     } finally {
+      unsubscribe();
+      if (activeConversationRunRef.current === trackedRun) {
+        activeConversationRunRef.current = null;
+      }
+      setCancellingSession(false);
       assistantStoreRef.current.setPending(false);
+      syncAssistant();
+    }
+  }
+
+  async function cancelActiveSession() {
+    if (cancellingSession) {
+      return;
+    }
+    setCancellingSession(true);
+    const currentSession = sessionRegistryRef.current.find(
+      (session) => session.id === activeSessionIdRef.current
+    );
+    if (currentSession?.kind === "artifact_generation" && currentSession.artifactTaskId) {
+      try {
+        await onCancelArtifactTask?.(currentSession.artifactTaskId);
+      } finally {
+        setCancellingSession(false);
+      }
+      return;
+    }
+
+    const trackedRun = activeConversationRunRef.current;
+    if (!trackedRun) {
+      setCancellingSession(false);
+      return;
+    }
+    trackedRun.cancelRequested = true;
+    if (!trackedRun.runId || trackedRun.cancelSent) {
+      return;
+    }
+    trackedRun.cancelSent = true;
+    try {
+      const result = await agentClient.cancel(trackedRun.runId, "用户终止了 AI 对话");
+      if (result.ok) {
+        return;
+      }
+      trackedRun.cancelSent = false;
+      setCancellingSession(false);
+      assistantStoreRef.current.addMessage(
+        createMessage("assistant", `终止失败：${result.error.message}`)
+      );
+      syncAssistant();
+    } catch (error) {
+      trackedRun.cancelSent = false;
+      setCancellingSession(false);
+      assistantStoreRef.current.addMessage(
+        createMessage("assistant", `终止失败：${getAssistantErrorMessage(error)}`)
+      );
       syncAssistant();
     }
   }
@@ -978,20 +1222,56 @@ export function AssistantPane({
   const composerHint =
     readyMessage ??
     "输入 / 开始软件命令；普通输入会结合 PDF 选区或当前文献上下文回答。";
+  const activeSession = sessionHistory.find((session) => session.id === activeSessionId);
+  const activeSessionRunning = activeSession?.kind === "artifact_generation"
+    ? activeSession.status === "running"
+    : assistantState.pending;
 
   return (
     <div className={conversationStarted ? "assistant-pane in-conversation" : "assistant-pane initial-session"}>
       <div className="assistant-session-toolbar">
+        <div className="assistant-active-session" aria-label="当前会话">
+          <span className="assistant-active-session-kind">
+            {activeSession?.kind === "artifact_generation"
+              ? "产物生成"
+              : "普通对话"}
+          </span>
+          <span className="assistant-active-session-title">
+            {activeSession?.title ?? "新对话"}
+          </span>
+          {activeSession?.artifactId ? (
+            <button
+              className="assistant-session-open-artifact"
+              onClick={() => onOpenArtifact?.(activeSession.artifactId!)}
+              type="button"
+            >
+              打开产物
+            </button>
+          ) : null}
+        </div>
         <div aria-label="会话操作" className="assistant-session-actions">
+          {activeSessionRunning ? (
+            <button
+              className="assistant-session-button danger"
+              disabled={cancellingSession}
+              onClick={() => void cancelActiveSession()}
+              title="终止当前 AI 运行"
+              type="button"
+            >
+              {cancellingSession ? "终止中…" : "终止"}
+            </button>
+          ) : null}
           <button
             className="assistant-session-button"
-            onClick={startNewSession}
+            disabled={assistantState.pending}
+            onClick={() => startNewSession()}
             title="开始一个新的 AI 对话"
             type="button"
           >
             新建
           </button>
           <button
+            aria-expanded={historyOpen}
             className="assistant-session-button"
             onClick={() => setHistoryOpen((current) => !current)}
             title="查看历史会话"
@@ -1003,7 +1283,11 @@ export function AssistantPane({
       </div>
 
       {historyOpen ? (
-        <AssistantHistoryPanel history={sessionHistory} onRestoreSession={restoreArchivedSession} />
+        <AssistantHistoryPanel
+          activeSessionId={activeSessionId}
+          history={sessionHistory}
+          onOpenSession={openSession}
+        />
       ) : null}
 
       <AssistantContextPanel context={runtimeContext} />

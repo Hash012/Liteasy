@@ -254,9 +254,9 @@ describe("ReaderPane", () => {
     expect(within(selectionMenu).getByRole("button", { name: "高亮" })).toHaveAttribute("title", "高亮选中文段");
     expect(within(selectionMenu).getByRole("button", { name: "划线" })).toHaveAttribute("title", "给选中文段添加下划线");
     expect(within(selectionMenu).getByRole("button", { name: "注释" })).toHaveAttribute("title", "给选中文段添加旁注");
-    expect(within(selectionMenu).getByRole("button", { name: "问 AI" })).toHaveAttribute(
+    expect(within(selectionMenu).getByRole("button", { name: "加入对话" })).toHaveAttribute(
       "title",
-      "预留接口：后续会把选中文段发送给 AI"
+      "把选中文段加入右侧对话上下文"
     );
 
     await user.click(within(selectionMenu).getByRole("button", { name: "高亮" }));
@@ -589,5 +589,29 @@ describe("ReaderPane", () => {
 
     expect(screen.getByText("选中文献集：1 篇 · 未锁定")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "树形展开" })).not.toBeInTheDocument();
+  });
+
+  test("highlights the PDF page referenced by an Agent evidence record", () => {
+    render(
+      <ReaderPane
+        analysisHint="已找到引用证据。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={["paper-1"]}
+        selectionLocked={true}
+        targetEvidence={{
+          evidenceId: "evidence-2-example",
+          page: 1,
+          paperId: "paper-1",
+          quote: "late interaction independently encodes query and document tokens",
+          requestId: 1
+        }}
+      />
+    );
+
+    expect(screen.getByLabelText("PDF.js 页面 1")).toHaveClass("evidence-target");
+    expect(screen.getByRole("button", { name: "缩略图" })).toHaveClass("active");
   });
 });

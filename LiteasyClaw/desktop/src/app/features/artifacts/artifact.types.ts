@@ -2,7 +2,7 @@ import type { UIDslDocument } from "../generative-ui/generativeUi.types";
 import type { AgentCitation } from "../agent-api/agentApi.types";
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 
-export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed";
+export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type ArtifactType = "comparison_table" | "mindmap" | "ppt" | "skill_doc" | "tree";
 export type ArtifactTaskStage =
   | "waiting_for_import"
@@ -13,7 +13,8 @@ export type ArtifactTaskStage =
   | "structuring_artifact"
   | "saving_result"
   | "completed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export type ArtifactOutlineNode = {
   evidenceIds?: string[];
@@ -24,6 +25,8 @@ export type ArtifactOutlineNode = {
 };
 
 export type ArtifactTask = {
+  agentRunId?: string;
+  artifactId?: string;
   id: string;
   message: string;
   partialAnswer?: string;

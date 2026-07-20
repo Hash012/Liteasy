@@ -44,3 +44,21 @@ test("rejects unsafe artifact ids", (context) => {
 
   assert.throws(() => repository.save(document("../escape")), /invalid_agent_artifact/);
 });
+
+test("deletes only the validated artifact file", (context) => {
+  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-artifacts-"));
+  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
+  const repository = createAgentArtifactRepository({ resultDirectory });
+  repository.save(document("artifact-delete"));
+  repository.save(document("artifact-keep"));
+
+  assert.deepEqual(repository.remove("artifact-delete"), {
+    artifactId: "artifact-delete",
+    deleted: true,
+    path: "project-docs/agent-results/artifact-delete.json"
+  });
+  assert.equal(fs.existsSync(path.join(resultDirectory, "artifact-delete.json")), false);
+  assert.equal(fs.existsSync(path.join(resultDirectory, "artifact-keep.json")), true);
+  assert.equal(repository.remove("artifact-delete"), null);
+  assert.throws(() => repository.remove("../escape"), /invalid_agent_artifact_id/);
+});

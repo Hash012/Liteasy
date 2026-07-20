@@ -39,7 +39,16 @@ type PdfSidebarMode = "thumbnails" | "annotations";
 type PdfReaderProps = {
   onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
   selectedPapers: Paper[];
+  targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
+};
+
+export type PdfEvidenceTarget = {
+  evidenceId: string;
+  page: number;
+  paperId: string;
+  quote: string;
+  requestId: number;
 };
 
 const fallbackExcerpt = "Liteasy 将在这里显示清晰 PDF 页面，并把文本选区绑定到批注与 AI 问答。";
@@ -367,6 +376,7 @@ function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect): CSSProp
 type PdfPageViewProps = {
   annotations: PdfAnnotation[];
   activePaper: Paper | null;
+  focused: boolean;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
   stageWidth: number;
@@ -376,6 +386,7 @@ type PdfPageViewProps = {
 function PdfPageView({
   activePaper,
   annotations,
+  focused,
   pageNumber,
   pdfDocument,
   stageWidth,
@@ -459,7 +470,7 @@ function PdfPageView({
   return (
     <article
       aria-label={`PDF.js 页面 ${pageNumber}`}
-      className="pdf-page-shell"
+      className={`pdf-page-shell ${focused ? "evidence-target" : ""}`}
       data-page={pageNumber}
       style={{ minHeight: pageSize.height, width: pageSize.width }}
     >
@@ -550,7 +561,12 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
   );
 }
 
-export function PdfReader({ onAddSelectionToConversation, selectedPapers, zoom }: PdfReaderProps) {
+export function PdfReader({
+  onAddSelectionToConversation,
+  selectedPapers,
+  targetEvidence,
+  zoom
+}: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
@@ -558,6 +574,7 @@ export function PdfReader({ onAddSelectionToConversation, selectedPapers, zoom }
   const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = useState(1);
+  const [focusedPage, setFocusedPage] = useState(1);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
@@ -594,6 +611,7 @@ export function PdfReader({ onAddSelectionToConversation, selectedPapers, zoom }
     setAnnotationDraft("");
     setSelection(null);
     setPageCount(1);
+    setFocusedPage(1);
 
     if (!pdfDisplaySource) {
       setPdfDocument(null);
@@ -640,6 +658,32 @@ export function PdfReader({ onAddSelectionToConversation, selectedPapers, zoom }
       void loadingTask.destroy();
     };
   }, [activePaper?.sourcePath, pdfDisplaySource]);
+
+  useEffect(() => {
+    if (!targetEvidence || targetEvidence.paperId !== activePaper?.id) {
+      return undefined;
+    }
+
+    const targetPage = Math.min(
+      Math.max(1, Math.trunc(targetEvidence.page || 1)),
+      Math.max(1, pageCount)
+    );
+    setFocusedPage(targetPage);
+    setSidebarMode("thumbnails");
+    setSidebarCollapsed(false);
+    setStatus(`已定位到第 ${targetPage} 页的 Agent 引用证据。`);
+
+    const frame = window.requestAnimationFrame(() => {
+      const pageElement = stageRef.current?.querySelector<HTMLElement>(
+        `[data-page="${targetPage}"]`
+      );
+      if (pageElement && typeof pageElement.scrollIntoView === "function") {
+        pageElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activePaper?.id, pageCount, targetEvidence]);
 
   function clearBrowserSelection() {
     window.getSelection()?.removeAllRanges();
@@ -812,7 +856,7 @@ export function PdfReader({ onAddSelectionToConversation, selectedPapers, zoom }
                 <ol className="pdf-thumbnail-list">
                   {pageNumbers.map((pageNumber) => (
                     <PdfThumbnail
-                      active={pageNumber === 1}
+                      active={pageNumber === focusedPage}
                       activePaper={activePaper}
                       key={pageNumber}
                       pageNumber={pageNumber}
@@ -880,6 +924,7 @@ export function PdfReader({ onAddSelectionToConversation, selectedPapers, zoom }
                 <PdfPageView
                   activePaper={activePaper}
                   annotations={annotations}
+                  focused={pageNumber === focusedPage}
                   key={pageNumber}
                   pageNumber={pageNumber}
                   pdfDocument={pdfDocument}

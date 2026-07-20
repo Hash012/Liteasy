@@ -8,6 +8,16 @@ const defaultResultDirectory = resolve(repositoryDir, "../../../project-docs/age
 const artifactVersion = "liteasy.agent-artifact/v1";
 const artifactTypes = new Set(["comparison_table", "mindmap", "ppt", "tree"]);
 
+function validateArtifactId(artifactId) {
+  if (
+    typeof artifactId !== "string" ||
+    !/^[A-Za-z0-9._-]{1,120}$/.test(artifactId)
+  ) {
+    throw new Error("invalid_agent_artifact_id");
+  }
+  return artifactId;
+}
+
 function validateArtifact(document) {
   if (!document || typeof document !== "object" || Array.isArray(document)) {
     throw new Error("invalid_agent_artifact");
@@ -30,7 +40,7 @@ function validateArtifact(document) {
 }
 
 function artifactPath(resultDirectory, artifactId) {
-  return path.join(resultDirectory, `${artifactId}.json`);
+  return path.join(resultDirectory, `${validateArtifactId(artifactId)}.json`);
 }
 
 function readArtifact(filePath) {
@@ -79,6 +89,24 @@ export function createAgentArtifactRepository(options = {}) {
       return {
         artifact: validated,
         path: `project-docs/agent-results/${validated.artifactId}.json`
+      };
+    },
+
+    remove(artifactId) {
+      const validatedArtifactId = validateArtifactId(artifactId);
+      const destination = artifactPath(resultDirectory, validatedArtifactId);
+      if (!fs.existsSync(destination)) {
+        return null;
+      }
+      const stat = fs.statSync(destination);
+      if (!stat.isFile()) {
+        return null;
+      }
+      fs.unlinkSync(destination);
+      return {
+        artifactId: validatedArtifactId,
+        deleted: true,
+        path: `project-docs/agent-results/${validatedArtifactId}.json`
       };
     }
   };

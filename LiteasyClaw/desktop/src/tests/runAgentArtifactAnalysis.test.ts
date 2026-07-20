@@ -67,13 +67,25 @@ test("streams public Agent progress events to the artifact task", async () => {
     });
     listener?.({
       apiVersion: "liteasy.agent/v1",
+      delta: "MaxSim 在每个 query token 上取最大相似度。",
+      emittedAt: "2026-07-20T00:00:00.500Z",
+      eventId: "event-subtask-delta",
+      label: "ColBERT · 方法区段",
+      runId: "run-stream",
+      sequence: 2,
+      sessionId: "session-1",
+      subtaskId: "section:demo-1:2",
+      type: "analysis.subtask.delta"
+    });
+    listener?.({
+      apiVersion: "liteasy.agent/v1",
       emittedAt: "2026-07-20T00:00:01.000Z",
       eventId: "event-progress",
       phase: "generating_answer",
       planId: "run-stream",
       progress: 55,
       runId: "run-stream",
-      sequence: 2,
+      sequence: 3,
       sessionId: "session-1",
       summary: "正在调用模型生成分析结构",
       traceId: "trace-run-stream",
@@ -85,7 +97,7 @@ test("streams public Agent progress events to the artifact task", async () => {
       emittedAt: "2026-07-20T00:00:02.000Z",
       eventId: "event-delta",
       runId: "run-stream",
-      sequence: 3,
+      sequence: 4,
       sessionId: "session-1",
       type: "assistant.delta"
     });
@@ -107,6 +119,19 @@ test("streams public Agent progress events to the artifact task", async () => {
 
   await runAgentArtifactAnalysis(createClient(send, subscribe), "tree", onProgress);
 
+  expect(onProgress).toHaveBeenCalledWith({
+    agentRunId: "run-stream",
+    message: "Agent 已接收分析任务",
+    progress: 18,
+    stage: "preparing_context"
+  });
+  expect(onProgress).toHaveBeenCalledWith({
+    message: "正在并行分析论文区段（1 个 SubAgent 已返回内容）",
+    partialAnswer:
+      "【SubAgent 工作记录 · ColBERT · 方法区段】\nMaxSim 在每个 query token 上取最大相似度。",
+    progress: 48,
+    stage: "generating_answer"
+  });
   expect(onProgress).toHaveBeenCalledWith({
     message: "正在调用模型生成分析结构",
     progress: 55,

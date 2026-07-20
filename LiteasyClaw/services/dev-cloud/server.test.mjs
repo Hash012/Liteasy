@@ -70,7 +70,7 @@ test("allows browser CORS preflight from the desktop dev server", async () => {
 
   assert.equal(response.statusCode, 204);
   assert.equal(response.headers["Access-Control-Allow-Origin"], "http://127.0.0.1:1420");
-  assert.equal(response.headers["Access-Control-Allow-Methods"], "GET,POST,OPTIONS");
+  assert.equal(response.headers["Access-Control-Allow-Methods"], "DELETE,GET,POST,OPTIONS");
   assert.equal(response.headers["Access-Control-Allow-Headers"], "Content-Type");
 });
 
@@ -121,6 +121,7 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/model/audit",
     "GET /v1/agent-artifacts",
     "POST /v1/agent-artifacts",
+    "DELETE /v1/agent-artifacts/:artifactId",
     "POST /v1/recommendations",
     "POST /v1/recommendation-cache/get",
     "POST /v1/recommendation-cache/put",
@@ -180,6 +181,65 @@ test("returns a healthy status from the health endpoint", async () => {
   assert.deepEqual(response.json, {
     ok: true
   });
+});
+
+test("deletes a persisted Agent artifact by validated id", async (context) => {
+  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-agent-artifacts-"));
+  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
+  const handlerOptions = { agentArtifactResultDirectory: resultDirectory };
+  const artifact = {
+    agent: {
+      apiVersion: "liteasy.agent/v1",
+      runId: "run-1",
+      sessionId: "session-1",
+      status: "completed"
+    },
+    answer: "analysis",
+    artifactId: "artifact-delete",
+    artifactType: "tree",
+    citations: [],
+    createdAt: "2026-07-20T00:00:00.000Z",
+    papers: [],
+    title: "Tree",
+    uiDsl: { version: "liteasy.ui/v1" },
+    version: "liteasy.agent-artifact/v1"
+  };
+  const created = await invokeHandler({
+    body: JSON.stringify(artifact),
+    handlerOptions,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/agent-artifacts"
+  });
+  assert.equal(created.statusCode, 201);
+
+  const deleted = await invokeHandler({
+    handlerOptions,
+    method: "DELETE",
+    url: "/v1/agent-artifacts/artifact-delete"
+  });
+  assert.equal(deleted.statusCode, 200);
+  assert.deepEqual(deleted.json, {
+    artifactId: "artifact-delete",
+    deleted: true,
+    path: "project-docs/agent-results/artifact-delete.json"
+  });
+  assert.equal(fs.existsSync(path.join(resultDirectory, "artifact-delete.json")), false);
+
+  const missing = await invokeHandler({
+    handlerOptions,
+    method: "DELETE",
+    url: "/v1/agent-artifacts/artifact-delete"
+  });
+  assert.equal(missing.statusCode, 404);
+
+  const unsafe = await invokeHandler({
+    handlerOptions,
+    method: "DELETE",
+    url: "/v1/agent-artifacts/%2E%2E%2Fescape"
+  });
+  assert.equal(unsafe.statusCode, 400);
+  assert.equal(unsafe.json.error, "invalid_agent_artifact_id");
 });
 
 test("prefers a configured public origin for deploy-facing links and policy payloads", async () => {

@@ -28,7 +28,22 @@ test("opens a distinct tab for a tree analysis task", () => {
   expect(store.getOpenTabs()[0]?.type).toBe("tree");
 });
 
-test("keeps generated artifact history until a tab is closed", () => {
+test("keeps every concurrent generation task in newest-first order", () => {
+  const store = createArtifactStore();
+  const firstTaskId = store.createTask("mindmap");
+  const secondTaskId = store.createTask("tree");
+
+  store.startTask(firstTaskId);
+  store.startTask(secondTaskId);
+  store.updateTask(firstTaskId, { progress: 42 });
+
+  expect(store.getTasks()).toEqual([
+    expect.objectContaining({ id: secondTaskId, progress: 15, status: "running" }),
+    expect.objectContaining({ id: firstTaskId, progress: 42, status: "running" })
+  ]);
+});
+
+test("keeps generated artifact history after a tab is closed and can reopen it", () => {
   const store = createArtifactStore();
   const firstTaskId = store.createTask("mindmap");
   const secondTaskId = store.createTask("ppt");
@@ -52,4 +67,14 @@ test("keeps generated artifact history until a tab is closed", () => {
   store.closeTab("artifact-2");
 
   expect(store.getOpenTabs().map((tab) => tab.artifactId)).toEqual(["artifact-1"]);
+  expect(store.getCatalog().map((tab) => tab.artifactId).sort()).toEqual([
+    "artifact-1",
+    "artifact-2"
+  ]);
+
+  expect(store.openCatalogEntry("artifact-2")).toBe(true);
+  expect(store.getOpenTabs().map((tab) => tab.artifactId)).toEqual([
+    "artifact-2",
+    "artifact-1"
+  ]);
 });

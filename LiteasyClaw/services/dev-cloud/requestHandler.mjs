@@ -73,6 +73,7 @@ const availableEndpoints = [
   "POST /v1/model/audit",
   "GET /v1/agent-artifacts",
   "POST /v1/agent-artifacts",
+  "DELETE /v1/agent-artifacts/:artifactId",
   "POST /v1/recommendations",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
@@ -126,7 +127,7 @@ function buildCorsHeaders(request) {
 
   const headers = {
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "DELETE,GET,POST,OPTIONS",
     Vary: "Origin"
   };
 
@@ -358,6 +359,23 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       } catch (error) {
         writeJson(request, response, 400, {
           error: error instanceof Error ? error.message : "invalid_agent_artifact"
+        });
+      }
+      return;
+    }
+
+    if (method === "DELETE" && url.pathname.startsWith("/v1/agent-artifacts/")) {
+      const artifactId = url.pathname.slice("/v1/agent-artifacts/".length);
+      try {
+        const deleted = agentArtifactRepository.remove(artifactId);
+        if (!deleted) {
+          writeJson(request, response, 404, { error: "agent_artifact_not_found" });
+          return;
+        }
+        writeJson(request, response, 200, deleted);
+      } catch (error) {
+        writeJson(request, response, 400, {
+          error: error instanceof Error ? error.message : "invalid_agent_artifact_id"
         });
       }
       return;

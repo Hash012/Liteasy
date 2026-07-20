@@ -67,7 +67,15 @@ export function createDesktopAgentService(
       options.onConfirmationResult?.(result);
       return result;
     },
-    async executeKnowledge({ context, coreTurn, reportDelta, reportProgress, request, signal }) {
+    async executeKnowledge({
+      context,
+      coreTurn,
+      reportDelta,
+      reportProgress,
+      reportSubtaskDelta,
+      request,
+      signal
+    }) {
       const environment = context.value as DesktopAgentEnvironment;
       if (request.input.mode === "command") {
         throw new Error("Command turns cannot use the knowledge executor");
@@ -81,6 +89,9 @@ export function createDesktopAgentService(
           ? (delta) => reportDelta(delta)
           : undefined,
         onProgress: reportProgress,
+        onSubtaskDelta: request.input.artifactType
+          ? reportSubtaskDelta
+          : undefined,
         question: request.input.message,
         signal
       });

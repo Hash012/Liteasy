@@ -4,9 +4,11 @@ import type { DockItemId, DockRegionId, DockRegionLayout } from "./dock.types";
 import { DockEmptyState } from "./DockEmptyState";
 
 export const dockItemMimeType = "application/x-liteasy-dock-item";
+export const dockDynamicTabMimeType = "application/x-liteasy-dynamic-tab";
 
 type DockRegionProps = {
   dynamicTabs?: Array<{
+    draggable?: boolean;
     id: string;
     onActivate: () => void;
     onClose?: () => void;
@@ -17,6 +19,7 @@ type DockRegionProps = {
   layout: DockRegionLayout;
   onActivateItem: (itemId: DockItemId) => void;
   onCloseItem: (itemId: DockItemId) => void;
+  onMoveDynamicTab?: (tabId: string, targetRegionId: DockRegionId) => void;
   onMoveItem: (itemId: DockItemId, targetRegionId: DockRegionId) => void;
   overlay?: ReactNode;
   regionId: DockRegionId;
@@ -26,15 +29,28 @@ type DockRegionProps = {
 
 function hasDockPayload(event: DragEvent<HTMLElement>) {
   const types = event.dataTransfer?.types;
-  return types ? Array.from(types).includes(dockItemMimeType) : false;
+  return types
+    ? Array.from(types).some(
+        (type) => type === dockItemMimeType || type === dockDynamicTabMimeType
+      )
+    : false;
 }
 
 function canAcceptDockPayload(
   event: DragEvent<HTMLElement>,
-  regionId: DockRegionId
+  regionId: DockRegionId,
+  onMoveDynamicTab?: (tabId: string, targetRegionId: DockRegionId) => void
 ) {
   if (!hasDockPayload(event)) {
     return false;
+  }
+
+  const dynamicTabId = event.dataTransfer.getData(dockDynamicTabMimeType);
+  if (
+    Array.from(event.dataTransfer.types).includes(dockDynamicTabMimeType) &&
+    onMoveDynamicTab
+  ) {
+    return dynamicTabId === "" || dynamicTabId.length > 0;
   }
 
   const itemId = event.dataTransfer.getData(dockItemMimeType);
@@ -49,6 +65,7 @@ export function DockRegion({
   layout,
   onActivateItem,
   onCloseItem,
+  onMoveDynamicTab,
   onMoveItem,
   overlay,
   regionId,
@@ -63,6 +80,12 @@ export function DockRegion({
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
     setDropActive(false);
+    const dynamicTabId = event.dataTransfer.getData(dockDynamicTabMimeType);
+    if (dynamicTabId && onMoveDynamicTab) {
+      onMoveDynamicTab(dynamicTabId, regionId);
+      return;
+    }
+
     const itemId = event.dataTransfer.getData(dockItemMimeType);
     if (!isDockItemId(itemId)) {
       return;
@@ -71,6 +94,24 @@ export function DockRegion({
       return;
     }
     onMoveItem(itemId, regionId);
+  }
+
+  function handleDynamicTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, tabId: string) {
+    if (!event.altKey || !event.shiftKey || !onMoveDynamicTab) {
+      return;
+    }
+    const targetByKey: Partial<Record<string, DockRegionId>> = {
+      ArrowDown: "bottom",
+      ArrowLeft: "left",
+      ArrowRight: "right",
+      ArrowUp: "main"
+    };
+    const targetRegionId = targetByKey[event.key];
+    if (!targetRegionId) {
+      return;
+    }
+    event.preventDefault();
+    onMoveDynamicTab(tabId, targetRegionId);
   }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, itemId: DockItemId) {
@@ -125,7 +166,7 @@ export function DockRegion({
         }
       }}
       onDragOver={(event) => {
-        if (!canAcceptDockPayload(event, regionId)) {
+        if (!canAcceptDockPayload(event, regionId, onMoveDynamicTab)) {
           return;
         }
         event.preventDefault();
@@ -186,11 +227,22 @@ export function DockRegion({
                   <button
                     aria-selected={tab.selected}
                     className={`dock-tab ${tab.selected ? "active" : ""}`}
+                    draggable={tab.draggable && Boolean(onMoveDynamicTab)}
                     id={`dock-tab-${regionId}-${tab.id}`}
                     onClick={tab.onActivate}
+                    onDragEnd={() => setDropActive(false)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData(dockDynamicTabMimeType, tab.id);
+                    }}
+                    onKeyDown={(event) => handleDynamicTabKeyDown(event, tab.id)}
                     role="tab"
                     tabIndex={tab.selected ? 0 : -1}
-                    title={tab.title}
+                    title={
+                      tab.draggable
+                        ? `拖动“${tab.title}”到其他区域；Alt+Shift+方向键也可移动`
+                        : tab.title
+                    }
                     type="button"
                   >
                     {tab.title}

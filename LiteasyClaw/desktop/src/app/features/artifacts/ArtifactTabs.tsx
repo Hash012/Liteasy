@@ -14,6 +14,8 @@ type ArtifactTabsProps = {
   canStartAnalysis: boolean;
   onActivateArtifact?: (artifactId: string) => void;
   onDynamicAction?: (action: UIDslActionRef) => void;
+  onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
+  onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
   onRegenerateArtifact?: (
     request: ArtifactRegenerationRequest
   ) => string | void | Promise<string | void>;
@@ -24,6 +26,13 @@ type ArtifactTabsProps = {
   selectionLocked: boolean;
   tasks: ArtifactTask[];
   tabs: ArtifactTab[];
+};
+
+export type ArtifactEvidenceOpenRequest = {
+  evidenceId: string;
+  page: number;
+  paperId: string;
+  quote: string;
 };
 
 function getFallbackPreview(type: ArtifactType) {
@@ -55,6 +64,7 @@ function getFallbackPreview(type: ArtifactType) {
 }
 
 const taskStatusLabels: Record<ArtifactTask["status"], string> = {
+  cancelled: "已终止",
   completed: "已完成",
   failed: "失败",
   queued: "准备中",
@@ -65,6 +75,8 @@ function cleanAgentAnswer(answer: string) {
   return answer
     .replace(/^\s*```(?:text|markdown|md)?\s*$/gim, "")
     .replace(/^\s*```\s*$/gim, "")
+    .replace(/\[?\bevidence-[a-z0-9][a-z0-9-]*\b\]?/gi, "〔证据〕")
+    .replace(/(?:〔证据〕[\s,，、;；]*){2,}/g, "〔证据〕 ")
     .trim();
 }
 
@@ -74,6 +86,8 @@ export function ArtifactTabs({
   canStartAnalysis,
   onActivateArtifact,
   onDynamicAction,
+  onDeleteArtifact,
+  onOpenEvidence,
   onRegenerateArtifact,
   onSaveMarkdownTab,
   onUpdateMarkdownTab,
@@ -86,6 +100,7 @@ export function ArtifactTabs({
   const [regenerationOpen, setRegenerationOpen] = useState(false);
   const [supplementalContext, setSupplementalContext] = useState("");
   const [submittingRegeneration, setSubmittingRegeneration] = useState(false);
+  const [deletingArtifact, setDeletingArtifact] = useState(false);
   const activeTab = tabs.find((tab) => tab.artifactId === activeArtifactId) ?? tabs[0] ?? null;
   const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
   const activeTask = tasks[0] ?? null;
@@ -115,6 +130,24 @@ export function ArtifactTabs({
       setSupplementalContext("");
     } finally {
       setSubmittingRegeneration(false);
+    }
+  }
+
+  async function deleteActiveArtifact() {
+    if (!activeTab || activeTab.type === "skill_doc" || !onDeleteArtifact) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `确认删除多模态产物“${activeTab.title}”吗？\n\n持久化 JSON 文件也会被删除，此操作无法撤销。`
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingArtifact(true);
+    try {
+      await onDeleteArtifact(activeTab.artifactId);
+    } finally {
+      setDeletingArtifact(false);
     }
   }
 
@@ -239,15 +272,28 @@ export function ArtifactTabs({
                 <div className="artifact-source-papers missing">历史产物未记录来源论文</div>
               )}
             </div>
-            {onRegenerateArtifact && activeTab.papers && activeTab.papers.length > 0 ? (
-              <button
-                className="artifact-regenerate-button"
-                onClick={() => setRegenerationOpen(true)}
-                type="button"
-              >
-                补充资料并重新生成
-              </button>
-            ) : null}
+            <div className="artifact-card-actions">
+              {onRegenerateArtifact && activeTab.papers && activeTab.papers.length > 0 ? (
+                <button
+                  className="artifact-regenerate-button"
+                  onClick={() => setRegenerationOpen(true)}
+                  type="button"
+                >
+                  补充资料并重新生成
+                </button>
+              ) : null}
+              {onDeleteArtifact ? (
+                <button
+                  aria-label={`删除产物：${activeTab.title}`}
+                  className="artifact-delete-button"
+                  disabled={deletingArtifact}
+                  onClick={() => void deleteActiveArtifact()}
+                  type="button"
+                >
+                  {deletingArtifact ? "正在删除…" : "删除产物"}
+                </button>
+              ) : null}
+            </div>
           </div>
           {activeTab.resultPath ? (
             <div className="artifact-result-meta">
@@ -268,7 +314,41 @@ export function ArtifactTabs({
           {activeTab.outlineMarkdown ? (
             <details className="artifact-outline-markdown">
               <summary>查看可提交的 Markdown 大纲元数据</summary>
-              <pre>{activeTab.outlineMarkdown}</pre>
+              <pre>{cleanAgentAnswer(activeTab.outlineMarkdown)}</pre>
+            </details>
+          ) : null}
+          {activeTab.analysis?.evidence.length ? (
+            <details className="artifact-evidence-index" open>
+              <summary>
+                论文原文证据（{activeTab.analysis.evidence.length} 条）
+                {onOpenEvidence ? " · 点击跳转 PDF" : ""}
+              </summary>
+              <ol>
+                {activeTab.analysis.evidence.map((evidence, index) => (
+                  <li key={evidence.id}>
+                    <button
+                      aria-label={`打开原文证据 ${index + 1}：${evidence.paperTitle} 第 ${evidence.page} 页`}
+                      disabled={!onOpenEvidence}
+                      onClick={() => onOpenEvidence?.({
+                        evidenceId: evidence.id,
+                        page: evidence.page,
+                        paperId: evidence.paperId,
+                        quote: evidence.quote
+                      })}
+                      type="button"
+                    >
+                      <span className="artifact-evidence-heading">
+                        <strong>{evidence.paperTitle}</strong>
+                        <span>第 {evidence.page} 页</span>
+                      </span>
+                      <q>{evidence.quote}</q>
+                      {evidence.summary && evidence.summary !== evidence.quote ? (
+                        <span className="artifact-evidence-summary">摘要：{evidence.summary}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ol>
             </details>
           ) : null}
           <div className="artifact-card-body">

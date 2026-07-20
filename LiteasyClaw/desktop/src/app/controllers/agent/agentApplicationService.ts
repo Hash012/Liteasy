@@ -45,6 +45,7 @@ export type AgentCommandExecutionInput = {
   request: SubmitAgentTurnRequest;
   reportProgress: (input: { phase: string; progress: number; summary: string }) => void;
   reportDelta: (delta: string) => void;
+  reportSubtaskDelta: (input: { delta: string; label: string; subtaskId: string }) => void;
   runId: string;
   signal: AbortSignal;
 };
@@ -296,7 +297,10 @@ export function createAgentApplicationService(
           ...run,
           // Delta events are transient transport data. The completed answer is persisted once
           // in assistant.message, avoiding a duplicate token log in the lightweight snapshot.
-          events: run.events.filter((event) => event.type !== "assistant.delta")
+          events: run.events.filter(
+            (event) =>
+              event.type !== "assistant.delta" && event.type !== "analysis.subtask.delta"
+          )
         }) as unknown as AgentRun
       ),
       session: asJsonValue(stored.session) as unknown as AgentSession
@@ -609,6 +613,9 @@ export function createAgentApplicationService(
           },
           reportDelta(delta) {
             emit(stored, run, { delta, type: "assistant.delta" });
+          },
+          reportSubtaskDelta(input) {
+            emit(stored, run, { ...input, type: "analysis.subtask.delta" });
           },
           request,
           runId,

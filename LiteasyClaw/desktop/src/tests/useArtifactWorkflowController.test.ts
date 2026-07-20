@@ -61,6 +61,7 @@ function completedRun(): AgentRun {
 
 function artifactResultClient() {
   return {
+    delete: vi.fn(async () => undefined),
     list: vi.fn(async () => []),
     save: vi.fn(async (document: { artifactId: string }) =>
       `project-docs/agent-results/${document.artifactId}.json`
@@ -145,7 +146,7 @@ describe("useArtifactWorkflowController", () => {
     ]);
   });
 
-  test("restores previously saved Agent artifacts for later viewing", async () => {
+  test("restores saved artifacts into the catalog and opens them on demand", async () => {
     const artifactStore = createArtifactStore();
     const persisted = {
       agent: {
@@ -176,6 +177,7 @@ describe("useArtifactWorkflowController", () => {
       version: "liteasy.agent-artifact/v1" as const
     };
     const client = {
+      delete: vi.fn(async () => undefined),
       list: vi.fn(async () => [persisted]),
       save: vi.fn()
     };
@@ -196,12 +198,28 @@ describe("useArtifactWorkflowController", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(result.current.model.artifactTabs).toEqual([
+    expect(result.current.model.artifactCatalog).toEqual([
       expect.objectContaining({
         agentRunId: "run-saved",
         artifactId: "artifact-saved",
         resultPath: "project-docs/agent-results/artifact-saved.json"
       })
+    ]);
+    expect(result.current.model.artifactTabs).toEqual([]);
+
+    act(() => {
+      result.current.actions.openArtifact("artifact-saved");
+    });
+    expect(result.current.model.artifactTabs).toEqual([
+      expect.objectContaining({ artifactId: "artifact-saved" })
+    ]);
+
+    act(() => {
+      result.current.actions.closeArtifactTab("artifact-saved");
+    });
+    expect(result.current.model.artifactTabs).toEqual([]);
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-saved" })
     ]);
   });
 });

@@ -59,6 +59,7 @@ import type {
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionExecutor";
 import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
+import type { PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
 import { generateWorkbenchOverlayUIDslDocument } from "../features/generative-ui/uiDslGenerator";
 import { DockRegion } from "../features/dock/DockRegion";
@@ -110,6 +111,7 @@ export function AppShell({
   const agentArtifactRunnerRef = useRef<(
     artifactType: ArtifactType,
     onProgress: (input: {
+      agentRunId?: string;
       message: string;
       partialAnswer?: string;
       partialOutlineNodes?: ArtifactOutlineNode[];
@@ -120,6 +122,11 @@ export function AppShell({
   ) => Promise<AgentRun>>(
     async () => {
       throw new Error("Agent artifact runner is not ready");
+    }
+  );
+  const agentCancelRunnerRef = useRef<(runId: string, reason?: string) => Promise<void>>(
+    async () => {
+      throw new Error("Agent cancel runner is not ready");
     }
   );
   const artifactResultClientRef = useRef<ReturnType<typeof createArtifactResultClient> | null>(null);
@@ -140,11 +147,17 @@ export function AppShell({
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
   const [activeCenterArtifactId, setActiveCenterArtifactId] = useState<string | null>(null);
+  const [activeSideArtifactIds, setActiveSideArtifactIds] = useState<
+    Partial<Record<DockRegionId, string>>
+  >({});
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
+  const [readerEvidenceTarget, setReaderEvidenceTarget] = useState<PdfEvidenceTarget | null>(null);
+  const readerEvidenceRequestRef = useRef(0);
   const agentArtifactPaperIdsOverrideRef = useRef<string[] | null>(null);
   const [readerConversationContext, setReaderConversationContext] =
     useState<ReaderConversationContext | null>(null);
   const latestArtifactIdRef = useRef<string | null>(null);
+  const latestArtifactTaskIdRef = useRef<string | null>(null);
 
   const workspaceSelection = useWorkspaceSelectionController({
     localLibrarySnapshot,
@@ -199,6 +212,7 @@ export function AppShell({
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
     artifactResultClient: artifactResultClientRef.current,
+    cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getSelectedDocumentSet: () => workspaceStoreRef.current.getSelectedDocumentSet(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
@@ -207,13 +221,100 @@ export function AppShell({
     runAgentAnalysis: (artifactType, onProgress, options) =>
       agentArtifactRunnerRef.current(artifactType, onProgress, options)
   });
-  const { artifactTabs, artifactTasks } = artifactWorkflow.model;
+  const { artifactCatalog, artifactTabs, artifactTasks } = artifactWorkflow.model;
+
+  function getArtifactRegion(artifactId: string): DockRegionId {
+    return dock.findDynamicItemRegion(artifactId) ?? "main";
+  }
+
+  function activateArtifactSurface(artifactId: string) {
+    const regionId = getArtifactRegion(artifactId);
+    if (regionId === "main") {
+      setActiveCenterArtifactId(artifactId);
+      return;
+    }
+    setActiveSideArtifactIds((current) => ({
+      ...current,
+      [regionId]: artifactId
+    }));
+    paneLayout.setCollapsed(regionId, false);
+  }
+
+  function selectFallbackArtifact(
+    artifactId: string,
+    remainingTabs: typeof artifactTabs
+  ) {
+    const regionId = getArtifactRegion(artifactId);
+    const fallbackId = remainingTabs.find(
+      (candidate) => getArtifactRegion(candidate.artifactId) === regionId
+    )?.artifactId;
+    if (regionId === "main") {
+      if (activeCenterArtifactId === artifactId) {
+        setActiveCenterArtifactId(fallbackId ?? null);
+      }
+      return;
+    }
+    setActiveSideArtifactIds((current) => {
+      if (current[regionId] !== artifactId) {
+        return current;
+      }
+      const next = { ...current };
+      if (fallbackId) {
+        next[regionId] = fallbackId;
+      } else {
+        delete next[regionId];
+      }
+      return next;
+    });
+  }
+
+  function moveArtifactSurface(artifactId: string, targetRegionId: DockRegionId) {
+    if (!artifactTabs.some((tab) => tab.artifactId === artifactId)) {
+      return;
+    }
+    const sourceRegionId = getArtifactRegion(artifactId);
+    dock.moveDynamicItem(artifactId, targetRegionId);
+    if (sourceRegionId === "main" && activeCenterArtifactId === artifactId) {
+      setActiveCenterArtifactId(null);
+    } else if (sourceRegionId !== "main") {
+      setActiveSideArtifactIds((current) => {
+        if (current[sourceRegionId] !== artifactId) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[sourceRegionId];
+        return next;
+      });
+    }
+    if (targetRegionId === "main") {
+      setActiveCenterArtifactId(artifactId);
+    } else {
+      setActiveSideArtifactIds((current) => ({
+        ...current,
+        [targetRegionId]: artifactId
+      }));
+      paneLayout.setCollapsed(targetRegionId, false);
+    }
+  }
+
+  useEffect(() => {
+    const latestTask = artifactTasks[0];
+    if (!latestTask || latestArtifactTaskIdRef.current === latestTask.id) {
+      return;
+    }
+    latestArtifactTaskIdRef.current = latestTask.id;
+    const assistantRegionId = dock.findItemRegion("assistant") ?? "right";
+    dock.openItem("assistant");
+    if (assistantRegionId !== "main") {
+      paneLayout.setCollapsed(assistantRegionId, false);
+    }
+  }, [artifactTasks]);
 
   useEffect(() => {
     const latestArtifactId = artifactTabs[0]?.artifactId ?? null;
     if (latestArtifactId && latestArtifactId !== latestArtifactIdRef.current) {
       latestArtifactIdRef.current = latestArtifactId;
-      setActiveCenterArtifactId(latestArtifactId);
+      activateArtifactSurface(latestArtifactId);
       return;
     }
 
@@ -221,9 +322,11 @@ export function AppShell({
       activeCenterArtifactId &&
       !artifactTabs.some((tab) => tab.artifactId === activeCenterArtifactId)
     ) {
-      setActiveCenterArtifactId(artifactTabs[0]?.artifactId ?? null);
+      setActiveCenterArtifactId(
+        artifactTabs.find((tab) => getArtifactRegion(tab.artifactId) === "main")?.artifactId ?? null
+      );
     }
-  }, [activeCenterArtifactId, artifactTabs]);
+  }, [activeCenterArtifactId, artifactTabs, dock.dynamicItemRegions]);
 
   const registeredWorkspaceActions = useRegisteredWorkspaceActions({
     importSelectedSet: workspaceActions.importSelectedSet,
@@ -450,7 +553,7 @@ export function AppShell({
     },
     openArtifactTab: (input) => {
       if (input.artifactId) {
-        setActiveCenterArtifactId(input.artifactId);
+        activateArtifactSurface(input.artifactId);
       }
       const message = input.artifactType
         ? `已定位到中心产物：${input.artifactType}。`
@@ -519,6 +622,12 @@ export function AppShell({
       );
     } finally {
       agentArtifactPaperIdsOverrideRef.current = null;
+    }
+  };
+  agentCancelRunnerRef.current = async (runId, reason) => {
+    const result = await assistantAgent.agentClient.cancel(runId, reason);
+    if (!result.ok) {
+      throw new Error(result.error.message);
     }
   };
   async function handleWorkbenchOverlayAction(action: UIDslActionRef) {
@@ -592,7 +701,7 @@ export function AppShell({
   const libraryPaperChildren = workspaceState.papers.reduce<
     Record<string, LibraryPaperChildItem[]>
   >((entries, paper) => {
-    entries[paper.id] = artifactTabs
+    entries[paper.id] = artifactCatalog
       .filter(
         (tab) =>
           tab.papers?.some((sourcePaper) => sourcePaper.id === paper.id) ||
@@ -619,6 +728,22 @@ export function AppShell({
     if (readerRegionId !== "main") {
       paneLayout.setCollapsed(readerRegionId, false);
     }
+  }
+
+  function openEvidenceInReader(request: Omit<PdfEvidenceTarget, "requestId">) {
+    const paper = workspaceState.papers.find((candidate) => candidate.id === request.paperId);
+    if (!paper) {
+      setAnalysisHint("这条证据对应的论文当前不在文献库中，无法打开 PDF 原文。");
+      return;
+    }
+
+    readerEvidenceRequestRef.current += 1;
+    setReaderEvidenceTarget({
+      ...request,
+      requestId: readerEvidenceRequestRef.current
+    });
+    openPaperInReader(request.paperId);
+    setAnalysisHint(`正在打开《${paper.title}》第 ${request.page} 页的引用证据。`);
   }
 
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
@@ -659,7 +784,8 @@ export function AppShell({
     onOpenPaper: openPaperInReader,
     onOpenPaperChild: (item) => {
       if (item.kind === "artifact") {
-        setActiveCenterArtifactId(item.id);
+        artifactWorkflow.actions.openArtifact(item.id);
+        activateArtifactSurface(item.id);
       }
     },
     onOpenSharedLibrary: (summary) => {
@@ -667,7 +793,7 @@ export function AppShell({
     },
     onOpenSkillDocument: (entry) => {
       artifactWorkflow.actions.openSkillDocument(entry);
-      setActiveCenterArtifactId(`skill-doc-${entry.id}`);
+      activateArtifactSurface(`skill-doc-${entry.id}`);
     },
     onRetryCollectionSync: knowledgeSync.actions.retryCollectionSync,
     onRetryDocumentMetadataSync: knowledgeSync.actions.retryDocumentMetadataSync,
@@ -710,6 +836,15 @@ export function AppShell({
   function activateDockItem(regionId: DockRegionId, itemId: DockItemId) {
     if (regionId === "main") {
       setActiveCenterArtifactId(null);
+    } else {
+      setActiveSideArtifactIds((current) => {
+        if (!current[regionId]) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[regionId];
+        return next;
+      });
     }
     if (isLeftRailDockItem(itemId)) {
       leftRail.setLeftRailView(itemId);
@@ -722,16 +857,29 @@ export function AppShell({
       leftRail.setLeftRailView(itemId);
     }
     dock.moveItem(itemId, targetRegionId);
-    if (targetRegionId !== "main") {
+    if (targetRegionId === "main") {
+      setActiveCenterArtifactId(null);
+    } else {
+      setActiveSideArtifactIds((current) => {
+        if (!current[targetRegionId]) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[targetRegionId];
+        return next;
+      });
       paneLayout.setCollapsed(targetRegionId, false);
     }
   }
 
-  function renderArtifactSurface(tabs = artifactTabs) {
+  function renderArtifactSurface(
+    tabs = artifactTabs,
+    activeArtifactId: string | null = activeCenterArtifactId
+  ) {
     return (
       <section aria-label="多模态产物区域" className="dock-artifact-surface">
         <ArtifactTabs
-          activeArtifactId={activeCenterArtifactId}
+          activeArtifactId={activeArtifactId}
           analysisHint={analysisHint}
           canStartAnalysis={
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
@@ -739,7 +887,16 @@ export function AppShell({
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
           }}
-          onActivateArtifact={setActiveCenterArtifactId}
+          onOpenEvidence={openEvidenceInReader}
+          onDeleteArtifact={async (artifactId) => {
+            const message = await artifactWorkflow.actions.deleteArtifact(artifactId);
+            const remainingTabs = artifactTabs.filter(
+              (candidate) => candidate.artifactId !== artifactId
+            );
+            selectFallbackArtifact(artifactId, remainingTabs);
+            return message;
+          }}
+          onActivateArtifact={activateArtifactSurface}
           onRegenerateArtifact={(request) => {
             artifactWorkflow.actions.regenerateArtifact(request);
           }}
@@ -783,6 +940,7 @@ export function AppShell({
           onArtifactDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
           }}
+          onOpenEvidence={openEvidenceInReader}
           onStartAnalysis={(artifactType) => {
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
@@ -804,6 +962,7 @@ export function AppShell({
           selectedPaperIds={workspaceState.selectedPaperIds}
           selectionLocked={workspaceState.selectionLocked}
           showArtifactRegion={false}
+          targetEvidence={readerEvidenceTarget}
         />
       );
     }
@@ -812,6 +971,7 @@ export function AppShell({
       return (
         <AssistantSidebar
           agentClient={assistantAgent.agentClient}
+          artifactTasks={artifactTasks}
           executionJournal={assistantAgent.executionJournal}
           importedSelectedCount={importedSelectedCount}
           modelTransport={modelTransport}
@@ -820,6 +980,7 @@ export function AppShell({
           onApplyGeneratedTheme={runtimeActionContext.applyGeneratedTheme}
           onApplyPanelAction={runtimeActionContext.applyPanelAction}
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
+          onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
           onGenerateArtifact={(artifactType) => {
             const message = artifactWorkflow.actions.handleAssistantArtifact(artifactType);
             return message;
@@ -827,6 +988,10 @@ export function AppShell({
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
           onMoveDockItem={runtimeActionContext.moveDockItem}
           onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
+          onOpenArtifact={(artifactId) => {
+            artifactWorkflow.actions.openArtifact(artifactId);
+            activateArtifactSurface(artifactId);
+          }}
           onOpenOrganizationSharedLibrary={
             organizationShell.actions.openOrganizationSharedLibrary
           }
@@ -852,31 +1017,36 @@ export function AppShell({
     const showDetachedLayoutControls =
       regionId === "main" &&
       (dock.layout.regions.main.activeItemId !== "reader" || activeCenterArtifactId !== null);
-    const centerArtifactTabs =
-      regionId === "main"
-        ? artifactTabs.map((tab) => ({
-            id: tab.artifactId,
-            onActivate: () => setActiveCenterArtifactId(tab.artifactId),
-            onClose: () => {
-              const remainingTabs = artifactTabs.filter(
-                (candidate) => candidate.artifactId !== tab.artifactId
-              );
-              artifactWorkflow.actions.closeArtifactTab(tab.artifactId);
-              if (activeCenterArtifactId === tab.artifactId) {
-                setActiveCenterArtifactId(remainingTabs[0]?.artifactId ?? null);
-              }
-            },
-            render: () => renderArtifactSurface([tab]),
-            selected: activeCenterArtifactId === tab.artifactId,
-            title: tab.title
-          }))
-        : [];
+    const dynamicArtifactTabs = artifactTabs
+      .filter((tab) => getArtifactRegion(tab.artifactId) === regionId)
+      .map((tab) => {
+        const selected =
+          regionId === "main"
+            ? activeCenterArtifactId === tab.artifactId
+            : activeSideArtifactIds[regionId] === tab.artifactId;
+        return {
+          draggable: true,
+          id: tab.artifactId,
+          onActivate: () => activateArtifactSurface(tab.artifactId),
+          onClose: () => {
+            const remainingTabs = artifactTabs.filter(
+              (candidate) => candidate.artifactId !== tab.artifactId
+            );
+            artifactWorkflow.actions.closeArtifactTab(tab.artifactId);
+            selectFallbackArtifact(tab.artifactId, remainingTabs);
+          },
+          render: () => renderArtifactSurface([tab], tab.artifactId),
+          selected,
+          title: tab.title
+        };
+      });
     return (
       <DockRegion
-        dynamicTabs={centerArtifactTabs}
+        dynamicTabs={dynamicArtifactTabs}
         layout={dock.layout.regions[regionId]}
         onActivateItem={(itemId) => activateDockItem(regionId, itemId)}
         onCloseItem={dock.closeItem}
+        onMoveDynamicTab={moveArtifactSurface}
         onMoveItem={moveDockItem}
         overlay={
           regionId === "main" ? (

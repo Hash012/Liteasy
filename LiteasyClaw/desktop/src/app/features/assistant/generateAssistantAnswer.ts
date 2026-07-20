@@ -28,6 +28,7 @@ type GenerateAssistantAnswerInput = {
   modelTransport?: ModelTransport;
   onDelta?: (delta: string, accumulated: string) => void;
   onProgress?: (input: { phase: string; progress: number; summary: string }) => void;
+  onSubtaskDelta?: (input: { delta: string; label: string; subtaskId: string }) => void;
   question: string;
   selectedPapers: Paper[];
   settings: SettingsState;
@@ -108,6 +109,7 @@ async function runAnalysisSubtasks(input: {
   model: string;
   prepared: PreparedMultiPaperAnalysis;
   provider: SettingsState["models.default_provider"];
+  onSubtaskDelta?: GenerateAssistantAnswerInput["onSubtaskDelta"];
   signal?: AbortSignal;
 }) {
   const tasks = buildAnalysisSubtasks(input.prepared);
@@ -133,6 +135,11 @@ async function runAnalysisSubtasks(input: {
       try {
         const generation = await input.gateway.generateAnswer({
           model: input.model,
+          onDelta: (delta) => input.onSubtaskDelta?.({
+            delta,
+            label: `${task.paperTitle} · ${task.focus}`,
+            subtaskId: task.id
+          }),
           prompt,
           provider: input.provider
         });
@@ -156,6 +163,7 @@ export async function generateAssistantAnswer({
   modelTransport,
   onDelta,
   onProgress,
+  onSubtaskDelta,
   question,
   selectedPapers,
   settings,
@@ -201,6 +209,7 @@ export async function generateAssistantAnswer({
       model,
       prepared: preparedAnalysis,
       provider,
+      onSubtaskDelta,
       signal
     });
   }

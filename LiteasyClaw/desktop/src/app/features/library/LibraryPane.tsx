@@ -60,9 +60,9 @@ type LibraryCollectionId =
   | "vector-database";
 
 type LibraryCollection = {
+  children: LibraryCollection[];
   id: LibraryCollectionId;
   label: string;
-  level: "root" | "child" | "grandchild";
 };
 
 const importStatusLabels: Record<ImportJob["status"], string> = {
@@ -73,12 +73,45 @@ const importStatusLabels: Record<ImportJob["status"], string> = {
 };
 
 const libraryCollections: LibraryCollection[] = [
-  { id: "my-library", label: "My Library", level: "root" },
-  { id: "courses", label: "Courses", level: "child" },
-  { id: "vector-search", label: "Vector Search", level: "child" },
-  { id: "late-interaction", label: "Late Interaction", level: "grandchild" },
-  { id: "vector-database", label: "Vector Database", level: "grandchild" }
+  {
+    children: [
+      {
+        children: [
+          {
+            children: [
+              { children: [], id: "late-interaction", label: "Late Interaction" }
+            ],
+            id: "vector-search",
+            label: "Vector Search"
+          },
+          { children: [], id: "vector-database", label: "Vector Database" }
+        ],
+        id: "courses",
+        label: "Courses"
+      }
+    ],
+    id: "my-library",
+    label: "My Library"
+  }
 ];
+
+function findLibraryCollection(
+  collections: LibraryCollection[],
+  collectionId: LibraryCollectionId
+): LibraryCollection | undefined {
+  for (const collection of collections) {
+    if (collection.id === collectionId) {
+      return collection;
+    }
+
+    const child = findLibraryCollection(collection.children, collectionId);
+    if (child) {
+      return child;
+    }
+  }
+
+  return undefined;
+}
 
 function getRelevanceLabel(band: RecommendationItem["relevanceBand"]) {
   if (band === "high") {
@@ -150,16 +183,25 @@ export function LibraryPane({
   const selectedCount = selectedPaperIds.length;
   const [activeCollectionId, setActiveCollectionId] = useState<LibraryCollectionId>("my-library");
   const activeCollection =
-    libraryCollections.find((collection) => collection.id === activeCollectionId) ??
+    findLibraryCollection(libraryCollections, activeCollectionId) ??
     libraryCollections[0];
   const visiblePapers = papers.filter((paper) => paperMatchesCollection(paper, activeCollection.id));
   const folderTree = buildWorkspaceFolderTree(visiblePapers);
+  const [collapsedCollectionIds, setCollapsedCollectionIds] = useState<LibraryCollectionId[]>([]);
   const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<string[]>([]);
   const [expandedPaperIds, setExpandedPaperIds] = useState<string[]>([]);
 
   function toggleFolder(path: string) {
     setCollapsedFolderPaths((current) =>
       current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
+    );
+  }
+
+  function toggleCollection(collectionId: LibraryCollectionId) {
+    setCollapsedCollectionIds((current) =>
+      current.includes(collectionId)
+        ? current.filter((item) => item !== collectionId)
+        : [...current, collectionId]
     );
   }
 
@@ -183,7 +225,7 @@ export function LibraryPane({
         data-selected={selected}
         key={paper.id}
       >
-        <div className="paper-row" style={{ paddingLeft: `${depth * 14}px` }}>
+        <div className="paper-row" style={{ paddingLeft: `${depth * 10}px` }}>
           <button
             aria-expanded={expanded}
             aria-label={`${expanded ? "收起" : "展开"}${paper.title}的关联条目`}
@@ -244,13 +286,13 @@ export function LibraryPane({
     );
   }
 
-  function renderFolder(node: WorkspaceFolderNode, depth = 0) {
+  function renderFolder(node: WorkspaceFolderNode, depth = 0, rootFolder = true) {
     const expanded = !collapsedFolderPaths.includes(node.path);
-    const folderLabel = depth === 0 ? `目录：${node.path}` : node.name;
+    const folderLabel = rootFolder ? `目录：${node.path}` : node.name;
 
     return (
       <li className="library-folder-node" key={node.path}>
-        <div className="library-folder-row" style={{ paddingLeft: `${depth * 14}px` }}>
+        <div className="library-folder-row" style={{ paddingLeft: `${depth * 10}px` }}>
           <button
             aria-expanded={expanded}
             aria-label={`${expanded ? "收起" : "展开"}目录 ${node.path}`}
@@ -273,8 +315,70 @@ export function LibraryPane({
         </div>
         {expanded ? (
           <ul className="library-tree-children">
-            {node.children.map((child) => renderFolder(child, depth + 1))}
+            {node.children.map((child) => renderFolder(child, depth + 1, false))}
             {node.papers.map((paper) => renderPaper(paper, depth + 1))}
+          </ul>
+        ) : null}
+      </li>
+    );
+  }
+
+  function renderCollection(collection: LibraryCollection, depth = 0) {
+    const active = activeCollection.id === collection.id;
+    const expanded = !collapsedCollectionIds.includes(collection.id);
+    const hasChildren = collection.children.length > 0;
+
+    return (
+      <li className="library-collection-node" key={collection.id}>
+        <div
+          className={`library-collection-row${active ? " active" : ""}`}
+          style={{ paddingLeft: `${depth * 10}px` }}
+        >
+          {hasChildren ? (
+            <button
+              aria-expanded={expanded}
+              aria-label={`${expanded ? "收起" : "展开"} Collection ${collection.label}`}
+              className="library-disclosure"
+              onClick={() => toggleCollection(collection.id)}
+              type="button"
+            >
+              <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+            </button>
+          ) : (
+            <span aria-hidden="true" className="library-disclosure-spacer" />
+          )}
+          <button
+            aria-pressed={active}
+            className="library-collection-name"
+            onClick={() => {
+              setActiveCollectionId(collection.id);
+              if (!expanded) {
+                toggleCollection(collection.id);
+              }
+            }}
+            title={`打开 Collection：${collection.label}`}
+            type="button"
+          >
+            <span aria-hidden="true" className="library-folder-icon">▱</span>
+            <span>{collection.label}</span>
+          </button>
+        </div>
+        {expanded ? (
+          <ul className="library-tree-children">
+            {collection.children.map((child) => renderCollection(child, depth + 1))}
+            {active ? (
+              <li className="library-collection-content">
+                <div className="library-folder-tree" aria-label="工作区目录树">
+                  {folderTree.length > 0 ? (
+                    <ul className="library-resource-tree">
+                      {folderTree.map((node) => renderFolder(node, depth + 1))}
+                    </ul>
+                  ) : (
+                    <div className="library-empty-collection">当前 Collection 暂无文献</div>
+                  )}
+                </div>
+              </li>
+            ) : null}
           </ul>
         ) : null}
       </li>
@@ -367,28 +471,10 @@ export function LibraryPane({
         <div className="library-active-collection">当前 Collection：{activeCollection.label}</div>
         <div className="library-collection-browser">
           <nav aria-label="文献库 collections" className="library-collection-tree">
-            {libraryCollections.map((collection) => (
-              <button
-                aria-pressed={activeCollection.id === collection.id}
-                className={`library-tree-row ${collection.level} ${
-                  activeCollection.id === collection.id ? "active" : ""
-                }`}
-                key={collection.id}
-                onClick={() => setActiveCollectionId(collection.id)}
-                title={`切换到 ${collection.label}`}
-                type="button"
-              >
-                {collection.label}
-              </button>
-            ))}
+            <ul className="library-resource-tree">
+              {libraryCollections.map((collection) => renderCollection(collection))}
+            </ul>
           </nav>
-          <div className="library-folder-tree" aria-label="工作区目录树">
-            {folderTree.length > 0 ? (
-              <ul className="library-resource-tree">{folderTree.map((node) => renderFolder(node))}</ul>
-            ) : (
-              <div className="library-empty-collection">当前 Collection 暂无文献</div>
-            )}
-          </div>
         </div>
       </div>
 

@@ -351,4 +351,121 @@ describe("ArtifactTabs", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
   });
+
+  test("shows friendly PDF evidence entries and keeps internal evidence ids out of visible output", () => {
+    const onOpenEvidence = vi.fn();
+    const evidenceId = "evidence-2-5ae8057b-952e-4ed6-a863-695e935e8c33";
+    const tab: ArtifactTab = {
+      analysis: {
+        evidence: [
+          {
+            analysisRunId: "analysis-1",
+            chunkId: "chunk-colbert-p4",
+            id: evidenceId,
+            page: 4,
+            paperId: "demo-1",
+            paperTitle: "ColBERT",
+            quote: "MaxSim matches every query token against document tokens.",
+            relevance: 0.96,
+            retrievalReason: "Matches the requested method detail.",
+            summary: "MaxSim 保留 token 级细粒度匹配。",
+            terms: ["MaxSim"]
+          }
+        ]
+      } as ArtifactTab["analysis"],
+      answer: `MaxSim 的结论来自 [${evidenceId}]。`,
+      artifactId: "artifact-evidence",
+      outlineMarkdown: `- MaxSim <!-- evidence: ${evidenceId} -->`,
+      title: "ColBERT 树形分析",
+      type: "tree",
+      uiDsl: {
+        actions: [],
+        audit: {
+          createdAt: "2026-07-20T00:00:00.000Z",
+          generatedBy: "agent",
+          traceId: "trace-evidence"
+        },
+        dataSources: [],
+        id: "ui-evidence",
+        intentPlanId: "plan-evidence",
+        root: {
+          component: "TreeOutline",
+          id: "tree-evidence",
+          props: {
+            nodes: [
+              {
+                evidenceIds: [evidenceId],
+                id: "maxsim",
+                kind: "term",
+                label: `MaxSim [${evidenceId}]`
+              }
+            ],
+            title: "树形展开"
+          }
+        },
+        surface: "center_artifact",
+        version: "liteasy-ui-dsl/v1"
+      }
+    };
+
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onOpenEvidence={onOpenEvidence}
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByText("论文原文证据（1 条） · 点击跳转 PDF")).toBeInTheDocument();
+    expect(screen.getByText("MaxSim matches every query token against document tokens.")).toBeInTheDocument();
+    expect(screen.getByText("摘要：MaxSim 保留 token 级细粒度匹配。")).toBeInTheDocument();
+    expect(screen.getByText("MaxSim")).toBeInTheDocument();
+    expect(screen.getByText("1 条证据")).toBeInTheDocument();
+    expect(screen.queryByText(/evidence-2-5ae8057b/i)).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "打开原文证据 1：ColBERT 第 4 页" })
+    );
+    expect(onOpenEvidence).toHaveBeenCalledWith({
+      evidenceId,
+      page: 4,
+      paperId: "demo-1",
+      quote: "MaxSim matches every query token against document tokens."
+    });
+  });
+
+  test("requires confirmation before deleting a persisted artifact", async () => {
+    const onDeleteArtifact = vi.fn(async () => undefined);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const tab: ArtifactTab = {
+      artifactId: "artifact-delete",
+      title: "待删除树形产物",
+      type: "tree"
+    };
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onDeleteArtifact={onDeleteArtifact}
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+      />
+    );
+
+    const deleteButton = screen.getByRole("button", { name: "删除产物：待删除树形产物" });
+    fireEvent.click(deleteButton);
+    expect(onDeleteArtifact).not.toHaveBeenCalled();
+    fireEvent.click(deleteButton);
+    await waitFor(() => expect(onDeleteArtifact).toHaveBeenCalledWith("artifact-delete"));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    confirm.mockRestore();
+  });
 });

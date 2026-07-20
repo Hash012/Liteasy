@@ -2,6 +2,8 @@ import { expect, test } from "vitest";
 import { moveDockItem } from "../app/features/dock/dockLayout";
 import {
   loadDockLayout,
+  loadDynamicDockPlacements,
+  saveDynamicDockPlacements,
   saveDockLayout
 } from "../app/features/dock/dockLayout.storage";
 
@@ -20,4 +22,22 @@ test("falls back to the default dock layout when storage is malformed", () => {
 
   expect(loadDockLayout().regions.main.itemIds).toEqual(["reader"]);
   expect(loadDockLayout().regions.left.itemIds).toEqual(["library"]);
+});
+
+test("persists dynamic artifact tab regions and ignores invalid entries", () => {
+  saveDynamicDockPlacements({
+    "artifact-1": "right",
+    "artifact-2": "bottom"
+  });
+
+  expect(loadDynamicDockPlacements()).toEqual({
+    "artifact-1": "right",
+    "artifact-2": "bottom"
+  });
+
+  window.localStorage.setItem(
+    "liteasy.ui.dynamic-dock-placement.v1",
+    JSON.stringify({ "artifact-invalid": "outside", "artifact-main": "main" })
+  );
+  expect(loadDynamicDockPlacements()).toEqual({ "artifact-main": "main" });
 });

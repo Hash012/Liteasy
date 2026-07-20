@@ -70,12 +70,14 @@ const paper: Paper = {
 };
 
 function renderArtifactActions(options: {
+  confirmDuplicateGeneration?: ReturnType<typeof vi.fn>;
   imported?: boolean;
   locked?: boolean;
   selectedPapers?: Paper[];
 } = {}) {
   const artifactStore = createArtifactStore();
   const onAnalysisHint = vi.fn();
+  const onArtifactCatalogChanged = vi.fn<(catalog: ArtifactTab[]) => void>();
   const onArtifactTabsChanged = vi.fn<(tabs: ArtifactTab[]) => void>();
   const onArtifactTasksChanged = vi.fn<(tasks: ArtifactTask[]) => void>();
   const selectedPapers = options.selectedPapers ?? [paper];
@@ -97,18 +99,22 @@ function renderArtifactActions(options: {
   const saveArtifactResult = vi.fn(async (document: { artifactId: string }) =>
     `project-docs/agent-results/${document.artifactId}.json`
   );
+  const deleteArtifactResult = vi.fn(async () => undefined);
 
   const hook = renderHook(() =>
     useArtifactActions({
       artifactStore,
       artifactResultClient: {
+        delete: deleteArtifactResult,
         list: vi.fn(async () => []),
         save: saveArtifactResult
       },
+      confirmDuplicateGeneration: options.confirmDuplicateGeneration,
       getImportedChunksByPaperId: () => importedChunks,
       getSelectedDocumentSet: () => selectedDocumentSet,
       getSelectedPapers: () => selectedPapers,
       onAnalysisHint,
+      onArtifactCatalogChanged,
       onArtifactTabsChanged,
       onArtifactTasksChanged,
       queueImportForPapers,
@@ -117,11 +123,14 @@ function renderArtifactActions(options: {
   );
 
   return {
+    artifactStore,
     onAnalysisHint,
+    onArtifactCatalogChanged,
     onArtifactTabsChanged,
     onArtifactTasksChanged,
     queueImportForPapers,
     runAgentAnalysis,
+    deleteArtifactResult,
     saveArtifactResult,
     result: hook.result
   };
@@ -134,6 +143,43 @@ describe("useArtifactActions", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  test("syncs all concurrent generation tasks without dropping older sessions", () => {
+    const artifactStore = createArtifactStore();
+    const firstTaskId = artifactStore.createTask("mindmap");
+    const secondTaskId = artifactStore.createTask("tree");
+    artifactStore.startTask(firstTaskId);
+    artifactStore.startTask(secondTaskId);
+    const onArtifactTasksChanged = vi.fn<(tasks: ArtifactTask[]) => void>();
+    const hook = renderHook(() =>
+      useArtifactActions({
+        artifactStore,
+        artifactResultClient: {
+          delete: vi.fn(async () => undefined),
+          list: vi.fn(async () => []),
+          save: vi.fn(async () => "project-docs/agent-results/test.json")
+        },
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        onArtifactCatalogChanged: vi.fn(),
+        onArtifactTabsChanged: vi.fn(),
+        onArtifactTasksChanged,
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => createCompletedAgentRun())
+      })
+    );
+
+    act(() => {
+      hook.result.current.syncArtifacts(secondTaskId);
+    });
+
+    expect(onArtifactTasksChanged).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id: secondTaskId, type: "tree" }),
+      expect.objectContaining({ id: firstTaskId, type: "mindmap" })
+    ]);
   });
 
   test("requires a selected and locked document set before analysis", () => {
@@ -227,6 +273,82 @@ describe("useArtifactActions", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       expect.stringContaining("project-docs/agent-results/")
     );
+  });
+
+  test("cancels a running Agent artifact and never saves its partial result", async () => {
+    const artifactStore = createArtifactStore();
+    const cancelAgentRun = vi.fn(async () => undefined);
+    const save = vi.fn(async () => "should-not-be-written.json");
+    let resolveRun: ((run: AgentRun) => void) | undefined;
+    const runAgentAnalysis = vi.fn((
+      _artifactType: string,
+      onProgress: (input: {
+        agentRunId?: string;
+        message: string;
+        progress: number;
+        stage: "generating_answer";
+      }) => void
+    ) => {
+      onProgress({
+        agentRunId: "run-cancel-me",
+        message: "正在生成",
+        progress: 55,
+        stage: "generating_answer"
+      });
+      return new Promise<AgentRun>((resolve) => {
+        resolveRun = resolve;
+      });
+    });
+    const hook = renderHook(() => useArtifactActions({
+      artifactStore,
+      artifactResultClient: {
+        delete: vi.fn(async () => undefined),
+        list: vi.fn(async () => []),
+        save
+      },
+      cancelAgentRun,
+      getImportedChunksByPaperId: () => ({
+        [paper.id]: buildImportedChunksForPaper(paper)
+      }),
+      getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
+      getSelectedPapers: () => [paper],
+      onAnalysisHint: vi.fn(),
+      onArtifactCatalogChanged: vi.fn(),
+      onArtifactTabsChanged: vi.fn(),
+      onArtifactTasksChanged: vi.fn(),
+      queueImportForPapers: vi.fn(() => "already_imported"),
+      runAgentAnalysis: runAgentAnalysis as never
+    }));
+
+    act(() => {
+      hook.result.current.startAnalysis("tree");
+    });
+    const task = artifactStore.getTasks()[0];
+    expect(task.agentRunId).toBe("run-cancel-me");
+
+    await act(async () => {
+      await hook.result.current.cancelArtifactTask(task.id);
+    });
+    expect(cancelAgentRun).toHaveBeenCalledWith(
+      "run-cancel-me",
+      "用户终止了多模态产物生成"
+    );
+    expect(artifactStore.getTask(task.id)).toMatchObject({
+      stage: "cancelled",
+      status: "cancelled"
+    });
+
+    await act(async () => {
+      resolveRun?.({
+        ...createCompletedAgentRun(),
+        events: [],
+        runId: "run-cancel-me",
+        status: "cancelled"
+      });
+      await Promise.resolve();
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(artifactStore.getCatalog()).toEqual([]);
   });
 
   test("starts comparison-table analysis as a first-class artifact type", async () => {
@@ -387,6 +509,7 @@ describe("useArtifactActions", () => {
   test("does not start duplicate analysis while selected papers are still importing", () => {
     const artifactStore = createArtifactStore();
     const onAnalysisHint = vi.fn();
+    const onArtifactCatalogChanged = vi.fn<(catalog: ArtifactTab[]) => void>();
     const onArtifactTabsChanged = vi.fn<(tabs: ArtifactTab[]) => void>();
     const onArtifactTasksChanged = vi.fn<(tasks: ArtifactTask[]) => void>();
     const queueImportForPapers = vi.fn(() => "importing" as const);
@@ -394,6 +517,7 @@ describe("useArtifactActions", () => {
       useArtifactActions({
         artifactStore,
         artifactResultClient: {
+          delete: vi.fn(async () => undefined),
           list: vi.fn(async () => []),
           save: vi.fn(async () => "project-docs/agent-results/test.json")
         },
@@ -401,6 +525,7 @@ describe("useArtifactActions", () => {
         getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
         getSelectedPapers: () => [paper],
         onAnalysisHint,
+        onArtifactCatalogChanged,
         onArtifactTabsChanged,
         onArtifactTasksChanged,
         queueImportForPapers,
@@ -427,7 +552,196 @@ describe("useArtifactActions", () => {
       message = result.current.handleAssistantArtifact("tree");
     });
 
-    expect(message).toBe("已根据当前选中文献集触发分支 skill；如尚未导入，系统会先导入再开始生成产物。");
+    expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该模态分析。");
+  });
+
+  test("asks before generating the same modality for the exact persisted paper set", () => {
+    const secondPaper: Paper = {
+      id: "demo-2",
+      sourcePath: "fixtures/demo-2.pdf",
+      title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings"
+    };
+    const confirmDuplicateGeneration = vi.fn(() => false);
+    const {
+      artifactStore,
+      onAnalysisHint,
+      onArtifactTasksChanged,
+      queueImportForPapers,
+      result,
+      runAgentAnalysis
+    } = renderArtifactActions({
+      confirmDuplicateGeneration,
+      imported: true,
+      selectedPapers: [paper, secondPaper]
+    });
+    artifactStore.upsertCatalogEntry({
+      artifactId: "artifact-saved-tree",
+      papers: [
+        { id: secondPaper.id, title: secondPaper.title },
+        { id: paper.id, title: paper.title }
+      ],
+      title: "Saved Tree",
+      type: "tree"
+    });
+
+    let message = "";
+    act(() => {
+      message = result.current.startAnalysis("tree");
+    });
+
+    expect(confirmDuplicateGeneration).toHaveBeenCalledWith({
+      artifactType: "tree",
+      existingArtifacts: [expect.objectContaining({ artifactId: "artifact-saved-tree" })],
+      papers: [paper, secondPaper]
+    });
+    expect(message).toBe("已取消重复生成“树形展开”产物。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("已取消重复生成“树形展开”产物。");
+    expect(queueImportForPapers).not.toHaveBeenCalled();
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    expect(onArtifactTasksChanged).not.toHaveBeenCalled();
+    expect(artifactStore.getTasks()).toEqual([]);
+  });
+
+  test("continues duplicate generation only after confirmation", () => {
+    const confirmDuplicateGeneration = vi.fn(() => true);
+    const { artifactStore, queueImportForPapers, result } = renderArtifactActions({
+      confirmDuplicateGeneration,
+      imported: true
+    });
+    artifactStore.upsertCatalogEntry({
+      artifactId: "artifact-saved-mindmap",
+      papers: [{ id: paper.id, title: paper.title }],
+      title: "Saved Mind Map",
+      type: "mindmap"
+    });
+
+    act(() => {
+      result.current.startAnalysis("mindmap");
+    });
+
+    expect(confirmDuplicateGeneration).toHaveBeenCalledTimes(1);
+    expect(queueImportForPapers).toHaveBeenCalledTimes(1);
+    expect(artifactStore.getTasks()).toEqual([
+      expect.objectContaining({ status: "running", type: "mindmap" })
+    ]);
+  });
+
+  test("does not confirm when modality or the source-paper set differs", () => {
+    const confirmDuplicateGeneration = vi.fn(() => false);
+    const { artifactStore, queueImportForPapers, result } = renderArtifactActions({
+      confirmDuplicateGeneration,
+      imported: true
+    });
+    artifactStore.upsertCatalogEntry({
+      artifactId: "artifact-saved-tree-with-other-paper",
+      papers: [{ id: "demo-2", title: "ACORN" }],
+      title: "Saved Tree",
+      type: "tree"
+    });
+    artifactStore.upsertCatalogEntry({
+      artifactId: "artifact-saved-ppt",
+      papers: [{ id: paper.id, title: paper.title }],
+      title: "Saved PPT",
+      type: "ppt"
+    });
+
+    act(() => {
+      result.current.startAnalysis("tree");
+    });
+
+    expect(confirmDuplicateGeneration).not.toHaveBeenCalled();
+    expect(queueImportForPapers).toHaveBeenCalledTimes(1);
+  });
+
+  test("assistant artifact command returns cancellation and does not create a task", () => {
+    const confirmDuplicateGeneration = vi.fn(() => false);
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      confirmDuplicateGeneration,
+      imported: true
+    });
+    artifactStore.upsertCatalogEntry({
+      artifactId: "artifact-saved-tree",
+      papers: [{ id: paper.id, title: paper.title }],
+      title: "Saved Tree",
+      type: "tree"
+    });
+
+    let message = "";
+    act(() => {
+      message = result.current.handleAssistantArtifact("tree");
+    });
+
+    expect(message).toBe("已取消重复生成“树形展开”产物。");
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    expect(artifactStore.getTasks()).toEqual([]);
+  });
+
+  test("deletes persistence before removing an artifact from catalog and open tabs", async () => {
+    const { deleteArtifactResult, onArtifactCatalogChanged, onArtifactTabsChanged, result } =
+      renderArtifactActions();
+    act(() => {
+      result.current.restoreArtifactResult({
+        agent: {
+          apiVersion: "liteasy.agent/v1",
+          runId: "run-saved",
+          sessionId: "session-saved",
+          status: "completed"
+        },
+        answer: "analysis",
+        artifactId: "artifact-saved",
+        artifactType: "tree",
+        citations: [],
+        createdAt: "2026-07-20T03:00:00.000Z",
+        papers: [{ id: paper.id, title: paper.title }],
+        title: "Saved Tree",
+        uiDsl: { version: "liteasy-ui-dsl/v1" } as never,
+        version: "liteasy.agent-artifact/v1"
+      });
+      result.current.openArtifact("artifact-saved");
+    });
+
+    await act(async () => {
+      await result.current.deleteArtifact("artifact-saved");
+    });
+
+    expect(deleteArtifactResult).toHaveBeenCalledWith("artifact-saved");
+    expect(onArtifactCatalogChanged).toHaveBeenLastCalledWith([]);
+    expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([]);
+  });
+
+  test("keeps catalog and tabs when persistent artifact deletion fails", async () => {
+    const actions = renderArtifactActions();
+    actions.deleteArtifactResult.mockRejectedValueOnce(new Error("disk busy"));
+    act(() => {
+      actions.result.current.restoreArtifactResult({
+        agent: {
+          apiVersion: "liteasy.agent/v1",
+          runId: "run-saved",
+          sessionId: "session-saved",
+          status: "completed"
+        },
+        answer: "analysis",
+        artifactId: "artifact-saved",
+        artifactType: "tree",
+        citations: [],
+        createdAt: "2026-07-20T03:00:00.000Z",
+        papers: [{ id: paper.id, title: paper.title }],
+        title: "Saved Tree",
+        uiDsl: { version: "liteasy-ui-dsl/v1" } as never,
+        version: "liteasy.agent-artifact/v1"
+      });
+    });
+
+    await act(async () => {
+      await actions.result.current.deleteArtifact("artifact-saved");
+    });
+
+    expect(actions.onArtifactCatalogChanged).toHaveBeenLastCalledWith([
+      expect.objectContaining({ artifactId: "artifact-saved" })
+    ]);
+    expect(actions.onAnalysisHint).toHaveBeenLastCalledWith(
+      "删除多模态产物失败：disk busy"
+    );
   });
 
   test("regenerates from the persisted source-paper set and saves provenance", async () => {
@@ -446,13 +760,18 @@ describe("useArtifactActions", () => {
     const hook = renderHook(() =>
       useArtifactActions({
         artifactStore,
-        artifactResultClient: { list: vi.fn(async () => []), save },
+        artifactResultClient: {
+          delete: vi.fn(async () => undefined),
+          list: vi.fn(async () => []),
+          save
+        },
         getImportedChunksByPaperId: () => ({
           [paper.id]: buildImportedChunksForPaper(paper)
         }),
         getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
         getSelectedPapers: () => [],
         onAnalysisHint: vi.fn(),
+        onArtifactCatalogChanged: vi.fn(),
         onArtifactTabsChanged,
         onArtifactTasksChanged: vi.fn(),
         queueImportForPapers: vi.fn(() => "already_imported" as const),

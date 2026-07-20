@@ -3,7 +3,7 @@ import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
 import type { UIDslActionRef } from "../features/generative-ui/generativeUi.types";
-import { PdfReader } from "../features/pdf/PdfReader";
+import { PdfReader, type PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import { DockLayoutControls } from "./DockLayoutControls";
@@ -15,6 +15,7 @@ type ReaderPaneProps = {
   artifactTasks: ArtifactTask[];
   layoutCollapsed?: PaneCollapseState;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
+  onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
@@ -26,6 +27,7 @@ type ReaderPaneProps = {
   selectedPapers?: Paper[];
   selectedPaperIds: string[];
   selectionLocked: boolean;
+  targetEvidence?: PdfEvidenceTarget | null;
 };
 
 const defaultLayoutCollapsed: PaneCollapseState = {
@@ -40,6 +42,7 @@ export function ReaderPane({
   artifactTasks,
   layoutCollapsed = defaultLayoutCollapsed,
   onArtifactDynamicAction,
+  onOpenEvidence,
   onAddReaderContextToConversation,
   onSaveMarkdownTab,
   onStartAnalysis,
@@ -50,7 +53,8 @@ export function ReaderPane({
   selectedPapers = [],
   selectedPaperIds,
   selectionLocked,
-  showArtifactRegion = true
+  showArtifactRegion = true,
+  targetEvidence
 }: ReaderPaneProps) {
   const [zoom, setZoom] = useState(100);
   const activePaper = selectedPapers[0] ?? null;
@@ -111,6 +115,7 @@ export function ReaderPane({
           <PdfReader
             onAddSelectionToConversation={onAddReaderContextToConversation}
             selectedPapers={selectedPapers}
+            targetEvidence={targetEvidence}
             zoom={zoom}
           />
           {artifactRegionVisible ? (
@@ -119,6 +124,7 @@ export function ReaderPane({
               analysisHint={analysisHint}
               canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
               onDynamicAction={onArtifactDynamicAction}
+              onOpenEvidence={onOpenEvidence}
               onSaveMarkdownTab={onSaveMarkdownTab}
               onStartAnalysis={onStartAnalysis}
               onUpdateMarkdownTab={onUpdateMarkdownTab}

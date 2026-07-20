@@ -1,5 +1,6 @@
 import { AssistantPane } from "../features/assistant/AssistantPane";
-import type { ArtifactType } from "../features/artifacts/artifact.types";
+import type { ArtifactTask, ArtifactType } from "../features/artifacts/artifact.types";
+import type { AssistantSessionHistoryItem } from "../features/assistant/assistantSessionHistory";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import type { SettingsState } from "../features/settings/settings.types";
@@ -15,6 +16,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantSidebarProps = {
   agentClient: FrontendAgentClient;
+  artifactTasks?: ArtifactTask[];
   executionJournal?: ExecutionJournal;
   /** @deprecated Agent context is supplied by the AppShell controller. */
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
@@ -24,11 +26,14 @@ type AssistantSidebarProps = {
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
+  onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
   onGenerateArtifact: (artifactType: ArtifactType) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
+  onOpenArtifact?: (artifactId: string) => void;
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
+  onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;
   profileUnlocked?: boolean;
   readerConversationContext?: ReaderConversationContext | null;
@@ -43,6 +48,7 @@ type AssistantSidebarProps = {
 
 export function AssistantSidebar({
   agentClient,
+  artifactTasks = [],
   executionJournal,
   importedSelectedCount,
   modelTransport,
@@ -50,11 +56,14 @@ export function AssistantSidebar({
   onApplyLayoutPreset,
   onApplyPanelAction,
   onApplyThemePreset,
+  onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
   onMoveDockItem,
   onOpenAcademicArchive,
+  onOpenArtifact,
   onOpenOrganizationSharedLibrary,
+  onActiveSessionChange,
   onSettingsChanged,
   profileUnlocked = false,
   readerConversationContext = null,
@@ -75,17 +84,21 @@ export function AssistantSidebar({
       <div className="pane-body">
         <AssistantPane
           agentClient={agentClient}
+          artifactTasks={artifactTasks}
           executionJournal={executionJournal}
           modelTransport={modelTransport}
           onApplyGeneratedTheme={onApplyGeneratedTheme}
           onApplyLayoutPreset={onApplyLayoutPreset}
           onApplyPanelAction={onApplyPanelAction}
           onApplyThemePreset={onApplyThemePreset}
+          onCancelArtifactTask={onCancelArtifactTask}
           onGenerateArtifact={onGenerateArtifact}
           onImportSelectedSet={onImportSelectedSet}
           onMoveDockItem={onMoveDockItem}
           onOpenAcademicArchive={onOpenAcademicArchive}
+          onOpenArtifact={onOpenArtifact}
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
+          onActiveSessionChange={onActiveSessionChange}
           onSettingsChanged={onSettingsChanged}
           profileUnlocked={profileUnlocked}
           readerConversationContext={readerConversationContext}

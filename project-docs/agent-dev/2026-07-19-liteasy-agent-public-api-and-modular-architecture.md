@@ -417,6 +417,22 @@ Artifact modal
 
 “补充资料并重新生成”对话框把新增文本、引用、页码或要求作为独立的 `<user-supplement>` 信任域传入。重生成期间 Agent 环境临时使用原产物的 `sourcePaperIds` 与对应已导入 chunks，完成后恢复当前 UI selection；新结果另存 JSON，并记录 `regeneratedFromArtifactId`、`supplementalContext` 和 `papers`，不覆盖旧产物，也不把用户补充误标成论文原始证据。
 
+产物 catalog 与中心区 open tabs 是两个不同集合。应用启动时，`GET /v1/agent-artifacts` 只恢复 catalog；关闭中心标签只删除 open-tab 投影，不删除 catalog 项。文献树按 catalog 的 `papers` 建立关联，点击条目时再把 catalog 项打开成中心标签。因此“关闭标签”不再导致论文下的产物入口消失。
+
+产物删除与关闭标签语义分离。“关闭”只收起界面标签；“删除产物”经用户确认后调用 `DELETE /v1/agent-artifacts/:artifactId`，服务端严格校验 ID，并且只允许删除结果目录中的单个 JSON。远端删除成功后才从 catalog、open tabs 和论文子项中移除；失败时保留本地入口，避免界面与磁盘状态分叉。同一模态、同一组论文已有持久产物时，再次点击生成会明确询问用户；确认后另存新版本，不覆盖旧结果。
+
+`evidence-*` 是 Evidence 记录的稳定内部主键，不是面向读者的引用文本。它把树节点或结论关联到 `paperId/page/chunkId/quote/summary`，用于审计、去重和机器处理。界面保留 `evidenceIds` 元数据，但不再铺陈裸 ID；产物提供“论文原文证据”索引，显示论文、页码、原文摘录和摘要。点击证据会切换到对应论文 Reader、滚动并高亮目标 PDF 页。当前定位精度为 PDF 页级；后续若要做到页内句级高亮，应在 Evidence 中再持久化 PDF.js text item/字符范围或归一化 bounding boxes。
+
+### 5.7 多会话 Chat 与可见生成工作记录
+
+右侧 Chat 维护显式 session registry，普通问答与每个 ArtifactTask 分属不同 session。新建和历史切换只改变前端活动会话，不关闭共享 Agent client，也不取消后台产物 run。每个会话保存消息、模式、类型、状态和更新时间；产物会话还保存 task/artifact 关联，完成后提供“打开产物”入口。多个生成任务可同时保留在任务集合和会话历史中。
+
+产物开始时，应用自动打开 Assistant 所在 dock region。任务的阶段、进度、`partialAnswer` 和完成/失败状态持续投影到对应 Chat session；用户主动切到普通对话后，后台更新不会抢回焦点。
+
+SubAgent 分析新增瞬态 `analysis.subtask.delta` 公共事件，携带 `subtaskId/label/delta`。它展示的是证据区段的可见分析草稿，不是模型私有思维链。此类增量与 `assistant.delta` 一样不进入轻量 Agent 状态快照；最终答案和已保存产物仍作为持久事实源。主 Agent 最终综合开始后，产物树继续从严格 Markdown unordered list 增量解析并渲染。
+
+普通对话和多模态任务都按真实 `runId` 提供“终止”。如果用户在 `run.started` 到达前点击，前端先记录取消意图，拿到 `runId` 后补发 `cancelRun`。已取消任务拒绝迟到的进度、完成与保存回调，因此不会出现“界面已终止但结果仍落盘”。终止状态与原因保留在对应 Chat session 历史中。
+
 结果格式为 `liteasy.agent-artifact/v1`，包含论文标识、目标模态、回答、citation、分析结构、渲染 DSL 与 Agent run 标识，不包含 API key。结果可能含论文片段和用户问题，提交前仍需确认可共享性。团队共享流程：
 
 ```bash
@@ -503,7 +519,7 @@ git push
 1. 将 JSON 快照迁移到 SQLite 分表/WAL，加入 schema migration、保留期、查询索引、正文脱敏或加密；保持 `AgentStateStore` 契约不变。
 2. Windows named pipe host，以及桌面退出时主动清理 Unix socket。
 3. 如需网络 MCP，用官方 SDK 接入 Streamable HTTP，补 OAuth、Origin 防护和限流。
-4. 将 AnalysisRun/Evidence/Claim 从 event metadata/版本化 JSON 迁入 SQLite 独立表，并接通 selection/document revision、ArtifactSource 与 citation 跳页；仓库 JSON 继续作为显式导出/协作格式。
+4. 将 AnalysisRun/Evidence/Claim 从 event metadata/版本化 JSON 迁入 SQLite 独立表，并接通 selection/document revision、ArtifactSource 与 PDF 页内文本范围；仓库 JSON 继续作为显式导出/协作格式。
 5. 加入 per-principal capability filter、并发上限、事件保留和背压。
 6. executor 在模型、解析、检索、批处理边界全面响应 `AbortSignal`。
 
@@ -537,4 +553,4 @@ npm run dev:test-api
 
 脚本只在进程内读取仓库根部 `project-docs/test-api.md`，将 `OPENAI_KEY`/`API_END_POINT` 映射为现有 dev-cloud 环境变量，不打印或复制密钥。当前实验默认模型为 `gpt-5.5`，可用 `VITE_LITEASY_OPENAI_MODEL` 覆盖。端口冲突时，现有 `dev-with-cloud.mjs` 会自动选择后续可用端口，并把实际 dev-cloud endpoint 注入 Vite；应以终端启动日志为准。
 
-当前验证（2026-07-20）：`gpt-5.5` 真实 SSE 能力探测和 dev-cloud NDJSON 端到端请求均通过；一次 551 字实验在约 12.7 秒收到首批 delta，共收到 7 批、约 19.9 秒完成。严格 Markdown 树提示实验收到 47 批 delta、生成 174 个可增量解析的列表节点，且没有 tab/ASCII 树线。真实 PDF 摄取实测 ColBERT 10 页、60,518 字符，ACORN 15 页、92,529 字符。PDF/分析/产物/文献树聚焦回归共 68 个用例通过；最终树持久化相关 24 个用例通过；dev-cloud 6/6 与 `npm run build` 通过。全量桌面测试为 546/604 通过、58 个既有失败，数量未增加；其中包含旧 Assistant UI contract 断言和受限环境 `listen EPERM`。Rust `cargo check` 尚未完成：当前环境仅有 Cargo/Rust 1.75，无法解析仓库的 v4 lockfile，且未安装 `rustfmt`。
+当前验证（2026-07-20）：`gpt-5.5` 真实 SSE 能力探测和 dev-cloud NDJSON 端到端请求均通过；一次 551 字实验在约 12.7 秒收到首批 delta，共收到 7 批、约 19.9 秒完成。严格 Markdown 树提示实验收到 47 批 delta、生成 174 个可增量解析的列表节点，且没有 tab/ASCII 树线。真实 PDF 摄取实测 ColBERT 10 页、60,518 字符，ACORN 15 页、92,529 字符。删除、取消、重复确认、证据索引/PDF 定位等本轮聚焦回归 61/61 通过；dev-cloud 6/6 测试文件与 `npm run build` 通过。全量桌面测试为 566/623 通过、57 个既有失败；其中主要是旧 Assistant UI contract 断言和受限环境 `listen EPERM`，本轮没有增加失败数。Rust `cargo check` 尚未完成：当前环境仅有 Cargo/Rust 1.75，无法解析仓库的 v4 lockfile，且未安装 `rustfmt`。

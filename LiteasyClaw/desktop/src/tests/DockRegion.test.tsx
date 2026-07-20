@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import {
   DockRegion,
+  dockDynamicTabMimeType,
   dockItemMimeType
 } from "../app/features/dock/DockRegion";
 
@@ -137,5 +138,53 @@ describe("DockRegion", () => {
     await user.click(screen.getByRole("button", { name: "关闭 Liteasy Chat" }));
 
     expect(onCloseItem).toHaveBeenCalledWith("assistant");
+  });
+
+  test("moves a dynamic artifact tab to another dock region", () => {
+    const onMoveDynamicTab = vi.fn();
+    const { rerender } = render(
+      <DockRegion
+        dynamicTabs={[
+          {
+            draggable: true,
+            id: "artifact-1",
+            onActivate: vi.fn(),
+            render: () => <div>artifact content</div>,
+            selected: true,
+            title: "ColBERT 文献树"
+          }
+        ]}
+        layout={{ activeItemId: "reader", itemIds: ["reader"] }}
+        onActivateItem={vi.fn()}
+        onCloseItem={vi.fn()}
+        onMoveDynamicTab={onMoveDynamicTab}
+        onMoveItem={vi.fn()}
+        regionId="main"
+        renderItem={() => <div>reader</div>}
+      />
+    );
+
+    const artifactTab = screen.getByRole("tab", { name: "ColBERT 文献树" });
+    const transfer = createDataTransfer("");
+    fireEvent.dragStart(artifactTab, { dataTransfer: transfer });
+    expect(transfer.getData(dockDynamicTabMimeType)).toBe("artifact-1");
+
+    rerender(
+      <DockRegion
+        layout={{ activeItemId: "assistant", itemIds: ["assistant"] }}
+        onActivateItem={vi.fn()}
+        onCloseItem={vi.fn()}
+        onMoveDynamicTab={onMoveDynamicTab}
+        onMoveItem={vi.fn()}
+        regionId="right"
+        renderItem={() => <div>assistant</div>}
+      />
+    );
+    const rightRegion = screen.getByLabelText("右栏 Dock 区域");
+    fireEvent.dragOver(rightRegion, { dataTransfer: transfer });
+    expect(rightRegion).toHaveClass("drop-active");
+    fireEvent.drop(rightRegion, { dataTransfer: transfer });
+
+    expect(onMoveDynamicTab).toHaveBeenCalledWith("artifact-1", "right");
   });
 });

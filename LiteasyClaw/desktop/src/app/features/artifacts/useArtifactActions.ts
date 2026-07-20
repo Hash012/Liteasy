@@ -30,19 +30,31 @@ export type AgentArtifactGenerationOptions = {
   supplementalContext?: string;
 };
 
+export type DuplicateArtifactGenerationConfirmation = {
+  artifactType: Exclude<ArtifactType, "skill_doc">;
+  existingArtifacts: ArtifactTab[];
+  papers: Paper[];
+};
+
 type UseArtifactActionsInput = {
   artifactStore: ArtifactStore;
   artifactResultClient: ArtifactResultClient;
+  confirmDuplicateGeneration?: (
+    input: DuplicateArtifactGenerationConfirmation
+  ) => boolean;
+  cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
   onAnalysisHint: (message: string) => void;
+  onArtifactCatalogChanged: (catalog: ArtifactTab[]) => void;
   onArtifactTabsChanged: (tabs: ArtifactTab[]) => void;
   onArtifactTasksChanged: (tasks: ArtifactTask[]) => void;
   queueImportForPapers: (papers: Paper[], onComplete?: () => void) => ImportQueueStatus;
   runAgentAnalysis: (
     artifactType: ArtifactType,
     onProgress: (input: {
+      agentRunId?: string;
       message: string;
       partialAnswer?: string;
       partialOutlineNodes?: ArtifactTask["partialOutlineNodes"];
@@ -73,22 +85,66 @@ function createArtifactId(taskId: string) {
   return taskId.replace("artifact-task-", "artifact-");
 }
 
+const artifactTypeLabels: Record<Exclude<ArtifactType, "skill_doc">, string> = {
+  comparison_table: "对比表",
+  mindmap: "思维导图",
+  ppt: "PPT",
+  tree: "树形展开"
+};
+
+function normalizePaperIds(papers: Array<{ id: string }>) {
+  return [...new Set(papers.map((paper) => paper.id))].sort();
+}
+
+export function findDuplicateArtifacts(
+  catalog: ArtifactTab[],
+  artifactType: Exclude<ArtifactType, "skill_doc">,
+  papers: Array<{ id: string }>
+) {
+  const sourcePaperIds = normalizePaperIds(papers);
+  return catalog.filter((artifact) => {
+    if (artifact.type !== artifactType || !artifact.papers) {
+      return false;
+    }
+    const artifactPaperIds = normalizePaperIds(artifact.papers);
+    return artifactPaperIds.length === sourcePaperIds.length &&
+      artifactPaperIds.every((paperId, index) => paperId === sourcePaperIds[index]);
+  });
+}
+
+function confirmDuplicateGenerationInBrowser({
+  artifactType,
+  existingArtifacts,
+  papers
+}: DuplicateArtifactGenerationConfirmation) {
+  if (typeof window === "undefined" || typeof window.confirm !== "function") {
+    return false;
+  }
+  const paperList = papers.map((paper) => `- ${paper.title}`).join("\n");
+  return window.confirm(
+    `当前文献集合已经存在 ${existingArtifacts.length} 个“${artifactTypeLabels[artifactType]}”产物：\n\n` +
+    `${paperList}\n\n仍要生成新的产物吗？新结果会另存，不会覆盖已有产物。`
+  );
+}
+
 export function useArtifactActions({
   artifactStore,
   artifactResultClient,
+  confirmDuplicateGeneration = confirmDuplicateGenerationInBrowser,
+  cancelAgentRun,
   getImportedChunksByPaperId,
   getSelectedDocumentSet,
   getSelectedPapers,
   onAnalysisHint,
+  onArtifactCatalogChanged,
   onArtifactTabsChanged,
   onArtifactTasksChanged,
   queueImportForPapers,
   runAgentAnalysis
 }: UseArtifactActionsInput) {
-  function syncArtifacts(taskId?: string) {
-    const task = taskId ? artifactStore.getTask(taskId) : undefined;
-    const nextTasks = task ? [{ ...task }] : [];
-    onArtifactTasksChanged(nextTasks);
+  function syncArtifacts(_taskId?: string) {
+    onArtifactTasksChanged(artifactStore.getTasks().map((task) => ({ ...task })));
+    onArtifactCatalogChanged(artifactStore.getCatalog());
     onArtifactTabsChanged([...artifactStore.getOpenTabs()]);
   }
 
@@ -103,6 +159,9 @@ export function useArtifactActions({
     if (!queuedTaskId) {
       syncArtifacts(taskId);
     }
+    if (artifactStore.getTask(taskId)?.status === "cancelled") {
+      return;
+    }
     artifactStore.startTask(taskId);
     syncArtifacts(taskId);
 
@@ -111,18 +170,37 @@ export function useArtifactActions({
         throw new Error("Skill 文档不是论文分析模态");
       }
       const onProgress = (progress: {
+        agentRunId?: string;
         message: string;
         partialAnswer?: string;
         partialOutlineNodes?: ArtifactTask["partialOutlineNodes"];
         progress: number;
         stage: ArtifactTaskStage;
       }) => {
+        if (artifactStore.getTask(taskId)?.status === "cancelled") {
+          if (progress.agentRunId && cancelAgentRun) {
+            void cancelAgentRun(
+              progress.agentRunId,
+              "用户在 Agent 启动前终止了多模态产物生成"
+            ).catch((error) => {
+              onAnalysisHint(
+                `终止请求未能送达 Agent：${error instanceof Error ? error.message : String(error)}`
+              );
+            });
+          }
+          return;
+        }
         artifactStore.updateTask(taskId, progress);
         syncArtifacts(taskId);
       };
       const agentRun = generationOptions
         ? await runAgentAnalysis(artifactType, onProgress, generationOptions)
         : await runAgentAnalysis(artifactType, onProgress);
+      if (artifactStore.getTask(taskId)?.status === "cancelled" || agentRun.status === "cancelled") {
+        artifactStore.cancelTask(taskId);
+        syncArtifacts(taskId);
+        return;
+      }
       if (agentRun.status !== "completed") {
         throw new Error(`Agent run 未完成：${agentRun.status}`);
       }
@@ -216,12 +294,41 @@ export function useArtifactActions({
       syncArtifacts(taskId);
       onAnalysisHint(`Agent 分析完成并已保存：${resultPath}`);
     } catch (error) {
+      if (artifactStore.getTask(taskId)?.status === "cancelled") {
+        syncArtifacts(taskId);
+        return;
+      }
       artifactStore.failTask(taskId);
       syncArtifacts(taskId);
       onAnalysisHint(
         `Agent 分析失败：${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  async function cancelArtifactTask(taskId: string) {
+    const task = artifactStore.getTask(taskId);
+    if (!task || task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
+      return "该生成任务已经结束。";
+    }
+
+    artifactStore.cancelTask(taskId);
+    syncArtifacts(taskId);
+    if (task.agentRunId && cancelAgentRun) {
+      try {
+        await cancelAgentRun(task.agentRunId, "用户终止了多模态产物生成");
+      } catch (error) {
+        onAnalysisHint(
+          `终止请求未能送达 Agent：${error instanceof Error ? error.message : String(error)}`
+        );
+        return "任务已在界面中终止，但 Agent 终止请求发送失败。";
+      }
+    }
+    const message = task.agentRunId
+      ? "已终止多模态产物生成；未完成结果不会保存。"
+      : "已取消等待中的多模态产物任务；不会启动生成或保存结果。";
+    onAnalysisHint(message);
+    return message;
   }
 
   function startAnalysis(artifactType: ArtifactType) {
@@ -239,6 +346,25 @@ export function useArtifactActions({
     }
 
     const selectedPapers = getSelectedPapers();
+    if (artifactType !== "skill_doc") {
+      const existingArtifacts = findDuplicateArtifacts(
+        artifactStore.getCatalog(),
+        artifactType,
+        selectedPapers
+      );
+      if (
+        existingArtifacts.length > 0 &&
+        !confirmDuplicateGeneration({
+          artifactType,
+          existingArtifacts,
+          papers: selectedPapers
+        })
+      ) {
+        const message = `已取消重复生成“${artifactTypeLabels[artifactType]}”产物。`;
+        onAnalysisHint(message);
+        return message;
+      }
+    }
     const importedChunksByPaperId = getImportedChunksByPaperId();
     let queuedTaskId: string | undefined;
     const importStatus = queueImportForPapers(selectedPapers, () => {
@@ -284,13 +410,12 @@ export function useArtifactActions({
       return message;
     }
 
-    startAnalysis(artifactType);
-    return "已根据当前选中文献集触发分支 skill；如尚未导入，系统会先导入再开始生成产物。";
+    return startAnalysis(artifactType);
   }
 
   function regenerateArtifact(request: ArtifactRegenerationRequest) {
     const existing = artifactStore
-      .getOpenTabs()
+      .getCatalog()
       .find((tab) => tab.artifactId === request.artifactId);
     if (!existing || existing.type === "skill_doc") {
       const message = "找不到可重新生成的论文分析产物。";
@@ -352,6 +477,40 @@ export function useArtifactActions({
     syncArtifacts();
   }
 
+  async function deleteArtifact(artifactId: string) {
+    const existing = artifactStore
+      .getCatalog()
+      .find((tab) => tab.artifactId === artifactId);
+    if (!existing || existing.type === "skill_doc") {
+      const message = "找不到可删除的已保存多模态产物。";
+      onAnalysisHint(message);
+      return message;
+    }
+    try {
+      await artifactResultClient.delete(artifactId);
+      artifactStore.removeCatalogEntry(artifactId);
+      syncArtifacts();
+      const message = `已删除多模态产物：${existing.title}`;
+      onAnalysisHint(message);
+      return message;
+    } catch (error) {
+      const message = `删除多模态产物失败：${error instanceof Error ? error.message : String(error)}`;
+      onAnalysisHint(message);
+      return message;
+    }
+  }
+
+  function openArtifact(artifactId: string) {
+    const opened = artifactStore.openCatalogEntry(artifactId);
+    if (!opened) {
+      const message = "找不到已保存的多模态产物。";
+      onAnalysisHint(message);
+      return message;
+    }
+    syncArtifacts();
+    return "已打开保存的多模态产物。";
+  }
+
   function restoreArtifactResult(result: Awaited<ReturnType<ArtifactResultClient["list"]>>[number]) {
     const outlineNodes = result.outlineNodes ?? (result.analysis
       ? buildArtifactOutline({
@@ -370,7 +529,7 @@ export function useArtifactActions({
           title: result.title
         })
       : result.uiDsl;
-    artifactStore.upsertTab({
+    artifactStore.upsertCatalogEntry({
       agentRunId: result.agent.runId,
       analysis: result.analysis,
       answer: result.answer,
@@ -439,8 +598,11 @@ export function useArtifactActions({
   }
 
   return {
+    cancelArtifactTask,
     closeArtifactTab,
+    deleteArtifact,
     handleAssistantArtifact,
+    openArtifact,
     openSkillDocument,
     regenerateArtifact,
     restoreArtifactResult,

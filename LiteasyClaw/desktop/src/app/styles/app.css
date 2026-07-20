@@ -923,6 +923,46 @@ body {
   gap: 10px;
 }
 
+.assistant-active-session {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.assistant-active-session-kind {
+  flex: none;
+  border-radius: 999px;
+  background: rgba(222, 237, 248, 0.86);
+  color: #35627f;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
+.assistant-active-session-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #4d6983;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-session-open-artifact {
+  border: 1px solid #b9d3e6;
+  border-radius: 7px;
+  background: #eef7ff;
+  color: #1b66a2;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
 .assistant-session-actions {
   display: flex;
   justify-content: flex-end;
@@ -946,11 +986,24 @@ body {
   padding: 7px 11px;
 }
 
+.assistant-session-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.assistant-session-button.danger {
+  border-color: #dfb8b4;
+  background: #fff5f3;
+  color: #a33f37;
+}
+
 .assistant-history-panel {
   border: 1px solid #dce8f1;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.78);
   padding: 12px;
+  max-height: min(44vh, 420px);
+  overflow: auto;
 }
 
 .assistant-history-title {
@@ -982,6 +1035,11 @@ body {
   padding: 10px;
 }
 
+.assistant-history-item.active {
+  border-color: #90b7d2;
+  background: rgba(230, 242, 250, 0.9);
+}
+
 .assistant-history-restore {
   border: 0;
   background: transparent;
@@ -996,6 +1054,19 @@ body {
 .assistant-history-restore:hover {
   color: #1f4f78;
   text-decoration: underline;
+}
+
+.assistant-history-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-top: 5px;
+}
+
+.assistant-history-item-kind {
+  color: #4b7795;
+  font-weight: 700;
 }
 
 .mode-switch {
@@ -1955,6 +2026,28 @@ body {
   font-weight: 700;
 }
 
+.artifact-card-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.artifact-delete-button {
+  background: #fff8f7;
+  border: 1px solid #dca5a0;
+  border-radius: 8px;
+  color: #9b3028;
+  cursor: pointer;
+  padding: 7px 11px;
+}
+
+.artifact-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .artifact-regenerate-backdrop {
   position: fixed;
   z-index: 120;
@@ -2065,7 +2158,8 @@ body {
 }
 
 .artifact-agent-answer,
-.artifact-outline-markdown {
+.artifact-outline-markdown,
+.artifact-evidence-index {
   border: 1px solid rgba(116, 103, 87, 0.16);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.58);
@@ -2075,9 +2169,64 @@ body {
 }
 
 .artifact-agent-answer summary,
-.artifact-outline-markdown summary {
+.artifact-outline-markdown summary,
+.artifact-evidence-index summary {
   cursor: pointer;
   font-weight: 700;
+}
+
+.artifact-evidence-index > ol {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+
+.artifact-evidence-index li button {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(39, 125, 114, 0.2);
+  border-radius: 10px;
+  background: rgba(247, 252, 249, 0.92);
+  color: #554f48;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.artifact-evidence-index li button:hover:not(:disabled) {
+  border-color: rgba(39, 125, 114, 0.48);
+  background: #f0faf5;
+}
+
+.artifact-evidence-index li button:disabled {
+  cursor: default;
+}
+
+.artifact-evidence-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  color: #367166;
+}
+
+.artifact-evidence-heading span,
+.artifact-evidence-summary {
+  color: #746d64;
+  font-size: 12px;
+}
+
+.artifact-evidence-index q {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .artifact-agent-answer-body,
@@ -2432,6 +2581,13 @@ body {
   overflow: hidden;
 }
 
+.pdf-page-shell.evidence-target {
+  border-color: rgba(27, 102, 179, 0.78);
+  box-shadow:
+    0 0 0 4px rgba(27, 102, 179, 0.16),
+    0 22px 52px rgba(24, 34, 47, 0.15);
+}
+
 .pdf-page-canvas {
   display: block;
   max-width: 100%;
@@ -2538,8 +2694,10 @@ body {
 }
 
 .pdf-annotation-list {
+  align-content: start;
   display: grid;
   gap: 8px;
+  grid-auto-rows: max-content;
   min-height: 0;
   overflow: auto;
 }

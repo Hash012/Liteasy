@@ -32,6 +32,20 @@ type VisualOutlineNode = {
   parentId?: string;
 };
 
+const evidenceIdPattern = /\[?\bevidence-[a-z0-9][a-z0-9-]*\b\]?/gi;
+
+function hideInternalEvidenceIds(value: string, replacement = "〔证据〕") {
+  return value
+    .replace(evidenceIdPattern, replacement)
+    .replace(/(?:〔证据〕[\s,，、;；]*){2,}/g, "〔证据〕 ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function cleanOutlineLabel(value: string) {
+  return hideInternalEvidenceIds(value, "").replace(/\s+([，。；：,.!?])/g, "$1");
+}
+
 function normalizeOutlineNodes(records: Record<string, unknown>[]): VisualOutlineNode[] {
   const hasExplicitParents = records.some((record) => typeof record.parentId === "string");
   const levelParents = new Map<number, string>();
@@ -54,7 +68,7 @@ function normalizeOutlineNodes(records: Record<string, unknown>[]): VisualOutlin
       evidenceIds: getStringArrayProp(record, "evidenceIds"),
       id,
       kind: getStringProp(record, "kind", parentId ? "evidence" : "root"),
-      label: getStringProp(record, "label"),
+      label: cleanOutlineLabel(getStringProp(record, "label")) || "证据节点",
       parentId
     };
   });
@@ -168,7 +182,9 @@ function renderNode(
     return (
       <section className="genui-panel" key={node.id}>
         {getStringProp(node.props, "title") ? <strong>{getStringProp(node.props, "title")}</strong> : null}
-        {getStringProp(node.props, "text") ? <p>{getStringProp(node.props, "text")}</p> : null}
+        {getStringProp(node.props, "text") ? (
+          <p>{hideInternalEvidenceIds(getStringProp(node.props, "text"))}</p>
+        ) : null}
         {children}
       </section>
     );
@@ -191,8 +207,8 @@ function renderNode(
     return (
       <section className="genui-evidence-card" key={node.id}>
         <strong>{getStringProp(node.props, "title", "证据")}</strong>
-        <span>{getStringProp(node.props, "source")}</span>
-        <p>{getStringProp(node.props, "snippet")}</p>
+        <span>{hideInternalEvidenceIds(getStringProp(node.props, "source"))}</span>
+        <p>{hideInternalEvidenceIds(getStringProp(node.props, "snippet"))}</p>
       </section>
     );
   }
@@ -215,8 +231,8 @@ function renderNode(
               {rows.map((row, index) => (
                 <tr key={`${node.id}-row-${index}`}>
                   <td>{getStringProp(row, "paper")}</td>
-                  <td>{getStringProp(row, "evidence")}</td>
-                  <td>{getStringProp(row, "snippet")}</td>
+                  <td>{hideInternalEvidenceIds(getStringProp(row, "evidence"))}</td>
+                  <td>{hideInternalEvidenceIds(getStringProp(row, "snippet"))}</td>
                 </tr>
               ))}
             </tbody>
@@ -278,8 +294,8 @@ function renderNode(
               {rows.map((row, index) => (
                 <tr key={`${node.id}-row-${index}`}>
                   <td>{getStringProp(row, "paper")}</td>
-                  <td>{getStringProp(row, "focus")}</td>
-                  <td>{getStringProp(row, "evidence")}</td>
+                  <td>{hideInternalEvidenceIds(getStringProp(row, "focus"))}</td>
+                  <td>{hideInternalEvidenceIds(getStringProp(row, "evidence"))}</td>
                 </tr>
               ))}
             </tbody>
@@ -311,7 +327,9 @@ function renderNode(
               <span>{getStringProp(slide, "title", `Slide ${index + 1}`)}</span>
               <ul>
                 {getStringArrayProp(slide, "bullets").map((bullet) => (
-                  <li key={`${node.id}-slide-${index}-${bullet}`}>{bullet}</li>
+                  <li key={`${node.id}-slide-${index}-${bullet}`}>
+                    {hideInternalEvidenceIds(bullet)}
+                  </li>
                 ))}
               </ul>
             </article>

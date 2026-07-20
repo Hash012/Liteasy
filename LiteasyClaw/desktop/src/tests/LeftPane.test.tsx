@@ -242,6 +242,51 @@ describe("LeftPane", () => {
     );
   });
 
+  test("renders collections and source folders as one collapsible hierarchy", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          papers: [
+            {
+              id: "paper-1",
+              sourcePath: "/papers/search/late-interaction/colbert.pdf",
+              title: "ColBERT"
+            }
+          ]
+        })}
+      />
+    );
+
+    const collectionTree = screen.getByLabelText("文献库 collections");
+    const myLibraryNode = within(collectionTree).getByRole("button", { name: "My Library" })
+      .closest(".library-collection-node");
+
+    expect(myLibraryNode).not.toBeNull();
+    expect(within(myLibraryNode as HTMLElement).getByRole("button", { name: "Courses" }))
+      .toBeInTheDocument();
+    expect(within(myLibraryNode as HTMLElement).getByText("目录：/papers"))
+      .toBeInTheDocument();
+    expect(within(myLibraryNode as HTMLElement).getByText("search")).toBeInTheDocument();
+    expect(within(myLibraryNode as HTMLElement).getByText("late-interaction"))
+      .toBeInTheDocument();
+
+    await user.click(
+      within(collectionTree).getByRole("button", { name: "收起 Collection My Library" })
+    );
+
+    expect(within(collectionTree).queryByRole("button", { name: "Courses" }))
+      .not.toBeInTheDocument();
+    expect(within(collectionTree).queryByText("ColBERT")).not.toBeInTheDocument();
+
+    await user.click(
+      within(collectionTree).getByRole("button", { name: "展开 Collection My Library" })
+    );
+    expect(within(collectionTree).getByText("ColBERT")).toBeInTheDocument();
+  });
+
   test("switches visible papers when clicking My Library collections", async () => {
     const user = userEvent.setup();
 
