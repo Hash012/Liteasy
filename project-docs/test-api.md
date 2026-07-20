@@ -1,0 +1,2 @@
+OPENAI_KEY:sk-ebe0f6ae24f5748435d15f278c2cdde2f0b81eb97172c7ffa109faffa84db98a
+API_END_POINT:https://gmn.chuangzuoli.com/v1/
