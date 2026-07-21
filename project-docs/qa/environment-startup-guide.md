@@ -1,214 +1,251 @@
-# LiteasyClaw 环境启动手册
+# LiteasyClaw 启动与本地联调指南
 
-这份文档面向没有软件开发经验的成员，目标是让你可以独立把 LiteasyClaw 当前版本跑起来并检查界面是否正常。
+本文档用于从零启动 LiteasyClaw，并重点说明论文 Agent、流式多模态产物和 `project-docs/test-api.md` 测试接口的联调方式。
 
-## 1. 你需要准备什么
+所有命令都以仓库根目录为起点，示例中不依赖某个开发者的绝对路径。
 
-请先确认电脑上已经具备以下工具：
+## 1. 最短启动路径
 
-1. `Node.js`
-2. `npm`
-3. `Rust`
-4. Tauri 运行依赖
+如果要在浏览器中使用真实模型验证 ACORN、ColBERT 等论文的树形展开，推荐使用：
 
-如果你不知道是否已经安装，可以把下面这些命令分别复制到终端里执行：
+```bash
+cd LiteasyClaw/services/dev-cloud
+npm install
+
+cd ../../desktop
+npm install
+npm run dev:test-api
+```
+
+`dev:test-api` 会完成这些事情：
+
+1. 从仓库根目录的 `project-docs/test-api.md` 读取测试 API 地址和密钥。
+2. 默认使用 `gpt-5.5`。
+3. 同时启动 Liteasy dev-cloud 和 Vite 前端。
+4. 检测 dev-cloud 端口冲突；默认端口被占用时自动选择后续空闲端口。
+5. 将实际 dev-cloud 端口注入桌面前端，避免前端仍然请求旧端口。
+
+启动日志中的实际地址是唯一准确信息。一般会看到：
+
+```text
+[dev:cloud] LiteasyClaw dev cloud listening on http://127.0.0.1:<实际端口>
+[dev:desktop] Local: http://127.0.0.1:1420/
+```
+
+用浏览器打开 `http://127.0.0.1:1420/` 即可。
+
+> `test-api.md` 是开发测试凭据来源。不要把其中的密钥复制到截图、issue、终端输出或普通文档中。新增或更换长期使用的密钥时，应优先放入被 Git 忽略的 `.env.local`。
+
+## 2. 环境要求
+
+开发云要求 Node.js 20 或更高版本：
 
 ```bash
 node -v
 npm -v
+```
+
+启动完整 Tauri 桌面窗口时还需要 Rust 与当前操作系统所需的 Tauri 系统依赖：
+
+```bash
 cargo --version
+rustc --version
 ```
 
-正常情况下，这些命令都会输出版本号，例如 `v20.x`、`10.x`、`cargo 1.x`。
-
-## 2. 在哪里打开终端
-
-如果你使用的是 Ubuntu / WSL：
-
-1. 打开终端程序
-2. 进入项目工作区目录
+如果当前终端找不到 `cargo`，Linux/macOS 常见处理是：
 
 ```bash
-cd /home/octopus/Liteasy/LiteasyClaw/desktop
+source "$HOME/.cargo/env"
 ```
 
-## 3. 第一次启动前要做什么
-
-第一次运行前，请先安装依赖：
+首次拉取项目后，需要分别安装两个 Node 包的依赖：
 
 ```bash
+cd LiteasyClaw/services/dev-cloud
+npm install
+
+cd ../../desktop
 npm install
 ```
 
-正常情况下，这一步会下载前端和 Tauri 依赖，并在结束时回到命令提示符。
+## 3. 选择启动模式
 
-如果这里失败：
-
-- 先检查网络是否正常
-- 再检查 `node -v` 和 `npm -v` 是否能输出版本号
-
-## 4. 如何启动本地云端联调服务
-
-如果你要检查当前桌面端的云账号、云端策略、推荐、文献元数据同步、模型审计与组织空间入口，请先在仓库根目录启动本地云端联调服务：
+### 3.1 真实测试 API + 浏览器前端（推荐用于 Agent 联调）
 
 ```bash
-cd /home/octopus/Liteasy
-node /home/octopus/Liteasy/LiteasyClaw/services/dev-cloud/server.mjs
+cd LiteasyClaw/desktop
+npm run dev:test-api
 ```
 
-看到下面这行表示成功：
+适用于：
 
-```text
-LiteasyClaw dev cloud listening on http://127.0.0.1:8787
-```
+- 验证论文问答和多论文分析。
+- 验证树形展开、思维导图、PPT 等多模态产物。
+- 检查右侧 AI Chat 的流式进度。
+- 验证 Agent 失败详情、重试与本地持久化。
 
-浏览器访问 `http://127.0.0.1:8787/` 时会返回云端联调服务索引 JSON；桌面端页面请打开 Tauri 窗口或 Vite 地址。
+脚本直接读取 `test-api.md`，不会要求把密钥作为命令行参数写入 shell 历史。
 
-如果点击 `登录云账号`、进入 `组织` 页面或同步模型策略时看到“云端服务当前不可用。请确认已启动 http://127.0.0.1:8787，并检查当前云端地址。”，通常表示这个服务终端没有启动、已经关闭，或当前运行环境仍指向错误的云端地址。
-
-这个终端窗口不要关闭。然后另开一个终端启动桌面端。
-
-如果你只是想看最基础的桌面界面，可以暂时跳过这一步。
-
-### 路演或云端部署时怎么启动
-
-如果你要把当前 demo 服务部署到云端做路演，请先设置部署环境变量，再启动服务：
+### 3.2 普通本地开发 + 内置回答
 
 ```bash
-export LITEASY_DEV_CLOUD_HOST=0.0.0.0
-export LITEASY_DEV_CLOUD_PORT=8787
-export LITEASY_DEV_CLOUD_PUBLIC_ORIGIN=https://你的演示域名
-node /home/octopus/Liteasy/LiteasyClaw/services/dev-cloud/server.mjs
+cd LiteasyClaw/desktop
+npm run dev
 ```
 
-启动后请优先检查：
+这条命令同样会启动 dev-cloud 和 Vite。没有配置真实模型密钥时，开发云会使用内置开发回答，适合 UI、账号、组织和文件系统功能开发，但不适合判断真实论文分析质量。
 
-```text
-https://你的演示域名/
-https://你的演示域名/healthz
-https://你的演示域名/admin/
+### 3.3 完整 Tauri 桌面应用
+
+Tauri 的 `beforeDevCommand` 会自动运行 `npm run dev`，因此不需要预先再启动一套 Vite。
+
+如果要在 Tauri 中调用真实 OpenAI 兼容接口，在本地创建以下两个文件。
+
+`LiteasyClaw/services/dev-cloud/.env.local`：
+
+```dotenv
+OPENAI_API_KEY=<本地密钥>
+OPENAI_BASE_URL=<以 /v1 结尾的 API 根地址>
+LITEASY_MODEL_PROVIDER=openai
 ```
 
-如果要把环境恢复到路演稳定基线，再执行：
+`LiteasyClaw/desktop/.env.local`：
+
+```dotenv
+VITE_LITEASY_OPENAI_MODEL=gpt-5.5
+```
+
+这两个 `.env.local` 已被 Git 忽略。不要把真实密钥写入 TypeScript、测试或已跟踪的配置文件。
+
+然后启动：
 
 ```bash
-node LiteasyClaw/scripts/reset-demo-data.mjs
-node LiteasyClaw/scripts/reseed-demo-data.mjs
-node LiteasyClaw/scripts/smoke-roadshow.mjs http://127.0.0.1:8787
-```
-
-路演完整说明请看：
-
-```text
-/home/octopus/Liteasy/project-docs/qa/roadshow-demo-guide.md
-```
-
-## 5. 如何启动界面
-
-在 `desktop` 目录下执行：
-
-```bash
+cd LiteasyClaw/desktop
 source "$HOME/.cargo/env"
 npm run tauri dev
 ```
 
-正常情况下会发生两件事：
+如果需要让 Tauri 使用 `test-api.md` 中的测试服务，请把相同的 API 地址和密钥同步到上面的 dev-cloud `.env.local`，不要把密钥直接写进启动命令。
 
-1. 终端里出现开发服务启动日志
-2. 桌面上弹出一个名为 `LiteasyClaw` 的应用窗口
+### 3.4 分终端调试
 
-如果桌面窗口一时打不开，也可以先看前端预览：
+需要单独观察开发云和前端日志时，可以显式使用同一个端口。
 
-```bash
-npm run dev
-```
-
-## 6. 看到什么才算启动成功
-
-启动成功后，你应该能看到一个三栏布局窗口：
-
-1. 左栏标题是 `Library`
-2. 中栏标题是 `Reader`
-3. 右栏标题是 `AI Assistant`
-
-三个区域都应可见，不应只有空白页，也不应只有浏览器默认文本。最左侧窄竖栏应能看到 `文献库 / 组织 / 个人中心 / 设置`；左栏默认显示工作区文献列表与“交给AI流程”按钮；中栏初始可能显示空态提示；右栏只应看到 AI 助手模式切换、输入框和发送按钮。模型策略与文献元数据同步在左边栏 `设置` 页面，组织空间与组织治理在左边栏 `组织` 页面。
-
-### 本地文献库现在要额外检查什么
-
-当前版本开始把本地文献库逐步收敛到真实本地目录语义。启动后请额外检查：
-
-1. 你的用户目录下存在一个 `LiteasyLibrary` 文件夹
-2. 左栏 `文献库` 页能看到类似 `当前工作区：/home/你的用户名/LiteasyLibrary` 的路径
-3. `工作区母目录` 显示的是同一个本地根路径
-4. 这表示桌面端已经开始按“文件支撑的本地文献库 root”来组织工作区，而不再只是固定 starter fixture 文案
-
-如果你是在本机 Linux 环境启动，通常可以用下面命令确认目录是否已经存在：
+终端 1：
 
 ```bash
-ls "$HOME/LiteasyLibrary"
+cd LiteasyClaw/services/dev-cloud
+LITEASY_DEV_CLOUD_PORT=8791 npm start
 ```
 
-第一次启动时，即使里面还是空目录，只要这个根目录被创建出来、左栏路径也显示出来，就说明本地文献库 root seam 已经接通。
-
-如果要完整检查 Phase 2，请继续按下面文档操作：
-
-```text
-/home/octopus/Liteasy/project-docs/qa/phase2-test-guide.md
-```
-
-如果要检查 Phase 3 组织空间入口，请继续按下面文档操作：
-
-```text
-/home/octopus/Liteasy/project-docs/qa/phase3-test-guide.md
-```
-
-如果你只想了解当前阶段哪些能力还不是正式生产能力，请看：
-
-```text
-/home/octopus/Liteasy/project-docs/qa/phase2-known-limitations.md
-```
-
-Phase 3 组织与治理原型边界请看：
-
-```text
-/home/octopus/Liteasy/project-docs/qa/phase3-governance-limitations.md
-```
-
-## 7. 常见问题先看什么
-
-### 情况 1：终端提示找不到 `cargo`
-
-说明 Rust 没有正确安装，先执行：
+终端 2：
 
 ```bash
-source "$HOME/.cargo/env"
+cd LiteasyClaw/desktop
+VITE_LITEASY_DEV_CLOUD_PORT=8791 npm run dev:desktop
 ```
 
-然后再次检查：
+这里的 `8791` 只是示例；可以换成任意空闲端口，但两边必须一致。
+
+## 4. 确认实际端口与服务身份
+
+组合启动脚本会从 8787 开始寻找空闲端口。不要假设开发云一定运行在 8787，应以终端日志为准。
+
+假设日志显示端口为 8791，可以执行：
 
 ```bash
-cargo --version
+curl --noproxy '*' http://127.0.0.1:8791/healthz
 ```
 
-### 情况 2：终端提示依赖安装失败
+预期结果：
 
-请记录：
+```json
+{"ok":true}
+```
 
-- 你执行的命令
-- 报错的最后 20 行
+再检查根地址：
 
-然后反馈给开发同学。
+```bash
+curl --noproxy '*' http://127.0.0.1:8791/
+```
 
-### 情况 3：窗口没有弹出来
+返回内容应明确属于 LiteasyClaw dev-cloud。如果看到其他应用的 HTML、Uvicorn 页面或无关 JSON，说明端口上运行的不是 Liteasy 服务。
 
-先检查终端有没有红色报错信息；如果有，请截图或复制最后一段报错。
+## 5. 可选：验证真实模型流式链路
 
-## 8. 反馈问题时怎么写
+下面的请求会真实消耗测试接口额度，仅在需要排查模型连接时执行：
 
-反馈时请至少带上这些信息：
+```bash
+curl --noproxy '*' -N http://127.0.0.1:8791/v1/model/generate-stream \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "gpt-5.5",
+    "prompt": "只回答：Liteasy upstream ok",
+    "provider": "openai"
+  }'
+```
 
-1. 你在哪个目录执行的命令
-2. 执行了哪条命令
-3. 看到的结果是什么
-4. 你预期看到什么
-5. 截图或报错文本
+成功时会持续返回 NDJSON `delta`，最后返回 `completed` 事件；其中 `execution.mode` 应为 `live`，`execution.provider` 应为 `openai`。
+
+如果实际端口不是 8791，请替换命令中的端口。
+
+## 6. 验证论文 Agent
+
+启动页面后，按以下顺序验证 ACORN 树形展开：
+
+1. 在左侧文献库展开目录并选中 ACORN。
+2. 锁定当前文献集。
+3. 在多模态入口选择“树形展开”。
+4. 右侧 AI Chat 应立即出现一个独立生成 session，并持续更新阶段、进度和流式文本。
+5. 中央区域应逐步渲染树节点，而不是等待结束后一次性显示制表符文本。
+6. 完成后，论文文件节点下应出现对应产物条目；关闭标签页或重新登录后仍可从文献库重新打开。
+
+若失败，产物区域和对应 AI session 应显示：
+
+- 原始错误原因；
+- 失败阶段；
+- Agent 本地端点；
+- Provider 与模型；
+- 发生时间；
+- 针对 401、404、429、网络失败等情况的恢复建议。
+
+`PDF parsed` 只表示论文证据已经可以检索，不代表 Agent 分析已经完成。最终状态应以多模态生成任务自身的阶段为准。
+
+## 7. 常见故障
+
+| 现象 | 优先检查 |
+| --- | --- |
+| `EADDRINUSE` | 使用 `npm run dev` 或 `npm run dev:test-api` 让脚本自动选端口；手动模式下换一个端口。 |
+| `/healthz` 返回 HTML 或其他应用内容 | 请求到了错误服务；核对启动日志中的实际端口。 |
+| 前端仍请求 8787 | 重启 Vite/Tauri。`VITE_*` 环境变量不会被已运行的前端进程重新读取。 |
+| 401 / Unauthorized | 检查测试密钥是否有效；修改配置后必须重启 dev-cloud。 |
+| 404 / `/responses` 不存在 | 确认 `OPENAI_BASE_URL` 是正确的 `/v1` 根地址，并且上游支持 OpenAI Responses API。 |
+| 429 / rate limit | 停止重复压力请求，等待额度或限流窗口恢复后再试。 |
+| 503 或 HTTP 200 空流 | 当前实现会有限重试；持续失败通常表示上游代理不稳定，应保留界面中的时间和详细错误。 |
+| UI 显示 `parsed`，但产物尚未完成 | 解析与 Agent 生成是两个独立生命周期，查看右侧生成 session 和产物任务进度。 |
+| Tauri 窗口没有出现 | 检查 `cargo --version`、系统 Tauri 依赖以及终端最后一段 Rust/Vite 错误。 |
+
+## 8. 停止服务
+
+组合启动时，在运行 `npm run dev` 或 `npm run dev:test-api` 的终端按 `Ctrl+C`，脚本会同时停止 Vite 和 dev-cloud。
+
+分终端启动时，需要在两个终端中分别按 `Ctrl+C`。
+
+## 9. 测试与构建
+
+修改桌面端后：
+
+```bash
+cd LiteasyClaw/desktop
+npm test
+npm run build
+```
+
+修改开发云后：
+
+```bash
+cd LiteasyClaw/services/dev-cloud
+npm test
+```
+
+提交问题时请附上：执行目录、完整启动命令、实际端口、失败阶段和报错文本。不要附带 API Key。
