@@ -115,7 +115,9 @@ async function runAnalysisSubtasks(input: {
   const tasks = buildAnalysisSubtasks(input.prepared);
   const reports = new Array<string>(tasks.length);
   let cursor = 0;
-  const workerCount = Math.min(4, tasks.length);
+  // The test proxy can intermittently return 503 when one artifact fans out too aggressively.
+  // Two workers still overlap evidence analysis while keeping the lightweight endpoint stable.
+  const workerCount = Math.min(2, tasks.length);
 
   await Promise.all(Array.from({ length: workerCount }, async () => {
     while (cursor < tasks.length) {

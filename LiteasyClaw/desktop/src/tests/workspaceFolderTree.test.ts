@@ -48,3 +48,27 @@ test("builds nested folder nodes with descendant paper counts", () => {
     expect.objectContaining({ name: "search", paperCount: 2, path: "/papers/search" })
   ]);
 });
+
+test("collapses absolute parent segments into the configured workspace root", () => {
+  const tree = buildWorkspaceFolderTree(
+    [
+      {
+        id: "paper-1",
+        sourcePath: "/home/test/LiteasyLibrary/papers/search/colbert.pdf",
+        title: "ColBERT"
+      }
+    ],
+    "/home/test/LiteasyLibrary"
+  );
+
+  expect(tree).toHaveLength(1);
+  expect(tree[0]).toMatchObject({
+    name: "LiteasyLibrary",
+    paperCount: 1,
+    path: "/home/test/LiteasyLibrary"
+  });
+  expect(tree[0].children[0]).toMatchObject({
+    name: "papers",
+    path: "/home/test/LiteasyLibrary/papers"
+  });
+});

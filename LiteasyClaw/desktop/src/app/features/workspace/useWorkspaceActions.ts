@@ -4,6 +4,16 @@ import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper, WorkspaceState } from "./workspace.types";
 import type { createImportStore } from "../import/import.store";
 import type { createWorkspaceStore } from "./workspace.store";
+import type { MoveLocalLibraryResource } from "../library/libraryFileSystemClient";
+import {
+  buildMovedFolderPath,
+  buildMovedPaper,
+  buildRenamedFolderPath,
+  buildRenamedPaper,
+  isWorkspacePathWithinRoot,
+  normalizeWorkspacePath,
+  replaceWorkspacePathPrefix
+} from "./workspacePathOperations";
 
 type WorkspaceStore = ReturnType<typeof createWorkspaceStore>;
 type ImportStore = ReturnType<typeof createImportStore>;
@@ -30,6 +40,7 @@ type UseWorkspaceActionsInput = {
   extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
+  moveLocalLibraryResource?: MoveLocalLibraryResource;
   onAnalysisHint: (message: string) => void;
   onImportJobsChanged: (jobsByDocumentId: Record<string, ImportJob>) => void;
   onWorkspaceChanged: (state: WorkspaceState) => void;
@@ -59,6 +70,7 @@ export function useWorkspaceActions({
   extractPaperChunks = extractImportedChunksForPaper,
   importDocument,
   importStore,
+  moveLocalLibraryResource,
   onAnalysisHint,
   onImportJobsChanged,
   onWorkspaceChanged,
@@ -70,6 +82,172 @@ export function useWorkspaceActions({
 
   function syncImportJobs() {
     onImportJobsChanged(buildImportJobsByDocumentId(workspaceStore, importStore));
+  }
+
+  function requireLocalWorkspace() {
+    const state = workspaceStore.getState();
+    if (state.workspaceSource.type !== "local_library") {
+      throw new Error("组织共享文献库是只读视图，不能在这里移动或重命名。");
+    }
+    return state;
+  }
+
+  function ensureTargetPathsAvailable(updatedPapers: Paper[], changedPaperIds: Set<string>) {
+    const state = workspaceStore.getState();
+    const occupiedPaths = new Set(
+      state.papers
+        .filter((paper) => !changedPaperIds.has(paper.id) && paper.sourcePath)
+        .map((paper) => normalizeWorkspacePath(paper.sourcePath!))
+    );
+    const nextPaths = new Set<string>();
+    updatedPapers.forEach((paper) => {
+      if (!paper.sourcePath) {
+        return;
+      }
+      const path = normalizeWorkspacePath(paper.sourcePath);
+      if (occupiedPaths.has(path) || nextPaths.has(path)) {
+        throw new Error(`目标位置已存在同名条目：${path}`);
+      }
+      nextPaths.add(path);
+    });
+  }
+
+  async function movePhysicalResourceIfManaged(sourcePath: string, targetPath: string) {
+    const state = workspaceStore.getState();
+    if (
+      moveLocalLibraryResource &&
+      isWorkspacePathWithinRoot(sourcePath, state.workspaceSource.rootPath) &&
+      isWorkspacePathWithinRoot(targetPath, state.workspaceSource.rootPath)
+    ) {
+      await moveLocalLibraryResource({ sourcePath, targetPath });
+    }
+  }
+
+  async function renamePaper(paperId: string, requestedName: string) {
+    try {
+      const state = requireLocalWorkspace();
+      const paper = state.papers.find((candidate) => candidate.id === paperId);
+      if (!paper) {
+        throw new Error("找不到要重命名的文献条目。");
+      }
+      const updatedPaper = buildRenamedPaper(paper, requestedName);
+      ensureTargetPathsAvailable([updatedPaper], new Set([paper.id]));
+      if (paper.sourcePath && updatedPaper.sourcePath && paper.sourcePath !== updatedPaper.sourcePath) {
+        await movePhysicalResourceIfManaged(paper.sourcePath, updatedPaper.sourcePath);
+      }
+      workspaceStore.updatePapers([updatedPaper]);
+      syncWorkspace();
+      const message = `已将文献条目重命名为《${updatedPaper.title}》。`;
+      onAnalysisHint(message);
+      return message;
+    } catch (error) {
+      const message = `重命名失败：${error instanceof Error ? error.message : String(error)}`;
+      onAnalysisHint(message);
+      return message;
+    }
+  }
+
+  async function movePaper(paperId: string, targetFolderPath: string) {
+    try {
+      const state = requireLocalWorkspace();
+      const paper = state.papers.find((candidate) => candidate.id === paperId);
+      if (!paper) {
+        throw new Error("找不到要移动的文献条目。");
+      }
+      const updatedPaper = buildMovedPaper(paper, targetFolderPath);
+      if (updatedPaper.sourcePath === paper.sourcePath) {
+        return "条目已经位于目标目录。";
+      }
+      ensureTargetPathsAvailable([updatedPaper], new Set([paper.id]));
+      await movePhysicalResourceIfManaged(paper.sourcePath!, updatedPaper.sourcePath!);
+      workspaceStore.updatePapers([updatedPaper]);
+      syncWorkspace();
+      const message = `已将《${paper.title}》移动到 ${normalizeWorkspacePath(targetFolderPath)}。`;
+      onAnalysisHint(message);
+      return message;
+    } catch (error) {
+      const message = `移动失败：${error instanceof Error ? error.message : String(error)}`;
+      onAnalysisHint(message);
+      return message;
+    }
+  }
+
+  async function renameFolder(folderPath: string, requestedName: string) {
+    try {
+      const state = requireLocalWorkspace();
+      if (folderPath === "未归档文献") {
+        throw new Error("“未归档文献”是虚拟分组，不能重命名。");
+      }
+      const targetFolderPath = buildRenamedFolderPath(folderPath, requestedName);
+      if (normalizeWorkspacePath(targetFolderPath) === normalizeWorkspacePath(folderPath)) {
+        return "目录名称未发生变化。";
+      }
+      const affectedPapers = state.papers.filter((paper) =>
+        paper.sourcePath
+          ? normalizeWorkspacePath(paper.sourcePath).startsWith(`${normalizeWorkspacePath(folderPath)}/`)
+          : false
+      );
+      if (affectedPapers.length === 0) {
+        throw new Error("目录中没有可更新的文献条目。");
+      }
+      const updatedPapers = affectedPapers.map((paper) => ({
+        ...paper,
+        sourcePath: replaceWorkspacePathPrefix(
+          paper.sourcePath!,
+          folderPath,
+          targetFolderPath
+        )
+      }));
+      const changedIds = new Set(affectedPapers.map((paper) => paper.id));
+      ensureTargetPathsAvailable(updatedPapers, changedIds);
+      await movePhysicalResourceIfManaged(folderPath, targetFolderPath);
+      workspaceStore.updatePapers(updatedPapers);
+      syncWorkspace();
+      const message = `已将目录重命名为 ${targetFolderPath}。`;
+      onAnalysisHint(message);
+      return message;
+    } catch (error) {
+      const message = `重命名目录失败：${error instanceof Error ? error.message : String(error)}`;
+      onAnalysisHint(message);
+      return message;
+    }
+  }
+
+  async function moveFolder(folderPath: string, targetFolderPath: string) {
+    try {
+      const state = requireLocalWorkspace();
+      if (folderPath === "未归档文献") {
+        throw new Error("“未归档文献”是虚拟分组，不能移动。");
+      }
+      const destinationPath = buildMovedFolderPath(folderPath, targetFolderPath);
+      if (normalizeWorkspacePath(destinationPath) === normalizeWorkspacePath(folderPath)) {
+        return "目录已经位于目标位置。";
+      }
+      const affectedPapers = state.papers.filter((paper) =>
+        paper.sourcePath
+          ? normalizeWorkspacePath(paper.sourcePath).startsWith(`${normalizeWorkspacePath(folderPath)}/`)
+          : false
+      );
+      if (affectedPapers.length === 0) {
+        throw new Error("目录中没有可移动的文献条目。");
+      }
+      const updatedPapers = affectedPapers.map((paper) => ({
+        ...paper,
+        sourcePath: replaceWorkspacePathPrefix(paper.sourcePath!, folderPath, destinationPath)
+      }));
+      const changedIds = new Set(affectedPapers.map((paper) => paper.id));
+      ensureTargetPathsAvailable(updatedPapers, changedIds);
+      await movePhysicalResourceIfManaged(folderPath, destinationPath);
+      workspaceStore.updatePapers(updatedPapers);
+      syncWorkspace();
+      const message = `已将目录移动到 ${destinationPath}。`;
+      onAnalysisHint(message);
+      return message;
+    } catch (error) {
+      const message = `移动目录失败：${error instanceof Error ? error.message : String(error)}`;
+      onAnalysisHint(message);
+      return message;
+    }
   }
 
   function addExternalPaperToLibrary(item: ExternalLibraryItem) {
@@ -135,7 +313,7 @@ export function useWorkspaceActions({
       onAnalysisHint("已解除锁定。请调整选中文献集后，再选择模态按钮启动分析。");
     } else {
       workspaceStore.lockSelection();
-      onAnalysisHint("选中文献集已锁定。可以先交给AI流程，或直接用模态按钮开始分析。");
+      onAnalysisHint("选中文献集已锁定。可直接使用模态按钮开始分析。");
     }
     syncWorkspace();
   }
@@ -270,9 +448,13 @@ export function useWorkspaceActions({
     getImportedSelectedCount,
     getSelectedPapers,
     importSelectedSet,
+    moveFolder,
+    movePaper,
     queueImportForPapers,
     syncImportJobs,
     syncWorkspace,
+    renameFolder,
+    renamePaper,
     toggleSelection,
     toggleSelectionLock
   };

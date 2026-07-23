@@ -31,12 +31,6 @@ export const dockItemRegistry: Record<DockItemId, DockItemDescriptor> = {
     preferredRegion: "left",
     title: "设置"
   },
-  reader: {
-    allowedRegions: ["main"],
-    id: "reader",
-    preferredRegion: "main",
-    title: "Reader"
-  },
   assistant: {
     allowedRegions: sideToolRegions,
     id: "assistant",

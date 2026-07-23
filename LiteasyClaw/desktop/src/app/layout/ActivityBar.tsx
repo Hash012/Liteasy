@@ -1,3 +1,6 @@
+import { Button, Tooltip } from "@fluentui/react-components";
+import { BookRegular, PeopleRegular, PersonRegular, SettingsRegular } from "@fluentui/react-icons";
+import type { ReactElement } from "react";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 type ActivityBarProps = {
@@ -7,11 +10,11 @@ type ActivityBarProps = {
   onSelectView: (view: LeftRailView) => void;
 };
 
-const activityItems: Array<{ label: string; view: LeftRailView }> = [
-  { label: "文献库", view: "library" },
-  { label: "组织", view: "organization" },
-  { label: "个人中心", view: "profile" },
-  { label: "设置", view: "settings" }
+const activityItems: Array<{ icon: ReactElement; label: string; view: LeftRailView }> = [
+  { icon: <BookRegular />, label: "文献库", view: "library" },
+  { icon: <PeopleRegular />, label: "组织", view: "organization" },
+  { icon: <PersonRegular />, label: "个人中心", view: "profile" },
+  { icon: <SettingsRegular />, label: "设置", view: "settings" }
 ];
 
 export function ActivityBar({
@@ -23,23 +26,24 @@ export function ActivityBar({
   return (
     <nav aria-label="左边栏导航" className="activity-bar">
       {activityItems.map((item) => (
-        <button
-          aria-label={item.label}
-          className={activeView === item.view ? "activity-button active" : "activity-button"}
-          key={item.view}
-          onClick={() =>
-            activeView === item.view
-              ? onToggleActiveView?.(item.view)
-              : onSelectView(item.view)
-          }
-          title={item.label}
-          type="button"
-        >
-          <span className="activity-button-label">{item.label}</span>
-          {item.view === "profile" && !accountSessionAvailable ? (
-            <span className="activity-login-badge">未登录</span>
-          ) : null}
-        </button>
+        <Tooltip content={item.label} key={item.view} positioning="after" relationship="description">
+          <Button
+            appearance="subtle"
+            aria-label={item.label}
+            className={activeView === item.view ? "activity-button active" : "activity-button"}
+            icon={item.icon}
+            onClick={() =>
+              activeView === item.view
+                ? onToggleActiveView?.(item.view)
+                : onSelectView(item.view)
+            }
+            type="button"
+          >
+            {item.view === "profile" && !accountSessionAvailable ? (
+              <span className="activity-login-badge">未登录</span>
+            ) : null}
+          </Button>
+        </Tooltip>
       ))}
     </nav>
   );

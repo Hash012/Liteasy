@@ -1,3 +1,12 @@
+import { Tooltip } from "@fluentui/react-components";
+import {
+  BookRegular,
+  ChatRegular,
+  PeopleRegular,
+  PersonRegular,
+  SettingsRegular,
+  SparkleRegular
+} from "@fluentui/react-icons";
 import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { dockItemRegistry, dockRegionLabels, isDockItemId } from "./dockRegistry";
 import type { DockItemId, DockRegionId, DockRegionLayout } from "./dock.types";
@@ -6,9 +15,28 @@ import { DockEmptyState } from "./DockEmptyState";
 export const dockItemMimeType = "application/x-liteasy-dock-item";
 export const dockDynamicTabMimeType = "application/x-liteasy-dynamic-tab";
 
+function getDockItemIcon(itemId: DockItemId) {
+  switch (itemId) {
+    case "library":
+      return <BookRegular />;
+    case "organization":
+      return <PeopleRegular />;
+    case "profile":
+      return <PersonRegular />;
+    case "settings":
+      return <SettingsRegular />;
+    case "assistant":
+      return <ChatRegular />;
+    case "artifacts":
+      return <SparkleRegular />;
+  }
+}
+
 type DockRegionProps = {
   dynamicTabs?: Array<{
     draggable?: boolean;
+    icon?: ReactNode;
+    kind?: "document" | "artifact";
     id: string;
     onActivate: () => void;
     onClose?: () => void;
@@ -182,31 +210,34 @@ export function DockRegion({
               {layout.itemIds.map((itemId) => {
                 const descriptor = dockItemRegistry[itemId];
                 const active = !activeDynamicTab && layout.activeItemId === itemId;
+                const tooltipContent = descriptor.allowedRegions.length > 1
+                  ? `${descriptor.title} · 可拖动到其他区域`
+                  : descriptor.title;
                 return (
                   <div className="dock-dynamic-tab" key={itemId}>
-                    <button
-                      aria-selected={active}
-                      className={`dock-tab ${active ? "active" : ""}`}
-                      draggable={descriptor.allowedRegions.length > 1}
-                      id={`dock-tab-${regionId}-${itemId}`}
-                      onClick={() => onActivateItem(itemId)}
-                      onDragEnd={() => setDropActive(false)}
-                      onDragStart={(event) => {
-                        event.dataTransfer.effectAllowed = "move";
-                        event.dataTransfer.setData(dockItemMimeType, itemId);
-                      }}
-                      onKeyDown={(event) => handleTabKeyDown(event, itemId)}
-                      role="tab"
-                      tabIndex={active ? 0 : -1}
-                      title={
-                        descriptor.allowedRegions.length > 1
-                          ? `拖动“${descriptor.title}”到其他区域`
-                          : descriptor.title
-                      }
-                      type="button"
-                    >
-                      {descriptor.title}
-                    </button>
+                    <Tooltip content={tooltipContent} positioning="below" relationship="description">
+                      <button
+                        aria-label={descriptor.title}
+                        aria-selected={active}
+                        className={`dock-tab dock-tab-icon-only ${active ? "active" : ""}`}
+                        draggable={descriptor.allowedRegions.length > 1}
+                        id={`dock-tab-${regionId}-${itemId}`}
+                        onClick={() => onActivateItem(itemId)}
+                        onDragEnd={() => setDropActive(false)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData(dockItemMimeType, itemId);
+                        }}
+                        onKeyDown={(event) => handleTabKeyDown(event, itemId)}
+                        role="tab"
+                        tabIndex={active ? 0 : -1}
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="dock-tab-icon">
+                          {getDockItemIcon(itemId)}
+                        </span>
+                      </button>
+                    </Tooltip>
                     <button
                       aria-label={`关闭 ${descriptor.title}`}
                       className="dock-tab-close"
@@ -226,7 +257,7 @@ export function DockRegion({
                 <div className="dock-dynamic-tab" key={tab.id}>
                   <button
                     aria-selected={tab.selected}
-                    className={`dock-tab ${tab.selected ? "active" : ""}`}
+                    className={`dock-tab ${tab.kind === "document" ? "dock-document-tab" : ""} ${tab.selected ? "active" : ""}`}
                     draggable={tab.draggable && Boolean(onMoveDynamicTab)}
                     id={`dock-tab-${regionId}-${tab.id}`}
                     onClick={tab.onActivate}
@@ -245,7 +276,8 @@ export function DockRegion({
                     }
                     type="button"
                   >
-                    {tab.title}
+                    {tab.icon ? <span aria-hidden="true" className="dock-tab-icon">{tab.icon}</span> : null}
+                    <span className="dock-tab-title">{tab.title}</span>
                   </button>
                   {tab.onClose ? (
                     <button
@@ -296,7 +328,7 @@ export function DockRegion({
                 key={tab.id}
                 role="tabpanel"
               >
-                {tab.render()}
+                {tab.kind === "document" && !tab.selected ? null : tab.render()}
               </div>
             ))}
           </>

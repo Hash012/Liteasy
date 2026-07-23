@@ -80,7 +80,7 @@ export function AssistantSidebar({
 
   return (
     <section aria-label={regionLabel} className={`pane ${regionId} assistant-only-pane`}>
-      <div className="pane-header">Liteasy Chat</div>
+      <div className="pane-header">AI 对话</div>
       <div className="pane-body">
         <AssistantPane
           agentClient={agentClient}

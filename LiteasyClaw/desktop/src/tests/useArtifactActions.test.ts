@@ -71,6 +71,7 @@ const paper: Paper = {
 
 function renderArtifactActions(options: {
   confirmDuplicateGeneration?: ReturnType<typeof vi.fn>;
+  diagnosticContext?: { endpoint: string; model: string; provider: string };
   imported?: boolean;
   locked?: boolean;
   selectedPapers?: Paper[];
@@ -111,6 +112,9 @@ function renderArtifactActions(options: {
       },
       confirmDuplicateGeneration: options.confirmDuplicateGeneration,
       getImportedChunksByPaperId: () => importedChunks,
+      getModelDiagnosticContext: options.diagnosticContext
+        ? () => options.diagnosticContext!
+        : undefined,
       getSelectedDocumentSet: () => selectedDocumentSet,
       getSelectedPapers: () => selectedPapers,
       onAnalysisHint,
@@ -272,6 +276,45 @@ describe("useArtifactActions", () => {
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       expect.stringContaining("project-docs/agent-results/")
+    );
+  });
+
+  test("keeps provider diagnostics when Agent generation rejects", async () => {
+    const { artifactStore, onAnalysisHint, result, runAgentAnalysis } = renderArtifactActions({
+      diagnosticContext: {
+        endpoint: "http://127.0.0.1:8791",
+        model: "gpt-5.5",
+        provider: "openai"
+      },
+      imported: true
+    });
+    runAgentAnalysis.mockRejectedValueOnce(
+      new Error("OpenAI Responses API 流式请求失败（404）：route missing")
+    );
+
+    act(() => {
+      result.current.startAnalysis("tree");
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(artifactStore.getTasks()[0]).toMatchObject({
+      failure: {
+        endpoint: "http://127.0.0.1:8791",
+        failedStage: "preparing_context",
+        message: expect.stringContaining("route missing"),
+        model: "gpt-5.5",
+        provider: "openai",
+        recovery: expect.arrayContaining([
+          expect.stringContaining("/responses")
+        ])
+      },
+      status: "failed"
+    });
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(
+      expect.stringContaining("route missing")
     );
   });
 

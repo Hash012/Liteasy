@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Tooltip } from "@fluentui/react-components";
+import { AddRegular, DismissRegular, HistoryRegular } from "@fluentui/react-icons";
 import { AssistantComposer } from "./AssistantComposer";
 import { AssistantHistoryPanel } from "./AssistantHistoryPanel";
 import { AssistantMessageList } from "./AssistantMessageList";
@@ -1251,34 +1253,43 @@ export function AssistantPane({
         </div>
         <div aria-label="会话操作" className="assistant-session-actions">
           {activeSessionRunning ? (
+            <Tooltip content={cancellingSession ? "正在终止 AI 运行" : "终止当前 AI 运行"} positioning="below" relationship="description">
+              <button
+                aria-label={cancellingSession ? "终止中" : "终止"}
+                className="assistant-session-button assistant-icon-button danger"
+                disabled={cancellingSession}
+                onClick={() => void cancelActiveSession()}
+                title="终止当前 AI 运行"
+                type="button"
+              >
+                <DismissRegular />
+              </button>
+            </Tooltip>
+          ) : null}
+          <Tooltip content="新建对话" positioning="below" relationship="description">
             <button
-              className="assistant-session-button danger"
-              disabled={cancellingSession}
-              onClick={() => void cancelActiveSession()}
-              title="终止当前 AI 运行"
+              aria-label="新建"
+              className="assistant-session-button assistant-icon-button"
+              disabled={assistantState.pending}
+              onClick={() => startNewSession()}
+              title="开始一个新的 AI 对话"
               type="button"
             >
-              {cancellingSession ? "终止中…" : "终止"}
+              <AddRegular />
             </button>
-          ) : null}
-          <button
-            className="assistant-session-button"
-            disabled={assistantState.pending}
-            onClick={() => startNewSession()}
-            title="开始一个新的 AI 对话"
-            type="button"
-          >
-            新建
-          </button>
-          <button
-            aria-expanded={historyOpen}
-            className="assistant-session-button"
-            onClick={() => setHistoryOpen((current) => !current)}
-            title="查看历史会话"
-            type="button"
-          >
-            {historyOpen ? "隐藏" : "历史"}
-          </button>
+          </Tooltip>
+          <Tooltip content={historyOpen ? "隐藏历史会话" : "查看历史会话"} positioning="below" relationship="description">
+            <button
+              aria-expanded={historyOpen}
+              aria-label={historyOpen ? "隐藏历史" : "历史"}
+              className="assistant-session-button assistant-icon-button"
+              onClick={() => setHistoryOpen((current) => !current)}
+              title="查看历史会话"
+              type="button"
+            >
+              <HistoryRegular />
+            </button>
+          </Tooltip>
         </div>
       </div>
 

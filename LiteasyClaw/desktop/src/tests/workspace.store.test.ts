@@ -37,6 +37,22 @@ test("does not add the same paper twice", () => {
   expect(store.getState().papers).toEqual([{ id: "p1", title: "Paper 1" }]);
 });
 
+test("updates paper paths while preserving stable ids and selection", () => {
+  const store = createWorkspaceStore();
+  store.addPaper({ id: "p1", sourcePath: "/library/old.pdf", title: "Old" });
+  store.toggleSelection("p1");
+
+  store.updatePapers([
+    { id: "p1", sourcePath: "/library/archive/new.pdf", title: "New" }
+  ]);
+
+  expect(store.getState()).toMatchObject({
+    papers: [{ id: "p1", sourcePath: "/library/archive/new.pdf", title: "New" }],
+    selectedPaperIds: ["p1"],
+    workspaceRevision: 1
+  });
+});
+
 test("closes the visible workspace and resets document selection", () => {
   const store = createWorkspaceStore();
 

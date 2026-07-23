@@ -12,12 +12,15 @@ shell -> controllers -> feature modules -> shared types / clients
 
 ## 快速入口
 
+首次运行或需要联调论文 Agent，请先看：
+
+- **[启动与本地联调指南](project-docs/qa/environment-startup-guide.md)**：包含 `test-api.md`、`gpt-5.5`、端口冲突、Tauri、健康检查与 Agent 故障排查。
+
 - 项目结构可视化：`project-docs/engineering/project-structure-overview.html`
 - 三人分工可视化：`project-docs/engineering/three-person-worksplit.html`
 - 模块边界文档：`project-docs/engineering/module-boundaries.md`
 - Dock 工作台与新功能 UI 归位规范：`project-docs/engineering/dock-workbench-ui-placement.md`
 - 产品方案原文：`project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
-- 当前启动指南：`project-docs/qa/environment-startup-guide.md`
 - 路演指南：`project-docs/qa/roadshow-demo-guide.md`
 - 桌面端说明：`LiteasyClaw/desktop/README.md`
 - 开发云说明：`LiteasyClaw/services/dev-cloud/README.md`
@@ -60,105 +63,22 @@ archive/                历史记录、报告、日志、非核心生成物
 
 注意：当前仍有 demo/mock 部分，尤其是导入解析、推荐、审计和组织治理。账号注册、登录和会话已经使用本地 SQLite 持久化；验收前请看 `project-docs/qa/` 下的限制说明。
 
-## 如何完整运行
+## 如何启动
 
-完整体验需要两个终端：一个启动本地开发云服务，一个启动桌面端。
-
-### 终端 1：开发云服务
+真实论文 Agent 的推荐启动方式：
 
 ```bash
 cd LiteasyClaw/services/dev-cloud
 npm install
-npm start
-```
 
-看到下面输出表示启动成功：
-
-```text
-LiteasyClaw dev cloud listening on http://127.0.0.1:8787
-```
-
-开发云服务地址：
-
-```text
-http://127.0.0.1:8787/
-```
-
-内部 demo admin 地址：
-
-```text
-http://127.0.0.1:8787/admin/
-```
-
-如果要调用真实 OpenAI，而不是内置开发回答：
-
-```bash
-export OPENAI_API_KEY=你的密钥
-npm start
-```
-
-如果要调用真实 DeepSeek：
-
-```bash
-export DEEPSEEK_API_KEY=你的密钥
-export DEEPSEEK_BASE_URL=https://api.deepseek.com
-export LITEASY_MODEL_PROVIDER=deepseek
-node LiteasyClaw/services/dev-cloud/server.mjs
-```
-
-更安全的本地写法是把 key 放到不会提交的 `LiteasyClaw/services/dev-cloud/.env.local`。根目录 `.gitignore` 已忽略该文件，dev-cloud 启动时会自动读取：
-
-```bash
-cd /home/octopus/Liteasy/LiteasyClaw/services/dev-cloud
-printf 'DEEPSEEK_API_KEY=你的密钥\nDEEPSEEK_BASE_URL=https://api.deepseek.com\nLITEASY_MODEL_PROVIDER=deepseek\n' > .env.local
-node server.mjs
-```
-
-验证开发云是否已经走 DeepSeek：
-
-```bash
-curl http://127.0.0.1:8787/v1/model/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-v4-flash",
-    "prompt": "用一句话回答：LiteasyClaw 的命令模式应该做什么？",
-    "provider": "deepseek",
-    "source": "cloud_proxy"
-  }'
-```
-
-返回里的 `execution.mode` 为 `live` 且 `execution.provider` 为 `deepseek`，说明已经通过当前开发云链路调用真实 DeepSeek。若没配置 key，请求 `deepseek` 会报“未注册 provider”；请求默认 OpenAI 且无 OpenAI key 时才会回退到内置 mock。
-
-### 终端 2：桌面端
-
-```bash
-cd LiteasyClaw/desktop
-source "$HOME/.cargo/env"
+cd ../../desktop
 npm install
-npm run tauri dev
+npm run dev:test-api
 ```
 
-后续依赖已安装时，通常可以直接：
+该命令会读取 `project-docs/test-api.md`，使用 `gpt-5.5`，并同时启动开发云与浏览器前端。默认端口被占用时会自动选择空闲端口，请以终端日志为准。
 
-```bash
-cd LiteasyClaw/desktop
-source "$HOME/.cargo/env"
-npm run tauri dev
-```
-
-如果暂时不打开 Tauri 桌面窗口，只看前端页面：
-
-```bash
-cd LiteasyClaw/desktop
-npm install
-npm run dev
-```
-
-默认前端地址通常是：
-
-```text
-http://127.0.0.1:1420/
-```
+完整 Tauri、普通 mock 开发、分终端调试、健康检查与故障恢复请查看 **[启动与本地联调指南](project-docs/qa/environment-startup-guide.md)**。
 
 ## 常用验证命令
 
@@ -180,7 +100,7 @@ npm test
 路演前恢复 demo 数据：
 
 ```bash
-cd /home/octopus/Liteasy
+# 在仓库根目录执行
 node LiteasyClaw/scripts/reset-demo-data.mjs
 node LiteasyClaw/scripts/reseed-demo-data.mjs
 node LiteasyClaw/scripts/smoke-roadshow.mjs http://127.0.0.1:8787

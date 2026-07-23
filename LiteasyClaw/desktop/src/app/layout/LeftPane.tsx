@@ -55,9 +55,14 @@ export type LeftPaneProps = {
   onOpenOrganizationDialog: () => void;
   onOpenPaper?: (paperId: string) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
+  onRefreshLocalLibrary?: () => Promise<void>;
+  onMoveLibraryFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
+  onMoveLibraryPaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
   onOpenSharedLibrary?: (summary: OrganizationSummary) => void;
   onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
   onReturnToLocalWorkspace: () => void;
+  onRenameLibraryFolder?: (folderPath: string, requestedName: string) => Promise<string>;
+  onRenameLibraryPaper?: (paperId: string, requestedName: string) => Promise<string>;
   onRetryDocumentMetadataSync?: () => void;
   onSelectOrganization?: (organizationId: string) => void;
   onToggleProfileSampling: () => void;
@@ -137,9 +142,14 @@ export function LeftPane({
   onOpenOrganizationDialog,
   onOpenPaper,
   onOpenPaperChild,
+  onRefreshLocalLibrary,
+  onMoveLibraryFolder,
+  onMoveLibraryPaper,
   onOpenSharedLibrary,
   onOpenSkillDocument,
   onReturnToLocalWorkspace,
+  onRenameLibraryFolder,
+  onRenameLibraryPaper,
   onRetryDocumentMetadataSync,
   onSelectOrganization,
   onToggleProfileSampling,
@@ -272,8 +282,13 @@ export function LeftPane({
             }}
             onOpenPaper={onOpenPaper}
             onOpenPaperChild={onOpenPaperChild}
+            onRefreshLocalLibrary={onRefreshLocalLibrary}
+            onMoveFolder={onMoveLibraryFolder}
+            onMovePaper={onMoveLibraryPaper}
             onRetryCollectionSync={onRetryCollectionSync}
             onReturnToLocalWorkspace={onReturnToLocalWorkspace}
+            onRenameFolder={onRenameLibraryFolder}
+            onRenamePaper={onRenameLibraryPaper}
             onToggleLock={onToggleLock}
             onToggleSelection={onToggleSelection}
             organizationWorkspaceLabel={organizationWorkspaceLabel}

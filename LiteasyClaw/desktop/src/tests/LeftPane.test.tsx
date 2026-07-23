@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
@@ -96,28 +96,30 @@ describe("LeftPane", () => {
     expect(screen.getByText("文献元数据同步")).toBeInTheDocument();
   });
 
-  test("shows the local library root and refresh affordance", () => {
+  test("shows the local library root and refreshes it on demand", async () => {
+    const user = userEvent.setup();
+    const onRefreshLocalLibrary = vi.fn(() => Promise.resolve());
     render(
       <LeftPane
         {...createProps({
           leftRailView: "library",
+          onRefreshLocalLibrary,
           workspaceLabel: "/home/test/LiteasyLibrary"
         })}
       />
     );
 
-    expect(screen.getByText("工作区母目录：/home/test/LiteasyLibrary")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "刷新本地文献库" })).toBeInTheDocument();
+    expect(screen.getByText("/home/test/LiteasyLibrary")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "刷新本地文献库" }));
+    expect(onRefreshLocalLibrary).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("本地文献库已刷新。")).toBeInTheDocument();
   });
 
-  test("renders the library view and forwards import action", async () => {
-    const user = userEvent.setup();
-    const onImportSelectedSet = vi.fn();
+  test("renders the library view with analysis started from the shared AI entry points", () => {
     render(
       <LeftPane
         {...createProps({
           leftRailView: "library",
-          onImportSelectedSet,
           papers: [{ id: "demo-1", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" }],
           selectedPaperIds: ["demo-1"],
           selectionLocked: true
@@ -126,9 +128,24 @@ describe("LeftPane", () => {
     );
 
     expect(screen.getByText("我的文献库")).toBeInTheDocument();
-    expect(screen.getByText("当前工作区：本地文献库")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "交给AI流程" }));
-    expect(onImportSelectedSet).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("本地文献库", { selector: ".library-workspace-label" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "交给AI流程" })).not.toBeInTheDocument();
+  });
+
+  test("uses independently collapsible VS Code-style library sections", async () => {
+    const user = userEvent.setup();
+    render(<LeftPane {...createProps({ leftRailView: "library" })} />);
+
+    const librarySection = screen.getByRole("button", { name: "收起我的文献库" });
+    expect(librarySection.querySelector("svg")).toBeInTheDocument();
+    await user.click(librarySection);
+    expect(screen.getByRole("button", { name: "展开我的文献库" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("PDF 文件拖拽导入区")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "展开我的文献库" }));
+    expect(screen.getByLabelText("PDF 文件拖拽导入区")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收起收藏" }).querySelector("svg")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收起关联推荐" }).querySelector("svg")).toBeInTheDocument();
   });
 
   test("switches between local and organization library views from the literature list", async () => {
@@ -267,8 +284,7 @@ describe("LeftPane", () => {
     expect(myLibraryNode).not.toBeNull();
     expect(within(myLibraryNode as HTMLElement).getByRole("button", { name: "Courses" }))
       .toBeInTheDocument();
-    expect(within(myLibraryNode as HTMLElement).getByText("目录：/papers"))
-      .toBeInTheDocument();
+    expect(within(myLibraryNode as HTMLElement).getByTitle("/papers")).toBeInTheDocument();
     expect(within(myLibraryNode as HTMLElement).getByText("search")).toBeInTheDocument();
     expect(within(myLibraryNode as HTMLElement).getByText("late-interaction"))
       .toBeInTheDocument();
@@ -285,6 +301,37 @@ describe("LeftPane", () => {
       within(collectionTree).getByRole("button", { name: "展开 Collection My Library" })
     );
     expect(within(collectionTree).getByText("ColBERT")).toBeInTheDocument();
+  });
+
+  test("renames a paper from its resource context menu", async () => {
+    const user = userEvent.setup();
+    const onRenameLibraryPaper = vi.fn(() => Promise.resolve("重命名成功"));
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          onRenameLibraryPaper,
+          papers: [
+            {
+              id: "paper-1",
+              sourcePath: "/home/test/LiteasyLibrary/papers/colbert.pdf",
+              title: "ColBERT"
+            }
+          ],
+          workspaceLabel: "/home/test/LiteasyLibrary"
+        })}
+      />
+    );
+
+    fireEvent.contextMenu(screen.getByText("ColBERT").closest(".paper-row")!);
+    await user.click(screen.getByRole("menuitem", { name: "重命名…" }));
+    const input = screen.getByRole("textbox", { name: "新名称" });
+    await user.clear(input);
+    await user.type(input, "ColBERT Revised");
+    await user.click(screen.getByRole("button", { name: "确认" }));
+
+    expect(onRenameLibraryPaper).toHaveBeenCalledWith("paper-1", "ColBERT Revised");
+    expect(await screen.findByText("重命名成功")).toBeInTheDocument();
   });
 
   test("switches visible papers when clicking My Library collections", async () => {
@@ -318,18 +365,18 @@ describe("LeftPane", () => {
     );
 
     const libraryZone = screen.getByLabelText("我的文献库投放区");
-    expect(within(libraryZone).getByText("当前 Collection：My Library")).toBeInTheDocument();
+    expect(within(libraryZone).getByRole("button", { name: "My Library" })).toHaveAttribute("aria-pressed", "true");
 
     await user.click(within(libraryZone).getByRole("button", { name: "Vector Database" }));
 
-    expect(within(libraryZone).getByText("当前 Collection：Vector Database")).toBeInTheDocument();
+    expect(within(libraryZone).getByRole("button", { name: "Vector Database" })).toHaveAttribute("aria-pressed", "true");
     expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
     expect(within(libraryZone).queryByText(/ColBERT/)).not.toBeInTheDocument();
     expect(within(libraryZone).queryByText(/ACORN/)).not.toBeInTheDocument();
 
     await user.click(within(libraryZone).getByRole("button", { name: "My Library" }));
 
-    expect(within(libraryZone).getByText("当前 Collection：My Library")).toBeInTheDocument();
+    expect(within(libraryZone).getByRole("button", { name: "My Library" })).toHaveAttribute("aria-pressed", "true");
     expect(within(libraryZone).getByText(/ColBERT/)).toBeInTheDocument();
     expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
     expect(within(libraryZone).getByText(/ACORN/)).toBeInTheDocument();
@@ -403,9 +450,8 @@ describe("LeftPane", () => {
     const libraryZone = screen.getByLabelText("我的文献库投放区");
     await user.click(within(libraryZone).getByRole("button", { name: "My Library" }));
 
-    expect(within(libraryZone).getByText("工作区母目录：本地文献库")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("目录：/papers")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("目录：未归档文献")).toBeInTheDocument();
+    expect(within(libraryZone).getByText("本地文献库", { selector: ".library-workspace-label" })).toBeInTheDocument();
+    expect(within(libraryZone).getByTitle("/papers")).toBeInTheDocument();
     expect(within(libraryZone).getByText("2 篇文献")).toBeInTheDocument();
     expect(within(libraryZone).getByText("1 篇文献")).toBeInTheDocument();
   });

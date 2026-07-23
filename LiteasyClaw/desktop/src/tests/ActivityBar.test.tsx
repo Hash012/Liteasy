@@ -47,4 +47,18 @@ describe("ActivityBar", () => {
     expect(profileButton).toHaveClass("active");
     expect(within(profileButton).queryByText("未登录")).not.toBeInTheDocument();
   });
+
+  test("shows a Fluent tooltip beside an icon-only module entry", async () => {
+    const user = userEvent.setup();
+    render(
+      <ActivityBar
+        activeView="library"
+        onSelectView={vi.fn()}
+      />
+    );
+
+    await user.hover(screen.getByRole("button", { name: "文献库" }));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("文献库");
+  });
 });

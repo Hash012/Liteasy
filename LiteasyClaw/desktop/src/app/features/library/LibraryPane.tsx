@@ -1,7 +1,28 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type FormEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode
+} from "react";
+import { Tooltip } from "@fluentui/react-components";
+import {
+  ArrowSyncRegular,
+  BookmarkRegular,
+  ChevronDownRegular,
+  ChevronRightRegular,
+  DocumentPdfRegular,
+  FolderRegular,
+  LockClosedRegular,
+  LockOpenRegular,
+  LibraryRegular,
+  LightbulbRegular,
+  NoteRegular,
+  SparkleRegular
+} from "@fluentui/react-icons";
 import type { CollectionItem } from "../collection/collection.types";
 import "./library.css";
-import { ImportButton } from "../import/ImportButton";
 import type { ImportJob } from "../import/import.types";
 import type { RecommendationItem, RecommendationStatus } from "../recommendations/recommendation.types";
 import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
@@ -10,6 +31,10 @@ import {
   buildWorkspaceFolderTree,
   type WorkspaceFolderNode
 } from "../workspace/workspaceFolderTree";
+import {
+  getWorkspaceParentPath,
+  normalizeWorkspacePath
+} from "../workspace/workspacePathOperations";
 
 export type LibraryPaperChildItem = {
   id: string;
@@ -44,7 +69,12 @@ type LibraryPaneProps = {
   onOpenOrganizationWorkspace: () => void;
   onOpenPaper?: (paperId: string) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
+  onRefreshLocalLibrary?: () => Promise<void>;
+  onMoveFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
+  onMovePaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
   onRetryCollectionSync?: () => void;
+  onRenameFolder?: (folderPath: string, requestedName: string) => Promise<string>;
+  onRenamePaper?: (paperId: string, requestedName: string) => Promise<string>;
   onReturnToLocalWorkspace: () => void;
   onToggleLock: () => void;
   onToggleSelection: (paperId: string) => void;
@@ -59,11 +89,35 @@ type LibraryCollectionId =
   | "late-interaction"
   | "vector-database";
 
+type LibrarySectionId = "library" | "collections" | "recommendations";
+
 type LibraryCollection = {
   children: LibraryCollection[];
   id: LibraryCollectionId;
   label: string;
 };
+
+type ResourceContextMenu = {
+  left: number;
+  target:
+    | { folder: WorkspaceFolderNode; kind: "folder" }
+    | { kind: "paper"; paper: Paper };
+  top: number;
+};
+
+type ResourceOperationDialog = {
+  action: "move" | "rename";
+  target:
+    | { folder: WorkspaceFolderNode; kind: "folder" }
+    | { kind: "paper"; paper: Paper };
+  value: string;
+};
+
+const workspaceResourceMimeType = "application/x-liteasy-workspace-resource";
+
+function flattenFolderPaths(nodes: WorkspaceFolderNode[]): string[] {
+  return nodes.flatMap((node) => [node.path, ...flattenFolderPaths(node.children)]);
+}
 
 const importStatusLabels: Record<ImportJob["status"], string> = {
   failed: "PDF 解析失败",
@@ -168,12 +222,16 @@ export function LibraryPane({
   onAddDroppedPdfFiles,
   onClearRecommendations,
   onCollectRecommendation,
-  onImportSelectedSet,
   onLoginRequired,
   onOpenOrganizationWorkspace,
   onOpenPaper,
   onOpenPaperChild,
+  onRefreshLocalLibrary,
+  onMoveFolder,
+  onMovePaper,
   onRetryCollectionSync,
+  onRenameFolder,
+  onRenamePaper,
   onReturnToLocalWorkspace,
   onToggleLock,
   onToggleSelection,
@@ -182,14 +240,130 @@ export function LibraryPane({
 }: LibraryPaneProps) {
   const selectedCount = selectedPaperIds.length;
   const [activeCollectionId, setActiveCollectionId] = useState<LibraryCollectionId>("my-library");
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<LibrarySectionId[]>([]);
   const activeCollection =
     findLibraryCollection(libraryCollections, activeCollectionId) ??
     libraryCollections[0];
   const visiblePapers = papers.filter((paper) => paperMatchesCollection(paper, activeCollection.id));
-  const folderTree = buildWorkspaceFolderTree(visiblePapers);
+  const folderTree = buildWorkspaceFolderTree(
+    visiblePapers,
+    workspaceSourceType === "local_library" ? workspaceLabel : undefined
+  );
+  const folderPaths = flattenFolderPaths(folderTree);
   const [collapsedCollectionIds, setCollapsedCollectionIds] = useState<LibraryCollectionId[]>([]);
   const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<string[]>([]);
   const [expandedPaperIds, setExpandedPaperIds] = useState<string[]>([]);
+  const [contextMenu, setContextMenu] = useState<ResourceContextMenu | null>(null);
+  const [operationDialog, setOperationDialog] = useState<ResourceOperationDialog | null>(null);
+  const [resourceActionMessage, setResourceActionMessage] = useState("");
+  const [dropTargetFolderPath, setDropTargetFolderPath] = useState<string | null>(null);
+  const resourceEditingEnabled = workspaceSourceType === "local_library";
+  const normalizedWorkspaceRoot = normalizeWorkspacePath(workspaceLabel);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return undefined;
+    }
+    function closeContextMenu(event: KeyboardEvent | Event) {
+      if (event instanceof KeyboardEvent && event.key !== "Escape") {
+        return;
+      }
+      setContextMenu(null);
+    }
+    window.addEventListener("click", closeContextMenu);
+    window.addEventListener("blur", closeContextMenu);
+    window.addEventListener("keydown", closeContextMenu);
+    return () => {
+      window.removeEventListener("click", closeContextMenu);
+      window.removeEventListener("blur", closeContextMenu);
+      window.removeEventListener("keydown", closeContextMenu);
+    };
+  }, [contextMenu]);
+
+  function openContextMenu(
+    event: ReactMouseEvent,
+    target: ResourceContextMenu["target"]
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      left: Math.min(event.clientX, Math.max(8, window.innerWidth - 230)),
+      target,
+      top: Math.min(event.clientY, Math.max(8, window.innerHeight - 330))
+    });
+  }
+
+  function openOperationDialog(
+    action: ResourceOperationDialog["action"],
+    target: ResourceOperationDialog["target"]
+  ) {
+    const value = action === "rename"
+      ? target.kind === "paper"
+        ? target.paper.title
+        : target.folder.name
+      : target.kind === "paper"
+        ? getWorkspaceParentPath(target.paper.sourcePath ?? "")
+        : getWorkspaceParentPath(target.folder.path);
+    setContextMenu(null);
+    setOperationDialog({ action, target, value });
+  }
+
+  async function submitResourceOperation(event: FormEvent) {
+    event.preventDefault();
+    const dialog = operationDialog;
+    if (!dialog || !dialog.value.trim()) {
+      return;
+    }
+    let message = "";
+    if (dialog.target.kind === "paper") {
+      message = dialog.action === "rename"
+        ? await onRenamePaper?.(dialog.target.paper.id, dialog.value) ?? ""
+        : await onMovePaper?.(dialog.target.paper.id, dialog.value) ?? "";
+    } else {
+      message = dialog.action === "rename"
+        ? await onRenameFolder?.(dialog.target.folder.path, dialog.value) ?? ""
+        : await onMoveFolder?.(dialog.target.folder.path, dialog.value) ?? "";
+    }
+    setResourceActionMessage(message);
+    setOperationDialog(null);
+  }
+
+  async function copyResourceText(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setResourceActionMessage(`已复制${label}。`);
+    } catch {
+      setResourceActionMessage(`无法访问剪贴板；${label}为：${value}`);
+    }
+    setContextMenu(null);
+  }
+
+  function readDraggedResource(event: ReactDragEvent) {
+    const serialized = event.dataTransfer.getData(workspaceResourceMimeType);
+    if (!serialized) {
+      return null;
+    }
+    try {
+      return JSON.parse(serialized) as { id?: string; kind?: string; path?: string };
+    } catch {
+      return null;
+    }
+  }
+
+  async function dropResourceIntoFolder(event: ReactDragEvent, folderPath: string) {
+    if (!resourceEditingEnabled) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setDropTargetFolderPath(null);
+    const resource = readDraggedResource(event);
+    if (resource?.kind === "paper" && resource.id) {
+      setResourceActionMessage(await onMovePaper?.(resource.id, folderPath) ?? "");
+    } else if (resource?.kind === "folder" && resource.path) {
+      setResourceActionMessage(await onMoveFolder?.(resource.path, folderPath) ?? "");
+    }
+  }
 
   function toggleFolder(path: string) {
     setCollapsedFolderPaths((current) =>
@@ -202,6 +376,39 @@ export function LibraryPane({
       current.includes(collectionId)
         ? current.filter((item) => item !== collectionId)
         : [...current, collectionId]
+    );
+  }
+
+  function toggleSection(sectionId: LibrarySectionId) {
+    setCollapsedSectionIds((current) =>
+      current.includes(sectionId)
+        ? current.filter((item) => item !== sectionId)
+        : [...current, sectionId]
+    );
+  }
+
+  function renderSectionHeader(
+    sectionId: LibrarySectionId,
+    title: string,
+    icon: ReactNode,
+    count?: number
+  ) {
+    const expanded = !collapsedSectionIds.includes(sectionId);
+    return (
+      <button
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "收起" : "展开"}${title}`}
+        className="library-section-header"
+        onClick={() => toggleSection(sectionId)}
+        type="button"
+      >
+        <span aria-hidden="true" className="library-section-disclosure">
+          {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        </span>
+        <span aria-hidden="true" className="library-section-icon">{icon}</span>
+        <span className="library-section-title">{title}</span>
+        {count !== undefined ? <span className="library-section-count">{count}</span> : null}
+      </button>
     );
   }
 
@@ -225,7 +432,20 @@ export function LibraryPane({
         data-selected={selected}
         key={paper.id}
       >
-        <div className="paper-row" style={{ paddingLeft: `${depth * 10}px` }}>
+        <div
+          className="paper-row"
+          draggable={resourceEditingEnabled}
+          onContextMenu={(event) => openContextMenu(event, { kind: "paper", paper })}
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(
+              workspaceResourceMimeType,
+              JSON.stringify({ id: paper.id, kind: "paper" })
+            );
+          }}
+          style={{ paddingLeft: `${depth * 10}px` }}
+          title="右键查看更多文件操作；也可拖动到其他目录"
+        >
           <button
             aria-expanded={expanded}
             aria-label={`${expanded ? "收起" : "展开"}${paper.title}的关联条目`}
@@ -234,7 +454,7 @@ export function LibraryPane({
             title={`${expanded ? "收起" : "展开"}相关产物和笔记`}
             type="button"
           >
-            <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+            <span aria-hidden="true">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
           </button>
           <label className="library-paper-selector" title={selectionLocked ? "选中文献集已锁定" : "加入或移出选中文献集"}>
             <input
@@ -248,10 +468,10 @@ export function LibraryPane({
           <button
             className="library-paper-title"
             onClick={() => onOpenPaper?.(paper.id)}
-            title={`在 Reader 中打开：${paper.title}`}
+            title={`打开 PDF：${paper.title}`}
             type="button"
           >
-            <span aria-hidden="true" className="library-file-icon">PDF</span>
+            <span aria-hidden="true" className="library-file-icon"><DocumentPdfRegular /></span>
             <span>{paper.title}</span>
           </button>
           {importJobs[paper.id] ? (
@@ -271,7 +491,7 @@ export function LibraryPane({
                   type="button"
                 >
                   <span aria-hidden="true" className={`library-child-icon ${item.kind}`}>
-                    {item.kind === "artifact" ? "◇" : "✎"}
+                    {item.kind === "artifact" ? <SparkleRegular /> : <NoteRegular />}
                   </span>
                   <span className="library-child-label">{item.label}</span>
                   {item.meta ? <span className="library-child-meta">{item.meta}</span> : null}
@@ -288,11 +508,41 @@ export function LibraryPane({
 
   function renderFolder(node: WorkspaceFolderNode, depth = 0, rootFolder = true) {
     const expanded = !collapsedFolderPaths.includes(node.path);
-    const folderLabel = rootFolder ? `目录：${node.path}` : node.name;
+    const folderLabel = rootFolder ? workspaceLabel : node.name;
+    const workspaceRootFolder = normalizeWorkspacePath(node.path) === normalizedWorkspaceRoot;
 
     return (
       <li className="library-folder-node" key={node.path}>
-        <div className="library-folder-row" style={{ paddingLeft: `${depth * 10}px` }}>
+        <div
+          className={`library-folder-row${dropTargetFolderPath === node.path ? " drop-target" : ""}`}
+          draggable={resourceEditingEnabled && node.path !== "未归档文献" && !workspaceRootFolder}
+          onContextMenu={(event) => openContextMenu(event, { folder: node, kind: "folder" })}
+          onDragOver={(event) => {
+            if (
+              resourceEditingEnabled &&
+              Array.from(event.dataTransfer.types).includes(workspaceResourceMimeType)
+            ) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              setDropTargetFolderPath(node.path);
+            }
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setDropTargetFolderPath((current) => current === node.path ? null : current);
+            }
+          }}
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData(
+              workspaceResourceMimeType,
+              JSON.stringify({ kind: "folder", path: node.path })
+            );
+          }}
+          onDrop={(event) => void dropResourceIntoFolder(event, node.path)}
+          style={{ paddingLeft: `${depth * 10}px` }}
+          title="右键查看更多目录操作；可把文件或目录拖到这里"
+        >
           <button
             aria-expanded={expanded}
             aria-label={`${expanded ? "收起" : "展开"}目录 ${node.path}`}
@@ -300,7 +550,7 @@ export function LibraryPane({
             onClick={() => toggleFolder(node.path)}
             type="button"
           >
-            <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+            <span aria-hidden="true">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
           </button>
           <button
             className="library-folder-name"
@@ -308,7 +558,7 @@ export function LibraryPane({
             title={node.path}
             type="button"
           >
-            <span aria-hidden="true" className="library-folder-icon">▱</span>
+            <span aria-hidden="true" className="library-folder-icon"><FolderRegular /></span>
             <span>{folderLabel}</span>
           </button>
           <span className="library-folder-count">{node.paperCount} 篇文献</span>
@@ -342,7 +592,7 @@ export function LibraryPane({
               onClick={() => toggleCollection(collection.id)}
               type="button"
             >
-              <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+              <span aria-hidden="true">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
             </button>
           ) : (
             <span aria-hidden="true" className="library-disclosure-spacer" />
@@ -359,7 +609,7 @@ export function LibraryPane({
             title={`打开 Collection：${collection.label}`}
             type="button"
           >
-            <span aria-hidden="true" className="library-folder-icon">▱</span>
+            <span aria-hidden="true" className="library-folder-icon"><FolderRegular /></span>
             <span>{collection.label}</span>
           </button>
         </div>
@@ -388,16 +638,44 @@ export function LibraryPane({
   return (
     <div className="library-pane">
       <div className="library-toolbar">
-        <ImportButton label="交给AI流程" onImport={onImportSelectedSet} />
-        <button className="library-button ghost" type="button" onClick={onToggleLock}>
-          {selectionLocked ? "解除锁定" : "锁定选择"}
-        </button>
-        <button className="library-button ghost" type="button">
-          刷新本地文献库
-        </button>
+        <Tooltip
+          content={selectionLocked ? "解除选中文献集锁定" : "锁定选中文献集"}
+          positioning="below"
+          relationship="description"
+        >
+          <button
+            aria-label={selectionLocked ? "解除锁定" : "锁定选择"}
+            className="library-button ghost library-icon-button"
+            onClick={onToggleLock}
+            title={selectionLocked ? "解除锁定" : "锁定选择"}
+            type="button"
+          >
+            {selectionLocked ? <LockOpenRegular /> : <LockClosedRegular />}
+          </button>
+        </Tooltip>
+        <Tooltip content="刷新本地文献库" positioning="below" relationship="description">
+          <button
+            aria-label="刷新本地文献库"
+            className="library-button ghost library-icon-button"
+            onClick={() => {
+              setResourceActionMessage("正在刷新本地文献库…");
+              void onRefreshLocalLibrary?.().then(() => {
+                setResourceActionMessage("本地文献库已刷新。");
+              }).catch((error) => {
+                setResourceActionMessage(
+                  `刷新失败：${error instanceof Error ? error.message : String(error)}`
+                );
+              });
+            }}
+            title="刷新本地文献库"
+            type="button"
+          >
+            <ArrowSyncRegular />
+          </button>
+        </Tooltip>
       </div>
 
-      <div
+      <section
         aria-label="我的文献库投放区"
         className="library-section library-drop-zone"
         onDragOver={(event) => {
@@ -422,11 +700,11 @@ export function LibraryPane({
           }
         }}
       >
-        <div className="library-section-title">我的文献库</div>
+        {renderSectionHeader("library", "我的文献库", <LibraryRegular />, papers.length)}
+        {!collapsedSectionIds.includes("library") ? <div className="library-section-content">
         <div className="library-workspace-overview">
           <div>
-            <div className="library-workspace-label">当前工作区：{workspaceLabel}</div>
-            <div className="library-workspace-root">工作区母目录：{workspaceLabel}</div>
+            <div className="library-workspace-label">{workspaceLabel}</div>
           </div>
           <div aria-label="文献视图切换" className="library-workspace-switcher" role="group">
             <button
@@ -463,12 +741,16 @@ export function LibraryPane({
           </div>
         </div>
         <div className="library-selection-summary">
-          当前选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
+          已选 {selectedCount} 篇{selectionLocked ? " · 已锁定" : ""}
         </div>
         <div aria-label="PDF 文件拖拽导入区" className="library-file-drop-target">
           拖入 PDF 添加到文献库
         </div>
-        <div className="library-active-collection">当前 Collection：{activeCollection.label}</div>
+        {resourceActionMessage ? (
+          <div aria-live="polite" className="library-resource-action-message">
+            {resourceActionMessage}
+          </div>
+        ) : null}
         <div className="library-collection-browser">
           <nav aria-label="文献库 collections" className="library-collection-tree">
             <ul className="library-resource-tree">
@@ -476,9 +758,10 @@ export function LibraryPane({
             </ul>
           </nav>
         </div>
-      </div>
+        </div> : null}
+      </section>
 
-      <div
+      <section
         aria-label="收藏投放区"
         className={`library-section muted ${collectionItems.length > 0 ? "has-collection" : ""} ${!accountSessionAvailable ? "locked" : ""}`}
         onDragOver={(event) => {
@@ -501,7 +784,8 @@ export function LibraryPane({
           }
         }}
       >
-        <div className="library-section-title">收藏</div>
+        {renderSectionHeader("collections", "收藏", <BookmarkRegular />, collectionItems.length)}
+        {!collapsedSectionIds.includes("collections") ? <div className="library-section-content">
         {!accountSessionAvailable ? (
           <button
             className="library-inline-button"
@@ -522,7 +806,7 @@ export function LibraryPane({
           </>
         ) : collectionItems.length === 0 ? (
           <p className="collection-status-message ready">
-            {collectionStatus === "ready" ? "把关联推荐拖到这里，收藏不会随着推荐刷新而消失。" : collectionMessage}
+            {collectionStatus === "ready" ? "拖入推荐以收藏" : collectionMessage}
           </p>
         ) : (
           <ul className="collection-list">
@@ -545,11 +829,13 @@ export function LibraryPane({
             ))}
           </ul>
         )}
-      </div>
+        </div> : null}
+      </section>
 
-      <div className={`library-section muted ${!accountSessionAvailable ? "locked" : ""}`}>
+      <section className={`library-section muted ${!accountSessionAvailable ? "locked" : ""}`}>
+        {renderSectionHeader("recommendations", "关联推荐", <LightbulbRegular />, recommendationItems.length)}
+        {!collapsedSectionIds.includes("recommendations") ? <div className="library-section-content">
         <div className="library-section-heading">
-          <div className="library-section-title">关联推荐</div>
           <button
             className="library-inline-button"
             disabled={!accountSessionAvailable || (recommendationItems.length === 0 && recommendationStatus !== "ready")}
@@ -602,7 +888,184 @@ export function LibraryPane({
             ))}
           </ul>
         ) : null}
-      </div>
+        </div> : null}
+      </section>
+
+      {contextMenu ? (
+        <div
+          aria-label="文献资源操作"
+          className="library-resource-context-menu"
+          onClick={(event) => event.stopPropagation()}
+          role="menu"
+          style={{ left: contextMenu.left, top: contextMenu.top }}
+        >
+          <div className="library-resource-context-heading">
+            {contextMenu.target.kind === "paper"
+              ? contextMenu.target.paper.title
+              : contextMenu.target.folder.name}
+          </div>
+          {contextMenu.target.kind === "paper" ? (
+            <>
+              <button onClick={() => {
+                onOpenPaper?.(contextMenu.target.kind === "paper" ? contextMenu.target.paper.id : "");
+                setContextMenu(null);
+              }} role="menuitem" type="button">
+                打开 PDF
+              </button>
+              <button
+                disabled={selectionLocked}
+                onClick={() => {
+                  if (contextMenu.target.kind === "paper") {
+                    onToggleSelection(contextMenu.target.paper.id);
+                  }
+                  setContextMenu(null);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                {selectedPaperIds.includes(contextMenu.target.paper.id) ? "移出选中文献集" : "加入选中文献集"}
+              </button>
+              <button onClick={() => {
+                if (contextMenu.target.kind === "paper") {
+                  togglePaper(contextMenu.target.paper.id);
+                }
+                setContextMenu(null);
+              }} role="menuitem" type="button">
+                {expandedPaperIds.includes(contextMenu.target.paper.id) ? "收起关联条目" : "展开关联条目"}
+              </button>
+              <div className="library-resource-context-separator" />
+              <button
+                disabled={!resourceEditingEnabled || !onRenamePaper}
+                onClick={() => openOperationDialog("rename", contextMenu.target)}
+                role="menuitem"
+                type="button"
+              >
+                重命名…
+              </button>
+              <button
+                disabled={!resourceEditingEnabled || !onMovePaper}
+                onClick={() => openOperationDialog("move", contextMenu.target)}
+                role="menuitem"
+                type="button"
+              >
+                移动到目录…
+              </button>
+              <button
+                onClick={() => void copyResourceText(
+                  contextMenu.target.kind === "paper" ? contextMenu.target.paper.sourcePath ?? "" : "",
+                  "文件路径"
+                )}
+                role="menuitem"
+                type="button"
+              >
+                复制文件路径
+              </button>
+              <button
+                onClick={() => void copyResourceText(
+                  contextMenu.target.kind === "paper" ? contextMenu.target.paper.title : "",
+                  "文献标题"
+                )}
+                role="menuitem"
+                type="button"
+              >
+                复制文献标题
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => {
+                if (contextMenu.target.kind === "folder") {
+                  toggleFolder(contextMenu.target.folder.path);
+                }
+                setContextMenu(null);
+              }} role="menuitem" type="button">
+                {collapsedFolderPaths.includes(contextMenu.target.folder.path) ? "展开目录" : "收起目录"}
+              </button>
+              <div className="library-resource-context-separator" />
+              <button
+                disabled={
+                  !resourceEditingEnabled ||
+                  !onRenameFolder ||
+                  contextMenu.target.folder.path === "未归档文献" ||
+                  normalizeWorkspacePath(contextMenu.target.folder.path) === normalizedWorkspaceRoot
+                }
+                onClick={() => openOperationDialog("rename", contextMenu.target)}
+                role="menuitem"
+                type="button"
+              >
+                重命名目录…
+              </button>
+              <button
+                disabled={
+                  !resourceEditingEnabled ||
+                  !onMoveFolder ||
+                  contextMenu.target.folder.path === "未归档文献" ||
+                  normalizeWorkspacePath(contextMenu.target.folder.path) === normalizedWorkspaceRoot
+                }
+                onClick={() => openOperationDialog("move", contextMenu.target)}
+                role="menuitem"
+                type="button"
+              >
+                移动目录…
+              </button>
+              <button
+                onClick={() => void copyResourceText(
+                  contextMenu.target.kind === "folder" ? contextMenu.target.folder.path : "",
+                  "目录路径"
+                )}
+                role="menuitem"
+                type="button"
+              >
+                复制目录路径
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {operationDialog ? (
+        <div className="library-resource-dialog-backdrop" role="presentation">
+          <form
+            aria-label={operationDialog.action === "rename" ? "重命名资源" : "移动资源"}
+            aria-modal="true"
+            className="library-resource-dialog"
+            onSubmit={(event) => void submitResourceOperation(event)}
+            role="dialog"
+          >
+            <strong>
+              {operationDialog.action === "rename"
+                ? `重命名${operationDialog.target.kind === "folder" ? "目录" : "文献"}`
+                : `移动${operationDialog.target.kind === "folder" ? "目录" : "文献"}`}
+            </strong>
+            <label>
+              {operationDialog.action === "rename" ? "新名称" : "目标目录"}
+              <input
+                autoFocus
+                list={operationDialog.action === "move" ? "library-folder-path-options" : undefined}
+                onChange={(event) => setOperationDialog({
+                  ...operationDialog,
+                  value: event.target.value
+                })}
+                value={operationDialog.value}
+              />
+            </label>
+            {operationDialog.action === "move" ? (
+              <datalist id="library-folder-path-options">
+                {folderPaths.map((path) => <option key={path} value={path} />)}
+              </datalist>
+            ) : null}
+            <small>
+              当前：{operationDialog.target.kind === "paper"
+                ? operationDialog.target.paper.sourcePath ?? operationDialog.target.paper.title
+                : operationDialog.target.folder.path}
+            </small>
+            <div className="library-resource-dialog-actions">
+              <button onClick={() => setOperationDialog(null)} type="button">取消</button>
+              <button className="primary" type="submit">确认</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -700,7 +700,7 @@ test("supports the confirmed workbench pane layout", async () => {
     "--left-pane-size": "0px"
   });
   expect(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "展开左侧栏" })).toBeInTheDocument();
-  expect(screen.getByText("Liteasy Chat", { selector: ".pane-header" })).toBeInTheDocument();
+  expect(screen.getByText("AI 对话", { selector: ".pane-header" })).toBeInTheDocument();
 
   await user.click(within(screen.getByLabelText("Reader 标题栏")).getByRole("button", { name: "展开左侧栏" }));
 
@@ -782,7 +782,7 @@ test("collapses the left pane when clicking the active activity-bar item", async
   expect(workbench.style.getPropertyValue("--left-pane-utility-size")).toBe("0px");
   expect(screen.queryByLabelText("展开左栏")).not.toBeInTheDocument();
   expect(within(screen.getByLabelText("Reader 标题栏")).getByText("Reader", { selector: ".reader-pane-title" })).toBeInTheDocument();
-  expect(screen.getByText("Liteasy Chat", { selector: ".pane-header" })).toBeInTheDocument();
+  expect(screen.getByText("AI 对话", { selector: ".pane-header" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "组织" }));
   expect(screen.getByLabelText("左边栏组织")).toBeInTheDocument();
@@ -6098,14 +6098,16 @@ test("keeps the right pane as a minimal AI assistant and moves admin panels out"
 
   const readerHeader = await screen.findByLabelText("Reader 标题栏");
   const rightPane = screen.getByLabelText("右栏AI助手");
-  expect(within(rightPane).getByPlaceholderText("输入你的问题或命令")).toBeInTheDocument();
+  expect(
+    within(rightPane).getByPlaceholderText("输入消息，使用 /、@、$ 添加指令、论文或 skill")
+  ).toBeInTheDocument();
   expect(within(rightPane).queryByText("模型接入策略")).not.toBeInTheDocument();
   expect(within(rightPane).queryByText("文献元数据同步")).not.toBeInTheDocument();
   expect(within(rightPane).queryByText("组织空间")).not.toBeInTheDocument();
   expect(within(rightPane).queryByText("组织治理")).not.toBeInTheDocument();
 
-  expect(within(readerHeader).getByText("云端模型能力")).toBeInTheDocument();
-  expect(within(readerHeader).getByText("LiteasyClaw")).toBeInTheDocument();
+  expect(within(readerHeader).queryByText("云端模型能力")).not.toBeInTheDocument();
+  expect(within(readerHeader).queryByText("LiteasyClaw")).not.toBeInTheDocument();
 });
 
 test("opens settings from the activity bar and keeps only user-facing cloud capability details", async () => {

@@ -86,14 +86,13 @@ describe("ReaderPane", () => {
 
     const readerHeader = screen.getByLabelText("Reader 标题栏");
     expect(within(readerHeader).getByText("Reader", { selector: ".reader-pane-title" })).toBeInTheDocument();
-    expect(within(readerHeader).getByText("LiteasyClaw")).toBeInTheDocument();
-    expect(within(readerHeader).getByText("AI-driven paper-assisted reading platform")).toBeInTheDocument();
-    expect(within(readerHeader).getByText("云端模型能力")).toBeInTheDocument();
+    expect(within(readerHeader).queryByText("AI-driven paper-assisted reading platform")).not.toBeInTheDocument();
+    expect(within(readerHeader).queryByText("云端模型能力")).not.toBeInTheDocument();
     expect(within(readerHeader).getByRole("toolbar", { name: "PDF 阅读批注工具栏" })).toBeInTheDocument();
     expect(within(readerHeader).getByText(readerTestPaper.title)).toBeInTheDocument();
     expect(within(readerHeader).getByText("显示比例 100%")).toBeInTheDocument();
     expect(document.querySelector(".pdf-toolbar")).not.toBeInTheDocument();
-    expect(screen.getByText("选中文献集：1 篇 · 已锁定")).toBeInTheDocument();
+    expect(screen.getByText("选择分析类型以生成产物")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "思维导图" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "对比表" })).not.toBeInTheDocument();
     expect(onStartAnalysis).not.toHaveBeenCalled();
@@ -587,7 +586,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    expect(screen.getByText("选中文献集：1 篇 · 未锁定")).toBeInTheDocument();
+    expect(screen.getByText("锁定选中文献后开始分析")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "树形展开" })).not.toBeInTheDocument();
   });
 

@@ -26,6 +26,14 @@ export function createWorkspaceStore() {
       state.papers.push(paper);
       return true;
     },
+    updatePapers(papers: Paper[]) {
+      if (papers.length === 0) {
+        return;
+      }
+      const updates = new Map(papers.map((paper) => [paper.id, paper]));
+      state.papers = state.papers.map((paper) => updates.get(paper.id) ?? paper);
+      state.workspaceRevision += 1;
+    },
     openWorkspace(
       papers: Paper[],
       workspaceSource: WorkspaceSource = state.workspaceSource

@@ -27,6 +27,7 @@ export type ArtifactOutlineNode = {
 export type ArtifactTask = {
   agentRunId?: string;
   artifactId?: string;
+  failure?: ArtifactTaskFailure;
   id: string;
   message: string;
   partialAnswer?: string;
@@ -35,6 +36,16 @@ export type ArtifactTask = {
   stage: ArtifactTaskStage;
   type: ArtifactType;
   status: ArtifactTaskStatus;
+};
+
+export type ArtifactTaskFailure = {
+  endpoint?: string;
+  failedStage: ArtifactTaskStage;
+  message: string;
+  model?: string;
+  occurredAt: string;
+  provider?: string;
+  recovery: string[];
 };
 
 export type ArtifactPreview = {

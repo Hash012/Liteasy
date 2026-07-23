@@ -41,9 +41,28 @@ export function groupWorkspacePapersByFolder(papers: Paper[]): WorkspaceFolderGr
   }));
 }
 
-function getFolderPathSegments(folder: string) {
+function getFolderPathSegments(folder: string, workspaceRootPath?: string) {
   if (folder === "未归档文献") {
     return [{ name: folder, path: folder }];
+  }
+
+  const normalizedFolder = folder.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedRoot = workspaceRootPath
+    ?.replace(/\\/g, "/")
+    .replace(/\/+$/, "");
+  if (
+    normalizedRoot?.startsWith("/") &&
+    (normalizedFolder === normalizedRoot || normalizedFolder.startsWith(`${normalizedRoot}/`))
+  ) {
+    const relativeSegments = normalizedFolder.slice(normalizedRoot.length).split("/").filter(Boolean);
+    const rootName = normalizedRoot.slice(normalizedRoot.lastIndexOf("/") + 1) || normalizedRoot;
+    return [
+      { name: rootName, path: normalizedRoot },
+      ...relativeSegments.map((name, index) => ({
+        name,
+        path: `${normalizedRoot}/${relativeSegments.slice(0, index + 1).join("/")}`
+      }))
+    ];
   }
 
   const absolute = folder.startsWith("/");
@@ -59,14 +78,17 @@ function getFolderPathSegments(folder: string) {
  * to their immediate parent folder. `groupWorkspacePapersByFolder` remains as
  * the small flat projection used by older callers.
  */
-export function buildWorkspaceFolderTree(papers: Paper[]): WorkspaceFolderNode[] {
+export function buildWorkspaceFolderTree(
+  papers: Paper[],
+  workspaceRootPath?: string
+): WorkspaceFolderNode[] {
   const roots: WorkspaceFolderNode[] = [];
 
   groupWorkspacePapersByFolder(papers).forEach((group) => {
     let siblings = roots;
     let currentNode: WorkspaceFolderNode | undefined;
 
-    getFolderPathSegments(group.folder).forEach((segment) => {
+    getFolderPathSegments(group.folder, workspaceRootPath).forEach((segment) => {
       currentNode = siblings.find((node) => node.path === segment.path);
       if (!currentNode) {
         currentNode = {

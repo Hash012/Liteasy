@@ -33,7 +33,45 @@ describe("ArtifactTabs", () => {
     );
     expect(screen.getByText("正在调用模型生成分析结构")).toBeInTheDocument();
     expect(screen.getByText("ColBERT 使用 late interaction。")).toBeInTheDocument();
-    expect(screen.getByText(/PDF 解析完成只表示证据可检索/)).toBeInTheDocument();
+    expect(screen.queryByText(/PDF 解析完成只表示证据可检索/)).not.toBeInTheDocument();
+  });
+
+  test("shows provider, model, endpoint and recovery guidance after generation fails", () => {
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[]}
+        tasks={[
+          {
+            failure: {
+              endpoint: "http://127.0.0.1:8787",
+              failedStage: "generating_answer",
+              message: "OpenAI Responses API 流式请求失败（404）",
+              model: "gpt-5.5",
+              occurredAt: "2026-07-21T03:00:00.000Z",
+              provider: "openai",
+              recovery: ["确认上游地址支持 /responses 路由。"]
+            },
+            id: "artifact-task-2",
+            message: "Agent 分析失败：OpenAI Responses API 流式请求失败（404）",
+            progress: 55,
+            stage: "failed",
+            status: "failed",
+            type: "tree"
+          }
+        ]}
+      />
+    );
+
+    expect(screen.getByText("查看失败详情与恢复建议")).toBeInTheDocument();
+    expect(screen.getByText("http://127.0.0.1:8787")).toBeInTheDocument();
+    expect(screen.getByText("openai")).toBeInTheDocument();
+    expect(screen.getByText("gpt-5.5")).toBeInTheDocument();
+    expect(screen.getByText("确认上游地址支持 /responses 路由。")).toBeInTheDocument();
   });
 
   test("renders center artifact ui dsl when a tab provides one", () => {

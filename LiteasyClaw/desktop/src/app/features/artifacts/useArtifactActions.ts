@@ -44,6 +44,11 @@ type UseArtifactActionsInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getModelDiagnosticContext?: () => {
+    endpoint?: string;
+    model?: string;
+    provider?: string;
+  };
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
   onAnalysisHint: (message: string) => void;
@@ -83,6 +88,43 @@ function getArtifactTitle(type: ArtifactType) {
 
 function createArtifactId(taskId: string) {
   return taskId.replace("artifact-task-", "artifact-");
+}
+
+function buildFailureRecovery(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("401") || normalized.includes("unauthorized") || normalized.includes("api key")) {
+    return [
+      "确认 project-docs/test-api.md 中的 API key 已同步到 dev-cloud/.env.local。",
+      "修改密钥后重启 dev-cloud，旧进程不会自动重新读取环境文件。"
+    ];
+  }
+  if (
+    normalized.includes("404") ||
+    normalized.includes("not found") ||
+    normalized.includes("unsupported route")
+  ) {
+    return [
+      "确认上游地址支持 OpenAI Responses API 的 /responses 路由。",
+      "确认 OPENAI_BASE_URL 只包含 API 根路径，例如以 /v1 结尾。"
+    ];
+  }
+  if (normalized.includes("429") || normalized.includes("rate limit")) {
+    return ["检查上游账号额度与限流状态，稍后重试。"];
+  }
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("连接失败")
+  ) {
+    return [
+      "确认 Liteasy dev-cloud 已启动，且桌面端配置的本地端口与实际端口一致。",
+      "检查 dev-cloud 到上游模型地址的网络与代理配置。"
+    ];
+  }
+  return [
+    "检查下方 endpoint、provider 与 model 是否和当前 dev-cloud 配置一致。",
+    "查看 dev-cloud 终端日志中的同一时间请求；修正配置后重启服务再重试。"
+  ];
 }
 
 const artifactTypeLabels: Record<Exclude<ArtifactType, "skill_doc">, string> = {
@@ -133,6 +175,7 @@ export function useArtifactActions({
   confirmDuplicateGeneration = confirmDuplicateGenerationInBrowser,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getModelDiagnosticContext,
   getSelectedDocumentSet,
   getSelectedPapers,
   onAnalysisHint,
@@ -298,11 +341,18 @@ export function useArtifactActions({
         syncArtifacts(taskId);
         return;
       }
-      artifactStore.failTask(taskId);
+      const currentTask = artifactStore.getTask(taskId);
+      const message = error instanceof Error ? error.message : String(error);
+      const modelContext = getModelDiagnosticContext?.() ?? {};
+      artifactStore.failTask(taskId, {
+        ...modelContext,
+        failedStage: currentTask?.stage ?? "generating_answer",
+        message,
+        occurredAt: new Date().toISOString(),
+        recovery: buildFailureRecovery(message)
+      });
       syncArtifacts(taskId);
-      onAnalysisHint(
-        `Agent 分析失败：${error instanceof Error ? error.message : String(error)}`
-      );
+      onAnalysisHint(`Agent 分析失败：${message}`);
     }
   }
 

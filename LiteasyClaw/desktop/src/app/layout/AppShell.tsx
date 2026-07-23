@@ -46,6 +46,7 @@ import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
 import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
+import { moveLocalLibraryResource } from "../features/library/libraryFileSystemClient";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
@@ -66,12 +67,14 @@ import { DockRegion } from "../features/dock/DockRegion";
 import { useDockLayout } from "../features/dock/useDockLayout";
 import type { DockItemId, DockRegionId } from "../features/dock/dock.types";
 import { DockLayoutControls } from "./DockLayoutControls";
+import { DocumentPdfRegular } from "@fluentui/react-icons";
 import {
   createGeneratedThemeStyle,
   type GeneratedThemeInput
 } from "../features/theme/generatedTheme";
 import { useAssistantAgentController } from "../controllers/agent/useAssistantAgentController";
 import { runAgentArtifactAnalysis } from "../controllers/agent/runAgentArtifactAnalysis";
+import { getDefaultModelForProvider } from "../features/models/modelPolicy";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
@@ -140,7 +143,10 @@ export function AppShell({
       }
     });
   }
-  const localLibrarySnapshot = useLocalLibrary(localLibraryLoader);
+  const {
+    refresh: refreshLocalLibrary,
+    snapshot: localLibrarySnapshot
+  } = useLocalLibrary(localLibraryLoader);
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const { isOnline } = useConnectivity();
@@ -150,6 +156,7 @@ export function AppShell({
   const [activeSideArtifactIds, setActiveSideArtifactIds] = useState<
     Partial<Record<DockRegionId, string>>
   >({});
+  const [openReaderPaperIds, setOpenReaderPaperIds] = useState<string[]>([]);
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
   const [readerEvidenceTarget, setReaderEvidenceTarget] = useState<PdfEvidenceTarget | null>(null);
   const readerEvidenceRequestRef = useRef(0);
@@ -203,6 +210,7 @@ export function AppShell({
   const workspaceActions = useWorkspaceActions({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
+    moveLocalLibraryResource,
     onAnalysisHint: setAnalysisHint,
     onImportJobsChanged: setImportJobsByDocumentId,
     onWorkspaceChanged: setWorkspaceState,
@@ -212,8 +220,17 @@ export function AppShell({
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
     artifactResultClient: artifactResultClientRef.current,
+    artifactResultScopeKey: settingsState["models.cloud_proxy_endpoint"],
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
+    getModelDiagnosticContext: () => {
+      const provider = settingsStoreRef.current.getState()["models.default_provider"];
+      return {
+        endpoint: settingsStoreRef.current.getState()["models.cloud_proxy_endpoint"],
+        model: getDefaultModelForProvider(provider),
+        provider
+      };
+    },
     getSelectedDocumentSet: () => workspaceStoreRef.current.getSelectedDocumentSet(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
     onAnalysisHint: setAnalysisHint,
@@ -372,13 +389,22 @@ export function AppShell({
     organizationShell.actions.resetOrganizationState();
   }
   const selectedPapers = workspaceActions.getSelectedPapers();
+  const openReaderPapers = openReaderPaperIds.flatMap((paperId) => {
+    const paper = workspaceState.papers.find((candidate) => candidate.id === paperId);
+    return paper ? [paper] : [];
+  });
   const activeReaderPaper =
-    workspaceState.papers.find((paper) => paper.id === activeReaderPaperId) ??
-    selectedPapers[0] ??
-    null;
-  const readerPapers = activeReaderPaper
-    ? [activeReaderPaper, ...selectedPapers.filter((paper) => paper.id !== activeReaderPaper.id)]
-    : selectedPapers;
+    openReaderPapers.find((paper) => paper.id === activeReaderPaperId) ?? null;
+  useEffect(() => {
+    const availablePaperIds = new Set(workspaceState.papers.map((paper) => paper.id));
+    setOpenReaderPaperIds((current) => {
+      const next = current.filter((paperId) => availablePaperIds.has(paperId));
+      return next.length === current.length ? current : next;
+    });
+    setActiveReaderPaperId((current) =>
+      current && availablePaperIds.has(current) ? current : null
+    );
+  }, [workspaceState.papers]);
   const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
   const applyRuntimeLayoutPreset: ActionContext["applyLayoutPreset"] = (input) => {
@@ -721,13 +747,26 @@ export function AppShell({
       return;
     }
 
+    setOpenReaderPaperIds((current) =>
+      current.includes(paperId) ? current : [...current, paperId]
+    );
     setActiveReaderPaperId(paperId);
     setActiveCenterArtifactId(null);
-    dock.openItem("reader");
-    const readerRegionId = dock.findItemRegion("reader") ?? "main";
-    if (readerRegionId !== "main") {
-      paneLayout.setCollapsed(readerRegionId, false);
-    }
+  }
+
+  function closeReaderPaper(paperId: string) {
+    setOpenReaderPaperIds((current) => {
+      const closingIndex = current.indexOf(paperId);
+      const next = current.filter((currentPaperId) => currentPaperId !== paperId);
+      setActiveReaderPaperId((activePaperId) => {
+        if (activePaperId !== paperId) {
+          return activePaperId;
+        }
+        return next[Math.min(closingIndex, next.length - 1)] ?? null;
+      });
+      return next;
+    });
+    setActiveCenterArtifactId(null);
   }
 
   function openEvidenceInReader(request: Omit<PdfEvidenceTarget, "requestId">) {
@@ -782,6 +821,12 @@ export function AppShell({
     onOpenAcademicArchive: profileActions.openAcademicArchive,
     onOpenOrganizationDialog: organizationShell.actions.openOrganizationDialog,
     onOpenPaper: openPaperInReader,
+    onRefreshLocalLibrary: async () => {
+      await refreshLocalLibrary();
+      setAnalysisHint("本地文献库已从磁盘重新扫描。");
+    },
+    onMoveLibraryFolder: workspaceActions.moveFolder,
+    onMoveLibraryPaper: workspaceActions.movePaper,
     onOpenPaperChild: (item) => {
       if (item.kind === "artifact") {
         artifactWorkflow.actions.openArtifact(item.id);
@@ -796,6 +841,8 @@ export function AppShell({
       activateArtifactSurface(`skill-doc-${entry.id}`);
     },
     onRetryCollectionSync: knowledgeSync.actions.retryCollectionSync,
+    onRenameLibraryFolder: workspaceActions.renameFolder,
+    onRenameLibraryPaper: workspaceActions.renamePaper,
     onRetryDocumentMetadataSync: knowledgeSync.actions.retryDocumentMetadataSync,
     onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
     onSelectOrganization: organizationShell.actions.selectOrganization,
@@ -930,43 +977,6 @@ export function AppShell({
       return <LeftPane {...leftPaneProps} leftRailView={itemId} />;
     }
 
-    if (itemId === "reader") {
-      return (
-        <ReaderPane
-          analysisHint={analysisHint}
-          artifactTabs={artifactTabs}
-          artifactTasks={artifactTasks}
-          layoutCollapsed={paneLayout.collapsed}
-          onArtifactDynamicAction={(action) => {
-            void handleArtifactCanvasAction(action);
-          }}
-          onOpenEvidence={openEvidenceInReader}
-          onStartAnalysis={(artifactType) => {
-            void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
-          }}
-          onAddReaderContextToConversation={addReaderContextToConversation}
-          onSaveMarkdownTab={(artifactId) => {
-            void artifactWorkflow.actions.saveSkillDocument(artifactId);
-          }}
-          onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
-          onToggleBottomPane={() =>
-            paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
-          }
-          onToggleLeftPane={() =>
-            paneLayout.setCollapsed("left", !paneLayout.collapsed.left)
-          }
-          onToggleRightPane={() =>
-            paneLayout.setCollapsed("right", !paneLayout.collapsed.right)
-          }
-          selectedPapers={readerPapers}
-          selectedPaperIds={workspaceState.selectedPaperIds}
-          selectionLocked={workspaceState.selectionLocked}
-          showArtifactRegion={false}
-          targetEvidence={readerEvidenceTarget}
-        />
-      );
-    }
-
     if (itemId === "assistant") {
       return (
         <AssistantSidebar
@@ -1013,10 +1023,70 @@ export function AppShell({
     return renderArtifactSurface();
   }
 
+  function renderReaderPaper(paperId: string) {
+    const paper = workspaceState.papers.find((candidate) => candidate.id === paperId);
+    if (!paper) {
+      return null;
+    }
+    const paperSelection = [
+      paper,
+      ...selectedPapers.filter((selectedPaper) => selectedPaper.id !== paper.id)
+    ];
+    return (
+      <ReaderPane
+        analysisHint={analysisHint}
+        artifactTabs={artifactTabs}
+        artifactTasks={artifactTasks}
+        layoutCollapsed={paneLayout.collapsed}
+        onArtifactDynamicAction={(action) => {
+          void handleArtifactCanvasAction(action);
+        }}
+        onOpenEvidence={openEvidenceInReader}
+        onStartAnalysis={(artifactType) => {
+          void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+        }}
+        onAddReaderContextToConversation={addReaderContextToConversation}
+        onSaveMarkdownTab={(artifactId) => {
+          void artifactWorkflow.actions.saveSkillDocument(artifactId);
+        }}
+        onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
+        onToggleBottomPane={() =>
+          paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
+        }
+        onToggleLeftPane={() =>
+          paneLayout.setCollapsed("left", !paneLayout.collapsed.left)
+        }
+        onToggleRightPane={() =>
+          paneLayout.setCollapsed("right", !paneLayout.collapsed.right)
+        }
+        selectedPapers={paperSelection}
+        selectedPaperIds={workspaceState.selectedPaperIds}
+        selectionLocked={workspaceState.selectionLocked}
+        showArtifactRegion={false}
+        targetEvidence={readerEvidenceTarget?.paperId === paper.id ? readerEvidenceTarget : null}
+      />
+    );
+  }
+
   function renderDockRegion(regionId: DockRegionId) {
     const showDetachedLayoutControls =
       regionId === "main" &&
-      (dock.layout.regions.main.activeItemId !== "reader" || activeCenterArtifactId !== null);
+      activeCenterArtifactId !== null;
+    const dynamicReaderTabs = regionId === "main"
+      ? openReaderPapers.map((paper) => ({
+          icon: <DocumentPdfRegular />,
+          id: `pdf-${paper.id}`,
+          kind: "document" as const,
+          onActivate: () => {
+            setActiveReaderPaperId(paper.id);
+            setActiveCenterArtifactId(null);
+          },
+          onClose: () => closeReaderPaper(paper.id),
+          render: () => renderReaderPaper(paper.id),
+          selected: activeCenterArtifactId === null && activeReaderPaperId === paper.id,
+          title: paper.title
+        }))
+      : [];
     const dynamicArtifactTabs = artifactTabs
       .filter((tab) => getArtifactRegion(tab.artifactId) === regionId)
       .map((tab) => {
@@ -1040,9 +1110,10 @@ export function AppShell({
           title: tab.title
         };
       });
+    const dynamicTabs = [...dynamicReaderTabs, ...dynamicArtifactTabs];
     return (
       <DockRegion
-        dynamicTabs={dynamicArtifactTabs}
+        dynamicTabs={dynamicTabs}
         layout={dock.layout.regions[regionId]}
         onActivateItem={(itemId) => activateDockItem(regionId, itemId)}
         onCloseItem={dock.closeItem}

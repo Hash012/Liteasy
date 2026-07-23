@@ -134,3 +134,30 @@ test("projects artifact progress into a stable generation session", () => {
   expect(completed.messages[1].content).toContain("进度：100%");
   expect(completed.messages[1].content).toContain("完整结果");
 });
+
+test("projects detailed artifact failures into the AI generation session", () => {
+  const failed = createArtifactTaskSession({
+    failure: {
+      endpoint: "http://127.0.0.1:8787",
+      failedStage: "generating_answer",
+      message: "OpenAI Responses API 请求失败（401）",
+      model: "gpt-5.5",
+      occurredAt: "2026-07-21T03:00:00.000Z",
+      provider: "openai",
+      recovery: ["重新配置并重启 dev-cloud。"]
+    },
+    id: "task-failed",
+    message: "Agent 分析失败：OpenAI Responses API 请求失败（401）",
+    progress: 55,
+    stage: "failed",
+    status: "failed",
+    type: "tree"
+  }, undefined, () => 0);
+
+  expect(failed.status).toBe("failed");
+  expect(failed.messages[1].content).toContain("失败诊断");
+  expect(failed.messages[1].content).toContain("http://127.0.0.1:8787");
+  expect(failed.messages[1].content).toContain("Provider：openai");
+  expect(failed.messages[1].content).toContain("Model：gpt-5.5");
+  expect(failed.messages[1].content).toContain("重新配置并重启 dev-cloud");
+});
