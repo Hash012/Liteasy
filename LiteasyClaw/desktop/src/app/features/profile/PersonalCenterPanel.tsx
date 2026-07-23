@@ -2,7 +2,10 @@ import type { AccountSession } from "../account/account.types";
 import type { OrganizationSummary } from "../organization/organization.types";
 import { AcademicProfileForm } from "./AcademicProfileForm";
 import type { AcademicProfile } from "./profile.types";
-import { formatAcademicProfile } from "./profile.types";
+import {
+  formatAcademicProfile,
+  formatAcademicResearchProfile
+} from "./profile.types";
 
 type PersonalCenterPanelProps = {
   academicProfile: AcademicProfile;
@@ -10,12 +13,9 @@ type PersonalCenterPanelProps = {
   onClearProfile: () => void;
   onLogout: () => void;
   onOpenAcademicArchive: () => void;
-  onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   organizationSummary: OrganizationSummary | null;
   profileClearMessage?: string;
-  profileSamplingEnabled: boolean;
-  readPaperCount: number;
 };
 
 export function PersonalCenterPanel({
@@ -24,12 +24,9 @@ export function PersonalCenterPanel({
   onClearProfile,
   onLogout,
   onOpenAcademicArchive,
-  onToggleProfileSampling,
   onUpdateAcademicProfile,
   organizationSummary,
-  profileClearMessage,
-  profileSamplingEnabled,
-  readPaperCount
+  profileClearMessage
 }: PersonalCenterPanelProps) {
   const displayName = accountSession?.name ?? "未连接云账号";
   const userId = accountSession?.sessionId ?? "未登录";
@@ -62,28 +59,21 @@ export function PersonalCenterPanel({
       </div>
 
       <div className="personal-center-card">
-        <div className="personal-center-section-title">画像配置</div>
-        <div className="personal-center-row">画像配置：{formatAcademicProfile(academicProfile)}</div>
+        <div className="personal-center-section-title">研究画像</div>
+        <div className="personal-center-row">研究阶段：{formatAcademicProfile(academicProfile)}</div>
+        <div className="personal-center-row">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
         <AcademicProfileForm academicProfile={academicProfile} onSave={onUpdateAcademicProfile} />
-        <div className="personal-center-row">用户画像：{profileSamplingEnabled ? "已开启" : "已关闭"}</div>
         {profileClearMessage ? <div className="personal-center-row">{profileClearMessage}</div> : null}
-        <button className="left-rail-button" onClick={onToggleProfileSampling} type="button">
-          {profileSamplingEnabled ? "关闭用户画像" : "开启用户画像"}
-        </button>
         <div className="personal-center-footnote">
-          开启后会采样身份数据、文献和交互记录；微信、飞书等本机数据仍需额外授权。
+          可随时在此维护研究阶段和研究学科。
         </div>
       </div>
 
-      {profileSamplingEnabled ? (
-        <div className="personal-center-card">
-          <div className="personal-center-section-title">学术人格</div>
-          <div className="personal-center-row">已阅读论文数：{readPaperCount}</div>
-          <div className="personal-center-row">学术人格：跨学科综述型</div>
-          <button className="left-rail-button" onClick={onOpenAcademicArchive} type="button">学术档案</button>
-          <button className="left-rail-button danger" onClick={onClearProfile} type="button">清空用户画像（需鉴权）</button>
-        </div>
-      ) : null}
+      <div className="personal-center-card">
+        <div className="personal-center-section-title">学术档案</div>
+        <button className="left-rail-button" onClick={onOpenAcademicArchive} type="button">查看学术档案</button>
+        <button className="left-rail-button danger" onClick={onClearProfile} type="button">清空研究画像</button>
+      </div>
     </section>
   );
 }

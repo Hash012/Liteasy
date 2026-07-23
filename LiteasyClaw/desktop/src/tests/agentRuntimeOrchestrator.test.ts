@@ -323,7 +323,7 @@ test("returns confirmation for profile sampling before mutation", async () => {
             value: true
           }
         },
-        summary: "用户画像会影响个性化采样与后续回答策略，请确认后再开启。",
+        summary: "用户画像只会在已授权的 Liteasy 产品内范围中使用；不会读取外部应用数据，也不建立向量索引或提供历史回溯。请确认后再开启。",
         type: "confirmation_request"
       })
     ],

@@ -38,12 +38,6 @@ export type SemanticPolicyDecision =
     };
 
 function getConfirmationSummary(plan: SemanticActionPlan, action: RuntimeActionInvocation) {
-  if (action.actionId === "settings.update" && action.input.target === "profile.enabled") {
-    return action.input.value === true
-      ? "用户画像会影响个性化采样与后续回答策略，请确认后再开启。"
-      : "关闭用户画像会停止个性化采样，请确认后再关闭。";
-  }
-
   return `请确认后再执行：${plan.summary}`;
 }
 

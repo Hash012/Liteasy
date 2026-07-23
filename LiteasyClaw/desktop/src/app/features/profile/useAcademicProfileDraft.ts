@@ -3,19 +3,17 @@ import type { AcademicProfile } from "./profile.types";
 
 type UseAcademicProfileDraftInput = {
   academicProfile: AcademicProfile;
-  onSave: (profile: AcademicProfile) => void;
+  onSave: (profile: AcademicProfile) => void | Promise<void>;
 };
 
 export function normalizeAcademicProfileDraft(profile: AcademicProfile): AcademicProfile {
   return {
-    age: profile.age.trim() || "未设置",
-    gender: profile.gender,
+    disciplines: profile.disciplines.map((discipline) => ({
+      ...discipline,
+      description: discipline.description.trim()
+    })),
     stage: profile.stage
   };
-}
-
-export function getVisibleAcademicProfileAge(profile: AcademicProfile) {
-  return profile.age === "未设置" ? "" : profile.age;
 }
 
 export function useAcademicProfileDraft({ academicProfile, onSave }: UseAcademicProfileDraftInput) {
@@ -25,18 +23,17 @@ export function useAcademicProfileDraft({ academicProfile, onSave }: UseAcademic
     setDraftProfile(academicProfile);
   }, [academicProfile]);
 
-  function updateDraftProfile(field: keyof AcademicProfile, value: string) {
+  function updateDraftProfile<K extends keyof AcademicProfile>(field: K, value: AcademicProfile[K]) {
     setDraftProfile((currentProfile) => ({ ...currentProfile, [field]: value }));
   }
 
   function saveAcademicProfile() {
-    onSave(normalizeAcademicProfileDraft(draftProfile));
+    return onSave(normalizeAcademicProfileDraft(draftProfile));
   }
 
   return {
     draftProfile,
     saveAcademicProfile,
-    updateDraftProfile,
-    visibleAge: getVisibleAcademicProfileAge(draftProfile)
+    updateDraftProfile
   };
 }

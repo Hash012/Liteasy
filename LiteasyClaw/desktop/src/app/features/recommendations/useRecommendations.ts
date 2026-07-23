@@ -43,6 +43,7 @@ type UseRecommendationsInput = {
   recommendationCacheTransport?: RecommendationCacheTransport;
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
+  personalizationVersion?: number;
   selectedPapers: Paper[];
   workspaceRevision: number;
   workspaceSourceKey: string;
@@ -77,6 +78,7 @@ export function useRecommendations({
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
+  personalizationVersion = 0,
   selectedPapers,
   workspaceRevision,
   workspaceSourceKey
@@ -88,7 +90,8 @@ export function useRecommendations({
         selectionKey,
         sessionId: accountSession.sessionId,
         sortMode: recommendationSortMode,
-        workspaceKey: workspaceSourceKey
+        workspaceKey: workspaceSourceKey,
+        personalizationVersion
       }
     : null;
   const [recommendationItems, setRecommendationItems] = useState<RecommendationItem[]>([]);
@@ -282,6 +285,7 @@ export function useRecommendations({
     recommendationTransport,
     recommendationsEnabled,
     recommendationSortMode,
+    personalizationVersion,
     selectionKey,
     workspaceSourceKey
   ]);
@@ -316,8 +320,16 @@ export function useRecommendations({
     setRecommendationMessage("已清理当前工作区的关联推荐缓存。");
   }
 
+  function dismissRecommendation(recommendationId: string) {
+    setRecommendationItems((currentItems) =>
+      currentItems.filter((recommendation) => recommendation.id !== recommendationId)
+    );
+    setRecommendationMessage("已减少类似推荐，后续结果会继续调整。");
+  }
+
   return {
     clearRecommendationCache,
+    dismissRecommendation,
     recommendationItems,
     recommendationMessage,
     recommendationPending,

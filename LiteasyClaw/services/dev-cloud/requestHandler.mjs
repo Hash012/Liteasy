@@ -45,6 +45,10 @@ import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
+import {
+  createPersonalizationRepository,
+  PersonalizationValidationError
+} from "./db/personalizationRepository.mjs";
 
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
 // 仍保留明确上限以防止本地开发服务被无界请求占满内存。
@@ -75,6 +79,10 @@ const availableEndpoints = [
   "POST /v1/agent-artifacts",
   "DELETE /v1/agent-artifacts/:artifactId",
   "POST /v1/recommendations",
+  "POST /v1/profile/get",
+  "POST /v1/profile/save",
+  "POST /v1/profile/clear",
+  "POST /v1/personalization/signal",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
   "POST /v1/recommendation-cache/clear",
@@ -297,6 +305,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   });
   const accountRepository = createAccountRepository(database);
   const sessionRepository = createAuthSessionRepository(database);
+  const personalizationRepository =
+    customConfig.personalizationRepository ?? createPersonalizationRepository(database);
   const authService = customConfig.authService ?? createAuthService({
     accountRepository,
     sessionDurationMs: config.accountSessionDurationMs,
@@ -607,7 +617,83 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      writeJson(request, response, 200, buildRecommendationPayload(body));
+      writeJson(
+        request,
+        response,
+        200,
+        buildRecommendationPayload(
+          body,
+          personalizationRepository.getRecommendationPreferences(body.sessionId)
+        )
+      );
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/profile/get") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+
+      writeJson(request, response, 200, personalizationRepository.get(body.sessionId));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/profile/save") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+
+      try {
+        writeJson(request, response, 200, personalizationRepository.save(body.sessionId, body.profile));
+      } catch (error) {
+        if (error instanceof PersonalizationValidationError) {
+          writeJson(request, response, 400, { error: "invalid_academic_profile", message: error.message });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/profile/clear") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+
+      writeJson(request, response, 200, personalizationRepository.clear(body.sessionId));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/personalization/signal") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+
+      try {
+        writeJson(request, response, 200, personalizationRepository.recordSignal(body.sessionId, body.signal));
+      } catch (error) {
+        if (error instanceof PersonalizationValidationError) {
+          writeJson(request, response, 400, { error: "invalid_personalization_signal", message: error.message });
+          return;
+        }
+        throw error;
+      }
       return;
     }
 

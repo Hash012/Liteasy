@@ -825,7 +825,7 @@ test("routes command mode through runtime confirmation before profile sampling c
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("开启用户画像")).toBeInTheDocument();
-  expect(screen.getByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")).toBeInTheDocument();
+  expect(screen.getByText("用户画像只会在已授权的 Liteasy 产品内范围中使用；不会读取外部应用数据，也不建立向量索引或提供历史回溯。请确认后再开启。")).toBeInTheDocument();
   expect(settingsStore.getState()["profile.enabled"]).toBe(false);
 });
 

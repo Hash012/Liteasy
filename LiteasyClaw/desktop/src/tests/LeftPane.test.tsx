@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
+import { defaultAcademicProfile, defaultProfileDataScopes } from "../app/features/profile/profile.types";
 
 function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
   return {
@@ -55,8 +56,9 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     organizationSummaryStatus: "idle",
     papers: [],
     profileClearMessage: undefined,
+    profileDataScopes: defaultProfileDataScopes,
     profileReadPaperCount: 0,
-    academicProfile: { age: "未设置", gender: "未设置", stage: "未设置" },
+    academicProfile: defaultAcademicProfile,
     profileSamplingEnabled: false,
     recommendationItems: [],
     recommendationMessage: "推荐",
@@ -634,13 +636,12 @@ describe("LeftPane", () => {
         {...createProps({
           accountSession: { avatarUrl: "", name: "Ada", sessionId: "session-1", userId: "user-1" },
           leftRailView: "profile",
-          organizationSummary: summary,
-          profileSamplingEnabled: true
+          organizationSummary: summary
         })}
       />
     );
     expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
-    expect(screen.getByText("用户画像：已开启")).toBeInTheDocument();
+    expect(screen.getByText("研究画像")).toBeInTheDocument();
   });
 
   test("hides organization creation for basic members and keeps join available", () => {
@@ -861,17 +862,29 @@ describe("LeftPane", () => {
     );
 
     const personalCenter = screen.getByLabelText("左边栏个人中心");
-    expect(within(personalCenter).getByText("画像配置：性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
+    expect(within(personalCenter).getByText("研究阶段：未设置")).toBeInTheDocument();
+    expect(within(personalCenter).getByText("研究学科：未设置")).toBeInTheDocument();
+    expect(within(personalCenter).queryByLabelText("性别")).not.toBeInTheDocument();
+    expect(within(personalCenter).queryByLabelText("常用研究方法")).not.toBeInTheDocument();
+    expect(within(personalCenter).queryByRole("button", { name: /暂停用户画像|启用用户画像/ })).not.toBeInTheDocument();
 
-    await user.selectOptions(within(personalCenter).getByLabelText("性别"), "女");
-    await user.clear(within(personalCenter).getByLabelText("年龄"));
-    await user.type(within(personalCenter).getByLabelText("年龄"), "28");
-    await user.selectOptions(within(personalCenter).getByLabelText("学段"), "博士研究生");
-    await user.click(within(personalCenter).getByRole("button", { name: "保存画像配置" }));
+    await user.selectOptions(within(personalCenter).getByLabelText("学科门类"), "08");
+    await user.click(within(personalCenter).getByLabelText("工学 · 计算机科学与技术（0812）"));
+    await user.type(
+      within(personalCenter).getByLabelText("工学 · 计算机科学与技术（0812） 的补充说明（可选）"),
+      "自然语言处理"
+    );
+    await user.selectOptions(within(personalCenter).getByLabelText("研究阶段"), "博士研究生");
+    await user.click(within(personalCenter).getByRole("button", { name: "保存研究画像" }));
 
     expect(onUpdateAcademicProfile).toHaveBeenCalledWith({
-      age: "28",
-      gender: "女",
+      disciplines: [{
+        categoryCode: "08",
+        categoryName: "工学",
+        code: "0812",
+        description: "自然语言处理",
+        name: "计算机科学与技术"
+      }],
       stage: "博士研究生"
     });
   });

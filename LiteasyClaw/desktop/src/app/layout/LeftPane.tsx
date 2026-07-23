@@ -42,6 +42,7 @@ export type LeftPaneProps = {
   onClearProfile: () => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (item: RecommendationItem) => void;
+  onDismissRecommendation?: (item: RecommendationItem) => void;
   onRetryCollectionSync?: () => void;
   onCreateOrganization?: () => void;
   onImportSelectedSet: () => void;
@@ -60,7 +61,6 @@ export type LeftPaneProps = {
   onReturnToLocalWorkspace: () => void;
   onRetryDocumentMetadataSync?: () => void;
   onSelectOrganization?: (organizationId: string) => void;
-  onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   onToggleSelection: (paperId: string) => void;
   onToggleLock: () => void;
@@ -69,8 +69,6 @@ export type LeftPaneProps = {
   organizationSummaryStatus: OrganizationSummaryStatus;
   papers: Paper[];
   profileClearMessage?: string;
-  profileReadPaperCount: number;
-  profileSamplingEnabled: boolean;
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
   recommendationPending: boolean;
@@ -124,6 +122,7 @@ export function LeftPane({
   onClearProfile,
   onClearRecommendations,
   onCollectRecommendation,
+  onDismissRecommendation,
   onRetryCollectionSync,
   onCreateOrganization,
   onImportSelectedSet,
@@ -142,7 +141,6 @@ export function LeftPane({
   onReturnToLocalWorkspace,
   onRetryDocumentMetadataSync,
   onSelectOrganization,
-  onToggleProfileSampling,
   onUpdateAcademicProfile,
   onToggleSelection,
   onToggleLock,
@@ -152,8 +150,6 @@ export function LeftPane({
   organizationSummaryStatus,
   papers,
   profileClearMessage,
-  profileReadPaperCount,
-  profileSamplingEnabled,
   recommendationItems,
   recommendationMessage,
   recommendationPending,
@@ -211,12 +207,9 @@ export function LeftPane({
               onClearProfile={onClearProfile}
               onLogout={onLogout}
               onOpenAcademicArchive={onOpenAcademicArchive}
-              onToggleProfileSampling={onToggleProfileSampling}
               onUpdateAcademicProfile={onUpdateAcademicProfile}
               organizationSummary={organizationSummary}
               profileClearMessage={profileClearMessage}
-              profileSamplingEnabled={profileSamplingEnabled}
-              readPaperCount={profileReadPaperCount}
             />
           ) : (
             <section aria-label="左边栏个人能力说明" className="organization-sidebar-panel">
@@ -263,6 +256,7 @@ export function LeftPane({
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
             onCollectRecommendation={onCollectRecommendation}
+            onDismissRecommendation={onDismissRecommendation}
             onImportSelectedSet={onImportSelectedSet}
             onLoginRequired={onLoginRequired}
             onOpenOrganizationWorkspace={() => {

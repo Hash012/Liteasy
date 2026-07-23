@@ -7,7 +7,8 @@ function buildScopeKey(scope) {
     scope.sessionId,
     scope.workspaceKey,
     scope.selectionKey,
-    scope.sortMode
+    scope.sortMode,
+    scope.personalizationVersion ?? 0
   ].join("::");
 }
 

@@ -1,7 +1,6 @@
 export type SettingKey =
   | "network.recommendation.enabled"
   | "network.recommendation.sort_mode"
-  | "profile.enabled"
   | "assistant.default_output_mode"
   | "assistant.language"
   | "models.default_provider"
@@ -11,7 +10,6 @@ export type SettingKey =
 export type SettingsState = {
   "network.recommendation.enabled": boolean;
   "network.recommendation.sort_mode": "relevance" | "retrieved_at";
-  "profile.enabled": boolean;
   "assistant.default_output_mode": string;
   "assistant.language": string;
   "models.default_provider": string;

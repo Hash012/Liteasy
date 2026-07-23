@@ -17,14 +17,14 @@ export function ClearProfileConfirmDialog({ onCancel, onConfirm }: ClearProfileC
           </button>
         </div>
         <div className="academic-archive-card">
-          将清空性别、年龄、学段、阅读统计和学术人格缓存；昵称、用户 ID 和头像会保留。
+          将清空已选择的学科、补充说明和研究阶段；昵称、用户 ID 和头像会保留。
         </div>
         <div className="clear-profile-actions">
           <button className="left-rail-button" onClick={onCancel} type="button">
             取消
           </button>
           <button className="left-rail-button danger" onClick={onConfirm} type="button">
-            确认清空用户画像
+            确认清空研究画像
           </button>
         </div>
       </div>

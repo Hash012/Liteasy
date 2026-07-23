@@ -12,39 +12,17 @@ test("executes a settings update through the action registry", async () => {
     {
       actionId: "settings.update",
       input: {
-        target: "profile.enabled",
-        value: true
+        target: "network.recommendation.enabled",
+        value: false
       }
     },
     {
-      profileUnlocked: true,
       settingsStore
     }
   );
 
-  expect(result.message).toContain("用户画像");
-  expect(settingsStore.getState()["profile.enabled"]).toBe(true);
-});
-
-test("blocks profile actions when the cloud account is unavailable", async () => {
-  const settingsStore = createSettingsStore();
-
-  const result = await executeAction(
-    {
-      actionId: "settings.update",
-      input: {
-        target: "profile.enabled",
-        value: true
-      }
-    },
-    {
-      profileUnlocked: false,
-      settingsStore
-    }
-  );
-
-  expect(result.message).toBe("请先登录云账号后再使用个人画像能力。");
-  expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+  expect(result.message).toContain("联网推荐");
+  expect(settingsStore.getState()["network.recommendation.enabled"]).toBe(false);
 });
 
 test("executes a direct artifact analysis action without going through skill routing", async () => {
@@ -264,20 +242,7 @@ test("executes architecture action-catalog handlers through injected feature own
   });
 });
 
-test("derives confirmation policy from registered action metadata and invocation payload", () => {
-  expect(
-    getRuntimeActionPolicy({
-      actionId: "settings.update",
-      input: {
-        target: "profile.enabled",
-        value: true
-      }
-    })
-  ).toMatchObject({
-    requiresConfirmation: true,
-    riskLevel: "medium"
-  });
-
+test("derives confirmation policy from registered action metadata", () => {
   expect(
     getRuntimeActionPolicy({
       actionId: "settings.update",

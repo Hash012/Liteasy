@@ -39,6 +39,7 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[]) => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
+  onDismissRecommendation?: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
   onLoginRequired?: () => void;
   onOpenOrganizationWorkspace: () => void;
@@ -168,6 +169,7 @@ export function LibraryPane({
   onAddDroppedPdfFiles,
   onClearRecommendations,
   onCollectRecommendation,
+  onDismissRecommendation,
   onImportSelectedSet,
   onLoginRequired,
   onOpenOrganizationWorkspace,
@@ -598,6 +600,13 @@ export function LibraryPane({
                   {getRelevanceLabel(item.relevanceBand)}
                 </div>
                 <div className="recommendation-reason">{item.reason}</div>
+                <button
+                  className="library-inline-button"
+                  onClick={() => onDismissRecommendation?.(item)}
+                  type="button"
+                >
+                  不感兴趣
+                </button>
               </li>
             ))}
           </ul>

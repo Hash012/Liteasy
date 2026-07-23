@@ -63,4 +63,49 @@ describe("useCloudAccountController", () => {
     expect(result.current.model.accountSession?.sessionId).toBe("demo-session-1");
     expect(result.current.model.loginDialogOpen).toBe(false);
   });
+
+  test("notifies the shell only after a successful account registration", async () => {
+    const input = createControllerInput();
+    const onRegistered = vi.fn();
+    const accountTransport = vi.fn(async () => ({
+      json: async () => ({
+        session: {
+          email: "tian@example.com",
+          expiresAt: "2026-12-31T23:59:59.000Z",
+          membershipTier: "pro" as const,
+          name: "Tian",
+          sessionId: "account-session-tian-example-com"
+        }
+      }),
+      ok: true,
+      status: 200
+    }));
+
+    const { result } = renderHook(() =>
+      useCloudAccountController({
+        ...input,
+        accountTransport,
+        onRegistered
+      })
+    );
+
+    await act(async () => {
+      await result.current.actions.submitAccountRegistration({
+        displayName: "Tian",
+        email: "tian@example.com",
+        password: "private-password-1"
+      });
+    });
+
+    expect(onRegistered).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.actions.submitAccountLogin({
+        email: "tian@example.com",
+        password: "private-password-1"
+      });
+    });
+
+    expect(onRegistered).toHaveBeenCalledTimes(1);
+  });
 });

@@ -11,14 +11,24 @@ test("normalizes and saves editable academic profile drafts", () => {
     })
   );
 
-  act(() => result.current.updateDraftProfile("gender", "女"));
-  act(() => result.current.updateDraftProfile("age", " 28 "));
   act(() => result.current.updateDraftProfile("stage", "博士研究生"));
+  act(() => result.current.updateDraftProfile("disciplines", [{
+    categoryCode: "08",
+    categoryName: "工学",
+    code: "0812",
+    description: " 自然语言处理与信息检索 ",
+    name: "计算机科学与技术"
+  }]));
   act(() => result.current.saveAcademicProfile());
 
   expect(onSave).toHaveBeenCalledWith({
-    age: "28",
-    gender: "女",
+    disciplines: [{
+      categoryCode: "08",
+      categoryName: "工学",
+      code: "0812",
+      description: "自然语言处理与信息检索",
+      name: "计算机科学与技术"
+    }],
     stage: "博士研究生"
   });
 });
@@ -31,13 +41,34 @@ test("syncs draft when the saved academic profile changes", () => {
         academicProfile,
         onSave
       }),
-    { initialProps: { academicProfile: { age: "28", gender: "女", stage: "博士研究生" } } }
+    {
+      initialProps: {
+        academicProfile: {
+          disciplines: [{
+            categoryCode: "04",
+            categoryName: "教育学",
+            code: "0401",
+            description: "学习分析",
+            name: "教育学"
+          }],
+          stage: "博士研究生"
+        }
+      }
+    }
   );
 
-  expect(result.current.draftProfile).toEqual({ age: "28", gender: "女", stage: "博士研究生" });
+  expect(result.current.draftProfile).toEqual({
+    disciplines: [{
+      categoryCode: "04",
+      categoryName: "教育学",
+      code: "0401",
+      description: "学习分析",
+      name: "教育学"
+    }],
+    stage: "博士研究生"
+  });
 
   rerender({ academicProfile: defaultAcademicProfile });
 
   expect(result.current.draftProfile).toEqual(defaultAcademicProfile);
-  expect(result.current.visibleAge).toBe("");
 });

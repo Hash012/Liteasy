@@ -85,8 +85,7 @@ export type AgentRuntimeContextView = {
     organizationName?: string;
   };
   profile: {
-    enabled: boolean;
-    requiresConfirmation: boolean;
+    personalizationSummary?: string;
   };
   selection: {
     importedCount: number;

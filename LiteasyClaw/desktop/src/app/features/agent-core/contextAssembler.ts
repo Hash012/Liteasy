@@ -45,7 +45,9 @@ function summarizeRuntimeContext(contextView?: AgentRuntimeContextView) {
     `- 选中文献：${contextView.selection.selectedCount} 篇，已导入 ${contextView.selection.importedCount} 篇。`,
     `- 选区锁定：${contextView.selection.locked ? "是" : "否"}。`,
     `- 云账号：${contextView.cloud.connected ? "已连接" : "未连接"}。`,
-    `- 画像：${contextView.profile.enabled ? "开启" : "关闭"}。`,
+    ...(contextView.profile.personalizationSummary
+      ? [`- 研究画像：${contextView.profile.personalizationSummary}。`]
+      : []),
     `- 工作区：${contextView.workspace.type}${contextView.workspace.rootPath ? ` (${contextView.workspace.rootPath})` : ""}。`,
     contextView.selection.issues.length
       ? `- 待补上下文：${contextView.selection.issues.join(", ")}。`

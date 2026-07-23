@@ -40,6 +40,7 @@ type UseKnowledgeSyncControllerInput = {
   recommendationTransport?: RecommendationTransport;
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
+  personalizationVersion?: number;
   selectedPapers: Paper[];
   workspaceRevision: number;
   workspaceSourceKey: string;
@@ -57,6 +58,7 @@ export function useKnowledgeSyncController({
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
+  personalizationVersion,
   selectedPapers,
   workspaceRevision,
   workspaceSourceKey
@@ -75,6 +77,7 @@ export function useKnowledgeSyncController({
     recommendationTransport,
     recommendationsEnabled,
     recommendationSortMode,
+    personalizationVersion,
     selectedPapers,
     workspaceRevision,
     workspaceSourceKey
@@ -91,6 +94,7 @@ export function useKnowledgeSyncController({
     actions: {
       clearRecommendationCache: recommendations.clearRecommendationCache,
       collectRecommendation: collection.collectRecommendation,
+      dismissRecommendation: recommendations.dismissRecommendation,
       retryCollectionSync: collection.retry,
       retryDocumentMetadataSync: documentMetadataSync.retrySync
     },

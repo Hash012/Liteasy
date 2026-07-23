@@ -7,6 +7,10 @@ import type { ImportJob } from "../features/import/import.types";
 import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
 import { useProfileActions } from "../features/profile/useProfileActions";
+import {
+  createAcademicProfileExport,
+  downloadAcademicProfileExport
+} from "../features/profile/profileExport";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import { usePolicySync } from "../features/models/usePolicySync";
@@ -174,6 +178,7 @@ export function AppShell({
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏模态按钮启动分析。"
   );
+  const [registrationWelcomeMessageId, setRegistrationWelcomeMessageId] = useState(0);
   const modelSettings = useModelSettingsActions({
     localDevCloudEnv,
     onSettingsChanged: (nextSettings) => setSettingsState(cloneSettingsState(nextSettings)),
@@ -188,18 +193,6 @@ export function AppShell({
       paneLayout.setCollapsed(regionId, false);
     }
   }
-  const profileActions = useProfileActions({
-    onProfileSamplingChanged: (enabled) => {
-      settingsStoreRef.current.apply({
-        intent: "update_setting",
-        target: "profile.enabled",
-        value: enabled
-      });
-      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
-    },
-    profileSamplingEnabled: settingsState["profile.enabled"]
-  });
-
   const workspaceActions = useWorkspaceActions({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
@@ -347,12 +340,28 @@ export function AppShell({
     accountTransport,
     getSettings: () => settingsStoreRef.current.getState(),
     applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
-    isOnline
+    isOnline,
+    onRegistered: () => {
+      openDockedLeftRailView("profile");
+      setRegistrationWelcomeMessageId((current) => current + 1);
+    }
   });
   const {
     accountSession,
     loginDialogOpen
   } = cloudAccount.model;
+  const profileActions = useProfileActions({
+    accountSession,
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"]
+  });
+  function handleProfileExport() {
+    downloadAcademicProfileExport(
+      createAcademicProfileExport({
+        academicProfile: profileActions.academicProfile
+      })
+    );
+    profileActions.markProfileExported();
+  }
   const organizationShell = useOrganizationShellController({
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
@@ -603,6 +612,7 @@ export function AppShell({
     onOpenOrganizationSharedLibrary: organizationShell.actions.openOrganizationSharedLibrary,
     onSettingsChanged: (nextSettings) =>
       setSettingsState(cloneSettingsState(nextSettings)),
+    profilePersonalizationSummary: profileActions.assistantProfileSummary,
     profileUnlocked: accountSession !== null,
     runtimeOrganizationName: organizationShell.model.organizationSummary?.name,
     runtimeWorkspace: workspaceState.workspaceSource,
@@ -646,6 +656,7 @@ export function AppShell({
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
+    personalizationVersion: profileActions.personalizationVersion,
     selectedPapers,
     workspaceRevision: workspaceState.workspaceRevision,
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
@@ -717,10 +728,15 @@ export function AppShell({
   }, {});
 
   function openPaperInReader(paperId: string) {
-    if (!workspaceState.papers.some((paper) => paper.id === paperId)) {
+    const paper = workspaceState.papers.find((item) => item.id === paperId);
+    if (!paper) {
       return;
     }
 
+    void profileActions.recordPersonalizationSignal({
+      kind: "paper_opened",
+      title: paper.title
+    });
     setActiveReaderPaperId(paperId);
     setActiveCenterArtifactId(null);
     dock.openItem("reader");
@@ -768,7 +784,20 @@ export function AppShell({
     onAddExternalPaper: workspaceActions.addExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
-    onCollectRecommendation: knowledgeSync.actions.collectRecommendation,
+    onCollectRecommendation: (recommendation) => {
+      void knowledgeSync.actions.collectRecommendation(recommendation);
+      void profileActions.recordPersonalizationSignal({
+        kind: "recommendation_saved",
+        title: recommendation.title
+      });
+    },
+    onDismissRecommendation: (recommendation) => {
+      knowledgeSync.actions.dismissRecommendation(recommendation.id);
+      void profileActions.recordPersonalizationSignal({
+        kind: "recommendation_dismissed",
+        recommendationId: recommendation.id
+      });
+    },
     onCreateOrganization: organizationShell.actions.openCreateDialog,
     onImportSelectedSet: () => {
       void registeredWorkspaceActions.handleImportSelectedSet();
@@ -800,7 +829,6 @@ export function AppShell({
     onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
     onSelectOrganization: organizationShell.actions.selectOrganization,
     onToggleLock: workspaceActions.toggleSelectionLock,
-    onToggleProfileSampling: profileActions.toggleProfileSampling,
     onToggleSelection: workspaceActions.toggleSelection,
     onUpdateAcademicProfile: profileActions.updateAcademicProfile,
     organizationActionMessage,
@@ -809,8 +837,6 @@ export function AppShell({
     organizationSummaryStatus,
     papers: workspaceState.papers,
     profileClearMessage: profileActions.profileClearMessage,
-    profileReadPaperCount: workspaceState.papers.length,
-    profileSamplingEnabled: settingsState["profile.enabled"],
     recommendationItems,
     recommendationMessage,
     recommendationPending,
@@ -999,6 +1025,14 @@ export function AppShell({
             setSettingsState(cloneSettingsState(nextSettings))
           }
           profileUnlocked={accountSession !== null}
+          registrationWelcomeMessage={
+            registrationWelcomeMessageId > 0
+              ? {
+                  content: "欢迎来到Liteasy，请完善学术档案",
+                  id: registrationWelcomeMessageId
+                }
+              : undefined
+          }
           regionId={regionId === "main" ? "right" : regionId}
           runtimeOrganizationName={organizationSummary?.name}
           runtimeWorkspace={workspaceState.workspaceSource}
@@ -1169,6 +1203,7 @@ export function AppShell({
           onInviteMember={organizationShell.actions.sendDemoOrganizationInvite}
           onJoinOrganization={organizationShell.actions.createDemoOrganizationJoinRequest}
           onLeaveOrganization={organizationShell.actions.createDemoOrganizationLeaveRequest}
+          onExportProfile={handleProfileExport}
           onSkipLogin={cloudAccount.actions.skipLogin}
           onSubmitAccountLogin={(login) => {
             void cloudAccount.actions.submitAccountLogin(login);
@@ -1186,7 +1221,6 @@ export function AppShell({
           onSelectOrganization={organizationShell.actions.selectOrganization}
           organizationDialogOpen={organizationDialogOpen}
           loginDialogOpen={loginDialogOpen}
-          readPaperCount={workspaceState.papers.length}
           summary={organizationSummary}
         />
         {renderDockRegion("main")}

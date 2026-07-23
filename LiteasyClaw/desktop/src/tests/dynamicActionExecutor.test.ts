@@ -1,9 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
-  executeConfirmedSemanticPlan,
   executeUIDslActionRef
 } from "../app/features/agent-runtime/dynamicActionExecutor";
-import { createExecutionJournal } from "../app/features/generative-ui/executionJournal";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
 describe("executeUIDslActionRef", () => {
@@ -59,16 +57,15 @@ describe("executeUIDslActionRef", () => {
     const result = await executeUIDslActionRef(
       {
         actionId: "settings.update",
-        id: "enable-profile-from-answer",
-        input: {
-          target: "profile.enabled",
-          value: true
-        },
-        label: "开启画像",
-        riskLevel: "medium"
+          id: "disable-recommendations-from-answer",
+          input: {
+            target: "network.recommendation.enabled",
+            value: false
+          },
+          label: "关闭联网推荐",
+          riskLevel: "low"
       },
       {
-        profileUnlocked: true,
         settingsStore
       },
       {
@@ -77,12 +74,12 @@ describe("executeUIDslActionRef", () => {
       }
     );
 
-    expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+    expect(settingsStore.getState()["network.recommendation.enabled"]).toBe(true);
     expect(result.events).toEqual([
       {
         kind: "command_mode",
         missing: ["command_mode"],
-        question: "当前模式不执行软件动作，请切换到命令模式。",
+        question: "软件动作需要用 / 开始输入命令。",
         type: "clarification_request"
       },
       {
@@ -100,14 +97,13 @@ describe("executeUIDslActionRef", () => {
     ]);
   });
 
-  test("routes medium-risk dynamic actions through resumable human confirmation", async () => {
-    const journal = createExecutionJournal();
+  test("rejects profile state changes from dynamic actions", async () => {
     const settingsStore = createSettingsStore();
 
-    const pending = await executeUIDslActionRef(
+    const result = await executeUIDslActionRef(
       {
         actionId: "settings.update",
-        id: "enable-profile",
+          id: "enable-profile",
         input: {
           target: "profile.enabled",
           value: true
@@ -116,91 +112,15 @@ describe("executeUIDslActionRef", () => {
         riskLevel: "medium"
       },
       {
-        journal,
-        profileUnlocked: true,
-        settingsStore
+          settingsStore
       },
       {
         traceId: "trace-dynamic-profile"
       }
     );
 
-    expect(settingsStore.getState()["profile.enabled"]).toBe(false);
-    expect(pending.events).toEqual([
-      {
-        plan: expect.objectContaining({
-          actions: [
-            {
-              actionId: "settings.update",
-              input: {
-                target: "profile.enabled",
-                value: true
-              }
-            }
-          ],
-          planId: "dynamic-profile",
-          summary: "开启画像"
-        }),
-        type: "plan_preview"
-      },
-      expect.objectContaining({
-        action: {
-          actionId: "settings.update",
-          payload: {
-            target: "profile.enabled",
-            value: true
-          }
-        },
-        confirmationId: "confirm-dynamic-profile-settings.update",
-        summary: "用户画像会影响个性化采样与后续回答策略，请确认后再开启。",
-        traceId: "trace-dynamic-profile",
-        type: "confirmation_request"
-      })
-    ]);
-
-    const confirmation = pending.events.find((event) => event.type === "confirmation_request");
-    const result = await executeConfirmedSemanticPlan(confirmation, {
-      journal,
-      profileUnlocked: true,
-      settingsStore
-    });
-
-    expect(settingsStore.getState()["profile.enabled"]).toBe(true);
-    expect(result.events).toEqual([
-      {
-        action: {
-          actionId: "settings.update",
-          payload: {
-            target: "profile.enabled",
-            value: true
-          }
-        },
-        type: "action_request"
-      },
-      {
-        message: "已更新 用户画像：true",
-        type: "assistant_reply"
-      }
-    ]);
-    expect(journal.getTrace("trace-dynamic-profile")).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionId: "settings.update",
-          result: "confirm",
-          type: "policy"
-        }),
-        expect.objectContaining({
-          actionId: "settings.update",
-          confirmationId: "confirm-dynamic-profile-settings.update",
-          decision: "accepted",
-          type: "confirmation"
-        }),
-        expect.objectContaining({
-          actionId: "settings.update",
-          result: "allow",
-          type: "policy"
-        })
-      ])
-    );
+    expect(settingsStore.getState()).not.toHaveProperty("profile.enabled");
+    expect(result.events.some((event) => event.type === "confirmation_request")).toBe(false);
+    expect(result.events.some((event) => event.type === "runtime_error")).toBe(true);
   });
 });

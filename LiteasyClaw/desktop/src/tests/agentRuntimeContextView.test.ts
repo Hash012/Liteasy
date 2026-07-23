@@ -7,7 +7,7 @@ test("builds a ready runtime context summary", () => {
   const context = buildAgentRuntimeContextView({
     importedCount: 2,
     organizationName: "Liteasy AI Reading Lab",
-    profileEnabled: false,
+    profilePersonalizationSummary: "研究阶段：博士研究生",
     profileUnlocked: true,
     selectedCount: 2,
     selectionLocked: true,
@@ -23,8 +23,7 @@ test("builds a ready runtime context summary", () => {
       organizationName: "Liteasy AI Reading Lab"
     },
     profile: {
-      enabled: false,
-      requiresConfirmation: true
+      personalizationSummary: "研究阶段：博士研究生"
     },
     selection: {
       importedCount: 2,
@@ -39,14 +38,13 @@ test("builds a ready runtime context summary", () => {
     }
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 2 篇 · 已锁定 · 已导入 2/2 · 云账号已连接 · 画像关闭"
+    "上下文 · 选中 2 篇 · 已锁定 · 已导入 2/2 · 云账号已连接 · 研究画像已应用"
   );
 });
 
 test("marks empty, unlocked, and partially imported selections as not ready", () => {
   const context = buildAgentRuntimeContextView({
     importedCount: 1,
-    profileEnabled: true,
     profileUnlocked: false,
     selectedCount: 3,
     selectionLocked: false
@@ -66,14 +64,13 @@ test("marks empty, unlocked, and partially imported selections as not ready", ()
     connected: false
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 画像开启"
+    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 研究画像待补充"
   );
 });
 
 test("marks no selected papers and unknown workspace as issues", () => {
   const context = buildAgentRuntimeContextView({
     importedCount: 0,
-    profileEnabled: false,
     profileUnlocked: false,
     selectedCount: 0,
     selectionLocked: false

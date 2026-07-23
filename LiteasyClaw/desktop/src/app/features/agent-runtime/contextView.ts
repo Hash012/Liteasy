@@ -4,7 +4,7 @@ import type { WorkspaceSource } from "../workspace/workspace.types";
 export type AgentRuntimeContextViewInput = {
   importedCount: number;
   organizationName?: string;
-  profileEnabled: boolean;
+  profilePersonalizationSummary?: string;
   profileUnlocked: boolean;
   selectedCount: number;
   selectionLocked: boolean;
@@ -39,8 +39,9 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
       ...(input.organizationName ? { organizationName: input.organizationName } : {})
     },
     profile: {
-      enabled: input.profileEnabled,
-      requiresConfirmation: true
+      ...(input.profilePersonalizationSummary
+        ? { personalizationSummary: input.profilePersonalizationSummary }
+        : {})
     },
     selection: {
       importedCount: input.importedCount,
@@ -59,7 +60,7 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
 export function formatAgentRuntimeContextSummary(context: AgentRuntimeContextView) {
   const lockLabel = context.selection.locked ? "已锁定" : "未锁定";
   const cloudLabel = context.cloud.connected ? "云账号已连接" : "云账号未连接";
-  const profileLabel = context.profile.enabled ? "画像开启" : "画像关闭";
+  const profileLabel = context.profile.personalizationSummary ? "研究画像已应用" : "研究画像待补充";
 
   return [
     "上下文",

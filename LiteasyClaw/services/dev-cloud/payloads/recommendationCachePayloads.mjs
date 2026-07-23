@@ -8,6 +8,8 @@ function isScope(body = {}) {
   return (
     typeof body.selectionKey === "string" &&
     typeof body.sessionId === "string" &&
+    (typeof body.personalizationVersion === "undefined" ||
+      (Number.isInteger(body.personalizationVersion) && body.personalizationVersion >= 0)) &&
     (body.sortMode === "relevance" || body.sortMode === "retrieved_at") &&
     typeof body.workspaceKey === "string"
   );
@@ -32,6 +34,8 @@ function isRecommendationItem(item) {
 
 function getScope(body) {
   return {
+    personalizationVersion:
+      typeof body.personalizationVersion === "number" ? body.personalizationVersion : 0,
     selectionKey: body.selectionKey,
     sessionId: body.sessionId,
     sortMode: body.sortMode,
