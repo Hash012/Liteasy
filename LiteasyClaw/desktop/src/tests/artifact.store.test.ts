@@ -28,6 +28,35 @@ test("opens a distinct tab for a tree analysis task", () => {
   expect(store.getOpenTabs()[0]?.type).toBe("tree");
 });
 
+test("preserves detailed failure diagnostics on a failed task", () => {
+  const store = createArtifactStore();
+  const taskId = store.createTask("tree");
+  store.startTask(taskId);
+  store.updateTask(taskId, { stage: "generating_answer" });
+
+  store.failTask(taskId, {
+    endpoint: "http://127.0.0.1:8787",
+    failedStage: "generating_answer",
+    message: "模型服务请求失败（cloud_proxy 502）",
+    model: "gpt-5.5",
+    occurredAt: "2026-07-21T03:00:00.000Z",
+    provider: "openai",
+    recovery: ["检查 dev-cloud 配置。"]
+  });
+
+  expect(store.getTask(taskId)).toMatchObject({
+    failure: {
+      endpoint: "http://127.0.0.1:8787",
+      failedStage: "generating_answer",
+      model: "gpt-5.5",
+      provider: "openai"
+    },
+    message: "Agent 分析失败：模型服务请求失败（cloud_proxy 502）",
+    stage: "failed",
+    status: "failed"
+  });
+});
+
 test("keeps every concurrent generation task in newest-first order", () => {
   const store = createArtifactStore();
   const firstTaskId = store.createTask("mindmap");

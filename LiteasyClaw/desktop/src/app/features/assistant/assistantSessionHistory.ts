@@ -148,6 +148,18 @@ export function createArtifactTaskSession(
     task.message,
     `阶段：${artifactStageLabels[task.stage]}`,
     `进度：${progress}%`,
+    task.failure
+      ? [
+          "\n失败诊断：",
+          `- 原因：${task.failure.message}`,
+          `- 失败阶段：${artifactStageLabels[task.failure.failedStage]}`,
+          task.failure.endpoint ? `- Agent 服务端点：${task.failure.endpoint}` : "",
+          task.failure.provider ? `- Provider：${task.failure.provider}` : "",
+          task.failure.model ? `- Model：${task.failure.model}` : "",
+          `- 时间：${task.failure.occurredAt}`,
+          ...task.failure.recovery.map((item) => `- 建议：${item}`)
+        ].filter(Boolean).join("\n")
+      : "",
     task.partialAnswer?.trim() ? `\n实时生成内容：\n${task.partialAnswer.trim()}` : ""
   ].filter(Boolean).join("\n");
   const timestamp = createTimestamp(now);

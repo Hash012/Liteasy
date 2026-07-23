@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  CommentRegular,
+  DocumentRegular,
+  PanelLeftContractRegular,
+  PanelLeftExpandRegular
+} from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
@@ -820,26 +826,28 @@ export function PdfReader({
               title="展开 PDF 左侧栏"
               type="button"
             >
-              展开
+              <PanelLeftExpandRegular />
             </button>
           ) : (
             <>
               <div className="pdf-sidebar-switcher">
                 <button
+                  aria-label="缩略图"
                   className={sidebarMode === "thumbnails" ? "active" : ""}
                   onClick={() => setSidebarMode("thumbnails")}
                   title="显示页面缩略图"
                   type="button"
                 >
-                  缩略图
+                  <DocumentRegular />
                 </button>
                 <button
+                  aria-label="批注"
                   className={sidebarMode === "annotations" ? "active" : ""}
                   onClick={() => setSidebarMode("annotations")}
                   title="显示当前文档批注"
                   type="button"
                 >
-                  批注
+                  <CommentRegular />
                 </button>
                 <button
                   aria-label="收起 PDF 左侧栏"
@@ -848,7 +856,7 @@ export function PdfReader({
                   title="收起 PDF 左侧栏"
                   type="button"
                 >
-                  收起
+                  <PanelLeftContractRegular />
                 </button>
               </div>
 

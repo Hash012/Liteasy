@@ -78,13 +78,14 @@ const paper: Paper = {
 describe("useArtifactWorkflowController", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    window.localStorage.clear();
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  test("exposes empty artifact workflow state before analysis starts", () => {
+  test("exposes empty artifact workflow state before analysis starts", async () => {
     const artifactStore = createArtifactStore();
 
     const { result } = renderHook(() =>
@@ -99,6 +100,11 @@ describe("useArtifactWorkflowController", () => {
         runAgentAnalysis: vi.fn(async () => completedRun())
       })
     );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
     expect(result.current.model.artifactTabs).toEqual([]);
     expect(result.current.model.artifactTasks).toEqual([]);
@@ -220,6 +226,123 @@ describe("useArtifactWorkflowController", () => {
     expect(result.current.model.artifactTabs).toEqual([]);
     expect(result.current.model.artifactCatalog).toEqual([
       expect.objectContaining({ artifactId: "artifact-saved" })
+    ]);
+  });
+
+  test("restores the local artifact catalog when the service is unavailable", async () => {
+    const artifactStore = createArtifactStore();
+    const localRepository = {
+      list: vi.fn(async () => [{
+        artifactId: "artifact-local",
+        createdAt: "2026-07-21T01:00:00.000Z",
+        title: "Locally cached tree",
+        type: "tree" as const
+      }]),
+      replace: vi.fn(async () => undefined)
+    };
+    const onAnalysisHint = vi.fn();
+    const client = artifactResultClient();
+    client.list.mockRejectedValueOnce(new Error("endpoint changed after login"));
+
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactLocalRepository: localRepository,
+        artifactResultClient: client,
+        artifactResultScopeKey: "mock://before-login",
+        artifactStore,
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint,
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-local" })
+    ]);
+    expect(localRepository.replace).toHaveBeenCalledWith([
+      expect.objectContaining({ artifactId: "artifact-local" })
+    ]);
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(
+      "同步 Agent 产物服务失败，已保留本地记录：endpoint changed after login"
+    );
+  });
+
+  test("refreshes server artifacts when login changes the result endpoint", async () => {
+    const artifactStore = createArtifactStore();
+    const persisted = {
+      agent: {
+        apiVersion: "liteasy.agent/v1",
+        runId: "run-after-login",
+        sessionId: "session-after-login",
+        status: "completed" as const
+      },
+      answer: "restored after login",
+      artifactId: "artifact-after-login",
+      artifactType: "tree" as const,
+      citations: [],
+      createdAt: "2026-07-21T02:00:00.000Z",
+      papers: [],
+      title: "Restored after login",
+      uiDsl: {
+        actions: [],
+        audit: {
+          createdAt: "2026-07-21T02:00:00.000Z",
+          generatedBy: "rule" as const,
+          traceId: "trace-after-login"
+        },
+        dataSources: [],
+        root: { component: "Tree" as const, id: "root", props: { nodes: [] } },
+        surface: "center_artifact" as const,
+        version: "liteasy.ui/v1" as const
+      },
+      version: "liteasy.agent-artifact/v1" as const
+    };
+    const client = artifactResultClient();
+    client.list.mockResolvedValueOnce([]).mockResolvedValueOnce([persisted]);
+    const localRepository = {
+      list: vi.fn(async () => []),
+      replace: vi.fn(async () => undefined)
+    };
+
+    const { result, rerender } = renderHook(
+      ({ scopeKey }) => useArtifactWorkflowController({
+        artifactLocalRepository: localRepository,
+        artifactResultClient: client,
+        artifactResultScopeKey: scopeKey,
+        artifactStore,
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      }),
+      { initialProps: { scopeKey: "mock://before-login" } }
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    rerender({ scopeKey: "http://127.0.0.1:8791" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(client.list).toHaveBeenCalledTimes(2);
+    expect(localRepository.list).toHaveBeenCalledTimes(1);
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-after-login" })
     ]);
   });
 });

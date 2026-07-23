@@ -33,11 +33,11 @@ function extractBlock(startToken: string) {
 }
 
 describe("layout style contract", () => {
-  test("uses the same Chinese serif font stack as the course HTML reference", () => {
+  test("uses the Fluent-style Windows font stack", () => {
     const rootBlock = extractBlock(":root");
 
     expect(rootBlock).toContain(
-      'font-family: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", Georgia, serif;'
+      'font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;'
     );
     expect(css).toMatch(/button,\s*\ninput,\s*\ntextarea,\s*\nselect\s*\{[\s\S]*font:\s*inherit;/);
   });

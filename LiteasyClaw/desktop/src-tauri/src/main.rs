@@ -2,6 +2,7 @@
 
 mod agent_host;
 mod agent_state;
+mod artifact_catalog_state;
 mod import;
 mod local_library;
 mod skill_documents;
@@ -23,8 +24,11 @@ fn main() {
             agent_host::agent_host_reply,
             agent_state::load_agent_state,
             agent_state::save_agent_state,
+            artifact_catalog_state::load_artifact_catalog_state,
+            artifact_catalog_state::save_artifact_catalog_state,
             import::mock_import,
             local_library::load_local_library_snapshot,
+            local_library::move_local_library_resource,
             skill_documents::save_skill_document
         ])
         .run(tauri::generate_context!())

@@ -7,7 +7,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-test("opens either paper in Reader while the multi-paper selection remains locked", async () => {
+test("opens multiple PDFs as independent document tabs while the selection remains locked", async () => {
   const user = userEvent.setup();
   const colbertTitle =
     "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT";
@@ -22,8 +22,15 @@ test("opens either paper in Reader while the multi-paper selection remains locke
   await user.click(screen.getByRole("button", { name: "锁定选择" }));
 
   await user.click(within(library).getByRole("button", { name: acornTitle }));
+  await user.click(within(library).getByRole("button", { name: colbertTitle }));
 
-  expect(within(screen.getByLabelText("Reader 标题栏")).getByText(acornTitle)).toBeInTheDocument();
+  const acornTab = screen.getByRole("tab", { name: acornTitle });
+  expect(acornTab).toHaveClass("dock-document-tab");
+  expect(screen.getByRole("tab", { name: colbertTitle })).toBeInTheDocument();
+  expect(acornTab).toHaveAttribute("aria-selected", "false");
+  expect(screen.getByRole("tab", { name: colbertTitle })).toHaveAttribute("aria-selected", "true");
+  await user.click(acornTab);
+  expect(within(screen.getByLabelText("PDF 标题栏")).getByText(acornTitle)).toBeInTheDocument();
   expect(within(library).getByLabelText(colbertTitle)).toBeChecked();
   expect(within(library).getByLabelText(acornTitle)).toBeChecked();
   expect(within(library).getByLabelText(colbertTitle)).toBeDisabled();

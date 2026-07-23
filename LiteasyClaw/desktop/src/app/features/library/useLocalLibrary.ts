@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createLocalLibraryClient } from "./localLibraryClient";
 import type { LocalLibrarySnapshot } from "./localLibrary.types";
 
@@ -19,19 +19,28 @@ function canUseTauriLocalLibrary(loader?: LocalLibraryLoader) {
 
 export function useLocalLibrary(loader?: LocalLibraryLoader) {
   const [snapshot, setSnapshot] = useState<LocalLibrarySnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     if (!canUseTauriLocalLibrary(loader)) {
       return;
     }
-
-    const load = async () => {
+    try {
       const client = createLocalLibraryClient(loader);
       setSnapshot(await client());
-    };
-
-    void load();
+      setError(null);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(message);
+      throw cause;
+    }
   }, [loader]);
 
-  return snapshot;
+  useEffect(() => {
+    void refresh().catch(() => {
+      // The caller can surface the retained error state without an unhandled rejection.
+    });
+  }, [refresh]);
+
+  return { error, refresh, snapshot };
 }

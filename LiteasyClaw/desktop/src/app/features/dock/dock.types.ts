@@ -5,7 +5,6 @@ export type DockItemId =
   | "organization"
   | "profile"
   | "settings"
-  | "reader"
   | "assistant"
   | "artifacts";
 

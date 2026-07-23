@@ -403,6 +403,8 @@ Artifact modal
 
 等待过程由 Public Agent API 的真实事件驱动，不使用前端假定时器。Artifact task 依次显示 `waiting_for_import → preparing_context → retrieving_evidence → generating_answer → auditing_answer → structuring_artifact → saving_result → completed`，其中 PDF 左栏的 `PDF 已就绪` 只表示检索材料已准备，不代表 Agent 已生成结果。OpenAI Responses SSE 经 dev-cloud 转为 `application/x-ndjson`，再映射成 Public Agent `assistant.delta`；树/思维导图模式会把已完整到达的 Markdown unordered-list 行解析成临时节点即时展开。临时树不持久化，最终事实树仍由完整 Evidence 生成。
 
+失败任务保留 `run.failed.message`，并附带失败阶段、本地 Agent endpoint、provider、model、时间和恢复建议；UI 与对应的 Artifact Chat session 都显示同一诊断，API key 永不进入任务状态。OpenAI-compatible upstream 的错误解析兼容 `error.message`、字符串 `error`、`message` 与 `detail`。对网络错误、429、408 和 5xx 只做最多三次有限退避；HTTP 200 但没有任何文本的 SSE 不再视为成功，而是尝试从 `response.completed`/`output_text.done` 恢复全文，完全空输出时重连一次后明确失败。
+
 树形图和思维导图的运行时元数据是带 `id/parentId/kind/evidenceIds` 的结构化节点，不再用制表符、ASCII 树或模型正文推断层级。界面用递归 `<ul>`、可折叠节点和连接线渲染，并按层渐进出现。相同节点树同时派生 Markdown unordered list，保存为 `outlineMarkdown`，用于人工查看、Git diff 和外部工具交换；Markdown 是可读投影，结构化 JSON 才是运行时事实源。
 
 导入现已复用项目已有的 `pdfjs-dist`，从实际 `sourcePath` 逐页提取文本，以约 1600 字符和 180 字符重叠切块，并保留页码、摘要和轻量术语标签。只有仓库自带的 demo PDF 在解析异常时允许回退到 fixture；未知或用户导入来源解析失败会明确失败，不会用演示片段伪装全文。实测 ColBERT 为 10 页、60,518 个文本字符，ACORN 为 15 页、92,529 个文本字符。
@@ -413,11 +415,15 @@ Artifact modal
 
 文献库使用单列递归资源树，而不是“左侧 Collection / 右侧论文”的双列布局。文件夹、子文件夹和论文统一用 `▸/▾` 控制收起与展开；论文标题保持单行省略并用 tooltip 显示全名。论文的 checkbox 只控制分析选择集，标题点击只控制独立的 `activeReaderPaperId`，因此锁定 ColBERT + ACORN 后仍可在 Reader 中切换任一论文而不修改锁定快照。
 
+本地资源操作沿用 `layout -> controller -> feature client -> Tauri command` 边界。右键菜单和拖拽只表达重命名/移动意图；controller 先计算新路径并检查条目冲突，Tauri 再 canonicalize 源资源与目标父目录，拒绝 `~/LiteasyLibrary` 之外的路径、覆盖同名资源以及把目录移入自身。只有磁盘 rename 与索引更新都成功后，workspace store 才按稳定论文 ID 更新路径；索引写入失败时尝试回滚磁盘移动。`.liteasy-library-index.json` 只保存 `id + relativePath`，不复制 PDF 正文。刷新按钮会重新扫描 PDF 并恢复路径，目录树显示时折叠工作区根目录之外的绝对路径段，减少无效宽度占用。
+
 论文节点展开后显示与其关联的多模态产物和用户笔记条目。关联优先读取持久产物的 `papers`，旧结果兼容从 analysis coverage 推导。产物中心按 `activeArtifactId` 渲染并提供历史切换，不再固定显示数组第一项；每个页面明确列出来源论文。
 
 “补充资料并重新生成”对话框把新增文本、引用、页码或要求作为独立的 `<user-supplement>` 信任域传入。重生成期间 Agent 环境临时使用原产物的 `sourcePaperIds` 与对应已导入 chunks，完成后恢复当前 UI selection；新结果另存 JSON，并记录 `regeneratedFromArtifactId`、`supplementalContext` 和 `papers`，不覆盖旧产物，也不把用户补充误标成论文原始证据。
 
 产物 catalog 与中心区 open tabs 是两个不同集合。应用启动时，`GET /v1/agent-artifacts` 只恢复 catalog；关闭中心标签只删除 open-tab 投影，不删除 catalog 项。文献树按 catalog 的 `papers` 建立关联，点击条目时再把 catalog 项打开成中心标签。因此“关闭标签”不再导致论文下的产物入口消失。
+
+catalog 采用本机缓存与协作 JSON 双层恢复。Tauri 桌面端把完整多模态 catalog 原子写入应用数据目录的 `artifact-catalog.v1.json`；浏览器开发模式使用 IndexedDB，缺少 IndexedDB 时才降级到 `localStorage`。启动时先加载本机缓存以恢复可见记录，再与 `GET /v1/agent-artifacts` 返回合并，远端暂时不可用不会清空本地 catalog。`models.cloud_proxy_endpoint` 因登录或本地端口变化时会触发重新同步，而不是只在 controller 首次挂载时请求一次。skill 文档属于源文件投影，不进入该缓存。
 
 产物删除与关闭标签语义分离。“关闭”只收起界面标签；“删除产物”经用户确认后调用 `DELETE /v1/agent-artifacts/:artifactId`，服务端严格校验 ID，并且只允许删除结果目录中的单个 JSON。远端删除成功后才从 catalog、open tabs 和论文子项中移除；失败时保留本地入口，避免界面与磁盘状态分叉。同一模态、同一组论文已有持久产物时，再次点击生成会明确询问用户；确认后另存新版本，不覆盖旧结果。
 

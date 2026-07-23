@@ -20,7 +20,7 @@ export function createDefaultDockLayout(): DockLayout {
     regions: {
       bottom: createRegion([]),
       left: createRegion(["library"]),
-      main: createRegion(["reader"]),
+      main: createRegion([]),
       right: createRegion(["assistant"])
     },
     version: 1
@@ -85,11 +85,6 @@ export function normalizeDockLayout(value: unknown): DockLayout {
       normalizeRegion(regionId, rawRegions[regionId], claimedItems)
     ])
   ) as Record<DockRegionId, DockRegionLayout>;
-
-  if (!claimedItems.has("reader")) {
-    regions.main.itemIds.unshift("reader");
-    regions.main.activeItemId ??= "reader";
-  }
 
   return {
     regions,

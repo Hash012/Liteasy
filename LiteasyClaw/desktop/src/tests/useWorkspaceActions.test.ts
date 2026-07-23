@@ -5,6 +5,7 @@ import { buildImportedChunksForPaper } from "../app/features/import/importFixtur
 import { createWorkspaceStore } from "../app/features/workspace/workspace.store";
 import type { Paper, WorkspaceState } from "../app/features/workspace/workspace.types";
 import { useWorkspaceActions } from "../app/features/workspace/useWorkspaceActions";
+import type { MoveLocalLibraryResource } from "../app/features/library/libraryFileSystemClient";
 
 function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
   return {
@@ -16,9 +17,22 @@ function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
   };
 }
 
-function renderWorkspaceActions(papers: Paper[] = []) {
+function renderWorkspaceActions(
+  papers: Paper[] = [],
+  options: {
+    moveLocalLibraryResource?: MoveLocalLibraryResource;
+    workspaceRootPath?: string;
+  } = {}
+) {
   const workspaceStore = createWorkspaceStore();
-  papers.forEach((paper) => workspaceStore.addPaper(paper));
+  if (options.workspaceRootPath) {
+    workspaceStore.openWorkspace(papers, {
+      rootPath: options.workspaceRootPath,
+      type: "local_library"
+    });
+  } else {
+    papers.forEach((paper) => workspaceStore.addPaper(paper));
+  }
   const importStore = createImportStore();
   const onAnalysisHint = vi.fn();
   const onImportJobsChanged = vi.fn();
@@ -30,6 +44,7 @@ function renderWorkspaceActions(papers: Paper[] = []) {
       }),
       importDocument: vi.fn(() => Promise.resolve()),
       importStore,
+      moveLocalLibraryResource: options.moveLocalLibraryResource,
       onAnalysisHint,
       onImportJobsChanged,
       onWorkspaceChanged,
@@ -101,6 +116,92 @@ describe("useWorkspaceActions", () => {
     );
     expect(workspaceStore.getState().papers).toHaveLength(1);
     expect(onAnalysisHint).toHaveBeenLastCalledWith("《Recommended Paper》已经在我的文献库中。");
+  });
+
+  test("renames a managed PDF on disk before updating its stable workspace entry", async () => {
+    const moveLocalLibraryResource = vi.fn(() => Promise.resolve());
+    const paper = {
+      id: "paper-1",
+      sourcePath: "/tmp/LiteasyLibrary/papers/colbert.pdf",
+      title: "ColBERT"
+    };
+    const { result, workspaceStore } = renderWorkspaceActions([paper], {
+      moveLocalLibraryResource,
+      workspaceRootPath: "/tmp/LiteasyLibrary"
+    });
+    workspaceStore.toggleSelection(paper.id);
+
+    await act(async () => {
+      await result.current.renamePaper(paper.id, "ColBERT Revised");
+    });
+
+    expect(moveLocalLibraryResource).toHaveBeenCalledWith({
+      sourcePath: "/tmp/LiteasyLibrary/papers/colbert.pdf",
+      targetPath: "/tmp/LiteasyLibrary/papers/ColBERT Revised.pdf"
+    });
+    expect(workspaceStore.getState()).toMatchObject({
+      papers: [{
+        id: "paper-1",
+        sourcePath: "/tmp/LiteasyLibrary/papers/ColBERT Revised.pdf",
+        title: "ColBERT Revised"
+      }],
+      selectedPaperIds: ["paper-1"]
+    });
+  });
+
+  test("moves a directory and updates every descendant only after disk success", async () => {
+    const moveLocalLibraryResource = vi.fn(() => Promise.resolve());
+    const { result, workspaceStore } = renderWorkspaceActions([
+      {
+        id: "paper-1",
+        sourcePath: "/tmp/LiteasyLibrary/search/colbert.pdf",
+        title: "ColBERT"
+      },
+      {
+        id: "paper-2",
+        sourcePath: "/tmp/LiteasyLibrary/search/late/maxsim.pdf",
+        title: "MaxSim"
+      }
+    ], {
+      moveLocalLibraryResource,
+      workspaceRootPath: "/tmp/LiteasyLibrary"
+    });
+
+    await act(async () => {
+      await result.current.moveFolder(
+        "/tmp/LiteasyLibrary/search",
+        "/tmp/LiteasyLibrary/archive"
+      );
+    });
+
+    expect(moveLocalLibraryResource).toHaveBeenCalledWith({
+      sourcePath: "/tmp/LiteasyLibrary/search",
+      targetPath: "/tmp/LiteasyLibrary/archive/search"
+    });
+    expect(workspaceStore.getState().papers.map((paper) => paper.sourcePath)).toEqual([
+      "/tmp/LiteasyLibrary/archive/search/colbert.pdf",
+      "/tmp/LiteasyLibrary/archive/search/late/maxsim.pdf"
+    ]);
+  });
+
+  test("keeps workspace paths unchanged when the disk operation fails", async () => {
+    const moveLocalLibraryResource = vi.fn(() => Promise.reject(new Error("permission denied")));
+    const paper = {
+      id: "paper-1",
+      sourcePath: "/tmp/LiteasyLibrary/papers/colbert.pdf",
+      title: "ColBERT"
+    };
+    const { onAnalysisHint, result, workspaceStore } = renderWorkspaceActions([paper], {
+      moveLocalLibraryResource,
+      workspaceRootPath: "/tmp/LiteasyLibrary"
+    });
+
+    await act(async () => {
+      await result.current.movePaper("paper-1", "/tmp/LiteasyLibrary/archive");
+    });
+
+    expect(workspaceStore.getState().papers).toEqual([paper]);
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("移动失败：permission denied");
   });
 
   test("imports the selected set and exposes imported chunks after timers complete", async () => {

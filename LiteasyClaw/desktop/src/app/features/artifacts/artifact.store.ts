@@ -1,4 +1,9 @@
-import type { ArtifactTab, ArtifactTask, ArtifactType } from "./artifact.types";
+import type {
+  ArtifactTab,
+  ArtifactTask,
+  ArtifactTaskFailure,
+  ArtifactType
+} from "./artifact.types";
 
 export function createArtifactStore() {
   const tasks = new Map<string, ArtifactTask>();
@@ -78,10 +83,13 @@ export function createArtifactStore() {
         tabs.splice(tabIndex, 1);
       }
     },
-    failTask(id: string) {
+    failTask(id: string, failure?: ArtifactTaskFailure) {
       const task = tasks.get(id);
       if (!task || task.status === "cancelled") return;
-      task.message = "Agent 分析失败";
+      task.failure = failure;
+      task.message = failure?.message
+        ? `Agent 分析失败：${failure.message}`
+        : "Agent 分析失败";
       task.stage = "failed";
       task.status = "failed";
     },

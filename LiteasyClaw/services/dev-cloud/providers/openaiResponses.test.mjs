@@ -82,6 +82,70 @@ test("throws a readable error when the OpenAI provider returns a non-ok status",
   );
 });
 
+test("preserves string error payloads returned by OpenAI-compatible proxies", async () => {
+  const provider = createOpenAIResponsesProvider({
+    apiKey: "sk-test",
+    fetchImpl: async () => ({
+      json: async () => ({ error: "model gpt-5.5 is unavailable" }),
+      ok: false,
+      status: 404
+    })
+  });
+
+  await assert.rejects(
+    provider({ model: "gpt-5.5", prompt: "test" }),
+    /404.*model gpt-5.5 is unavailable/
+  );
+});
+
+test("adds a sanitized endpoint and network cause to connection failures", async () => {
+  const provider = createOpenAIResponsesProvider({
+    apiBaseUrl: "https://proxy.example.test/v1?token=secret",
+    apiKey: "sk-test",
+    fetchImpl: async () => {
+      const error = new Error("fetch failed");
+      error.cause = { code: "ECONNRESET" };
+      throw error;
+    }
+  });
+
+  await assert.rejects(
+    provider({ model: "gpt-5.5", prompt: "test" }),
+    (error) => {
+      assert.match(error.message, /endpoint=https:\/\/proxy\.example\.test\/v1/);
+      assert.match(error.message, /ECONNRESET/);
+      assert.doesNotMatch(error.message, /token=secret/);
+      return true;
+    }
+  );
+});
+
+test("retries transient 503 responses before returning a live answer", async () => {
+  let attempts = 0;
+  const provider = createOpenAIResponsesProvider({
+    apiKey: "sk-test",
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts < 3) {
+        return {
+          body: { cancel: async () => undefined },
+          json: async () => ({ error: { message: "temporarily unavailable" } }),
+          ok: false,
+          status: 503
+        };
+      }
+      return {
+        json: async () => ({ output_text: "recovered" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  assert.equal(await provider({ model: "gpt-5.5", prompt: "test" }), "recovered");
+  assert.equal(attempts, 3);
+});
+
 test("yields output_text deltas from the OpenAI Responses SSE stream", async () => {
   let capturedBody;
   const provider = createOpenAIResponsesStreamProvider({
@@ -107,4 +171,51 @@ test("yields output_text deltas from the OpenAI Responses SSE stream", async () 
 
   assert.deepEqual(deltas, ["Hello ", "stream"]);
   assert.equal(capturedBody.stream, true);
+});
+
+test("extracts full text from response.completed when a proxy omits deltas", async () => {
+  const provider = createOpenAIResponsesStreamProvider({
+    apiKey: "sk-test",
+    fetchImpl: async () => ({
+      body: Readable.from([
+        Buffer.from('data: {"type":"response.completed","response":{"output_text":"completed text"}}\n\n')
+      ]),
+      ok: true,
+      status: 200
+    })
+  });
+  const deltas = [];
+
+  for await (const delta of provider({ model: "gpt-5.5", prompt: "test" })) {
+    deltas.push(delta);
+  }
+
+  assert.deepEqual(deltas, ["completed text"]);
+});
+
+test("reopens the stream once when an upstream response contains no text", async () => {
+  let attempts = 0;
+  const provider = createOpenAIResponsesStreamProvider({
+    apiKey: "sk-test",
+    fetchImpl: async () => {
+      attempts += 1;
+      return {
+        body: Readable.from([
+          attempts === 1
+            ? Buffer.from('data: {"type":"response.completed"}\n\n')
+            : Buffer.from('data: {"type":"response.output_text.delta","delta":"recovered"}\n\n')
+        ]),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+  const deltas = [];
+
+  for await (const delta of provider({ model: "gpt-5.5", prompt: "test" })) {
+    deltas.push(delta);
+  }
+
+  assert.deepEqual(deltas, ["recovered"]);
+  assert.equal(attempts, 2);
 });

@@ -71,6 +71,19 @@ const taskStatusLabels: Record<ArtifactTask["status"], string> = {
   running: "分析中"
 };
 
+const taskStageLabels: Record<ArtifactTask["stage"], string> = {
+  auditing_answer: "核验回答",
+  cancelled: "已终止",
+  completed: "生成完成",
+  failed: "生成失败",
+  generating_answer: "流式生成",
+  preparing_context: "准备上下文",
+  retrieving_evidence: "检索论文证据",
+  saving_result: "持久保存",
+  structuring_artifact: "构建产物结构",
+  waiting_for_import: "等待 PDF 解析"
+};
+
 function cleanAgentAnswer(answer: string) {
   return answer
     .replace(/^\s*```(?:text|markdown|md)?\s*$/gim, "")
@@ -215,7 +228,28 @@ export function ArtifactTabs({
           ) : activeTask.partialAnswer ? (
             <div className="artifact-stream-preview">{cleanAgentAnswer(activeTask.partialAnswer)}</div>
           ) : null}
-          <small>PDF 解析完成只表示证据可检索；Agent 生成、审计和保存仍是后续独立阶段。</small>
+          {activeTask.failure ? (
+            <details className="artifact-failure-diagnostic" open>
+              <summary>查看失败详情与恢复建议</summary>
+              <dl>
+                <div><dt>原因</dt><dd>{activeTask.failure.message}</dd></div>
+                <div><dt>失败阶段</dt><dd>{taskStageLabels[activeTask.failure.failedStage]}</dd></div>
+                {activeTask.failure.endpoint ? (
+                  <div><dt>Agent 服务端点</dt><dd>{activeTask.failure.endpoint}</dd></div>
+                ) : null}
+                {activeTask.failure.provider ? (
+                  <div><dt>Provider</dt><dd>{activeTask.failure.provider}</dd></div>
+                ) : null}
+                {activeTask.failure.model ? (
+                  <div><dt>Model</dt><dd>{activeTask.failure.model}</dd></div>
+                ) : null}
+                <div><dt>时间</dt><dd>{activeTask.failure.occurredAt}</dd></div>
+              </dl>
+              <ul>
+                {activeTask.failure.recovery.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </details>
+          ) : null}
         </section>
       ) : null}
 
@@ -228,7 +262,11 @@ export function ArtifactTabs({
               : analysisHint
           }
         >
-          选中文献集：{selectedCount} 篇{selectionLocked ? " · 已锁定" : " · 未锁定"}
+          {selectedCount === 0
+            ? "选择文献后开始分析"
+            : selectionLocked
+              ? "选择分析类型以生成产物"
+              : "锁定选中文献后开始分析"}
         </div>
       ) : activeTab?.type === "skill_doc" ? (
         <div className="artifact-card skill-doc-card">

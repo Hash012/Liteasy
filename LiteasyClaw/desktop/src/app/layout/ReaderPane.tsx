@@ -1,3 +1,5 @@
+import { Button } from "@fluentui/react-components";
+import { AddRegular, SubtractRegular } from "@fluentui/react-icons";
 import { useState } from "react";
 import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
@@ -62,37 +64,31 @@ export function ReaderPane({
 
   return (
     <main className="pane center">
-      <div aria-label="Reader 标题栏" className="pane-header reader-pane-header">
-        <div className="reader-header-primary">
-          <span className="reader-pane-title">Reader</span>
-          <span className="reader-brand-lockup" title="LiteasyClaw · AI-driven paper-assisted reading platform · 云端模型能力">
-            <span className="reader-brand-name">LiteasyClaw</span>
-            <span className="reader-brand-tagline">AI-driven paper-assisted reading platform</span>
-            <span className="reader-model-indicator">云端模型能力</span>
-          </span>
-        </div>
+      <div aria-label="PDF 标题栏" className="pane-header reader-pane-header">
         {activePaper ? (
           <div aria-label="PDF 阅读批注工具栏" className="reader-pdf-toolbar" role="toolbar">
             <span className="reader-file-title" title={activePaper.sourcePath ?? "当前使用 PDF.js 阅读面板"}>
               {activePaper.title}
             </span>
-            <button
+            <Button
               aria-label="缩小 PDF 页面"
+              appearance="subtle"
+              icon={<SubtractRegular />}
               onClick={() => setZoom((current) => Math.max(70, current - 10))}
+              size="small"
               title="缩小 PDF 页面"
               type="button"
-            >
-              -
-            </button>
+            />
             <span className="reader-display-scale">显示比例 {zoom}%</span>
-            <button
+            <Button
               aria-label="放大 PDF 页面"
+              appearance="subtle"
+              icon={<AddRegular />}
               onClick={() => setZoom((current) => Math.min(180, current + 10))}
+              size="small"
               title="放大 PDF 页面"
               type="button"
-            >
-              +
-            </button>
+            />
           </div>
         ) : null}
         <DockLayoutControls
@@ -137,7 +133,7 @@ export function ReaderPane({
           ) : null}
         </div>
       ) : (
-        <div aria-label="Reader 空状态" className="pane-body reader-empty-brand">
+        <div aria-label="PDF 空状态" className="pane-body reader-empty-brand">
           <img alt="LiteasyClaw" src={liteasyLogoUrl} />
         </div>
       )}

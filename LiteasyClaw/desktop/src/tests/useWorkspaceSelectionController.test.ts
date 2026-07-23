@@ -51,7 +51,16 @@ test("opens local library snapshots and exposes the workspace label", () => {
   const { result, rerender } = renderHook(
     ({ rootPath }: { rootPath?: string }) =>
       useWorkspaceSelectionController({
-        localLibrarySnapshot: rootPath ? { documents: [], rootPath } : null,
+        localLibrarySnapshot: rootPath ? {
+          entries: [
+            {
+              id: "local-paper-1",
+              path: `${rootPath}/papers/paper-1.pdf`,
+              title: "Paper 1"
+            }
+          ],
+          rootPath
+        } : null,
         workspaceStore
       }),
     {
@@ -65,7 +74,13 @@ test("opens local library snapshots and exposes the workspace label", () => {
 
   expect(result.current.model.workspaceLabel).toBe("/tmp/LiteasyLibrary");
   expect(result.current.model.workspaceState).toMatchObject({
-    papers: [],
+    papers: [
+      {
+        id: "local-paper-1",
+        sourcePath: "/tmp/LiteasyLibrary/papers/paper-1.pdf",
+        title: "Paper 1"
+      }
+    ],
     selectedPaperIds: [],
     selectionLocked: false,
     workspaceRevision: 1,

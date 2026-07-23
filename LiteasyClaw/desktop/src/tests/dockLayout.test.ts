@@ -9,14 +9,14 @@ import {
 } from "../app/features/dock/dockLayout";
 
 describe("dock layout", () => {
-  test("starts with the four product areas in their preferred regions", () => {
+  test("starts with the three persistent product areas and an empty document workspace", () => {
     const layout = createDefaultDockLayout();
 
     expect(layout.regions.left).toEqual({
       activeItemId: "library",
       itemIds: ["library"]
     });
-    expect(layout.regions.main.itemIds).toEqual(["reader"]);
+    expect(layout.regions.main.itemIds).toEqual([]);
     expect(layout.regions.right.itemIds).toEqual(["assistant"]);
     expect(layout.regions.bottom.itemIds).toEqual([]);
   });
@@ -38,7 +38,7 @@ describe("dock layout", () => {
   test("rejects a drop outside an item's allowed regions", () => {
     const layout = createDefaultDockLayout();
 
-    expect(moveDockItem(layout, "reader", "right")).toBe(layout);
+    expect(moveDockItem(layout, "artifacts", "left")).toBe(layout);
   });
 
   test("opens a missing activity item in its preferred region", () => {
@@ -69,7 +69,7 @@ describe("dock layout", () => {
     expect(findDockItemRegion(closed, "assistant")).toBeNull();
   });
 
-  test("normalizes duplicate, unknown and invalid stored items while restoring Reader", () => {
+  test("normalizes duplicate, unknown and invalid stored items without restoring a legacy Reader", () => {
     const layout = normalizeDockLayout({
       regions: {
         bottom: {
@@ -95,7 +95,7 @@ describe("dock layout", () => {
     expect(layout.regions.left.itemIds).toEqual(["library"]);
     expect(layout.regions.bottom.itemIds).toEqual([]);
     expect(layout.regions.right.itemIds).toEqual(["assistant"]);
-    expect(layout.regions.main.itemIds).toEqual(["reader"]);
+    expect(layout.regions.main.itemIds).toEqual([]);
   });
 
   test("migrates legacy standalone artifact dock items out of stored layouts", () => {
@@ -125,7 +125,7 @@ describe("dock layout", () => {
       activeItemId: null,
       itemIds: []
     });
-    expect(layout.regions.main.itemIds).toEqual(["reader"]);
+    expect(layout.regions.main.itemIds).toEqual([]);
   });
 
   test("migrates legacy multi-tab left regions to the active tab", () => {

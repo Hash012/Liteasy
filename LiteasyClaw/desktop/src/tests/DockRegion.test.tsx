@@ -74,6 +74,36 @@ describe("DockRegion", () => {
     expect(onMoveItem).toHaveBeenCalledWith("assistant", "bottom");
   });
 
+  test("renders document tabs with a file icon and a truncatable title", () => {
+    render(
+      <DockRegion
+        dynamicTabs={[
+          {
+            icon: <svg aria-label="PDF 文件" />,
+            id: "pdf-colbert",
+            kind: "document",
+            onActivate: vi.fn(),
+            onClose: vi.fn(),
+            render: () => <div>PDF content</div>,
+            selected: true,
+            title: "ColBERT: Efficient and Effective Passage Search"
+          }
+        ]}
+        layout={{ activeItemId: null, itemIds: [] }}
+        onActivateItem={vi.fn()}
+        onCloseItem={vi.fn()}
+        onMoveItem={vi.fn()}
+        regionId="main"
+        renderItem={() => null}
+      />
+    );
+
+    const documentTab = screen.getByRole("tab", { name: "ColBERT: Efficient and Effective Passage Search" });
+    expect(documentTab).toHaveClass("dock-document-tab");
+    expect(documentTab.querySelector("svg")).toBeInTheDocument();
+    expect(within(documentTab).getByText("ColBERT: Efficient and Effective Passage Search")).toHaveClass("dock-tab-title");
+  });
+
   test("shows only the shared logo when a region has no tabs", () => {
     render(
       <DockRegion
@@ -113,11 +143,11 @@ describe("DockRegion", () => {
     fireEvent.drop(region, { dataTransfer: assistantTransfer });
     expect(onMoveItem).toHaveBeenCalledWith("assistant", "left");
 
-    const readerTransfer = createDataTransfer("reader");
-    readerTransfer.setData(dockItemMimeType, "reader");
-    fireEvent.dragOver(region, { dataTransfer: readerTransfer });
+    const unknownTransfer = createDataTransfer("unknown");
+    unknownTransfer.setData(dockItemMimeType, "unknown");
+    fireEvent.dragOver(region, { dataTransfer: unknownTransfer });
     expect(region).not.toHaveClass("drop-active");
-    fireEvent.drop(region, { dataTransfer: readerTransfer });
+    fireEvent.drop(region, { dataTransfer: unknownTransfer });
     expect(onMoveItem).toHaveBeenCalledTimes(1);
   });
 
@@ -154,13 +184,13 @@ describe("DockRegion", () => {
             title: "ColBERT 文献树"
           }
         ]}
-        layout={{ activeItemId: "reader", itemIds: ["reader"] }}
+        layout={{ activeItemId: null, itemIds: [] }}
         onActivateItem={vi.fn()}
         onCloseItem={vi.fn()}
         onMoveDynamicTab={onMoveDynamicTab}
         onMoveItem={vi.fn()}
         regionId="main"
-        renderItem={() => <div>reader</div>}
+        renderItem={() => null}
       />
     );
 

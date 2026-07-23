@@ -1,4 +1,6 @@
 import type { RefObject } from "react";
+import { Tooltip } from "@fluentui/react-components";
+import { MicRegular, SendRegular } from "@fluentui/react-icons";
 import type { AssistantComposerSuggestion, AssistantContextToken } from "./assistant.types";
 
 type ActiveTrigger = {
@@ -185,17 +187,29 @@ export function AssistantComposer({
         value={input}
       />
       <div className="assistant-composer-actions">
-        <button
-          aria-label="语音输入（预留）"
-          className="assistant-voice-button"
-          onClick={onVoiceInput}
-          type="button"
-        >
-          语音
-        </button>
-        <button className="assistant-send" type="button" onClick={onSend} disabled={pending}>
-          {editing ? "更新并发送" : "发送"}
-        </button>
+        <Tooltip content="语音输入（预留）" positioning="above" relationship="description">
+          <button
+            aria-label="语音输入（预留）"
+            className="assistant-voice-button assistant-icon-button"
+            onClick={onVoiceInput}
+            title="语音输入（预留）"
+            type="button"
+          >
+            <MicRegular />
+          </button>
+        </Tooltip>
+        <Tooltip content={editing ? "更新并发送" : "发送消息"} positioning="above" relationship="description">
+          <button
+            aria-label={editing ? "更新并发送" : "发送"}
+            className="assistant-send assistant-icon-button"
+            disabled={pending}
+            onClick={onSend}
+            title={editing ? "更新并发送" : "发送"}
+            type="button"
+          >
+            <SendRegular />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

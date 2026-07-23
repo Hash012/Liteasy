@@ -33,7 +33,14 @@ export function useWorkspaceSelectionController({
     cloneWorkspaceState(workspaceStore.getState())
   );
   const [workspaceLabel, setWorkspaceLabel] = useState("本地文献库");
+  const localLibraryEntries = localLibrarySnapshot?.entries;
   const localLibraryRootPath = localLibrarySnapshot?.rootPath;
+  const localLibrarySnapshotKey = localLibrarySnapshot
+    ? [
+        localLibrarySnapshot.rootPath,
+        ...localLibrarySnapshot.entries.map((entry) => `${entry.id}:${entry.path}:${entry.title}`)
+      ].join("\n")
+    : "";
   const selectedDocumentSet = useMemo(
     () => buildSelectedDocumentSetSnapshot(workspaceState),
     [workspaceState]
@@ -44,13 +51,17 @@ export function useWorkspaceSelectionController({
       return;
     }
 
-    workspaceStore.openWorkspace([], {
+    workspaceStore.openWorkspace((localLibraryEntries ?? []).map((entry) => ({
+      id: entry.id,
+      sourcePath: entry.path,
+      title: entry.title
+    })), {
       rootPath: localLibraryRootPath,
       type: "local_library"
     });
     setWorkspaceState(cloneWorkspaceState(workspaceStore.getState()));
     setWorkspaceLabel(localLibraryRootPath);
-  }, [localLibraryRootPath, workspaceStore]);
+  }, [localLibrarySnapshotKey, workspaceStore]);
 
   return {
     actions: {
