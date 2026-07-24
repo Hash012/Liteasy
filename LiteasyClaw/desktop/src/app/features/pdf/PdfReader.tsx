@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   CommentRegular,
   DocumentRegular,
@@ -13,7 +13,8 @@ import type { ReaderConversationContext } from "../assistant/assistantContext.ty
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-type AnnotationKind = "highlight" | "underline" | "note";
+type AnnotationKind = "highlight" | "underline";
+type HighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
 
 type PdfAnnotationRect = {
   height: number;
@@ -30,6 +31,7 @@ type PdfAnnotation = {
   page: number;
   rects: PdfAnnotationRect[];
   text: string;
+  color?: HighlightColor;
 };
 
 type PdfSelection = {
@@ -43,11 +45,12 @@ type PdfSelection = {
 type PdfSidebarMode = "thumbnails" | "annotations";
 
 type PdfReaderProps = {
-  onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
   selectedPapers: Paper[];
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
+  onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
 };
+
 
 export type PdfEvidenceTarget = {
   evidenceId: string;
@@ -103,7 +106,41 @@ function getAnnotationLabel(kind: AnnotationKind) {
     return "划线";
   }
 
-  return "注释";
+  return kind;
+}
+
+function getHighlightColor(color: HighlightColor): string {
+  switch (color) {
+    case "yellow":
+      return "#ffeaa7";
+    case "red":
+      return "#fab1a0";
+    case "blue":
+      return "#74b9ff";
+    case "green":
+      return "#55efc4";
+    case "pink":
+      return "#fd79a8";
+    default:
+      return "#ffeaa7";
+  }
+}
+
+function getHighlightBorderColor(color: HighlightColor): string {
+  switch (color) {
+    case "yellow":
+      return "#ffe69c";
+    case "red":
+      return "#f5c6cb";
+    case "blue":
+      return "#bee5eb";
+    case "green":
+      return "#c3e6cb";
+    case "pink":
+      return "#f5b7e9";
+    default:
+      return "#ffe69c";
+  }
 }
 
 function getOverlayLabel(kind: AnnotationKind) {
@@ -115,14 +152,10 @@ function getOverlayLabel(kind: AnnotationKind) {
     return "划线标注";
   }
 
-  return "旁注";
+  return kind;
 }
 
 function getAnnotationText(kind: AnnotationKind) {
-  if (kind === "note") {
-    return "注释";
-  }
-
   return getAnnotationLabel(kind);
 }
 
@@ -361,21 +394,28 @@ function drawCanvasFallback(canvas: HTMLCanvasElement | null, title: string, pag
   context.fillText(title.slice(0, compact ? 18 : 52), compact ? 14 : 72, compact ? 18 : 78);
 }
 
-function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect): CSSProperties {
-  if (kind === "note") {
+function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: HighlightColor): CSSProperties {
+  if (kind === "underline") {
     return {
-      height: "2%",
-      left: `${Math.min(97, rect.left + rect.width + 0.7)}%`,
-      top: `${rect.top}%`,
-      width: "2%"
+      border: "none",
+      boxShadow: "none",
+      background: "none",
+      height: `${rect.height}%`,
+      left: `${rect.left}%`,
+      top: `${rect.top + rect.height - 0.3}%`,
+      width: `${rect.width}%`,
+      borderBottom: "2px solid rgba(27, 102, 179, 0.8)"
     };
   }
 
+  const highlightColor = color ? getHighlightColor(color) : getHighlightColor("yellow");
+
   return {
+    backgroundColor: highlightColor,
     height: `${rect.height}%`,
-    left: `${rect.left}%`,
-    top: `${rect.top}%`,
-    width: `${rect.width}%`
+    left: `${rect.left - 0.1}%`,
+    top: `${rect.top - 0.05}%`,
+    width: `${rect.width + 0.2}%`
   };
 }
 
@@ -491,11 +531,13 @@ function PdfPageView({
             <div
               className={`pdf-overlay-mark ${annotation.kind}`}
               key={`${annotation.id}-${index}`}
-              style={getOverlayStyle(annotation.kind, rect)}
+              style={getOverlayStyle(
+                annotation.kind,
+                rect,
+                annotation.kind === "highlight" ? annotation.color : undefined
+              )}
               title={`第 ${annotation.page} 页：${annotation.excerpt}`}
-            >
-              <span className="pdf-overlay-label">{getOverlayLabel(annotation.kind)}</span>
-            </div>
+            />
           ))
         )}
       </div>
@@ -568,24 +610,25 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
 }
 
 export function PdfReader({
-  onAddSelectionToConversation,
   selectedPapers,
   targetEvidence,
-  zoom
+  zoom,
+  onAddSelectionToConversation
 }: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
-  const [annotationDraft, setAnnotationDraft] = useState("");
   const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
+  const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = useState(1);
   const [focusedPage, setFocusedPage] = useState(1);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<PdfSidebarMode>("annotations");
   const [stageWidth, setStageWidth] = useState(960);
-  const [status, setStatus] = useState("选择文段后可添加高亮、划线、注释，或把选中文段交给 AI。");
+  const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
   const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
+  const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
   const pageNumbers = useMemo(() => getPageNumbers(pageCount), [pageCount]);
 
@@ -595,26 +638,25 @@ export function PdfReader({
       return undefined;
     }
 
-    function updateStageWidth() {
-      setStageWidth(Math.max(520, stageElement?.clientWidth || 960));
+    function updateLayout() {
+      setStageWidth(stageElement.clientWidth);
     }
 
-    updateStageWidth();
+    updateLayout();
 
     if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateStageWidth);
-      return () => window.removeEventListener("resize", updateStageWidth);
+      window.addEventListener("resize", updateLayout);
+      return () => window.removeEventListener("resize", updateLayout);
     }
 
-    const observer = new ResizeObserver(updateStageWidth);
+    const observer = new ResizeObserver(updateLayout);
     observer.observe(stageElement);
     return () => observer.disconnect();
   }, []);
 
+  
   useEffect(() => {
     setAnnotations([]);
-    setActiveAnnotationId(null);
-    setAnnotationDraft("");
     setSelection(null);
     setPageCount(1);
     setFocusedPage(1);
@@ -749,7 +791,8 @@ export function PdfReader({
       kind,
       page: activeSelection.page,
       rects: activeSelection.rects,
-      text: getAnnotationText(kind)
+      text: getAnnotationText(kind),
+      color: kind === "highlight" ? selectedColor : undefined
     };
     const duplicate = annotations.some(
       (item) =>
@@ -772,40 +815,64 @@ export function PdfReader({
   }
 
   function addSelectionToConversation() {
-    const activeSelection = selection ?? getInitialSelection(activePaper);
-    onAddSelectionToConversation?.({
-      excerpt: activeSelection.excerpt,
-      page: activeSelection.page,
-      paperId: activePaper?.id,
-      paperTitle: activePaper?.title,
+    if (!selection) return;
+
+    const context: ReaderConversationContext = {
+      excerpt: selection.excerpt,
+      page: selection.page,
+      paperId: selectedPapers[0]?.id,
+      paperTitle: selectedPapers[0]?.title,
       source: "pdf_selection"
-    });
-    setStatus("已将选中文段加入对话上下文。");
+    };
+
+    onAddSelectionToConversation?.(context);
     setSelection(null);
     clearBrowserSelection();
+    setStatus("已将选中文段添加到对话。");
   }
+
 
   function openAnnotationEditor(annotation: PdfAnnotation) {
     setActiveAnnotationId(annotation.id);
-    setAnnotationDraft(annotation.note ?? "");
+    setAnnotationNoteDraft(annotation.note || "");
+    // 如果是高亮，打开颜色选择器
+    if (annotation.kind === "highlight" && annotation.color) {
+      setSelectedColor(annotation.color);
+    }
   }
 
-  function saveAnnotationNote(annotationId: string) {
-    const note = annotationDraft.trim();
+  function saveAnnotationNote() {
+    if (!activeAnnotationId) return;
+
+    setAnnotations((current) =>
+      current.map((annotation) =>
+        annotation.id === activeAnnotationId
+          ? {
+              ...annotation,
+              note: annotationNoteDraft
+            }
+          : annotation
+      )
+    );
+    setStatus("已保存批注。");
+    setActiveAnnotationId(null);
+  }
+
+  function updateHighlightColor(annotationId: string, color: HighlightColor) {
     setAnnotations((current) =>
       current.map((annotation) =>
         annotation.id === annotationId
           ? {
               ...annotation,
-              note
+              color
             }
           : annotation
       )
     );
+    setStatus("已更新高亮颜色。");
     setActiveAnnotationId(null);
-    setAnnotationDraft("");
-    setStatus(note ? "已保存批注补充笔记。" : "已清空批注补充笔记。");
   }
+
 
   return (
     <section
@@ -817,7 +884,10 @@ export function PdfReader({
         aria-label="PDF 阅读工作区"
         className={`pdf-workspace ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-open"}`}
       >
-        <aside aria-label="PDF 左侧批注栏" className="pdf-left-sidebar">
+        <aside
+          aria-label="PDF 左侧批注栏"
+          className="pdf-left-sidebar"
+        >
           {sidebarCollapsed ? (
             <button
               aria-label="展开 PDF 左侧栏"
@@ -881,6 +951,12 @@ export function PdfReader({
                     <ul className="pdf-annotation-list">
                       {annotations.map((annotation) => (
                         <li className={`pdf-annotation-item ${annotation.kind}`} key={annotation.id}>
+                          {annotation.kind === "highlight" && annotation.color && (
+                            <div
+                              className="annotation-color-indicator"
+                              style={{ backgroundColor: getHighlightColor(annotation.color) }}
+                            />
+                          )}
                           <button
                             aria-label={`编辑批注：${annotation.excerpt}`}
                             className="pdf-annotation-summary"
@@ -891,20 +967,66 @@ export function PdfReader({
                             <span className="pdf-annotation-kind">{annotation.text}</span>
                             <span className="pdf-annotation-excerpt">{annotation.excerpt}</span>
                           </button>
-                          {annotation.note ? (
-                            <div className="pdf-annotation-note">补充：{annotation.note}</div>
-                          ) : null}
+                          {annotation.note && (
+                            <div className="annotation-divider" />
+                          )}
                           {activeAnnotationId === annotation.id ? (
                             <div className="pdf-annotation-editor">
-                              <textarea
-                                aria-label="补充批注笔记"
-                                onChange={(event) => setAnnotationDraft(event.target.value)}
-                                placeholder="为这条批注补充笔记"
-                                value={annotationDraft}
-                              />
-                              <button onClick={() => saveAnnotationNote(annotation.id)} type="button">
-                                保存笔记
+                              <div className="note-editor">
+                                <textarea
+                                  value={annotationNoteDraft}
+                                  onChange={(e) => setAnnotationNoteDraft(e.target.value)}
+                                  placeholder="添加批注..."
+                                  rows={3}
+                                />
+                                <div className="editor-actions">
+                                  <button onClick={saveAnnotationNote} type="button" className="save-button">
+                                    保存
+                                  </button>
+                                  <button onClick={() => setActiveAnnotationId(null)} type="button" className="cancel-button">
+                                    取消
+                                  </button>
+                                </div>
+                              </div>
+                              {annotation.kind === "highlight" && (
+                                <div className="color-selector">
+                                  {(["yellow", "red", "blue", "green", "pink"] as HighlightColor[]).map((color) => (
+                                    <button
+                                      key={color}
+                                      className={`color-option ${selectedColor === color ? "active" : ""}`}
+                                      style={{ backgroundColor: getHighlightColor(color) }}
+                                      onClick={() => {
+                                        // 更新高亮颜色
+                                        setAnnotations(current =>
+                                          current.map(a =>
+                                            a.id === annotation.id
+                                              ? { ...a, color }
+                                              : a
+                                          )
+                                        );
+                                        setStatus("已更新高亮颜色。");
+                                      }}
+                                      title={`选择${color === "yellow" ? "黄色" : color === "red" ? "红色" : color === "blue" ? "蓝色" : color === "green" ? "绿色" : "粉色"}高亮`}
+                                      type="button"
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                              <button onClick={() => {
+                                // 删除批注
+                                setAnnotations(current => current.filter(a => a.id !== annotation.id));
+                                setActiveAnnotationId(null);
+                                setStatus("已删除批注。");
+                              }} type="button" className="delete-button">
+                                删除
                               </button>
+                            </div>
+                          ) : annotation.note ? (
+                            <div className="annotation-note-preview">
+                              {annotation.note.length > 50 ?
+                                `${annotation.note.substring(0, 50)}...` :
+                                annotation.note
+                              }
                             </div>
                           ) : null}
                         </li>
@@ -919,7 +1041,11 @@ export function PdfReader({
           )}
         </aside>
 
-        <section aria-label="PDF 页面预览" className="pdf-main-stage">
+
+        <section
+          aria-label="PDF 页面预览"
+          className="pdf-main-stage"
+        >
           <div
             aria-label="PDF 页面滚动区"
             className="pdf-stage"
@@ -947,23 +1073,34 @@ export function PdfReader({
                 className="pdf-selection-menu"
                 style={{ left: selection.menuLeft, top: selection.menuTop }}
               >
-                <button onClick={() => addAnnotation("highlight")} title="高亮选中文段" type="button">
-                  高亮
-                </button>
-                <button onClick={() => addAnnotation("underline")} title="给选中文段添加下划线" type="button">
-                  划线
-                </button>
-                <button onClick={() => addAnnotation("note")} title="给选中文段添加旁注" type="button">
-                  注释
-                </button>
-                <button
-                  onClick={addSelectionToConversation}
-                  title="把选中文段加入右侧对话上下文"
-                  type="button"
-                >
-                  加入对话
-                </button>
-              </div>
+                <div className="selection-menu-row">
+                  <button onClick={() => addAnnotation("highlight")} title="高亮选中文段" type="button">
+                    高亮
+                  </button>
+                  <div className="color-selector">
+                    {(["yellow", "red", "blue", "green", "pink"] as HighlightColor[]).map((color) => (
+                      <button
+                        key={color}
+                        className={`color-option ${selectedColor === color ? "active" : ""}`}
+                        style={{ backgroundColor: getHighlightColor(color) }}
+                        onClick={() => setSelectedColor(color)}
+                        title={`选择${color === "yellow" ? "黄色" : color === "red" ? "红色" : color === "blue" ? "蓝色" : color === "green" ? "绿色" : "粉色"}高亮`}
+                        type="button"
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="selection-menu-row">
+                  <button onClick={() => addAnnotation("underline")} title="给选中文段添加下划线" type="button">
+                    划线
+                  </button>
+                </div>
+                <div className="selection-menu-row">
+                  <button onClick={addSelectionToConversation} title="将选中文段添加到对话" type="button" className="add-to-conversation">
+                    加入对话
+                  </button>
+                </div>
+                              </div>
             ) : null}
           </div>
         </section>
