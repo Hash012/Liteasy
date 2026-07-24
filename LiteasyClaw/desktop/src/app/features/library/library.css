@@ -247,6 +247,20 @@
   color: #5d7690;
   font-size: 12px;
   font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.library-file-drop-target:hover {
+  background: rgba(233, 243, 255, 0.85);
+  border-color: #1b66b3;
+}
+
+.library-file-drop-hint {
+  font-size: 11px;
+  color: #7b90a5;
+  font-weight: 400;
+  margin-top: 4px;
 }
 
 .library-collection-browser {

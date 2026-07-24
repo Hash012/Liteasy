@@ -257,6 +257,7 @@ export function LibraryPane({
   const [operationDialog, setOperationDialog] = useState<ResourceOperationDialog | null>(null);
   const [resourceActionMessage, setResourceActionMessage] = useState("");
   const [dropTargetFolderPath, setDropTargetFolderPath] = useState<string | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const resourceEditingEnabled = workspaceSourceType === "local_library";
   const normalizedWorkspaceRoot = normalizeWorkspacePath(workspaceLabel);
 
@@ -743,8 +744,29 @@ export function LibraryPane({
         <div className="library-selection-summary">
           已选 {selectedCount} 篇{selectionLocked ? " · 已锁定" : ""}
         </div>
-        <div aria-label="PDF 文件拖拽导入区" className="library-file-drop-target">
+        <div
+          aria-label="PDF 文件拖拽导入区"
+          className="library-file-drop-target"
+          onClick={() => document.getElementById('pdf-file-input')?.click()}
+        >
+          <input
+            key={fileInputKey}
+            id="pdf-file-input"
+            type="file"
+            accept=".pdf"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+              if (pdfFiles.length > 0) {
+                onAddDroppedPdfFiles?.(pdfFiles);
+                setFileInputKey(prev => prev + 1);
+              }
+            }}
+          />
           拖入 PDF 添加到文献库
+          <span className="library-file-drop-hint">或点击上传</span>
         </div>
         {resourceActionMessage ? (
           <div aria-live="polite" className="library-resource-action-message">
