@@ -161,7 +161,7 @@ describe("AppDialogs", () => {
 
     rerender(<AppDialogs {...createProps({ clearProfileConfirmOpen: true })} />);
     expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
-    expect(screen.getByRole("dialog", { name: "清空用户画像确认" })).toHaveClass("workspace-modal-panel");
+    expect(screen.getByRole("dialog", { name: "清空学术档案确认" })).toHaveClass("workspace-modal-panel");
   });
   test("renders only active profile dialogs and forwards actions", async () => {
     const user = userEvent.setup();
@@ -171,7 +171,7 @@ describe("AppDialogs", () => {
       <AppDialogs {...createProps({ clearProfileConfirmOpen: true, onClearProfile })} />
     );
 
-    await user.click(screen.getByRole("button", { name: "确认清空研究画像" }));
+    await user.click(screen.getByRole("button", { name: "确认清空学术档案" }));
     expect(onClearProfile).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog", { name: "学术档案页面" })).not.toBeInTheDocument();
 

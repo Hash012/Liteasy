@@ -46,7 +46,7 @@ function summarizeRuntimeContext(contextView?: AgentRuntimeContextView) {
     `- 选区锁定：${contextView.selection.locked ? "是" : "否"}。`,
     `- 云账号：${contextView.cloud.connected ? "已连接" : "未连接"}。`,
     ...(contextView.profile.personalizationSummary
-      ? [`- 研究画像：${contextView.profile.personalizationSummary}。`]
+      ? [`- 学术档案与当前关注：${contextView.profile.personalizationSummary}。`]
       : []),
     `- 工作区：${contextView.workspace.type}${contextView.workspace.rootPath ? ` (${contextView.workspace.rootPath})` : ""}。`,
     contextView.selection.issues.length

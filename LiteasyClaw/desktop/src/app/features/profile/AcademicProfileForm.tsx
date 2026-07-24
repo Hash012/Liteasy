@@ -65,7 +65,7 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
   }
 
   return (
-    <div className="personal-profile-form" aria-label="画像配置表单">
+    <div className="personal-profile-form" aria-label="学术档案编辑表单">
       <div className="personal-profile-fieldset">
         <div className="personal-profile-field-label">研究学科</div>
         <div className="personal-profile-inline-controls">
@@ -135,7 +135,7 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
         </select>
       </label>
       <button className="left-rail-button" onClick={saveAcademicProfile} type="button">
-        保存研究画像
+        保存学术档案
       </button>
     </div>
   );

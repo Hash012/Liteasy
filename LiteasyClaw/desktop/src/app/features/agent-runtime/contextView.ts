@@ -60,7 +60,7 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
 export function formatAgentRuntimeContextSummary(context: AgentRuntimeContextView) {
   const lockLabel = context.selection.locked ? "已锁定" : "未锁定";
   const cloudLabel = context.cloud.connected ? "云账号已连接" : "云账号未连接";
-  const profileLabel = context.profile.personalizationSummary ? "研究画像已应用" : "研究画像待补充";
+  const profileLabel = context.profile.personalizationSummary ? "学术档案已应用" : "学术档案待补充";
 
   return [
     "上下文",

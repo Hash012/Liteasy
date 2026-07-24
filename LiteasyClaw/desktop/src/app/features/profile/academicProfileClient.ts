@@ -98,12 +98,12 @@ export function createAcademicProfileClient({
       url: buildUrl(endpoint, action)
     });
     if (!response.ok) {
-      throw new Error(`研究画像同步失败（${response.status}）`);
+      throw new Error(`学术档案同步失败（${response.status}）`);
     }
 
     const payload = await response.json();
     if (!isSnapshot(payload)) {
-      throw new Error("研究画像返回格式无效");
+      throw new Error("学术档案返回格式无效");
     }
     return payload;
   }

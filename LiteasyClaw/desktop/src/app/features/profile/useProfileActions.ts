@@ -65,7 +65,7 @@ export function useProfileActions({
       })
       .catch(() => {
         if (active) {
-          setProfileClearMessage("研究画像暂未同步，将在网络恢复后继续保存。");
+          setProfileClearMessage("学术档案暂未同步，将在网络恢复后继续保存。");
         }
       });
 
@@ -93,7 +93,7 @@ export function useProfileActions({
   function updateAcademicProfile(nextProfile: AcademicProfile) {
     if (!accountSession || !client) {
       setAcademicProfile(nextProfile);
-      setProfileClearMessage("研究画像已更新。");
+      setProfileClearMessage("学术档案已更新。");
       return;
     }
 
@@ -103,10 +103,10 @@ export function useProfileActions({
         setAcademicProfile(toAcademicProfile(snapshot.profile));
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
-        setProfileClearMessage("研究画像已保存。");
+        setProfileClearMessage("学术档案已保存。");
       })
       .catch(() => {
-        setProfileClearMessage("研究画像保存失败，请检查云端连接后重试。");
+        setProfileClearMessage("学术档案保存失败，请检查云端连接后重试。");
       });
   }
 
@@ -131,10 +131,10 @@ export function useProfileActions({
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
         setClearProfileConfirmOpen(false);
-        setProfileClearMessage("已清空研究画像与个性化偏向。");
+        setProfileClearMessage("已清空学术档案，并重置个性化调整。");
       })
       .catch(() => {
-        setProfileClearMessage("研究画像清空失败，请检查云端连接后重试。");
+        setProfileClearMessage("学术档案清空失败，请检查云端连接后重试。");
       });
   }
 

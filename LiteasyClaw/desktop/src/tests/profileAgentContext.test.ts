@@ -33,6 +33,6 @@ describe("profile and Agent context boundary", () => {
       runtimeContext
     });
 
-    expect(prompt.runtimeSummary).toContain("研究画像：研究阶段：博士研究生；研究学科：工学 · 计算机科学与技术（自然语言处理）。");
+    expect(prompt.runtimeSummary).toContain("学术档案与当前关注：研究阶段：博士研究生；研究学科：工学 · 计算机科学与技术（自然语言处理）。");
   });
 });

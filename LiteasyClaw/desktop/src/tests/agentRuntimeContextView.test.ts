@@ -38,7 +38,7 @@ test("builds a ready runtime context summary", () => {
     }
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 2 篇 · 已锁定 · 已导入 2/2 · 云账号已连接 · 研究画像已应用"
+    "上下文 · 选中 2 篇 · 已锁定 · 已导入 2/2 · 云账号已连接 · 学术档案已应用"
   );
 });
 
@@ -64,7 +64,7 @@ test("marks empty, unlocked, and partially imported selections as not ready", ()
     connected: false
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 研究画像待补充"
+    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 学术档案待补充"
   );
 });
 

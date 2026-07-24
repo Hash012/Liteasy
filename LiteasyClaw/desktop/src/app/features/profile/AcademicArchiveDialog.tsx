@@ -22,7 +22,7 @@ export function AcademicArchiveDialog({
       <div aria-label="学术档案页面" className="workspace-modal-panel academic-archive-dialog" role="dialog">
         <div className="academic-archive-header">
           <div>
-            <div className="personal-center-kicker">用户画像配置文件</div>
+            <div className="personal-center-kicker">当前研究信息</div>
             <div className="academic-archive-title">学术档案</div>
           </div>
           <button className="organization-dialog-close" onClick={onClose} type="button">

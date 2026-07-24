@@ -59,7 +59,7 @@ export function PersonalCenterPanel({
       </div>
 
       <div className="personal-center-card">
-        <div className="personal-center-section-title">研究画像</div>
+        <div className="personal-center-section-title">学术档案</div>
         <div className="personal-center-row">研究阶段：{formatAcademicProfile(academicProfile)}</div>
         <div className="personal-center-row">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
         <AcademicProfileForm academicProfile={academicProfile} onSave={onUpdateAcademicProfile} />
@@ -70,9 +70,9 @@ export function PersonalCenterPanel({
       </div>
 
       <div className="personal-center-card">
-        <div className="personal-center-section-title">学术档案</div>
+        <div className="personal-center-section-title">档案管理</div>
         <button className="left-rail-button" onClick={onOpenAcademicArchive} type="button">查看学术档案</button>
-        <button className="left-rail-button danger" onClick={onClearProfile} type="button">清空研究画像</button>
+        <button className="left-rail-button danger" onClick={onClearProfile} type="button">清空学术档案</button>
       </div>
     </section>
   );

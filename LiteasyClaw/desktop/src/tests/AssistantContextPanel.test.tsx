@@ -31,7 +31,7 @@ test("renders a collapsed runtime context summary by default", () => {
 
   expect(screen.getByRole("button", { name: /运行时上下文/ })).toBeInTheDocument();
   expect(
-    screen.getByText("上下文 · 选中 3 篇 · 已锁定 · 已导入 2/3 · 云账号已连接 · 研究画像待补充")
+    screen.getByText("上下文 · 选中 3 篇 · 已锁定 · 已导入 2/3 · 云账号已连接 · 学术档案待补充")
   ).toBeInTheDocument();
   expect(screen.queryByText("Selection")).not.toBeInTheDocument();
 });
@@ -89,5 +89,5 @@ test("renders the same context view produced for planner and policy contexts", a
   expect(within(panel).getByText("工作区未知")).toBeInTheDocument();
   expect(within(panel).getByText("未知工作区")).toBeInTheDocument();
   expect(within(panel).getByText("未连接")).toBeInTheDocument();
-  expect(within(panel).getByText("已应用研究画像")).toBeInTheDocument();
+  expect(within(panel).getByText("已应用学术档案")).toBeInTheDocument();
 });

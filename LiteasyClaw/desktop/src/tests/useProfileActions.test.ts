@@ -74,7 +74,7 @@ describe("useProfileActions", () => {
       stage: "博士研究生"
     });
     expect(result.current.assistantProfileSummary).toContain("研究学科：工学 · 计算机科学与技术（自然语言处理）");
-    expect(result.current.profileClearMessage).toBe("研究画像已更新。");
+    expect(result.current.profileClearMessage).toBe("学术档案已更新。");
 
     act(() => result.current.openClearProfileConfirm());
     act(() => result.current.clearUserProfile());
