@@ -21,6 +21,7 @@ import {
   outlineToMarkdown,
   parseStreamingOutlineMarkdown
 } from "./artifactOutline";
+import { createEvidenceBackedBaseGraph } from "../intuition-graph/createBaseGraph";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
@@ -287,6 +288,13 @@ export function useArtifactActions({
         selectedPapers,
         title
       });
+      const intuitionGraph = artifactType === "mindmap"
+        ? createEvidenceBackedBaseGraph({
+            analysis: metadata.analysis,
+            artifactId,
+            workId: selectedPapers.length === 1 ? `local:${selectedPapers[0].id}` : `selection:${metadata.analysis.run.id}`
+          })
+        : undefined;
       const document = {
         agent: {
           apiVersion: agentRun.apiVersion,
@@ -300,6 +308,7 @@ export function useArtifactActions({
         artifactType,
         citations: answerEvent.citations ?? [],
         createdAt,
+        intuitionGraph,
         outlineMarkdown,
         outlineNodes,
         papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title })),
@@ -323,6 +332,7 @@ export function useArtifactActions({
         artifactId,
         citations: answerEvent.citations,
         createdAt,
+        intuitionGraph,
         outlineMarkdown,
         outlineNodes,
         papers: document.papers,
@@ -586,6 +596,7 @@ export function useArtifactActions({
       artifactId: result.artifactId,
       citations: result.citations,
       createdAt: result.createdAt,
+      intuitionGraph: result.intuitionGraph,
       outlineMarkdown: result.outlineMarkdown ?? (outlineNodes ? outlineToMarkdown(outlineNodes) : undefined),
       outlineNodes,
       papers: result.papers,

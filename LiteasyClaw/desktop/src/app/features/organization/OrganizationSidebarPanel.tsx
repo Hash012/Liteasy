@@ -1,4 +1,11 @@
 import type { AccountSession } from "../account/account.types";
+import { Tooltip } from "@fluentui/react-components";
+import {
+  AddRegular,
+  OpenRegular,
+  PeopleAddRegular,
+  SignOutRegular
+} from "@fluentui/react-icons";
 import { OrganizationGovernancePanel } from "./OrganizationGovernancePanel";
 import { OrganizationSpacePanel } from "./OrganizationSpacePanel";
 import type {
@@ -66,67 +73,69 @@ export function OrganizationSidebarPanel({
 
   return (
     <section aria-label="左边栏组织" className="organization-sidebar-panel">
-      <div className="organization-sidebar-header">
-        <div>
-          <div className="organization-sidebar-kicker">Activity · Organization</div>
-          <div className="organization-sidebar-title">组织</div>
-        </div>
-      </div>
       {loggedOut ? (
         <div className="organization-action-feedback">
           <div className="organization-sidebar-actions">
-            <button
-              className="policy-button sync"
-              onClick={onLoginRequired}
-              title="当前已退化为本地阅读器，组织空间不可用。登录后可加入组织、创建组织、查看共享文献库和组织通知。"
-              type="button"
-            >
-              登录后查看组织能力
-            </button>
+            <Tooltip content="登录后使用组织空间" positioning="below" relationship="description">
+              <button
+                aria-label="登录后使用组织空间"
+                className="policy-button sync icon-only"
+                onClick={onLoginRequired}
+                title="登录后使用组织空间"
+                type="button"
+              >
+                <PeopleAddRegular />
+              </button>
+            </Tooltip>
           </div>
         </div>
       ) : (
         <div className="organization-sidebar-actions">
-          <button className="policy-button sync" onClick={onOpenWindow} type="button">
-            打开组织窗口
-          </button>
-          {canCreateOrganization ? (
-            <button
-              className="policy-button ghost"
-              onClick={onCreateOrganization}
-              title={accountPermissionTooltip}
-              type="button"
-            >
-              创建组织
+          <Tooltip content="打开组织窗口" positioning="below" relationship="description">
+            <button aria-label="打开组织窗口" className="policy-button sync icon-only" onClick={onOpenWindow} type="button">
+              <OpenRegular />
             </button>
+          </Tooltip>
+          {canCreateOrganization ? (
+            <Tooltip content="创建组织" positioning="below" relationship="description">
+              <button
+                aria-label="创建组织"
+                className="policy-button ghost icon-only"
+                onClick={onCreateOrganization}
+                title={accountPermissionTooltip}
+                type="button"
+              >
+                <AddRegular />
+              </button>
+            </Tooltip>
           ) : (
-            <button className="policy-button ghost" disabled title={accountPermissionTooltip} type="button">
-              创建组织
+            <button aria-label="创建组织" className="policy-button ghost icon-only" disabled title={accountPermissionTooltip} type="button">
+              <AddRegular />
             </button>
           )}
-          <button
-            className="policy-button ghost"
-            onClick={onJoinOrganization}
-            title={accountPermissionTooltip}
-            type="button"
-          >
-            加入组织
-          </button>
-          {summary && canInviteMembers ? (
-            <button className="policy-button ghost" onClick={() => onInviteMember?.(summary)} type="button">
-              邀请成员
+          <Tooltip content="加入组织" positioning="below" relationship="description">
+            <button aria-label="加入组织" className="policy-button ghost icon-only" onClick={onJoinOrganization} title={accountPermissionTooltip} type="button">
+              <PeopleAddRegular />
             </button>
+          </Tooltip>
+          {summary && canInviteMembers ? (
+            <Tooltip content="邀请成员" positioning="below" relationship="description">
+              <button aria-label="邀请成员" className="policy-button ghost icon-only" onClick={() => onInviteMember?.(summary)} type="button">
+                <PeopleAddRegular />
+              </button>
+            </Tooltip>
           ) : null}
           {summary ? (
-            <button className="left-rail-button danger" onClick={() => onLeaveOrganization?.(summary)} type="button">
-              退出组织
-            </button>
+            <Tooltip content="退出组织" positioning="below" relationship="description">
+              <button aria-label="退出组织" className="left-rail-button danger icon-only" onClick={() => onLeaveOrganization?.(summary)} type="button">
+                <SignOutRegular />
+              </button>
+            </Tooltip>
           ) : null}
         </div>
       )}
       {actionMessage ? (
         <div aria-label="组织操作反馈" className="organization-action-feedback" role="status">
-          <div className="organization-action-feedback-title">组织操作反馈</div>
           <div className="organization-action-feedback-message">{actionMessage}</div>
         </div>
       ) : null}

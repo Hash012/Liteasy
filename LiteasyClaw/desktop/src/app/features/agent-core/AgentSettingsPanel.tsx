@@ -3,9 +3,9 @@ import {
   getAgentCoreStatusLabel,
   getAgentEntryStatusLabel,
   type AgentCoreCatalogEntry,
-  type AgentCoreConfig,
-  type AgentMemoryEntry
+  type AgentCoreConfig
 } from "./agentCoreConfig";
+import { BotRegular, ShieldRegular } from "@fluentui/react-icons";
 
 type AgentSettingsPanelProps = {
   config?: AgentCoreConfig;
@@ -50,27 +50,6 @@ function AgentCatalogList({
   );
 }
 
-function AgentMemoryList({ entries }: { entries: AgentMemoryEntry[] }) {
-  return (
-    <div className="agent-settings-section">
-      <div className="agent-settings-section-title">Memory 条目</div>
-      <div className="agent-settings-list">
-        {entries.map((entry) => (
-          <div className="agent-settings-row" key={entry.id}>
-            <div className="agent-settings-row-main">
-              <div className="agent-settings-row-title">
-                {entry.type} · {entry.importance}
-              </div>
-              <div className="agent-settings-row-description">{entry.summary}</div>
-            </div>
-            <div className="agent-settings-badge memory">{entry.namespace}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function AgentSettingsPanel({
   config = defaultAgentCoreConfig,
   onOpenSkillDocument
@@ -84,36 +63,9 @@ export function AgentSettingsPanel({
   return (
     <div className="model-policy-card agent-settings-card">
       <div className="agent-settings-header">
-        <div>
-          <div className="model-policy-title">Agent 核心</div>
-          <div className="model-policy-summary">
-            面向文献阅读、知识组织、学术产物和组织资料区的受控工作台 Agent。
-          </div>
-        </div>
+        <div aria-label="AI 功能" className="model-policy-title"><BotRegular /></div>
         <div className={`agent-settings-badge ${config.status}`}>
           {getAgentCoreStatusLabel(config.status)}
-        </div>
-      </div>
-
-      <div className="agent-md-card">
-        <div className="agent-settings-section-title">agent.md</div>
-        <div className="agent-md-path">{config.agentMd.path}</div>
-        <div className="agent-settings-row-description">{config.agentMd.summary}</div>
-        <div className="model-policy-meta">版本：{config.agentMd.revision}</div>
-      </div>
-
-      <div className="agent-settings-budget" aria-label="Agent 循环预算">
-        <div>
-          <span>{config.budget.maxIterations}</span>
-          <small>最大迭代</small>
-        </div>
-        <div>
-          <span>{config.budget.maxToolCalls}</span>
-          <small>工具调用</small>
-        </div>
-        <div>
-          <span>{config.budget.staleObservationTurns}</span>
-          <small>旧观察轮次</small>
         </div>
       </div>
 
@@ -124,10 +76,8 @@ export function AgentSettingsPanel({
       />
       <AgentCatalogList entries={config.plugins} title="Plugin 条目" />
       <AgentCatalogList entries={config.mcpServers} title="MCP 条目" />
-      <AgentMemoryList entries={config.memories} />
-
-      <div className="agent-settings-section">
-        <div className="agent-settings-section-title">安全与记忆策略</div>
+      <div className="agent-settings-section" aria-label="安全策略">
+        <div className="agent-settings-section-title"><ShieldRegular /></div>
         <div className="agent-settings-chip-row">
           {safetyItems.map((item) => (
             <span className="agent-settings-chip" key={item}>

@@ -1,0 +1,8 @@
+Node A
+Node B
+
+A {
+    level=0
+    description:"xxxx"
+    to(target=B, description="xxx")
+}

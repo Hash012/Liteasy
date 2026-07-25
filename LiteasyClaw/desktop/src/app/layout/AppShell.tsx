@@ -46,7 +46,7 @@ import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
 import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
-import { moveLocalLibraryResource } from "../features/library/libraryFileSystemClient";
+import { moveLocalLibraryResource, persistDroppedPdfFiles } from "../features/library/libraryFileSystemClient";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
@@ -211,6 +211,10 @@ export function AppShell({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
     moveLocalLibraryResource,
+    persistDroppedPdfFiles: typeof window !== "undefined" &&
+      typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
+      ? persistDroppedPdfFiles
+      : undefined,
     onAnalysisHint: setAnalysisHint,
     onImportJobsChanged: setImportJobsByDocumentId,
     onWorkspaceChanged: setWorkspaceState,

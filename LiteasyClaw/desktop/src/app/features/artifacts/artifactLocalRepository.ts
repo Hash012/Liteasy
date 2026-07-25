@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ArtifactTab, ArtifactType } from "./artifact.types";
+import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
 
 const browserStorageKey = "liteasy.artifact-catalog.v1";
 const databaseName = "liteasy-artifact-cache";
@@ -43,7 +44,8 @@ function isCachedArtifact(value: unknown): value is ArtifactTab {
     typeof candidate.title === "string" &&
     typeof candidate.type === "string" &&
     artifactTypes.has(candidate.type as ArtifactType) &&
-    candidate.type !== "skill_doc"
+    candidate.type !== "skill_doc" &&
+    (candidate.intuitionGraph === undefined || IntuitionGraphDocumentSchema.safeParse(candidate.intuitionGraph).success)
   );
 }
 

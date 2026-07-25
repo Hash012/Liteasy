@@ -1,4 +1,5 @@
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "./metadata.types";
+import { ArrowSyncRegular, DatabaseRegular } from "@fluentui/react-icons";
 
 type DocumentMetadataSyncPanelProps = {
   lastResult: DocumentMetadataSyncResult | null;
@@ -36,21 +37,20 @@ export function DocumentMetadataSyncPanel({
   const statusLabel = getStatusLabel(status, lastResult);
 
   return (
-    <div className="model-policy-card metadata-sync-card">
-      <div className="model-policy-title">文献元数据同步</div>
+    <div className="metadata-sync-card">
+      <div aria-label="文献元数据同步" className="metadata-sync-icon"><DatabaseRegular /></div>
       <div className={`model-policy-status ${status}`} title={message}>
-        文献同步：{statusLabel}
+        {statusLabel}
       </div>
-      {lastResult ? <div className="model-policy-meta">最近同步：{lastResult.syncedAt}</div> : null}
-      {lastResult ? <div className="model-policy-meta">同步批次：{lastResult.syncId}</div> : null}
       <button
-        className="policy-button sync"
+        aria-label="重新同步文献元数据"
+        className="policy-button sync icon-only"
         disabled={status === "syncing" || status === "unauthenticated"}
         onClick={onRetrySync}
         title={message}
         type="button"
       >
-        重新同步文献元数据
+        <ArrowSyncRegular />
       </button>
     </div>
   );

@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ChevronDownRegular, ChevronRightRegular, DatabaseRegular, SettingsRegular, BotRegular } from "@fluentui/react-icons";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
@@ -18,20 +20,36 @@ export function SettingsPane({
   onOpenSkillDocument,
   onRetryDocumentMetadataSync,
 }: SettingsPaneProps) {
+  const [agentExpanded, setAgentExpanded] = useState(false);
+  const [syncExpanded, setSyncExpanded] = useState(true);
   return (
     <section aria-label="左边栏设置" className="settings-panel">
-      <div className="settings-panel-title">设置</div>
-      <div className="settings-model-indicator">云端模型能力</div>
-      <div className="settings-model-copy">
-        Liteasy 面向普通用户统一通过云端模型能力提供问答、解释和产物生成服务。
-      </div>
-      <AgentSettingsPanel onOpenSkillDocument={onOpenSkillDocument} />
-      <DocumentMetadataSyncPanel
-        lastResult={documentMetadataSyncResult}
-        message={documentMetadataSyncMessage ?? ""}
-        onRetrySync={onRetryDocumentMetadataSync}
-        status={documentMetadataSyncStatus}
-      />
+      <div aria-hidden="true" className="settings-panel-icon"><SettingsRegular /></div>
+      <section className="sidebar-section settings-agent-section">
+        <button aria-expanded={agentExpanded} aria-label={`${agentExpanded ? "收起" : "展开"} Agent 设置`} className="sidebar-section-header" onClick={() => setAgentExpanded((current) => !current)} type="button">
+          <span aria-hidden="true" className="sidebar-section-disclosure">{agentExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
+          <BotRegular />
+          <span>Agent</span>
+        </button>
+        {agentExpanded ? <div className="sidebar-section-content">
+          <AgentSettingsPanel onOpenSkillDocument={onOpenSkillDocument} />
+        </div> : null}
+      </section>
+      <section className="sidebar-section settings-sync-section">
+        <button aria-expanded={syncExpanded} aria-label={`${syncExpanded ? "收起" : "展开"}文献同步`} className="sidebar-section-header" onClick={() => setSyncExpanded((current) => !current)} type="button">
+          <span aria-hidden="true" className="sidebar-section-disclosure">{syncExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
+          <DatabaseRegular />
+          <span>文献同步</span>
+        </button>
+        {syncExpanded ? <div className="sidebar-section-content">
+          <DocumentMetadataSyncPanel
+            lastResult={documentMetadataSyncResult}
+            message={documentMetadataSyncMessage ?? ""}
+            onRetrySync={onRetryDocumentMetadataSync}
+            status={documentMetadataSyncStatus}
+          />
+        </div> : null}
+      </section>
     </section>
   );
 }

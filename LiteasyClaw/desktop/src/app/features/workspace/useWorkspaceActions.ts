@@ -5,6 +5,7 @@ import type { Paper, WorkspaceState } from "./workspace.types";
 import type { createImportStore } from "../import/import.store";
 import type { createWorkspaceStore } from "./workspace.store";
 import type { MoveLocalLibraryResource } from "../library/libraryFileSystemClient";
+import type { PersistDroppedPdfFiles } from "../library/libraryFileSystemClient";
 import {
   buildMovedFolderPath,
   buildMovedPaper,
@@ -41,6 +42,7 @@ type UseWorkspaceActionsInput = {
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
   moveLocalLibraryResource?: MoveLocalLibraryResource;
+  persistDroppedPdfFiles?: PersistDroppedPdfFiles;
   onAnalysisHint: (message: string) => void;
   onImportJobsChanged: (jobsByDocumentId: Record<string, ImportJob>) => void;
   onWorkspaceChanged: (state: WorkspaceState) => void;
@@ -71,6 +73,7 @@ export function useWorkspaceActions({
   importDocument,
   importStore,
   moveLocalLibraryResource,
+  persistDroppedPdfFiles,
   onAnalysisHint,
   onImportJobsChanged,
   onWorkspaceChanged,
@@ -266,7 +269,7 @@ export function useWorkspaceActions({
     onAnalysisHint(`《${item.title}》已经在我的文献库中。`);
   }
 
-  function addDroppedPdfFiles(files: File[]) {
+  async function addDroppedPdfFiles(files: File[], targetFolderPath?: string) {
     const pdfFiles = files.filter((file) => file.name.toLowerCase().endsWith(".pdf"));
 
     if (pdfFiles.length === 0) {
@@ -274,13 +277,33 @@ export function useWorkspaceActions({
       return;
     }
 
+    const state = workspaceStore.getState();
+    if (persistDroppedPdfFiles && state.workspaceSource.type === "local_library") {
+      try {
+        const snapshot = await persistDroppedPdfFiles({ files: pdfFiles, targetFolderPath });
+        workspaceStore.openWorkspace(snapshot.entries.map((entry) => ({
+          id: entry.id,
+          sourcePath: entry.path,
+          title: entry.title
+        })), {
+          rootPath: snapshot.rootPath,
+          type: "local_library"
+        });
+        syncWorkspace();
+        const target = targetFolderPath ? normalizeWorkspacePath(targetFolderPath) : `${snapshot.rootPath}/papers`;
+        onAnalysisHint(`已保存 ${pdfFiles.length} 个 PDF 到 ${target}。`);
+        return;
+      } catch (error) {
+        onAnalysisHint(`保存到本地文献库失败：${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
+    }
+
     let addedCount = 0;
     pdfFiles.forEach((file) => {
       const title = normalizeDroppedFileTitle(file.name);
-      const sourcePath =
-        typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
-          ? URL.createObjectURL(file)
-          : `dropped://${encodeURIComponent(file.name)}`;
+      const targetRoot = state.workspaceSource.rootPath || "本地文献库";
+      const sourcePath = `${targetFolderPath ?? `${targetRoot}/papers`}/${file.name}`;
       const added = workspaceStore.addPaper({
         id: buildDroppedPaperId(file),
         sourcePath,
@@ -313,7 +336,7 @@ export function useWorkspaceActions({
       onAnalysisHint("已解除锁定。请调整选中文献集后，再选择模态按钮启动分析。");
     } else {
       workspaceStore.lockSelection();
-      onAnalysisHint("选中文献集已锁定。可直接使用模态按钮开始分析。");
+      onAnalysisHint("选中文献集已锁定。可以先交给AI流程，或直接用模态按钮开始分析。");
     }
     syncWorkspace();
   }

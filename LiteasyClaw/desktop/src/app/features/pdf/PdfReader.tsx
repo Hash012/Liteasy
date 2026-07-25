@@ -639,7 +639,7 @@ export function PdfReader({
     }
 
     function updateLayout() {
-      setStageWidth(stageElement.clientWidth);
+      setStageWidth(stageRef.current?.clientWidth ?? 960);
     }
 
     updateLayout();

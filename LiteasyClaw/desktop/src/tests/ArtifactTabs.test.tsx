@@ -214,6 +214,38 @@ describe("ArtifactTabs", () => {
     expect(screen.getAllByText("ColBERT").length).toBeGreaterThan(1);
   });
 
+  test("switches an evidence-backed mind map to the layered graph projection", () => {
+    const tab: ArtifactTab = {
+      artifactId: "artifact-graph",
+      title: "论文图",
+      type: "mindmap",
+      intuitionGraph: {
+        version: "liteasy-intuition-graph/v1",
+        id: "graph-artifact",
+        workId: "local:paper-1",
+        rootNodeId: "Thesis",
+        revision: 1,
+        nodes: [
+          {
+            id: "Thesis", status: "complete", kind: "thesis", baseLevel: 0, label: "核心结论", summary: "有证据支撑的结论。",
+            evidenceIds: ["evidence-1"], source: { type: "paper", analysisRunId: "analysis-1" }, expandable: true, tags: []
+          },
+          {
+            id: "Mechanism", status: "complete", kind: "mechanism", baseLevel: 1, label: "关键机制", summary: "解释结论的机制。",
+            evidenceIds: ["evidence-2"], source: { type: "paper", analysisRunId: "analysis-1" }, expandable: false, tags: []
+          }
+        ],
+        edges: [{ id: "thesis-mechanism", sourceNodeId: "Thesis", targetNodeId: "Mechanism", kind: "expands", evidenceIds: ["evidence-2"] }],
+        provenance: { createdAt: "2026-07-25T00:00:00.000Z", generatedBy: "rule", analysisRunId: "analysis-1" }
+      }
+    };
+    render(<ArtifactTabs analysisHint="" canStartAnalysis onStartAnalysis={vi.fn()} selectedCount={1} selectionLocked tabs={[tab]} tasks={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "星图阅读" }));
+    expect(screen.getByLabelText("论文认知图")).toBeInTheDocument();
+    expect(screen.getAllByText("核心结论").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "L0" })).toBeInTheDocument();
+  });
+
   test("routes center artifact action refs through the provided handler", async () => {
     const onDynamicAction = vi.fn();
     const tab: ArtifactTab = {
