@@ -27,8 +27,9 @@ type AssistantSidebarProps = {
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
+  onLockPapersForTask?: (paperIds: string[]) => void;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
@@ -41,6 +42,7 @@ type AssistantSidebarProps = {
   runtimeOrganizationName?: string;
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPaperCount: number;
+  availablePapers?: Paper[];
   selectedPapers: Paper[];
   selectionLocked: boolean;
   settingsStore: SettingsStoreLike;
@@ -50,6 +52,7 @@ export function AssistantSidebar({
   agentClient,
   artifactTasks = [],
   executionJournal,
+  importedChunksByPaperId,
   importedSelectedCount,
   modelTransport,
   onApplyGeneratedTheme,
@@ -59,6 +62,7 @@ export function AssistantSidebar({
   onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
+  onLockPapersForTask,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
@@ -71,6 +75,7 @@ export function AssistantSidebar({
   runtimeOrganizationName,
   runtimeWorkspace,
   selectedPaperCount,
+  availablePapers,
   selectedPapers,
   selectionLocked,
   settingsStore
@@ -86,6 +91,7 @@ export function AssistantSidebar({
           agentClient={agentClient}
           artifactTasks={artifactTasks}
           executionJournal={executionJournal}
+          importedChunksByPaperId={importedChunksByPaperId}
           modelTransport={modelTransport}
           onApplyGeneratedTheme={onApplyGeneratedTheme}
           onApplyLayoutPreset={onApplyLayoutPreset}
@@ -94,6 +100,7 @@ export function AssistantSidebar({
           onCancelArtifactTask={onCancelArtifactTask}
           onGenerateArtifact={onGenerateArtifact}
           onImportSelectedSet={onImportSelectedSet}
+          onLockPapersForTask={onLockPapersForTask}
           onMoveDockItem={onMoveDockItem}
           onOpenAcademicArchive={onOpenAcademicArchive}
           onOpenArtifact={onOpenArtifact}
@@ -104,6 +111,7 @@ export function AssistantSidebar({
           readerConversationContext={readerConversationContext}
           runtimeOrganizationName={runtimeOrganizationName}
           runtimeWorkspace={runtimeWorkspace}
+          availablePapers={availablePapers}
           selectedPapers={selectedPapers}
           selectedSetStatus={{
             importedCount: importedSelectedCount,

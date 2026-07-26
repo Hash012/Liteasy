@@ -125,7 +125,7 @@ export function ArtifactTabs({
   useEffect(() => {
     setRegenerationOpen(false);
     setSupplementalContext("");
-    setGraphMode(false);
+    setGraphMode(activeTab?.type === "layered_graph");
     setGraphView(defaultGraphViewState);
   }, [activeTab?.artifactId]);
 
@@ -228,7 +228,7 @@ export function ArtifactTabs({
             <div className="artifact-stream-tree" aria-label="正在生成的树形预览">
               <OutlineTree
                 nodes={activeTask.partialOutlineNodes.map((node) => ({ ...node }))}
-                variant={activeTask.type === "mindmap" ? "mindmap" : "tree"}
+                variant={activeTask.type === "mindmap" || activeTask.type === "layered_graph" ? "mindmap" : "tree"}
               />
             </div>
           ) : activeTask.partialAnswer ? (

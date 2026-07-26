@@ -4,7 +4,7 @@ import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.typ
 import type { IntuitionGraphDocument } from "../intuition-graph/intuitionGraph.types";
 
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type ArtifactType = "comparison_table" | "mindmap" | "ppt" | "skill_doc" | "tree";
+export type ArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "skill_doc" | "tree";
 export type ArtifactTaskStage =
   | "waiting_for_import"
   | "preparing_context"

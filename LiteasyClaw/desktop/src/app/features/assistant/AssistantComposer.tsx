@@ -181,7 +181,7 @@ export function AssistantComposer({
             onSend();
           }
         }}
-        placeholder="输入消息，使用 /、@、$ 添加指令、论文或 skill"
+        placeholder="输入你的问题或命令"
         rows={4}
         title={modeHint}
         value={input}

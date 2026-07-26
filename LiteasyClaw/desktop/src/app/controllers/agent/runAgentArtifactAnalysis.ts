@@ -8,6 +8,7 @@ import type { AgentArtifactGenerationOptions } from "../../features/artifacts/us
 
 const modalityLabels = {
   comparison_table: "对比表",
+  layered_graph: "分层关系图",
   mindmap: "思维导图",
   ppt: "PPT 大纲",
   tree: "树形分析"
@@ -29,7 +30,7 @@ export async function runAgentArtifactAnalysis(
   if (artifactType === "skill_doc") {
     throw new Error("Skill 文档不是论文分析模态");
   }
-  const outlineInstruction = artifactType === "tree" || artifactType === "mindmap"
+  const outlineInstruction = artifactType === "tree" || artifactType === "mindmap" || artifactType === "layered_graph"
     ? [
         "严格使用 Markdown unordered list 表达层级，每层缩进两个空格；不要使用制表符、ASCII 树线或代码围栏。",
         "以每篇论文为一级分析对象，继续展开研究动机、问题定义、关键假设、数据流、算法步骤、公式/变量、模型与组件、数据集、基线、指标、定量结果、消融、效率、失败模式、局限与可复现信息。",
@@ -102,7 +103,7 @@ export async function runAgentArtifactAnalysis(
     }
     if (event.type === "assistant.delta") {
       partialAnswer += event.delta;
-      const partialOutlineNodes = artifactType === "tree" || artifactType === "mindmap"
+      const partialOutlineNodes = artifactType === "tree" || artifactType === "mindmap" || artifactType === "layered_graph"
         ? parseStreamingOutlineMarkdown(partialAnswer)
         : undefined;
       onProgress?.({

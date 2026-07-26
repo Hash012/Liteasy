@@ -14,6 +14,7 @@ const modalityOptions: Array<{
 }> = [
   { className: "tree", label: "树形展开", type: "tree" },
   { className: "mindmap", label: "思维导图", type: "mindmap" },
+  { className: "layered-graph", label: "分层关系图", type: "layered_graph" },
   { className: "ppt", label: "PPT", type: "ppt" },
   { className: "comparison", label: "对比表", type: "comparison_table" }
 ];
@@ -30,6 +31,8 @@ export function FloatingModalityButton({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const movedRef = useRef(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -48,6 +51,8 @@ export function FloatingModalityButton({
       const rootRect = root.getBoundingClientRect();
       const nextX = event.clientX - parentRect.left - dragOffsetRef.current.x;
       const nextY = event.clientY - parentRect.top - dragOffsetRef.current.y;
+
+      movedRef.current = true;
 
       setPosition({
         x: clamp(nextX, 8, Math.max(8, parentRect.width - rootRect.width - 8)),
@@ -82,7 +87,7 @@ export function FloatingModalityButton({
           : undefined
       }
     >
-      {modalityOptions.map((option) => (
+      {expanded ? modalityOptions.map((option) => (
         <button
           className={`floating-modality-option ${option.className}`}
           disabled={!canStartAnalysis}
@@ -93,9 +98,10 @@ export function FloatingModalityButton({
         >
           {option.label}
         </button>
-      ))}
+      )) : null}
       <button
-        aria-label="模态选择"
+        aria-expanded={expanded}
+        aria-label={expanded ? "关闭模态选择" : "打开模态选择"}
         className="floating-modality-main"
         onPointerDown={(event) => {
           const root = rootRef.current;
@@ -107,7 +113,13 @@ export function FloatingModalityButton({
             x: event.clientX - rect.left,
             y: event.clientY - rect.top
           };
+          movedRef.current = false;
           setDragging(true);
+        }}
+        onClick={() => {
+          if (!movedRef.current) {
+            setExpanded((current) => !current);
+          }
         }}
         title={analysisHint}
         type="button"

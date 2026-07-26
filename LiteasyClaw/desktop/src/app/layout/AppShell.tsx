@@ -987,6 +987,7 @@ export function AppShell({
           agentClient={assistantAgent.agentClient}
           artifactTasks={artifactTasks}
           executionJournal={assistantAgent.executionJournal}
+          importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
           modelTransport={modelTransport}
           readerConversationContext={readerConversationContext}
@@ -995,11 +996,19 @@ export function AppShell({
           onApplyPanelAction={runtimeActionContext.applyPanelAction}
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
           onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
-          onGenerateArtifact={(artifactType) => {
-            const message = artifactWorkflow.actions.handleAssistantArtifact(artifactType);
-            return message;
+          onGenerateArtifact={(artifactType, paperIds) => {
+            if (paperIds && paperIds.length > 0) {
+              workspaceStoreRef.current.setSelectedDocumentSet(paperIds, true);
+              workspaceActions.syncWorkspace();
+              return artifactWorkflow.actions.startAnalysis(artifactType);
+            }
+            return artifactWorkflow.actions.handleAssistantArtifact(artifactType);
           }}
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
+          onLockPapersForTask={(paperIds) => {
+            workspaceStoreRef.current.setSelectedDocumentSet(paperIds, true);
+            workspaceActions.syncWorkspace();
+          }}
           onMoveDockItem={runtimeActionContext.moveDockItem}
           onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
           onOpenArtifact={(artifactId) => {
@@ -1016,6 +1025,7 @@ export function AppShell({
           regionId={regionId === "main" ? "right" : regionId}
           runtimeOrganizationName={organizationSummary?.name}
           runtimeWorkspace={workspaceState.workspaceSource}
+          availablePapers={workspaceState.papers}
           selectedPaperCount={workspaceState.selectedPaperIds.length}
           selectedPapers={selectedPapers}
           selectionLocked={workspaceState.selectionLocked}

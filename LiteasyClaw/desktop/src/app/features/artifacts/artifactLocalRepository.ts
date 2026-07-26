@@ -20,6 +20,7 @@ type ArtifactCatalogTransport = {
 
 const artifactTypes = new Set<ArtifactType>([
   "comparison_table",
+  "layered_graph",
   "mindmap",
   "ppt",
   "skill_doc",

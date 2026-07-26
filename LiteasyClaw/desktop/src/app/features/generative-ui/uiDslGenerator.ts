@@ -510,6 +510,10 @@ function getArtifactProjectionTitle(type: ArtifactType) {
     return "Literature PPT Outline";
   }
 
+  if (type === "layered_graph") {
+    return "Layered Literature Graph";
+  }
+
   return "Literature Mind Map";
 }
 
