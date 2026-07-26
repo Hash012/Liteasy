@@ -1397,6 +1397,52 @@ body {
   color: #85494b;
 }
 
+.assistant-public-audit-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d5e1dc;
+  border-radius: 8px;
+  background: #f4faf7;
+  color: #2f6254;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.assistant-public-audit-card.blocked {
+  border-color: #ead8bd;
+  background: #fff8ec;
+  color: #765a2a;
+}
+
+.assistant-public-audit-summary,
+.assistant-public-audit-checks {
+  display: grid;
+  gap: 6px;
+}
+
+.assistant-public-audit-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assistant-public-audit-issues span {
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.assistant-public-audit-check {
+  display: grid;
+  gap: 2px;
+}
+
+.assistant-public-audit-check small {
+  color: inherit;
+  opacity: 0.78;
+}
+
 .genui-canvas,
 .genui-stack,
 .genui-panel,
@@ -3808,6 +3854,17 @@ body {
   gap: 10px;
   justify-content: space-between;
   padding: 9px;
+}
+
+.agent-settings-toggle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(216, 206, 191, 0.72);
+  border-radius: 8px;
+  background: #fffdfa;
+  padding: 9px 10px;
 }
 
 .agent-settings-doc-button {

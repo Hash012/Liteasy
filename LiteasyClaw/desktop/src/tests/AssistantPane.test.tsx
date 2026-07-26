@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,6 +45,88 @@ test("shows the unified composer before a conversation starts", async () => {
   });
   expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
 });
+
+test("shows public workflow audit summaries after a public Agent run when enabled", async () => {
+  const user = userEvent.setup();
+  const settingsStore = createSettingsStore();
+  settingsStore.apply({
+    intent: "update_setting",
+    target: "assistant.public_audit.enabled",
+    value: true
+  });
+  const listPublicWorkflowAuditSummaries = vi.fn(async () => ({
+    data: [
+      {
+        auditLevel: "brief" as const,
+        checks: [
+          { label: "任务范围", status: "passed" as const },
+          { label: "证据与来源", status: "blocked" as const }
+        ],
+        disclosure: "public" as const,
+        issueLabels: ["选中文献证据覆盖不足"],
+        status: "blocked" as const
+      }
+    ],
+    ok: true as const
+  }));
+  const agentClient: FrontendAgentClient = {
+    cancel: vi.fn(),
+    close: vi.fn(),
+    connect: vi.fn(),
+    confirm: vi.fn(),
+    getSession: () => ({ sessionId: "session-public-audit", status: "active" }),
+    listPublicWorkflowAuditSummaries,
+    send: vi.fn(async () => ({
+      data: {
+        apiVersion: "liteasy.agent/v1",
+        createdAt: "2026-07-26T00:00:00.000Z",
+        events: [
+          {
+            apiVersion: "liteasy.agent/v1",
+            emittedAt: "2026-07-26T00:00:01.000Z",
+            eventId: "event-message",
+            message: "思维导图已生成",
+            runId: "run-public-audit",
+            sequence: 1,
+            sessionId: "session-public-audit",
+            type: "assistant.message"
+          }
+        ],
+        idempotencyKey: "conversation:qa:test",
+        input: { message: "生成思维导图", mode: "qa" },
+        runId: "run-public-audit",
+        sessionId: "session-public-audit",
+        status: "completed"
+      },
+      ok: true as const
+    })),
+    subscribe: vi.fn(() => vi.fn())
+  };
+
+  render(
+    <AssistantPane
+      agentClient={agentClient}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+      settingsStore={settingsStore}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成思维导图");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(await screen.findByText("公开审计过程")).toBeInTheDocument();
+  expect(screen.getByText("选中文献证据覆盖不足")).toBeInTheDocument();
+  expect(listPublicWorkflowAuditSummaries).toHaveBeenCalledWith({
+    runId: "run-public-audit",
+    sessionId: "session-public-audit"
+  });
+});
+
 
 test("renders command result DSL after a theme command while keeping the empty launcher as default UI", async () => {
   const user = userEvent.setup();

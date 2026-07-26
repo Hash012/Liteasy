@@ -4,6 +4,7 @@ import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
+import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 
 type SettingsPaneProps = {
   documentMetadataSyncMessage?: string;
@@ -11,6 +12,8 @@ type SettingsPaneProps = {
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
   onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
   onRetryDocumentMetadataSync?: () => void;
+  onUpdateSetting?: (command: UpdateSettingCommand) => void;
+  settings?: Partial<SettingsState>;
 };
 
 export function SettingsPane({
@@ -19,6 +22,8 @@ export function SettingsPane({
   documentMetadataSyncStatus,
   onOpenSkillDocument,
   onRetryDocumentMetadataSync,
+  onUpdateSetting,
+  settings
 }: SettingsPaneProps) {
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [syncExpanded, setSyncExpanded] = useState(true);
@@ -32,7 +37,11 @@ export function SettingsPane({
           <span>Agent</span>
         </button>
         {agentExpanded ? <div className="sidebar-section-content">
-          <AgentSettingsPanel onOpenSkillDocument={onOpenSkillDocument} />
+          <AgentSettingsPanel
+            onOpenSkillDocument={onOpenSkillDocument}
+            onUpdateSetting={onUpdateSetting}
+            settings={settings}
+          />
         </div> : null}
       </section>
       <section className="sidebar-section settings-sync-section">

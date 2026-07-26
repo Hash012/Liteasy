@@ -2,6 +2,7 @@ import type {
   AgentApiResult,
   AgentEventListener,
   AgentPublicApi,
+  PublicWorkflowAuditSummary,
   AgentRun,
   AgentSession,
   ResolveAgentConfirmationRequest,
@@ -17,6 +18,10 @@ export type FrontendAgentClient = {
     decision: ResolveAgentConfirmationRequest["decision"]
   ) => Promise<AgentApiResult<AgentRun>>;
   getSession: () => AgentSession | null;
+  listPublicWorkflowAuditSummaries: (input: {
+    runId?: string;
+    sessionId: string;
+  }) => Promise<AgentApiResult<PublicWorkflowAuditSummary[]>>;
   send: (
     input: SubmitAgentTurnRequest["input"],
     options?: {
@@ -128,6 +133,10 @@ export function createFrontendAgentClient(
 
     getSession() {
       return session;
+    },
+
+    async listPublicWorkflowAuditSummaries(input) {
+      return api.listPublicWorkflowAuditSummaries(input);
     },
 
     async send(input, sendOptions = {}) {

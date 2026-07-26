@@ -48,6 +48,41 @@ describe("AssistantMessageList", () => {
     expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
   });
 
+  test("renders user-safe public workflow audit summaries without internal identifiers", () => {
+    const messages: AssistantMessage[] = [
+      {
+        content: "思维导图已生成",
+        id: "assistant-public-audit",
+        publicWorkflowAudits: [
+          {
+            auditLevel: "brief",
+            checks: [
+              { label: "任务范围", status: "passed" },
+              { label: "证据与来源", status: "blocked" },
+              {
+                label: "自动修复",
+                status: "blocked",
+                summary: "已尝试自动修复，但仍需人工复核。"
+              }
+            ],
+            disclosure: "public",
+            issueLabels: ["选中文献证据覆盖不足"],
+            status: "blocked"
+          }
+        ],
+        role: "assistant"
+      }
+    ];
+
+    render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
+
+    expect(screen.getByText("公开审计过程")).toBeInTheDocument();
+    expect(screen.getByText("选中文献证据覆盖不足")).toBeInTheDocument();
+    expect(screen.getByText("证据与来源：需复核")).toBeInTheDocument();
+    expect(screen.getByText("已尝试自动修复，但仍需人工复核。")).toBeInTheDocument();
+    expect(screen.queryByText(/trace-|run-|session-|stepId/)).not.toBeInTheDocument();
+  });
+
   test("forwards dynamic action refs with their DSL trace id", async () => {
     const user = userEvent.setup();
     const onDynamicAction = vi.fn();

@@ -831,6 +831,10 @@ export function AppShell({
     onToggleLock: workspaceActions.toggleSelectionLock,
     onToggleProfileSampling: profileActions.toggleProfileSampling,
     onToggleSelection: workspaceActions.toggleSelection,
+    onUpdateSetting: (command) => {
+      settingsStoreRef.current.apply(command);
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    },
     onUpdateAcademicProfile: profileActions.updateAcademicProfile,
     organizationActionMessage,
     organizationSummary,

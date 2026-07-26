@@ -6,10 +6,13 @@ import {
   type AgentCoreConfig
 } from "./agentCoreConfig";
 import { BotRegular, ShieldRegular } from "@fluentui/react-icons";
+import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 
 type AgentSettingsPanelProps = {
   config?: AgentCoreConfig;
   onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
+  onUpdateSetting?: (command: UpdateSettingCommand) => void;
+  settings?: Partial<SettingsState>;
 };
 
 function AgentCatalogList({
@@ -52,7 +55,9 @@ function AgentCatalogList({
 
 export function AgentSettingsPanel({
   config = defaultAgentCoreConfig,
-  onOpenSkillDocument
+  onOpenSkillDocument,
+  onUpdateSetting,
+  settings
 }: AgentSettingsPanelProps) {
   const safetyItems = [
     config.safety.highRiskRequiresConfirmation ? "高风险动作需要确认" : "高风险动作未强制确认",
@@ -76,6 +81,27 @@ export function AgentSettingsPanel({
       />
       <AgentCatalogList entries={config.plugins} title="Plugin 条目" />
       <AgentCatalogList entries={config.mcpServers} title="MCP 条目" />
+      <div className="agent-settings-section" aria-label="用户可见审计">
+        <div className="agent-settings-section-title">用户可见审计</div>
+        <label className="agent-settings-toggle-row">
+          <span className="agent-settings-row-main">
+            <span className="agent-settings-row-title">显示公开审计过程</span>
+            <span className="agent-settings-row-description">
+              在回答或产物旁展示安全摘要，不显示内部 trace、prompt 或画像细节。
+            </span>
+          </span>
+          <input
+            aria-label="显示公开审计过程"
+            checked={Boolean(settings?.["assistant.public_audit.enabled"])}
+            onChange={(event) => onUpdateSetting?.({
+              intent: "update_setting",
+              target: "assistant.public_audit.enabled",
+              value: event.currentTarget.checked
+            })}
+            type="checkbox"
+          />
+        </label>
+      </div>
       <div className="agent-settings-section" aria-label="安全策略">
         <div className="agent-settings-section-title"><ShieldRegular /></div>
         <div className="agent-settings-chip-row">

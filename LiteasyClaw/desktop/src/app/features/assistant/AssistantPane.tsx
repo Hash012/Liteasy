@@ -17,7 +17,8 @@ import type { FrontendAgentClient } from "../agent-api/frontendAgentClient";
 import type {
   AgentConfirmationRequest,
   AgentEvent,
-  AgentRun
+  AgentRun,
+  PublicWorkflowAuditSummary
 } from "../agent-api/agentApi.types";
 import { createSettingsStore } from "../settings/settings.store";
 import type { ArtifactTask, ArtifactType } from "../artifacts/artifact.types";
@@ -802,6 +803,51 @@ export function AssistantPane({
     processedAgentRunSequencesRef.current.set(run.runId, latestSequence);
   }
 
+  function appendPublicWorkflowAuditsToLatestAssistantMessage(
+    publicWorkflowAudits: PublicWorkflowAuditSummary[]
+  ) {
+    if (!publicWorkflowAudits.length) {
+      return;
+    }
+    const currentMessages = assistantStoreRef.current.getState().messages;
+    let lastAssistantIndex = -1;
+    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+      if (currentMessages[index].role === "assistant") {
+        lastAssistantIndex = index;
+        break;
+      }
+    }
+    if (lastAssistantIndex < 0) {
+      return;
+    }
+
+    assistantStoreRef.current.replaceMessages(
+      currentMessages.map((message, index) =>
+        index === lastAssistantIndex
+          ? {
+              ...message,
+              publicWorkflowAudits
+            }
+          : message
+      )
+    );
+  }
+
+  async function appendPublicWorkflowAuditForRun(run: AgentRun) {
+    if (!settingsStoreRef.current.getState()["assistant.public_audit.enabled"]) {
+      return;
+    }
+
+    const result = await agentClient?.listPublicWorkflowAuditSummaries({
+      runId: run.runId,
+      sessionId: run.sessionId
+    });
+    if (!result?.ok) {
+      return;
+    }
+    appendPublicWorkflowAuditsToLatestAssistantMessage(result.data);
+  }
+
   function getTraceIdFromPublicRun(run: AgentRun) {
     const progress = run.events.find((event) => event.type === "progress.started");
     if (progress?.type === "progress.started") {
@@ -881,6 +927,7 @@ export function AssistantPane({
         return;
       }
       consumePublicAgentRun(result.data);
+      await appendPublicWorkflowAuditForRun(result.data);
       if (result.data.status === "cancelled") {
         const currentSession = sessionRegistryRef.current.find(
           (session) => session.id === activeSessionIdRef.current

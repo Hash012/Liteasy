@@ -3,6 +3,7 @@ import type { SettingKey } from "./settings.types";
 export const settingsRegistry: Record<SettingKey, { label: string }> = {
   "network.recommendation.enabled": { label: "联网推荐" },
   "network.recommendation.sort_mode": { label: "推荐排序" },
+  "assistant.public_audit.enabled": { label: "公开审计过程" },
   "profile.enabled": { label: "用户画像" },
   "assistant.default_output_mode": { label: "默认输出模式" },
   "assistant.language": { label: "回答语言" },
