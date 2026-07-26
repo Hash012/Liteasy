@@ -7,6 +7,7 @@ LiteasyClaw/desktop/dist/
 LiteasyClaw/desktop/.vite/
 LiteasyClaw/desktop/.vite-temp/
 LiteasyClaw/desktop/src-tauri/target/
+LiteasyClaw/tools/md-to-pdf/node_modules/
 LiteasyClaw/services/dev-cloud/node_modules/
 LiteasyClaw/services/dev-cloud/.liteasy-data/
 LiteasyClaw/services/dev-cloud/*.sqlite
