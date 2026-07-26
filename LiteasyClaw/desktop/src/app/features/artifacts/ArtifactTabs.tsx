@@ -86,6 +86,12 @@ const taskStageLabels: Record<ArtifactTask["stage"], string> = {
   waiting_for_import: "等待 PDF 解析"
 };
 
+const verificationStatusLabels = {
+  fail: "审计未通过",
+  pass: "审计通过",
+  review: "需复核"
+} as const;
+
 function cleanAgentAnswer(answer: string) {
   return answer
     .replace(/^\s*```(?:text|markdown|md)?\s*$/gim, "")
@@ -121,6 +127,8 @@ export function ArtifactTabs({
   const activeTab = tabs.find((tab) => tab.artifactId === activeArtifactId) ?? tabs[0] ?? null;
   const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
   const activeTask = tasks[0] ?? null;
+  const activeVerification = activeTab?.verification ?? activeTab?.mindmapArtifact?.verification;
+  const activeMindmapSources = activeTab?.mindmapArtifact?.sources;
 
   useEffect(() => {
     setRegenerationOpen(false);
@@ -357,6 +365,37 @@ export function ArtifactTabs({
             <div className="artifact-result-meta">
               从产物 {activeTab.regeneratedFromArtifactId} 补充资料后重新生成
             </div>
+          ) : null}
+          {activeVerification ? (
+            <div className={`artifact-verification-summary ${activeVerification.status}`}>
+              <span>{verificationStatusLabels[activeVerification.status]}</span>
+              {activeVerification.errors.length > 0 ? (
+                <span>错误：{activeVerification.errors.length}</span>
+              ) : null}
+              {activeVerification.warnings.length > 0 ? (
+                <span>警告：{activeVerification.warnings.length}</span>
+              ) : null}
+            </div>
+          ) : null}
+          {activeMindmapSources ? (
+            <div className="artifact-source-layer-summary" aria-label="思维导图来源层">
+              <span>论文证据：{activeMindmapSources.selectedPapers.length}</span>
+              <span>外部补充：{activeMindmapSources.externalReferences.length}</span>
+              <span>模型推断：{activeMindmapSources.inferences.length}</span>
+            </div>
+          ) : null}
+          {activeMindmapSources?.externalReferences.length ? (
+            <details className="artifact-external-reference-index" open>
+              <summary>外部补充来源</summary>
+              <ul>
+                {activeMindmapSources.externalReferences.map((reference) => (
+                  <li key={reference.refId}>
+                    <strong>{reference.sourceTitle}</strong>
+                    <span>{reference.summary}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           ) : null}
           {activeTab.answer ? (
             <details className="artifact-agent-answer">

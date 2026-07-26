@@ -7,7 +7,70 @@ import type { Paper } from "../app/features/workspace/workspace.types";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 
-function createCompletedAgentRun(): AgentRun {
+function createMindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
+  const verification = {
+    checkedAt: "2026-07-20T02:00:00.000Z",
+    errors: verificationStatus === "fail"
+      ? [{
+          code: "missing_selected_paper_coverage",
+          message: "选中文献 demo-1 没有被思维导图节点覆盖。"
+        }]
+      : [],
+    repairable: verificationStatus === "fail",
+    status: verificationStatus,
+    warnings: []
+  };
+
+  return {
+    artifactId: "artifact-mindmap-1",
+    createdAt: "2026-07-20T02:00:00.000Z",
+    root: {
+      children: [
+        {
+          children: [],
+          confidence: "high",
+          id: "node-claim-1",
+          label: "ColBERT evidence",
+          nodeType: "paper_claim",
+          sourceRefs: ["paper:evidence-1"]
+        }
+      ],
+      confidence: "high",
+      id: "root",
+      label: "ColBERT 思维导图",
+      nodeType: "topic",
+      sourceRefs: []
+    },
+    runId: "analysis-1",
+    sources: {
+      externalReferences: [],
+      inferences: [],
+      selectedPapers: [{
+        evidenceId: "evidence-1",
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        refId: "paper:evidence-1",
+        snippet: "evidence"
+      }]
+    },
+    title: "ColBERT 思维导图",
+    verification,
+    version: "liteasy.mindmap-artifact/v1"
+  };
+}
+
+function createArtifactWorkflow(status: "blocked" | "verified" = "verified") {
+  const mindmap = createMindmapArtifact(status === "verified" ? "pass" : "fail");
+  return {
+    mindmap,
+    status,
+    verification: mindmap.verification
+  };
+}
+
+function createCompletedAgentRun(options: {
+  artifactWorkflow?: ReturnType<typeof createArtifactWorkflow>;
+} = {}): AgentRun {
   return {
     apiVersion: "liteasy.agent/v1",
     completedAt: "2026-07-20T02:00:00.000Z",
@@ -47,7 +110,8 @@ function createCompletedAgentRun(): AgentRun {
               query: "analyze",
               status: "completed"
             }
-          }
+          },
+          artifactWorkflow: options.artifactWorkflow ?? createArtifactWorkflow()
         },
         runId: "run-artifact-1",
         sequence: 1,
@@ -277,6 +341,71 @@ describe("useArtifactActions", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       expect.stringContaining("project-docs/agent-results/")
     );
+  });
+
+  test("blocks saving a mindmap when artifact workflow verification fails", async () => {
+    const {
+      artifactStore,
+      onAnalysisHint,
+      result,
+      runAgentAnalysis,
+      saveArtifactResult
+    } = renderArtifactActions({
+      imported: true
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedAgentRun({
+      artifactWorkflow: createArtifactWorkflow("blocked")
+    }));
+
+    act(() => {
+      result.current.startAnalysis("mindmap");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(saveArtifactResult).not.toHaveBeenCalled();
+    expect(artifactStore.getTasks()[0]).toEqual(expect.objectContaining({
+      stage: "failed",
+      status: "failed"
+    }));
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(expect.stringContaining("审计未通过"));
+  });
+
+  test("persists verified mindmap artifact metadata with the saved result", async () => {
+    const {
+      onArtifactTabsChanged,
+      result,
+      saveArtifactResult
+    } = renderArtifactActions({
+      imported: true
+    });
+
+    act(() => {
+      result.current.startAnalysis("mindmap");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(saveArtifactResult).toHaveBeenCalledWith(expect.objectContaining({
+      mindmapArtifact: expect.objectContaining({
+        verification: expect.objectContaining({ status: "pass" })
+      }),
+      verification: expect.objectContaining({ status: "pass" })
+    }));
+    expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        mindmapArtifact: expect.objectContaining({
+          verification: expect.objectContaining({ status: "pass" })
+        }),
+        verification: expect.objectContaining({ status: "pass" })
+      })
+    ]);
   });
 
   test("keeps provider diagnostics when Agent generation rejects", async () => {

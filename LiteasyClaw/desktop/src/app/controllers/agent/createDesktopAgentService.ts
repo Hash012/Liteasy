@@ -101,6 +101,7 @@ export function createDesktopAgentService(
         message: answer.content,
         metadata: JSON.parse(JSON.stringify({
           analysis: answer.analysis,
+          artifactWorkflow: answer.artifactWorkflow,
           audit: answer.audit,
           executionTrace: answer.executionTrace
         })),

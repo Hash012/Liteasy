@@ -126,6 +126,82 @@ describe("ArtifactTabs", () => {
     expect(screen.getByText("demo-1 p.2")).toBeInTheDocument();
   });
 
+  test("renders mindmap verification and source layer metadata", () => {
+    const tab: ArtifactTab = {
+      artifactId: "artifact-mindmap",
+      mindmapArtifact: {
+        artifactId: "artifact-mindmap",
+        createdAt: "2026-07-26T00:00:00.000Z",
+        root: {
+          children: [],
+          confidence: "high",
+          id: "root",
+          label: "ColBERT 思维导图",
+          nodeType: "topic",
+          sourceRefs: []
+        },
+        runId: "run-1",
+        sources: {
+          externalReferences: [
+            {
+              authorityLevel: "high",
+              reason: "concept_definition",
+              refId: "external:late-interaction",
+              sourceTitle: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+              summary: "Late interaction preserves token-level matching signals before aggregation."
+            }
+          ],
+          inferences: [],
+          selectedPapers: [
+            {
+              evidenceId: "evidence-1",
+              paperId: "paper-1",
+              paperTitle: "ColBERT",
+              refId: "paper:evidence-1",
+              snippet: "ColBERT uses MaxSim to aggregate token-level similarities."
+            }
+          ]
+        },
+        title: "ColBERT 思维导图",
+        verification: {
+          checkedAt: "2026-07-26T00:00:00.000Z",
+          errors: [],
+          repairable: false,
+          status: "pass",
+          warnings: []
+        },
+        version: "liteasy.mindmap-artifact/v1"
+      },
+      title: "ColBERT 思维导图",
+      type: "mindmap",
+      verification: {
+        checkedAt: "2026-07-26T00:00:00.000Z",
+        errors: [],
+        repairable: false,
+        status: "pass",
+        warnings: []
+      }
+    };
+
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByText("审计通过")).toBeInTheDocument();
+    expect(screen.getByText("论文证据：1")).toBeInTheDocument();
+    expect(screen.getByText("外部补充：1")).toBeInTheDocument();
+    expect(screen.getByText("模型推断：0")).toBeInTheDocument();
+    expect(screen.getByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).toBeInTheDocument();
+  });
+
   test("renders typed center artifact components from ui dsl", () => {
     const tab: ArtifactTab = {
       artifactId: "artifact-mixed",

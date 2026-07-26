@@ -13,6 +13,7 @@ import { generateEvidenceUIDslDocument } from "../generative-ui/uiDslGenerator";
 import type { AgentCorePromptContext } from "../agent-core/contextAssembler";
 import { formatAgentCorePromptContext } from "../agent-core/contextAssembler";
 import type { AgentArtifactType } from "../agent-api/agentApi.types";
+import { runMindmapArtifactWorkflow } from "../artifact-workflow/mindmapWorkflowHarness";
 import {
   completeMultiPaperAnalysis,
   prepareMultiPaperAnalysis
@@ -294,6 +295,29 @@ export async function generateAssistantAnswer({
         signal
       })
     : undefined;
+  const mindmapWorkflow = artifactType === "mindmap" && preparedAnalysis && analysis
+    ? await runMindmapArtifactWorkflow({
+        artifactId: `mindmap-${analysis.run.id}`,
+        generatedAnswer: generatedAnswerText,
+        prepared: preparedAnalysis,
+        question,
+        runId: analysis.run.id,
+        selectedPapers
+      })
+    : undefined;
+  const artifactWorkflow = mindmapWorkflow
+    ? mindmapWorkflow.status === "verified"
+      ? {
+          mindmap: mindmapWorkflow.artifact,
+          status: mindmapWorkflow.status,
+          verification: mindmapWorkflow.artifact.verification
+        }
+      : {
+          mindmap: mindmapWorkflow.draft,
+          status: mindmapWorkflow.status,
+          verification: mindmapWorkflow.verification
+        }
+    : undefined;
   onProgress?.({
     phase: "structuring_artifact",
     progress: 88,
@@ -303,6 +327,7 @@ export async function generateAssistantAnswer({
   return {
     analysis,
     answer: generatedAnswerText,
+    artifactWorkflow,
     audit,
     citations: groundedAnswer.citations,
     confidence: groundedAnswer.confidence,

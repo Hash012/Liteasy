@@ -6,7 +6,55 @@ import { buildImportedChunksForPaper } from "../app/features/import/importFixtur
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 
-function completedRun(): AgentRun {
+function mindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
+  const verification = {
+    checkedAt: "2026-07-20T02:00:00.000Z",
+    errors: verificationStatus === "fail"
+      ? [{
+          code: "missing_selected_paper_coverage",
+          message: "选中文献 demo-1 没有被思维导图节点覆盖。"
+        }]
+      : [],
+    repairable: verificationStatus === "fail",
+    status: verificationStatus,
+    warnings: []
+  };
+
+  return {
+    artifactId: "artifact-mindmap-1",
+    createdAt: "2026-07-20T02:00:00.000Z",
+    root: {
+      children: [],
+      confidence: "high",
+      id: "root",
+      label: "Attention 思维导图",
+      nodeType: "topic",
+      sourceRefs: []
+    },
+    runId: "analysis-1",
+    sources: {
+      externalReferences: [],
+      inferences: [],
+      selectedPapers: []
+    },
+    title: "Attention 思维导图",
+    verification,
+    version: "liteasy.mindmap-artifact/v1"
+  };
+}
+
+function artifactWorkflow(status: "blocked" | "verified" = "verified") {
+  const mindmap = mindmapArtifact(status === "verified" ? "pass" : "fail");
+  return {
+    mindmap,
+    status,
+    verification: mindmap.verification
+  };
+}
+
+function completedRun(options: {
+  workflowStatus?: "blocked" | "verified";
+} = {}): AgentRun {
   return {
     apiVersion: "liteasy.agent/v1",
     completedAt: "2026-07-20T02:00:00.000Z",
@@ -44,7 +92,8 @@ function completedRun(): AgentRun {
             query: "analysis",
             status: "completed"
           }
-        }
+        },
+        artifactWorkflow: artifactWorkflow(options.workflowStatus ?? "verified")
       },
       runId: "run-1",
       sequence: 1,
@@ -145,11 +194,51 @@ describe("useArtifactWorkflowController", () => {
 
     expect(result.current.model.artifactTabs).toEqual([
       expect.objectContaining({
+        mindmapArtifact: expect.objectContaining({
+          verification: expect.objectContaining({ status: "pass" })
+        }),
         preview: expect.objectContaining({ rootLabel: "Attention Is All You Need" }),
         title: "Literature Mind Map",
         type: "mindmap"
       })
     ]);
+  });
+
+  test("marks a mindmap task failed when artifact workflow audit blocks persistence", async () => {
+    const artifactStore = createArtifactStore();
+    const onAnalysisHint = vi.fn();
+    const client = artifactResultClient();
+
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactStore,
+        artifactResultClient: client,
+        getImportedChunksByPaperId: () => ({
+          [paper.id]: buildImportedChunksForPaper(paper)
+        }),
+        getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
+        getSelectedPapers: () => [paper],
+        onAnalysisHint,
+        queueImportForPapers: vi.fn(() => "already_imported"),
+        runAgentAnalysis: vi.fn(async () => completedRun({ workflowStatus: "blocked" }))
+      })
+    );
+
+    act(() => {
+      result.current.actions.startAnalysis("mindmap");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(client.save).not.toHaveBeenCalled();
+    expect(result.current.model.artifactTasks[0]).toEqual(expect.objectContaining({
+      stage: "failed",
+      status: "failed"
+    }));
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(expect.stringContaining("审计未通过"));
   });
 
   test("restores saved artifacts into the catalog and opens them on demand", async () => {
@@ -166,6 +255,7 @@ describe("useArtifactWorkflowController", () => {
       artifactType: "mindmap" as const,
       citations: [],
       createdAt: "2026-07-20T03:00:00.000Z",
+      mindmapArtifact: mindmapArtifact("pass"),
       papers: [{ id: paper.id, title: paper.title }],
       title: "Saved Mind Map",
       uiDsl: {
@@ -180,6 +270,7 @@ describe("useArtifactWorkflowController", () => {
         surface: "center_artifact" as const,
         version: "liteasy.ui/v1" as const
       },
+      verification: mindmapArtifact("pass").verification,
       version: "liteasy.agent-artifact/v1" as const
     };
     const client = {
@@ -208,6 +299,9 @@ describe("useArtifactWorkflowController", () => {
       expect.objectContaining({
         agentRunId: "run-saved",
         artifactId: "artifact-saved",
+        mindmapArtifact: expect.objectContaining({
+          verification: expect.objectContaining({ status: "pass" })
+        }),
         resultPath: "project-docs/agent-results/artifact-saved.json"
       })
     ]);

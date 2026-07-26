@@ -637,9 +637,10 @@ export function PdfReader({
     if (!stageElement) {
       return undefined;
     }
+    const measuredStageElement = stageElement;
 
     function updateLayout() {
-      setStageWidth(stageRef.current?.clientWidth ?? 960);
+      setStageWidth(measuredStageElement.clientWidth);
     }
 
     updateLayout();
@@ -650,7 +651,7 @@ export function PdfReader({
     }
 
     const observer = new ResizeObserver(updateLayout);
-    observer.observe(stageElement);
+    observer.observe(measuredStageElement);
     return () => observer.disconnect();
   }, []);
 

@@ -14,6 +14,24 @@ const modalityLabels = {
   tree: "树形分析"
 } as const;
 
+function mapArtifactProgressStage(phase: string | undefined): ArtifactTaskStage {
+  if (phase === "planning_artifact" || phase === "collecting_external_knowledge") {
+    return "retrieving_evidence";
+  }
+  if (phase === "verifying_artifact" || phase === "repairing_artifact") {
+    return "auditing_answer";
+  }
+  if (
+    phase === "retrieving_evidence" ||
+    phase === "generating_answer" ||
+    phase === "auditing_answer" ||
+    phase === "structuring_artifact"
+  ) {
+    return phase;
+  }
+  return "generating_answer";
+}
+
 export async function runAgentArtifactAnalysis(
   client: FrontendAgentClient,
   artifactType: ArtifactType,
@@ -68,19 +86,10 @@ export async function runAgentArtifactAnalysis(
       return;
     }
     if (event.type === "progress.started") {
-      const supportedStages = new Set<ArtifactTaskStage>([
-        "retrieving_evidence",
-        "generating_answer",
-        "auditing_answer",
-        "structuring_artifact"
-      ]);
-      const stage = supportedStages.has(event.phase as ArtifactTaskStage)
-        ? event.phase as ArtifactTaskStage
-        : "generating_answer";
       onProgress?.({
         message: event.summary,
         progress: Math.max(25, Math.min(90, event.progress ?? 50)),
-        stage
+        stage: mapArtifactProgressStage(event.phase)
       });
       return;
     }

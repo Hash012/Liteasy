@@ -1,5 +1,9 @@
 import type { UIDslDocument } from "../generative-ui/generativeUi.types";
 import type { AgentCitation } from "../agent-api/agentApi.types";
+import type {
+  MindmapArtifact,
+  MindmapVerificationReport
+} from "../artifact-workflow/mindmapArtifact.types";
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { IntuitionGraphDocument } from "../intuition-graph/intuitionGraph.types";
 
@@ -75,6 +79,7 @@ export type ArtifactTab = {
   createdAt?: string;
   intuitionGraph?: IntuitionGraphDocument;
   markdown?: string;
+  mindmapArtifact?: MindmapArtifact;
   outlineMarkdown?: string;
   outlineNodes?: ArtifactOutlineNode[];
   papers?: ArtifactPaperRef[];
@@ -86,6 +91,7 @@ export type ArtifactTab = {
   title: string;
   type: ArtifactType;
   uiDsl?: UIDslDocument;
+  verification?: MindmapVerificationReport;
 };
 
 export type AgentArtifactResult = {
@@ -102,6 +108,7 @@ export type AgentArtifactResult = {
   citations: AgentCitation[];
   createdAt: string;
   intuitionGraph?: IntuitionGraphDocument;
+  mindmapArtifact?: MindmapArtifact;
   outlineMarkdown?: string;
   outlineNodes?: ArtifactOutlineNode[];
   papers: ArtifactPaperRef[];
@@ -109,5 +116,6 @@ export type AgentArtifactResult = {
   supplementalContext?: string;
   title: string;
   uiDsl: UIDslDocument;
+  verification?: MindmapVerificationReport;
   version: "liteasy.agent-artifact/v1";
 };

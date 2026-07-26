@@ -299,6 +299,7 @@ test("runs section-analysis model calls before the final artifact synthesis", as
   expect(prompts.filter((prompt) => prompt.includes("并行子任务"))).toHaveLength(4);
   expect(prompts.at(-1)).toContain("并行分析子任务记录");
   expect(result.answer).toContain("Method details");
+  expect(result.artifactWorkflow).toBeUndefined();
 });
 
 test("a single selected paper still creates AnalysisRun metadata for modal output", async () => {
@@ -320,4 +321,10 @@ test("a single selected paper still creates AnalysisRun metadata for modal outpu
       status: "completed"
     }
   });
+  expect(result.artifactWorkflow).toEqual(expect.objectContaining({
+    mindmap: expect.objectContaining({
+      verification: expect.objectContaining({ status: "pass" })
+    }),
+    status: "verified"
+  }));
 });

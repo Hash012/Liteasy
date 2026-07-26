@@ -2198,9 +2198,40 @@ body {
   overflow-wrap: anywhere;
 }
 
+.artifact-verification-summary,
+.artifact-source-layer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.artifact-verification-summary span,
+.artifact-source-layer-summary span {
+  border: 1px solid rgba(39, 125, 114, 0.18);
+  border-radius: 8px;
+  background: rgba(244, 250, 247, 0.82);
+  color: #375b53;
+  padding: 4px 8px;
+}
+
+.artifact-verification-summary.fail span:first-child {
+  border-color: rgba(171, 70, 55, 0.28);
+  background: rgba(255, 244, 241, 0.88);
+  color: #8a3a2d;
+}
+
+.artifact-verification-summary.review span:first-child {
+  border-color: rgba(163, 126, 43, 0.28);
+  background: rgba(255, 250, 235, 0.9);
+  color: #785f21;
+}
+
 .artifact-agent-answer,
 .artifact-outline-markdown,
-.artifact-evidence-index {
+.artifact-evidence-index,
+.artifact-external-reference-index {
   border: 1px solid rgba(116, 103, 87, 0.16);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.58);
@@ -2211,9 +2242,27 @@ body {
 
 .artifact-agent-answer summary,
 .artifact-outline-markdown summary,
-.artifact-evidence-index summary {
+.artifact-evidence-index summary,
+.artifact-external-reference-index summary {
   cursor: pointer;
   font-weight: 700;
+}
+
+.artifact-external-reference-index ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.artifact-external-reference-index li {
+  color: #554f48;
+}
+
+.artifact-external-reference-index li span {
+  display: block;
+  color: #687267;
+  margin-top: 3px;
 }
 
 .artifact-evidence-index > ol {

@@ -14,6 +14,11 @@ import type {
 import type { createArtifactStore } from "./artifact.store";
 import { generateCenterArtifactUIDslDocument } from "../generative-ui/uiDslGenerator";
 import type { AgentRun } from "../agent-api/agentApi.types";
+import type {
+  MindmapArtifact,
+  MindmapArtifactWorkflowMetadata,
+  MindmapVerificationReport
+} from "../artifact-workflow/mindmapArtifact.types";
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { ArtifactResultClient } from "./artifactResultClient";
 import {
@@ -24,6 +29,16 @@ import {
 import { createEvidenceBackedBaseGraph } from "../intuition-graph/createBaseGraph";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
+
+type AgentArtifactMetadata = {
+  analysis?: CompletedMultiPaperAnalysis;
+  artifactWorkflow?: MindmapArtifactWorkflowMetadata;
+};
+
+type VerifiedMindmapMetadata = {
+  mindmapArtifact: MindmapArtifact;
+  verification: MindmapVerificationReport;
+};
 
 export type AgentArtifactGenerationOptions = {
   regeneratedFromArtifactId?: string;
@@ -130,6 +145,38 @@ function buildFailureRecovery(message: string) {
     "检查下方 endpoint、provider 与 model 是否和当前 dev-cloud 配置一致。",
     "查看 dev-cloud 终端日志中的同一时间请求；修正配置后重启服务再重试。"
   ];
+}
+
+function formatVerificationFailure(
+  verification: MindmapVerificationReport | undefined,
+  fallback: string
+) {
+  const messages = verification?.errors.map((issue) => issue.message).filter(Boolean) ?? [];
+  return messages.length > 0 ? messages.join("；") : fallback;
+}
+
+function requireVerifiedMindmapMetadata(
+  artifactWorkflow: MindmapArtifactWorkflowMetadata | undefined
+): VerifiedMindmapMetadata {
+  if (!artifactWorkflow) {
+    throw new Error("思维导图审计未通过：缺少 Artifact Workflow 审计结果。");
+  }
+
+  const verification = artifactWorkflow.verification ?? artifactWorkflow.mindmap.verification;
+  if (
+    artifactWorkflow.status !== "verified" ||
+    artifactWorkflow.mindmap.verification.status !== "pass" ||
+    verification.status !== "pass"
+  ) {
+    throw new Error(
+      `思维导图审计未通过：${formatVerificationFailure(verification, "workflow 未返回可保存的通过态产物。")}`
+    );
+  }
+
+  return {
+    mindmapArtifact: artifactWorkflow.mindmap,
+    verification
+  };
 }
 
 const artifactTypeLabels: Record<Exclude<ArtifactType, "skill_doc">, string> = {
@@ -263,11 +310,14 @@ export function useArtifactActions({
         answerEvent.metadata &&
         typeof answerEvent.metadata === "object" &&
         !Array.isArray(answerEvent.metadata)
-          ? answerEvent.metadata as { analysis?: CompletedMultiPaperAnalysis }
+          ? answerEvent.metadata as AgentArtifactMetadata
           : {};
       if (!metadata.analysis) {
         throw new Error("Agent run 缺少可持久化的 AnalysisRun/Evidence/Claim");
       }
+      const verifiedMindmap = artifactType === "mindmap"
+        ? requireVerifiedMindmapMetadata(metadata.artifactWorkflow)
+        : undefined;
       const artifactId = `${createArtifactId(taskId)}-${agentRun.runId}`
         .replace(/[^A-Za-z0-9._-]/g, "-")
         .slice(0, 120);
@@ -314,6 +364,12 @@ export function useArtifactActions({
         citations: answerEvent.citations ?? [],
         createdAt,
         intuitionGraph,
+        ...(verifiedMindmap
+          ? {
+              mindmapArtifact: verifiedMindmap.mindmapArtifact,
+              verification: verifiedMindmap.verification
+            }
+          : {}),
         outlineMarkdown,
         outlineNodes,
         papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title })),
@@ -338,6 +394,12 @@ export function useArtifactActions({
         citations: answerEvent.citations,
         createdAt,
         intuitionGraph,
+        ...(verifiedMindmap
+          ? {
+              mindmapArtifact: verifiedMindmap.mindmapArtifact,
+              verification: verifiedMindmap.verification
+            }
+          : {}),
         outlineMarkdown,
         outlineNodes,
         papers: document.papers,
@@ -610,6 +672,7 @@ export function useArtifactActions({
       citations: result.citations,
       createdAt: result.createdAt,
       intuitionGraph: result.intuitionGraph,
+      mindmapArtifact: result.mindmapArtifact,
       outlineMarkdown: result.outlineMarkdown ?? (outlineNodes ? outlineToMarkdown(outlineNodes) : undefined),
       outlineNodes,
       papers: result.papers,
@@ -618,7 +681,8 @@ export function useArtifactActions({
       title: result.title,
       type: result.artifactType,
       supplementalContext: result.supplementalContext,
-      uiDsl
+      uiDsl,
+      verification: result.verification
     });
     syncArtifacts();
   }

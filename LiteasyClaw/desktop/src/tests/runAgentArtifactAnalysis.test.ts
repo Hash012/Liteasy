@@ -150,6 +150,81 @@ test("streams public Agent progress events to the artifact task", async () => {
   expect(unsubscribe).toHaveBeenCalledTimes(1);
 });
 
+test("maps artifact workflow progress phases to stable artifact task stages", async () => {
+  let listener: Parameters<FrontendAgentClient["subscribe"]>[0] | undefined;
+  const subscribe = vi.fn((nextListener: Parameters<FrontendAgentClient["subscribe"]>[0]) => {
+    listener = nextListener;
+    return vi.fn();
+  });
+  const send = vi.fn(async (input: Parameters<FrontendAgentClient["send"]>[0]) => {
+    listener?.({
+      apiVersion: "liteasy.agent/v1",
+      emittedAt: "2026-07-20T00:00:00.000Z",
+      eventId: "event-start",
+      inputMode: "qa",
+      message: input.message,
+      runId: "run-workflow",
+      sequence: 1,
+      sessionId: "session-1",
+      type: "run.started"
+    });
+    [
+      ["planning_artifact", "规划 Artifact 结构", 34],
+      ["collecting_external_knowledge", "检索外部补充知识", 42],
+      ["verifying_artifact", "审计 Artifact 结构", 82],
+      ["repairing_artifact", "修复 Artifact 草稿", 86]
+    ].forEach(([phase, summary, progress], index) => {
+      listener?.({
+        apiVersion: "liteasy.agent/v1",
+        emittedAt: "2026-07-20T00:00:01.000Z",
+        eventId: `event-progress-${index}`,
+        phase: String(phase),
+        planId: "run-workflow",
+        progress: Number(progress),
+        runId: "run-workflow",
+        sequence: index + 2,
+        sessionId: "session-1",
+        summary: String(summary),
+        traceId: "trace-run-workflow",
+        type: "progress.started"
+      });
+    });
+    return {
+      data: {
+        apiVersion: "liteasy.agent/v1" as const,
+        createdAt: "2026-07-20T00:00:00.000Z",
+        events: [],
+        idempotencyKey: "key-workflow",
+        input,
+        runId: "run-workflow",
+        sessionId: "session-1",
+        status: "completed" as const
+      },
+      ok: true as const
+    };
+  });
+  const onProgress = vi.fn();
+
+  await runAgentArtifactAnalysis(createClient(send, subscribe), "mindmap", onProgress);
+
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "规划 Artifact 结构",
+    stage: "retrieving_evidence"
+  }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "检索外部补充知识",
+    stage: "retrieving_evidence"
+  }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "审计 Artifact 结构",
+    stage: "auditing_answer"
+  }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "修复 Artifact 草稿",
+    stage: "auditing_answer"
+  }));
+});
+
 test("includes supplemental material and preserves its trust boundary during regeneration", async () => {
   const send = vi.fn(async (input: Parameters<FrontendAgentClient["send"]>[0]) => ({
     data: {
