@@ -1,9 +1,10 @@
 import type { UIDslDocument } from "../generative-ui/generativeUi.types";
 import type { AgentCitation } from "../agent-api/agentApi.types";
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
+import type { IntuitionGraphDocument } from "../intuition-graph/intuitionGraph.types";
 
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type ArtifactType = "comparison_table" | "mindmap" | "ppt" | "skill_doc" | "tree";
+export type ArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "skill_doc" | "tree";
 export type ArtifactTaskStage =
   | "waiting_for_import"
   | "preparing_context"
@@ -72,6 +73,7 @@ export type ArtifactTab = {
   artifactId: string;
   citations?: AgentCitation[];
   createdAt?: string;
+  intuitionGraph?: IntuitionGraphDocument;
   markdown?: string;
   outlineMarkdown?: string;
   outlineNodes?: ArtifactOutlineNode[];
@@ -99,6 +101,7 @@ export type AgentArtifactResult = {
   artifactType: Exclude<ArtifactType, "skill_doc">;
   citations: AgentCitation[];
   createdAt: string;
+  intuitionGraph?: IntuitionGraphDocument;
   outlineMarkdown?: string;
   outlineNodes?: ArtifactOutlineNode[];
   papers: ArtifactPaperRef[];

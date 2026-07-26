@@ -4,6 +4,7 @@ export function createSettingsStore() {
   const state: SettingsState = {
     "network.recommendation.enabled": true,
     "network.recommendation.sort_mode": "relevance",
+    "profile.enabled": false,
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
     "models.default_provider": "openai",

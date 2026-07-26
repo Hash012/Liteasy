@@ -52,6 +52,7 @@ function createSessionId(now: () => number, randomId: () => string) {
 
 const artifactTypeLabels: Record<ArtifactType, string> = {
   comparison_table: "论文对比表",
+  layered_graph: "分层关系图",
   mindmap: "思维导图",
   ppt: "演示文稿",
   skill_doc: "技能文档",

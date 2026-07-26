@@ -50,7 +50,7 @@ import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
 import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
-import { moveLocalLibraryResource } from "../features/library/libraryFileSystemClient";
+import { moveLocalLibraryResource, persistDroppedPdfFiles } from "../features/library/libraryFileSystemClient";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
@@ -136,6 +136,16 @@ export function AppShell({
       throw new Error("Agent cancel runner is not ready");
     }
   );
+  const refreshRecommendationsRef = useRef<(
+    input: { scope: "current_workspace" | "selected_document_set" }
+  ) => Promise<string>>(
+    async () => "推荐刷新功能正在初始化，请稍后重试。"
+  );
+  const getRecommendationItemsRef = useRef(() => [] as Array<{
+    reason: string;
+    relevanceScore: number;
+    title: string;
+  }>);
   const artifactResultClientRef = useRef<ReturnType<typeof createArtifactResultClient> | null>(null);
   if (!artifactResultClientRef.current) {
     artifactResultClientRef.current = createArtifactResultClient({
@@ -204,6 +214,10 @@ export function AppShell({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
     moveLocalLibraryResource,
+    persistDroppedPdfFiles: typeof window !== "undefined" &&
+      typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
+      ? persistDroppedPdfFiles
+      : undefined,
     onAnalysisHint: setAnalysisHint,
     onImportJobsChanged: setImportJobsByDocumentId,
     onWorkspaceChanged: setWorkspaceState,
@@ -369,7 +383,16 @@ export function AppShell({
   } = cloudAccount.model;
   const profileActions = useProfileActions({
     accountSession,
-    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"]
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
+    onProfileSamplingChanged: (enabled) => {
+      settingsStoreRef.current.apply({
+        intent: "update_setting",
+        target: "profile.enabled",
+        value: enabled
+      });
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    },
+    profileSamplingEnabled: settingsState["profile.enabled"]
   });
   function handleProfileExport() {
     downloadAcademicProfileExport(
@@ -614,6 +637,7 @@ export function AppShell({
         ])
       );
     },
+    getRecommendations: () => getRecommendationItemsRef.current(),
     getSelectedPapers: () => {
       const sourcePaperIds = agentArtifactPaperIdsOverrideRef.current;
       if (!sourcePaperIds) {
@@ -636,8 +660,10 @@ export function AppShell({
     onMoveDockItem: runtimeActionContext.moveDockItem,
     onOpenAcademicArchive: runtimeActionContext.openAcademicArchive,
     onOpenOrganizationSharedLibrary: organizationShell.actions.openOrganizationSharedLibrary,
+    onRefreshRecommendations: (input) => refreshRecommendationsRef.current(input),
     onSettingsChanged: (nextSettings) =>
       setSettingsState(cloneSettingsState(nextSettings)),
+    profileEnabled: settingsState["profile.enabled"],
     profilePersonalizationSummary: profileActions.assistantProfileSummary,
     profileUnlocked: accountSession !== null,
     runtimeOrganizationName: organizationShell.model.organizationSummary?.name,
@@ -687,6 +713,13 @@ export function AppShell({
     workspaceRevision: workspaceState.workspaceRevision,
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
   });
+  refreshRecommendationsRef.current = async () => knowledgeSync.actions.refreshRecommendations();
+  getRecommendationItemsRef.current = () =>
+    knowledgeSync.model.recommendationItems.map(({ reason, relevanceScore, title }) => ({
+      reason,
+      relevanceScore,
+      title
+    }));
   const {
     collectionItems,
     collectionMessage,
@@ -876,6 +909,7 @@ export function AppShell({
     onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
     onSelectOrganization: organizationShell.actions.selectOrganization,
     onToggleLock: workspaceActions.toggleSelectionLock,
+    onToggleProfileSampling: profileActions.toggleProfileSampling,
     onToggleSelection: workspaceActions.toggleSelection,
     onUpdateAcademicProfile: profileActions.updateAcademicProfile,
     organizationActionMessage,
@@ -884,6 +918,8 @@ export function AppShell({
     organizationSummaryStatus,
     papers: workspaceState.papers,
     profileClearMessage: profileActions.profileClearMessage,
+    profileReadPaperCount: workspaceState.papers.length,
+    profileSamplingEnabled: settingsState["profile.enabled"],
     recommendationItems,
     recommendationMessage,
     recommendationPending,
@@ -1009,6 +1045,7 @@ export function AppShell({
           agentClient={assistantAgent.agentClient}
           artifactTasks={artifactTasks}
           executionJournal={assistantAgent.executionJournal}
+          importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
           modelTransport={modelTransport}
           readerConversationContext={readerConversationContext}
@@ -1017,11 +1054,19 @@ export function AppShell({
           onApplyPanelAction={runtimeActionContext.applyPanelAction}
           onApplyThemePreset={runtimeActionContext.applyThemePreset}
           onCancelArtifactTask={artifactWorkflow.actions.cancelArtifactTask}
-          onGenerateArtifact={(artifactType) => {
-            const message = artifactWorkflow.actions.handleAssistantArtifact(artifactType);
-            return message;
+          onGenerateArtifact={(artifactType, paperIds) => {
+            if (paperIds && paperIds.length > 0) {
+              workspaceStoreRef.current.setSelectedDocumentSet(paperIds, true);
+              workspaceActions.syncWorkspace();
+              return artifactWorkflow.actions.startAnalysis(artifactType);
+            }
+            return artifactWorkflow.actions.handleAssistantArtifact(artifactType);
           }}
           onImportSelectedSet={runtimeActionContext.importSelectedSet}
+          onLockPapersForTask={(paperIds) => {
+            workspaceStoreRef.current.setSelectedDocumentSet(paperIds, true);
+            workspaceActions.syncWorkspace();
+          }}
           onMoveDockItem={runtimeActionContext.moveDockItem}
           onOpenAcademicArchive={runtimeActionContext.openAcademicArchive}
           onOpenArtifact={(artifactId) => {
@@ -1046,6 +1091,7 @@ export function AppShell({
           regionId={regionId === "main" ? "right" : regionId}
           runtimeOrganizationName={organizationSummary?.name}
           runtimeWorkspace={workspaceState.workspaceSource}
+          availablePapers={workspaceState.papers}
           selectedPaperCount={workspaceState.selectedPaperIds.length}
           selectedPapers={selectedPapers}
           selectionLocked={workspaceState.selectionLocked}

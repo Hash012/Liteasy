@@ -95,7 +95,7 @@ describe("LeftPane", () => {
     render(<LeftPane {...createProps({ leftRailView: "settings" })} />);
 
     expect(screen.getByLabelText("左边栏设置")).toBeInTheDocument();
-    expect(screen.getByText("文献元数据同步")).toBeInTheDocument();
+    expect(screen.getByLabelText("文献元数据同步")).toBeInTheDocument();
   });
 
   test("shows the local library root and refreshes it on demand", async () => {
@@ -111,7 +111,7 @@ describe("LeftPane", () => {
       />
     );
 
-    expect(screen.getByText("/home/test/LiteasyLibrary")).toBeInTheDocument();
+    expect(screen.getByText("/home/test/LiteasyLibrary", { selector: ".library-workspace-label" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "刷新本地文献库" }));
     expect(onRefreshLocalLibrary).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("本地文献库已刷新。")).toBeInTheDocument();
@@ -550,7 +550,6 @@ describe("LeftPane", () => {
     );
 
     const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).getByText("组织操作反馈")).toBeInTheDocument();
     expect(within(organizationPane).getByRole("status", { name: "组织操作反馈" })).toHaveTextContent(
       "已提交创建组织“Liteasy Demo Organization”的申请，当前为演示环境记录。"
     );
@@ -687,7 +686,7 @@ describe("LeftPane", () => {
       />
     );
     expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
-    expect(screen.getByText("研究画像")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
   });
 
   test("hides organization creation for basic members and keeps join available", () => {
@@ -912,7 +911,7 @@ describe("LeftPane", () => {
     expect(within(personalCenter).getByText("研究学科：未设置")).toBeInTheDocument();
     expect(within(personalCenter).queryByLabelText("性别")).not.toBeInTheDocument();
     expect(within(personalCenter).queryByLabelText("常用研究方法")).not.toBeInTheDocument();
-    expect(within(personalCenter).queryByRole("button", { name: /暂停用户画像|启用用户画像/ })).not.toBeInTheDocument();
+    expect(within(personalCenter).getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
 
     await user.selectOptions(within(personalCenter).getByLabelText("学科门类"), "08");
     await user.click(within(personalCenter).getByLabelText("工学 · 计算机科学与技术（0812）"));
@@ -921,7 +920,7 @@ describe("LeftPane", () => {
       "自然语言处理"
     );
     await user.selectOptions(within(personalCenter).getByLabelText("研究阶段"), "博士研究生");
-    await user.click(within(personalCenter).getByRole("button", { name: "保存研究画像" }));
+    await user.click(within(personalCenter).getByRole("button", { name: "保存学术档案" }));
 
     expect(onUpdateAcademicProfile).toHaveBeenCalledWith({
       disciplines: [{
@@ -968,7 +967,8 @@ describe("LeftPane", () => {
     expect(onLogout).toHaveBeenCalledTimes(1);
   });
 
-  test("shows governance as waiting instead of disconnected while organization loads", () => {
+  test("shows governance as waiting instead of disconnected while organization loads", async () => {
+    const user = userEvent.setup();
     render(
       <LeftPane
         {...createProps({
@@ -979,6 +979,7 @@ describe("LeftPane", () => {
       />
     );
 
+    await user.click(screen.getByRole("button", { name: "展开组织治理" }));
     expect(screen.getByText("组织治理：等待组织空间")).toBeInTheDocument();
     expect(screen.getByText("组织空间加载完成后会同步组织治理摘要。")).toBeInTheDocument();
   });

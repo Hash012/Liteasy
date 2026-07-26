@@ -6,6 +6,7 @@ import { createWorkspaceStore } from "../app/features/workspace/workspace.store"
 import type { Paper, WorkspaceState } from "../app/features/workspace/workspace.types";
 import { useWorkspaceActions } from "../app/features/workspace/useWorkspaceActions";
 import type { MoveLocalLibraryResource } from "../app/features/library/libraryFileSystemClient";
+import type { PersistDroppedPdfFiles } from "../app/features/library/libraryFileSystemClient";
 
 function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
   return {
@@ -21,6 +22,7 @@ function renderWorkspaceActions(
   papers: Paper[] = [],
   options: {
     moveLocalLibraryResource?: MoveLocalLibraryResource;
+    persistDroppedPdfFiles?: PersistDroppedPdfFiles;
     workspaceRootPath?: string;
   } = {}
 ) {
@@ -45,6 +47,7 @@ function renderWorkspaceActions(
       importDocument: vi.fn(() => Promise.resolve()),
       importStore,
       moveLocalLibraryResource: options.moveLocalLibraryResource,
+      persistDroppedPdfFiles: options.persistDroppedPdfFiles,
       onAnalysisHint,
       onImportJobsChanged,
       onWorkspaceChanged,
@@ -116,6 +119,37 @@ describe("useWorkspaceActions", () => {
     );
     expect(workspaceStore.getState().papers).toHaveLength(1);
     expect(onAnalysisHint).toHaveBeenLastCalledWith("《Recommended Paper》已经在我的文献库中。");
+  });
+
+  test("persists dropped PDFs in the selected local library folder instead of using a localhost blob URL", async () => {
+    const persistDroppedPdfFiles = vi.fn(() => Promise.resolve({
+      entries: [{
+        id: "local-1",
+        path: "/tmp/LiteasyLibrary/courses/retrieval.pdf",
+        title: "retrieval"
+      }],
+      rootPath: "/tmp/LiteasyLibrary"
+    }));
+    const { result, workspaceStore } = renderWorkspaceActions([], {
+      persistDroppedPdfFiles,
+      workspaceRootPath: "/tmp/LiteasyLibrary"
+    });
+
+    await act(async () => {
+      await result.current.addDroppedPdfFiles(
+        [new File(["pdf"], "retrieval.pdf", { type: "application/pdf" })],
+        "/tmp/LiteasyLibrary/courses"
+      );
+    });
+
+    expect(persistDroppedPdfFiles).toHaveBeenCalledWith(expect.objectContaining({
+      targetFolderPath: "/tmp/LiteasyLibrary/courses"
+    }));
+    expect(workspaceStore.getState().papers).toEqual([{
+      id: "local-1",
+      sourcePath: "/tmp/LiteasyLibrary/courses/retrieval.pdf",
+      title: "retrieval"
+    }]);
   });
 
   test("renames a managed PDF on disk before updating its stable workspace entry", async () => {

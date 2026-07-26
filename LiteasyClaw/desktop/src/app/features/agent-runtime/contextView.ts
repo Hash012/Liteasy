@@ -1,11 +1,17 @@
-import type { AgentRuntimeContextView, RuntimeContextIssue } from "./agentRuntime.types";
+import type {
+  AgentRecommendationContextItem,
+  AgentRuntimeContextView,
+  RuntimeContextIssue
+} from "./agentRuntime.types";
 import type { WorkspaceSource } from "../workspace/workspace.types";
 
 export type AgentRuntimeContextViewInput = {
   importedCount: number;
   organizationName?: string;
+  profileEnabled?: boolean;
   profilePersonalizationSummary?: string;
   profileUnlocked: boolean;
+  recommendations?: AgentRecommendationContextItem[];
   selectedCount: number;
   selectionLocked: boolean;
   workspace?: Partial<WorkspaceSource>;
@@ -32,6 +38,7 @@ function getSelectionIssues(input: AgentRuntimeContextViewInput): RuntimeContext
 export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput): AgentRuntimeContextView {
   const issues = getSelectionIssues(input);
   const workspaceType = input.workspace?.type ?? "unknown";
+  const recommendations = input.recommendations ?? [];
 
   return {
     cloud: {
@@ -39,9 +46,15 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
       ...(input.organizationName ? { organizationName: input.organizationName } : {})
     },
     profile: {
-      ...(input.profilePersonalizationSummary
+      enabled: Boolean(input.profileEnabled),
+      requiresConfirmation: true,
+      ...(input.profileEnabled && input.profilePersonalizationSummary
         ? { personalizationSummary: input.profilePersonalizationSummary }
         : {})
+    },
+    recommendations: {
+      items: recommendations.slice(0, 3).map((recommendation) => ({ ...recommendation })),
+      totalCount: recommendations.length
     },
     selection: {
       importedCount: input.importedCount,
@@ -60,7 +73,11 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
 export function formatAgentRuntimeContextSummary(context: AgentRuntimeContextView) {
   const lockLabel = context.selection.locked ? "已锁定" : "未锁定";
   const cloudLabel = context.cloud.connected ? "云账号已连接" : "云账号未连接";
-  const profileLabel = context.profile.personalizationSummary ? "学术档案已应用" : "学术档案待补充";
+  const profileLabel = !context.profile.enabled
+    ? "用户画像已关闭"
+    : context.profile.personalizationSummary
+      ? "学术档案已应用"
+      : "学术档案待补充";
 
   return [
     "上下文",

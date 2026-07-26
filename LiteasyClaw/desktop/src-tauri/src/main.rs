@@ -28,6 +28,7 @@ fn main() {
             artifact_catalog_state::save_artifact_catalog_state,
             import::mock_import,
             local_library::load_local_library_snapshot,
+            local_library::import_local_library_pdfs,
             local_library::move_local_library_resource,
             skill_documents::save_skill_document
         ])

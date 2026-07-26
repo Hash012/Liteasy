@@ -53,6 +53,12 @@ export function createWorkspaceStore() {
         ? state.selectedPaperIds.filter((item) => item !== id)
         : [...state.selectedPaperIds, id];
     },
+    setSelectedDocumentSet(ids: string[], locked = true) {
+      const availableIds = new Set(state.papers.map((paper) => paper.id));
+      state.selectedPaperIds = [...new Set(ids)].filter((id) => availableIds.has(id));
+      state.selectionLocked = locked;
+      state.workspaceRevision += 1;
+    },
     lockSelection() {
       state.selectionLocked = true;
     },

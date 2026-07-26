@@ -529,7 +529,7 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
     inputSchema: {
       properties: {
         artifactType: {
-          enum: ["comparison_table", "mindmap", "tree", "ppt"],
+          enum: ["comparison_table", "layered_graph", "mindmap", "tree", "ppt"],
           type: "string"
         },
         source: {
@@ -564,6 +564,22 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
             semanticSignal("selected_document_set", ["当前选中文献集", "当前论文", "选中文献", "这组论文"], 1)
           ],
           summary: "生成思维导图"
+        },
+        {
+          clarificationLabel: "生成分层关系图",
+          frameId: "artifact.generate.layered_graph",
+          input: {
+            artifactType: "layered_graph",
+            source: "selected_document_set"
+          },
+          intentId: "artifact.generate",
+          requiredContext: ["selected_document_set"],
+          signals: [
+            semanticSignal("create", ["生成", "制作", "做", "梳理"], 1),
+            semanticSignal("layered_graph", ["分层关系图", "分层图", "Obsidian", "星图", "关系网络"], 4, true),
+            semanticSignal("selected_document_set", ["当前选中文献集", "当前论文", "选中文献", "这组论文"], 1)
+          ],
+          summary: "生成分层关系图"
         },
         {
           clarificationLabel: "生成对比表",
@@ -624,7 +640,7 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
     inputSchema: {
       properties: {
         artifactType: {
-          enum: ["comparison_table", "mindmap", "tree", "ppt"],
+          enum: ["comparison_table", "layered_graph", "mindmap", "tree", "ppt"],
           type: "string"
         },
         source: {
@@ -654,7 +670,7 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
           type: "string"
         },
         artifactType: {
-          enum: ["comparison_table", "mindmap", "tree", "ppt"],
+          enum: ["comparison_table", "layered_graph", "mindmap", "tree", "ppt"],
           type: "string"
         }
       },
@@ -1172,6 +1188,38 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
           ],
           summary: "按检索时间排序推荐"
         },
+        {
+          clarificationLabel: "开启用户画像",
+          frameId: "settings.update.profile.enable",
+          input: {
+            target: "profile.enabled",
+            value: true
+          },
+          intentId: "settings.update",
+          requiresConfirmation: true,
+          riskLevel: "medium",
+          signals: [
+            semanticSignal("enable", ["开启", "打开", "启用"], 3, true),
+            semanticSignal("profile", ["用户画像", "个人画像", "学术画像"], 4, true)
+          ],
+          summary: "开启用户画像"
+        },
+        {
+          clarificationLabel: "关闭用户画像",
+          frameId: "settings.update.profile.disable",
+          input: {
+            target: "profile.enabled",
+            value: false
+          },
+          intentId: "settings.update",
+          requiresConfirmation: true,
+          riskLevel: "medium",
+          signals: [
+            semanticSignal("disable", ["关闭", "停用", "禁用"], 3, true),
+            semanticSignal("profile", ["用户画像", "个人画像", "学术画像"], 4, true)
+          ],
+          summary: "关闭用户画像"
+        },
       ]
     }
   }),
@@ -1488,6 +1536,14 @@ export function getRuntimeActionPolicy(invocation: ActionInvocation): Registered
     throw new Error(`Unknown action metadata: ${invocation.actionId}`);
   }
 
+  if (invocation.actionId === "settings.update" && invocation.input.target === "profile.enabled") {
+    return {
+      ...cloneActionMetadata(metadata),
+      requiresConfirmation: true,
+      riskLevel: "medium"
+    };
+  }
+
   return cloneActionMetadata(metadata);
 }
 
@@ -1589,6 +1645,15 @@ export async function executeAction(
   if (invocation.actionId === "settings.update") {
     if (!context.settingsStore) {
       throw new Error("settings.update requires a settings store");
+    }
+
+    if (
+      invocation.input.target === "profile.enabled" &&
+      context.profileUnlocked !== true
+    ) {
+      return {
+        message: "请先登录云账号后再使用个人画像能力。"
+      };
     }
 
     context.settingsStore.apply({

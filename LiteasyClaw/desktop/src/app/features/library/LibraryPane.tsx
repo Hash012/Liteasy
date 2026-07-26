@@ -61,7 +61,7 @@ type LibraryPaneProps = {
   canOpenOrganizationWorkspace: boolean;
   organizationWorkspaceLabel?: string;
   onAddExternalPaper: (item: CollectionItem | RecommendationItem) => void;
-  onAddDroppedPdfFiles?: (files: File[]) => void;
+  onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearRecommendations: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
   onDismissRecommendation?: (recommendation: RecommendationItem) => void;
@@ -260,8 +260,42 @@ export function LibraryPane({
   const [operationDialog, setOperationDialog] = useState<ResourceOperationDialog | null>(null);
   const [resourceActionMessage, setResourceActionMessage] = useState("");
   const [dropTargetFolderPath, setDropTargetFolderPath] = useState<string | null>(null);
+  const [fileDropActive, setFileDropActive] = useState(false);
+  const [importFolderPath, setImportFolderPath] = useState(() => {
+    if (typeof window === "undefined") {
+      return workspaceLabel;
+    }
+    return window.localStorage.getItem("liteasy.library.import-folder.v1") ?? workspaceLabel;
+  });
+  const [fileInputKey, setFileInputKey] = useState(0);
   const resourceEditingEnabled = workspaceSourceType === "local_library";
   const normalizedWorkspaceRoot = normalizeWorkspacePath(workspaceLabel);
+
+  useEffect(() => {
+    if (!resourceEditingEnabled) {
+      return;
+    }
+    const validFolder = folderPaths.includes(importFolderPath) ? importFolderPath : workspaceLabel;
+    if (validFolder !== importFolderPath) {
+      setImportFolderPath(validFolder);
+      return;
+    }
+    window.localStorage.setItem("liteasy.library.import-folder.v1", validFolder);
+  }, [folderPaths, importFolderPath, resourceEditingEnabled, workspaceLabel]);
+
+  function importPdfFiles(files: File[], targetFolderPath = importFolderPath) {
+    const pdfFiles = files.filter((file) => file.name.toLowerCase().endsWith(".pdf"));
+    if (pdfFiles.length === 0) {
+      setResourceActionMessage("请拖入 PDF 文件。");
+      return;
+    }
+    setResourceActionMessage(`正在将 ${pdfFiles.length} 个 PDF 保存到 ${targetFolderPath}…`);
+    void Promise.resolve(onAddDroppedPdfFiles?.(pdfFiles, targetFolderPath)).then(() => {
+      setResourceActionMessage(`已将 ${pdfFiles.length} 个 PDF 保存到 ${targetFolderPath}。`);
+    }).catch((error) => {
+      setResourceActionMessage(`导入失败：${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
 
   useEffect(() => {
     if (!contextMenu) {
@@ -365,6 +399,13 @@ export function LibraryPane({
       setResourceActionMessage(await onMovePaper?.(resource.id, folderPath) ?? "");
     } else if (resource?.kind === "folder" && resource.path) {
       setResourceActionMessage(await onMoveFolder?.(resource.path, folderPath) ?? "");
+    } else {
+      const droppedPdfFiles = Array.from(event.dataTransfer.files ?? []).filter((file) =>
+        file.name.toLowerCase().endsWith(".pdf")
+      );
+      if (droppedPdfFiles.length > 0) {
+        importPdfFiles(droppedPdfFiles, folderPath);
+      }
     }
   }
 
@@ -521,12 +562,11 @@ export function LibraryPane({
           draggable={resourceEditingEnabled && node.path !== "未归档文献" && !workspaceRootFolder}
           onContextMenu={(event) => openContextMenu(event, { folder: node, kind: "folder" })}
           onDragOver={(event) => {
-            if (
-              resourceEditingEnabled &&
-              Array.from(event.dataTransfer.types).includes(workspaceResourceMimeType)
-            ) {
+            const carriesWorkspaceResource = Array.from(event.dataTransfer.types).includes(workspaceResourceMimeType);
+            const carriesPdfFiles = Array.from(event.dataTransfer.types).includes("Files");
+            if (resourceEditingEnabled && (carriesWorkspaceResource || carriesPdfFiles)) {
               event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
+              event.dataTransfer.dropEffect = carriesWorkspaceResource ? "move" : "copy";
               setDropTargetFolderPath(node.path);
             }
           }}
@@ -683,6 +723,15 @@ export function LibraryPane({
         className="library-section library-drop-zone"
         onDragOver={(event) => {
           event.preventDefault();
+          if (Array.from(event.dataTransfer.types).includes("Files")) {
+            event.dataTransfer.dropEffect = "copy";
+            setFileDropActive(true);
+          }
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setFileDropActive(false);
+          }
         }}
         onDrop={(event) => {
           event.preventDefault();
@@ -690,7 +739,8 @@ export function LibraryPane({
             file.name.toLowerCase().endsWith(".pdf")
           );
           if (droppedPdfFiles.length > 0) {
-            onAddDroppedPdfFiles?.(droppedPdfFiles);
+            importPdfFiles(droppedPdfFiles);
+            setFileDropActive(false);
             return;
           }
 
@@ -746,9 +796,43 @@ export function LibraryPane({
         <div className="library-selection-summary">
           已选 {selectedCount} 篇{selectionLocked ? " · 已锁定" : ""}
         </div>
-        <div aria-label="PDF 文件拖拽导入区" className="library-file-drop-target">
-          拖入 PDF 添加到文献库
+        <div
+          aria-label="PDF 文件拖拽导入区"
+          className={`library-file-drop-target${fileDropActive ? " drop-active" : ""}`}
+          onDragEnter={() => setFileDropActive(true)}
+          onDragLeave={() => setFileDropActive(false)}
+          onClick={() => document.getElementById('pdf-file-input')?.click()}
+        >
+          <input
+            key={fileInputKey}
+            id="pdf-file-input"
+            type="file"
+            accept=".pdf"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+              if (pdfFiles.length > 0) {
+                importPdfFiles(pdfFiles);
+                setFileInputKey(prev => prev + 1);
+              }
+            }}
+          />
+          <span>{fileDropActive ? `松开以保存到 ${importFolderPath}` : "拖入 PDF 添加到文献库"}</span>
+          <span className="library-file-drop-hint">或点击上传；也可直接拖到目录</span>
         </div>
+        {resourceEditingEnabled ? (
+          <label className="library-import-target">
+            <span>导入位置</span>
+            <select aria-label="PDF 导入位置" onChange={(event) => setImportFolderPath(event.target.value)} value={importFolderPath}>
+              <option value={workspaceLabel}>{workspaceLabel}</option>
+              {folderPaths.filter((path) => path !== workspaceLabel).map((path) => (
+                <option key={path} value={path}>{path.replace(`${workspaceLabel}/`, "")}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {resourceActionMessage ? (
           <div aria-live="polite" className="library-resource-action-message">
             {resourceActionMessage}

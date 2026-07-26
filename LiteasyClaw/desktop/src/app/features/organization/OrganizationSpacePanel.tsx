@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ChevronDownRegular, ChevronRightRegular, PeopleRegular } from "@fluentui/react-icons";
 import type {
   OrganizationList,
   OrganizationListStatus,
@@ -94,6 +96,7 @@ export function OrganizationSpacePanel({
   status,
   summary
 }: OrganizationSpacePanelProps) {
+  const [expanded, setExpanded] = useState(true);
   const latestNotification = summary?.notifications[0];
   const latestAuditEvent = summary?.auditEvents[0];
   const readNotificationIdSet = new Set(readNotificationIds);
@@ -107,9 +110,22 @@ export function OrganizationSpacePanel({
     : 0;
 
   return (
-    <div className="model-policy-card organization-space-card">
-      <div className="model-policy-title">组织空间</div>
-      <div className={`model-policy-status ${status}`}>{getStatusLabel(status, summary)}</div>
+    <section className="sidebar-section organization-space-card">
+      <button
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "收起" : "展开"}组织空间`}
+        className="sidebar-section-header"
+        onClick={() => setExpanded((current) => !current)}
+        type="button"
+      >
+        <span aria-hidden="true" className="sidebar-section-disclosure">
+          {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        </span>
+        <PeopleRegular />
+        <span>组织空间</span>
+      </button>
+      {expanded ? <div className="sidebar-section-content">
+        <div className={`model-policy-status ${status}`}>{getStatusLabel(status, summary)}</div>
       {list ? (
         <>
           <div className="model-policy-summary">
@@ -193,6 +209,7 @@ export function OrganizationSpacePanel({
       ) : (
         <div className="model-policy-footnote">{message}</div>
       )}
-    </div>
+      </div> : null}
+    </section>
   );
 }

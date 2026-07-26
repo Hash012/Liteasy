@@ -247,6 +247,50 @@
   color: #5d7690;
   font-size: 12px;
   font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.library-file-drop-target:hover {
+  background: rgba(233, 243, 255, 0.85);
+  border-color: #1b66b3;
+}
+
+.library-file-drop-target.drop-active {
+  min-height: 72px;
+  border-color: #0f6cbd;
+  border-width: 2px;
+  background: #e9f3ff;
+  box-shadow: inset 0 0 0 1px rgba(15, 108, 189, 0.12);
+  color: #0f6cbd;
+}
+
+.library-file-drop-hint {
+  font-size: 11px;
+  color: #7b90a5;
+  font-weight: 400;
+  margin-top: 4px;
+}
+
+.library-import-target {
+  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  margin: -4px 0 12px;
+  color: #5d7690;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.library-import-target select {
+  min-width: 0;
+  border: 1px solid #adc7dc;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #35536f;
+  font: inherit;
+  padding: 6px 8px;
 }
 
 .library-collection-browser {

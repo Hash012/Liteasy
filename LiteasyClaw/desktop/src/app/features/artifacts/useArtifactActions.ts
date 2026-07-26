@@ -21,6 +21,7 @@ import {
   outlineToMarkdown,
   parseStreamingOutlineMarkdown
 } from "./artifactOutline";
+import { createEvidenceBackedBaseGraph } from "../intuition-graph/createBaseGraph";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
@@ -83,6 +84,10 @@ function getArtifactTitle(type: ArtifactType) {
     return "Literature Comparison Table";
   }
 
+  if (type === "layered_graph") {
+    return "Layered Literature Graph";
+  }
+
   return "Literature Mind Map";
 }
 
@@ -129,6 +134,7 @@ function buildFailureRecovery(message: string) {
 
 const artifactTypeLabels: Record<Exclude<ArtifactType, "skill_doc">, string> = {
   comparison_table: "对比表",
+  layered_graph: "分层关系图",
   mindmap: "思维导图",
   ppt: "PPT",
   tree: "树形展开"
@@ -272,7 +278,7 @@ export function useArtifactActions({
         papers: selectedPapers,
         title
       });
-      const generatedOutlineNodes = artifactType === "tree" || artifactType === "mindmap"
+      const generatedOutlineNodes = artifactType === "tree" || artifactType === "mindmap" || artifactType === "layered_graph"
         ? parseStreamingOutlineMarkdown(answerEvent.message)
         : [];
       const outlineNodes = generatedOutlineNodes.length >= 4
@@ -287,6 +293,13 @@ export function useArtifactActions({
         selectedPapers,
         title
       });
+      const intuitionGraph = artifactType === "mindmap" || artifactType === "layered_graph"
+        ? createEvidenceBackedBaseGraph({
+            analysis: metadata.analysis,
+            artifactId,
+            workId: selectedPapers.length === 1 ? `local:${selectedPapers[0].id}` : `selection:${metadata.analysis.run.id}`
+          })
+        : undefined;
       const document = {
         agent: {
           apiVersion: agentRun.apiVersion,
@@ -300,6 +313,7 @@ export function useArtifactActions({
         artifactType,
         citations: answerEvent.citations ?? [],
         createdAt,
+        intuitionGraph,
         outlineMarkdown,
         outlineNodes,
         papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title })),
@@ -323,6 +337,7 @@ export function useArtifactActions({
         artifactId,
         citations: answerEvent.citations,
         createdAt,
+        intuitionGraph,
         outlineMarkdown,
         outlineNodes,
         papers: document.papers,
@@ -381,21 +396,12 @@ export function useArtifactActions({
     return message;
   }
 
-  function startAnalysis(artifactType: ArtifactType) {
-    const selectedSet = getSelectedDocumentSet();
-    if (selectedSet.documentIds.length === 0) {
-      const message = "请先在工作区勾选文件，形成选中文献集。";
+  function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[]) {
+    if (selectedPapers.length === 0) {
+      const message = "请通过 @ 指定论文，或在左栏勾选并锁定文献后再生成产物。";
       onAnalysisHint(message);
       return message;
     }
-
-    if (!selectedSet.locked) {
-      const message = "请先锁定选中文献集，再启动模态分析。";
-      onAnalysisHint(message);
-      return message;
-    }
-
-    const selectedPapers = getSelectedPapers();
     if (artifactType !== "skill_doc") {
       const existingArtifacts = findDuplicateArtifacts(
         artifactStore.getCatalog(),
@@ -450,6 +456,23 @@ export function useArtifactActions({
     const message = "当前选中文献集尚未全部导入，系统会先导入，再自动启动该模态分析。";
     onAnalysisHint(message);
     return message;
+  }
+
+  function startAnalysis(artifactType: ArtifactType) {
+    const selectedSet = getSelectedDocumentSet();
+    if (selectedSet.documentIds.length === 0) {
+      const message = "请先在工作区勾选文件，形成选中文献集。";
+      onAnalysisHint(message);
+      return message;
+    }
+
+    if (!selectedSet.locked) {
+      const message = "请先锁定选中文献集，再启动模态分析。";
+      onAnalysisHint(message);
+      return message;
+    }
+
+    return startAnalysisForPapers(artifactType, getSelectedPapers());
   }
 
   function handleAssistantArtifact(artifactType: ArtifactType) {
@@ -569,7 +592,7 @@ export function useArtifactActions({
           title: result.title
         })
       : undefined);
-    const uiDsl = outlineNodes && (result.artifactType === "tree" || result.artifactType === "mindmap")
+    const uiDsl = outlineNodes && (result.artifactType === "tree" || result.artifactType === "mindmap" || result.artifactType === "layered_graph")
       ? generateCenterArtifactUIDslDocument({
           artifactId: result.artifactId,
           artifactType: result.artifactType,
@@ -586,6 +609,7 @@ export function useArtifactActions({
       artifactId: result.artifactId,
       citations: result.citations,
       createdAt: result.createdAt,
+      intuitionGraph: result.intuitionGraph,
       outlineMarkdown: result.outlineMarkdown ?? (outlineNodes ? outlineToMarkdown(outlineNodes) : undefined),
       outlineNodes,
       papers: result.papers,
@@ -658,6 +682,7 @@ export function useArtifactActions({
     restoreArtifactResult,
     saveSkillDocument,
     startAnalysis,
+    startAnalysisForPapers,
     startArtifactTask,
     syncArtifacts,
     updateSkillDocument

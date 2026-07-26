@@ -50,10 +50,14 @@ import type { UIDslActionRef, UIDslDocument } from "../generative-ui/generativeU
 import { validateUIDslDocument } from "../generative-ui/uiDslValidator";
 import { createModelAssistedJournalAuditModel } from "../generative-ui/journalAuditModel";
 import { createModelAssistedUIDslGenerator } from "../generative-ui/uiDslGenerator";
+import { createModelAssistedClarification } from "../agent-runtime/modelClarification";
+import { createModelSemanticPlanner } from "../agent-runtime/modelSemanticPlanner";
+import { runAgentRuntime } from "../agent-runtime/runtimeOrchestrator";
 import type { ModelTransport } from "../models/modelHttpClient";
 import type { ActionContext } from "../skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
 import type { SettingsState } from "../settings/settings.types";
+import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import { defaultAgentCoreConfig } from "../agent-core/agentCoreConfig";
 import type { AnswerAuditResult } from "./answerAuditor";
 import type { ModelExecutionTrace } from "../models/modelExecution";
@@ -63,21 +67,29 @@ import {
   getSelectedSetReadyMessage
 } from "./assistantPresentation";
 import type { ReaderConversationContext } from "./assistantContext.types";
+import { generateAssistantAnswer } from "./generateAssistantAnswer";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantPaneProps = {
-  agentClient: FrontendAgentClient;
+  /**
+   * The application always supplies the public Agent client. Keeping this optional
+   * makes the pane usable in isolated previews and provides a real model-backed
+   * fallback for legacy embeds while the Agent host is being initialized.
+   */
+  agentClient?: FrontendAgentClient;
   artifactTasks?: ArtifactTask[];
   executionJournal?: ExecutionJournal;
+  importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
   modelTransport?: ModelTransport;
   onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
   onApplyThemePreset?: ActionContext["applyThemePreset"];
   onCancelArtifactTask?: (taskId: string) => string | Promise<string>;
-  onGenerateArtifact: (artifactType: ArtifactType) => string;
+  onGenerateArtifact: (artifactType: ArtifactType, paperIds?: string[]) => string;
   onImportSelectedSet?: ActionContext["importSelectedSet"];
+  onLockPapersForTask?: (paperIds: string[]) => void;
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenArtifact?: (artifactId: string) => void;
@@ -88,6 +100,7 @@ type AssistantPaneProps = {
   registrationWelcomeMessage?: { content: string; id: number };
   readerConversationContext?: ReaderConversationContext | null;
   runtimeOrganizationName?: string;
+  availablePapers?: Paper[];
   runtimeWorkspace?: Partial<WorkspaceSource>;
   selectedPapers?: Paper[];
   selectedSetStatus: SelectedSetStatus;
@@ -114,6 +127,15 @@ function createMessage(role: AssistantMessage["role"], content: string): Assista
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role
   };
+}
+
+function getArtifactTypeFromCommand(message: string): ArtifactType | null {
+  if (/分层关系图|分层图|obsidian|星图|关系网络/i.test(message)) return "layered_graph";
+  if (/思维导图|脑图|mindmap/i.test(message)) return "mindmap";
+  if (/树状图|树形图|树形展开/i.test(message)) return "tree";
+  if (/对比表|对比矩阵|comparison table/i.test(message)) return "comparison_table";
+  if (/\bppt\b|演示文稿|幻灯片/i.test(message)) return "ppt";
+  return null;
 }
 
 function formatRuntimeEvent(event: AgentRuntimeEvent): string {
@@ -197,6 +219,7 @@ export function AssistantPane({
   agentClient,
   artifactTasks = [],
   executionJournal,
+  importedChunksByPaperId = {},
   modelTransport,
   onApplyGeneratedTheme,
   onApplyLayoutPreset,
@@ -205,6 +228,7 @@ export function AssistantPane({
   onCancelArtifactTask,
   onGenerateArtifact,
   onImportSelectedSet,
+  onLockPapersForTask,
   onMoveDockItem,
   onOpenAcademicArchive,
   onOpenArtifact,
@@ -217,6 +241,7 @@ export function AssistantPane({
   runtimeOrganizationName,
   runtimeWorkspace,
   selectedPapers = [],
+  availablePapers = selectedPapers,
   selectedSetStatus,
   settingsStore
 }: AssistantPaneProps) {
@@ -242,6 +267,7 @@ export function AssistantPane({
   } | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const lastReaderContextKeyRef = useRef<string | null>(null);
+  const commandPaperIdsRef = useRef<string[] | undefined>();
   const settingsStoreRef = useRef(settingsStore ?? createSettingsStore());
   const [assistantState, setAssistantState] = useState<AssistantState>(() =>
     cloneAssistantState(assistantStoreRef.current.getState())
@@ -260,6 +286,7 @@ export function AssistantPane({
   const runtimeContext = buildAgentRuntimeContextView({
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
+    profileEnabled: Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
     profileUnlocked,
     selectedCount: selectedSetStatus.selectedCount,
     selectionLocked: selectedSetStatus.selectionLocked,
@@ -468,7 +495,7 @@ export function AssistantPane({
       trigger: "/"
     }));
 
-    const paperSuggestions: AssistantComposerSuggestion[] = selectedPapers.flatMap((paper) => {
+    const paperSuggestions: AssistantComposerSuggestion[] = availablePapers.map((paper) => {
       const paperToken: AssistantContextToken = {
         detail: "整篇论文",
         id: `paper-${paper.id}`,
@@ -476,7 +503,19 @@ export function AssistantPane({
         label: paper.title,
         prompt: `用户指定论文上下文：${paper.title}（paperId=${paper.id}）`
       };
-      const pageTokens: AssistantComposerSuggestion[] = Array.from({ length: 20 }, (_, index) => index + 1).map((page) => ({
+      return {
+        detail: "整篇论文",
+        id: `paper-${paper.id}`,
+        label: paper.title,
+        token: paperToken,
+        trigger: "@" as const
+      };
+    });
+
+    // 先提供所有“整篇论文”候选，避免每篇的页码把后续论文挤出首屏；
+    // 输入标题或 p.页码时仍可检索到下面的精确页码上下文。
+    const pageSuggestions: AssistantComposerSuggestion[] = availablePapers.flatMap((paper) =>
+      Array.from({ length: 20 }, (_, index) => index + 1).map((page) => ({
         detail: `${paper.title} · 第 ${page} 页`,
         id: `page-${paper.id}-${page}`,
         label: `${paper.title} p.${page}`,
@@ -488,19 +527,8 @@ export function AssistantPane({
           prompt: `用户指定论文页面上下文：${paper.title}（paperId=${paper.id}），第 ${page} 页。`
         },
         trigger: "@" as const
-      }));
-
-      return [
-        {
-          detail: "整篇论文",
-          id: `paper-${paper.id}`,
-          label: paper.title,
-          token: paperToken,
-          trigger: "@" as const
-        },
-        ...pageTokens
-      ];
-    });
+      }))
+    );
 
     const skillSuggestions: AssistantComposerSuggestion[] = defaultAgentCoreConfig.skills.map((skill) => ({
       detail: skill.description,
@@ -516,7 +544,7 @@ export function AssistantPane({
       trigger: "$"
     }));
 
-    return [...commandSuggestions, ...paperSuggestions, ...skillSuggestions];
+    return [...commandSuggestions, ...paperSuggestions, ...pageSuggestions, ...skillSuggestions];
   }
 
   function setMode(mode: AssistantMode) {
@@ -618,9 +646,17 @@ export function AssistantPane({
       moveDockItem: onMoveDockItem,
       openAcademicArchive: onOpenAcademicArchive,
       openOrganizationSharedLibrary: onOpenOrganizationSharedLibrary,
+      clarifySemanticPlan: createModelAssistedClarification({
+        modelTransport,
+        settings: settingsStoreRef.current.getState()
+      }),
       profileUnlocked,
+      semanticPlanner: createModelSemanticPlanner({
+        modelTransport,
+        settings: settingsStoreRef.current.getState()
+      }),
       settingsStore: settingsStoreRef.current,
-      startArtifactAnalysis: onGenerateArtifact
+      startArtifactAnalysis: (artifactType) => onGenerateArtifact(artifactType, commandPaperIdsRef.current)
     };
   }
 
@@ -759,6 +795,11 @@ export function AssistantPane({
   }
 
   async function runPublicAgentMessage(message: string, mode: AssistantMode) {
+    if (!agentClient) {
+      await runEmbeddedAgentMessage(message, mode);
+      return;
+    }
+
     const trackedRun = {
       cancelRequested: false,
       cancelSent: false,
@@ -852,6 +893,56 @@ export function AssistantPane({
     }
   }
 
+  /**
+   * The normal desktop route is the public Agent API above. This path is only a
+   * compatibility bridge for isolated pane consumers: it still calls the same
+   * configured model gateway, so a greeting exercises the configured service
+   * rather than falling back to a static instruction message.
+   */
+  async function runEmbeddedAgentMessage(message: string, mode: AssistantMode) {
+    assistantStoreRef.current.setPending(true);
+    syncAssistant();
+
+    try {
+      if (mode === "command") {
+        const result = await runAgentRuntime(
+          { message, mode },
+          createRuntimeExecutionContext()
+        );
+        appendRuntimeEvents(result.events);
+        await appendJournalAudit(getTraceIdFromRuntimeEvents(result.events));
+        if (result.settingsChanged) {
+          onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
+        }
+      } else {
+        const answer = await generateAssistantAnswer({
+          importedChunksByPaperId,
+          mode,
+          modelTransport,
+          question: message,
+          selectedPapers,
+          settings: settingsStoreRef.current.getState()
+        });
+        const assistantMessage = createMessage("assistant", answer.content);
+        assistantMessage.audit = answer.audit;
+        assistantMessage.citations = answer.citations;
+        assistantMessage.confidence = answer.confidence;
+        assistantMessage.executionTrace = answer.executionTrace;
+        assistantMessage.uiDsl = answer.uiDsl;
+        assistantStoreRef.current.addMessage(assistantMessage);
+      }
+      setInput("");
+      setEditingMessageId(null);
+    } catch (error) {
+      assistantStoreRef.current.addMessage(
+        createMessage("assistant", getAssistantErrorMessage(error))
+      );
+    } finally {
+      assistantStoreRef.current.setPending(false);
+      syncAssistant();
+    }
+  }
+
   async function cancelActiveSession() {
     if (cancellingSession) {
       return;
@@ -870,7 +961,7 @@ export function AssistantPane({
     }
 
     const trackedRun = activeConversationRunRef.current;
-    if (!trackedRun) {
+    if (!trackedRun || !agentClient) {
       setCancellingSession(false);
       return;
     }
@@ -952,6 +1043,9 @@ export function AssistantPane({
 
     try {
       if (isPublicConfirmation(confirmation)) {
+        if (!agentClient) {
+          throw new Error("AI 服务尚未初始化，请稍后重试。");
+        }
         const result = await agentClient.confirm(confirmation.confirmationId, "approve");
         if (!result.ok) {
           throw new Error(result.error.message);
@@ -981,6 +1075,14 @@ export function AssistantPane({
   async function handleRejectRequest(confirmation: AssistantConfirmationRequest) {
     clearConfirmationMessage(confirmation.confirmationId);
     if (isPublicConfirmation(confirmation)) {
+      if (!agentClient) {
+        assistantStoreRef.current.addMessage(
+          createMessage("assistant", "AI 服务尚未初始化，请稍后重试。")
+        );
+        syncAssistant();
+        inputRef.current?.focus();
+        return;
+      }
       const result = await agentClient.confirm(confirmation.confirmationId, "reject");
       if (!result.ok) {
         assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
@@ -1075,19 +1177,13 @@ export function AssistantPane({
       attachedContextPrompt.length > 0 ? attachedContextPrompt : readerContextPrompt;
     const readyMessage =
       combinedContextPrompt.length > 0 ? null : getSelectedSetReadyMessage(selectedSetStatus);
-    if (readyMessage) {
-      assistantStoreRef.current.addMessage(createMessage("assistant", readyMessage));
-      syncAssistant();
-      inputRef.current?.focus();
-      setInput("");
-      setEditingMessageId(null);
-      return;
-    }
 
     const publicQuestion =
       combinedContextPrompt.length > 0
         ? `${combinedContextPrompt}\n\n用户问题：${question}`
-        : question;
+        : readyMessage
+          ? `${question}\n\n系统上下文：当前尚未准备论文任务。请自然、友好地先回答用户，不要复述系统上下文或错误提示。回答末尾简短提醒：可在左栏勾选并锁定一些论文，或使用 @ 添加论文后开始分析。`
+          : question;
     await runPublicAgentMessage(publicQuestion, mode);
   }
 
@@ -1097,6 +1193,9 @@ export function AssistantPane({
     const isSlashCommand = trimmedInput.startsWith("/");
     const commandMessage = isSlashCommand ? trimmedInput.slice(1).trim() : "";
     const contextTokensForTurn = [...composerContextTokens];
+    const referencedPaperIds = contextTokensForTurn
+      .filter((token) => token.kind === "paper")
+      .map((token) => token.id.replace(/^paper-/, ""));
     const attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn);
     const activeMode: AssistantMode = isSlashCommand ? "command" : "qa";
     const adapted = adaptTextIntent({
@@ -1128,12 +1227,30 @@ export function AssistantPane({
     );
     userMessage.contextTokens = contextTokensForTurn;
     assistantStoreRef.current.addMessage(userMessage);
+    if (referencedPaperIds.length > 0) {
+      // @ 引用和左栏“选择并锁定”是同一个任务上下文，而非仅拼进提示词的装饰。
+      onLockPapersForTask?.([...new Set(referencedPaperIds)]);
+    }
     setComposerContextTokens([]);
     setReaderContexts([]);
     lastReaderContextKeyRef.current = null;
 
     if (adapted.runtimeInput.mode === "command") {
-      await runCommandMessage(adapted.runtimeInput.message);
+      commandPaperIdsRef.current = referencedPaperIds;
+      try {
+        const artifactType = getArtifactTypeFromCommand(adapted.runtimeInput.message);
+        if (artifactType && commandPaperIdsRef.current.length > 0) {
+          const message = onGenerateArtifact(artifactType, commandPaperIdsRef.current);
+          assistantStoreRef.current.addMessage(createMessage("assistant", message));
+          setInput("");
+          setEditingMessageId(null);
+          syncAssistant();
+          return;
+        }
+        await runCommandMessage(adapted.runtimeInput.message);
+      } finally {
+        commandPaperIdsRef.current = undefined;
+      }
       return;
     }
 
@@ -1238,9 +1355,9 @@ export function AssistantPane({
   const conversationStarted = assistantState.messages.length > 0;
   const readyMessage =
     readerContexts.length > 0 ? null : getSelectedSetReadyMessage(selectedSetStatus);
-  const composerHint =
-    readyMessage ??
-    "输入 / 开始软件命令；普通输入会结合 PDF 选区或当前文献上下文回答。";
+  const composerHint = readyMessage
+    ? "可以先直接对话来检查 AI 服务；需要论文分析时，再在左栏锁定论文或用 @ 添加论文。"
+    : "输入 / 开始软件命令；普通输入会结合 PDF 选区或当前文献上下文回答。";
   const activeSession = sessionHistory.find((session) => session.id === activeSessionId);
   const activeSessionRunning = activeSession?.kind === "artifact_generation"
     ? activeSession.status === "running"

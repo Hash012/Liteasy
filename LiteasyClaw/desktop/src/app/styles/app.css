@@ -2182,6 +2182,7 @@ body {
   opacity: 0.55;
 }
 
+
 .artifact-card-body {
   display: flex;
   flex-direction: column;
@@ -2481,6 +2482,7 @@ body {
   grid-template-columns: 180px minmax(0, 1fr);
   height: 100%;
   min-height: 0;
+  position: relative;
 }
 
 .pdf-workspace.sidebar-collapsed {
@@ -2490,10 +2492,13 @@ body {
 .pdf-left-sidebar {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  width: 180px;
   min-width: 0;
   border-right: 1px solid var(--line-1);
   background: rgba(248, 251, 253, 0.88);
+  overflow: hidden;
 }
+
 
 .pdf-sidebar-switcher {
   display: grid;
@@ -2501,11 +2506,13 @@ body {
   gap: 6px;
   padding: 10px;
   border-bottom: 1px solid var(--line-1);
+  min-width: 0;
 }
 
 .pdf-workspace.sidebar-collapsed .pdf-left-sidebar {
   display: block;
   padding: 8px 6px;
+  width: 44px;
 }
 
 .pdf-sidebar-switcher button {
@@ -2553,6 +2560,7 @@ body {
   list-style: none;
   margin: 0;
   padding: 10px;
+  overflow: auto;
 }
 
 .pdf-thumbnail-list {
@@ -2584,14 +2592,16 @@ body {
 
 .pdf-sidebar-annotations {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
   min-height: 0;
+  overflow: hidden;
 }
 
 .pdf-main-stage {
   min-width: 0;
   min-height: 0;
   background: #e8eef5;
+  overflow: auto;
 }
 
 .pdf-stage {
@@ -2745,7 +2755,28 @@ body {
   gap: 8px;
   grid-auto-rows: max-content;
   min-height: 0;
-  overflow: auto;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-1) transparent;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pdf-annotation-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pdf-annotation-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pdf-annotation-list::-webkit-scrollbar-thumb {
+  background-color: var(--line-1);
+  border-radius: 3px;
+  border: none;
 }
 
 .pdf-status {
@@ -2758,8 +2789,10 @@ body {
   border: 1px solid var(--line-1);
   border-radius: 8px;
   background: #ffffff;
-  padding: 9px 10px;
+  padding: 8px 10px;
   line-height: 1.45;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .pdf-annotation-summary {
@@ -2827,6 +2860,78 @@ body {
   padding: 7px 12px;
 }
 
+.note-editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.note-editor textarea {
+  min-height: 74px;
+  resize: vertical;
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink-1);
+  font: inherit;
+  padding: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.annotation-note-preview {
+  font-size: 12px;
+  color: var(--ink-2);
+  font-style: italic;
+  margin-left: 4px;
+  display: block;
+  margin-top: 2px;
+}
+
+.annotation-divider {
+  height: 1px;
+  background: var(--line-1);
+  margin: 6px 4px 4px 4px;
+}
+
+.pdf-annotation-item {
+  position: relative;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.editor-actions button {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.save-button {
+  background: var(--accent-2);
+  color: white;
+  border-color: var(--accent-2);
+}
+
+.cancel-button {
+  background: var(--paper-1);
+  color: var(--ink-2);
+}
+
+.delete-button {
+  background: #ff5f57;
+  color: white;
+  border-color: #ff5f57;
+  margin-top: 4px;
+}
+
+.pdf-annotation-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .pdf-annotation-item.highlight {
   background: #fff4df;
 }
@@ -2839,10 +2944,62 @@ body {
   background: #e9f7ef;
 }
 
+.pdf-annotation-item.highlight {
+  position: relative;
+  padding-left: 12px;
+}
+
+.annotation-color-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 2px 0 0 2px;
+}
+
+.selection-menu-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+
+.color-selector {
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  background: rgba(248, 249, 250, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.color-option {
+  width: 16px;
+  height: 16px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.color-option:hover {
+  transform: scale(1.15);
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.color-option.active {
+  border: 2px solid var(--ink-1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+
 .pdf-annotation-overlay {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 0;
   pointer-events: none;
   user-select: none;
 }
@@ -2856,24 +3013,29 @@ body {
   font-size: clamp(10px, 1.2vw, 12px);
   font-weight: 800;
   padding: 0;
+  pointer-events: none;
 }
 
 .pdf-overlay-mark.highlight {
-  background: rgba(255, 218, 102, 0.38);
+  mix-blend-mode: normal;
+  opacity: 0.5;
+  border-radius: 1px;
+  margin: -0.5px;
+  box-shadow: none;
 }
 
 .pdf-overlay-mark.underline {
-  background: linear-gradient(to top, rgba(27, 102, 179, 0.7) 0 3px, transparent 3px);
-  color: #174f8a;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(27, 102, 179, 0.8);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  border: none;
+  box-shadow: none;
 }
 
-.pdf-overlay-mark.note {
-  border: 1px solid rgba(42, 124, 84, 0.22);
-  background: rgba(233, 247, 239, 0.92);
-  color: #25643d;
-  border-radius: 999px;
-  box-shadow: 0 4px 12px rgba(42, 124, 84, 0.2);
-}
+/* 注释提示框样式 */
 
 .pdf-overlay-label {
   position: absolute;
@@ -2888,28 +3050,52 @@ body {
   position: absolute;
   z-index: 8;
   display: flex;
+  flex-direction: column;
   gap: 4px;
-  padding: 5px;
+  padding: 8px;
   border: 1px solid rgba(24, 34, 47, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 14px 34px rgba(24, 34, 47, 0.16);
-  backdrop-filter: blur(16px);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(24, 34, 47, 0.15);
+  backdrop-filter: blur(8px);
   user-select: none;
+  min-width: 180px;
 }
 
 .pdf-selection-menu button {
   border: 0;
-  border-radius: 999px;
+  border-radius: 6px;
   background: transparent;
   color: var(--ink-1);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 900;
-  padding: 7px 10px;
+  font-weight: 700;
+  padding: 6px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.pdf-selection-menu .selection-menu-row {
+  width: 100%;
+}
+
+.pdf-selection-menu .selection-menu-row button {
+  flex: 1;
+  margin: 0;
+  border-radius: 6px;
 }
 
 .pdf-selection-menu button:hover {
+  background: #e9f3ff;
+  color: var(--accent-1);
+}
+
+.pdf-selection-menu .add-to-conversation {
+  background: transparent;
+  color: var(--ink-1);
+}
+
+.pdf-selection-menu .add-to-conversation:hover {
   background: #e9f3ff;
   color: var(--accent-1);
 }
@@ -3101,14 +3287,14 @@ body {
 .personal-center-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
   min-height: 100%;
 }
 
 .personal-center-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
 }
 
@@ -3127,10 +3313,10 @@ body {
 }
 
 .personal-center-logout {
-  align-self: flex-start;
-  border: 1px solid #cbd9e5;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
+  align-self: flex-end;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #4e657b;
   cursor: pointer;
   font-size: 12px;
@@ -3140,23 +3326,46 @@ body {
 }
 
 .personal-center-logout:hover {
-  border-color: #adc2d4;
-  background: #ffffff;
+  background: #e0eefa;
   color: #244b6d;
 }
 
+.left-rail-button.icon-only,
+.policy-button.icon-only,
+.personal-center-logout.icon-only {
+  display: grid;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+}
 
-.personal-center-card {
-  border: 1px solid #d1dfeb;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
+.left-rail-button.icon-only svg,
+.policy-button.icon-only svg,
+.personal-center-logout.icon-only svg,
+.model-policy-title svg,
+.agent-settings-section-title svg,
+.settings-panel-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.personal-center-actions {
+  display: flex;
+  gap: 8px;
+}
+
+
+.personal-center-identity {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #ddd4c6;
 }
 
-.personal-center-card.primary {
+.personal-center-identity {
   align-items: center;
   flex-direction: row;
 }
@@ -3165,7 +3374,7 @@ body {
   align-items: center;
   background: linear-gradient(180deg, #ffffff 0%, #dbeaf6 100%);
   border: 1px solid #b7d0e5;
-  border-radius: 12px;
+  border-radius: 50%;
   color: #244b6d;
   display: flex;
   font-size: 26px;
@@ -3185,6 +3394,42 @@ body {
 .personal-center-section-title {
   color: #294f70;
   font-weight: 800;
+}
+
+.sidebar-section {
+  border-bottom: 1px solid #d9e5ef;
+}
+
+.sidebar-section-header {
+  align-items: center;
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: #49657d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 0;
+  text-align: left;
+}
+
+.sidebar-section-header:hover { background: rgba(233, 243, 255, 0.72); color: #0f6cbd; }
+
+.sidebar-section-header > svg,
+.sidebar-section-disclosure svg,
+.metadata-sync-icon svg { width: 16px; height: 16px; }
+
+.sidebar-section-disclosure { display: grid; color: #71869a; }
+
+.sidebar-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 12px 23px;
 }
 
 .personal-profile-form {
@@ -3446,8 +3691,46 @@ body {
 .settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
+
+.settings-panel-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #3978ac;
+}
+
+.metadata-sync-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.metadata-sync-card .model-policy-status { flex: 1; }
+
+.settings-agent-section .agent-settings-card {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-agent-section .agent-settings-row {
+  border-color: #d9e5ef;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-agent-section .agent-settings-doc-button,
+.settings-agent-section .agent-settings-badge,
+.settings-agent-section .agent-settings-chip {
+  border-radius: 4px;
+}
+
+.metadata-sync-icon { display: none; }
 
 .settings-panel-title {
   color: #5f584d;
@@ -3694,7 +3977,7 @@ body {
 .organization-sidebar-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 .organization-sidebar-header {
@@ -3711,13 +3994,11 @@ body {
 }
 
 .organization-action-feedback {
-  border: 1px solid rgba(71, 124, 167, 0.28);
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(235, 244, 252, 0.92), rgba(248, 250, 252, 0.96));
+  border-left: 2px solid rgba(71, 124, 167, 0.5);
+  background: transparent;
   color: #244b6d;
   line-height: 1.45;
-  padding: 10px 12px;
-  box-shadow: 0 8px 22px rgba(31, 51, 69, 0.08);
+  padding: 4px 0 4px 10px;
 }
 
 .organization-action-feedback-title {
@@ -3797,6 +4078,112 @@ body {
 
 .account-auth-mode-tabs .left-rail-button {
   justify-content: center;
+}
+
+.layered-graph {
+  border: 1px solid #c7d8e7;
+  border-radius: 14px;
+  background: #f9fcff;
+  color: #23384d;
+  overflow: hidden;
+}
+
+.layered-graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #dbe7f1;
+}
+
+.layered-graph-control {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.layered-graph-control > span {
+  margin-right: 4px;
+  color: #51677b;
+  font-weight: 700;
+}
+
+.layered-graph-control button,
+.layered-graph-detail button,
+.layered-graph-accessible-list button {
+  border: 1px solid #bfd1df;
+  border-radius: 7px;
+  background: #fff;
+  color: #284c5a;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 8px;
+}
+
+.layered-graph-control button.active,
+.layered-graph-control button:hover,
+.layered-graph-control button:focus-visible,
+.layered-graph-detail button:hover,
+.layered-graph-detail button:focus-visible {
+  border-color: #125d71;
+  background: #d8f0f3;
+  outline: none;
+}
+
+.layered-graph-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 0.32fr);
+  min-height: 410px;
+}
+
+.layered-graph-canvas {
+  min-height: 410px;
+}
+
+.layered-graph-canvas .react-flow__node {
+  box-shadow: 0 3px 12px rgb(51 82 99 / 14%);
+}
+
+.layered-graph-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-left: 1px solid #dbe7f1;
+  background: rgb(245 250 253 / 80%);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.layered-graph-detail p {
+  margin: 0;
+}
+
+.layered-graph-detail small {
+  color: #587085;
+}
+
+.layered-graph-accessible-list {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .layered-graph-content {
+    grid-template-columns: 1fr;
+  }
+
+  .layered-graph-detail {
+    border-top: 1px solid #dbe7f1;
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layered-graph-canvas .react-flow__node {
+    transition: none !important;
+  }
 }
 
 

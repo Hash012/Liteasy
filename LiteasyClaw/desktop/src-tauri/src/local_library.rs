@@ -34,6 +34,13 @@ struct LocalLibraryIndexEntry {
     relative_path: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedPdfFile {
+    bytes: Vec<u8>,
+    name: String,
+}
+
 fn library_root() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -144,6 +151,66 @@ pub fn load_local_library_snapshot() -> Result<LocalLibrarySnapshot, String> {
         entries,
         root_path: root.to_string_lossy().to_string(),
     })
+}
+
+fn resolve_import_directory(root: &Path, requested_path: Option<String>) -> Result<PathBuf, String> {
+    let directory = match requested_path {
+        Some(path) if !path.trim().is_empty() => PathBuf::from(path),
+        _ => root.join("papers"),
+    };
+    fs::create_dir_all(&directory).map_err(|error| format!("无法创建导入目录：{error}"))?;
+    let canonical = directory
+        .canonicalize()
+        .map_err(|error| format!("无法访问导入目录：{error}"))?;
+    if !canonical.starts_with(root) {
+        return Err("导入目录必须位于本地文献库中。".to_string());
+    }
+    Ok(canonical)
+}
+
+fn unique_pdf_target(directory: &Path, requested_name: &str) -> Result<PathBuf, String> {
+    let source_name = Path::new(requested_name)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "PDF 文件名无效。".to_string())?;
+    let source_path = Path::new(source_name);
+    if !source_path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("pdf")) {
+        return Err("只能导入 PDF 文件。".to_string());
+    }
+    let stem = source_path.file_stem().and_then(|value| value.to_str()).unwrap_or("Untitled PDF");
+    let mut sequence = 1usize;
+    loop {
+        let name = if sequence == 1 {
+            format!("{stem}.pdf")
+        } else {
+            format!("{stem} ({sequence}).pdf")
+        };
+        let candidate = directory.join(name);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+        sequence += 1;
+    }
+}
+
+#[tauri::command]
+pub fn import_local_library_pdfs(
+    files: Vec<ImportedPdfFile>,
+    target_folder_path: Option<String>,
+) -> Result<LocalLibrarySnapshot, String> {
+    if files.is_empty() {
+        return Err("没有可导入的 PDF 文件。".to_string());
+    }
+    let root = library_root()?;
+    let directory = resolve_import_directory(&root, target_folder_path)?;
+    for file in files {
+        if file.bytes.is_empty() {
+            return Err(format!("PDF 文件为空：{}", file.name));
+        }
+        let target = unique_pdf_target(&directory, &file.name)?;
+        fs::write(&target, file.bytes).map_err(|error| format!("写入 PDF 失败：{error}"))?;
+    }
+    load_local_library_snapshot()
 }
 
 fn resolve_existing_resource(root: &Path, requested_path: &str) -> Result<PathBuf, String> {

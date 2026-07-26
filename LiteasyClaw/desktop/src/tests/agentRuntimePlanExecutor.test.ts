@@ -503,7 +503,7 @@ test("returns confirmation before registered medium-risk settings actions", asyn
             value: true
           }
         },
-        summary: "用户画像只会在已授权的 Liteasy 产品内范围中使用；不会读取外部应用数据，也不建立向量索引或提供历史回溯。请确认后再开启。",
+        summary: "请确认后再执行：开启用户画像",
         type: "confirmation_request"
       })
     ],
@@ -553,7 +553,7 @@ test("uses registered action policy to require confirmation even when a plan omi
           value: true
         }
       },
-      summary: "用户画像只会在已授权的 Liteasy 产品内范围中使用；不会读取外部应用数据，也不建立向量索引或提供历史回溯。请确认后再开启。",
+        summary: "请确认后再执行：开启用户画像",
       type: "confirmation_request"
     })
   ]);

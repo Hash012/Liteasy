@@ -7,6 +7,7 @@ test("builds a ready runtime context summary", () => {
   const context = buildAgentRuntimeContextView({
     importedCount: 2,
     organizationName: "Liteasy AI Reading Lab",
+    profileEnabled: true,
     profilePersonalizationSummary: "研究阶段：博士研究生",
     profileUnlocked: true,
     selectedCount: 2,
@@ -23,7 +24,13 @@ test("builds a ready runtime context summary", () => {
       organizationName: "Liteasy AI Reading Lab"
     },
     profile: {
+      enabled: true,
+      requiresConfirmation: true,
       personalizationSummary: "研究阶段：博士研究生"
+    },
+    recommendations: {
+      items: [],
+      totalCount: 0
     },
     selection: {
       importedCount: 2,
@@ -64,7 +71,7 @@ test("marks empty, unlocked, and partially imported selections as not ready", ()
     connected: false
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 学术档案待补充"
+    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 用户画像已关闭"
   );
 });
 

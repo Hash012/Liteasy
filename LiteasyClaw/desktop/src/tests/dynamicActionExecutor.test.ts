@@ -97,7 +97,7 @@ describe("executeUIDslActionRef", () => {
     ]);
   });
 
-  test("rejects profile state changes from dynamic actions", async () => {
+  test("requires confirmation before dynamic actions change profile state", async () => {
     const settingsStore = createSettingsStore();
 
     const result = await executeUIDslActionRef(
@@ -119,8 +119,8 @@ describe("executeUIDslActionRef", () => {
       }
     );
 
-    expect(settingsStore.getState()).not.toHaveProperty("profile.enabled");
-    expect(result.events.some((event) => event.type === "confirmation_request")).toBe(false);
-    expect(result.events.some((event) => event.type === "runtime_error")).toBe(true);
+    expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+    expect(result.events.some((event) => event.type === "confirmation_request")).toBe(true);
+    expect(result.events.some((event) => event.type === "runtime_error")).toBe(false);
   });
 });

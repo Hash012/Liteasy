@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ChevronDownRegular, ChevronRightRegular, ShieldRegular } from "@fluentui/react-icons";
 import type { OrganizationGovernanceStatus, OrganizationGovernanceSummary } from "./organization.types";
 
 type OrganizationGovernancePanelProps = {
@@ -31,13 +33,27 @@ export function OrganizationGovernancePanel({
   status,
   summary
 }: OrganizationGovernancePanelProps) {
+  const [expanded, setExpanded] = useState(false);
   const firstTask = summary?.runningTasks[0];
   const firstAuditEvent = summary?.recentAuditEvents[0];
 
   return (
-    <div className="model-policy-card organization-governance-card">
-      <div className="model-policy-title">组织治理</div>
-      <div className={`model-policy-status ${status}`}>{getStatusLabel(status)}</div>
+    <section className="sidebar-section organization-governance-card">
+      <button
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "收起" : "展开"}组织治理`}
+        className="sidebar-section-header"
+        onClick={() => setExpanded((current) => !current)}
+        type="button"
+      >
+        <span aria-hidden="true" className="sidebar-section-disclosure">
+          {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        </span>
+        <ShieldRegular />
+        <span>组织治理</span>
+      </button>
+      {expanded ? <div className="sidebar-section-content">
+        <div className={`model-policy-status ${status}`}>{getStatusLabel(status)}</div>
       {summary ? (
         <>
           <div className="model-policy-summary">
@@ -60,6 +76,7 @@ export function OrganizationGovernancePanel({
       ) : (
         <div className="model-policy-footnote">{message}</div>
       )}
-    </div>
+      </div> : null}
+    </section>
   );
 }

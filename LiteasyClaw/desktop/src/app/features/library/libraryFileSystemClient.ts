@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { LocalLibrarySnapshot } from "./localLibrary.types";
 
 export type MoveLocalLibraryResourceInput = {
   sourcePath: string;
@@ -14,3 +15,24 @@ export const moveLocalLibraryResource: MoveLocalLibraryResource = (input) =>
     sourcePath: input.sourcePath,
     targetPath: input.targetPath
   });
+
+export type PersistDroppedPdfFilesInput = {
+  files: File[];
+  targetFolderPath?: string;
+};
+
+export type PersistDroppedPdfFiles = (
+  input: PersistDroppedPdfFilesInput
+) => Promise<LocalLibrarySnapshot>;
+
+export const persistDroppedPdfFiles: PersistDroppedPdfFiles = async ({ files, targetFolderPath }) => {
+  const payload = await Promise.all(files.map(async (file) => ({
+    bytes: Array.from(new Uint8Array(await file.arrayBuffer())),
+    name: file.name
+  })));
+
+  return invoke<LocalLibrarySnapshot>("import_local_library_pdfs", {
+    files: payload,
+    targetFolderPath
+  });
+};

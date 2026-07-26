@@ -1,4 +1,5 @@
 import type { AgentArtifactResult } from "./artifact.types";
+import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
 
 type ArtifactResultTransport = (
   url: string,
@@ -27,6 +28,7 @@ function isArtifactResult(value: unknown): value is AgentArtifactResult {
     Array.isArray(candidate.papers) &&
     Array.isArray(candidate.citations) &&
     Boolean(candidate.uiDsl) &&
+    (candidate.intuitionGraph === undefined || IntuitionGraphDocumentSchema.safeParse(candidate.intuitionGraph).success) &&
     candidate.agent?.status === "completed"
   );
 }

@@ -72,6 +72,7 @@ type ArtifactWorkflowActions = {
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
   saveSkillDocument: (artifactId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
+  startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
   updateSkillDocument: (artifactId: string, markdown: string) => void;
 };
 
@@ -198,6 +199,7 @@ export function useArtifactWorkflowController({
       regenerateArtifact: artifactActions.regenerateArtifact,
       saveSkillDocument: artifactActions.saveSkillDocument,
       startAnalysis: artifactActions.startAnalysis,
+      startAnalysisForPapers: artifactActions.startAnalysisForPapers,
       updateSkillDocument: artifactActions.updateSkillDocument
     },
     model: {

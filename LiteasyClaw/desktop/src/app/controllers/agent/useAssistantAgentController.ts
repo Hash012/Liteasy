@@ -2,7 +2,10 @@ import { useRef } from "react";
 import type { ArtifactType } from "../../features/artifacts/artifact.types";
 import { createFrontendAgentClient } from "../../features/agent-api/frontendAgentClient";
 import type { AgentPublicApi } from "../../features/agent-api/agentApi.types";
-import type { PendingCommandClarification } from "../../features/agent-runtime/agentRuntime.types";
+import type {
+  AgentRecommendationContextItem,
+  PendingCommandClarification
+} from "../../features/agent-runtime/agentRuntime.types";
 import { buildAgentRuntimeContextView } from "../../features/agent-runtime/contextView";
 import { createModelAssistedClarification } from "../../features/agent-runtime/modelClarification";
 import { createModelSemanticPlanner } from "../../features/agent-runtime/modelSemanticPlanner";
@@ -22,6 +25,7 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
   getImportedChunksByPaperId?: () => Record<string, RetrievalChunk[]>;
+  getRecommendations?: () => AgentRecommendationContextItem[];
   getSelectedPapers?: () => Paper[];
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
@@ -35,7 +39,9 @@ export type AssistantAgentControllerInput = {
   onMoveDockItem?: ActionContext["moveDockItem"];
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
+  onRefreshRecommendations?: ActionContext["refreshRecommendations"];
   onSettingsChanged?: (settings: SettingsState) => void;
+  profileEnabled: boolean;
   profilePersonalizationSummary?: string;
   profileUnlocked: boolean;
   runtimeOrganizationName?: string;
@@ -61,8 +67,10 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
         const runtimeContext = buildAgentRuntimeContextView({
           importedCount: current.importedSelectedCount,
           organizationName: current.runtimeOrganizationName,
+          profileEnabled: current.profileEnabled,
           profilePersonalizationSummary: current.profilePersonalizationSummary,
           profileUnlocked: current.profileUnlocked,
+          recommendations: current.getRecommendations?.(),
           selectedCount: current.selectedPaperCount,
           selectionLocked: current.selectionLocked,
           workspace: current.runtimeWorkspace
@@ -97,6 +105,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
             openOrganizationSharedLibrary: current.onOpenOrganizationSharedLibrary,
             pendingClarification: pendingClarificationRef.current,
             profileUnlocked: current.profileUnlocked,
+            refreshRecommendations: current.onRefreshRecommendations,
             semanticPlanner: createModelSemanticPlanner({
               modelTransport: current.modelTransport,
               settings: current.settingsStore.getState()

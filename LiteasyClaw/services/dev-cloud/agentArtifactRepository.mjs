@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const repositoryDir = dirname(fileURLToPath(import.meta.url));
 const defaultResultDirectory = resolve(repositoryDir, "../../../project-docs/agent-results");
 const artifactVersion = "liteasy.agent-artifact/v1";
-const artifactTypes = new Set(["comparison_table", "mindmap", "ppt", "tree"]);
+const artifactTypes = new Set(["comparison_table", "layered_graph", "mindmap", "ppt", "tree"]);
 
 function validateArtifactId(artifactId) {
   if (

@@ -79,13 +79,25 @@ export type RuntimeContextIssue =
   | "documents_not_imported"
   | "workspace_unknown";
 
+export type AgentRecommendationContextItem = {
+  reason: string;
+  relevanceScore: number;
+  title: string;
+};
+
 export type AgentRuntimeContextView = {
   cloud: {
     connected: boolean;
     organizationName?: string;
   };
   profile: {
+    enabled: boolean;
     personalizationSummary?: string;
+    requiresConfirmation: boolean;
+  };
+  recommendations: {
+    items: AgentRecommendationContextItem[];
+    totalCount: number;
   };
   selection: {
     importedCount: number;

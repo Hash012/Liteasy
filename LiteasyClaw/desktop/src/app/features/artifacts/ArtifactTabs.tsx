@@ -7,6 +7,8 @@ import type {
 } from "./artifact.types";
 import { DynamicCanvas, OutlineTree } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
+import { ObsidianLikeGraphCanvas } from "../layered-reading/ObsidianLikeGraphCanvas";
+import { defaultGraphViewState } from "../layered-reading/layeredReading.types";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
@@ -114,6 +116,8 @@ export function ArtifactTabs({
   const [supplementalContext, setSupplementalContext] = useState("");
   const [submittingRegeneration, setSubmittingRegeneration] = useState(false);
   const [deletingArtifact, setDeletingArtifact] = useState(false);
+  const [graphMode, setGraphMode] = useState(false);
+  const [graphView, setGraphView] = useState(defaultGraphViewState);
   const activeTab = tabs.find((tab) => tab.artifactId === activeArtifactId) ?? tabs[0] ?? null;
   const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
   const activeTask = tasks[0] ?? null;
@@ -121,6 +125,8 @@ export function ArtifactTabs({
   useEffect(() => {
     setRegenerationOpen(false);
     setSupplementalContext("");
+    setGraphMode(activeTab?.type === "layered_graph");
+    setGraphView(defaultGraphViewState);
   }, [activeTab?.artifactId]);
 
   async function submitRegeneration() {
@@ -222,7 +228,7 @@ export function ArtifactTabs({
             <div className="artifact-stream-tree" aria-label="正在生成的树形预览">
               <OutlineTree
                 nodes={activeTask.partialOutlineNodes.map((node) => ({ ...node }))}
-                variant={activeTask.type === "mindmap" ? "mindmap" : "tree"}
+                variant={activeTask.type === "mindmap" || activeTask.type === "layered_graph" ? "mindmap" : "tree"}
               />
             </div>
           ) : activeTask.partialAnswer ? (
@@ -311,6 +317,15 @@ export function ArtifactTabs({
               )}
             </div>
             <div className="artifact-card-actions">
+              {activeTab.intuitionGraph ? (
+                <button
+                  className="artifact-regenerate-button"
+                  onClick={() => setGraphMode((current) => !current)}
+                  type="button"
+                >
+                  {graphMode ? "查看原产物" : "星图阅读"}
+                </button>
+              ) : null}
               {onRegenerateArtifact && activeTab.papers && activeTab.papers.length > 0 ? (
                 <button
                   className="artifact-regenerate-button"
@@ -390,7 +405,13 @@ export function ArtifactTabs({
             </details>
           ) : null}
           <div className="artifact-card-body">
-            {activeTab.uiDsl ? (
+            {graphMode && activeTab.intuitionGraph ? (
+              <ObsidianLikeGraphCanvas
+                graph={activeTab.intuitionGraph}
+                onViewChange={setGraphView}
+                view={graphView}
+              />
+            ) : activeTab.uiDsl ? (
               <DynamicCanvas document={activeTab.uiDsl} onAction={(action) => onDynamicAction?.(action)} />
             ) : activePreview ? (
               <>

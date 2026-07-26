@@ -95,6 +95,7 @@ export function useKnowledgeSyncController({
       clearRecommendationCache: recommendations.clearRecommendationCache,
       collectRecommendation: collection.collectRecommendation,
       dismissRecommendation: recommendations.dismissRecommendation,
+      refreshRecommendations: recommendations.refreshRecommendations,
       retryCollectionSync: collection.retry,
       retryDocumentMetadataSync: documentMetadataSync.retrySync
     },
