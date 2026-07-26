@@ -2,6 +2,7 @@ import type {
   AgentWorkflowTraceAuditEvent,
   AgentWorkflowTraceAuditSummary,
   AgentJsonValue,
+  PublicWorkflowAuditSummary,
   AgentWorkflowTraceRecord
 } from "../../features/agent-api/agentApi.types";
 
@@ -166,5 +167,60 @@ export function summarizeWorkflowTraceEvents(
     status: terminal.status,
     stepCount: stepEvents.length,
     traceId: firstEvent.traceId
+  };
+}
+
+const publicIssueLabels: Record<string, string> = {
+  critical_fact_without_source: "关键事实缺少来源",
+  external_low_authority_main_claim: "主结论使用了低权威外部来源",
+  invalid_structure: "产物结构不完整",
+  missing_selected_paper_coverage: "选中文献证据覆盖不足",
+  source_ref_not_found: "来源引用无法追溯"
+};
+
+function publicLabelForIssue(code: string) {
+  return publicIssueLabels[code] ?? "存在需要复核的审计问题";
+}
+
+export function projectPublicWorkflowAuditSummary(
+  summary: AgentWorkflowTraceAuditSummary
+): PublicWorkflowAuditSummary {
+  const checks: PublicWorkflowAuditSummary["checks"] = [
+    {
+      label: "任务范围",
+      status: "passed"
+    },
+    {
+      label: "证据与来源",
+      status: summary.failedIssueCodes.includes("missing_selected_paper_coverage") ||
+        summary.failedIssueCodes.includes("source_ref_not_found")
+        ? "blocked"
+        : "passed"
+    },
+    {
+      label: "结构校验",
+      status: summary.blockedStep?.kind === "verification" ? "blocked" : "passed",
+      summary: summary.blockedStep?.kind === "verification"
+        ? summary.blockedStep.summary
+        : undefined
+    }
+  ];
+
+  if (summary.repairAttempted) {
+    checks.push({
+      label: "自动修复",
+      status: summary.repairSucceeded ? "passed" : "blocked",
+      summary: summary.repairSucceeded
+        ? "已完成安全自动修复并重新通过审计。"
+        : "已尝试自动修复，但仍需人工复核。"
+    });
+  }
+
+  return {
+    auditLevel: "brief",
+    checks,
+    disclosure: "public",
+    issueLabels: Array.from(new Set(summary.failedIssueCodes.map(publicLabelForIssue))),
+    status: summary.status === "completed" ? "passed" : "blocked"
   };
 }

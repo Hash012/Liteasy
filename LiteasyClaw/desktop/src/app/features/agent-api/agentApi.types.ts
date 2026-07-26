@@ -246,6 +246,18 @@ export type AgentWorkflowTraceAuditSummary = {
   traceId: string;
 };
 
+export type PublicWorkflowAuditSummary = {
+  auditLevel: "brief";
+  checks: Array<{
+    label: string;
+    status: "blocked" | "passed" | "warning";
+    summary?: string;
+  }>;
+  disclosure: "public";
+  issueLabels: string[];
+  status: "blocked" | "passed";
+};
+
 export type AgentApiErrorCode =
   | "confirmation_not_found"
   | "execution_failed"
@@ -295,6 +307,10 @@ export type AgentPublicApi = {
     runId?: string;
     sessionId: string;
   }) => Promise<AgentApiResult<AgentWorkflowTraceAuditSummary[]>>;
+  listPublicWorkflowAuditSummaries: (input: {
+    runId?: string;
+    sessionId: string;
+  }) => Promise<AgentApiResult<PublicWorkflowAuditSummary[]>>;
   listCapabilities: () => Promise<AgentApiResult<AgentCapability[]>>;
   resolveConfirmation: (
     input: ResolveAgentConfirmationRequest

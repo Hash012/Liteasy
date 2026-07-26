@@ -295,6 +295,7 @@ type MindmapWorkflowTrace = {
 - ledger 查询是内部审计接口；产品 UI 不应把它作为普通用户功能入口。
 - `workflowTraces` 可投影为稳定内部事件：`workflow.started`、`workflow.step.completed`、`workflow.step.blocked`、`workflow.completed`、`workflow.blocked`。这些事件用于审计面板、失败统计和 QA，不参与普通 Agent 对话事件流。
 - 内部审计摘要由事件流汇总生成，包含 `status`、`blockedStep`、`repairAttempted`、`repairSucceeded`、`failedIssueCodes`、`stepCount`、`completedStepCount`。它用于负责人快速判断一次 artifact run 是通过、阻断在 verifier、还是 repair 后仍失败。
+- 普通用户可选择开启“审计过程”查看，但只能看到 `PublicWorkflowAuditSummary`：`status`、用户可理解的检查项、问题标签和简短说明。它不包含 `runId`、`sessionId`、`traceId`、`stepId`、prompt、内部错误栈或画像细节。
 
 当前 repair gate 已具备最小安全修复能力：当 verifier 返回可修复失败时，workflow 最多执行一轮 `repair`，然后必须重新 verifier。第一类允许的修复是“关键子节点缺 sourceRefs，但父节点已有可验证 sourceRefs”时继承父来源；这属于结构性漏标修复，不新增事实、不新增来源、不改写结论。若错误属于证据缺失、低权威来源支撑主结论、sourceRef 不存在等不可安全修复问题，则保持 `blocked`，不把草稿伪装为已通过产物。
 

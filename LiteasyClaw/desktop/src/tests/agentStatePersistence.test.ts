@@ -331,6 +331,77 @@ test("summarizes persisted workflow trace events for internal audits", async () 
   });
 });
 
+test("projects persisted workflow traces into user-safe public audit summaries", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({
+    executeKnowledge: () => ({
+      message: "mindmap blocked",
+      metadata: {
+        artifactWorkflow: {
+          status: "blocked",
+          workflowTrace: {
+            artifactId: "artifact-mindmap-public",
+            internalOnly: true,
+            runId: "placeholder-before-service-run",
+            steps: [
+              {
+                completedAt: "2026-07-20T00:00:01.000Z",
+                kind: "verification",
+                startedAt: "2026-07-20T00:00:00.000Z",
+                status: "blocked",
+                stepId: "1-verification",
+                summary: "确定性校验未通过"
+              },
+              {
+                completedAt: "2026-07-20T00:00:02.000Z",
+                details: {
+                  unresolvedIssueCodes: ["missing_selected_paper_coverage"]
+                },
+                kind: "repair",
+                startedAt: "2026-07-20T00:00:01.000Z",
+                status: "blocked",
+                stepId: "2-repair",
+                summary: "没有安全自动修复策略，保持草稿阻断"
+              }
+            ],
+            traceId: "mindmap-workflow:placeholder:artifact-mindmap-public",
+            version: "liteasy.mindmap-workflow-trace/v1"
+          }
+        }
+      }
+    }),
+    stateStore: memory.store
+  });
+  const session = await createSession(first);
+  const submitted = await first.submitTurn({
+    idempotencyKey: "mindmap-public-summary",
+    input: { artifactType: "mindmap", message: "生成思维导图", mode: "qa" },
+    sessionId: session.sessionId
+  });
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  const summaries = await first.listPublicWorkflowAuditSummaries({
+    runId: submitted.data.runId,
+    sessionId: session.sessionId
+  });
+
+  expect(summaries).toMatchObject({
+    data: [
+      {
+        auditLevel: "brief",
+        disclosure: "public",
+        issueLabels: ["选中文献证据覆盖不足"],
+        status: "blocked"
+      }
+    ],
+    ok: true
+  });
+  expect(JSON.stringify(summaries)).not.toContain("placeholder");
+  expect(JSON.stringify(summaries)).not.toContain("stepId");
+});
+
 test("reconnects a stable frontend client session after restart", async () => {
   const memory = createMemoryStore();
   const first = createPersistentService({ stateStore: memory.store });

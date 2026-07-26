@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  projectPublicWorkflowAuditSummary,
   projectWorkflowTraceEvents,
   summarizeWorkflowTraceEvents
 } from "../app/controllers/agent/agentWorkflowTraceProjection";
@@ -142,4 +143,56 @@ test("summarizes projected workflow audit events for internal review", () => {
     stepCount: 3,
     traceId: "mindmap-workflow:run-1:artifact-mindmap-1"
   });
+});
+
+test("projects an internal audit summary into a user-safe public summary", () => {
+  const publicSummary = projectPublicWorkflowAuditSummary({
+    artifactId: "artifact-mindmap-1",
+    blockedStep: {
+      kind: "verification",
+      stepId: "2-verification",
+      summary: "确定性校验未通过"
+    },
+    completedStepCount: 2,
+    failedIssueCodes: ["missing_selected_paper_coverage"],
+    internalOnly: true,
+    repairAttempted: true,
+    repairSucceeded: false,
+    runId: "run-1",
+    sessionId: "session-1",
+    status: "blocked",
+    stepCount: 4,
+    traceId: "mindmap-workflow:run-1:artifact-mindmap-1"
+  });
+
+  expect(publicSummary).toEqual({
+    auditLevel: "brief",
+    checks: [
+      {
+        label: "任务范围",
+        status: "passed"
+      },
+      {
+        label: "证据与来源",
+        status: "blocked"
+      },
+      {
+        label: "结构校验",
+        status: "blocked",
+        summary: "确定性校验未通过"
+      },
+      {
+        label: "自动修复",
+        status: "blocked",
+        summary: "已尝试自动修复，但仍需人工复核。"
+      }
+    ],
+    disclosure: "public",
+    issueLabels: ["选中文献证据覆盖不足"],
+    status: "blocked"
+  });
+  expect(JSON.stringify(publicSummary)).not.toContain("traceId");
+  expect(JSON.stringify(publicSummary)).not.toContain("stepId");
+  expect(JSON.stringify(publicSummary)).not.toContain("run-1");
+  expect(JSON.stringify(publicSummary)).not.toContain("session-1");
 });

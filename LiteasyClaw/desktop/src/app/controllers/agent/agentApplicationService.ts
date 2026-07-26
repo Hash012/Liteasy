@@ -29,6 +29,7 @@ import {
 } from "../../features/agent-api/agentApi.types";
 import { getRegisteredActionMetadata } from "../../features/skills/actionRegistry";
 import {
+  projectPublicWorkflowAuditSummary,
   projectWorkflowTraceEvents,
   summarizeWorkflowTraceEvents
 } from "./agentWorkflowTraceProjection";
@@ -930,6 +931,24 @@ export function createAgentApplicationService(
       return {
         data: listScopedWorkflowTraces(sessionId, runId)
           .map((trace) => summarizeWorkflowTraceEvents(projectWorkflowTraceEvents(trace))),
+        ok: true
+      };
+    },
+
+    async listPublicWorkflowAuditSummaries({ runId, sessionId }) {
+      await ensureHydrated();
+      const sessionResult = getStoredSession(sessionId);
+      if (!sessionResult.ok) {
+        return sessionResult;
+      }
+      if (runId && !sessionResult.data.runs.has(runId)) {
+        return apiError("run_not_found", `Agent run not found: ${runId}`);
+      }
+      return {
+        data: listScopedWorkflowTraces(sessionId, runId)
+          .map((trace) => projectPublicWorkflowAuditSummary(
+            summarizeWorkflowTraceEvents(projectWorkflowTraceEvents(trace))
+          )),
         ok: true
       };
     },
