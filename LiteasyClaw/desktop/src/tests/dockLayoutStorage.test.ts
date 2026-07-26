@@ -20,7 +20,7 @@ test("persists and restores the dock tab arrangement", () => {
 test("falls back to the default dock layout when storage is malformed", () => {
   window.localStorage.setItem("liteasy.ui.dock-layout.v1", "{broken");
 
-  expect(loadDockLayout().regions.main.itemIds).toEqual(["reader"]);
+  expect(loadDockLayout().regions.main.itemIds).toEqual([]);
   expect(loadDockLayout().regions.left.itemIds).toEqual(["library"]);
 });
 

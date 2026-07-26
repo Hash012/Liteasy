@@ -40,7 +40,8 @@ import {
 import type {
   AgentRuntimeEvent,
   AgentRuntimeExecutionContext,
-  HumanConfirmationRequest
+  HumanConfirmationRequest,
+  PendingCommandClarification
 } from "../agent-runtime/agentRuntime.types";
 import {
   createExecutionJournal,
@@ -54,6 +55,7 @@ import { createModelAssistedClarification } from "../agent-runtime/modelClarific
 import { createModelSemanticPlanner } from "../agent-runtime/modelSemanticPlanner";
 import { runAgentRuntime } from "../agent-runtime/runtimeOrchestrator";
 import type { ModelTransport } from "../models/modelHttpClient";
+import type { AcademicProfile } from "../profile/profile.types";
 import type { ActionContext } from "../skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../workspace/workspace.types";
 import type { SettingsState } from "../settings/settings.types";
@@ -64,6 +66,7 @@ import type { ModelExecutionTrace } from "../models/modelExecution";
 import { AssistantContextPanel } from "./AssistantContextPanel";
 import {
   getAssistantErrorMessage,
+  getModeHint,
   getSelectedSetReadyMessage
 } from "./assistantPresentation";
 import type { ReaderConversationContext } from "./assistantContext.types";
@@ -78,6 +81,7 @@ type AssistantPaneProps = {
    * fallback for legacy embeds while the Agent host is being initialized.
    */
   agentClient?: FrontendAgentClient;
+  academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
   executionJournal?: ExecutionJournal;
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
@@ -214,8 +218,15 @@ function getTraceIdFromRuntimeEvents(events: AgentRuntimeEvent[]) {
   return undefined;
 }
 
+function createConversationIdempotencyKey(mode: AssistantMode) {
+  const randomPart = globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `conversation:${mode}:${randomPart}`;
+}
+
 export function AssistantPane({
   agentClient,
+  academicProfile,
   artifactTasks = [],
   executionJournal,
   importedChunksByPaperId = {},
@@ -265,6 +276,7 @@ export function AssistantPane({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const lastReaderContextKeyRef = useRef<string | null>(null);
   const commandPaperIdsRef = useRef<string[] | undefined>();
+  const pendingCommandClarificationRef = useRef<PendingCommandClarification | undefined>();
   const settingsStoreRef = useRef(settingsStore ?? createSettingsStore());
   const [assistantState, setAssistantState] = useState<AssistantState>(() =>
     cloneAssistantState(assistantStoreRef.current.getState())
@@ -281,6 +293,7 @@ export function AssistantPane({
   const [readerContexts, setReaderContexts] = useState<ReaderConversationContext[]>([]);
   const [cancellingSession, setCancellingSession] = useState(false);
   const runtimeContext = buildAgentRuntimeContextView({
+    academicProfile,
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
     profileEnabled: Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
@@ -443,6 +456,7 @@ export function AssistantPane({
 
   function clearReaderConversationContexts() {
     lastReaderContextKeyRef.current = null;
+    pendingCommandClarificationRef.current = undefined;
     setReaderContexts([]);
     setComposerContextTokens([]);
   }
@@ -632,6 +646,7 @@ export function AssistantPane({
         modelTransport,
         settings: settingsStoreRef.current.getState()
       }),
+      pendingClarification: pendingCommandClarificationRef.current,
       profileUnlocked,
       semanticPlanner: createModelSemanticPlanner({
         modelTransport,
@@ -674,6 +689,30 @@ export function AssistantPane({
     events.forEach((event) => {
       appendRuntimeEvent(event);
     });
+  }
+
+  function rememberPendingClarification(events: AgentRuntimeEvent[], previousInput: string) {
+    const clarificationEvent = [...events]
+      .reverse()
+      .find((event) => event.type === "clarification_request");
+    if (
+      clarificationEvent?.type === "clarification_request" &&
+      clarificationEvent.kind === "ambiguous_action" &&
+      clarificationEvent.candidates?.length
+    ) {
+      pendingCommandClarificationRef.current = {
+        clarification: {
+          candidates: clarificationEvent.candidates,
+          kind: clarificationEvent.kind,
+          missing: clarificationEvent.missing,
+          question: clarificationEvent.question
+        },
+        previousInput
+      };
+      return;
+    }
+
+    pendingCommandClarificationRef.current = undefined;
   }
 
   function appendPublicAgentEvent(event: AgentEvent) {
@@ -782,13 +821,16 @@ export function AssistantPane({
       return;
     }
 
+    const idempotencyKey = createConversationIdempotencyKey(mode);
     const trackedRun = {
       cancelRequested: false,
       cancelSent: false,
+      idempotencyKey,
       message
     } as {
       cancelRequested: boolean;
       cancelSent: boolean;
+      idempotencyKey: string;
       message: string;
       runId?: string;
     };
@@ -821,7 +863,7 @@ export function AssistantPane({
     const unsubscribe = agentClient.subscribe((event) => {
       if (
         event.type === "run.started" &&
-        event.message === message &&
+        event.idempotencyKey === idempotencyKey &&
         activeConversationRunRef.current === trackedRun
       ) {
         trackedRun.runId = event.runId;
@@ -833,7 +875,7 @@ export function AssistantPane({
     assistantStoreRef.current.setPending(true);
     syncAssistant();
     try {
-      const result = await agentClient.send({ message, mode });
+      const result = await agentClient.send({ message, mode }, { idempotencyKey });
       if (!result.ok) {
         assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
         return;
@@ -891,6 +933,7 @@ export function AssistantPane({
           { message, mode },
           createRuntimeExecutionContext()
         );
+        rememberPendingClarification(result.events, message);
         appendRuntimeEvents(result.events);
         await appendJournalAudit(getTraceIdFromRuntimeEvents(result.events));
         if (result.settingsChanged) {
@@ -1171,18 +1214,15 @@ export function AssistantPane({
 
   async function handleSend() {
     const currentState = assistantStoreRef.current.getState();
-    const trimmedInput = input.trim();
-    const isSlashCommand = trimmedInput.startsWith("/");
-    const commandMessage = isSlashCommand ? trimmedInput.slice(1).trim() : "";
     const contextTokensForTurn = [...composerContextTokens];
     const referencedPaperIds = contextTokensForTurn
       .filter((token) => token.kind === "paper")
       .map((token) => token.id.replace(/^paper-/, ""));
     const attachedContextPrompt = buildComposerTokenPrompt(contextTokensForTurn);
-    const activeMode: AssistantMode = isSlashCommand ? "command" : "qa";
     const adapted = adaptTextIntent({
-      activeMode,
-      value: isSlashCommand ? commandMessage : input
+      activeMode: "qa",
+      parseSlashCommand: true,
+      value: input
     });
 
     if (adapted.kind === "idle") {
@@ -1202,11 +1242,9 @@ export function AssistantPane({
       }
     }
 
+    const activeMode = adapted.runtimeInput.mode;
     assistantStoreRef.current.setMode(activeMode);
-    const userMessage = createMessage(
-      "user",
-      isSlashCommand ? `/${adapted.userMessageContent}` : adapted.userMessageContent
-    );
+    const userMessage = createMessage("user", adapted.userMessageContent);
     userMessage.contextTokens = contextTokensForTurn;
     assistantStoreRef.current.addMessage(userMessage);
     if (referencedPaperIds.length > 0) {
@@ -1310,12 +1348,17 @@ export function AssistantPane({
     }
 
     assistantStoreRef.current.replaceMessages(currentState.messages.slice(0, messageIndex));
-    const rawContent = message.content;
-    const isSlashCommand = rawContent.trim().startsWith("/");
-    const runtimeMessage = isSlashCommand ? rawContent.trim().slice(1).trim() : rawContent;
-    const activeMode: AssistantMode = isSlashCommand ? "command" : "qa";
+    const adapted = adaptTextIntent({
+      activeMode: "qa",
+      parseSlashCommand: true,
+      value: message.content
+    });
+    if (adapted.kind === "idle") {
+      return;
+    }
+    const activeMode = adapted.runtimeInput.mode;
     const attachedContextPrompt = buildComposerTokenPrompt(message.contextTokens ?? []);
-    const retriedMessage = createMessage("user", rawContent);
+    const retriedMessage = createMessage("user", adapted.userMessageContent);
     retriedMessage.contextTokens = message.contextTokens;
     assistantStoreRef.current.setMode(activeMode);
     assistantStoreRef.current.addMessage(retriedMessage);
@@ -1325,11 +1368,11 @@ export function AssistantPane({
     syncAssistant();
 
     if (activeMode === "command") {
-      await runCommandMessage(runtimeMessage);
+      await runCommandMessage(adapted.runtimeInput.message);
       return;
     }
 
-    await runKnowledgeMessage(runtimeMessage, activeMode, {
+    await runKnowledgeMessage(adapted.runtimeInput.message, activeMode, {
       attachedContextPrompt
     });
   }
@@ -1337,9 +1380,11 @@ export function AssistantPane({
   const conversationStarted = assistantState.messages.length > 0;
   const readyMessage =
     readerContexts.length > 0 ? null : getSelectedSetReadyMessage(selectedSetStatus);
-  const composerHint = readyMessage
+  const composerHint = input.startsWith("/")
+    ? getModeHint("command")
+    : readyMessage
     ? "可以先直接对话来检查 AI 服务；需要论文分析时，再在左栏锁定论文或用 @ 添加论文。"
-    : "输入 / 开始软件命令；普通输入会结合 PDF 选区或当前文献上下文回答。";
+    : getModeHint("qa");
   const activeSession = sessionHistory.find((session) => session.id === activeSessionId);
   const activeSessionRunning = activeSession?.kind === "artifact_generation"
     ? activeSession.status === "running"

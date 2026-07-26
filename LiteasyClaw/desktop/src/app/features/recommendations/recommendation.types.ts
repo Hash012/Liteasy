@@ -6,6 +6,8 @@ export type RecommendationItem = {
   relevanceScore: number;
   reason: string;
   source: string;
+  sourceKind: "cache" | "live" | "mock";
+  sourceUrl?: string;
   title: string;
 };
 

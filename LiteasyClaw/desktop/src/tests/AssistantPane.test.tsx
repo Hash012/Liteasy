@@ -15,7 +15,7 @@ async function selectInitialAssistantMode(user: ReturnType<typeof userEvent.setu
 }
 
 
-test("shows compact mode chips above the composer before a conversation starts", async () => {
+test("shows the unified composer before a conversation starts", async () => {
   const user = userEvent.setup();
 
   render(
@@ -29,22 +29,20 @@ test("shows compact mode chips above the composer before a conversation starts",
     />
   );
 
-  const launcher = screen.getByLabelText("AI助手初始模式入口");
+  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
   expect(screen.queryByLabelText("对话模式切换")).not.toBeInTheDocument();
-  expect(within(launcher).queryByText("Liteasy 学术助手")).not.toBeInTheDocument();
-  expect(within(launcher).queryByText("研")).not.toBeInTheDocument();
-  expect(within(launcher).getByText("/ 命令")).toBeInTheDocument();
-  expect(within(launcher).getByText("PDF 选区问答")).toBeInTheDocument();
-  expect(screen.getByText("统一输入：/ 命令 · PDF 选区问答")).toBeInTheDocument();
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
+    "title",
+    "普通输入会结合 PDF 选区或当前文献上下文回答。"
+  );
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
-    expect(screen.queryByLabelText("AI助手初始模式入口")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("AI助手初始消息区")).not.toBeInTheDocument();
   });
   expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
-  expect(screen.getByText("/ 命令 · PDF 选区问答")).toBeInTheDocument();
 });
 
 test("renders command result DSL after a theme command while keeping the empty launcher as default UI", async () => {
@@ -62,12 +60,12 @@ test("renders command result DSL after a theme command while keeping the empty l
     />
   );
 
-  expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
+  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/让 UI 变成卡通风格");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.queryByLabelText("AI助手初始模式入口")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("AI助手初始消息区")).not.toBeInTheDocument();
   expect(screen.getByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument();
   expect(screen.getByText("执行审计：已回放 5 条 journal 事实。")).toBeInTheDocument();
@@ -131,7 +129,7 @@ test("renders model-assisted command result DSL when the model returns valid UI 
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让 UI 变成卡通风格");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/让 UI 变成卡通风格");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
@@ -204,7 +202,7 @@ test("renders model-assisted journal audit commentary after command execution", 
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让 UI 变成卡通风格");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/让 UI 变成卡通风格");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
@@ -239,7 +237,7 @@ test("keeps a placeholder voice-input seam in the assistant composer", async () 
 });
 
 
-test("requires imported selected document set before qa mode can answer", async () => {
+test("answers qa mode while surfacing selection readiness in runtime context", async () => {
   const user = userEvent.setup();
 
   render(
@@ -257,11 +255,12 @@ test("requires imported selected document set before qa mode can answer", async 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇论文讲了什么？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("这篇论文讲了什么？")).toBeInTheDocument();
-  expect(screen.getByText("请先将当前选中文献集导入 AI 流程，再进行问答或解释。")).toBeInTheDocument();
+  expect(screen.getAllByText("这篇论文讲了什么？").length).toBeGreaterThan(0);
+  expect(screen.getByText(/云端回答：这篇论文讲了什么？/)).toBeInTheDocument();
+  expect(screen.getByText(/已导入 0\/1/)).toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
-    "请先将当前选中文献集导入 AI 流程，再进行问答或解释。"
+    "可以先直接对话来检查 AI 服务；需要论文分析时，再在左栏锁定论文或用 @ 添加论文。"
   );
 });
 
@@ -283,7 +282,7 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("总结这篇论文的核心方法")).toBeInTheDocument();
+  expect(screen.getAllByText("总结这篇论文的核心方法").length).toBeGreaterThan(0);
   expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
   expect(screen.getAllByText(/demo-1 p\.2/).length).toBeGreaterThan(0);
   expect(screen.getByText("审计模型 gpt-5-mini-auditor")).toBeInTheDocument();
@@ -304,7 +303,7 @@ test("archives the current assistant session when starting a new one", async () 
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await user.click(screen.getByRole("button", { name: "新建" }));
@@ -314,7 +313,7 @@ test("archives the current assistant session when starting a new one", async () 
   await user.click(screen.getByRole("button", { name: "历史" }));
 
   expect(screen.getByText("历史会话")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "打开会话：/关闭联网推荐" })).toBeInTheDocument();
   expect(screen.getByText("5 条消息 · 命令")).toBeInTheDocument();
 });
 
@@ -332,20 +331,20 @@ test("restores an archived assistant session from history", async () => {
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
   await user.click(screen.getByRole("button", { name: "新建" }));
   await user.click(screen.getByRole("button", { name: "历史" }));
 
-  await user.click(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" }));
+  await user.click(screen.getByRole("button", { name: "打开会话：/关闭联网推荐" }));
 
   expect(screen.queryByLabelText("历史会话面板")).not.toBeInTheDocument();
-  expect(screen.getByText("当前模式：命令")).toBeInTheDocument();
-  expect(screen.getByText("关闭联网推荐")).toBeInTheDocument();
+  expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话");
+  expect(screen.getAllByText("/关闭联网推荐").length).toBeGreaterThan(0);
   expect(screen.getByText(/已更新 联网推荐：false/)).toBeInTheDocument();
 });
 
-test("starts a separate session when switching modes during a conversation", async () => {
+test("starts a separate session from the session toolbar", async () => {
   const user = userEvent.setup();
 
   render(
@@ -359,24 +358,21 @@ test("starts a separate session when switching modes during a conversation", asy
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  await user.click(within(screen.getByLabelText("对话模式切换")).getByRole("button", { name: "问答" }));
+  await user.click(screen.getByRole("button", { name: "新建" }));
 
-  expect(screen.queryByText("关闭联网推荐")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
-  expect(within(screen.getByLabelText("AI助手初始模式入口")).getByRole("button", { name: "问答模式" })).toHaveClass(
-    "active"
-  );
+  expect(screen.queryByText("/关闭联网推荐")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "历史" }));
 
-  expect(screen.getByRole("button", { name: "恢复会话：关闭联网推荐" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "打开会话：/关闭联网推荐" })).toBeInTheDocument();
   expect(screen.getByText("5 条消息 · 命令")).toBeInTheDocument();
 });
 
-test("separates session actions from in-conversation mode switching controls", async () => {
+test("keeps session actions separate from the unified composer command entry", async () => {
   const user = userEvent.setup();
 
   render(
@@ -390,17 +386,19 @@ test("separates session actions from in-conversation mode switching controls", a
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   const sessionActions = screen.getByLabelText("会话操作");
-  const modeControls = screen.getByLabelText("对话模式切换");
 
   expect(within(sessionActions).getByRole("button", { name: "新建" })).toBeInTheDocument();
   expect(within(sessionActions).getByRole("button", { name: "历史" })).toBeInTheDocument();
   expect(within(sessionActions).queryByRole("button", { name: "命令" })).not.toBeInTheDocument();
-  expect(within(modeControls).getByRole("button", { name: "命令" })).toBeInTheDocument();
-  expect(within(modeControls).queryByRole("button", { name: "新建" })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("对话模式切换")).not.toBeInTheDocument();
+  expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
+    "title",
+    "普通输入会结合 PDF 选区或当前文献上下文回答。"
+  );
 });
 
 test("executes natural language command aliases through safe actions", async () => {
@@ -417,10 +415,10 @@ test("executes natural language command aliases through safe actions", async () 
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "别再联网推荐了");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/别再联网推荐了");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("别再联网推荐了")).toBeInTheDocument();
+  expect(screen.getAllByText("/别再联网推荐了").length).toBeGreaterThan(0);
   expect(screen.getByText(/已更新 联网推荐：false/)).toBeInTheDocument();
 });
 
@@ -438,10 +436,10 @@ test("records command execution feedback in message history", async () => {
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "关闭联网推荐");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("关闭联网推荐")).toBeInTheDocument();
+  expect(screen.getAllByText("/关闭联网推荐").length).toBeGreaterThan(0);
   expect(screen.getByText(/已更新 联网推荐：false/)).toBeInTheDocument();
 });
 
@@ -538,7 +536,7 @@ test("lets users edit a previous prompt and replaces the following answer", asyn
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  await user.click(screen.getByRole("button", { name: "重新编辑：总结这篇论文的核心方法" }));
+  await user.click(screen.getByRole("button", { name: "编辑：总结这篇论文的核心方法" }));
 
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveValue("总结这篇论文的核心方法");
 
@@ -548,7 +546,7 @@ test("lets users edit a previous prompt and replaces the following answer", asyn
 
   expect(screen.queryByText("总结这篇论文的核心方法")).not.toBeInTheDocument();
   expect(screen.queryByText(/云端回答：总结这篇论文的核心方法/)).not.toBeInTheDocument();
-  expect(screen.getByText("这篇论文的实验结论是什么？")).toBeInTheDocument();
+  expect(screen.getAllByText("这篇论文的实验结论是什么？").length).toBeGreaterThan(0);
   expect(screen.getByText(/云端回答：这篇论文的实验结论是什么？/)).toBeInTheDocument();
 });
 
@@ -689,7 +687,7 @@ test("does not submit duplicate prompts while a model answer is pending", async 
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(modelTransport).toHaveBeenCalledTimes(1);
-  expect(screen.getAllByText("你的输入")).toHaveLength(1);
+  expect(screen.getAllByText("总结这篇论文的核心方法").length).toBeGreaterThan(0);
 
   resolveAnswer?.({
     answer: "模型回答",
@@ -792,7 +790,7 @@ test("resolves short command follow-up phrases from the previous ambiguous comma
     expect(screen.getByText(/请选择要执行的动作/)).toBeInTheDocument();
   });
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "组织面板");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/组织面板");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
@@ -821,10 +819,10 @@ test("routes command mode through runtime confirmation before profile sampling c
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/开启用户画像");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("开启用户画像")).toBeInTheDocument();
+  expect(screen.getAllByText("/开启用户画像").length).toBeGreaterThan(0);
   expect(screen.getByText("用户画像会影响个性化采样与后续回答策略，请确认后再开启。")).toBeInTheDocument();
   expect(settingsStore.getState()["profile.enabled"]).toBe(false);
 });
@@ -846,7 +844,7 @@ test("continues a confirmed command from the human confirmation UI", async () =>
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/开启用户画像");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(settingsStore.getState()["profile.enabled"]).toBe(false);
@@ -906,7 +904,7 @@ test("uses runtime context readiness before starting a mind map from the assista
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "生成思维导图");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/生成思维导图");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("请先导入当前选中文献集，再生成思维导图。")).toBeInTheDocument();
@@ -929,7 +927,7 @@ test("shows semantic command plan previews in command mode", async () => {
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "把窗口切分成两个");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/把窗口切分成两个");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("计划：切换为双栏布局")).toBeInTheDocument();
@@ -991,7 +989,7 @@ test("uses the model semantic planner for command mode when it returns valid JSO
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "让界面像儿童科普书");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/让界面像儿童科普书");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("计划：应用卡通风格")).toBeInTheDocument();
@@ -1037,7 +1035,7 @@ test("falls back to the local semantic planner when model command planning fails
     />
   );
 
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "把窗口切分成两个");
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/把窗口切分成两个");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getByText("计划：切换为双栏布局")).toBeInTheDocument();

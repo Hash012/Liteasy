@@ -14,6 +14,14 @@ function isScope(body = {}) {
 }
 
 function isRecommendationItem(item) {
+  const hasValidSourceKind =
+    item?.sourceKind === "cache" ||
+    item?.sourceKind === "live" ||
+    item?.sourceKind === "mock";
+  const hasValidSourceUrl =
+    item?.sourceKind === "live"
+      ? typeof item?.sourceUrl === "string" && item.sourceUrl.trim().length > 0
+      : item?.sourceUrl === undefined || typeof item.sourceUrl === "string";
   return (
     typeof item === "object" &&
     item !== null &&
@@ -26,6 +34,8 @@ function isRecommendationItem(item) {
     typeof item.relevanceScore === "number" &&
     typeof item.reason === "string" &&
     typeof item.source === "string" &&
+    hasValidSourceKind &&
+    hasValidSourceUrl &&
     typeof item.title === "string"
   );
 }

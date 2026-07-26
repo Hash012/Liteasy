@@ -48,11 +48,15 @@ describe("AssistantPane multi-session registry", () => {
     });
     const agentClient = {
       cancel,
-      send: vi.fn(async (input: { message: string; mode: string }) => {
+      send: vi.fn(async (
+        input: { message: string; mode: string },
+        options?: { idempotencyKey?: string }
+      ) => {
         listener?.({
           apiVersion: "liteasy.agent/v1",
           emittedAt: "2026-07-20T10:00:00.000Z",
           eventId: "event-started",
+          idempotencyKey: options?.idempotencyKey,
           inputMode: input.mode,
           message: input.message,
           runId: "run-chat-1",
@@ -83,7 +87,7 @@ describe("AssistantPane multi-session registry", () => {
         }}
       />
     );
-    await user.type(screen.getByPlaceholderText(/输入消息/), "解释 MaxSim");
+    await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释 MaxSim");
     await user.click(screen.getByRole("button", { name: "发送" }));
     await user.click(await screen.findByRole("button", { name: "终止" }));
 
@@ -91,6 +95,104 @@ describe("AssistantPane multi-session registry", () => {
     expect(await screen.findByText(/运行已取消：用户终止了 AI 对话/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "历史" }));
     expect(screen.getByText("普通对话 · 已终止")).toBeInTheDocument();
+  });
+
+  test("cancels the active ordinary AI run by idempotency key when duplicate messages overlap", async () => {
+    const user = userEvent.setup();
+    let listener: ((event: never) => void) | undefined;
+    let resolveSend: ((result: unknown) => void) | undefined;
+    let submittedIdempotencyKey: string | undefined;
+    const cancelledRun = {
+      apiVersion: "liteasy.agent/v1",
+      completedAt: "2026-07-20T10:00:01.000Z",
+      createdAt: "2026-07-20T10:00:00.000Z",
+      events: [{
+        apiVersion: "liteasy.agent/v1",
+        emittedAt: "2026-07-20T10:00:01.000Z",
+        eventId: "event-cancelled",
+        reason: "用户终止了 AI 对话",
+        runId: "run-target",
+        sequence: 2,
+        sessionId: "session-1",
+        type: "run.cancelled"
+      }],
+      idempotencyKey: "key-target",
+      input: { message: "解释 MaxSim", mode: "qa" },
+      runId: "run-target",
+      sessionId: "session-1",
+      status: "cancelled"
+    };
+    const cancel = vi.fn(async () => {
+      resolveSend?.({ data: cancelledRun, ok: true });
+      return { data: cancelledRun, ok: true };
+    });
+    const agentClient = {
+      cancel,
+      send: vi.fn(async (
+        input: { message: string; mode: string },
+        options?: { idempotencyKey?: string }
+      ) => {
+        submittedIdempotencyKey = options?.idempotencyKey;
+        listener?.({
+          apiVersion: "liteasy.agent/v1",
+          emittedAt: "2026-07-20T10:00:00.000Z",
+          eventId: "event-started-other",
+          idempotencyKey: "key-other",
+          inputMode: input.mode,
+          message: input.message,
+          runId: "run-other",
+          sequence: 1,
+          sessionId: "session-1",
+          type: "run.started"
+        } as never);
+        return new Promise((resolve) => {
+          resolveSend = resolve;
+        });
+      }),
+      subscribe: vi.fn((nextListener: (event: never) => void) => {
+        listener = nextListener;
+        return () => {
+          listener = undefined;
+        };
+      })
+    } as never;
+
+    render(
+      <AssistantPane
+        agentClient={agentClient}
+        onGenerateArtifact={() => "unused"}
+        selectedSetStatus={{
+          importedCount: 1,
+          selectedCount: 1,
+          selectionLocked: true
+        }}
+      />
+    );
+    await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释 MaxSim");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await user.click(await screen.findByRole("button", { name: "终止" }));
+    listener?.({
+      apiVersion: "liteasy.agent/v1",
+      emittedAt: "2026-07-20T10:00:00.100Z",
+      eventId: "event-started-target",
+      idempotencyKey: submittedIdempotencyKey,
+      inputMode: "qa",
+      message: "解释 MaxSim",
+      runId: "run-target",
+      sequence: 1,
+      sessionId: "session-1",
+      type: "run.started"
+    } as never);
+
+    await waitFor(() => {
+      expect(cancel).toHaveBeenCalledWith("run-target", "用户终止了 AI 对话");
+    });
+    expect(agentClient.send).toHaveBeenCalledWith(
+      { message: "解释 MaxSim", mode: "qa" },
+      expect.objectContaining({
+        idempotencyKey: expect.stringMatching(/^conversation:qa:/)
+      })
+    );
   });
 
   test("terminates the active multimodal generation session", async () => {

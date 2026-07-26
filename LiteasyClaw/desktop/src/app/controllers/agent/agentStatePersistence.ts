@@ -1,7 +1,9 @@
 import type {
   AgentEvent,
+  AgentJsonValue,
   AgentRun,
-  AgentSession
+  AgentSession,
+  AgentWorkflowTraceRecord
 } from "../../features/agent-api/agentApi.types";
 import type { HumanConfirmationRequest } from "../../features/agent-runtime/agentRuntime.types";
 
@@ -23,6 +25,7 @@ export type AgentStateSnapshot = {
   savedAt: string;
   sessions: PersistedAgentSession[];
   version: typeof AGENT_STATE_SNAPSHOT_VERSION;
+  workflowTraces?: AgentWorkflowTraceRecord[];
 };
 
 export type AgentStateStore = {
@@ -75,6 +78,41 @@ function isAgentSession(value: unknown): value is AgentSession {
   );
 }
 
+function isJsonValue(value: unknown): value is AgentJsonValue {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).every(isJsonValue);
+  }
+
+  return false;
+}
+
+function isWorkflowTraceRecord(value: unknown): value is AgentWorkflowTraceRecord {
+  return (
+    isRecord(value) &&
+    typeof value.runId === "string" &&
+    typeof value.sessionId === "string" &&
+    typeof value.traceId === "string" &&
+    typeof value.capturedAt === "string" &&
+    value.internalOnly === true &&
+    isJsonValue(value.trace) &&
+    (value.artifactId === undefined || typeof value.artifactId === "string") &&
+    (value.version === undefined || typeof value.version === "string")
+  );
+}
+
 function isConfirmation(value: unknown): value is HumanConfirmationRequest {
   return (
     isRecord(value) &&
@@ -123,6 +161,12 @@ export function parseAgentStateSnapshot(value: unknown): AgentStateSnapshot | nu
   }
 
   const sessionIds = new Set(sessions.map(({ session }) => session.sessionId));
+  const runIdsBySession = new Map(
+    sessions.map(({ runs, session }) => [
+      session.sessionId,
+      new Set(runs.map((run) => run.runId))
+    ])
+  );
   const pendingConfirmations: PersistedAgentConfirmation[] = [];
   for (const candidate of value.pendingConfirmations) {
     if (
@@ -141,10 +185,25 @@ export function parseAgentStateSnapshot(value: unknown): AgentStateSnapshot | nu
     });
   }
 
+  const workflowTraces = value.workflowTraces === undefined
+    ? undefined
+    : Array.isArray(value.workflowTraces) &&
+        value.workflowTraces.every((trace) =>
+          isWorkflowTraceRecord(trace) &&
+          sessionIds.has(trace.sessionId) &&
+          runIdsBySession.get(trace.sessionId)?.has(trace.runId)
+        )
+      ? value.workflowTraces
+      : null;
+  if (workflowTraces === null) {
+    return null;
+  }
+
   return {
     pendingConfirmations,
     savedAt: value.savedAt,
     sessions,
-    version: AGENT_STATE_SNAPSHOT_VERSION
+    version: AGENT_STATE_SNAPSHOT_VERSION,
+    workflowTraces
   };
 }

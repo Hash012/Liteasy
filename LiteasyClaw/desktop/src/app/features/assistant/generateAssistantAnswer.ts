@@ -144,7 +144,8 @@ async function runAnalysisSubtasks(input: {
             subtaskId: task.id
           }),
           prompt,
-          provider: input.provider
+          provider: input.provider,
+          signal: input.signal
         });
         reports[taskIndex] = `### 子任务 ${task.id}：${task.focus}\n${generation.answer}`;
       } catch (error) {
@@ -252,7 +253,8 @@ export async function generateAssistantAnswer({
     model,
     onDelta,
     prompt,
-    provider
+    provider,
+    signal
   });
   if (signal?.aborted) {
     throw new Error("Assistant answer generation was cancelled");
@@ -310,12 +312,14 @@ export async function generateAssistantAnswer({
       ? {
           mindmap: mindmapWorkflow.artifact,
           status: mindmapWorkflow.status,
-          verification: mindmapWorkflow.artifact.verification
+          verification: mindmapWorkflow.artifact.verification,
+          workflowTrace: mindmapWorkflow.workflowTrace
         }
       : {
           mindmap: mindmapWorkflow.draft,
           status: mindmapWorkflow.status,
-          verification: mindmapWorkflow.verification
+          verification: mindmapWorkflow.verification,
+          workflowTrace: mindmapWorkflow.workflowTrace
         }
     : undefined;
   onProgress?.({

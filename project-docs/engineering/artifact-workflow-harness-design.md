@@ -25,6 +25,7 @@ LiteasyClaw 需要参考 Claude Code dynamic workflows 的思想，但不应照�
 2. 第一类 artifact 选择 `思维导图`。
 3. 并行模型调用只要收益大，产品上不设固定数量上限；工程上必须有 backpressure 和 provider 限流。
 4. artifact 必须审计通过后才作为正式结果落库和展示。
+5. workflow trace 只给内部审计使用，不作为普通用户界面的一部分。
 
 另一个补充决策：思维导图允许加入所选论文之外的信息，例如联网权威资料、确定性概念释义和必要背景知识，用于补齐论文解读的逻辑链。但这些信息必须显式标明来源层级，不能伪装成所选论文结论。
 
@@ -62,6 +63,7 @@ flowchart TB
   Subtasks["analysis subtasks<br/>并行分析子任务"]:::new
   Synth["MindmapSynthesizer<br/>导图草稿综合"]:::new
   Verify["MindmapArtifactVerifier<br/>强制审计门禁"]:::gate
+  Trace["Internal Workflow Trace<br/>内部审计链路记录"]:::new
   Store["artifact.store / result repository<br/>正式产物存储"]:::existing
   UIRender["center artifact tab<br/>中栏展示"]:::existing
 
@@ -71,6 +73,8 @@ flowchart TB
   Evidence --> Subtasks
   External --> Subtasks
   Subtasks --> Synth --> Verify
+  Mindmap -. writes internal audit steps .-> Trace
+  Verify -. writes gate result .-> Trace
   Verify -- pass --> Store --> UIRender
   Verify -- repairable --> Synth
   Verify -- fail --> API
@@ -250,6 +254,49 @@ artifact.persisted
 ```
 
 事件必须包含 `runId`、`artifactId`、`stepId`、`progress`、`summary`，但不能泄漏完整 prompt、API key、未脱敏外部网页正文或内部函数引用。
+
+## 10.1 Internal Workflow Trace
+
+`workflowTrace` 是内部审计数据，不进入普通用户界面。当前代码已抽出通用 `ArtifactWorkflowHarness`，由它统一记录 step 起止时间、状态和 internal-only trace；`MindmapWorkflow` 只保留领域逻辑。Agent 服务会从 `artifactWorkflow.workflowTrace` 抽取 trace，写入独立 `workflowTraces` ledger，并通过内部 `listWorkflowTraces` 查询。它的用途是让负责人和工程审计能回答：
+
+- 本次 artifact 固化了哪些输入范围。
+- 是否执行外部知识补充。
+- 何时构造草稿。
+- verifier 是否通过、阻断或触发修复。
+
+最小结构：
+
+```ts
+type MindmapWorkflowTrace = {
+  version: "liteasy.mindmap-workflow-trace/v1";
+  traceId: string;
+  runId: string;
+  artifactId: string;
+  internalOnly: true;
+  steps: Array<{
+    stepId: string;
+    kind: "scope" | "external_lookup" | "draft" | "verification" | "repair";
+    status: "completed" | "blocked";
+    summary: string;
+    startedAt: string;
+    completedAt: string;
+    details?: Record<string, string | number | string[]>;
+  }>;
+};
+```
+
+内部 trace 规则：
+
+- 可以记录 step 类型、计数、来源 ID、覆盖缺口和 verifier 结果。
+- 不记录完整 prompt、API key、未脱敏网页正文、模型原始长输出或用户隐私画像全文。
+- 普通 Assistant 消息、Artifact tab 和推荐 UI 不展示 `workflowTrace`。
+- 面向用户的可见信息仍来自 artifact source layer、verification summary 和正式产物结构。
+- `workflowTraces` ledger 随 Agent state snapshot 持久化，记录只允许归属到已有 `sessionId/runId`。
+- ledger 查询是内部审计接口；产品 UI 不应把它作为普通用户功能入口。
+- `workflowTraces` 可投影为稳定内部事件：`workflow.started`、`workflow.step.completed`、`workflow.step.blocked`、`workflow.completed`、`workflow.blocked`。这些事件用于审计面板、失败统计和 QA，不参与普通 Agent 对话事件流。
+- 内部审计摘要由事件流汇总生成，包含 `status`、`blockedStep`、`repairAttempted`、`repairSucceeded`、`failedIssueCodes`、`stepCount`、`completedStepCount`。它用于负责人快速判断一次 artifact run 是通过、阻断在 verifier、还是 repair 后仍失败。
+
+当前 repair gate 已具备最小安全修复能力：当 verifier 返回可修复失败时，workflow 最多执行一轮 `repair`，然后必须重新 verifier。第一类允许的修复是“关键子节点缺 sourceRefs，但父节点已有可验证 sourceRefs”时继承父来源；这属于结构性漏标修复，不新增事实、不新增来源、不改写结论。若错误属于证据缺失、低权威来源支撑主结论、sourceRef 不存在等不可安全修复问题，则保持 `blocked`，不把草稿伪装为已通过产物。
 
 失败终态：
 

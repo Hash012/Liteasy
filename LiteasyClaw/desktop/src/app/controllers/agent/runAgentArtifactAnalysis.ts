@@ -3,6 +3,7 @@ import type {
   ArtifactType
 } from "../../features/artifacts/artifact.types";
 import type { FrontendAgentClient } from "../../features/agent-api/frontendAgentClient";
+import type { AgentAttachment } from "../../features/agent-api/agentApi.types";
 import { parseStreamingOutlineMarkdown } from "../../features/artifacts/artifactOutline";
 import type { AgentArtifactGenerationOptions } from "../../features/artifacts/useArtifactActions";
 
@@ -30,6 +31,23 @@ function mapArtifactProgressStage(phase: string | undefined): ArtifactTaskStage 
     return phase;
   }
   return "generating_answer";
+}
+
+function createArtifactIdempotencyKey(artifactType: ArtifactType) {
+  const randomPart = globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `artifact:${artifactType}:${randomPart}`;
+}
+
+function buildSelectionAttachment(options?: AgentArtifactGenerationOptions): AgentAttachment {
+  const metadata = options?.sourcePaperIds?.length
+    ? { paperIds: [...options.sourcePaperIds] }
+    : undefined;
+  return {
+    ...(metadata ? { metadata } : {}),
+    source: "selection",
+    uri: "liteasy://selection/current"
+  };
 }
 
 export async function runAgentArtifactAnalysis(
@@ -64,11 +82,12 @@ export async function runAgentArtifactAnalysis(
     ? `\n\n用户补充资料（必须与论文原始证据分开标注，不得把用户材料伪装成论文原文）：\n<user-supplement>\n${options.supplementalContext}\n</user-supplement>`
     : "";
   const message = `${sourceDescription}。完整梳理论文结构、术语关系、方法细节、实验设计与结论边界，并提取可追溯证据。${outlineInstruction}${supplementalInstruction}`;
+  const idempotencyKey = createArtifactIdempotencyKey(artifactType);
   let targetRunId: string | null = null;
   let partialAnswer = "";
   const subtaskDrafts = new Map<string, { content: string; label: string }>();
   const unsubscribe = client.subscribe((event) => {
-    if (event.type === "run.started" && event.message === message) {
+    if (event.type === "run.started" && event.idempotencyKey === idempotencyKey) {
       targetRunId = event.runId;
       onProgress?.({
         agentRunId: event.runId,
@@ -128,7 +147,10 @@ export async function runAgentArtifactAnalysis(
   try {
     result = await client.send(
       { artifactType, message, mode: "qa" },
-      { attachments: [{ source: "selection", uri: "liteasy://selection/current" }] }
+      {
+        attachments: [buildSelectionAttachment(options)],
+        idempotencyKey
+      }
     );
   } finally {
     unsubscribe();

@@ -12,8 +12,8 @@ describe("assistant presentation helpers", () => {
     expect(getModeLabel("explain")).toBe("名词解释");
     expect(getModeLabel("command")).toBe("命令");
     expect(getModeLabel("qa")).toBe("问答");
-    expect(getModeHint("command")).toContain("打开组织共享文献库");
-    expect(getModeHint("qa")).toContain("选中文献集");
+    expect(getModeHint("command")).toContain("输入 / 开始软件命令");
+    expect(getModeHint("qa")).toContain("PDF 选区");
   });
 
   test("explains why the selected document set is not ready", () => {

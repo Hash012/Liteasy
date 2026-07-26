@@ -11,10 +11,19 @@ export type AgentCorePromptContext = {
 };
 
 function summarizeEntries(label: string, entries: AgentCoreCatalogEntry[]) {
+  const executableActionAliases: Record<string, string[]> = {
+    "artifact-generate": ["artifact.generate"],
+    "organization-library-open": ["organization.open_shared_library"],
+    "settings-adjust": ["settings.update"]
+  };
   const body = entries
     .map((entry) => {
       const status = entry.status === "active" ? "active" : entry.status === "review" ? "review" : "planned";
-      return `- ${entry.id} (${status}, risk=${entry.risk}): ${entry.description}`;
+      const actionAliases = executableActionAliases[entry.id];
+      const actionSummary = actionAliases?.length
+        ? ` actions=${actionAliases.join(",")}`
+        : "";
+      return `- ${entry.id} (${status}, risk=${entry.risk}${actionSummary}): ${entry.description}`;
     })
     .join("\n");
 
@@ -40,12 +49,16 @@ function summarizeRuntimeContext(contextView?: AgentRuntimeContextView) {
     return "## Runtime Context\n- 当前没有运行时上下文。";
   }
 
+  const profileLine = contextView.profile.enabled && contextView.profile.academic
+    ? `- 画像：开启（性别 ${contextView.profile.academic.gender}，年龄 ${contextView.profile.academic.age}，学段 ${contextView.profile.academic.stage}）。`
+    : `- 画像：${contextView.profile.enabled ? "开启" : "关闭"}。`;
+
   return [
     "## Runtime Context",
     `- 选中文献：${contextView.selection.selectedCount} 篇，已导入 ${contextView.selection.importedCount} 篇。`,
     `- 选区锁定：${contextView.selection.locked ? "是" : "否"}。`,
     `- 云账号：${contextView.cloud.connected ? "已连接" : "未连接"}。`,
-    `- 画像：${contextView.profile.enabled ? "开启" : "关闭"}。`,
+    profileLine,
     `- 工作区：${contextView.workspace.type}${contextView.workspace.rootPath ? ` (${contextView.workspace.rootPath})` : ""}。`,
     contextView.selection.issues.length
       ? `- 待补上下文：${contextView.selection.issues.join(", ")}。`
@@ -92,4 +105,3 @@ export function formatAgentCorePromptContext(context: AgentCorePromptContext) {
     context.budgetSummary
   ].join("\n\n");
 }
-

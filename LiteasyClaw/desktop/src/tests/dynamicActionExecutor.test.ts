@@ -82,7 +82,7 @@ describe("executeUIDslActionRef", () => {
       {
         kind: "command_mode",
         missing: ["command_mode"],
-        question: "当前模式不执行软件动作，请切换到命令模式。",
+        question: "软件动作需要用 / 开始输入命令。",
         type: "clarification_request"
       },
       {

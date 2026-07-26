@@ -898,9 +898,44 @@
 .recommendation-source {
   margin-top: 4px;
   color: #7a8e9e;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.recommendation-source a {
+  color: inherit;
+}
+
+.recommendation-source-kind {
+  border: 1px solid #bfd0dd;
+  border-radius: 999px;
+  color: #49697f;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  text-transform: none;
+}
+
+.recommendation-source-kind.mock {
+  background: #fff4cf;
+  border-color: #ead58b;
+  color: #7d6200;
+}
+
+.recommendation-source-kind.cache {
+  background: #edf5f8;
+}
+
+.recommendation-source-kind.live {
+  background: #eaf7ee;
+  border-color: #a8d7b8;
+  color: #286b3d;
 }
 
 .recommendation-related {

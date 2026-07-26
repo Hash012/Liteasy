@@ -83,6 +83,48 @@ test("runs a knowledge turn through one session and deduplicates retries", async
   });
 });
 
+test("deduplicates idempotent retries with semantically identical attachment metadata", async () => {
+  const api = createTestService();
+  const session = await createSession(api);
+  const first = await api.submitTurn({
+    attachments: [
+      {
+        metadata: {
+          paperIds: ["demo-1", "demo-2"],
+          scope: "selection"
+        },
+        source: "selection",
+        uri: "liteasy://selection/current"
+      }
+    ],
+    idempotencyKey: "question-with-attachments",
+    input: { message: "compare papers", mode: "qa" },
+    sessionId: session.sessionId
+  });
+  const retry = await api.submitTurn({
+    attachments: [
+      {
+        metadata: {
+          scope: "selection",
+          paperIds: ["demo-1", "demo-2"]
+        },
+        source: "selection",
+        uri: "liteasy://selection/current"
+      }
+    ],
+    idempotencyKey: "question-with-attachments",
+    input: { message: "compare papers", mode: "qa" },
+    sessionId: session.sessionId
+  });
+
+  expect(first.ok).toBe(true);
+  expect(retry.ok).toBe(true);
+  if (!first.ok || !retry.ok) {
+    throw new Error("expected successful runs");
+  }
+  expect(retry.data.runId).toBe(first.data.runId);
+});
+
 test("keeps a risky command pending until the owning session approves it", async () => {
   let confirmationExecutions = 0;
   const confirmation: HumanConfirmationRequest = {

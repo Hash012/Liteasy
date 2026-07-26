@@ -70,6 +70,34 @@ test("marks empty, unlocked, and partially imported selections as not ready", ()
   );
 });
 
+test("includes academic profile details when profile sampling is enabled", () => {
+  const context = buildAgentRuntimeContextView({
+    academicProfile: {
+      age: "27",
+      gender: "女",
+      stage: "博士"
+    },
+    importedCount: 1,
+    profileEnabled: true,
+    profileUnlocked: true,
+    selectedCount: 1,
+    selectionLocked: true
+  });
+
+  expect(context.profile).toEqual({
+    academic: {
+      age: "27",
+      gender: "女",
+      stage: "博士"
+    },
+    enabled: true,
+    requiresConfirmation: true
+  });
+  expect(formatAgentRuntimeContextSummary(context)).toBe(
+    "上下文 · 选中 1 篇 · 已锁定 · 已导入 1/1 · 云账号已连接 · 画像开启（女/27/博士）"
+  );
+});
+
 test("marks no selected papers and unknown workspace as issues", () => {
   const context = buildAgentRuntimeContextView({
     importedCount: 0,

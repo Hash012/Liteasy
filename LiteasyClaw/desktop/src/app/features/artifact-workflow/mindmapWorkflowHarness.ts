@@ -3,13 +3,16 @@ import type {
   MindmapNode,
   MindmapSelectedPaperSource,
   MindmapSourceCatalog,
+  MindmapWorkflowTraceStepKind,
   MindmapVerificationReport,
   MindmapWorkflowResult
 } from "./mindmapArtifact.types";
+import { createArtifactWorkflowHarness } from "./artifactWorkflowHarness";
 import {
   createDeterministicExternalKnowledgeProvider,
   type ExternalKnowledgeProvider
 } from "./externalKnowledgeProvider";
+import { repairMindmapArtifact } from "./mindmapArtifactRepairer";
 import { verifyMindmapArtifact } from "./mindmapArtifactVerifier";
 import type { AnalysisEvidence, PreparedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { Paper } from "../workspace/workspace.types";
@@ -29,14 +32,44 @@ export async function runMindmapArtifactWorkflow(
   input: RunMindmapArtifactWorkflowInput
 ): Promise<MindmapWorkflowResult> {
   const now = input.now ?? (() => new Date());
+  const harness = createArtifactWorkflowHarness<
+    MindmapWorkflowTraceStepKind,
+    "liteasy.mindmap-workflow-trace/v1"
+  >({
+    artifactId: input.artifactId,
+    now,
+    runId: input.runId,
+    tracePrefix: "mindmap-workflow",
+    traceVersion: "liteasy.mindmap-workflow-trace/v1"
+  });
+  harness.step({
+    details: {
+      artifactType: "mindmap",
+      selectedPaperIds: input.selectedPapers.map((paper) => paper.id)
+    },
+    kind: "scope",
+    run: () => undefined,
+    summary: "固定思维导图任务范围"
+  });
   const externalKnowledgeProvider =
     input.externalKnowledgeProvider ?? createDeterministicExternalKnowledgeProvider();
   const selectedPaperSources = buildSelectedPaperSources(input.prepared.evidence);
-  const externalReferences = await externalKnowledgeProvider.lookup({
-    question: input.question,
-    terms: collectEvidenceTerms(input.prepared.evidence),
-    timeoutMs: 1200
+  const externalReferences = await harness.step({
+    details: {
+      selectedEvidenceCount: selectedPaperSources.length
+    },
+    kind: "external_lookup",
+    run: () => externalKnowledgeProvider.lookup({
+      question: input.question,
+      terms: collectEvidenceTerms(input.prepared.evidence),
+      timeoutMs: 1200
+    }),
+    summary: "补充外部知识来源"
   });
+  const lastExternalStep = harness.trace().steps[harness.trace().steps.length - 1];
+  if (lastExternalStep?.details) {
+    lastExternalStep.details.externalReferenceCount = externalReferences.length;
+  }
   const sources: MindmapSourceCatalog = {
     externalReferences,
     inferences: [],
@@ -66,26 +99,90 @@ export async function runMindmapArtifactWorkflow(
     verification: initialVerification,
     version: "liteasy.mindmap-artifact/v1"
   };
-  const verification = verifyMindmapArtifact(draft, {
-    now,
-    selectedPaperIds: input.selectedPapers.map((paper) => paper.id)
+  harness.step({
+    details: {
+      rootChildCount: draft.root.children.length,
+      sourceRefCount: draft.sources.selectedPapers.length + draft.sources.externalReferences.length
+    },
+    kind: "draft",
+    run: () => undefined,
+    summary: "构造思维导图草稿"
   });
-  const verifiedDraft = {
+  const verification = harness.step({
+    details: {},
+    kind: "verification",
+    run: () => verifyMindmapArtifact(draft, {
+      now,
+      selectedPaperIds: input.selectedPapers.map((paper) => paper.id)
+    }),
+    summary: "确定性校验通过"
+  });
+  const verificationStep = harness.trace().steps[harness.trace().steps.length - 1];
+  verificationStep.details = {
+    errorCount: verification.errors.length,
+    warningCount: verification.warnings.length
+  };
+  if (verification.status !== "pass") {
+    verificationStep.status = "blocked";
+    verificationStep.summary = "确定性校验未通过";
+  }
+  let finalVerification = verification;
+  let finalDraft: MindmapArtifact = {
     ...draft,
     verification
   };
 
-  if (verification.status === "pass") {
+  if (verification.status !== "pass" && verification.repairable) {
+    const repairResult = harness.step({
+      details: {
+        errorCodes: verification.errors.map((issue) => issue.code),
+        repairRounds: 1
+      },
+      kind: "repair",
+      run: () => repairMindmapArtifact(finalDraft, verification),
+      summary: "尝试安全自动修复"
+    });
+    const repairStep = harness.trace().steps[harness.trace().steps.length - 1];
+    repairStep.details = {
+      ...(repairStep.details ?? {}),
+      appliedRepairCount: repairResult.appliedRepairs.length,
+      unresolvedIssueCodes: repairResult.unresolvedIssueCodes
+    };
+    finalDraft = repairResult.artifact;
+    finalVerification = verifyMindmapArtifact(finalDraft, {
+      now,
+      selectedPaperIds: input.selectedPapers.map((paper) => paper.id)
+    });
+    finalDraft = {
+      ...finalDraft,
+      verification: finalVerification
+    };
+    if (finalVerification.status === "pass") {
+      repairStep.status = "completed";
+      repairStep.summary = "安全自动修复后审计通过";
+    } else {
+      repairStep.status = "blocked";
+      repairStep.summary = repairResult.appliedRepairs.length > 0
+        ? "安全自动修复后仍未通过审计"
+        : "没有安全自动修复策略，保持草稿阻断";
+    }
+  }
+
+  const workflowTrace = harness.trace();
+
+  if (finalVerification.status === "pass") {
     return {
-      artifact: verifiedDraft,
-      status: "verified"
+      artifact: finalDraft,
+      status: "verified",
+      workflowTrace
     };
   }
 
   return {
-    draft: verifiedDraft,
+    draft: finalDraft,
     status: "blocked",
-    verification
+    verification: finalVerification,
+    workflowTrace
   };
 }
 

@@ -5,18 +5,15 @@ import { AssistantMessageList } from "../app/features/assistant/AssistantMessage
 import type { AssistantMessage } from "../app/features/assistant/assistant.types";
 
 describe("AssistantMessageList", () => {
-  test("renders the initial launcher and forwards mode selection", async () => {
-    const user = userEvent.setup();
+  test("renders an empty initial message region without persistent mode copy", async () => {
     const onModeChange = vi.fn();
 
     render(<AssistantMessageList messages={[]} mode="command" onModeChange={onModeChange} />);
 
-    expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
+    expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
     expect(screen.queryByText("受控操作")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "命令模式" })).toHaveAttribute("title", "受控操作");
-    await user.click(screen.getByRole("button", { name: "问答模式" }));
-
-    expect(onModeChange).toHaveBeenCalledWith("qa");
+    expect(screen.queryByRole("button", { name: "命令模式" })).not.toBeInTheDocument();
+    expect(onModeChange).not.toHaveBeenCalled();
   });
 
   test("renders assistant message citations, audit, and execution trace", () => {
@@ -44,7 +41,6 @@ describe("AssistantMessageList", () => {
 
     render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
 
-    expect(screen.getByText("助手回复")).toBeInTheDocument();
     expect(screen.getByText("回答内容")).toBeInTheDocument();
     expect(screen.getByText("paper-1 · 第 3 页")).toBeInTheDocument();
     expect(screen.getByText("可信度 0.87")).toBeInTheDocument();

@@ -143,6 +143,17 @@ export function AssistantMessageList({
                   </button>
                 </>
               ) : null}
+              {message.role === "assistant" && onRegenerateMessage ? (
+                <button
+                  aria-label="重新生成回复"
+                  className="assistant-message-action"
+                  onClick={() => onRegenerateMessage(message.id)}
+                  title="重新生成"
+                  type="button"
+                >
+                  ↻
+                </button>
+              ) : null}
             </div>
           </div>
         );

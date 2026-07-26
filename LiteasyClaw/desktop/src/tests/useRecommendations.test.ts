@@ -55,6 +55,7 @@ describe("useRecommendations", () => {
           relevanceScore: 0.91,
           reason: "cached",
           source: "Semantic Scholar",
+          sourceKind: "cache",
           title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
         }
       ]
@@ -102,6 +103,7 @@ describe("useRecommendations", () => {
         relevanceScore: 0.91,
         reason: "fresh",
         source: "Semantic Scholar",
+        sourceKind: "mock",
         title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
       }
     ];

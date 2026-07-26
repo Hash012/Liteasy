@@ -52,7 +52,7 @@ test("product AssistantSidebar executes chat commands through the injected publi
   render(<ProductAssistant />);
 
   await user.type(
-    screen.getByPlaceholderText("输入消息，使用 /、@、$ 添加指令、论文或 skill"),
+    screen.getByPlaceholderText("输入你的问题或命令"),
     "/让 UI 变成卡通风格"
   );
   await user.click(screen.getByRole("button", { name: "发送" }));
@@ -62,7 +62,7 @@ test("product AssistantSidebar executes chat commands through the injected publi
   expect(screen.getByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
 
   await user.type(
-    screen.getByPlaceholderText("输入消息，使用 /、@、$ 添加指令、论文或 skill"),
+    screen.getByPlaceholderText("输入你的问题或命令"),
     "总结这篇论文的检索方法"
   );
   await user.click(screen.getByRole("button", { name: "发送" }));

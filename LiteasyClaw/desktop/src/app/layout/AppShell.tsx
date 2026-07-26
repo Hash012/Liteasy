@@ -160,7 +160,6 @@ export function AppShell({
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
   const [readerEvidenceTarget, setReaderEvidenceTarget] = useState<PdfEvidenceTarget | null>(null);
   const readerEvidenceRequestRef = useRef(0);
-  const agentArtifactPaperIdsOverrideRef = useRef<string[] | null>(null);
   const [readerConversationContext, setReaderConversationContext] =
     useState<ReaderConversationContext | null>(null);
   const latestArtifactIdRef = useRef<string | null>(null);
@@ -597,28 +596,12 @@ export function AppShell({
     startArtifactAnalysis: artifactWorkflow.actions.handleAssistantArtifact
   };
   const assistantAgent = useAssistantAgentController({
-    getImportedChunksByPaperId: () => {
-      const sourcePaperIds = agentArtifactPaperIdsOverrideRef.current;
-      if (!sourcePaperIds) {
-        return workspaceActions.getImportedChunksByPaperId();
-      }
-      return Object.fromEntries(
-        sourcePaperIds.map((paperId) => [
-          paperId,
-          importStoreRef.current.getParsedChunksByDocumentId(paperId)
-        ])
-      );
-    },
-    getSelectedPapers: () => {
-      const sourcePaperIds = agentArtifactPaperIdsOverrideRef.current;
-      if (!sourcePaperIds) {
-        return workspaceActions.getSelectedPapers();
-      }
-      const sourcePaperIdSet = new Set(sourcePaperIds);
-      return workspaceStoreRef.current
-        .getState()
-        .papers.filter((paper) => sourcePaperIdSet.has(paper.id));
-    },
+    academicProfile: profileActions.academicProfile,
+    getAllPapers: () => workspaceStoreRef.current.getState().papers,
+    getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
+    getImportedChunksForPaperId: (paperId) =>
+      importStoreRef.current.getParsedChunksByDocumentId(paperId),
+    getSelectedPapers: workspaceActions.getSelectedPapers,
     importedChunksByPaperId,
     importedSelectedCount,
     modelTransport,
@@ -642,17 +625,12 @@ export function AppShell({
     settingsStore: settingsStoreRef.current
   });
   agentArtifactRunnerRef.current = async (artifactType, onProgress, options) => {
-    agentArtifactPaperIdsOverrideRef.current = options?.sourcePaperIds ?? null;
-    try {
-      return await runAgentArtifactAnalysis(
-        assistantAgent.agentClient,
-        artifactType,
-        onProgress,
-        options
-      );
-    } finally {
-      agentArtifactPaperIdsOverrideRef.current = null;
-    }
+    return runAgentArtifactAnalysis(
+      assistantAgent.agentClient,
+      artifactType,
+      onProgress,
+      options
+    );
   };
   agentCancelRunnerRef.current = async (runId, reason) => {
     const result = await assistantAgent.agentClient.cancel(runId, reason);
@@ -985,6 +963,7 @@ export function AppShell({
       return (
         <AssistantSidebar
           agentClient={assistantAgent.agentClient}
+          academicProfile={profileActions.academicProfile}
           artifactTasks={artifactTasks}
           executionJournal={assistantAgent.executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}

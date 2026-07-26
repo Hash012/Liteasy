@@ -7,6 +7,7 @@ export type ModelTransportRequest = {
   body: string;
   headers: Record<string, string>;
   method: "POST";
+  signal?: AbortSignal;
   url: string;
 };
 
@@ -92,7 +93,8 @@ async function defaultTransport(request: ModelTransportRequest): Promise<ModelTr
   return fetch(request.url, {
     body: request.body,
     headers: request.headers,
-    method: request.method
+    method: request.method,
+    signal: request.signal
   });
 }
 
@@ -168,7 +170,7 @@ export function createHttpModelClient({
   transport = defaultTransport
 }: CreateHttpModelClientInput) {
   return async (input: GenerateAnswerInput): Promise<ModelGenerationResult> => {
-    const response = await transport({
+    const transportRequest: ModelTransportRequest = {
       body: JSON.stringify({
         model: input.model,
         prompt: input.prompt,
@@ -180,7 +182,11 @@ export function createHttpModelClient({
       },
       method: "POST",
       url: buildModelServiceUrl(endpoint, Boolean(input.onDelta))
-    });
+    };
+    if (input.signal) {
+      transportRequest.signal = input.signal;
+    }
+    const response = await transport(transportRequest);
 
     if (!response.ok) {
       const detail = await readBackendError(response);

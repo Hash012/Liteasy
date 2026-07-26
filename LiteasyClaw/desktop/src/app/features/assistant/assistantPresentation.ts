@@ -12,6 +12,18 @@ export function getModeLabel(mode: AssistantMode) {
   return "名词解释";
 }
 
+export function getModeHint(mode: AssistantMode) {
+  if (mode === "command") {
+    return "输入 / 开始软件命令；普通输入会结合 PDF 选区或当前文献上下文回答。";
+  }
+
+  if (mode === "qa") {
+    return "普通输入会结合 PDF 选区或当前文献上下文回答。";
+  }
+
+  return "输入要解释的概念，助手会结合当前论文上下文给出简明说明。";
+}
+
 export function getSelectedSetReadyMessage(selectedSetStatus: SelectedSetStatus) {
   if (selectedSetStatus.selectedCount === 0) {
     return "请先在左栏勾选文件，形成选中文献集。";

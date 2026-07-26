@@ -84,8 +84,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    const readerHeader = screen.getByLabelText("Reader 标题栏");
-    expect(within(readerHeader).getByText("Reader", { selector: ".reader-pane-title" })).toBeInTheDocument();
+    const readerHeader = screen.getByLabelText("PDF 标题栏");
     expect(within(readerHeader).queryByText("AI-driven paper-assisted reading platform")).not.toBeInTheDocument();
     expect(within(readerHeader).queryByText("云端模型能力")).not.toBeInTheDocument();
     expect(within(readerHeader).getByRole("toolbar", { name: "PDF 阅读批注工具栏" })).toBeInTheDocument();
@@ -110,7 +109,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    const emptyState = screen.getByLabelText("Reader 空状态");
+    const emptyState = screen.getByLabelText("PDF 空状态");
     expect(within(emptyState).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
     expect(screen.queryByText("选择文献后开始阅读")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("PDF 阅读器")).not.toBeInTheDocument();
@@ -143,7 +142,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    const readerHeader = screen.getByLabelText("Reader 标题栏");
+    const readerHeader = screen.getByLabelText("PDF 标题栏");
     const layoutControls = within(readerHeader).getByRole("toolbar", { name: "阅读区布局控制" });
     expect(within(layoutControls).getByRole("button", { name: "折叠左侧栏" })).toHaveAttribute(
       "title",
@@ -262,7 +261,7 @@ describe("ReaderPane", () => {
     expect(screen.getByText("已创建高亮批注。")).toBeInTheDocument();
     expect(screen.getByText("vector database systems")).toBeInTheDocument();
     expect(screen.getAllByText("vector database systems")).toHaveLength(1);
-    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByText("高亮标注")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/高亮标注/)).toBeInTheDocument();
 
     mockPdfSelection({
       ancestor: getPdfTextNode(),
@@ -272,7 +271,7 @@ describe("ReaderPane", () => {
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
     expect(screen.getByText("注释")).toBeInTheDocument();
-    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByText("旁注")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/旁注/)).toBeInTheDocument();
   });
 
   test("uses line-level PDF text rects instead of one tall selection box", async () => {

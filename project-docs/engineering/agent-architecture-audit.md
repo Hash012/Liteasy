@@ -267,11 +267,13 @@ flowchart LR
   ImportGate["selected set + import readiness gate<br/>选中文献导入门禁<br/>[I]"]:::implemented
   AgentRun["runAgentArtifactAnalysis<br/>Agent 产物分析运行器<br/>[I]"]:::boundary
   Analysis["generateAssistantAnswer<br/>证据/模型/审计分析<br/>[P]"]:::partial
+  Trace["workflowTrace metadata<br/>内部审计链路记录<br/>[P]"]:::partial
   Store["artifact.store<br/>产物任务与标签状态<br/>[I]"]:::implemented
   Result["artifactResultClient + local repository<br/>产物结果同步存储<br/>[P]"]:::partial
   CenterUi["center artifact UI DSL / preview<br/>中心区产物呈现<br/>[I]"]:::implemented
 
   Button --> Controller --> ImportGate --> AgentRun --> Analysis --> Store --> Result --> CenterUi
+  Analysis -. internal audit only .-> Trace
 ```
 
 当前特点：
@@ -279,6 +281,7 @@ flowchart LR
 - Artifact 生成通过 Agent Public API 发起 QA turn，而不是绕过 Agent 服务直接调模型。
 - 生成过程会将 run 事件转为任务进度、流式 partial answer、SubAgent 工作记录和最终 artifact tab。
 - 成功落库要求 Agent run 返回可持久化的 `AnalysisRun/Evidence/Claim` 元数据。
+- 思维导图 workflow 已开始返回 `workflowTrace` metadata；该 trace 只用于内部审计，不进入普通用户 UI。
 
 ## 9. 模块成熟度矩阵
 

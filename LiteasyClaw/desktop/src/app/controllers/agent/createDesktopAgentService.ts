@@ -1,4 +1,8 @@
-import type { AgentPublicApi } from "../../features/agent-api/agentApi.types";
+import type {
+  AgentPublicApi,
+  AgentSession,
+  SubmitAgentTurnRequest
+} from "../../features/agent-api/agentApi.types";
 import { runAgentRuntime } from "../../features/agent-runtime/runtimeOrchestrator";
 import { executeConfirmedSemanticPlan } from "../../features/agent-runtime/planExecutor";
 import type { AgentRuntimeExecutionContext } from "../../features/agent-runtime/agentRuntime.types";
@@ -27,7 +31,10 @@ export type DesktopAgentServiceOptions = Pick<
   | "onPersistenceError"
   | "stateStore"
 > & {
-  getEnvironment: () => DesktopAgentEnvironment;
+  getEnvironment: (input?: {
+    request?: SubmitAgentTurnRequest;
+    session?: AgentSession;
+  }) => DesktopAgentEnvironment;
   onCommandResult?: (input: {
     result: Awaited<ReturnType<typeof runAgentRuntime>>;
     message: string;
@@ -111,8 +118,8 @@ export function createDesktopAgentService(
     listCapabilities: options.listCapabilities,
     now: options.now,
     onPersistenceError: options.onPersistenceError,
-    resolveContext() {
-      const environment = options.getEnvironment();
+    resolveContext({ request, session }) {
+      const environment = options.getEnvironment({ request, session });
       return {
         runtimeContext: environment.runtime.contextView,
         value: environment

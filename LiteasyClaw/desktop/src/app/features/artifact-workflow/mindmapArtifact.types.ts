@@ -70,6 +70,36 @@ export type MindmapVerificationReport = {
   warnings: MindmapVerificationIssue[];
 };
 
+export type MindmapWorkflowTraceStepKind =
+  | "scope"
+  | "external_lookup"
+  | "draft"
+  | "repair"
+  | "verification";
+
+export type MindmapWorkflowTraceStepStatus =
+  | "blocked"
+  | "completed";
+
+export type MindmapWorkflowTraceStep = {
+  completedAt: string;
+  details?: Record<string, number | string | string[]>;
+  kind: MindmapWorkflowTraceStepKind;
+  startedAt: string;
+  status: MindmapWorkflowTraceStepStatus;
+  stepId: string;
+  summary: string;
+};
+
+export type MindmapWorkflowTrace = {
+  artifactId: string;
+  internalOnly: true;
+  runId: string;
+  steps: MindmapWorkflowTraceStep[];
+  traceId: string;
+  version: "liteasy.mindmap-workflow-trace/v1";
+};
+
 export type MindmapArtifact = {
   artifactId: string;
   createdAt: string;
@@ -85,11 +115,13 @@ export type MindmapWorkflowResult =
   | {
       artifact: MindmapArtifact;
       status: "verified";
+      workflowTrace: MindmapWorkflowTrace;
     }
   | {
       draft: MindmapArtifact;
       status: "blocked";
       verification: MindmapVerificationReport;
+      workflowTrace: MindmapWorkflowTrace;
     };
 
 export type MindmapArtifactWorkflowMetadata =
@@ -97,9 +129,11 @@ export type MindmapArtifactWorkflowMetadata =
       mindmap: MindmapArtifact;
       status: "verified";
       verification: MindmapVerificationReport;
+      workflowTrace?: MindmapWorkflowTrace;
     }
   | {
       mindmap: MindmapArtifact;
       status: "blocked";
       verification: MindmapVerificationReport;
+      workflowTrace?: MindmapWorkflowTrace;
     };

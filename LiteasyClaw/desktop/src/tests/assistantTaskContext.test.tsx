@@ -65,6 +65,9 @@ test("sends a friendly no-selection greeting to the Agent API instead of renderi
     expect.objectContaining({
       message: expect.stringContaining("hello?"),
       mode: "qa"
+    }),
+    expect.objectContaining({
+      idempotencyKey: expect.stringMatching(/^conversation:qa:/)
     })
   );
 });

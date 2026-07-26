@@ -40,7 +40,8 @@ test("submits modal analysis through the public Agent client", async () => {
       mode: "qa"
     }),
     {
-      attachments: [{ source: "selection", uri: "liteasy://selection/current" }]
+      attachments: [{ source: "selection", uri: "liteasy://selection/current" }],
+      idempotencyKey: expect.stringMatching(/^artifact:mindmap:/)
     }
   );
   expect(send.mock.calls[0][0].message).not.toContain("总节点不超过 60");
@@ -53,11 +54,15 @@ test("streams public Agent progress events to the artifact task", async () => {
     listener = nextListener;
     return unsubscribe;
   });
-  const send = vi.fn(async (input: Parameters<FrontendAgentClient["send"]>[0]) => {
+  const send = vi.fn(async (
+    input: Parameters<FrontendAgentClient["send"]>[0],
+    options?: Parameters<FrontendAgentClient["send"]>[1]
+  ) => {
     listener?.({
       apiVersion: "liteasy.agent/v1",
       emittedAt: "2026-07-20T00:00:00.000Z",
       eventId: "event-start",
+      idempotencyKey: options?.idempotencyKey ?? "",
       inputMode: "qa",
       message: input.message,
       runId: "run-stream",
@@ -150,17 +155,117 @@ test("streams public Agent progress events to the artifact task", async () => {
   expect(unsubscribe).toHaveBeenCalledTimes(1);
 });
 
+test("binds streamed progress to the submitted idempotency key instead of matching duplicate messages", async () => {
+  let listener: Parameters<FrontendAgentClient["subscribe"]>[0] | undefined;
+  const subscribe = vi.fn((nextListener: Parameters<FrontendAgentClient["subscribe"]>[0]) => {
+    listener = nextListener;
+    return vi.fn();
+  });
+  const send = vi.fn(async (
+    input: Parameters<FrontendAgentClient["send"]>[0],
+    options?: Parameters<FrontendAgentClient["send"]>[1]
+  ) => {
+    listener?.({
+      apiVersion: "liteasy.agent/v1",
+      emittedAt: "2026-07-20T00:00:00.000Z",
+      eventId: "event-start-other",
+      idempotencyKey: "other-artifact-run",
+      inputMode: "qa",
+      message: input.message,
+      runId: "run-other",
+      sequence: 1,
+      sessionId: "session-1",
+      type: "run.started"
+    });
+    listener?.({
+      apiVersion: "liteasy.agent/v1",
+      emittedAt: "2026-07-20T00:00:00.500Z",
+      eventId: "event-progress-other",
+      phase: "generating_answer",
+      planId: "run-other",
+      progress: 66,
+      runId: "run-other",
+      sequence: 2,
+      sessionId: "session-1",
+      summary: "错误串入的进度",
+      traceId: "trace-run-other",
+      type: "progress.started"
+    });
+    listener?.({
+      apiVersion: "liteasy.agent/v1",
+      emittedAt: "2026-07-20T00:00:01.000Z",
+      eventId: "event-start-target",
+      idempotencyKey: options?.idempotencyKey ?? "",
+      inputMode: "qa",
+      message: input.message,
+      runId: "run-target",
+      sequence: 1,
+      sessionId: "session-1",
+      type: "run.started"
+    });
+    listener?.({
+      apiVersion: "liteasy.agent/v1",
+      emittedAt: "2026-07-20T00:00:01.500Z",
+      eventId: "event-progress-target",
+      phase: "generating_answer",
+      planId: "run-target",
+      progress: 55,
+      runId: "run-target",
+      sequence: 2,
+      sessionId: "session-1",
+      summary: "目标 run 的进度",
+      traceId: "trace-run-target",
+      type: "progress.started"
+    });
+    return {
+      data: {
+        apiVersion: "liteasy.agent/v1" as const,
+        createdAt: "2026-07-20T00:00:00.000Z",
+        events: [],
+        idempotencyKey: options?.idempotencyKey ?? "missing-key",
+        input,
+        runId: "run-target",
+        sessionId: "session-1",
+        status: "completed" as const
+      },
+      ok: true as const
+    };
+  });
+  const onProgress = vi.fn();
+
+  await runAgentArtifactAnalysis(createClient(send, subscribe), "mindmap", onProgress);
+
+  expect(send.mock.calls[0][1]?.idempotencyKey).toMatch(/^artifact:mindmap:/);
+  expect(onProgress).not.toHaveBeenCalledWith(expect.objectContaining({
+    agentRunId: "run-other"
+  }));
+  expect(onProgress).not.toHaveBeenCalledWith(expect.objectContaining({
+    message: "错误串入的进度"
+  }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    agentRunId: "run-target",
+    message: "Agent 已接收分析任务"
+  }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+    message: "目标 run 的进度"
+  }));
+});
+
 test("maps artifact workflow progress phases to stable artifact task stages", async () => {
   let listener: Parameters<FrontendAgentClient["subscribe"]>[0] | undefined;
   const subscribe = vi.fn((nextListener: Parameters<FrontendAgentClient["subscribe"]>[0]) => {
     listener = nextListener;
     return vi.fn();
   });
-  const send = vi.fn(async (input: Parameters<FrontendAgentClient["send"]>[0]) => {
+  const send = vi.fn(async (
+    input: Parameters<FrontendAgentClient["send"]>[0],
+    options?: Parameters<FrontendAgentClient["send"]>[1]
+  ) => {
     listener?.({
       apiVersion: "liteasy.agent/v1",
       emittedAt: "2026-07-20T00:00:00.000Z",
       eventId: "event-start",
+      idempotencyKey: options?.idempotencyKey ?? "",
       inputMode: "qa",
       message: input.message,
       runId: "run-workflow",
@@ -255,6 +360,17 @@ test("includes supplemental material and preserves its trust boundary during reg
     expect.any(Object)
   );
   expect(send.mock.calls[0][0].message).toContain("不得把用户材料伪装成论文原文");
+  expect(send.mock.calls[0][1]).toMatchObject({
+    attachments: [
+      {
+        metadata: {
+          paperIds: ["demo-1", "demo-2"]
+        },
+        source: "selection",
+        uri: "liteasy://selection/current"
+      }
+    ]
+  });
 });
 
 test("does not treat skill documents as a paper-analysis modality", async () => {

@@ -1,7 +1,9 @@
 import type { AgentRuntimeContextView, RuntimeContextIssue } from "./agentRuntime.types";
+import type { AcademicProfile } from "../profile/profile.types";
 import type { WorkspaceSource } from "../workspace/workspace.types";
 
 export type AgentRuntimeContextViewInput = {
+  academicProfile?: AcademicProfile;
   importedCount: number;
   organizationName?: string;
   profileEnabled: boolean;
@@ -10,6 +12,17 @@ export type AgentRuntimeContextViewInput = {
   selectionLocked: boolean;
   workspace?: Partial<WorkspaceSource>;
 };
+
+function hasAcademicProfile(profile: AcademicProfile | undefined): profile is AcademicProfile {
+  if (!profile) {
+    return false;
+  }
+  return profile.age !== "未设置" || profile.gender !== "未设置" || profile.stage !== "未设置";
+}
+
+function formatAcademicProfileBrief(profile: AcademicProfile) {
+  return `${profile.gender}/${profile.age}/${profile.stage}`;
+}
 
 function getSelectionIssues(input: AgentRuntimeContextViewInput): RuntimeContextIssue[] {
   const issues: RuntimeContextIssue[] = [];
@@ -39,6 +52,9 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
       ...(input.organizationName ? { organizationName: input.organizationName } : {})
     },
     profile: {
+      ...(input.profileEnabled && hasAcademicProfile(input.academicProfile)
+        ? { academic: { ...input.academicProfile } }
+        : {}),
       enabled: input.profileEnabled,
       requiresConfirmation: true
     },
@@ -59,7 +75,11 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
 export function formatAgentRuntimeContextSummary(context: AgentRuntimeContextView) {
   const lockLabel = context.selection.locked ? "已锁定" : "未锁定";
   const cloudLabel = context.cloud.connected ? "云账号已连接" : "云账号未连接";
-  const profileLabel = context.profile.enabled ? "画像开启" : "画像关闭";
+  const profileLabel = context.profile.enabled
+    ? context.profile.academic
+      ? `画像开启（${formatAcademicProfileBrief(context.profile.academic)}）`
+      : "画像开启"
+    : "画像关闭";
 
   return [
     "上下文",

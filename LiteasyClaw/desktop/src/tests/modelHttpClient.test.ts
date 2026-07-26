@@ -96,6 +96,39 @@ test("throws a readable error when the backend response shape is invalid", async
   ).rejects.toThrow(/模型服务返回格式无效/);
 });
 
+test("passes abort signals through to the model transport", async () => {
+  const controller = new AbortController();
+  let observedSignal: AbortSignal | undefined;
+  const client = createHttpModelClient({
+    endpoint: "https://liteasy.example.com/model-proxy",
+    source: "cloud_proxy",
+    transport: async (request) => {
+      observedSignal = request.signal;
+      return {
+        json: async () => ({
+          answer: "abort-aware answer",
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  await client({
+    model: "gpt-5-mini",
+    prompt: "Explain cancellation",
+    provider: "openai",
+    signal: controller.signal
+  });
+
+  expect(observedSignal).toBe(controller.signal);
+});
+
 test("consumes NDJSON model deltas and reports accumulated output", async () => {
   const encoder = new TextEncoder();
   const onDelta = vi.fn();

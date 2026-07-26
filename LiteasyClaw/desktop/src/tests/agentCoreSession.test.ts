@@ -18,6 +18,42 @@ test("prepares a turn with agent.md, memory, capabilities, and budget context", 
   expect(prepared.turn.runtimeContext.prompt.budgetSummary).toContain("最大迭代：12");
 });
 
+test("injects enabled academic profile details into the core prompt context", () => {
+  const session = createAgentCoreSession();
+  const prepared = session.prepareTurn({
+    message: "解释这篇论文时适配我的背景",
+    mode: "qa",
+    runtimeContext: {
+      cloud: { connected: true },
+      profile: {
+        academic: {
+          age: "27",
+          gender: "女",
+          stage: "博士"
+        },
+        enabled: true,
+        requiresConfirmation: true
+      },
+      selection: {
+        importedCount: 1,
+        issues: [],
+        locked: true,
+        ready: true,
+        selectedCount: 1
+      },
+      workspace: { type: "local_library" }
+    }
+  });
+
+  expect(prepared.ok).toBe(true);
+  if (!prepared.ok) {
+    throw new Error("expected prepared turn");
+  }
+  expect(prepared.turn.runtimeContext.prompt.runtimeSummary).toContain(
+    "画像：开启（性别 女，年龄 27，学段 博士）"
+  );
+});
+
 test("blocks the same failed request after two failed observations", () => {
   const session = createAgentCoreSession();
 
@@ -59,4 +95,3 @@ test("blocks the same failed request after two failed observations", () => {
     ok: false
   });
 });
-

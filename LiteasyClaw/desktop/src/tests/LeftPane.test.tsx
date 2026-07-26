@@ -259,6 +259,20 @@ describe("LeftPane", () => {
     );
   });
 
+  test("does not crash when dragover dataTransfer types are missing", () => {
+    render(<LeftPane {...createProps({ leftRailView: "library" })} />);
+
+    const libraryZone = screen.getByLabelText("我的文献库投放区");
+
+    expect(() => {
+      fireEvent.dragOver(libraryZone, {
+        dataTransfer: {
+          dropEffect: "none"
+        }
+      });
+    }).not.toThrow();
+  });
+
   test("renders collections and source folders as one collapsible hierarchy", async () => {
     const user = userEvent.setup();
 

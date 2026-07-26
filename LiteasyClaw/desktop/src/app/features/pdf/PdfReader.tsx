@@ -13,7 +13,7 @@ import type { ReaderConversationContext } from "../assistant/assistantContext.ty
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-type AnnotationKind = "highlight" | "underline";
+type AnnotationKind = "highlight" | "underline" | "note";
 type HighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
 
 type PdfAnnotationRect = {
@@ -106,7 +106,7 @@ function getAnnotationLabel(kind: AnnotationKind) {
     return "划线";
   }
 
-  return kind;
+  return "注释";
 }
 
 function getHighlightColor(color: HighlightColor): string {
@@ -152,7 +152,7 @@ function getOverlayLabel(kind: AnnotationKind) {
     return "划线标注";
   }
 
-  return kind;
+  return "旁注";
 }
 
 function getAnnotationText(kind: AnnotationKind) {
@@ -395,6 +395,17 @@ function drawCanvasFallback(canvas: HTMLCanvasElement | null, title: string, pag
 }
 
 function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: HighlightColor): CSSProperties {
+  if (kind === "note") {
+    return {
+      backgroundColor: "rgba(36, 80, 142, 0.95)",
+      borderRadius: "999px",
+      height: "2%",
+      left: `${Math.max(0, rect.left - 1.2)}%`,
+      top: `${rect.top + Math.min(rect.height, 1)}%`,
+      width: "2%"
+    };
+  }
+
   if (kind === "underline") {
     return {
       border: "none",
@@ -529,6 +540,7 @@ function PdfPageView({
         {pageAnnotations.map((annotation) =>
           annotation.rects.map((rect, index) => (
             <div
+              aria-label={`${getOverlayLabel(annotation.kind)}：第 ${annotation.page} 页：${annotation.excerpt}`}
               className={`pdf-overlay-mark ${annotation.kind}`}
               key={`${annotation.id}-${index}`}
               style={getOverlayStyle(
@@ -975,14 +987,15 @@ export function PdfReader({
                             <div className="pdf-annotation-editor">
                               <div className="note-editor">
                                 <textarea
-                                  value={annotationNoteDraft}
+                                  aria-label="补充批注笔记"
                                   onChange={(e) => setAnnotationNoteDraft(e.target.value)}
                                   placeholder="添加批注..."
                                   rows={3}
+                                  value={annotationNoteDraft}
                                 />
                                 <div className="editor-actions">
                                   <button onClick={saveAnnotationNote} type="button" className="save-button">
-                                    保存
+                                    保存笔记
                                   </button>
                                   <button onClick={() => setActiveAnnotationId(null)} type="button" className="cancel-button">
                                     取消
@@ -1024,10 +1037,9 @@ export function PdfReader({
                             </div>
                           ) : annotation.note ? (
                             <div className="annotation-note-preview">
-                              {annotation.note.length > 50 ?
-                                `${annotation.note.substring(0, 50)}...` :
-                                annotation.note
-                              }
+                              补充：{annotation.note.length > 50
+                                ? `${annotation.note.substring(0, 50)}...`
+                                : annotation.note}
                             </div>
                           ) : null}
                         </li>
@@ -1097,7 +1109,12 @@ export function PdfReader({
                   </button>
                 </div>
                 <div className="selection-menu-row">
-                  <button onClick={addSelectionToConversation} title="将选中文段添加到对话" type="button" className="add-to-conversation">
+                  <button onClick={() => addAnnotation("note")} title="给选中文段添加旁注" type="button">
+                    注释
+                  </button>
+                </div>
+                <div className="selection-menu-row">
+                  <button onClick={addSelectionToConversation} title="把选中文段加入右侧对话上下文" type="button" className="add-to-conversation">
                     加入对话
                   </button>
                 </div>

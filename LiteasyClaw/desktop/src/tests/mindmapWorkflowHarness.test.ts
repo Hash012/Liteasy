@@ -75,6 +75,33 @@ describe("mindmapWorkflowHarness", () => {
         verification: { status: "pass" }
       }
     });
+    expect(result.workflowTrace).toMatchObject({
+      artifactId: "artifact-mindmap-1",
+      internalOnly: true,
+      runId: "run-1",
+      steps: [
+        expect.objectContaining({
+          kind: "scope",
+          status: "completed",
+          summary: "固定思维导图任务范围"
+        }),
+        expect.objectContaining({
+          kind: "external_lookup",
+          status: "completed",
+          summary: "补充外部知识来源"
+        }),
+        expect.objectContaining({
+          kind: "draft",
+          status: "completed",
+          summary: "构造思维导图草稿"
+        }),
+        expect.objectContaining({
+          kind: "verification",
+          status: "completed",
+          summary: "确定性校验通过"
+        })
+      ]
+    });
   });
 
   test("returns blocked when the generated draft cannot cover every selected paper", async () => {
@@ -115,6 +142,21 @@ describe("mindmapWorkflowHarness", () => {
         ],
         status: "fail"
       }
+    });
+    expect(result.workflowTrace).toMatchObject({
+      internalOnly: true,
+      steps: expect.arrayContaining([
+        expect.objectContaining({
+          kind: "verification",
+          status: "blocked",
+          summary: "确定性校验未通过"
+        }),
+        expect.objectContaining({
+          kind: "repair",
+          status: "blocked",
+          summary: "没有安全自动修复策略，保持草稿阻断"
+        })
+      ])
     });
   });
 });

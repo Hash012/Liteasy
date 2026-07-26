@@ -835,6 +835,7 @@ test("stores and reads recommendation cache separately from collection data", as
           relevanceScore: 0.92,
           reason: "cached",
           source: "Semantic Scholar",
+          sourceKind: "cache",
           title: "RoBERTa"
         }
       ],
@@ -875,6 +876,41 @@ test("stores and reads recommendation cache separately from collection data", as
   assert.equal(getResponse.json.cacheHit, true);
   assert.equal(getResponse.json.recommendations.length, 1);
   assert.equal(getResponse.json.recommendations[0].id, "rec-bert-1");
+});
+
+test("rejects recommendation cache writes without explicit source provenance", async () => {
+  const handler = createDevCloudRequestHandler();
+
+  const putResponse = await invokeHandler({
+    body: JSON.stringify({
+      recommendations: [
+        {
+          discoveredAt: "2026-05-14T08:15:00Z",
+          id: "rec-bert-1",
+          relatedDocumentTitle: "BERT",
+          relevanceBand: "high",
+          relevanceScore: 0.92,
+          reason: "cached",
+          source: "Semantic Scholar",
+          title: "RoBERTa"
+        }
+      ],
+      selectionKey: "demo-2",
+      sessionId: "demo-session-1",
+      sortMode: "relevance",
+      workspaceKey: "local:/tmp/LiteasyLibrary"
+    }),
+    handler,
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    method: "POST",
+    url: "/v1/recommendation-cache/put"
+  });
+
+  assert.equal(putResponse.statusCode, 400);
+  assert.equal(putResponse.json.error, "invalid_recommendation_cache_payload");
 });
 
 test("clearing recommendation cache does not remove private cloud collection data", async () => {
@@ -1194,6 +1230,7 @@ test("returns related recommendations for the selected document set", async () =
         relevanceScore: 0.92,
         reason: "同样关注向量数据库系统架构与相似度检索能力。",
         source: "Semantic Scholar",
+        sourceKind: "mock",
         title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       },
       {
@@ -1204,6 +1241,7 @@ test("returns related recommendations for the selected document set", async () =
         relevanceScore: 0.78,
         reason: "补充开源向量数据库系统实现，便于和综述框架对照。",
         source: "arXiv Watch",
+        sourceKind: "mock",
         title: "Milvus: A Purpose-Built Vector Data Management System"
       }
     ]

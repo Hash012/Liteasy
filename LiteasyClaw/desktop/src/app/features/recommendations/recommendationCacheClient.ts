@@ -28,6 +28,21 @@ function buildCacheUrl(endpoint: string, action: "get" | "put" | "clear") {
 }
 
 function isRecommendationItem(item: unknown): item is RecommendationItem {
+  const sourceKind = item &&
+    typeof item === "object" &&
+    "sourceKind" in item
+      ? item.sourceKind
+      : undefined;
+  const sourceUrl = item &&
+    typeof item === "object" &&
+    "sourceUrl" in item
+      ? item.sourceUrl
+      : undefined;
+  const hasValidSourceKind = sourceKind === "cache" || sourceKind === "live" || sourceKind === "mock";
+  const hasValidSourceUrl =
+    sourceKind === "live"
+      ? typeof sourceUrl === "string" && sourceUrl.trim().length > 0
+      : sourceUrl === undefined || typeof sourceUrl === "string";
   return (
     typeof item === "object" &&
     item !== null &&
@@ -47,6 +62,8 @@ function isRecommendationItem(item: unknown): item is RecommendationItem {
     typeof item.reason === "string" &&
     "source" in item &&
     typeof item.source === "string" &&
+    hasValidSourceKind &&
+    hasValidSourceUrl &&
     "title" in item &&
     typeof item.title === "string"
   );
