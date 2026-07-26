@@ -1,8 +1,5 @@
 # LiteasyClaw Agent Architecture Audit
 
-审计日期：2026-07-26
-
-本文用于项目负责人审计当前 Agent 架构边界、实现成熟度和后续成员分工。它依据当前源码与工程文档整理，重点区分“已可执行的 Agent 链路”和“已建模但仍属治理/规划层的 Agent 能力”。
 
 ## 1. 审计结论
 
@@ -39,34 +36,34 @@ flowchart TB
   classDef boundary fill:#e3f2fd,stroke:#1565c0,color:#10233a
   classDef risk fill:#ffebee,stroke:#c62828,color:#3a1010
 
-  User["用户 / AssistantPane [I]"]:::implemented
-  Workbench["工作台按钮 / UI DSL Action [P]"]:::partial
-  CLI["CLI Adapter [I]"]:::implemented
-  MCP["Agent MCP JSON-RPC [I]"]:::implemented
+  User["AssistantPane<br/>用户对话入口<br/>[I]"]:::implemented
+  Workbench["UI DSL Action<br/>动态界面动作入口<br/>[P]"]:::partial
+  CLI["CLI Adapter<br/>命令行接入<br/>[I]"]:::implemented
+  MCP["Agent MCP JSON-RPC<br/>外部工具协议接入<br/>[I]"]:::implemented
 
-  PublicApi["AgentPublicApi<br/>session/run/event/confirm/cancel [I]"]:::boundary
-  AppService["agentApplicationService<br/>幂等、事件流、状态持久化 [I]"]:::implemented
-  Core["agent-core<br/>agent.md + memory + capability + budget [P]"]:::partial
+  PublicApi["AgentPublicApi<br/>统一会话与事件接口<br/>[I]"]:::boundary
+  AppService["agentApplicationService<br/>运行编排与状态持久化<br/>[I]"]:::implemented
+  Core["agent-core<br/>上下文/记忆/预算治理<br/>[P]"]:::partial
 
-  Runtime{"mode == command ?"}
-  CommandRuntime["agent-runtime<br/>semantic plan -> validate -> policy -> execute [I]"]:::implemented
-  KnowledgeRuntime["generateAssistantAnswer<br/>evidence -> model -> audit -> UI DSL [P]"]:::partial
+  Runtime{"mode == command ?<br/>是否命令模式"}
+  CommandRuntime["agent-runtime<br/>命令规划与受控执行<br/>[I]"]:::implemented
+  KnowledgeRuntime["generateAssistantAnswer<br/>文献问答与解释生成<br/>[P]"]:::partial
 
-  Planner["Rule planner + model planner fallback [I]"]:::implemented
-  Validator["planValidator<br/>registered action schema gate [I]"]:::implemented
-  Policy["policyEngine<br/>context / risk / confirmation [I]"]:::implemented
-  Executor["planExecutor<br/>action events / rollback / UI DSL [I]"]:::implemented
+  Planner["SemanticPlanner<br/>语义动作规划<br/>[I]"]:::implemented
+  Validator["planValidator<br/>动作契约校验<br/>[I]"]:::implemented
+  Policy["policyEngine<br/>风险与确认决策<br/>[I]"]:::implemented
+  Executor["planExecutor<br/>执行/回滚/事件输出<br/>[I]"]:::implemented
 
-  ActionRegistry["actionRegistry<br/>capability metadata + handlers [I]"]:::boundary
-  SkillRegistry["skillRegistry<br/>thin mapping for 3 skills [P]"]:::partial
-  FeatureHandlers["ActionContext handlers<br/>layout/theme/panel/import/org/artifact [P]"]:::partial
+  ActionRegistry["actionRegistry<br/>能力注册与处理器分发<br/>[I]"]:::boundary
+  SkillRegistry["skillRegistry<br/>Skill 到 Action 薄映射<br/>[P]"]:::partial
+  FeatureHandlers["ActionContext handlers<br/>领域功能处理器<br/>[P]"]:::partial
 
-  Retrieval["retrieval + paper-analysis<br/>chunks/evidence/citations [P]"]:::partial
-  Models["modelGateway + dev-cloud proxy [P]"]:::partial
-  Artifacts["artifact workflow<br/>tasks/catalog/tabs/result persistence [I]"]:::implemented
-  UIDsl["generative-ui<br/>validated UI DSL + dynamic action refs [I]"]:::implemented
-  Audit["executionJournal + answer/journal audit [P]"]:::partial
-  StaticCatalogs["plugins / domain MCP servers / full memory curation [D]"]:::planned
+  Retrieval["retrieval + paper-analysis<br/>证据检索与论文分析<br/>[P]"]:::partial
+  Models["modelGateway + dev-cloud proxy<br/>模型策略与云代理<br/>[P]"]:::partial
+  Artifacts["artifact workflow<br/>产物任务与标签页管理<br/>[I]"]:::implemented
+  UIDsl["generative-ui<br/>动态界面生成与校验<br/>[I]"]:::implemented
+  Audit["executionJournal + answer/journal audit<br/>执行与回答审计<br/>[P]"]:::partial
+  StaticCatalogs["plugins / domain MCP servers / full memory curation<br/>扩展生态与长期记忆规划<br/>[D]"]:::planned
 
   User --> PublicApi
   CLI --> PublicApi
@@ -97,19 +94,19 @@ Command Mode 是当前最像“Agent 操作系统”的链路。它的安全假�
 ```mermaid
 sequenceDiagram
   autonumber
-  participant U as User
-  participant A as AssistantPane
-  participant C as FrontendAgentClient
-  participant S as AgentApplicationService
-  participant Core as AgentCoreSession
-  participant R as runAgentRuntime
-  participant P as SemanticPlanner
-  participant V as PlanValidator
-  participant PE as PolicyEngine
-  participant E as PlanExecutor
-  participant AR as ActionRegistry
-  participant FH as Feature Handlers
-  participant UI as Assistant UI / UIDsl
+  participant U as User<br/>用户
+  participant A as AssistantPane<br/>对话交互面
+  participant C as FrontendAgentClient<br/>前端 Agent 客户端
+  participant S as AgentApplicationService<br/>运行服务编排
+  participant Core as AgentCoreSession<br/>上下文治理会话
+  participant R as runAgentRuntime<br/>命令运行时入口
+  participant P as SemanticPlanner<br/>语义动作规划器
+  participant V as PlanValidator<br/>动作契约校验器
+  participant PE as PolicyEngine<br/>风险确认策略
+  participant E as PlanExecutor<br/>动作执行器
+  participant AR as ActionRegistry<br/>能力注册表
+  participant FH as Feature Handlers<br/>领域处理器
+  participant UI as Assistant UI / UIDsl<br/>消息与动态界面
 
   U->>A: /自然语言命令
   A->>C: send({ mode: "command" })
@@ -159,16 +156,16 @@ flowchart LR
   classDef partial fill:#fff8e1,stroke:#f9a825,color:#3a2a00
   classDef boundary fill:#e3f2fd,stroke:#1565c0,color:#10233a
 
-  Input["QA / Explain / artifact QA turn [I]"]:::implemented
-  Core["agent-core prompt context [P]"]:::partial
-  Evidence{"artifactType or multi-paper?"}
-  Multi["prepareMultiPaperAnalysis<br/>adaptive evidence matrix [P]"]:::partial
-  Local["getMockAnswer / imported chunks [P]"]:::partial
-  Model["modelGateway<br/>policy checked provider/model [P]"]:::boundary
-  Subtasks["parallel paper/section subtasks for artifact [P]"]:::partial
-  Audit["local or HTTP audit<br/>score/verdict/rationale [P]"]:::partial
-  UIDsl["generateEvidenceUIDslDocument [I]"]:::implemented
-  Events["assistant.message + ui.render [I]"]:::implemented
+  Input["QA / Explain / artifact QA turn<br/>知识问答输入<br/>[I]"]:::implemented
+  Core["agent-core prompt context<br/>Agent 上下文注入<br/>[P]"]:::partial
+  Evidence{"artifactType or multi-paper?<br/>是否产物/多论文"}
+  Multi["prepareMultiPaperAnalysis<br/>多论文证据矩阵<br/>[P]"]:::partial
+  Local["getMockAnswer / imported chunks<br/>本地片段召回<br/>[P]"]:::partial
+  Model["modelGateway<br/>模型策略网关<br/>[P]"]:::boundary
+  Subtasks["parallel paper/section subtasks<br/>并行论文区段分析<br/>[P]"]:::partial
+  Audit["local or HTTP audit<br/>回答可信度审计<br/>[P]"]:::partial
+  UIDsl["generateEvidenceUIDslDocument<br/>证据可视化界面<br/>[I]"]:::implemented
+  Events["assistant.message + ui.render<br/>回答与界面事件<br/>[I]"]:::implemented
 
   Input --> Core --> Evidence
   Evidence -- yes --> Multi --> Subtasks --> Model
@@ -194,14 +191,14 @@ flowchart TB
   classDef boundary fill:#e3f2fd,stroke:#1565c0,color:#10233a
   classDef planned fill:#f3e5f5,stroke:#7b1fa2,color:#2a1030
 
-  Frontend["FrontendAgentClient [I]"]:::implemented
-  CLI["createAgentCliAdapter [I]"]:::implemented
-  MCP["createAgentMcpJsonRpcHandler [I]"]:::implemented
-  Host["createAgentHost [I]"]:::implemented
-  API["AgentPublicApi<br/>createSession / submitTurn / confirm / cancel / capabilities [I]"]:::boundary
-  Service["AgentApplicationService<br/>idempotency, hydration, persistence, event mapping [I]"]:::implemented
-  TauriStore["Tauri Agent state store [P]"]:::partial
-  DomainMcp["local-library / citation-tools domain MCP servers [D]"]:::planned
+  Frontend["FrontendAgentClient<br/>前端会话客户端<br/>[I]"]:::implemented
+  CLI["createAgentCliAdapter<br/>命令行适配器<br/>[I]"]:::implemented
+  MCP["createAgentMcpJsonRpcHandler<br/>MCP JSON-RPC 适配器<br/>[I]"]:::implemented
+  Host["createAgentHost<br/>多入口宿主封装<br/>[I]"]:::implemented
+  API["AgentPublicApi<br/>统一 Agent 公共接口<br/>[I]"]:::boundary
+  Service["AgentApplicationService<br/>幂等/持久化/事件映射<br/>[I]"]:::implemented
+  TauriStore["Tauri Agent state store<br/>桌面端运行状态存储<br/>[P]"]:::partial
+  DomainMcp["local-library / citation-tools domain MCP servers<br/>文献与引用工具服务<br/>[D]"]:::planned
 
   Frontend --> API
   CLI --> API
@@ -227,17 +224,17 @@ flowchart TB
   classDef trusted fill:#e8f5e9,stroke:#2e7d32,color:#102a12
   classDef partial fill:#fff8e1,stroke:#f9a825,color:#3a2a00
 
-  NL["Natural language [untrusted]"]:::untrusted
-  ModelJson["Model planner JSON [untrusted]"]:::untrusted
-  UIDslDoc["Generated UI DSL [untrusted until validated]"]:::untrusted
+  NL["Natural language<br/>用户自然语言输入<br/>[untrusted]"]:::untrusted
+  ModelJson["Model planner JSON<br/>模型规划输出<br/>[untrusted]"]:::untrusted
+  UIDslDoc["Generated UI DSL<br/>生成式界面描述<br/>[untrusted until validated]"]:::untrusted
 
-  RegisteredActions["RegisteredActionMetadata<br/>actionId + schema + risk + semantic frames"]:::gate
-  PlanValidator["validateSemanticActionPlan"]:::gate
-  Policy["evaluateSemanticPlanPolicy"]:::gate
-  Confirmation["Human confirmation for medium/high risk"]:::gate
-  UIDslValidator["validateUIDslDocument"]:::gate
-  Execute["executeAction(ActionContext)"]:::trusted
-  Skills["skillRegistry<br/>3 executable skill wrappers only"]:::partial
+  RegisteredActions["RegisteredActionMetadata<br/>动作能力元数据<br/>[gate]"]:::gate
+  PlanValidator["validateSemanticActionPlan<br/>语义计划校验<br/>[gate]"]:::gate
+  Policy["evaluateSemanticPlanPolicy<br/>动作策略裁决<br/>[gate]"]:::gate
+  Confirmation["Human confirmation<br/>中高风险人工确认<br/>[gate]"]:::gate
+  UIDslValidator["validateUIDslDocument<br/>动态界面安全校验<br/>[gate]"]:::gate
+  Execute["executeAction(ActionContext)<br/>受控动作执行<br/>[trusted]"]:::trusted
+  Skills["skillRegistry<br/>可执行 Skill 封装<br/>[P]"]:::partial
 
   NL --> ModelJson --> PlanValidator
   RegisteredActions --> PlanValidator
@@ -265,14 +262,14 @@ flowchart LR
   classDef partial fill:#fff8e1,stroke:#f9a825,color:#3a2a00
   classDef boundary fill:#e3f2fd,stroke:#1565c0,color:#10233a
 
-  Button["Modality button / command / assistant request [I]"]:::implemented
-  Controller["useArtifactWorkflowController [I]"]:::implemented
-  ImportGate["selected set + import readiness gate [I]"]:::implemented
-  AgentRun["runAgentArtifactAnalysis<br/>FrontendAgentClient QA turn [I]"]:::boundary
-  Analysis["generateAssistantAnswer<br/>multi-paper evidence + model + audit [P]"]:::partial
-  Store["artifact.store<br/>task/catalog/open tabs [I]"]:::implemented
-  Result["artifactResultClient + local repository [P]"]:::partial
-  CenterUi["center artifact UI DSL / preview [I]"]:::implemented
+  Button["Modality button / command / assistant request<br/>产物生成入口<br/>[I]"]:::implemented
+  Controller["useArtifactWorkflowController<br/>产物流程控制器<br/>[I]"]:::implemented
+  ImportGate["selected set + import readiness gate<br/>选中文献导入门禁<br/>[I]"]:::implemented
+  AgentRun["runAgentArtifactAnalysis<br/>Agent 产物分析运行器<br/>[I]"]:::boundary
+  Analysis["generateAssistantAnswer<br/>证据/模型/审计分析<br/>[P]"]:::partial
+  Store["artifact.store<br/>产物任务与标签状态<br/>[I]"]:::implemented
+  Result["artifactResultClient + local repository<br/>产物结果同步存储<br/>[P]"]:::partial
+  CenterUi["center artifact UI DSL / preview<br/>中心区产物呈现<br/>[I]"]:::implemented
 
   Button --> Controller --> ImportGate --> AgentRun --> Analysis --> Store --> Result --> CenterUi
 ```
@@ -395,3 +392,67 @@ LiteasyClaw P1 Agent = 学术工作台受控 Agent
 - 完整外部 MCP 工具生态；
 - 无人监管的高风险写操作。
 ```
+
+## 14. 与 BrainPilot Agent 手册对照
+
+对照 `project-docs/reference/BrainPilot-Agent构建学习手册.pdf` 后，当前 LiteasyClaw 的方向是对的，但成熟度不能按“完整多 Agent 系统”宣传。更准确的定位是：
+
+```text
+一个面向学术工作台的主 Agent Host
++ 确定性 runtime
++ 多条模式化链路
++ 局部并行分析子任务
+```
+
+它符合 BrainPilot 手册里“不要默认 Agent 越多越好”和“生产系统通常适合混合架构”的判断。当前阶段继续做单一主 Agent 更稳：上下文统一、权限边界集中、状态更容易审计，避免为了显得高级而拆出多个角色造成成本、延迟和冲突。
+
+| BrainPilot 原则 | LiteasyClaw 当前状态 | 判断 |
+|---|---|---|
+| 单 Agent 适合目标集中、上下文统一的任务 | LiteasyClaw 的主要目标是文献工作台内的问答、解释、命令和产物生成 | 匹配，当前不必强拆多 Agent |
+| 混合架构由代码控制关键阶段，Agent 在阶段内自主行动 | `agent-runtime` 用 planner、validator、policy、executor 控制命令链路 | 匹配，这是当前最正确的架构方向 |
+| 多 Agent 需要不同权限、上下文隔离、真实并行、独立审查或独立预算 | 当前只有 artifact 分析里的并行子任务，没有独立 mailbox、独立权限和 per-agent 状态 | 尚未达到 BrainPilot 式多 Agent |
+| HTTP 应是命令入口 + 事件出口 | `agent-api` 已有 session/run/event/confirmation/cancel 语义 | 方向匹配，但事件持久化和恢复还需加强 |
+| 权限不能只靠 prompt，必须通过工具注册限制 | Command Mode 最终只能执行 registered action，并经过 schema、policy、confirmation | 匹配，是安全架构亮点 |
+| Prompt、Skill、Tool、Knowledge、Memory 要分层 | LiteasyClaw 已有这些概念，但 `skillRegistry` 与 `agent-core` catalog 成熟度不一致 | 需要收敛命名和执行契约 |
+| 多 Agent 需要 mailbox、背压、幂等、每 Agent 串行、跨 Agent 并行 | 当前没有完整 mailbox/delivery loop/backpressure/per-agent loop | 暂不能称为完整多 Agent runtime |
+| 可靠性要有 durable job ledger、trace、预算、重试、评测基线 | 当前有 run/event、budget、audit 的雏形 | 需要作为 P1/P2 工程硬化重点 |
+
+### 当前到底是几个 Agent？
+
+从产品视角看，是一个 Liteasy Agent。
+
+从工程视角看，是一个 `AgentPublicApi` / `AgentApplicationService` / `agent-core` 组成的主 Agent Host，下面分出几条受控链路：
+
+1. Command Mode：自然语言到 action plan，再经过校验、策略、确认和执行，基本是串行链路。
+2. QA / Explain：上下文装配、检索、模型回答、审计、UI DSL 输出，基本是串行链路。
+3. Artifact Analysis：一个 Agent run 内部可以拆出多篇论文或多区段并行分析子任务，但这些子任务还不是独立 Agent。
+
+所以当前不是“多个 Agent 互相协作”，而是“一条主 Agent 链路下有多个模式分支，部分分支内部可以并行调用模型”。
+
+### 大模型 API 调用是并行还是串行？
+
+当前应按链路区分：
+
+- Command Mode：以串行为主。模型 planner 产出一个 plan 后，由 runtime 串行校验、裁决、执行。
+- 普通 QA / Explain：以串行为主。检索和上下文准备后进入模型生成，再做审计和 UI 输出。
+- 多论文 / Artifact 分析：可以在一个 run 内并行发起多个 paper/section 分析子任务，再汇总成最终回答或产物。
+
+这更像“一个主链路，多模式分支，局部分支并行”，不是 BrainPilot 手册中“主协调 Agent + 多专家 Agent + mailbox 消息系统”的完整形态。
+
+### 是否应该马上升级成多 Agent？
+
+不建议现在就全面升级。只有当至少满足下面两项时，才值得拆出真正独立 Agent：
+
+1. 不同角色必须拥有不同工具权限，例如检索者不能写 workspace，审计者不能改产物。
+2. 某类任务需要隔离大上下文，例如全文检索、公式核查、引用审计各自上下文很重。
+3. 工作能真正并行，并且并行结果有稳定结构化交接格式。
+4. 需要独立质量审查责任，例如 artifact 发布前必须由 auditor 审查。
+5. 某类任务需要独立模型、预算、超时和失败策略。
+
+近期更合理的演进顺序是：
+
+1. 保留一个 Liteasy 主 Agent，先把 Agent Host / Public API / runtime contract 做硬。
+2. 把 `SubAgent 工作记录` 这类命名改成 `并行分析子任务`，避免团队误判为真实多 Agent。
+3. 补 durable job ledger、事件持久化、幂等、trace、预算可视化和恢复测试。
+4. 先把 retrieval/ingestion/evidence/citation 做成生产链路。
+5. 第一批真正的第二 Agent 可以是 `Auditor Agent`，只读、低权限、专门审查事实、引用和 artifact 质量。
