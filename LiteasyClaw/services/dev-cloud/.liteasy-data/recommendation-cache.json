@@ -1,6 +1,6 @@
 {
   "demo-session-1::local_library:本地文献库::demo-1::relevance": {
-    "cachedAt": "2026-07-01T12:29:41.447Z",
+    "cachedAt": "2026-07-27T05:53:49.892Z",
     "recommendations": [
       {
         "discoveredAt": "2026-05-14T07:30:00Z",
@@ -10,6 +10,7 @@
         "relevanceScore": 0.91,
         "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
         "source": "Semantic Scholar",
+        "sourceKind": "mock",
         "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
       },
       {
@@ -20,6 +21,7 @@
         "relevanceScore": 0.75,
         "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
         "source": "Connected Papers",
+        "sourceKind": "mock",
         "title": "Dense Passage Retrieval for Open-Domain Question Answering"
       }
     ]
@@ -100,7 +102,7 @@
     ]
   },
   "demo-session-1::local_library:本地文献库::demo-3::relevance": {
-    "cachedAt": "2026-07-01T13:14:10.029Z",
+    "cachedAt": "2026-07-27T05:52:11.223Z",
     "recommendations": [
       {
         "discoveredAt": "2026-05-14T08:15:00Z",
@@ -110,6 +112,7 @@
         "relevanceScore": 0.91,
         "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
         "source": "Semantic Scholar",
+        "sourceKind": "mock",
         "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
       },
       {
@@ -120,6 +123,7 @@
         "relevanceScore": 0.79,
         "reason": "补充混合结构化条件和向量检索的系统设计背景。",
         "source": "arXiv Watch",
+        "sourceKind": "mock",
         "title": "Efficient Filtered Approximate Nearest Neighbor Search"
       }
     ]
