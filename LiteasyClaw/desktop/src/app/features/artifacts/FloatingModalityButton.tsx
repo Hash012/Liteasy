@@ -16,7 +16,8 @@ const modalityOptions: Array<{
   { className: "mindmap", label: "思维导图", type: "mindmap" },
   { className: "layered-graph", label: "分层关系图", type: "layered_graph" },
   { className: "ppt", label: "PPT", type: "ppt" },
-  { className: "comparison", label: "对比表", type: "comparison_table" }
+  { className: "comparison", label: "对比表", type: "comparison_table" },
+  { className: "thin-reading", label: "薄读", type: "thin_reading" }
 ];
 
 function clamp(value: number, min: number, max: number) {

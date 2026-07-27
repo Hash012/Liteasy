@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useArtifactWorkflowController } from "../app/controllers/useArtifactWorkflowController";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
@@ -368,6 +369,91 @@ describe("useArtifactWorkflowController", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       "同步 Agent 产物服务失败，已保留本地记录：endpoint changed after login"
     );
+  });
+
+  test("restores and updates a locally cached thin-reading artifact", async () => {
+    const artifactStore = createArtifactStore();
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-reading",
+      papers: [{ id: paper.id, title: paper.title }],
+      targetLanguage: "zh-CN"
+    });
+    const localRepository = {
+      list: vi.fn(async () => [{
+        artifactId: "artifact-thin-reading",
+        createdAt: "2026-07-21T01:00:00.000Z",
+        papers: [{ id: paper.id, title: paper.title }],
+        thinReadingDocument,
+        title: "薄读",
+        type: "thin_reading" as const
+      }]),
+      replace: vi.fn(async () => undefined)
+    };
+    const client = artifactResultClient();
+    client.list.mockRejectedValueOnce(new Error("endpoint unavailable"));
+
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactLocalRepository: localRepository,
+        artifactResultClient: client,
+        artifactStore,
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "zh-CN" }),
+        type: "thin_reading"
+      })
+    ]);
+
+    act(() => {
+      result.current.actions.openArtifact("artifact-thin-reading");
+      result.current.actions.updateThinReadingDocument(
+        "artifact-thin-reading",
+        createThinReadingDocument({
+          artifactId: "artifact-thin-reading",
+          papers: [{ id: paper.id, title: paper.title }],
+          targetLanguage: "en-US"
+        })
+      );
+    });
+
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "en-US" })
+      })
+    ]);
+    expect(result.current.model.artifactTabs).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "en-US" })
+      })
+    ]);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(localRepository.replace).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "en-US" })
+      })
+    ]);
   });
 
   test("refreshes server artifacts when login changes the result endpoint", async () => {

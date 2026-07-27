@@ -14,6 +14,7 @@ import type { Paper, SelectedDocumentSet } from "../features/workspace/workspace
 import type { ImportQueueStatus } from "../features/workspace/useWorkspaceActions";
 import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { ArtifactResultClient } from "../features/artifacts/artifactResultClient";
+import type { ThinReadingDocument } from "../features/thin-reading/thinReading.types";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { DuplicateArtifactGenerationConfirmation } from "../features/artifacts/useArtifactActions";
 import {
@@ -33,6 +34,7 @@ type UseArtifactWorkflowControllerInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getAssistantLanguage?: () => string;
   getModelDiagnosticContext?: () => {
     endpoint?: string;
     model?: string;
@@ -74,6 +76,7 @@ type ArtifactWorkflowActions = {
   startAnalysis: (artifactType: ArtifactType) => string;
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
   updateSkillDocument: (artifactId: string, markdown: string) => void;
+  updateThinReadingDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
 };
 
 export function useArtifactWorkflowController({
@@ -84,6 +87,7 @@ export function useArtifactWorkflowController({
   confirmDuplicateGeneration,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getAssistantLanguage,
   getModelDiagnosticContext,
   getSelectedDocumentSet,
   getSelectedPapers,
@@ -130,6 +134,7 @@ export function useArtifactWorkflowController({
     confirmDuplicateGeneration,
     cancelAgentRun,
     getImportedChunksByPaperId,
+    getAssistantLanguage,
     getModelDiagnosticContext,
     getSelectedDocumentSet,
     getSelectedPapers,
@@ -200,7 +205,8 @@ export function useArtifactWorkflowController({
       saveSkillDocument: artifactActions.saveSkillDocument,
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,
-      updateSkillDocument: artifactActions.updateSkillDocument
+      updateSkillDocument: artifactActions.updateSkillDocument,
+      updateThinReadingDocument: artifactActions.updateThinReadingDocument
     },
     model: {
       artifactCatalog,

@@ -9,6 +9,8 @@ import { DynamicCanvas, OutlineTree } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { ObsidianLikeGraphCanvas } from "../layered-reading/ObsidianLikeGraphCanvas";
 import { defaultGraphViewState } from "../layered-reading/layeredReading.types";
+import { ThinReadingTab } from "../thin-reading/ThinReadingTab";
+import type { ThinReadingDocument } from "../thin-reading/thinReading.types";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
@@ -23,6 +25,7 @@ type ArtifactTabsProps = {
   ) => string | void | Promise<string | void>;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
+  onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   selectedCount: number;
   selectionLocked: boolean;
@@ -112,6 +115,7 @@ export function ArtifactTabs({
   onRegenerateArtifact,
   onSaveMarkdownTab,
   onUpdateMarkdownTab,
+  onUpdateThinReadingDocument,
   onStartAnalysis,
   selectedCount,
   selectionLocked,
@@ -176,6 +180,21 @@ export function ArtifactTabs({
     } finally {
       setDeletingArtifact(false);
     }
+  }
+
+  if (activeTab?.type === "thin_reading") {
+    if (!activeTab.thinReadingDocument) {
+      return <div className="artifact-empty">薄读内容缺失</div>;
+    }
+
+    return (
+      <ThinReadingTab
+        artifactId={activeTab.artifactId}
+        document={activeTab.thinReadingDocument}
+        onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
+        papers={activeTab.papers ?? []}
+      />
+    );
   }
 
   return (

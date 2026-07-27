@@ -529,7 +529,7 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
     inputSchema: {
       properties: {
         artifactType: {
-          enum: ["comparison_table", "layered_graph", "mindmap", "tree", "ppt"],
+          enum: ["comparison_table", "layered_graph", "mindmap", "thin_reading", "tree", "ppt"],
           type: "string"
         },
         source: {
@@ -628,6 +628,22 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
             semanticSignal("selected_document_set", ["当前选中文献集", "当前论文", "选中文献", "这组论文"], 1)
           ],
           summary: "生成 PPT"
+        },
+        {
+          clarificationLabel: "生成薄读",
+          frameId: "artifact.generate.thin_reading",
+          input: {
+            artifactType: "thin_reading",
+            source: "selected_document_set"
+          },
+          intentId: "artifact.generate",
+          requiredContext: ["selected_document_set"],
+          signals: [
+            semanticSignal("create", ["生成", "制作", "做", "整理"], 1),
+            semanticSignal("thin_reading", ["薄读", "thin reading"], 4, true),
+            semanticSignal("selected_document_set", ["当前选中文献集", "当前论文", "选中文献", "这组论文"], 1)
+          ],
+          summary: "生成薄读"
         }
       ]
     }
@@ -640,7 +656,7 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
     inputSchema: {
       properties: {
         artifactType: {
-          enum: ["comparison_table", "layered_graph", "mindmap", "tree", "ppt"],
+          enum: ["comparison_table", "layered_graph", "mindmap", "thin_reading", "tree", "ppt"],
           type: "string"
         },
         source: {
@@ -670,7 +686,7 @@ const registeredActionMetadata: RegisteredActionMetadata[] = [
           type: "string"
         },
         artifactType: {
-          enum: ["comparison_table", "layered_graph", "mindmap", "tree", "ppt"],
+          enum: ["comparison_table", "layered_graph", "mindmap", "thin_reading", "tree", "ppt"],
           type: "string"
         }
       },

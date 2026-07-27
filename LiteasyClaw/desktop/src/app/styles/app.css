@@ -561,22 +561,32 @@ body {
 
 .floating-modality-launcher:hover .floating-modality-option.tree,
 .floating-modality-launcher:focus-within .floating-modality-option.tree {
-  transform: translate(-74px, -42px) scale(1);
+  transform: translate(-90px, -8px) scale(1);
 }
 
 .floating-modality-launcher:hover .floating-modality-option.mindmap,
 .floating-modality-launcher:focus-within .floating-modality-option.mindmap {
-  transform: translate(2px, -88px) scale(1);
+  transform: translate(-48px, -82px) scale(1);
+}
+
+.floating-modality-launcher:hover .floating-modality-option.layered-graph,
+.floating-modality-launcher:focus-within .floating-modality-option.layered-graph {
+  transform: translate(48px, -82px) scale(1);
 }
 
 .floating-modality-launcher:hover .floating-modality-option.ppt,
 .floating-modality-launcher:focus-within .floating-modality-option.ppt {
-  transform: translate(78px, -42px) scale(1);
+  transform: translate(90px, -8px) scale(1);
 }
 
 .floating-modality-launcher:hover .floating-modality-option.comparison,
 .floating-modality-launcher:focus-within .floating-modality-option.comparison {
-  transform: translate(48px, 66px) scale(1);
+  transform: translate(54px, 64px) scale(1);
+}
+
+.floating-modality-launcher:hover .floating-modality-option.thin-reading,
+.floating-modality-launcher:focus-within .floating-modality-option.thin-reading {
+  transform: translate(-54px, 64px) scale(1);
 }
 
 .floating-modality-option.tree {
@@ -587,12 +597,20 @@ body {
   background: #107c10;
 }
 
+.floating-modality-option.layered-graph {
+  background: #3c6479;
+}
+
 .floating-modality-option.ppt {
   background: #ca5010;
 }
 
 .floating-modality-option.comparison {
   background: #5c2d91;
+}
+
+.floating-modality-option.thin-reading {
+  background: #51605d;
 }
 
 .floating-modality-option:disabled {

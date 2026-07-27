@@ -225,6 +225,7 @@ export function AppShell({
     artifactResultClient: artifactResultClientRef.current,
     artifactResultScopeKey: settingsState["models.cloud_proxy_endpoint"],
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
+    getAssistantLanguage: () => settingsStoreRef.current.getState()["assistant.language"],
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getModelDiagnosticContext: () => {
       const provider = settingsStoreRef.current.getState()["models.default_provider"];
@@ -940,6 +941,7 @@ export function AppShell({
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
           onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
+          onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
           selectedCount={workspaceState.selectedPaperIds.length}
           selectionLocked={workspaceState.selectionLocked}
           tabs={tabs}
@@ -1047,6 +1049,7 @@ export function AppShell({
           void artifactWorkflow.actions.saveSkillDocument(artifactId);
         }}
         onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
+        onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
         onToggleBottomPane={() =>
           paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
         }

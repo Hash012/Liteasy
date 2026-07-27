@@ -27,6 +27,7 @@ import {
   parseStreamingOutlineMarkdown
 } from "./artifactOutline";
 import { createEvidenceBackedBaseGraph } from "../intuition-graph/createBaseGraph";
+import { createThinReadingDocument } from "../thin-reading/thinReadingProjection";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
@@ -60,6 +61,7 @@ type UseArtifactActionsInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getAssistantLanguage?: () => string;
   getModelDiagnosticContext?: () => {
     endpoint?: string;
     model?: string;
@@ -184,6 +186,7 @@ const artifactTypeLabels: Record<Exclude<ArtifactType, "skill_doc">, string> = {
   layered_graph: "分层关系图",
   mindmap: "思维导图",
   ppt: "PPT",
+  thin_reading: "薄读",
   tree: "树形展开"
 };
 
@@ -228,6 +231,7 @@ export function useArtifactActions({
   confirmDuplicateGeneration = confirmDuplicateGenerationInBrowser,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getAssistantLanguage,
   getModelDiagnosticContext,
   getSelectedDocumentSet,
   getSelectedPapers,
@@ -264,6 +268,32 @@ export function useArtifactActions({
     try {
       if (artifactType === "skill_doc") {
         throw new Error("Skill 文档不是论文分析模态");
+      }
+      if (artifactType === "thin_reading") {
+        const artifactId = createArtifactId(taskId);
+        const createdAt = new Date().toISOString();
+        const thinReadingDocument = createThinReadingDocument({
+          artifactId,
+          importedChunksByPaperId: Object.fromEntries(
+            Object.entries(importedChunksByPaperId).map(([paperId, chunks]) => [
+              paperId,
+              chunks.map((chunk) => chunk.snippet)
+            ])
+          ),
+          papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title })),
+          targetLanguage: getAssistantLanguage?.() ?? "zh-CN"
+        });
+        artifactStore.completeTask(taskId, {
+          artifactId,
+          createdAt,
+          papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title })),
+          thinReadingDocument,
+          title: "薄读",
+          type: "thin_reading"
+        });
+        syncArtifacts(taskId);
+        onAnalysisHint("薄读已在本地生成。");
+        return;
       }
       const onProgress = (progress: {
         agentRunId?: string;
@@ -712,6 +742,20 @@ export function useArtifactActions({
     syncArtifacts();
   }
 
+  function updateThinReadingDocument(artifactId: string, nextDocument: NonNullable<ArtifactTab["thinReadingDocument"]>) {
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
+    if (!existing || existing.type !== "thin_reading") {
+      return;
+    }
+
+    artifactStore.upsertTab({
+      ...existing,
+      thinReadingDocument: nextDocument
+    });
+    syncArtifacts();
+  }
+
   async function saveSkillDocument(artifactId: string) {
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId);
     if (!existing || existing.type !== "skill_doc") {
@@ -749,6 +793,7 @@ export function useArtifactActions({
     startAnalysisForPapers,
     startArtifactTask,
     syncArtifacts,
-    updateSkillDocument
+    updateSkillDocument,
+    updateThinReadingDocument
   };
 }

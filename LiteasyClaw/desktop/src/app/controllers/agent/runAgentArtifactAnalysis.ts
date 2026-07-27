@@ -66,6 +66,9 @@ export async function runAgentArtifactAnalysis(
   if (artifactType === "skill_doc") {
     throw new Error("Skill 文档不是论文分析模态");
   }
+  if (artifactType === "thin_reading") {
+    throw new Error("薄读是本地 artifact flow，不通过通用 Agent 论文分析模态生成");
+  }
   const outlineInstruction = artifactType === "tree" || artifactType === "mindmap" || artifactType === "layered_graph"
     ? [
         "严格使用 Markdown unordered list 表达层级，每层缩进两个空格；不要使用制表符、ASCII 树线或代码围栏。",

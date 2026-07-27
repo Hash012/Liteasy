@@ -134,6 +134,7 @@ const paper: Paper = {
 };
 
 function renderArtifactActions(options: {
+  assistantLanguage?: string;
   confirmDuplicateGeneration?: ReturnType<typeof vi.fn>;
   diagnosticContext?: { endpoint: string; model: string; provider: string };
   imported?: boolean;
@@ -175,6 +176,9 @@ function renderArtifactActions(options: {
         save: saveArtifactResult
       },
       confirmDuplicateGeneration: options.confirmDuplicateGeneration,
+      getAssistantLanguage: options.assistantLanguage
+        ? () => options.assistantLanguage!
+        : undefined,
       getImportedChunksByPaperId: () => importedChunks,
       getModelDiagnosticContext: options.diagnosticContext
         ? () => options.diagnosticContext!
@@ -341,6 +345,47 @@ describe("useArtifactActions", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       expect.stringContaining("project-docs/agent-results/")
     );
+  });
+
+  test("generates a completed thin-reading artifact locally for imported papers", async () => {
+    const {
+      artifactStore,
+      onArtifactTabsChanged,
+      result,
+      runAgentAnalysis,
+      saveArtifactResult
+    } = renderArtifactActions({
+      assistantLanguage: "zh-CN",
+      imported: true
+    });
+
+    act(() => {
+      result.current.startAnalysis("thin_reading");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    expect(saveArtifactResult).not.toHaveBeenCalled();
+    expect(artifactStore.getTasks()[0]).toEqual(expect.objectContaining({
+      artifactId: expect.any(String),
+      status: "completed",
+      type: "thin_reading"
+    }));
+    expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        createdAt: expect.any(String),
+        papers: [{ id: paper.id, title: paper.title }],
+        thinReadingDocument: expect.objectContaining({
+          targetLanguage: "zh-CN"
+        }),
+        title: "薄读",
+        type: "thin_reading"
+      })
+    ]);
   });
 
   test("blocks saving a mindmap when artifact workflow verification fails", async () => {

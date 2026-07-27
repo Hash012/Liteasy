@@ -93,6 +93,25 @@ test("executes a semantic artifact generation action through the action registry
   expect(result.message).toBe("已开始 PPT 分析。");
 });
 
+test("registers thin reading across artifact generation capability metadata", () => {
+  const metadata = getRegisteredActionMetadata();
+  const generate = metadata.find((action) => action.actionId === "artifact.generate");
+  const startAnalysis = metadata.find((action) => action.actionId === "artifact.start_analysis");
+  const openTab = metadata.find((action) => action.actionId === "artifact.open_tab");
+
+  expect(generate?.inputSchema.properties?.artifactType.enum).toContain("thin_reading");
+  expect(startAnalysis?.inputSchema.properties?.artifactType.enum).toContain("thin_reading");
+  expect(openTab?.inputSchema.properties?.artifactType.enum).toContain("thin_reading");
+  expect(generate?.semantic?.frames).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        input: expect.objectContaining({ artifactType: "thin_reading" }),
+        summary: "生成薄读"
+      })
+    ])
+  );
+});
+
 test("exposes registered action metadata for runtime planning and safety checks", () => {
   const metadata = getRegisteredActionMetadata();
 

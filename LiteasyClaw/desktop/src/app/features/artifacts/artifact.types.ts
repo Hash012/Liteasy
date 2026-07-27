@@ -6,9 +6,10 @@ import type {
 } from "../artifact-workflow/mindmapArtifact.types";
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { IntuitionGraphDocument } from "../intuition-graph/intuitionGraph.types";
+import type { ThinReadingDocument } from "../thin-reading/thinReading.types";
 
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type ArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "skill_doc" | "tree";
+export type ArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "skill_doc" | "thin_reading" | "tree";
 export type ArtifactTaskStage =
   | "waiting_for_import"
   | "preparing_context"
@@ -86,6 +87,7 @@ export type ArtifactTab = {
   regeneratedFromArtifactId?: string;
   sourcePath?: string;
   supplementalContext?: string;
+  thinReadingDocument?: ThinReadingDocument;
   preview?: ArtifactPreview;
   resultPath?: string;
   title: string;

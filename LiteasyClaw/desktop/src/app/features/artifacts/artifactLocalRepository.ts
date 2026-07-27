@@ -24,6 +24,7 @@ const artifactTypes = new Set<ArtifactType>([
   "mindmap",
   "ppt",
   "skill_doc",
+  "thin_reading",
   "tree"
 ]);
 

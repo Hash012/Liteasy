@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { ArtifactTabs } from "../app/features/artifacts/ArtifactTabs";
 import type { ArtifactTab } from "../app/features/artifacts/artifact.types";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 
 describe("ArtifactTabs", () => {
   test("shows real Agent phase progress separately from PDF readiness", () => {
@@ -124,6 +125,37 @@ describe("ArtifactTabs", () => {
     expect(screen.getByText("ColBERT")).toBeInTheDocument();
     expect(screen.getByText("Late interaction")).toBeInTheDocument();
     expect(screen.getByText("demo-1 p.2")).toBeInTheDocument();
+  });
+
+  test("renders thin-reading tabs as a full-page surface without generic artifact card chrome", () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      targetLanguage: "zh-CN"
+    });
+    const onUpdateThinReadingDocument = vi.fn();
+    const { container } = render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        onUpdateThinReadingDocument={onUpdateThinReadingDocument}
+        selectedCount={1}
+        selectionLocked
+        tabs={[{
+          artifactId: "artifact-thin",
+          papers: [{ id: "paper-1", title: "ColBERT" }],
+          thinReadingDocument,
+          title: "薄读",
+          type: "thin_reading"
+        }]}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
+    expect(screen.getByText("Intuecho")).toBeInTheDocument();
+    expect(container.querySelector(".artifact-card")).toBeNull();
   });
 
   test("renders mindmap verification and source layer metadata", () => {

@@ -8,6 +8,7 @@ import type { UIDslActionRef } from "../features/generative-ui/generativeUi.type
 import { PdfReader, type PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
+import type { ThinReadingDocument } from "../features/thin-reading/thinReading.types";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
 
@@ -25,6 +26,7 @@ type ReaderPaneProps = {
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
   onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
+  onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   showArtifactRegion?: boolean;
   selectedPapers?: Paper[];
   selectedPaperIds: string[];
@@ -52,6 +54,7 @@ export function ReaderPane({
   onToggleLeftPane,
   onToggleRightPane,
   onUpdateMarkdownTab,
+  onUpdateThinReadingDocument,
   selectedPapers = [],
   selectedPaperIds,
   selectionLocked,
@@ -115,21 +118,22 @@ export function ReaderPane({
             zoom={zoom}
           />
           {artifactRegionVisible ? (
-          <section aria-label="多模态产物区域" className="reader-artifact-region">
-            <ArtifactTabs
-              analysisHint={analysisHint}
-              canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
-              onDynamicAction={onArtifactDynamicAction}
-              onOpenEvidence={onOpenEvidence}
-              onSaveMarkdownTab={onSaveMarkdownTab}
-              onStartAnalysis={onStartAnalysis}
-              onUpdateMarkdownTab={onUpdateMarkdownTab}
-              selectedCount={selectedPaperIds.length}
-              selectionLocked={selectionLocked}
-              tabs={artifactTabs}
-              tasks={artifactTasks}
-            />
-          </section>
+            <section aria-label="多模态产物区域" className="reader-artifact-region">
+              <ArtifactTabs
+                analysisHint={analysisHint}
+                canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
+                onDynamicAction={onArtifactDynamicAction}
+                onOpenEvidence={onOpenEvidence}
+                onSaveMarkdownTab={onSaveMarkdownTab}
+                onStartAnalysis={onStartAnalysis}
+                onUpdateMarkdownTab={onUpdateMarkdownTab}
+                onUpdateThinReadingDocument={onUpdateThinReadingDocument}
+                selectedCount={selectedPaperIds.length}
+                selectionLocked={selectionLocked}
+                tabs={artifactTabs}
+                tasks={artifactTasks}
+              />
+            </section>
           ) : null}
         </div>
       ) : (

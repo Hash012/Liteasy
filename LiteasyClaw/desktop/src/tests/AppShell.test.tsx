@@ -808,6 +808,33 @@ test("renders artifact content from imported selected-document chunks", async ()
   expect(screen.getByLabelText("空 Dock 区域")).toBeInTheDocument();
 }, 15000);
 
+test("opens a full thin-reading tab from the floating modality launcher", async () => {
+  const user = userEvent.setup();
+
+  render(<AppShell />);
+
+  await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
+  await user.click(screen.getByRole("button", { name: "锁定选择" }));
+  await sendAssistantCommand(user, "导入当前选中文献集");
+
+  await waitFor(() => {
+    expect(screen.getByText("PDF 已就绪")).toBeInTheDocument();
+  }, { timeout: 2500 });
+
+  await user.click(screen.getByRole("button", { name: "打开模态选择" }));
+  await user.click(screen.getByRole("button", { name: "薄读" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("tab", { name: "薄读" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+  expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeInTheDocument();
+  expect(screen.getByText("Intuecho")).toBeInTheDocument();
+}, 10000);
+
 test("collapses the left pane when clicking the active activity-bar item", async () => {
   const user = userEvent.setup();
 

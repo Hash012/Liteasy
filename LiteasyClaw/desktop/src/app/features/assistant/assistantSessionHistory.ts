@@ -56,6 +56,7 @@ const artifactTypeLabels: Record<ArtifactType, string> = {
   mindmap: "思维导图",
   ppt: "演示文稿",
   skill_doc: "技能文档",
+  thin_reading: "薄读",
   tree: "文献树"
 };
 
