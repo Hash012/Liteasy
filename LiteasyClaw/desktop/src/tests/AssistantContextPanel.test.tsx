@@ -10,7 +10,7 @@ function createContext(overrides: Partial<AgentRuntimeContextView> = {}): AgentR
       connected: true,
       organizationName: "Liteasy AI Reading Lab"
     },
-    profile: { enabled: false, requiresConfirmation: true },
+    profile: {},
     selection: {
       importedCount: 2,
       issues: ["documents_not_imported"],
@@ -31,7 +31,7 @@ test("renders a collapsed runtime context summary by default", () => {
 
   expect(screen.getByRole("button", { name: /运行时上下文/ })).toBeInTheDocument();
   expect(
-    screen.getByText("上下文 · 选中 3 篇 · 已锁定 · 已导入 2/3 · 云账号已连接 · 用户画像已关闭")
+    screen.getByText("上下文 · 选中 3 篇 · 已锁定 · 已导入 2/3 · 云账号已连接 · 学术档案待补充")
   ).toBeInTheDocument();
   expect(screen.queryByText("Selection")).not.toBeInTheDocument();
 });
@@ -63,7 +63,6 @@ test("renders the same context view produced for planner and policy contexts", a
         connected: false
       },
       profile: {
-        enabled: true,
         personalizationSummary: "研究阶段：博士研究生"
       },
       selection: {

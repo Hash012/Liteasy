@@ -45,10 +45,7 @@ function summarizeRuntimeContext(contextView?: AgentRuntimeContextView) {
     `- 选中文献：${contextView.selection.selectedCount} 篇，已导入 ${contextView.selection.importedCount} 篇。`,
     `- 选区锁定：${contextView.selection.locked ? "是" : "否"}。`,
     `- 云账号：${contextView.cloud.connected ? "已连接" : "未连接"}。`,
-    `- 用户画像：${contextView.profile.enabled ? "已开启（修改需确认）" : "已关闭"}。`,
-    ...(contextView.profile.personalizationSummary
-      ? [`- 学术档案与当前关注：${contextView.profile.personalizationSummary}。`]
-      : []),
+    `- 学术档案：${contextView.profile.personalizationSummary ?? "待补充学科或研究阶段"}。`,
     ...(contextView.recommendations.totalCount > 0
       ? [
           `- 当前推荐：${contextView.recommendations.totalCount} 条，其中优先参考：`,

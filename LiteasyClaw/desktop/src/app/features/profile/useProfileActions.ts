@@ -11,8 +11,6 @@ import {
 type UseProfileActionsInput = {
   accountSession?: AccountSession | null;
   controlPlaneEndpoint?: string;
-  onProfileSamplingChanged?: (enabled: boolean) => void;
-  profileSamplingEnabled?: boolean;
   transport?: AcademicProfileTransport;
 };
 
@@ -30,8 +28,6 @@ function toAcademicProfile(profile: AcademicProfile) {
 export function useProfileActions({
   accountSession = null,
   controlPlaneEndpoint = "mock://control-plane",
-  onProfileSamplingChanged,
-  profileSamplingEnabled = false,
   transport
 }: UseProfileActionsInput = {}) {
   const [academicArchiveOpen, setAcademicArchiveOpen] = useState(false);
@@ -94,11 +90,6 @@ export function useProfileActions({
     setClearProfileConfirmOpen(false);
   }
 
-  function toggleProfileSampling() {
-    setProfileClearMessage(undefined);
-    onProfileSamplingChanged?.(!profileSamplingEnabled);
-  }
-
   function updateAcademicProfile(nextProfile: AcademicProfile) {
     if (!accountSession || !client) {
       setAcademicProfile(nextProfile);
@@ -130,7 +121,6 @@ export function useProfileActions({
       setPersonalizationVersion(0);
       setClearProfileConfirmOpen(false);
       setProfileClearMessage("已清空学科、补充说明和研究阶段。");
-      onProfileSamplingChanged?.(false);
       return;
     }
 
@@ -142,7 +132,6 @@ export function useProfileActions({
         setPersonalizationVersion(snapshot.personalizationVersion);
         setClearProfileConfirmOpen(false);
         setProfileClearMessage("已清空学术档案，并重置个性化调整。");
-        onProfileSamplingChanged?.(false);
       })
       .catch(() => {
         setProfileClearMessage("学术档案清空失败，请检查云端连接后重试。");
@@ -182,10 +171,8 @@ export function useProfileActions({
     openClearProfileConfirm,
     markProfileExported,
     profileClearMessage,
-    profileSamplingEnabled,
     personalizationVersion,
     recordPersonalizationSignal,
-    toggleProfileSampling,
     updateAcademicProfile
   };
 }

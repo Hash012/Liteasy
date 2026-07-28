@@ -6,8 +6,6 @@ import {
   ChevronDownRegular,
   ChevronRightRegular,
   DeleteRegular,
-  EyeOffRegular,
-  EyeRegular,
   PersonRegular,
   SignOutRegular
 } from "@fluentui/react-icons";
@@ -25,11 +23,9 @@ type PersonalCenterPanelProps = {
   onClearProfile: () => void;
   onLogout: () => void;
   onOpenAcademicArchive: () => void;
-  onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   organizationSummary: OrganizationSummary | null;
   profileClearMessage?: string;
-  profileSamplingEnabled: boolean;
   readPaperCount: number;
 };
 
@@ -39,11 +35,9 @@ export function PersonalCenterPanel({
   onClearProfile,
   onLogout,
   onOpenAcademicArchive,
-  onToggleProfileSampling,
   onUpdateAcademicProfile,
   organizationSummary,
   profileClearMessage,
-  profileSamplingEnabled,
   readPaperCount
 }: PersonalCenterPanelProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(["profile", "academic"]);
@@ -78,23 +72,17 @@ export function PersonalCenterPanel({
         <button aria-expanded={isExpanded("profile")} aria-label={`${isExpanded("profile") ? "收起" : "展开"}画像配置`} className="sidebar-section-header" onClick={() => toggleSection("profile")} type="button">
           <span aria-hidden="true" className="sidebar-section-disclosure">{isExpanded("profile") ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
           <PersonRegular />
-          <span>画像配置</span>
+          <span>学术档案配置</span>
         </button>
         {isExpanded("profile") ? <div className="sidebar-section-content">
           <div className="personal-center-row">研究阶段：{formatAcademicProfile(academicProfile)}</div>
           <div className="personal-center-row">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
           <AcademicProfileForm academicProfile={academicProfile} onSave={onUpdateAcademicProfile} />
           {profileClearMessage ? <div className="personal-center-row">{profileClearMessage}</div> : null}
-          <Tooltip content={profileSamplingEnabled ? "关闭用户画像" : "开启用户画像"} positioning="below" relationship="description">
-            <button aria-label={profileSamplingEnabled ? "关闭用户画像" : "开启用户画像"} className="left-rail-button icon-only" onClick={onToggleProfileSampling} type="button">
-              {profileSamplingEnabled ? <EyeOffRegular /> : <EyeRegular />}
-            </button>
-          </Tooltip>
         </div> : null}
       </section>
 
-      {profileSamplingEnabled ? (
-        <section className="sidebar-section personal-center-section">
+      <section className="sidebar-section personal-center-section">
           <button aria-expanded={isExpanded("academic")} aria-label={`${isExpanded("academic") ? "收起" : "展开"}学术档案`} className="sidebar-section-header" onClick={() => toggleSection("academic")} type="button">
             <span aria-hidden="true" className="sidebar-section-disclosure">{isExpanded("academic") ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
             <ArchiveRegular />
@@ -106,13 +94,12 @@ export function PersonalCenterPanel({
             <Tooltip content="学术档案" positioning="below" relationship="description">
               <button aria-label="学术档案" className="left-rail-button icon-only" onClick={onOpenAcademicArchive} type="button"><ArchiveRegular /></button>
             </Tooltip>
-            <Tooltip content="清空用户画像" positioning="below" relationship="description">
-              <button aria-label="清空用户画像" className="left-rail-button danger icon-only" onClick={onClearProfile} type="button"><DeleteRegular /></button>
+            <Tooltip content="清空学术档案" positioning="below" relationship="description">
+              <button aria-label="清空学术档案" className="left-rail-button danger icon-only" onClick={onClearProfile} type="button"><DeleteRegular /></button>
             </Tooltip>
           </div>
           </div> : null}
-        </section>
-      ) : null}
+      </section>
     </section>
   );
 }

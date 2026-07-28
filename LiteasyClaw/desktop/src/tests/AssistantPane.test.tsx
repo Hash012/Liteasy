@@ -804,61 +804,6 @@ test("resolves short command follow-up phrases from the previous ambiguous comma
   expect(screen.getByText("已打开组织面板。")).toBeInTheDocument();
 });
 
-test("routes command mode through runtime confirmation before profile sampling changes", async () => {
-  const user = userEvent.setup();
-  const settingsStore = createSettingsStore();
-
-  render(
-    <AssistantPane
-      onGenerateArtifact={() => "unused"}
-      profileUnlocked={true}
-      selectedSetStatus={{
-        importedCount: 1,
-        selectedCount: 1,
-        selectionLocked: true
-      }}
-      settingsStore={settingsStore}
-    />
-  );
-
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  expect(screen.getByText("开启用户画像")).toBeInTheDocument();
-  expect(screen.getByText("用户画像只会在已授权的 Liteasy 产品内范围中使用；不会读取外部应用数据，也不建立向量索引或提供历史回溯。请确认后再开启。")).toBeInTheDocument();
-  expect(settingsStore.getState()["profile.enabled"]).toBe(false);
-});
-
-test("continues a confirmed command from the human confirmation UI", async () => {
-  const user = userEvent.setup();
-  const settingsStore = createSettingsStore();
-
-  render(
-    <AssistantPane
-      onGenerateArtifact={() => "unused"}
-      profileUnlocked={true}
-      selectedSetStatus={{
-        importedCount: 1,
-        selectedCount: 1,
-        selectionLocked: true
-      }}
-      settingsStore={settingsStore}
-    />
-  );
-
-  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "开启用户画像");
-  await user.click(screen.getByRole("button", { name: "发送" }));
-
-  expect(settingsStore.getState()["profile.enabled"]).toBe(false);
-
-  await user.click(screen.getByRole("button", { name: "确认执行" }));
-
-  await waitFor(() => {
-    expect(settingsStore.getState()["profile.enabled"]).toBe(true);
-  });
-  expect(screen.getByText("已更新 用户画像：true")).toBeInTheDocument();
-});
-
 test("renders the expandable runtime context panel inside the assistant", async () => {
   const user = userEvent.setup();
 

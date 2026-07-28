@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import type { AccountSession } from "../app/features/account/account.types";
 import { useProfileActions } from "../app/features/profile/useProfileActions";
 
@@ -12,14 +12,8 @@ const accountSession: AccountSession = {
 };
 
 describe("useProfileActions", () => {
-  test("opens and closes the academic archive and delegates profile enable changes", () => {
-    const onProfileSamplingChanged = vi.fn();
-    const { result } = renderHook(() =>
-      useProfileActions({
-        onProfileSamplingChanged,
-        profileSamplingEnabled: false
-      })
-    );
+  test("opens and closes the academic archive", () => {
+    const { result } = renderHook(() => useProfileActions());
 
     expect(result.current.academicArchiveOpen).toBe(false);
     expect(result.current.profileClearMessage).toBeUndefined();
@@ -29,10 +23,6 @@ describe("useProfileActions", () => {
 
     act(() => result.current.closeAcademicArchive());
     expect(result.current.academicArchiveOpen).toBe(false);
-    expect(result.current.profileSamplingEnabled).toBe(false);
-
-    act(() => result.current.toggleProfileSampling());
-    expect(onProfileSamplingChanged).toHaveBeenCalledWith(true);
   });
 
   test("requires confirmation before clearing the profile", () => {

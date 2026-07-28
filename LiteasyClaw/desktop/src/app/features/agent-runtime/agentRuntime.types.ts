@@ -91,9 +91,7 @@ export type AgentRuntimeContextView = {
     organizationName?: string;
   };
   profile: {
-    enabled: boolean;
     personalizationSummary?: string;
-    requiresConfirmation: boolean;
   };
   recommendations: {
     items: AgentRecommendationContextItem[];

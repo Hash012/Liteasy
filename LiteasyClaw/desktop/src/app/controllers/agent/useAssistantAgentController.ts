@@ -41,7 +41,6 @@ export type AssistantAgentControllerInput = {
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onRefreshRecommendations?: ActionContext["refreshRecommendations"];
   onSettingsChanged?: (settings: SettingsState) => void;
-  profileEnabled: boolean;
   profilePersonalizationSummary?: string;
   profileUnlocked: boolean;
   runtimeOrganizationName?: string;
@@ -67,7 +66,6 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
         const runtimeContext = buildAgentRuntimeContextView({
           importedCount: current.importedSelectedCount,
           organizationName: current.runtimeOrganizationName,
-          profileEnabled: current.profileEnabled,
           profilePersonalizationSummary: current.profilePersonalizationSummary,
           profileUnlocked: current.profileUnlocked,
           recommendations: current.getRecommendations?.(),

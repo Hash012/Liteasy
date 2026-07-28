@@ -49,7 +49,6 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     onReturnToLocalWorkspace: vi.fn(),
     onSelectOrganization: vi.fn(),
     onToggleLock: vi.fn(),
-    onToggleProfileSampling: vi.fn(),
     onToggleSelection: vi.fn(),
     organizationSummary: null,
     organizationSummaryMessage: "组织摘要",
@@ -59,7 +58,6 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     profileDataScopes: defaultProfileDataScopes,
     profileReadPaperCount: 0,
     academicProfile: defaultAcademicProfile,
-    profileSamplingEnabled: false,
     recommendationItems: [],
     recommendationMessage: "推荐",
     recommendationPending: false,
@@ -686,7 +684,7 @@ describe("LeftPane", () => {
       />
     );
     expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "学术档案" })).toBeInTheDocument();
   });
 
   test("hides organization creation for basic members and keeps join available", () => {
@@ -911,7 +909,7 @@ describe("LeftPane", () => {
     expect(within(personalCenter).getByText("研究学科：未设置")).toBeInTheDocument();
     expect(within(personalCenter).queryByLabelText("性别")).not.toBeInTheDocument();
     expect(within(personalCenter).queryByLabelText("常用研究方法")).not.toBeInTheDocument();
-    expect(within(personalCenter).getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
+    expect(within(personalCenter).getByRole("button", { name: "学术档案" })).toBeInTheDocument();
 
     await user.selectOptions(within(personalCenter).getByLabelText("学科门类"), "08");
     await user.click(within(personalCenter).getByLabelText("工学 · 计算机科学与技术（0812）"));

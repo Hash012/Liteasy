@@ -97,30 +97,4 @@ describe("executeUIDslActionRef", () => {
     ]);
   });
 
-  test("requires confirmation before dynamic actions change profile state", async () => {
-    const settingsStore = createSettingsStore();
-
-    const result = await executeUIDslActionRef(
-      {
-        actionId: "settings.update",
-          id: "enable-profile",
-        input: {
-          target: "profile.enabled",
-          value: true
-        },
-        label: "开启画像",
-        riskLevel: "medium"
-      },
-      {
-          settingsStore
-      },
-      {
-        traceId: "trace-dynamic-profile"
-      }
-    );
-
-    expect(settingsStore.getState()["profile.enabled"]).toBe(false);
-    expect(result.events.some((event) => event.type === "confirmation_request")).toBe(true);
-    expect(result.events.some((event) => event.type === "runtime_error")).toBe(false);
-  });
 });

@@ -286,7 +286,6 @@ export function AssistantPane({
   const runtimeContext = buildAgentRuntimeContextView({
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
-    profileEnabled: Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
     profileUnlocked,
     selectedCount: selectedSetStatus.selectedCount,
     selectionLocked: selectedSetStatus.selectionLocked,

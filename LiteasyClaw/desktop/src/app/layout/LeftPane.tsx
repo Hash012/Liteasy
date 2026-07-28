@@ -66,7 +66,6 @@ export type LeftPaneProps = {
   onRenameLibraryPaper?: (paperId: string, requestedName: string) => Promise<string>;
   onRetryDocumentMetadataSync?: () => void;
   onSelectOrganization?: (organizationId: string) => void;
-  onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   onToggleSelection: (paperId: string) => void;
   onToggleLock: () => void;
@@ -76,7 +75,6 @@ export type LeftPaneProps = {
   papers: Paper[];
   profileClearMessage?: string;
   profileReadPaperCount: number;
-  profileSamplingEnabled: boolean;
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
   recommendationPending: boolean;
@@ -154,7 +152,6 @@ export function LeftPane({
   onRenameLibraryPaper,
   onRetryDocumentMetadataSync,
   onSelectOrganization,
-  onToggleProfileSampling,
   onUpdateAcademicProfile,
   onToggleSelection,
   onToggleLock,
@@ -165,7 +162,6 @@ export function LeftPane({
   papers,
   profileClearMessage,
   profileReadPaperCount,
-  profileSamplingEnabled,
   recommendationItems,
   recommendationMessage,
   recommendationPending,
@@ -223,11 +219,9 @@ export function LeftPane({
               onClearProfile={onClearProfile}
               onLogout={onLogout}
               onOpenAcademicArchive={onOpenAcademicArchive}
-              onToggleProfileSampling={onToggleProfileSampling}
               onUpdateAcademicProfile={onUpdateAcademicProfile}
               organizationSummary={organizationSummary}
               profileClearMessage={profileClearMessage}
-              profileSamplingEnabled={profileSamplingEnabled}
               readPaperCount={profileReadPaperCount}
             />
           ) : (

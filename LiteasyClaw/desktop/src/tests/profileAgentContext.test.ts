@@ -22,7 +22,6 @@ describe("profile and Agent context boundary", () => {
     });
     const runtimeContext = buildAgentRuntimeContextView({
       importedCount: 1,
-      profileEnabled: true,
       profilePersonalizationSummary: profileSummary,
       profileUnlocked: true,
       recommendations: [
@@ -41,7 +40,7 @@ describe("profile and Agent context boundary", () => {
       runtimeContext
     });
 
-    expect(prompt.runtimeSummary).toContain("学术档案与当前关注：研究阶段：博士研究生；研究学科：工学 · 计算机科学与技术（自然语言处理）。");
+    expect(prompt.runtimeSummary).toContain("学术档案：研究阶段：博士研究生；研究学科：工学 · 计算机科学与技术（自然语言处理）。");
     expect(prompt.runtimeSummary).toContain("Causal Retrieval for Scholarly Search（相关度 0.92）：与当前研究方向相关");
   });
 });

@@ -383,16 +383,7 @@ export function AppShell({
   } = cloudAccount.model;
   const profileActions = useProfileActions({
     accountSession,
-    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
-    onProfileSamplingChanged: (enabled) => {
-      settingsStoreRef.current.apply({
-        intent: "update_setting",
-        target: "profile.enabled",
-        value: enabled
-      });
-      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
-    },
-    profileSamplingEnabled: settingsState["profile.enabled"]
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"]
   });
   function handleProfileExport() {
     downloadAcademicProfileExport(
@@ -663,7 +654,6 @@ export function AppShell({
     onRefreshRecommendations: (input) => refreshRecommendationsRef.current(input),
     onSettingsChanged: (nextSettings) =>
       setSettingsState(cloneSettingsState(nextSettings)),
-    profileEnabled: settingsState["profile.enabled"],
     profilePersonalizationSummary: profileActions.assistantProfileSummary,
     profileUnlocked: accountSession !== null,
     runtimeOrganizationName: organizationShell.model.organizationSummary?.name,
@@ -909,7 +899,6 @@ export function AppShell({
     onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
     onSelectOrganization: organizationShell.actions.selectOrganization,
     onToggleLock: workspaceActions.toggleSelectionLock,
-    onToggleProfileSampling: profileActions.toggleProfileSampling,
     onToggleSelection: workspaceActions.toggleSelection,
     onUpdateAcademicProfile: profileActions.updateAcademicProfile,
     organizationActionMessage,
@@ -919,7 +908,6 @@ export function AppShell({
     papers: workspaceState.papers,
     profileClearMessage: profileActions.profileClearMessage,
     profileReadPaperCount: workspaceState.papers.length,
-    profileSamplingEnabled: settingsState["profile.enabled"],
     recommendationItems,
     recommendationMessage,
     recommendationPending,
