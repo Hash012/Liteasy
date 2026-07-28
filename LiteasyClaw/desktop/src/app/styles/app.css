@@ -3137,6 +3137,13 @@ body {
   box-shadow: none;
 }
 
+.pdf-overlay-mark.agent-evidence {
+  background: rgba(27, 102, 179, 0.22) !important;
+  border: 1px solid rgba(27, 102, 179, 0.62);
+  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.12);
+  opacity: 0.82;
+}
+
 .pdf-overlay-mark.underline {
   background: none;
   color: inherit;

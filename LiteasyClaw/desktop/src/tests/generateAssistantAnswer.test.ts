@@ -311,3 +311,212 @@ test("injects agent core context into qa generation prompts", async () => {
   expect(prompt).toContain("Memory");
   expect(prompt).toContain("Skills");
 });
+
+test("stops thin-reading generation on mock endpoints", async () => {
+  const settings = createSettingsStore().getState();
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {},
+    mode: "qa",
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings
+  })).rejects.toThrow("真实模型链路");
+});
+
+test("parses thin-reading structured output from a live model request", async () => {
+  const store = createSettingsStore();
+  const requests: Array<{ body: string; url: string }> = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({
+        audit: {
+          model: "gpt-5-mini-auditor",
+          rationale: "薄读审计通过。",
+          score: 0.92,
+          verdict: "pass"
+        }
+      }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [
+        {
+          page: 2,
+          paperId: "demo-1",
+          paperTitle: "ColBERT",
+          snippet: "ColBERT uses contextualized token embeddings and MaxSim late interaction.",
+          summary: "ColBERT 用 MaxSim 进行 late interaction。",
+          tags: ["ColBERT", "MaxSim"]
+        }
+      ]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      requests.push({ body: request.body, url: request.url });
+      const prompt = String(JSON.parse(request.body).prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            externalKnowledge: [],
+            claims: [
+              {
+                evidenceIds: [evidenceId],
+                status: "grounded",
+                text: "ColBERT 用 MaxSim late interaction 保留细粒度匹配信号。"
+              }
+            ],
+            omittedSections: [{ label: "实验", sectionKey: "experiment" }],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [
+              {
+                compatibility: 0.8,
+                note: "本地待同步的理解线索。",
+                relationship: "方法与问题设定"
+              }
+            ],
+            summary: "ColBERT 的核心贡献是用 contextualized token embeddings 和 MaxSim late interaction 保留细粒度匹配信号。",
+            withinPaperClosure: true
+          }),
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(JSON.parse(requests[0].body)).toMatchObject({
+    provider: "openai",
+    requireLive: true,
+    source: "cloud_proxy"
+  });
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    evidence: {
+      claims: [
+        expect.objectContaining({
+          status: "grounded",
+          text: expect.stringContaining("MaxSim")
+        })
+      ],
+      paperEvidenceSpans: [
+        expect.objectContaining({
+          page: 2,
+          paperId: "demo-1",
+          quote: expect.stringContaining("MaxSim")
+        })
+      ]
+    },
+    paperType: "experimental",
+    summary: expect.stringContaining("MaxSim"),
+    withinPaperClosure: true
+  });
+  expect(result.content).toContain("ColBERT 的核心贡献");
+});
+
+test("downgrades thin-reading closure when retrieval coverage is incomplete", async () => {
+  const store = createSettingsStore();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({
+        audit: {
+          model: "gpt-5-mini-auditor",
+          rationale: "薄读审计通过，但检索覆盖不足。",
+          score: 0.82,
+          verdict: "review"
+        }
+      }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [
+        {
+          page: 2,
+          paperId: "demo-1",
+          paperTitle: "ColBERT",
+          snippet: "ColBERT uses contextualized token embeddings and MaxSim late interaction.",
+          summary: "ColBERT 用 MaxSim 进行 late interaction。",
+          tags: ["ColBERT", "MaxSim"]
+        }
+      ]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "ColBERT 的核心贡献是用 MaxSim late interaction 保留细粒度匹配信号。",
+            withinPaperClosure: true
+          }),
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "openai"
+          }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [
+      { id: "demo-1", title: "ColBERT" },
+      { id: "demo-2", title: "Missing Paper" }
+    ],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-gap",
+      depth: 0,
+      paperIds: ["demo-1", "demo-2"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(result.analysis?.run.coverage.missingPaperIds).toContain("demo-2");
+  expect(result.thinReading?.rootSeed?.withinPaperClosure).toBe(false);
+});

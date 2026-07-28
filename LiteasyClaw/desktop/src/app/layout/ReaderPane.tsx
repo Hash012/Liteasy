@@ -1,6 +1,6 @@
 import { Button } from "@fluentui/react-components";
 import { AddRegular, SubtractRegular } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
@@ -8,7 +8,7 @@ import type { UIDslActionRef } from "../features/generative-ui/generativeUi.type
 import { PdfReader, type PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
-import type { ThinReadingDocument } from "../features/thin-reading/thinReading.types";
+import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/thin-reading/thinReading.types";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
 
@@ -19,9 +19,14 @@ type ReaderPaneProps = {
   layoutCollapsed?: PaneCollapseState;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
+  onGenerateThinReadingBranch?: (input: {
+    artifactId: string;
+    document: ThinReadingDocument;
+    source: ThinReadingBranchSource;
+  }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
   onSaveMarkdownTab?: (artifactId: string) => void;
-  onStartAnalysis: (artifactType: ArtifactType) => void;
+  onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
@@ -47,6 +52,7 @@ export function ReaderPane({
   layoutCollapsed = defaultLayoutCollapsed,
   onArtifactDynamicAction,
   onOpenEvidence,
+  onGenerateThinReadingBranch,
   onAddReaderContextToConversation,
   onSaveMarkdownTab,
   onStartAnalysis,
@@ -63,6 +69,10 @@ export function ReaderPane({
 }: ReaderPaneProps) {
   const [zoom, setZoom] = useState(100);
   const activePaper = selectedPapers[0] ?? null;
+  const analysisPapers = useMemo(() => {
+    const selectedPaperIdSet = new Set(selectedPaperIds);
+    return selectedPapers.filter((paper) => selectedPaperIdSet.has(paper.id));
+  }, [selectedPaperIds, selectedPapers]);
   const artifactRegionVisible = showArtifactRegion && !layoutCollapsed.bottom;
 
   return (
@@ -123,9 +133,10 @@ export function ReaderPane({
                 analysisHint={analysisHint}
                 canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
                 onDynamicAction={onArtifactDynamicAction}
+                onGenerateThinReadingBranch={onGenerateThinReadingBranch}
                 onOpenEvidence={onOpenEvidence}
                 onSaveMarkdownTab={onSaveMarkdownTab}
-                onStartAnalysis={onStartAnalysis}
+                onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}
                 onUpdateMarkdownTab={onUpdateMarkdownTab}
                 onUpdateThinReadingDocument={onUpdateThinReadingDocument}
                 selectedCount={selectedPaperIds.length}

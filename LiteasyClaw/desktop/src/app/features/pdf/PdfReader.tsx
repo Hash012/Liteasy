@@ -42,6 +42,11 @@ type PdfSelection = {
   rects: PdfAnnotationRect[];
 };
 
+type TextLayerPosition = {
+  node: Text;
+  offset: number;
+};
+
 type PdfSidebarMode = "thumbnails" | "annotations";
 
 type PdfReaderProps = {
@@ -331,6 +336,91 @@ function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection
   };
 }
 
+function collectTextLayerNodes(textLayer: HTMLElement): Text[] {
+  const nodes: Text[] = [];
+  const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
+  let current = walker.nextNode();
+  while (current) {
+    if (current.nodeType === Node.TEXT_NODE && current.textContent) {
+      nodes.push(current as Text);
+    }
+    current = walker.nextNode();
+  }
+  return nodes;
+}
+
+function normalizeQuoteForSearch(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function buildNormalizedTextLayerIndex(nodes: Text[]) {
+  let text = "";
+  const positions: TextLayerPosition[] = [];
+  let previousWasWhitespace = true;
+
+  for (const node of nodes) {
+    const value = node.nodeValue ?? "";
+    for (let offset = 0; offset < value.length; offset += 1) {
+      const character = value[offset];
+      if (/\s/.test(character)) {
+        if (!previousWasWhitespace && text.length > 0) {
+          text += " ";
+          positions.push({ node, offset });
+          previousWasWhitespace = true;
+        }
+        continue;
+      }
+
+      text += character.toLowerCase();
+      positions.push({ node, offset });
+      previousWasWhitespace = false;
+    }
+  }
+
+  if (text.endsWith(" ")) {
+    text = text.slice(0, -1);
+    positions.pop();
+  }
+
+  return { positions, text };
+}
+
+export function findQuoteRangeInTextLayer(textLayer: HTMLElement, quote: string): Range | null {
+  const query = normalizeQuoteForSearch(quote);
+  if (!query) {
+    return null;
+  }
+
+  const index = buildNormalizedTextLayerIndex(collectTextLayerNodes(textLayer));
+  const start = index.text.indexOf(query);
+  if (start < 0) {
+    return null;
+  }
+  const end = start + query.length - 1;
+  const startPosition = index.positions[start];
+  const endPosition = index.positions[end];
+  if (!startPosition || !endPosition) {
+    return null;
+  }
+
+  const range = document.createRange();
+  range.setStart(startPosition.node, startPosition.offset);
+  range.setEnd(endPosition.node, endPosition.offset + 1);
+  return range;
+}
+
+function buildTargetEvidenceRects(
+  textLayer: HTMLElement,
+  pageElement: HTMLElement,
+  quote: string
+) {
+  const range = findQuoteRangeInTextLayer(textLayer, quote);
+  if (!range) {
+    return [];
+  }
+  return buildAnnotationRects(range, pageElement.getBoundingClientRect()).slice(0, 8);
+}
+
 function getInitialSelection(activePaper: Paper | null): PdfSelection {
   return {
     excerpt: activePaper
@@ -437,6 +527,7 @@ type PdfPageViewProps = {
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
   stageWidth: number;
+  targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
 };
 
@@ -447,12 +538,31 @@ function PdfPageView({
   pageNumber,
   pdfDocument,
   stageWidth,
+  targetEvidence,
   zoom
 }: PdfPageViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pageShellRef = useRef<HTMLElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
   const pageTitle = activePaper?.title ?? "选择文献后开始阅读";
   const [pageSize, setPageSize] = useState({ height: 980, width: 760 });
+  const [targetHighlightRects, setTargetHighlightRects] = useState<PdfAnnotationRect[]>([]);
+
+  function updateTargetHighlightRects() {
+    const textLayer = textLayerRef.current;
+    const pageElement = pageShellRef.current;
+    if (
+      !focused ||
+      !targetEvidence?.quote ||
+      targetEvidence.paperId !== activePaper?.id ||
+      !textLayer ||
+      !pageElement
+    ) {
+      setTargetHighlightRects([]);
+      return;
+    }
+    setTargetHighlightRects(buildTargetEvidenceRects(textLayer, pageElement, targetEvidence.quote));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -461,6 +571,7 @@ function PdfPageView({
     async function renderPage() {
       if (!pdfDocument) {
         drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
+        setTargetHighlightRects([]);
         return;
       }
 
@@ -509,8 +620,12 @@ function PdfPageView({
           viewport
         });
         await layer.render();
+        if (!cancelled) {
+          updateTargetHighlightRects();
+        }
       } catch {
         drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
+        setTargetHighlightRects([]);
       }
     }
 
@@ -520,7 +635,12 @@ function PdfPageView({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [pageNumber, pageTitle, pdfDocument, stageWidth, zoom]);
+  }, [activePaper?.id, focused, pageNumber, pageTitle, pdfDocument, stageWidth, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(updateTargetHighlightRects);
+    return () => window.cancelAnimationFrame(frame);
+  }, [activePaper?.id, focused, pageNumber, pageSize.height, pageSize.width, targetEvidence?.quote, targetEvidence?.requestId]);
 
   const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
 
@@ -529,6 +649,7 @@ function PdfPageView({
       aria-label={`PDF.js 页面 ${pageNumber}`}
       className={`pdf-page-shell ${focused ? "evidence-target" : ""}`}
       data-page={pageNumber}
+      ref={pageShellRef}
       style={{ minHeight: pageSize.height, width: pageSize.width }}
     >
       <canvas aria-label={`PDF.js 页面画布 ${pageNumber}`} className="pdf-page-canvas" ref={canvasRef} />
@@ -552,6 +673,15 @@ function PdfPageView({
             />
           ))
         )}
+        {targetHighlightRects.map((rect, index) => (
+          <div
+            aria-label={`Agent 引用证据高亮：第 ${pageNumber} 页：${targetEvidence?.quote ?? ""}`}
+            className="pdf-overlay-mark highlight agent-evidence"
+            key={`target-evidence-${targetEvidence?.requestId ?? pageNumber}-${index}`}
+            style={getOverlayStyle("highlight", rect, "blue")}
+            title={`Agent 引用证据：${targetEvidence?.quote ?? ""}`}
+          />
+        ))}
       </div>
     </article>
   );
@@ -1076,6 +1206,7 @@ export function PdfReader({
                   pageNumber={pageNumber}
                   pdfDocument={pdfDocument}
                   stageWidth={stageWidth}
+                  targetEvidence={targetEvidence}
                   zoom={zoom}
                 />
               ))}

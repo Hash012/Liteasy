@@ -80,3 +80,36 @@ test("reports a failed artifact deletion", async () => {
     "agent_artifact_not_found"
   );
 });
+
+test("lists thin-reading artifacts without requiring a UI DSL", async () => {
+  const thinReadingDocument = {
+    ...document,
+    artifactId: "artifact-thin",
+    artifactType: "thin_reading" as const,
+    thinReadingDocument: {
+      annotationSettings: { autoPublic: false },
+      annotations: [],
+      artifactId: "artifact-thin",
+      activeNodeId: "root",
+      nodes: {},
+      paperIds: ["paper-1"],
+      pendingPublicAnnotationIds: [],
+      rootNodeId: "root",
+      targetLanguage: "zh-CN",
+      title: "Paper 1",
+      version: "liteasy.thin-reading/v1" as const
+    },
+    title: "Paper 1",
+    uiDsl: undefined
+  };
+  const client = createArtifactResultClient({
+    getBaseEndpoint: () => "http://127.0.0.1:8787",
+    transport: vi.fn(async () => ({
+      json: async () => ({ artifacts: [thinReadingDocument] }),
+      ok: true,
+      status: 200
+    }))
+  });
+
+  await expect(client.list()).resolves.toEqual([thinReadingDocument]);
+});

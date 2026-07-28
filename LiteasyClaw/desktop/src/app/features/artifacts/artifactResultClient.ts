@@ -27,7 +27,8 @@ function isArtifactResult(value: unknown): value is AgentArtifactResult {
     typeof candidate.answer === "string" &&
     Array.isArray(candidate.papers) &&
     Array.isArray(candidate.citations) &&
-    Boolean(candidate.uiDsl) &&
+    (candidate.uiDsl === undefined || Boolean(candidate.uiDsl)) &&
+    (candidate.thinReadingDocument === undefined || typeof candidate.thinReadingDocument === "object") &&
     (candidate.intuitionGraph === undefined || IntuitionGraphDocumentSchema.safeParse(candidate.intuitionGraph).success) &&
     candidate.agent?.status === "completed"
   );

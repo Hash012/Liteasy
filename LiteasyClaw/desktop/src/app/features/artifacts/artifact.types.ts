@@ -116,8 +116,9 @@ export type AgentArtifactResult = {
   papers: ArtifactPaperRef[];
   regeneratedFromArtifactId?: string;
   supplementalContext?: string;
+  thinReadingDocument?: ThinReadingDocument;
   title: string;
-  uiDsl: UIDslDocument;
+  uiDsl?: UIDslDocument;
   verification?: MindmapVerificationReport;
   version: "liteasy.agent-artifact/v1";
 };

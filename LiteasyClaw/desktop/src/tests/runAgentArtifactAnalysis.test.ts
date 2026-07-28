@@ -373,6 +373,79 @@ test("includes supplemental material and preserves its trust boundary during reg
   });
 });
 
+test("submits thin-reading analysis with structured context metadata", async () => {
+  const send = vi.fn(async (input: Parameters<FrontendAgentClient["send"]>[0]) => ({
+    data: {
+      apiVersion: "liteasy.agent/v1" as const,
+      createdAt: "2026-07-28T00:00:00.000Z",
+      events: [],
+      idempotencyKey: "key-thin",
+      input,
+      runId: "run-thin",
+      sessionId: "session-1",
+      status: "completed" as const
+    },
+    ok: true as const
+  }));
+
+  await runAgentArtifactAnalysis(createClient(send), "thin_reading", undefined, {
+    sourcePaperIds: ["paper-1"],
+    thinReadingContext: {
+      artifactId: "artifact-thin",
+      depth: 0,
+      paperIds: ["paper-1"],
+      primaryPaperId: "paper-1",
+      primaryPaperTitle: "Paper 1",
+      parentClaims: [
+        {
+          evidenceIds: ["evidence-parent"],
+          id: "claim-parent",
+          status: "grounded",
+          text: "上一层关键判断。"
+        }
+      ],
+      parentEvidenceSpans: [
+        {
+          confidence: 0.89,
+          id: "evidence-parent",
+          page: 3,
+          paperId: "paper-1",
+          quote: "Parent evidence quote."
+        }
+      ],
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(send.mock.calls[0][0]).toMatchObject({
+    artifactType: "thin_reading",
+    mode: "qa"
+  });
+  expect(send.mock.calls[0][0].message).toContain("必须走真实模型链路");
+  expect(send.mock.calls[0][1]).toMatchObject({
+    attachments: [
+      {
+        metadata: {
+          paperIds: ["paper-1"],
+          thinReadingContext: expect.objectContaining({
+            artifactId: "artifact-thin",
+            parentClaims: [
+              expect.objectContaining({ id: "claim-parent" })
+            ],
+            parentEvidenceSpans: [
+              expect.objectContaining({ id: "evidence-parent", quote: "Parent evidence quote." })
+            ],
+            source: { kind: "root_overview" }
+          })
+        },
+        source: "selection",
+        uri: "liteasy://selection/current"
+      }
+    ]
+  });
+});
+
 test("does not treat skill documents as a paper-analysis modality", async () => {
   const send = vi.fn();
   await expect(

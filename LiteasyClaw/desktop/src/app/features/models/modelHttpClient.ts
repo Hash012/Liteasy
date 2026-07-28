@@ -175,6 +175,7 @@ export function createHttpModelClient({
         model: input.model,
         prompt: input.prompt,
         provider: input.provider,
+        ...(input.requireLive ? { requireLive: true } : {}),
         source
       }),
       headers: {

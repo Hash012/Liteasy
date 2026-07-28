@@ -19,6 +19,15 @@ import {
   prepareMultiPaperAnalysis
 } from "../paper-analysis/multiPaperAnalysisWorkflow";
 import type { PreparedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
+import {
+  buildThinReadingAgentPrompt,
+  parseThinReadingModelSeed,
+  resolveThinReadingTargetLanguage
+} from "../thin-reading/thinReadingAgent";
+import type {
+  ThinReadingGenerationContext,
+  ThinReadingNodeSeed
+} from "../thin-reading/thinReading.types";
 
 type GenerateAssistantAnswerInput = {
   agentCoreContext?: AgentCorePromptContext;
@@ -34,6 +43,7 @@ type GenerateAssistantAnswerInput = {
   selectedPapers: Paper[];
   settings: SettingsState;
   signal?: AbortSignal;
+  thinReadingContext?: ThinReadingGenerationContext | null;
 };
 
 function isMockEndpoint(endpoint: string) {
@@ -43,6 +53,11 @@ function isMockEndpoint(endpoint: string) {
 function getActiveModelEndpoint(settings: SettingsState) {
   return settings["models.cloud_proxy_endpoint"];
 }
+
+type ThinReadingGenerationResult = {
+  context: ThinReadingGenerationContext;
+  rootSeed: ThinReadingNodeSeed;
+};
 
 type AnalysisSubtask = {
   evidencePrompt: string;
@@ -158,6 +173,42 @@ async function runAnalysisSubtasks(input: {
   return reports.join("\n\n");
 }
 
+function buildDefaultThinReadingContext(input: {
+  selectedPapers: Paper[];
+  settings: SettingsState;
+}): ThinReadingGenerationContext {
+  const primaryPaper = input.selectedPapers[0];
+  return {
+    artifactId: `thin-reading-${primaryPaper?.id ?? "unscoped"}`,
+    depth: 0,
+    paperIds: input.selectedPapers.map((paper) => paper.id),
+    primaryPaperId: primaryPaper?.id,
+    primaryPaperTitle: primaryPaper?.title,
+    source: { kind: "root_overview" },
+    targetLanguage: resolveThinReadingTargetLanguage(input.settings["assistant.language"])
+  };
+}
+
+function completeThinReadingContext(input: {
+  context?: ThinReadingGenerationContext | null;
+  selectedPapers: Paper[];
+  settings: SettingsState;
+}): ThinReadingGenerationContext {
+  const fallback = buildDefaultThinReadingContext(input);
+  const context = input.context ?? fallback;
+  const primaryPaper = input.selectedPapers.find((paper) => paper.id === context.primaryPaperId) ??
+    input.selectedPapers[0];
+  return {
+    ...context,
+    paperIds: context.paperIds.length > 0
+      ? [...context.paperIds]
+      : input.selectedPapers.map((paper) => paper.id),
+    primaryPaperId: context.primaryPaperId ?? primaryPaper?.id,
+    primaryPaperTitle: context.primaryPaperTitle ?? primaryPaper?.title,
+    targetLanguage: resolveThinReadingTargetLanguage(context.targetLanguage)
+  };
+}
+
 export async function generateAssistantAnswer({
   agentCoreContext,
   artifactType,
@@ -171,7 +222,8 @@ export async function generateAssistantAnswer({
   question,
   selectedPapers,
   settings,
-  signal
+  signal,
+  thinReadingContext
 }: GenerateAssistantAnswerInput) {
   if (signal?.aborted) {
     throw new Error("Assistant answer generation was cancelled");
@@ -201,6 +253,103 @@ export async function generateAssistantAnswer({
   });
   const provider = settings["models.default_provider"];
   const model = getDefaultModelForProvider(provider);
+  if (artifactType === "thin_reading") {
+    if (selectedPapers.length === 0 || !preparedAnalysis) {
+      throw new Error("薄读需要至少一篇已选论文。");
+    }
+    const activeEndpoint = getActiveModelEndpoint(settings);
+    if (isMockEndpoint(activeEndpoint)) {
+      throw new Error("薄读必须使用真实模型链路；当前模型 endpoint 是 mock，本次生成已停止。");
+    }
+    const context = completeThinReadingContext({
+      context: thinReadingContext,
+      selectedPapers,
+      settings
+    });
+    onProgress?.({
+      phase: "generating_answer",
+      progress: 55,
+      summary: context.source.kind === "root_overview"
+        ? "正在调用真实模型生成薄读总述"
+        : "正在调用真实模型生成薄读下一层"
+    });
+    const generation = await gateway.generateAnswer({
+      model,
+      onDelta,
+      prompt: buildThinReadingAgentPrompt({
+        context,
+        prepared: preparedAnalysis
+      }),
+      provider,
+      requireLive: true,
+      signal
+    });
+    if (signal?.aborted) {
+      throw new Error("Assistant answer generation was cancelled");
+    }
+    const rootSeed = parseThinReadingModelSeed(generation.answer, {
+      analysis: preparedAnalysis,
+      analysisEvidence: preparedAnalysis.evidence
+    });
+    onProgress?.({
+      phase: "auditing_answer",
+      progress: 78,
+      summary: "正在核对薄读证据边界"
+    });
+    const localAudit = auditAssistantAnswer({
+      answer: rootSeed.summary,
+      citations: groundedAnswer.citations,
+      retrievalConfidence: groundedAnswer.confidence
+    });
+    const audit = await createHttpModelAuditClient({
+      endpoint: activeEndpoint,
+      source: "cloud_proxy",
+      transport: auditTransport
+    })({
+      answer: rootSeed.summary,
+      citations: groundedAnswer.citations,
+      model: "gpt-5-mini-auditor",
+      provider,
+      question,
+      retrievalConfidence: groundedAnswer.confidence
+    }).catch(() => localAudit);
+    if (signal?.aborted) {
+      throw new Error("Assistant answer generation was cancelled");
+    }
+    const analysis = completeMultiPaperAnalysis({
+      answer: rootSeed.summary,
+      auditScore: audit.score,
+      auditVerdict: audit.verdict,
+      prepared: preparedAnalysis,
+      signal
+    });
+    onProgress?.({
+      phase: "structuring_artifact",
+      progress: 88,
+      summary: "正在构造薄读结构化产物"
+    });
+    return {
+      analysis,
+      answer: rootSeed.summary,
+      artifactWorkflow: undefined,
+      audit,
+      citations: groundedAnswer.citations,
+      confidence: groundedAnswer.confidence,
+      executionTrace: generation.trace,
+      thinReading: {
+        context,
+        rootSeed
+      } satisfies ThinReadingGenerationResult,
+      uiDsl: generateEvidenceUIDslDocument({
+        answer: rootSeed.summary,
+        citations: groundedAnswer.citations,
+        confidence: groundedAnswer.confidence,
+        mode,
+        question
+      }),
+      content: rootSeed.summary
+    };
+  }
   let parallelAnalysis = "";
   if (artifactType && preparedAnalysis && !isMockEndpoint(getActiveModelEndpoint(settings))) {
     onProgress?.({

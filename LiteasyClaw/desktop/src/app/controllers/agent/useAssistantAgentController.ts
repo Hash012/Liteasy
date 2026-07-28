@@ -15,7 +15,10 @@ import type { SettingsState } from "../../features/settings/settings.types";
 import type { createSettingsStore } from "../../features/settings/settings.store";
 import type { ActionContext } from "../../features/skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../../features/workspace/workspace.types";
-import { resolveAgentKnowledgeScope } from "./agentRequestScope";
+import {
+  getAgentRequestThinReadingContext,
+  resolveAgentKnowledgeScope
+} from "./agentRequestScope";
 import { createDesktopAgentService } from "./createDesktopAgentService";
 import { createTauriAgentStateStore } from "./tauriAgentStateStore";
 import { useTauriAgentHostBridge } from "./useTauriAgentHostBridge";
@@ -86,7 +89,8 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
             importedChunksByPaperId: knowledgeScope.importedChunksByPaperId,
             modelTransport: current.modelTransport,
             selectedPapers: knowledgeScope.selectedPapers,
-            settings: current.settingsStore.getState()
+            settings: current.settingsStore.getState(),
+            thinReadingContext: getAgentRequestThinReadingContext(request)
           },
           runtime: {
             applyGeneratedTheme: current.onApplyGeneratedTheme,

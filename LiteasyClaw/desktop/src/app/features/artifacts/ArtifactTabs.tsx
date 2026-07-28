@@ -10,7 +10,7 @@ import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { ObsidianLikeGraphCanvas } from "../layered-reading/ObsidianLikeGraphCanvas";
 import { defaultGraphViewState } from "../layered-reading/layeredReading.types";
 import { ThinReadingTab } from "../thin-reading/ThinReadingTab";
-import type { ThinReadingDocument } from "../thin-reading/thinReading.types";
+import type { ThinReadingBranchSource, ThinReadingDocument } from "../thin-reading/thinReading.types";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
@@ -20,6 +20,11 @@ type ArtifactTabsProps = {
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
   onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
+  onGenerateThinReadingBranch?: (input: {
+    artifactId: string;
+    document: ThinReadingDocument;
+    source: ThinReadingBranchSource;
+  }) => Promise<void>;
   onRegenerateArtifact?: (
     request: ArtifactRegenerationRequest
   ) => string | void | Promise<string | void>;
@@ -111,6 +116,7 @@ export function ArtifactTabs({
   onActivateArtifact,
   onDynamicAction,
   onDeleteArtifact,
+  onGenerateThinReadingBranch,
   onOpenEvidence,
   onRegenerateArtifact,
   onSaveMarkdownTab,
@@ -191,6 +197,8 @@ export function ArtifactTabs({
       <ThinReadingTab
         artifactId={activeTab.artifactId}
         document={activeTab.thinReadingDocument}
+        onGenerateBranch={onGenerateThinReadingBranch}
+        onOpenEvidence={onOpenEvidence}
         onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
         papers={activeTab.papers ?? []}
       />

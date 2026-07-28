@@ -810,8 +810,115 @@ test("renders artifact content from imported selected-document chunks", async ()
 
 test("opens a full thin-reading tab from the floating modality launcher", async () => {
   const user = userEvent.setup();
+  const modelTransport = vi.fn(async (request) => {
+    const body = JSON.parse(request.body) as { prompt?: string };
+    if (body.prompt?.includes("Liteasy 薄读 Agent")) {
+      const evidenceId = body.prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const thinReadingAnswer = JSON.stringify({
+        externalKnowledge: [],
+        omittedSections: [{ label: "实验", sectionKey: "experiment" }],
+        paperEvidence: [evidenceId],
+        paperType: "survey",
+        recommendations: [
+          {
+            compatibility: 0.8,
+            note: "本地待同步的理解线索。",
+            relationship: "方法与问题设定"
+          }
+        ],
+        summary: "这篇综述的核心是把 vector database management systems 放在向量表示、索引和查询处理的系统框架中理解。",
+        withinPaperClosure: true
+      });
+      const encoder = new TextEncoder();
+      return {
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode(`${JSON.stringify({
+              delta: thinReadingAnswer,
+              type: "delta"
+            })}\n`));
+            controller.enqueue(encoder.encode(`${JSON.stringify({
+              answer: thinReadingAnswer,
+              execution: {
+                backend: "dev_cloud",
+                mode: "live",
+                provider: "openai"
+              },
+              type: "completed"
+            })}\n`));
+            controller.close();
+          }
+        }),
+        json: async () => ({}),
+        ok: true,
+        status: 200
+      };
+    }
+    return {
+      json: async () => ({
+        answer: "真实模型回答",
+        execution: {
+          backend: "dev_cloud",
+          mode: "live",
+          provider: "openai"
+        }
+      }),
+      ok: true,
+      status: 200
+    };
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input) => {
+      if (String(input).includes("/v1/agent-artifacts")) {
+        return {
+          json: async () => ({
+            artifacts: [],
+            path: "/tmp/liteasy-agent-artifacts/thin-reading.json"
+          }),
+          ok: true,
+          status: 200
+        };
+      }
 
-  render(<AppShell />);
+      return {
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-test",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      };
+    })
+  );
+
+  render(
+    <AppShell
+      controlPlaneTransport={async () => ({
+        json: async () => ({
+          cloudProxyEndpoint: "https://liteasy.example.com/model-proxy",
+          defaultProvider: "openai",
+          localDirectEnabled: false,
+          localDirectEndpoint: "mock://local-direct",
+          modelAccessMode: "cloud_proxy",
+          policyVersion: "policy-dev-cloud-live",
+          syncedAt: "2026-05-14T09:30:00Z"
+        }),
+        ok: true,
+        status: 200
+      })}
+      initialSettings={{
+        "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy",
+        "models.control_plane_endpoint": "https://liteasy.example.com/control-plane"
+      }}
+      modelTransport={modelTransport}
+    />
+  );
 
   await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await user.click(screen.getByRole("button", { name: "锁定选择" }));
@@ -833,6 +940,9 @@ test("opens a full thin-reading tab from the floating modality launcher", async 
   expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeInTheDocument();
   expect(screen.getByText("Intuecho")).toBeInTheDocument();
+  expect(JSON.parse(modelTransport.mock.calls.at(-1)?.[0].body ?? "{}")).toMatchObject({
+    requireLive: true
+  });
 }, 10000);
 
 test("collapses the left pane when clicking the active activity-bar item", async () => {

@@ -110,7 +110,8 @@ export function createDesktopAgentService(
           analysis: answer.analysis,
           artifactWorkflow: answer.artifactWorkflow,
           audit: answer.audit,
-          executionTrace: answer.executionTrace
+          executionTrace: answer.executionTrace,
+          thinReading: answer.thinReading
         })),
         ui: JSON.parse(JSON.stringify(answer.uiDsl))
       };

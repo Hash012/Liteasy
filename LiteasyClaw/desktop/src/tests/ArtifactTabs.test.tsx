@@ -131,13 +131,36 @@ describe("ArtifactTabs", () => {
     const thinReadingDocument = createThinReadingDocument({
       artifactId: "artifact-thin",
       papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"],
+          paperEvidenceSpans: [
+            {
+              confidence: 0.9,
+              id: "evidence-1",
+              page: 2,
+              paperId: "paper-1",
+              quote: "ColBERT uses MaxSim."
+            }
+          ]
+        },
+        omittedSections: [
+          { id: "section-experiment", label: "实验", sectionKey: "experiment" }
+        ],
+        recommendations: [],
+        summary: "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。",
+        withinPaperClosure: true
+      },
       targetLanguage: "zh-CN"
     });
+    const onOpenEvidence = vi.fn();
     const onUpdateThinReadingDocument = vi.fn();
     const { container } = render(
       <ArtifactTabs
         analysisHint=""
         canStartAnalysis
+        onOpenEvidence={onOpenEvidence}
         onStartAnalysis={vi.fn()}
         onUpdateThinReadingDocument={onUpdateThinReadingDocument}
         selectedCount={1}
@@ -156,6 +179,14 @@ describe("ArtifactTabs", () => {
     expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
     expect(screen.getByText("Intuecho")).toBeInTheDocument();
     expect(container.querySelector(".artifact-card")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "打开论文内证据 evidence-1 第 2 页" }));
+    expect(onOpenEvidence).toHaveBeenCalledWith({
+      evidenceId: "evidence-1",
+      page: 2,
+      paperId: "paper-1",
+      quote: "ColBERT uses MaxSim."
+    });
   });
 
   test("renders mindmap verification and source layer metadata", () => {

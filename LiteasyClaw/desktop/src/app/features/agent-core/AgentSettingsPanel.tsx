@@ -81,6 +81,30 @@ export function AgentSettingsPanel({
       />
       <AgentCatalogList entries={config.plugins} title="Plugin 条目" />
       <AgentCatalogList entries={config.mcpServers} title="MCP 条目" />
+      <div className="agent-settings-section" aria-label="目标语言">
+        <div className="agent-settings-section-title">目标语言</div>
+        <label className="agent-settings-toggle-row">
+          <span className="agent-settings-row-main">
+            <span className="agent-settings-row-title">薄读生成语言</span>
+            <span className="agent-settings-row-description">
+              默认中文；英文输出保留论文关键术语，跟随系统会读取浏览器语言。
+            </span>
+          </span>
+          <select
+            aria-label="薄读生成语言"
+            onChange={(event) => onUpdateSetting?.({
+              intent: "update_setting",
+              target: "assistant.language",
+              value: event.currentTarget.value
+            })}
+            value={settings?.["assistant.language"] ?? "zh-CN"}
+          >
+            <option value="zh-CN">中文</option>
+            <option value="en-US">English</option>
+            <option value="system">跟随系统</option>
+          </select>
+        </label>
+      </div>
       <div className="agent-settings-section" aria-label="用户可见审计">
         <div className="agent-settings-section-title">用户可见审计</div>
         <label className="agent-settings-toggle-row">

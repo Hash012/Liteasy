@@ -376,6 +376,18 @@ describe("useArtifactWorkflowController", () => {
     const thinReadingDocument = createThinReadingDocument({
       artifactId: "artifact-thin-reading",
       papers: [{ id: paper.id, title: paper.title }],
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"]
+        },
+        omittedSections: [
+          { id: "section-experiment", label: "实验", sectionKey: "experiment" }
+        ],
+        recommendations: [],
+        summary: "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。",
+        withinPaperClosure: true
+      },
       targetLanguage: "zh-CN"
     });
     const localRepository = {
@@ -427,6 +439,18 @@ describe("useArtifactWorkflowController", () => {
         createThinReadingDocument({
           artifactId: "artifact-thin-reading",
           papers: [{ id: paper.id, title: paper.title }],
+          rootSeed: {
+            evidence: {
+              externalKnowledge: [],
+              paperEvidence: ["evidence-1"]
+            },
+            omittedSections: [
+              { id: "section-evaluation", label: "Evaluation", sectionKey: "evaluation" }
+            ],
+            recommendations: [],
+            summary: "ColBERT keeps token-level matching signals through MaxSim interaction.",
+            withinPaperClosure: true
+          },
           targetLanguage: "en-US"
         })
       );

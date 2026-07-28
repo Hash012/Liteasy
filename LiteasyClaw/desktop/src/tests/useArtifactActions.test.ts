@@ -2,6 +2,8 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
+import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import type { ArtifactTab, ArtifactTask } from "../app/features/artifacts/artifact.types";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
@@ -124,6 +126,52 @@ function createCompletedAgentRun(options: {
     runId: "run-artifact-1",
     sessionId: "session-artifact-1",
     status: "completed"
+  };
+}
+
+function createCompletedThinReadingRun(): AgentRun {
+  const run = createCompletedAgentRun();
+  const answerEvent = run.events.find((event) => event.type === "assistant.message");
+  if (!answerEvent || answerEvent.type !== "assistant.message") {
+    throw new Error("expected assistant answer event");
+  }
+  answerEvent.message = "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。";
+  answerEvent.metadata = {
+    ...answerEvent.metadata,
+    thinReading: {
+      context: {
+        artifactId: "artifact-1",
+        depth: 0,
+        paperIds: ["demo-1"],
+        primaryPaperId: "demo-1",
+        primaryPaperTitle: "ColBERT",
+        source: { kind: "root_overview" },
+        targetLanguage: "zh-CN"
+      },
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"]
+        },
+        omittedSections: [
+          { id: "section-experiment", label: "实验", sectionKey: "experiment" }
+        ],
+        recommendations: [
+          {
+            compatibility: 0.78,
+            id: "intuecho-local",
+            note: "本地待同步的理解线索。",
+            relationship: "方法与问题设定"
+          }
+        ],
+        summary: "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。",
+        withinPaperClosure: true
+      }
+    }
+  };
+  return {
+    ...run,
+    input: { artifactType: "thin_reading", message: "thin reading", mode: "qa" }
   };
 }
 
@@ -347,7 +395,7 @@ describe("useArtifactActions", () => {
     );
   });
 
-  test("generates a completed thin-reading artifact locally for imported papers", async () => {
+  test("generates a completed thin-reading artifact through Agent for imported papers", async () => {
     const {
       artifactStore,
       onArtifactTabsChanged,
@@ -358,6 +406,7 @@ describe("useArtifactActions", () => {
       assistantLanguage: "zh-CN",
       imported: true
     });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
 
     act(() => {
       result.current.startAnalysis("thin_reading");
@@ -368,8 +417,25 @@ describe("useArtifactActions", () => {
       await Promise.resolve();
     });
 
-    expect(runAgentAnalysis).not.toHaveBeenCalled();
-    expect(saveArtifactResult).not.toHaveBeenCalled();
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({
+        sourcePaperIds: [paper.id],
+        thinReadingContext: expect.objectContaining({
+          artifactId: "artifact-1",
+          primaryPaperId: paper.id,
+          source: { kind: "root_overview" },
+          targetLanguage: "zh-CN"
+        })
+      })
+    );
+    expect(saveArtifactResult).toHaveBeenCalledWith(expect.objectContaining({
+      artifactType: "thin_reading",
+      thinReadingDocument: expect.objectContaining({
+        targetLanguage: "zh-CN"
+      })
+    }));
     expect(artifactStore.getTasks()[0]).toEqual(expect.objectContaining({
       artifactId: expect.any(String),
       status: "completed",
@@ -380,12 +446,137 @@ describe("useArtifactActions", () => {
         createdAt: expect.any(String),
         papers: [{ id: paper.id, title: paper.title }],
         thinReadingDocument: expect.objectContaining({
-          targetLanguage: "zh-CN"
+          targetLanguage: "zh-CN",
+          nodes: expect.any(Object)
         }),
         title: "薄读",
         type: "thin_reading"
       })
     ]);
+  });
+
+  test("passes parent claims and evidence spans when generating a thin-reading branch", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const {
+      artifactStore,
+      result,
+      runAgentAnalysis
+    } = renderArtifactActions({
+      imported: true,
+      selectedPapers: papers
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-07-28T00:00:00.000Z",
+      papers,
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+
+    await act(async () => {
+      await result.current.generateThinReadingBranch({
+        artifactId: document.artifactId,
+        document,
+        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+      });
+    });
+
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({
+        sourcePaperIds: ["paper-attention", "paper-bert"],
+        thinReadingContext: expect.objectContaining({
+          depth: 1,
+          parentClaims: [
+            expect.objectContaining({
+              id: "thin-reading-claim-attention-core",
+              text: expect.stringContaining("self-attention")
+            })
+          ],
+          parentEvidenceSpans: [
+            expect.objectContaining({
+              id: "evidence-attention-self-attention",
+              page: 2,
+              quote: expect.stringContaining("Self-attention replaces recurrence")
+            })
+          ],
+          parentNodeId: document.rootNodeId,
+          parentSummary: expect.stringContaining("Transformer"),
+          source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+        })
+      })
+    );
+  });
+
+  test("applies assistant language to generated thin-reading content", async () => {
+    const {
+      onArtifactTabsChanged,
+      runAgentAnalysis,
+      result
+    } = renderArtifactActions({
+      assistantLanguage: "en-US",
+      imported: true
+    });
+    const run = createCompletedThinReadingRun();
+    const answerEvent = run.events.find((event) => event.type === "assistant.message");
+    if (!answerEvent || answerEvent.type !== "assistant.message") {
+      throw new Error("expected assistant answer event");
+    }
+    if (
+      !answerEvent.metadata ||
+      typeof answerEvent.metadata !== "object" ||
+      Array.isArray(answerEvent.metadata)
+    ) {
+      throw new Error("expected metadata");
+    }
+    (answerEvent.metadata as Record<string, unknown>).thinReading = {
+      context: {
+        artifactId: "artifact-1",
+        depth: 0,
+        paperIds: ["demo-1"],
+        primaryPaperId: "demo-1",
+        primaryPaperTitle: "ColBERT",
+        source: { kind: "root_overview" },
+        targetLanguage: "en-US"
+      },
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"]
+        },
+        omittedSections: [
+          { id: "section-experiment", label: "Experiments", sectionKey: "experiment" }
+        ],
+        recommendations: [],
+        summary: "ColBERT keeps token-level matching signals through MaxSim.",
+        withinPaperClosure: true
+      }
+    };
+    runAgentAnalysis.mockResolvedValueOnce(run);
+
+    act(() => {
+      result.current.startAnalysis("thin_reading");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const thinReadingDocument = onArtifactTabsChanged.mock.lastCall?.[0][0].thinReadingDocument;
+    const root = thinReadingDocument?.nodes[thinReadingDocument.rootNodeId];
+
+    expect(thinReadingDocument).toEqual(expect.objectContaining({
+      targetLanguage: "en-US",
+      title: expect.not.stringMatching(/^薄读[:：]/)
+    }));
+    expect(root?.omittedSections.map((token) => token.label)).toContain("Experiments");
+    expect(root?.summary).not.toMatch(/围绕|薄读总述|可用上下文/);
   });
 
   test("blocks saving a mindmap when artifact workflow verification fails", async () => {

@@ -906,6 +906,24 @@ export function AppShell({
     }
   }
 
+  function startReaderScopedAnalysis(artifactType: ArtifactType, papers?: typeof selectedPapers) {
+    if (papers && papers.length > 0) {
+      artifactWorkflow.actions.startAnalysisForPapers(artifactType, papers);
+      return;
+    }
+    void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+  }
+
+  function getActiveReaderAnalysisPapers() {
+    if (!activeReaderPaper || !workspaceState.selectedPaperIds.includes(activeReaderPaper.id)) {
+      return selectedPapers;
+    }
+    return [
+      activeReaderPaper,
+      ...selectedPapers.filter((paper) => paper.id !== activeReaderPaper.id)
+    ];
+  }
+
   function renderArtifactSurface(
     tabs = artifactTabs,
     activeArtifactId: string | null = activeCenterArtifactId
@@ -934,6 +952,7 @@ export function AppShell({
           onRegenerateArtifact={(request) => {
             artifactWorkflow.actions.regenerateArtifact(request);
           }}
+          onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
           onSaveMarkdownTab={(artifactId) => {
             void artifactWorkflow.actions.saveSkillDocument(artifactId);
           }}
@@ -1041,9 +1060,8 @@ export function AppShell({
           void handleArtifactCanvasAction(action);
         }}
         onOpenEvidence={openEvidenceInReader}
-        onStartAnalysis={(artifactType) => {
-          void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
-        }}
+        onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
+        onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
         onSaveMarkdownTab={(artifactId) => {
           void artifactWorkflow.actions.saveSkillDocument(artifactId);
@@ -1127,7 +1145,7 @@ export function AppShell({
                 workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
               }
               onStartAnalysis={(artifactType) => {
-                void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+                startReaderScopedAnalysis(artifactType, getActiveReaderAnalysisPapers());
               }}
             />
           ) : undefined

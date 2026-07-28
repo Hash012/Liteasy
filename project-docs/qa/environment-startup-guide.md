@@ -19,8 +19,8 @@ npm run dev:test-api
 
 `dev:test-api` 会完成这些事情：
 
-1. 从仓库根目录的 `project-docs/test-api.md` 读取测试 API 地址和密钥。
-2. 默认使用 `gpt-5.5`。
+1. 从仓库根目录的 `project-docs/test-api.md` 读取测试 API 地址和密钥（字段名是 `OPENAI_KEY` / `API_END_POINT`）。
+2. 默认使用 `gpt-5.4-mini`。
 3. 同时启动 Liteasy dev-cloud 和 Vite 前端。
 4. 检测 dev-cloud 端口冲突；默认端口被占用时自动选择后续空闲端口。
 5. 将实际 dev-cloud 端口注入桌面前端，避免前端仍然请求旧端口。
@@ -112,7 +112,7 @@ LITEASY_MODEL_PROVIDER=openai
 `LiteasyClaw/desktop/.env.local`：
 
 ```dotenv
-VITE_LITEASY_OPENAI_MODEL=gpt-5.5
+VITE_LITEASY_OPENAI_MODEL=gpt-5.4-mini
 ```
 
 这两个 `.env.local` 已被 Git 忽略。不要把真实密钥写入 TypeScript、测试或已跟踪的配置文件。
@@ -179,7 +179,7 @@ curl --noproxy '*' http://127.0.0.1:8791/
 curl --noproxy '*' -N http://127.0.0.1:8791/v1/model/generate-stream \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "gpt-5.5",
+    "model": "gpt-5.4-mini",
     "prompt": "只回答：Liteasy upstream ok",
     "provider": "openai"
   }'

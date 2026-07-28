@@ -60,7 +60,7 @@ function isAgentRun(value: unknown): value is AgentRun {
     typeof value.input.message === "string" &&
     typeof value.input.mode === "string" &&
     (value.input.artifactType === undefined ||
-      ["comparison_table", "layered_graph", "mindmap", "ppt", "tree"].includes(
+      ["comparison_table", "layered_graph", "mindmap", "ppt", "thin_reading", "tree"].includes(
         value.input.artifactType as string
       )) &&
     Array.isArray(value.events) &&

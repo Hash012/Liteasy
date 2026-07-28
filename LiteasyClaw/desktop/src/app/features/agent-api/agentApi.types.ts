@@ -6,7 +6,7 @@ export type AgentConsumer = "cli" | "frontend" | "mcp";
 
 export type AgentMode = "command" | "explain" | "qa";
 
-export type AgentArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "tree";
+export type AgentArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "thin_reading" | "tree";
 
 export type AgentRunStatus =
   | "cancelled"

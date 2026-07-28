@@ -62,3 +62,31 @@ test("deletes only the validated artifact file", (context) => {
   assert.equal(repository.remove("artifact-delete"), null);
   assert.throws(() => repository.remove("../escape"), /invalid_agent_artifact_id/);
 });
+
+test("accepts persisted thin-reading Agent artifacts", (context) => {
+  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-artifacts-"));
+  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
+  const repository = createAgentArtifactRepository({ resultDirectory });
+  const thinReading = {
+    ...document("artifact-thin"),
+    artifactType: "thin_reading",
+    thinReadingDocument: {
+      annotationSettings: { autoPublic: false },
+      annotations: [],
+      artifactId: "artifact-thin",
+      activeNodeId: "root",
+      nodes: {},
+      paperIds: ["paper-1"],
+      pendingPublicAnnotationIds: [],
+      rootNodeId: "root",
+      targetLanguage: "zh-CN",
+      title: "Paper 1",
+      version: "liteasy.thin-reading/v1"
+    },
+    title: "Paper 1"
+  };
+
+  repository.save(thinReading);
+
+  assert.equal(repository.list()[0].artifactType, "thin_reading");
+});

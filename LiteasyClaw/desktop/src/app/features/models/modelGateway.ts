@@ -10,6 +10,7 @@ export type GenerateAnswerInput = {
   onDelta?: (delta: string, accumulated: string) => void;
   prompt: string;
   provider: string;
+  requireLive?: boolean;
   signal?: AbortSignal;
 };
 

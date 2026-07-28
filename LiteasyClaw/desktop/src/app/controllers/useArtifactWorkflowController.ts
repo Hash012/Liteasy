@@ -14,7 +14,7 @@ import type { Paper, SelectedDocumentSet } from "../features/workspace/workspace
 import type { ImportQueueStatus } from "../features/workspace/useWorkspaceActions";
 import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { ArtifactResultClient } from "../features/artifacts/artifactResultClient";
-import type { ThinReadingDocument } from "../features/thin-reading/thinReading.types";
+import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/thin-reading/thinReading.types";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { DuplicateArtifactGenerationConfirmation } from "../features/artifacts/useArtifactActions";
 import {
@@ -68,6 +68,11 @@ type ArtifactWorkflowActions = {
   cancelArtifactTask: (taskId: string) => Promise<string>;
   closeArtifactTab: (artifactId: string) => void;
   deleteArtifact: (artifactId: string) => Promise<string>;
+  generateThinReadingBranch: (input: {
+    artifactId: string;
+    document: ThinReadingDocument;
+    source: ThinReadingBranchSource;
+  }) => Promise<void>;
   handleAssistantArtifact: (artifactType: ArtifactType) => string;
   openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
   openArtifact: (artifactId: string) => string;
@@ -198,6 +203,7 @@ export function useArtifactWorkflowController({
       cancelArtifactTask: artifactActions.cancelArtifactTask,
       closeArtifactTab: artifactActions.closeArtifactTab,
       deleteArtifact: artifactActions.deleteArtifact,
+      generateThinReadingBranch: artifactActions.generateThinReadingBranch,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
       openArtifact: artifactActions.openArtifact,
       openSkillDocument: artifactActions.openSkillDocument,

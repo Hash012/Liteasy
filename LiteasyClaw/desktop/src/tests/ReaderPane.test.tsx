@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { findQuoteRangeInTextLayer } from "../app/features/pdf/PdfReader";
 import { ReaderPane } from "../app/layout/ReaderPane";
 
 const readerTestPaper = {
@@ -69,6 +70,24 @@ function mockPdfSelection({
 }
 
 describe("ReaderPane", () => {
+  test("matches Agent evidence quotes across PDF text-layer spans", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = [
+      "<span>ColBERT uses late</span>",
+      "<span> interaction to preserve</span>",
+      "<span> token-level matching signals.</span>"
+    ].join("");
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "late interaction to preserve token-level matching"
+    );
+
+    expect(range?.toString().replace(/\s+/g, " ")).toContain(
+      "late interaction to preserve token-level matching"
+    );
+  });
+
   test("renders the reader header and leaves artifact generation to the floating launcher", () => {
     const onStartAnalysis = vi.fn();
 
