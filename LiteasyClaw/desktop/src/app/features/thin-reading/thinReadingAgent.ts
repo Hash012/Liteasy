@@ -106,6 +106,7 @@ type ParseThinReadingModelSeedOptions = {
   analysisEvidence?: readonly AnalysisEvidence[];
   analysis?: PreparedMultiPaperAnalysis;
   externalSources?: readonly ThinReadingExternalSource[];
+  requireExplicitTraceability?: boolean;
 };
 
 function normalizeSectionToken(value: ParsedThinReadingModelOutput["omittedSections"][number]): ThinReadingSectionToken | null {
@@ -311,25 +312,87 @@ function modelSentencesTrackSummary(input: {
   summary: string;
   sentences: readonly ThinReadingSummarySentence[];
 }) {
+  return summarySentenceCoverage(input) >= 0.72;
+}
+
+function summarySentenceCoverage(input: {
+  summary: string;
+  sentences: readonly { text: string }[];
+}) {
   const summary = normalizeSentenceForMatch(input.summary);
   if (!summary || input.sentences.length === 0) {
-    return false;
+    return 0;
   }
   let cursor = 0;
   let matchedLength = 0;
   for (const sentence of input.sentences) {
     const needle = normalizeSentenceForMatch(sentence.text);
     if (!needle) {
-      return false;
+      return 0;
     }
     const index = summary.indexOf(needle, cursor);
     if (index < 0) {
-      return false;
+      return 0;
     }
     cursor = index + needle.length;
     matchedLength += needle.length;
   }
-  return matchedLength / summary.length >= 0.72;
+  return matchedLength / summary.length;
+}
+
+function assertExplicitTraceability(input: {
+  allowedEvidenceIds: readonly string[];
+  allowedExternalSourceIds: readonly string[];
+  parsed: ParsedThinReadingModelOutput;
+}) {
+  if (input.parsed.summarySentences.length === 0) {
+    throw new Error("薄读 Agent 质量门未通过：summarySentences 必须显式覆盖正文，不能由本地代码猜测句级证据。");
+  }
+  const coverage = summarySentenceCoverage({
+    sentences: input.parsed.summarySentences,
+    summary: input.parsed.summary
+  });
+  if (coverage < 0.95) {
+    throw new Error(
+      `薄读 Agent 质量门未通过：summarySentences 只覆盖正文的 ${Math.round(coverage * 100)}%，至少需要 95%。`
+    );
+  }
+  const paperEvidence = new Set(normalizeEvidenceReferences(
+    input.parsed.paperEvidence,
+    input.allowedEvidenceIds
+  ));
+  const externalKnowledge = new Set(input.parsed.externalKnowledge);
+  input.parsed.summarySentences.forEach((sentence, index) => {
+    const evidenceIds = normalizeEvidenceReferences(sentence.evidenceIds, input.allowedEvidenceIds);
+    const externalSourceIds = sentence.externalKnowledge.filter(
+      (sourceId) => input.allowedExternalSourceIds.includes(sourceId)
+    );
+    if (evidenceIds.length === 0 && externalSourceIds.length === 0 && sentence.status !== "unsupported") {
+      throw new Error(
+        `薄读 Agent 质量门未通过：summarySentences[${index}] 没有来源，却未标记 unsupported。`
+      );
+    }
+    const unlistedEvidence = evidenceIds.filter((evidenceId) => !paperEvidence.has(evidenceId));
+    if (unlistedEvidence.length > 0) {
+      throw new Error(
+        `薄读 Agent 质量门未通过：summarySentences[${index}] 的 evidence ID 未列入 paperEvidence：${unlistedEvidence.join("；")}。`
+      );
+    }
+    const unlistedSources = externalSourceIds.filter((sourceId) => !externalKnowledge.has(sourceId));
+    if (unlistedSources.length > 0) {
+      throw new Error(
+        `薄读 Agent 质量门未通过：summarySentences[${index}] 的 external source ID 未列入 externalKnowledge：${unlistedSources.join("；")}。`
+      );
+    }
+    if (sentence.status === "grounded" && evidenceIds.length === 0) {
+      throw new Error(
+        `薄读 Agent 质量门未通过：summarySentences[${index}] 标记 grounded，但没有论文内 evidence ID。`
+      );
+    }
+  });
+  if (input.parsed.withinPaperClosure && input.parsed.externalKnowledge.length > 0) {
+    throw new Error("薄读 Agent 质量门未通过：withinPaperClosure=true 时不能引用外部来源。");
+  }
 }
 
 function tokenizeForOverlap(value: string) {
@@ -489,6 +552,13 @@ export function parseThinReadingModelSeed(
     fieldName: "summarySentences.evidenceIds",
     paperEvidence: parsed.summarySentences.flatMap((sentence) => sentence.evidenceIds)
   });
+  if (options.requireExplicitTraceability) {
+    assertExplicitTraceability({
+      allowedEvidenceIds,
+      allowedExternalSourceIds,
+      parsed
+    });
+  }
   const paperEvidence = normalizeEvidenceReferences(parsed.paperEvidence, allowedEvidenceIds);
   const paperEvidenceSpans = buildEvidenceSpans({
     analysisEvidence,
@@ -616,7 +686,7 @@ function formatExternalSources(sources: readonly ThinReadingExternalSource[] | u
       const authors = source.authors.slice(0, 4).join(", ") || "unknown authors";
       const year = source.year ? ` (${source.year})` : "";
       const abstract = source.abstract ? ` abstract=\"${truncatePromptText(source.abstract, 420)}\"` : " abstract unavailable";
-      return `- ${source.id}: ${source.title}${year}; authors=${authors}; url=${source.url}; relevance=${source.relevance}.${abstract}`;
+      return `- ${source.id}: ${source.title}${year}; relation=${source.relation}; authors=${authors}; url=${source.url}; relevance=${source.relevance}.${abstract}`;
     })
   ].join("\n");
 }
@@ -660,6 +730,7 @@ export function buildThinReadingAgentPrompt(input: {
     "- claims 列出 summary 的关键判断；grounded claim 必须引用下方 evidence ID。",
     "- 继续深入时必须承接上一层关键判断与证据 span，说明本次深入如何细化、修正或补足上一层，而不是另起一个无关摘要。",
     "- externalKnowledge 不是自由文本，只能填写上方本轮允许引用的 external source ID；没有可用外部来源则必须为空数组。",
+    "- 外部来源的 relation 是 OpenAlex 图字段推断结果：cited_by_target=目标论文引用该来源，cites_target=该来源引用目标论文，related=OpenAlex 相关工作，topic_search=仅主题检索命中。只能按给定 relation 表述，禁止把 topic_search 写成引用关系。",
     "- omittedSections 列出当前 summary 没覆盖、但值得继续深入的论文板块，数量随证据实际情况决定；label 必须是短按钮文案，中文不超过 12 字或英文不超过 6 个词。",
     "- recommendations 只是 Intuecho 本地待同步占位推荐线索，不要伪装成真实社区数据。",
     "- withinPaperClosure 为 false 时表示主要依赖外部知识。",

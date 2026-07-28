@@ -914,6 +914,9 @@ export function useArtifactActions({
       depth: activeNode.depth + 1,
       paperIds: document.paperIds,
       primaryPaperId: document.paperIds[0],
+      primaryPaperIdentity: document.paperIds[0]
+        ? document.paperIdentities?.[document.paperIds[0]]?.primary
+        : undefined,
       primaryPaperTitle: papers.find((paper) => paper.id === document.paperIds[0])?.title,
       parentClaims: activeNode.evidence.claims ? [...activeNode.evidence.claims] : undefined,
       parentEvidenceSpans: activeNode.evidence.paperEvidenceSpans

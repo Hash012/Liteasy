@@ -415,6 +415,12 @@ test("parses thin-reading structured output from a live model request", async ()
               }
             ],
             summary: "ColBERT 的核心贡献是用 contextualized token embeddings 和 MaxSim late interaction 保留细粒度匹配信号。",
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: "ColBERT 的核心贡献是用 contextualized token embeddings 和 MaxSim late interaction 保留细粒度匹配信号。"
+            }],
             withinPaperClosure: true
           }),
           execution: {
@@ -535,6 +541,12 @@ test("runs thin-reading through the DeepSeek provider without downgrading to moc
             paperType: "experimental",
             recommendations: [],
             summary: "ColBERT 的薄读核心是用 MaxSim late interaction 把 contextualized token embeddings 转化为细粒度匹配信号。",
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: "ColBERT 的薄读核心是用 MaxSim late interaction 把 contextualized token embeddings 转化为细粒度匹配信号。"
+            }],
             withinPaperClosure: true
           }),
           execution: {
@@ -577,6 +589,156 @@ test("runs thin-reading through the DeepSeek provider without downgrading to moc
     summary: expect.stringContaining("MaxSim"),
     withinPaperClosure: true
   });
+});
+
+test("repairs an incomplete live thin-reading trace exactly once", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      prompts.push(prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const summary = "ColBERT 用 MaxSim late interaction 保留细粒度匹配信号，并降低文档编码的在线成本。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{
+              evidenceIds: [evidenceId],
+              status: "grounded",
+              text: "MaxSim 是核心机制。"
+            }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            ...(prompts.length === 1 ? {} : {
+              summarySentences: [{
+                evidenceIds: [evidenceId],
+                externalKnowledge: [],
+                status: "grounded",
+                text: summary
+              }]
+            }),
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-repair",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts).toHaveLength(2);
+  expect(prompts[1]).toContain("确定性结构质量门");
+  expect(prompts[1]).toContain("<invalid_output>");
+  expect(result.thinReading?.qualityGate).toMatchObject({
+    attempts: 2,
+    repaired: true,
+    repairReasons: [expect.stringContaining("summarySentences 必须显式覆盖正文")]
+  });
+});
+
+test("stops after one failed trace repair without creating a local fallback", async () => {
+  const store = createSettingsStore();
+  let modelCalls = 0;
+  const phases: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      modelCalls += 1;
+      const prompt = String(JSON.parse(request.body).prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "这份输出始终缺少显式句级映射，因此不应被保存为看似成功的薄读结果。",
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    onProgress: (progress) => phases.push(progress.phase),
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-repair-failure",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  })).rejects.toThrow("结构质量门连续失败");
+
+  expect(modelCalls).toBe(2);
+  expect(phases).toContain("repairing_structured_output");
 });
 
 test("downgrades thin-reading closure when retrieval coverage is incomplete", async () => {
@@ -626,6 +788,12 @@ test("downgrades thin-reading closure when retrieval coverage is incomplete", as
             paperType: "experimental",
             recommendations: [],
             summary: "ColBERT 的核心贡献是用 MaxSim late interaction 保留细粒度匹配信号。",
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: "ColBERT 的核心贡献是用 MaxSim late interaction 保留细粒度匹配信号。"
+            }],
             withinPaperClosure: true
           }),
           execution: {
@@ -738,6 +906,7 @@ test("retrieves traceable external sources before generating beyond the paper cl
             doi: "https://doi.org/10.1000/follow-up",
             id: "openalex:W42",
             provider: "openalex",
+            relation: "topic_search",
             relevance: 0.86,
             retrievalQuery: "ColBERT 后续研究",
             sourceId: "W42",
@@ -754,6 +923,12 @@ test("retrieves traceable external sources before generating beyond the paper cl
   });
 
   expect(externalRequests).toHaveLength(1);
+  expect(JSON.parse(externalRequests[0].body)).toMatchObject({
+    targetPaperIdentity: {
+      kind: "local_paper_id",
+      value: "demo-1"
+    }
+  });
   expect(externalRequests[0].url).toContain("/v1/research/external-knowledge");
   expect(modelPrompt).toContain("openalex:W42");
   expect(modelPrompt).toContain("Efficient Multi-vector Retrieval");

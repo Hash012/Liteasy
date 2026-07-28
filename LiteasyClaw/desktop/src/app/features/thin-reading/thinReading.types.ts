@@ -1,5 +1,6 @@
 import type {
   PaperIdentity,
+  PaperIdentityCandidate,
   PaperIdentityInput
 } from "../paper-identity/paperIdentity";
 
@@ -57,6 +58,7 @@ export type ThinReadingExternalSource = {
   doi?: string;
   id: string;
   provider: "openalex";
+  relation: "cited_by_target" | "cites_target" | "related" | "topic_search";
   relevance: number;
   retrievalQuery: string;
   sourceId: string;
@@ -105,6 +107,7 @@ export type ThinReadingGenerationContext = {
   depth: number;
   paperIds: readonly string[];
   primaryPaperId?: string;
+  primaryPaperIdentity?: PaperIdentityCandidate;
   primaryPaperTitle?: string;
   prompt?: string;
   parentClaims?: readonly ThinReadingClaim[];

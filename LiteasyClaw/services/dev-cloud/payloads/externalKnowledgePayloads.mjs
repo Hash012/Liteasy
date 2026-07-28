@@ -37,26 +37,124 @@ function normalizeDoi(value) {
   return doi ? `https://doi.org/${doi}` : undefined;
 }
 
-function sourceIdFromWork(work) {
-  const rawId = normalizeText(work?.id);
+function normalizeDoiKey(value) {
+  return normalizeText(value)
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
+    .toLowerCase();
+}
+
+function normalizeArxivKey(value) {
+  const match = normalizeText(value).match(
+    /(?:arxiv[:/\s]+|abs\/|pdf\/)?([a-z-]+(?:\.[A-Z]{2})?\/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)/i
+  );
+  return (match?.[1] ?? "").replace(/\.pdf$/i, "").replace(/v\d+$/i, "").toLowerCase();
+}
+
+function sourceIdFromValue(value) {
+  const rawId = normalizeText(value);
   const match = rawId.match(/(?:openalex\.org\/)?(W\d+)$/i);
   return match ? match[1].toUpperCase() : "";
 }
 
+function sourceIdFromWork(work) {
+  return sourceIdFromValue(work?.id);
+}
+
+function workOpenAlexIds(work) {
+  const values = [work?.id, ...(Array.isArray(work?.referenced_works) ? work.referenced_works : [])];
+  return new Set(values.map(sourceIdFromValue).filter(Boolean));
+}
+
+function workExternalValues(work) {
+  const locations = Array.isArray(work?.locations) ? work.locations : [];
+  return [
+    work?.doi,
+    work?.primary_location?.landing_page_url,
+    ...Object.values(work?.ids ?? {}),
+    ...locations.flatMap((location) => [location?.landing_page_url, location?.pdf_url])
+  ].map(normalizeText).filter(Boolean);
+}
+
+function matchesTargetIdentity(work, identity) {
+  const kind = normalizeText(identity?.kind);
+  const value = normalizeText(identity?.value);
+  if (!kind || !value) {
+    return false;
+  }
+  const externalValues = workExternalValues(work);
+  if (kind === "doi") {
+    const targetDoi = normalizeDoiKey(value);
+    return Boolean(targetDoi) && externalValues.some((candidate) => normalizeDoiKey(candidate) === targetDoi);
+  }
+  if (kind === "arxiv_id") {
+    const targetArxiv = normalizeArxivKey(value);
+    return Boolean(targetArxiv) && externalValues.some((candidate) => normalizeArxivKey(candidate) === targetArxiv);
+  }
+  return false;
+}
+
+function findTargetWork(works, input) {
+  const identityMatch = works.find((work) => matchesTargetIdentity(work, input.targetPaperIdentity));
+  if (identityMatch) {
+    return identityMatch;
+  }
+  const targetTitle = normalizeTitle(input.targetPaperTitle);
+  return targetTitle
+    ? works.find((work) => normalizeTitle(work?.display_name ?? work?.title) === targetTitle)
+    : undefined;
+}
+
+function relationToTarget(work, targetWork) {
+  const sourceId = sourceIdFromWork(work);
+  const targetId = sourceIdFromWork(targetWork);
+  if (!sourceId || !targetId) {
+    return "topic_search";
+  }
+  if (workOpenAlexIds(targetWork).has(sourceId)) {
+    return "cited_by_target";
+  }
+  if (workOpenAlexIds(work).has(targetId)) {
+    return "cites_target";
+  }
+  const relatedIds = new Set(
+    (Array.isArray(targetWork?.related_works) ? targetWork.related_works : [])
+      .map(sourceIdFromValue)
+      .filter(Boolean)
+  );
+  return relatedIds.has(sourceId) ? "related" : "topic_search";
+}
+
 function lexicalOverlap(query, title) {
-  const queryTokens = new Set(normalizeTitle(query).split(" ").filter((token) => token.length > 2));
+  const stopWords = new Set([
+    "follow", "following", "paper", "related", "research", "study", "work",
+    "后续", "文献", "论文", "工作", "研究", "相关"
+  ]);
+  const queryTokens = new Set(
+    normalizeTitle(query)
+      .split(" ")
+      .filter((token) => token.length > 2 && !stopWords.has(token))
+  );
   if (queryTokens.size === 0) {
     return 0;
   }
   const titleTokens = new Set(normalizeTitle(title).split(" ").filter(Boolean));
-  const overlap = [...queryTokens].filter((token) => titleTokens.has(token)).length;
+  const overlap = [...queryTokens].filter((queryToken) => [...titleTokens].some((titleToken) => (
+    titleToken === queryToken ||
+    (queryToken.length >= 5 && titleToken.startsWith(queryToken)) ||
+    (titleToken.length >= 5 && queryToken.startsWith(titleToken))
+  ))).length;
   return overlap / queryTokens.size;
 }
 
 function normalizeWork(work, input, rank) {
   const sourceId = sourceIdFromWork(work);
   const title = normalizeText(work?.display_name ?? work?.title);
-  if (!sourceId || !title || normalizeTitle(title) === normalizeTitle(input.targetPaperTitle)) {
+  if (
+    !sourceId ||
+    !title ||
+    sourceId === sourceIdFromWork(input.targetWork) ||
+    normalizeTitle(title) === normalizeTitle(input.targetPaperTitle)
+  ) {
     return null;
   }
   const doi = normalizeDoi(work?.doi);
@@ -81,6 +179,7 @@ function normalizeWork(work, input, rank) {
     doi,
     id: `openalex:${sourceId}`,
     provider: "openalex",
+    relation: relationToTarget(work, input.targetWork),
     relevance,
     retrievalQuery: input.query,
     sourceId,
@@ -102,23 +201,7 @@ async function defaultOpenAlexTransport(url, options) {
   return fetch(url, options);
 }
 
-export async function searchOpenAlexExternalKnowledge(body, options = {}) {
-  const query = normalizeText(body?.query);
-  const targetPaperTitle = normalizeText(body?.targetPaperTitle);
-  const limit = Number.isInteger(body?.limit)
-    ? Math.min(maximumResults, Math.max(1, body.limit))
-    : 5;
-  if (!query || query.length > maximumQueryLength) {
-    throw new ExternalKnowledgeError(
-      "invalid_external_knowledge_query",
-      `query 必须为 1-${maximumQueryLength} 个字符。`,
-      400
-    );
-  }
-
-  const url = new URL(openAlexEndpoint);
-  url.searchParams.set("search", query);
-  url.searchParams.set("per-page", String(Math.min(maximumResults + 1, limit + 1)));
+async function fetchOpenAlexPayload(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 8000);
   let response;
@@ -137,6 +220,9 @@ export async function searchOpenAlexExternalKnowledge(body, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
+  if (options.allowNotFound && response?.status === 404) {
+    return null;
+  }
   if (!response?.ok) {
     throw new ExternalKnowledgeError(
       "openalex_upstream_error",
@@ -144,16 +230,60 @@ export async function searchOpenAlexExternalKnowledge(body, options = {}) {
       502
     );
   }
-  let payload;
   try {
-    payload = await response.json();
+    return await response.json();
   } catch {
     throw new ExternalKnowledgeError("openalex_invalid_response", "OpenAlex 返回格式无效。", 502);
   }
+}
+
+async function resolveTargetWork(works, input, options) {
+  const targetFromSearch = findTargetWork(works, input);
+  if (targetFromSearch) {
+    return targetFromSearch;
+  }
+  if (input.targetPaperIdentity?.kind !== "doi") {
+    return undefined;
+  }
+  const doi = normalizeDoiKey(input.targetPaperIdentity.value);
+  if (!doi) {
+    return undefined;
+  }
+  const exactUrl = new URL(`${openAlexEndpoint}/https://doi.org/${doi}`);
+  const target = await fetchOpenAlexPayload(exactUrl, { ...options, allowNotFound: true });
+  return target && sourceIdFromWork(target) ? target : undefined;
+}
+
+export async function searchOpenAlexExternalKnowledge(body, options = {}) {
+  const query = normalizeText(body?.query);
+  const targetPaperTitle = normalizeText(body?.targetPaperTitle);
+  const limit = Number.isInteger(body?.limit)
+    ? Math.min(maximumResults, Math.max(1, body.limit))
+    : 5;
+  if (!query || query.length > maximumQueryLength) {
+    throw new ExternalKnowledgeError(
+      "invalid_external_knowledge_query",
+      `query 必须为 1-${maximumQueryLength} 个字符。`,
+      400
+    );
+  }
+
+  const url = new URL(openAlexEndpoint);
+  url.searchParams.set("search", query);
+  url.searchParams.set("per-page", String(Math.min(maximumResults + 1, limit + 1)));
+  const payload = await fetchOpenAlexPayload(url, options);
   const works = Array.isArray(payload?.results) ? payload.results : [];
+  const targetWork = await resolveTargetWork(works, {
+    targetPaperIdentity: body?.targetPaperIdentity,
+    targetPaperTitle
+  }, options);
   const sources = works
-    .map((work, rank) => normalizeWork(work, { query, targetPaperTitle }, rank))
+    .map((work, rank) => normalizeWork(work, { query, targetPaperTitle, targetWork }, rank))
     .filter(Boolean)
+    .filter((source) => (
+      source.relation !== "topic_search" ||
+      lexicalOverlap(query, `${source.title} ${source.abstract}`) > 0
+    ))
     .slice(0, limit);
   return {
     provider: "openalex",

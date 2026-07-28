@@ -17,6 +17,12 @@ const zh = {
   editAnnotation: "编辑批注",
   evidenceExternal: (count: number) => `外${count}`,
   evidenceExternalOpen: (title: string) => `打开外部来源：${title}`,
+  evidenceExternalRelation: (relation: string) => ({
+    cited_by_target: "目标论文引用",
+    cites_target: "引用目标论文",
+    related: "相关工作",
+    topic_search: "主题检索命中"
+  }[relation] ?? "外部来源"),
   evidenceExternalTitle: (sources: readonly string[]) => `外部知识：${sources.join("；")}`,
   evidenceOpen: (sentence: string, index: number) => `打开证据句 ${index}：${sentence}`,
   evidenceOpenTitle: (evidenceId: string) => `打开 PDF 证据：${evidenceId}`,
@@ -67,6 +73,12 @@ const en = {
   editAnnotation: "Edit annotation",
   evidenceExternal: (count: number) => `X${count}`,
   evidenceExternalOpen: (title: string) => `Open external source: ${title}`,
+  evidenceExternalRelation: (relation: string) => ({
+    cited_by_target: "Cited by target paper",
+    cites_target: "Cites target paper",
+    related: "Related work",
+    topic_search: "Topic search result"
+  }[relation] ?? "External source"),
   evidenceExternalTitle: (sources: readonly string[]) => `External knowledge: ${sources.join("; ")}`,
   evidenceOpen: (sentence: string, index: number) => `Open evidence ${index} for: ${sentence}`,
   evidenceOpenTitle: (evidenceId: string) => `Open PDF evidence: ${evidenceId}`,

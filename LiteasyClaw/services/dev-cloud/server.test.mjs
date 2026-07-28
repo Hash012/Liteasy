@@ -189,6 +189,7 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
       doi: "https://doi.org/10.1000/example",
       id: "openalex:W123456789",
       provider: "openalex",
+      relation: "topic_search",
       relevance: response.json.sources[0].relevance,
       retrievalQuery: "ColBERT late interaction retrieval",
       sourceId: "W123456789",
@@ -199,6 +200,106 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
   ]);
   assert.ok(response.json.sources[0].relevance > 0);
   assert.ok(response.json.sources[0].relevance <= 1);
+});
+
+test("derives bounded one-hop OpenAlex relations from explicit graph fields", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      limit: 5,
+      query: "target paper citation neighborhood",
+      targetPaperIdentity: { kind: "doi", value: "10.1000/target" },
+      targetPaperTitle: "A misleading local title"
+    }),
+    handlerOptions: {
+      openAlexTransport: async () => ({
+        json: async () => ({
+          results: [
+            {
+              display_name: "Canonical Target",
+              doi: "https://doi.org/10.1000/TARGET",
+              id: "https://openalex.org/W100",
+              referenced_works: ["https://openalex.org/W101"],
+              related_works: ["https://openalex.org/W103"]
+            },
+            { display_name: "Prior Work", id: "https://openalex.org/W101" },
+            {
+              display_name: "Follow-up Work",
+              id: "https://openalex.org/W102",
+              referenced_works: ["https://openalex.org/W100"]
+            },
+            { display_name: "Related Work", id: "https://openalex.org/W103" },
+            { display_name: "Citation Neighborhood Survey", id: "https://openalex.org/W104" }
+          ]
+        }),
+        ok: true,
+        status: 200
+      })
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(
+    Object.fromEntries(response.json.sources.map((source) => [source.sourceId, source.relation])),
+    {
+      W101: "cited_by_target",
+      W102: "cites_target",
+      W103: "related",
+      W104: "topic_search"
+    }
+  );
+  assert.ok(!response.json.sources.some((source) => source.sourceId === "W100"));
+});
+
+test("resolves a missing target work by DOI before deriving a one-hop relation", async () => {
+  const requestedUrls = [];
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      query: "follow-up retrieval system",
+      targetPaperIdentity: { kind: "doi", value: "10.1000/target" },
+      targetPaperTitle: "Canonical Target"
+    }),
+    handlerOptions: {
+      openAlexTransport: async (url) => {
+        requestedUrls.push(url);
+        const exactTargetRequest = url.includes("/works/https://doi.org/10.1000/target");
+        return {
+          json: async () => exactTargetRequest
+            ? {
+                display_name: "Canonical Target",
+                doi: "https://doi.org/10.1000/target",
+                id: "https://openalex.org/W200",
+                referenced_works: ["https://openalex.org/W201"]
+              }
+            : {
+                results: [
+                  {
+                    display_name: "Prior Work",
+                    id: "https://openalex.org/W201"
+                  },
+                  {
+                    display_name: "Unrelated Numerical Library",
+                    id: "https://openalex.org/W202"
+                  }
+                ]
+              },
+          ok: true,
+          status: 200
+        };
+      }
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(requestedUrls.length, 2);
+  assert.match(requestedUrls[1], /works\/https:\/\/doi\.org\/10\.1000\/target/);
+  assert.equal(response.json.sources[0].relation, "cited_by_target");
+  assert.ok(!response.json.sources.some((source) => source.sourceId === "W202"));
 });
 
 test("returns an explicit empty external-knowledge result without synthetic sources", async () => {

@@ -423,6 +423,7 @@ describe("ThinReadingTab", () => {
             authors: ["A. Author"],
             id: "openalex:W42",
             provider: "openalex",
+            relation: "related",
             relevance: 0.85,
             retrievalQuery: "follow-up",
             sourceId: "W42",
@@ -450,6 +451,7 @@ describe("ThinReadingTab", () => {
     const marker = screen.getByRole("link", { name: "打开外部来源：A Follow-up Study" });
     expect(marker).toHaveTextContent("外1");
     expect(marker).toHaveAttribute("href", "https://openalex.org/W42");
+    expect(marker.getAttribute("title")).toContain("相关工作");
     expect(marker.closest("sup")).not.toBeNull();
   });
 });

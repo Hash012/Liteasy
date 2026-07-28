@@ -14,6 +14,10 @@ type SearchInput = {
   query: string;
   signal?: AbortSignal;
   targetPaperTitle?: string;
+  targetPaperIdentity?: {
+    kind: string;
+    value: string;
+  };
 };
 
 function isExternalSource(value: unknown): value is ThinReadingExternalSource {
@@ -24,6 +28,12 @@ function isExternalSource(value: unknown): value is ThinReadingExternalSource {
     "authors" in value && Array.isArray(value.authors) && value.authors.every((author) => typeof author === "string") &&
     "id" in value && typeof value.id === "string" &&
     "provider" in value && value.provider === "openalex" &&
+    "relation" in value && (
+      value.relation === "cited_by_target" ||
+      value.relation === "cites_target" ||
+      value.relation === "related" ||
+      value.relation === "topic_search"
+    ) &&
     "relevance" in value && typeof value.relevance === "number" &&
     "retrievalQuery" in value && typeof value.retrievalQuery === "string" &&
     "sourceId" in value && typeof value.sourceId === "string" &&
@@ -50,6 +60,7 @@ export function createThinReadingExternalKnowledgeClient(input: {
       body: JSON.stringify({
         limit: search.limit ?? 5,
         query: search.query,
+        targetPaperIdentity: search.targetPaperIdentity,
         targetPaperTitle: search.targetPaperTitle
       }),
       headers: { "Content-Type": "application/json" },

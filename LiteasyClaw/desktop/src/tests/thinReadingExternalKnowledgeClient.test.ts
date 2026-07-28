@@ -13,6 +13,7 @@ describe("thinReadingExternalKnowledgeClient", () => {
           doi: "https://doi.org/10.1000/follow-up",
           id: "openalex:W42",
           provider: "openalex",
+          relation: "cites_target",
           relevance: 0.82,
           retrievalQuery: "late interaction follow-up",
           sourceId: "W42",
@@ -32,6 +33,10 @@ describe("thinReadingExternalKnowledgeClient", () => {
 
     await expect(client({
       query: "late interaction follow-up",
+      targetPaperIdentity: {
+        kind: "doi",
+        value: "10.1000/colbert"
+      },
       targetPaperTitle: "ColBERT"
     })).resolves.toEqual([
       expect.objectContaining({
@@ -42,6 +47,7 @@ describe("thinReadingExternalKnowledgeClient", () => {
       })
     ]);
     expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.stringContaining('"targetPaperIdentity":{"kind":"doi","value":"10.1000/colbert"}'),
       method: "POST",
       url: "https://liteasy.example.com/v1/research/external-knowledge"
     }));

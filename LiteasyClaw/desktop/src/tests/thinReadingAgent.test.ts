@@ -230,6 +230,52 @@ describe("thinReadingAgent", () => {
     ]);
   });
 
+  test("requires explicit sentence traceability for live generation", () => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: [],
+      claims: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        status: "grounded",
+        text: "taxonomy 是核心贡献。"
+      }],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "这篇综述用 taxonomy 组织 vector database systems，并明确了研究空白。",
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: prepared.evidence,
+      requireExplicitTraceability: true
+    })).toThrow("summarySentences 必须显式覆盖正文");
+  });
+
+  test("rejects live sentence evidence omitted from the top-level evidence set", () => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: [],
+      claims: [{
+        evidenceIds: ["evidence-listed"],
+        status: "grounded",
+        text: "taxonomy 是核心贡献。"
+      }],
+      omittedSections: [],
+      paperEvidence: ["evidence-listed"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "这篇综述用 taxonomy 组织 vector database systems，并明确了研究空白。",
+      summarySentences: [{
+        evidenceIds: ["evidence-unlisted"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "这篇综述用 taxonomy 组织 vector database systems，并明确了研究空白。"
+      }],
+      withinPaperClosure: true
+    }), {
+      allowedEvidenceIds: ["evidence-listed", "evidence-unlisted"],
+      requireExplicitTraceability: true
+    })).toThrow("未列入 paperEvidence");
+  });
+
   test("rebuilds sentence evidence mapping when model summarySentences drift from the displayed summary", () => {
     const seed = parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
@@ -462,6 +508,7 @@ describe("thinReadingAgent", () => {
         authors: ["A. Author"],
         id: "openalex:W-ALLOWED",
         provider: "openalex",
+        relation: "topic_search",
         relevance: 0.8,
         retrievalQuery: "taxonomy follow-up",
         sourceId: "W-ALLOWED",

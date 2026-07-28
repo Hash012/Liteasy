@@ -1,4 +1,5 @@
 import type { SubmitAgentTurnRequest } from "../../features/agent-api/agentApi.types";
+import type { PaperIdentityCandidate } from "../../features/paper-identity/paperIdentity";
 import type { RetrievalChunk } from "../../features/retrieval/retrieval.types";
 import type {
   ThinReadingClaim,
@@ -116,6 +117,12 @@ function normalizeExternalSources(value: unknown): ThinReadingGenerationContext[
     !Array.isArray(source) &&
     "id" in source && typeof source.id === "string" &&
     "provider" in source && source.provider === "openalex" &&
+    "relation" in source && (
+      source.relation === "cited_by_target" ||
+      source.relation === "cites_target" ||
+      source.relation === "related" ||
+      source.relation === "topic_search"
+    ) &&
     "sourceId" in source && typeof source.sourceId === "string" &&
     "title" in source && typeof source.title === "string" &&
     "url" in source && typeof source.url === "string" &&
@@ -124,7 +131,58 @@ function normalizeExternalSources(value: unknown): ThinReadingGenerationContext[
     "relevance" in source && typeof source.relevance === "number" &&
     "retrievalQuery" in source && typeof source.retrievalQuery === "string"
   ));
-  return sources.length > 0 ? sources as NonNullable<ThinReadingGenerationContext["externalSources"]> : undefined;
+  return sources.length > 0
+    ? sources.map((source) => ({
+        abstract: source.abstract,
+        authors: [...source.authors],
+        doi: "doi" in source && typeof source.doi === "string" ? source.doi : undefined,
+        id: source.id,
+        provider: "openalex" as const,
+        relation: source.relation,
+        relevance: source.relevance,
+        retrievalQuery: source.retrievalQuery,
+        sourceId: source.sourceId,
+        title: source.title,
+        url: source.url,
+        year: "year" in source && typeof source.year === "number" ? source.year : undefined
+      }))
+    : undefined;
+}
+
+function isPaperIdentityKind(value: unknown): value is PaperIdentityCandidate["kind"] {
+  return value === "doi" ||
+    value === "arxiv_id" ||
+    value === "semantic_scholar_id" ||
+    value === "title_authors_year_hash" ||
+    value === "local_paper_id";
+}
+
+function isPaperIdentitySource(value: unknown): value is PaperIdentityCandidate["source"] {
+  return value === "inferred" || value === "local" || value === "metadata";
+}
+
+function normalizePaperIdentityCandidate(value: unknown): PaperIdentityCandidate | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const candidate = value as Partial<PaperIdentityCandidate>;
+  const kind = candidate.kind;
+  const source = candidate.source;
+  if (
+    !isPaperIdentityKind(kind) ||
+    !isPaperIdentitySource(source) ||
+    typeof candidate.value !== "string" ||
+    candidate.value.trim().length === 0 ||
+    candidate.id !== `${candidate.kind}:${candidate.value}`
+  ) {
+    return undefined;
+  }
+  return {
+    id: candidate.id,
+    kind,
+    source,
+    value: candidate.value
+  };
 }
 
 export function getAgentRequestThinReadingContext(
@@ -153,6 +211,7 @@ export function getAgentRequestThinReadingContext(
     depth: candidate.depth,
     paperIds: [...candidate.paperIds],
     primaryPaperId: typeof candidate.primaryPaperId === "string" ? candidate.primaryPaperId : undefined,
+    primaryPaperIdentity: normalizePaperIdentityCandidate(candidate.primaryPaperIdentity),
     primaryPaperTitle: typeof candidate.primaryPaperTitle === "string" ? candidate.primaryPaperTitle : undefined,
     prompt: typeof candidate.prompt === "string" ? candidate.prompt : undefined,
     parentClaims: normalizeThinReadingClaims(candidate.parentClaims),

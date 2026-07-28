@@ -58,6 +58,12 @@ test("preserves reader-prioritized paper order and thin-reading context", () => 
             depth: 0,
             paperIds: ["paper-c", "paper-a"],
             primaryPaperId: "paper-c",
+            primaryPaperIdentity: {
+              id: "doi:10.1000/paper-c",
+              kind: "doi" as const,
+              source: "metadata" as const,
+              value: "10.1000/paper-c"
+            },
             primaryPaperTitle: "Paper C",
             parentClaims: [
               {
@@ -117,8 +123,19 @@ test("preserves reader-prioritized paper order and thin-reading context", () => 
       })
     ],
     primaryPaperId: "paper-c",
+    primaryPaperIdentity: {
+      id: "doi:10.1000/paper-c",
+      kind: "doi",
+      source: "metadata",
+      value: "10.1000/paper-c"
+    },
     source: { kind: "root_overview" }
   });
+
+  const malformedIdentityRequest = structuredClone(request);
+  malformedIdentityRequest.attachments[0].metadata.thinReadingContext.primaryPaperIdentity.id =
+    "doi:10.1000/different-paper";
+  expect(getAgentRequestThinReadingContext(malformedIdentityRequest)?.primaryPaperIdentity).toBeUndefined();
 });
 
 test("falls back to the current selected context without a selection attachment", () => {

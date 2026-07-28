@@ -44,7 +44,7 @@
 .thin-reading__body { display: grid; gap: clamp(36px, 8vw, 120px); grid-template-columns: minmax(0, 700px) minmax(190px, 260px); margin: 0 auto; max-width: 1100px; padding: clamp(38px, 6vw, 76px) 24px 80px; }
 .thin-reading.is-intuecho-collapsed .thin-reading__body { gap: clamp(24px, 5vw, 72px); grid-template-columns: minmax(0, 740px) 52px; }
 .thin-reading__article { min-width: 0; }
-.thin-reading__article h2 { font-size: clamp(23px, 2.5vw, 32px); font-weight: 600; line-height: 1.28; margin: 10px 0 24px; max-width: 18em; text-wrap: balance; }
+.thin-reading__article h2 { font-size: 30px; font-weight: 600; line-height: 1.28; margin: 10px 0 24px; max-width: 18em; text-wrap: balance; }
 .thin-reading__summary {
   color: #304248;
   font-family: "Noto Serif SC", "Songti SC", SimSun, serif;
@@ -125,6 +125,7 @@
   .thin-reading__topbar { align-items: flex-start; flex-direction: column; }
   .thin-reading__controls { justify-content: space-between; width: 100%; }
   .thin-reading__body { display: block; padding-top: 40px; }
+  .thin-reading__article h2 { font-size: 24px; }
   .thin-reading.is-intuecho-collapsed .thin-reading__body { display: block; }
   .thin-reading__evidence-grid { grid-template-columns: 1fr; }
   .thin-reading__intuecho { border-left: 0; border-top: 1px solid var(--thin-line); margin-top: 54px; padding: 28px 0 0; }

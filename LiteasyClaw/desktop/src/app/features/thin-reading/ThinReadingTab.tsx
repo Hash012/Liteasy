@@ -399,7 +399,7 @@ export function ThinReadingTab({
                               href={source.url}
                               rel="noreferrer"
                               target="_blank"
-                              title={labels.evidenceExternalTitle([source.title])}
+                              title={`${labels.evidenceExternalRelation(source.relation)} · ${labels.evidenceExternalTitle([source.title])}`}
                             >
                               {labels.evidenceExternal(sourceIndex + 1)}
                             </a>
