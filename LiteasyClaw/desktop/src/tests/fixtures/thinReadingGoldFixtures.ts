@@ -193,23 +193,37 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
           evidenceIds: [],
           id: "claim-external-citation-graph",
           status: "weak",
-          text: "越过本文证据后，citation graph 将其与后续相关工作连接起来。"
+          text: "越过本文证据后，这条 OpenAlex 主题检索结果只能作为外部阅读线索，不能断言为引用关系。"
         }],
-        externalKnowledge: ["OpenAlex citation graph"],
+        externalKnowledge: ["openalex:W2741809807"],
+        externalSources: [{
+          abstract: "A large-scale analysis of the prevalence and impact of open access articles.",
+          authors: ["Heather Piwowar", "Jason Priem"],
+          id: "openalex:W2741809807",
+          provider: "openalex",
+          relation: "topic_search",
+          relevance: 0.85,
+          retrievalQuery: "open access research",
+          sourceRecordUrl: "https://openalex.org/W2741809807",
+          sourceId: "W2741809807",
+          title: "The state of OA: a large-scale analysis of the prevalence and impact of Open Access articles",
+          url: "https://openalex.org/W2741809807",
+          year: 2018
+        }],
         paperEvidence: [],
         paperEvidenceSpans: [],
         summarySentences: [{
           evidenceIds: [],
-          externalKnowledge: ["OpenAlex citation graph"],
+          externalKnowledge: ["openalex:W2741809807"],
           id: "sentence-external-citation-graph",
           status: "weak",
-          text: "这一层已越过论文闭包，需要借助 OpenAlex citation graph 追踪后续相关工作与引用关系。"
+          text: "这一层已越过论文闭包，只能将 OpenAlex 的主题检索结果作为外部阅读线索，不能把它写成已验证的引用关系。"
         }]
       },
       omittedSections: [],
       paperType: "survey",
       recommendations: [],
-      summary: "这一层已越过论文闭包，需要借助 OpenAlex citation graph 追踪后续相关工作与引用关系。",
+      summary: "这一层已越过论文闭包，只能将 OpenAlex 的主题检索结果作为外部阅读线索，不能把它写成已验证的引用关系。",
       withinPaperClosure: false
     },
     gold: {
@@ -217,9 +231,62 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
       id: "gold-branch-external-boundary",
       paperType: "survey",
       relevantEvidenceIds: [],
-      requiredBranchConcepts: [["citation graph", "引文图"], ["相关工作", "related work"]],
+      requiredBranchConcepts: [["主题检索", "topic search"], ["外部阅读线索", "external reading lead"]],
       requiredParentContinuityConcepts: [["论文闭包", "paper closure"]],
-      requiredSummaryConcepts: [["OpenAlex", "外部知识"], ["引用关系", "citation relationship"]],
+      requiredSummaryConcepts: [["OpenAlex", "外部知识"], ["不能", "not"], ["引用关系", "citation relationship"]],
+      stage: "branch",
+      targetLanguage: "zh-CN"
+    }
+  },
+  {
+    candidate: {
+      evidence: {
+        claims: [{
+          evidenceIds: [],
+          id: "claim-external-cites-bert",
+          status: "weak",
+          text: "AlphaFold 是 OpenAlex 图中引用 BERT 的后续工作，这一关系属于论文外证据。"
+        }],
+        externalKnowledge: ["openalex:W3177828909"],
+        externalSources: [{
+          abstract: "Highly accurate protein structure prediction with AlphaFold.",
+          authors: ["John Jumper", "Richard Evans"],
+          doi: "10.1038/s41586-021-03819-2",
+          id: "openalex:W3177828909",
+          provider: "openalex",
+          relation: "cites_target",
+          relevance: 0.77,
+          retrievalQuery: "OpenAlex works citing BERT W2963341956",
+          sourceRecordUrl: "https://openalex.org/W3177828909",
+          sourceId: "W3177828909",
+          title: "Highly accurate protein structure prediction with AlphaFold",
+          url: "https://openalex.org/W3177828909",
+          year: 2021
+        }],
+        paperEvidence: [],
+        paperEvidenceSpans: [],
+        summarySentences: [{
+          evidenceIds: [],
+          externalKnowledge: ["openalex:W3177828909"],
+          id: "sentence-external-cites-bert",
+          status: "weak",
+          text: "越过 BERT 原文闭包后，OpenAlex 显示 AlphaFold 引用 BERT；这是一条可追溯的论文外 citation graph 关系，不是 BERT 论文内证据。"
+        }]
+      },
+      omittedSections: [],
+      paperType: "experimental",
+      recommendations: [],
+      summary: "越过 BERT 原文闭包后，OpenAlex 显示 AlphaFold 引用 BERT；这是一条可追溯的论文外 citation graph 关系，不是 BERT 论文内证据。",
+      withinPaperClosure: false
+    },
+    gold: {
+      expectedWithinPaperClosure: false,
+      id: "gold-branch-external-bert-cited-by-alphafold",
+      paperType: "experimental",
+      relevantEvidenceIds: [],
+      requiredBranchConcepts: ["AlphaFold", ["引用 BERT", "cites BERT"], ["citation graph", "引文图"]],
+      requiredParentContinuityConcepts: ["BERT", ["论文内证据", "paper evidence"]],
+      requiredSummaryConcepts: ["OpenAlex", "AlphaFold", "BERT", ["论文外", "external"]],
       stage: "branch",
       targetLanguage: "zh-CN"
     }

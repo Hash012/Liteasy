@@ -21,6 +21,9 @@ export type AnalysisEvidence = {
   chunkId: string;
   id: string;
   page: number;
+  pageTextEnd?: number;
+  pageTextStart?: number;
+  textExtraction?: "embedded" | "ocr";
   paperId: string;
   paperTitle: string;
   quote: string;

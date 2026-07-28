@@ -52,6 +52,41 @@ test("posts a typed model request to the backend endpoint", async () => {
   ]);
 });
 
+test("forwards an artifact's structured output contract to the backend", async () => {
+  let requestBody = "";
+  const client = createHttpModelClient({
+    endpoint: "https://liteasy.example.com/model-proxy",
+    source: "cloud_proxy",
+    transport: async (request) => {
+      requestBody = request.body;
+      return {
+        json: async () => ({ answer: "{}" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  await client({
+    model: "gpt-5-mini",
+    outputFormat: {
+      name: "liteasy_thin_reading",
+      schema: { type: "object" },
+      strict: true
+    },
+    prompt: "Return JSON.",
+    provider: "openai"
+  });
+
+  expect(JSON.parse(requestBody)).toMatchObject({
+    outputFormat: {
+      name: "liteasy_thin_reading",
+      schema: { type: "object" },
+      strict: true
+    }
+  });
+});
+
 test("throws a readable error when the backend returns a non-ok status", async () => {
   const client = createHttpModelClient({
     endpoint: "https://liteasy.example.com/model-proxy",

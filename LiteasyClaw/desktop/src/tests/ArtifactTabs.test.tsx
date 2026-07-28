@@ -140,10 +140,19 @@ describe("ArtifactTabs", () => {
               confidence: 0.9,
               id: "evidence-1",
               page: 2,
+              pageTextEnd: 37,
+              pageTextStart: 18,
               paperId: "paper-1",
               quote: "ColBERT uses MaxSim."
             }
-          ]
+          ],
+          summarySentences: [{
+            evidenceIds: ["evidence-1"],
+            externalKnowledge: [],
+            id: "sentence-evidence-1",
+            status: "grounded",
+            text: "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。"
+          }]
         },
         omittedSections: [
           { id: "section-experiment", label: "实验", sectionKey: "experiment" }
@@ -184,9 +193,58 @@ describe("ArtifactTabs", () => {
     expect(onOpenEvidence).toHaveBeenCalledWith({
       evidenceId: "evidence-1",
       page: 2,
+      pageTextEnd: 37,
+      pageTextStart: 18,
       paperId: "paper-1",
       quote: "ColBERT uses MaxSim."
     });
+  });
+
+  test("surfaces live thin-reading Agent phase progress in the reading page", () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-progress",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "ColBERT uses late interaction for retrieval.",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[{
+          artifactId: "artifact-thin-progress",
+          papers: [{ id: "paper-1", title: "ColBERT" }],
+          thinReadingDocument,
+          title: "薄读",
+          type: "thin_reading"
+        }]}
+        tasks={[{
+          id: "thin-reading-task",
+          message: "正在核对薄读证据边界",
+          progress: 78,
+          stage: "thin_reading_validating",
+          status: "running",
+          type: "thin_reading"
+        }]}
+      />
+    );
+
+    expect(screen.getByText("正在核对薄读证据边界")).toBeInTheDocument();
+    expect(screen.getByText("核验薄读证据")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "薄读 Agent 进度" })).toHaveAttribute(
+      "aria-valuenow",
+      "78"
+    );
   });
 
   test("renders mindmap verification and source layer metadata", () => {
@@ -572,6 +630,8 @@ describe("ArtifactTabs", () => {
             chunkId: "chunk-colbert-p4",
             id: evidenceId,
             page: 4,
+            pageTextEnd: 98,
+            pageTextStart: 45,
             paperId: "demo-1",
             paperTitle: "ColBERT",
             quote: "MaxSim matches every query token against document tokens.",
@@ -643,6 +703,8 @@ describe("ArtifactTabs", () => {
     expect(onOpenEvidence).toHaveBeenCalledWith({
       evidenceId,
       page: 4,
+      pageTextEnd: 98,
+      pageTextStart: 45,
       paperId: "demo-1",
       quote: "MaxSim matches every query token against document tokens."
     });

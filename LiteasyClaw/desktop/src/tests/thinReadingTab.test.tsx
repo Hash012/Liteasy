@@ -1,10 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ThinReadingTab } from "../app/features/thin-reading/ThinReadingTab";
+import {
+  resolveThinReadingSelectionPopoverPosition,
+  ThinReadingTab
+} from "../app/features/thin-reading/ThinReadingTab";
 import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
 import {
+  addThinReadingAnnotation,
   advanceThinReadingDocument,
-  createThinReadingDocument
+  createThinReadingDocument,
+  setThinReadingAutoPublic
 } from "../app/features/thin-reading/thinReadingProjection";
 import type { ThinReadingNodeSeed } from "../app/features/thin-reading/thinReading.types";
 import type { ThinReadingDocument } from "../app/features/thin-reading/thinReading.types";
@@ -16,13 +21,15 @@ function makeDocument(): ThinReadingDocument {
 function renderTab(
   document: ThinReadingDocument,
   onUpdateDocument = vi.fn(),
-  onOpenEvidence?: Parameters<typeof ThinReadingTab>[0]["onOpenEvidence"]
+  onOpenEvidence?: Parameters<typeof ThinReadingTab>[0]["onOpenEvidence"],
+  onSyncIntuecho?: Parameters<typeof ThinReadingTab>[0]["onSyncIntuecho"]
 ) {
   return render(
     <ThinReadingTab
       artifactId={document.artifactId}
       document={document}
       onOpenEvidence={onOpenEvidence}
+      onSyncIntuecho={onSyncIntuecho}
       onUpdateDocument={onUpdateDocument}
       papers={createThinReadingFixture().papers}
     />
@@ -34,6 +41,26 @@ afterEach(() => {
 });
 
 describe("ThinReadingTab", () => {
+  test("keeps a desktop selection popover inside the visible viewport", () => {
+    expect(resolveThinReadingSelectionPopoverPosition({
+      bottom: 520,
+      left: 1310,
+      top: 490
+    }, { height: 900, width: 1440 })).toEqual({
+      left: 948,
+      top: 530
+    });
+
+    expect(resolveThinReadingSelectionPopoverPosition({
+      bottom: 820,
+      left: 620,
+      top: 790
+    }, { height: 844, width: 1280 })).toEqual({
+      bottom: 64,
+      left: 620
+    });
+  });
+
   test("renders the root thin-reading surface and its navigation", () => {
     const document = makeDocument();
 
@@ -41,6 +68,8 @@ describe("ThinReadingTab", () => {
 
     expect(screen.getByText("总述")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByText("本地阅读线索")).toBeInTheDocument();
+    expect(screen.queryByText("社区共享批注")).not.toBeInTheDocument();
     expect(screen.getByTestId("thin-reading-summary")).toHaveTextContent("self-attention");
     expect(screen.getByRole("button", { name: /打开证据句/ })).toHaveTextContent("证1");
     expect(screen.queryByText("依据")).not.toBeInTheDocument();
@@ -48,6 +77,29 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "实验" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
+  });
+
+  test("warns before the closure boundary without mislabelling paper evidence as external", () => {
+    const fixture = createThinReadingFixture();
+    const root = createThinReadingDocument(fixture);
+    const document = advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: fixture.rootSeed,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" },
+      title: "实验"
+    });
+    const secondLevel = advanceThinReadingDocument(document, {
+      parentNodeId: document.activeNodeId,
+      seed: fixture.rootSeed,
+      source: { kind: "omitted_section", label: "消融", sectionKey: "ablation" },
+      title: "消融"
+    });
+
+    const { container } = renderTab(secondLevel);
+
+    expect(screen.getByText("接近论文原文闭包")).toBeInTheDocument();
+    expect(container.querySelector(".thin-reading__article-meta")).toHaveTextContent("论文内证据");
+    expect(screen.queryByText("已越出论文原文闭包")).not.toBeInTheDocument();
   });
 
   test("opens PDF evidence only from summary markers", () => {
@@ -115,6 +167,114 @@ describe("ThinReadingTab", () => {
       paperId: "paper-attention",
       quote: "The model allows for significantly more parallelization."
     });
+  });
+
+  test("renders paper and external markers together when a sentence has both boundaries", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          externalKnowledge: ["openalex:W42"],
+          externalSources: [{
+            abstract: "A follow-up study.",
+            authors: ["A. Author"],
+            id: "openalex:W42",
+            provider: "openalex",
+            relation: "related",
+            relevance: 0.85,
+            retrievalQuery: "follow-up",
+            sourceRecordUrl: "https://openalex.org/W42",
+            sourceId: "W42",
+            title: "A Follow-up Study",
+            url: "https://openalex.org/W42",
+            year: 2025
+          }],
+          summarySentences: [{
+            evidenceIds: ["evidence-attention-self-attention"],
+            externalKnowledge: ["openalex:W42"],
+            id: "sentence-mixed-boundaries",
+            status: "weak",
+            text: "论文提出 self-attention，后续研究扩展了该方向。"
+          }]
+        }
+      }
+    });
+
+    renderTab(document, vi.fn(), vi.fn());
+
+    expect(screen.getByRole("button", { name: /打开证据句 1/ })).toHaveTextContent("证1");
+    expect(screen.getByRole("link", { name: "打开外部来源：A Follow-up Study" })).toHaveTextContent("外1");
+  });
+
+  test("labels a Crossref record as its provider while keeping its accessible record name provider-neutral", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        withinPaperClosure: false,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          externalKnowledge: ["crossref:10.1038/s41586-021-03819-2"],
+          externalSources: [{
+            abstract: "A Crossref source.",
+            authors: ["J. Jumper"],
+            doi: "https://doi.org/10.1038/s41586-021-03819-2",
+            id: "crossref:10.1038/s41586-021-03819-2",
+            provider: "crossref",
+            relation: "topic_search",
+            relevance: 0.8,
+            retrievalQuery: "protein structure prediction",
+            sourceId: "10.1038/s41586-021-03819-2",
+            sourceRecordUrl: "https://api.crossref.org/works/10.1038%2Fs41586-021-03819-2",
+            title: "Highly accurate protein structure prediction with AlphaFold",
+            url: "https://doi.org/10.1038/s41586-021-03819-2"
+          }],
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: ["crossref:10.1038/s41586-021-03819-2"],
+            id: "crossref-sentence",
+            status: "weak",
+            text: "这条论文外线索来自可追溯的主题检索。"
+          }]
+        }
+      }
+    });
+
+    renderTab(document);
+
+    expect(screen.getByRole("link", { name: "打开来源记录：Highly accurate protein structure prediction with AlphaFold" }))
+      .toHaveTextContent("Crossref");
+  });
+
+  test("forwards persisted page-text offsets when opening evidence", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          paperEvidenceSpans: fixture.rootSeed.evidence.paperEvidenceSpans?.map((span) => ({
+            ...span,
+            pageTextEnd: 92,
+            pageTextStart: 38
+          }))
+        }
+      }
+    });
+    const onOpenEvidence = vi.fn();
+
+    renderTab(document, vi.fn(), onOpenEvidence);
+    fireEvent.click(screen.getByRole("button", { name: /打开证据句/ }));
+
+    expect(onOpenEvidence).toHaveBeenCalledWith(expect.objectContaining({
+      pageTextEnd: 92,
+      pageTextStart: 38
+    }));
   });
 
   test("renders all thin-reading interface copy in the document target language", async () => {
@@ -231,6 +391,49 @@ describe("ThinReadingTab", () => {
     expect(within(menu).getAllByText(/遗漏板块/)).toHaveLength(2);
   });
 
+  test("shows the complete ancestor path and returns directly to an intermediate node", () => {
+    const root = makeDocument();
+    const experiment = advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-experiment"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "实验结果。",
+        withinPaperClosure: true
+      },
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" },
+      title: "实验"
+    });
+    const ablation = advanceThinReadingDocument(experiment, {
+      parentNodeId: experiment.activeNodeId,
+      seed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-ablation"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "消融结果。",
+        withinPaperClosure: true
+      },
+      source: { kind: "omitted_section", label: "消融", sectionKey: "ablation" },
+      title: "消融"
+    });
+    const onUpdateDocument = vi.fn();
+
+    renderTab(ablation, onUpdateDocument);
+
+    const breadcrumbs = screen.getByLabelText("薄读层级");
+    expect(within(breadcrumbs).getByRole("button", { name: "总述" })).toBeInTheDocument();
+    const experimentBreadcrumb = within(breadcrumbs).getByRole("button", { name: "实验" });
+    expect(within(breadcrumbs).getByText("消融")).toHaveAttribute("aria-current", "page");
+
+    fireEvent.click(experimentBreadcrumb);
+
+    expect(onUpdateDocument).toHaveBeenCalledWith(
+      ablation.artifactId,
+      expect.objectContaining({ activeNodeId: experiment.activeNodeId })
+    );
+  });
+
   test("shows a selection affordance and requests Agent branch generation from selected text", async () => {
     const document = makeDocument();
     const onUpdateDocument = vi.fn();
@@ -258,7 +461,9 @@ describe("ThinReadingTab", () => {
     fireEvent.mouseUp(paragraph);
 
     expect(screen.getByRole("button", { name: "深入" })).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "深入提示（可选）" }), {
+    const deepenPrompt = screen.getByRole("textbox", { name: "深入提示（可选）" });
+    expect(deepenPrompt).toHaveAttribute("maxlength", "600");
+    fireEvent.change(deepenPrompt, {
       target: { value: "关注证据" }
     });
     fireEvent.click(screen.getByRole("button", { name: "深入" }));
@@ -267,11 +472,40 @@ describe("ThinReadingTab", () => {
       artifactId: document.artifactId,
       document,
       source: {
+        evidenceIds: ["evidence-attention-self-attention"],
         kind: "selected_text",
         excerpt: "被选中的摘要",
         prompt: "关注证据"
       }
     }));
+  });
+
+  test("honors automatic publication when saving an annotation from selected text", () => {
+    const document = setThinReadingAutoPublic(makeDocument(), true);
+    const onUpdateDocument = vi.fn();
+    renderTab(document, onUpdateDocument);
+    const paragraph = screen.getByTestId("thin-reading-summary");
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "被选中的摘要",
+      getRangeAt: () => ({
+        commonAncestorContainer: paragraph,
+        getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
+      }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(paragraph);
+    fireEvent.change(screen.getByRole("textbox", { name: "批注" }), {
+      target: { value: "自动公开的选区批注" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存批注" }));
+
+    const updatedDocument = onUpdateDocument.mock.calls[0][1] as ThinReadingDocument;
+    expect(updatedDocument.annotations[0]).toMatchObject({
+      body: "自动公开的选区批注",
+      visibility: "pending_public"
+    });
+    expect(updatedDocument.pendingPublicAnnotationIds).toEqual([updatedDocument.annotations[0].id]);
   });
 
   test("lets Intuecho recommendation text enter the same selection deepen flow", async () => {
@@ -309,6 +543,70 @@ describe("ThinReadingTab", () => {
         excerpt: "self-attention 如何替代 recurrence"
       }
     }));
+  });
+
+  test("preserves an external source target when saving a selected external reading lead", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          claims: [],
+          externalKnowledge: ["openalex:W42"],
+          externalSources: [{
+            abstract: "A follow-up study.",
+            authors: ["A. Author"],
+            id: "openalex:W42",
+            provider: "openalex",
+            relation: "related",
+            relevance: 0.85,
+            retrievalQuery: "follow-up",
+            sourceRecordUrl: "https://openalex.org/W42",
+            sourceId: "W42",
+            title: "A Follow-up Study",
+            url: "https://openalex.org/W42",
+            year: 2025
+          }],
+          paperEvidence: [],
+          paperEvidenceSpans: [],
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: ["openalex:W42"],
+            id: "sentence-external",
+            status: "weak",
+            text: "后续研究扩展了这套方法。"
+          }]
+        },
+        summary: "后续研究扩展了这套方法。",
+        withinPaperClosure: false
+      }
+    });
+    const onUpdateDocument = vi.fn();
+    renderTab(document, onUpdateDocument);
+    const sourceLink = screen.getByRole("link", { name: "A Follow-up Study" });
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "A Follow-up Study",
+      getRangeAt: () => ({
+        commonAncestorContainer: sourceLink,
+        getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
+      }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(sourceLink);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "批注" }), {
+      target: { value: "外部来源待核验" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存批注" }));
+
+    const updatedDocument = onUpdateDocument.mock.calls[0][1] as ThinReadingDocument;
+    expect(updatedDocument.annotations[0].target).toEqual({
+      kind: "external_knowledge",
+      nodeId: document.activeNodeId,
+      source: "openalex:W42"
+    });
   });
 
   test("can deepen an Intuecho recommendation directly without pretending it is synced community data", async () => {
@@ -369,6 +667,27 @@ describe("ThinReadingTab", () => {
     expect(updatedDocument.pendingPublicAnnotationIds).toEqual([updatedDocument.annotations[0].id]);
   });
 
+  test("hands pending public annotations to the configured Intuecho sync action", async () => {
+    const root = makeDocument();
+    const document = addThinReadingAnnotation(root, {
+      body: "等待远端确认的批注。",
+      excerpt: "self-attention",
+      nodeId: root.rootNodeId,
+      visibility: "pending_public"
+    });
+    const onSyncIntuecho = vi.fn(async () => undefined);
+    renderTab(document, vi.fn(), undefined, onSyncIntuecho);
+
+    const syncButton = screen.getByRole("button", { name: "同步公开批注" });
+    expect(syncButton).toBeEnabled();
+    fireEvent.click(syncButton);
+
+    await waitFor(() => expect(onSyncIntuecho).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document
+    }));
+  });
+
   test("marks unsupported summary sentences without highlighting the body text", () => {
     const fixture = createThinReadingFixture();
     const unsupportedSeed: ThinReadingNodeSeed = {
@@ -408,6 +727,28 @@ describe("ThinReadingTab", () => {
     expect(globalThis.document.querySelector(".thin-reading__summary-sentence--unsupported")).toBeNull();
   });
 
+  test("marks legacy summaries without sentence-level mappings as pending review", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          summarySentences: []
+        },
+        summary: "第一句来自旧产物。第二句也没有独立来源映射。"
+      }
+    });
+    const onOpenEvidence = vi.fn();
+
+    renderTab(document, vi.fn(), onOpenEvidence);
+
+    expect(screen.getAllByText("待核")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /打开证据句/ })).not.toBeInTheDocument();
+    expect(onOpenEvidence).not.toHaveBeenCalled();
+  });
+
   test("renders traceable external sources as compact superscript links", () => {
     const fixture = createThinReadingFixture();
     const text = "后续研究扩展了这套方法。";
@@ -426,6 +767,7 @@ describe("ThinReadingTab", () => {
             relation: "related",
             relevance: 0.85,
             retrievalQuery: "follow-up",
+            sourceRecordUrl: "https://openalex.org/W42",
             sourceId: "W42",
             title: "A Follow-up Study",
             url: "https://openalex.org/W42",
@@ -452,6 +794,11 @@ describe("ThinReadingTab", () => {
     expect(marker).toHaveTextContent("外1");
     expect(marker).toHaveAttribute("href", "https://openalex.org/W42");
     expect(marker.getAttribute("title")).toContain("相关工作");
+    expect(screen.getByRole("link", { name: "打开来源记录：A Follow-up Study" }))
+      .toHaveAttribute("href", "https://openalex.org/W42");
     expect(marker.closest("sup")).not.toBeNull();
+    expect(screen.getByLabelText("已越出论文原文闭包")).toHaveTextContent("本层主要依据论文外的可追溯来源");
+    expect(screen.getByRole("link", { name: "A Follow-up Study" })).toHaveAttribute("href", "https://openalex.org/W42");
+    expect(screen.getByLabelText("本轮外部来源")).toHaveTextContent("相关工作");
   });
 });

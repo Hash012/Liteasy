@@ -2928,6 +2928,43 @@ body {
   line-height: 1.5;
 }
 
+.pdf-public-annotation-status {
+  align-items: center;
+  background: #fff4e8;
+  border-bottom: 1px solid #ead3bd;
+  color: #875a28;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.pdf-public-annotation-status button {
+  background: transparent;
+  border: 1px solid #d6b28a;
+  border-radius: 4px;
+  color: #875a28;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 7px;
+}
+
+.pdf-public-annotation-status button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.pdf-evidence-status {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line-1);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 7px 12px;
+}
+
 .pdf-annotation-item {
   border: 1px solid var(--line-1);
   border-radius: 8px;
@@ -2964,6 +3001,30 @@ body {
 .pdf-annotation-excerpt {
   color: var(--ink-1);
   font-size: 12px;
+}
+
+.pdf-annotation-public-toggle,
+.pdf-annotation-auto-public-toggle {
+  align-items: center;
+  color: var(--ink-2);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.pdf-annotation-auto-public-toggle {
+  border-bottom: 1px solid var(--line-1);
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.pdf-annotation-item > small {
+  color: #875a28;
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .pdf-annotation-note {

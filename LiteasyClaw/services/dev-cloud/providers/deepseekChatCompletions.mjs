@@ -8,6 +8,20 @@ function extractAssistantContent(payload) {
   return typeof content === "string" && content.length > 0 ? content : null;
 }
 
+function buildChatCompletionRequest(input) {
+  return {
+    messages: [
+      {
+        content: input.prompt,
+        role: "user"
+      }
+    ],
+    model: input.model,
+    ...(input.outputFormat ? { response_format: { type: "json_object" } } : {}),
+    stream: false
+  };
+}
+
 async function readErrorMessage(response) {
   try {
     const payload = await response.json();
@@ -27,23 +41,22 @@ export function createDeepSeekChatCompletionsProvider({
   fetchImpl = fetchWithConfiguredProxy
 }) {
   return async (input) => {
-    const response = await fetchImpl(`${apiBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
-      body: JSON.stringify({
-        messages: [
-          {
-            content: input.prompt,
-            role: "user"
-          }
-        ],
-        model: input.model,
-        stream: false
-      }),
+    const url = `${apiBaseUrl.replace(/\/+$/, "")}/chat/completions`;
+    const request = (includeOutputFormat) => fetchImpl(url, {
+      body: JSON.stringify(buildChatCompletionRequest(
+        includeOutputFormat ? input : { ...input, outputFormat: undefined }
+      )),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
       method: "POST"
     });
+    let response = await request(true);
+    if (input.outputFormat && (response.status === 400 || response.status === 422)) {
+      await response.body?.cancel?.().catch?.(() => undefined);
+      response = await request(false);
+    }
 
     if (!response.ok) {
       const detail = await readErrorMessage(response);

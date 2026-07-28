@@ -1,4 +1,5 @@
 const openAlexEndpoint = "https://api.openalex.org/works";
+const crossrefEndpoint = "https://api.crossref.org/works";
 const maximumQueryLength = 500;
 const maximumResults = 8;
 
@@ -41,6 +42,10 @@ function normalizeDoiKey(value) {
   return normalizeText(value)
     .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
     .toLowerCase();
+}
+
+function sourceDoiKey(source) {
+  return normalizeDoiKey(source?.doi ?? source?.sourceId);
 }
 
 function normalizeArxivKey(value) {
@@ -182,6 +187,7 @@ function normalizeWork(work, input, rank) {
     relation: relationToTarget(work, input.targetWork),
     relevance,
     retrievalQuery: input.query,
+    sourceRecordUrl: `https://openalex.org/${sourceId}`,
     sourceId,
     title,
     url,
@@ -242,14 +248,22 @@ async function resolveTargetWork(works, input, options) {
   if (targetFromSearch) {
     return targetFromSearch;
   }
-  if (input.targetPaperIdentity?.kind !== "doi") {
+  const identity = input.targetPaperIdentity;
+  if (!identity) {
     return undefined;
   }
-  const doi = normalizeDoiKey(input.targetPaperIdentity.value);
-  if (!doi) {
+  let externalId;
+  if (identity.kind === "doi") {
+    const doi = normalizeDoiKey(identity.value);
+    externalId = doi ? `https://doi.org/${doi}` : "";
+  } else if (identity.kind === "arxiv_id") {
+    const arxivId = normalizeArxivKey(identity.value);
+    externalId = arxivId ? `https://arxiv.org/abs/${arxivId}` : "";
+  }
+  if (!externalId) {
     return undefined;
   }
-  const exactUrl = new URL(`${openAlexEndpoint}/https://doi.org/${doi}`);
+  const exactUrl = new URL(`${openAlexEndpoint}/${externalId}`);
   const target = await fetchOpenAlexPayload(exactUrl, { ...options, allowNotFound: true });
   return target && sourceIdFromWork(target) ? target : undefined;
 }
@@ -288,6 +302,123 @@ export async function searchOpenAlexExternalKnowledge(body, options = {}) {
   return {
     provider: "openalex",
     query,
+    sources,
+    status: sources.length > 0 ? "available" : "empty"
+  };
+}
+
+function crossrefAuthors(item) {
+  return Array.isArray(item?.author)
+    ? item.author
+        .map((author) => normalizeText([author?.given, author?.family].filter(Boolean).join(" ")))
+        .filter(Boolean)
+        .slice(0, 12)
+    : [];
+}
+
+function crossrefYear(item) {
+  const dateParts = item?.published_print?.["date-parts"] ?? item?.published_online?.["date-parts"] ?? item?.issued?.["date-parts"];
+  const year = Array.isArray(dateParts) && Array.isArray(dateParts[0]) ? dateParts[0][0] : undefined;
+  return Number.isInteger(year) ? year : undefined;
+}
+
+function normalizeCrossrefWork(item, query, rank) {
+  const doiKey = normalizeDoiKey(item?.DOI);
+  const title = normalizeText(Array.isArray(item?.title) ? item.title[0] : "");
+  if (!doiKey || !title) {
+    return null;
+  }
+  const relevance = Math.min(
+    1,
+    Number((0.45 / (rank + 1) + 0.55 * lexicalOverlap(query, title)).toFixed(3))
+  );
+  return {
+    abstract: normalizeText(item?.abstract).replace(/<[^>]*>/g, "").slice(0, 2400),
+    authors: crossrefAuthors(item),
+    doi: `https://doi.org/${doiKey}`,
+    id: `crossref:${doiKey}`,
+    provider: "crossref",
+    relation: "topic_search",
+    relevance,
+    retrievalQuery: query,
+    sourceRecordUrl: `${crossrefEndpoint}/${encodeURIComponent(doiKey)}`,
+    sourceId: doiKey,
+    title,
+    url: `https://doi.org/${doiKey}`,
+    year: crossrefYear(item)
+  };
+}
+
+async function searchCrossrefExternalKnowledge(body, options = {}) {
+  const query = normalizeText(body?.query);
+  const limit = Number.isInteger(body?.limit)
+    ? Math.min(maximumResults, Math.max(1, body.limit))
+    : 5;
+  const url = new URL(crossrefEndpoint);
+  url.searchParams.set("query.bibliographic", query);
+  url.searchParams.set("rows", String(Math.min(maximumResults, limit)));
+  let payload;
+  try {
+    payload = await fetchOpenAlexPayload(url, {
+      ...options,
+      transport: options.transport ?? defaultOpenAlexTransport
+    });
+  } catch (error) {
+    if (error instanceof ExternalKnowledgeError) {
+      throw new ExternalKnowledgeError(
+        error.code.replace("openalex", "crossref"),
+        error.message.replace(/OpenAlex/g, "Crossref"),
+        error.statusCode
+      );
+    }
+    throw error;
+  }
+  const items = Array.isArray(payload?.message?.items) ? payload.message.items : [];
+  return items
+    .map((item, rank) => normalizeCrossrefWork(item, query, rank))
+    .filter(Boolean)
+    .filter((source) => lexicalOverlap(query, `${source.title} ${source.abstract}`) > 0);
+}
+
+function relationRank(relation) {
+  if (relation === "cited_by_target" || relation === "cites_target") return 3;
+  if (relation === "related") return 2;
+  return 1;
+}
+
+function mergeExternalSources(sources, limit) {
+  const deduplicated = new Map();
+  for (const source of sources) {
+    const key = sourceDoiKey(source) || `${source.provider}:${source.sourceId}`;
+    const existing = deduplicated.get(key);
+    if (!existing || relationRank(source.relation) > relationRank(existing.relation) ||
+      (relationRank(source.relation) === relationRank(existing.relation) && source.relevance > existing.relevance)) {
+      deduplicated.set(key, source);
+    }
+  }
+  return [...deduplicated.values()]
+    .sort((left, right) => relationRank(right.relation) - relationRank(left.relation) || right.relevance - left.relevance || left.title.localeCompare(right.title))
+    .slice(0, limit);
+}
+
+export async function searchExternalKnowledge(body, options = {}) {
+  const limit = Number.isInteger(body?.limit) ? Math.min(maximumResults, Math.max(1, body.limit)) : 5;
+  const crossrefEnabled = options.crossrefEnabled !== false;
+  const [openAlex, crossref] = await Promise.allSettled([
+    searchOpenAlexExternalKnowledge(body, { timeoutMs: options.openAlexTimeoutMs, transport: options.openAlexTransport }),
+    !crossrefEnabled
+      ? Promise.resolve([])
+      : searchCrossrefExternalKnowledge(body, { timeoutMs: options.crossrefTimeoutMs, transport: options.crossrefTransport })
+  ]);
+  const openAlexSources = openAlex.status === "fulfilled" ? openAlex.value.sources : [];
+  const crossrefSources = crossref.status === "fulfilled" ? crossref.value : [];
+  if (openAlex.status === "rejected" && (!crossrefEnabled || crossref.status === "rejected")) {
+    throw openAlex.reason instanceof Error ? openAlex.reason : crossref.reason;
+  }
+  const sources = mergeExternalSources([...openAlexSources, ...crossrefSources], limit);
+  return {
+    provider: crossrefSources.length > 0 && openAlexSources.length > 0 ? "openalex+crossref" : crossrefSources.length > 0 ? "crossref" : "openalex",
+    query: normalizeText(body?.query),
     sources,
     status: sources.length > 0 ? "available" : "empty"
   };

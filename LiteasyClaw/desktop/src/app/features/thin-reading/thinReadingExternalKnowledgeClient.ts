@@ -10,6 +10,7 @@ export type ThinReadingExternalKnowledgeTransport = (request: {
 }) => Promise<ModelTransportResponse>;
 
 type SearchInput = {
+  artifactId: string;
   limit?: number;
   query: string;
   signal?: AbortSignal;
@@ -20,26 +21,58 @@ type SearchInput = {
   };
 };
 
+export type ThinReadingExternalRetrievalState = {
+  attempts: number;
+  id: string;
+  reused: boolean;
+  status: "completed" | "skipped";
+};
+
+export type ThinReadingExternalKnowledgeResult = {
+  retrieval?: ThinReadingExternalRetrievalState;
+  sources: ThinReadingExternalSource[];
+};
+
 function isExternalSource(value: unknown): value is ThinReadingExternalSource {
-  return Boolean(
-    value &&
-    typeof value === "object" &&
-    "abstract" in value && typeof value.abstract === "string" &&
-    "authors" in value && Array.isArray(value.authors) && value.authors.every((author) => typeof author === "string") &&
-    "id" in value && typeof value.id === "string" &&
-    "provider" in value && value.provider === "openalex" &&
-    "relation" in value && (
-      value.relation === "cited_by_target" ||
-      value.relation === "cites_target" ||
-      value.relation === "related" ||
-      value.relation === "topic_search"
-    ) &&
-    "relevance" in value && typeof value.relevance === "number" &&
-    "retrievalQuery" in value && typeof value.retrievalQuery === "string" &&
-    "sourceId" in value && typeof value.sourceId === "string" &&
-    "title" in value && typeof value.title === "string" &&
-    "url" in value && typeof value.url === "string"
-  );
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const source = value as Partial<ThinReadingExternalSource>;
+  const sourceId = source.sourceId?.trim().toUpperCase() ?? "";
+  const isOpenAlex = source.provider === "openalex" &&
+    /^W\d+$/.test(sourceId) &&
+    source.id === `openalex:${sourceId}` &&
+    source.sourceRecordUrl === `https://openalex.org/${sourceId}`;
+  const crossrefDoi = source.sourceId?.trim().toLowerCase() ?? "";
+  const isCrossref = source.provider === "crossref" &&
+    /^[^\s/]+\/[^\s]+$/.test(crossrefDoi) &&
+    source.id === `crossref:${crossrefDoi}` &&
+    source.doi === `https://doi.org/${crossrefDoi}` &&
+    source.url === `https://doi.org/${crossrefDoi}` &&
+    source.sourceRecordUrl === `https://api.crossref.org/works/${encodeURIComponent(crossrefDoi)}` &&
+    source.relation === "topic_search";
+  return (isOpenAlex || isCrossref) &&
+    typeof source.url === "string" && /^https:\/\//i.test(source.url) &&
+    typeof source.title === "string" && source.title.trim().length > 0 &&
+    typeof source.abstract === "string" &&
+    Array.isArray(source.authors) && source.authors.every((author) => typeof author === "string") &&
+    (source.relation === "cited_by_target" ||
+      source.relation === "cites_target" ||
+      source.relation === "related" ||
+      source.relation === "topic_search") &&
+    typeof source.relevance === "number" && Number.isFinite(source.relevance) &&
+    typeof source.retrievalQuery === "string";
+}
+
+function isRetrievalState(value: unknown): value is ThinReadingExternalRetrievalState {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const state = value as Partial<ThinReadingExternalRetrievalState>;
+  return typeof state.id === "string" && state.id.length > 0 &&
+    typeof state.attempts === "number" && Number.isInteger(state.attempts) && state.attempts > 0 &&
+    typeof state.reused === "boolean" &&
+    (state.status === "completed" || state.status === "skipped");
 }
 
 async function defaultTransport(request: Parameters<ThinReadingExternalKnowledgeTransport>[0]) {
@@ -55,9 +88,13 @@ export function createThinReadingExternalKnowledgeClient(input: {
   endpoint: string;
   transport?: ThinReadingExternalKnowledgeTransport;
 }) {
-  return async (search: SearchInput): Promise<ThinReadingExternalSource[]> => {
+  return async (search: SearchInput): Promise<ThinReadingExternalKnowledgeResult> => {
+    if (!/^[A-Za-z0-9._-]{1,120}$/.test(search.artifactId)) {
+      throw new Error("外部文献检索缺少有效 artifactId");
+    }
     const response = await (input.transport ?? defaultTransport)({
       body: JSON.stringify({
+        artifactId: search.artifactId,
         limit: search.limit ?? 5,
         query: search.query,
         targetPaperIdentity: search.targetPaperIdentity,
@@ -81,6 +118,11 @@ export function createThinReadingExternalKnowledgeClient(input: {
     ) {
       throw new Error("外部文献检索返回格式无效");
     }
-    return payload.sources;
+    return {
+      ...(isRetrievalState("retrieval" in payload ? payload.retrieval : undefined)
+        ? { retrieval: payload.retrieval }
+        : {}),
+      sources: payload.sources
+    };
   };
 }

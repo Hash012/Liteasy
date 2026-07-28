@@ -77,6 +77,23 @@ test("retrieves bounded evidence with a fair per-paper first pass", () => {
   expect(prepared.evidencePrompt).toContain(`[${prepared.evidence[0].id}] Paper A p.1`);
 });
 
+test("preserves page-text offsets from retrieval chunks into analysis evidence", () => {
+  const prepared = prepareMultiPaperAnalysis({
+    createId: createIdFactory(),
+    importedChunksByPaperId: {
+      "paper-a": [{
+        ...chunk("paper-a", "Paper A", 2, "late interaction", ["retrieval"]),
+        pageTextEnd: 48,
+        pageTextStart: 12
+      }]
+    },
+    query: "late interaction",
+    selectedPapers: [{ id: "paper-a", title: "Paper A" }]
+  });
+
+  expect(prepared.evidence[0]).toMatchObject({ pageTextEnd: 48, pageTextStart: 12 });
+});
+
 test("uses adaptive stratified coverage instead of collapsing a paper to a few top chunks", () => {
   const evidenceChunks = Array.from({ length: 40 }, (_, index) =>
     chunk(

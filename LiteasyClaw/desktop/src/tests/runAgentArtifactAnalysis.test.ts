@@ -47,6 +47,99 @@ test("submits modal analysis through the public Agent client", async () => {
   expect(send.mock.calls[0][0].message).not.toContain("总节点不超过 60");
 });
 
+test("projects thin-reading root phases into dedicated task stages", async () => {
+  let listener: Parameters<FrontendAgentClient["subscribe"]>[0] | undefined;
+  const subscribe = vi.fn((nextListener: Parameters<FrontendAgentClient["subscribe"]>[0]) => {
+    listener = nextListener;
+    return vi.fn();
+  });
+  const send = vi.fn(async (
+    input: Parameters<FrontendAgentClient["send"]>[0],
+    options?: Parameters<FrontendAgentClient["send"]>[1]
+  ) => {
+    const eventBase = {
+      apiVersion: "liteasy.agent/v1" as const,
+      emittedAt: "2026-07-28T00:00:00.000Z",
+      inputMode: "qa" as const,
+      runId: "thin-run",
+      sessionId: "session-1"
+    };
+    listener?.({
+      ...eventBase,
+      eventId: "thin-start",
+      idempotencyKey: options?.idempotencyKey ?? "",
+      message: input.message,
+      sequence: 1,
+      type: "run.started"
+    });
+    listener?.({
+      ...eventBase,
+      eventId: "thin-retrieval",
+      phase: "retrieving_evidence",
+      planId: "thin-run",
+      progress: 35,
+      sequence: 2,
+      summary: "正在检索并整理选中文献证据",
+      traceId: "trace-thin",
+      type: "progress.started"
+    });
+    listener?.({
+      ...eventBase,
+      eventId: "thin-generation",
+      phase: "generating_answer",
+      planId: "thin-run",
+      progress: 55,
+      sequence: 3,
+      summary: "正在调用真实模型生成薄读总述",
+      traceId: "trace-thin",
+      type: "progress.started"
+    });
+    listener?.({
+      ...eventBase,
+      eventId: "thin-validation",
+      phase: "auditing_answer",
+      planId: "thin-run",
+      progress: 78,
+      sequence: 4,
+      summary: "正在核对薄读证据边界",
+      traceId: "trace-thin",
+      type: "progress.started"
+    });
+    return {
+      data: {
+        apiVersion: "liteasy.agent/v1" as const,
+        createdAt: "2026-07-28T00:00:00.000Z",
+        events: [],
+        idempotencyKey: options?.idempotencyKey ?? "",
+        input,
+        runId: "thin-run",
+        sessionId: "session-1",
+        status: "completed" as const
+      },
+      ok: true as const
+    };
+  });
+  const onProgress = vi.fn();
+
+  await runAgentArtifactAnalysis(createClient(send, subscribe), "thin_reading", onProgress, {
+    sourcePaperIds: ["paper-1"],
+    thinReadingContext: {
+      artifactId: "artifact-thin",
+      depth: 0,
+      paperIds: ["paper-1"],
+      primaryPaperId: "paper-1",
+      primaryPaperTitle: "Paper one",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ stage: "thin_reading_planning" }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ stage: "thin_reading_retrieving_evidence" }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ stage: "thin_reading_generating_root" }));
+  expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ stage: "thin_reading_validating" }));
+});
+
 test("streams public Agent progress events to the artifact task", async () => {
   let listener: Parameters<FrontendAgentClient["subscribe"]>[0] | undefined;
   const unsubscribe = vi.fn();

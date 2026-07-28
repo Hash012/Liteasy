@@ -79,6 +79,8 @@ test("preserves reader-prioritized paper order and thin-reading context", () => 
                 confidence: 0.88,
                 id: "evidence-parent",
                 page: 2,
+                pageTextEnd: 49,
+                pageTextStart: 5,
                 paperId: "paper-c",
                 quote: "Paper C introduces a retrieval structure."
               }
@@ -119,6 +121,8 @@ test("preserves reader-prioritized paper order and thin-reading context", () => 
       expect.objectContaining({
         id: "evidence-parent",
         page: 2,
+        pageTextEnd: 49,
+        pageTextStart: 5,
         quote: expect.stringContaining("retrieval structure")
       })
     ],
@@ -151,4 +155,39 @@ test("falls back to the current selected context without a selection attachment"
   expect(scope.importedChunksByPaperId).toEqual({
     "paper-a": [{ chunkId: "chunk-a", page: 1, paperId: "paper-a", text: "A" }]
   });
+});
+
+test("normalizes selected-passage evidence ids and rejects malformed attachment metadata", () => {
+  const request = {
+    attachments: [{
+      metadata: {
+        thinReadingContext: {
+          artifactId: "artifact-thin-branch",
+          depth: 1,
+          paperIds: ["paper-a"],
+          source: {
+            evidenceIds: ["evidence-selected", "evidence-selected", "evidence-boundary"],
+            excerpt: "the selected passage",
+            kind: "selected_text" as const
+          },
+          targetLanguage: "en-US"
+        }
+      },
+      source: "selection" as const,
+      uri: "liteasy://selection/current"
+    }],
+    idempotencyKey: "artifact:thin:branch",
+    input: { artifactType: "thin_reading" as const, message: "deepen", mode: "qa" as const },
+    sessionId: "session-branch"
+  };
+
+  expect(getAgentRequestThinReadingContext(request)?.source).toEqual({
+    evidenceIds: ["evidence-selected", "evidence-boundary"],
+    excerpt: "the selected passage",
+    kind: "selected_text"
+  });
+
+  const malformed = structuredClone(request);
+  malformed.attachments[0].metadata.thinReadingContext.source.evidenceIds = [42] as unknown as string[];
+  expect(getAgentRequestThinReadingContext(malformed)).toBeNull();
 });

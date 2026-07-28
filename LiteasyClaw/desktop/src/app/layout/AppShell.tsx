@@ -217,6 +217,7 @@ export function AppShell({
     onAnalysisHint: setAnalysisHint,
     onImportJobsChanged: setImportJobsByDocumentId,
     onWorkspaceChanged: setWorkspaceState,
+    ocrLanguage: settingsState["import.ocr_language"],
     workspaceStore: workspaceStoreRef.current
   });
 
@@ -226,7 +227,14 @@ export function AppShell({
     artifactResultScopeKey: settingsState["models.cloud_proxy_endpoint"],
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
     getAssistantLanguage: () => settingsStoreRef.current.getState()["assistant.language"],
+    getActiveReaderPaper: () => {
+      const paperId = activeReaderPaperId;
+      return paperId
+        ? workspaceStoreRef.current.getState().papers.find((paper) => paper.id === paperId) ?? null
+        : null;
+    },
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
+    getIntuechoEndpoint: () => settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"],
     getModelDiagnosticContext: () => {
       const provider = settingsStoreRef.current.getState()["models.default_provider"];
       return {
@@ -953,6 +961,7 @@ export function AppShell({
             artifactWorkflow.actions.regenerateArtifact(request);
           }}
           onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
+          onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
           onSaveMarkdownTab={(artifactId) => {
             void artifactWorkflow.actions.saveSkillDocument(artifactId);
           }}
@@ -1061,6 +1070,8 @@ export function AppShell({
         }}
         onOpenEvidence={openEvidenceInReader}
         onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
+        onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
+        intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
         onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
         onSaveMarkdownTab={(artifactId) => {

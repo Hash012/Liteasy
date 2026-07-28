@@ -39,6 +39,7 @@ async function invokeHandler({ body, handler, handlerOptions, headers = {}, meth
   };
 
   const isolatedHandlerOptions = {
+    crossrefEnabled: false,
     deepseekApiKey: undefined,
     defaultProvider: "openai",
     openaiApiKey: undefined,
@@ -192,6 +193,7 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
       relation: "topic_search",
       relevance: response.json.sources[0].relevance,
       retrievalQuery: "ColBERT late interaction retrieval",
+      sourceRecordUrl: "https://openalex.org/W123456789",
       sourceId: "W123456789",
       title: "Multi-vector dense retrieval after ColBERT",
       url: "https://example.org/paper",
@@ -200,6 +202,57 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
   ]);
   assert.ok(response.json.sources[0].relevance > 0);
   assert.ok(response.json.sources[0].relevance <= 1);
+});
+
+test("merges Crossref topic results without inventing graph relations or duplicating a DOI", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ artifactId: "crossref-merge", limit: 5, query: "retrieval evaluation" }),
+    handlerOptions: {
+      crossrefEnabled: true,
+      crossrefTransport: async () => ({
+        json: async () => ({
+          message: { items: [
+            { DOI: "10.1000/shared", title: ["Retrieval evaluation from Crossref"] },
+            { DOI: "10.1000/crossref-only", author: [{ family: "Author", given: "C" }], title: ["Retrieval evaluation replication"] }
+          ] }
+        }),
+        ok: true,
+        status: 200
+      }),
+      openAlexTransport: async () => ({
+        json: async () => ({
+          results: [{
+            display_name: "Retrieval evaluation from OpenAlex",
+            doi: "https://doi.org/10.1000/shared",
+            id: "https://openalex.org/W4242"
+          }]
+        }),
+        ok: true,
+        status: 200
+      })
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.provider, "openalex+crossref");
+  assert.equal(response.json.sources.filter((source) => source.doi === "https://doi.org/10.1000/shared").length, 1);
+  assert.deepEqual(response.json.sources.find((source) => source.provider === "crossref"), {
+    abstract: "",
+    authors: ["C Author"],
+    doi: "https://doi.org/10.1000/crossref-only",
+    id: "crossref:10.1000/crossref-only",
+    provider: "crossref",
+    relation: "topic_search",
+    relevance: response.json.sources.find((source) => source.provider === "crossref").relevance,
+    retrievalQuery: "retrieval evaluation",
+    sourceRecordUrl: "https://api.crossref.org/works/10.1000%2Fcrossref-only",
+    sourceId: "10.1000/crossref-only",
+    title: "Retrieval evaluation replication",
+    url: "https://doi.org/10.1000/crossref-only"
+  });
 });
 
 test("derives bounded one-hop OpenAlex relations from explicit graph fields", async () => {
@@ -302,16 +355,166 @@ test("resolves a missing target work by DOI before deriving a one-hop relation",
   assert.ok(!response.json.sources.some((source) => source.sourceId === "W202"));
 });
 
-test("returns an explicit empty external-knowledge result without synthetic sources", async () => {
+test("resolves a missing target work by arXiv identity before deriving a one-hop relation", async () => {
+  const requestedUrls = [];
   const response = await invokeHandler({
-    body: JSON.stringify({ query: "a research topic with no OpenAlex result" }),
+    body: JSON.stringify({
+      query: "attention architecture follow-up",
+      targetPaperIdentity: { kind: "arxiv_id", value: "1706.03762v5" },
+      targetPaperTitle: "A title absent from this search page"
+    }),
     handlerOptions: {
-      openAlexTransport: async () => ({
+      openAlexTransport: async (url) => {
+        requestedUrls.push(url);
+        const exactTargetRequest = url.includes("/works/https://arxiv.org/abs/1706.03762");
+        return {
+          json: async () => exactTargetRequest
+            ? {
+                display_name: "Attention Target",
+                id: "https://openalex.org/W300",
+                referenced_works: ["https://openalex.org/W301"]
+              }
+            : {
+                results: [{
+                  display_name: "Attention Follow-up",
+                  id: "https://openalex.org/W301"
+                }]
+              },
+          ok: true,
+          status: 200
+        };
+      }
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(requestedUrls.length, 2);
+  assert.match(requestedUrls[1], /works\/https:\/\/arxiv\.org\/abs\/1706\.03762/);
+  assert.equal(response.json.sources[0].relation, "cited_by_target");
+});
+
+test("recovers an artifact-scoped external retrieval after failure and reuses the completed result", async () => {
+  let calls = 0;
+  const createHandler = () => createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    openAlexTransport: async () => {
+      calls += 1;
+      if (calls === 1) {
+        throw new Error("temporary upstream failure");
+      }
+      return {
+        json: async () => ({
+          results: [{
+            display_name: "Retrieval Follow-up",
+            id: "https://openalex.org/W401"
+          }]
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+  const request = {
+    artifactId: "artifact-thin-recovery",
+    query: "retrieval follow-up",
+    targetPaperTitle: "Target Paper"
+  };
+
+  const first = await invokeHandler({
+    body: JSON.stringify(request),
+    handler: createHandler(),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+  expectExternalRetrievalFailure(first);
+
+  const second = await invokeHandler({
+    body: JSON.stringify(request),
+    // Recreate the handler to prove the failed state is read from SQLite,
+    // rather than surviving only in a process-local request cache.
+    handler: createHandler(),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+  assert.equal(second.statusCode, 200);
+  assert.deepEqual(second.json.retrieval, {
+    attempts: 2,
+    id: second.json.retrieval.id,
+    reused: false,
+    status: "completed"
+  });
+  assert.equal(second.json.sources[0].sourceId, "W401");
+
+  const third = await invokeHandler({
+    body: JSON.stringify(request),
+    handler: createHandler(),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+  assert.equal(third.statusCode, 200);
+  assert.deepEqual(third.json.retrieval, {
+    attempts: 2,
+    id: second.json.retrieval.id,
+    reused: true,
+    status: "completed"
+  });
+  assert.equal(calls, 2);
+});
+
+function expectExternalRetrievalFailure(response) {
+  assert.equal(response.statusCode, 502);
+  assert.equal(response.json.error, "openalex_unavailable");
+  assert.deepEqual(response.json.retrieval, {
+    attempts: 1,
+    id: response.json.retrieval.id,
+    reused: false,
+    status: "failed"
+  });
+}
+
+test("rejects an unsafe artifact boundary before external retrieval", async () => {
+  let calls = 0;
+  const response = await invokeHandler({
+    body: JSON.stringify({ artifactId: "../unsafe", query: "retrieval follow-up" }),
+    handlerOptions: {
+      openAlexTransport: async () => {
+        calls += 1;
+        throw new Error("should not be called");
+      }
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "invalid_external_knowledge_artifact_id");
+  assert.equal(calls, 0);
+});
+
+test("returns an explicit empty external-knowledge result without synthetic sources", async () => {
+  let calls = 0;
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    openAlexTransport: async () => {
+      calls += 1;
+      return {
         json: async () => ({ results: [] }),
         ok: true,
         status: 200
-      })
-    },
+      };
+    }
+  });
+  const request = { artifactId: "artifact-thin-empty", query: "a research topic with no OpenAlex result" };
+  const response = await invokeHandler({
+    body: JSON.stringify(request),
+    handler,
     headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-knowledge"
@@ -320,6 +523,24 @@ test("returns an explicit empty external-knowledge result without synthetic sour
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.status, "empty");
   assert.deepEqual(response.json.sources, []);
+  assert.deepEqual(response.json.retrieval, {
+    attempts: 1,
+    id: response.json.retrieval.id,
+    reused: false,
+    status: "skipped"
+  });
+
+  const reused = await invokeHandler({
+    body: JSON.stringify(request),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+  assert.equal(reused.statusCode, 200);
+  assert.equal(reused.json.retrieval.status, "skipped");
+  assert.equal(reused.json.retrieval.reused, true);
+  assert.equal(calls, 1);
 });
 
 test("reports an OpenAlex upstream failure instead of falling back to static knowledge", async () => {

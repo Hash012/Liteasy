@@ -20,6 +20,7 @@ type ArtifactTabsProps = {
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
   onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
+  onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onGenerateThinReadingBranch?: (input: {
     artifactId: string;
     document: ThinReadingDocument;
@@ -41,6 +42,9 @@ type ArtifactTabsProps = {
 export type ArtifactEvidenceOpenRequest = {
   evidenceId: string;
   page: number;
+  pageTextEnd?: number;
+  pageTextStart?: number;
+  textExtraction?: "embedded" | "ocr";
   paperId: string;
   quote: string;
 };
@@ -91,6 +95,15 @@ const taskStageLabels: Record<ArtifactTask["stage"], string> = {
   retrieving_evidence: "检索论文证据",
   saving_result: "持久保存",
   structuring_artifact: "构建产物结构",
+  thin_reading_generating_branch: "生成薄读下一层",
+  thin_reading_generating_root: "生成薄读总述",
+  thin_reading_parsing_document: "解析论文文本",
+  thin_reading_planning: "规划薄读路径",
+  thin_reading_repairing_trace: "修复句级证据映射",
+  thin_reading_retrieving_evidence: "检索薄读证据",
+  thin_reading_retrieving_external_knowledge: "检索外部文献",
+  thin_reading_saving: "保存薄读节点",
+  thin_reading_validating: "核验薄读证据",
   waiting_for_import: "等待 PDF 解析"
 };
 
@@ -118,6 +131,7 @@ export function ArtifactTabs({
   onDeleteArtifact,
   onGenerateThinReadingBranch,
   onOpenEvidence,
+  onSyncThinReadingAnnotations,
   onRegenerateArtifact,
   onSaveMarkdownTab,
   onUpdateMarkdownTab,
@@ -137,6 +151,9 @@ export function ArtifactTabs({
   const activeTab = tabs.find((tab) => tab.artifactId === activeArtifactId) ?? tabs[0] ?? null;
   const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
   const activeTask = tasks[0] ?? null;
+  const activeThinReadingTask = tasks.find((task) => (
+    task.type === "thin_reading" && task.status === "running"
+  ));
   const activeVerification = activeTab?.verification ?? activeTab?.mindmapArtifact?.verification;
   const activeMindmapSources = activeTab?.mindmapArtifact?.sources;
 
@@ -197,8 +214,14 @@ export function ArtifactTabs({
       <ThinReadingTab
         artifactId={activeTab.artifactId}
         document={activeTab.thinReadingDocument}
+        generationProgress={activeThinReadingTask ? {
+          message: activeThinReadingTask.message,
+          progress: activeThinReadingTask.progress,
+          stageLabel: taskStageLabels[activeThinReadingTask.stage]
+        } : undefined}
         onGenerateBranch={onGenerateThinReadingBranch}
         onOpenEvidence={onOpenEvidence}
+        onSyncIntuecho={onSyncThinReadingAnnotations}
         onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
         papers={activeTab.papers ?? []}
       />
@@ -451,6 +474,9 @@ export function ArtifactTabs({
                       onClick={() => onOpenEvidence?.({
                         evidenceId: evidence.id,
                         page: evidence.page,
+                        ...(typeof evidence.pageTextEnd === "number" ? { pageTextEnd: evidence.pageTextEnd } : {}),
+                        ...(typeof evidence.pageTextStart === "number" ? { pageTextStart: evidence.pageTextStart } : {}),
+                        ...(evidence.textExtraction ? { textExtraction: evidence.textExtraction } : {}),
                         paperId: evidence.paperId,
                         quote: evidence.quote
                       })}

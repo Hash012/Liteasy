@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
 import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
-import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
+import {
+  advanceThinReadingDocument,
+  createThinReadingDocument
+} from "../app/features/thin-reading/thinReadingProjection";
 import type { ArtifactTab, ArtifactTask } from "../app/features/artifacts/artifact.types";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
@@ -182,6 +185,7 @@ const paper: Paper = {
 };
 
 function renderArtifactActions(options: {
+  activeReaderPaper?: Paper | null;
   assistantLanguage?: string;
   confirmDuplicateGeneration?: ReturnType<typeof vi.fn>;
   diagnosticContext?: { endpoint: string; model: string; provider: string };
@@ -227,6 +231,7 @@ function renderArtifactActions(options: {
       getAssistantLanguage: options.assistantLanguage
         ? () => options.assistantLanguage!
         : undefined,
+      getActiveReaderPaper: () => options.activeReaderPaper ?? null,
       getImportedChunksByPaperId: () => importedChunks,
       getModelDiagnosticContext: options.diagnosticContext
         ? () => options.diagnosticContext!
@@ -455,6 +460,50 @@ describe("useArtifactActions", () => {
     ]);
   });
 
+  test("prefers the active reader paper over earlier selected papers for a root thin reading", async () => {
+    const secondPaper: Paper = {
+      id: "demo-2",
+      sourcePath: "fixtures/demo-2.pdf",
+      title: "A second selected paper"
+    };
+    const {
+      onArtifactTabsChanged,
+      queueImportForPapers,
+      result,
+      runAgentAnalysis
+    } = renderArtifactActions({
+      activeReaderPaper: secondPaper,
+      imported: true,
+      selectedPapers: [paper, secondPaper]
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+
+    act(() => {
+      result.current.startAnalysis("thin_reading");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(queueImportForPapers).toHaveBeenCalledWith([secondPaper], expect.any(Function));
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({
+        sourcePaperIds: [secondPaper.id],
+        thinReadingContext: expect.objectContaining({
+          paperIds: [secondPaper.id],
+          primaryPaperId: secondPaper.id
+        })
+      })
+    );
+    expect(onArtifactTabsChanged).toHaveBeenLastCalledWith([
+      expect.objectContaining({ papers: [{ id: secondPaper.id, title: secondPaper.title }] })
+    ]);
+  });
+
   test("passes parent claims and evidence spans when generating a thin-reading branch", async () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument(fixture);
@@ -489,9 +538,11 @@ describe("useArtifactActions", () => {
       "thin_reading",
       expect.any(Function),
       expect.objectContaining({
-        sourcePaperIds: ["paper-attention", "paper-bert"],
+        sourcePaperIds: ["paper-attention"],
         thinReadingContext: expect.objectContaining({
           depth: 1,
+          paperIds: ["paper-attention"],
+          primaryPaperId: "paper-attention",
           parentClaims: [
             expect.objectContaining({
               id: "thin-reading-claim-attention-core",
@@ -509,6 +560,50 @@ describe("useArtifactActions", () => {
           parentSummary: expect.stringContaining("Transformer"),
           source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
         })
+      })
+    );
+    expect(artifactStore.getOpenTabs().find((tab) => tab.artifactId === document.artifactId)).toEqual(
+      expect.objectContaining({ papers: [{ id: "paper-attention", title: "Attention Is All You Need" }] })
+    );
+  });
+
+  test("reuses an existing branch without retaining legacy multi-paper refs", async () => {
+    const fixture = createThinReadingFixture();
+    const root = createThinReadingDocument(fixture);
+    const generated = advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: fixture.rootSeed,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" },
+      title: "实验"
+    });
+    const document = { ...generated, activeNodeId: generated.rootNodeId };
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true,
+      selectedPapers: papers
+    });
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-07-28T00:00:00.000Z",
+      papers,
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+
+    await act(async () => {
+      await result.current.generateThinReadingBranch({
+        artifactId: document.artifactId,
+        document,
+        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+      });
+    });
+
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    expect(artifactStore.getOpenTabs().find((tab) => tab.artifactId === document.artifactId)).toEqual(
+      expect.objectContaining({
+        papers: [{ id: "paper-attention", title: "Attention Is All You Need" }],
+        thinReadingDocument: expect.objectContaining({ paperIds: ["paper-attention"] })
       })
     );
   });

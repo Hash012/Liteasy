@@ -328,6 +328,28 @@ test("stops thin-reading generation on mock endpoints", async () => {
   })).rejects.toThrow("真实模型链路");
 });
 
+test("stops live thin-reading before the model call when PDF text evidence is unavailable", async () => {
+  const store = createSettingsStore();
+  const modelTransport = vi.fn();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: { "scan-1": [] },
+    mode: "qa",
+    modelTransport,
+    question: "生成薄读",
+    selectedPapers: [{ id: "scan-1", title: "扫描版论文" }],
+    settings: store.getState()
+  })).rejects.toThrow("未能从《扫描版论文》提取可引用文本");
+
+  expect(modelTransport).not.toHaveBeenCalled();
+});
+
 test("limits external retrieval to explicit beyond-paper thin-reading branches", () => {
   const baseContext = {
     artifactId: "artifact-scope",
@@ -350,6 +372,16 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
     parentWithinPaperClosure: false,
     source: { kind: "selected_text", excerpt: "MaxSim" }
   })).toBe(true);
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    depth: 3,
+    source: { kind: "selected_text", excerpt: "MaxSim" }
+  })).toBe(true);
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    depth: 2,
+    source: { kind: "selected_text", excerpt: "MaxSim" }
+  }, { maximumInternalDepth: 4 })).toBe(false);
 });
 
 test("parses thin-reading structured output from a live model request", async () => {
@@ -452,6 +484,14 @@ test("parses thin-reading structured output from a live model request", async ()
   });
 
   expect(JSON.parse(requests[0].body)).toMatchObject({
+    outputFormat: {
+      name: "liteasy_thin_reading",
+      schema: expect.objectContaining({
+        additionalProperties: false,
+        type: "object"
+      }),
+      strict: true
+    },
     provider: "openai",
     requireLive: true,
     source: "cloud_proxy"
@@ -677,6 +717,90 @@ test("repairs an incomplete live thin-reading trace exactly once", async () => {
   });
 });
 
+test("repairs a selected Chinese branch that omits an explicitly requested terminology pair", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "BERT",
+        snippet: "The MLM objective enables a deep bidirectional Transformer.",
+        summary: "MLM 让模型融合左右上下文。",
+        tags: ["masked language modeling"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      prompts.push(prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const summary = prompts.length === 1
+        ? "掩码预测让模型融合左右上下文，因而可以预训练深度双向 Transformer。"
+        : "masked language modeling（掩码语言建模）让模型融合左右上下文，因而可以预训练深度双向 Transformer。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: summary
+            }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "解释 masked language modeling（掩码语言建模）如何支持双向预训练",
+    selectedPapers: [{ id: "demo-1", title: "BERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-terminology-repair",
+      depth: 1,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "BERT",
+      source: {
+        kind: "selected_text",
+        excerpt: "masked language modeling（掩码语言建模）让模型融合左右上下文。"
+      },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts).toHaveLength(2);
+  expect(prompts[1]).toContain("中文选区明确要求保留“masked language modeling（掩码语言建模）”");
+  expect(result.thinReading?.qualityGate).toMatchObject({
+    attempts: 2,
+    repaired: true,
+    repairReasons: [expect.stringContaining("中文选区明确要求保留")]
+  });
+});
+
 test("stops after one failed trace repair without creating a local fallback", async () => {
   const store = createSettingsStore();
   let modelCalls = 0;
@@ -741,7 +865,7 @@ test("stops after one failed trace repair without creating a local fallback", as
   expect(phases).toContain("repairing_structured_output");
 });
 
-test("downgrades thin-reading closure when retrieval coverage is incomplete", async () => {
+test("restricts a direct thin-reading request to its primary paper", async () => {
   const store = createSettingsStore();
   store.apply({
     intent: "update_setting",
@@ -823,13 +947,17 @@ test("downgrades thin-reading closure when retrieval coverage is incomplete", as
     }
   });
 
-  expect(result.analysis?.run.coverage.missingPaperIds).toContain("demo-2");
-  expect(result.thinReading?.rootSeed?.withinPaperClosure).toBe(false);
+  expect(result.analysis?.run.coverage.selectedPaperIds).toEqual(["demo-1"]);
+  expect(result.analysis?.run.coverage.missingPaperIds).toEqual([]);
+  expect(result.thinReading?.context.paperIds).toEqual(["demo-1"]);
+  expect(result.thinReading?.context.primaryPaperId).toBe("demo-1");
+  expect(result.thinReading?.rootSeed?.withinPaperClosure).toBe(true);
 });
 
-test("retrieves traceable external sources before generating beyond the paper closure", async () => {
+test("moves a deep paper-bounded branch to traceable external sources at the closure limit", async () => {
   const store = createSettingsStore();
   const externalRequests: Array<{ body: string; url: string }> = [];
+  const progressSummaries: string[] = [];
   let modelPrompt = "";
   store.apply({
     intent: "update_setting",
@@ -855,6 +983,7 @@ test("retrieves traceable external sources before generating beyond the paper cl
       }]
     },
     mode: "qa",
+    onProgress: (progress) => progressSummaries.push(progress.summary),
     modelTransport: async (request) => {
       modelPrompt = String(JSON.parse(request.body).prompt);
       return {
@@ -886,12 +1015,12 @@ test("retrieves traceable external sources before generating beyond the paper cl
     settings: store.getState(),
     thinReadingContext: {
       artifactId: "artifact-thin-external",
-      depth: 2,
+      depth: 3,
       paperIds: ["demo-1"],
-      parentWithinPaperClosure: false,
+      parentWithinPaperClosure: true,
       primaryPaperId: "demo-1",
       primaryPaperTitle: "ColBERT",
-      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      source: { kind: "selected_text", excerpt: "MaxSim late interaction 的 token-level matching 细节" },
       targetLanguage: "zh-CN"
     },
     thinReadingExternalKnowledgeTransport: async (request) => {
@@ -900,6 +1029,12 @@ test("retrieves traceable external sources before generating beyond the paper cl
         json: async () => ({
           provider: "openalex",
           query: "ColBERT 后续研究",
+          retrieval: {
+            attempts: 2,
+            id: "artifact-thin-external:cached-query",
+            reused: true,
+            status: "completed"
+          },
           sources: [{
             abstract: "An efficient multi-vector retrieval method.",
             authors: ["A. Author"],
@@ -909,6 +1044,7 @@ test("retrieves traceable external sources before generating beyond the paper cl
             relation: "topic_search",
             relevance: 0.86,
             retrievalQuery: "ColBERT 后续研究",
+            sourceRecordUrl: "https://openalex.org/W42",
             sourceId: "W42",
             title: "Efficient Multi-vector Retrieval",
             url: "https://openalex.org/W42",
@@ -923,6 +1059,7 @@ test("retrieves traceable external sources before generating beyond the paper cl
   });
 
   expect(externalRequests).toHaveLength(1);
+  expect(progressSummaries).toContain("正在复用已验证的外部文献来源");
   expect(JSON.parse(externalRequests[0].body)).toMatchObject({
     targetPaperIdentity: {
       kind: "local_paper_id",

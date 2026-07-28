@@ -5,6 +5,9 @@ export type Citation = {
 };
 
 export type RetrievalChunk = {
+  pageTextEnd?: number;
+  pageTextStart?: number;
+  textExtraction?: "embedded" | "ocr";
   paperId: string;
   paperTitle: string;
   page: number;

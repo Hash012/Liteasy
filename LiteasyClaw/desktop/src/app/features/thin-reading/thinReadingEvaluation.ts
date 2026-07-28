@@ -5,15 +5,29 @@ import type {
 
 export type ThinReadingGoldConcept = string | readonly string[];
 
+export type ThinReadingGoldEvidence = {
+  evidenceId: string;
+  page: number;
+  quote: string;
+};
+
+export type ThinReadingGoldTerminology = {
+  original: ThinReadingGoldConcept;
+  translation: ThinReadingGoldConcept;
+};
+
 export type ThinReadingGoldStandard = {
+  acceptablePaperTypes?: readonly ThinReadingPaperType[];
   expectedOmittedSectionKeys?: readonly string[];
   expectedWithinPaperClosure: boolean;
   id: string;
   paperType: ThinReadingPaperType;
+  requiredEvidence?: readonly ThinReadingGoldEvidence[];
   relevantEvidenceIds: readonly string[];
   requiredBranchConcepts?: readonly ThinReadingGoldConcept[];
   requiredParentContinuityConcepts?: readonly ThinReadingGoldConcept[];
   requiredSummaryConcepts: readonly ThinReadingGoldConcept[];
+  requiredTerminology?: readonly ThinReadingGoldTerminology[];
   stage: "branch" | "root";
   targetLanguage: string;
 };
@@ -27,12 +41,17 @@ export type ThinReadingEvaluationMetric = {
 export type ThinReadingEvaluationIssueCode =
   | "branch_relevance_below_threshold"
   | "citation_precision_below_threshold"
+  | "citation_recall_below_threshold"
   | "closure_boundary_mismatch"
+  | "evidence_grounding_below_threshold"
+  | "external_relation_misrepresented"
+  | "external_source_untraceable"
   | "language_inconsistent"
   | "omitted_section_recall_below_threshold"
   | "paper_type_mismatch"
   | "sentence_boundary_incomplete"
   | "summary_core_recall_below_threshold"
+  | "terminology_retention_below_threshold"
   | "unsupported_claim_ratio_above_threshold";
 
 export type ThinReadingEvaluationReport = {
@@ -44,12 +63,17 @@ export type ThinReadingEvaluationReport = {
   metrics: {
     branchRelevance: ThinReadingEvaluationMetric;
     citationPrecision: ThinReadingEvaluationMetric;
+    citationRecall: ThinReadingEvaluationMetric;
     closureBoundaryAccuracy: ThinReadingEvaluationMetric;
+    evidenceGrounding: ThinReadingEvaluationMetric;
+    externalRelationFidelity: ThinReadingEvaluationMetric;
+    externalSourceTraceability: ThinReadingEvaluationMetric;
     languageConsistency: ThinReadingEvaluationMetric;
     omittedSectionRecall: ThinReadingEvaluationMetric;
     paperTypeAccuracy: ThinReadingEvaluationMetric;
     sentenceBoundaryCoverage: ThinReadingEvaluationMetric;
     summaryCoreRecall: ThinReadingEvaluationMetric;
+    terminologyRetention: ThinReadingEvaluationMetric;
     unsupportedClaimRatio: ThinReadingEvaluationMetric;
   };
   overallScore: number;
@@ -64,14 +88,19 @@ export type ThinReadingEvaluationSuiteReport = {
 };
 
 const metricWeights = {
-  branchRelevance: 0.15,
-  citationPrecision: 0.15,
+  branchRelevance: 0.1,
+  citationPrecision: 0.06,
+  citationRecall: 0.06,
   closureBoundaryAccuracy: 0.1,
-  languageConsistency: 0.1,
-  omittedSectionRecall: 0.1,
-  paperTypeAccuracy: 0.1,
+  evidenceGrounding: 0.1,
+  externalRelationFidelity: 0.05,
+  externalSourceTraceability: 0.05,
+  languageConsistency: 0.05,
+  omittedSectionRecall: 0.08,
+  paperTypeAccuracy: 0.05,
   sentenceBoundaryCoverage: 0.15,
-  summaryCoreRecall: 0.15
+  summaryCoreRecall: 0.14,
+  terminologyRetention: 0.05
 } as const;
 
 function clamp01(value: number) {
@@ -133,6 +162,39 @@ function citationPrecision(seed: ThinReadingNodeSeed, relevantEvidenceIds: reado
   );
 }
 
+function citationRecall(seed: ThinReadingNodeSeed, requiredEvidence: readonly ThinReadingGoldEvidence[] | undefined, relevantEvidenceIds: readonly string[]) {
+  const required = unique(requiredEvidence?.map((evidence) => evidence.evidenceId) ?? relevantEvidenceIds);
+  const references = new Set(referencedEvidenceIds(seed));
+  return metric(
+    required.filter((evidenceId) => references.has(evidenceId)).length,
+    required.length
+  );
+}
+
+function evidenceGrounding(
+  seed: ThinReadingNodeSeed,
+  requiredEvidence: readonly ThinReadingGoldEvidence[] | undefined
+) {
+  const required = requiredEvidence ?? [];
+  const spans = seed.evidence.paperEvidenceSpans ?? [];
+  return metric(
+    required.filter((goldEvidence) => spans.some((span) => (
+      span.id === goldEvidence.evidenceId &&
+      span.page === goldEvidence.page &&
+      quotesOverlap(span.quote, goldEvidence.quote)
+    ))).length,
+    required.length
+  );
+}
+
+function quotesOverlap(left: string, right: string) {
+  const normalizedLeft = normalizeText(left);
+  const normalizedRight = normalizeText(right);
+  return normalizedLeft.length > 0 && normalizedRight.length > 0 && (
+    normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)
+  );
+}
+
 function sentenceHasValidBoundary(
   sentence: NonNullable<ThinReadingNodeSeed["evidence"]["summarySentences"]>[number],
   availableEvidenceIds: ReadonlySet<string>
@@ -154,9 +216,24 @@ function sentenceBoundaryCoverage(seed: ThinReadingNodeSeed) {
   const availableEvidenceIds = new Set(
     (seed.evidence.paperEvidenceSpans ?? []).map((span) => span.id)
   );
-  return metric(
+  const validBoundaryCoverage = metric(
     sentences.filter((sentence) => sentenceHasValidBoundary(sentence, availableEvidenceIds)).length,
     Math.max(1, sentences.length)
+  );
+  const normalizedSummary = normalizeText(seed.summary);
+  const tracedSummaryLength = sentences.reduce((total, sentence) => {
+    const normalizedSentence = normalizeText(sentence.text);
+    return normalizedSentence.length > 0 && normalizedSummary.includes(normalizedSentence)
+      ? total + normalizedSentence.length
+      : total;
+  }, 0);
+  const textCoverage = metric(
+    Math.min(tracedSummaryLength, normalizedSummary.length),
+    Math.max(1, normalizedSummary.length)
+  );
+  return metric(
+    validBoundaryCoverage.score * textCoverage.score,
+    1
   );
 }
 
@@ -181,6 +258,52 @@ function languageConsistency(summary: string, targetLanguage: string) {
   return metric(consistent ? 1 : 0, 1);
 }
 
+function terminologyRetention(
+  summary: string,
+  terminology: readonly ThinReadingGoldTerminology[] | undefined,
+  targetLanguage: string
+) {
+  const expected = terminology ?? [];
+  const normalizedSummary = normalizeText(summary);
+  const requiresInlineGloss = targetLanguage.trim().toLowerCase().startsWith("zh");
+  return metric(
+    expected.filter((term) => {
+      const originals = typeof term.original === "string" ? [term.original] : term.original;
+      const translations = typeof term.translation === "string" ? [term.translation] : term.translation;
+      if (!requiresInlineGloss) {
+        return originals.some((original) => normalizeText(original).length > 0 && matchesConcept(normalizedSummary, original)) &&
+          translations.some((translation) => normalizeText(translation).length > 0 && matchesConcept(normalizedSummary, translation));
+      }
+      return originals.some((original) => translations.some((translation) => (
+        hasInlineTerminologyGloss(summary, original, translation)
+      )));
+    }).length,
+    expected.length
+  );
+}
+
+function hasInlineTerminologyGloss(summary: string, original: string, translation: string) {
+  const originalPattern = terminologyPattern(original);
+  const translationPattern = terminologyPattern(translation);
+  if (!originalPattern || !translationPattern) {
+    return false;
+  }
+  return new RegExp(
+    `${originalPattern}\\s*[（(]\\s*${translationPattern}\\s*[）)]`,
+    "iu"
+  ).test(summary.normalize("NFKC"));
+}
+
+function terminologyPattern(value: string) {
+  const normalized = value.normalize("NFKC").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+");
+}
+
 function unsupportedClaimRatio(seed: ThinReadingNodeSeed) {
   const claims = seed.evidence.claims ?? [];
   const sentences = seed.evidence.summarySentences ?? [];
@@ -200,6 +323,90 @@ function closureBoundaryAccuracy(seed: ThinReadingNodeSeed, expectedWithinPaperC
   return metric(stateMatches && sourceBoundaryMatches ? 1 : 0, 1);
 }
 
+function hasTraceableExternalSource(source: NonNullable<ThinReadingNodeSeed["evidence"]["externalSources"]>[number]) {
+  const validRelations = new Set([
+    "cited_by_target",
+    "cites_target",
+    "related",
+    "topic_search"
+  ]);
+  try {
+    const paperUrl = new URL(source.url);
+    const recordUrl = new URL(source.sourceRecordUrl);
+    const hasSharedFields = source.title.trim().length > 0 &&
+      source.retrievalQuery.trim().length > 0 &&
+      validRelations.has(source.relation) &&
+      paperUrl.protocol === "https:" &&
+      recordUrl.protocol === "https:";
+    const isOpenAlex = source.provider === "openalex" &&
+      source.id === `openalex:${source.sourceId}` &&
+      /^W\d+$/i.test(source.sourceId) &&
+      recordUrl.hostname === "openalex.org" &&
+      recordUrl.pathname === `/${source.sourceId}`;
+    const crossrefDoi = source.sourceId.trim().toLowerCase();
+    const isCrossref = source.provider === "crossref" &&
+      /^[^\s/]+\/[^\s]+$/.test(crossrefDoi) &&
+      source.id === `crossref:${crossrefDoi}` &&
+      source.doi === `https://doi.org/${crossrefDoi}` &&
+      source.url === `https://doi.org/${crossrefDoi}` &&
+      source.relation === "topic_search" &&
+      recordUrl.hostname === "api.crossref.org" &&
+      recordUrl.pathname === `/works/${encodeURIComponent(crossrefDoi)}`;
+    return hasSharedFields && (isOpenAlex || isCrossref);
+  } catch {
+    return false;
+  }
+}
+
+function externalSourceTraceability(seed: ThinReadingNodeSeed) {
+  const references = unique([
+    ...seed.evidence.externalKnowledge,
+    ...(seed.evidence.summarySentences ?? []).flatMap((sentence) => sentence.externalKnowledge)
+  ]);
+  if (seed.withinPaperClosure) {
+    return metric(references.length === 0 ? 1 : 0, 1);
+  }
+  const sources = new Map((seed.evidence.externalSources ?? []).map((source) => [source.id, source]));
+  return metric(
+    references.filter((sourceId) => {
+      const source = sources.get(sourceId);
+      return source !== undefined && hasTraceableExternalSource(source);
+    }).length,
+    Math.max(1, references.length)
+  );
+}
+
+function hasUnqualifiedCitationClaim(text: string) {
+  const citationPattern = /引用关系|引文图|引用了|被引用|citation(?:\s+graph|\s+relationship)?|cites?|cited\s+by/giu;
+  for (const match of text.matchAll(citationPattern)) {
+    const prefix = text.slice(Math.max(0, (match.index ?? 0) - 24), match.index ?? 0);
+    if (!/(?:不能|不可|不是|并非|不得|not)\s*[^。！？!?]{0,20}$/iu.test(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function externalRelationFidelity(seed: ThinReadingNodeSeed) {
+  const sources = seed.evidence.externalSources ?? [];
+  const sourcesById = new Map(sources.map((source) => [source.id, source]));
+  const sentences = seed.evidence.summarySentences ?? [];
+  const sentenceMisrepresentsRelation = sentences.some((sentence) => {
+    const citedSources = sentence.externalKnowledge
+      .map((sourceId) => sourcesById.get(sourceId))
+      .filter((source): source is NonNullable<typeof source> => Boolean(source));
+    return citedSources.length > 0 &&
+      citedSources.every((source) => source.relation !== "cited_by_target" && source.relation !== "cites_target") &&
+      hasUnqualifiedCitationClaim(sentence.text);
+  });
+  const hasVerifiedCitationRelation = sources.some((source) =>
+    source.relation === "cited_by_target" || source.relation === "cites_target"
+  );
+  const claimMisrepresentsRelation = !hasVerifiedCitationRelation &&
+    hasUnqualifiedCitationClaim((seed.evidence.claims ?? []).map((claim) => claim.text).join(" "));
+  return metric(sentenceMisrepresentsRelation || claimMisrepresentsRelation ? 0 : 1, 1);
+}
+
 function issue(
   code: ThinReadingEvaluationIssueCode,
   message: string
@@ -214,6 +421,8 @@ export function evaluateThinReadingGoldCase(input: {
   const { candidate, gold } = input;
   const summaryCoreRecall = conceptRecall(candidate.summary, gold.requiredSummaryConcepts);
   const citationPrecisionMetric = citationPrecision(candidate, gold.relevantEvidenceIds);
+  const citationRecallMetric = citationRecall(candidate, gold.requiredEvidence, gold.relevantEvidenceIds);
+  const evidenceGroundingMetric = evidenceGrounding(candidate, gold.requiredEvidence);
   const sentenceBoundaryCoverageMetric = sentenceBoundaryCoverage(candidate);
   const omittedSectionRecallMetric = omittedSectionRecall(candidate, gold.expectedOmittedSectionKeys);
   const branchText = [
@@ -230,8 +439,21 @@ export function evaluateThinReadingGoldCase(input: {
     candidate,
     gold.expectedWithinPaperClosure
   );
+  const externalSourceTraceabilityMetric = externalSourceTraceability(candidate);
+  const externalRelationFidelityMetric = externalRelationFidelity(candidate);
   const languageConsistencyMetric = languageConsistency(candidate.summary, gold.targetLanguage);
-  const paperTypeAccuracy = metric(candidate.paperType === gold.paperType ? 1 : 0, 1);
+  const terminologyRetentionMetric = terminologyRetention(
+    candidate.summary,
+    gold.requiredTerminology,
+    gold.targetLanguage
+  );
+  const acceptedPaperTypes = gold.acceptablePaperTypes?.length
+    ? gold.acceptablePaperTypes
+    : [gold.paperType];
+  const paperTypeAccuracy = metric(
+    candidate.paperType !== undefined && acceptedPaperTypes.includes(candidate.paperType) ? 1 : 0,
+    1
+  );
   const unsupportedClaimRatioMetric = unsupportedClaimRatio(candidate);
   const issues: Array<{ code: ThinReadingEvaluationIssueCode; message: string }> = [];
 
@@ -241,8 +463,14 @@ export function evaluateThinReadingGoldCase(input: {
   if (citationPrecisionMetric.score < 0.9) {
     issues.push(issue("citation_precision_below_threshold", "引用精度低于 0.90。"));
   }
-  if (sentenceBoundaryCoverageMetric.score < 1) {
-    issues.push(issue("sentence_boundary_incomplete", "存在没有合法来源边界的总述句。"));
+  if (citationRecallMetric.score < 0.9) {
+    issues.push(issue("citation_recall_below_threshold", "必要论文证据的引用召回率低于 0.90。"));
+  }
+  if (evidenceGroundingMetric.score < 1) {
+    issues.push(issue("evidence_grounding_below_threshold", "证据 span 未能回溯到 gold PDF 的页码和原文片段。"));
+  }
+  if (sentenceBoundaryCoverageMetric.score < 0.95) {
+    issues.push(issue("sentence_boundary_incomplete", "总述句缺少合法来源边界，或句级映射覆盖显示正文不足 95%。"));
   }
   if (omittedSectionRecallMetric.score < 0.5) {
     issues.push(issue("omitted_section_recall_below_threshold", "关键遗漏板块召回率低于 0.50。"));
@@ -253,11 +481,20 @@ export function evaluateThinReadingGoldCase(input: {
   if (closureBoundaryAccuracyMetric.score < 1) {
     issues.push(issue("closure_boundary_mismatch", "论文闭包状态或外部知识边界与 gold 不一致。"));
   }
+  if (externalSourceTraceabilityMetric.score < 1) {
+    issues.push(issue("external_source_untraceable", "外部知识未逐一映射到可追溯的 OpenAlex 来源。"));
+  }
+  if (externalRelationFidelityMetric.score < 1) {
+    issues.push(issue("external_relation_misrepresented", "仅主题检索命中被错误表述为已验证的引用关系。"));
+  }
   if (languageConsistencyMetric.score < 1) {
     issues.push(issue("language_inconsistent", "总述语言与目标语言不一致。"));
   }
+  if (terminologyRetentionMetric.score < 1) {
+    issues.push(issue("terminology_retention_below_threshold", "关键术语未以原文（目标语言释义）的紧邻形式保留。"));
+  }
   if (paperTypeAccuracy.score < 1) {
-    issues.push(issue("paper_type_mismatch", "模型判断的论文类型与 gold 不一致。"));
+    issues.push(issue("paper_type_mismatch", "模型判断的论文类型不在 gold 允许的类型集合中。"));
   }
   if (unsupportedClaimRatioMetric.score > 0.2) {
     issues.push(issue("unsupported_claim_ratio_above_threshold", "unsupported claim/句子占比高于 0.20。"));
@@ -266,22 +503,32 @@ export function evaluateThinReadingGoldCase(input: {
   const metrics = {
     branchRelevance,
     citationPrecision: citationPrecisionMetric,
+    citationRecall: citationRecallMetric,
     closureBoundaryAccuracy: closureBoundaryAccuracyMetric,
+    evidenceGrounding: evidenceGroundingMetric,
+    externalRelationFidelity: externalRelationFidelityMetric,
+    externalSourceTraceability: externalSourceTraceabilityMetric,
     languageConsistency: languageConsistencyMetric,
     omittedSectionRecall: omittedSectionRecallMetric,
     paperTypeAccuracy,
     sentenceBoundaryCoverage: sentenceBoundaryCoverageMetric,
     summaryCoreRecall,
+    terminologyRetention: terminologyRetentionMetric,
     unsupportedClaimRatio: unsupportedClaimRatioMetric
   };
   const overallScore = clamp01(
     summaryCoreRecall.score * metricWeights.summaryCoreRecall +
     citationPrecisionMetric.score * metricWeights.citationPrecision +
+    citationRecallMetric.score * metricWeights.citationRecall +
+    evidenceGroundingMetric.score * metricWeights.evidenceGrounding +
     sentenceBoundaryCoverageMetric.score * metricWeights.sentenceBoundaryCoverage +
     omittedSectionRecallMetric.score * metricWeights.omittedSectionRecall +
     branchRelevance.score * metricWeights.branchRelevance +
     closureBoundaryAccuracyMetric.score * metricWeights.closureBoundaryAccuracy +
+    externalRelationFidelityMetric.score * metricWeights.externalRelationFidelity +
+    externalSourceTraceabilityMetric.score * metricWeights.externalSourceTraceability +
     languageConsistencyMetric.score * metricWeights.languageConsistency +
+    terminologyRetentionMetric.score * metricWeights.terminologyRetention +
     paperTypeAccuracy.score * metricWeights.paperTypeAccuracy
   );
 

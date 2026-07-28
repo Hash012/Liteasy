@@ -2,11 +2,13 @@ import type {
   AdvanceThinReadingDocumentInput,
   CreateThinReadingDocumentInput,
   ThinReadingAnnotation,
+  ThinReadingAnnotationSyncState,
   ThinReadingAnnotationTarget,
   ThinReadingDocument,
   ThinReadingBranchSource,
   ThinReadingIntuechoRecommendation,
   ThinReadingClaim,
+  ThinReadingClosureState,
   ThinReadingEvidenceSpan,
   ThinReadingExternalSource,
   ThinReadingNode,
@@ -31,6 +33,22 @@ export type ThinReadingBranchOption = {
   withinPaperClosure: boolean;
 };
 
+export function resolveThinReadingClosureState(input: {
+  closureState?: ThinReadingClosureState;
+  depth: number;
+  withinPaperClosure: boolean;
+}): ThinReadingClosureState {
+  if (!input.withinPaperClosure) {
+    return "outside_paper";
+  }
+  if (input.closureState === "near_boundary") {
+    return "near_boundary";
+  }
+  // The next interaction at depth three retrieves external sources. Flag the
+  // preceding internal level so readers understand the transition before it occurs.
+  return input.depth >= 2 ? "near_boundary" : "inside_paper";
+}
+
 export type CreateThinReadingAnnotationInput = {
   body: string;
   createdAt?: string;
@@ -52,12 +70,20 @@ function stableHash(value: string): string {
 }
 
 function freezeSource(source: ThinReadingNodeSource): ThinReadingNodeSource {
-  return Object.freeze({ ...source });
+  return Object.freeze({
+    ...source,
+    evidenceIds: source.kind === "selected_text" && source.evidenceIds
+      ? Object.freeze([...source.evidenceIds])
+      : undefined
+  });
 }
 
 function freezeScope(scope: ThinReadingRecommendationScope): ThinReadingRecommendationScope {
   return Object.freeze({
     ...scope,
+    evidenceIds: scope.kind === "selected_passage" && scope.evidenceIds
+      ? Object.freeze([...scope.evidenceIds])
+      : undefined,
     paperIdentity: scope.paperIdentity ? freezePaperIdentity(scope.paperIdentity) : undefined
   });
 }
@@ -128,6 +154,7 @@ function freezeNode(node: ThinReadingNode): ThinReadingNode {
 function freezeAnnotation(annotation: ThinReadingAnnotation): ThinReadingAnnotation {
   return Object.freeze({
     ...annotation,
+    syncState: annotation.syncState ? Object.freeze({ ...annotation.syncState }) as ThinReadingAnnotationSyncState : undefined,
     target: Object.freeze({ ...annotation.target }) as ThinReadingAnnotationTarget
   });
 }
@@ -190,6 +217,11 @@ export function createThinReadingDocument(
   const rootTitle = createRootTitle(paperTitles, input.targetLanguage);
   const rootNode: ThinReadingNode = {
     childIds: [],
+    closureState: resolveThinReadingClosureState({
+      closureState: input.rootSeed.closureState,
+      depth: 0,
+      withinPaperClosure: input.rootSeed.withinPaperClosure
+    }),
     createdAt: createNodeCreatedAt(rootNodeId),
     depth: 0,
     id: rootNodeId,
@@ -233,7 +265,13 @@ function recommendationScopeForSource(
   if (source.kind === "omitted_section") {
     return { kind: "section", paperId, paperIdentity, sectionKey: source.sectionKey };
   }
-  return { kind: "selected_passage", excerpt: source.excerpt, paperId, paperIdentity };
+  return {
+    kind: "selected_passage",
+    ...(source.evidenceIds ? { evidenceIds: [...source.evidenceIds] } : {}),
+    excerpt: source.excerpt,
+    paperId,
+    paperIdentity
+  };
 }
 
 export function truncateThinReadingTitle(value: string, fallback: string): string {
@@ -263,6 +301,11 @@ export function advanceThinReadingDocument(
 
   const child: ThinReadingNode = {
     childIds: [],
+    closureState: resolveThinReadingClosureState({
+      closureState: input.seed.closureState,
+      depth: parent.depth + 1,
+      withinPaperClosure: input.seed.withinPaperClosure
+    }),
     createdAt: input.createdAt ?? createNodeCreatedAt(childId),
     depth: parent.depth + 1,
     id: childId,
@@ -339,7 +382,7 @@ export function listThinReadingBranchOptions(
 
 function pendingIdsFor(annotations: readonly ThinReadingAnnotation[]) {
   return annotations
-    .filter((annotation) => annotation.visibility === "pending_public")
+    .filter((annotation) => annotation.visibility === "pending_public" && annotation.syncState?.status !== "synced")
     .map((annotation) => annotation.id);
 }
 
@@ -407,6 +450,7 @@ export function updateThinReadingAnnotation(
       ? {
           ...annotation,
           body: normalizedBody,
+          syncState: annotation.visibility === "pending_public" ? undefined : annotation.syncState,
           updatedAt: new Date().toISOString()
         }
       : annotation
@@ -427,11 +471,41 @@ export function setThinReadingAnnotationPublic(
     annotation.id === annotationId
       ? {
           ...annotation,
+          syncState: publicRequested ? undefined : undefined,
           updatedAt: new Date().toISOString(),
           visibility: publicRequested ? "pending_public" as const : "private" as const
         }
       : annotation
   );
+  return freezeDocument({
+    ...document,
+    annotations,
+    pendingPublicAnnotationIds: pendingIdsFor(annotations)
+  });
+}
+
+export function applyThinReadingAnnotationSyncResults(
+  document: ThinReadingDocument,
+  results: readonly (
+    | { annotationId: string; error: string; status: "failed" }
+    | { annotationId: string; intuechoAnnotationId: string; status: "synced"; syncedAt: string }
+    | { annotationId: string; status: "pending_public" }
+  )[],
+  attemptedAt = new Date().toISOString()
+): ThinReadingDocument {
+  const resultsByAnnotationId = new Map(results.map((result) => [result.annotationId, result]));
+  const annotations = document.annotations.map((annotation) => {
+    if (annotation.visibility !== "pending_public") {
+      return annotation;
+    }
+    const result = resultsByAnnotationId.get(annotation.id);
+    if (!result || result.status === "pending_public") {
+      return annotation;
+    }
+    return result.status === "synced"
+      ? { ...annotation, syncState: { intuechoAnnotationId: result.intuechoAnnotationId, status: "synced" as const, syncedAt: result.syncedAt } }
+      : { ...annotation, syncState: { error: result.error, lastAttemptAt: attemptedAt, status: "failed" as const } };
+  });
   return freezeDocument({
     ...document,
     annotations,

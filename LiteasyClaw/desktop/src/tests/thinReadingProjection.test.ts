@@ -2,9 +2,12 @@ import { describe, expect, test } from "vitest";
 import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
 import {
   addThinReadingAnnotation,
+  applyThinReadingAnnotationSyncResults,
   advanceThinReadingDocument,
   createThinReadingDocument,
-  listThinReadingBranchOptions
+  listThinReadingBranchOptions,
+  resolveThinReadingClosureState,
+  updateThinReadingAnnotation
 } from "../app/features/thin-reading/thinReadingProjection";
 import type { ThinReadingNodeSeed } from "../app/features/thin-reading/thinReading.types";
 
@@ -33,6 +36,17 @@ function seed(overrides: Partial<ThinReadingNodeSeed> = {}): ThinReadingNodeSeed
 }
 
 describe("thinReadingProjection", () => {
+  test("distinguishes a near-boundary internal level from a real external level", () => {
+    expect(resolveThinReadingClosureState({ depth: 0, withinPaperClosure: true })).toBe("inside_paper");
+    expect(resolveThinReadingClosureState({ depth: 2, withinPaperClosure: true })).toBe("near_boundary");
+    expect(resolveThinReadingClosureState({ depth: 2, withinPaperClosure: false })).toBe("outside_paper");
+    expect(resolveThinReadingClosureState({
+      closureState: "near_boundary",
+      depth: 1,
+      withinPaperClosure: true
+    })).toBe("near_boundary");
+  });
+
   test("creates a deterministic root document with omitted-section tokens", () => {
     const document = createThinReadingDocument({
       artifactId: "artifact-thin-1",
@@ -88,6 +102,8 @@ describe("thinReadingProjection", () => {
               id: "evidence-1",
               normalizedQuote: "colbert uses maxsim.",
               page: 2,
+              pageTextEnd: 20,
+              pageTextStart: 0,
               paperId: "paper-1",
               quote: "ColBERT uses MaxSim."
             }
@@ -114,6 +130,8 @@ describe("thinReadingProjection", () => {
     expect(root.evidence.paperEvidenceSpans?.[0]).toMatchObject({
       chunkId: "paper-1:p2:chunk-1",
       page: 2,
+      pageTextEnd: 20,
+      pageTextStart: 0,
       quote: "ColBERT uses MaxSim."
     });
     expect(root.evidence.summarySentences?.[0]).toMatchObject({
@@ -239,6 +257,38 @@ describe("thinReadingProjection", () => {
     ]);
   });
 
+  test("freezes selected-text evidence ids with the persisted branch", () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-selected-source",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed(),
+      targetLanguage: "zh-CN"
+    });
+    const evidenceIds = ["evidence-1"];
+    const next = advanceThinReadingDocument(document, {
+      parentNodeId: document.rootNodeId,
+      seed: seed(),
+      source: {
+        kind: "selected_text",
+        evidenceIds,
+        excerpt: "MaxSim preserves the strongest token-level match."
+      },
+      title: "MaxSim"
+    });
+    evidenceIds.push("mutated-after-persist");
+    const child = next.nodes[next.activeNodeId];
+
+    expect(child.source).toMatchObject({
+      kind: "selected_text",
+      evidenceIds: ["evidence-1"]
+    });
+    expect(child.recommendationScope).toMatchObject({
+      kind: "selected_passage",
+      evidenceIds: ["evidence-1"]
+    });
+    expect(Object.isFrozen((child.source as Extract<typeof child.source, { kind: "selected_text" }>).evidenceIds)).toBe(true);
+  });
+
   test("keeps fixture helpers on the production input shape", () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument(fixture);
@@ -267,5 +317,66 @@ describe("thinReadingProjection", () => {
       visibility: "pending_public"
     });
     expect(next.pendingPublicAnnotationIds).toEqual([next.annotations[0].id]);
+  });
+
+  test("persists a verified Intuecho receipt and requeues an edited public annotation", () => {
+    const root = createThinReadingDocument({
+      artifactId: "artifact-thin-sync-receipt",
+      papers: [{ doi: "10.1000/example", id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed(),
+      targetLanguage: "zh-CN"
+    });
+    const pending = addThinReadingAnnotation(root, {
+      body: "需要同步的理解。",
+      excerpt: "MaxSim",
+      nodeId: root.rootNodeId,
+      visibility: "pending_public"
+    });
+    const annotationId = pending.annotations[0].id;
+    const synced = applyThinReadingAnnotationSyncResults(pending, [{
+      annotationId,
+      intuechoAnnotationId: "intuecho-123",
+      status: "synced",
+      syncedAt: "2026-07-28T02:00:00.000Z"
+    }]);
+
+    expect(synced.pendingPublicAnnotationIds).toEqual([]);
+    expect(synced.annotations[0].syncState).toEqual({
+      intuechoAnnotationId: "intuecho-123",
+      status: "synced",
+      syncedAt: "2026-07-28T02:00:00.000Z"
+    });
+
+    const edited = updateThinReadingAnnotation(synced, annotationId, "修改后需要重新同步的理解。");
+    expect(edited.pendingPublicAnnotationIds).toEqual([annotationId]);
+    expect(edited.annotations[0].syncState).toBeUndefined();
+  });
+
+  test("keeps failed Intuecho sync in the pending queue with a retryable error", () => {
+    const root = createThinReadingDocument({
+      artifactId: "artifact-thin-sync-failure",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed(),
+      targetLanguage: "zh-CN"
+    });
+    const pending = addThinReadingAnnotation(root, {
+      body: "待重试。",
+      excerpt: "MaxSim",
+      nodeId: root.rootNodeId,
+      visibility: "pending_public"
+    });
+    const annotationId = pending.annotations[0].id;
+    const failed = applyThinReadingAnnotationSyncResults(pending, [{
+      annotationId,
+      error: "Intuecho 同步请求失败（HTTP 503）。",
+      status: "failed"
+    }], "2026-07-28T03:00:00.000Z");
+
+    expect(failed.pendingPublicAnnotationIds).toEqual([annotationId]);
+    expect(failed.annotations[0].syncState).toEqual({
+      error: "Intuecho 同步请求失败（HTTP 503）。",
+      lastAttemptAt: "2026-07-28T03:00:00.000Z",
+      status: "failed"
+    });
   });
 });

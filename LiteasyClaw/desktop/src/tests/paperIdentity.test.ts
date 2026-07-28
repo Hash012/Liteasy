@@ -1,10 +1,21 @@
 import { describe, expect, test } from "vitest";
 import {
+  inferPaperIdentityMetadataFromPdfText,
   resolvePaperIdentity,
   resolvePaperIdentityMap
 } from "../app/features/paper-identity/paperIdentity";
 
 describe("paperIdentity", () => {
+  test("extracts only explicitly marked DOI and arXiv identifiers from PDF text", () => {
+    expect(inferPaperIdentityMetadataFromPdfText(
+      "Preprint arXiv: 1706.03762v5. DOI: https://doi.org/10.48550/arXiv.1706.03762"
+    )).toEqual({
+      arxivId: "1706.03762v5",
+      doi: "10.48550/arxiv.1706.03762"
+    });
+    expect(inferPaperIdentityMetadataFromPdfText("The experiment ran in 2020.12345 seconds.")).toEqual({});
+  });
+
   test("prefers DOI over every weaker paper identity", () => {
     const identity = resolvePaperIdentity({
       arxivId: "2301.01234",

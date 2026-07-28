@@ -13,6 +13,8 @@ type WeightedPattern = {
 };
 
 type ThinReadingPaperTypeProfile = {
+  coverageAuditEn: string;
+  coverageAuditZh: string;
   labelEn: string;
   labelZh: string;
   matchers: readonly WeightedPattern[];
@@ -38,6 +40,8 @@ export const thinReadingPaperTypes: readonly ThinReadingPaperType[] = Object.fre
 
 const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfile> = {
   benchmark: {
+    coverageAuditEn: "task definition, measurement axes, data composition, baselines, result/ranking shifts, and evaluation limits",
+    coverageAuditZh: "任务定义、测量轴线、数据组成、baseline、结果/排名变化和评测局限",
     focusEn: "Prioritize benchmark task design, evaluation axes, headline ranking/result shifts, and what the benchmark makes newly comparable.",
     focusZh: "优先讲基准任务设计、评测轴线、关键排名/结果变化，以及它让哪些对象变得可比较。",
     labelEn: "benchmark/evaluation paper",
@@ -52,6 +56,8 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道什么对象因此变得可测/可比较，以及哪些结果变化真正重要。"
   },
   dataset: {
+    coverageAuditEn: "resource scope, provenance, construction or annotation protocol, coverage, intended use, and bias or access limits",
+    coverageAuditZh: "资源范围、来源、构建或标注协议、覆盖范围、预期用途和偏差/访问限制",
     focusEn: "Prioritize what resource is built, how it is collected/annotated, coverage, intended uses, evaluation hooks, and bias boundaries.",
     focusZh: "优先讲构建了什么资源、如何采集/标注、覆盖范围、用途、评测接口和偏差边界。",
     labelEn: "dataset/resource paper",
@@ -66,13 +72,16 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道新增资源是什么、为什么可用，以及覆盖范围/偏差边界在哪里。"
   },
   experimental: {
+    coverageAuditEn: "research question, central conclusion, mechanism or reasoning path, decisive evidence, failure regime, and field position",
+    coverageAuditZh: "研究问题、核心结论、机制或推理路径、决定性证据、失效区间和领域位置",
     focusEn: "Prioritize the core conclusion, the reasoning path or mechanism, decisive experimental evidence, and the paper's position in the field map.",
     focusZh: "优先讲核心结论、关键思路/机制、决定性实验支撑，以及这个结论在领域知识图谱中的位置。",
     labelEn: "experimental/conclusion paper",
     labelZh: "实验/结论型论文",
     matchers: [
       { pattern: /experiment|ablation|empirical|evaluation|baseline|accuracy|f1|auc|result/i, weight: 3 },
-      { pattern: /实验|消融|评估|基线|准确率|结果|性能提升|指标/, weight: 3 }
+      { pattern: /pre-?train(?:ing)?|fine-?tun(?:e|ing)|downstream task|transfer learning/i, weight: 4 },
+      { pattern: /实验|消融|评估|基线|准确率|结果|性能提升|指标|预训练|微调|下游任务|迁移学习/, weight: 3 }
     ],
     omittedHintEn: "Good omitted buttons often include method details, experiments, ablations, assumptions, failure cases, and related-work position.",
     omittedHintZh: "遗漏按钮通常可落在方法细节、实验、消融、假设、失败案例和相关工作位置。",
@@ -80,6 +89,8 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道核心结论、关键机制/推理路径，以及让结论可信的决定性证据。"
   },
   humanities: {
+    coverageAuditEn: "thesis, source material, historical or conceptual context, interpretive path, counter-reading, and explanatory limit",
+    coverageAuditZh: "中心论题、材料、历史或概念语境、解释路径、反向解读和解释边界",
     focusEn: "Prioritize the central thesis, conceptual genealogy, interpretive path, textual or historical evidence, and explanatory limits.",
     focusZh: "优先讲中心论题、概念谱系、解释路径、文本/历史证据和解释边界。",
     labelEn: "humanities/interpretive paper",
@@ -94,6 +105,8 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道中心论题、解释路径、关键文本/历史证据，以及这种解释的边界。"
   },
   position: {
+    coverageAuditEn: "stance, problem reframing, supporting reasons, assumptions, practical implications, and strongest unresolved objection",
+    coverageAuditZh: "立场、问题重构、支撑理由、前提假设、实践含义和最强未解反驳",
     focusEn: "Prioritize the stance, problem reframing, strongest reasons, strategic implications, and what remains contested.",
     focusZh: "优先讲作者立场、问题重构、最强理由、策略含义和仍有争议之处。",
     labelEn: "position/perspective paper",
@@ -108,6 +121,8 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道作者立场、问题重构方式、最强理由，以及仍有争议之处。"
   },
   survey: {
+    coverageAuditEn: "scope boundary, taxonomy or organizing map, comparison axes, stable findings, disagreements, and open gaps",
+    coverageAuditZh: "范围边界、分类或组织地图、比较轴线、稳定发现、分歧和开放缺口",
     focusEn: "Prioritize the taxonomy, main axes of disagreement, knowledge map, organizing framework, and unsolved problems.",
     focusZh: "优先讲分类框架、主要分歧轴线、知识地图、组织方式和未解决问题。",
     labelEn: "survey/review paper",
@@ -122,6 +137,8 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道组织领域的知识地图、主要比较轴线，以及哪些未解问题支撑这个领域。"
   },
   systems: {
+    coverageAuditEn: "deployment setting, architecture, critical data/control path, component responsibilities, measured operation, and tradeoff or failure boundary",
+    coverageAuditZh: "部署场景、架构、关键数据/控制路径、组件职责、实测运行结果和取舍或失效边界",
     focusEn: "Prioritize architecture, data/control flow, component responsibilities, operational tradeoffs, and measured performance/reliability.",
     focusZh: "优先讲架构、数据/控制流、组件职责、工程取舍，以及性能/可靠性的实测结果。",
     labelEn: "systems/architecture paper",
@@ -136,6 +153,8 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道系统架构、核心数据/控制流、关键工程取舍，以及实测的运行后果。"
   },
   theoretical: {
+    coverageAuditEn: "formal claim, definitions, assumptions, proof hinge, relation to prior result, and the bound or consequence",
+    coverageAuditZh: "形式化主张、定义、前提假设、证明支点、与既有结果的关系和界或推论",
     focusEn: "Prioritize the theorem or formal claim, assumptions, proof path, relationship to prior theory, and implications of the bound/result.",
     focusZh: "优先讲定理/形式化主张、前提假设、证明路径、与既有理论的关系，以及界/结论的含义。",
     labelEn: "theoretical/derivation paper",
@@ -150,6 +169,8 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     retentionTestZh: "读者只看总述后，应知道形式化结论、前提假设、证明路线，以及这个界/定理为什么改变理论地图。"
   },
   unknown: {
+    coverageAuditEn: "strongest supported claims, evidence coverage, primary versus secondary contribution, uncertainty, and salient blind spots",
+    coverageAuditZh: "最强支撑的主张、证据覆盖、主要与次要贡献、不确定性和显著盲点",
     focusEn: "Infer the paper type from evidence first, then prioritize the few claims a reader should retain instead of summarizing every section evenly.",
     focusZh: "先从证据中自行判断论文类型，再优先呈现读者最应留下的少数主轴，避免平均概括。",
     labelEn: "unclassified paper",
@@ -358,6 +379,22 @@ function commonEvidenceGate(language: ThinReadingPromptLanguage) {
   ].join("\n");
 }
 
+function coverageAuditGate(
+  language: ThinReadingPromptLanguage,
+  profile: ThinReadingPaperTypeProfile
+) {
+  if (language === "en-US") {
+    return [
+      `Private coverage audit: check ${profile.coverageAuditEn}.`,
+      "Do not output this audit or force every facet into the overview. Retain only evidence-supported facets that materially change the reader's mental model; turn a salient uncovered facet into an omitted-section token instead of a fixed chapter list."
+    ].join("\n");
+  }
+  return [
+    `私有覆盖审计：检查 ${profile.coverageAuditZh}。`,
+    "不要输出这份审计，也不要把每个维度硬塞进总述。只保留有证据且会改变读者认知模型的维度；重要但未覆盖的维度应生成遗漏板块入口，而不是固定章节清单。"
+  ].join("\n");
+}
+
 export function getThinReadingPaperTypeLabel(
   paperType: ThinReadingPaperType,
   targetLanguage: string
@@ -457,7 +494,7 @@ export function buildThinReadingPromptGuidance(input: {
         ? "Stage: omitted section. Explain why this omitted section matters to the paper's retained core."
         : "Stage: selected text. Explain the selected words in continuity with the parent node and user prompt.";
     return [
-      `Initial paper type: ${profile.labelEn} (${inferredPaperType}). You may correct paperType in JSON if the evidence proves another type.`,
+      `Initial paper type: ${profile.labelEn} (${inferredPaperType}). Keep this paperType in JSON unless current evidence directly establishes that another type is the paper's primary contribution; title taxonomy or a single familiar term is not enough to override it.`,
       `Allowed paperType values: ${typeList}.`,
       `Type-specific focus: ${profile.focusEn}`,
       `Retention test: ${profile.retentionTestEn}`,
@@ -467,6 +504,7 @@ export function buildThinReadingPromptGuidance(input: {
         ? `Type conflict: ${inferredPaperType} and ${classification.runnerUp.paperType} are close. Decide by the paper's primary contribution and the reader's retained mental model, not by section names or venue conventions.`
         : `Type confidence: ${classification.confidence}.`,
       `Omitted-section rule: ${profile.omittedHintEn}`,
+      coverageAuditGate(language, profile),
       stageQualityGate(language, stage),
       commonEvidenceGate(language),
       stageInstruction
@@ -479,7 +517,7 @@ export function buildThinReadingPromptGuidance(input: {
       ? "阶段：遗漏板块。解释这个未覆盖板块为什么会改变或补强上一层留下的核心印象。"
       : "阶段：正文选区。围绕选中的词句继续讲清楚，并保持和上一层术语、证据、用户提示的连贯性。";
   return [
-    `初步论文类型：${profile.labelZh}（${inferredPaperType}）。如果证据证明另有类型，可在 JSON 的 paperType 中修正。`,
+    `初步论文类型：${profile.labelZh}（${inferredPaperType}）。JSON 中默认保持这一 paperType；只有本轮证据直接证明另一类型才是论文的主要贡献时才能修正，不能仅凭标题分类或一个熟悉术语改写类型。`,
     `paperType 只能取：${typeList}。`,
     `类型取舍：${profile.focusZh}`,
     `留存测试：${profile.retentionTestZh}`,
@@ -489,6 +527,7 @@ export function buildThinReadingPromptGuidance(input: {
       ? `类型冲突：${inferredPaperType} 与 ${classification.runnerUp.paperType} 分数接近。必须按论文的主要贡献和读者应留下的认知模型裁决，不能按章节名或发表场景机械选择。`
       : `类型判断置信度：${classification.confidence}。`,
     `遗漏板块规则：${profile.omittedHintZh}`,
+    coverageAuditGate(language, profile),
     stageQualityGate(language, stage),
     commonEvidenceGate(language),
     stageInstruction

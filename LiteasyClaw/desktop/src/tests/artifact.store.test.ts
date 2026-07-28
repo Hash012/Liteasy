@@ -28,6 +28,25 @@ test("opens a distinct tab for a tree analysis task", () => {
   expect(store.getOpenTabs()[0]?.type).toBe("tree");
 });
 
+test("tracks thin-reading imports and planning as dedicated task stages", () => {
+  const store = createArtifactStore();
+  const taskId = store.createTask("thin_reading");
+
+  expect(store.getTask(taskId)).toMatchObject({
+    message: "正在解析论文文本与证据位置",
+    stage: "thin_reading_parsing_document",
+    status: "queued"
+  });
+
+  store.startTask(taskId);
+
+  expect(store.getTask(taskId)).toMatchObject({
+    message: "正在规划薄读路径与证据范围",
+    stage: "thin_reading_planning",
+    status: "running"
+  });
+});
+
 test("preserves detailed failure diagnostics on a failed task", () => {
   const store = createArtifactStore();
   const taskId = store.createTask("tree");

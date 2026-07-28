@@ -85,6 +85,51 @@ function extractOutputText(payload) {
   return null;
 }
 
+function buildResponseRequest(input, stream = false) {
+  return {
+    input: input.prompt,
+    model: input.model,
+    ...(input.outputFormat ? {
+      text: {
+        format: {
+          name: input.outputFormat.name,
+          schema: input.outputFormat.schema,
+          strict: input.outputFormat.strict,
+          type: "json_schema"
+        }
+      }
+    } : {}),
+    ...(stream ? { stream: true } : {})
+  };
+}
+
+async function requestResponseWithStructuredOutputFallback(input, fetchImpl, stream = false) {
+  const request = (includeOutputFormat) => fetchWithTransientRetry(
+    fetchImpl,
+    buildResponsesUrl(input.apiBaseUrl),
+    {
+      body: JSON.stringify(buildResponseRequest(
+        includeOutputFormat ? input : { ...input, outputFormat: undefined },
+        stream
+      )),
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    }
+  );
+
+  const response = await request(true);
+  // A compatible proxy may reject the Responses JSON-schema field entirely. The caller's
+  // Zod parser and trace gate remain mandatory when falling back to prompted JSON.
+  if (input.outputFormat && (response.status === 400 || response.status === 422)) {
+    await response.body?.cancel?.().catch?.(() => undefined);
+    return request(false);
+  }
+  return response;
+}
+
 async function readErrorMessage(response) {
   try {
     const payload = await response.json();
@@ -115,17 +160,10 @@ export function createOpenAIResponsesProvider({
   return async (input) => {
     let response;
     try {
-      response = await fetchWithTransientRetry(fetchImpl, buildResponsesUrl(apiBaseUrl), {
-        body: JSON.stringify({
-          input: input.prompt,
-          model: input.model
-        }),
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        method: "POST"
-      });
+      response = await requestResponseWithStructuredOutputFallback(
+        { ...input, apiBaseUrl, apiKey },
+        fetchImpl
+      );
     } catch (error) {
       throw new Error(
         `OpenAI Responses API 连接失败（endpoint=${describeEndpoint(apiBaseUrl)}）：${describeNetworkError(error)}`
@@ -161,18 +199,11 @@ export function createOpenAIResponsesStreamProvider({
     for (let streamAttempt = 1; streamAttempt <= maximumStreamAttempts; streamAttempt += 1) {
       let response;
       try {
-        response = await fetchWithTransientRetry(fetchImpl, buildResponsesUrl(apiBaseUrl), {
-          body: JSON.stringify({
-            input: input.prompt,
-            model: input.model,
-            stream: true
-          }),
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
-          },
-          method: "POST"
-        });
+        response = await requestResponseWithStructuredOutputFallback(
+          { ...input, apiBaseUrl, apiKey },
+          fetchImpl,
+          true
+        );
       } catch (error) {
         throw new Error(
           `OpenAI Responses API 流式连接失败（endpoint=${describeEndpoint(apiBaseUrl)}）：${describeNetworkError(error)}`

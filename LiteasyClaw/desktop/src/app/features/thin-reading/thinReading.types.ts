@@ -20,14 +20,20 @@ export type ThinReadingPaperType =
 export type ThinReadingNodeSource =
   | { kind: "root_overview" }
   | { kind: "omitted_section"; label: string; sectionKey: string }
-  | { kind: "selected_text"; excerpt: string; prompt?: string };
+  | { kind: "selected_text"; evidenceIds?: readonly string[]; excerpt: string; prompt?: string };
 
 export type ThinReadingBranchSource = Exclude<ThinReadingNodeSource, { kind: "root_overview" }>;
 
 export type ThinReadingRecommendationScope =
   | { kind: "whole_paper"; paperId?: string; paperIdentity?: PaperIdentity }
   | { kind: "section"; paperId?: string; paperIdentity?: PaperIdentity; sectionKey: string }
-  | { kind: "selected_passage"; paperId?: string; paperIdentity?: PaperIdentity; excerpt: string };
+  | {
+      kind: "selected_passage";
+      evidenceIds?: readonly string[];
+      excerpt: string;
+      paperId?: string;
+      paperIdentity?: PaperIdentity;
+    };
 
 export type ThinReadingSectionToken = {
   id: string;
@@ -40,6 +46,8 @@ export type ThinReadingIntuechoRecommendation = {
   compatibility: number;
   note: string;
   relationship: string;
+  // Agent-generated leads must never be presented as community recommendations.
+  source?: "intuecho_community" | "local_agent_lead";
 };
 
 export type ThinReadingEvidenceSpan = {
@@ -48,6 +56,9 @@ export type ThinReadingEvidenceSpan = {
   id: string;
   normalizedQuote?: string;
   page?: number;
+  pageTextEnd?: number;
+  pageTextStart?: number;
+  textExtraction?: "embedded" | "ocr";
   paperId: string;
   quote: string;
 };
@@ -57,10 +68,11 @@ export type ThinReadingExternalSource = {
   authors: readonly string[];
   doi?: string;
   id: string;
-  provider: "openalex";
+  provider: "crossref" | "openalex";
   relation: "cited_by_target" | "cites_target" | "related" | "topic_search";
   relevance: number;
   retrievalQuery: string;
+  sourceRecordUrl: string;
   sourceId: string;
   title: string;
   url: string;
@@ -68,6 +80,8 @@ export type ThinReadingExternalSource = {
 };
 
 export type ThinReadingClaimStatus = "grounded" | "unsupported" | "weak";
+
+export type ThinReadingClosureState = "inside_paper" | "near_boundary" | "outside_paper";
 
 export type ThinReadingClaim = {
   evidenceIds: readonly string[];
@@ -94,6 +108,7 @@ export type ThinReadingNodeEvidence = {
 };
 
 export type ThinReadingNodeSeed = {
+  closureState?: ThinReadingClosureState;
   evidence: ThinReadingNodeEvidence;
   omittedSections: readonly ThinReadingSectionToken[];
   paperType?: ThinReadingPaperType;
@@ -123,6 +138,7 @@ export type ThinReadingGenerationContext = {
 
 export type ThinReadingNode = {
   childIds: readonly string[];
+  closureState?: ThinReadingClosureState;
   createdAt: string;
   depth: number;
   id: string;
@@ -147,6 +163,10 @@ export type ThinReadingAnnotationTarget =
 
 export type ThinReadingAnnotationVisibility = "private" | "pending_public";
 
+export type ThinReadingAnnotationSyncState =
+  | { error: string; lastAttemptAt: string; status: "failed" }
+  | { intuechoAnnotationId: string; status: "synced"; syncedAt: string };
+
 export type ThinReadingAnnotation = {
   artifactId: string;
   body: string;
@@ -155,6 +175,7 @@ export type ThinReadingAnnotation = {
   id: string;
   nodeId: string;
   target: ThinReadingAnnotationTarget;
+  syncState?: ThinReadingAnnotationSyncState;
   updatedAt: string;
   visibility: ThinReadingAnnotationVisibility;
 };

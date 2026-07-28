@@ -21,6 +21,7 @@ function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
 function renderWorkspaceActions(
   papers: Paper[] = [],
   options: {
+    extractPaperChunks?: (paper: Paper) => Promise<ReturnType<typeof buildImportedChunksForPaper>>;
     moveLocalLibraryResource?: MoveLocalLibraryResource;
     persistDroppedPdfFiles?: PersistDroppedPdfFiles;
     workspaceRootPath?: string;
@@ -41,9 +42,9 @@ function renderWorkspaceActions(
   const onWorkspaceChanged = vi.fn();
   const hook = renderHook(() =>
     useWorkspaceActions({
-      extractPaperChunks: (paper) => new Promise((resolve) => {
+      extractPaperChunks: options.extractPaperChunks ?? ((paper) => new Promise((resolve) => {
         window.setTimeout(() => resolve(buildImportedChunksForPaper(paper)), 800);
-      }),
+      })),
       importDocument: vi.fn(() => Promise.resolve()),
       importStore,
       moveLocalLibraryResource: options.moveLocalLibraryResource,
@@ -267,6 +268,36 @@ describe("useWorkspaceActions", () => {
     expect(result.current.getImportedSelectedCount()).toBe(1);
     expect(result.current.getImportedChunksByPaperId()[paper.id]).toHaveLength(2);
     expect(workspaceStore.getState().selectedPaperIds).toEqual([paper.id]);
+  });
+
+  test("fills missing DOI and arXiv metadata from explicitly marked first-page text", async () => {
+    const paper = { id: "demo-identifiers", sourcePath: "fixtures/identifiers.pdf", title: "Metadata from PDF" };
+    const { result, workspaceStore } = renderWorkspaceActions([paper], {
+      extractPaperChunks: async (input) => [{
+        page: 1,
+        paperId: input.id,
+        paperTitle: input.title,
+        snippet: "Preprint arXiv: 1706.03762v5. DOI: 10.48550/arXiv.1706.03762",
+        summary: "identifier page",
+        tags: []
+      }]
+    });
+
+    act(() => result.current.toggleSelection(paper.id));
+    act(() => {
+      result.current.importSelectedSet();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(workspaceStore.getState().papers).toEqual([
+      expect.objectContaining({
+        arxivId: "1706.03762v5",
+        doi: "10.48550/arxiv.1706.03762",
+        id: paper.id
+      })
+    ]);
   });
 
   test("does not queue duplicate imports while a selected paper is already queued or parsing", async () => {

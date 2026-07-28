@@ -8,6 +8,8 @@ export function createSettingsStore() {
     "profile.enabled": false,
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
+    "import.ocr_language": "eng",
+    "thin_reading.intuecho_endpoint": "",
     "models.default_provider": "openai",
     "models.cloud_proxy_endpoint": "mock://cloud-proxy",
     "models.control_plane_endpoint": "mock://control-plane"

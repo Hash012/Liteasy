@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import {
   CommentRegular,
   DocumentRegular,
@@ -8,31 +8,32 @@ import {
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
+import { compactPdfTextForSearch, normalizePdfTextForSearch } from "./pdfTextSearch";
 import type { Paper } from "../workspace/workspace.types";
 import type { ReaderConversationContext } from "../assistant/assistantContext.types";
+import {
+  loadPdfAnnotationAutoPublic,
+  loadPdfAnnotations,
+  pdfAnnotationAutoPublicStorageKey,
+  pdfAnnotationStorageKey,
+  savePdfAnnotationAutoPublic,
+  savePdfAnnotations,
+  type PdfAnnotation,
+  type PdfAnnotationKind,
+  type PdfAnnotationRect,
+  type PdfHighlightColor
+} from "./pdfAnnotationStorage";
+import {
+  listPdfAnnotationPendingPublicItems,
+  PDF_ANNOTATION_PENDING_LABEL,
+  syncPdfAnnotationPendingItems
+} from "./pdfAnnotationIntuechoSync";
+import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-type AnnotationKind = "highlight" | "underline" | "note";
-type HighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
-
-type PdfAnnotationRect = {
-  height: number;
-  left: number;
-  top: number;
-  width: number;
-};
-
-type PdfAnnotation = {
-  excerpt: string;
-  id: string;
-  kind: AnnotationKind;
-  note?: string;
-  page: number;
-  rects: PdfAnnotationRect[];
-  text: string;
-  color?: HighlightColor;
-};
+type AnnotationKind = PdfAnnotationKind;
+type HighlightColor = PdfHighlightColor;
 
 type PdfSelection = {
   excerpt: string;
@@ -45,6 +46,7 @@ type PdfSelection = {
 type TextLayerPosition = {
   node: Text;
   offset: number;
+  normalizedOffset: number;
 };
 
 type PdfSidebarMode = "thumbnails" | "annotations";
@@ -54,12 +56,16 @@ type PdfReaderProps = {
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
   onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
+  intuechoEndpoint?: string;
 };
 
 
 export type PdfEvidenceTarget = {
   evidenceId: string;
   page: number;
+  pageTextEnd?: number;
+  pageTextStart?: number;
+  textExtraction?: "embedded" | "ocr";
   paperId: string;
   quote: string;
   requestId: number;
@@ -350,7 +356,7 @@ function collectTextLayerNodes(textLayer: HTMLElement): Text[] {
 }
 
 function normalizeQuoteForSearch(value: string) {
-  return value.replace(/\s+/g, " ").trim().toLowerCase();
+  return normalizePdfTextForSearch(value);
 }
 
 function buildNormalizedTextLayerIndex(nodes: Text[]) {
@@ -365,14 +371,24 @@ function buildNormalizedTextLayerIndex(nodes: Text[]) {
       if (/\s/.test(character)) {
         if (!previousWasWhitespace && text.length > 0) {
           text += " ";
-          positions.push({ node, offset });
+          positions.push({ node, normalizedOffset: text.length - 1, offset });
           previousWasWhitespace = true;
         }
         continue;
       }
 
-      text += character.toLowerCase();
-      positions.push({ node, offset });
+      const normalizedCharacter = character
+        .normalize("NFKC")
+        .replace(/[‐‑‒–—]/g, "-")
+        .replace(/\u00ad/g, "")
+        .toLowerCase();
+      if (!normalizedCharacter) {
+        continue;
+      }
+      for (const item of normalizedCharacter) {
+        text += item;
+        positions.push({ node, normalizedOffset: text.length - 1, offset });
+      }
       previousWasWhitespace = false;
     }
   }
@@ -385,20 +401,57 @@ function buildNormalizedTextLayerIndex(nodes: Text[]) {
   return { positions, text };
 }
 
-export function findQuoteRangeInTextLayer(textLayer: HTMLElement, quote: string): Range | null {
-  const query = normalizeQuoteForSearch(quote);
-  if (!query) {
-    return null;
+function buildCompactTextLayerIndex(index: ReturnType<typeof buildNormalizedTextLayerIndex>) {
+  const positions: TextLayerPosition[] = [];
+  let text = "";
+  for (let offset = 0; offset < index.text.length; offset += 1) {
+    const character = index.text[offset];
+    if (/\s/.test(character) || character === "-") {
+      continue;
+    }
+    text += character;
+    const position = index.positions[offset];
+    if (position) {
+      positions.push(position);
+    }
   }
+  return { positions, text };
+}
 
-  const index = buildNormalizedTextLayerIndex(collectTextLayerNodes(textLayer));
-  const start = index.text.indexOf(query);
+function compactQuoteForSearch(value: string) {
+  return compactPdfTextForSearch(value);
+}
+
+function findQuoteRangeInIndex(input: {
+  index: ReturnType<typeof buildNormalizedTextLayerIndex>;
+  preferredStart?: number;
+  query: string;
+}) {
+  let start = input.index.text.indexOf(input.query);
   if (start < 0) {
     return null;
   }
-  const end = start + query.length - 1;
-  const startPosition = index.positions[start];
-  const endPosition = index.positions[end];
+  if (typeof input.preferredStart === "number" && Number.isFinite(input.preferredStart)) {
+    let closestStart = start;
+    let closestDistance = Math.abs(
+      (input.index.positions[start]?.normalizedOffset ?? start) - input.preferredStart
+    );
+    let nextStart = input.index.text.indexOf(input.query, start + 1);
+    while (nextStart >= 0) {
+      const distance = Math.abs(
+        (input.index.positions[nextStart]?.normalizedOffset ?? nextStart) - input.preferredStart
+      );
+      if (distance < closestDistance) {
+        closestStart = nextStart;
+        closestDistance = distance;
+      }
+      nextStart = input.index.text.indexOf(input.query, nextStart + 1);
+    }
+    start = closestStart;
+  }
+  const end = start + input.query.length - 1;
+  const startPosition = input.index.positions[start];
+  const endPosition = input.index.positions[end];
   if (!startPosition || !endPosition) {
     return null;
   }
@@ -409,12 +462,40 @@ export function findQuoteRangeInTextLayer(textLayer: HTMLElement, quote: string)
   return range;
 }
 
+export function findQuoteRangeInTextLayer(
+  textLayer: HTMLElement,
+  quote: string,
+  preferredStart?: number
+): Range | null {
+  const query = normalizeQuoteForSearch(quote);
+  if (!query) {
+    return null;
+  }
+
+  const index = buildNormalizedTextLayerIndex(collectTextLayerNodes(textLayer));
+  const exactRange = findQuoteRangeInIndex({ index, preferredStart, query });
+  if (exactRange) {
+    return exactRange;
+  }
+
+  const compactQuery = compactQuoteForSearch(quote);
+  if (!compactQuery) {
+    return null;
+  }
+  return findQuoteRangeInIndex({
+    index: buildCompactTextLayerIndex(index),
+    preferredStart,
+    query: compactQuery
+  });
+}
+
 function buildTargetEvidenceRects(
   textLayer: HTMLElement,
   pageElement: HTMLElement,
-  quote: string
+  quote: string,
+  preferredStart?: number
 ) {
-  const range = findQuoteRangeInTextLayer(textLayer, quote);
+  const range = findQuoteRangeInTextLayer(textLayer, quote, preferredStart);
   if (!range) {
     return [];
   }
@@ -524,6 +605,7 @@ type PdfPageViewProps = {
   annotations: PdfAnnotation[];
   activePaper: Paper | null;
   focused: boolean;
+  onEvidenceHighlightResolved?: (matched: boolean) => void;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
   stageWidth: number;
@@ -535,6 +617,7 @@ function PdfPageView({
   activePaper,
   annotations,
   focused,
+  onEvidenceHighlightResolved,
   pageNumber,
   pdfDocument,
   stageWidth,
@@ -552,6 +635,15 @@ function PdfPageView({
     const textLayer = textLayerRef.current;
     const pageElement = pageShellRef.current;
     if (
+      focused &&
+      targetEvidence?.textExtraction === "ocr" &&
+      targetEvidence.paperId === activePaper?.id
+    ) {
+      setTargetHighlightRects([]);
+      onEvidenceHighlightResolved?.(false);
+      return;
+    }
+    if (
       !focused ||
       !targetEvidence?.quote ||
       targetEvidence.paperId !== activePaper?.id ||
@@ -561,7 +653,14 @@ function PdfPageView({
       setTargetHighlightRects([]);
       return;
     }
-    setTargetHighlightRects(buildTargetEvidenceRects(textLayer, pageElement, targetEvidence.quote));
+    const rects = buildTargetEvidenceRects(
+      textLayer,
+      pageElement,
+      targetEvidence.quote,
+      targetEvidence.pageTextStart
+    );
+    setTargetHighlightRects(rects);
+    onEvidenceHighlightResolved?.(rects.length > 0);
   }
 
   useEffect(() => {
@@ -572,6 +671,9 @@ function PdfPageView({
       if (!pdfDocument) {
         drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
         setTargetHighlightRects([]);
+        if (focused && targetEvidence?.paperId === activePaper?.id) {
+          onEvidenceHighlightResolved?.(false);
+        }
         return;
       }
 
@@ -626,6 +728,9 @@ function PdfPageView({
       } catch {
         drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
         setTargetHighlightRects([]);
+        if (focused && targetEvidence?.paperId === activePaper?.id) {
+          onEvidenceHighlightResolved?.(false);
+        }
       }
     }
 
@@ -635,12 +740,12 @@ function PdfPageView({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [activePaper?.id, focused, pageNumber, pageTitle, pdfDocument, stageWidth, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
+  }, [activePaper?.id, focused, onEvidenceHighlightResolved, pageNumber, pageTitle, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
     return () => window.cancelAnimationFrame(frame);
-  }, [activePaper?.id, focused, pageNumber, pageSize.height, pageSize.width, targetEvidence?.quote, targetEvidence?.requestId]);
+  }, [activePaper?.id, focused, pageNumber, pageSize.height, pageSize.width, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId]);
 
   const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
 
@@ -755,7 +860,8 @@ export function PdfReader({
   selectedPapers,
   targetEvidence,
   zoom,
-  onAddSelectionToConversation
+  onAddSelectionToConversation,
+  intuechoEndpoint = ""
 }: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -771,8 +877,28 @@ export function PdfReader({
   const [selection, setSelection] = useState<PdfSelection | null>(null);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
+  const [syncingAnnotations, setSyncingAnnotations] = useState(false);
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
+  const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
+  const autoPublicStorageKey = pdfAnnotationAutoPublicStorageKey(activePaper);
+  const [autoPublicAnnotations, setAutoPublicAnnotations] = useState(false);
+  const [hydratedAnnotationStorageKey, setHydratedAnnotationStorageKey] = useState<string | null>(null);
   const pageNumbers = useMemo(() => getPageNumbers(pageCount), [pageCount]);
+  const pendingPublicAnnotations = useMemo(
+    () => listPdfAnnotationPendingPublicItems(annotations),
+    [annotations]
+  );
+
+  const handleEvidenceHighlightResolved = useCallback((matched: boolean) => {
+    if (!targetEvidence || targetEvidence.paperId !== activePaper?.id) {
+      return;
+    }
+    setStatus(targetEvidence.textExtraction === "ocr"
+      ? `已定位到第 ${targetEvidence.page} 页；该证据来自 OCR 识别，当前只能页级定位。`
+      : matched
+        ? `已定位并高亮第 ${targetEvidence.page} 页的 Agent 引用证据。`
+        : `已定位到第 ${targetEvidence.page} 页；原文文本层未能精确匹配，当前为页级定位。`);
+  }, [activePaper?.id, targetEvidence]);
 
   useEffect(() => {
     const stageElement = stageRef.current;
@@ -799,8 +925,14 @@ export function PdfReader({
 
   
   useEffect(() => {
-    setAnnotations([]);
+    setAnnotations(loadPdfAnnotations(
+      annotationStorageKey,
+      activePaper ? resolvePaperIdentity(activePaper) : undefined
+    ));
+    setAutoPublicAnnotations(loadPdfAnnotationAutoPublic(autoPublicStorageKey));
+    setHydratedAnnotationStorageKey(annotationStorageKey);
     setSelection(null);
+    setActiveAnnotationId(null);
     setPageCount(1);
     setFocusedPage(1);
 
@@ -848,7 +980,13 @@ export function PdfReader({
       cancelled = true;
       void loadingTask.destroy();
     };
-  }, [activePaper?.sourcePath, pdfDisplaySource]);
+  }, [activePaper?.sourcePath, annotationStorageKey, autoPublicStorageKey, pdfDisplaySource]);
+
+  useEffect(() => {
+    if (annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey) {
+      savePdfAnnotations(annotationStorageKey, annotations);
+    }
+  }, [annotationStorageKey, annotations, hydratedAnnotationStorageKey]);
 
   useEffect(() => {
     if (!targetEvidence || targetEvidence.paperId !== activePaper?.id) {
@@ -928,14 +1066,22 @@ export function PdfReader({
 
   function addAnnotation(kind: AnnotationKind) {
     const activeSelection = selection ?? getInitialSelection(activePaper);
+    const now = new Date().toISOString();
     const annotation: PdfAnnotation = {
+      color: kind === "highlight" ? selectedColor : undefined,
+      createdAt: now,
       excerpt: activeSelection.excerpt,
       id: `${kind}-${Date.now()}-${annotations.length}`,
       kind,
       page: activeSelection.page,
+      paperIdentity: resolvePaperIdentity(activePaper ?? {
+        id: "local-pdf-selection",
+        title: "未命名 PDF"
+      }),
       rects: activeSelection.rects,
       text: getAnnotationText(kind),
-      color: kind === "highlight" ? selectedColor : undefined
+      updatedAt: now,
+      visibility: autoPublicAnnotations ? "pending_public" : "private"
     };
     const duplicate = annotations.some(
       (item) =>
@@ -992,7 +1138,9 @@ export function PdfReader({
         annotation.id === activeAnnotationId
           ? {
               ...annotation,
-              note: annotationNoteDraft
+              note: annotationNoteDraft,
+              syncState: annotation.visibility === "pending_public" ? undefined : annotation.syncState,
+              updatedAt: new Date().toISOString()
             }
           : annotation
       )
@@ -1007,13 +1155,50 @@ export function PdfReader({
         annotation.id === annotationId
           ? {
               ...annotation,
-              color
+              color,
+              syncState: annotation.visibility === "pending_public" ? undefined : annotation.syncState,
+              updatedAt: new Date().toISOString()
             }
           : annotation
       )
     );
     setStatus("已更新高亮颜色。");
     setActiveAnnotationId(null);
+  }
+
+  function setAnnotationPublic(annotationId: string, isPublic: boolean) {
+    setAnnotations((current) => current.map((annotation) => annotation.id === annotationId
+      ? {
+          ...annotation,
+          syncState: undefined,
+          updatedAt: new Date().toISOString(),
+          visibility: isPublic ? "pending_public" : "private"
+        }
+      : annotation));
+  }
+
+  function setAutoPublic(value: boolean) {
+    setAutoPublicAnnotations(value);
+    savePdfAnnotationAutoPublic(autoPublicStorageKey, value);
+  }
+
+  async function syncPublicAnnotations() {
+    if (syncingAnnotations || pendingPublicAnnotations.length === 0) return;
+    setSyncingAnnotations(true);
+    try {
+      const results = await syncPdfAnnotationPendingItems({ endpoint: intuechoEndpoint, items: pendingPublicAnnotations });
+      const attemptedAt = new Date().toISOString();
+      setAnnotations((current) => current.map((annotation) => {
+        const result = results.find((item) => item.annotationId === annotation.id);
+        if (!result) return annotation;
+        return result.status === "synced"
+          ? { ...annotation, syncState: { intuechoAnnotationId: result.intuechoAnnotationId, status: "synced", syncedAt: result.syncedAt } }
+          : { ...annotation, syncState: { error: result.error, lastAttemptAt: attemptedAt, status: "failed" } };
+      }));
+      setStatus(results.some((result) => result.status === "synced") ? "已收到 Intuecho 同步确认。" : "公开批注仍在本地等待 Intuecho 同步。");
+    } finally {
+      setSyncingAnnotations(false);
+    }
   }
 
 
@@ -1090,6 +1275,22 @@ export function PdfReader({
                   <div aria-live="polite" className="pdf-status">
                     {status}
                   </div>
+                  <label className="pdf-annotation-auto-public-toggle">
+                    <input
+                      checked={autoPublicAnnotations}
+                      onChange={(event) => setAutoPublic(event.currentTarget.checked)}
+                      type="checkbox"
+                    />
+                    新批注自动公开到 Intuecho
+                  </label>
+                  {pendingPublicAnnotations.length > 0 ? (
+                    <div className="pdf-public-annotation-status">
+                      <span>{PDF_ANNOTATION_PENDING_LABEL} · {pendingPublicAnnotations.length}</span>
+                      <button disabled={syncingAnnotations} onClick={() => void syncPublicAnnotations()} type="button">
+                        {syncingAnnotations ? "正在同步" : "立即同步"}
+                      </button>
+                    </div>
+                  ) : null}
                   {annotations.length > 0 ? (
                     <ul className="pdf-annotation-list">
                       {annotations.map((annotation) => (
@@ -1172,6 +1373,17 @@ export function PdfReader({
                                 : annotation.note}
                             </div>
                           ) : null}
+                          <label className="pdf-annotation-public-toggle">
+                            <input
+                              checked={annotation.visibility === "pending_public"}
+                              onChange={(event) => setAnnotationPublic(annotation.id, event.currentTarget.checked)}
+                              type="checkbox"
+                            />
+                            公开到 Intuecho
+                          </label>
+                          {annotation.visibility === "pending_public" ? <small>{PDF_ANNOTATION_PENDING_LABEL}</small> : null}
+                          {annotation.syncState?.status === "synced" ? <small>已同步到 Intuecho</small> : null}
+                          {annotation.syncState?.status === "failed" ? <small>同步失败：{annotation.syncState.error}</small> : null}
                         </li>
                       ))}
                     </ul>
@@ -1189,6 +1401,11 @@ export function PdfReader({
           aria-label="PDF 页面预览"
           className="pdf-main-stage"
         >
+          {targetEvidence?.paperId === activePaper?.id ? (
+            <div aria-live="polite" className="pdf-evidence-status" role="status">
+              {status}
+            </div>
+          ) : null}
           <div
             aria-label="PDF 页面滚动区"
             className="pdf-stage"
@@ -1203,6 +1420,7 @@ export function PdfReader({
                   annotations={annotations}
                   focused={pageNumber === focusedPage}
                   key={pageNumber}
+                  onEvidenceHighlightResolved={handleEvidenceHighlightResolved}
                   pageNumber={pageNumber}
                   pdfDocument={pdfDocument}
                   stageWidth={stageWidth}

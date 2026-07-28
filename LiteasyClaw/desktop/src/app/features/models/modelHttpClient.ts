@@ -173,6 +173,7 @@ export function createHttpModelClient({
     const transportRequest: ModelTransportRequest = {
       body: JSON.stringify({
         model: input.model,
+        ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
         prompt: input.prompt,
         provider: input.provider,
         ...(input.requireLive ? { requireLive: true } : {}),

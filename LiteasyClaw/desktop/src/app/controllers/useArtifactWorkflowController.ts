@@ -34,7 +34,9 @@ type UseArtifactWorkflowControllerInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getIntuechoEndpoint?: () => string;
   getAssistantLanguage?: () => string;
+  getActiveReaderPaper?: () => Paper | null;
   getModelDiagnosticContext?: () => {
     endpoint?: string;
     model?: string;
@@ -82,6 +84,7 @@ type ArtifactWorkflowActions = {
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
   updateSkillDocument: (artifactId: string, markdown: string) => void;
   updateThinReadingDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
+  syncThinReadingAnnotations: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
 };
 
 export function useArtifactWorkflowController({
@@ -92,7 +95,9 @@ export function useArtifactWorkflowController({
   confirmDuplicateGeneration,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getIntuechoEndpoint,
   getAssistantLanguage,
+  getActiveReaderPaper,
   getModelDiagnosticContext,
   getSelectedDocumentSet,
   getSelectedPapers,
@@ -139,7 +144,9 @@ export function useArtifactWorkflowController({
     confirmDuplicateGeneration,
     cancelAgentRun,
     getImportedChunksByPaperId,
+    getIntuechoEndpoint,
     getAssistantLanguage,
+    getActiveReaderPaper,
     getModelDiagnosticContext,
     getSelectedDocumentSet,
     getSelectedPapers,
@@ -212,7 +219,8 @@ export function useArtifactWorkflowController({
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,
       updateSkillDocument: artifactActions.updateSkillDocument,
-      updateThinReadingDocument: artifactActions.updateThinReadingDocument
+      updateThinReadingDocument: artifactActions.updateThinReadingDocument,
+      syncThinReadingAnnotations: artifactActions.syncThinReadingAnnotations
     },
     model: {
       artifactCatalog,

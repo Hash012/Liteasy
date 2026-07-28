@@ -815,6 +815,11 @@ test("opens a full thin-reading tab from the floating modality launcher", async 
     if (body.prompt?.includes("Liteasy 薄读 Agent")) {
       const evidenceId = body.prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       const thinReadingAnswer = JSON.stringify({
+        claims: [{
+          evidenceIds: [evidenceId],
+          status: "grounded",
+          text: "这篇综述以向量表示、索引和查询处理组织 vector database management systems。"
+        }],
         externalKnowledge: [],
         omittedSections: [{ label: "实验", sectionKey: "experiment" }],
         paperEvidence: [evidenceId],
@@ -827,6 +832,12 @@ test("opens a full thin-reading tab from the floating modality launcher", async 
           }
         ],
         summary: "这篇综述的核心是把 vector database management systems 放在向量表示、索引和查询处理的系统框架中理解。",
+        summarySentences: [{
+          evidenceIds: [evidenceId],
+          externalKnowledge: [],
+          status: "grounded",
+          text: "这篇综述的核心是把 vector database management systems 放在向量表示、索引和查询处理的系统框架中理解。"
+        }],
         withinPaperClosure: true
       });
       const encoder = new TextEncoder();

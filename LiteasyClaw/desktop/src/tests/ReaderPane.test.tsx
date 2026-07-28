@@ -1,7 +1,12 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { findQuoteRangeInTextLayer } from "../app/features/pdf/PdfReader";
+import { normalizePdfTextForSearch } from "../app/features/pdf/pdfTextSearch";
+import {
+  pdfAnnotationAutoPublicStorageKey,
+  pdfAnnotationStorageKey
+} from "../app/features/pdf/pdfAnnotationStorage";
 import { ReaderPane } from "../app/layout/ReaderPane";
 
 const readerTestPaper = {
@@ -12,6 +17,7 @@ const readerTestPaper = {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 function makeRect({ height, left, top, width }: { height: number; left: number; top: number; width: number }) {
@@ -85,6 +91,64 @@ describe("ReaderPane", () => {
 
     expect(range?.toString().replace(/\s+/g, " ")).toContain(
       "late interaction to preserve token-level matching"
+    );
+  });
+
+  test("uses a persisted page-text offset to disambiguate repeated evidence quotes", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = [
+      "<span>first token-level matching signal. </span>",
+      "<span>padding between occurrences. </span>",
+      "<span>second token-level matching signal.</span>"
+    ].join("");
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "token-level matching signal",
+      48
+    );
+
+    expect(range?.startContainer.parentElement?.textContent).toContain(
+      "second token-level matching signal"
+    );
+  });
+
+  test("uses the shared Unicode-normalized offset to disambiguate repeated evidence quotes", () => {
+    const textLayer = document.createElement("div");
+    const pageText = "first multimodal AI reference. padding. second multi\u00admodal \uFF21I reference.";
+    textLayer.innerHTML = [
+      "<span>first multimodal AI reference. padding. </span>",
+      "<span>second multi\u00admodal \uFF21I reference.</span>"
+    ].join("");
+    const normalizedPage = normalizePdfTextForSearch(pageText);
+    const secondOccurrence = normalizedPage.indexOf(
+      "multimodal ai reference",
+      normalizedPage.indexOf("multimodal ai reference") + 1
+    );
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "multimodal AI reference",
+      secondOccurrence
+    );
+
+    expect(range?.startContainer.parentElement?.textContent).toContain("second multi\u00admodal \uFF21I reference");
+  });
+
+  test("matches a quote across PDF line-break hyphenation and Unicode dash drift", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = [
+      "<span>The late inter-</span>",
+      "<span>action path preserves token‐level signals.</span>"
+    ].join("");
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "late interaction path preserves token-level signals"
+    );
+
+    expect(range?.toString().replace(/\s+/g, " ")).toContain(
+      "late inter-action path preserves token‐level signals"
     );
   });
 
@@ -291,6 +355,72 @@ describe("ReaderPane", () => {
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
     expect(screen.getByText("注释")).toBeInTheDocument();
     expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/旁注/)).toBeInTheDocument();
+  });
+
+  test("restores local PDF annotations when the same paper is reopened", async () => {
+    const user = userEvent.setup();
+    const selectionRect = makeRect({ height: 20, left: 180, top: 220, width: 160 });
+    const first = render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    mockPdfSelection({ ancestor: getPdfTextNode(), boundingRect: selectionRect, text: "persistent PDF annotation" });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
+    expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain("persistent PDF annotation");
+
+    first.unmount();
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    expect(await screen.findByText("persistent PDF annotation")).toBeInTheDocument();
+  });
+
+  test("queues a PDF annotation for Intuecho without claiming that it is already public", async () => {
+    const user = userEvent.setup();
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "新批注自动公开到 Intuecho" }));
+
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: makeRect({ height: 20, left: 180, top: 220, width: 160 }),
+      text: "a publicly queued PDF annotation"
+    });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
+
+    expect(screen.getAllByText("等待 Intuecho 同步").length).toBeGreaterThan(0);
+    expect(screen.queryByText("已同步到 Intuecho")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain("pending_public");
+    expect(window.localStorage.getItem(pdfAnnotationAutoPublicStorageKey(readerTestPaper)!)).toBe("true");
   });
 
   test("uses line-level PDF text rects instead of one tall selection box", async () => {
@@ -630,5 +760,58 @@ describe("ReaderPane", () => {
 
     expect(screen.getByLabelText("PDF.js 页面 1")).toHaveClass("evidence-target");
     expect(screen.getByRole("button", { name: "缩略图" })).toHaveClass("active");
+  });
+
+  test("reports page-level positioning when the PDF text layer cannot match evidence", async () => {
+    render(
+      <ReaderPane
+        analysisHint="已找到引用证据。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={["paper-1"]}
+        selectionLocked={true}
+        targetEvidence={{
+          evidenceId: "evidence-unmatched",
+          page: 1,
+          paperId: "paper-1",
+          quote: "a quote that is not available in this text layer",
+          requestId: 2
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("已定位到第 1 页；原文文本层未能精确匹配，当前为页级定位。")).toBeInTheDocument();
+    });
+  });
+
+  test("reports OCR evidence as an explicit page-level fallback without claiming a text-layer match", async () => {
+    render(
+      <ReaderPane
+        analysisHint="已找到 OCR 证据。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={["paper-1"]}
+        selectionLocked={true}
+        targetEvidence={{
+          evidenceId: "evidence-ocr",
+          page: 1,
+          paperId: "paper-1",
+          quote: "OCR-derived quote",
+          requestId: 3,
+          textExtraction: "ocr"
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("已定位到第 1 页；该证据来自 OCR 识别，当前只能页级定位。"))
+        .toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/Agent 引用证据高亮/)).not.toBeInTheDocument();
   });
 });

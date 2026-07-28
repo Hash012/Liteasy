@@ -1,11 +1,14 @@
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { PDFPageProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
+import { normalizePdfTextForSearch } from "../pdf/pdfTextSearch";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper } from "../workspace/workspace.types";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export type ExtractedPdfPage = {
+  textExtraction?: "embedded" | "ocr";
   page: number;
   text: string;
 };
@@ -15,12 +18,25 @@ type PdfChunkingOptions = {
   overlapCharacters?: number;
 };
 
+export type PdfOcrWorker = {
+  recognize(image: HTMLCanvasElement): Promise<{ data: { text: string } }>;
+  terminate(): Promise<unknown>;
+};
+
+export type PdfOcrLanguage = "chi_sim" | "eng" | "eng+chi_sim";
+
+export type PdfExtractionOptions = {
+  createOcrWorker?: (language: string) => Promise<PdfOcrWorker>;
+  ocrLanguage?: PdfOcrLanguage;
+};
+
 const defaultMaxChunkCharacters = 1_600;
 const defaultOverlapCharacters = 180;
 
 function normalizePdfText(value: string) {
   return value
     .replace(/-\s*\n\s*(?=[a-z])/g, "")
+    .replace(/\u00ad\s*\n?\s*/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n")
     .replace(/[ \t]{2,}/g, " ")
@@ -123,21 +139,36 @@ export function buildPdfChunksFromPages(
     Math.min(Math.floor(maximum / 3), options.overlapCharacters ?? defaultOverlapCharacters)
   );
 
-  return pages.flatMap((page) =>
-    splitPageText(page.text, maximum, overlap).map((snippet, chunkIndex) => ({
-      page: page.page,
-      paperId: paper.id,
-      paperTitle: paper.title,
-      snippet,
-      summary: compact(snippet, 360),
-      tags: [
-        "PDF 全文",
-        `第 ${page.page} 页`,
-        `页内片段 ${chunkIndex + 1}`,
-        ...extractTerms(snippet)
-      ]
-    }))
-  );
+  return pages.flatMap((page) => {
+    const pageText = normalizePdfText(page.text);
+    const pageTextForSearch = normalizePdfTextForSearch(pageText);
+    let searchStart = 0;
+    return splitPageText(pageText, maximum, overlap).map((snippet, chunkIndex) => {
+      const snippetForSearch = normalizePdfTextForSearch(snippet);
+      const matchedStart = pageTextForSearch.indexOf(snippetForSearch, searchStart);
+      const pageTextStart = matchedStart >= 0 ? matchedStart : searchStart;
+      const pageTextEnd = pageTextStart + snippetForSearch.length;
+      // Overlapping chunks can share a prefix, so advance by one character rather than past the chunk.
+      searchStart = Math.min(pageTextForSearch.length, pageTextStart + 1);
+      return {
+        page: page.page,
+        pageTextEnd,
+        pageTextStart,
+        paperId: paper.id,
+        paperTitle: paper.title,
+        snippet,
+        summary: compact(snippet, 360),
+        textExtraction: page.textExtraction ?? "embedded",
+        tags: [
+          "PDF 全文",
+          ...(page.textExtraction === "ocr" ? ["OCR 识别"] : []),
+          `第 ${page.page} 页`,
+          `页内片段 ${chunkIndex + 1}`,
+          ...extractTerms(snippet)
+        ]
+      };
+    });
+  });
 }
 
 function isTextItem(item: unknown): item is { hasEOL?: boolean; str: string } {
@@ -149,10 +180,41 @@ function isTextItem(item: unknown): item is { hasEOL?: boolean; str: string } {
   );
 }
 
-export async function extractPdfPages(sourcePath: string): Promise<ExtractedPdfPage[]> {
+async function renderPdfPageForOcr(page: PDFPageProxy) {
+  if (typeof document === "undefined") {
+    throw new Error("OCR 只能在桌面阅读器中运行。");
+  }
+  const viewport = page.getViewport({ scale: 2 });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    throw new Error("无法创建 OCR 页面画布。");
+  }
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  return canvas;
+}
+
+async function createPdfOcrWorker(language: string): Promise<PdfOcrWorker> {
+  const { createWorker } = await import("tesseract.js");
+  return createWorker(language);
+}
+
+async function extractScannedPdfPageText(page: PDFPageProxy, worker: PdfOcrWorker) {
+  const canvas = await renderPdfPageForOcr(page);
+  const result = await worker.recognize(canvas);
+  return normalizePdfText(result.data.text);
+}
+
+export async function extractPdfPages(
+  sourcePath: string | Uint8Array,
+  options: PdfExtractionOptions = {}
+): Promise<ExtractedPdfPage[]> {
   const document = await pdfjsLib.getDocument(sourcePath).promise;
   try {
     const pages: ExtractedPdfPage[] = [];
+    const scannedPageNumbers: number[] = [];
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
@@ -164,20 +226,48 @@ export async function extractPdfPages(sourcePath: string): Promise<ExtractedPdfP
           .join("")
       );
       if (text) {
-        pages.push({ page: pageNumber, text });
+        pages.push({ page: pageNumber, text, textExtraction: "embedded" });
+      } else {
+        scannedPageNumbers.push(pageNumber);
       }
     }
+    if (scannedPageNumbers.length > 0) {
+      let worker: PdfOcrWorker | null = null;
+      try {
+        worker = await (options.createOcrWorker ?? createPdfOcrWorker)(options.ocrLanguage ?? "eng");
+        for (const pageNumber of scannedPageNumbers) {
+          const page = await document.getPage(pageNumber);
+          let text = "";
+          try {
+            text = await extractScannedPdfPageText(page, worker);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`第 ${pageNumber} 页没有可选文字，且 OCR 失败：${message}`);
+          }
+          if (!text) {
+            throw new Error(`第 ${pageNumber} 页没有可选文字，OCR 未识别出可用文本。`);
+          }
+          pages.push({ page: pageNumber, text, textExtraction: "ocr" });
+        }
+      } finally {
+        await worker?.terminate();
+      }
+    }
+    pages.sort((left, right) => left.page - right.page);
     return pages;
   } finally {
     await document.destroy();
   }
 }
 
-export async function extractPdfChunksForPaper(paper: Paper): Promise<RetrievalChunk[]> {
+export async function extractPdfChunksForPaper(
+  paper: Paper,
+  options: PdfExtractionOptions = {}
+): Promise<RetrievalChunk[]> {
   if (!paper.sourcePath) {
     throw new Error(`Paper ${paper.id} does not have a PDF source path`);
   }
-  const pages = await extractPdfPages(paper.sourcePath);
+  const pages = await extractPdfPages(paper.sourcePath, options);
   const chunks = buildPdfChunksFromPages(paper, pages);
   if (chunks.length === 0) {
     throw new Error(`No selectable text was extracted from ${paper.title}`);

@@ -16,7 +16,31 @@ const modalityLabels = {
   tree: "树形分析"
 } as const;
 
-function mapArtifactProgressStage(phase: string | undefined): ArtifactTaskStage {
+function mapArtifactProgressStage(
+  artifactType: ArtifactType,
+  phase: string | undefined,
+  options?: AgentArtifactGenerationOptions
+): ArtifactTaskStage {
+  if (artifactType === "thin_reading") {
+    if (phase === "retrieving_evidence") {
+      return "thin_reading_retrieving_evidence";
+    }
+    if (phase === "retrieving_external_knowledge") {
+      return "thin_reading_retrieving_external_knowledge";
+    }
+    if (phase === "generating_answer") {
+      return options?.thinReadingContext?.source.kind === "root_overview"
+        ? "thin_reading_generating_root"
+        : "thin_reading_generating_branch";
+    }
+    if (phase === "repairing_structured_output") {
+      return "thin_reading_repairing_trace";
+    }
+    if (phase === "auditing_answer" || phase === "structuring_artifact") {
+      return "thin_reading_validating";
+    }
+    return "thin_reading_planning";
+  }
   if (phase === "planning_artifact" || phase === "collecting_external_knowledge") {
     return "retrieving_evidence";
   }
@@ -121,7 +145,7 @@ export async function runAgentArtifactAnalysis(
         agentRunId: event.runId,
         message: "Agent 已接收分析任务",
         progress: 18,
-        stage: "preparing_context"
+        stage: artifactType === "thin_reading" ? "thin_reading_planning" : "preparing_context"
       });
       return;
     }
@@ -129,14 +153,18 @@ export async function runAgentArtifactAnalysis(
       return;
     }
     if (event.type === "context.prepared") {
-      onProgress?.({ message: "已装配工作区与 Agent 上下文", progress: 25, stage: "preparing_context" });
+      onProgress?.({
+        message: artifactType === "thin_reading" ? "已装配论文范围，正在规划薄读证据" : "已装配工作区与 Agent 上下文",
+        progress: 25,
+        stage: artifactType === "thin_reading" ? "thin_reading_planning" : "preparing_context"
+      });
       return;
     }
     if (event.type === "progress.started") {
       onProgress?.({
         message: event.summary,
         progress: Math.max(25, Math.min(90, event.progress ?? 50)),
-        stage: mapArtifactProgressStage(event.phase)
+        stage: mapArtifactProgressStage(artifactType, event.phase, options)
       });
       return;
     }
@@ -153,7 +181,11 @@ export async function runAgentArtifactAnalysis(
         message: `正在并行分析论文区段（${subtaskDrafts.size} 个 SubAgent 已返回内容）`,
         partialAnswer: visibleWorklog.slice(-6_000),
         progress: 48,
-        stage: "generating_answer"
+        stage: artifactType === "thin_reading"
+          ? options?.thinReadingContext?.source.kind === "root_overview"
+            ? "thin_reading_generating_root"
+            : "thin_reading_generating_branch"
+          : "generating_answer"
       });
       return;
     }
@@ -167,7 +199,11 @@ export async function runAgentArtifactAnalysis(
         partialAnswer: partialAnswer.slice(-1600),
         partialOutlineNodes,
         progress: 68,
-        stage: "generating_answer"
+        stage: artifactType === "thin_reading"
+          ? options?.thinReadingContext?.source.kind === "root_overview"
+            ? "thin_reading_generating_root"
+            : "thin_reading_generating_branch"
+          : "generating_answer"
       });
     }
   });

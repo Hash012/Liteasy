@@ -5,9 +5,16 @@ export type ModelPolicy = {
   allowedProviders: string[];
 };
 
+export type ModelOutputFormat = {
+  name: string;
+  schema: Record<string, unknown>;
+  strict: boolean;
+};
+
 export type GenerateAnswerInput = {
   model: string;
   onDelta?: (delta: string, accumulated: string) => void;
+  outputFormat?: ModelOutputFormat;
   prompt: string;
   provider: string;
   requireLive?: boolean;

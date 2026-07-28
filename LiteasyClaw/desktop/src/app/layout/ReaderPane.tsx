@@ -24,7 +24,9 @@ type ReaderPaneProps = {
     document: ThinReadingDocument;
     source: ThinReadingBranchSource;
   }) => Promise<void>;
+  onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
+  intuechoEndpoint?: string;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
   onToggleBottomPane?: () => void;
@@ -53,7 +55,9 @@ export function ReaderPane({
   onArtifactDynamicAction,
   onOpenEvidence,
   onGenerateThinReadingBranch,
+  onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
+  intuechoEndpoint,
   onSaveMarkdownTab,
   onStartAnalysis,
   onToggleBottomPane,
@@ -122,6 +126,7 @@ export function ReaderPane({
           }`}
         >
           <PdfReader
+            intuechoEndpoint={intuechoEndpoint}
             onAddSelectionToConversation={onAddReaderContextToConversation}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
@@ -134,6 +139,7 @@ export function ReaderPane({
                 canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
                 onDynamicAction={onArtifactDynamicAction}
                 onGenerateThinReadingBranch={onGenerateThinReadingBranch}
+                onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}
                 onOpenEvidence={onOpenEvidence}
                 onSaveMarkdownTab={onSaveMarkdownTab}
                 onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}

@@ -1,7 +1,9 @@
 import type { ImportJob } from "../import/import.types";
 import { extractImportedChunksForPaper } from "../import/importFixtures";
+import type { PdfOcrLanguage } from "../import/pdfTextExtractor";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper, WorkspaceState } from "./workspace.types";
+import { inferPaperIdentityMetadataFromPdfText } from "../paper-identity/paperIdentity";
 import type { createImportStore } from "../import/import.store";
 import type { createWorkspaceStore } from "./workspace.store";
 import type { MoveLocalLibraryResource } from "../library/libraryFileSystemClient";
@@ -39,6 +41,7 @@ function buildDroppedPaperId(file: File) {
 
 type UseWorkspaceActionsInput = {
   extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
+  ocrLanguage?: PdfOcrLanguage;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
   moveLocalLibraryResource?: MoveLocalLibraryResource;
@@ -69,7 +72,7 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 }
 
 export function useWorkspaceActions({
-  extractPaperChunks = extractImportedChunksForPaper,
+  extractPaperChunks,
   importDocument,
   importStore,
   moveLocalLibraryResource,
@@ -77,8 +80,10 @@ export function useWorkspaceActions({
   onAnalysisHint,
   onImportJobsChanged,
   onWorkspaceChanged,
+  ocrLanguage = "eng",
   workspaceStore
 }: UseWorkspaceActionsInput) {
+  const resolvePaperChunks = extractPaperChunks ?? ((paper: Paper) => extractImportedChunksForPaper(paper, { ocrLanguage }));
   function syncWorkspace() {
     onWorkspaceChanged(cloneWorkspaceState(workspaceStore.getState()));
   }
@@ -395,10 +400,24 @@ export function useWorkspaceActions({
       window.setTimeout(() => {
         importStore.markParsing(jobId);
         syncImportJobs();
-        void extractPaperChunks(paper)
+        void resolvePaperChunks(paper)
           .then((chunks) => {
             if (chunks.length === 0) {
               throw new Error("PDF did not contain extractable text");
+            }
+            const firstPage = Math.min(...chunks.map((chunk) => chunk.page));
+            const firstPageText = chunks
+              .filter((chunk) => chunk.page === firstPage)
+              .map((chunk) => chunk.snippet)
+              .join("\n");
+            const inferredIdentity = inferPaperIdentityMetadataFromPdfText(firstPageText);
+            if ((inferredIdentity.doi && !paper.doi) || (inferredIdentity.arxivId && !paper.arxivId)) {
+              workspaceStore.updatePapers([{
+                ...paper,
+                ...(paper.doi ? {} : inferredIdentity.doi ? { doi: inferredIdentity.doi } : {}),
+                ...(paper.arxivId ? {} : inferredIdentity.arxivId ? { arxivId: inferredIdentity.arxivId } : {})
+              }]);
+              syncWorkspace();
             }
             importStore.markParsed(jobId, {
               paperId: paper.id,

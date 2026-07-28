@@ -229,6 +229,23 @@ export function resolvePaperIdentityMap(
   );
 }
 
+export function inferPaperIdentityMetadataFromPdfText(value: string): Pick<Paper, "arxivId" | "doi"> {
+  const text = compact(value);
+  if (!text) {
+    return {};
+  }
+  const doi = normalizeDoi(
+    text.match(/(?:doi\s*[:：]\s*|https?:\/\/(?:dx\.)?doi\.org\/)(10\.\d{4,9}\/[\-._;()/:A-Z0-9]+)/i)?.[1]
+  );
+  const arxivId = normalizeArxivId(
+    text.match(/(?:arxiv\s*[:：]\s*|https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\/)([a-z-]+(?:\.[A-Z]{2})?\/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)/i)?.[1]
+  );
+  return {
+    ...(doi ? { doi } : {}),
+    ...(arxivId ? { arxivId } : {})
+  };
+}
+
 export function freezePaperIdentity(identity: PaperIdentity): PaperIdentity {
   return Object.freeze({
     ...identity,

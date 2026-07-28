@@ -44,10 +44,11 @@ import {
 import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
+import { createExternalKnowledgeRunRepository } from "./db/externalKnowledgeRunRepository.mjs";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 import {
   ExternalKnowledgeError,
-  searchOpenAlexExternalKnowledge
+  searchExternalKnowledge
 } from "./payloads/externalKnowledgePayloads.mjs";
 
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
@@ -300,6 +301,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   const database = customConfig.database ?? createDatabase({
     databasePath: customConfig.databasePath
   });
+  const externalKnowledgeRunRepository =
+    customConfig.externalKnowledgeRunRepository ?? createExternalKnowledgeRunRepository(database);
   const accountRepository = createAccountRepository(database);
   const sessionRepository = createAuthSessionRepository(database);
   const authService = customConfig.authService ?? createAuthService({
@@ -621,17 +624,44 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      let retrievalRun;
       try {
-        const payload = await searchOpenAlexExternalKnowledge(body, {
-          timeoutMs: customConfig.openAlexTimeoutMs,
-          transport: customConfig.openAlexTransport
+        if (typeof body.artifactId === "string") {
+          const resumed = externalKnowledgeRunRepository.begin(body);
+          if (resumed.payload) {
+            writeJson(request, response, 200, { ...resumed.payload, retrieval: resumed.run });
+            return;
+          }
+          retrievalRun = resumed.run;
+        }
+        const payload = await searchExternalKnowledge(body, {
+          crossrefEnabled: customConfig.crossrefEnabled,
+          crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+          crossrefTransport: customConfig.crossrefTransport,
+          openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+          openAlexTransport: customConfig.openAlexTransport
         });
-        writeJson(request, response, 200, payload);
+        const completedRun = typeof body.artifactId === "string"
+          ? externalKnowledgeRunRepository.complete(body, payload)
+          : undefined;
+        writeJson(request, response, 200, completedRun ? { ...payload, retrieval: completedRun } : payload);
       } catch (error) {
-        const statusCode = error instanceof ExternalKnowledgeError ? error.statusCode : 502;
+        const statusCode = error instanceof ExternalKnowledgeError
+          ? error.statusCode
+          : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
+            ? 400
+            : 502;
+        const failedRun = typeof body.artifactId === "string" && retrievalRun
+          ? externalKnowledgeRunRepository.fail(body, error)
+          : undefined;
         writeJson(request, response, statusCode, {
-          error: error instanceof ExternalKnowledgeError ? error.code : "external_knowledge_unavailable",
-          message: error instanceof Error ? error.message : "外部知识检索不可用。"
+          error: error instanceof ExternalKnowledgeError
+            ? error.code
+            : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
+              ? "invalid_external_knowledge_artifact_id"
+              : "external_knowledge_unavailable",
+          message: error instanceof Error ? error.message : "外部知识检索不可用。",
+          ...(failedRun ? { retrieval: failedRun } : {})
         });
       }
       return;

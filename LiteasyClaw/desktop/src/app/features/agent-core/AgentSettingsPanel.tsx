@@ -126,6 +126,44 @@ export function AgentSettingsPanel({
           />
         </label>
       </div>
+      <div className="agent-settings-section" aria-label="扫描 PDF OCR">
+        <div className="agent-settings-section-title">扫描 PDF OCR</div>
+        <label className="agent-settings-toggle-row">
+          <span className="agent-settings-row-main">
+            <span className="agent-settings-row-title">识别语言</span>
+            <span className="agent-settings-row-description">仅用于没有文字层的 PDF；OCR 证据仍只支持页级定位。</span>
+          </span>
+          <select
+            aria-label="扫描 PDF OCR 语言"
+            onChange={(event) => onUpdateSetting?.({
+              intent: "update_setting",
+              target: "import.ocr_language",
+              value: event.currentTarget.value
+            })}
+            value={settings?.["import.ocr_language"] ?? "eng"}
+          >
+            <option value="eng">English</option>
+            <option value="chi_sim">中文（简体）</option>
+            <option value="eng+chi_sim">中文 + English</option>
+          </select>
+        </label>
+      </div>
+      <div className="agent-settings-section" aria-label="Intuecho 同步">
+        <div className="agent-settings-section-title">Intuecho 同步</div>
+        <label className="agent-settings-toggle-row">
+          <span className="agent-settings-row-main">
+            <span className="agent-settings-row-title">共享批注端点</span>
+            <span className="agent-settings-row-description">仅 HTTPS；未配置时公开批注保留在本地等待同步。</span>
+          </span>
+          <input
+            aria-label="Intuecho 同步端点"
+            onChange={(event) => onUpdateSetting?.({ intent: "update_setting", target: "thin_reading.intuecho_endpoint", value: event.currentTarget.value.trim() })}
+            placeholder="https://intuecho.example.com"
+            type="url"
+            value={settings?.["thin_reading.intuecho_endpoint"] ?? ""}
+          />
+        </label>
+      </div>
       <div className="agent-settings-section" aria-label="安全策略">
         <div className="agent-settings-section-title"><ShieldRegular /></div>
         <div className="agent-settings-chip-row">
