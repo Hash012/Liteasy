@@ -28,6 +28,10 @@ import type {
   ThinReadingGenerationContext,
   ThinReadingNodeSeed
 } from "../thin-reading/thinReading.types";
+import {
+  createThinReadingExternalKnowledgeClient,
+  type ThinReadingExternalKnowledgeTransport
+} from "../thin-reading/thinReadingExternalKnowledgeClient";
 
 type GenerateAssistantAnswerInput = {
   agentCoreContext?: AgentCorePromptContext;
@@ -44,6 +48,7 @@ type GenerateAssistantAnswerInput = {
   settings: SettingsState;
   signal?: AbortSignal;
   thinReadingContext?: ThinReadingGenerationContext | null;
+  thinReadingExternalKnowledgeTransport?: ThinReadingExternalKnowledgeTransport;
 };
 
 function isMockEndpoint(endpoint: string) {
@@ -209,6 +214,35 @@ function completeThinReadingContext(input: {
   };
 }
 
+const externalResearchIntent = /(?:外部|论文外|后续研究|相关工作|最新进展|对照研究|引用网络|external|follow[- ]?up|related work|later work|citation)/i;
+
+export function shouldRetrieveThinReadingExternalKnowledge(context: ThinReadingGenerationContext) {
+  if (context.source.kind === "root_overview") {
+    return false;
+  }
+  if (context.parentWithinPaperClosure === false) {
+    return true;
+  }
+  const sourceText = context.source.kind === "selected_text"
+    ? `${context.source.excerpt}\n${context.source.prompt ?? ""}`
+    : context.source.label;
+  return externalResearchIntent.test(sourceText);
+}
+
+function buildThinReadingExternalQuery(context: ThinReadingGenerationContext) {
+  const sourceFocus = context.source.kind === "selected_text"
+    ? `${context.source.excerpt} ${context.source.prompt ?? ""}`
+    : context.source.kind === "omitted_section"
+      ? context.source.label
+      : "";
+  return [context.primaryPaperTitle, sourceFocus]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
+}
+
 export async function generateAssistantAnswer({
   agentCoreContext,
   artifactType,
@@ -223,7 +257,8 @@ export async function generateAssistantAnswer({
   selectedPapers,
   settings,
   signal,
-  thinReadingContext
+  thinReadingContext,
+  thinReadingExternalKnowledgeTransport
 }: GenerateAssistantAnswerInput) {
   if (signal?.aborted) {
     throw new Error("Assistant answer generation was cancelled");
@@ -261,11 +296,31 @@ export async function generateAssistantAnswer({
     if (isMockEndpoint(activeEndpoint)) {
       throw new Error("薄读必须使用真实模型链路；当前模型 endpoint 是 mock，本次生成已停止。");
     }
-    const context = completeThinReadingContext({
+    let context = completeThinReadingContext({
       context: thinReadingContext,
       selectedPapers,
       settings
     });
+    if (shouldRetrieveThinReadingExternalKnowledge(context)) {
+      onProgress?.({
+        phase: "retrieving_external_knowledge",
+        progress: 46,
+        summary: "正在检索可追溯的外部文献来源"
+      });
+      const externalSources = await createThinReadingExternalKnowledgeClient({
+        endpoint: activeEndpoint,
+        transport: thinReadingExternalKnowledgeTransport
+      })({
+        limit: 5,
+        query: buildThinReadingExternalQuery(context),
+        signal,
+        targetPaperTitle: context.primaryPaperTitle
+      });
+      if (externalSources.length === 0) {
+        throw new Error("未检索到可追溯的外部文献来源，本次论文闭包外生成已停止。");
+      }
+      context = { ...context, externalSources };
+    }
     onProgress?.({
       phase: "generating_answer",
       progress: 55,
@@ -289,7 +344,8 @@ export async function generateAssistantAnswer({
     }
     const rootSeed = parseThinReadingModelSeed(generation.answer, {
       analysis: preparedAnalysis,
-      analysisEvidence: preparedAnalysis.evidence
+      analysisEvidence: preparedAnalysis.evidence,
+      externalSources: context.externalSources
     });
     onProgress?.({
       phase: "auditing_answer",

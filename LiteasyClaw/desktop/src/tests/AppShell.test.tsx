@@ -777,7 +777,7 @@ test("renders artifact content from imported selected-document chunks", async ()
     expect(screen.getByText("PDF 已就绪")).toBeInTheDocument();
   }, { timeout: 2500 });
 
-  await user.click(screen.getByRole("button", { name: "打开模态选择" }));
+  await user.click(screen.getByRole("button", { name: "打开 AI 选择" }));
   await user.click(screen.getByRole("button", { name: "思维导图" }));
 
   await waitFor(() => {
@@ -920,15 +920,17 @@ test("opens a full thin-reading tab from the floating modality launcher", async 
     />
   );
 
+  await user.click(screen.getByLabelText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"));
   await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
+  await user.click(screen.getByTitle("打开 PDF：Survey of Vector Database Management Systems"));
   await user.click(screen.getByRole("button", { name: "锁定选择" }));
   await sendAssistantCommand(user, "导入当前选中文献集");
 
   await waitFor(() => {
-    expect(screen.getByText("PDF 已就绪")).toBeInTheDocument();
+    expect(screen.getAllByText("PDF 已就绪")).toHaveLength(2);
   }, { timeout: 2500 });
 
-  await user.click(screen.getByRole("button", { name: "打开模态选择" }));
+  await user.click(screen.getByRole("button", { name: "打开 AI 选择" }));
   await user.click(screen.getByRole("button", { name: "薄读" }));
 
   await waitFor(() => {
@@ -940,9 +942,15 @@ test("opens a full thin-reading tab from the floating modality launcher", async 
   expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeInTheDocument();
   expect(screen.getByText("Intuecho")).toBeInTheDocument();
-  expect(JSON.parse(modelTransport.mock.calls.at(-1)?.[0].body ?? "{}")).toMatchObject({
+  const thinReadingRequest = modelTransport.mock.calls
+    .map(([request]) => JSON.parse(request.body) as { prompt?: string; requireLive?: boolean })
+    .find((request) => request.prompt?.includes("Liteasy 薄读 Agent"));
+  expect(thinReadingRequest).toMatchObject({
     requireLive: true
   });
+  expect(thinReadingRequest?.prompt).toContain(
+    "目标论文：Survey of Vector Database Management Systems"
+  );
 }, 10000);
 
 test("collapses the left pane when clicking the active activity-bar item", async () => {
@@ -977,7 +985,7 @@ test("composes the primary workbench areas through Dock regions", async () => {
   expect(within(workbench).queryByLabelText("下栏 Dock 区域")).not.toBeInTheDocument();
   expect(screen.getByLabelText("空 Dock 区域")).toBeInTheDocument();
   expect(screen.queryByRole("tab", { name: "多模态产物" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "打开模态选择" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "打开 AI 选择" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "文献库" }));
 

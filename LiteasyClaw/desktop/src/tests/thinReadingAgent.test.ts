@@ -77,10 +77,18 @@ describe("thinReadingAgent", () => {
 
     expect(prompt).toContain("初步论文类型：综述型论文");
     expect(prompt).toContain("paperType");
+    expect(prompt).toContain("summarySentences");
+    expect(prompt).toContain("每个内容性句子都必须能追溯");
     expect(prompt).toContain("evidence-survey-taxonomy");
     expect(prompt).toContain("分类框架");
     expect(prompt).toContain("label 必须是短按钮文案");
     expect(prompt).toContain("不要复制整张 evidence 矩阵");
+    expect(prompt).toContain("留存测试");
+    expect(prompt).toContain("人工留存案例");
+    expect(prompt.match(/信号：/g)).toHaveLength(3);
+    expect(prompt).toContain("反摘要门控");
+    expect(prompt).toContain("Skeptical audit");
+    expect(prompt).toContain("读后留存测试");
   });
 
   test("includes parent claims and evidence spans when generating a branch", () => {
@@ -146,6 +154,14 @@ describe("thinReadingAgent", () => {
             }
           ],
           summary: "这篇综述的核心不是给出单一系统方案，而是用 taxonomy（分类框架）组织 vector database systems 的知识地图。",
+          summarySentences: [
+            {
+              evidenceIds: ["evidence-survey-taxonomy"],
+              externalKnowledge: [],
+              status: "grounded",
+              text: "这篇综述的核心不是给出单一系统方案，而是用 taxonomy（分类框架）组织 vector database systems 的知识地图。"
+            }
+          ],
           withinPaperClosure: true
         }),
         "```"
@@ -169,6 +185,13 @@ describe("thinReadingAgent", () => {
             paperId: "paper-survey",
             quote: expect.stringContaining("taxonomy")
           })
+        ],
+        summarySentences: [
+          expect.objectContaining({
+            evidenceIds: ["evidence-survey-taxonomy"],
+            status: "grounded",
+            text: expect.stringContaining("taxonomy")
+          })
         ]
       },
       paperType: "survey",
@@ -179,6 +202,66 @@ describe("thinReadingAgent", () => {
       label: "分类轴线",
       sectionKey: "taxonomy"
     });
+  });
+
+  test("creates sentence-level evidence mapping when the model omits summarySentences", () => {
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: [],
+      claims: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "第一句概括 taxonomy。第二句说明它组织知识地图。",
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: prepared.evidence
+    });
+
+    expect(seed.evidence.summarySentences).toEqual([
+      expect.objectContaining({
+        evidenceIds: ["evidence-survey-taxonomy"],
+        text: "第一句概括 taxonomy。"
+      }),
+      expect.objectContaining({
+        evidenceIds: ["evidence-survey-taxonomy"],
+        text: "第二句说明它组织知识地图。"
+      })
+    ]);
+  });
+
+  test("rebuilds sentence evidence mapping when model summarySentences drift from the displayed summary", () => {
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: [],
+      claims: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "第一句概括 taxonomy。第二句说明它组织知识地图。",
+      summarySentences: [
+        {
+          evidenceIds: ["evidence-survey-taxonomy"],
+          externalKnowledge: [],
+          status: "grounded",
+          text: "模型另写了一句不存在于正文中的解释。"
+        }
+      ],
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: prepared.evidence
+    });
+
+    expect(seed.evidence.summarySentences).toEqual([
+      expect.objectContaining({
+        evidenceIds: ["evidence-survey-taxonomy"],
+        text: "第一句概括 taxonomy。"
+      }),
+      expect.objectContaining({
+        evidenceIds: ["evidence-survey-taxonomy"],
+        text: "第二句说明它组织知识地图。"
+      })
+    ]);
   });
 
   test("normalizes long omitted section labels from live model output", () => {
@@ -356,5 +439,35 @@ describe("thinReadingAgent", () => {
     });
 
     expect(seed.withinPaperClosure).toBe(false);
+  });
+
+  test("rejects external source ids that were not returned by this retrieval turn", () => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: ["openalex:W-INVENTED"],
+      omittedSections: [],
+      paperEvidence: [],
+      paperType: "survey",
+      recommendations: [],
+      summary: "后续工作扩展了这套分类，并在新的任务与数据集上验证了它的适用边界。",
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: ["openalex:W-INVENTED"],
+        status: "weak",
+        text: "后续工作扩展了这套分类，并在新的任务与数据集上验证了它的适用边界。"
+      }],
+      withinPaperClosure: false
+    }), {
+      externalSources: [{
+        abstract: "A traceable source.",
+        authors: ["A. Author"],
+        id: "openalex:W-ALLOWED",
+        provider: "openalex",
+        relevance: 0.8,
+        retrievalQuery: "taxonomy follow-up",
+        sourceId: "W-ALLOWED",
+        title: "Allowed source",
+        url: "https://openalex.org/W-ALLOWED"
+      }]
+    })).toThrow("本轮检索中不存在");
   });
 });

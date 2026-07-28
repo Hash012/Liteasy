@@ -123,6 +123,7 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/agent-artifacts",
     "DELETE /v1/agent-artifacts/:artifactId",
     "POST /v1/recommendations",
+    "POST /v1/research/external-knowledge",
     "POST /v1/recommendation-cache/get",
     "POST /v1/recommendation-cache/put",
     "POST /v1/recommendation-cache/clear",
@@ -136,6 +137,129 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/org/shared-library/manifest",
     "POST /v1/org/governance-summary"
   ]);
+});
+
+test("normalizes traceable OpenAlex works for external thin-reading research", async () => {
+  let requestedUrl = "";
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      limit: 2,
+      query: "ColBERT late interaction retrieval",
+      targetPaperTitle: "ColBERT"
+    }),
+    handlerOptions: {
+      openAlexTransport: async (url) => {
+        requestedUrl = url;
+        return {
+          json: async () => ({
+            results: [
+              {
+                abstract_inverted_index: { dense: [1], retrieval: [2], "Multi-vector": [0] },
+                authorships: [{ author: { display_name: "Jane Researcher" } }],
+                display_name: "Multi-vector dense retrieval after ColBERT",
+                doi: "https://doi.org/10.1000/example",
+                id: "https://openalex.org/W123456789",
+                primary_location: { landing_page_url: "https://example.org/paper" },
+                publication_year: 2025
+              },
+              {
+                display_name: "ColBERT",
+                id: "https://openalex.org/W999999999"
+              }
+            ]
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(requestedUrl, /api\.openalex\.org\/works/);
+  assert.match(requestedUrl, /search=ColBERT/);
+  assert.equal(response.json.status, "available");
+  assert.deepEqual(response.json.sources, [
+    {
+      abstract: "Multi-vector dense retrieval",
+      authors: ["Jane Researcher"],
+      doi: "https://doi.org/10.1000/example",
+      id: "openalex:W123456789",
+      provider: "openalex",
+      relevance: response.json.sources[0].relevance,
+      retrievalQuery: "ColBERT late interaction retrieval",
+      sourceId: "W123456789",
+      title: "Multi-vector dense retrieval after ColBERT",
+      url: "https://example.org/paper",
+      year: 2025
+    }
+  ]);
+  assert.ok(response.json.sources[0].relevance > 0);
+  assert.ok(response.json.sources[0].relevance <= 1);
+});
+
+test("returns an explicit empty external-knowledge result without synthetic sources", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ query: "a research topic with no OpenAlex result" }),
+    handlerOptions: {
+      openAlexTransport: async () => ({
+        json: async () => ({ results: [] }),
+        ok: true,
+        status: 200
+      })
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.status, "empty");
+  assert.deepEqual(response.json.sources, []);
+});
+
+test("reports an OpenAlex upstream failure instead of falling back to static knowledge", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ query: "ColBERT follow-up work" }),
+    handlerOptions: {
+      openAlexTransport: async () => ({
+        json: async () => ({}),
+        ok: false,
+        status: 503
+      })
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 502);
+  assert.equal(response.json.error, "openalex_upstream_error");
+});
+
+test("reports an explicit timeout when OpenAlex does not respond", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ query: "ColBERT citation network" }),
+    handlerOptions: {
+      openAlexTimeoutMs: 5,
+      openAlexTransport: async (_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          reject(error);
+        }, { once: true });
+      })
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 504);
+  assert.equal(response.json.error, "openalex_timeout");
 });
 
 test("streams model deltas as NDJSON", async () => {

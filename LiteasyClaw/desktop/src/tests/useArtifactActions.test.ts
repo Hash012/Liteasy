@@ -316,7 +316,7 @@ describe("useArtifactActions", () => {
     act(() => {
       message = unlocked.result.current.startAnalysis("tree");
     });
-    expect(message).toBe("请先锁定选中文献集，再启动模态分析。");
+    expect(message).toBe("请先锁定选中文献集，再启动 AI 分析。");
     expect(unlocked.queueImportForPapers).not.toHaveBeenCalled();
   });
 
@@ -328,7 +328,7 @@ describe("useArtifactActions", () => {
       message = result.current.startAnalysis("mindmap");
     });
 
-    expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该模态分析。");
+    expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。");
     expect(queueImportForPapers).toHaveBeenCalledWith([paper], expect.any(Function));
     expect(onArtifactTasksChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({
@@ -369,8 +369,8 @@ describe("useArtifactActions", () => {
       message = result.current.startAnalysis("ppt");
     });
 
-    expect(message).toBe("当前选中文献集已导入，正在按指定模态启动分析。");
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定模态启动分析。");
+    expect(message).toBe("当前选中文献集已导入，正在按指定 AI 分析启动。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定 AI 分析启动。");
     expect(onArtifactTasksChanged).toHaveBeenCalledWith([
       expect.objectContaining({ status: "running", type: "ppt" })
     ]);
@@ -960,7 +960,7 @@ describe("useArtifactActions", () => {
       message = result.current.handleAssistantArtifact("tree");
     });
 
-    expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该模态分析。");
+    expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。");
   });
 
   test("asks before generating the same modality for the exact persisted paper set", () => {

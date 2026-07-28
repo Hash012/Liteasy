@@ -37,32 +37,29 @@ describe("ThinReadingTab", () => {
   test("renders the root thin-reading surface and its navigation", () => {
     const document = makeDocument();
 
-    renderTab(document);
+    renderTab(document, vi.fn(), vi.fn());
 
     expect(screen.getByText("总述")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /已由论文证据支撑/ })).toHaveTextContent(
-      "Transformer 用 self-attention 替代 recurrence"
-    );
-    expect(screen.getByRole("button", {
-      name: "打开论文内证据 evidence-attention-self-attention 第 2 页"
-    })).toHaveTextContent(
-      "Self-attention replaces recurrence"
-    );
+    expect(screen.getByTestId("thin-reading-summary")).toHaveTextContent("self-attention");
+    expect(screen.getByRole("button", { name: /打开证据句/ })).toHaveTextContent("证1");
+    expect(screen.queryByText("依据")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /已由论文证据支撑/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "实验" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
   });
 
-  test("opens PDF evidence spans and keeps annotation as a separate action", () => {
+  test("opens PDF evidence only from summary markers", () => {
     const document = makeDocument();
     const onUpdateDocument = vi.fn();
     const onOpenEvidence = vi.fn();
     renderTab(document, onUpdateDocument, onOpenEvidence);
 
-    fireEvent.click(screen.getByRole("button", {
-      name: "打开论文内证据 evidence-attention-self-attention 第 2 页"
-    }));
+    fireEvent.click(screen.getByTestId("thin-reading-summary"));
+    expect(onOpenEvidence).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /打开证据句/ }));
 
     expect(onOpenEvidence).toHaveBeenCalledWith({
       evidenceId: "evidence-attention-self-attention",
@@ -71,19 +68,113 @@ describe("ThinReadingTab", () => {
       quote: "Self-attention replaces recurrence in the encoder."
     });
     expect(onUpdateDocument).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByRole("button", {
-      name: "批注论文内证据 evidence-attention-self-attention"
-    }));
-
-    const updatedDocument = onUpdateDocument.mock.calls[0][1] as ThinReadingDocument;
-    expect(updatedDocument.annotations[0]).toMatchObject({
-      excerpt: "Self-attention replaces recurrence in the encoder.",
-      target: expect.objectContaining({
-        evidence: "evidence-attention-self-attention",
-        kind: "paper_evidence"
-      })
+  test("renders and opens every evidence span attached to the same sentence", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          paperEvidence: ["evidence-attention-self-attention", "evidence-attention-parallel"],
+          paperEvidenceSpans: [
+            ...(fixture.rootSeed.evidence.paperEvidenceSpans ?? []),
+            {
+              chunkId: "paper-attention:p3:chunk-2",
+              confidence: 0.88,
+              id: "evidence-attention-parallel",
+              page: 3,
+              paperId: "paper-attention",
+              quote: "The model allows for significantly more parallelization."
+            }
+          ],
+          summarySentences: [{
+            evidenceIds: ["evidence-attention-self-attention", "evidence-attention-parallel"],
+            externalKnowledge: [],
+            id: "sentence-multiple-evidence",
+            status: "grounded",
+            text: "Transformer replaces recurrence and increases parallelization."
+          }]
+        }
+      }
     });
+    const onOpenEvidence = vi.fn();
+
+    renderTab(document, vi.fn(), onOpenEvidence);
+
+    expect(screen.getByRole("button", { name: /打开证据句 1/ })).toHaveTextContent("证1");
+    const secondMarker = screen.getByRole("button", { name: /打开证据句 2/ });
+    expect(secondMarker).toHaveTextContent("证2");
+    fireEvent.click(secondMarker);
+
+    expect(onOpenEvidence).toHaveBeenCalledWith({
+      evidenceId: "evidence-attention-parallel",
+      page: 3,
+      paperId: "paper-attention",
+      quote: "The model allows for significantly more parallelization."
+    });
+  });
+
+  test("renders all thin-reading interface copy in the document target language", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        omittedSections: [{ id: "section-method", label: "Method", sectionKey: "method" }],
+        recommendations: [{
+          compatibility: 0.9,
+          id: "recommendation-method",
+          note: "A local recommendation lead about the method.",
+          relationship: "Method and evidence"
+        }],
+        summary: "The paper replaces recurrence with self-attention.",
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          summarySentences: [{
+            evidenceIds: ["evidence-attention-self-attention"],
+            externalKnowledge: [],
+            id: "sentence-method",
+            status: "grounded",
+            text: "The paper replaces recurrence with self-attention."
+          }]
+        }
+      },
+      targetLanguage: "en-US"
+    });
+    const onGenerateBranch = vi.fn(async () => undefined);
+
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onOpenEvidence={vi.fn()}
+        onUpdateDocument={vi.fn()}
+        papers={fixture.papers}
+      />
+    );
+
+    expect(screen.getByLabelText("Thin reading page")).toBeInTheDocument();
+    expect(screen.getByText("Overview")).toBeInTheDocument();
+    expect(screen.getByText("English")).toBeInTheDocument();
+    expect(screen.getByText(/Local identity only/)).toBeInTheDocument();
+    expect(globalThis.document.querySelector(".thin-reading__article-meta")).toHaveTextContent("Paper evidence");
+    expect(screen.getByRole("button", { name: /Open evidence 1 for/ })).toHaveTextContent("E1");
+    expect(screen.getByRole("button", { name: "Collapse Intuecho recommendations" })).toBeInTheDocument();
+    expect(screen.getByText("No annotations yet")).toBeInTheDocument();
+    expect(screen.queryByText("暂无批注")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explore Intuecho recommendation: Method and evidence" }));
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith(expect.objectContaining({
+      source: {
+        kind: "selected_text",
+        excerpt: "A local recommendation lead about the method.",
+        prompt: "Explore this local Intuecho recommendation lead: Method and evidence"
+      }
+    })));
   });
 
   test("collapses and restores the Intuecho recommendation rail", () => {
@@ -183,6 +274,69 @@ describe("ThinReadingTab", () => {
     }));
   });
 
+  test("lets Intuecho recommendation text enter the same selection deepen flow", async () => {
+    const document = makeDocument();
+    const onGenerateBranch = vi.fn(async () => undefined);
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+    const recommendationNote = screen.getByText("本地待同步的理解线索，关注 self-attention 如何替代 recurrence。");
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "self-attention 如何替代 recurrence",
+      getRangeAt: () =>
+        ({
+          commonAncestorContainer: recommendationNote,
+          getBoundingClientRect: () => ({ bottom: 188, left: 420, right: 620, top: 160 })
+        }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(recommendationNote);
+
+    fireEvent.click(screen.getByRole("button", { name: "深入" }));
+
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document,
+      source: {
+        kind: "selected_text",
+        excerpt: "self-attention 如何替代 recurrence"
+      }
+    }));
+  });
+
+  test("can deepen an Intuecho recommendation directly without pretending it is synced community data", async () => {
+    const document = makeDocument();
+    const onGenerateBranch = vi.fn(async () => undefined);
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "深入 Intuecho 推荐：方法与问题设定" }));
+
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document,
+      source: {
+        kind: "selected_text",
+        excerpt: "本地待同步的理解线索，关注 self-attention 如何替代 recurrence。",
+        prompt: "围绕 Intuecho 本地推荐线索继续深入：方法与问题设定"
+      }
+    }));
+  });
+
   test("saves pending-public annotations locally", () => {
     const document = makeDocument();
     const onUpdateDocument = vi.fn();
@@ -215,24 +369,7 @@ describe("ThinReadingTab", () => {
     expect(updatedDocument.pendingPublicAnnotationIds).toEqual([updatedDocument.annotations[0].id]);
   });
 
-  test("adds annotations to structured claims", () => {
-    const document = makeDocument();
-    const onUpdateDocument = vi.fn();
-    renderTab(document, onUpdateDocument);
-
-    fireEvent.click(screen.getByRole("button", { name: /已由论文证据支撑/ }));
-
-    const updatedDocument = onUpdateDocument.mock.calls[0][1] as ThinReadingDocument;
-    expect(updatedDocument.annotations[0]).toMatchObject({
-      excerpt: expect.stringContaining("self-attention"),
-      target: expect.objectContaining({
-        claimId: "thin-reading-claim-attention-core",
-        kind: "claim"
-      })
-    });
-  });
-
-  test("marks unsupported claims for review instead of rendering them as ordinary text", () => {
+  test("marks unsupported summary sentences without highlighting the body text", () => {
     const fixture = createThinReadingFixture();
     const unsupportedSeed: ThinReadingNodeSeed = {
       ...fixture.rootSeed,
@@ -242,6 +379,17 @@ describe("ThinReadingTab", () => {
           {
             evidenceIds: [],
             id: "claim-unsupported",
+            status: "unsupported",
+            text: "模型声称论文证明了一个没有证据的结论。"
+          }
+        ],
+        paperEvidence: [],
+        paperEvidenceSpans: [],
+        summarySentences: [
+          {
+            evidenceIds: [],
+            externalKnowledge: [],
+            id: "sentence-unsupported",
             status: "unsupported",
             text: "模型声称论文证明了一个没有证据的结论。"
           }
@@ -255,9 +403,53 @@ describe("ThinReadingTab", () => {
 
     renderTab(document);
 
-    expect(screen.getByText("未支撑，待复核")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /未支撑，待复核/ })).toHaveClass(
-      "thin-reading__claim--unsupported"
-    );
+    expect(screen.queryByText("依据")).not.toBeInTheDocument();
+    expect(screen.getByText("待核")).toHaveClass("thin-reading__summary-marker", "is-static");
+    expect(globalThis.document.querySelector(".thin-reading__summary-sentence--unsupported")).toBeNull();
+  });
+
+  test("renders traceable external sources as compact superscript links", () => {
+    const fixture = createThinReadingFixture();
+    const text = "后续研究扩展了这套方法。";
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          claims: [],
+          externalKnowledge: ["openalex:W42"],
+          externalSources: [{
+            abstract: "A follow-up study.",
+            authors: ["A. Author"],
+            id: "openalex:W42",
+            provider: "openalex",
+            relevance: 0.85,
+            retrievalQuery: "follow-up",
+            sourceId: "W42",
+            title: "A Follow-up Study",
+            url: "https://openalex.org/W42",
+            year: 2025
+          }],
+          paperEvidence: [],
+          paperEvidenceSpans: [],
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: ["openalex:W42"],
+            id: "sentence-external",
+            status: "weak",
+            text
+          }]
+        },
+        summary: text,
+        withinPaperClosure: false
+      }
+    });
+
+    renderTab(document);
+
+    const marker = screen.getByRole("link", { name: "打开外部来源：A Follow-up Study" });
+    expect(marker).toHaveTextContent("外1");
+    expect(marker).toHaveAttribute("href", "https://openalex.org/W42");
+    expect(marker.closest("sup")).not.toBeNull();
   });
 });

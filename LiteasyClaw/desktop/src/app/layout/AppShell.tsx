@@ -178,7 +178,7 @@ export function AppShell({
   );
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
   const [analysisHint, setAnalysisHint] = useState(
-    "先勾选并锁定文献形成选中文献集，再用中栏模态按钮启动分析。"
+    "先勾选并锁定文献形成选中文献集，再用中栏 AI 按钮启动分析。"
   );
   const modelSettings = useModelSettingsActions({
     localDevCloudEnv,

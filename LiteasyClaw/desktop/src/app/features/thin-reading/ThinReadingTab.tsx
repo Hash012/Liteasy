@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   ArrowLeftRegular,
   ArrowRightRegular,
@@ -14,16 +14,15 @@ import {
   setThinReadingAutoPublic,
   updateThinReadingAnnotation
 } from "./thinReadingProjection";
-import {
-  THIN_READING_INTUECHO_PENDING_LABEL,
-  listThinReadingPendingPublicAnnotations
-} from "./thinReadingIntuechoSyncQueue";
+import { listThinReadingPendingPublicAnnotations } from "./thinReadingIntuechoSyncQueue";
 import { getThinReadingPaperTypeLabel } from "./thinReadingPromptRegistry";
+import { getThinReadingUiCopy } from "./thinReadingI18n";
 import type {
   ThinReadingAnnotationTarget,
   ThinReadingBranchSource,
   ThinReadingDocument,
-  ThinReadingEvidenceSpan
+  ThinReadingEvidenceSpan,
+  ThinReadingSummarySentence
 } from "./thinReading.types";
 import "./thinReading.css";
 
@@ -47,14 +46,56 @@ export type ThinReadingTabProps = {
   papers: Array<{ id: string; title: string }>;
 };
 
-function sourceLabel(source: ThinReadingDocument["nodes"][string]["source"]): string {
+function sourceLabel(
+  source: ThinReadingDocument["nodes"][string]["source"],
+  labels: { overview: string; selectedText: string }
+): string {
   if (source.kind === "omitted_section") {
     return source.label;
   }
   if (source.kind === "selected_text") {
-    return "正文选区";
+    return labels.selectedText;
   }
-  return "总述";
+  return labels.overview;
+}
+
+function branchSourceLabel(
+  source: ThinReadingDocument["nodes"][string]["source"],
+  labels: ReturnType<typeof getThinReadingUiCopy>
+) {
+  if (source.kind === "omitted_section") {
+    return labels.omittedSection;
+  }
+  return sourceLabel(source, labels);
+}
+
+function splitSummarySentences(summary: string) {
+  const matches = summary.replace(/\s+/g, " ").trim().match(/[^。！？!?]+[。！？!?]?/g) ?? [];
+  return matches.map((sentence) => sentence.trim()).filter(Boolean);
+}
+
+function getSummarySentences(
+  node: ThinReadingDocument["nodes"][string]
+): readonly ThinReadingSummarySentence[] {
+  if (node.evidence.summarySentences && node.evidence.summarySentences.length > 0) {
+    return node.evidence.summarySentences;
+  }
+  const fallbackEvidenceIds = node.evidence.claims?.find((claim) => claim.evidenceIds.length > 0)?.evidenceIds ??
+    node.evidence.paperEvidence.slice(0, 2);
+  const sentences = splitSummarySentences(node.summary);
+  return (sentences.length > 0 ? sentences : [node.summary]).map((sentence, index) => ({
+    evidenceIds: fallbackEvidenceIds,
+    externalKnowledge: fallbackEvidenceIds.length > 0
+      ? []
+      : node.evidence.externalKnowledge.slice(0, 2),
+    id: `${node.id}-summary-sentence-${index}`,
+    status: fallbackEvidenceIds.length > 0
+      ? "grounded"
+      : node.evidence.externalKnowledge.length > 0
+        ? "weak"
+        : "unsupported",
+    text: sentence
+  }));
 }
 
 export function ThinReadingTab({
@@ -66,7 +107,7 @@ export function ThinReadingTab({
   papers
 }: ThinReadingTabProps) {
   const activeNode = document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId];
-  const contentRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [selection, setSelection] = useState<{ excerpt: string; top: number; left: number } | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -77,9 +118,10 @@ export function ThinReadingTab({
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [editingAnnotationBody, setEditingAnnotationBody] = useState("");
   const [intuechoCollapsed, setIntuechoCollapsed] = useState(false);
+  const labels = getThinReadingUiCopy(document.targetLanguage);
   const paperTitle = useMemo(
-    () => papers.find((paper) => document.paperIds.includes(paper.id))?.title ?? "未命名论文",
-    [document.paperIds, papers]
+    () => papers.find((paper) => document.paperIds.includes(paper.id))?.title ?? labels.untitledPaper,
+    [document.paperIds, labels.untitledPaper, papers]
   );
   const primaryIdentity = document.paperIdentities?.[document.paperIds[0] ?? ""]?.primary;
   const parent = activeNode.parentId ? document.nodes[activeNode.parentId] : undefined;
@@ -92,6 +134,10 @@ export function ThinReadingTab({
   const paperTypeLabel = activeNode.paperType
     ? getThinReadingPaperTypeLabel(activeNode.paperType, document.targetLanguage)
     : "";
+  const externalSourceById = useMemo(
+    () => new Map((activeNode.evidence.externalSources ?? []).map((source) => [source.id, source])),
+    [activeNode.evidence.externalSources]
+  );
 
   useEffect(() => {
     setBranchMenuOpen(false);
@@ -129,7 +175,7 @@ export function ThinReadingTab({
       return;
     }
     if (!onGenerateBranch) {
-      setGenerationError("薄读 Agent 入口未就绪。");
+      setGenerationError(labels.unavailableAgent);
       return;
     }
     setGenerating(true);
@@ -190,9 +236,29 @@ export function ThinReadingTab({
     });
   }
 
+  function openSummaryMarkerEvidence(
+    event: ReactMouseEvent<HTMLButtonElement>,
+    span: ThinReadingEvidenceSpan
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    openEvidenceSpan(span);
+  }
+
   function advanceOmittedSection(sectionKey: string, label: string) {
     const source: ThinReadingBranchSource = { kind: "omitted_section", label, sectionKey };
     void generateBranch(source);
+  }
+
+  function deepenRecommendation(input: {
+    note: string;
+    relationship: string;
+  }) {
+    void generateBranch({
+      kind: "selected_text",
+      excerpt: input.note,
+      prompt: labels.deepenIntuechoPrompt(input.relationship)
+    });
   }
 
   function handleNextClick() {
@@ -203,33 +269,34 @@ export function ThinReadingTab({
     setBranchMenuOpen((open) => !open);
   }
 
-  const nextLabel = "查看已生成的下一层页面";
-  const previousLabel = `回到上一层：${parent?.title ?? "总述"}`;
+  const nextLabel = labels.next;
+  const previousLabel = labels.previous(parent?.title ?? labels.overview);
   const nodeAnnotations = document.annotations.filter((annotation) => annotation.nodeId === activeNode.id);
   const paperEvidenceSpans = activeNode.evidence.paperEvidenceSpans ?? [];
-  const claims = activeNode.evidence.claims ?? [];
+  const summarySentences = getSummarySentences(activeNode);
 
   return (
     <main
       className={`thin-reading ${activeNode.withinPaperClosure ? "" : "is-external"} ${intuechoCollapsed ? "is-intuecho-collapsed" : ""}`}
-      aria-label="薄读页面"
+      aria-label={labels.page}
     >
       <header className="thin-reading__topbar">
         <div className="thin-reading__heading">
           <span className="thin-reading__eyebrow">THIN READING</span>
           <h1>{document.title}</h1>
           <span className="thin-reading__source">
-            源文：{paperTitle}
+            {labels.source(paperTitle)}
             {primaryIdentity ? ` · ${primaryIdentity.kind}:${primaryIdentity.value}` : ""}
+            {primaryIdentity?.kind === "local_paper_id" ? ` (${labels.identityLocalOnly})` : ""}
           </span>
         </div>
         <div className="thin-reading__controls">
-          <span className="thin-reading__language">{document.targetLanguage}</span>
+          <span className="thin-reading__language">{labels.languageName}</span>
           <div className="thin-reading__depth-nav">
             <button aria-label={previousLabel} disabled={!canGoBack} onClick={() => parent && goToNode(parent.id)} type="button">
               <ArrowLeftRegular aria-hidden="true" />
             </button>
-            <span>第 {activeNode.depth} 层</span>
+            <span>{labels.depth(activeNode.depth)}</span>
             <div className="thin-reading__next-wrap" onMouseEnter={() => branches.length > 1 && setBranchMenuOpen(true)}>
               <button
                 aria-expanded={branches.length > 1 ? branchMenuOpen : undefined}
@@ -243,11 +310,11 @@ export function ThinReadingTab({
                 <ArrowRightRegular aria-hidden="true" />
               </button>
               {branchMenuOpen && branches.length > 1 ? (
-                <div className="thin-reading__branch-menu" role="menu" aria-label="已生成的下一层页面">
+                <div className="thin-reading__branch-menu" role="menu" aria-label={labels.generatedBranches}>
                   {branches.map((branch) => (
                     <button className="thin-reading__branch-item" key={branch.nodeId} onClick={() => goToNode(branch.nodeId)} role="menuitem" type="button">
                       <span>{branch.title}</span>
-                      <small>{branch.sourceLabel} · 第 {branch.depth} 层</small>
+                      <small>{branchSourceLabel(document.nodes[branch.nodeId]?.source ?? activeNode.source, labels)} · {labels.depth(branch.depth)}</small>
                     </button>
                   ))}
                 </div>
@@ -257,109 +324,113 @@ export function ThinReadingTab({
         </div>
       </header>
 
-      <div className="thin-reading__breadcrumbs" aria-label="薄读层级">
+      <div className="thin-reading__breadcrumbs" aria-label={labels.thinReadingDepth}>
         <button className={activeNode.id === document.rootNodeId ? "is-active" : ""} onClick={() => goToNode(document.rootNodeId)} type="button">
-          总述
+          {labels.overview}
         </button>
         <span>/</span>
-        <span className="is-active">第 {activeNode.depth} 层</span>
+        <span className="is-active">{labels.depth(activeNode.depth)}</span>
       </div>
 
-      <div className="thin-reading__body">
+      <div
+        className="thin-reading__body"
+        onKeyUp={inspectSelection}
+        onMouseUp={inspectSelection}
+        ref={contentRef}
+      >
         <article className="thin-reading__article">
           <div className="thin-reading__article-meta">
-            {sourceLabel(activeNode.source)}
+            {sourceLabel(activeNode.source, labels)}
             {paperTypeLabel ? ` · ${paperTypeLabel}` : ""}
             {" · "}
-            {activeNode.withinPaperClosure ? "论文内证据" : "外部知识"}
+            {activeNode.withinPaperClosure ? labels.paperEvidence : labels.externalKnowledge}
           </div>
           <h2>{activeNode.title}</h2>
-          <section ref={contentRef} onKeyUp={inspectSelection} onMouseUp={inspectSelection}>
+          <section>
             <p
               className="thin-reading__summary"
               data-testid="thin-reading-summary"
             >
-              {activeNode.summary}
-            </p>
-            {claims.length > 0 ? (
-              <section className="thin-reading__claim-block" aria-label="关键判断">
-                <h3>关键判断</h3>
-                {claims.map((claim) => (
-                  <button
-                    className={`thin-reading__claim thin-reading__claim--${claim.status}`}
-                    key={claim.id}
-                    onClick={() => annotateBlock({
-                      excerpt: claim.text,
-                      target: { claimId: claim.id, kind: "claim", nodeId: activeNode.id }
-                    })}
-                    type="button"
+              {summarySentences.map((sentence, index) => {
+                return (
+                  <span
+                    className="thin-reading__summary-sentence"
+                    key={sentence.id}
                   >
-                    <span>{claim.text}</span>
-                    {claim.status !== "grounded" ? (
-                      <span className="thin-reading__claim-review">
-                        {claim.status === "weak" ? "证据较弱，待复核" : "未支撑，待复核"}
-                      </span>
-                    ) : null}
-                    <small>
-                      {claim.status === "grounded" ? "已由论文证据支撑" : claim.status === "weak" ? "弱支撑/需上下文" : "未支撑"}
-                      {claim.evidenceIds.length > 0 ? ` · ${claim.evidenceIds.join(", ")}` : ""}
-                    </small>
-                  </button>
-                ))}
-              </section>
-            ) : null}
-            <div className="thin-reading__evidence-grid">
-              <section className="thin-reading__evidence-block">
-                <h3>论文内证据</h3>
-                {paperEvidenceSpans.length > 0 ? paperEvidenceSpans.map((span) => (
-                  <div className="thin-reading__evidence-item" key={span.id}>
-                    <button
-                      aria-label={`打开论文内证据 ${span.id}${span.page ? ` 第 ${span.page} 页` : " 页码未知"}`}
-                      className="thin-reading__evidence-open"
-                      disabled={!onOpenEvidence || typeof span.page !== "number"}
-                      onClick={() => openEvidenceSpan(span)}
-                      type="button"
-                    >
-                      <strong>{span.id}{span.page ? ` · p.${span.page}` : ""}</strong>
-                      <span>{span.quote}</span>
-                      <small>confidence {span.confidence.toFixed(2)}</small>
-                    </button>
-                    <button
-                      aria-label={`批注论文内证据 ${span.id}`}
-                      className="thin-reading__evidence-annotate"
-                      onClick={() => annotateBlock({
-                        excerpt: span.quote,
-                        target: { evidence: span.id, kind: "paper_evidence", nodeId: activeNode.id }
-                      })}
-                      type="button"
-                    >
-                      批注
-                    </button>
-                  </div>
-                )) : activeNode.evidence.paperEvidence.length > 0 ? activeNode.evidence.paperEvidence.map((evidence) => (
-                  <button key={evidence} onClick={() => annotateBlock({
-                    excerpt: evidence,
-                    target: { evidence, kind: "paper_evidence", nodeId: activeNode.id }
-                  })} type="button">
-                    {evidence}
-                  </button>
-                )) : <span>证据不足</span>}
-              </section>
-              <section className="thin-reading__evidence-block external">
-                <h3>外部知识</h3>
-                {activeNode.evidence.externalKnowledge.length > 0 ? activeNode.evidence.externalKnowledge.map((source) => (
-                  <button key={source} onClick={() => annotateBlock({
-                    excerpt: source,
-                    target: { kind: "external_knowledge", nodeId: activeNode.id, source }
-                  })} type="button">
-                    {source}
-                  </button>
-                )) : <span>未越出论文闭包</span>}
-              </section>
-            </div>
+                    {sentence.text}
+                    {sentence.evidenceIds.length > 0 ? sentence.evidenceIds.map((evidenceId, evidenceIndex) => {
+                      const span = paperEvidenceSpans.find((candidate) => candidate.id === evidenceId);
+                      const canOpenEvidence = Boolean(
+                        span &&
+                        onOpenEvidence &&
+                        typeof span.page === "number" &&
+                        Number.isFinite(span.page)
+                      );
+                      return (
+                        <sup key={`${sentence.id}-${evidenceId}`}>
+                          {canOpenEvidence ? (
+                            <button
+                              aria-label={labels.evidenceOpen(sentence.text, evidenceIndex + 1)}
+                              className="thin-reading__summary-marker"
+                              onClick={(event) => openSummaryMarkerEvidence(event, span!)}
+                              title={labels.evidenceOpenTitle(evidenceId)}
+                              type="button"
+                            >
+                              {labels.evidencePaper(evidenceIndex + 1)}
+                            </button>
+                          ) : (
+                            <span
+                              className="thin-reading__summary-marker is-static"
+                              title={labels.evidenceUnavailableTitle(evidenceId)}
+                            >
+                              {labels.evidencePaper(evidenceIndex + 1)}
+                            </span>
+                          )}
+                        </sup>
+                      );
+                    }) : sentence.externalKnowledge.length > 0 ? sentence.externalKnowledge.map((sourceId, sourceIndex) => {
+                      const source = externalSourceById.get(sourceId);
+                      return (
+                        <sup key={`${sentence.id}-${sourceId}`}>
+                          {source ? (
+                            <a
+                              aria-label={labels.evidenceExternalOpen(source.title)}
+                              className="thin-reading__summary-marker"
+                              href={source.url}
+                              rel="noreferrer"
+                              target="_blank"
+                              title={labels.evidenceExternalTitle([source.title])}
+                            >
+                              {labels.evidenceExternal(sourceIndex + 1)}
+                            </a>
+                          ) : (
+                            <span
+                              className="thin-reading__summary-marker is-static"
+                              title={labels.evidenceExternalTitle([sourceId])}
+                            >
+                              {labels.evidenceExternal(sourceIndex + 1)}
+                            </span>
+                          )}
+                        </sup>
+                      );
+                    }) : (
+                      <sup>
+                        <span
+                          className="thin-reading__summary-marker is-static"
+                          title={labels.evidenceReviewTitle}
+                        >
+                          {labels.evidenceReview}
+                        </span>
+                      </sup>
+                    )}
+                    {index < summarySentences.length - 1 ? " " : ""}
+                  </span>
+                );
+              })}
+            </p>
           </section>
           {activeNode.omittedSections.length > 0 ? (
-            <div className="thin-reading__omitted" aria-label="待展开板块">
+            <div className="thin-reading__omitted" aria-label={labels.omittedRegion}>
               {activeNode.omittedSections.map((section) => (
                 <button disabled={generating} key={section.id} onClick={() => advanceOmittedSection(section.sectionKey, section.label)} type="button">
                   {section.label}
@@ -367,18 +438,18 @@ export function ThinReadingTab({
               ))}
             </div>
           ) : null}
-          {generating ? <div className="thin-reading__status">Agent 正在生成下一层</div> : null}
+          {generating ? <div className="thin-reading__status">{labels.generating}</div> : null}
           {generationError ? <div className="thin-reading__error">{generationError}</div> : null}
-          <section className="thin-reading__annotations" aria-label="薄读批注">
+          <section className="thin-reading__annotations" aria-label={labels.annotationRegion}>
             <div className="thin-reading__annotation-toolbar">
-              <h3>批注</h3>
+              <h3>{labels.annotate}</h3>
               <label>
                 <input
                   checked={document.annotationSettings.autoPublic}
                   onChange={(event) => update(setThinReadingAutoPublic(document, event.currentTarget.checked))}
                   type="checkbox"
                 />
-                自动公开
+                {labels.autoPublic}
               </label>
             </div>
             {nodeAnnotations.length > 0 ? nodeAnnotations.map((annotation) => (
@@ -387,7 +458,7 @@ export function ThinReadingTab({
                 {editingAnnotationId === annotation.id ? (
                   <>
                     <textarea
-                      aria-label="编辑批注"
+                      aria-label={labels.editAnnotation}
                       onChange={(event) => setEditingAnnotationBody(event.target.value)}
                       value={editingAnnotationBody}
                     />
@@ -395,14 +466,14 @@ export function ThinReadingTab({
                       <button onClick={() => {
                         update(updateThinReadingAnnotation(document, annotation.id, editingAnnotationBody));
                         setEditingAnnotationId(null);
-                      }} type="button">保存</button>
-                      <button onClick={() => setEditingAnnotationId(null)} type="button">取消</button>
+                      }} type="button">{labels.save}</button>
+                      <button onClick={() => setEditingAnnotationId(null)} type="button">{labels.cancel}</button>
                     </div>
                   </>
                 ) : (
                   <>
                     <p>{annotation.body}</p>
-                    {annotation.visibility === "pending_public" ? <span className="thin-reading__pending">{THIN_READING_INTUECHO_PENDING_LABEL}</span> : null}
+                    {annotation.visibility === "pending_public" ? <span className="thin-reading__pending">{labels.pendingSync}</span> : null}
                     <div className="thin-reading__annotation-actions">
                       <label>
                         <input
@@ -410,29 +481,29 @@ export function ThinReadingTab({
                           onChange={(event) => update(setThinReadingAnnotationPublic(document, annotation.id, event.currentTarget.checked))}
                           type="checkbox"
                         />
-                        公开
+                        {labels.public}
                       </label>
                       <button onClick={() => {
                         setEditingAnnotationId(annotation.id);
                         setEditingAnnotationBody(annotation.body);
-                      }} type="button">编辑</button>
-                      <button onClick={() => update(deleteThinReadingAnnotation(document, annotation.id))} type="button">删除</button>
+                      }} type="button">{labels.edit}</button>
+                      <button onClick={() => update(deleteThinReadingAnnotation(document, annotation.id))} type="button">{labels.delete}</button>
                     </div>
                   </>
                 )}
               </article>
-            )) : <p className="thin-reading__annotation-empty">暂无批注</p>}
+            )) : <p className="thin-reading__annotation-empty">{labels.annotationEmpty}</p>}
           </section>
         </article>
 
-        <aside className={`thin-reading__intuecho ${intuechoCollapsed ? "is-collapsed" : ""}`} aria-label="Intuecho 推荐">
+        <aside className={`thin-reading__intuecho ${intuechoCollapsed ? "is-collapsed" : ""}`} aria-label={labels.recommendationRegion}>
           {intuechoCollapsed ? (
             <button
               aria-expanded="false"
-              aria-label="展开 Intuecho 推荐栏"
+              aria-label={labels.expandIntuecho}
               className="thin-reading__intuecho-rail"
               onClick={() => setIntuechoCollapsed(false)}
-              title="展开 Intuecho 推荐栏"
+              title={labels.expandIntuecho}
               type="button"
             >
               <LightbulbRegular aria-hidden="true" />
@@ -445,31 +516,44 @@ export function ThinReadingTab({
             <>
               <button
                 aria-expanded="true"
-                aria-label="收起 Intuecho 推荐栏"
+                aria-label={labels.collapseIntuecho}
                 className="thin-reading__intuecho-toggle"
                 onClick={() => setIntuechoCollapsed(true)}
-                title="收起 Intuecho 推荐栏"
+                title={labels.collapseIntuecho}
                 type="button"
               >
                 <ChevronRightRegular aria-hidden="true" />
               </button>
               <div className="thin-reading__intuecho-mark">∿</div>
               <h2>Intuecho</h2>
-              <p className="thin-reading__intuecho-caption">从当前页面继续联想</p>
+              <p className="thin-reading__intuecho-caption">{labels.recommendationCaption}</p>
               <div className="thin-reading__recommendations">
                 {activeNode.recommendations.map((recommendation) => (
                   <div className="thin-reading__recommendation" key={recommendation.id}>
                     <strong>{recommendation.relationship}</strong>
                     <span>{recommendation.note}</span>
-                    <button onClick={() => annotateBlock({
-                      excerpt: recommendation.note,
-                      target: { kind: "recommendation", nodeId: activeNode.id, recommendationId: recommendation.id }
-                    })} type="button">批注</button>
+                    <div className="thin-reading__recommendation-actions">
+                      <button
+                        aria-label={labels.deepenIntuecho(recommendation.relationship)}
+                        disabled={generating}
+                        onClick={() => deepenRecommendation({
+                          note: recommendation.note,
+                          relationship: recommendation.relationship
+                        })}
+                        type="button"
+                      >
+                        {labels.deepen}
+                      </button>
+                      <button onClick={() => annotateBlock({
+                        excerpt: recommendation.note,
+                        target: { kind: "recommendation", nodeId: activeNode.id, recommendationId: recommendation.id }
+                      })} type="button">{labels.annotate}</button>
+                    </div>
                   </div>
                 ))}
               </div>
               {pendingPublicQueue.length > 0 ? (
-                <div className="thin-reading__pending-summary">{THIN_READING_INTUECHO_PENDING_LABEL} · {pendingPublicQueue.length}</div>
+                <div className="thin-reading__pending-summary">{labels.pendingSync} · {pendingPublicQueue.length}</div>
               ) : null}
             </>
           )}
@@ -478,16 +562,16 @@ export function ThinReadingTab({
 
       {selection ? (
         <div className="thin-reading__selection-popover" style={{ left: selection.left, top: selection.top }}>
-          <label htmlFor="thin-reading-prompt">深入提示（可选）</label>
+          <label htmlFor="thin-reading-prompt">{labels.deepenPrompt}</label>
           <input id="thin-reading-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-          <button disabled={generating} onClick={() => void deepenSelection()} type="button">深入</button>
-          <label htmlFor="thin-reading-annotation">批注</label>
+          <button disabled={generating} onClick={() => void deepenSelection()} type="button">{labels.deepen}</button>
+          <label htmlFor="thin-reading-annotation">{labels.annotate}</label>
           <input id="thin-reading-annotation" value={annotationBody} onChange={(event) => setAnnotationBody(event.target.value)} />
           <label>
             <input checked={annotationPublic} onChange={(event) => setAnnotationPublic(event.currentTarget.checked)} type="checkbox" />
-            公开
+            {labels.public}
           </label>
-          <button onClick={saveSelectionAnnotation} type="button">保存批注</button>
+          <button onClick={saveSelectionAnnotation} type="button">{labels.saveAnnotation}</button>
         </div>
       ) : null}
     </main>

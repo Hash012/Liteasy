@@ -663,14 +663,14 @@ export function useArtifactActions({
         getImportedChunksByPaperId(),
         taskId
       );
-      onAnalysisHint("导入完成，已按指定模态启动主工作流。");
+      onAnalysisHint("导入完成，已按指定 AI 分析启动主工作流。");
     });
 
     if (importStatus === "already_imported") {
       queuedTaskId = artifactStore.createTask(artifactType);
       syncArtifacts(queuedTaskId);
       void startArtifactTask(artifactType, selectedPapers, importedChunksByPaperId, queuedTaskId);
-      const message = "当前选中文献集已导入，正在按指定模态启动分析。";
+      const message = "当前选中文献集已导入，正在按指定 AI 分析启动。";
       onAnalysisHint(message);
       return message;
     }
@@ -685,7 +685,7 @@ export function useArtifactActions({
       queuedTaskId = artifactStore.createTask(artifactType);
       syncArtifacts(queuedTaskId);
     }
-    const message = "当前选中文献集尚未全部导入，系统会先导入，再自动启动该模态分析。";
+    const message = "当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。";
     onAnalysisHint(message);
     return message;
   }
@@ -699,7 +699,7 @@ export function useArtifactActions({
     }
 
     if (!selectedSet.locked) {
-      const message = "请先锁定选中文献集，再启动模态分析。";
+      const message = "请先锁定选中文献集，再启动 AI 分析。";
       onAnalysisHint(message);
       return message;
     }
@@ -920,6 +920,7 @@ export function useArtifactActions({
         ? [...activeNode.evidence.paperEvidenceSpans]
         : undefined,
       parentNodeId: activeNode.id,
+      parentWithinPaperClosure: activeNode.withinPaperClosure,
       parentSummary: activeNode.summary,
       parentTitle: activeNode.title,
       prompt: source.kind === "selected_text" ? source.prompt : undefined,

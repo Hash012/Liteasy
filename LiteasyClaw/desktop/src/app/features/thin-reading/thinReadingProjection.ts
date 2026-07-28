@@ -8,10 +8,12 @@ import type {
   ThinReadingIntuechoRecommendation,
   ThinReadingClaim,
   ThinReadingEvidenceSpan,
+  ThinReadingExternalSource,
   ThinReadingNode,
   ThinReadingNodeEvidence,
   ThinReadingNodeSource,
-  ThinReadingRecommendationScope
+  ThinReadingRecommendationScope,
+  ThinReadingSummarySentence
 } from "./thinReading.types";
 import {
   freezePaperIdentity,
@@ -70,10 +72,25 @@ function freezeEvidenceSpan(span: ThinReadingEvidenceSpan): ThinReadingEvidenceS
   return Object.freeze({ ...span });
 }
 
+function freezeExternalSource(source: ThinReadingExternalSource): ThinReadingExternalSource {
+  return Object.freeze({
+    ...source,
+    authors: Object.freeze([...source.authors])
+  });
+}
+
 function freezeClaim(claim: ThinReadingClaim): ThinReadingClaim {
   return Object.freeze({
     ...claim,
     evidenceIds: Object.freeze([...claim.evidenceIds])
+  });
+}
+
+function freezeSummarySentence(sentence: ThinReadingSummarySentence): ThinReadingSummarySentence {
+  return Object.freeze({
+    ...sentence,
+    evidenceIds: Object.freeze([...sentence.evidenceIds]),
+    externalKnowledge: Object.freeze([...sentence.externalKnowledge])
   });
 }
 
@@ -83,9 +100,15 @@ function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvide
       ? Object.freeze(evidence.claims.map(freezeClaim))
       : undefined,
     externalKnowledge: Object.freeze([...evidence.externalKnowledge]),
+    externalSources: evidence.externalSources
+      ? Object.freeze(evidence.externalSources.map(freezeExternalSource))
+      : undefined,
     paperEvidence: Object.freeze([...evidence.paperEvidence]),
     paperEvidenceSpans: evidence.paperEvidenceSpans
       ? Object.freeze(evidence.paperEvidenceSpans.map(freezeEvidenceSpan))
+      : undefined,
+    summarySentences: evidence.summarySentences
+      ? Object.freeze(evidence.summarySentences.map(freezeSummarySentence))
       : undefined
   });
 }

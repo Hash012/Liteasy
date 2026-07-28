@@ -333,10 +333,10 @@ export function useWorkspaceActions({
     const state = workspaceStore.getState();
     if (state.selectionLocked) {
       workspaceStore.unlockSelection();
-      onAnalysisHint("已解除锁定。请调整选中文献集后，再选择模态按钮启动分析。");
+      onAnalysisHint("已解除锁定。请调整选中文献集后，再选择 AI 按钮启动分析。");
     } else {
       workspaceStore.lockSelection();
-      onAnalysisHint("选中文献集已锁定。可以先交给AI流程，或直接用模态按钮开始分析。");
+      onAnalysisHint("选中文献集已锁定。可以先交给 AI 流程，或直接用 AI 按钮开始分析。");
     }
     syncWorkspace();
   }
@@ -444,7 +444,7 @@ export function useWorkspaceActions({
     }
 
     const importStatus = queueImportForPapers(selectedPapers, () => {
-      onAnalysisHint("选中文献集已完成导入，现在可以通过中栏模态按钮启动分析。");
+      onAnalysisHint("选中文献集已完成导入，现在可以通过中栏 AI 按钮启动分析。");
     });
 
     if (importStatus === "started") {

@@ -8,10 +8,12 @@ import type {
   ThinReadingGenerationContext,
   ThinReadingClaim,
   ThinReadingEvidenceSpan,
+  ThinReadingExternalSource,
   ThinReadingIntuechoRecommendation,
   ThinReadingNodeSeed,
   ThinReadingPaperType,
-  ThinReadingSectionToken
+  ThinReadingSectionToken,
+  ThinReadingSummarySentence
 } from "./thinReading.types";
 
 function stableHash(value: string): string {
@@ -88,6 +90,12 @@ const thinReadingModelOutputSchema = z.object({
     relationship: normalizedStringSchema({ maximumLength: 42 })
   }).strict()).max(6).default([]),
   summary: normalizedStringSchema({ maximumLength: 1200, minimumLength: 24 }),
+  summarySentences: z.array(z.object({
+    evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).default([]),
+    externalKnowledge: z.array(normalizedStringSchema({ maximumLength: 180 })).default([]),
+    status: z.enum(["grounded", "unsupported", "weak"]).default("weak"),
+    text: normalizedStringSchema({ maximumLength: 420, minimumLength: 2 })
+  }).strict()).default([]),
   withinPaperClosure: z.boolean()
 }).strict();
 
@@ -97,6 +105,7 @@ type ParseThinReadingModelSeedOptions = {
   allowedEvidenceIds?: readonly string[];
   analysisEvidence?: readonly AnalysisEvidence[];
   analysis?: PreparedMultiPaperAnalysis;
+  externalSources?: readonly ThinReadingExternalSource[];
 };
 
 function normalizeSectionToken(value: ParsedThinReadingModelOutput["omittedSections"][number]): ThinReadingSectionToken | null {
@@ -196,6 +205,18 @@ function assertEvidenceReferences(input: {
   }
 }
 
+function assertExternalSourceReferences(input: {
+  allowedSourceIds: readonly string[];
+  references: readonly string[];
+}) {
+  const invalid = input.references.filter((reference) => !input.allowedSourceIds.includes(reference));
+  if (invalid.length > 0) {
+    throw new Error(
+      `薄读 Agent 返回格式无效：引用了本轮检索中不存在的 external source ID：${invalid.join("；")}。`
+    );
+  }
+}
+
 function normalizeQuote(value: string) {
   return value
     .toLowerCase()
@@ -272,6 +293,154 @@ function buildClaims(input: {
   }];
 }
 
+function splitSummarySentences(summary: string) {
+  const matches = normalizeString(summary).match(/[^。！？!?]+[。！？!?]?/g) ?? [];
+  const sentences = matches.map(normalizeString).filter(Boolean);
+  return sentences.length > 0 ? sentences : [normalizeString(summary)].filter(Boolean);
+}
+
+function normalizeSentenceForMatch(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[。！？!?.,;:，；：]+$/g, "")
+    .trim();
+}
+
+function modelSentencesTrackSummary(input: {
+  summary: string;
+  sentences: readonly ThinReadingSummarySentence[];
+}) {
+  const summary = normalizeSentenceForMatch(input.summary);
+  if (!summary || input.sentences.length === 0) {
+    return false;
+  }
+  let cursor = 0;
+  let matchedLength = 0;
+  for (const sentence of input.sentences) {
+    const needle = normalizeSentenceForMatch(sentence.text);
+    if (!needle) {
+      return false;
+    }
+    const index = summary.indexOf(needle, cursor);
+    if (index < 0) {
+      return false;
+    }
+    cursor = index + needle.length;
+    matchedLength += needle.length;
+  }
+  return matchedLength / summary.length >= 0.72;
+}
+
+function tokenizeForOverlap(value: string) {
+  const normalized = value.toLowerCase();
+  const words = normalized.match(/[a-z0-9][a-z0-9\-_/]*|[\u3400-\u9fff]/g) ?? [];
+  return new Set(words.filter((word) => word.length > 0));
+}
+
+function lexicalOverlapScore(left: string, right: string) {
+  const leftTokens = tokenizeForOverlap(left);
+  const rightTokens = tokenizeForOverlap(right);
+  if (leftTokens.size === 0 || rightTokens.size === 0) {
+    return 0;
+  }
+  let shared = 0;
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) {
+      shared += 1;
+    }
+  });
+  return shared / Math.max(1, Math.min(leftTokens.size, rightTokens.size));
+}
+
+function bestClaimForSentence(
+  sentence: string,
+  claims: readonly ThinReadingClaim[]
+) {
+  let best: { claim: ThinReadingClaim; score: number } | null = null;
+  for (const claim of claims) {
+    const score = lexicalOverlapScore(sentence, claim.text);
+    if (!best || score > best.score) {
+      best = { claim, score };
+    }
+  }
+  return best && best.score >= 0.18 ? best.claim : null;
+}
+
+function normalizeSummarySentenceStatus(input: {
+  evidenceIds: readonly string[];
+  externalKnowledge: readonly string[];
+  status: "grounded" | "unsupported" | "weak";
+}) {
+  if (input.evidenceIds.length > 0) {
+    return input.status === "unsupported" ? "weak" : input.status;
+  }
+  if (input.externalKnowledge.length > 0) {
+    return input.status === "grounded" ? "weak" : input.status;
+  }
+  return "unsupported";
+}
+
+function buildSummarySentences(input: {
+  allowedEvidenceIds: readonly string[];
+  allowedExternalSourceIds: readonly string[];
+  claims: readonly ThinReadingClaim[];
+  parsed: ParsedThinReadingModelOutput;
+  paperEvidence: readonly string[];
+}): ThinReadingSummarySentence[] {
+  const modelSentences = input.parsed.summarySentences.flatMap((sentence) => {
+    const evidenceIds = normalizeEvidenceReferences(sentence.evidenceIds, input.allowedEvidenceIds);
+    const externalKnowledge = [...new Set(
+      sentence.externalKnowledge
+        .map(normalizeString)
+        .filter((sourceId) => input.allowedExternalSourceIds.includes(sourceId))
+    )];
+    if (!sentence.text) {
+      return [];
+    }
+    return [{
+      evidenceIds,
+      externalKnowledge,
+      id: `thin-reading-sentence-${stableHash(`${sentence.text}\u0000${evidenceIds.join("\u0000")}\u0000${externalKnowledge.join("\u0000")}`)}`,
+      status: normalizeSummarySentenceStatus({
+        evidenceIds,
+        externalKnowledge,
+        status: sentence.status
+      }),
+      text: sentence.text
+    }];
+  });
+  if (modelSentences.length > 0 && modelSentencesTrackSummary({
+    sentences: modelSentences,
+    summary: input.parsed.summary
+  })) {
+    return modelSentences;
+  }
+
+  return splitSummarySentences(input.parsed.summary).map((sentence) => {
+    const bestClaim = bestClaimForSentence(sentence, input.claims);
+    const evidenceIds = bestClaim?.evidenceIds.length
+      ? bestClaim.evidenceIds
+      : input.paperEvidence.slice(0, 2);
+    const externalKnowledge = evidenceIds.length > 0
+      ? []
+      : input.parsed.externalKnowledge
+          .filter((sourceId) => input.allowedExternalSourceIds.includes(sourceId))
+          .slice(0, 2);
+    return {
+      evidenceIds,
+      externalKnowledge,
+      id: `thin-reading-sentence-${stableHash(`${sentence}\u0000${evidenceIds.join("\u0000")}\u0000${externalKnowledge.join("\u0000")}`)}`,
+      status: normalizeSummarySentenceStatus({
+        evidenceIds,
+        externalKnowledge,
+        status: bestClaim?.status ?? "weak"
+      }),
+      text: sentence
+    };
+  });
+}
+
 export function parseThinReadingModelSeed(
   output: string,
   options: ParseThinReadingModelSeedOptions = {}
@@ -289,6 +458,8 @@ export function parseThinReadingModelSeed(
   }
 
   const parsed = parsedResult.data;
+  const externalSources = options.externalSources ?? [];
+  const allowedExternalSourceIds = externalSources.map((source) => source.id);
   const analysisEvidence = options.analysis?.evidence ?? options.analysisEvidence ?? [];
   const allowedEvidenceIds = options.allowedEvidenceIds ??
     analysisEvidence.map((item) => item.id) ??
@@ -301,10 +472,22 @@ export function parseThinReadingModelSeed(
     fieldName: "paperEvidence",
     paperEvidence: parsed.paperEvidence
   });
+  assertExternalSourceReferences({
+    allowedSourceIds: allowedExternalSourceIds,
+    references: [
+      ...parsed.externalKnowledge,
+      ...parsed.summarySentences.flatMap((sentence) => sentence.externalKnowledge)
+    ]
+  });
   assertEvidenceReferences({
     allowedEvidenceIds,
     fieldName: "claims.evidenceIds",
     paperEvidence: parsed.claims.flatMap((claim) => claim.evidenceIds)
+  });
+  assertEvidenceReferences({
+    allowedEvidenceIds,
+    fieldName: "summarySentences.evidenceIds",
+    paperEvidence: parsed.summarySentences.flatMap((sentence) => sentence.evidenceIds)
   });
   const paperEvidence = normalizeEvidenceReferences(parsed.paperEvidence, allowedEvidenceIds);
   const paperEvidenceSpans = buildEvidenceSpans({
@@ -315,6 +498,13 @@ export function parseThinReadingModelSeed(
     availableEvidenceIds: allowedEvidenceIds,
     parsed
   });
+  const summarySentences = buildSummarySentences({
+    allowedEvidenceIds,
+    allowedExternalSourceIds,
+    claims,
+    parsed,
+    paperEvidence
+  });
   const coverageGap = options.analysis?.run.coverage.missingPaperIds.length ?? 0;
   const retrievalConfidence = options.analysis?.retrievalConfidence;
   const hasInsufficientRetrieval = coverageGap > 0 ||
@@ -324,8 +514,10 @@ export function parseThinReadingModelSeed(
     evidence: {
       claims,
       externalKnowledge: parsed.externalKnowledge,
+      externalSources,
       paperEvidence,
-      paperEvidenceSpans
+      paperEvidenceSpans,
+      summarySentences
     },
     omittedSections: parsed.omittedSections
       .map(normalizeSectionToken)
@@ -414,6 +606,21 @@ function formatParentEvidenceSpans(spans: readonly ThinReadingEvidenceSpan[] | u
   ].join("\n");
 }
 
+function formatExternalSources(sources: readonly ThinReadingExternalSource[] | undefined) {
+  if (!sources || sources.length === 0) {
+    return "本轮没有检索外部来源；externalKnowledge 必须为空数组，不得依赖模型常识补写论文外事实。";
+  }
+  return [
+    "本轮允许引用的外部来源（externalKnowledge 只能填写下列 source ID）：",
+    ...sources.map((source) => {
+      const authors = source.authors.slice(0, 4).join(", ") || "unknown authors";
+      const year = source.year ? ` (${source.year})` : "";
+      const abstract = source.abstract ? ` abstract=\"${truncatePromptText(source.abstract, 420)}\"` : " abstract unavailable";
+      return `- ${source.id}: ${source.title}${year}; authors=${authors}; url=${source.url}; relevance=${source.relevance}.${abstract}`;
+    })
+  ].join("\n");
+}
+
 export function buildThinReadingAgentPrompt(input: {
   context: ThinReadingGenerationContext;
   prepared: PreparedMultiPaperAnalysis;
@@ -435,13 +642,24 @@ export function buildThinReadingAgentPrompt(input: {
     input.context.parentSummary ? `上一层文本：${input.context.parentSummary}` : "",
     formatParentClaims(input.context.parentClaims),
     formatParentEvidenceSpans(input.context.parentEvidenceSpans),
+    formatExternalSources(input.context.externalSources),
+    "内部工作流（只在脑中执行，不要输出这些步骤）：",
+    "1. Context assembly：先识别当前层级、目标论文、选区/遗漏板块、父节点 claim/evidence。",
+    "2. Evidence sieve：从证据矩阵中选出最能改变读者理解的 evidence ID，区分主张、机制、结果、局限和背景。",
+    "3. Retention compression：用论文类型决定读者读后最该留下的 1-3 个核心印象，丢弃平均章节摘要。",
+    "4. Skeptical audit：逐句检查是否有本轮 evidence ID、本轮允许的 external source ID 或 unsupported；不合格则改写。",
+    "5. Drilldown planning：omittedSections 只放真正值得继续读且本段没有覆盖的入口，不设置固定按钮。",
     "核心要求：",
     "- summary 写成一段自然文本，直指论文类型决定的重点，避免按章节平均概括。",
+    "- summary 必须通过“读后留存测试”：读者只记住这一段，也能复述论文最关键的贡献/论证/边界。",
+    "- summary 不要堆术语；每个关键术语都要说明它在论文机制、证据链或知识地图中的作用。",
+    "- summary 中每个内容性句子都必须能追溯到论文内 evidence ID 或本轮允许的 external source ID；不要写没有来源边界的句子。",
+    "- summarySentences 必须按 summary 句子顺序逐句列出 text、evidenceIds、externalKnowledge 和 status；text 必须原样对应 summary 中的句子，不能写解释性改写。",
     "- paperType 必须填写最能解释当前取舍的论文类型；如果初步类型不准，可以修正，但只能使用允许值。",
     "- paperEvidence 只能填写下方 evidence ID 或含 evidence ID 的短说明；只列对 summary/claims 真正关键的证据，不要复制整张 evidence 矩阵。",
     "- claims 列出 summary 的关键判断；grounded claim 必须引用下方 evidence ID。",
     "- 继续深入时必须承接上一层关键判断与证据 span，说明本次深入如何细化、修正或补足上一层，而不是另起一个无关摘要。",
-    "- externalKnowledge 只填写确实越出目标论文闭包的外部知识；没有则为空数组。",
+    "- externalKnowledge 不是自由文本，只能填写上方本轮允许引用的 external source ID；没有可用外部来源则必须为空数组。",
     "- omittedSections 列出当前 summary 没覆盖、但值得继续深入的论文板块，数量随证据实际情况决定；label 必须是短按钮文案，中文不超过 12 字或英文不超过 6 个词。",
     "- recommendations 只是 Intuecho 本地待同步占位推荐线索，不要伪装成真实社区数据。",
     "- withinPaperClosure 为 false 时表示主要依赖外部知识。",
@@ -449,10 +667,11 @@ export function buildThinReadingAgentPrompt(input: {
     "{",
     '  "paperType": "experimental",',
     '  "summary": "string",',
+    '  "summarySentences": [{"text": "summary sentence", "evidenceIds": ["evidence-id"], "externalKnowledge": [], "status": "grounded"}],',
     '  "withinPaperClosure": true,',
     '  "paperEvidence": ["evidence-id"],',
     '  "claims": [{"text": "claim text", "evidenceIds": ["evidence-id"], "status": "grounded"}],',
-    '  "externalKnowledge": ["external source or concept"],',
+    '  "externalKnowledge": ["openalex:W123456789"],',
     '  "omittedSections": [{"sectionKey": "method", "label": "方法"}],',
     '  "recommendations": [{"relationship": "方法与问题设定", "note": "本地待同步的理解线索", "compatibility": 0.78}]',
     "}",

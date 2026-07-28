@@ -23,7 +23,7 @@ describe("useRegisteredWorkspaceActions", () => {
   });
 
   test("runs artifact analysis through the registered action boundary", async () => {
-    const startArtifactAnalysis = vi.fn(() => "当前选中文献集已导入，正在按指定模态启动分析。");
+    const startArtifactAnalysis = vi.fn(() => "当前选中文献集已导入，正在按指定 AI 分析启动。");
     const onAnalysisHint = vi.fn();
     const { result } = renderHook(() =>
       useRegisteredWorkspaceActions({
@@ -38,6 +38,6 @@ describe("useRegisteredWorkspaceActions", () => {
     });
 
     expect(startArtifactAnalysis).toHaveBeenCalledWith("tree");
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定模态启动分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定 AI 分析启动。");
   });
 });

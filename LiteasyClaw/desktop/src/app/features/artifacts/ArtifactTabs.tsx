@@ -299,7 +299,7 @@ export function ArtifactTabs({
           className="artifact-empty"
           title={
             canStartAnalysis
-              ? "使用中间栏悬浮模态按钮生成新的多模态产物。"
+              ? "使用中间栏悬浮 AI 按钮生成新的多模态产物。"
               : analysisHint
           }
         >

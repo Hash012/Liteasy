@@ -51,6 +51,20 @@ export type ThinReadingEvidenceSpan = {
   quote: string;
 };
 
+export type ThinReadingExternalSource = {
+  abstract: string;
+  authors: readonly string[];
+  doi?: string;
+  id: string;
+  provider: "openalex";
+  relevance: number;
+  retrievalQuery: string;
+  sourceId: string;
+  title: string;
+  url: string;
+  year?: number;
+};
+
 export type ThinReadingClaimStatus = "grounded" | "unsupported" | "weak";
 
 export type ThinReadingClaim = {
@@ -60,11 +74,21 @@ export type ThinReadingClaim = {
   text: string;
 };
 
+export type ThinReadingSummarySentence = {
+  evidenceIds: readonly string[];
+  externalKnowledge: readonly string[];
+  id: string;
+  status: ThinReadingClaimStatus;
+  text: string;
+};
+
 export type ThinReadingNodeEvidence = {
   claims?: readonly ThinReadingClaim[];
   externalKnowledge: readonly string[];
+  externalSources?: readonly ThinReadingExternalSource[];
   paperEvidence: readonly string[];
   paperEvidenceSpans?: readonly ThinReadingEvidenceSpan[];
+  summarySentences?: readonly ThinReadingSummarySentence[];
 };
 
 export type ThinReadingNodeSeed = {
@@ -85,11 +109,13 @@ export type ThinReadingGenerationContext = {
   prompt?: string;
   parentClaims?: readonly ThinReadingClaim[];
   parentEvidenceSpans?: readonly ThinReadingEvidenceSpan[];
+  parentWithinPaperClosure?: boolean;
   parentNodeId?: string;
   parentSummary?: string;
   parentTitle?: string;
   source: ThinReadingNodeSource;
   targetLanguage: string;
+  externalSources?: readonly ThinReadingExternalSource[];
 };
 
 export type ThinReadingNode = {

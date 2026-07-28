@@ -32,6 +32,15 @@ export function createThinReadingFixture(): CreateThinReadingDocumentInput {
             paperId: "paper-attention",
             quote: "Self-attention replaces recurrence in the encoder."
           })
+        ]),
+        summarySentences: Object.freeze([
+          Object.freeze({
+            evidenceIds: Object.freeze(["evidence-attention-self-attention"]),
+            externalKnowledge: Object.freeze([]),
+            id: "thin-reading-sentence-attention-core",
+            status: "grounded",
+            text: "这篇论文的核心不是一般性介绍序列建模，而是提出 Transformer 用 self-attention（自注意力）替代 recurrence（循环结构）作为主要建模机制，使编码器与解码器能并行处理 token 间关系，并把后续 NLP 架构的知识图谱重心推向 attention-based representation（基于注意力的表示）。"
+          })
         ])
       }),
       omittedSections: Object.freeze([

@@ -119,7 +119,7 @@ test("keeps the central modality menu collapsed until the user opens it", async 
   );
 
   expect(screen.queryByRole("button", { name: "分层关系图" })).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "打开模态选择" }));
+  await user.click(screen.getByRole("button", { name: "打开 AI 选择" }));
   await user.click(screen.getByRole("button", { name: "分层关系图" }));
 
   expect(onStartAnalysis).toHaveBeenCalledWith("layered_graph");
@@ -137,7 +137,7 @@ test("exposes thin reading from the central modality menu", async () => {
     />
   );
 
-  await user.click(screen.getByRole("button", { name: "打开模态选择" }));
+  await user.click(screen.getByRole("button", { name: "打开 AI 选择" }));
   await user.click(screen.getByRole("button", { name: "薄读" }));
 
   expect(onStartAnalysis).toHaveBeenCalledWith("thin_reading");

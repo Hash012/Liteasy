@@ -167,10 +167,12 @@ body {
   border-color: var(--button-border-color);
   border-style: solid;
   border-width: var(--button-border-width);
+  border-radius: 50%;
   background: var(--button-background);
   color: var(--button-color);
   font-weight: var(--button-font-weight);
   box-shadow: var(--button-shadow);
+  transform-origin: center;
 }
 
 .app-shell {
@@ -505,8 +507,8 @@ body {
   right: 28px;
   bottom: 28px;
   z-index: 13;
-  width: 68px;
-  height: 68px;
+  width: 64px;
+  height: 64px;
   pointer-events: auto;
 }
 
@@ -519,19 +521,26 @@ body {
   position: absolute;
   display: grid;
   place-items: center;
+  aspect-ratio: 1;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 999px;
+  border-radius: 50%;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
   color: #fff;
   cursor: pointer;
   font-weight: 600;
   letter-spacing: 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: normal;
 }
 
 .floating-modality-main {
   inset: 0;
   background: #0f6cbd;
-  font-size: 14px;
+  font-size: 15px;
+  width: 64px;
+  height: 64px;
 }
 
 .floating-modality-main:focus-visible,
@@ -541,16 +550,37 @@ body {
 }
 
 .floating-modality-option {
-  top: 12px;
-  left: 12px;
-  width: 44px;
-  height: 44px;
+  top: 6px;
+  left: 6px;
+  width: 52px;
+  height: 52px;
   opacity: 0;
   transform: translate(0, 0) scale(0.68);
   transition: opacity 150ms ease, transform 180ms ease;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.1;
+  overflow-wrap: anywhere;
+  padding: 5px;
   text-align: center;
+}
+
+.floating-modality-option span {
+  display: block;
+  inline-size: 100%;
+  line-height: 1.05;
+  max-inline-size: 42px;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.floating-modality-option.layered-graph-option span {
+  font-size: 9px;
+  max-inline-size: 38px;
+}
+
+.floating-modality-option.thin-reading span {
+  font-size: 10px;
+  max-inline-size: 36px;
 }
 
 .floating-modality-launcher:hover .floating-modality-option,
@@ -569,8 +599,8 @@ body {
   transform: translate(-48px, -82px) scale(1);
 }
 
-.floating-modality-launcher:hover .floating-modality-option.layered-graph,
-.floating-modality-launcher:focus-within .floating-modality-option.layered-graph {
+.floating-modality-launcher:hover .floating-modality-option.layered-graph-option,
+.floating-modality-launcher:focus-within .floating-modality-option.layered-graph-option {
   transform: translate(48px, -82px) scale(1);
 }
 
@@ -597,7 +627,7 @@ body {
   background: #107c10;
 }
 
-.floating-modality-option.layered-graph {
+.floating-modality-option.layered-graph-option {
   background: #3c6479;
 }
 

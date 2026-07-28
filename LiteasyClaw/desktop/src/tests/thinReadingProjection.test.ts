@@ -91,6 +91,15 @@ describe("thinReadingProjection", () => {
               paperId: "paper-1",
               quote: "ColBERT uses MaxSim."
             }
+          ],
+          summarySentences: [
+            {
+              evidenceIds: ["evidence-1"],
+              externalKnowledge: [],
+              id: "sentence-1",
+              status: "grounded",
+              text: "MaxSim 保留 token-level matching signals。"
+            }
           ]
         }
       }),
@@ -106,6 +115,11 @@ describe("thinReadingProjection", () => {
       chunkId: "paper-1:p2:chunk-1",
       page: 2,
       quote: "ColBERT uses MaxSim."
+    });
+    expect(root.evidence.summarySentences?.[0]).toMatchObject({
+      evidenceIds: ["evidence-1"],
+      status: "grounded",
+      text: "MaxSim 保留 token-level matching signals。"
     });
   });
 

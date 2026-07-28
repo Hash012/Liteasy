@@ -106,6 +106,27 @@ function normalizeThinReadingEvidenceSpans(value: unknown): ThinReadingEvidenceS
   return spans.length > 0 ? spans : undefined;
 }
 
+function normalizeExternalSources(value: unknown): ThinReadingGenerationContext["externalSources"] {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const sources = value.filter((source) => (
+    source &&
+    typeof source === "object" &&
+    !Array.isArray(source) &&
+    "id" in source && typeof source.id === "string" &&
+    "provider" in source && source.provider === "openalex" &&
+    "sourceId" in source && typeof source.sourceId === "string" &&
+    "title" in source && typeof source.title === "string" &&
+    "url" in source && typeof source.url === "string" &&
+    "authors" in source && Array.isArray(source.authors) && source.authors.every((author: unknown) => typeof author === "string") &&
+    "abstract" in source && typeof source.abstract === "string" &&
+    "relevance" in source && typeof source.relevance === "number" &&
+    "retrievalQuery" in source && typeof source.retrievalQuery === "string"
+  ));
+  return sources.length > 0 ? sources as NonNullable<ThinReadingGenerationContext["externalSources"]> : undefined;
+}
+
 export function getAgentRequestThinReadingContext(
   request?: SubmitAgentTurnRequest
 ): ThinReadingGenerationContext | null {
@@ -137,10 +158,14 @@ export function getAgentRequestThinReadingContext(
     parentClaims: normalizeThinReadingClaims(candidate.parentClaims),
     parentEvidenceSpans: normalizeThinReadingEvidenceSpans(candidate.parentEvidenceSpans),
     parentNodeId: typeof candidate.parentNodeId === "string" ? candidate.parentNodeId : undefined,
+    parentWithinPaperClosure: typeof candidate.parentWithinPaperClosure === "boolean"
+      ? candidate.parentWithinPaperClosure
+      : undefined,
     parentSummary: typeof candidate.parentSummary === "string" ? candidate.parentSummary : undefined,
     parentTitle: typeof candidate.parentTitle === "string" ? candidate.parentTitle : undefined,
     source: candidate.source,
-    targetLanguage: candidate.targetLanguage
+    targetLanguage: candidate.targetLanguage,
+    externalSources: normalizeExternalSources(candidate.externalSources)
   };
 }
 

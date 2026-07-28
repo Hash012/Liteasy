@@ -1,4 +1,7 @@
-import { generateAssistantAnswer } from "../app/features/assistant/generateAssistantAnswer";
+import {
+  generateAssistantAnswer,
+  shouldRetrieveThinReadingExternalKnowledge
+} from "../app/features/assistant/generateAssistantAnswer";
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
@@ -325,9 +328,34 @@ test("stops thin-reading generation on mock endpoints", async () => {
   })).rejects.toThrow("真实模型链路");
 });
 
+test("limits external retrieval to explicit beyond-paper thin-reading branches", () => {
+  const baseContext = {
+    artifactId: "artifact-scope",
+    depth: 1,
+    paperIds: ["demo-1"],
+    primaryPaperTitle: "ColBERT",
+    targetLanguage: "zh-CN"
+  } as const;
+
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    source: { kind: "omitted_section", label: "方法细节", sectionKey: "method" }
+  })).toBe(false);
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" }
+  })).toBe(true);
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    parentWithinPaperClosure: false,
+    source: { kind: "selected_text", excerpt: "MaxSim" }
+  })).toBe(true);
+});
+
 test("parses thin-reading structured output from a live model request", async () => {
   const store = createSettingsStore();
   const requests: Array<{ body: string; url: string }> = [];
+  let externalRetrievalCalls = 0;
   store.apply({
     intent: "update_setting",
     target: "models.cloud_proxy_endpoint",
@@ -410,6 +438,10 @@ test("parses thin-reading structured output from a live model request", async ()
       primaryPaperTitle: "ColBERT",
       source: { kind: "root_overview" },
       targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRetrievalCalls += 1;
+      throw new Error("root thin-reading must not retrieve external sources");
     }
   });
 
@@ -439,6 +471,112 @@ test("parses thin-reading structured output from a live model request", async ()
     withinPaperClosure: true
   });
   expect(result.content).toContain("ColBERT 的核心贡献");
+  expect(externalRetrievalCalls).toBe(0);
+});
+
+test("runs thin-reading through the DeepSeek provider without downgrading to mock data", async () => {
+  const store = createSettingsStore();
+  const requests: Array<{ body: string; url: string }> = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  store.apply({
+    intent: "update_setting",
+    target: "models.default_provider",
+    value: "deepseek"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({
+        audit: {
+          model: "gpt-5-mini-auditor",
+          rationale: "DeepSeek 薄读审计通过。",
+          score: 0.9,
+          verdict: "pass"
+        }
+      }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [
+        {
+          page: 2,
+          paperId: "demo-1",
+          paperTitle: "ColBERT",
+          snippet: "ColBERT uses contextualized token embeddings and MaxSim late interaction.",
+          summary: "ColBERT 用 MaxSim 进行 late interaction。",
+          tags: ["ColBERT", "MaxSim"]
+        }
+      ]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      requests.push({ body: request.body, url: request.url });
+      const prompt = String(JSON.parse(request.body).prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            externalKnowledge: [],
+            claims: [
+              {
+                evidenceIds: [evidenceId],
+                status: "grounded",
+                text: "ColBERT 通过 MaxSim late interaction 保留 token-level matching signals。"
+              }
+            ],
+            omittedSections: [{ label: "消融", sectionKey: "ablation" }],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "ColBERT 的薄读核心是用 MaxSim late interaction 把 contextualized token embeddings 转化为细粒度匹配信号。",
+            withinPaperClosure: true
+          }),
+          execution: {
+            backend: "dev_cloud",
+            mode: "live",
+            provider: "deepseek"
+          }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-deepseek",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(JSON.parse(requests[0].body)).toMatchObject({
+    model: "deepseek-v4-flash",
+    provider: "deepseek",
+    requireLive: true,
+    source: "cloud_proxy"
+  });
+  expect(result.executionTrace).toMatchObject({
+    backend: "dev_cloud",
+    mode: "live",
+    provider: "deepseek"
+  });
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    paperType: "experimental",
+    summary: expect.stringContaining("MaxSim"),
+    withinPaperClosure: true
+  });
 });
 
 test("downgrades thin-reading closure when retrieval coverage is incomplete", async () => {
@@ -519,4 +657,157 @@ test("downgrades thin-reading closure when retrieval coverage is incomplete", as
 
   expect(result.analysis?.run.coverage.missingPaperIds).toContain("demo-2");
   expect(result.thinReading?.rootSeed?.withinPaperClosure).toBe(false);
+});
+
+test("retrieves traceable external sources before generating beyond the paper closure", async () => {
+  const store = createSettingsStore();
+  const externalRequests: Array<{ body: string; url: string }> = [];
+  let modelPrompt = "";
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      modelPrompt = String(JSON.parse(request.body).prompt);
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: ["openalex:W42"],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "后续研究把 late interaction 扩展到更高效的多向量检索。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: ["openalex:W42"],
+              status: "weak",
+              text: "后续研究把 late interaction 扩展到更高效的多向量检索。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-external",
+      depth: 2,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async (request) => {
+      externalRequests.push({ body: request.body, url: request.url });
+      return {
+        json: async () => ({
+          provider: "openalex",
+          query: "ColBERT 后续研究",
+          sources: [{
+            abstract: "An efficient multi-vector retrieval method.",
+            authors: ["A. Author"],
+            doi: "https://doi.org/10.1000/follow-up",
+            id: "openalex:W42",
+            provider: "openalex",
+            relevance: 0.86,
+            retrievalQuery: "ColBERT 后续研究",
+            sourceId: "W42",
+            title: "Efficient Multi-vector Retrieval",
+            url: "https://openalex.org/W42",
+            year: 2025
+          }],
+          status: "available"
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalRequests).toHaveLength(1);
+  expect(externalRequests[0].url).toContain("/v1/research/external-knowledge");
+  expect(modelPrompt).toContain("openalex:W42");
+  expect(modelPrompt).toContain("Efficient Multi-vector Retrieval");
+  expect(result.thinReading?.rootSeed.evidence.externalSources?.[0]).toMatchObject({
+    id: "openalex:W42",
+    url: "https://openalex.org/W42"
+  });
+  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
+});
+
+test("stops beyond-paper generation when external retrieval returns no sources", async () => {
+  const store = createSettingsStore();
+  let modelCalls = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async () => {
+      modelCalls += 1;
+      throw new Error("model should not be called");
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-empty-external",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({ provider: "openalex", query: "query", sources: [], status: "empty" }),
+      ok: true,
+      status: 200
+    })
+  })).rejects.toThrow("闭包外生成已停止");
+  expect(modelCalls).toBe(0);
 });

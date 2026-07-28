@@ -180,7 +180,7 @@ describe("ArtifactTabs", () => {
     expect(screen.getByText("Intuecho")).toBeInTheDocument();
     expect(container.querySelector(".artifact-card")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "打开论文内证据 evidence-1 第 2 页" }));
+    fireEvent.click(screen.getByRole("button", { name: /打开证据句/ }));
     expect(onOpenEvidence).toHaveBeenCalledWith({
       evidenceId: "evidence-1",
       page: 2,

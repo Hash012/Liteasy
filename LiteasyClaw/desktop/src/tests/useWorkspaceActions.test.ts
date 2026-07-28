@@ -84,11 +84,11 @@ describe("useWorkspaceActions", () => {
 
     act(() => result.current.toggleSelectionLock());
     expect(workspaceStore.getState().selectionLocked).toBe(true);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已锁定。可以先交给AI流程，或直接用模态按钮开始分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已锁定。可以先交给 AI 流程，或直接用 AI 按钮开始分析。");
 
     act(() => result.current.toggleSelectionLock());
     expect(workspaceStore.getState().selectionLocked).toBe(false);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("已解除锁定。请调整选中文献集后，再选择模态按钮启动分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("已解除锁定。请调整选中文献集后，再选择 AI 按钮启动分析。");
   });
 
   test("adds external papers once and reports duplicate drops", () => {
@@ -263,7 +263,7 @@ describe("useWorkspaceActions", () => {
       await vi.advanceTimersByTimeAsync(800);
     });
     expect(importStore.getLatestJobByDocumentId(paper.id)?.status).toBe("parsed");
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已完成导入，现在可以通过中栏模态按钮启动分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已完成导入，现在可以通过中栏 AI 按钮启动分析。");
     expect(result.current.getImportedSelectedCount()).toBe(1);
     expect(result.current.getImportedChunksByPaperId()[paper.id]).toHaveLength(2);
     expect(workspaceStore.getState().selectedPaperIds).toEqual([paper.id]);

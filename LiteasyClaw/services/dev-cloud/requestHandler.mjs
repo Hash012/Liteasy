@@ -45,6 +45,10 @@ import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
+import {
+  ExternalKnowledgeError,
+  searchOpenAlexExternalKnowledge
+} from "./payloads/externalKnowledgePayloads.mjs";
 
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
 // 仍保留明确上限以防止本地开发服务被无界请求占满内存。
@@ -75,6 +79,7 @@ const availableEndpoints = [
   "POST /v1/agent-artifacts",
   "DELETE /v1/agent-artifacts/:artifactId",
   "POST /v1/recommendations",
+  "POST /v1/research/external-knowledge",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
   "POST /v1/recommendation-cache/clear",
@@ -608,6 +613,27 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
 
       writeJson(request, response, 200, buildRecommendationPayload(body));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      try {
+        const payload = await searchOpenAlexExternalKnowledge(body, {
+          timeoutMs: customConfig.openAlexTimeoutMs,
+          transport: customConfig.openAlexTransport
+        });
+        writeJson(request, response, 200, payload);
+      } catch (error) {
+        const statusCode = error instanceof ExternalKnowledgeError ? error.statusCode : 502;
+        writeJson(request, response, statusCode, {
+          error: error instanceof ExternalKnowledgeError ? error.code : "external_knowledge_unavailable",
+          message: error instanceof Error ? error.message : "外部知识检索不可用。"
+        });
+      }
       return;
     }
 
