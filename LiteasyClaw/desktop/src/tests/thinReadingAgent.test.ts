@@ -558,6 +558,7 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain(sentenceId);
     expect(prompt).toContain("supported（直接支持）");
     expect(prompt).toContain("contradicted（证据明确冲突）");
+    expect(prompt).toContain("正文必须与生成和检索过程隔离");
     expect(parseThinReadingEvidenceReview({
       output: JSON.stringify({
         propositionVerdicts: [{
@@ -676,7 +677,8 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("选区在上一层关联过外部来源");
     expect(prompt).toContain("A Follow-up Study");
     expect(prompt).toContain("relation=related");
-    expect(prompt).toContain("NARRATION RULE: this exact source may only be called a related-work lead");
+    expect(prompt).toContain("PROVENANCE RULE: relation and source ID are internal metadata");
+    expect(prompt).toContain("State only a scholarly proposition directly supported");
     expect(prompt).toContain("不同 relation 的 source 不得在同一句中合并为笼统的 citation 结论");
   });
 
@@ -1408,6 +1410,89 @@ describe("thinReadingAgent", () => {
     })).toThrow("summarySentences 必须映射本轮 external source ID");
   });
 
+  test("keeps topic-search provenance internal while allowing supported scholarly content", () => {
+    const externalSource = {
+      abstract: "The study organizes ablation experiments by module to separate layout and vectorization factors.",
+      authors: ["A. Author"],
+      id: "arxiv:2507.08038",
+      provider: "arxiv" as const,
+      relation: "topic_search" as const,
+      relevance: 0.88,
+      retrievalQuery: "module ablation planning",
+      sourceRecordUrl: "https://export.arxiv.org/api/query?id_list=2507.08038",
+      sourceId: "2507.08038",
+      title: "Planning Modular Ablation Experiments",
+      url: "https://arxiv.org/abs/2507.08038"
+    };
+    const summary = "该研究按模块组织消融实验，以区分布局和向量化因素。";
+
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      claims: [],
+      externalKnowledge: [externalSource.id],
+      omittedSections: [],
+      paperEvidence: [],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: [externalSource.id],
+        status: "weak",
+        text: summary
+      }],
+      withinPaperClosure: false
+    }), {
+      externalSources: [externalSource],
+      requireExplicitTraceability: true,
+      requireExternalKnowledge: true
+    }).summary).toBe(summary);
+
+    const prompt = buildThinReadingAgentPrompt({
+      context: { ...context, depth: 1, externalSources: [externalSource], source: { kind: "omitted_section", label: "消融实验", sectionKey: "ablation" } },
+      prepared
+    });
+    expect(prompt).toContain("正文只陈述来源标题、摘要或页级原文直接支持的学术命题");
+    expect(prompt).toContain("这些定义仅供内部核验，不得照搬进正文");
+    expect(prompt).not.toContain("may only be called a topic-search result");
+    expect(prompt).not.toContain("只能称对应 source 为主题检索命中");
+  });
+
+  test.each([
+    "外部主题检索（arxiv:2507.08038）提供了消融实验规划的相关背景。",
+    "检索结果提示该方向值得继续阅读，但没有直接陈述任何可供学习的学术命题。",
+    "该方向可参考 openalex:W42，后续研究可以据此继续讨论消融实验的组织方式。"
+  ])("rejects retrieval-process narration from thin-reading body: %s", (summary) => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [],
+      externalKnowledge: ["arxiv:2507.08038"],
+      omittedSections: [],
+      paperEvidence: [],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: ["arxiv:2507.08038"],
+        status: "weak",
+        text: summary
+      }],
+      withinPaperClosure: false
+    }), {
+      externalSources: [{
+        abstract: "The study organizes ablation experiments by module.",
+        authors: [],
+        id: "arxiv:2507.08038",
+        provider: "arxiv",
+        relation: "topic_search",
+        relevance: 0.8,
+        retrievalQuery: "ablation planning",
+        sourceRecordUrl: "https://export.arxiv.org/api/query?id_list=2507.08038",
+        sourceId: "2507.08038",
+        title: "Planning Modular Ablation Experiments",
+        url: "https://arxiv.org/abs/2507.08038"
+      }],
+      requireExplicitTraceability: true
+    })).toThrow("泄漏了 external source ID 或检索过程");
+  });
+
   test("rejects a topic-search result that is described as a citation relationship", () => {
     expect(() => parseThinReadingModelSeed(JSON.stringify({
       claims: [],
@@ -1438,7 +1523,7 @@ describe("thinReadingAgent", () => {
         title: "Topic result",
         url: "https://doi.org/10.1000/topic"
       }]
-    })).toThrow("topic_search 只能表述为主题检索命中");
+    })).toThrow("topic_search/related 是内部溯源关系");
   });
 
   test("rejects citation language for a topic result when another retrieved source has a citation edge", () => {
@@ -1470,6 +1555,6 @@ describe("thinReadingAgent", () => {
           sourceRecordUrl: "https://openalex.org/W43", sourceId: "W43", title: "Graph result", url: "https://doi.org/10.1000/graph"
         }
       ]
-    })).toThrow("topic_search 只能表述为主题检索命中");
+    })).toThrow("topic_search/related 是内部溯源关系");
   });
 });

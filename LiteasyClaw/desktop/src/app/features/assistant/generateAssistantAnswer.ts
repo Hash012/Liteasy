@@ -698,7 +698,8 @@ function buildThinReadingRepairPrompt(input: {
     "- 下钻讲解的数字保真：只要失败正文句解释、比较或概括了绑定 evidence 中的量化结果、实验设置或数值配置，必须逐字保留该断言至少一个原文数字及对应单位、百分比、区间、误差或统计限定；不得用“大幅、显著、较高”等词替代数据。公式中的零值、上下界或不等式只在当前句讲解该公式、取值范围或边界条件时保留；仅解释参数或机制作用时不要硬塞公式数字。若同一长 evidence 的另一条无关断言含数字，也不要带入。失败原因会列出缺失数字；回到该句绑定的 evidence 定位对应原文断言后修复。",
     "- 不得把未列入 paperEvidence / externalKnowledge 的 ID 填入句级映射。",
     "- claims.evidenceIds 只允许 paperEvidence 中的论文 evidence ID；任何外部 source ID（openalex:/crossref:/arxiv:）只能写入 summarySentences.externalKnowledge，不能写入 claims.evidenceIds。",
-    "- 对每个 summarySentences 条目逐一检查 externalKnowledge：只有该条目中的全部 source relation 都是 cited_by_target 或 cites_target，才可使用引用、被引用、citation 或 citation relationship。只要包含 topic_search 或 related，就必须拆成独立句，并分别称为主题检索命中或相关线索，不能使用任何 citation 措辞。",
+    "- summary、summarySentences.text 与 claims 只能讲来源直接支持的学术内容，不得出现 openalex:/crossref:/arxiv: source ID、provider、relation、retrievalIntents 或“外部主题检索”“主题检索命中”“外部阅读线索”“检索结果提供/提示”等生成过程；这些信息只保留在结构化证据映射。若失败句是检索元叙事，将它改写为来源标题、摘要或页级原文直接支持的内容命题；若没有有信息量的命题则删除。",
+    "- 对每个 summarySentences 条目逐一检查 externalKnowledge：只有该条目中的全部 source relation 都是 cited_by_target 或 cites_target，才可使用引用、被引用、citation 或 citation relationship。topic_search 或 related 只表示不得声称引用关系，不得在正文复述其 relation 标签或检索状态。",
     ...(targetedRepair ? [
       "本轮属于证据复核后的定向修复，以下约束优先：",
       `- 只允许修改这些失败句及依赖它们的 claims：${targetedRepair.review.unsupportedSentenceIds.join("；")}。`,
