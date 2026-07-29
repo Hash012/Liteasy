@@ -50,7 +50,7 @@ function summarizeRuntimeContext(contextView?: AgentRuntimeContextView) {
   }
 
   const profileLine = contextView.profile.enabled && contextView.profile.academic
-    ? `- 画像：开启（性别 ${contextView.profile.academic.gender}，年龄 ${contextView.profile.academic.age}，学段 ${contextView.profile.academic.stage}）。研究偏好：主题 ${contextView.profile.academic.researchTopics || "未设置"}；方法 ${contextView.profile.academic.researchMethods || "未设置"}；数据集 ${contextView.profile.academic.researchDatasets || "未设置"}；阅读语言 ${contextView.profile.academic.preferredLanguages || "未设置"}。`
+    ? `- 画像：开启（性别 ${contextView.profile.academic.gender}，年龄 ${contextView.profile.academic.age}，学段 ${contextView.profile.academic.stage}）。研究偏好：主题 ${contextView.profile.academic.researchTopics || "未设置"}；方法 ${contextView.profile.academic.researchMethods || "未设置"}；数据集 ${contextView.profile.academic.researchDatasets || "未设置"}；阅读语言 ${contextView.profile.academic.preferredLanguages || "未设置"}；学科 ${(contextView.profile.academic.disciplines ?? []).map((discipline) => discipline.name).join("、") || "未设置"}。${contextView.profile.personalizationSummary ? ` 学术档案与当前关注：${contextView.profile.personalizationSummary}。` : ""}`
     : `- 画像：${contextView.profile.enabled ? "开启" : "关闭"}。`;
 
   return [

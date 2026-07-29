@@ -245,7 +245,7 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "",
         "## 目标",
         "",
-        "从用户长期行为中提取可复用偏好、研究画像、项目事实和经历记忆，并允许用户审查和删除。",
+        "结合用户维护的学术档案与产品内聚合信号，改善推荐和助手回答；不保留可回溯的行为历史或经历记忆。",
         "",
         "## 安全边界",
         "",
@@ -254,7 +254,7 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 必须按 namespace 隔离。"
       ].join("\n"),
       docPath: "project-docs/agent-dev/skills/memory-curate.md",
-      description: "管理用户偏好、画像、项目事实和经历记忆。",
+      description: "基于学术档案和聚合信号改善推荐与助手回答。",
       id: "memory-curate",
       label: "记忆整理",
       risk: "medium",

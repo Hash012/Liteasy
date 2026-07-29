@@ -59,6 +59,7 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     profileReadPaperCount: 0,
     academicProfile: {
       age: "未设置",
+      disciplines: [],
       gender: "未设置",
       preferredLanguages: "",
       researchDatasets: "",
@@ -708,7 +709,7 @@ describe("LeftPane", () => {
       />
     );
     expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "关闭用户画像" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关闭个性化行为信号" })).toBeInTheDocument();
   });
 
   test("hides organization creation for basic members and keeps join available", () => {
@@ -934,15 +935,16 @@ describe("LeftPane", () => {
     await user.selectOptions(within(personalCenter).getByLabelText("性别"), "女");
     await user.clear(within(personalCenter).getByLabelText("年龄"));
     await user.type(within(personalCenter).getByLabelText("年龄"), "28");
-    await user.selectOptions(within(personalCenter).getByLabelText("学段"), "博士研究生");
+    await user.selectOptions(within(personalCenter).getByLabelText("研究阶段"), "博士研究生");
     await user.type(within(personalCenter).getByLabelText("研究主题"), "神经检索, 向量数据库");
     await user.type(within(personalCenter).getByLabelText("常用方法"), "混合检索");
     await user.type(within(personalCenter).getByLabelText("关注数据集"), "BEIR");
     await user.type(within(personalCenter).getByLabelText("阅读语言"), "中文, English");
-    await user.click(within(personalCenter).getByRole("button", { name: "保存画像配置" }));
+    await user.click(within(personalCenter).getByRole("button", { name: "保存学术档案" }));
 
     expect(onUpdateAcademicProfile).toHaveBeenCalledWith({
       age: "28",
+      disciplines: [],
       gender: "女",
       preferredLanguages: "中文、English",
       researchDatasets: "BEIR",

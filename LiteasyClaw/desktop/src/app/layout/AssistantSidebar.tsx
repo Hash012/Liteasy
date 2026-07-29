@@ -38,7 +38,9 @@ type AssistantSidebarProps = {
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;
+  profilePersonalizationSummary?: string;
   profileUnlocked?: boolean;
+  registrationWelcomeMessage?: { content: string; id: number };
   readerConversationContext?: ReaderConversationContext | null;
   regionId?: Exclude<DockRegionId, "main">;
   runtimeOrganizationName?: string;
@@ -72,7 +74,9 @@ export function AssistantSidebar({
   onOpenOrganizationSharedLibrary,
   onActiveSessionChange,
   onSettingsChanged,
+  profilePersonalizationSummary,
   profileUnlocked = false,
+  registrationWelcomeMessage,
   readerConversationContext = null,
   regionId = "right",
   runtimeOrganizationName,
@@ -111,7 +115,9 @@ export function AssistantSidebar({
           onOpenOrganizationSharedLibrary={onOpenOrganizationSharedLibrary}
           onActiveSessionChange={onActiveSessionChange}
           onSettingsChanged={onSettingsChanged}
+          profilePersonalizationSummary={profilePersonalizationSummary}
           profileUnlocked={profileUnlocked}
+          registrationWelcomeMessage={registrationWelcomeMessage}
           readerConversationContext={readerConversationContext}
           runtimeOrganizationName={runtimeOrganizationName}
           runtimeWorkspace={runtimeWorkspace}

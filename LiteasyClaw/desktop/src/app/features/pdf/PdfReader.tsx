@@ -946,7 +946,7 @@ export function PdfReader({
     return () => observer.disconnect();
   }, []);
 
-  
+
   useEffect(() => {
     setAnnotations(loadPdfAnnotations(
       annotationStorageKey,

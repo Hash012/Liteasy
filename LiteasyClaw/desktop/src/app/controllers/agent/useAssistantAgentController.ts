@@ -44,6 +44,7 @@ export type AssistantAgentControllerInput = {
   onOpenAcademicArchive?: ActionContext["openAcademicArchive"];
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onSettingsChanged?: (settings: SettingsState) => void;
+  profilePersonalizationSummary?: string;
   profileUnlocked: boolean;
   runtimeOrganizationName?: string;
   runtimeWorkspace?: Partial<WorkspaceSource>;
@@ -78,6 +79,7 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
           importedCount: current.importedSelectedCount,
           organizationName: current.runtimeOrganizationName,
           profileEnabled: Boolean(current.settingsStore.getState()["profile.enabled"]),
+          profilePersonalizationSummary: current.profilePersonalizationSummary,
           profileUnlocked: current.profileUnlocked,
           selectedCount: current.selectedPaperCount,
           selectionLocked: current.selectionLocked,

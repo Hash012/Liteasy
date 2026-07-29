@@ -88,6 +88,7 @@ export type AgentRuntimeContextView = {
   profile: {
     academic?: AcademicProfile;
     enabled: boolean;
+    personalizationSummary?: string;
     requiresConfirmation: boolean;
   };
   selection: {

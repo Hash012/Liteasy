@@ -60,6 +60,7 @@ type UseRecommendationsInput = {
   recommendationCacheTransport?: RecommendationCacheTransport;
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
+  personalizationVersion?: number;
   researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
   workspaceRevision: number;
@@ -111,6 +112,7 @@ export function useRecommendations({
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
+  personalizationVersion = 0,
   researchProfile,
   selectedPapers,
   workspaceRevision,
@@ -119,7 +121,8 @@ export function useRecommendations({
   const suppressNextCachedMessageRef = useRef(false);
   const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile);
   const currentScope = accountSession
-    ? {
+      ? {
+        personalizationVersion,
         selectionKey,
         sessionId: accountSession.sessionId,
         sortMode: recommendationSortMode,
@@ -322,6 +325,7 @@ export function useRecommendations({
     recommendationTransport,
     recommendationsEnabled,
     recommendationSortMode,
+    personalizationVersion,
     selectionKey,
     workspaceSourceKey
   ]);

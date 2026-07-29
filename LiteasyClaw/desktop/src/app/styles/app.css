@@ -3648,6 +3648,61 @@ body {
   gap: 10px;
 }
 
+.personal-profile-fieldset,
+.discipline-selection-list {
+  display: grid;
+  gap: 10px;
+}
+
+.personal-profile-fieldset {
+  border: 1px solid #d8e4ee;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.personal-profile-field-label {
+  color: #294f70;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.personal-profile-inline-controls {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.discipline-option-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.discipline-option {
+  align-items: flex-start;
+  border: 1px solid #dbe6ef;
+  border-radius: 6px;
+  color: #40576d;
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  line-height: 1.45;
+  padding: 7px 8px;
+}
+
+.discipline-option:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.discipline-option input {
+  accent-color: #3c769d;
+  margin-top: 2px;
+}
+
 .personal-profile-field {
   color: #40576d;
   display: flex;

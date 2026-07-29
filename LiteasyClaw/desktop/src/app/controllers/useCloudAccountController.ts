@@ -15,6 +15,7 @@ type UseCloudAccountControllerInput = {
   applyLocalDevCloudDefaults: () => void;
   getSettings: () => SettingsState;
   isOnline: boolean;
+  onRegistered?: () => void;
 };
 
 type CloudAccountModel = {
@@ -39,7 +40,8 @@ export function useCloudAccountController({
   accountTransport,
   applyLocalDevCloudDefaults,
   getSettings,
-  isOnline
+  isOnline,
+  onRegistered
 }: UseCloudAccountControllerInput): {
   actions: CloudAccountActions;
   model: CloudAccountModel;
@@ -101,6 +103,7 @@ export function useCloudAccountController({
     if (session) {
       setLoginDialogDismissedThisSession(true);
       setLoginDialogOpen(false);
+      onRegistered?.();
     }
   }
 

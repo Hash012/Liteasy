@@ -4,7 +4,7 @@ import { splitResearchProfileValues } from "./profile.types";
 
 type UseAcademicProfileDraftInput = {
   academicProfile: AcademicProfile;
-  onSave: (profile: AcademicProfile) => void;
+  onSave: (profile: AcademicProfile) => void | Promise<void>;
 };
 
 export function normalizeAcademicProfileDraft(profile: AcademicProfile): AcademicProfile {
@@ -12,6 +12,10 @@ export function normalizeAcademicProfileDraft(profile: AcademicProfile): Academi
     splitResearchProfileValues(value, limit).join("、");
   return {
     age: profile.age.trim() || "未设置",
+    disciplines: (profile.disciplines ?? []).map((discipline) => ({
+      ...discipline,
+      description: discipline.description.trim()
+    })),
     gender: profile.gender,
     preferredLanguages: normalizeResearchField(profile.preferredLanguages, 6),
     researchDatasets: normalizeResearchField(profile.researchDatasets),
@@ -26,18 +30,24 @@ export function getVisibleAcademicProfileAge(profile: AcademicProfile) {
 }
 
 export function useAcademicProfileDraft({ academicProfile, onSave }: UseAcademicProfileDraftInput) {
-  const [draftProfile, setDraftProfile] = useState<AcademicProfile>(academicProfile);
+  const [draftProfile, setDraftProfile] = useState<AcademicProfile>(() => ({
+    ...academicProfile,
+    disciplines: academicProfile.disciplines ?? []
+  }));
 
   useEffect(() => {
-    setDraftProfile(academicProfile);
+    setDraftProfile({
+      ...academicProfile,
+      disciplines: academicProfile.disciplines ?? []
+    });
   }, [academicProfile]);
 
-  function updateDraftProfile(field: keyof AcademicProfile, value: string) {
+  function updateDraftProfile<K extends keyof AcademicProfile>(field: K, value: AcademicProfile[K]) {
     setDraftProfile((currentProfile) => ({ ...currentProfile, [field]: value }));
   }
 
   function saveAcademicProfile() {
-    onSave(normalizeAcademicProfileDraft(draftProfile));
+    return onSave(normalizeAcademicProfileDraft(draftProfile));
   }
 
   return {

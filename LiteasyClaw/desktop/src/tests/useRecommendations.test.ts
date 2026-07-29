@@ -77,6 +77,7 @@ describe("useRecommendations", () => {
         },
         recommendationsEnabled: true,
         recommendationSortMode: "relevance",
+        personalizationVersion: 7,
         selectedPapers,
         workspaceRevision: 0,
         workspaceSourceKey: "local:/tmp/LiteasyLibrary"
@@ -90,6 +91,7 @@ describe("useRecommendations", () => {
     expect(cacheGet).toHaveBeenCalledTimes(1);
     expect(recommendationFetch).not.toHaveBeenCalled();
     expect(cachePut).not.toHaveBeenCalled();
+    expect(cacheGet.mock.calls[0][0].personalizationVersion).toBe(7);
     expect(result.current.recommendationMessage).toBe("已显示当前选中文献集的缓存推荐。");
   });
 

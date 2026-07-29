@@ -3,11 +3,41 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import { AppShell } from "../app/layout/AppShell";
 import { dockItemMimeType } from "../app/features/dock/DockRegion";
+import type {
+  AcademicProfileSnapshot,
+  AcademicProfileTransport
+} from "../app/features/profile/academicProfileClient";
 
 afterEach(() => {
   window.localStorage.clear();
   vi.unstubAllGlobals();
 });
+
+function createAcademicProfileTransport(): AcademicProfileTransport {
+  let profile: AcademicProfileSnapshot["profile"] = {
+    disciplines: [],
+    profileVersion: 0,
+    stage: "未设置"
+  };
+  let personalizationVersion = 0;
+  return async ({ body, url }) => {
+    const payload = JSON.parse(body) as {
+      profile?: Pick<AcademicProfileSnapshot["profile"], "disciplines" | "stage">;
+    };
+    if (url.endsWith("/v1/profile/save") && payload.profile) {
+      profile = { ...payload.profile, profileVersion: profile.profileVersion + 1 };
+      personalizationVersion += 1;
+    } else if (url.endsWith("/v1/profile/clear")) {
+      profile = { disciplines: [], profileVersion: 0, stage: "未设置" };
+      personalizationVersion += 1;
+    }
+    return {
+      json: async () => ({ personalizationVersion, profile }),
+      ok: true,
+      status: 200
+    };
+  };
+}
 
 async function openSettingsPanel(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: "设置" }));
@@ -5873,7 +5903,7 @@ test("keeps assistant profile commands behind runtime confirmation before person
   const leftPane = await openProfilePanel(user);
 
   expect(within(leftPane).getByText("性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
-  expect(within(leftPane).getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
+  expect(within(leftPane).getByRole("button", { name: "开启个性化行为信号" })).toBeInTheDocument();
 });
 
 test("opens the personal center in the left rail and toggles user profile sampling", async () => {
@@ -5973,13 +6003,13 @@ test("opens the personal center in the left rail and toggles user profile sampli
   expect(within(leftPane).getByText("Liteasy Researcher")).toBeInTheDocument();
   expect(within(leftPane).getByText("Liteasy AI Reading Lab")).toBeInTheDocument();
   expect(within(leftPane).getByText("性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
-  expect(within(leftPane).queryByText("已阅读 3 篇")).not.toBeInTheDocument();
+  expect(within(leftPane).getByText("已阅读 3 篇")).toBeInTheDocument();
 
-  await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
+  await user.click(within(leftPane).getByRole("button", { name: "开启个性化行为信号" }));
 
   expect(within(leftPane).getByText("已阅读 3 篇")).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "学术档案" })).toBeInTheDocument();
-  expect(within(leftPane).getByRole("button", { name: "清空用户画像" })).toBeInTheDocument();
+  expect(within(leftPane).getByRole("button", { name: "清空学术档案和个性化数据" })).toBeInTheDocument();
 }, 10000);
 
 
@@ -5988,6 +6018,7 @@ test("updates academic profile configuration from the personal center and archiv
 
   render(
     <AppShell
+      academicProfileTransport={createAcademicProfileTransport()}
       accountTransport={async () => ({
         json: async () => ({
           session: {
@@ -6011,17 +6042,17 @@ test("updates academic profile configuration from the personal center and archiv
   await user.selectOptions(within(leftPane).getByLabelText("性别"), "女");
   await user.clear(within(leftPane).getByLabelText("年龄"));
   await user.type(within(leftPane).getByLabelText("年龄"), "28");
-  await user.selectOptions(within(leftPane).getByLabelText("学段"), "博士研究生");
-  await user.click(within(leftPane).getByRole("button", { name: "保存画像配置" }));
+  await user.selectOptions(within(leftPane).getByLabelText("研究阶段"), "博士研究生");
+  await user.click(within(leftPane).getByRole("button", { name: "保存学术档案" }));
 
   expect(within(leftPane).getByText("性别 女 · 年龄 28 · 学段 博士研究生")).toBeInTheDocument();
-  expect(within(leftPane).getByText("画像配置已更新。")).toBeInTheDocument();
+  expect(await within(leftPane).findByText("学术档案已保存并同步。")).toBeInTheDocument();
 
-  await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
+  await user.click(within(leftPane).getByRole("button", { name: "开启个性化行为信号" }));
   await user.click(within(leftPane).getByRole("button", { name: "学术档案" }));
 
   const archiveDialog = screen.getByRole("dialog", { name: "学术档案页面" });
-  expect(within(archiveDialog).getByText("身份配置：性别 女 · 年龄 28 · 学段 博士研究生")).toBeInTheDocument();
+  expect(within(archiveDialog).getByText("画像摘要：性别 女 · 年龄 28 · 学段 博士研究生")).toBeInTheDocument();
 }, 10000);
 
 test("opens the academic archive page from the personal center", async () => {
@@ -6118,16 +6149,15 @@ test("opens the academic archive page from the personal center", async () => {
   });
 
   const leftPane = await openProfilePanel(user);
-  await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
+  await user.click(within(leftPane).getByRole("button", { name: "开启个性化行为信号" }));
   await user.click(within(leftPane).getByRole("button", { name: "学术档案" }));
 
   const archiveDialog = screen.getByRole("dialog", { name: "学术档案页面" });
   expect(within(archiveDialog).getByText("学术档案" )).toBeInTheDocument();
   expect(within(archiveDialog).getByText("档案所有者：Liteasy Researcher" )).toBeInTheDocument();
-  expect(within(archiveDialog).getByText("身份配置：性别 未设置 · 年龄 未设置 · 学段 未设置" )).toBeInTheDocument();
-  expect(within(archiveDialog).getByText("阅读统计：已阅读 3 篇论文" )).toBeInTheDocument();
-  expect(within(archiveDialog).getByText("学术人格分析：跨学科综述型" )).toBeInTheDocument();
-  expect(within(archiveDialog).getByText("授权状态：微信/飞书/本地文件 未授权" )).toBeInTheDocument();
+  expect(within(archiveDialog).getByText("画像摘要：性别 未设置 · 年龄 未设置 · 学段 未设置" )).toBeInTheDocument();
+  expect(within(archiveDialog).getByText("研究学科：未设置" )).toBeInTheDocument();
+  expect(within(archiveDialog).getByRole("button", { name: "导出学术档案" })).toBeInTheDocument();
 }, 10000);
 
 test("requires confirmation before clearing the user profile", async () => {
@@ -6135,6 +6165,7 @@ test("requires confirmation before clearing the user profile", async () => {
 
   render(
     <AppShell
+      academicProfileTransport={createAcademicProfileTransport()}
       accountTransport={async () => ({
         json: async () => ({
           session: {
@@ -6227,26 +6258,26 @@ test("requires confirmation before clearing the user profile", async () => {
   await user.selectOptions(within(leftPane).getByLabelText("性别"), "女");
   await user.clear(within(leftPane).getByLabelText("年龄"));
   await user.type(within(leftPane).getByLabelText("年龄"), "28");
-  await user.selectOptions(within(leftPane).getByLabelText("学段"), "博士研究生");
-  await user.click(within(leftPane).getByRole("button", { name: "保存画像配置" }));
+  await user.selectOptions(within(leftPane).getByLabelText("研究阶段"), "博士研究生");
+  await user.click(within(leftPane).getByRole("button", { name: "保存学术档案" }));
   expect(within(leftPane).getByText("性别 女 · 年龄 28 · 学段 博士研究生")).toBeInTheDocument();
 
-  await user.click(within(leftPane).getByRole("button", { name: "开启用户画像" }));
-  await user.click(within(leftPane).getByRole("button", { name: "清空用户画像" }));
+  await user.click(within(leftPane).getByRole("button", { name: "开启个性化行为信号" }));
+  await user.click(within(leftPane).getByRole("button", { name: "清空学术档案和个性化数据" }));
 
-  const clearDialog = screen.getByRole("dialog", { name: "清空用户画像确认" });
-  expect(within(clearDialog).getByText("清空用户画像确认" )).toBeInTheDocument();
-  expect(within(clearDialog).getByText("将清空性别、年龄、学段、阅读统计和学术人格缓存；昵称、用户 ID 和头像会保留。" )).toBeInTheDocument();
+  const clearDialog = screen.getByRole("dialog", { name: "清空学术档案确认" });
+  expect(within(clearDialog).getByText("清空学术档案确认" )).toBeInTheDocument();
+  expect(within(clearDialog).getByText("将清空学术档案、行为聚合、推荐反馈和历史推荐缓存；昵称、用户 ID 和头像会保留。" )).toBeInTheDocument();
 
-  await user.click(within(clearDialog).getByRole("button", { name: "确认清空用户画像" }));
+  await user.click(within(clearDialog).getByRole("button", { name: "确认清空学术档案" }));
 
-  expect(screen.queryByRole("dialog", { name: "清空用户画像确认" })).not.toBeInTheDocument();
-  expect(within(leftPane).getByRole("button", { name: "开启用户画像" })).toBeInTheDocument();
+  expect(screen.queryByRole("dialog", { name: "清空学术档案确认" })).not.toBeInTheDocument();
+  expect(within(leftPane).getByRole("button", { name: "开启个性化行为信号" })).toBeInTheDocument();
   expect(within(leftPane).getByText("性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
   expect(within(leftPane).getByLabelText("性别")).toHaveValue("未设置");
   expect(within(leftPane).getByLabelText("年龄")).toHaveValue("");
-  expect(within(leftPane).getByLabelText("学段")).toHaveValue("未设置");
-  expect(within(leftPane).getByText("用户画像已清空，基础身份信息已保留。" )).toBeInTheDocument();
+  expect(within(leftPane).getByLabelText("研究阶段")).toHaveValue("未设置");
+  expect(within(leftPane).getByText("已清空学术档案和个性化数据。" )).toBeInTheDocument();
 }, 10000);
 
 test("keeps workspace dialogs inside the workbench after removing the top account bar", async () => {

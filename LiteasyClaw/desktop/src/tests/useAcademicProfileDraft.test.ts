@@ -25,6 +25,7 @@ test("normalizes and saves editable academic profile drafts", () => {
 
   expect(onSave).toHaveBeenCalledWith({
     age: "28",
+    disciplines: [],
     gender: "女",
     preferredLanguages: "中文、English",
     researchDatasets: "MS MARCO、BEIR",

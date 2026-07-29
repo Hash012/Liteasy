@@ -68,23 +68,22 @@ describe("PolicyEngine", () => {
     });
   });
 
-  test("requires confirmation from registered policy metadata and payload overrides", () => {
+  test("requires confirmation for registered high-risk actions", () => {
     expect(
       evaluateSemanticPlanPolicy(
         createPlan({
           actions: [
             {
-              actionId: "settings.update",
+              actionId: "workspace.delete_documents",
               input: {
-                target: "profile.enabled",
-                value: true
+                scope: "selected_document_set"
               }
             }
           ],
-          intentId: "settings.update",
+          intentId: "workspace.delete_documents",
           requiresConfirmation: false,
           riskLevel: "low",
-          summary: "开启用户画像"
+          summary: "删除当前选中文献"
         }),
         {
           contextView: readyContextView,
@@ -93,15 +92,14 @@ describe("PolicyEngine", () => {
       )
     ).toEqual({
       action: {
-        actionId: "settings.update",
+        actionId: "workspace.delete_documents",
         input: {
-          target: "profile.enabled",
-          value: true
+          scope: "selected_document_set"
         }
       },
       kind: "confirm",
-      riskLevel: "medium",
-      summary: "用户画像会影响个性化采样与后续回答策略，请确认后再开启。"
+      riskLevel: "high",
+      summary: "请确认后再执行：删除当前选中文献"
     });
   });
 

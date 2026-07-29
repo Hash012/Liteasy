@@ -1,19 +1,74 @@
-import type { AcademicProfile } from "./profile.types";
+import { useMemo, useState } from "react";
+import disciplineCatalog from "../../../../../shared/disciplineCatalog.json";
+import type { AcademicDiscipline, AcademicProfile, DisciplineCatalogItem } from "./profile.types";
 import { useAcademicProfileDraft } from "./useAcademicProfileDraft";
 
 type AcademicProfileFormProps = {
   academicProfile: AcademicProfile;
-  onSave: (profile: AcademicProfile) => void;
+  onSave: (profile: AcademicProfile) => void | Promise<void>;
 };
 
 export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfileFormProps) {
-  const { draftProfile, saveAcademicProfile, updateDraftProfile, visibleAge } = useAcademicProfileDraft({
+  const { draftProfile, saveAcademicProfile, updateDraftProfile } = useAcademicProfileDraft({
     academicProfile,
     onSave
   });
+  const [categoryCode, setCategoryCode] = useState("");
+  const [query, setQuery] = useState("");
+  const categories = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          disciplineCatalog.items.map((item) => [item.categoryCode, item.categoryName])
+        ).entries()
+      ),
+    []
+  );
+  const normalizedQuery = query.trim().toLowerCase();
+  const matchingDisciplines = useMemo(
+    () =>
+      disciplineCatalog.items.filter((discipline) => {
+        if (categoryCode && discipline.categoryCode !== categoryCode) {
+          return false;
+        }
+        if (!normalizedQuery) {
+          return true;
+        }
+        return `${discipline.categoryName} ${discipline.name} ${discipline.code}`
+          .toLowerCase()
+          .includes(normalizedQuery);
+      }),
+    [categoryCode, normalizedQuery]
+  );
+
+  function disciplineText(discipline: DisciplineCatalogItem | AcademicDiscipline) {
+    return `${discipline.categoryName} · ${discipline.name}（${discipline.code}）`;
+  }
+
+  function toggleDiscipline(discipline: DisciplineCatalogItem) {
+    const selected = draftProfile.disciplines.some((item) => item.code === discipline.code);
+    if (!selected && draftProfile.disciplines.length >= 12) {
+      return;
+    }
+    updateDraftProfile(
+      "disciplines",
+      selected
+        ? draftProfile.disciplines.filter((item) => item.code !== discipline.code)
+        : [...draftProfile.disciplines, { ...discipline, description: "" }]
+    );
+  }
+
+  function updateDescription(code: string, description: string) {
+    updateDraftProfile(
+      "disciplines",
+      draftProfile.disciplines.map((discipline) =>
+        discipline.code === code ? { ...discipline, description } : discipline
+      )
+    );
+  }
 
   return (
-    <div className="personal-profile-form" aria-label="画像配置表单">
+    <div className="personal-profile-form" aria-label="学术档案编辑表单">
       <label className="personal-profile-field">
         性别
         <select
@@ -34,11 +89,70 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
           inputMode="numeric"
           onChange={(event) => updateDraftProfile("age", event.target.value)}
           placeholder="未设置"
-          value={visibleAge}
+          value={draftProfile.age === "未设置" ? "" : draftProfile.age}
         />
       </label>
+      <div className="personal-profile-fieldset">
+        <div className="personal-profile-field-label">研究学科（最多 12 个）</div>
+        <div className="personal-profile-inline-controls">
+          <label className="personal-profile-field">
+            学科门类
+            <select
+              className="personal-profile-control"
+              onChange={(event) => setCategoryCode(event.target.value)}
+              value={categoryCode}
+            >
+              <option value="">全部门类</option>
+              {categories.map(([code, name]) => (
+                <option key={code} value={code}>{`${code} · ${name}`}</option>
+              ))}
+            </select>
+          </label>
+          <label className="personal-profile-field">
+            搜索二级学科
+            <input
+              className="personal-profile-control"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="名称或代码，例如 0812"
+              value={query}
+            />
+          </label>
+        </div>
+        <div aria-label="国家学科目录" className="discipline-option-list">
+          {matchingDisciplines.map((discipline) => {
+            const checked = draftProfile.disciplines.some((item) => item.code === discipline.code);
+            return (
+              <label className="discipline-option" key={discipline.code}>
+                <input
+                  checked={checked}
+                  disabled={!checked && draftProfile.disciplines.length >= 12}
+                  onChange={() => toggleDiscipline(discipline)}
+                  type="checkbox"
+                />
+                <span>{disciplineText(discipline)}</span>
+              </label>
+            );
+          })}
+        </div>
+        {draftProfile.disciplines.length > 0 ? (
+          <div aria-label="已选研究学科" className="discipline-selection-list">
+            {draftProfile.disciplines.map((discipline) => (
+              <label className="personal-profile-field" key={discipline.code}>
+                {disciplineText(discipline)} 的补充说明（可选）
+                <input
+                  className="personal-profile-control"
+                  maxLength={240}
+                  onChange={(event) => updateDescription(discipline.code, event.target.value)}
+                  placeholder="例如：自然语言处理与信息检索"
+                  value={discipline.description}
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
+      </div>
       <label className="personal-profile-field">
-        学段
+        研究阶段
         <select
           className="personal-profile-control"
           onChange={(event) => updateDraftProfile("stage", event.target.value)}
@@ -91,7 +205,7 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
         />
       </label>
       <button className="left-rail-button" onClick={saveAcademicProfile} type="button">
-        保存画像配置
+        保存学术档案
       </button>
     </div>
   );
