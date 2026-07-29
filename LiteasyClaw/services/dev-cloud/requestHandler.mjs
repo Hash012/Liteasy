@@ -879,16 +879,17 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
       const openAlexApiKey = openAlexApiKeyFromRequest(request);
       const crossrefEnabled = customConfig.crossrefEnabled !== false;
-      const arxivEnabled = customConfig.arxivEnabled === true;
+      const configuredArxivEnabled = customConfig.arxivEnabled === true;
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      const arxivEnabled = configuredArxivEnabled && body.includeArxiv !== false;
       if (!openAlexApiKey && !crossrefEnabled && !arxivEnabled) {
         writeJson(request, response, 503, {
           error: "openalex_api_key_required",
           message: "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。"
         });
-        return;
-      }
-      const body = await readJsonOrWriteError(request, response);
-      if (body === null) {
         return;
       }
       let retrievalRun;

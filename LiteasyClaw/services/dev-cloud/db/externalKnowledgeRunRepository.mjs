@@ -24,6 +24,7 @@ function normalizeIdentity(value) {
 
 function requestKey(input) {
   const canonical = JSON.stringify({
+    includeArxiv: input.includeArxiv !== false,
     query: normalizeText(input.query),
     targetPaperIdentity: normalizeIdentity(input.targetPaperIdentity),
     targetPaperTitle: normalizeText(input.targetPaperTitle)

@@ -8,7 +8,7 @@ import {
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
-test("prioritizes verified citation edges over unselected topic-search sources for generation", () => {
+test("prioritizes verified citation edges while retaining bounded topic-search context", () => {
   const sources = [
     {
       abstract: "A graph-linked paper.", authors: [], id: "openalex:W1", provider: "openalex" as const,
@@ -16,7 +16,7 @@ test("prioritizes verified citation edges over unselected topic-search sources f
       sourceRecordUrl: "https://openalex.org/W1", title: "Graph source", url: "https://openalex.org/W1"
     },
     {
-      abstract: "A topic result.", authors: [], id: "openalex:W2", provider: "openalex" as const,
+      abstract: "A traceable topic result with reviewable source content.", authors: [], id: "openalex:W2", provider: "openalex" as const,
       relation: "topic_search" as const, relevance: 0.7, retrievalQuery: "BERT", sourceId: "W2",
       sourceRecordUrl: "https://openalex.org/W2", title: "Topic source", url: "https://openalex.org/W2"
     }
@@ -31,7 +31,8 @@ test("prioritizes verified citation edges over unselected topic-search sources f
   };
 
   expect(prioritizeThinReadingGenerationSources({ context, sources }).map((source) => source.id)).toEqual([
-    "openalex:W1"
+    "openalex:W1",
+    "openalex:W2"
   ]);
   expect(prioritizeThinReadingGenerationSources({
     context: {
@@ -775,7 +776,7 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
       status: 200
     }),
     importedChunksByPaperId: {
-      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
         page: index + 1,
         paperId: "demo-1",
         paperTitle: "Planning Paper",
@@ -906,7 +907,7 @@ test("retries a cross-layer evidence ID with the current planning allowlist", as
       status: 200
     }),
     importedChunksByPaperId: {
-      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
         page: index + 1,
         paperId: "demo-1",
         paperTitle: "Branch Planning Paper",
@@ -1039,7 +1040,7 @@ test("executes a bounded second evidence-tool round after observing a concrete g
     artifactType: "thin_reading",
     auditTransport: async () => ({ json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }), ok: true, status: 200 }),
     importedChunksByPaperId: {
-      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
         page: index + 1,
         paperId: "demo-1",
         paperTitle: "Tool Loop Paper",
@@ -1574,6 +1575,7 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     }
   });
   expect(externalBodies.slice(1).map((body) => body.limit)).toEqual([12, 12]);
+  expect(externalBodies.map((body) => body.includeArxiv)).toEqual([true, false, false]);
   expect(externalBodies.map((body) => body.query)).toEqual(expect.arrayContaining([
     expect.stringContaining("conflicting results"),
     expect.stringContaining("follow-up research")

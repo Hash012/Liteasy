@@ -73,8 +73,30 @@ describe("thinReadingExternalKnowledgeClient", () => {
       url: "https://liteasy.example.com/v1/research/external-knowledge"
     }));
     expect(String(transport.mock.calls[0][0].body)).toContain('"targetPaperIdentity":{"kind":"doi","value":"10.1000/colbert"}');
-    expect(JSON.parse(String(transport.mock.calls[0][0].body)).limit).toBe(32);
+    expect(JSON.parse(String(transport.mock.calls[0][0].body))).toMatchObject({
+      includeArxiv: true,
+      limit: 32
+    });
     expect(String(transport.mock.calls[0][0].body)).not.toContain("user-openalex-key");
+  });
+
+  test("skips rate-limited arXiv fan-out for secondary retrieval intents", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async (request) => {
+        requests.push(JSON.parse(request.body));
+        return { json: async () => ({ sources: [] }), ok: true, status: 200 };
+      }
+    });
+
+    await client({ artifactId: "artifact-intents", intent: "challenge", query: "failure cases" });
+    await client({ artifactId: "artifact-intents", intent: "context", query: "follow-up work" });
+
+    expect(requests).toEqual([
+      expect.objectContaining({ includeArxiv: false, query: "failure cases" }),
+      expect.objectContaining({ includeArxiv: false, query: "follow-up work" })
+    ]);
   });
 
   test("rejects malformed configured API keys before sending a retrieval request", async () => {

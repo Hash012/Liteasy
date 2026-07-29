@@ -203,6 +203,37 @@ test("uses traceable arXiv topic results for thin-reading external knowledge", a
   assert.equal(response.json.sources[0].sourceRecordUrl, "https://arxiv.org/abs/2401.01234");
 });
 
+test("allows secondary thin-reading retrievals to opt out of the rate-limited arXiv route", async () => {
+  let arxivCalls = 0;
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "thin-reading-secondary-no-arxiv",
+      includeArxiv: false,
+      query: "replication limitations"
+    }),
+    handler: createDevCloudRequestHandler({
+      arxivEnabled: true,
+      arxivTransport: async () => {
+        arxivCalls += 1;
+        throw new Error("arXiv should be skipped for secondary intent");
+      },
+      crossrefEnabled: false,
+      openAlexTransport: async () => ({
+        json: async () => ({ results: [] }),
+        ok: true,
+        status: 200
+      })
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(response.json.status, "empty");
+  assert.equal(arxivCalls, 0);
+});
+
 test("returns only a validated external PDF with content-addressed provenance", async () => {
   const response = await invokeHandler({
     body: JSON.stringify({

@@ -118,6 +118,7 @@ export function createThinReadingExternalKnowledgeClient(input: {
     const response = await (input.transport ?? defaultTransport)({
       body: JSON.stringify({
         artifactId: search.artifactId,
+        includeArxiv: (search.intent ?? "support") === "support",
         limit: search.limit ?? thinReadingExternalCandidateLimit,
         query: search.query,
         targetPaperIdentity: search.targetPaperIdentity,
