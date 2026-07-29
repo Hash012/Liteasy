@@ -1012,8 +1012,8 @@ export async function generateAssistantAnswer({
     if (preparedAnalysis.evidence.length === 0) {
       const paperTitles = analysisInputPapers.map((paper) => paper.title || paper.id);
       throw new Error(
-        `薄读已停止：未能从《${paperTitles.join("》、《")}》提取可引用文本。` +
-        "请确认 PDF 不是扫描件或受保护文件，并在导入完成后重试。"
+        `薄读已停止：《${paperTitles.join("》、《")}》没有可用的本地文本索引。` +
+        "请重新导入来源 PDF，等待文本解析完成后重试。"
       );
     }
     let context = completeThinReadingContext({

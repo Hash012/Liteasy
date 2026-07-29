@@ -39,6 +39,7 @@ type UseArtifactWorkflowControllerInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getIntuechoEndpoint?: () => string;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -47,6 +48,7 @@ type UseArtifactWorkflowControllerInput = {
     model?: string;
     provider?: string;
   };
+  getPaperById?: (paperId: string) => Paper | undefined;
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
   onAnalysisHint: (message: string) => void;
@@ -105,10 +107,12 @@ export function useArtifactWorkflowController({
   confirmDuplicateGeneration,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getImportedChunksForPaperId,
   getIntuechoEndpoint,
   getAssistantLanguage,
   getActiveReaderPaper,
   getModelDiagnosticContext,
+  getPaperById,
   getSelectedDocumentSet,
   getSelectedPapers,
   onAnalysisHint,
@@ -159,10 +163,12 @@ export function useArtifactWorkflowController({
     confirmDuplicateGeneration,
     cancelAgentRun,
     getImportedChunksByPaperId,
+    getImportedChunksForPaperId,
     getIntuechoEndpoint,
     getAssistantLanguage,
     getActiveReaderPaper,
     getModelDiagnosticContext,
+    getPaperById,
     getSelectedDocumentSet,
     getSelectedPapers,
     onAnalysisHint,

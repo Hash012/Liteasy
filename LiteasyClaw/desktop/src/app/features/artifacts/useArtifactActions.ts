@@ -93,6 +93,7 @@ type UseArtifactActionsInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getIntuechoEndpoint?: () => string;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -101,6 +102,7 @@ type UseArtifactActionsInput = {
     model?: string;
     provider?: string;
   };
+  getPaperById?: (paperId: string) => Paper | undefined;
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
   onAnalysisHint: (message: string) => void;
@@ -156,6 +158,16 @@ function createArtifactId(taskId: string) {
 
 function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
   const normalized = message.toLowerCase();
+  if (
+    normalized.includes("文本索引") ||
+    normalized.includes("重新导入来源 pdf") ||
+    failedStage === "thin_reading_parsing_document"
+  ) {
+    return [
+      "确认来源 PDF 仍位于当前本地文献库中，然后重新执行导入。",
+      "若 PDF 没有文字层，请检查 OCR 语言设置并查看导入阶段返回的具体页码错误。"
+    ];
+  }
   if (normalized.includes("401") || normalized.includes("unauthorized") || normalized.includes("api key")) {
     return [
       "确认 project-docs/test-api.md 中的 API key 已同步到 dev-cloud/.env.local。",
@@ -401,10 +413,12 @@ export function useArtifactActions({
   confirmDuplicateGeneration = confirmDuplicateGenerationInBrowser,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getImportedChunksForPaperId,
   getIntuechoEndpoint,
   getAssistantLanguage,
   getActiveReaderPaper,
   getModelDiagnosticContext,
+  getPaperById,
   getSelectedDocumentSet,
   getSelectedPapers,
   onAnalysisHint,
@@ -418,6 +432,55 @@ export function useArtifactActions({
     onArtifactTasksChanged(artifactStore.getTasks().map((task) => ({ ...task })));
     onArtifactCatalogChanged(artifactStore.getCatalog());
     onArtifactTabsChanged([...artifactStore.getOpenTabs()]);
+  }
+
+  function importedChunksForPaper(paperId: string) {
+    return getImportedChunksForPaperId?.(paperId) ??
+      getImportedChunksByPaperId()[paperId] ??
+      [];
+  }
+
+  async function ensureThinReadingPaperImported(paper: Paper) {
+    if (importedChunksForPaper(paper.id).length > 0) {
+      return;
+    }
+    if (!paper.sourcePath) {
+      throw new Error(
+        `《${paper.title}》缺少本地 PDF 路径，无法重新建立薄读文本索引。请在文献库中重新导入该 PDF。`
+      );
+    }
+
+    onAnalysisHint(`《${paper.title}》的薄读文本索引已失效，正在从原 PDF 自动重新建立。`);
+    await new Promise<void>((resolve, reject) => {
+      const status = queueImportForPapers(
+        [paper],
+        resolve,
+        ({ error }) => reject(new Error(
+          `《${paper.title}》重新建立薄读文本索引失败：${error.message}`
+        ))
+      );
+      if (status === "already_imported") {
+        if (importedChunksForPaper(paper.id).length > 0) {
+          resolve();
+        } else {
+          reject(new Error(
+            `《${paper.title}》的导入记录不包含可引用文本，请重新导入该 PDF。`
+          ));
+        }
+      } else if (status === "importing") {
+        reject(new Error(
+          `《${paper.title}》正在建立文本索引，请等待导入完成后重试。`
+        ));
+      } else if (status === "idle") {
+        reject(new Error(`无法为《${paper.title}》启动 PDF 文本索引。`));
+      }
+    });
+
+    if (importedChunksForPaper(paper.id).length === 0) {
+      throw new Error(
+        `《${paper.title}》导入完成，但没有生成可引用文本索引。请检查 PDF 解析结果后重试。`
+      );
+    }
   }
 
   async function startArtifactTask(
@@ -1016,11 +1079,20 @@ export function useArtifactActions({
       });
       return;
     }
-    const primaryPaper = (existing.papers ?? []).find((paper) => paper.id === primaryPaperId);
-    if (!primaryPaper) {
+    const persistedPaper = (existing.papers ?? []).find((paper) => paper.id === primaryPaperId);
+    if (!persistedPaper) {
       throw new Error("该薄读产物缺少来源论文，无法继续生成下一层。");
     }
-    const papers = [{ id: primaryPaper.id, title: primaryPaper.title }] as Paper[];
+    const activeReaderPaper = getActiveReaderPaper?.();
+    const primaryPaper = getPaperById?.(primaryPaperId) ??
+      getSelectedPapers().find((paper) => paper.id === primaryPaperId) ??
+      (activeReaderPaper?.id === primaryPaperId ? activeReaderPaper : undefined);
+    if (!primaryPaper) {
+      throw new Error(
+        `《${persistedPaper.title}》已不在当前文献库中，无法重新建立薄读文本索引。请重新导入原 PDF。`
+      );
+    }
+    const papers = [{ id: persistedPaper.id, title: persistedPaper.title }] as Paper[];
     const selectedExternalSources = source.kind === "selected_text" && source.externalSourceIds?.length
       ? (activeNode.evidence.externalSources ?? []).filter((externalSource) => (
         source.externalSourceIds?.includes(externalSource.id)
@@ -1043,6 +1115,20 @@ export function useArtifactActions({
       artifactId,
       ...(recoverySnapshot ? { thinReadingBranchRecovery: recoverySnapshot } : {})
     });
+    syncArtifacts(taskId);
+    try {
+      await ensureThinReadingPaperImported(primaryPaper);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      artifactStore.failTask(taskId, {
+        failedStage: "thin_reading_parsing_document",
+        message,
+        occurredAt: new Date().toISOString(),
+        recovery: buildFailureRecovery(message, "thin_reading_parsing_document")
+      });
+      syncArtifacts(taskId);
+      throw error;
+    }
     artifactStore.startTask(taskId);
     syncArtifacts(taskId);
     const context: ThinReadingGenerationContext = {

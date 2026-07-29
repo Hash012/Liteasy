@@ -267,6 +267,9 @@ describe("useArtifactWorkflowController", () => {
         artifactResultClient: artifactResultClient(),
         artifactStore,
         getImportedChunksByPaperId: () => ({ [paper.id]: buildImportedChunksForPaper(paper) }),
+        getImportedChunksForPaperId: (paperId) =>
+          paperId === paper.id ? buildImportedChunksForPaper(paper) : [],
+        getPaperById: (paperId) => paperId === paper.id ? paper : undefined,
         getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
         getSelectedPapers: () => [],
         onAnalysisHint,

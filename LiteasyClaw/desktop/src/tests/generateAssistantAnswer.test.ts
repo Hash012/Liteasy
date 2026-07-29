@@ -381,7 +381,7 @@ test("stops live thin-reading before the model call when PDF text evidence is un
     question: "生成薄读",
     selectedPapers: [{ id: "scan-1", title: "扫描版论文" }],
     settings: store.getState()
-  })).rejects.toThrow("未能从《扫描版论文》提取可引用文本");
+  })).rejects.toThrow("《扫描版论文》没有可用的本地文本索引");
 
   expect(modelTransport).not.toHaveBeenCalled();
 });
