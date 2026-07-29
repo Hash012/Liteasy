@@ -20,7 +20,13 @@ export type ThinReadingPaperType =
 export type ThinReadingNodeSource =
   | { kind: "root_overview" }
   | { kind: "omitted_section"; label: string; sectionKey: string }
-  | { kind: "selected_text"; evidenceIds?: readonly string[]; excerpt: string; prompt?: string };
+  | {
+      kind: "selected_text";
+      evidenceIds?: readonly string[];
+      externalSourceIds?: readonly string[];
+      excerpt: string;
+      prompt?: string;
+    };
 
 export type ThinReadingBranchSource = Exclude<ThinReadingNodeSource, { kind: "root_overview" }>;
 
@@ -30,6 +36,7 @@ export type ThinReadingRecommendationScope =
   | {
       kind: "selected_passage";
       evidenceIds?: readonly string[];
+      externalSourceIds?: readonly string[];
       excerpt: string;
       paperId?: string;
       paperIdentity?: PaperIdentity;
@@ -98,10 +105,59 @@ export type ThinReadingSummarySentence = {
   text: string;
 };
 
+// This is deliberately attached to the generated node rather than the transient Agent run.
+// A reader reopening an artifact must be able to inspect how its evidence boundary was chosen.
+export type ThinReadingGenerationAudit = {
+  evidenceLoop?: {
+    rounds: readonly {
+      focus: readonly string[];
+      observedEvidenceIds: readonly string[];
+      pageRequests: readonly number[];
+      round: number;
+      searchQueries: readonly string[];
+      selectedEvidenceIds: readonly string[];
+      toolCalls: readonly {
+        evidenceIds: readonly string[];
+        kind: "read" | "search" | "view";
+        pages?: readonly number[];
+        query?: string;
+      }[];
+    }[];
+    stopReason: "maximum_rounds_reached" | "no_new_evidence" | "observation_sufficient";
+    stopReasonDetail: string;
+  };
+  evidencePlan?: {
+    focus: readonly string[];
+    selectedEvidenceIds: readonly string[];
+  };
+  evidenceToolCalls?: readonly {
+    evidenceIds: readonly string[];
+    kind: "read" | "search" | "view";
+    pages?: readonly number[];
+    query?: string;
+  }[];
+  evidenceReview?: {
+    reason: string;
+    unsupportedSentenceIds: readonly string[];
+    verdict: "pass";
+  };
+  model: {
+    id: string;
+    provider: string;
+  };
+  qualityGate: {
+    attempts: number;
+    repaired: boolean;
+    repairReasons: readonly string[];
+  };
+  version: "liteasy.thin-reading-agent/v1" | "liteasy.thin-reading-agent/v2";
+};
+
 export type ThinReadingNodeEvidence = {
   claims?: readonly ThinReadingClaim[];
   externalKnowledge: readonly string[];
   externalSources?: readonly ThinReadingExternalSource[];
+  generationAudit?: ThinReadingGenerationAudit;
   paperEvidence: readonly string[];
   paperEvidenceSpans?: readonly ThinReadingEvidenceSpan[];
   summarySentences?: readonly ThinReadingSummarySentence[];
@@ -134,6 +190,7 @@ export type ThinReadingGenerationContext = {
   source: ThinReadingNodeSource;
   targetLanguage: string;
   externalSources?: readonly ThinReadingExternalSource[];
+  selectedExternalSources?: readonly ThinReadingExternalSource[];
 };
 
 export type ThinReadingNode = {

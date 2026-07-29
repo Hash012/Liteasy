@@ -2,11 +2,17 @@ import {
   createRecommendationClient,
   type RecommendationTransport
 } from "./recommendationClient";
-import type { RecommendationItem, RecommendationRequestDocument } from "./recommendation.types";
+import type {
+  RecommendationItem,
+  RecommendationRequestDocument,
+  RecommendationResearchProfile
+} from "./recommendation.types";
 import type { SettingsState } from "../settings/settings.types";
 
 type RecommendationRuntimeInput = {
   controlPlaneEndpoint: string;
+  openAlexApiKey?: string;
+  researchProfile?: RecommendationResearchProfile;
   sortMode: SettingsState["network.recommendation.sort_mode"];
   selectedDocuments: RecommendationRequestDocument[];
   sessionId: string;
@@ -126,10 +132,12 @@ export async function fetchCloudRecommendations(
 
   const client = createRecommendationClient({
     endpoint: input.controlPlaneEndpoint,
+    openAlexApiKey: input.openAlexApiKey,
     transport: deps.transport
   });
 
   const items = await client({
+    researchProfile: input.researchProfile,
     selectedDocuments: input.selectedDocuments,
     sessionId: input.sessionId
   });

@@ -75,6 +75,10 @@ test("includes academic profile details when profile sampling is enabled", () =>
     academicProfile: {
       age: "27",
       gender: "女",
+      preferredLanguages: "中文、English",
+      researchDatasets: "BEIR",
+      researchMethods: "混合检索",
+      researchTopics: "神经信息检索",
       stage: "博士"
     },
     importedCount: 1,
@@ -88,13 +92,17 @@ test("includes academic profile details when profile sampling is enabled", () =>
     academic: {
       age: "27",
       gender: "女",
+      preferredLanguages: "中文、English",
+      researchDatasets: "BEIR",
+      researchMethods: "混合检索",
+      researchTopics: "神经信息检索",
       stage: "博士"
     },
     enabled: true,
     requiresConfirmation: true
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 1 篇 · 已锁定 · 已导入 1/1 · 云账号已连接 · 画像开启（女/27/博士）"
+    "上下文 · 选中 1 篇 · 已锁定 · 已导入 1/1 · 云账号已连接 · 画像开启（女/27/博士/主题:神经信息检索）"
   );
 });
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { findQuoteRangeInTextLayer } from "../app/features/pdf/PdfReader";
+import { buildTargetEvidenceRects, findQuoteRangeInTextLayer } from "../app/features/pdf/PdfReader";
 import { normalizePdfTextForSearch } from "../app/features/pdf/pdfTextSearch";
 import {
   pdfAnnotationAutoPublicStorageKey,
@@ -150,6 +150,49 @@ describe("ReaderPane", () => {
     expect(range?.toString().replace(/\s+/g, " ")).toContain(
       "late inter-action path preserves token‐level signals"
     );
+  });
+
+  test("keeps Agent evidence highlight coordinates stable across PDF zoom scales", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = "<span>late interaction independently encodes query and document tokens</span>";
+    const page = document.createElement("article");
+    let scale = 1;
+    const originalGetClientRects = Object.getOwnPropertyDescriptor(Range.prototype, "getClientRects");
+    Object.defineProperty(Range.prototype, "getClientRects", {
+      configurable: true,
+      value: () => makeRectList([
+        makeRect({ height: 16 * scale, left: 120 * scale, top: 160 * scale, width: 320 * scale })
+      ])
+    });
+    vi.spyOn(page, "getBoundingClientRect").mockImplementation(() => makeRect({
+      height: 980 * scale,
+      left: 20 * scale,
+      top: 40 * scale,
+      width: 760 * scale
+    }));
+
+    try {
+      const at100Percent = buildTargetEvidenceRects(
+        textLayer,
+        page,
+        "late interaction independently encodes query and document tokens"
+      );
+      scale = 2;
+      const at200Percent = buildTargetEvidenceRects(
+        textLayer,
+        page,
+        "late interaction independently encodes query and document tokens"
+      );
+
+      expect(at100Percent).toHaveLength(1);
+      expect(at200Percent).toEqual(at100Percent);
+    } finally {
+      if (originalGetClientRects) {
+        Object.defineProperty(Range.prototype, "getClientRects", originalGetClientRects);
+      } else {
+        delete (Range.prototype as { getClientRects?: unknown }).getClientRects;
+      }
+    }
   });
 
   test("renders the reader header and leaves artifact generation to the floating launcher", () => {
@@ -339,6 +382,7 @@ describe("ReaderPane", () => {
       "title",
       "把选中文段加入右侧对话上下文"
     );
+    expect(within(selectionMenu).queryByRole("button", { name: /深入/ })).not.toBeInTheDocument();
 
     await user.click(within(selectionMenu).getByRole("button", { name: "高亮" }));
     expect(screen.getByText("已创建高亮批注。")).toBeInTheDocument();

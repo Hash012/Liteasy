@@ -2,13 +2,15 @@ import {
   runCrossrefThinReadingLiveEval,
   runOpenAlexThinReadingLiveEval
 } from "./thin-reading-openalex-live-eval.mjs";
+import { requireOpenAlexApiKey } from "./openalex-api-key.mjs";
 import { searchExternalKnowledge } from "../../services/dev-cloud/payloads/externalKnowledgePayloads.mjs";
 
 async function runExternalAggregatorLiveEval() {
+  const openAlexApiKey = requireOpenAlexApiKey();
   const result = await searchExternalKnowledge({
     limit: 8,
     query: "multimodal retrieval benchmark"
-  });
+  }, { openAlexApiKey });
   const providers = new Set(result.sources.map((source) => source.provider));
   const crossrefSources = result.sources.filter((source) => source.provider === "crossref");
   if (!providers.has("openalex") || crossrefSources.length === 0 ||

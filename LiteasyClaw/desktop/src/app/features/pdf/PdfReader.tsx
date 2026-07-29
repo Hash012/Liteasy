@@ -489,7 +489,7 @@ export function findQuoteRangeInTextLayer(
   });
 }
 
-function buildTargetEvidenceRects(
+export function buildTargetEvidenceRects(
   textLayer: HTMLElement,
   pageElement: HTMLElement,
   quote: string,

@@ -7,6 +7,7 @@ import type {
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { IntuitionGraphDocument } from "../intuition-graph/intuitionGraph.types";
 import type { ThinReadingDocument } from "../thin-reading/thinReading.types";
+import type { ThinReadingBranchRecoverySnapshot } from "./artifactTaskRecovery";
 
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type ArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "skill_doc" | "thin_reading" | "tree";
@@ -48,7 +49,9 @@ export type ArtifactTask = {
   partialAnswer?: string;
   partialOutlineNodes?: ArtifactOutlineNode[];
   progress: number;
+  recoveredAfterRestart?: boolean;
   stage: ArtifactTaskStage;
+  thinReadingBranchRecovery?: ThinReadingBranchRecoverySnapshot;
   type: ArtifactType;
   status: ArtifactTaskStatus;
 };

@@ -9,6 +9,7 @@ export const settingsRegistry: Record<SettingKey, { label: string }> = {
   "assistant.language": { label: "回答语言" },
   "import.ocr_language": { label: "扫描 PDF OCR 语言" },
   "thin_reading.intuecho_endpoint": { label: "Intuecho 同步端点" },
+  "thin_reading.openalex_api_key": { label: "OpenAlex API 密钥" },
   "models.default_provider": { label: "默认模型服务商" },
   "models.cloud_proxy_endpoint": { label: "云代理模型端点" },
   "models.control_plane_endpoint": { label: "云端控制平面端点" }

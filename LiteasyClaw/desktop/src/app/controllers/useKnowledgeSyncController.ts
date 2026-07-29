@@ -8,13 +8,18 @@ import type { RecommendationCacheTransport } from "../features/recommendations/r
 import type { AccountSession } from "../features/account/account.types";
 import type { SettingsState } from "../features/settings/settings.types";
 import type { Paper } from "../features/workspace/workspace.types";
-import type { RecommendationItem } from "../features/recommendations/recommendation.types";
+import type {
+  RecommendationItem,
+  RecommendationResearchProfile
+} from "../features/recommendations/recommendation.types";
 import type { RecommendationCacheScope } from "../features/recommendations/recommendationCache.types";
+import type { RecommendationFeedbackTransport } from "../features/recommendations/recommendationFeedbackClient";
 
 type UseKnowledgeSyncControllerInput = {
   accountSession: AccountSession | null;
   collectionTransport?: CollectionTransport;
   controlPlaneEndpoint: string;
+  openAlexApiKey?: string;
   documentMetadataTransport?: DocumentMetadataTransport;
   documents: Paper[];
   recommendationCacheDeps?: {
@@ -29,9 +34,12 @@ type UseKnowledgeSyncControllerInput = {
     ) => Promise<{ cachedAt: string; ok: true }>;
   };
   recommendationCacheTransport?: RecommendationCacheTransport;
+  recommendationFeedbackTransport?: RecommendationFeedbackTransport;
   recommendationGeneratorDeps?: {
     fetch: (input: {
       controlPlaneEndpoint: string;
+      openAlexApiKey?: string;
+      researchProfile?: RecommendationResearchProfile;
       selectedDocuments: Array<{ id: string; title: string }>;
       sessionId: string;
       sortMode: SettingsState["network.recommendation.sort_mode"];
@@ -40,6 +48,7 @@ type UseKnowledgeSyncControllerInput = {
   recommendationTransport?: RecommendationTransport;
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
+  researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
   workspaceRevision: number;
   workspaceSourceKey: string;
@@ -49,14 +58,17 @@ export function useKnowledgeSyncController({
   accountSession,
   collectionTransport,
   controlPlaneEndpoint,
+  openAlexApiKey,
   documentMetadataTransport,
   documents,
   recommendationCacheDeps,
   recommendationCacheTransport,
+  recommendationFeedbackTransport,
   recommendationGeneratorDeps,
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
+  researchProfile,
   selectedPapers,
   workspaceRevision,
   workspaceSourceKey
@@ -69,12 +81,15 @@ export function useKnowledgeSyncController({
   const recommendations = useRecommendations({
     accountSession,
     controlPlaneEndpoint,
+    openAlexApiKey,
     recommendationCacheDeps,
     recommendationCacheTransport,
+    recommendationFeedbackTransport,
     recommendationGeneratorDeps,
     recommendationTransport,
     recommendationsEnabled,
     recommendationSortMode,
+    researchProfile,
     selectedPapers,
     workspaceRevision,
     workspaceSourceKey
@@ -90,7 +105,12 @@ export function useKnowledgeSyncController({
   return {
     actions: {
       clearRecommendationCache: recommendations.clearRecommendationCache,
-      collectRecommendation: collection.collectRecommendation,
+      collectRecommendation: async (recommendation: RecommendationItem) => {
+        await collection.collectRecommendation(recommendation);
+        await recommendations.recordRecommendationFeedback(recommendation, "saved");
+      },
+      dismissRecommendation: (recommendation: RecommendationItem) =>
+        recommendations.recordRecommendationFeedback(recommendation, "dismissed"),
       retryCollectionSync: collection.retry,
       retryDocumentMetadataSync: documentMetadataSync.retrySync
     },

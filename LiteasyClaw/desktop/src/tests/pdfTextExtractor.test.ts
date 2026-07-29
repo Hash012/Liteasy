@@ -4,7 +4,16 @@ import { pathToFileURL } from "node:url";
 import { createCanvas } from "@napi-rs/canvas";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { vi } from "vitest";
-import { buildPdfChunksFromPages, extractPdfPages } from "../app/features/import/pdfTextExtractor";
+import {
+  buildPdfChunksFromPages,
+  extractPdfChunksForPaper,
+  extractPdfPages,
+  pdfOcrWorkerOptions
+} from "../app/features/import/pdfTextExtractor";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
+  resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
+).href;
 
 test("turns every extracted PDF page into overlapping evidence chunks with technical terms", () => {
   const chunks = buildPdfChunksFromPages(
@@ -54,6 +63,21 @@ test("records offsets in the whitespace-folded coordinate system used by the PDF
   });
 });
 
+test("loads a managed local PDF as bytes before handing it to PDF.js", async () => {
+  const fixturePath = resolve(process.cwd(), "public/papers/colbert-late-interaction.pdf");
+  const loadPdfSource = vi.fn(async () => new Uint8Array(readFileSync(fixturePath)));
+
+  const chunks = await extractPdfChunksForPaper({
+    id: "local-colbert",
+    sourcePath: "/tmp/LiteasyLibrary/papers/colbert.pdf",
+    title: "ColBERT"
+  }, { loadPdfSource });
+
+  expect(loadPdfSource).toHaveBeenCalledWith("/tmp/LiteasyLibrary/papers/colbert.pdf");
+  expect(chunks.length).toBeGreaterThan(0);
+  expect(chunks[0]).toMatchObject({ paperId: "local-colbert" });
+});
+
 test("records offsets in the same Unicode-normalized coordinate system as PDF evidence highlighting", () => {
   const [chunk] = buildPdfChunksFromPages(
     { id: "paper-unicode", title: "Unicode coordinate test" },
@@ -98,9 +122,6 @@ test("marks OCR-derived chunks so evidence navigation can remain page-level", ()
 
 test("extracts a no-text PDF through the real OCR fallback and preserves its provenance", async () => {
   const fixturePath = resolve(process.cwd(), "public/papers/liteasy-ocr-scanned-fixture.pdf");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
-    resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
-  ).href;
   const originalCreateElement = document.createElement.bind(document);
   const ownDescriptor = Object.getOwnPropertyDescriptor(document, "createElement");
   Object.defineProperty(document, "createElement", {
@@ -143,9 +164,6 @@ test("extracts a no-text PDF through the real OCR fallback and preserves its pro
 
 test("passes the selected OCR language to a scanned PDF worker", async () => {
   const fixturePath = resolve(process.cwd(), "public/papers/liteasy-ocr-scanned-fixture.pdf");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
-    resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
-  ).href;
   const originalCreateElement = document.createElement.bind(document);
   const ownDescriptor = Object.getOwnPropertyDescriptor(document, "createElement");
   Object.defineProperty(document, "createElement", {
@@ -173,3 +191,13 @@ test("passes the selected OCR language to a scanned PDF worker", async () => {
     }
   }
 }, 120_000);
+
+test("uses bundled English and Chinese language data for offline browser OCR", () => {
+  const expected = {
+    gzip: true,
+    langPath: "http://localhost:3000/ocr"
+  };
+  expect(pdfOcrWorkerOptions("eng")).toEqual(expected);
+  expect(pdfOcrWorkerOptions("chi_sim")).toEqual(expected);
+  expect(pdfOcrWorkerOptions("eng+chi_sim")).toEqual(expected);
+});

@@ -44,21 +44,84 @@ function tokenize(value: string) {
   return [...new Set([...latinTokens, ...chineseTokens])];
 }
 
-function scoreChunk(queryTokens: string[], chunk: RetrievalChunk) {
-  const snippet = chunk.snippet.toLowerCase();
-  const summary = chunk.summary.toLowerCase();
-  const title = chunk.paperTitle.toLowerCase();
-  const tags = chunk.tags.map((tag) => tag.toLowerCase());
-  return queryTokens.reduce((score, token) => {
-    const tagScore = tags.some((tag) => tag.includes(token) || token.includes(tag)) ? 4 : 0;
-    return (
-      score +
-      tagScore +
-      (snippet.includes(token) ? 2 : 0) +
-      (summary.includes(token) ? 1 : 0) +
-      (title.includes(token) ? 1 : 0)
-    );
+const rhetoricalEvidenceSignals: ReadonlyArray<{ pattern: RegExp; weight: number }> = [
+  { pattern: /\babstract\b|\b摘要\b/i, weight: 3 },
+  { pattern: /\bwe (?:propose|introduce|present|show|demonstrate)\b|\bcontribution(?:s)?\b|\b贡献\b|\b本文(?:提出|发现|证明)/i, weight: 4 },
+  { pattern: /\bconclusion(?:s)?\b|\bconclude\b|\b讨论与结论\b|\b结论\b/i, weight: 4 },
+  { pattern: /\bresults?\b|\bfindings?\b|\bexperiment(?:s|al)?\b|\b实验结果?\b|\b主要发现\b/i, weight: 3 },
+  { pattern: /\blimitation(?:s)?\b|\bfailure cases?\b|\bthreats? to validity\b|\b局限(?:性)?\b|\b失效(?:条件|情形)?\b/i, weight: 3 },
+  { pattern: /\btheorem\b|\bproof\b|\bproposition\b|\b定理\b|\b证明\b/i, weight: 3 }
+];
+
+function rhetoricalEvidenceScore(chunk: RetrievalChunk) {
+  const text = `${chunk.summary}\n${chunk.snippet}`;
+  return rhetoricalEvidenceSignals.reduce(
+    (score, signal) => score + (signal.pattern.test(text) ? signal.weight : 0),
+    0
+  );
+}
+
+type LexicalCorpus = {
+  averageDocumentLength: number;
+  documentFrequency: ReadonlyMap<string, number>;
+  documentCount: number;
+};
+
+function textTokens(value: string) {
+  return tokenize(value);
+}
+
+function chunkText(chunk: RetrievalChunk) {
+  return [chunk.paperTitle, ...chunk.tags, chunk.summary, chunk.snippet].join("\n");
+}
+
+function buildLexicalCorpus(chunks: readonly RetrievalChunk[]): LexicalCorpus {
+  const documentFrequency = new Map<string, number>();
+  const totalLength = chunks.reduce((total, chunk) => {
+    const uniqueTerms = new Set(textTokens(chunkText(chunk)));
+    uniqueTerms.forEach((term) => documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1));
+    return total + Math.max(1, textTokens(chunkText(chunk)).length);
   }, 0);
+  return {
+    averageDocumentLength: Math.max(1, totalLength / Math.max(1, chunks.length)),
+    documentCount: Math.max(1, chunks.length),
+    documentFrequency
+  };
+}
+
+function lexicalEvidenceScore(queryTokens: string[], chunk: RetrievalChunk, corpus: LexicalCorpus) {
+  const terms = textTokens(chunkText(chunk));
+  const termFrequency = new Map<string, number>();
+  terms.forEach((term) => termFrequency.set(term, (termFrequency.get(term) ?? 0) + 1));
+  const documentLength = Math.max(1, terms.length);
+  const k1 = 1.2;
+  const b = 0.75;
+  const bm25 = queryTokens.reduce((score, token) => {
+    const frequency = termFrequency.get(token) ?? 0;
+    if (frequency === 0) {
+      return score;
+    }
+    const documentFrequency = corpus.documentFrequency.get(token) ?? 0;
+    const idf = Math.log(1 + (corpus.documentCount - documentFrequency + 0.5) / (documentFrequency + 0.5));
+    const normalizedFrequency = (frequency * (k1 + 1)) /
+      (frequency + k1 * (1 - b + b * (documentLength / corpus.averageDocumentLength)));
+    return score + idf * normalizedFrequency;
+  }, 0);
+  // Tags and title are curator-provided document metadata. Keep their explicit boost while the
+  // body itself is ranked by BM25, so a repeated boilerplate term cannot dominate a rare query term.
+  const metadataBoost = queryTokens.reduce((score, token) => (
+    score +
+    (chunk.tags.some((tag) => tag.toLowerCase().includes(token) || token.includes(tag.toLowerCase())) ? 1.25 : 0) +
+    (chunk.paperTitle.toLowerCase().includes(token) ? 0.35 : 0)
+  ), 0);
+  // BM25 values are naturally small on short imported PDFs. Scale the lexical signal so an
+  // explicit user term still outranks a generic rhetorical marker such as "result".
+  return bm25 * 3 + metadataBoost;
+}
+
+function scoreChunk(queryTokens: string[], chunk: RetrievalChunk, corpus: LexicalCorpus) {
+  // Thin reading needs decisive claims and limits even when the launch query is generic.
+  return lexicalEvidenceScore(queryTokens, chunk, corpus) + rhetoricalEvidenceScore(chunk);
 }
 
 function defaultIdFactory() {
@@ -78,6 +141,8 @@ function chunkId(chunk: RetrievalChunk, index: number) {
 type RankedChunk = {
   chunk: RetrievalChunk;
   chunkId: string;
+  lexicalScore: number;
+  rhetoricalScore: number;
   score: number;
 };
 
@@ -103,7 +168,16 @@ function selectStratifiedEvidence(ranked: RankedChunk[], limit: number) {
     (left, right) => left.chunk.page - right.chunk.page || left.chunkId.localeCompare(right.chunkId)
   );
   const selected = new Map<string, RankedChunk>();
-  const coverageSlots = Math.min(limit, Math.max(6, Math.ceil(limit * 0.6)));
+  // When the evidence budget is small, preserve claims/results/limits before spending slots on
+  // uniform page coverage. Otherwise a title page can crowd out a paper's actual contribution.
+  for (const candidate of ranked.filter((entry) => entry.rhetoricalScore > 0)) {
+    if (selected.size >= limit) {
+      break;
+    }
+    selected.set(candidate.chunkId, candidate);
+  }
+  const remainingSlots = limit - selected.size;
+  const coverageSlots = Math.min(remainingSlots, Math.max(0, Math.ceil(limit * 0.6)));
 
   for (let slot = 0; slot < coverageSlots; slot += 1) {
     const start = Math.floor((slot * byDocumentOrder.length) / coverageSlots);
@@ -139,6 +213,9 @@ export function prepareMultiPaperAnalysis(
   const createId = input.createId ?? defaultIdFactory();
   const analysisRunId = createId("analysis");
   const queryTokens = tokenize(input.query);
+  const lexicalCorpus = buildLexicalCorpus(
+    input.selectedPapers.flatMap((paper) => input.importedChunksByPaperId[paper.id] ?? [])
+  );
   const evidence: AnalysisEvidence[] = [];
   const rankedByPaper = input.selectedPapers.map((paper) => {
     throwIfAborted(input.signal);
@@ -154,7 +231,9 @@ export function prepareMultiPaperAnalysis(
       .map((chunk, index) => ({
         chunk,
         chunkId: chunkId(chunk, index),
-        score: scoreChunk(queryTokens, chunk)
+        lexicalScore: lexicalEvidenceScore(queryTokens, chunk, lexicalCorpus),
+        rhetoricalScore: rhetoricalEvidenceScore(chunk),
+        score: scoreChunk(queryTokens, chunk, lexicalCorpus)
       }))
       .sort((left, right) => right.score - left.score);
     return { paper, paperLimit, ranked: selectStratifiedEvidence(ranked, paperLimit) };
@@ -201,8 +280,12 @@ export function prepareMultiPaperAnalysis(
         quote: candidate.chunk.snippet,
         relevance: Number(relevance.toFixed(2)),
         retrievalReason:
-          candidate.score > 0
-            ? "query_overlap_within_selected_paper"
+          candidate.lexicalScore > 0
+            ? candidate.rhetoricalScore > 0
+              ? "query_overlap_and_rhetorical_core_evidence"
+              : "query_overlap_within_selected_paper"
+            : candidate.rhetoricalScore > 0
+              ? "rhetorical_core_evidence"
             : "per_paper_coverage_fallback",
         summary: candidate.chunk.summary,
         terms: candidate.chunk.tags

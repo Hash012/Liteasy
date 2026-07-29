@@ -141,6 +141,50 @@ describe("thinReadingProjection", () => {
     });
   });
 
+  test("persists and freezes the evidence-planning quality audit on root and branch nodes", () => {
+    const audit = {
+      evidenceLoop: {
+        rounds: [{
+          focus: ["核心结论"],
+          observedEvidenceIds: ["evidence-1"],
+          pageRequests: [],
+          round: 1,
+          searchQueries: [],
+          selectedEvidenceIds: ["evidence-1"],
+          toolCalls: [{ evidenceIds: ["evidence-1"], kind: "read" as const }]
+        }],
+        stopReason: "observation_sufficient" as const,
+        stopReasonDetail: "首轮证据已足以支撑核心结论。"
+      },
+      evidencePlan: { focus: ["核心结论"], selectedEvidenceIds: ["evidence-1"] },
+      evidenceReview: { reason: "句子均由限定证据支持。", unsupportedSentenceIds: [], verdict: "pass" as const },
+      model: { id: "gpt-5-mini", provider: "openai" },
+      qualityGate: { attempts: 2, repaired: true, repairReasons: ["首次句级映射不完整"] },
+      version: "liteasy.thin-reading-agent/v2" as const
+    };
+    const rootDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-audit",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed({ evidence: { externalKnowledge: [], generationAudit: audit, paperEvidence: ["evidence-1"] } }),
+      targetLanguage: "zh-CN"
+    });
+    const branched = advanceThinReadingDocument(rootDocument, {
+      parentNodeId: rootDocument.rootNodeId,
+      seed: seed({ evidence: { externalKnowledge: [], generationAudit: audit, paperEvidence: ["evidence-1"] } }),
+      source: { evidenceIds: ["evidence-1"], excerpt: "MaxSim", kind: "selected_text" },
+      title: "MaxSim"
+    });
+    const rootAudit = branched.nodes[branched.rootNodeId].evidence.generationAudit;
+    const branchAudit = branched.nodes[branched.activeNodeId].evidence.generationAudit;
+
+    expect(rootAudit).toEqual(audit);
+    expect(branchAudit).toEqual(audit);
+    expect(Object.isFrozen(branchAudit?.qualityGate.repairReasons)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidencePlan?.selectedEvidenceIds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceLoop?.rounds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.evidenceLoop?.rounds[0].toolCalls[0].evidenceIds)).toBe(true);
+  });
+
   test("falls back to local paper id when no global identity metadata is available", () => {
     const document = createThinReadingDocument({
       artifactId: "artifact-thin-local-id",
@@ -265,28 +309,34 @@ describe("thinReadingProjection", () => {
       targetLanguage: "zh-CN"
     });
     const evidenceIds = ["evidence-1"];
+    const externalSourceIds = ["openalex:W42"];
     const next = advanceThinReadingDocument(document, {
       parentNodeId: document.rootNodeId,
       seed: seed(),
       source: {
         kind: "selected_text",
         evidenceIds,
+        externalSourceIds,
         excerpt: "MaxSim preserves the strongest token-level match."
       },
       title: "MaxSim"
     });
     evidenceIds.push("mutated-after-persist");
+    externalSourceIds.push("mutated-after-persist");
     const child = next.nodes[next.activeNodeId];
 
     expect(child.source).toMatchObject({
       kind: "selected_text",
-      evidenceIds: ["evidence-1"]
+      evidenceIds: ["evidence-1"],
+      externalSourceIds: ["openalex:W42"]
     });
     expect(child.recommendationScope).toMatchObject({
       kind: "selected_passage",
-      evidenceIds: ["evidence-1"]
+      evidenceIds: ["evidence-1"],
+      externalSourceIds: ["openalex:W42"]
     });
     expect(Object.isFrozen((child.source as Extract<typeof child.source, { kind: "selected_text" }>).evidenceIds)).toBe(true);
+    expect(Object.isFrozen((child.source as Extract<typeof child.source, { kind: "selected_text" }>).externalSourceIds)).toBe(true);
   });
 
   test("keeps fixture helpers on the production input shape", () => {
@@ -377,6 +427,51 @@ describe("thinReadingProjection", () => {
       error: "Intuecho 同步请求失败（HTTP 503）。",
       lastAttemptAt: "2026-07-28T03:00:00.000Z",
       status: "failed"
+    });
+  });
+
+  test("does not let a stale Intuecho receipt overwrite a later edit or confirmed receipt", () => {
+    const root = createThinReadingDocument({
+      artifactId: "artifact-thin-sync-stale-receipt",
+      papers: [{ doi: "10.1000/example", id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed(),
+      targetLanguage: "zh-CN"
+    });
+    const pending = addThinReadingAnnotation(root, {
+      body: "首次提交的理解。",
+      createdAt: "2026-07-28T00:00:00.000Z",
+      excerpt: "MaxSim",
+      nodeId: root.rootNodeId,
+      visibility: "pending_public"
+    });
+    const annotationId = pending.annotations[0].id;
+    const edited = updateThinReadingAnnotation(pending, annotationId, "编辑后需要重新提交的理解。");
+    const staleResult = [{
+      annotationId,
+      intuechoAnnotationId: "intuecho-stale",
+      status: "synced" as const,
+      syncedAt: "2026-07-28T02:00:00.000Z"
+    }];
+
+    const afterEdit = applyThinReadingAnnotationSyncResults(
+      edited,
+      staleResult,
+      "2026-07-28T02:00:00.000Z",
+      new Map([[annotationId, pending.annotations[0].updatedAt]])
+    );
+    expect(afterEdit.annotations[0]).toMatchObject({ body: "编辑后需要重新提交的理解。", visibility: "pending_public" });
+    expect(afterEdit.annotations[0].syncState).toBeUndefined();
+
+    const confirmed = applyThinReadingAnnotationSyncResults(pending, staleResult);
+    const afterLateFailure = applyThinReadingAnnotationSyncResults(confirmed, [{
+      annotationId,
+      error: "Intuecho 同步请求失败（HTTP 503）。",
+      status: "failed" as const
+    }]);
+    expect(afterLateFailure.annotations[0].syncState).toEqual({
+      intuechoAnnotationId: "intuecho-stale",
+      status: "synced",
+      syncedAt: "2026-07-28T02:00:00.000Z"
     });
   });
 });

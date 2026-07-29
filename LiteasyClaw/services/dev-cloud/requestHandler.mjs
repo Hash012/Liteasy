@@ -17,6 +17,10 @@ import {
   buildRecommendationCachePutPayload
 } from "./payloads/recommendationCachePayloads.mjs";
 import {
+  buildRecommendationFeedbackPayload,
+  getRecommendationFeedback
+} from "./payloads/recommendationFeedbackPayloads.mjs";
+import {
   buildModelAuditPayload,
   buildProviderRegistry,
   buildStreamingProviderRegistry,
@@ -39,12 +43,22 @@ import {
 } from "./payloads/policyPayloads.mjs";
 import {
   buildDocumentMetadataSyncPayload,
-  buildRecommendationPayload
+  buildLiveRecommendationPayload,
+  buildRecommendationPayload,
+  normalizeRecommendationResearchProfile
 } from "./payloads/recommendationPayloads.mjs";
+import { applyRecommendationEmbeddingScores } from "./payloads/recommendationEmbeddingPayloads.mjs";
+import { applyRecommendationExternalReranker } from "./payloads/recommendationRerankerPayloads.mjs";
 import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
 import { createExternalKnowledgeRunRepository } from "./db/externalKnowledgeRunRepository.mjs";
+import {
+  listRecommendationCandidateSources,
+  updateRecommendationCandidateStatus,
+  upsertRecommendationCandidates
+} from "./db/recommendationCandidateRepository.mjs";
+import { clearRecommendationCacheForSession } from "./db/recommendationCacheRepository.mjs";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 import {
   ExternalKnowledgeError,
@@ -80,6 +94,7 @@ const availableEndpoints = [
   "POST /v1/agent-artifacts",
   "DELETE /v1/agent-artifacts/:artifactId",
   "POST /v1/recommendations",
+  "POST /v1/recommendations/feedback",
   "POST /v1/research/external-knowledge",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
@@ -132,7 +147,7 @@ function buildCorsHeaders(request) {
         : undefined;
 
   const headers = {
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type,X-OpenAlex-Api-Key",
     "Access-Control-Allow-Methods": "DELETE,GET,POST,OPTIONS",
     Vary: "Origin"
   };
@@ -147,6 +162,12 @@ function buildCorsHeaders(request) {
 function writeCorsPreflight(request, response) {
   response.writeHead(204, buildCorsHeaders(request));
   response.end();
+}
+
+function openAlexApiKeyFromRequest(request) {
+  const value = request.headers["x-openalex-api-key"];
+  const apiKey = typeof value === "string" ? value.trim() : "";
+  return apiKey && apiKey.length <= 512 && !/\s/.test(apiKey) ? apiKey : "";
 }
 
 function writeJson(request, response, statusCode, payload) {
@@ -614,12 +635,168 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
+      const profileResult = normalizeRecommendationResearchProfile(body.researchProfile);
+      if (!profileResult.ok) {
+        writeJson(request, response, 400, {
+          error: profileResult.error,
+          message: "研究画像格式无效或超过允许范围。"
+        });
+        return;
+      }
+      const recommendationBody = profileResult.value
+        ? { ...body, researchProfile: profileResult.value }
+        : body;
+      if (customConfig.recommendationMode === "demo") {
+        writeJson(request, response, 200, buildRecommendationPayload(recommendationBody));
+        return;
+      }
+      const selectedDocuments = Array.isArray(body.selectedDocuments)
+        ? body.selectedDocuments
+            .filter((document) => typeof document?.title === "string" && document.title.trim().length > 0)
+            .slice(0, 3)
+        : [];
+      if (selectedDocuments.length === 0) {
+        writeJson(request, response, 200, { recommendations: [] });
+        return;
+      }
+      try {
+        const sourceGroups = await Promise.all(selectedDocuments.map(async (document) => {
+          const result = await searchExternalKnowledge({
+            limit: 5,
+            query: document.title,
+            targetPaperTitle: document.title
+          }, {
+            allowCrossrefOnlyFallback: true,
+            arxivEnabled: customConfig.arxivEnabled === true,
+            arxivTimeoutMs: customConfig.arxivTimeoutMs,
+            arxivTransport: customConfig.arxivTransport,
+            crossrefEnabled: customConfig.crossrefEnabled !== false,
+            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+            crossrefTransport: customConfig.crossrefTransport,
+            openAlexApiKey: openAlexApiKeyFromRequest(request),
+            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+            openAlexTransport: customConfig.openAlexTransport
+          });
+          return {
+            relatedDocumentTitle: document.title,
+            semanticQuery: document.title,
+            sources: [
+              ...result.sources,
+              ...listRecommendationCandidateSources(body.sessionId, document.title)
+            ]
+          };
+        }));
+        const profileQuery = profileResult.value
+          ? [...profileResult.value.topics.slice(0, 2), ...profileResult.value.methods.slice(0, 1)]
+              .join(" ")
+              .slice(0, 240)
+          : "";
+        if (profileQuery) {
+          const profileSources = await searchExternalKnowledge({
+            limit: 5,
+            query: profileQuery,
+            targetPaperTitle: profileQuery
+          }, {
+            allowCrossrefOnlyFallback: true,
+            arxivEnabled: customConfig.arxivEnabled === true,
+            arxivTimeoutMs: customConfig.arxivTimeoutMs,
+            arxivTransport: customConfig.arxivTransport,
+            crossrefEnabled: customConfig.crossrefEnabled !== false,
+            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+            crossrefTransport: customConfig.crossrefTransport,
+            openAlexApiKey: openAlexApiKeyFromRequest(request),
+            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+            openAlexTransport: customConfig.openAlexTransport
+          });
+          sourceGroups.push({
+            relatedDocumentTitle: "研究画像",
+            semanticQuery: profileQuery,
+            sources: profileSources.sources
+          });
+        }
+        const semanticRetrieval = await applyRecommendationEmbeddingScores(sourceGroups, {
+          apiKey: config.recommendationEmbeddingApiKey,
+          baseUrl: config.recommendationEmbeddingBaseUrl,
+          model: config.recommendationEmbeddingModel,
+          timeoutMs: customConfig.recommendationEmbeddingTimeoutMs,
+          transport: customConfig.recommendationEmbeddingTransport
+        });
+        const payload = buildLiveRecommendationPayload(
+          recommendationBody,
+          semanticRetrieval.sourceGroups,
+          new Date(),
+          getRecommendationFeedback(body.sessionId)
+        );
+        const externalReranker = await applyRecommendationExternalReranker(
+          payload.recommendations,
+          {
+            apiKey: config.recommendationRerankerApiKey,
+            baseUrl: config.recommendationRerankerBaseUrl,
+            model: config.recommendationRerankerModel,
+            query: [
+              ...selectedDocuments.map((document) => document.title),
+              profileQuery
+            ].filter(Boolean).join("\n"),
+            timeoutMs: customConfig.recommendationRerankerTimeoutMs,
+            transport: customConfig.recommendationRerankerTransport
+          }
+        );
+        upsertRecommendationCandidates(
+          body.sessionId,
+          externalReranker.recommendations.filter((candidate) => candidate.sourceKind === "live")
+        );
+        writeJson(request, response, 200, {
+          ...payload,
+          externalReranker: externalReranker.audit,
+          recommendations: externalReranker.recommendations,
+          semanticRetrieval: semanticRetrieval.audit
+        });
+      } catch (error) {
+        if (error instanceof ExternalKnowledgeError) {
+          writeJson(request, response, error.statusCode, { error: error.code, message: error.message });
+          return;
+        }
+        writeJson(request, response, 502, {
+          error: "recommendation_retrieval_failed",
+          message: "联网推荐来源当前不可用。"
+        });
+      }
+      return;
+    }
 
-      writeJson(request, response, 200, buildRecommendationPayload(body));
+    if (method === "POST" && url.pathname === "/v1/recommendations/feedback") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      const payload = buildRecommendationFeedbackPayload(body);
+      if ("error" in payload) {
+        writeJson(request, response, 400, payload);
+        return;
+      }
+      updateRecommendationCandidateStatus(
+        body.sessionId,
+        body.candidate,
+        payload.feedback.action
+      );
+      const invalidatedCacheEntries = clearRecommendationCacheForSession(body.sessionId);
+      writeJson(request, response, 200, { ...payload, invalidatedCacheEntries });
       return;
     }
 
     if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
+      const openAlexApiKey = openAlexApiKeyFromRequest(request);
+      const crossrefEnabled = customConfig.crossrefEnabled !== false;
+      if (!openAlexApiKey && !crossrefEnabled) {
+        writeJson(request, response, 503, {
+          error: "openalex_api_key_required",
+          message: "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。"
+        });
+        return;
+      }
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
         return;
@@ -635,9 +812,11 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           retrievalRun = resumed.run;
         }
         const payload = await searchExternalKnowledge(body, {
-          crossrefEnabled: customConfig.crossrefEnabled,
+          allowCrossrefOnlyFallback: !openAlexApiKey && crossrefEnabled,
+          crossrefEnabled,
           crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
           crossrefTransport: customConfig.crossrefTransport,
+          openAlexApiKey,
           openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
           openAlexTransport: customConfig.openAlexTransport
         });

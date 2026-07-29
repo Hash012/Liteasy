@@ -29,6 +29,7 @@ type ArtifactTabsProps = {
   onRegenerateArtifact?: (
     request: ArtifactRegenerationRequest
   ) => string | void | Promise<string | void>;
+  onRetryInterruptedThinReadingBranch?: (taskId: string) => Promise<void>;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
   onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
@@ -133,6 +134,7 @@ export function ArtifactTabs({
   onOpenEvidence,
   onSyncThinReadingAnnotations,
   onRegenerateArtifact,
+  onRetryInterruptedThinReadingBranch,
   onSaveMarkdownTab,
   onUpdateMarkdownTab,
   onUpdateThinReadingDocument,
@@ -152,7 +154,8 @@ export function ArtifactTabs({
   const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
   const activeTask = tasks[0] ?? null;
   const activeThinReadingTask = tasks.find((task) => (
-    task.type === "thin_reading" && task.status === "running"
+    task.type === "thin_reading" && task.artifactId === activeTab?.artifactId &&
+    (task.status === "running" || task.status === "failed")
   ));
   const activeVerification = activeTab?.verification ?? activeTab?.mindmapArtifact?.verification;
   const activeMindmapSources = activeTab?.mindmapArtifact?.sources;
@@ -214,11 +217,19 @@ export function ArtifactTabs({
       <ThinReadingTab
         artifactId={activeTab.artifactId}
         document={activeTab.thinReadingDocument}
-        generationProgress={activeThinReadingTask ? {
+        generationProgress={activeThinReadingTask?.status === "running" ? {
           message: activeThinReadingTask.message,
           progress: activeThinReadingTask.progress,
           stageLabel: taskStageLabels[activeThinReadingTask.stage]
         } : undefined}
+        taskFailureMessage={activeThinReadingTask?.status === "failed"
+          ? activeThinReadingTask.failure?.message ?? activeThinReadingTask.message
+          : undefined}
+        onRetryInterruptedBranch={activeThinReadingTask?.status === "failed" &&
+          activeThinReadingTask.recoveredAfterRestart &&
+          activeThinReadingTask.thinReadingBranchRecovery && onRetryInterruptedThinReadingBranch
+          ? () => onRetryInterruptedThinReadingBranch(activeThinReadingTask.id)
+          : undefined}
         onGenerateBranch={onGenerateThinReadingBranch}
         onOpenEvidence={onOpenEvidence}
         onSyncIntuecho={onSyncThinReadingAnnotations}

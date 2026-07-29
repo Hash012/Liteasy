@@ -153,6 +153,34 @@ describe("useWorkspaceActions", () => {
     }]);
   });
 
+  test("keeps browser-uploaded PDF bytes reachable through a blob URL", async () => {
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const createObjectUrl = vi.fn(() => "blob:http://localhost/local-paper");
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl
+    });
+    const { result, workspaceStore } = renderWorkspaceActions();
+    const file = new File(["pdf"], "local-paper.pdf", { type: "application/pdf" });
+
+    await act(async () => {
+      await result.current.addDroppedPdfFiles([file]);
+    });
+
+    expect(createObjectUrl).toHaveBeenCalledWith(file);
+    expect(workspaceStore.getState().papers).toEqual([
+      expect.objectContaining({ sourcePath: "blob:http://localhost/local-paper" })
+    ]);
+    if (originalCreateObjectUrl) {
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectUrl
+      });
+    } else {
+      Reflect.deleteProperty(URL, "createObjectURL");
+    }
+  });
+
   test("renames a managed PDF on disk before updating its stable workspace entry", async () => {
     const moveLocalLibraryResource = vi.fn(() => Promise.resolve());
     const paper = {
@@ -268,6 +296,41 @@ describe("useWorkspaceActions", () => {
     expect(result.current.getImportedSelectedCount()).toBe(1);
     expect(result.current.getImportedChunksByPaperId()[paper.id]).toHaveLength(2);
     expect(workspaceStore.getState().selectedPaperIds).toEqual([paper.id]);
+  });
+
+  test("does not report import completion after PDF extraction fails", async () => {
+    const paper = {
+      id: "local-broken",
+      sourcePath: "/tmp/LiteasyLibrary/papers/broken.pdf",
+      title: "Broken PDF"
+    };
+    const { importStore, onAnalysisHint, result, workspaceStore } = renderWorkspaceActions([paper], {
+      extractPaperChunks: vi.fn(async () => {
+        throw new Error("read_local_library_pdf command not found");
+      })
+    });
+    const onComplete = vi.fn();
+    const onFailure = vi.fn();
+    workspaceStore.toggleSelection(paper.id);
+
+    act(() => {
+      result.current.queueImportForPapers([paper], onComplete, onFailure);
+      vi.runAllTimers();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.objectContaining({ message: "read_local_library_pdf command not found" }),
+      paper
+    }));
+    expect(importStore.getLatestJobByDocumentId(paper.id)?.status).toBe("failed");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(
+      "《Broken PDF》解析失败：read_local_library_pdf command not found"
+    );
   });
 
   test("fills missing DOI and arXiv metadata from explicitly marked first-page text", async () => {

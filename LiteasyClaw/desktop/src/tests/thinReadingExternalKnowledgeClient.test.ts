@@ -35,6 +35,7 @@ describe("thinReadingExternalKnowledgeClient", () => {
     }));
     const client = createThinReadingExternalKnowledgeClient({
       endpoint: "https://liteasy.example.com/",
+      openAlexApiKey: "user-openalex-key",
       transport
     });
 
@@ -63,10 +64,41 @@ describe("thinReadingExternalKnowledgeClient", () => {
     });
     expect(transport).toHaveBeenCalledWith(expect.objectContaining({
       body: expect.stringContaining('"artifactId":"artifact-thin-external"'),
+      headers: expect.objectContaining({ "X-OpenAlex-Api-Key": "user-openalex-key" }),
       method: "POST",
       url: "https://liteasy.example.com/v1/research/external-knowledge"
     }));
     expect(String(transport.mock.calls[0][0].body)).toContain('"targetPaperIdentity":{"kind":"doi","value":"10.1000/colbert"}');
+    expect(String(transport.mock.calls[0][0].body)).not.toContain("user-openalex-key");
+  });
+
+  test("rejects malformed configured API keys before sending a retrieval request", async () => {
+    const transport = vi.fn();
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      openAlexApiKey: "not a valid key",
+      transport
+    });
+
+    await expect(client({ artifactId: "artifact-invalid-key", query: "test" })).rejects.toThrow("API 密钥格式无效");
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  test("surfaces the actionable OpenAlex key requirement instead of a generic 503", async () => {
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async () => ({
+        json: async () => ({
+          error: "openalex_api_key_required",
+          message: "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。"
+        }),
+        ok: false,
+        status: 503
+      })
+    });
+
+    await expect(client({ artifactId: "artifact-key-required", query: "test" }))
+      .rejects.toThrow("请在 Liteasy 设置中配置 OpenAlex API 密钥");
   });
 
   test("rejects malformed source payloads", async () => {

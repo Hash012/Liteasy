@@ -1,0 +1,161 @@
+{
+  "agent": {
+    "apiVersion": "liteasy.agent/v1",
+    "runId": "run-1785310466051-2",
+    "sessionId": "session-1785020363938-1",
+    "status": "completed"
+  },
+  "analysis": {
+    "citations": [],
+    "evidence": [],
+    "evidencePrompt": "没有从所选论文中取得可引用证据；必须回答证据不足。",
+    "paperClaims": [],
+    "retrievalConfidence": 0.15,
+    "run": {
+      "coverage": {
+        "coveredPaperIds": [],
+        "missingPaperIds": [
+          "dropped-heliox-camera-ready-pdf-1508724"
+        ],
+        "ratio": 0,
+        "selectedPaperIds": [
+          "dropped-heliox-camera-ready-pdf-1508724"
+        ]
+      },
+      "createdAt": "2026-07-29T07:34:26.104Z",
+      "id": "analysis-1-412875f1-9ba4-4606-8f38-7e19bfbebfd0",
+      "plan": {
+        "dimensions": [
+          "研究问题",
+          "方法",
+          "实验与结果",
+          "局限与分歧"
+        ],
+        "maxEvidencePerPaper": 1,
+        "maxTotalEvidence": 1,
+        "paperIds": [
+          "dropped-heliox-camera-ready-pdf-1508724"
+        ],
+        "query": "基于当前锁定的选中文献集生成可供读者深入理解论文的树形分析。完整梳理论文结构、术语关系、方法细节、实验设计与结论边界，并提取可追溯证据。严格使用 Markdown unordered list 表达层级，每层缩进两个空格；不要使用制表符、ASCII 树线或代码围栏。以每篇论文为一级分析对象，继续展开研究动机、问题定义、关键假设、数据流、算法步骤、公式/变量、模型与组件、数据集、基线、指标、定量结果、消融、效率、失败模式、局限与可复现信息。证据中出现的专有名词、模型名、组件名、算法名、数据集名和指标名都要作为可继续展开的节点，解释它是什么、在方法中的位置、与相邻概念的关系。不要为了缩短输出而合并有独立含义的概念，也不要设置固定节点数；深度和规模应随证据量增长。每个事实节点附 evidence ID。证据不足时明确标注未知项，不能用常识补写。"
+      },
+      "query": "基于当前锁定的选中文献集生成可供读者深入理解论文的树形分析。完整梳理论文结构、术语关系、方法细节、实验设计与结论边界，并提取可追溯证据。严格使用 Markdown unordered list 表达层级，每层缩进两个空格；不要使用制表符、ASCII 树线或代码围栏。以每篇论文为一级分析对象，继续展开研究动机、问题定义、关键假设、数据流、算法步骤、公式/变量、模型与组件、数据集、基线、指标、定量结果、消融、效率、失败模式、局限与可复现信息。证据中出现的专有名词、模型名、组件名、算法名、数据集名和指标名都要作为可继续展开的节点，解释它是什么、在方法中的位置、与相邻概念的关系。不要为了缩短输出而合并有独立含义的概念，也不要设置固定节点数；深度和规模应随证据量增长。每个事实节点附 evidence ID。证据不足时明确标注未知项，不能用常识补写。",
+      "status": "needs_review",
+      "completedAt": "2026-07-29T07:34:33.916Z"
+    },
+    "claims": [
+      {
+        "analysisRunId": "analysis-1-412875f1-9ba4-4606-8f38-7e19bfbebfd0",
+        "confidence": 0,
+        "evidenceIds": [],
+        "id": "claim-1-3f95192a-f0e0-45fc-a955-a6eeb9bc29ac",
+        "stance": "insufficient",
+        "text": "根据当前 Runtime Context 和 Evidence Matrix，我无法生成你要求的树形分析。\n\n**原因**  \n- 选中文献：1 篇（`heliox_camera_ready`），但**已导入 0 篇** → 该文献尚未进入受控上下文的可引用状态。  \n- 证据矩阵明确返回：**没有从所选论文中取得可引用证据** → 不能依赖常识补写，也不能凭空生成分析。  \n- “选区锁定”为“是”（可能指文献已被选中但未导入），而 `documents_not_imported` 字段确认了缺少待引用内容。\n\n**可执行的下一步建议**  \n1. **导入文献**：使用文献库的“导入”功能，将 `heliox_camera_ready` PDF 或题录数据纳入本地文献库。  \n2. **解除选区锁定**（如果锁定阻止了导入操作）：在界面上关闭“选区锁定”开关，然后重新导入。  \n3. 导入成功后，再向我发送“基于选中文献生成树形分析”的指令，我将利用已接入的 `artifact-generate` skill 提取结构、术语、方法细节和可追溯证据，严格按 Markdown 无序列表层级展开。\n\n当前资源不足，无法执行目标产物。请先完成数据导入，我随时准备好继续。"
+      }
+    ]
+  },
+  "answer": "根据当前 Runtime Context 和 Evidence Matrix，我无法生成你要求的树形分析。\n\n**原因**  \n- 选中文献：1 篇（`heliox_camera_ready`），但**已导入 0 篇** → 该文献尚未进入受控上下文的可引用状态。  \n- 证据矩阵明确返回：**没有从所选论文中取得可引用证据** → 不能依赖常识补写，也不能凭空生成分析。  \n- “选区锁定”为“是”（可能指文献已被选中但未导入），而 `documents_not_imported` 字段确认了缺少待引用内容。\n\n**可执行的下一步建议**  \n1. **导入文献**：使用文献库的“导入”功能，将 `heliox_camera_ready` PDF 或题录数据纳入本地文献库。  \n2. **解除选区锁定**（如果锁定阻止了导入操作）：在界面上关闭“选区锁定”开关，然后重新导入。  \n3. 导入成功后，再向我发送“基于选中文献生成树形分析”的指令，我将利用已接入的 `artifact-generate` skill 提取结构、术语、方法细节和可追溯证据，严格按 Markdown 无序列表层级展开。\n\n当前资源不足，无法执行目标产物。请先完成数据导入，我随时准备好继续。\n引用: \n可信度: 0.15",
+  "artifactId": "artifact-1-run-1785310466051-2",
+  "artifactType": "tree",
+  "citations": [],
+  "createdAt": "2026-07-29T07:34:33.960Z",
+  "outlineMarkdown": "- Literature Tree Analysis\n  - heliox_camera_ready\n    - 当前没有取得可引用证据\n",
+  "outlineNodes": [
+    {
+      "id": "root",
+      "kind": "root",
+      "label": "Literature Tree Analysis"
+    },
+    {
+      "id": "paper-dropped-heliox-camera-ready-pdf-1508724",
+      "kind": "paper",
+      "label": "heliox_camera_ready",
+      "parentId": "root"
+    },
+    {
+      "id": "gap-dropped-heliox-camera-ready-pdf-1508724",
+      "kind": "gap",
+      "label": "当前没有取得可引用证据",
+      "parentId": "paper-dropped-heliox-camera-ready-pdf-1508724"
+    }
+  ],
+  "papers": [
+    {
+      "id": "dropped-heliox-camera-ready-pdf-1508724",
+      "title": "heliox_camera_ready"
+    }
+  ],
+  "title": "Literature Tree Analysis",
+  "uiDsl": {
+    "actions": [
+      {
+        "actionId": "artifact.open_tab",
+        "id": "open-artifact-1-run-1785310466051-2",
+        "input": {
+          "artifactId": "artifact-1-run-1785310466051-2",
+          "artifactType": "tree"
+        },
+        "label": "打开产物",
+        "riskLevel": "low"
+      }
+    ],
+    "audit": {
+      "createdAt": "2026-07-29T07:34:33.960Z",
+      "generatedBy": "rule",
+      "traceId": "trace-artifact-1-run-1785310466051-2"
+    },
+    "dataSources": [
+      {
+        "id": "artifact-selected-set",
+        "params": {
+          "artifactType": "tree",
+          "paperIds": [
+            "dropped-heliox-camera-ready-pdf-1508724"
+          ]
+        },
+        "sourceId": "selected_document_set.summary"
+      }
+    ],
+    "id": "ui-artifact-1-run-1785310466051-2",
+    "intentPlanId": "artifact-artifact-1-run-1785310466051-2",
+    "root": {
+      "children": [
+        {
+          "component": "ActionBar",
+          "id": "artifact-actions",
+          "props": {
+            "actionIds": [
+              "open-artifact-1-run-1785310466051-2"
+            ]
+          }
+        }
+      ],
+      "component": "TreeOutline",
+      "id": "artifact-tree-outline",
+      "props": {
+        "nodes": [
+          {
+            "id": "root",
+            "kind": "root",
+            "label": "Literature Tree Analysis"
+          },
+          {
+            "id": "paper-dropped-heliox-camera-ready-pdf-1508724",
+            "kind": "paper",
+            "label": "heliox_camera_ready",
+            "parentId": "root"
+          },
+          {
+            "id": "gap-dropped-heliox-camera-ready-pdf-1508724",
+            "kind": "gap",
+            "label": "当前没有取得可引用证据",
+            "parentId": "paper-dropped-heliox-camera-ready-pdf-1508724"
+          }
+        ],
+        "title": "Literature Tree Analysis"
+      }
+    },
+    "surface": "center_artifact",
+    "version": "liteasy-ui-dsl/v1"
+  },
+  "version": "liteasy.agent-artifact/v1"
+}

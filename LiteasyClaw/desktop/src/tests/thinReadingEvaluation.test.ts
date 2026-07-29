@@ -157,7 +157,7 @@ describe("thinReadingEvaluation", () => {
     }));
   });
 
-  test("accepts the same 95 percent sentence-trace threshold enforced by live generation", () => {
+  test("rejects a sentence trace that leaves even a short displayed suffix unmapped", () => {
     const fixture = thinReadingGoldFixtures.find(({ gold }) =>
       gold.id === "gold-experimental-colbert"
     )!;
@@ -168,10 +168,50 @@ describe("thinReadingEvaluation", () => {
 
     const report = evaluateThinReadingGoldCase({ candidate, gold: fixture.gold });
 
-    expect(report.metrics.sentenceBoundaryCoverage.score).toBeGreaterThanOrEqual(0.95);
-    expect(report.issues).not.toContainEqual(expect.objectContaining({
+    expect(report.metrics.sentenceBoundaryCoverage.score).toBeLessThan(1);
+    expect(report.issues).toContainEqual(expect.objectContaining({
       code: "sentence_boundary_incomplete"
     }));
+  });
+
+  test("accepts an ordered sentence trace when only punctuation separators are omitted", () => {
+    const fixture = thinReadingGoldFixtures.find(({ gold }) =>
+      gold.id === "gold-experimental-colbert"
+    )!;
+    const evidenceId = fixture.candidate.evidence.paperEvidence[0];
+    const candidate = {
+      ...fixture.candidate,
+      summary: "第一句保留 MaxSim。第二句说明 token-level matching。",
+      evidence: {
+        ...fixture.candidate.evidence,
+        claims: [{
+          evidenceIds: [evidenceId],
+          id: "punctuation-boundary-claim",
+          status: "grounded" as const,
+          text: "MaxSim 保留 token-level matching。"
+        }],
+        summarySentences: [
+          {
+            evidenceIds: [evidenceId],
+            externalKnowledge: [],
+            id: "punctuation-boundary-first",
+            status: "grounded" as const,
+            text: "第一句保留 MaxSim"
+          },
+          {
+            evidenceIds: [evidenceId],
+            externalKnowledge: [],
+            id: "punctuation-boundary-second",
+            status: "grounded" as const,
+            text: "第二句说明 token-level matching"
+          }
+        ]
+      }
+    };
+
+    const report = evaluateThinReadingGoldCase({ candidate, gold: fixture.gold });
+
+    expect(report.metrics.sentenceBoundaryCoverage.score).toBe(1);
   });
 
   test("does not award citation precision when required gold evidence is not cited", () => {
@@ -364,6 +404,55 @@ describe("thinReadingEvaluation", () => {
         sourceId: "W3177828909"
       })
     ]);
+  });
+
+  test("rejects a traceable but wrong external source identity or relation", () => {
+    const fixture = thinReadingGoldFixtures.find(({ gold }) =>
+      gold.id === "gold-branch-external-bert-cited-by-alphafold"
+    )!;
+    const wrongIdentity = evaluateThinReadingGoldCase({
+      candidate: {
+        ...fixture.candidate,
+        evidence: {
+          ...fixture.candidate.evidence,
+          externalKnowledge: ["openalex:W43"],
+          externalSources: [{
+            ...(fixture.candidate.evidence.externalSources ?? [])[0],
+            id: "openalex:W43",
+            sourceId: "W43",
+            sourceRecordUrl: "https://openalex.org/W43"
+          }],
+          summarySentences: fixture.candidate.evidence.summarySentences?.map((sentence) => ({
+            ...sentence,
+            externalKnowledge: ["openalex:W43"]
+          }))
+        }
+      },
+      gold: fixture.gold
+    });
+    const wrongRelation = evaluateThinReadingGoldCase({
+      candidate: {
+        ...fixture.candidate,
+        evidence: {
+          ...fixture.candidate.evidence,
+          externalSources: fixture.candidate.evidence.externalSources?.map((source) => ({
+            ...source,
+            relation: "related" as const
+          }))
+        }
+      },
+      gold: fixture.gold
+    });
+
+    expect(wrongIdentity.metrics.externalSourceTraceability.score).toBe(1);
+    expect(wrongIdentity.metrics.externalSourceGoldMatch.score).toBe(0);
+    expect(wrongIdentity.issues).toContainEqual(expect.objectContaining({
+      code: "external_source_mismatch"
+    }));
+    expect(wrongRelation.metrics.externalSourceGoldMatch.score).toBe(0);
+    expect(wrongRelation.issues).toContainEqual(expect.objectContaining({
+      code: "external_source_mismatch"
+    }));
   });
 
   test("rejects a topic-search source when the summary upgrades it into a citation relationship", () => {

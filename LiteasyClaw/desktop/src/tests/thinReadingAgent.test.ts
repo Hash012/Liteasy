@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
   buildThinReadingAgentPrompt,
+  buildThinReadingEvidenceObservationPrompt,
+  buildThinReadingEvidencePlanPrompt,
+  buildThinReadingEvidenceReviewPrompt,
+  parseThinReadingEvidenceObservation,
+  parseThinReadingEvidencePlan,
+  parseThinReadingEvidenceReview,
   parseThinReadingModelSeed
 } from "../app/features/thin-reading/thinReadingAgent";
 import { classifyThinReadingPaper } from "../app/features/thin-reading/thinReadingPromptRegistry";
@@ -97,6 +103,122 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("错误：后期交互（late interaction）");
   });
 
+  test("builds and validates an evidence-only reading plan", () => {
+    const prompt = buildThinReadingEvidencePlanPrompt({ context, prepared });
+    expect(prompt).toContain("证据规划 Agent");
+    expect(prompt).toContain("不写摘要");
+    expect(prompt).toContain("evidence-survey-taxonomy");
+    expect(prompt).toContain("轻量证据目录");
+    expect(prompt).toContain("terms=survey, taxonomy, vector database");
+    expect(prompt).toContain("summary=这篇综述给出 vector database systems 的 taxonomy（分类框架）。");
+    expect(prompt).not.toContain("This survey presents a taxonomy of vector database systems.");
+    expect(prompt).not.toContain("完整证据矩阵");
+
+    expect(parseThinReadingEvidencePlan({
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      output: JSON.stringify({
+        focus: ["分类框架"],
+        selectedEvidenceIds: ["evidence-survey-taxonomy"]
+      })
+    })).toEqual({
+      focus: ["分类框架"],
+      pageRequests: [],
+      searchQueries: [],
+      selectedEvidenceIds: ["evidence-survey-taxonomy"]
+    });
+
+    expect(() => parseThinReadingEvidencePlan({
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      output: JSON.stringify({ focus: ["分类框架"], selectedEvidenceIds: ["invented-evidence"] })
+    })).toThrow("不可用的 evidence ID");
+  });
+
+  test("bounds the second-round evidence observation decision to the original allowlist", () => {
+    const firstPlan = parseThinReadingEvidencePlan({
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      output: JSON.stringify({
+        focus: ["分类框架"],
+        selectedEvidenceIds: ["evidence-survey-taxonomy"]
+      })
+    });
+    const prompt = buildThinReadingEvidenceObservationPrompt({
+      context,
+      firstPlan,
+      observedEvidenceIds: ["evidence-survey-taxonomy"],
+      prepared
+    });
+    expect(prompt).toContain("证据观察 Agent");
+    expect(prompt).toContain("最多一轮");
+    expect(prompt).toContain("This survey presents a taxonomy");
+
+    expect(parseThinReadingEvidenceObservation({
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      output: JSON.stringify({
+        decision: "stop",
+        focus: [],
+        pageRequests: [],
+        reason: "已观察证据足以支撑当前的核心分类框架。",
+        searchQueries: [],
+        selectedEvidenceIds: []
+      })
+    }).decision).toBe("stop");
+
+    expect(() => parseThinReadingEvidenceObservation({
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      output: JSON.stringify({
+        decision: "continue",
+        focus: ["新证据"],
+        pageRequests: [],
+        reason: "需要补充会改变核心结论的限定证据。",
+        searchQueries: [],
+        selectedEvidenceIds: ["invented-evidence"]
+      })
+    })).toThrow("不可用的 evidence ID");
+
+    expect(() => parseThinReadingEvidenceObservation({
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      output: JSON.stringify({
+        decision: "stop",
+        focus: [],
+        pageRequests: [2],
+        reason: "已经足够但错误地保留了工具请求。",
+        searchQueries: [],
+        selectedEvidenceIds: []
+      })
+    })).toThrow("stop 不能包含新的证据请求");
+  });
+
+  test("requires evidence reviewers to name a real unsupported sentence", () => {
+    const node = parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: ["evidence-survey-taxonomy"], status: "grounded", text: "taxonomy 是主轴。" }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "该综述以 taxonomy（分类框架）组织知识地图。",
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该综述以 taxonomy（分类框架）组织知识地图。"
+      }],
+      withinPaperClosure: true
+    }), { analysis: prepared, requireExplicitTraceability: true, targetLanguage: "zh-CN" });
+    const prompt = buildThinReadingEvidenceReviewPrompt({ node, prepared });
+    const sentenceId = node.evidence.summarySentences[0].id;
+    expect(prompt).toContain("证据复核 Agent");
+    expect(prompt).toContain(sentenceId);
+    expect(parseThinReadingEvidenceReview({
+      output: JSON.stringify({ reason: "该句将 taxonomy 的作用夸大为因果结论。", unsupportedSentenceIds: [sentenceId], verdict: "fail" }),
+      sentenceIds: [sentenceId]
+    })).toMatchObject({ verdict: "fail", unsupportedSentenceIds: [sentenceId] });
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({ reason: "该句没有对应的论文证据，因此不能被复核通过。", unsupportedSentenceIds: ["invented-sentence"], verdict: "fail" }),
+      sentenceIds: [sentenceId]
+    })).toThrow("不存在的 summary sentence ID");
+  });
+
   test("includes parent claims and evidence spans when generating a branch", () => {
     const prompt = buildThinReadingAgentPrompt({
       context: {
@@ -136,6 +258,41 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("上一层论文内证据 span");
     expect(prompt).toContain("This survey presents a taxonomy");
     expect(prompt).toContain("本轮输出仍只能引用下方可用 evidence ID");
+  });
+
+  test("anchors an external-source selection to its canonical source in the branch prompt", () => {
+    const prompt = buildThinReadingAgentPrompt({
+      context: {
+        ...context,
+        depth: 2,
+        externalSources: [{
+          abstract: "A traceable follow-up study.",
+          authors: ["A. Author"],
+          id: "openalex:W42",
+          provider: "openalex",
+          relation: "related",
+          relevance: 0.8,
+          retrievalQuery: "vector database follow-up",
+          sourceId: "W42",
+          sourceRecordUrl: "https://openalex.org/W42",
+          title: "A Follow-up Study",
+          url: "https://openalex.org/W42",
+          year: 2025
+        }],
+        source: {
+          externalSourceIds: ["openalex:W42"],
+          excerpt: "A Follow-up Study",
+          kind: "selected_text"
+        }
+      },
+      prepared
+    });
+
+    expect(prompt).toContain("选区对应的已验证外部 source ID：openalex:W42");
+    expect(prompt).toContain("A Follow-up Study");
+    expect(prompt).toContain("relation=related");
+    expect(prompt).toContain("NARRATION RULE: this exact source may only be called a related-work lead");
+    expect(prompt).toContain("不同 relation 的 source 不得在同一句中合并为笼统的 citation 结论");
   });
 
   test("prioritizes evidence linked to a selected summary passage", () => {
@@ -319,6 +476,69 @@ describe("thinReadingAgent", () => {
     })).toThrow("summarySentences 必须显式覆盖正文");
   });
 
+  test("rejects a nearly complete sentence map that leaves displayed summary content untraced", () => {
+    const summary = "证".repeat(100);
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: [],
+      claims: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        status: "grounded",
+        text: "证据支撑该判断。"
+      }],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary,
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary.slice(0, 96)
+      }],
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: prepared.evidence,
+      requireExplicitTraceability: true
+    })).toThrow("必须完整覆盖 100% 的正文");
+  });
+
+  test("accepts ordered sentence mappings when only sentence-boundary punctuation is omitted", () => {
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: [],
+      claims: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        status: "grounded",
+        text: "taxonomy 组织知识地图。"
+      }],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "第一句说明 taxonomy。第二句说明它组织知识地图。",
+      summarySentences: [
+        {
+          evidenceIds: ["evidence-survey-taxonomy"],
+          externalKnowledge: [],
+          status: "grounded",
+          text: "第一句说明 taxonomy"
+        },
+        {
+          evidenceIds: ["evidence-survey-taxonomy"],
+          externalKnowledge: [],
+          status: "grounded",
+          text: "第二句说明它组织知识地图"
+        }
+      ],
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: prepared.evidence,
+      requireExplicitTraceability: true
+    });
+
+    expect(seed.evidence.summarySentences).toHaveLength(2);
+  });
+
   test("rejects a Chinese gloss that reverses a key term from the current evidence", () => {
     expect(() => parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
@@ -410,6 +630,29 @@ describe("thinReadingAgent", () => {
       analysisEvidence: prepared.evidence,
       targetLanguage: "zh-CN"
     })).toThrow("中文总述过长");
+  });
+
+  test("rejects a newline-separated summary instead of preserving a section-list presentation", () => {
+    const summary = "核心结论：taxonomy 组织了 vector database systems。\n证据与边界：该分类框架用于比较系统设计。";
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      externalKnowledge: [],
+      claims: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary,
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: prepared.evidence,
+      targetLanguage: "zh-CN"
+    })).toThrow("summary 必须是一段连续的自然文本");
   });
 
   test("rejects live sentence evidence omitted from the top-level evidence set", () => {
@@ -505,7 +748,7 @@ describe("thinReadingAgent", () => {
     });
   });
 
-  test("accepts and normalizes live model output with many paper evidence references", () => {
+  test("rejects descriptive or combined evidence references instead of silently attributing them", () => {
     const manyEvidence = Array.from({ length: 18 }, (_, index) => ({
       analysisRunId: "analysis-many",
       chunkId: `paper-acorn:p${index + 1}:chunk-1`,
@@ -522,7 +765,7 @@ describe("thinReadingAgent", () => {
     const evidenceReferences = manyEvidence.map((item, index) =>
       index % 2 === 0 ? item.id : `${item.id} 支撑 ACORN 的混合搜索论证`
     );
-    const seed = parseThinReadingModelSeed(JSON.stringify({
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
       claims: [
         {
@@ -542,16 +785,7 @@ describe("thinReadingAgent", () => {
       withinPaperClosure: true
     }), {
       analysisEvidence: manyEvidence
-    });
-
-    expect(seed.evidence.paperEvidence).toHaveLength(18);
-    expect(seed.evidence.paperEvidence[0]).toBe("evidence-1-acorn");
-    expect(seed.evidence.paperEvidenceSpans).toHaveLength(18);
-    expect(seed.evidence.claims?.[0]?.evidenceIds).toEqual([
-      "evidence-1-acorn",
-      "evidence-2-acorn",
-      "evidence-3-acorn"
-    ]);
+    })).toThrow("paperEvidence 引用了不可用的 evidence ID");
   });
 
   test("rejects thin-reading output without paper or external evidence markers", () => {

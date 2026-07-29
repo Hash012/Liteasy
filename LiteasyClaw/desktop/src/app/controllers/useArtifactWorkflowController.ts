@@ -21,6 +21,11 @@ import {
   createArtifactLocalRepository,
   type ArtifactLocalRepository
 } from "../features/artifacts/artifactLocalRepository";
+import {
+  persistInterruptedArtifactTasks,
+  takeInterruptedArtifactTasks,
+  validateThinReadingBranchRecoverySnapshot
+} from "../features/artifacts/artifactTaskRecovery";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
@@ -45,7 +50,11 @@ type UseArtifactWorkflowControllerInput = {
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
   onAnalysisHint: (message: string) => void;
-  queueImportForPapers: (papers: Paper[], onComplete?: () => void) => ImportQueueStatus;
+  queueImportForPapers: (
+    papers: Paper[],
+    onComplete?: () => void,
+    onFailure?: (input: { error: Error; paper: Paper }) => void
+  ) => ImportQueueStatus;
   runAgentAnalysis: (
     artifactType: ArtifactType,
     onProgress: (input: {
@@ -79,6 +88,7 @@ type ArtifactWorkflowActions = {
   openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
   openArtifact: (artifactId: string) => string;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
+  retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   saveSkillDocument: (artifactId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
@@ -138,6 +148,11 @@ export function useArtifactWorkflowController({
     persistCatalog(catalog);
   }
 
+  function handleArtifactTasksChanged(tasks: ArtifactTask[]) {
+    persistInterruptedArtifactTasks(tasks);
+    setArtifactTasks(tasks);
+  }
+
   const artifactActions = useArtifactActions({
     artifactStore,
     artifactResultClient,
@@ -153,7 +168,7 @@ export function useArtifactWorkflowController({
     onAnalysisHint,
     onArtifactCatalogChanged: handleArtifactCatalogChanged,
     onArtifactTabsChanged: setArtifactTabs,
-    onArtifactTasksChanged: setArtifactTasks,
+    onArtifactTasksChanged: handleArtifactTasksChanged,
     queueImportForPapers,
     runAgentAnalysis
   });
@@ -162,6 +177,7 @@ export function useArtifactWorkflowController({
     let active = true;
 
     async function restoreArtifacts() {
+      let hydratedThisRun = false;
       if (!localHydratedRef.current) {
         try {
           const cachedArtifacts = await localRepositoryRef.current?.list();
@@ -176,12 +192,9 @@ export function useArtifactWorkflowController({
             );
           }
         }
-        if (!active) {
-          return;
-        }
         localHydratedRef.current = true;
         persistenceReadyRef.current = true;
-        artifactActions.syncArtifacts();
+        hydratedThisRun = true;
       }
 
       try {
@@ -196,6 +209,40 @@ export function useArtifactWorkflowController({
             `同步 Agent 产物服务失败，已保留本地记录：${error instanceof Error ? error.message : String(error)}`
           );
         }
+      }
+
+      if (!active) {
+        return;
+      }
+      const interruptedTasks = takeInterruptedArtifactTasks();
+      let recoverableBranchCount = 0;
+      interruptedTasks.forEach((task) => {
+        const tab = task.artifactId
+          ? artifactStore.getCatalog().find((candidate) => candidate.artifactId === task.artifactId)
+          : undefined;
+        const document = tab?.type === "thin_reading" ? tab.thinReadingDocument : undefined;
+        const validation = task.thinReadingBranchRecovery && document
+          ? validateThinReadingBranchRecoverySnapshot(task.thinReadingBranchRecovery, document)
+          : undefined;
+        if (validation?.valid) {
+          recoverableBranchCount += 1;
+          artifactStore.restoreInterruptedTask(task);
+          return;
+        }
+        artifactStore.restoreInterruptedTask({
+          ...task,
+          thinReadingBranchRecovery: undefined
+        });
+      });
+      if (interruptedTasks.length > 0) {
+        onAnalysisHint(
+          recoverableBranchCount > 0
+            ? "检测到应用重启前未完成的生成任务，已标记为中断；可核验的薄读分支可重新提交同一输入。"
+            : "检测到应用重启前未完成的生成任务，已标记为中断；请重新发起生成。"
+        );
+      }
+      if (hydratedThisRun || interruptedTasks.length > 0) {
+        artifactActions.syncArtifacts();
       }
     }
 
@@ -215,6 +262,7 @@ export function useArtifactWorkflowController({
       openArtifact: artifactActions.openArtifact,
       openSkillDocument: artifactActions.openSkillDocument,
       regenerateArtifact: artifactActions.regenerateArtifact,
+      retryInterruptedThinReadingBranch: artifactActions.retryInterruptedThinReadingBranch,
       saveSkillDocument: artifactActions.saveSkillDocument,
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,

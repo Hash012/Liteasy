@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { AcademicProfile } from "./profile.types";
 import { defaultAcademicProfile } from "./profile.types";
+import {
+  clearAcademicProfile,
+  loadAcademicProfile,
+  saveAcademicProfile
+} from "./profileStorage";
 
 type UseProfileActionsInput = {
   onProfileSamplingChanged?: (enabled: boolean) => void;
@@ -12,7 +17,7 @@ export function useProfileActions({
   profileSamplingEnabled = false
 }: UseProfileActionsInput = {}) {
   const [academicArchiveOpen, setAcademicArchiveOpen] = useState(false);
-  const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(defaultAcademicProfile);
+  const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(loadAcademicProfile);
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
 
@@ -39,11 +44,13 @@ export function useProfileActions({
 
   function updateAcademicProfile(nextProfile: AcademicProfile) {
     setAcademicProfile(nextProfile);
+    saveAcademicProfile(nextProfile);
     setProfileClearMessage("画像配置已更新。");
   }
 
   function clearUserProfile() {
-    setAcademicProfile(defaultAcademicProfile);
+    setAcademicProfile({ ...defaultAcademicProfile });
+    clearAcademicProfile();
     setClearProfileConfirmOpen(false);
     setProfileClearMessage("用户画像已清空，基础身份信息已保留。");
     onProfileSamplingChanged?.(false);

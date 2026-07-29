@@ -1,6 +1,7 @@
 import type {
   ThinReadingNodeSeed,
-  ThinReadingPaperType
+  ThinReadingPaperType,
+  ThinReadingExternalSource
 } from "./thinReading.types";
 
 export type ThinReadingGoldConcept = string | readonly string[];
@@ -11,6 +12,11 @@ export type ThinReadingGoldEvidence = {
   quote: string;
 };
 
+export type ThinReadingGoldExternalSource = {
+  id: string;
+  relation: ThinReadingExternalSource["relation"];
+};
+
 export type ThinReadingGoldTerminology = {
   original: ThinReadingGoldConcept;
   translation: ThinReadingGoldConcept;
@@ -19,6 +25,7 @@ export type ThinReadingGoldTerminology = {
 export type ThinReadingGoldStandard = {
   acceptablePaperTypes?: readonly ThinReadingPaperType[];
   expectedOmittedSectionKeys?: readonly string[];
+  expectedExternalSources?: readonly ThinReadingGoldExternalSource[];
   expectedWithinPaperClosure: boolean;
   id: string;
   paperType: ThinReadingPaperType;
@@ -45,6 +52,7 @@ export type ThinReadingEvaluationIssueCode =
   | "closure_boundary_mismatch"
   | "evidence_grounding_below_threshold"
   | "external_relation_misrepresented"
+  | "external_source_mismatch"
   | "external_source_untraceable"
   | "language_inconsistent"
   | "omitted_section_recall_below_threshold"
@@ -67,6 +75,7 @@ export type ThinReadingEvaluationReport = {
     closureBoundaryAccuracy: ThinReadingEvaluationMetric;
     evidenceGrounding: ThinReadingEvaluationMetric;
     externalRelationFidelity: ThinReadingEvaluationMetric;
+    externalSourceGoldMatch: ThinReadingEvaluationMetric;
     externalSourceTraceability: ThinReadingEvaluationMetric;
     languageConsistency: ThinReadingEvaluationMetric;
     omittedSectionRecall: ThinReadingEvaluationMetric;
@@ -94,7 +103,8 @@ const metricWeights = {
   closureBoundaryAccuracy: 0.1,
   evidenceGrounding: 0.1,
   externalRelationFidelity: 0.05,
-  externalSourceTraceability: 0.05,
+  externalSourceGoldMatch: 0.02,
+  externalSourceTraceability: 0.03,
   languageConsistency: 0.05,
   omittedSectionRecall: 0.08,
   paperTypeAccuracy: 0.05,
@@ -220,13 +230,21 @@ function sentenceBoundaryCoverage(seed: ThinReadingNodeSeed) {
     sentences.filter((sentence) => sentenceHasValidBoundary(sentence, availableEvidenceIds)).length,
     Math.max(1, sentences.length)
   );
-  const normalizedSummary = normalizeText(seed.summary);
-  const tracedSummaryLength = sentences.reduce((total, sentence) => {
-    const normalizedSentence = normalizeText(sentence.text);
-    return normalizedSentence.length > 0 && normalizedSummary.includes(normalizedSentence)
-      ? total + normalizedSentence.length
-      : total;
-  }, 0);
+  const normalizedSummary = normalizeSentenceTraceText(seed.summary);
+  let cursor = 0;
+  let tracedSummaryLength = 0;
+  for (const sentence of sentences) {
+    const normalizedSentence = normalizeSentenceTraceText(sentence.text);
+    if (!normalizedSentence) {
+      continue;
+    }
+    const index = normalizedSummary.indexOf(normalizedSentence, cursor);
+    if (index < 0) {
+      continue;
+    }
+    cursor = index + normalizedSentence.length;
+    tracedSummaryLength += normalizedSentence.length;
+  }
   const textCoverage = metric(
     Math.min(tracedSummaryLength, normalizedSummary.length),
     Math.max(1, normalizedSummary.length)
@@ -235,6 +253,14 @@ function sentenceBoundaryCoverage(seed: ThinReadingNodeSeed) {
     validBoundaryCoverage.score * textCoverage.score,
     1
   );
+}
+
+function normalizeSentenceTraceText(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\p{P}\p{S}\s]+/gu, "")
+    .trim();
 }
 
 function omittedSectionRecall(seed: ThinReadingNodeSeed, expectedKeys: readonly string[] | undefined) {
@@ -376,6 +402,28 @@ function externalSourceTraceability(seed: ThinReadingNodeSeed) {
   );
 }
 
+function externalSourceGoldMatch(
+  seed: ThinReadingNodeSeed,
+  expectedSources: readonly ThinReadingGoldExternalSource[] | undefined
+) {
+  const expected = expectedSources ?? [];
+  if (expected.length === 0) {
+    return metric(1, 1);
+  }
+  const referencedIds = new Set(unique([
+    ...seed.evidence.externalKnowledge,
+    ...(seed.evidence.summarySentences ?? []).flatMap((sentence) => sentence.externalKnowledge)
+  ]));
+  const sourcesById = new Map((seed.evidence.externalSources ?? []).map((source) => [source.id, source]));
+  return metric(
+    expected.filter((expectedSource) => {
+      const source = sourcesById.get(expectedSource.id);
+      return referencedIds.has(expectedSource.id) && source?.relation === expectedSource.relation;
+    }).length,
+    expected.length
+  );
+}
+
 function hasUnqualifiedCitationClaim(text: string) {
   const citationPattern = /引用关系|引文图|引用了|被引用|citation(?:\s+graph|\s+relationship)?|cites?|cited\s+by/giu;
   for (const match of text.matchAll(citationPattern)) {
@@ -440,6 +488,7 @@ export function evaluateThinReadingGoldCase(input: {
     gold.expectedWithinPaperClosure
   );
   const externalSourceTraceabilityMetric = externalSourceTraceability(candidate);
+  const externalSourceGoldMatchMetric = externalSourceGoldMatch(candidate, gold.expectedExternalSources);
   const externalRelationFidelityMetric = externalRelationFidelity(candidate);
   const languageConsistencyMetric = languageConsistency(candidate.summary, gold.targetLanguage);
   const terminologyRetentionMetric = terminologyRetention(
@@ -469,8 +518,8 @@ export function evaluateThinReadingGoldCase(input: {
   if (evidenceGroundingMetric.score < 1) {
     issues.push(issue("evidence_grounding_below_threshold", "证据 span 未能回溯到 gold PDF 的页码和原文片段。"));
   }
-  if (sentenceBoundaryCoverageMetric.score < 0.95) {
-    issues.push(issue("sentence_boundary_incomplete", "总述句缺少合法来源边界，或句级映射覆盖显示正文不足 95%。"));
+  if (sentenceBoundaryCoverageMetric.score < 1) {
+    issues.push(issue("sentence_boundary_incomplete", "总述句缺少合法来源边界，或句级映射未完整覆盖显示正文。"));
   }
   if (omittedSectionRecallMetric.score < 0.5) {
     issues.push(issue("omitted_section_recall_below_threshold", "关键遗漏板块召回率低于 0.50。"));
@@ -483,6 +532,9 @@ export function evaluateThinReadingGoldCase(input: {
   }
   if (externalSourceTraceabilityMetric.score < 1) {
     issues.push(issue("external_source_untraceable", "外部知识未逐一映射到可追溯的 OpenAlex 来源。"));
+  }
+  if (externalSourceGoldMatchMetric.score < 1) {
+    issues.push(issue("external_source_mismatch", "外部来源未匹配 gold 中已核验的来源身份或关系。"));
   }
   if (externalRelationFidelityMetric.score < 1) {
     issues.push(issue("external_relation_misrepresented", "仅主题检索命中被错误表述为已验证的引用关系。"));
@@ -507,6 +559,7 @@ export function evaluateThinReadingGoldCase(input: {
     closureBoundaryAccuracy: closureBoundaryAccuracyMetric,
     evidenceGrounding: evidenceGroundingMetric,
     externalRelationFidelity: externalRelationFidelityMetric,
+    externalSourceGoldMatch: externalSourceGoldMatchMetric,
     externalSourceTraceability: externalSourceTraceabilityMetric,
     languageConsistency: languageConsistencyMetric,
     omittedSectionRecall: omittedSectionRecallMetric,
@@ -526,6 +579,7 @@ export function evaluateThinReadingGoldCase(input: {
     branchRelevance.score * metricWeights.branchRelevance +
     closureBoundaryAccuracyMetric.score * metricWeights.closureBoundaryAccuracy +
     externalRelationFidelityMetric.score * metricWeights.externalRelationFidelity +
+    externalSourceGoldMatchMetric.score * metricWeights.externalSourceGoldMatch +
     externalSourceTraceabilityMetric.score * metricWeights.externalSourceTraceability +
     languageConsistencyMetric.score * metricWeights.languageConsistency +
     terminologyRetentionMetric.score * metricWeights.terminologyRetention +

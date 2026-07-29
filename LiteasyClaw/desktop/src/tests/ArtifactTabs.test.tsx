@@ -229,6 +229,7 @@ describe("ArtifactTabs", () => {
           type: "thin_reading"
         }]}
         tasks={[{
+          artifactId: "artifact-thin-progress",
           id: "thin-reading-task",
           message: "正在核对薄读证据边界",
           progress: 78,

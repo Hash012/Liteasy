@@ -79,6 +79,46 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
   });
 
+  test("labels recovered branch submission as a new model request", async () => {
+    const retry = vi.fn(async () => undefined);
+    const document = makeDocument();
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onRetryInterruptedBranch={retry}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+
+    expect(screen.getByText("将创建新的模型请求，不会续跑已中断的调用。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "重新提交同一输入" }));
+    await waitFor(() => expect(retry).toHaveBeenCalledTimes(1));
+  });
+
+  test("localizes interrupted branch recovery for English artifacts", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      targetLanguage: "en-US"
+    });
+
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onRetryInterruptedBranch={vi.fn()}
+        onUpdateDocument={vi.fn()}
+        papers={fixture.papers}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Resubmit the same input" })).toBeInTheDocument();
+    expect(screen.getByText("This creates a new model request; it does not resume the interrupted call.")).toBeInTheDocument();
+    expect(screen.queryByText("重新提交同一输入")).not.toBeInTheDocument();
+  });
+
   test("warns before the closure boundary without mislabelling paper evidence as external", () => {
     const fixture = createThinReadingFixture();
     const root = createThinReadingDocument(fixture);
@@ -607,6 +647,76 @@ describe("ThinReadingTab", () => {
       nodeId: document.activeNodeId,
       source: "openalex:W42"
     });
+  });
+
+  test("keeps the selected external source id when deepening an external reading lead", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          claims: [],
+          externalKnowledge: ["openalex:W42"],
+          externalSources: [{
+            abstract: "A follow-up study.",
+            authors: ["A. Author"],
+            id: "openalex:W42",
+            provider: "openalex",
+            relation: "related",
+            relevance: 0.85,
+            retrievalQuery: "follow-up",
+            sourceRecordUrl: "https://openalex.org/W42",
+            sourceId: "W42",
+            title: "A Follow-up Study",
+            url: "https://openalex.org/W42",
+            year: 2025
+          }],
+          paperEvidence: [],
+          paperEvidenceSpans: [],
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: ["openalex:W42"],
+            id: "sentence-external",
+            status: "weak",
+            text: "后续研究扩展了这套方法。"
+          }]
+        },
+        summary: "后续研究扩展了这套方法。",
+        withinPaperClosure: false
+      }
+    });
+    const onGenerateBranch = vi.fn(async () => undefined);
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={fixture.papers}
+      />
+    );
+    const sourceLink = screen.getByRole("link", { name: "A Follow-up Study" });
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "A Follow-up Study",
+      getRangeAt: () => ({
+        commonAncestorContainer: sourceLink,
+        getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
+      }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(sourceLink);
+    fireEvent.click(screen.getByRole("button", { name: "深入" }));
+
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document,
+      source: {
+        externalSourceIds: ["openalex:W42"],
+        excerpt: "A Follow-up Study",
+        kind: "selected_text"
+      }
+    }));
   });
 
   test("can deepen an Intuecho recommendation directly without pretending it is synced community data", async () => {

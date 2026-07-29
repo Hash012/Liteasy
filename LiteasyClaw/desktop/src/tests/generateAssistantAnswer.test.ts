@@ -1,9 +1,44 @@
 import {
   generateAssistantAnswer,
+  prioritizeThinReadingGenerationSources,
   shouldRetrieveThinReadingExternalKnowledge
 } from "../app/features/assistant/generateAssistantAnswer";
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+
+test("prioritizes verified citation edges over unselected topic-search sources for generation", () => {
+  const sources = [
+    {
+      abstract: "A graph-linked paper.", authors: [], id: "openalex:W1", provider: "openalex" as const,
+      relation: "cites_target" as const, relevance: 0.9, retrievalQuery: "BERT", sourceId: "W1",
+      sourceRecordUrl: "https://openalex.org/W1", title: "Graph source", url: "https://openalex.org/W1"
+    },
+    {
+      abstract: "A topic result.", authors: [], id: "openalex:W2", provider: "openalex" as const,
+      relation: "topic_search" as const, relevance: 0.7, retrievalQuery: "BERT", sourceId: "W2",
+      sourceRecordUrl: "https://openalex.org/W2", title: "Topic source", url: "https://openalex.org/W2"
+    }
+  ];
+  const context = {
+    artifactId: "artifact-external-priority",
+    depth: 1,
+    paperIds: ["paper-1"],
+    primaryPaperId: "paper-1",
+    source: { kind: "selected_text" as const, excerpt: "external relation" },
+    targetLanguage: "en-US"
+  };
+
+  expect(prioritizeThinReadingGenerationSources({ context, sources }).map((source) => source.id)).toEqual([
+    "openalex:W1"
+  ]);
+  expect(prioritizeThinReadingGenerationSources({
+    context: {
+      ...context,
+      source: { ...context.source, externalSourceIds: ["openalex:W2"] }
+    },
+    sources
+  }).map((source) => source.id)).toEqual(["openalex:W1", "openalex:W2"]);
+});
 
 test("generates cloud-proxy answers by default", async () => {
   const settings = createSettingsStore().getState();
@@ -382,6 +417,15 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
     depth: 2,
     source: { kind: "selected_text", excerpt: "MaxSim" }
   }, { maximumInternalDepth: 4 })).toBe(false);
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    depth: 1,
+    source: {
+      externalSourceIds: ["openalex:W42"],
+      kind: "selected_text",
+      excerpt: "A follow-up study"
+    }
+  }, { maximumInternalDepth: 4 })).toBe(true);
 });
 
 test("parses thin-reading structured output from a live model request", async () => {
@@ -631,6 +675,215 @@ test("runs thin-reading through the DeepSeek provider without downgrading to moc
   });
 });
 
+test("uses a live evidence plan to narrow a large thin-reading evidence matrix", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+  let plannedEvidenceIds: string[] = [];
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+        page: index + 1,
+        paperId: "demo-1",
+        paperTitle: "Planning Paper",
+        snippet: `Evidence passage ${index + 1} describes the method and result.`,
+        summary: `Evidence summary ${index + 1}.`,
+        tags: ["method", `signal-${index + 1}`]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      prompts.push(prompt);
+      if (prompt.includes("证据规划 Agent")) {
+        plannedEvidenceIds = [...prompt.matchAll(/\[(evidence-[^\]]+)\]/g)].slice(0, 3).map((match) => match[1]);
+        return {
+          json: async () => ({
+            answer: JSON.stringify({ focus: ["核心机制", "主要结果"], selectedEvidenceIds: plannedEvidenceIds }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据观察 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              decision: "stop",
+              focus: [],
+              pageRequests: [],
+              reason: "首轮观察已覆盖核心机制、主要结果与必要限定。",
+              searchQueries: [],
+              selectedEvidenceIds: []
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据复核 Agent")) {
+        reviewAttempts += 1;
+        const sentenceId = prompt.match(/id=(thin-reading-sentence-[^;\s]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(reviewAttempts === 1
+              ? {
+                  reason: "该句将三段证据共同支撑的范围表述得过强，需要压缩为可直接验证的判断。",
+                  unsupportedSentenceIds: [sentenceId],
+                  verdict: "fail"
+                }
+              : { reason: "每个句子均由指定证据直接支持。", unsupportedSentenceIds: [], verdict: "pass" }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const summary = "该方法的核心机制由三段关键证据共同支撑，并给出主要结果。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [plannedEvidenceIds[0]], status: "grounded", text: "核心机制得到关键证据支持。" }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: plannedEvidenceIds,
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{ evidenceIds: [plannedEvidenceIds[0]], externalKnowledge: [], status: "grounded", text: summary }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "Planning Paper" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-evidence-plan",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "Planning Paper",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts).toHaveLength(6);
+  expect(prompts[1]).toContain("证据观察 Agent");
+  expect(prompts[2]).not.toContain("Evidence summary 8");
+  expect(prompts[3]).toContain("证据复核 Agent");
+  expect(prompts[4]).toContain("薄读证据复核未通过");
+  expect(prompts[5]).toContain("证据复核 Agent");
+  expect(result.thinReading?.evidencePlan).toMatchObject({ selectedEvidenceIds: plannedEvidenceIds });
+  expect(result.thinReading?.evidenceLoop).toMatchObject({
+    rounds: [expect.objectContaining({ round: 1 })],
+    stopReason: "observation_sufficient"
+  });
+  expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual(plannedEvidenceIds);
+});
+
+test("executes a bounded second evidence-tool round after observing a concrete gap", async () => {
+  const store = createSettingsStore();
+  const generationPrompts: string[] = [];
+  store.apply({ intent: "update_setting", target: "models.cloud_proxy_endpoint", value: "https://liteasy.example.com/model-proxy" });
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({ json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }), ok: true, status: 200 }),
+    importedChunksByPaperId: {
+      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+        page: index + 1,
+        paperId: "demo-1",
+        paperTitle: "Tool Loop Paper",
+        snippet: index === 5 ? "Page six contains the MaxSim limitation." : `Page ${index + 1} contains method context.`,
+        summary: index === 5 ? "MaxSim limitation." : `Method context ${index + 1}.`,
+        tags: index === 5 ? ["MaxSim", "limitation"] : ["method"]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据规划 Agent")) {
+        const firstPageId = prompt.match(/\[(evidence-[^\]]+)\] p\.1/)?.[1] ?? "";
+        return {
+          json: async () => ({ answer: JSON.stringify({ focus: ["核心机制"], pageRequests: [], searchQueries: [], selectedEvidenceIds: [firstPageId] }), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true, status: 200
+        };
+      }
+      if (prompt.includes("证据观察 Agent")) {
+        const pageSixId = prompt.match(/\[(evidence-[^\]]+)\] p\.6/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              decision: "continue",
+              focus: ["MaxSim 限制"],
+              pageRequests: [6],
+              reason: "首轮只覆盖核心机制，缺少会改变结论边界的 MaxSim 限制证据。",
+              searchQueries: ["MaxSim limitation"],
+              selectedEvidenceIds: [pageSixId]
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify({ reason: "每句均有直接证据。", unsupportedSentenceIds: [], verdict: "pass" }), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true, status: 200
+        };
+      }
+      generationPrompts.push(prompt);
+      const ids = [...prompt.matchAll(/\[(evidence-[^\]]+)\]/g)].map((match) => match[1]);
+      const selectedId = ids.at(-1) ?? ids[0];
+      const summary = "该方法的限制需要结合第六页的 MaxSim evidence 阅读。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({ claims: [{ evidenceIds: [selectedId], status: "grounded", text: "第六页给出 MaxSim limitation。" }], externalKnowledge: [], omittedSections: [], paperEvidence: [selectedId], paperType: "experimental", recommendations: [], summary, summarySentences: [{ evidenceIds: [selectedId], externalKnowledge: [], status: "grounded", text: summary }], withinPaperClosure: true }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }), ok: true, status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "Tool Loop Paper" }],
+    settings: store.getState(),
+    thinReadingContext: { artifactId: "artifact-tool-loop", depth: 0, paperIds: ["demo-1"], primaryPaperId: "demo-1", primaryPaperTitle: "Tool Loop Paper", source: { kind: "root_overview" }, targetLanguage: "zh-CN" }
+  });
+
+  expect(generationPrompts).toHaveLength(1);
+  expect(generationPrompts[0]).toContain("Page six contains the MaxSim limitation.");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.evidenceToolCalls).toEqual(expect.arrayContaining([
+    expect.objectContaining({ kind: "search", query: "MaxSim limitation" }),
+    expect.objectContaining({ kind: "view", pages: [6] })
+  ]));
+  expect(result.thinReading?.evidenceLoop).toMatchObject({
+    rounds: [
+      expect.objectContaining({ round: 1 }),
+      expect.objectContaining({ round: 2, searchQueries: ["MaxSim limitation"] })
+    ],
+    stopReason: "maximum_rounds_reached"
+  });
+});
+
 test("repairs an incomplete live thin-reading trace exactly once", async () => {
   const store = createSettingsStore();
   const prompts: string[] = [];
@@ -709,6 +962,7 @@ test("repairs an incomplete live thin-reading trace exactly once", async () => {
 
   expect(prompts).toHaveLength(2);
   expect(prompts[1]).toContain("确定性结构质量门");
+  expect(prompts[1]).toContain("只有该条目中的全部 source relation 都是 cited_by_target 或 cites_target");
   expect(prompts[1]).toContain("<invalid_output>");
   expect(result.thinReading?.qualityGate).toMatchObject({
     attempts: 2,
@@ -956,13 +1210,19 @@ test("restricts a direct thin-reading request to its primary paper", async () =>
 
 test("moves a deep paper-bounded branch to traceable external sources at the closure limit", async () => {
   const store = createSettingsStore();
-  const externalRequests: Array<{ body: string; url: string }> = [];
+  const externalRequests: Array<{ body: string; headers: Record<string, string>; url: string }> = [];
   const progressSummaries: string[] = [];
+  let modelRequestBody = "";
   let modelPrompt = "";
   store.apply({
     intent: "update_setting",
     target: "models.cloud_proxy_endpoint",
     value: "https://liteasy.example.com/model-proxy"
+  });
+  store.apply({
+    intent: "update_setting",
+    target: "thin_reading.openalex_api_key",
+    value: "user-openalex-key"
   });
 
   const result = await generateAssistantAnswer({
@@ -985,6 +1245,7 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     mode: "qa",
     onProgress: (progress) => progressSummaries.push(progress.summary),
     modelTransport: async (request) => {
+      modelRequestBody = request.body;
       modelPrompt = String(JSON.parse(request.body).prompt);
       return {
         json: async () => ({
@@ -1024,7 +1285,7 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
       targetLanguage: "zh-CN"
     },
     thinReadingExternalKnowledgeTransport: async (request) => {
-      externalRequests.push({ body: request.body, url: request.url });
+      externalRequests.push({ body: request.body, headers: request.headers, url: request.url });
       return {
         json: async () => ({
           provider: "openalex",
@@ -1067,12 +1328,113 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     }
   });
   expect(externalRequests[0].url).toContain("/v1/research/external-knowledge");
+  expect(externalRequests[0].headers).toMatchObject({ "X-OpenAlex-Api-Key": "user-openalex-key" });
+  expect(externalRequests[0].body).not.toContain("user-openalex-key");
+  expect(modelRequestBody).not.toContain("user-openalex-key");
   expect(modelPrompt).toContain("openalex:W42");
   expect(modelPrompt).toContain("Efficient Multi-vector Retrieval");
   expect(result.thinReading?.rootSeed.evidence.externalSources?.[0]).toMatchObject({
     id: "openalex:W42",
     url: "https://openalex.org/W42"
   });
+  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
+});
+
+test("keeps a selected canonical external source available when a follow-up lookup is empty", async () => {
+  const store = createSettingsStore();
+  let modelPrompt = "";
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const selectedSource = {
+    abstract: "An already verified follow-up study.",
+    authors: ["A. Author"],
+    id: "openalex:W42",
+    provider: "openalex" as const,
+    relation: "related" as const,
+    relevance: 0.86,
+    retrievalQuery: "ColBERT follow-up",
+    sourceRecordUrl: "https://openalex.org/W42",
+    sourceId: "W42",
+    title: "Efficient Multi-vector Retrieval",
+    url: "https://openalex.org/W42",
+    year: 2025
+  };
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT uses MaxSim.",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      modelPrompt = String(JSON.parse(request.body).prompt);
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [selectedSource.id],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "这条已验证的后续研究线索聚焦更高效的多向量检索，并延续了当前阅读路径。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [selectedSource.id],
+              status: "weak",
+              text: "这条已验证的后续研究线索聚焦更高效的多向量检索，并延续了当前阅读路径。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-selected-external",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      selectedExternalSources: [selectedSource],
+      source: {
+        externalSourceIds: [selectedSource.id],
+        excerpt: selectedSource.title,
+        kind: "selected_text"
+      },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({ provider: "openalex", query: "ColBERT follow-up", sources: [], status: "empty" }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  expect(modelPrompt).toContain(selectedSource.id);
+  expect(modelPrompt).toContain(selectedSource.title);
+  expect(result.thinReading?.rootSeed.evidence.externalSources).toEqual([selectedSource]);
   expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
 });
 

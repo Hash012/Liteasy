@@ -7,6 +7,7 @@ import type { ImportJob } from "../features/import/import.types";
 import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
 import { useProfileActions } from "../features/profile/useProfileActions";
+import { toRecommendationResearchProfile } from "../features/profile/profile.types";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import { usePolicySync } from "../features/models/usePolicySync";
@@ -46,7 +47,11 @@ import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
 import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
-import { moveLocalLibraryResource, persistDroppedPdfFiles } from "../features/library/libraryFileSystemClient";
+import {
+  moveLocalLibraryResource,
+  persistDroppedPdfFiles,
+  readLocalLibraryPdf
+} from "../features/library/libraryFileSystemClient";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
@@ -209,6 +214,10 @@ export function AppShell({
   const workspaceActions = useWorkspaceActions({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
+    loadPdfSource: typeof window !== "undefined" &&
+      typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
+      ? readLocalLibraryPdf
+      : undefined,
     moveLocalLibraryResource,
     persistDroppedPdfFiles: typeof window !== "undefined" &&
       typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
@@ -660,9 +669,13 @@ export function AppShell({
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     documentMetadataTransport,
     documents: workspaceState.papers,
+    openAlexApiKey: settingsState["thin_reading.openalex_api_key"],
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
+    researchProfile: settingsState["profile.enabled"]
+      ? toRecommendationResearchProfile(profileActions.academicProfile)
+      : undefined,
     selectedPapers,
     workspaceRevision: workspaceState.workspaceRevision,
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
@@ -799,6 +812,7 @@ export function AppShell({
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
     onCollectRecommendation: knowledgeSync.actions.collectRecommendation,
+    onDismissRecommendation: knowledgeSync.actions.dismissRecommendation,
     onCreateOrganization: organizationShell.actions.openCreateDialog,
     onImportSelectedSet: () => {
       void registeredWorkspaceActions.handleImportSelectedSet();
@@ -961,6 +975,7 @@ export function AppShell({
             artifactWorkflow.actions.regenerateArtifact(request);
           }}
           onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
+          onRetryInterruptedThinReadingBranch={artifactWorkflow.actions.retryInterruptedThinReadingBranch}
           onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
           onSaveMarkdownTab={(artifactId) => {
             void artifactWorkflow.actions.saveSkillDocument(artifactId);

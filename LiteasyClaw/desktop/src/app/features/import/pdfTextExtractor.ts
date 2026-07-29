@@ -27,6 +27,7 @@ export type PdfOcrLanguage = "chi_sim" | "eng" | "eng+chi_sim";
 
 export type PdfExtractionOptions = {
   createOcrWorker?: (language: string) => Promise<PdfOcrWorker>;
+  loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   ocrLanguage?: PdfOcrLanguage;
 };
 
@@ -196,9 +197,20 @@ async function renderPdfPageForOcr(page: PDFPageProxy) {
   return canvas;
 }
 
-async function createPdfOcrWorker(language: string): Promise<PdfOcrWorker> {
+export function pdfOcrWorkerOptions(language: PdfOcrLanguage) {
+  // Bundled language files keep scanned documents readable without a first-run network request.
+  if (typeof window !== "undefined") {
+    return {
+      gzip: true,
+      langPath: new URL("/ocr", window.location.href).toString()
+    };
+  }
+  return {};
+}
+
+async function createPdfOcrWorker(language: PdfOcrLanguage): Promise<PdfOcrWorker> {
   const { createWorker } = await import("tesseract.js");
-  return createWorker(language);
+  return createWorker(language, 1, pdfOcrWorkerOptions(language));
 }
 
 async function extractScannedPdfPageText(page: PDFPageProxy, worker: PdfOcrWorker) {
@@ -267,7 +279,10 @@ export async function extractPdfChunksForPaper(
   if (!paper.sourcePath) {
     throw new Error(`Paper ${paper.id} does not have a PDF source path`);
   }
-  const pages = await extractPdfPages(paper.sourcePath, options);
+  const source = options.loadPdfSource
+    ? await options.loadPdfSource(paper.sourcePath)
+    : paper.sourcePath;
+  const pages = await extractPdfPages(source, options);
   const chunks = buildPdfChunksFromPages(paper, pages);
   if (chunks.length === 0) {
     throw new Error(`No selectable text was extracted from ${paper.title}`);

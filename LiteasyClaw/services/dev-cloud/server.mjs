@@ -15,6 +15,7 @@ async function startFromCli() {
   const { allowedOrigins, desktopOrigin, publicOrigin } = resolveCliRuntimeConfig();
   const server = createDevCloudServer({
     allowedOrigins,
+    arxivEnabled: true,
     desktopOrigin,
     publicOrigin
   });

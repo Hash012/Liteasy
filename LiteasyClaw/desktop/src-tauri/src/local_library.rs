@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const INDEX_FILE_NAME: &str = ".liteasy-library-index.json";
+const MAX_PDF_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -222,6 +223,30 @@ fn resolve_existing_resource(root: &Path, requested_path: &str) -> Result<PathBu
         return Err("只能修改本地文献库根目录内的资源。".to_string());
     }
     Ok(canonical)
+}
+
+#[tauri::command]
+pub fn read_local_library_pdf(source_path: String) -> Result<Vec<u8>, String> {
+    let root = library_root()?;
+    let source = resolve_existing_resource(&root, &source_path)?;
+    if !source.is_file()
+        || !source
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+    {
+        return Err("只能读取本地文献库中的 PDF 文件。".to_string());
+    }
+    let size = fs::metadata(&source)
+        .map_err(|error| format!("无法读取 PDF 文件信息：{error}"))?
+        .len();
+    if size == 0 {
+        return Err("PDF 文件为空。".to_string());
+    }
+    if size > MAX_PDF_BYTES {
+        return Err("PDF 文件超过 256 MB，无法导入。".to_string());
+    }
+    fs::read(source).map_err(|error| format!("读取 PDF 失败：{error}"))
 }
 
 fn resolve_target_resource(root: &Path, requested_path: &str) -> Result<PathBuf, String> {

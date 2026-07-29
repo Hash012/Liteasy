@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { requireOpenAlexApiKey } from "./openalex-api-key.mjs";
 
 const target = Object.freeze({
   id: "W2963341956",
@@ -47,9 +48,12 @@ export function validateCitesTargetRecord(input) {
   return issues;
 }
 
-async function fetchWork(id) {
+async function fetchWork(id, apiKey) {
+  const url = new URL(`https://api.openalex.org/works/${id}`);
+  url.searchParams.set("select", "id,display_name,referenced_works");
+  url.searchParams.set("api_key", apiKey);
   const response = await fetch(
-    `https://api.openalex.org/works/${id}?select=id,display_name,referenced_works`,
+    url,
     { signal: AbortSignal.timeout(15_000) }
   );
   if (!response.ok) {
@@ -59,9 +63,10 @@ async function fetchWork(id) {
 }
 
 export async function runOpenAlexThinReadingLiveEval() {
+  const apiKey = requireOpenAlexApiKey();
   const [targetRecord, sourceRecord] = await Promise.all([
-    fetchWork(target.id),
-    fetchWork(source.id)
+    fetchWork(target.id, apiKey),
+    fetchWork(source.id, apiKey)
   ]);
   const issues = validateCitesTargetRecord({ source: sourceRecord, target: targetRecord });
   if (issues.length > 0) {
