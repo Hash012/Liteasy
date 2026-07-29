@@ -6,6 +6,11 @@ import {
   loadAcademicProfile,
   saveAcademicProfile
 } from "./profileStorage";
+import {
+  loadAgentPersonalization,
+  saveAgentPersonalization,
+  type AgentPersonalization
+} from "../agent-core/agentPersonalization";
 
 type UseProfileActionsInput = {
   onProfileSamplingChanged?: (enabled: boolean) => void;
@@ -20,6 +25,25 @@ export function useProfileActions({
   const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(loadAcademicProfile);
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
+  const [agentPersonalization, setAgentPersonalization] = useState<AgentPersonalization>(
+    loadAgentPersonalization
+  );
+
+  function updateAgentMemories(memories: AgentPersonalization["memories"]) {
+    setAgentPersonalization((current) => {
+      const next = { ...current, memories: memories.map((memory) => ({ ...memory })) };
+      saveAgentPersonalization(next);
+      return next;
+    });
+  }
+
+  function updateAgentRecentStateOverride(recentStateOverride: string) {
+    setAgentPersonalization((current) => {
+      const next = { ...current, recentStateOverride: recentStateOverride.slice(0, 1200) };
+      saveAgentPersonalization(next);
+      return next;
+    });
+  }
 
   function openAcademicArchive() {
     setAcademicArchiveOpen(true);
@@ -59,6 +83,8 @@ export function useProfileActions({
   return {
     academicArchiveOpen,
     academicProfile,
+    agentMemories: agentPersonalization.memories,
+    agentRecentStateOverride: agentPersonalization.recentStateOverride,
     clearProfileConfirmOpen,
     clearUserProfile,
     closeAcademicArchive,
@@ -68,6 +94,8 @@ export function useProfileActions({
     profileClearMessage,
     profileSamplingEnabled,
     toggleProfileSampling,
+    updateAgentMemories,
+    updateAgentRecentStateOverride,
     updateAcademicProfile
   };
 }

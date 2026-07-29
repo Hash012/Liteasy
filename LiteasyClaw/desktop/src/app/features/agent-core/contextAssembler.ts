@@ -8,6 +8,7 @@ export type AgentCorePromptContext = {
   capabilitySummary: string;
   memorySummary: string;
   runtimeSummary: string;
+  userStateSummary?: string;
 };
 
 function summarizeEntries(label: string, entries: AgentCoreCatalogEntry[]) {
@@ -70,6 +71,7 @@ export function buildAgentCorePromptContext(input: {
   config: AgentCoreConfig;
   memories: AgentMemoryEntry[];
   runtimeContext?: AgentRuntimeContextView;
+  userStateSummary?: string;
 }): AgentCorePromptContext {
   const { config, memories, runtimeContext } = input;
 
@@ -92,7 +94,8 @@ export function buildAgentCorePromptContext(input: {
       summarizeEntries("MCP Servers", config.mcpServers)
     ].join("\n\n"),
     memorySummary: summarizeMemories(memories),
-    runtimeSummary: summarizeRuntimeContext(runtimeContext)
+    runtimeSummary: summarizeRuntimeContext(runtimeContext),
+    userStateSummary: input.userStateSummary?.trim()
   };
 }
 
@@ -100,8 +103,9 @@ export function formatAgentCorePromptContext(context: AgentCorePromptContext) {
   return [
     context.agentMd,
     context.runtimeSummary,
+    context.userStateSummary ? `## User Recent State\n${context.userStateSummary}` : "",
     context.memorySummary,
     context.capabilitySummary,
     context.budgetSummary
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }

@@ -12,5 +12,9 @@ export const settingsRegistry: Record<SettingKey, { label: string }> = {
   "thin_reading.openalex_api_key": { label: "OpenAlex API 密钥" },
   "models.default_provider": { label: "默认模型服务商" },
   "models.cloud_proxy_endpoint": { label: "云代理模型端点" },
-  "models.control_plane_endpoint": { label: "云端控制平面端点" }
+  "models.control_plane_endpoint": { label: "云端控制平面端点" },
+  "view.font_family": { label: "界面字体" },
+  "view.font_size": { label: "界面字号" },
+  "view.pdf_background": { label: "PDF 阅读底色" },
+  "view.pdf_custom_background": { label: "自定义 PDF 底色" }
 };

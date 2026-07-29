@@ -6,6 +6,7 @@ import { useRegisteredWorkspaceActions } from "../features/workspace/useRegister
 import type { ImportJob } from "../features/import/import.types";
 import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
+import { resolvePdfReadingBackground } from "../features/settings/viewSettings";
 import { useProfileActions } from "../features/profile/useProfileActions";
 import { toRecommendationResearchProfile } from "../features/profile/profile.types";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
@@ -613,13 +614,24 @@ export function AppShell({
     settingsStore: settingsStoreRef.current,
     startArtifactAnalysis: artifactWorkflow.actions.handleAssistantArtifact
   };
+  const generatedAgentRecentState = [
+    `用户正在“${workspaceLabel}”中工作。`,
+    `当前打开 ${openReaderPaperIds.length} 篇 PDF。`,
+    `当前选中 ${workspaceState.selectedPaperIds.length} 篇文献${workspaceState.selectionLocked ? "，且已锁定为任务上下文" : ""}。`,
+    profileActions.academicProfile.researchTopics
+      ? `研究主题偏好：${profileActions.academicProfile.researchTopics}。`
+      : ""
+  ].filter(Boolean).join(" ");
+  const agentRecentState = profileActions.agentRecentStateOverride.trim() || generatedAgentRecentState;
   const assistantAgent = useAssistantAgentController({
     academicProfile: profileActions.academicProfile,
+    getAgentMemories: () => profileActions.agentMemories,
     getAllPapers: () => workspaceStoreRef.current.getState().papers,
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getImportedChunksForPaperId: (paperId) =>
       importStoreRef.current.getParsedChunksByDocumentId(paperId),
     getSelectedPapers: workspaceActions.getSelectedPapers,
+    getUserStateSummary: () => agentRecentState,
     importedChunksByPaperId,
     importedSelectedCount,
     modelTransport,
@@ -792,6 +804,8 @@ export function AppShell({
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
     activePaperId: activeReaderPaper?.id ?? null,
     academicProfile: profileActions.academicProfile,
+    agentMemories: profileActions.agentMemories,
+    agentRecentState,
     accountSession,
     collectionItems,
     collectionMessage,
@@ -859,6 +873,8 @@ export function AppShell({
       setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
     },
     onUpdateAcademicProfile: profileActions.updateAcademicProfile,
+    onUpdateAgentMemories: profileActions.updateAgentMemories,
+    onUpdateAgentRecentState: profileActions.updateAgentRecentStateOverride,
     organizationActionMessage,
     organizationSummary,
     organizationSummaryMessage,
@@ -1088,6 +1104,7 @@ export function AppShell({
         onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
         onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
         intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
+        pdfBackground={resolvePdfReadingBackground(settingsState)}
         onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
         onSaveMarkdownTab={(artifactId) => {
@@ -1199,10 +1216,13 @@ export function AppShell({
     );
   }
 
-  const appFrameStyle =
-    runtimeTheme.kind === "generated"
+  const appFrameStyle = {
+    ...(runtimeTheme.kind === "generated"
       ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
-      : undefined;
+      : {}),
+    fontFamily: settingsState["view.font_family"],
+    fontSize: `${settingsState["view.font_size"]}px`
+  } as CSSProperties;
   const appFrameClassName = `app-frame${
     runtimeTheme.kind === "preset" && runtimeTheme.preset === "playful" ? " theme-playful" : ""
   }${runtimeTheme.kind === "generated" ? " theme-generated" : ""}`;

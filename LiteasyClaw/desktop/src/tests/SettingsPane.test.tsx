@@ -89,4 +89,63 @@ describe("SettingsPane", () => {
     expect(within(pane).getByRole("button", { name: "展开文献同步" })).toBeInTheDocument();
     expect(within(pane).queryByLabelText("文献元数据同步")).not.toBeInTheDocument();
   });
+
+  test("updates View font and PDF eye-care background settings", async () => {
+    const user = userEvent.setup();
+    const onUpdateSetting = vi.fn();
+
+    const { rerender } = render(
+      <SettingsPane
+        documentMetadataSyncResult={null}
+        documentMetadataSyncStatus="idle"
+        onUpdateSetting={onUpdateSetting}
+        settings={{
+          "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
+          "view.font_size": "14",
+          "view.pdf_background": "paper",
+          "view.pdf_custom_background": "#ffffff"
+        }}
+      />
+    );
+
+    const pane = screen.getByLabelText("左边栏设置");
+    expect(within(pane).getByRole("button", { name: "收起 View 设置" })).toBeInTheDocument();
+
+    await user.click(within(pane).getByText("暖黄护眼"));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting",
+      target: "view.pdf_background",
+      value: "warm"
+    });
+
+    await user.click(within(pane).getByText("自定义"));
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting",
+      target: "view.pdf_background",
+      value: "custom"
+    });
+
+    rerender(
+      <SettingsPane
+        documentMetadataSyncResult={null}
+        documentMetadataSyncStatus="idle"
+        onUpdateSetting={onUpdateSetting}
+        settings={{
+          "view.font_family": '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif',
+          "view.font_size": "14",
+          "view.pdf_background": "custom",
+          "view.pdf_custom_background": "#ffffff"
+        }}
+      />
+    );
+
+    fireEvent.change(within(pane).getByLabelText("自定义 PDF 底色"), {
+      target: { value: "#eaf6e8" }
+    });
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting",
+      target: "view.pdf_custom_background",
+      value: "#eaf6e8"
+    });
+  });
 });

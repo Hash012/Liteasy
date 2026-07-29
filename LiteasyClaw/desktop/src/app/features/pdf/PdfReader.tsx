@@ -55,6 +55,7 @@ type PdfSidebarMode = "thumbnails" | "annotations";
 
 type PdfReaderProps = {
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  pdfBackground?: string;
   selectedPapers: Paper[];
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
@@ -333,13 +334,56 @@ function buildAnnotationRects(range: Range, pageRect: DOMRect | undefined) {
     }));
 }
 
+function isWordBoundaryCharacter(character: string) {
+  return /[A-Za-z0-9_\u00c0-\u024f'’-]/.test(character);
+}
+
+/*
+ * 浏览器在 PDF text layer 的字形边缘落点常会停在单词中间，视觉上却像完整选中。
+ * 只在同一文本节点内向外补齐词边界，避免跨列、跨行或跨 text span 扩大选择。
+ */
+function expandRangeToWordBoundaries(range: Range) {
+  // 测试环境与少数嵌入式 WebView 可能提供精简 Range；此时保留原选区。
+  if (typeof range.cloneRange !== "function") {
+    return range;
+  }
+  const expanded = range.cloneRange();
+
+  if (expanded.startContainer.nodeType === Node.TEXT_NODE) {
+    const text = expanded.startContainer.textContent ?? "";
+    let offset = expanded.startOffset;
+    while (offset > 0 && isWordBoundaryCharacter(text.charAt(offset - 1))) {
+      offset -= 1;
+    }
+    expanded.setStart(expanded.startContainer, offset);
+  }
+
+  if (expanded.endContainer.nodeType === Node.TEXT_NODE) {
+    const text = expanded.endContainer.textContent ?? "";
+    let offset = expanded.endOffset;
+    while (offset < text.length && isWordBoundaryCharacter(text.charAt(offset))) {
+      offset += 1;
+    }
+    expanded.setEnd(expanded.endContainer, offset);
+  }
+
+  return expanded;
+}
+
 function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection): PdfSelection | null {
-  const excerpt = selection.toString().trim().replace(/\s+/g, " ");
-  if (!excerpt || selection.rangeCount === 0) {
+  if (selection.rangeCount === 0) {
     return null;
   }
 
-  const range = selection.getRangeAt(0);
+  const originalRange = selection.getRangeAt(0);
+  const range = expandRangeToWordBoundaries(originalRange);
+  const selectionText = typeof originalRange.cloneRange === "function"
+    ? range.toString()
+    : selection.toString();
+  const excerpt = selectionText.trim().replace(/\s+/g, " ");
+  if (!excerpt) {
+    return null;
+  }
   const rangeRect = range.getBoundingClientRect();
   const pageElement = getSelectionPageElement(range, stageElement);
   if (!pageElement) {
@@ -880,6 +924,7 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
 
 export function PdfReader({
   loadPdfSource,
+  pdfBackground = "#ffffff",
   selectedPapers,
   targetEvidence,
   zoom,
@@ -1241,6 +1286,7 @@ export function PdfReader({
       aria-label="PDF 阅读器"
       className="pdf-reader fluid"
       data-pdf-source={pdfDisplaySource ?? ""}
+      style={{ "--pdf-reading-background": pdfBackground } as CSSProperties}
     >
       <div
         aria-label="PDF 阅读工作区"

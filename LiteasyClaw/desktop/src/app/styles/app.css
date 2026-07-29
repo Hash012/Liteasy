@@ -2743,7 +2743,7 @@ body {
 .pdf-main-stage {
   min-width: 0;
   min-height: 0;
-  background: #e8eef5;
+  background: var(--pdf-reading-background, #e8eef5);
   overflow: auto;
 }
 
@@ -2755,7 +2755,7 @@ body {
   padding: 18px clamp(14px, 3vw, 34px);
   background:
     linear-gradient(135deg, rgba(27, 102, 179, 0.05), transparent 42%),
-    #e8eef5;
+    var(--pdf-reading-background, #e8eef5);
 }
 
 .pdf-page-list {
@@ -2775,7 +2775,7 @@ body {
   max-width: 100%;
   border: 1px solid var(--line-1);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--pdf-reading-background, #ffffff);
   box-shadow: 0 22px 52px rgba(24, 34, 47, 0.15);
   overflow: hidden;
 }
@@ -2790,7 +2790,8 @@ body {
 .pdf-page-canvas {
   display: block;
   max-width: 100%;
-  background: #ffffff;
+  background: var(--pdf-reading-background, #ffffff);
+  mix-blend-mode: multiply;
 }
 
 .pdf-page-shadow {
@@ -3000,7 +3001,11 @@ body {
 
 .pdf-annotation-excerpt {
   color: var(--ink-1);
+  display: -webkit-box;
   font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .pdf-annotation-public-toggle,
@@ -3537,7 +3542,7 @@ body {
 }
 
 .personal-center-logout:hover {
-  background: #e0eefa;
+  background: transparent;
   color: #244b6d;
 }
 
@@ -3675,6 +3680,67 @@ body {
   line-height: 1.5;
 }
 
+.agent-memory-section {
+  gap: 8px;
+}
+
+.agent-memory-list {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-memory-item {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-memory-controls {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.agent-memory-add,
+.agent-state-reset {
+  align-items: center;
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  color: #0f6cbd;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+  padding: 4px 0;
+}
+
+.agent-memory-add svg {
+  height: 16px;
+  width: 16px;
+}
+
+.agent-state-label {
+  color: #40576d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.agent-memory-section textarea {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #c7d8e7;
+  border-radius: 0;
+  box-sizing: border-box;
+  color: #263d52;
+  font: inherit;
+  line-height: 1.45;
+  padding: 7px 8px;
+  resize: vertical;
+  width: 100%;
+}
+
 .academic-archive-backdrop {
   background: rgba(44, 67, 88, 0.32);
   backdrop-filter: blur(8px);
@@ -3802,6 +3868,54 @@ body {
   height: 34px;
   place-items: center;
   color: #3978ac;
+}
+
+.view-settings-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.view-settings-panel .fui-Field {
+  gap: 5px;
+}
+
+.view-settings-panel .fui-Dropdown,
+.view-settings-panel .fui-Input {
+  width: 100%;
+}
+
+.view-settings-backgrounds {
+  display: grid;
+  gap: 7px;
+}
+
+.view-settings-color-label,
+.view-settings-custom-color {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.view-settings-color-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.view-settings-custom-color .fui-Input:first-child {
+  flex: 1;
+}
+
+.view-settings-native-color {
+  width: 42px;
+  min-width: 42px;
+  height: 32px;
+  border: 1px solid var(--line-1);
+  border-radius: 4px;
+  background: var(--paper-2);
+  padding: 3px;
 }
 
 .metadata-sync-card {

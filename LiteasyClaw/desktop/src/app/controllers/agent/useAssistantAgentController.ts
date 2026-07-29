@@ -2,6 +2,8 @@ import { useRef } from "react";
 import type { ArtifactType } from "../../features/artifacts/artifact.types";
 import { createFrontendAgentClient } from "../../features/agent-api/frontendAgentClient";
 import type { AgentPublicApi } from "../../features/agent-api/agentApi.types";
+import { defaultAgentCoreConfig, type AgentMemoryEntry } from "../../features/agent-core/agentCoreConfig";
+import { createAgentCoreSession } from "../../features/agent-core/agentCoreSession";
 import type { PendingCommandClarification } from "../../features/agent-runtime/agentRuntime.types";
 import { buildAgentRuntimeContextView } from "../../features/agent-runtime/contextView";
 import { createModelAssistedClarification } from "../../features/agent-runtime/modelClarification";
@@ -27,10 +29,12 @@ type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
   academicProfile?: AcademicProfile;
+  getAgentMemories?: () => AgentMemoryEntry[];
   getAllPapers?: () => Paper[];
   getImportedChunksByPaperId?: () => Record<string, RetrievalChunk[]>;
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getSelectedPapers?: () => Paper[];
+  getUserStateSummary?: () => string;
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
   modelTransport?: ModelTransport;
@@ -63,6 +67,13 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
 
   if (!apiRef.current) {
     apiRef.current = createDesktopAgentService({
+      createCoreSession() {
+        return createAgentCoreSession(undefined, {
+          getMemories: () =>
+            inputRef.current.getAgentMemories?.() ?? defaultAgentCoreConfig.memories,
+          getUserStateSummary: () => inputRef.current.getUserStateSummary?.() ?? ""
+        });
+      },
       getEnvironment({ request } = {}) {
         const current = inputRef.current;
         const knowledgeScope = resolveAgentKnowledgeScope({

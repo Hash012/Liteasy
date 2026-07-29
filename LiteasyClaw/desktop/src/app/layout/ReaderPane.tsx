@@ -28,6 +28,7 @@ type ReaderPaneProps = {
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
   intuechoEndpoint?: string;
+  pdfBackground?: string;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
   onToggleBottomPane?: () => void;
@@ -60,6 +61,7 @@ export function ReaderPane({
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
   intuechoEndpoint,
+  pdfBackground,
   onSaveMarkdownTab,
   onStartAnalysis,
   onToggleBottomPane,
@@ -131,6 +133,7 @@ export function ReaderPane({
             intuechoEndpoint={intuechoEndpoint}
             loadPdfSource={loadPdfSource}
             onAddSelectionToConversation={onAddReaderContextToConversation}
+            pdfBackground={pdfBackground}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
             zoom={zoom}

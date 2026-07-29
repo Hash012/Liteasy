@@ -10,7 +10,11 @@ export type SettingKey =
   | "thin_reading.openalex_api_key"
   | "models.default_provider"
   | "models.cloud_proxy_endpoint"
-  | "models.control_plane_endpoint";
+  | "models.control_plane_endpoint"
+  | "view.font_family"
+  | "view.font_size"
+  | "view.pdf_background"
+  | "view.pdf_custom_background";
 
 export type SettingsState = {
   "network.recommendation.enabled": boolean;
@@ -25,6 +29,10 @@ export type SettingsState = {
   "models.default_provider": string;
   "models.cloud_proxy_endpoint": string;
   "models.control_plane_endpoint": string;
+  "view.font_family": string;
+  "view.font_size": string;
+  "view.pdf_background": "paper" | "warm" | "mint" | "custom";
+  "view.pdf_custom_background": string;
 };
 
 export type UpdateSettingCommand = {
