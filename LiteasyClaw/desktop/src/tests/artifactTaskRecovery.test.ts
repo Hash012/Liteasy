@@ -156,15 +156,24 @@ describe("artifactTaskRecovery", () => {
     });
   });
 
-  test("does not persist a legacy omitted-section branch as retryable input", () => {
+  test("persists an omitted-section branch only while it remains on the parent page", () => {
     const document = createDocument();
 
-    expect(() => createThinReadingBranchRecoverySnapshot({
+    const snapshot = createThinReadingBranchRecoverySnapshot({
       artifactId: document.artifactId,
       document,
       parentNodeId: document.rootNodeId,
       primaryPaperId: "paper-1",
       source: { kind: "omitted_section", label: "实验", sectionKey: "experiments" }
-    })).toThrow("薄读分支输入超出可恢复范围");
+    });
+
+    expect(validateThinReadingBranchRecoverySnapshot(snapshot, document)).toEqual({ valid: true });
+    expect(validateThinReadingBranchRecoverySnapshot({
+      ...snapshot,
+      source: { kind: "omitted_section", label: "伪造板块", sectionKey: "forged" }
+    }, document)).toEqual({
+      valid: false,
+      reason: "原未覆盖模块已不在父页面的可深入列表中。"
+    });
   });
 });

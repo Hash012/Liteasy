@@ -11,6 +11,8 @@ const storageKey = "liteasy.artifact-task-recovery/v1";
 const maxExcerptLength = 6000;
 const maxPromptLength = 1200;
 const maxSourceReferenceCount = 64;
+const maxSectionLabelLength = 96;
+const maxSectionKeyLength = 96;
 
 export type ThinReadingBranchRecoverySnapshot = {
   artifactId: string;
@@ -31,6 +33,12 @@ function isUniqueBoundedStringArray(value: unknown) {
 function isRecoverableBranchSource(value: unknown): value is ThinReadingBranchSource {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const source = value as Record<string, unknown>;
+  if (source.kind === "omitted_section") {
+    return typeof source.label === "string" && source.label.trim().length > 0 &&
+      source.label.length <= maxSectionLabelLength &&
+      typeof source.sectionKey === "string" && source.sectionKey.trim().length > 0 &&
+      source.sectionKey.length <= maxSectionKeyLength;
+  }
   if (source.kind !== "selected_text" || typeof source.excerpt !== "string" ||
     source.excerpt.trim().length === 0 || source.excerpt.length > maxExcerptLength) return false;
   return (source.prompt === undefined ||
@@ -89,8 +97,13 @@ export function validateThinReadingBranchRecoverySnapshot(
   if (findThinReadingChildBySource(document, parent.id, snapshot.source)) {
     return { valid: false, reason: "当前文档已包含同一薄读分支。" };
   }
-  if (snapshot.source.kind !== "selected_text") {
-    return { valid: false, reason: "薄读只能从当前层正文中选取有证据映射的文字继续深入。" };
+  if (snapshot.source.kind === "omitted_section") {
+    const source = snapshot.source;
+    return parent.omittedSections.some((section) => (
+      section.sectionKey === source.sectionKey && section.label === source.label
+    ))
+      ? { valid: true }
+      : { valid: false, reason: "原未覆盖模块已不在父页面的可深入列表中。" };
   }
   const evidenceIds = new Set([...parent.evidence.paperEvidence, ...(parent.evidence.paperEvidenceSpans ?? []).map((span) => span.id)]);
   if ((snapshot.source.evidenceIds ?? []).some((id) => !evidenceIds.has(id))) {

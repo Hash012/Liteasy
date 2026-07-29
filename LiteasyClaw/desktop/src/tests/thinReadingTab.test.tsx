@@ -97,8 +97,32 @@ describe("ThinReadingTab", () => {
     expect(screen.queryByText("依据")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /已由论文证据支撑/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "实验" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "深入了解实验" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "深入了解局限" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
+  });
+
+  test("uses a declared omitted-module button as the complete branch topic", async () => {
+    const document = makeDocument();
+    const onGenerateBranch = vi.fn(async () => undefined);
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "深入了解实验" }));
+
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+    }));
   });
 
   test("labels recovered branch submission as a new model request", async () => {
@@ -388,6 +412,7 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "Collapse Intuecho recommendations" })).toBeInTheDocument();
     expect(screen.getByText("Connect Intuecho to view community shared annotations")).toBeInTheDocument();
     expect(screen.getByText("No annotations yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explore Method" })).toBeInTheDocument();
     expect(screen.queryByText("暂无批注")).not.toBeInTheDocument();
 
     expect(screen.queryByRole("button", { name: "Explore Intuecho recommendation: Method and evidence" })).not.toBeInTheDocument();

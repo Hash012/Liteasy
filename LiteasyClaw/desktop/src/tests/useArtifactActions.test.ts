@@ -616,7 +616,7 @@ describe("useArtifactActions", () => {
     );
   });
 
-  test("rejects a branch request that does not originate in the active summary body", async () => {
+  test("accepts a declared omitted module and rejects undeclared module or body input", async () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument(fixture);
     const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
@@ -632,18 +632,36 @@ describe("useArtifactActions", () => {
       title: "薄读",
       type: "thin_reading"
     });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
 
+    await act(async () => {
+      await result.current.generateThinReadingBranch({
+        artifactId: document.artifactId,
+        document,
+        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+      });
+    });
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({
+        thinReadingContext: expect.objectContaining({
+          ancestorSummaries: [expect.objectContaining({ nodeId: document.rootNodeId })],
+          source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+        })
+      })
+    );
     await expect(result.current.generateThinReadingBranch({
       artifactId: document.artifactId,
       document,
-      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
-    })).rejects.toThrow("薄读只能从当前层正文中选取有证据映射的文字继续深入");
+      source: { kind: "omitted_section", label: "伪造板块", sectionKey: "forged" }
+    })).rejects.toThrow("薄读只能从当前层正文选区或当前层列出的未覆盖模块继续深入");
     await expect(result.current.generateThinReadingBranch({
       artifactId: document.artifactId,
       document,
       source: { kind: "selected_text", excerpt: "不在本层正文中的文字" }
-    })).rejects.toThrow("薄读只能从当前层正文中选取有证据映射的文字继续深入");
-    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    })).rejects.toThrow("薄读只能从当前层正文选区或当前层列出的未覆盖模块继续深入");
+    expect(runAgentAnalysis).toHaveBeenCalledTimes(1);
   });
 
   test("applies assistant language to generated thin-reading content", async () => {

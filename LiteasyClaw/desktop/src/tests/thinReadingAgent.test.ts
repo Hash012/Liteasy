@@ -7,7 +7,8 @@ import {
   parseThinReadingEvidenceObservation,
   parseThinReadingEvidencePlan,
   parseThinReadingEvidenceReview,
-  parseThinReadingModelSeed
+  parseThinReadingModelSeed,
+  resolveThinReadingOmittedSections
 } from "../app/features/thin-reading/thinReadingAgent";
 import { classifyThinReadingPaper } from "../app/features/thin-reading/thinReadingPromptRegistry";
 import type { PreparedMultiPaperAnalysis } from "../app/features/paper-analysis/analysis.types";
@@ -93,8 +94,9 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("明确区分论文作者声称、理论推导、实验观察和 Agent 推断");
     expect(prompt).toContain("evidence-survey-taxonomy");
     expect(prompt).toContain("分类框架");
-    expect(prompt).toContain("omittedSections 是兼容字段");
-    expect(prompt).toContain("必须返回空数组");
+    expect(prompt).toContain("omittedSections 必须在 summary 定稿之后生成");
+    expect(prompt).toContain("差集中的合格模块都应返回，最多 8 个");
+    expect(prompt).toContain("禁止设想点击后的文章再反推按钮");
     expect(prompt).toContain("不得将无证据句写入正文");
     expect(prompt).toContain("不要复制整张 evidence 矩阵");
     expect(prompt).toContain("留存测试");
@@ -465,7 +467,9 @@ describe("thinReadingAgent", () => {
       summary: expect.stringContaining("taxonomy"),
       withinPaperClosure: true
     });
-    expect(seed.omittedSections).toEqual([]);
+    expect(seed.omittedSections).toEqual([
+      expect.objectContaining({ label: "分类轴线", sectionKey: "taxonomy" })
+    ]);
   });
 
   test("creates sentence-level evidence mapping when the model omits summarySentences", () => {
@@ -788,7 +792,7 @@ describe("thinReadingAgent", () => {
     ]);
   });
 
-  test("discards omitted-section output because generation may only continue from body text", () => {
+  test("keeps concise omitted-section topics and removes bracketed detail from button labels", () => {
     const seed = parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
       claims: [],
@@ -811,7 +815,44 @@ describe("thinReadingAgent", () => {
       analysisEvidence: prepared.evidence
     });
 
-    expect(seed.omittedSections).toEqual([]);
+    expect(seed.omittedSections).toEqual([
+      expect.objectContaining({
+        label: "ACORN-γ 与 ACORN-1 的详细构造与搜索算法",
+        sectionKey: "method_details"
+      }),
+      expect.objectContaining({ label: "相关工作", sectionKey: "related_work" })
+    ]);
+  });
+
+  test("keeps every uncovered topic when the semantic difference contains more than four", () => {
+    const candidates = ["定义", "数据", "流程", "指标", "案例", "复现"].map((label, index) => ({
+      label,
+      sectionKey: `custom_${index}`
+    }));
+
+    expect(resolveThinReadingOmittedSections({
+      candidates,
+      currentSummary: "当前页只讲核心结论。",
+      paperType: "unknown"
+    }).map((item) => item.label)).toEqual(["定义", "数据", "流程", "指标", "案例", "复现"]);
+  });
+
+  test("uses paper evidence as a fallback without repeating modules covered by ancestors", () => {
+    expect(resolveThinReadingOmittedSections({
+      ancestorSummaries: [{ summary: "上一层已经讲清实验评测与主要结果。" }],
+      candidates: [],
+      currentSummary: "当前页聚焦核心方法。",
+      evidence: [{
+        quote: "The ablation compares multiple baselines and reports a limitation.",
+        summary: "消融实验比较基线，并报告适用局限。",
+        terms: ["ablation", "baseline", "limitation"]
+      }],
+      paperType: "experimental",
+      targetLanguage: "zh-CN"
+    })).toEqual([
+      expect.objectContaining({ label: "消融与对比", sectionKey: "ablation" }),
+      expect.objectContaining({ label: "局限与边界", sectionKey: "limitations" })
+    ]);
   });
 
   test("rejects descriptive or combined evidence references instead of silently attributing them", () => {

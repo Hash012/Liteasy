@@ -1082,5 +1082,1017 @@
         "relevanceScore": 0.402
       }
     ]
+  },
+  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785314276294111520-3::relevance": {
+    "cachedAt": "2026-07-29T14:58:22.390Z",
+    "recommendations": [
+      {
+        "authors": [],
+        "canonicalId": "doi:10.1163/2210-7886_asc-41553",
+        "discoveredAt": "2026-07-29T14:58:22.380Z",
+        "id": "reading-candidate:doi:10.1163/2210-7886_asc-41553",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1163/2210-7886_asc-41553"
+          ],
+          "canonicalId": "doi:10.1163/2210-7886_asc-41553",
+          "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1163/2210-7886_asc-41553",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
+              "recordUrl": "https://api.crossref.org/works/10.1163%2F2210-7886_asc-41553",
+              "title": "41553, 1882-01-16",
+              "url": "https://doi.org/10.1163/2210-7886_asc-41553"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.633,
+          "sourceRelevance": 0.633,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.633,
+          "baseRelevance": 0.633,
+          "diversityPenalty": 0,
+          "finalScore": 0.633
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1163/2210-7886_asc-41553",
+        "title": "41553, 1882-01-16",
+        "rankingFusion": {
+          "calibratedScore": 0.633,
+          "fusionScore": 1,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.633,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "medium",
+        "relevanceScore": 0.633
+      },
+      {
+        "abstract": "Abstract Currently there is no way to reliably predict who is at higher or lower risk of cardiac toxicity from radiation, and the critical factors that alter radiation-induced heart disease are not completely clear. The heart produces and uses the most energy of all organs, with &amp;gt;90% of its energy produced via mitochondrial respiration. To maintain this energy output, ~30% of the heart volume is made up of mitochondria in cardiomyocytes. Such a high metabolic rate produces increased levels of reactive oxygen species (ROS), which have the potential to cause serious oxidative damage to the heart. Antioxidant enzymes such as superoxide dysmutases (SODs), catalase, and glutathione peroxidase can help to protect against ROS-mediated damage by converting superoxide to hydrogen peroxidase, and then hydrogen peroxide to water. Oxidative stressors, including therapeutic radiation therapy, have been shown to lead to long-term effects on mitochondrial function, as measured by excess formation of ROS including superoxide, mitochondrial-related gene expression, and altered mitochondrial morphology and functions such as mitochondrial respiration, pyruvate metabolism, and ion and lipid transport. While a potential link between aging-related signaling pathways, metabolic homeostasis, and radiation-induced normal tissue damage has recently been suggested, rigorous mechanistic data to support this intriguing idea has been limited. Mitochondrial detoxification pathways, which are dysregulated in normal tissues by radiation, lead to increased ROS levels and the disruption of mitochondrial reparative pathways. SIRT3 is one of three mitochondrial-located sirtuin proteins. SIRT3 is the primary deacetylase of mitochondrial proteins, and its deacetylase activity plays a key role in maintaining mitochondrial energy metabolism equilibrium and defending against cellular damage that occurs with aging. Lysine acetylation is an important post-translational modification that can regulate the function of mitochondrial proteins. The acetylation status of key mitochondrial detoxification proteins, which are Sirt3 deacetylation targets, may be dysregulated in normal tissue following radiation exposure. Loss of SIRT3 can dysregulate mitochondrial detoxification and metabolism, leading to the accumulation of cellular damage. Sirt3 KO mice demonstrate enhanced mitochondrial dysfunction, an",
+        "authors": [
+          "Carmen Bergom"
+        ],
+        "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
+        "discoveredAt": "2026-07-29T14:58:22.380Z",
+        "id": "reading-candidate:doi:10.1158/1557-3265.radsci21-ia-023",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1158/1557-3265.radsci21-ia-023"
+          ],
+          "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
+          "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1158/1557-3265.radsci21-ia-023",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+              "recordUrl": "https://api.crossref.org/works/10.1158%2F1557-3265.radsci21-ia-023",
+              "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
+              "url": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+              "year": 2021
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2021,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.408,
+          "sourceRelevance": 0.408,
+          "fusionScore": 0.832,
+          "lexicalRelevance": 0.052882,
+          "preFusionRelevance": 0.408,
+          "baseRelevance": 0.36,
+          "diversityPenalty": 0,
+          "finalScore": 0.36
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+        "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
+        "rankingFusion": {
+          "calibratedScore": 0.36,
+          "fusionScore": 0.832,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.408,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.02,
+              "id": "lexical_bm25",
+              "rank": 5,
+              "score": 0.052882,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.36
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
+        "discoveredAt": "2026-07-29T14:58:22.380Z",
+        "id": "reading-candidate:doi:10.1163/37612_wna_wo_wo_34_23_23",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1163/37612_wna_wo_wo_34_23_23"
+          ],
+          "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
+          "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1163/37612_wna_wo_wo_34_23_23",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
+              "recordUrl": "https://api.crossref.org/works/10.1163%2F37612_wna_wo_wo_34_23_23",
+              "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
+              "url": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.333,
+          "sourceRelevance": 0.333,
+          "fusionScore": 0.846,
+          "lexicalRelevance": 0.231319,
+          "preFusionRelevance": 0.333,
+          "baseRelevance": 0.297,
+          "diversityPenalty": 0.036,
+          "finalScore": 0.261
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
+        "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
+        "rankingFusion": {
+          "calibratedScore": 0.297,
+          "fusionScore": 0.846,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.333,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.023077,
+              "id": "lexical_bm25",
+              "rank": 3,
+              "score": 0.231319,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.261
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.31030/1621886",
+        "discoveredAt": "2026-07-29T14:58:22.380Z",
+        "id": "reading-candidate:doi:10.31030/1621886",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.31030/1621886"
+          ],
+          "canonicalId": "doi:10.31030/1621886",
+          "doi": "https://doi.org/10.31030/1621886",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.31030/1621886",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.31030/1621886",
+              "recordUrl": "https://api.crossref.org/works/10.31030%2F1621886",
+              "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
+              "url": "https://doi.org/10.31030/1621886"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.296,
+          "sourceRelevance": 0.296,
+          "fusionScore": 0.846,
+          "lexicalRelevance": 0.23357,
+          "preFusionRelevance": 0.296,
+          "baseRelevance": 0.264,
+          "diversityPenalty": 0.036,
+          "finalScore": 0.228
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.31030/1621886",
+        "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
+        "rankingFusion": {
+          "calibratedScore": 0.264,
+          "fusionScore": 0.846,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.025,
+              "id": "provider",
+              "rank": 4,
+              "score": 0.296,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.23357,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.228
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.31096/pnaa-js_misc-023",
+        "discoveredAt": "2026-07-29T14:58:22.380Z",
+        "id": "reading-candidate:doi:10.31096/pnaa-js_misc-023",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.31096/pnaa-js_misc-023"
+          ],
+          "canonicalId": "doi:10.31096/pnaa-js_misc-023",
+          "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.31096/pnaa-js_misc-023",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
+              "recordUrl": "https://api.crossref.org/works/10.31096%2Fpnaa-js_misc-023",
+              "title": "Shull Misc Slide - JS_MISC-023",
+              "url": "https://doi.org/10.31096/pnaa-js_misc-023"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.273,
+          "sourceRelevance": 0.273,
+          "fusionScore": 0.758,
+          "lexicalRelevance": 0.20403,
+          "preFusionRelevance": 0.273,
+          "baseRelevance": 0.227,
+          "diversityPenalty": 0.045,
+          "finalScore": 0.182
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.31096/pnaa-js_misc-023",
+        "title": "Shull Misc Slide - JS_MISC-023",
+        "rankingFusion": {
+          "calibratedScore": 0.227,
+          "fusionScore": 0.758,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.023333,
+              "id": "provider",
+              "rank": 5,
+              "score": 0.273,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.021429,
+              "id": "lexical_bm25",
+              "rank": 4,
+              "score": 0.20403,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.182
+      }
+    ]
+  },
+  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785313732256434307-0|local-1785314276294111520-3::relevance": {
+    "cachedAt": "2026-07-29T14:58:28.272Z",
+    "recommendations": [
+      {
+        "authors": [],
+        "canonicalId": "doi:10.1163/2210-7886_asc-41553",
+        "discoveredAt": "2026-07-29T14:58:28.264Z",
+        "id": "reading-candidate:doi:10.1163/2210-7886_asc-41553",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1163/2210-7886_asc-41553"
+          ],
+          "canonicalId": "doi:10.1163/2210-7886_asc-41553",
+          "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1163/2210-7886_asc-41553",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
+              "recordUrl": "https://api.crossref.org/works/10.1163%2F2210-7886_asc-41553",
+              "title": "41553, 1882-01-16",
+              "url": "https://doi.org/10.1163/2210-7886_asc-41553"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.633,
+          "sourceRelevance": 0.633,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.633,
+          "baseRelevance": 0.633,
+          "diversityPenalty": 0,
+          "finalScore": 0.633
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1163/2210-7886_asc-41553",
+        "title": "41553, 1882-01-16",
+        "rankingFusion": {
+          "calibratedScore": 0.633,
+          "fusionScore": 1,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.633,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "medium",
+        "relevanceScore": 0.633
+      },
+      {
+        "abstract": "Abstract Currently there is no way to reliably predict who is at higher or lower risk of cardiac toxicity from radiation, and the critical factors that alter radiation-induced heart disease are not completely clear. The heart produces and uses the most energy of all organs, with &amp;gt;90% of its energy produced via mitochondrial respiration. To maintain this energy output, ~30% of the heart volume is made up of mitochondria in cardiomyocytes. Such a high metabolic rate produces increased levels of reactive oxygen species (ROS), which have the potential to cause serious oxidative damage to the heart. Antioxidant enzymes such as superoxide dysmutases (SODs), catalase, and glutathione peroxidase can help to protect against ROS-mediated damage by converting superoxide to hydrogen peroxidase, and then hydrogen peroxide to water. Oxidative stressors, including therapeutic radiation therapy, have been shown to lead to long-term effects on mitochondrial function, as measured by excess formation of ROS including superoxide, mitochondrial-related gene expression, and altered mitochondrial morphology and functions such as mitochondrial respiration, pyruvate metabolism, and ion and lipid transport. While a potential link between aging-related signaling pathways, metabolic homeostasis, and radiation-induced normal tissue damage has recently been suggested, rigorous mechanistic data to support this intriguing idea has been limited. Mitochondrial detoxification pathways, which are dysregulated in normal tissues by radiation, lead to increased ROS levels and the disruption of mitochondrial reparative pathways. SIRT3 is one of three mitochondrial-located sirtuin proteins. SIRT3 is the primary deacetylase of mitochondrial proteins, and its deacetylase activity plays a key role in maintaining mitochondrial energy metabolism equilibrium and defending against cellular damage that occurs with aging. Lysine acetylation is an important post-translational modification that can regulate the function of mitochondrial proteins. The acetylation status of key mitochondrial detoxification proteins, which are Sirt3 deacetylation targets, may be dysregulated in normal tissue following radiation exposure. Loss of SIRT3 can dysregulate mitochondrial detoxification and metabolism, leading to the accumulation of cellular damage. Sirt3 KO mice demonstrate enhanced mitochondrial dysfunction, an",
+        "authors": [
+          "Carmen Bergom"
+        ],
+        "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
+        "discoveredAt": "2026-07-29T14:58:28.264Z",
+        "id": "reading-candidate:doi:10.1158/1557-3265.radsci21-ia-023",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1158/1557-3265.radsci21-ia-023"
+          ],
+          "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
+          "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1158/1557-3265.radsci21-ia-023",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+              "recordUrl": "https://api.crossref.org/works/10.1158%2F1557-3265.radsci21-ia-023",
+              "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
+              "url": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+              "year": 2021
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2021,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.408,
+          "sourceRelevance": 0.408,
+          "fusionScore": 0.811,
+          "lexicalRelevance": 0.035698,
+          "preFusionRelevance": 0.408,
+          "baseRelevance": 0.354,
+          "diversityPenalty": 0,
+          "finalScore": 0.354
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+        "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
+        "rankingFusion": {
+          "calibratedScore": 0.354,
+          "fusionScore": 0.811,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.408,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.01875,
+              "id": "lexical_bm25",
+              "rank": 6,
+              "score": 0.035698,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.354
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
+        "discoveredAt": "2026-07-29T14:58:28.264Z",
+        "id": "reading-candidate:doi:10.1163/37612_wna_wo_wo_34_23_23",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1163/37612_wna_wo_wo_34_23_23"
+          ],
+          "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
+          "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1163/37612_wna_wo_wo_34_23_23",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
+              "recordUrl": "https://api.crossref.org/works/10.1163%2F37612_wna_wo_wo_34_23_23",
+              "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
+              "url": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.333,
+          "sourceRelevance": 0.333,
+          "fusionScore": 0.846,
+          "lexicalRelevance": 0.174126,
+          "preFusionRelevance": 0.333,
+          "baseRelevance": 0.297,
+          "diversityPenalty": 0.036,
+          "finalScore": 0.261
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
+        "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
+        "rankingFusion": {
+          "calibratedScore": 0.297,
+          "fusionScore": 0.846,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.333,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.023077,
+              "id": "lexical_bm25",
+              "rank": 3,
+              "score": 0.174126,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.261
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.31030/1621886",
+        "discoveredAt": "2026-07-29T14:58:22.380Z",
+        "id": "reading-candidate:doi:10.31030/1621886",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.31030/1621886"
+          ],
+          "canonicalId": "doi:10.31030/1621886",
+          "doi": "https://doi.org/10.31030/1621886",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.31030/1621886",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.31030/1621886",
+              "recordUrl": "https://api.crossref.org/works/10.31030%2F1621886",
+              "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
+              "url": "https://doi.org/10.31030/1621886"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 该候选来自近期持久候选池，本轮未将其标记为新发现。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.296,
+          "sourceRelevance": 0.296,
+          "fusionScore": 0.846,
+          "lexicalRelevance": 0.174892,
+          "preFusionRelevance": 0.296,
+          "baseRelevance": 0.264,
+          "diversityPenalty": 0.036,
+          "finalScore": 0.228
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "cache",
+        "sourceUrl": "https://doi.org/10.31030/1621886",
+        "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
+        "rankingFusion": {
+          "calibratedScore": 0.264,
+          "fusionScore": 0.846,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.025,
+              "id": "provider",
+              "rank": 4,
+              "score": 0.296,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.174892,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.228
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.1163/37612_wna_pro_pro_30_55_23_23",
+        "discoveredAt": "2026-07-29T14:58:28.264Z",
+        "id": "reading-candidate:doi:10.1163/37612_wna_pro_pro_30_55_23_23",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1163/37612_wna_pro_pro_30_55_23_23"
+          ],
+          "canonicalId": "doi:10.1163/37612_wna_pro_pro_30_55_23_23",
+          "doi": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1163/37612_wna_pro_pro_30_55_23_23",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23",
+              "recordUrl": "https://api.crossref.org/works/10.1163%2F37612_wna_pro_pro_30_55_23_23",
+              "title": "PRO 30/55/023/023 - Copy Letter from H Clinton to Lord Amherst",
+              "url": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.296,
+          "sourceRelevance": 0.296,
+          "fusionScore": 0.758,
+          "lexicalRelevance": 0.172229,
+          "preFusionRelevance": 0.296,
+          "baseRelevance": 0.246,
+          "diversityPenalty": 0.072,
+          "finalScore": 0.174
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23",
+        "title": "PRO 30/55/023/023 - Copy Letter from H Clinton to Lord Amherst",
+        "rankingFusion": {
+          "calibratedScore": 0.246,
+          "fusionScore": 0.758,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.023333,
+              "id": "provider",
+              "rank": 5,
+              "score": 0.296,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.021429,
+              "id": "lexical_bm25",
+              "rank": 4,
+              "score": 0.172229,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.174
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.31096/pnaa-js_misc-023",
+        "discoveredAt": "2026-07-29T14:58:28.264Z",
+        "id": "reading-candidate:doi:10.31096/pnaa-js_misc-023",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.31096/pnaa-js_misc-023"
+          ],
+          "canonicalId": "doi:10.31096/pnaa-js_misc-023",
+          "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.31096/pnaa-js_misc-023",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
+              "recordUrl": "https://api.crossref.org/works/10.31096%2Fpnaa-js_misc-023",
+              "title": "Shull Misc Slide - JS_MISC-023",
+              "url": "https://doi.org/10.31096/pnaa-js_misc-023"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitles": [
+          "s41467-023-41553-7"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.273,
+          "sourceRelevance": 0.273,
+          "fusionScore": 0.709,
+          "lexicalRelevance": 0.153514,
+          "preFusionRelevance": 0.273,
+          "baseRelevance": 0.217,
+          "diversityPenalty": 0.045,
+          "finalScore": 0.172
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.31096/pnaa-js_misc-023",
+        "title": "Shull Misc Slide - JS_MISC-023",
+        "rankingFusion": {
+          "calibratedScore": 0.217,
+          "fusionScore": 0.709,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.021875,
+              "id": "provider",
+              "rank": 6,
+              "score": 0.273,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.02,
+              "id": "lexical_bm25",
+              "rank": 5,
+              "score": 0.153514,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.172
+      }
+    ]
   }
 }

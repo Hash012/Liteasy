@@ -7,6 +7,8 @@ test("keeps thin-reading prose and evidence markers readable on desktop", async 
   const evidenceMarker = page.locator(".thin-reading__summary-sentence > sup").first();
   await expect(summary).toBeVisible();
   await expect(evidenceMarker).toBeVisible();
+  await expect(page.getByRole("button", { name: "深入了解实验" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "深入了解局限" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Intuecho" })).toBeVisible();
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
   const fontSizes = await evidenceMarker.evaluate((marker) => {
@@ -23,6 +25,8 @@ test("keeps the community recommendation rail visible without a configured sourc
   await page.goto("/?thin-reading-fixture");
   const summary = page.getByTestId("thin-reading-summary");
   await expect(summary).toBeVisible();
+  await expect(page.getByRole("button", { name: "深入了解实验" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "深入了解局限" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Intuecho" })).toBeVisible();
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

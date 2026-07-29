@@ -2,6 +2,7 @@ import type { SubmitAgentTurnRequest } from "../../features/agent-api/agentApi.t
 import type { PaperIdentityCandidate } from "../../features/paper-identity/paperIdentity";
 import type { RetrievalChunk } from "../../features/retrieval/retrieval.types";
 import type {
+  ThinReadingAncestorSummary,
   ThinReadingClaim,
   ThinReadingEvidenceSpan,
   ThinReadingExternalSource,
@@ -36,6 +37,19 @@ function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | und
   if (source.kind === "root_overview") {
     return { kind: "root_overview" };
   }
+  if (source.kind === "omitted_section") {
+    if (
+      typeof source.label !== "string" || source.label.trim().length === 0 || source.label.length > 96 ||
+      typeof source.sectionKey !== "string" || source.sectionKey.trim().length === 0 || source.sectionKey.length > 96
+    ) {
+      return undefined;
+    }
+    return {
+      kind: "omitted_section",
+      label: source.label.trim(),
+      sectionKey: source.sectionKey.trim()
+    };
+  }
   if (source.kind === "selected_text") {
     const evidenceIds = source.evidenceIds;
     const externalSourceIds = source.externalSourceIds;
@@ -56,6 +70,31 @@ function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | und
     };
   }
   return undefined;
+}
+
+function normalizeAncestorSummaries(value: unknown): ThinReadingAncestorSummary[] | undefined {
+  if (!Array.isArray(value) || value.length > 16) {
+    return undefined;
+  }
+  const summaries = value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const candidate = item as Partial<ThinReadingAncestorSummary>;
+    if (
+      typeof candidate.nodeId !== "string" || candidate.nodeId.trim().length === 0 || candidate.nodeId.length > 180 ||
+      typeof candidate.title !== "string" || candidate.title.trim().length === 0 || candidate.title.length > 240 ||
+      typeof candidate.summary !== "string" || candidate.summary.trim().length === 0 || candidate.summary.length > 2_400
+    ) {
+      return [];
+    }
+    return [{
+      nodeId: candidate.nodeId.trim(),
+      summary: candidate.summary.trim(),
+      title: candidate.title.trim()
+    }];
+  });
+  return summaries.length === value.length ? summaries : undefined;
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -253,6 +292,7 @@ export function getAgentRequestThinReadingContext(
     }
   }
   return {
+    ancestorSummaries: normalizeAncestorSummaries(candidate.ancestorSummaries),
     artifactId: candidate.artifactId,
     depth: candidate.depth,
     paperIds: [...candidate.paperIds],

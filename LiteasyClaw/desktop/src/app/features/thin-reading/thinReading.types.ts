@@ -187,7 +187,14 @@ export type ThinReadingNodeSeed = {
   withinPaperClosure: boolean;
 };
 
+export type ThinReadingAncestorSummary = {
+  nodeId: string;
+  summary: string;
+  title: string;
+};
+
 export type ThinReadingGenerationContext = {
+  ancestorSummaries?: readonly ThinReadingAncestorSummary[];
   artifactId: string;
   depth: number;
   paperIds: readonly string[];

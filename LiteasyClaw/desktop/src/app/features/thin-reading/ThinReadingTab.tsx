@@ -415,6 +415,10 @@ export function ThinReadingTab({
     }
   }
 
+  function advanceOmittedSection(sectionKey: string, label: string) {
+    void generateBranch({ kind: "omitted_section", label, sectionKey });
+  }
+
   async function syncIntuecho() {
     if (!onSyncIntuecho || syncingIntuecho) {
       return;
@@ -616,6 +620,29 @@ export function ThinReadingTab({
               })}
             </p>
           </section>
+          {activeNode.omittedSections.length > 0 ? (
+            <section className="thin-reading__omitted" aria-label={labels.omittedRegion}>
+              <div className="thin-reading__omitted-actions">
+                {activeNode.omittedSections.map((section) => (
+                  <button
+                    aria-label={labels.deepenOmittedSection(section.label)}
+                    disabled={generationInProgress}
+                    key={section.id}
+                    onClick={() => advanceOmittedSection(section.sectionKey, section.label)}
+                    type="button"
+                  >
+                    <span className="thin-reading__omitted-copy">
+                      <span className="thin-reading__omitted-cue">{labels.deepenOmittedAction}</span>
+                      <span className="thin-reading__omitted-topic">{section.label}</span>
+                    </span>
+                    <span className="thin-reading__omitted-icon">
+                      <ArrowRightRegular aria-hidden="true" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
           {visibleGenerationProgress ? (
             <div aria-live="polite" className="thin-reading__status">
               {visibleGenerationProgress.stageLabel ? <strong>{visibleGenerationProgress.stageLabel}</strong> : null}

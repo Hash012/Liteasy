@@ -211,6 +211,19 @@ test("normalizes selected-passage evidence ids and rejects malformed attachment 
   };
   expect(getAgentRequestThinReadingContext(
     omittedSection as Parameters<typeof getAgentRequestThinReadingContext>[0]
+  )?.source).toEqual({
+    kind: "omitted_section",
+    label: "方法",
+    sectionKey: "method"
+  });
+
+  omittedSection.attachments[0].metadata.thinReadingContext.source = {
+    kind: "omitted_section",
+    label: "x".repeat(97),
+    sectionKey: "method"
+  };
+  expect(getAgentRequestThinReadingContext(
+    omittedSection as Parameters<typeof getAgentRequestThinReadingContext>[0]
   )).toBeNull();
 });
 

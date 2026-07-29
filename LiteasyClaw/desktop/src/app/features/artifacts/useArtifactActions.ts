@@ -270,6 +270,30 @@ function isThinReadingBodyExcerpt(summary: string, excerpt: string) {
   return normalizedExcerpt.length > 0 && normalizedSummary.includes(normalizedExcerpt);
 }
 
+function isThinReadingOmittedSectionSource(
+  node: ThinReadingDocument["nodes"][string],
+  source: ThinReadingBranchSource
+) {
+  return source.kind === "omitted_section" && node.omittedSections.some((section) => (
+    section.sectionKey === source.sectionKey && section.label === source.label
+  ));
+}
+
+function thinReadingAncestorSummaries(
+  document: ThinReadingDocument,
+  nodeId: string
+): NonNullable<ThinReadingGenerationContext["ancestorSummaries"]> {
+  const path: Array<NonNullable<ThinReadingGenerationContext["ancestorSummaries"]>[number]> = [];
+  const visited = new Set<string>();
+  let node: ThinReadingDocument["nodes"][string] | undefined = document.nodes[nodeId];
+  while (node && !visited.has(node.id)) {
+    path.unshift({ nodeId: node.id, summary: node.summary, title: node.title });
+    visited.add(node.id);
+    node = node.parentId ? document.nodes[node.parentId] : undefined;
+  }
+  return path;
+}
+
 function thinReadingTitleForSource(source: ThinReadingBranchSource, targetLanguage: string) {
   if (source.kind === "omitted_section") {
     return source.label;
@@ -979,8 +1003,10 @@ export function useArtifactActions({
         : undefined
     };
     const activeNode = scopedDocument.nodes[scopedDocument.activeNodeId] ?? scopedDocument.nodes[scopedDocument.rootNodeId];
-    if (source.kind !== "selected_text" || !isThinReadingBodyExcerpt(activeNode.summary, source.excerpt)) {
-      throw new Error("薄读只能从当前层正文中选取有证据映射的文字继续深入。");
+    const validBodySelection = source.kind === "selected_text" &&
+      isThinReadingBodyExcerpt(activeNode.summary, source.excerpt);
+    if (!validBodySelection && !isThinReadingOmittedSectionSource(activeNode, source)) {
+      throw new Error("薄读只能从当前层正文选区或当前层列出的未覆盖模块继续深入。");
     }
     const existingChild = findThinReadingChildBySource(scopedDocument, activeNode.id, source);
     if (existingChild) {
@@ -1020,6 +1046,7 @@ export function useArtifactActions({
     artifactStore.startTask(taskId);
     syncArtifacts(taskId);
     const context: ThinReadingGenerationContext = {
+      ancestorSummaries: thinReadingAncestorSummaries(scopedDocument, activeNode.id),
       artifactId,
       depth: activeNode.depth + 1,
       paperIds: [primaryPaperId],

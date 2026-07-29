@@ -846,6 +846,8 @@ async function generateThinReadingWithQualityRepair(input: {
       const parsedRootSeed = parseThinReadingModelSeed(generation.answer, {
         analysis: plannedEvidence,
         analysisEvidence: plannedEvidence.evidence,
+        ancestorSummaries: input.context.ancestorSummaries,
+        coverageEvidence: input.prepared.evidence,
         externalSources: input.context.externalSources,
         requireExternalKnowledge: requiresThinReadingExternalKnowledge(input.context),
         requireExplicitTraceability: true,
