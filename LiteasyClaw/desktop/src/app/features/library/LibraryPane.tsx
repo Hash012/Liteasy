@@ -249,6 +249,7 @@ export function LibraryPane({
   onClearRecommendations,
   onCollectRecommendation,
   onDismissRecommendation,
+  onImportSelectedSet,
   onLoginRequired,
   onOpenOrganizationWorkspace,
   onOpenPaper,

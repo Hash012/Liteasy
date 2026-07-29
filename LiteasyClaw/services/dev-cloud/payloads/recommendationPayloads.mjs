@@ -1,12 +1,11 @@
-export function buildRecommendationPayload(body) {
+function buildRecommendationCandidates(body) {
   const selectedDocuments = Array.isArray(body.selectedDocuments) ? body.selectedDocuments : [];
   const selectedTitles = selectedDocuments
     .filter((document) => typeof document?.title === "string")
     .map((document) => document.title);
 
   if (selectedTitles.some((title) => title.includes("ACORN"))) {
-    return {
-      recommendations: [
+    return [
         {
           discoveredAt: "2026-05-14T08:15:00Z",
           id: "rec-acorn-1",
@@ -29,13 +28,11 @@ export function buildRecommendationPayload(body) {
           sourceKind: "mock",
           title: "Efficient Filtered Approximate Nearest Neighbor Search"
         }
-      ]
-    };
+    ];
   }
 
   if (selectedTitles.some((title) => title.includes("Vector Database"))) {
-    return {
-      recommendations: [
+    return [
         {
           discoveredAt: "2026-05-14T08:15:00Z",
           id: "rec-vdbms-1",
@@ -58,12 +55,10 @@ export function buildRecommendationPayload(body) {
           sourceKind: "mock",
           title: "Milvus: A Purpose-Built Vector Data Management System"
         }
-      ]
-    };
+    ];
   }
 
-  return {
-    recommendations: [
+  return [
       {
         discoveredAt: "2026-05-14T07:30:00Z",
         id: "rec-colbert-1",
@@ -86,8 +81,67 @@ export function buildRecommendationPayload(body) {
         sourceKind: "mock",
         title: "Dense Passage Retrieval for Open-Domain Question Answering"
       }
-    ]
+  ];
+}
+
+function getProfileTerms(profile) {
+  if (!profile || typeof profile !== "object" || !Array.isArray(profile.disciplines)) {
+    return [];
+  }
+
+  return profile.disciplines.flatMap((discipline) => [
+    discipline.categoryName,
+    discipline.description,
+    discipline.name
+  ]);
+}
+
+function getSearchableText(item) {
+  return [item.reason, item.relatedDocumentTitle, item.title].join(" ").toLowerCase();
+}
+
+function normalizeTerms(terms) {
+  return terms
+    .filter((term) => typeof term === "string" && term.trim().length > 1)
+    .map((term) => term.trim().toLowerCase());
+}
+
+function personalizeRecommendation(item, preferences) {
+  const searchableText = getSearchableText(item);
+  const profileTerms = normalizeTerms(getProfileTerms(preferences.profile));
+  const behaviorTerms = Array.isArray(preferences.terms) ? preferences.terms : [];
+  const profileBoost = profileTerms.some((term) => searchableText.includes(term)) ? 0.025 : 0;
+  const behaviorBoost = behaviorTerms.reduce((total, term) => {
+    if (
+      !term ||
+      typeof term.term !== "string" ||
+      typeof term.weight !== "number" ||
+      !searchableText.includes(term.term.toLowerCase())
+    ) {
+      return total;
+    }
+    return total + Math.max(0, term.weight) * 0.015;
+  }, 0);
+
+  return {
+    ...item,
+    relevanceScore: Number(Math.min(0.99, item.relevanceScore + profileBoost + behaviorBoost).toFixed(3))
   };
+}
+
+export function buildRecommendationPayload(body, preferences = {}) {
+  const suppressedRecommendationIds = new Set(
+    Array.isArray(preferences.suppressedRecommendationIds)
+      ? preferences.suppressedRecommendationIds
+      : []
+  );
+  const recommendations = buildRecommendationCandidates(body)
+    .filter((item) => !suppressedRecommendationIds.has(item.id))
+    .map((item) => personalizeRecommendation(item, preferences))
+    .sort((left, right) => right.relevanceScore - left.relevanceScore)
+    .slice(0, 4);
+
+  return { recommendations };
 }
 
 function normalizeRecommendationTitle(value) {

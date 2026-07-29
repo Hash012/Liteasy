@@ -7,8 +7,15 @@ function isAcademicProfile(value: unknown): value is AcademicProfile {
     return false;
   }
   const candidate = value as Partial<Record<keyof AcademicProfile, unknown>>;
-  return Object.keys(defaultAcademicProfile).every(
-    (key) => typeof candidate[key as keyof AcademicProfile] === "string"
+  return (
+    typeof candidate.age === "string" &&
+    Array.isArray(candidate.disciplines) &&
+    typeof candidate.gender === "string" &&
+    typeof candidate.preferredLanguages === "string" &&
+    typeof candidate.researchDatasets === "string" &&
+    typeof candidate.researchMethods === "string" &&
+    typeof candidate.researchTopics === "string" &&
+    typeof candidate.stage === "string"
   );
 }
 

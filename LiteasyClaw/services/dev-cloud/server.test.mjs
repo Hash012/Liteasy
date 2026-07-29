@@ -241,6 +241,10 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/agent-artifacts",
     "DELETE /v1/agent-artifacts/:artifactId",
     "POST /v1/recommendations",
+    "POST /v1/profile/get",
+    "POST /v1/profile/save",
+    "POST /v1/profile/clear",
+    "POST /v1/personalization/signal",
     "POST /v1/recommendations/feedback",
     "POST /v1/research/external-knowledge",
     "POST /v1/recommendation-cache/get",
@@ -3267,4 +3271,87 @@ test("returns an audit score from the model audit endpoint", async () => {
       verdict: "pass"
     }
   });
+});
+
+test("keeps only the current academic profile and aggregate personalization state", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "demo-profile-session";
+  const profile = {
+    disciplines: [
+      {
+        categoryCode: "08",
+        categoryName: "工学",
+        code: "0812",
+        description: "信息检索与科学计量",
+        name: "计算机科学与技术"
+      }
+    ],
+    stage: "博士研究生"
+  };
+
+  const saved = await invokeHandler({
+    body: JSON.stringify({ profile, sessionId }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/profile/save"
+  });
+  assert.equal(saved.statusCode, 200);
+  assert.deepEqual(saved.json.profile.disciplines, profile.disciplines);
+  assert.equal(saved.json.profile.stage, profile.stage);
+  assert.equal(saved.json.personalizationVersion, 1);
+
+  const opened = await invokeHandler({
+    body: JSON.stringify({
+      sessionId,
+      signal: { kind: "paper_opened", title: "Causal Retrieval for Scientific Literature" }
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(opened.statusCode, 200);
+  assert.equal(opened.json.personalizationVersion, 2);
+  assert.match(opened.json.assistantSummary, /causal/);
+  assert.equal("terms" in opened.json, false);
+
+  const dismissed = await invokeHandler({
+    body: JSON.stringify({
+      sessionId,
+      signal: { kind: "recommendation_dismissed", recommendationId: "rec-colbert-1" }
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(dismissed.statusCode, 200);
+  assert.equal(dismissed.json.personalizationVersion, 3);
+
+  const recommendations = await invokeHandler({
+    body: JSON.stringify({ selectedDocuments: [], sessionId }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+  assert.equal(recommendations.statusCode, 200);
+  assert.equal(
+    recommendations.json.recommendations.some((recommendation) => recommendation.id === "rec-colbert-1"),
+    false
+  );
+
+  const cleared = await invokeHandler({
+    body: JSON.stringify({ sessionId }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/profile/clear"
+  });
+  assert.equal(cleared.statusCode, 200);
+  assert.deepEqual(cleared.json.profile.disciplines, []);
+  assert.equal(cleared.json.profile.stage, "未设置");
+  assert.equal(cleared.json.assistantSummary, undefined);
+  assert.equal(cleared.json.personalizationVersion, 4);
 });

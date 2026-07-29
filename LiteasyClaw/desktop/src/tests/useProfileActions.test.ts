@@ -1,108 +1,103 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { useProfileActions } from "../app/features/profile/useProfileActions";
+import type { AccountSession } from "../app/features/account/account.types";
 import { defaultAcademicProfile } from "../app/features/profile/profile.types";
+import { useProfileActions } from "../app/features/profile/useProfileActions";
 
-beforeEach(() => {
-  window.localStorage.clear();
-});
+const accountSession: AccountSession = {
+  email: "researcher@liteasy.dev",
+  expiresAt: "2026-05-15T09:30:00Z",
+  membershipTier: "pro",
+  name: "Liteasy Researcher",
+  sessionId: "demo-session-1"
+};
+
+beforeEach(() => window.localStorage.clear());
 
 describe("useProfileActions", () => {
-  test("tracks academic archive state and requests profile sampling changes", () => {
-    const onProfileSamplingChanged = vi.fn();
-    const { result, rerender } = renderHook(
-      ({ enabled }) =>
-        useProfileActions({
-          onProfileSamplingChanged,
-          profileSamplingEnabled: enabled
-        }),
-      { initialProps: { enabled: false } }
-    );
-
+  test("opens and closes the academic archive", () => {
+    const { result } = renderHook(() => useProfileActions());
     expect(result.current.academicArchiveOpen).toBe(false);
-    expect(result.current.profileSamplingEnabled).toBe(false);
-    expect(result.current.profileClearMessage).toBeUndefined();
-
     act(() => result.current.openAcademicArchive());
     expect(result.current.academicArchiveOpen).toBe(true);
-
     act(() => result.current.closeAcademicArchive());
     expect(result.current.academicArchiveOpen).toBe(false);
-
-    act(() => result.current.toggleProfileSampling());
-    expect(onProfileSamplingChanged).toHaveBeenLastCalledWith(true);
-
-    rerender({ enabled: true });
-    expect(result.current.profileSamplingEnabled).toBe(true);
-
-    act(() => result.current.toggleProfileSampling());
-    expect(onProfileSamplingChanged).toHaveBeenLastCalledWith(false);
   });
 
-  test("requires confirmation before clearing the profile and resets sampling", () => {
-    const onProfileSamplingChanged = vi.fn();
-    const { result } = renderHook(() =>
-      useProfileActions({
-        onProfileSamplingChanged,
-        profileSamplingEnabled: true
-      })
-    );
-
-    expect(result.current.profileSamplingEnabled).toBe(true);
-
-    act(() => result.current.openClearProfileConfirm());
-    expect(result.current.clearProfileConfirmOpen).toBe(true);
-
-    act(() => result.current.closeClearProfileConfirm());
-    expect(result.current.clearProfileConfirmOpen).toBe(false);
-    expect(result.current.profileSamplingEnabled).toBe(true);
-
-    act(() => result.current.openClearProfileConfirm());
-    act(() => result.current.clearUserProfile());
-
-    expect(result.current.clearProfileConfirmOpen).toBe(false);
-    expect(onProfileSamplingChanged).toHaveBeenLastCalledWith(false);
-    expect(result.current.profileClearMessage).toBe("用户画像已清空，基础身份信息已保留。");
-  });
-
-  test("stores editable academic profile configuration and clears it with confirmation", () => {
-    const onProfileSamplingChanged = vi.fn();
-    const { result } = renderHook(() =>
-      useProfileActions({
-        onProfileSamplingChanged,
-        profileSamplingEnabled: true
-      })
-    );
-
-    expect(result.current.academicProfile).toEqual(defaultAcademicProfile);
-
-    act(() =>
-      result.current.updateAcademicProfile({
-        ...defaultAcademicProfile,
-        age: "28",
-        gender: "女",
-        researchTopics: "神经信息检索",
-        stage: "博士研究生"
-      })
-    );
-
-    expect(result.current.academicProfile).toEqual({
+  test("stores a locally editable academic profile and clears it after confirmation", () => {
+    const { result } = renderHook(() => useProfileActions());
+    const profile = {
       ...defaultAcademicProfile,
-      age: "28",
-      gender: "女",
+      disciplines: [{
+        categoryCode: "08",
+        categoryName: "工学",
+        code: "0812",
+        description: "自然语言处理",
+        name: "计算机科学与技术"
+      }],
       researchTopics: "神经信息检索",
       stage: "博士研究生"
-    });
-    expect(result.current.profileClearMessage).toBe("画像配置已更新。");
+    };
+
+    act(() => result.current.updateAcademicProfile(profile));
+    expect(result.current.academicProfile).toEqual(profile);
+    expect(result.current.assistantProfileSummary).toContain("研究学科");
+    expect(result.current.profileClearMessage).toBe("学术档案已更新。");
 
     act(() => result.current.openClearProfileConfirm());
     act(() => result.current.clearUserProfile());
-
+    expect(result.current.clearProfileConfirmOpen).toBe(false);
     expect(result.current.academicProfile).toEqual(defaultAcademicProfile);
-    expect(onProfileSamplingChanged).toHaveBeenLastCalledWith(false);
+    expect(result.current.profileClearMessage).toBe("学术档案已清空。");
   });
 
-  test("restores the device-local research profile across hook instances", () => {
+  test("syncs academic profile and signals without exposing a profile toggle", async () => {
+    const savedProfile = {
+      disciplines: [{
+        categoryCode: "08",
+        categoryName: "工学",
+        code: "0812",
+        description: "信息检索",
+        name: "计算机科学与技术"
+      }],
+      stage: "博士研究生"
+    };
+    const requests: Array<{ body: Record<string, unknown>; url: string }> = [];
+    const transport = async (request: { body: string; url: string }) => {
+      requests.push({ body: JSON.parse(request.body), url: request.url });
+      const profile = request.url.endsWith("/get")
+        ? { disciplines: [], profileVersion: 0, stage: "未设置" }
+        : { ...savedProfile, profileVersion: 1 };
+      return {
+        json: async () => ({
+          ...(request.url.endsWith("/signal") ? { assistantSummary: "近期产品内关注：causal retrieval" } : {}),
+          personalizationVersion: requests.length - 1,
+          profile
+        }),
+        ok: true,
+        status: 200
+      };
+    };
+    const { result } = renderHook(() => useProfileActions({
+      accountSession,
+      controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+      transport
+    }));
+
+    await waitFor(() => expect(requests[0]?.url).toContain("/v1/profile/get"));
+    const nextProfile = { ...defaultAcademicProfile, ...savedProfile, researchTopics: "causal retrieval" };
+    await act(async () => { await result.current.updateAcademicProfile(nextProfile); });
+    expect(requests[1].body).toEqual({ profile: nextProfile, sessionId: accountSession.sessionId });
+    expect(result.current.academicProfile.researchTopics).toBe("causal retrieval");
+
+    await act(async () => {
+      await result.current.recordPersonalizationSignal({ kind: "paper_opened", title: "Causal retrieval" });
+    });
+    expect(result.current.assistantProfileSummary).toContain("causal retrieval");
+    expect(result.current).not.toHaveProperty("profileSamplingEnabled");
+  });
+
+  test("restores the device-local academic archive across hook instances", () => {
     const first = renderHook(() => useProfileActions());
     act(() => first.result.current.updateAcademicProfile({
       ...defaultAcademicProfile,
@@ -111,11 +106,8 @@ describe("useProfileActions", () => {
       researchTopics: "神经信息检索"
     }));
     first.unmount();
-
     const restored = renderHook(() => useProfileActions());
     expect(restored.result.current.academicProfile.researchTopics).toBe("神经信息检索");
     expect(restored.result.current.academicProfile.researchMethods).toBe("混合检索");
-    expect(restored.result.current.academicProfile.preferredLanguages).toBe("中文、English");
   });
-
 });

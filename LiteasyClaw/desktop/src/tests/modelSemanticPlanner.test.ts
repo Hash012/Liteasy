@@ -866,62 +866,6 @@ test("retries the structured planner output once before deterministic fallback",
   expect(JSON.parse(requestBodies[1]).prompt).toContain("上一次输出未通过结构化解析");
 });
 
-test("keeps deterministic confirmation plans before calling the model planner", async () => {
-  const settings = createSettingsStore().getState();
-  const modelTransport = vi.fn(async () => ({
-    json: async () => ({
-      answer: JSON.stringify({
-        actions: [
-          {
-            actionId: "settings.update",
-            input: {
-              target: "profile.enabled",
-              value: true
-            }
-          }
-        ],
-        confidence: "high",
-        intentId: "settings.update",
-        planId: "unsafe-model-plan",
-        requiredContext: [],
-        requiresConfirmation: false,
-        riskLevel: "low",
-        summary: "开启用户画像"
-      }),
-      execution: {
-        backend: "dev_cloud",
-        mode: "live",
-        provider: "openai"
-      }
-    }),
-    ok: true,
-    status: 200
-  }));
-  const planner = createModelSemanticPlanner({
-    modelTransport,
-    settings: {
-      ...settings,
-      "models.cloud_proxy_endpoint": "https://liteasy.example.com/model-proxy"
-    }
-  });
-
-  await expect(
-    planner(
-      {
-        message: "开启用户画像",
-        mode: "command"
-      },
-      plannerContext
-    )
-  ).resolves.toMatchObject({
-    intentId: "settings.update",
-    planId: expect.stringMatching(/^plan-/),
-    requiresConfirmation: true,
-    riskLevel: "medium"
-  });
-  expect(modelTransport).not.toHaveBeenCalled();
-});
-
 test("uses the DeepSeek default model when the active provider is deepseek", async () => {
   const settings = createSettingsStore().getState();
   let requestBody: string | undefined;

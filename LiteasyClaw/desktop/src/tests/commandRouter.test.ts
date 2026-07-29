@@ -24,16 +24,9 @@ test("maps generating a mind map to an artifact skill invocation", () => {
   });
 });
 
-test("maps disabling profile sampling to a settings skill invocation", () => {
-  const result = routeCommand("关闭用户画像");
-
-  expect(result).toEqual({
-    skillId: "settings.adjust",
-    input: {
-      target: "profile.enabled",
-      value: false
-    }
-  });
+test("does not route profile enable or disable commands", () => {
+  expect(routeCommand("关闭用户画像")).toBeNull();
+  expect(routeCommand("开启用户画像")).toBeNull();
 });
 
 test("does not expose removed model-policy commands in normal assistant routing", () => {

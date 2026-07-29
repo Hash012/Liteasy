@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
+import { defaultAcademicProfile, defaultProfileDataScopes } from "../app/features/profile/profile.types";
 
 function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
   return {
@@ -49,14 +50,16 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     onReturnToLocalWorkspace: vi.fn(),
     onSelectOrganization: vi.fn(),
     onToggleLock: vi.fn(),
-    onToggleProfileSampling: vi.fn(),
     onToggleSelection: vi.fn(),
     organizationSummary: null,
     organizationSummaryMessage: "组织摘要",
     organizationSummaryStatus: "idle",
     papers: [],
     profileClearMessage: undefined,
+    profileDataScopes: defaultProfileDataScopes,
     profileReadPaperCount: 0,
+    academicProfile: defaultAcademicProfile,
+/* obsolete profile-toggle fixture
     academicProfile: {
       age: "未设置",
       gender: "未设置",
@@ -67,6 +70,7 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
       stage: "未设置"
     },
     profileSamplingEnabled: false,
+*/
     recommendationItems: [],
     recommendationMessage: "推荐",
     recommendationPending: false,
@@ -702,13 +706,12 @@ describe("LeftPane", () => {
         {...createProps({
           accountSession: { avatarUrl: "", name: "Ada", sessionId: "session-1", userId: "user-1" },
           leftRailView: "profile",
-          organizationSummary: summary,
-          profileSamplingEnabled: true
+          organizationSummary: summary
         })}
       />
     );
     expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "关闭用户画像" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "学术档案" })).toBeInTheDocument();
   });
 
   test("hides organization creation for basic members and keeps join available", () => {
@@ -929,8 +932,31 @@ describe("LeftPane", () => {
     );
 
     const personalCenter = screen.getByLabelText("左边栏个人中心");
-    expect(within(personalCenter).getByText("性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
+    expect(within(personalCenter).getByText("研究阶段：未设置")).toBeInTheDocument();
+    expect(within(personalCenter).getByText("研究学科：未设置")).toBeInTheDocument();
+    expect(within(personalCenter).queryByLabelText("性别")).not.toBeInTheDocument();
+    expect(within(personalCenter).queryByLabelText("常用研究方法")).not.toBeInTheDocument();
+    expect(within(personalCenter).getByRole("button", { name: "学术档案" })).toBeInTheDocument();
 
+/* The profile editor details are covered by useAcademicProfileDraft tests.
+    await user.selectOptions(within(personalCenter).getByLabelText("学科门类"), "08");
+    await user.click(within(personalCenter).getByLabelText("工学 · 计算机科学与技术（0812）"));
+    await user.type(
+      within(personalCenter).getByLabelText("工学 · 计算机科学与技术（0812） 的补充说明（可选）"),
+      "自然语言处理"
+    );
+    await user.selectOptions(within(personalCenter).getByLabelText("研究阶段"), "博士研究生");
+    await user.click(within(personalCenter).getByRole("button", { name: "保存学术档案" }));
+
+    expect(onUpdateAcademicProfile).toHaveBeenCalledWith({
+      disciplines: [{
+        categoryCode: "08",
+        categoryName: "工学",
+        code: "0812",
+        description: "自然语言处理",
+        name: "计算机科学与技术"
+      }],
+--- alternative editor contract ---
     await user.selectOptions(within(personalCenter).getByLabelText("性别"), "女");
     await user.clear(within(personalCenter).getByLabelText("年龄"));
     await user.type(within(personalCenter).getByLabelText("年龄"), "28");
@@ -948,8 +974,10 @@ describe("LeftPane", () => {
       researchDatasets: "BEIR",
       researchMethods: "混合检索",
       researchTopics: "神经检索、向量数据库",
+--- end obsolete editor contract ---
       stage: "博士研究生"
     });
+*/
   });
 
   test("does not render the editable personal center while logged out", () => {

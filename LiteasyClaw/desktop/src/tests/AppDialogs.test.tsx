@@ -56,10 +56,10 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
     onInviteMember: vi.fn(),
     onJoinOrganization: vi.fn(),
     onLeaveOrganization: vi.fn(),
+    onExportProfile: vi.fn(),
     onOpenSharedLibrary: vi.fn(),
     onSelectOrganization: vi.fn(),
     organizationDialogOpen: false,
-    readPaperCount: 3,
     summary: null,
     ...overrides
   };
@@ -161,7 +161,7 @@ describe("AppDialogs", () => {
 
     rerender(<AppDialogs {...createProps({ clearProfileConfirmOpen: true })} />);
     expect(screen.getByTestId("workspace-dialog-backdrop")).toHaveClass("workspace-dialog-backdrop");
-    expect(screen.getByRole("dialog", { name: "清空用户画像确认" })).toHaveClass("workspace-modal-panel");
+    expect(screen.getByRole("dialog", { name: "清空学术档案确认" })).toHaveClass("workspace-modal-panel");
   });
   test("renders only active profile dialogs and forwards actions", async () => {
     const user = userEvent.setup();
@@ -171,7 +171,7 @@ describe("AppDialogs", () => {
       <AppDialogs {...createProps({ clearProfileConfirmOpen: true, onClearProfile })} />
     );
 
-    await user.click(screen.getByRole("button", { name: "确认清空用户画像" }));
+    await user.click(screen.getByRole("button", { name: "确认清空学术档案" }));
     expect(onClearProfile).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog", { name: "学术档案页面" })).not.toBeInTheDocument();
 
@@ -185,17 +185,17 @@ describe("AppDialogs", () => {
             name: "Ada",
             sessionId: "session-1"
           },
-          onCloseAcademicArchive,
-          readPaperCount: 7
+          onCloseAcademicArchive
         })}
       />
     );
 
     expect(screen.getByText("档案所有者：Ada")).toBeInTheDocument();
-    expect(screen.getByText("阅读统计：已阅读 7 篇论文")).toBeInTheDocument();
+    expect(screen.getByText("研究学科：未设置")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "关闭" }));
     expect(onCloseAcademicArchive).toHaveBeenCalledTimes(1);
   });
+
 
   test("renders organization action dialogs and forwards productized confirmations", async () => {
     const user = userEvent.setup();

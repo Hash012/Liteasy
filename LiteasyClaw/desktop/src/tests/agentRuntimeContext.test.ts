@@ -34,8 +34,7 @@ function createContext(overrides: Partial<AgentContextSnapshot> = {}): AgentCont
       "models.control_plane_endpoint": "http://127.0.0.1:8787",
       "models.default_provider": "openai",
       "network.recommendation.enabled": true,
-      "network.recommendation.sort_mode": "relevance",
-      "profile.enabled": false
+      "network.recommendation.sort_mode": "relevance"
     },
     workspace: {
       papers: [

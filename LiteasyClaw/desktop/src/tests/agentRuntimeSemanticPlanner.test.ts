@@ -468,19 +468,4 @@ test("plans existing settings and organization commands as semantic plans", () =
     summary: "打开组织共享文献库"
   });
 
-  expect(planSemanticCommand({ message: "开启用户画像", mode: "command" })).toMatchObject({
-    actions: [
-      {
-        actionId: "settings.update",
-        input: {
-          target: "profile.enabled",
-          value: true
-        }
-      }
-    ],
-    intentId: "settings.update",
-    requiresConfirmation: true,
-    riskLevel: "medium",
-    summary: "开启用户画像"
-  });
 });

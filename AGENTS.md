@@ -27,6 +27,17 @@ cd LiteasyClaw/services/dev-cloud && npm test   # 运行 Node 内置测试
 
 遵循现有 TypeScript 风格：两空格缩进、双引号和分号。React 组件使用 `PascalCase`，Hook 使用 `useThing`，其他 TypeScript 文件与函数使用 `camelCase`。功能代码放入对应 feature 目录；feature 不得导入 `layout` 或 `AppShell`。Rust 改动应放在 `src-tauri/src/` 并遵循 `rustfmt`。
 
+## Fluent 2 界面与图标基线
+
+GitHub `main` 的 `7c0da2c` 提交引入的 Fluent 2 图标与布局调整是产品界面基线，后续开发不得回退或以旧的文字/自制图标替代。界面变更遵循以下约束：
+
+- 保留图标优先的活动栏、紧凑分层面板、4–8px 圆角、浅边框和低层级阴影；不要恢复渐变背景、重装饰或纵向文字导航。
+- 新建或修改的交互组件优先使用 `@fluentui/react-components`；图标统一使用 `@fluentui/react-icons` 的 Fluent 2 素材，不使用 emoji 或混入其他图标库。
+- 图标按钮必须有可访问名称和悬浮提示；颜色采用中性表面、单一蓝色主操作与语义状态色，不能仅依赖颜色表达状态。
+- 避免把模型、实现方式或开发状态作为常驻界面文案。界面应突出用户任务、内容和下一步操作。
+
+在合并或迁移涉及界面的远端改动时，应以 `7c0da2c` 的 `FluentProvider`、`@fluentui` 依赖、活动栏和布局 token 为保留项，并先处理与当前工作区的冲突，不能通过覆盖当前用户改动来同步。
+
 ## 测试指南
 
 桌面端使用 Vitest 和 Testing Library。新增聚焦测试放入 `LiteasyClaw/desktop/src/tests/`，命名为 `*.test.ts` 或 `*.test.tsx`；`AppShell.test.tsx` 仅保留 smoke 和关键集成路径。云服务测试使用 Node 测试运行器，与服务模块同目录并命名为 `*.test.mjs`。提交前运行受影响测试；修改桌面端时还应运行 `npm run build`。
