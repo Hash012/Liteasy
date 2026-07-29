@@ -13,6 +13,7 @@ export type AssistantSessionHistoryItem = {
   kind?: AssistantSessionKind;
   messages: AssistantMessage[];
   mode: AssistantMode;
+  publicAgentClientSessionId?: string;
   status?: AssistantSessionStatus;
   title: string;
   updatedAt?: string;
@@ -99,16 +100,24 @@ export function createAssistantSession({
   title = "新对话"
 }: CreateAssistantSessionInput = {}): AssistantSessionHistoryItem {
   const timestamp = createTimestamp(now);
+  const sessionId = id ?? createSessionId(now, randomId);
   return {
     createdAt: timestamp,
-    id: id ?? createSessionId(now, randomId),
+    id: sessionId,
     kind,
     messages: [],
     mode,
+    ...(kind === "conversation"
+      ? { publicAgentClientSessionId: `assistant-pane:${sessionId}` }
+      : {}),
     status: "idle",
     title,
     updatedAt: timestamp
   };
+}
+
+export function resolveAssistantPublicAgentClientSessionId(session: AssistantSessionHistoryItem) {
+  return session.publicAgentClientSessionId ?? `assistant-pane:${session.id}`;
 }
 
 export function snapshotAssistantSession({

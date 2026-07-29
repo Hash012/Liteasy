@@ -2,7 +2,7 @@
   "agent": {
     "apiVersion": "liteasy.agent/v1",
     "runId": "run-1785345629817-35",
-    "sessionId": "session-1785311549378-1",
+    "sessionId": "thin-reading-local",
     "status": "completed"
   },
   "analysis": {

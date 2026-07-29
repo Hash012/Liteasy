@@ -15,7 +15,7 @@ test("prepares a turn with agent.md, memory, capabilities, and budget context", 
   expect(prepared.turn.runtimeContext.prompt.agentMd).toContain("Liteasy 学术工作台 Agent");
   expect(prepared.turn.runtimeContext.prompt.memorySummary).toContain("当前项目需要补齐 Agent 核心");
   expect(prepared.turn.runtimeContext.prompt.capabilitySummary).toContain("artifact.generate");
-  expect(prepared.turn.runtimeContext.prompt.budgetSummary).toContain("最大迭代：12");
+  expect(prepared.turn.runtimeContext.prompt.budgetSummary).toContain("最大迭代：64");
 });
 
 test("injects enabled academic profile details into the core prompt context", () => {

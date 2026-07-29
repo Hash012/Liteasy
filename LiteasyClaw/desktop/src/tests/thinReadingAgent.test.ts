@@ -131,6 +131,325 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("不得输出关联证据的并列堆砌");
   });
 
+  test("requires branch explanations to retain numbers when they summarize a numeric paper assertion", () => {
+    const numericEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-numeric-result",
+      quote: "On the evaluation dataset, the score rises from 0.34 to 0.39, an improvement of 14.7%.",
+      summary: "实验得分从 0.34 提升到 0.39，增幅为 14.7%。",
+      terms: ["检索性能"]
+    };
+    const numericAnalysis = {
+      ...prepared,
+      evidence: [numericEvidence],
+      evidencePrompt: `[${numericEvidence.id}] ${numericEvidence.quote}`
+    };
+    const baseOutput = {
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "目标数据集上的性能得到提升。" }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [numericEvidence.id],
+      paperType: "experimental",
+      summary: "该方法在目标数据集上的检索性能明显提升，效果优于此前基线。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标数据集上的检索性能明显提升，效果优于此前基线。"
+      }],
+      withinPaperClosure: true
+    };
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("概括了包含数值的论文断言（0.34、0.39、14.7）");
+
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "得分从 0.34 提升到 0.39。" }],
+      summary: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。"
+      }]
+    }), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toContain("14.7%");
+
+    expect(buildThinReadingAgentPrompt({
+      context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
+      prepared: numericAnalysis
+    })).toContain("按原文断言拆成最小命题");
+  });
+
+  test("requires 4096 only for the sentence that summarizes its source assertion", () => {
+    const mixedEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-projection-and-interaction",
+      quote: "The encoder projects each vector to 4096 dimensions with a linear layer. Late interaction compares query and document token vectors with MaxSim.",
+      summary: "编码器用线性层将向量投影到 4096 维；后期交互用 MaxSim 比较查询和文档词元向量。",
+      terms: ["encoder", "late interaction", "MaxSim"]
+    };
+    const mixedAnalysis = {
+      ...prepared,
+      evidence: [mixedEvidence],
+      evidencePrompt: `[${mixedEvidence.id}] ${mixedEvidence.quote}`
+    };
+    const baseOutput = (text: string) => ({
+      claims: [{ evidenceIds: [mixedEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [mixedEvidence.id],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [mixedEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "Late interaction compares query and document token vectors with MaxSim."
+    )), {
+      analysis: mixedAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("Late interaction");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The encoder projects each vector to a fixed dimension with a linear layer."
+    )), {
+      analysis: mixedAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("4096");
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The encoder projects each vector to 4096 dimensions with a linear layer."
+    )), {
+      analysis: mixedAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("4096");
+  });
+
+  test("keeps formula bounds only when a branch sentence explains the constraint", () => {
+    const constraintEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-symbolic-bound",
+      quote: "The compression parameter Mβ = 0 retains no candidate edges. The parameter controls how many candidate edges are retained during construction.",
+      summary: "压缩参数 Mβ=0 时不保留候选边；该参数控制构建时保留的候选边数量。",
+      terms: ["compression parameter"]
+    };
+    const constraintAnalysis = {
+      ...prepared,
+      evidence: [constraintEvidence],
+      evidencePrompt: `[${constraintEvidence.id}] ${constraintEvidence.quote}`
+    };
+    const baseOutput = (text: string) => ({
+      claims: [{ evidenceIds: [constraintEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [constraintEvidence.id],
+      paperType: "theoretical",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [constraintEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The compression parameter controls how many candidate edges are retained during construction."
+    )), {
+      analysis: constraintAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("controls");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The compression parameter has a lower-bound constraint."
+    )), {
+      analysis: constraintAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("（0）");
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The compression parameter Mβ = 0 retains no candidate edges."
+    )), {
+      analysis: constraintAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("Mβ = 0");
+  });
+
+  test("still requires a measured zero rather than accepting a qualitative substitute", () => {
+    const zeroMeasurement = {
+      ...prepared.evidence[0],
+      id: "evidence-zero-percent",
+      quote: "The controlled input has an error rate of 0%.",
+      summary: "受控输入的错误率为 0%。",
+      terms: ["error rate"]
+    };
+    const zeroAnalysis = {
+      ...prepared,
+      evidence: [zeroMeasurement],
+      evidencePrompt: `[${zeroMeasurement.id}] ${zeroMeasurement.quote}`
+    };
+    const baseOutput = (text: string) => ({
+      claims: [{ evidenceIds: [zeroMeasurement.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [zeroMeasurement.id],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [zeroMeasurement.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The controlled input has no observed errors."
+    )), {
+      analysis: zeroAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("（0）");
+  });
+
+  test("treats an equality-form metric as a measurement rather than a formula boundary", () => {
+    const metricEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-f1-equality",
+      quote: "F1 = 0.8 on the benchmark. The encoder uses late interaction.",
+      summary: "该基准上的 F1 为 0.8；编码器使用 late interaction。",
+      terms: ["F1", "late interaction"]
+    };
+    const metricAnalysis = {
+      ...prepared,
+      evidence: [metricEvidence],
+      evidencePrompt: `[${metricEvidence.id}] ${metricEvidence.quote}`
+    };
+    const text = "The F1 score is strong on the benchmark.";
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [metricEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [metricEvidence.id],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [metricEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: metricAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("（0.8）");
+  });
+
+  test("retains quantitative counts but ignores document-structural numbers", () => {
+    const baseOutput = (evidenceId: string, text: string) => ({
+      claims: [{ evidenceIds: [evidenceId], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidenceId],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [evidenceId],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+    const structuralEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-structural-number",
+      quote: "Passage 1, Page 2, Section 3, Figure 4, Table 5, and Chunk 6 describe the method mechanism.",
+      summary: "第 1 段说明方法机制。"
+    };
+    const structuralAnalysis = {
+      ...prepared,
+      evidence: [structuralEvidence],
+      evidencePrompt: `[${structuralEvidence.id}] ${structuralEvidence.quote}`
+    };
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      structuralEvidence.id,
+      "该段直接说明了方法的核心机制与其在整体流程中的作用。"
+    )), {
+      analysis: structuralAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toBe("该段直接说明了方法的核心机制与其在整体流程中的作用。");
+
+    const quantitativeEvidence = {
+      ...structuralEvidence,
+      id: "evidence-sample-count",
+      quote: "Passage 1 reports that the experiment evaluates 100 samples.",
+      summary: "第 1 段报告该实验评估了 100 个样本。"
+    };
+    const quantitativeAnalysis = {
+      ...prepared,
+      evidence: [quantitativeEvidence],
+      evidencePrompt: `[${quantitativeEvidence.id}] ${quantitativeEvidence.quote}`
+    };
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      quantitativeEvidence.id,
+      "该实验在数量充足且具有代表性的样本上完成了评估。"
+    )), {
+      analysis: quantitativeAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("概括了包含数值的论文断言（100）");
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      quantitativeEvidence.id,
+      "该实验评估了 100 个样本，并据此报告了方法的实验表现。"
+    )), {
+      analysis: quantitativeAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toBe("该实验评估了 100 个样本，并据此报告了方法的实验表现。");
+  });
+
   test("builds and validates an evidence-only reading plan", () => {
     const prompt = buildThinReadingEvidencePlanPrompt({ context, prepared });
     expect(prompt).toContain("证据规划 Agent");

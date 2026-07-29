@@ -1721,6 +1721,253 @@ test("drops an unsupported external-only sentence when external expansion was au
   expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 1, repaired: true });
 });
 
+test("replaces one unsupported required external source with a focused retrieval", async () => {
+  const store = createSettingsStore();
+  const externalQueries: string[] = [];
+  const generationPrompts: string[] = [];
+  let generationAttempts = 0;
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const externalSource = (id: string, title: string, abstract: string) => ({
+    abstract,
+    authors: ["A. Author"],
+    id: `openalex:${id}`,
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: `https://openalex.org/${id}`,
+    sourceId: id,
+    title,
+    url: `https://openalex.org/${id}`,
+    year: 2025
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        reviewAttempts += 1;
+        const sourceId = reviewAttempts === 1 ? "openalex:W1" : "openalex:W2";
+        const sentenceLine = prompt.split("\n").find((line) => line.includes(`external=${sourceId}`));
+        const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(reviewAttempts === 1
+              ? {
+                  reason: "初始外部来源只涉及相邻主题，不能支持后续研究的具体命题。",
+                  unsupportedSentenceIds: [sentenceId],
+                  verdict: "fail"
+                }
+              : {
+                  reason: "替代来源摘要直接支持该外部句。",
+                  unsupportedSentenceIds: [],
+                  verdict: "pass"
+                }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationAttempts += 1;
+      generationPrompts.push(prompt);
+      const sourceId = generationAttempts === 1 ? "openalex:W1" : "openalex:W2";
+      const text = generationAttempts === 1
+        ? "初始线索讨论相邻主题，但不能据此断言后续研究的具体改进。"
+        : "后续研究将 late interaction 扩展为更高效的多向量检索。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [sourceId],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: text,
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [sourceId],
+              status: "weak",
+              text
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-external-recovery",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "selected_text", excerpt: "论文外的后续研究" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async (request) => {
+      externalQueries.push(JSON.parse(request.body).query);
+      const source = externalQueries.length <= 3
+        ? externalSource("W1", "Adjacent Retrieval Topic", "A study about a neighboring retrieval topic.")
+        : externalSource("W2", "Efficient Multi-vector Retrieval", "This follow-up study extends late interaction with a more efficient multi-vector retrieval method.");
+      return {
+        json: async () => ({ provider: "openalex", query: "external", sources: [source], status: "available" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalQueries).toHaveLength(4);
+  expect(externalQueries[3]).toContain("direct evidence for the requested claim");
+  expect(generationPrompts).toHaveLength(2);
+  expect(generationPrompts[1]).toContain("openalex:W2");
+  expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual(["openalex:W2"]);
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 2, repaired: true });
+});
+
+test("returns a closure boundary when a required external claim has no replacement evidence", async () => {
+  const store = createSettingsStore();
+  let externalRequests = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const unsupportedSource = {
+    abstract: "A study about a neighboring retrieval topic.",
+    authors: ["A. Author"],
+    id: "openalex:W1",
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: "https://openalex.org/W1",
+    sourceId: "W1",
+    title: "Adjacent Retrieval Topic",
+    url: "https://openalex.org/W1",
+    year: 2025
+  };
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        const sentenceLine = prompt.split("\n").find((line) => line.includes("external=openalex:W1"));
+        const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该来源只涉及相邻主题，不能直接支持所问外部命题。",
+              unsupportedSentenceIds: [sentenceId],
+              verdict: "fail"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: ["openalex:W1"],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: ["openalex:W1"],
+              status: "weak",
+              text: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-external-boundary",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "selected_text", excerpt: "论文外的后续研究" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRequests += 1;
+      return {
+        json: async () => ({ provider: "openalex", query: "external", sources: [unsupportedSource], status: "available" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalRequests).toBe(4);
+  expect(result.thinReading?.rootSeed.summary).toContain("未找到能直接支持");
+  expect(result.thinReading?.rootSeed.closureState).toBe("near_boundary");
+  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(true);
+  expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual([]);
+});
+
 test("keeps a selected canonical external source available when a follow-up lookup is empty", async () => {
   const store = createSettingsStore();
   let modelPrompt = "";

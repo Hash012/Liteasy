@@ -399,9 +399,196 @@ type ParseThinReadingModelSeedOptions = {
   externalSources?: readonly ThinReadingExternalSource[];
   requireExternalKnowledge?: boolean;
   requireExplicitTraceability?: boolean;
+  requireNumericFidelity?: boolean;
   requiredChineseTerminology?: readonly RequiredChineseTerminology[];
   targetLanguage?: string;
 };
+
+const numericTokenPattern = /[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+
+const structuralNumberPrefixPattern = /(?:\b(?:algorithm|appendix|chapter|chunk|document|eq(?:uation)?|fig(?:ure)?|id|item|line|listing|no|number|p(?:age|assage)?|paper|para(?:graph)?|part|ref(?:erence)?|sec(?:tion)?|step|table)\.?\s*(?:no\.?\s*)?|(?:第\s*)?(?:页(?:码)?|段(?:落)?|节|章节|章|图|表|附录|块|片段|条目|公式|式|行|算法)\s*)$/i;
+const structuralNumberSuffixPattern = /^\s*(?:页(?:码)?|段(?:落)?|节|章节|章|图|表|附录|块|片段|条目|公式|式|行|算法)/;
+const chineseQuantitativeSuffixPattern = /^\s*(?:%|‰|百分点|倍|次|个|例|名|位|组|层|轮|步|条|项|篇|台|核|样本|数据集|查询|文档|图像|节点|边|簇|批(?:次)?|实验|试验|折|随机种子|候选|近邻|令牌|词元|参数|维(?:度)?|特征|标签|类别|模型|任务|序列|患者|受试者|参与者|病例|观察|记录|变量|毫秒|微秒|纳秒|秒|分钟|小时|天|周|月|年|字节)/;
+const physicalUnitSuffixPattern = /^\s*(?:[kMGT]?B(?:\/s)?|[munpμ]?s|ms|min|h|Hz|kHz|MHz|GHz|[kMGT]?FLOP(?:s)?|[kmunpμ]?m|cm|mm|km|kg|mg|µg|ug|mL|L|dB|W|V|A|Pa|K)\b/i;
+const englishQuantitativeSuffixPattern = /^\s*(?:samples?|examples?|instances?|observations?|participants?|subjects?|patients?|tokens?|documents?|queries|images|records?|datasets?|classes|categories|labels?|layers?|heads?|epochs?|iterations?|steps?|parameters?|features?|dimensions?|variables?|models?|methods?|tasks?|trials?|runs?|folds?|seeds?|batches?|workers?|GPUs?|CPUs?|nodes?|edges?|vertices?|clusters?|experiments?|cases?|studies|papers?|citations?|words?|sentences?|passages?|retrievals?|candidates?|neighbors?|shots?|bits?|CI|confidence intervals?)\b/i;
+const numericMetricPrefixPattern = /(?:\b(?:accuracy|auc|average|count|error|f1|latency|loss|map|mean|median|memory|mrr|ndcg|number|precision|probability|rate|ratio|recall|score|speed|std(?:\.?\s*dev(?:iation)?)?|throughput|time|top[- ]?k|total|variance)\s*(?:=|:|is|of|about|approximately)?\s*|(?:准确率|精确率|召回率|得分|分数|均值|平均|中位数|标准差|方差|误差|置信区间|显著性|p值|数量|总计|共|每|Top[- ]?k)\s*(?:为|是|约|达|至|=|：)?\s*)$/i;
+const numericComparisonPrefixPattern = /(?:\b(?:p|n)\s*(?:value\s*)?[<=>≤≥]\s*|[A-Za-zα-ωΑ-Ω][A-Za-z0-9α-ωΑ-Ω_]*\s*[<=>≤≥]\s*|[±~≈≃]\s*|\b(?:from|between)\s*)$/i;
+const numericRangeDelimiterPattern = /(?:-|–|—|~|〜|至|到|\bto\b)\s*$/i;
+const numericRangeSuffixPattern = /^\s*(?:-|–|—|~|〜|至|到|\bto\b)\s*[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)/i;
+
+function normalizeNumericToken(value: string, match: RegExpMatchArray) {
+  let token = match[0];
+  const index = match.index ?? 0;
+  if (/^[+-]/.test(token) && index > 0 && /[\p{L}\p{N}]/u.test(value[index - 1])) {
+    token = token.slice(1);
+  }
+  return token.replace(/,/g, "");
+}
+
+function hasQuantitativeUnitSuffix(value: string) {
+  return chineseQuantitativeSuffixPattern.test(value) ||
+    physicalUnitSuffixPattern.test(value) ||
+    englishQuantitativeSuffixPattern.test(value);
+}
+
+function isStructuralNumber(value: string, match: RegExpMatchArray) {
+  const index = match.index ?? 0;
+  const before = value.slice(Math.max(0, index - 80), index);
+  const after = value.slice(index + match[0].length, index + match[0].length + 80);
+  const startsListItem = /(?:^|\n)\s*(?:[-*]\s*)?$/.test(before) && /^\s*(?:[.)、:]\s+)[^\d]/.test(after);
+  const isBracketedReference = /[[(]\s*$/.test(before) && /^\s*[\])]/.test(after);
+  const isOrdinal = /第\s*$/.test(before) && structuralNumberSuffixPattern.test(after);
+  return structuralNumberPrefixPattern.test(before) || startsListItem || isBracketedReference || isOrdinal;
+}
+
+function isQuantitativeNumber(value: string, match: RegExpMatchArray) {
+  if (isStructuralNumber(value, match)) {
+    return false;
+  }
+  const index = match.index ?? 0;
+  const token = normalizeNumericToken(value, match);
+  const before = value.slice(Math.max(0, index - 80), index);
+  const after = value.slice(index + match[0].length, index + match[0].length + 80);
+  if (/[.,eE]/.test(token) || /^[+-]/.test(token) || /\s*%/.test(after)) {
+    return true;
+  }
+  return hasQuantitativeUnitSuffix(after) ||
+    numericMetricPrefixPattern.test(before) ||
+    numericComparisonPrefixPattern.test(before) ||
+    numericRangeDelimiterPattern.test(before) ||
+    numericRangeSuffixPattern.test(after) ||
+    /^\s*(?:\/|\^|x\s*[-+]?(?:\d|$))/.test(after) ||
+    /(?:\/|\^)\s*$/.test(before) ||
+    /(?:\b(?:top|recall|precision|hit|ndcg)@|#)\s*$/i.test(before);
+}
+
+function numericTokens(value: string) {
+  const normalized = value.normalize("NFKC").replace(/−/g, "-");
+  return [...normalized.matchAll(numericTokenPattern)]
+    .filter((match) => isQuantitativeNumber(normalized, match))
+    .map((match) => normalizeNumericToken(normalized, match));
+}
+
+const numericFactConcepts = [
+  {
+    measurement: true,
+    source: /\b(?:accuracy|auc|f1|map|mrr|ndcg|precision|recall|score|error|loss)\b|(?:准确率|精确率|召回率|得分|分数|误差|损失)/i,
+    summary: /\b(?:accuracy|auc|f1|map|mrr|ndcg|precision|recall|score|error|loss)\b|(?:准确率|精确率|召回率|得分|分数|误差|损失)/i
+  },
+  {
+    measurement: true,
+    source: /\b(?:sample|example|instance|observation|participant|subject|patient|case|dataset|document|query|image|record)s?\b|(?:样本|示例|实例|观察|参与者|受试者|患者|病例|数据集|文档|查询|图像|记录)/i,
+    summary: /\b(?:sample|example|instance|observation|participant|subject|patient|case|dataset|document|query|image|record)s?\b|(?:样本|示例|实例|观察|参与者|受试者|患者|病例|数据集|文档|查询|图像|记录)/i
+  },
+  {
+    measurement: true,
+    source: /\b(?:dimension|dimensionality|embedding size|hidden size|vector size)\b|(?:维度|维数|嵌入维度|隐藏维度|向量维度)/i,
+    summary: /\b(?:dimension|dimensionality|embedding size|hidden size|vector size)\b|(?:维度|维数|嵌入维度|隐藏维度|向量维度)/i
+  },
+  {
+    measurement: false,
+    source: /\b(?:project|projection|linear layer|compress|compression|reduce|reduction)\b|(?:投影|映射|线性层|压缩|降维)/i,
+    summary: /\b(?:project|projection|linear layer|compress|compression|reduce|reduction)\b|(?:投影|映射|线性层|压缩|降维)/i
+  },
+  {
+    measurement: false,
+    source: /\b(?:parameter|layer|head|epoch|iteration|step|batch|seed|worker|gpu|cpu|node|edge|cluster)\b|(?:参数|层|头|轮|迭代|步骤|批次|随机种子|工作进程|节点|边|簇)/i,
+    summary: /\b(?:parameter|layer|head|epoch|iteration|step|batch|seed|worker|gpu|cpu|node|edge|cluster)\b|(?:参数|层|头|轮|迭代|步骤|批次|随机种子|工作进程|节点|边|簇)/i
+  },
+  {
+    measurement: true,
+    source: /\b(?:latency|throughput|speed|time|memory|storage|size|byte|flop)\b|(?:延迟|吞吐|速度|时间|内存|存储|大小|字节|浮点运算)/i,
+    summary: /\b(?:latency|throughput|speed|time|memory|storage|size|byte|flop)\b|(?:延迟|吞吐|速度|时间|内存|存储|大小|字节|浮点运算)/i
+  },
+  {
+    measurement: true,
+    source: /%|‰|百分点|\b(?:rate|ratio|percentage|proportion)\b|(?:比例|百分比|占比)/i,
+    summary: /%|‰|百分点|\b(?:rate|ratio|percentage|proportion)\b|(?:比例|百分比|占比)/i
+  }
+] as const;
+
+type QuantitativeEvidenceFact = {
+  clause: string;
+  concepts: readonly typeof numericFactConcepts[number][];
+  kind: "measurement" | "symbolic_constraint";
+  numbers: readonly string[];
+};
+
+const symbolicVariablePattern = "[A-Za-zα-ωΑ-Ω][A-Za-z0-9_α-ωΑ-ΩβγδΔΓ]*";
+const symbolicNumberPattern = "[-+]?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?";
+const symbolicConstraintPattern = new RegExp(
+  `(?:${symbolicVariablePattern}\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${symbolicNumberPattern}|${symbolicNumberPattern}\\s*(?:=|<|>|≤|≥|<=|>=)\\s*${symbolicVariablePattern})`,
+  "u"
+);
+const symbolicConstraintSummaryPattern = /(?:=|<|>|≤|≥|<=|>=|约束|不等式|取值范围|范围|上下界|边界条件|lower bound|upper bound|constraint|inequality|range|bounded)/i;
+
+function splitEvidenceClauses(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.!?。！？;；])\s+/)
+    .filter(Boolean);
+}
+
+function quantitativeEvidenceFacts(evidence: AnalysisEvidence) {
+  return splitEvidenceClauses(evidence.quote).flatMap((clause) => {
+    const numbers = [...new Set(numericTokens(clause))];
+    if (numbers.length === 0) {
+      return [];
+    }
+    const concepts = numericFactConcepts.filter((concept) => concept.source.test(clause));
+    return [{
+      clause,
+      concepts,
+      kind: symbolicConstraintPattern.test(clause) && !concepts.some((concept) => concept.measurement)
+        ? "symbolic_constraint"
+        : "measurement",
+      numbers
+    } satisfies QuantitativeEvidenceFact];
+  });
+}
+
+function summarySentenceCoversNumericFact(sentence: string, fact: QuantitativeEvidenceFact) {
+  if (fact.kind === "symbolic_constraint") {
+    return symbolicConstraintSummaryPattern.test(sentence);
+  }
+  return fact.concepts.some((concept) => concept.summary.test(sentence));
+}
+
+function assertNumericFidelity(input: {
+  analysisEvidence: readonly AnalysisEvidence[];
+  parsed: ParsedThinReadingModelOutput;
+  allowedEvidenceIds: readonly string[];
+}) {
+  const evidenceById = new Map(input.analysisEvidence.map((evidence) => [evidence.id, evidence]));
+  input.parsed.summarySentences.forEach((sentence, index) => {
+    const evidenceIds = normalizeEvidenceReferences(sentence.evidenceIds, input.allowedEvidenceIds);
+    const requiredFacts = evidenceIds.flatMap((id) => {
+      const evidence = evidenceById.get(id);
+      if (!evidence) {
+        return [];
+      }
+      const clauses = splitEvidenceClauses(evidence.quote);
+      return quantitativeEvidenceFacts(evidence).filter((fact) => (
+        fact.kind === "measurement" && clauses.length === 1 ||
+        summarySentenceCoversNumericFact(sentence.text, fact)
+      ));
+    });
+    if (requiredFacts.length === 0) {
+      return;
+    }
+    const sentenceNumbers = numericTokens(sentence.text);
+    const missingFacts = requiredFacts.filter((fact) => (
+      !fact.numbers.some((number) => sentenceNumbers.includes(number))
+    ));
+    if (missingFacts.length > 0) {
+      const missingNumbers = [...new Set(missingFacts.flatMap((fact) => fact.numbers))];
+      throw new Error(
+        `薄读 Agent 质量门未通过：下钻正文句 summarySentences[${index}] 概括了包含数值的论文断言（${missingNumbers.slice(0, 6).join("、")}），句子必须保留对应原文数字。请在其绑定 evidence 中定位含这些数字的原文断言后修复。`
+      );
+    }
+  });
+}
 
 function escapeRegularExpression(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1045,6 +1232,9 @@ export function parseThinReadingModelSeed(
     paperEvidence: parsed.summarySentences.flatMap((sentence) => sentence.evidenceIds)
   });
   assertExternalRelationFidelity({ externalSources, parsed });
+  if (options.requireNumericFidelity) {
+    assertNumericFidelity({ analysisEvidence, allowedEvidenceIds, parsed });
+  }
   if (options.requireExplicitTraceability) {
     assertExplicitTraceability({
       allowedEvidenceIds,
@@ -1309,6 +1499,9 @@ export function buildThinReadingAgentPrompt(input: {
     "- summary 中每个内容性句子都必须能追溯到论文内 evidence ID 或本轮允许的 external source ID；没有直接来源支持时必须删除或改写为可由来源直接支持的最小命题，不得将无证据句写入正文或标记为 unsupported。",
     "- 采用保守的学术断言强度：首次、首个、唯一、最优、数量级、显著、证明、导致、使之成为可能等措辞，只有绑定 evidence 明确逐字表达同等强度时才能使用；否则收缩为 evidence 直接支持的观察、方法或结果。",
     "- 忠实保留证据限定词与适用范围，例如 up to、约、在特定数据集/模型/硬件上、初步、相关而非因果；不得把局部实验结果泛化为普遍结论。",
+    input.context.source.kind === "root_overview"
+      ? "- 根级总述可以为了读后留存而压缩次要实验数字；一旦写出量化比较，仍必须保留原文数字、单位、范围与限定条件。"
+      : "- 下钻讲解的数字保真：先把每条论文 evidence 按原文断言拆成最小命题。正文句只要解释、比较或概括了其中的量化结果、实验设置或数值配置，必须逐字保留该命题至少一个原文数字及对应单位、百分比、区间、误差或统计限定；可以同时用“明显提升”等直观词语解释程度，但不能用程度形容词替代数据，也不能换算、四舍五入或推断原文未给出的数字。公式中的零值、上下界或不等式只在当前句讲解该公式、取值范围或边界条件时保留；仅解释参数或机制作用时不得硬塞公式数字。不得因为同一长 evidence 的另一条无关命题含数字，就把数字硬塞进当前句。",
     "- 明确区分论文作者声称、理论推导、实验观察和 Agent 推断；Agent 推断不能标记 grounded，也不能借相邻 evidence 冒充直接支持。",
     "- summarySentences 必须按 summary 句子顺序逐句列出 text、evidenceIds、externalKnowledge 和 status；text 必须原样对应 summary 中的句子，不能写解释性改写。",
     "- paperType 必须填写最能解释当前取舍的论文类型；如果初步类型不准，可以修正，但只能使用允许值。",

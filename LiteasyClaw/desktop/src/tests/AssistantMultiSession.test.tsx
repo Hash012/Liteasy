@@ -18,6 +18,90 @@ function artifactTask(patch: Partial<ArtifactTask> = {}): ArtifactTask {
 }
 
 describe("AssistantPane multi-session registry", () => {
+  test("binds each conversation and restored history item to its own public Agent client", async () => {
+    const user = userEvent.setup();
+    const clients = new Map<string, { connect: ReturnType<typeof vi.fn>; send: ReturnType<typeof vi.fn> }>();
+    const createSessionClient = vi.fn((clientSessionId: string) => {
+      const send = vi.fn(async (input: { message: string; mode: string }) => ({
+        data: {
+          apiVersion: "liteasy.agent/v1",
+          completedAt: "2026-07-30T00:00:01.000Z",
+          createdAt: "2026-07-30T00:00:00.000Z",
+          events: [{
+            apiVersion: "liteasy.agent/v1",
+            emittedAt: "2026-07-30T00:00:01.000Z",
+            eventId: `event-${clientSessionId}`,
+            message: `answer:${input.message}`,
+            runId: `run-${clientSessionId}`,
+            sequence: 1,
+            sessionId: `public-${clientSessionId}`,
+            type: "assistant.message"
+          }],
+          idempotencyKey: `key-${clientSessionId}`,
+          input,
+          runId: `run-${clientSessionId}`,
+          sessionId: `public-${clientSessionId}`,
+          status: "completed"
+        },
+        ok: true
+      }));
+      const client = {
+        connect: vi.fn(async () => ({
+          data: {
+            apiVersion: "liteasy.agent/v1",
+            clientSessionId,
+            consumer: "frontend",
+            createdAt: "2026-07-30T00:00:00.000Z",
+            sessionId: `public-${clientSessionId}`,
+            status: "active"
+          },
+          ok: true
+        })),
+        send,
+        subscribe: vi.fn(() => () => undefined)
+      };
+      clients.set(clientSessionId, client);
+      return client;
+    });
+
+    render(
+      <AssistantPane
+        agentClient={{ createSessionClient } as never}
+        onGenerateArtifact={() => "unused"}
+        selectedSetStatus={{
+          importedCount: 1,
+          selectedCount: 1,
+          selectionLocked: true
+        }}
+      />
+    );
+
+    const composer = screen.getByPlaceholderText("输入你的问题或命令");
+    await user.type(composer, "第一条问题");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText("answer:第一条问题");
+
+    await user.click(screen.getByRole("button", { name: "新建" }));
+    await user.type(composer, "第二条问题");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText("answer:第二条问题");
+
+    await user.click(screen.getByRole("button", { name: "历史" }));
+    await user.click(screen.getByRole("button", { name: "打开会话：第一条问题" }));
+    await user.type(composer, "第一条追问");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText("answer:第一条追问");
+
+    expect(createSessionClient).toHaveBeenCalledTimes(2);
+    const [firstClientSessionId, secondClientSessionId] = createSessionClient.mock.calls.map(
+      ([clientSessionId]) => clientSessionId
+    );
+    expect(firstClientSessionId).not.toBe(secondClientSessionId);
+    expect(clients.get(firstClientSessionId)?.send).toHaveBeenCalledTimes(2);
+    expect(clients.get(secondClientSessionId)?.connect).toHaveBeenCalledTimes(1);
+    expect(clients.get(secondClientSessionId)?.send).toHaveBeenCalledTimes(1);
+  });
+
   test("cancels an ordinary AI conversation by run id", async () => {
     const user = userEvent.setup();
     let listener: ((event: never) => void) | undefined;

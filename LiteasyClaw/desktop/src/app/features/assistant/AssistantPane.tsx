@@ -27,6 +27,7 @@ import {
   createArtifactTaskSession,
   createAssistantSession,
   getArtifactTaskSessionId,
+  resolveAssistantPublicAgentClientSessionId,
   snapshotAssistantSession,
   upsertAssistantSession,
   type AssistantSessionHistoryItem
@@ -276,9 +277,11 @@ export function AssistantPane({
   const activeConversationRunRef = useRef<{
     cancelRequested: boolean;
     cancelSent: boolean;
+    client: FrontendAgentClient;
     message: string;
     runId?: string;
   } | null>(null);
+  const publicAgentClientsRef = useRef(new Map<string, FrontendAgentClient>());
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const lastReaderContextKeyRef = useRef<string | null>(null);
   const commandPaperIdsRef = useRef<string[] | undefined>();
@@ -483,6 +486,37 @@ export function AssistantPane({
     setComposerContextTokens([]);
   }
 
+  function getPublicAgentClient(session: AssistantSessionHistoryItem) {
+    if (!agentClient || session.kind === "artifact_generation") {
+      return null;
+    }
+    const existing = publicAgentClientsRef.current.get(session.id);
+    if (existing) {
+      return existing;
+    }
+    const client = agentClient.createSessionClient?.(
+      resolveAssistantPublicAgentClientSessionId(session)
+    ) ?? agentClient;
+    publicAgentClientsRef.current.set(session.id, client);
+    return client;
+  }
+
+  function getActivePublicAgentClient() {
+    const activeSession = sessionRegistryRef.current.find(
+      (session) => session.id === activeSessionIdRef.current
+    );
+    return activeSession ? getPublicAgentClient(activeSession) : null;
+  }
+
+  function connectPublicAgentSession(session: AssistantSessionHistoryItem) {
+    const client = getPublicAgentClient(session);
+    const connect = client?.connect;
+    if (!connect) {
+      return;
+    }
+    void connect().catch(() => undefined);
+  }
+
   function addComposerContextToken(token: AssistantContextToken) {
     setComposerContextTokens((currentTokens) => [
       ...currentTokens.filter((currentToken) => currentToken.id !== token.id),
@@ -619,6 +653,7 @@ export function AssistantPane({
     setInput("");
     setEditingMessageId(null);
     setVoiceInputMessage(undefined);
+    connectPublicAgentSession(session);
     syncAssistant();
   }
 
@@ -640,6 +675,7 @@ export function AssistantPane({
     setHistoryOpen(false);
     setInput("");
     setEditingMessageId(null);
+    connectPublicAgentSession(session);
     syncAssistant();
   }
 
@@ -854,16 +890,16 @@ export function AssistantPane({
     );
   }
 
-  async function appendPublicWorkflowAuditForRun(run: AgentRun) {
+  async function appendPublicWorkflowAuditForRun(run: AgentRun, client: FrontendAgentClient) {
     if (!settingsStoreRef.current.getState()["assistant.public_audit.enabled"]) {
       return;
     }
 
-    const result = await agentClient?.listPublicWorkflowAuditSummaries({
+    const result = await client.listPublicWorkflowAuditSummaries({
       runId: run.runId,
       sessionId: run.sessionId
     });
-    if (!result?.ok) {
+    if (!result.ok) {
       return;
     }
     appendPublicWorkflowAuditsToLatestAssistantMessage(result.data);
@@ -883,7 +919,8 @@ export function AssistantPane({
   }
 
   async function runPublicAgentMessage(message: string, mode: AssistantMode) {
-    if (!agentClient) {
+    const sessionAgentClient = getActivePublicAgentClient();
+    if (!sessionAgentClient) {
       await runEmbeddedAgentMessage(message, mode);
       return;
     }
@@ -892,11 +929,13 @@ export function AssistantPane({
     const trackedRun = {
       cancelRequested: false,
       cancelSent: false,
+      client: sessionAgentClient,
       idempotencyKey,
       message
     } as {
       cancelRequested: boolean;
       cancelSent: boolean;
+      client: FrontendAgentClient;
       idempotencyKey: string;
       message: string;
       runId?: string;
@@ -908,7 +947,7 @@ export function AssistantPane({
       }
       trackedRun.cancelSent = true;
       try {
-        const cancelled = await agentClient.cancel(trackedRun.runId, "用户终止了 AI 对话");
+        const cancelled = await trackedRun.client.cancel(trackedRun.runId, "用户终止了 AI 对话");
         if (cancelled.ok) {
           return;
         }
@@ -927,7 +966,7 @@ export function AssistantPane({
         syncAssistant();
       }
     };
-    const unsubscribe = agentClient.subscribe((event) => {
+    const unsubscribe = sessionAgentClient.subscribe((event) => {
       if (
         event.type === "run.started" &&
         event.idempotencyKey === idempotencyKey &&
@@ -942,13 +981,13 @@ export function AssistantPane({
     assistantStoreRef.current.setPending(true);
     syncAssistant();
     try {
-      const result = await agentClient.send({ message, mode }, { idempotencyKey });
+      const result = await sessionAgentClient.send({ message, mode }, { idempotencyKey });
       if (!result.ok) {
         assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
         return;
       }
       consumePublicAgentRun(result.data);
-      await appendPublicWorkflowAuditForRun(result.data);
+      await appendPublicWorkflowAuditForRun(result.data, sessionAgentClient);
       if (result.data.status === "cancelled") {
         const currentSession = sessionRegistryRef.current.find(
           (session) => session.id === activeSessionIdRef.current
@@ -1054,7 +1093,7 @@ export function AssistantPane({
     }
 
     const trackedRun = activeConversationRunRef.current;
-    if (!trackedRun || !agentClient) {
+    if (!trackedRun) {
       setCancellingSession(false);
       return;
     }
@@ -1064,7 +1103,7 @@ export function AssistantPane({
     }
     trackedRun.cancelSent = true;
     try {
-      const result = await agentClient.cancel(trackedRun.runId, "用户终止了 AI 对话");
+      const result = await trackedRun.client.cancel(trackedRun.runId, "用户终止了 AI 对话");
       if (result.ok) {
         return;
       }
@@ -1136,10 +1175,11 @@ export function AssistantPane({
 
     try {
       if (isPublicConfirmation(confirmation)) {
-        if (!agentClient) {
+        const sessionAgentClient = getActivePublicAgentClient();
+        if (!sessionAgentClient) {
           throw new Error("AI 服务尚未初始化，请稍后重试。");
         }
-        const result = await agentClient.confirm(confirmation.confirmationId, "approve");
+        const result = await sessionAgentClient.confirm(confirmation.confirmationId, "approve");
         if (!result.ok) {
           throw new Error(result.error.message);
         }
@@ -1168,7 +1208,8 @@ export function AssistantPane({
   async function handleRejectRequest(confirmation: AssistantConfirmationRequest) {
     clearConfirmationMessage(confirmation.confirmationId);
     if (isPublicConfirmation(confirmation)) {
-      if (!agentClient) {
+      const sessionAgentClient = getActivePublicAgentClient();
+      if (!sessionAgentClient) {
         assistantStoreRef.current.addMessage(
           createMessage("assistant", "AI 服务尚未初始化，请稍后重试。")
         );
@@ -1176,7 +1217,7 @@ export function AssistantPane({
         inputRef.current?.focus();
         return;
       }
-      const result = await agentClient.confirm(confirmation.confirmationId, "reject");
+      const result = await sessionAgentClient.confirm(confirmation.confirmationId, "reject");
       if (!result.ok) {
         assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
       } else {
