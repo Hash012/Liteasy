@@ -14,7 +14,7 @@ import type { OrganizationGovernanceStatus, OrganizationGovernanceSummary, Organ
 import type { CollectionItem } from "../features/collection/collection.types";
 import type { RecommendationItem, RecommendationStatus } from "../features/recommendations/recommendation.types";
 import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
-import type { SettingsState } from "../features/settings/settings.types";
+import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 export type LeftPaneProps = {
@@ -42,7 +42,7 @@ export type LeftPaneProps = {
   onClearProfile: () => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (item: RecommendationItem) => void;
-  onDismissRecommendation?: (item: RecommendationItem) => void;
+  onDismissRecommendation: (item: RecommendationItem) => void;
   onRetryCollectionSync?: () => void;
   onCreateOrganization?: () => void;
   onImportSelectedSet: () => void;
@@ -69,6 +69,7 @@ export type LeftPaneProps = {
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   onToggleSelection: (paperId: string) => void;
   onToggleLock: () => void;
+  onUpdateSetting?: (command: UpdateSettingCommand) => void;
   organizationSummary: OrganizationSummary | null;
   organizationSummaryMessage: string;
   organizationSummaryStatus: OrganizationSummaryStatus;
@@ -155,6 +156,7 @@ export function LeftPane({
   onUpdateAcademicProfile,
   onToggleSelection,
   onToggleLock,
+  onUpdateSetting,
   organizationActionMessage,
   organizationSummary,
   organizationSummaryMessage,
@@ -254,6 +256,8 @@ export function LeftPane({
             documentMetadataSyncStatus={documentMetadataSyncStatus}
             onOpenSkillDocument={onOpenSkillDocument}
             onRetryDocumentMetadataSync={onRetryDocumentMetadataSync}
+            onUpdateSetting={onUpdateSetting}
+            settings={settings}
           />
         ) : (
           <LibraryPane

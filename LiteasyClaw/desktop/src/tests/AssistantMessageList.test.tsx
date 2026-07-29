@@ -5,18 +5,15 @@ import { AssistantMessageList } from "../app/features/assistant/AssistantMessage
 import type { AssistantMessage } from "../app/features/assistant/assistant.types";
 
 describe("AssistantMessageList", () => {
-  test("renders the initial launcher and forwards mode selection", async () => {
-    const user = userEvent.setup();
+  test("renders an empty initial message region without persistent mode copy", async () => {
     const onModeChange = vi.fn();
 
     render(<AssistantMessageList messages={[]} mode="command" onModeChange={onModeChange} />);
 
-    expect(screen.getByLabelText("AI助手初始模式入口")).toBeInTheDocument();
+    expect(screen.getByLabelText("AI助手初始消息区")).toBeInTheDocument();
     expect(screen.queryByText("受控操作")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "命令模式" })).toHaveAttribute("title", "受控操作");
-    await user.click(screen.getByRole("button", { name: "问答模式" }));
-
-    expect(onModeChange).toHaveBeenCalledWith("qa");
+    expect(screen.queryByRole("button", { name: "命令模式" })).not.toBeInTheDocument();
+    expect(onModeChange).not.toHaveBeenCalled();
   });
 
   test("renders assistant message citations, audit, and execution trace", () => {
@@ -44,12 +41,46 @@ describe("AssistantMessageList", () => {
 
     render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
 
-    expect(screen.getByText("助手回复")).toBeInTheDocument();
     expect(screen.getByText("回答内容")).toBeInTheDocument();
     expect(screen.getByText("paper-1 · 第 3 页")).toBeInTheDocument();
     expect(screen.getByText("可信度 0.87")).toBeInTheDocument();
     expect(screen.getByText("审计评分 0.91 · 通过")).toBeInTheDocument();
     expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
+  });
+
+  test("renders user-safe public workflow audit summaries without internal identifiers", () => {
+    const messages: AssistantMessage[] = [
+      {
+        content: "思维导图已生成",
+        id: "assistant-public-audit",
+        publicWorkflowAudits: [
+          {
+            auditLevel: "brief",
+            checks: [
+              { label: "任务范围", status: "passed" },
+              { label: "证据与来源", status: "blocked" },
+              {
+                label: "自动修复",
+                status: "blocked",
+                summary: "已尝试自动修复，但仍需人工复核。"
+              }
+            ],
+            disclosure: "public",
+            issueLabels: ["选中文献证据覆盖不足"],
+            status: "blocked"
+          }
+        ],
+        role: "assistant"
+      }
+    ];
+
+    render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
+
+    expect(screen.getByText("公开审计过程")).toBeInTheDocument();
+    expect(screen.getByText("选中文献证据覆盖不足")).toBeInTheDocument();
+    expect(screen.getByText("证据与来源：需复核")).toBeInTheDocument();
+    expect(screen.getByText("已尝试自动修复，但仍需人工复核。")).toBeInTheDocument();
+    expect(screen.queryByText(/trace-|run-|session-|stepId/)).not.toBeInTheDocument();
   });
 
   test("forwards dynamic action refs with their DSL trace id", async () => {

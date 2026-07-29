@@ -1,11 +1,14 @@
 import type { ImportJob } from "../import/import.types";
 import { extractImportedChunksForPaper } from "../import/importFixtures";
+import type { PdfOcrLanguage } from "../import/pdfTextExtractor";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper, WorkspaceState } from "./workspace.types";
+import { inferPaperIdentityMetadataFromPdfText } from "../paper-identity/paperIdentity";
 import type { createImportStore } from "../import/import.store";
 import type { createWorkspaceStore } from "./workspace.store";
 import type { MoveLocalLibraryResource } from "../library/libraryFileSystemClient";
 import type { PersistDroppedPdfFiles } from "../library/libraryFileSystemClient";
+import type { ReadLocalLibraryPdf } from "../library/libraryFileSystemClient";
 import {
   buildMovedFolderPath,
   buildMovedPaper,
@@ -37,10 +40,18 @@ function buildDroppedPaperId(file: File) {
     .replace(/^-|-$/g, "")}-${file.size}`;
 }
 
+function createBrowserPdfSource(file: File, fallbackPath: string) {
+  return typeof URL.createObjectURL === "function"
+    ? URL.createObjectURL(file)
+    : fallbackPath;
+}
+
 type UseWorkspaceActionsInput = {
   extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
+  ocrLanguage?: PdfOcrLanguage;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
+  loadPdfSource?: ReadLocalLibraryPdf;
   moveLocalLibraryResource?: MoveLocalLibraryResource;
   persistDroppedPdfFiles?: PersistDroppedPdfFiles;
   onAnalysisHint: (message: string) => void;
@@ -69,16 +80,22 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 }
 
 export function useWorkspaceActions({
-  extractPaperChunks = extractImportedChunksForPaper,
+  extractPaperChunks,
   importDocument,
   importStore,
+  loadPdfSource,
   moveLocalLibraryResource,
   persistDroppedPdfFiles,
   onAnalysisHint,
   onImportJobsChanged,
   onWorkspaceChanged,
+  ocrLanguage = "eng",
   workspaceStore
 }: UseWorkspaceActionsInput) {
+  const resolvePaperChunks = extractPaperChunks ?? ((paper: Paper) => extractImportedChunksForPaper(paper, {
+    loadPdfSource,
+    ocrLanguage
+  }));
   function syncWorkspace() {
     onWorkspaceChanged(cloneWorkspaceState(workspaceStore.getState()));
   }
@@ -303,7 +320,8 @@ export function useWorkspaceActions({
     pdfFiles.forEach((file) => {
       const title = normalizeDroppedFileTitle(file.name);
       const targetRoot = state.workspaceSource.rootPath || "本地文献库";
-      const sourcePath = `${targetFolderPath ?? `${targetRoot}/papers`}/${file.name}`;
+      const fallbackPath = `${targetFolderPath ?? `${targetRoot}/papers`}/${file.name}`;
+      const sourcePath = createBrowserPdfSource(file, fallbackPath);
       const added = workspaceStore.addPaper({
         id: buildDroppedPaperId(file),
         sourcePath,
@@ -333,10 +351,10 @@ export function useWorkspaceActions({
     const state = workspaceStore.getState();
     if (state.selectionLocked) {
       workspaceStore.unlockSelection();
-      onAnalysisHint("已解除锁定。请调整选中文献集后，再选择模态按钮启动分析。");
+      onAnalysisHint("已解除锁定。请调整选中文献集后，再选择 AI 按钮启动分析。");
     } else {
       workspaceStore.lockSelection();
-      onAnalysisHint("选中文献集已锁定。可以先交给AI流程，或直接用模态按钮开始分析。");
+      onAnalysisHint("选中文献集已锁定。可以先交给 AI 流程，或直接用 AI 按钮开始分析。");
     }
     syncWorkspace();
   }
@@ -359,7 +377,11 @@ export function useWorkspaceActions({
     ) as Record<string, RetrievalChunk[]>;
   }
 
-  function queueImportForPapers(papers: Paper[], onComplete?: () => void): ImportQueueStatus {
+  function queueImportForPapers(
+    papers: Paper[],
+    onComplete?: () => void,
+    onFailure?: (input: { error: Error; paper: Paper }) => void
+  ): ImportQueueStatus {
     if (papers.length === 0) {
       return "idle";
     }
@@ -367,6 +389,7 @@ export function useWorkspaceActions({
     let pending = 0;
     let importing = false;
     let alreadyImported = 0;
+    let failed = false;
 
     papers.forEach((paper) => {
       const latestJob = importStore.getLatestJobByDocumentId(paper.id);
@@ -395,24 +418,42 @@ export function useWorkspaceActions({
       window.setTimeout(() => {
         importStore.markParsing(jobId);
         syncImportJobs();
-        void extractPaperChunks(paper)
+        void resolvePaperChunks(paper)
           .then((chunks) => {
             if (chunks.length === 0) {
               throw new Error("PDF did not contain extractable text");
+            }
+            const firstPage = Math.min(...chunks.map((chunk) => chunk.page));
+            const firstPageText = chunks
+              .filter((chunk) => chunk.page === firstPage)
+              .map((chunk) => chunk.snippet)
+              .join("\n");
+            const inferredIdentity = inferPaperIdentityMetadataFromPdfText(firstPageText);
+            if ((inferredIdentity.doi && !paper.doi) || (inferredIdentity.arxivId && !paper.arxivId)) {
+              workspaceStore.updatePapers([{
+                ...paper,
+                ...(paper.doi ? {} : inferredIdentity.doi ? { doi: inferredIdentity.doi } : {}),
+                ...(paper.arxivId ? {} : inferredIdentity.arxivId ? { arxivId: inferredIdentity.arxivId } : {})
+              }]);
+              syncWorkspace();
             }
             importStore.markParsed(jobId, {
               paperId: paper.id,
               chunks
             });
           })
-          .catch(() => {
+          .catch((error) => {
+            failed = true;
             importStore.markFailed(jobId);
-            onAnalysisHint(`《${paper.title}》解析失败；请确认 PDF 可读取且包含文本层。`);
+            const normalizedError = error instanceof Error ? error : new Error(String(error));
+            const reason = normalizedError.message;
+            onAnalysisHint(`《${paper.title}》解析失败：${reason}`);
+            onFailure?.({ error: normalizedError, paper });
           })
           .finally(() => {
             syncImportJobs();
             pending -= 1;
-            if (pending === 0) {
+            if (pending === 0 && !failed) {
               onComplete?.();
             }
           });
@@ -444,7 +485,7 @@ export function useWorkspaceActions({
     }
 
     const importStatus = queueImportForPapers(selectedPapers, () => {
-      onAnalysisHint("选中文献集已完成导入，现在可以通过中栏模态按钮启动分析。");
+      onAnalysisHint("选中文献集已完成导入，现在可以通过中栏 AI 按钮启动分析。");
     });
 
     if (importStatus === "started") {

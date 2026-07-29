@@ -25,9 +25,9 @@ export function createArtifactStore() {
       sequence += 1;
       const task: ArtifactTask = {
         id: `artifact-task-${sequence}`,
-        message: "等待 PDF 解析与索引",
+        message: type === "thin_reading" ? "正在解析论文文本与证据位置" : "等待 PDF 解析与索引",
         progress: 5,
-        stage: "waiting_for_import",
+        stage: type === "thin_reading" ? "thin_reading_parsing_document" : "waiting_for_import",
         type,
         status: "queued"
       };
@@ -37,9 +37,9 @@ export function createArtifactStore() {
     startTask(id: string) {
       const task = tasks.get(id);
       if (!task || task.status === "cancelled") return;
-      task.message = "正在准备 Agent 上下文";
+      task.message = task.type === "thin_reading" ? "正在规划薄读路径与证据范围" : "正在准备 Agent 上下文";
       task.progress = Math.max(task.progress, 15);
-      task.stage = "preparing_context";
+      task.stage = task.type === "thin_reading" ? "thin_reading_planning" : "preparing_context";
       task.status = "running";
     },
     updateTask(id: string, patch: Partial<Omit<ArtifactTask, "id" | "type">>) {
@@ -92,6 +92,29 @@ export function createArtifactStore() {
         : "Agent 分析失败";
       task.stage = "failed";
       task.status = "failed";
+    },
+    restoreInterruptedTask(task: Pick<ArtifactTask, "agentRunId" | "artifactId" | "id" | "message" | "progress" | "thinReadingBranchRecovery" | "type">) {
+      const recovered: ArtifactTask = {
+        ...(task.agentRunId ? { agentRunId: task.agentRunId } : {}),
+        ...(task.artifactId ? { artifactId: task.artifactId } : {}),
+        ...(task.thinReadingBranchRecovery ? { thinReadingBranchRecovery: task.thinReadingBranchRecovery } : {}),
+        failure: {
+          failedStage: "failed",
+          message: "应用在生成期间重启，原模型调用已中断。请重新发起生成。",
+          occurredAt: new Date().toISOString(),
+          recovery: ["重新发起生成"]
+        },
+        id: task.id,
+        message: "生成已因应用重启而中断，请重新发起。",
+        progress: Math.max(0, Math.min(100, task.progress)),
+        recoveredAfterRestart: true,
+        stage: "failed",
+        status: "failed",
+        type: task.type
+      };
+      tasks.set(recovered.id, recovered);
+      const suffix = recovered.id.match(/artifact-task-(\d+)$/)?.[1];
+      sequence = Math.max(sequence, Number(suffix) || 0);
     },
     cancelTask(id: string) {
       const task = tasks.get(id);

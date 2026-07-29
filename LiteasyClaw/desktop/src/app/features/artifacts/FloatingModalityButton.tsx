@@ -14,9 +14,10 @@ const modalityOptions: Array<{
 }> = [
   { className: "tree", label: "树形展开", type: "tree" },
   { className: "mindmap", label: "思维导图", type: "mindmap" },
-  { className: "layered-graph", label: "分层关系图", type: "layered_graph" },
+  { className: "layered-graph-option", label: "分层关系图", type: "layered_graph" },
   { className: "ppt", label: "PPT", type: "ppt" },
-  { className: "comparison", label: "对比表", type: "comparison_table" }
+  { className: "comparison", label: "对比表", type: "comparison_table" },
+  { className: "thin-reading", label: "薄读", type: "thin_reading" }
 ];
 
 function clamp(value: number, min: number, max: number) {
@@ -75,7 +76,7 @@ export function FloatingModalityButton({
 
   return (
     <div
-      aria-label="中间栏悬浮模态选择"
+      aria-label="中间栏悬浮 AI 选择"
       className={`floating-modality-launcher${dragging ? " dragging" : ""}`}
       ref={rootRef}
       style={
@@ -96,12 +97,12 @@ export function FloatingModalityButton({
           title={analysisHint}
           type="button"
         >
-          {option.label}
+          <span>{option.label}</span>
         </button>
       )) : null}
       <button
         aria-expanded={expanded}
-        aria-label={expanded ? "关闭模态选择" : "打开模态选择"}
+        aria-label={expanded ? "关闭 AI 选择" : "打开 AI 选择"}
         className="floating-modality-main"
         onPointerDown={(event) => {
           const root = rootRef.current;
@@ -124,7 +125,7 @@ export function FloatingModalityButton({
         title={analysisHint}
         type="button"
       >
-        模态
+        AI
       </button>
     </div>
   );

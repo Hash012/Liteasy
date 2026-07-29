@@ -9,6 +9,8 @@ import { DynamicCanvas, OutlineTree } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { ObsidianLikeGraphCanvas } from "../layered-reading/ObsidianLikeGraphCanvas";
 import { defaultGraphViewState } from "../layered-reading/layeredReading.types";
+import { ThinReadingTab } from "../thin-reading/ThinReadingTab";
+import type { ThinReadingBranchSource, ThinReadingDocument } from "../thin-reading/thinReading.types";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
@@ -18,11 +20,19 @@ type ArtifactTabsProps = {
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
   onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
+  onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
+  onGenerateThinReadingBranch?: (input: {
+    artifactId: string;
+    document: ThinReadingDocument;
+    source: ThinReadingBranchSource;
+  }) => Promise<void>;
   onRegenerateArtifact?: (
     request: ArtifactRegenerationRequest
   ) => string | void | Promise<string | void>;
+  onRetryInterruptedThinReadingBranch?: (taskId: string) => Promise<void>;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
+  onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   selectedCount: number;
   selectionLocked: boolean;
@@ -33,6 +43,9 @@ type ArtifactTabsProps = {
 export type ArtifactEvidenceOpenRequest = {
   evidenceId: string;
   page: number;
+  pageTextEnd?: number;
+  pageTextStart?: number;
+  textExtraction?: "embedded" | "ocr";
   paperId: string;
   quote: string;
 };
@@ -83,8 +96,23 @@ const taskStageLabels: Record<ArtifactTask["stage"], string> = {
   retrieving_evidence: "检索论文证据",
   saving_result: "持久保存",
   structuring_artifact: "构建产物结构",
+  thin_reading_generating_branch: "生成薄读下一层",
+  thin_reading_generating_root: "生成薄读总述",
+  thin_reading_parsing_document: "解析论文文本",
+  thin_reading_planning: "规划薄读路径",
+  thin_reading_repairing_trace: "修复句级证据映射",
+  thin_reading_retrieving_evidence: "检索薄读证据",
+  thin_reading_retrieving_external_knowledge: "检索外部文献",
+  thin_reading_saving: "保存薄读节点",
+  thin_reading_validating: "核验薄读证据",
   waiting_for_import: "等待 PDF 解析"
 };
+
+const verificationStatusLabels = {
+  fail: "审计未通过",
+  pass: "审计通过",
+  review: "需复核"
+} as const;
 
 function cleanAgentAnswer(answer: string) {
   return answer
@@ -102,10 +130,14 @@ export function ArtifactTabs({
   onActivateArtifact,
   onDynamicAction,
   onDeleteArtifact,
+  onGenerateThinReadingBranch,
   onOpenEvidence,
+  onSyncThinReadingAnnotations,
   onRegenerateArtifact,
+  onRetryInterruptedThinReadingBranch,
   onSaveMarkdownTab,
   onUpdateMarkdownTab,
+  onUpdateThinReadingDocument,
   onStartAnalysis,
   selectedCount,
   selectionLocked,
@@ -121,6 +153,12 @@ export function ArtifactTabs({
   const activeTab = tabs.find((tab) => tab.artifactId === activeArtifactId) ?? tabs[0] ?? null;
   const activePreview = activeTab ? (activeTab.preview ?? getFallbackPreview(activeTab.type)) : null;
   const activeTask = tasks[0] ?? null;
+  const activeThinReadingTask = tasks.find((task) => (
+    task.type === "thin_reading" && task.artifactId === activeTab?.artifactId &&
+    (task.status === "running" || task.status === "failed")
+  ));
+  const activeVerification = activeTab?.verification ?? activeTab?.mindmapArtifact?.verification;
+  const activeMindmapSources = activeTab?.mindmapArtifact?.sources;
 
   useEffect(() => {
     setRegenerationOpen(false);
@@ -168,6 +206,37 @@ export function ArtifactTabs({
     } finally {
       setDeletingArtifact(false);
     }
+  }
+
+  if (activeTab?.type === "thin_reading") {
+    if (!activeTab.thinReadingDocument) {
+      return <div className="artifact-empty">薄读内容缺失</div>;
+    }
+
+    return (
+      <ThinReadingTab
+        artifactId={activeTab.artifactId}
+        document={activeTab.thinReadingDocument}
+        generationProgress={activeThinReadingTask?.status === "running" ? {
+          message: activeThinReadingTask.message,
+          progress: activeThinReadingTask.progress,
+          stageLabel: taskStageLabels[activeThinReadingTask.stage]
+        } : undefined}
+        taskFailureMessage={activeThinReadingTask?.status === "failed"
+          ? activeThinReadingTask.failure?.message ?? activeThinReadingTask.message
+          : undefined}
+        onRetryInterruptedBranch={activeThinReadingTask?.status === "failed" &&
+          activeThinReadingTask.recoveredAfterRestart &&
+          activeThinReadingTask.thinReadingBranchRecovery && onRetryInterruptedThinReadingBranch
+          ? () => onRetryInterruptedThinReadingBranch(activeThinReadingTask.id)
+          : undefined}
+        onGenerateBranch={onGenerateThinReadingBranch}
+        onOpenEvidence={onOpenEvidence}
+        onSyncIntuecho={onSyncThinReadingAnnotations}
+        onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
+        papers={activeTab.papers ?? []}
+      />
+    );
   }
 
   return (
@@ -264,7 +333,7 @@ export function ArtifactTabs({
           className="artifact-empty"
           title={
             canStartAnalysis
-              ? "使用中间栏悬浮模态按钮生成新的多模态产物。"
+              ? "使用中间栏悬浮 AI 按钮生成新的多模态产物。"
               : analysisHint
           }
         >
@@ -358,6 +427,37 @@ export function ArtifactTabs({
               从产物 {activeTab.regeneratedFromArtifactId} 补充资料后重新生成
             </div>
           ) : null}
+          {activeVerification ? (
+            <div className={`artifact-verification-summary ${activeVerification.status}`}>
+              <span>{verificationStatusLabels[activeVerification.status]}</span>
+              {activeVerification.errors.length > 0 ? (
+                <span>错误：{activeVerification.errors.length}</span>
+              ) : null}
+              {activeVerification.warnings.length > 0 ? (
+                <span>警告：{activeVerification.warnings.length}</span>
+              ) : null}
+            </div>
+          ) : null}
+          {activeMindmapSources ? (
+            <div className="artifact-source-layer-summary" aria-label="思维导图来源层">
+              <span>论文证据：{activeMindmapSources.selectedPapers.length}</span>
+              <span>外部补充：{activeMindmapSources.externalReferences.length}</span>
+              <span>模型推断：{activeMindmapSources.inferences.length}</span>
+            </div>
+          ) : null}
+          {activeMindmapSources?.externalReferences.length ? (
+            <details className="artifact-external-reference-index" open>
+              <summary>外部补充来源</summary>
+              <ul>
+                {activeMindmapSources.externalReferences.map((reference) => (
+                  <li key={reference.refId}>
+                    <strong>{reference.sourceTitle}</strong>
+                    <span>{reference.summary}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           {activeTab.answer ? (
             <details className="artifact-agent-answer">
               <summary>查看原始 Agent 分析记录</summary>
@@ -385,6 +485,9 @@ export function ArtifactTabs({
                       onClick={() => onOpenEvidence?.({
                         evidenceId: evidence.id,
                         page: evidence.page,
+                        ...(typeof evidence.pageTextEnd === "number" ? { pageTextEnd: evidence.pageTextEnd } : {}),
+                        ...(typeof evidence.pageTextStart === "number" ? { pageTextStart: evidence.pageTextStart } : {}),
+                        ...(evidence.textExtraction ? { textExtraction: evidence.textExtraction } : {}),
                         paperId: evidence.paperId,
                         quote: evidence.quote
                       })}

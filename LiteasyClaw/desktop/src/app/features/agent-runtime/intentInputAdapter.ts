@@ -4,6 +4,7 @@ import type { AgentRuntimeInput, AssistantMode } from "./agentRuntime.types";
 export type IntentInputSource =
   | {
       activeMode: AssistantMode;
+      parseSlashCommand?: boolean;
       source: "text";
       value: string;
     }
@@ -79,6 +80,25 @@ export function adaptIntentInput(source: IntentInputSource): AdaptedMessageInten
     };
   }
 
+  if (source.source === "text" && source.parseSlashCommand && message.startsWith("/")) {
+    const commandMessage = normalizeMessage(message.slice(1));
+    if (commandMessage.length === 0) {
+      return {
+        kind: "idle",
+        reason: "empty_input"
+      };
+    }
+
+    return {
+      kind: "message",
+      runtimeInput: {
+        message: commandMessage,
+        mode: "command"
+      },
+      userMessageContent: `/${commandMessage}`
+    };
+  }
+
   return {
     kind: "message",
     runtimeInput: {
@@ -91,10 +111,12 @@ export function adaptIntentInput(source: IntentInputSource): AdaptedMessageInten
 
 export function adaptTextIntent(input: {
   activeMode: AssistantMode;
+  parseSlashCommand?: boolean;
   value: string;
 }): AdaptedMessageIntentInput {
   return adaptIntentInput({
     activeMode: input.activeMode,
+    parseSlashCommand: input.parseSlashCommand,
     source: "text",
     value: input.value
   });

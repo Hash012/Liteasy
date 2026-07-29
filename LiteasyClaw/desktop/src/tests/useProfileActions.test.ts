@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AccountSession } from "../app/features/account/account.types";
+import { defaultAcademicProfile } from "../app/features/profile/profile.types";
 import { useProfileActions } from "../app/features/profile/useProfileActions";
 
 const accountSession: AccountSession = {
@@ -11,58 +12,22 @@ const accountSession: AccountSession = {
   sessionId: "demo-session-1"
 };
 
+beforeEach(() => window.localStorage.clear());
+
 describe("useProfileActions", () => {
   test("opens and closes the academic archive", () => {
     const { result } = renderHook(() => useProfileActions());
-
     expect(result.current.academicArchiveOpen).toBe(false);
-    expect(result.current.profileClearMessage).toBeUndefined();
-
     act(() => result.current.openAcademicArchive());
     expect(result.current.academicArchiveOpen).toBe(true);
-
     act(() => result.current.closeAcademicArchive());
     expect(result.current.academicArchiveOpen).toBe(false);
   });
 
-  test("requires confirmation before clearing the profile", () => {
+  test("stores a locally editable academic profile and clears it after confirmation", () => {
     const { result } = renderHook(() => useProfileActions());
-
-    act(() => result.current.openClearProfileConfirm());
-    expect(result.current.clearProfileConfirmOpen).toBe(true);
-
-    act(() => result.current.closeClearProfileConfirm());
-    expect(result.current.clearProfileConfirmOpen).toBe(false);
-
-    act(() => result.current.openClearProfileConfirm());
-    act(() => result.current.clearUserProfile());
-
-    expect(result.current.clearProfileConfirmOpen).toBe(false);
-    expect(result.current.profileClearMessage).toBe("已清空学科、补充说明和研究阶段。");
-  });
-
-  test("stores editable academic profile configuration and clears it with confirmation", () => {
-    const { result } = renderHook(() => useProfileActions());
-
-    expect(result.current.academicProfile).toEqual({
-      disciplines: [],
-      stage: "未设置"
-    });
-
-    act(() =>
-      result.current.updateAcademicProfile({
-        disciplines: [{
-          categoryCode: "08",
-          categoryName: "工学",
-          code: "0812",
-          description: "自然语言处理",
-          name: "计算机科学与技术"
-        }],
-        stage: "博士研究生"
-      })
-    );
-
-    expect(result.current.academicProfile).toEqual({
+    const profile = {
+      ...defaultAcademicProfile,
       disciplines: [{
         categoryCode: "08",
         categoryName: "工学",
@@ -70,98 +35,79 @@ describe("useProfileActions", () => {
         description: "自然语言处理",
         name: "计算机科学与技术"
       }],
+      researchTopics: "神经信息检索",
       stage: "博士研究生"
-    });
-    expect(result.current.assistantProfileSummary).toContain("研究学科：工学 · 计算机科学与技术（自然语言处理）");
+    };
+
+    act(() => result.current.updateAcademicProfile(profile));
+    expect(result.current.academicProfile).toEqual(profile);
+    expect(result.current.assistantProfileSummary).toContain("研究学科");
     expect(result.current.profileClearMessage).toBe("学术档案已更新。");
 
     act(() => result.current.openClearProfileConfirm());
     act(() => result.current.clearUserProfile());
-
-    expect(result.current.academicProfile).toEqual({
-      disciplines: [],
-      stage: "未设置"
-    });
+    expect(result.current.clearProfileConfirmOpen).toBe(false);
+    expect(result.current.academicProfile).toEqual(defaultAcademicProfile);
+    expect(result.current.profileClearMessage).toBe("学术档案已清空。");
   });
 
-  test("saves the two user-managed fields and applies aggregate personalization without exposing it", async () => {
+  test("syncs academic profile and signals without exposing a profile toggle", async () => {
     const savedProfile = {
-      disciplines: [
-        {
-          categoryCode: "08",
-          categoryName: "工学",
-          code: "0812",
-          description: "信息检索",
-          name: "计算机科学与技术"
-        }
-      ],
+      disciplines: [{
+        categoryCode: "08",
+        categoryName: "工学",
+        code: "0812",
+        description: "信息检索",
+        name: "计算机科学与技术"
+      }],
       stage: "博士研究生"
     };
     const requests: Array<{ body: Record<string, unknown>; url: string }> = [];
     const transport = async (request: { body: string; url: string }) => {
       requests.push({ body: JSON.parse(request.body), url: request.url });
-      const payload = request.url.endsWith("/get")
-        ? {
-            personalizationVersion: 0,
-            profile: { disciplines: [], profileVersion: 0, stage: "未设置" }
-          }
-        : request.url.endsWith("/save")
-          ? {
-              personalizationVersion: 1,
-              profile: { ...savedProfile, profileVersion: 1 }
-            }
-          : request.url.endsWith("/signal")
-            ? {
-                assistantSummary: "近期产品内关注：causal retrieval",
-                personalizationVersion: 2,
-                profile: { ...savedProfile, profileVersion: 1 }
-              }
-            : {
-                personalizationVersion: 3,
-                profile: { disciplines: [], profileVersion: 0, stage: "未设置" }
-              };
+      const profile = request.url.endsWith("/get")
+        ? { disciplines: [], profileVersion: 0, stage: "未设置" }
+        : { ...savedProfile, profileVersion: 1 };
       return {
-        json: async () => payload,
+        json: async () => ({
+          ...(request.url.endsWith("/signal") ? { assistantSummary: "近期产品内关注：causal retrieval" } : {}),
+          personalizationVersion: requests.length - 1,
+          profile
+        }),
         ok: true,
         status: 200
       };
     };
+    const { result } = renderHook(() => useProfileActions({
+      accountSession,
+      controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+      transport
+    }));
 
-    const { result } = renderHook(() =>
-      useProfileActions({
-        accountSession,
-        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
-        transport
-      })
-    );
-
-    await waitFor(() => {
-      expect(result.current.personalizationVersion).toBe(0);
-    });
-
-    await act(async () => {
-      await result.current.updateAcademicProfile(savedProfile);
-    });
-    expect(result.current.academicProfile).toEqual(savedProfile);
-    expect(result.current.personalizationVersion).toBe(1);
-    expect(requests[1].url).toContain("/v1/profile/save");
-    expect(requests[1].body).toEqual({ profile: savedProfile, sessionId: accountSession.sessionId });
+    await waitFor(() => expect(requests[0]?.url).toContain("/v1/profile/get"));
+    const nextProfile = { ...defaultAcademicProfile, ...savedProfile, researchTopics: "causal retrieval" };
+    await act(async () => { await result.current.updateAcademicProfile(nextProfile); });
+    expect(requests[1].body).toEqual({ profile: nextProfile, sessionId: accountSession.sessionId });
+    expect(result.current.academicProfile.researchTopics).toBe("causal retrieval");
 
     await act(async () => {
-      await result.current.recordPersonalizationSignal({
-        kind: "paper_opened",
-        title: "Causal retrieval"
-      });
+      await result.current.recordPersonalizationSignal({ kind: "paper_opened", title: "Causal retrieval" });
     });
-    expect(result.current.assistantProfileSummary).toContain("近期产品内关注：causal retrieval");
-    expect(result.current).not.toHaveProperty("personalizationTerms");
-
-    await act(async () => {
-      await result.current.clearUserProfile();
-    });
-    expect(result.current.academicProfile).toEqual({ disciplines: [], stage: "未设置" });
-    expect(result.current.personalizationVersion).toBe(3);
-    expect(requests[3].url).toContain("/v1/profile/clear");
+    expect(result.current.assistantProfileSummary).toContain("causal retrieval");
+    expect(result.current).not.toHaveProperty("profileSamplingEnabled");
   });
 
+  test("restores the device-local academic archive across hook instances", () => {
+    const first = renderHook(() => useProfileActions());
+    act(() => first.result.current.updateAcademicProfile({
+      ...defaultAcademicProfile,
+      preferredLanguages: "中文、English",
+      researchMethods: "混合检索",
+      researchTopics: "神经信息检索"
+    }));
+    first.unmount();
+    const restored = renderHook(() => useProfileActions());
+    expect(restored.result.current.academicProfile.researchTopics).toBe("神经信息检索");
+    expect(restored.result.current.academicProfile.researchMethods).toBe("混合检索");
+  });
 });

@@ -118,4 +118,17 @@ describe("desktop dev script", () => {
     expect(env.LITEASY_DEV_CLOUD_HOST).toBe("0.0.0.0");
     expect(env.LITEASY_DEV_CLOUD_PUBLIC_ORIGIN).toBe("http://10.77.110.167:8790");
   });
+
+  test("maps test-api credentials into the live dev-test-api launcher", () => {
+    const script = readFileSync(
+      resolve(process.cwd(), "scripts/dev-with-test-api.mjs"),
+      "utf8"
+    );
+
+    expect(script).toContain('readField(content, "OPENAI_KEY")');
+    expect(script).toContain('readField(content, "API_END_POINT")');
+    expect(script).toContain("OPENAI_API_KEY: apiKey");
+    expect(script).toContain("OPENAI_BASE_URL: apiEndpoint");
+    expect(script).toContain('VITE_LITEASY_OPENAI_MODEL:\n      process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini"');
+  });
 });

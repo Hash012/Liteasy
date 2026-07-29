@@ -21,6 +21,7 @@ function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
 function renderWorkspaceActions(
   papers: Paper[] = [],
   options: {
+    extractPaperChunks?: (paper: Paper) => Promise<ReturnType<typeof buildImportedChunksForPaper>>;
     moveLocalLibraryResource?: MoveLocalLibraryResource;
     persistDroppedPdfFiles?: PersistDroppedPdfFiles;
     workspaceRootPath?: string;
@@ -41,9 +42,9 @@ function renderWorkspaceActions(
   const onWorkspaceChanged = vi.fn();
   const hook = renderHook(() =>
     useWorkspaceActions({
-      extractPaperChunks: (paper) => new Promise((resolve) => {
+      extractPaperChunks: options.extractPaperChunks ?? ((paper) => new Promise((resolve) => {
         window.setTimeout(() => resolve(buildImportedChunksForPaper(paper)), 800);
-      }),
+      })),
       importDocument: vi.fn(() => Promise.resolve()),
       importStore,
       moveLocalLibraryResource: options.moveLocalLibraryResource,
@@ -84,11 +85,11 @@ describe("useWorkspaceActions", () => {
 
     act(() => result.current.toggleSelectionLock());
     expect(workspaceStore.getState().selectionLocked).toBe(true);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已锁定。可以先交给AI流程，或直接用模态按钮开始分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已锁定。可以先交给 AI 流程，或直接用 AI 按钮开始分析。");
 
     act(() => result.current.toggleSelectionLock());
     expect(workspaceStore.getState().selectionLocked).toBe(false);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("已解除锁定。请调整选中文献集后，再选择模态按钮启动分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("已解除锁定。请调整选中文献集后，再选择 AI 按钮启动分析。");
   });
 
   test("adds external papers once and reports duplicate drops", () => {
@@ -150,6 +151,34 @@ describe("useWorkspaceActions", () => {
       sourcePath: "/tmp/LiteasyLibrary/courses/retrieval.pdf",
       title: "retrieval"
     }]);
+  });
+
+  test("keeps browser-uploaded PDF bytes reachable through a blob URL", async () => {
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const createObjectUrl = vi.fn(() => "blob:http://localhost/local-paper");
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl
+    });
+    const { result, workspaceStore } = renderWorkspaceActions();
+    const file = new File(["pdf"], "local-paper.pdf", { type: "application/pdf" });
+
+    await act(async () => {
+      await result.current.addDroppedPdfFiles([file]);
+    });
+
+    expect(createObjectUrl).toHaveBeenCalledWith(file);
+    expect(workspaceStore.getState().papers).toEqual([
+      expect.objectContaining({ sourcePath: "blob:http://localhost/local-paper" })
+    ]);
+    if (originalCreateObjectUrl) {
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectUrl
+      });
+    } else {
+      Reflect.deleteProperty(URL, "createObjectURL");
+    }
   });
 
   test("renames a managed PDF on disk before updating its stable workspace entry", async () => {
@@ -263,10 +292,75 @@ describe("useWorkspaceActions", () => {
       await vi.advanceTimersByTimeAsync(800);
     });
     expect(importStore.getLatestJobByDocumentId(paper.id)?.status).toBe("parsed");
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已完成导入，现在可以通过中栏模态按钮启动分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("选中文献集已完成导入，现在可以通过中栏 AI 按钮启动分析。");
     expect(result.current.getImportedSelectedCount()).toBe(1);
     expect(result.current.getImportedChunksByPaperId()[paper.id]).toHaveLength(2);
     expect(workspaceStore.getState().selectedPaperIds).toEqual([paper.id]);
+  });
+
+  test("does not report import completion after PDF extraction fails", async () => {
+    const paper = {
+      id: "local-broken",
+      sourcePath: "/tmp/LiteasyLibrary/papers/broken.pdf",
+      title: "Broken PDF"
+    };
+    const { importStore, onAnalysisHint, result, workspaceStore } = renderWorkspaceActions([paper], {
+      extractPaperChunks: vi.fn(async () => {
+        throw new Error("read_local_library_pdf command not found");
+      })
+    });
+    const onComplete = vi.fn();
+    const onFailure = vi.fn();
+    workspaceStore.toggleSelection(paper.id);
+
+    act(() => {
+      result.current.queueImportForPapers([paper], onComplete, onFailure);
+      vi.runAllTimers();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.objectContaining({ message: "read_local_library_pdf command not found" }),
+      paper
+    }));
+    expect(importStore.getLatestJobByDocumentId(paper.id)?.status).toBe("failed");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(
+      "《Broken PDF》解析失败：read_local_library_pdf command not found"
+    );
+  });
+
+  test("fills missing DOI and arXiv metadata from explicitly marked first-page text", async () => {
+    const paper = { id: "demo-identifiers", sourcePath: "fixtures/identifiers.pdf", title: "Metadata from PDF" };
+    const { result, workspaceStore } = renderWorkspaceActions([paper], {
+      extractPaperChunks: async (input) => [{
+        page: 1,
+        paperId: input.id,
+        paperTitle: input.title,
+        snippet: "Preprint arXiv: 1706.03762v5. DOI: 10.48550/arXiv.1706.03762",
+        summary: "identifier page",
+        tags: []
+      }]
+    });
+
+    act(() => result.current.toggleSelection(paper.id));
+    act(() => {
+      result.current.importSelectedSet();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(workspaceStore.getState().papers).toEqual([
+      expect.objectContaining({
+        arxivId: "1706.03762v5",
+        doi: "10.48550/arxiv.1706.03762",
+        id: paper.id
+      })
+    ]);
   });
 
   test("does not queue duplicate imports while a selected paper is already queued or parsing", async () => {

@@ -167,10 +167,12 @@ body {
   border-color: var(--button-border-color);
   border-style: solid;
   border-width: var(--button-border-width);
+  border-radius: 50%;
   background: var(--button-background);
   color: var(--button-color);
   font-weight: var(--button-font-weight);
   box-shadow: var(--button-shadow);
+  transform-origin: center;
 }
 
 .app-shell {
@@ -505,8 +507,8 @@ body {
   right: 28px;
   bottom: 28px;
   z-index: 13;
-  width: 68px;
-  height: 68px;
+  width: 64px;
+  height: 64px;
   pointer-events: auto;
 }
 
@@ -519,19 +521,26 @@ body {
   position: absolute;
   display: grid;
   place-items: center;
+  aspect-ratio: 1;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 999px;
+  border-radius: 50%;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
   color: #fff;
   cursor: pointer;
   font-weight: 600;
   letter-spacing: 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: normal;
 }
 
 .floating-modality-main {
   inset: 0;
   background: #0f6cbd;
-  font-size: 14px;
+  font-size: 15px;
+  width: 64px;
+  height: 64px;
 }
 
 .floating-modality-main:focus-visible,
@@ -541,16 +550,37 @@ body {
 }
 
 .floating-modality-option {
-  top: 12px;
-  left: 12px;
-  width: 44px;
-  height: 44px;
+  top: 6px;
+  left: 6px;
+  width: 52px;
+  height: 52px;
   opacity: 0;
   transform: translate(0, 0) scale(0.68);
   transition: opacity 150ms ease, transform 180ms ease;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.1;
+  overflow-wrap: anywhere;
+  padding: 5px;
   text-align: center;
+}
+
+.floating-modality-option span {
+  display: block;
+  inline-size: 100%;
+  line-height: 1.05;
+  max-inline-size: 42px;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.floating-modality-option.layered-graph-option span {
+  font-size: 9px;
+  max-inline-size: 38px;
+}
+
+.floating-modality-option.thin-reading span {
+  font-size: 10px;
+  max-inline-size: 36px;
 }
 
 .floating-modality-launcher:hover .floating-modality-option,
@@ -561,22 +591,32 @@ body {
 
 .floating-modality-launcher:hover .floating-modality-option.tree,
 .floating-modality-launcher:focus-within .floating-modality-option.tree {
-  transform: translate(-74px, -42px) scale(1);
+  transform: translate(-90px, -8px) scale(1);
 }
 
 .floating-modality-launcher:hover .floating-modality-option.mindmap,
 .floating-modality-launcher:focus-within .floating-modality-option.mindmap {
-  transform: translate(2px, -88px) scale(1);
+  transform: translate(-48px, -82px) scale(1);
+}
+
+.floating-modality-launcher:hover .floating-modality-option.layered-graph-option,
+.floating-modality-launcher:focus-within .floating-modality-option.layered-graph-option {
+  transform: translate(48px, -82px) scale(1);
 }
 
 .floating-modality-launcher:hover .floating-modality-option.ppt,
 .floating-modality-launcher:focus-within .floating-modality-option.ppt {
-  transform: translate(78px, -42px) scale(1);
+  transform: translate(90px, -8px) scale(1);
 }
 
 .floating-modality-launcher:hover .floating-modality-option.comparison,
 .floating-modality-launcher:focus-within .floating-modality-option.comparison {
-  transform: translate(48px, 66px) scale(1);
+  transform: translate(54px, 64px) scale(1);
+}
+
+.floating-modality-launcher:hover .floating-modality-option.thin-reading,
+.floating-modality-launcher:focus-within .floating-modality-option.thin-reading {
+  transform: translate(-54px, 64px) scale(1);
 }
 
 .floating-modality-option.tree {
@@ -587,12 +627,20 @@ body {
   background: #107c10;
 }
 
+.floating-modality-option.layered-graph-option {
+  background: #3c6479;
+}
+
 .floating-modality-option.ppt {
   background: #ca5010;
 }
 
 .floating-modality-option.comparison {
   background: #5c2d91;
+}
+
+.floating-modality-option.thin-reading {
+  background: #51605d;
 }
 
 .floating-modality-option:disabled {
@@ -1397,6 +1445,52 @@ body {
   color: #85494b;
 }
 
+.assistant-public-audit-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d5e1dc;
+  border-radius: 8px;
+  background: #f4faf7;
+  color: #2f6254;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.assistant-public-audit-card.blocked {
+  border-color: #ead8bd;
+  background: #fff8ec;
+  color: #765a2a;
+}
+
+.assistant-public-audit-summary,
+.assistant-public-audit-checks {
+  display: grid;
+  gap: 6px;
+}
+
+.assistant-public-audit-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assistant-public-audit-issues span {
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.assistant-public-audit-check {
+  display: grid;
+  gap: 2px;
+}
+
+.assistant-public-audit-check small {
+  color: inherit;
+  opacity: 0.78;
+}
+
 .genui-canvas,
 .genui-stack,
 .genui-panel,
@@ -2198,9 +2292,40 @@ body {
   overflow-wrap: anywhere;
 }
 
+.artifact-verification-summary,
+.artifact-source-layer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.artifact-verification-summary span,
+.artifact-source-layer-summary span {
+  border: 1px solid rgba(39, 125, 114, 0.18);
+  border-radius: 8px;
+  background: rgba(244, 250, 247, 0.82);
+  color: #375b53;
+  padding: 4px 8px;
+}
+
+.artifact-verification-summary.fail span:first-child {
+  border-color: rgba(171, 70, 55, 0.28);
+  background: rgba(255, 244, 241, 0.88);
+  color: #8a3a2d;
+}
+
+.artifact-verification-summary.review span:first-child {
+  border-color: rgba(163, 126, 43, 0.28);
+  background: rgba(255, 250, 235, 0.9);
+  color: #785f21;
+}
+
 .artifact-agent-answer,
 .artifact-outline-markdown,
-.artifact-evidence-index {
+.artifact-evidence-index,
+.artifact-external-reference-index {
   border: 1px solid rgba(116, 103, 87, 0.16);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.58);
@@ -2211,9 +2336,27 @@ body {
 
 .artifact-agent-answer summary,
 .artifact-outline-markdown summary,
-.artifact-evidence-index summary {
+.artifact-evidence-index summary,
+.artifact-external-reference-index summary {
   cursor: pointer;
   font-weight: 700;
+}
+
+.artifact-external-reference-index ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.artifact-external-reference-index li {
+  color: #554f48;
+}
+
+.artifact-external-reference-index li span {
+  display: block;
+  color: #687267;
+  margin-top: 3px;
 }
 
 .artifact-evidence-index > ol {
@@ -2785,6 +2928,43 @@ body {
   line-height: 1.5;
 }
 
+.pdf-public-annotation-status {
+  align-items: center;
+  background: #fff4e8;
+  border-bottom: 1px solid #ead3bd;
+  color: #875a28;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.pdf-public-annotation-status button {
+  background: transparent;
+  border: 1px solid #d6b28a;
+  border-radius: 4px;
+  color: #875a28;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 7px;
+}
+
+.pdf-public-annotation-status button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.pdf-evidence-status {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line-1);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 7px 12px;
+}
+
 .pdf-annotation-item {
   border: 1px solid var(--line-1);
   border-radius: 8px;
@@ -2821,6 +3001,30 @@ body {
 .pdf-annotation-excerpt {
   color: var(--ink-1);
   font-size: 12px;
+}
+
+.pdf-annotation-public-toggle,
+.pdf-annotation-auto-public-toggle {
+  align-items: center;
+  color: var(--ink-2);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.pdf-annotation-auto-public-toggle {
+  border-bottom: 1px solid var(--line-1);
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.pdf-annotation-item > small {
+  color: #875a28;
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .pdf-annotation-note {
@@ -3022,6 +3226,13 @@ body {
   border-radius: 1px;
   margin: -0.5px;
   box-shadow: none;
+}
+
+.pdf-overlay-mark.agent-evidence {
+  background: rgba(27, 102, 179, 0.22) !important;
+  border: 1px solid rgba(27, 102, 179, 0.62);
+  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.12);
+  opacity: 0.82;
 }
 
 .pdf-overlay-mark.underline {
@@ -3873,6 +4084,17 @@ body {
   gap: 10px;
   justify-content: space-between;
   padding: 9px;
+}
+
+.agent-settings-toggle-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(216, 206, 191, 0.72);
+  border-radius: 8px;
+  background: #fffdfa;
+  padding: 9px 10px;
 }
 
 .agent-settings-doc-button {

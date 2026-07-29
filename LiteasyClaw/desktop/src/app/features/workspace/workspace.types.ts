@@ -1,7 +1,12 @@
 export type Paper = {
+  arxivId?: string;
+  authors?: readonly string[] | string;
+  doi?: string;
   id: string;
+  semanticScholarId?: string;
   title: string;
   sourcePath?: string;
+  year?: number | string;
 };
 
 export type WorkspaceSourceType = "local_library" | "organization_shared";

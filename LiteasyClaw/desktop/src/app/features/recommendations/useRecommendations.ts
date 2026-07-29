@@ -10,16 +10,23 @@ import {
 } from "./recommendationCacheRuntime";
 import type {
   RecommendationItem,
+  RecommendationResearchProfile,
   RecommendationStatus
 } from "./recommendation.types";
 import type { RecommendationTransport } from "./recommendationClient";
 import type { Paper } from "../workspace/workspace.types";
 import type { RecommendationCacheScope } from "./recommendationCache.types";
 import type { RecommendationCacheTransport } from "./recommendationCacheClient";
+import {
+  createRecommendationFeedbackClient,
+  type RecommendationFeedbackAction,
+  type RecommendationFeedbackTransport
+} from "./recommendationFeedbackClient";
 
 type UseRecommendationsInput = {
   accountSession: AccountSession | null;
   controlPlaneEndpoint: string;
+  openAlexApiKey?: string;
   recommendationCacheDeps?: {
     clear: (scope: RecommendationCacheScope) => Promise<{ cleared: boolean }>;
     get: (scope: RecommendationCacheScope) => Promise<{
@@ -34,26 +41,50 @@ type UseRecommendationsInput = {
   recommendationGeneratorDeps?: {
     fetch: (input: {
       controlPlaneEndpoint: string;
+      openAlexApiKey?: string;
+      researchProfile?: RecommendationResearchProfile;
       selectedDocuments: Array<{ id: string; title: string }>;
       sessionId: string;
       sortMode: SettingsState["network.recommendation.sort_mode"];
     }) => Promise<RecommendationItem[]>;
   };
+  recommendationFeedbackDeps?: {
+    record: (input: {
+      action: RecommendationFeedbackAction;
+      candidate: RecommendationItem;
+      sessionId: string;
+    }) => Promise<unknown>;
+  };
+  recommendationFeedbackTransport?: RecommendationFeedbackTransport;
   recommendationTransport?: RecommendationTransport;
   recommendationCacheTransport?: RecommendationCacheTransport;
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
   personalizationVersion?: number;
+  researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
   workspaceRevision: number;
   workspaceSourceKey: string;
 };
 
-function buildSelectionCacheKey(selectedPapers: Paper[]) {
-  return selectedPapers
+function buildSelectionCacheKey(
+  selectedPapers: Paper[],
+  researchProfile?: RecommendationResearchProfile
+) {
+  const paperKey = selectedPapers
     .map((paper) => paper.id)
     .sort()
     .join("|");
+  if (!researchProfile) {
+    return paperKey;
+  }
+  const serializedProfile = JSON.stringify(researchProfile);
+  let hash = 2166136261;
+  for (let index = 0; index < serializedProfile.length; index += 1) {
+    hash ^= serializedProfile.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${paperKey}::profile:${(hash >>> 0).toString(16)}`;
 }
 
 function sortRecommendationItems(
@@ -72,20 +103,24 @@ function sortRecommendationItems(
 export function useRecommendations({
   accountSession,
   controlPlaneEndpoint,
+  openAlexApiKey,
   recommendationCacheDeps,
+  recommendationFeedbackDeps,
+  recommendationFeedbackTransport,
   recommendationGeneratorDeps,
   recommendationCacheTransport,
   recommendationTransport,
   recommendationsEnabled,
   recommendationSortMode,
   personalizationVersion = 0,
+  researchProfile,
   selectedPapers,
   workspaceRevision,
   workspaceSourceKey
 }: UseRecommendationsInput) {
   const suppressNextCachedMessageRef = useRef(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const selectionKey = buildSelectionCacheKey(selectedPapers);
+  const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile);
   const currentScope = accountSession
     ? {
         selectionKey,
@@ -177,6 +212,8 @@ export function useRecommendations({
     const generatorApi = recommendationGeneratorDeps ?? {
       fetch: (input: {
         controlPlaneEndpoint: string;
+        openAlexApiKey?: string;
+        researchProfile?: RecommendationResearchProfile;
         selectedDocuments: Array<{ id: string; title: string }>;
         sessionId: string;
         sortMode: SettingsState["network.recommendation.sort_mode"];
@@ -212,6 +249,8 @@ export function useRecommendations({
 
       const generatedRecommendations = await generatorApi.fetch({
         controlPlaneEndpoint,
+        openAlexApiKey,
+        researchProfile,
         sortMode: recommendationSortMode,
         selectedDocuments: selectedPapers.map((paper) => ({
           id: paper.id,
@@ -282,6 +321,7 @@ export function useRecommendations({
   }, [
     accountSession?.sessionId,
     controlPlaneEndpoint,
+    openAlexApiKey,
     recommendationCacheTransport,
     recommendationTransport,
     recommendationsEnabled,
@@ -370,10 +410,42 @@ export function useRecommendations({
     setRecommendationMessage("已减少类似推荐，后续结果会继续调整。");
   }
 
+  async function recordRecommendationFeedback(
+    candidate: RecommendationItem,
+    action: RecommendationFeedbackAction
+  ) {
+    if (!accountSession) {
+      setRecommendationMessage("登录后才能保存推荐反馈。");
+      return false;
+    }
+    const feedbackApi = recommendationFeedbackDeps ?? {
+      record: createRecommendationFeedbackClient({
+        endpoint: controlPlaneEndpoint,
+        transport: recommendationFeedbackTransport
+      })
+    };
+    try {
+      await feedbackApi.record({
+        action,
+        candidate,
+        sessionId: accountSession.sessionId
+      });
+    } catch {
+      setRecommendationMessage("推荐反馈保存失败，请稍后重试。");
+      return false;
+    }
+    setRecommendationItems((items) => items.filter((item) => item.id !== candidate.id));
+    setRecommendationMessage(action === "saved"
+      ? "已收藏，并用于改进后续推荐。"
+      : "已标记不感兴趣，并用于降低相似候选排序。");
+    return true;
+  }
+
   return {
     clearRecommendationCache,
     dismissRecommendation,
     refreshRecommendations,
+    recordRecommendationFeedback,
     recommendationItems,
     recommendationMessage,
     recommendationPending,

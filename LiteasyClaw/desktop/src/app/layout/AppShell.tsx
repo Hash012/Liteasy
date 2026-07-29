@@ -11,6 +11,7 @@ import {
   createAcademicProfileExport,
   downloadAcademicProfileExport
 } from "../features/profile/profileExport";
+import { toRecommendationResearchProfile } from "../features/profile/profile.types";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import { usePolicySync } from "../features/models/usePolicySync";
@@ -50,7 +51,11 @@ import { usePaneLayout } from "./usePaneLayout";
 import { useLocalLibrary } from "../features/library/useLocalLibrary";
 import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
-import { moveLocalLibraryResource, persistDroppedPdfFiles } from "../features/library/libraryFileSystemClient";
+import {
+  moveLocalLibraryResource,
+  persistDroppedPdfFiles,
+  readLocalLibraryPdf
+} from "../features/library/libraryFileSystemClient";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
@@ -174,7 +179,6 @@ export function AppShell({
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
   const [readerEvidenceTarget, setReaderEvidenceTarget] = useState<PdfEvidenceTarget | null>(null);
   const readerEvidenceRequestRef = useRef(0);
-  const agentArtifactPaperIdsOverrideRef = useRef<string[] | null>(null);
   const [readerConversationContext, setReaderConversationContext] =
     useState<ReaderConversationContext | null>(null);
   const latestArtifactIdRef = useRef<string | null>(null);
@@ -193,7 +197,7 @@ export function AppShell({
   );
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
   const [analysisHint, setAnalysisHint] = useState(
-    "先勾选并锁定文献形成选中文献集，再用中栏模态按钮启动分析。"
+    "先勾选并锁定文献形成选中文献集，再用中栏 AI 按钮启动分析。"
   );
   const [registrationWelcomeMessageId, setRegistrationWelcomeMessageId] = useState(0);
   const modelSettings = useModelSettingsActions({
@@ -213,6 +217,10 @@ export function AppShell({
   const workspaceActions = useWorkspaceActions({
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
+    loadPdfSource: typeof window !== "undefined" &&
+      typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
+      ? readLocalLibraryPdf
+      : undefined,
     moveLocalLibraryResource,
     persistDroppedPdfFiles: typeof window !== "undefined" &&
       typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
@@ -221,6 +229,7 @@ export function AppShell({
     onAnalysisHint: setAnalysisHint,
     onImportJobsChanged: setImportJobsByDocumentId,
     onWorkspaceChanged: setWorkspaceState,
+    ocrLanguage: settingsState["import.ocr_language"],
     workspaceStore: workspaceStoreRef.current
   });
 
@@ -229,7 +238,15 @@ export function AppShell({
     artifactResultClient: artifactResultClientRef.current,
     artifactResultScopeKey: settingsState["models.cloud_proxy_endpoint"],
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
+    getAssistantLanguage: () => settingsStoreRef.current.getState()["assistant.language"],
+    getActiveReaderPaper: () => {
+      const paperId = activeReaderPaperId;
+      return paperId
+        ? workspaceStoreRef.current.getState().papers.find((paper) => paper.id === paperId) ?? null
+        : null;
+    },
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
+    getIntuechoEndpoint: () => settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"],
     getModelDiagnosticContext: () => {
       const provider = settingsStoreRef.current.getState()["models.default_provider"];
       return {
@@ -616,29 +633,13 @@ export function AppShell({
     startArtifactAnalysis: artifactWorkflow.actions.handleAssistantArtifact
   };
   const assistantAgent = useAssistantAgentController({
-    getImportedChunksByPaperId: () => {
-      const sourcePaperIds = agentArtifactPaperIdsOverrideRef.current;
-      if (!sourcePaperIds) {
-        return workspaceActions.getImportedChunksByPaperId();
-      }
-      return Object.fromEntries(
-        sourcePaperIds.map((paperId) => [
-          paperId,
-          importStoreRef.current.getParsedChunksByDocumentId(paperId)
-        ])
-      );
-    },
+    academicProfile: profileActions.academicProfile,
+    getAllPapers: () => workspaceStoreRef.current.getState().papers,
+    getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
+    getImportedChunksForPaperId: (paperId) =>
+      importStoreRef.current.getParsedChunksByDocumentId(paperId),
     getRecommendations: () => getRecommendationItemsRef.current(),
-    getSelectedPapers: () => {
-      const sourcePaperIds = agentArtifactPaperIdsOverrideRef.current;
-      if (!sourcePaperIds) {
-        return workspaceActions.getSelectedPapers();
-      }
-      const sourcePaperIdSet = new Set(sourcePaperIds);
-      return workspaceStoreRef.current
-        .getState()
-        .papers.filter((paper) => sourcePaperIdSet.has(paper.id));
-    },
+    getSelectedPapers: workspaceActions.getSelectedPapers,
     importedChunksByPaperId,
     importedSelectedCount,
     modelTransport,
@@ -664,17 +665,12 @@ export function AppShell({
     settingsStore: settingsStoreRef.current
   });
   agentArtifactRunnerRef.current = async (artifactType, onProgress, options) => {
-    agentArtifactPaperIdsOverrideRef.current = options?.sourcePaperIds ?? null;
-    try {
-      return await runAgentArtifactAnalysis(
-        assistantAgent.agentClient,
-        artifactType,
-        onProgress,
-        options
-      );
-    } finally {
-      agentArtifactPaperIdsOverrideRef.current = null;
-    }
+    return runAgentArtifactAnalysis(
+      assistantAgent.agentClient,
+      artifactType,
+      onProgress,
+      options
+    );
   };
   agentCancelRunnerRef.current = async (runId, reason) => {
     const result = await assistantAgent.agentClient.cancel(runId, reason);
@@ -695,10 +691,12 @@ export function AppShell({
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     documentMetadataTransport,
     documents: workspaceState.papers,
+    openAlexApiKey: settingsState["thin_reading.openalex_api_key"],
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
     personalizationVersion: profileActions.personalizationVersion,
+    researchProfile: toRecommendationResearchProfile(profileActions.academicProfile),
     selectedPapers,
     workspaceRevision: workspaceState.workspaceRevision,
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
@@ -854,7 +852,7 @@ export function AppShell({
       });
     },
     onDismissRecommendation: (recommendation) => {
-      knowledgeSync.actions.dismissRecommendation(recommendation.id);
+      void knowledgeSync.actions.dismissRecommendation(recommendation);
       void profileActions.recordPersonalizationSignal({
         kind: "recommendation_dismissed",
         recommendationId: recommendation.id
@@ -900,6 +898,10 @@ export function AppShell({
     onSelectOrganization: organizationShell.actions.selectOrganization,
     onToggleLock: workspaceActions.toggleSelectionLock,
     onToggleSelection: workspaceActions.toggleSelection,
+    onUpdateSetting: (command) => {
+      settingsStoreRef.current.apply(command);
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    },
     onUpdateAcademicProfile: profileActions.updateAcademicProfile,
     organizationActionMessage,
     organizationSummary,
@@ -969,6 +971,24 @@ export function AppShell({
     }
   }
 
+  function startReaderScopedAnalysis(artifactType: ArtifactType, papers?: typeof selectedPapers) {
+    if (papers && papers.length > 0) {
+      artifactWorkflow.actions.startAnalysisForPapers(artifactType, papers);
+      return;
+    }
+    void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+  }
+
+  function getActiveReaderAnalysisPapers() {
+    if (!activeReaderPaper || !workspaceState.selectedPaperIds.includes(activeReaderPaper.id)) {
+      return selectedPapers;
+    }
+    return [
+      activeReaderPaper,
+      ...selectedPapers.filter((paper) => paper.id !== activeReaderPaper.id)
+    ];
+  }
+
   function renderArtifactSurface(
     tabs = artifactTabs,
     activeArtifactId: string | null = activeCenterArtifactId
@@ -997,6 +1017,9 @@ export function AppShell({
           onRegenerateArtifact={(request) => {
             artifactWorkflow.actions.regenerateArtifact(request);
           }}
+          onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
+          onRetryInterruptedThinReadingBranch={artifactWorkflow.actions.retryInterruptedThinReadingBranch}
+          onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
           onSaveMarkdownTab={(artifactId) => {
             void artifactWorkflow.actions.saveSkillDocument(artifactId);
           }}
@@ -1004,6 +1027,7 @@ export function AppShell({
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
           onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
+          onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
           selectedCount={workspaceState.selectedPaperIds.length}
           selectionLocked={workspaceState.selectionLocked}
           tabs={tabs}
@@ -1031,6 +1055,7 @@ export function AppShell({
       return (
         <AssistantSidebar
           agentClient={assistantAgent.agentClient}
+          academicProfile={profileActions.academicProfile}
           artifactTasks={artifactTasks}
           executionJournal={assistantAgent.executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}
@@ -1106,18 +1131,21 @@ export function AppShell({
         artifactTabs={artifactTabs}
         artifactTasks={artifactTasks}
         layoutCollapsed={paneLayout.collapsed}
+        loadPdfSource={readLocalLibraryPdf}
         onArtifactDynamicAction={(action) => {
           void handleArtifactCanvasAction(action);
         }}
         onOpenEvidence={openEvidenceInReader}
-        onStartAnalysis={(artifactType) => {
-          void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
-        }}
+        onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
+        onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
+        intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
+        onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
         onSaveMarkdownTab={(artifactId) => {
           void artifactWorkflow.actions.saveSkillDocument(artifactId);
         }}
         onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
+        onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
         onToggleBottomPane={() =>
           paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
         }
@@ -1195,7 +1223,7 @@ export function AppShell({
                 workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
               }
               onStartAnalysis={(artifactType) => {
-                void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
+                startReaderScopedAnalysis(artifactType, getActiveReaderAnalysisPapers());
               }}
             />
           ) : undefined

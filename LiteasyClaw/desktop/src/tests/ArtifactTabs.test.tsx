@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import { ArtifactTabs } from "../app/features/artifacts/ArtifactTabs";
 import type { ArtifactTab } from "../app/features/artifacts/artifact.types";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 
 describe("ArtifactTabs", () => {
   test("shows real Agent phase progress separately from PDF readiness", () => {
@@ -124,6 +125,203 @@ describe("ArtifactTabs", () => {
     expect(screen.getByText("ColBERT")).toBeInTheDocument();
     expect(screen.getByText("Late interaction")).toBeInTheDocument();
     expect(screen.getByText("demo-1 p.2")).toBeInTheDocument();
+  });
+
+  test("renders thin-reading tabs as a full-page surface without generic artifact card chrome", () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"],
+          paperEvidenceSpans: [
+            {
+              confidence: 0.9,
+              id: "evidence-1",
+              page: 2,
+              pageTextEnd: 37,
+              pageTextStart: 18,
+              paperId: "paper-1",
+              quote: "ColBERT uses MaxSim."
+            }
+          ],
+          summarySentences: [{
+            evidenceIds: ["evidence-1"],
+            externalKnowledge: [],
+            id: "sentence-evidence-1",
+            status: "grounded",
+            text: "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。"
+          }]
+        },
+        omittedSections: [
+          { id: "section-experiment", label: "实验", sectionKey: "experiment" }
+        ],
+        recommendations: [],
+        summary: "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+    const onOpenEvidence = vi.fn();
+    const onUpdateThinReadingDocument = vi.fn();
+    const { container } = render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onOpenEvidence={onOpenEvidence}
+        onStartAnalysis={vi.fn()}
+        onUpdateThinReadingDocument={onUpdateThinReadingDocument}
+        selectedCount={1}
+        selectionLocked
+        tabs={[{
+          artifactId: "artifact-thin",
+          papers: [{ id: "paper-1", title: "ColBERT" }],
+          thinReadingDocument,
+          title: "薄读",
+          type: "thin_reading"
+        }]}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
+    expect(screen.getByText("Intuecho")).toBeInTheDocument();
+    expect(container.querySelector(".artifact-card")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /打开证据句/ }));
+    expect(onOpenEvidence).toHaveBeenCalledWith({
+      evidenceId: "evidence-1",
+      page: 2,
+      pageTextEnd: 37,
+      pageTextStart: 18,
+      paperId: "paper-1",
+      quote: "ColBERT uses MaxSim."
+    });
+  });
+
+  test("surfaces live thin-reading Agent phase progress in the reading page", () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-progress",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "ColBERT uses late interaction for retrieval.",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[{
+          artifactId: "artifact-thin-progress",
+          papers: [{ id: "paper-1", title: "ColBERT" }],
+          thinReadingDocument,
+          title: "薄读",
+          type: "thin_reading"
+        }]}
+        tasks={[{
+          artifactId: "artifact-thin-progress",
+          id: "thin-reading-task",
+          message: "正在核对薄读证据边界",
+          progress: 78,
+          stage: "thin_reading_validating",
+          status: "running",
+          type: "thin_reading"
+        }]}
+      />
+    );
+
+    expect(screen.getByText("正在核对薄读证据边界")).toBeInTheDocument();
+    expect(screen.getByText("核验薄读证据")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "薄读 Agent 进度" })).toHaveAttribute(
+      "aria-valuenow",
+      "78"
+    );
+  });
+
+  test("renders mindmap verification and source layer metadata", () => {
+    const tab: ArtifactTab = {
+      artifactId: "artifact-mindmap",
+      mindmapArtifact: {
+        artifactId: "artifact-mindmap",
+        createdAt: "2026-07-26T00:00:00.000Z",
+        root: {
+          children: [],
+          confidence: "high",
+          id: "root",
+          label: "ColBERT 思维导图",
+          nodeType: "topic",
+          sourceRefs: []
+        },
+        runId: "run-1",
+        sources: {
+          externalReferences: [
+            {
+              authorityLevel: "high",
+              reason: "concept_definition",
+              refId: "external:late-interaction",
+              sourceTitle: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+              summary: "Late interaction preserves token-level matching signals before aggregation."
+            }
+          ],
+          inferences: [],
+          selectedPapers: [
+            {
+              evidenceId: "evidence-1",
+              paperId: "paper-1",
+              paperTitle: "ColBERT",
+              refId: "paper:evidence-1",
+              snippet: "ColBERT uses MaxSim to aggregate token-level similarities."
+            }
+          ]
+        },
+        title: "ColBERT 思维导图",
+        verification: {
+          checkedAt: "2026-07-26T00:00:00.000Z",
+          errors: [],
+          repairable: false,
+          status: "pass",
+          warnings: []
+        },
+        version: "liteasy.mindmap-artifact/v1"
+      },
+      title: "ColBERT 思维导图",
+      type: "mindmap",
+      verification: {
+        checkedAt: "2026-07-26T00:00:00.000Z",
+        errors: [],
+        repairable: false,
+        status: "pass",
+        warnings: []
+      }
+    };
+
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByText("审计通过")).toBeInTheDocument();
+    expect(screen.getByText("论文证据：1")).toBeInTheDocument();
+    expect(screen.getByText("外部补充：1")).toBeInTheDocument();
+    expect(screen.getByText("模型推断：0")).toBeInTheDocument();
+    expect(screen.getByText("ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT")).toBeInTheDocument();
   });
 
   test("renders typed center artifact components from ui dsl", () => {
@@ -433,6 +631,8 @@ describe("ArtifactTabs", () => {
             chunkId: "chunk-colbert-p4",
             id: evidenceId,
             page: 4,
+            pageTextEnd: 98,
+            pageTextStart: 45,
             paperId: "demo-1",
             paperTitle: "ColBERT",
             quote: "MaxSim matches every query token against document tokens.",
@@ -504,6 +704,8 @@ describe("ArtifactTabs", () => {
     expect(onOpenEvidence).toHaveBeenCalledWith({
       evidenceId,
       page: 4,
+      pageTextEnd: 98,
+      pageTextStart: 45,
       paperId: "demo-1",
       quote: "MaxSim matches every query token against document tokens."
     });

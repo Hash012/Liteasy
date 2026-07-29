@@ -4,8 +4,12 @@ export function createSettingsStore() {
   const state: SettingsState = {
     "network.recommendation.enabled": true,
     "network.recommendation.sort_mode": "relevance",
+    "assistant.public_audit.enabled": false,
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
+    "import.ocr_language": "eng",
+    "thin_reading.intuecho_endpoint": "",
+    "thin_reading.openalex_api_key": "",
     "models.default_provider": "openai",
     "models.cloud_proxy_endpoint": "mock://cloud-proxy",
     "models.control_plane_endpoint": "mock://control-plane"

@@ -182,6 +182,28 @@ node server.mjs
 - 配置了 `DEEPSEEK_API_KEY` 且请求体 `provider` 为 `deepseek`：`POST /v1/model/generate` 会走 DeepSeek Chat Completions API
 - 桌面端在默认 provider 为 `deepseek` 时会使用 `deepseek-v4-flash`
 
+联网论文推荐可选用真实 OpenAI-compatible embedding 服务做语义重排。只有以下三个变量同时配置时才启用：
+
+```bash
+LITEASY_RECOMMENDATION_EMBEDDING_API_KEY=你的密钥
+LITEASY_RECOMMENDATION_EMBEDDING_BASE_URL=https://你的服务/v1
+LITEASY_RECOMMENDATION_EMBEDDING_MODEL=服务支持的embedding模型ID
+```
+
+启用后，每次推荐刷新最多批量发送 32 条输入，包括选中文献标题、启用的研究画像查询，以及候选论文的标题、摘要和前六位作者。响应向量限制为 8–4096 维，调用超时或格式异常时保留 provider/BM25/画像与反馈排序，不会把本地关键词分数伪装成 semantic score。语义分以 `0.35` 权重校准来源相关度；候选完成身份合并和质量门后，再将 provider、BM25、可用的 semantic、正向 personalization 四路排名以 `recommendation-ranking-fusion/v1` 加权 RRF 融合。响应会在顶层 `rankingFusion` 和每个候选的 `rankingFusion.routes` 中记录 route、rank、权重和贡献，并在 `semanticRetrieval` / `scoreComponents` 中保留模型、维度、原始分数、融合分和最终多样性降权。API key 不进入响应、候选池或日志。
+
+还可以配置 Cohere-compatible `/rerank` 接口，对完成身份合并、质量门、RRF 和多样性处理后的短名单做可选二阶段精排。只有以下三个变量同时配置时才启用：
+
+```bash
+LITEASY_RECOMMENDATION_RERANKER_API_KEY=你的密钥
+LITEASY_RECOMMENDATION_RERANKER_BASE_URL=https://你的服务/v1
+LITEASY_RECOMMENDATION_RERANKER_MODEL=服务支持的reranker模型ID
+```
+
+每次最多向 reranker 发送前 8 条候选，query 最多 1000 字符，每条 document 最多 2600 字符，内容仅包括标题、摘要和前六位作者。服务要求返回完整、唯一且合法的候选 index，以及 `[0,1]` 范围内的 `relevance_score`；默认超时 8 秒，响应上限 1 MiB。成功时最终分数为 `RRF/多样性后分数 * 0.35 + reranker 分数 * 0.65`，并以 `recommendation-external-reranker/v1` 记录模型、候选数、原始分、reranker 分、最终分和名次。配置缺失、调用失败或响应异常时保持原 RRF 顺序和分数。
+
+reranker 只排序已通过确定性门禁的推荐短名单：它不验证 DOI/arXiv 身份、出版谱系、撤稿或事实正确性，输出也不会进入薄读 evidence allowlist。API key 不进入响应、候选池或日志。
+
 ## 4. 其他接口
 
 ### 控制平面

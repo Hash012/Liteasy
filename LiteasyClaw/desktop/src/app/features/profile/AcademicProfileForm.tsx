@@ -134,6 +134,44 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
           <option value="产业研发">产业研发</option>
         </select>
       </label>
+      <label className="personal-profile-field">
+        研究主题
+        <textarea
+          className="personal-profile-control personal-profile-textarea"
+          onChange={(event) => updateDraftProfile("researchTopics", event.target.value)}
+          placeholder="例如：神经信息检索、向量数据库"
+          rows={2}
+          value={draftProfile.researchTopics}
+        />
+      </label>
+      <label className="personal-profile-field">
+        常用方法
+        <textarea
+          className="personal-profile-control personal-profile-textarea"
+          onChange={(event) => updateDraftProfile("researchMethods", event.target.value)}
+          placeholder="例如：对比学习、混合检索"
+          rows={2}
+          value={draftProfile.researchMethods}
+        />
+      </label>
+      <label className="personal-profile-field">
+        关注数据集
+        <input
+          className="personal-profile-control"
+          onChange={(event) => updateDraftProfile("researchDatasets", event.target.value)}
+          placeholder="例如：MS MARCO、BEIR"
+          value={draftProfile.researchDatasets}
+        />
+      </label>
+      <label className="personal-profile-field">
+        阅读语言
+        <input
+          className="personal-profile-control"
+          onChange={(event) => updateDraftProfile("preferredLanguages", event.target.value)}
+          placeholder="例如：中文、English"
+          value={draftProfile.preferredLanguages}
+        />
+      </label>
       <button className="left-rail-button" onClick={saveAcademicProfile} type="button">
         保存学术档案
       </button>

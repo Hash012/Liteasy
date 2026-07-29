@@ -1,6 +1,6 @@
 import { Button } from "@fluentui/react-components";
 import { AddRegular, SubtractRegular } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
@@ -8,6 +8,7 @@ import type { UIDslActionRef } from "../features/generative-ui/generativeUi.type
 import { PdfReader, type PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
+import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/thin-reading/thinReading.types";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
 
@@ -16,15 +17,24 @@ type ReaderPaneProps = {
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
   layoutCollapsed?: PaneCollapseState;
+  loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
+  onGenerateThinReadingBranch?: (input: {
+    artifactId: string;
+    document: ThinReadingDocument;
+    source: ThinReadingBranchSource;
+  }) => Promise<void>;
+  onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
+  intuechoEndpoint?: string;
   onSaveMarkdownTab?: (artifactId: string) => void;
-  onStartAnalysis: (artifactType: ArtifactType) => void;
+  onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
   onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
+  onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   showArtifactRegion?: boolean;
   selectedPapers?: Paper[];
   selectedPaperIds: string[];
@@ -43,15 +53,20 @@ export function ReaderPane({
   artifactTabs,
   artifactTasks,
   layoutCollapsed = defaultLayoutCollapsed,
+  loadPdfSource,
   onArtifactDynamicAction,
   onOpenEvidence,
+  onGenerateThinReadingBranch,
+  onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
+  intuechoEndpoint,
   onSaveMarkdownTab,
   onStartAnalysis,
   onToggleBottomPane,
   onToggleLeftPane,
   onToggleRightPane,
   onUpdateMarkdownTab,
+  onUpdateThinReadingDocument,
   selectedPapers = [],
   selectedPaperIds,
   selectionLocked,
@@ -60,6 +75,10 @@ export function ReaderPane({
 }: ReaderPaneProps) {
   const [zoom, setZoom] = useState(100);
   const activePaper = selectedPapers[0] ?? null;
+  const analysisPapers = useMemo(() => {
+    const selectedPaperIdSet = new Set(selectedPaperIds);
+    return selectedPapers.filter((paper) => selectedPaperIdSet.has(paper.id));
+  }, [selectedPaperIds, selectedPapers]);
   const artifactRegionVisible = showArtifactRegion && !layoutCollapsed.bottom;
 
   return (
@@ -109,27 +128,32 @@ export function ReaderPane({
           }`}
         >
           <PdfReader
+            intuechoEndpoint={intuechoEndpoint}
+            loadPdfSource={loadPdfSource}
             onAddSelectionToConversation={onAddReaderContextToConversation}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
             zoom={zoom}
           />
           {artifactRegionVisible ? (
-          <section aria-label="多模态产物区域" className="reader-artifact-region">
-            <ArtifactTabs
-              analysisHint={analysisHint}
-              canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
-              onDynamicAction={onArtifactDynamicAction}
-              onOpenEvidence={onOpenEvidence}
-              onSaveMarkdownTab={onSaveMarkdownTab}
-              onStartAnalysis={onStartAnalysis}
-              onUpdateMarkdownTab={onUpdateMarkdownTab}
-              selectedCount={selectedPaperIds.length}
-              selectionLocked={selectionLocked}
-              tabs={artifactTabs}
-              tasks={artifactTasks}
-            />
-          </section>
+            <section aria-label="多模态产物区域" className="reader-artifact-region">
+              <ArtifactTabs
+                analysisHint={analysisHint}
+                canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
+                onDynamicAction={onArtifactDynamicAction}
+                onGenerateThinReadingBranch={onGenerateThinReadingBranch}
+                onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}
+                onOpenEvidence={onOpenEvidence}
+                onSaveMarkdownTab={onSaveMarkdownTab}
+                onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}
+                onUpdateMarkdownTab={onUpdateMarkdownTab}
+                onUpdateThinReadingDocument={onUpdateThinReadingDocument}
+                selectedCount={selectedPaperIds.length}
+                selectionLocked={selectionLocked}
+                tabs={artifactTabs}
+                tasks={artifactTasks}
+              />
+            </section>
           ) : null}
         </div>
       ) : (

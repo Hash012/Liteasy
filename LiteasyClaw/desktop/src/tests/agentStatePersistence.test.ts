@@ -126,6 +126,282 @@ test("restores completed runs and their idempotency mapping", async () => {
   expect(secondExecution).not.toHaveBeenCalled();
 });
 
+test("persists internal artifact workflow traces as a queryable ledger", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({
+    executeKnowledge: () => ({
+      message: "mindmap ready",
+      metadata: {
+        artifactWorkflow: {
+          status: "verified",
+          workflowTrace: {
+            artifactId: "artifact-mindmap-1",
+            internalOnly: true,
+            runId: "placeholder-before-service-run",
+            steps: [
+              {
+                completedAt: "2026-07-20T00:00:00.000Z",
+                kind: "verification",
+                startedAt: "2026-07-20T00:00:00.000Z",
+                status: "completed",
+                stepId: "1-verification",
+                summary: "确定性校验通过"
+              }
+            ],
+            traceId: "mindmap-workflow:placeholder:artifact-mindmap-1",
+            version: "liteasy.mindmap-workflow-trace/v1"
+          }
+        }
+      }
+    }),
+    stateStore: memory.store
+  });
+  const session = await createSession(first);
+  const submitted = await first.submitTurn({
+    idempotencyKey: "mindmap-ledger",
+    input: { artifactType: "mindmap", message: "生成思维导图", mode: "qa" },
+    sessionId: session.sessionId
+  });
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  const firstLedger = await first.listWorkflowTraces({
+    runId: submitted.data.runId,
+    sessionId: session.sessionId
+  });
+  const second = createPersistentService({ stateStore: memory.store });
+  const restoredLedger = await second.listWorkflowTraces({
+    runId: submitted.data.runId,
+    sessionId: session.sessionId
+  });
+
+  expect(firstLedger).toMatchObject({
+    data: [
+      {
+        artifactId: "artifact-mindmap-1",
+        internalOnly: true,
+        runId: submitted.data.runId,
+        sessionId: session.sessionId,
+        traceId: "mindmap-workflow:placeholder:artifact-mindmap-1"
+      }
+    ],
+    ok: true
+  });
+  expect(restoredLedger).toEqual(firstLedger);
+  expect((memory.snapshot as AgentStateSnapshot).workflowTraces).toHaveLength(1);
+});
+
+test("projects persisted workflow traces into internal audit events", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({
+    executeKnowledge: () => ({
+      message: "mindmap blocked",
+      metadata: {
+        artifactWorkflow: {
+          status: "blocked",
+          workflowTrace: {
+            artifactId: "artifact-mindmap-2",
+            internalOnly: true,
+            runId: "placeholder-before-service-run",
+            steps: [
+              {
+                completedAt: "2026-07-20T00:00:01.000Z",
+                kind: "verification",
+                startedAt: "2026-07-20T00:00:00.000Z",
+                status: "blocked",
+                stepId: "1-verification",
+                summary: "确定性校验未通过"
+              }
+            ],
+            traceId: "mindmap-workflow:placeholder:artifact-mindmap-2",
+            version: "liteasy.mindmap-workflow-trace/v1"
+          }
+        }
+      }
+    }),
+    stateStore: memory.store
+  });
+  const session = await createSession(first);
+  const submitted = await first.submitTurn({
+    idempotencyKey: "mindmap-event-projection",
+    input: { artifactType: "mindmap", message: "生成思维导图", mode: "qa" },
+    sessionId: session.sessionId
+  });
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  const events = await first.listWorkflowTraceEvents({
+    runId: submitted.data.runId,
+    sessionId: session.sessionId
+  });
+
+  expect(events).toMatchObject({
+    data: [
+      { type: "workflow.started" },
+      {
+        kind: "verification",
+        status: "blocked",
+        summary: "确定性校验未通过",
+        type: "workflow.step.blocked"
+      },
+      {
+        status: "blocked",
+        type: "workflow.blocked"
+      }
+    ],
+    ok: true
+  });
+});
+
+test("summarizes persisted workflow trace events for internal audits", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({
+    executeKnowledge: () => ({
+      message: "mindmap blocked",
+      metadata: {
+        artifactWorkflow: {
+          status: "blocked",
+          workflowTrace: {
+            artifactId: "artifact-mindmap-3",
+            internalOnly: true,
+            runId: "placeholder-before-service-run",
+            steps: [
+              {
+                completedAt: "2026-07-20T00:00:01.000Z",
+                kind: "verification",
+                startedAt: "2026-07-20T00:00:00.000Z",
+                status: "blocked",
+                stepId: "1-verification",
+                summary: "确定性校验未通过"
+              },
+              {
+                completedAt: "2026-07-20T00:00:02.000Z",
+                details: {
+                  unresolvedIssueCodes: ["missing_selected_paper_coverage"]
+                },
+                kind: "repair",
+                startedAt: "2026-07-20T00:00:01.000Z",
+                status: "blocked",
+                stepId: "2-repair",
+                summary: "没有安全自动修复策略，保持草稿阻断"
+              }
+            ],
+            traceId: "mindmap-workflow:placeholder:artifact-mindmap-3",
+            version: "liteasy.mindmap-workflow-trace/v1"
+          }
+        }
+      }
+    }),
+    stateStore: memory.store
+  });
+  const session = await createSession(first);
+  const submitted = await first.submitTurn({
+    idempotencyKey: "mindmap-summary",
+    input: { artifactType: "mindmap", message: "生成思维导图", mode: "qa" },
+    sessionId: session.sessionId
+  });
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  const summaries = await first.listWorkflowTraceSummaries({
+    runId: submitted.data.runId,
+    sessionId: session.sessionId
+  });
+
+  expect(summaries).toMatchObject({
+    data: [
+      {
+        artifactId: "artifact-mindmap-3",
+        blockedStep: {
+          kind: "verification",
+          stepId: "1-verification",
+          summary: "确定性校验未通过"
+        },
+        failedIssueCodes: ["missing_selected_paper_coverage"],
+        repairAttempted: true,
+        repairSucceeded: false,
+        status: "blocked",
+        stepCount: 2
+      }
+    ],
+    ok: true
+  });
+});
+
+test("projects persisted workflow traces into user-safe public audit summaries", async () => {
+  const memory = createMemoryStore();
+  const first = createPersistentService({
+    executeKnowledge: () => ({
+      message: "mindmap blocked",
+      metadata: {
+        artifactWorkflow: {
+          status: "blocked",
+          workflowTrace: {
+            artifactId: "artifact-mindmap-public",
+            internalOnly: true,
+            runId: "placeholder-before-service-run",
+            steps: [
+              {
+                completedAt: "2026-07-20T00:00:01.000Z",
+                kind: "verification",
+                startedAt: "2026-07-20T00:00:00.000Z",
+                status: "blocked",
+                stepId: "1-verification",
+                summary: "确定性校验未通过"
+              },
+              {
+                completedAt: "2026-07-20T00:00:02.000Z",
+                details: {
+                  unresolvedIssueCodes: ["missing_selected_paper_coverage"]
+                },
+                kind: "repair",
+                startedAt: "2026-07-20T00:00:01.000Z",
+                status: "blocked",
+                stepId: "2-repair",
+                summary: "没有安全自动修复策略，保持草稿阻断"
+              }
+            ],
+            traceId: "mindmap-workflow:placeholder:artifact-mindmap-public",
+            version: "liteasy.mindmap-workflow-trace/v1"
+          }
+        }
+      }
+    }),
+    stateStore: memory.store
+  });
+  const session = await createSession(first);
+  const submitted = await first.submitTurn({
+    idempotencyKey: "mindmap-public-summary",
+    input: { artifactType: "mindmap", message: "生成思维导图", mode: "qa" },
+    sessionId: session.sessionId
+  });
+  if (!submitted.ok) {
+    throw new Error(submitted.error.message);
+  }
+
+  const summaries = await first.listPublicWorkflowAuditSummaries({
+    runId: submitted.data.runId,
+    sessionId: session.sessionId
+  });
+
+  expect(summaries).toMatchObject({
+    data: [
+      {
+        auditLevel: "brief",
+        disclosure: "public",
+        issueLabels: ["选中文献证据覆盖不足"],
+        status: "blocked"
+      }
+    ],
+    ok: true
+  });
+  expect(JSON.stringify(summaries)).not.toContain("placeholder");
+  expect(JSON.stringify(summaries)).not.toContain("stepId");
+});
+
 test("reconnects a stable frontend client session after restart", async () => {
   const memory = createMemoryStore();
   const first = createPersistentService({ stateStore: memory.store });

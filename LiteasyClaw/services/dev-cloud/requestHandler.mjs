@@ -17,6 +17,10 @@ import {
   buildRecommendationCachePutPayload
 } from "./payloads/recommendationCachePayloads.mjs";
 import {
+  buildRecommendationFeedbackPayload,
+  getRecommendationFeedback
+} from "./payloads/recommendationFeedbackPayloads.mjs";
+import {
   buildModelAuditPayload,
   buildProviderRegistry,
   buildStreamingProviderRegistry,
@@ -39,16 +43,31 @@ import {
 } from "./payloads/policyPayloads.mjs";
 import {
   buildDocumentMetadataSyncPayload,
-  buildRecommendationPayload
+  buildLiveRecommendationPayload,
+  buildRecommendationPayload,
+  normalizeRecommendationResearchProfile
 } from "./payloads/recommendationPayloads.mjs";
+import { applyRecommendationEmbeddingScores } from "./payloads/recommendationEmbeddingPayloads.mjs";
+import { applyRecommendationExternalReranker } from "./payloads/recommendationRerankerPayloads.mjs";
 import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
+import { createExternalKnowledgeRunRepository } from "./db/externalKnowledgeRunRepository.mjs";
+import {
+  listRecommendationCandidateSources,
+  updateRecommendationCandidateStatus,
+  upsertRecommendationCandidates
+} from "./db/recommendationCandidateRepository.mjs";
+import { clearRecommendationCacheForSession } from "./db/recommendationCacheRepository.mjs";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 import {
   createPersonalizationRepository,
   PersonalizationValidationError
 } from "./db/personalizationRepository.mjs";
+import {
+  ExternalKnowledgeError,
+  searchExternalKnowledge
+} from "./payloads/externalKnowledgePayloads.mjs";
 
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
 // 仍保留明确上限以防止本地开发服务被无界请求占满内存。
@@ -83,6 +102,8 @@ const availableEndpoints = [
   "POST /v1/profile/save",
   "POST /v1/profile/clear",
   "POST /v1/personalization/signal",
+  "POST /v1/recommendations/feedback",
+  "POST /v1/research/external-knowledge",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
   "POST /v1/recommendation-cache/clear",
@@ -134,7 +155,7 @@ function buildCorsHeaders(request) {
         : undefined;
 
   const headers = {
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type,X-OpenAlex-Api-Key",
     "Access-Control-Allow-Methods": "DELETE,GET,POST,OPTIONS",
     Vary: "Origin"
   };
@@ -149,6 +170,12 @@ function buildCorsHeaders(request) {
 function writeCorsPreflight(request, response) {
   response.writeHead(204, buildCorsHeaders(request));
   response.end();
+}
+
+function openAlexApiKeyFromRequest(request) {
+  const value = request.headers["x-openalex-api-key"];
+  const apiKey = typeof value === "string" ? value.trim() : "";
+  return apiKey && apiKey.length <= 512 && !/\s/.test(apiKey) ? apiKey : "";
 }
 
 function writeJson(request, response, statusCode, payload) {
@@ -303,6 +330,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   const database = customConfig.database ?? createDatabase({
     databasePath: customConfig.databasePath
   });
+  const externalKnowledgeRunRepository =
+    customConfig.externalKnowledgeRunRepository ?? createExternalKnowledgeRunRepository(database);
   const accountRepository = createAccountRepository(database);
   const sessionRepository = createAuthSessionRepository(database);
   const personalizationRepository =
@@ -616,7 +645,136 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
+      const profileResult = normalizeRecommendationResearchProfile(body.researchProfile);
+      if (!profileResult.ok) {
+        writeJson(request, response, 400, {
+          error: profileResult.error,
+          message: "研究画像格式无效或超过允许范围。"
+        });
+        return;
+      }
+      const recommendationBody = profileResult.value
+        ? { ...body, researchProfile: profileResult.value }
+        : body;
+      if (customConfig.recommendationMode === "demo") {
+        writeJson(request, response, 200, buildRecommendationPayload(recommendationBody));
+        return;
+      }
+      const selectedDocuments = Array.isArray(body.selectedDocuments)
+        ? body.selectedDocuments
+            .filter((document) => typeof document?.title === "string" && document.title.trim().length > 0)
+            .slice(0, 3)
+        : [];
+      if (selectedDocuments.length === 0) {
+        writeJson(request, response, 200, { recommendations: [] });
+        return;
+      }
+      try {
+        const sourceGroups = await Promise.all(selectedDocuments.map(async (document) => {
+          const result = await searchExternalKnowledge({
+            limit: 5,
+            query: document.title,
+            targetPaperTitle: document.title
+          }, {
+            allowCrossrefOnlyFallback: true,
+            arxivEnabled: customConfig.arxivEnabled === true,
+            arxivTimeoutMs: customConfig.arxivTimeoutMs,
+            arxivTransport: customConfig.arxivTransport,
+            crossrefEnabled: customConfig.crossrefEnabled !== false,
+            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+            crossrefTransport: customConfig.crossrefTransport,
+            openAlexApiKey: openAlexApiKeyFromRequest(request),
+            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+            openAlexTransport: customConfig.openAlexTransport
+          });
+          return {
+            relatedDocumentTitle: document.title,
+            semanticQuery: document.title,
+            sources: [
+              ...result.sources,
+              ...listRecommendationCandidateSources(body.sessionId, document.title)
+            ]
+          };
+        }));
+        const profileQuery = profileResult.value
+          ? [...profileResult.value.topics.slice(0, 2), ...profileResult.value.methods.slice(0, 1)]
+              .join(" ")
+              .slice(0, 240)
+          : "";
+        if (profileQuery) {
+          const profileSources = await searchExternalKnowledge({
+            limit: 5,
+            query: profileQuery,
+            targetPaperTitle: profileQuery
+          }, {
+            allowCrossrefOnlyFallback: true,
+            arxivEnabled: customConfig.arxivEnabled === true,
+            arxivTimeoutMs: customConfig.arxivTimeoutMs,
+            arxivTransport: customConfig.arxivTransport,
+            crossrefEnabled: customConfig.crossrefEnabled !== false,
+            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+            crossrefTransport: customConfig.crossrefTransport,
+            openAlexApiKey: openAlexApiKeyFromRequest(request),
+            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+            openAlexTransport: customConfig.openAlexTransport
+          });
+          sourceGroups.push({
+            relatedDocumentTitle: "研究画像",
+            semanticQuery: profileQuery,
+            sources: profileSources.sources
+          });
+        }
+        const semanticRetrieval = await applyRecommendationEmbeddingScores(sourceGroups, {
+          apiKey: config.recommendationEmbeddingApiKey,
+          baseUrl: config.recommendationEmbeddingBaseUrl,
+          model: config.recommendationEmbeddingModel,
+          timeoutMs: customConfig.recommendationEmbeddingTimeoutMs,
+          transport: customConfig.recommendationEmbeddingTransport
+        });
+        const payload = buildLiveRecommendationPayload(
+          recommendationBody,
+          semanticRetrieval.sourceGroups,
+          new Date(),
+          getRecommendationFeedback(body.sessionId)
+        );
+        const externalReranker = await applyRecommendationExternalReranker(
+          payload.recommendations,
+          {
+            apiKey: config.recommendationRerankerApiKey,
+            baseUrl: config.recommendationRerankerBaseUrl,
+            model: config.recommendationRerankerModel,
+            query: [
+              ...selectedDocuments.map((document) => document.title),
+              profileQuery
+            ].filter(Boolean).join("\n"),
+            timeoutMs: customConfig.recommendationRerankerTimeoutMs,
+            transport: customConfig.recommendationRerankerTransport
+          }
+        );
+        upsertRecommendationCandidates(
+          body.sessionId,
+          externalReranker.recommendations.filter((candidate) => candidate.sourceKind === "live")
+        );
+        writeJson(request, response, 200, {
+          ...payload,
+          externalReranker: externalReranker.audit,
+          recommendations: externalReranker.recommendations,
+          semanticRetrieval: semanticRetrieval.audit
+        });
+      } catch (error) {
+        if (error instanceof ExternalKnowledgeError) {
+          writeJson(request, response, error.statusCode, { error: error.code, message: error.message });
+          return;
+        }
+        writeJson(request, response, 502, {
+          error: "recommendation_retrieval_failed",
+          message: "联网推荐来源当前不可用。"
+        });
+      }
+      return;
+    }
 
+/* Historical merge alternatives retained below for traceability while the combined handlers follow.
       writeJson(
         request,
         response,
@@ -630,10 +788,46 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     }
 
     if (method === "POST" && url.pathname === "/v1/profile/get") {
+--- alternative branch ---
+    if (method === "POST" && url.pathname === "/v1/recommendations/feedback") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      const payload = buildRecommendationFeedbackPayload(body);
+      if ("error" in payload) {
+        writeJson(request, response, 400, payload);
+        return;
+      }
+      updateRecommendationCandidateStatus(
+        body.sessionId,
+        body.candidate,
+        payload.feedback.action
+      );
+      const invalidatedCacheEntries = clearRecommendationCacheForSession(body.sessionId);
+      writeJson(request, response, 200, { ...payload, invalidatedCacheEntries });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
+      const openAlexApiKey = openAlexApiKeyFromRequest(request);
+      const crossrefEnabled = customConfig.crossrefEnabled !== false;
+      if (!openAlexApiKey && !crossrefEnabled) {
+        writeJson(request, response, 503, {
+          error: "openalex_api_key_required",
+          message: "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。"
+        });
+        return;
+      }
+--- end merge alternatives ---
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+--- original profile branch ---
       if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
@@ -685,6 +879,173 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
+      try {
+        writeJson(request, response, 200, personalizationRepository.recordSignal(body.sessionId, body.signal));
+      } catch (error) {
+        if (error instanceof PersonalizationValidationError) {
+          writeJson(request, response, 400, { error: "invalid_personalization_signal", message: error.message });
+          return;
+        }
+        throw error;
+--- external knowledge branch ---
+      let retrievalRun;
+      try {
+        if (typeof body.artifactId === "string") {
+          const resumed = externalKnowledgeRunRepository.begin(body);
+          if (resumed.payload) {
+            writeJson(request, response, 200, { ...resumed.payload, retrieval: resumed.run });
+            return;
+          }
+          retrievalRun = resumed.run;
+        }
+        const payload = await searchExternalKnowledge(body, {
+          allowCrossrefOnlyFallback: !openAlexApiKey && crossrefEnabled,
+          crossrefEnabled,
+          crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+          crossrefTransport: customConfig.crossrefTransport,
+          openAlexApiKey,
+          openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+          openAlexTransport: customConfig.openAlexTransport
+        });
+        const completedRun = typeof body.artifactId === "string"
+          ? externalKnowledgeRunRepository.complete(body, payload)
+          : undefined;
+        writeJson(request, response, 200, completedRun ? { ...payload, retrieval: completedRun } : payload);
+      } catch (error) {
+        const statusCode = error instanceof ExternalKnowledgeError
+          ? error.statusCode
+          : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
+            ? 400
+            : 502;
+        const failedRun = typeof body.artifactId === "string" && retrievalRun
+          ? externalKnowledgeRunRepository.fail(body, error)
+          : undefined;
+        writeJson(request, response, statusCode, {
+          error: error instanceof ExternalKnowledgeError
+            ? error.code
+            : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
+              ? "invalid_external_knowledge_artifact_id"
+              : "external_knowledge_unavailable",
+          message: error instanceof Error ? error.message : "外部知识检索不可用。",
+          ...(failedRun ? { retrieval: failedRun } : {})
+        });
+--- end alternative branch ---
+*/
+    if (method === "POST" && url.pathname === "/v1/recommendations/feedback") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      const payload = buildRecommendationFeedbackPayload(body);
+      if ("error" in payload) {
+        writeJson(request, response, 400, payload);
+        return;
+      }
+      updateRecommendationCandidateStatus(body.sessionId, body.candidate, payload.feedback.action);
+      const invalidatedCacheEntries = clearRecommendationCacheForSession(body.sessionId);
+      writeJson(request, response, 200, { ...payload, invalidatedCacheEntries });
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
+      const openAlexApiKey = openAlexApiKeyFromRequest(request);
+      const crossrefEnabled = customConfig.crossrefEnabled !== false;
+      if (!openAlexApiKey && !crossrefEnabled) {
+        writeJson(request, response, 503, {
+          error: "openalex_api_key_required",
+          message: "OpenAlex 外部文献检索需要有效 OpenAlex API 密钥。"
+        });
+        return;
+      }
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      let retrievalRun;
+      try {
+        if (typeof body.artifactId === "string") {
+          const resumed = externalKnowledgeRunRepository.begin(body);
+          if (resumed.payload) {
+            writeJson(request, response, 200, { ...resumed.payload, retrieval: resumed.run });
+            return;
+          }
+          retrievalRun = resumed.run;
+        }
+        const payload = await searchExternalKnowledge(body, {
+          allowCrossrefOnlyFallback: !openAlexApiKey && crossrefEnabled,
+          crossrefEnabled,
+          crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+          crossrefTransport: customConfig.crossrefTransport,
+          openAlexApiKey,
+          openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+          openAlexTransport: customConfig.openAlexTransport
+        });
+        const completedRun = typeof body.artifactId === "string"
+          ? externalKnowledgeRunRepository.complete(body, payload)
+          : undefined;
+        writeJson(request, response, 200, completedRun ? { ...payload, retrieval: completedRun } : payload);
+      } catch (error) {
+        const statusCode = error instanceof ExternalKnowledgeError
+          ? error.statusCode
+          : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
+            ? 400
+            : 502;
+        const failedRun = typeof body.artifactId === "string" && retrievalRun
+          ? externalKnowledgeRunRepository.fail(body, error)
+          : undefined;
+        writeJson(request, response, statusCode, {
+          error: error instanceof ExternalKnowledgeError
+            ? error.code
+            : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
+              ? "invalid_external_knowledge_artifact_id"
+              : "external_knowledge_unavailable",
+          message: error instanceof Error ? error.message : "外部知识检索不可用。",
+          ...(failedRun ? { retrieval: failedRun } : {})
+        });
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/profile/get") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      writeJson(request, response, 200, personalizationRepository.get(body.sessionId));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/profile/save") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      try {
+        writeJson(request, response, 200, personalizationRepository.save(body.sessionId, body.profile));
+      } catch (error) {
+        if (error instanceof PersonalizationValidationError) {
+          writeJson(request, response, 400, { error: "invalid_academic_profile", message: error.message });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/profile/clear") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      writeJson(request, response, 200, personalizationRepository.clear(body.sessionId));
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/personalization/signal") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
       try {
         writeJson(request, response, 200, personalizationRepository.recordSignal(body.sessionId, body.signal));
       } catch (error) {

@@ -2,11 +2,17 @@ import {
   createRecommendationClient,
   type RecommendationTransport
 } from "./recommendationClient";
-import type { RecommendationItem, RecommendationRequestDocument } from "./recommendation.types";
+import type {
+  RecommendationItem,
+  RecommendationRequestDocument,
+  RecommendationResearchProfile
+} from "./recommendation.types";
 import type { SettingsState } from "../settings/settings.types";
 
 type RecommendationRuntimeInput = {
   controlPlaneEndpoint: string;
+  openAlexApiKey?: string;
+  researchProfile?: RecommendationResearchProfile;
   sortMode: SettingsState["network.recommendation.sort_mode"];
   selectedDocuments: RecommendationRequestDocument[];
   sessionId: string;
@@ -29,6 +35,7 @@ function buildMockRecommendations(
         relevanceScore: 0.91,
         reason: "同样关注带结构化过滤条件的近似最近邻检索。",
         source: "Semantic Scholar",
+        sourceKind: "mock",
         title: "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
       },
       {
@@ -39,6 +46,7 @@ function buildMockRecommendations(
         relevanceScore: 0.79,
         reason: "补充混合结构化条件和向量检索的系统设计背景。",
         source: "arXiv Watch",
+        sourceKind: "mock",
         title: "Efficient Filtered Approximate Nearest Neighbor Search"
       }
     ];
@@ -54,6 +62,7 @@ function buildMockRecommendations(
         relevanceScore: 0.92,
         reason: "同样关注向量数据库系统架构与相似度检索能力。",
         source: "Semantic Scholar",
+        sourceKind: "mock",
         title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       },
       {
@@ -64,6 +73,7 @@ function buildMockRecommendations(
         relevanceScore: 0.78,
         reason: "补充开源向量数据库系统实现，便于和综述框架对照。",
         source: "arXiv Watch",
+        sourceKind: "mock",
         title: "Milvus: A Purpose-Built Vector Data Management System"
       }
     ];
@@ -78,6 +88,7 @@ function buildMockRecommendations(
       relevanceScore: 0.91,
       reason: "同样关注神经检索中的稀疏/密集表示与效率权衡。",
       source: "Semantic Scholar",
+      sourceKind: "mock",
       title: "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
     },
     {
@@ -88,6 +99,7 @@ function buildMockRecommendations(
       relevanceScore: 0.75,
       reason: "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
       source: "Connected Papers",
+      sourceKind: "mock",
       title: "Dense Passage Retrieval for Open-Domain Question Answering"
     }
   ];
@@ -120,10 +132,12 @@ export async function fetchCloudRecommendations(
 
   const client = createRecommendationClient({
     endpoint: input.controlPlaneEndpoint,
+    openAlexApiKey: input.openAlexApiKey,
     transport: deps.transport
   });
 
   const items = await client({
+    researchProfile: input.researchProfile,
     selectedDocuments: input.selectedDocuments,
     sessionId: input.sessionId
   });

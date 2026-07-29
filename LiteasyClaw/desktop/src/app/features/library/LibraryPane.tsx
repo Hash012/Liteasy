@@ -13,6 +13,7 @@ import {
   ChevronDownRegular,
   ChevronRightRegular,
   DocumentPdfRegular,
+  DismissRegular,
   FolderRegular,
   LockClosedRegular,
   LockOpenRegular,
@@ -64,7 +65,7 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearRecommendations: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
-  onDismissRecommendation?: (recommendation: RecommendationItem) => void;
+  onDismissRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
   onLoginRequired?: () => void;
   onOpenOrganizationWorkspace: () => void;
@@ -178,6 +179,30 @@ function getRelevanceLabel(band: RecommendationItem["relevanceBand"]) {
   }
 
   return "低关联";
+}
+
+function getRecommendationSourceKindLabel(sourceKind: RecommendationItem["sourceKind"]) {
+  if (sourceKind === "mock") {
+    return "演示数据";
+  }
+
+  if (sourceKind === "cache") {
+    return "缓存";
+  }
+
+  return "联网来源";
+}
+
+function getRecommendationRelationLabel(relation: RecommendationItem["relation"]) {
+  if (relation === "cited_by_target") return "目标论文引用";
+  if (relation === "cites_target") return "后续引用目标论文";
+  if (relation === "related") return "相关工作";
+  if (relation === "topic_search") return "主题检索线索";
+  return undefined;
+}
+
+function getDataTransferTypes(dataTransfer: Pick<DataTransfer, "types">) {
+  return Array.from(dataTransfer.types ?? []);
 }
 
 function paperMatchesCollection(paper: Paper, collectionId: LibraryCollectionId) {
@@ -562,8 +587,9 @@ export function LibraryPane({
           draggable={resourceEditingEnabled && node.path !== "未归档文献" && !workspaceRootFolder}
           onContextMenu={(event) => openContextMenu(event, { folder: node, kind: "folder" })}
           onDragOver={(event) => {
-            const carriesWorkspaceResource = Array.from(event.dataTransfer.types).includes(workspaceResourceMimeType);
-            const carriesPdfFiles = Array.from(event.dataTransfer.types).includes("Files");
+            const dataTransferTypes = getDataTransferTypes(event.dataTransfer);
+            const carriesWorkspaceResource = dataTransferTypes.includes(workspaceResourceMimeType);
+            const carriesPdfFiles = dataTransferTypes.includes("Files");
             if (resourceEditingEnabled && (carriesWorkspaceResource || carriesPdfFiles)) {
               event.preventDefault();
               event.dataTransfer.dropEffect = carriesWorkspaceResource ? "move" : "copy";
@@ -723,7 +749,7 @@ export function LibraryPane({
         className="library-section library-drop-zone"
         onDragOver={(event) => {
           event.preventDefault();
-          if (Array.from(event.dataTransfer.types).includes("Files")) {
+          if (getDataTransferTypes(event.dataTransfer).includes("Files")) {
             event.dataTransfer.dropEffect = "copy";
             setFileDropActive(true);
           }
@@ -965,19 +991,41 @@ export function LibraryPane({
                 }}
               >
                 <div className="recommendation-title">{item.title}</div>
-                <div className="recommendation-source">{item.source}</div>
+                <div className="recommendation-source">
+                  {item.sourceUrl ? (
+                    <a href={item.sourceUrl} rel="noreferrer" target="_blank">
+                      {item.source}
+                    </a>
+                  ) : (
+                    <span>{item.source}</span>
+                  )}
+                  <span className={`recommendation-source-kind ${item.sourceKind}`}>
+                    {getRecommendationSourceKindLabel(item.sourceKind)}
+                  </span>
+                </div>
                 <div className="recommendation-related">关联：{item.relatedDocumentTitle}</div>
+                {item.relation ? (
+                  <div className="recommendation-related">关系：{getRecommendationRelationLabel(item.relation)}</div>
+                ) : null}
+                {item.publishedYear ? (
+                  <div className="recommendation-related">发表：{item.publishedYear}</div>
+                ) : null}
                 <div className={`recommendation-band ${item.relevanceBand}`}>
                   {getRelevanceLabel(item.relevanceBand)}
                 </div>
                 <div className="recommendation-reason">{item.reason}</div>
-                <button
-                  className="library-inline-button"
-                  onClick={() => onDismissRecommendation?.(item)}
-                  type="button"
-                >
-                  不感兴趣
-                </button>
+                <div className="recommendation-actions">
+                  <Tooltip content="不感兴趣" relationship="label">
+                    <button
+                      aria-label={`不感兴趣：${item.title}`}
+                      className="library-button ghost library-icon-button"
+                      onClick={() => void onDismissRecommendation(item)}
+                      type="button"
+                    >
+                      <DismissRegular />
+                    </button>
+                  </Tooltip>
+                </div>
               </li>
             ))}
           </ul>

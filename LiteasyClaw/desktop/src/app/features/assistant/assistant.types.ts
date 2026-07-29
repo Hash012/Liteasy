@@ -4,7 +4,10 @@ import type { AnswerAuditResult } from "./answerAuditor";
 import type { UIDslDocument } from "../generative-ui/generativeUi.types";
 import type { HumanConfirmationRequest } from "../agent-runtime/agentRuntime.types";
 import type { AssistantMode } from "../agent-runtime/agentRuntime.types";
-import type { AgentConfirmationRequest } from "../agent-api/agentApi.types";
+import type {
+  AgentConfirmationRequest,
+  PublicWorkflowAuditSummary
+} from "../agent-api/agentApi.types";
 
 export type { AssistantMode };
 
@@ -20,6 +23,7 @@ export type AssistantMessage = {
   audit?: AnswerAuditResult;
   confirmation?: AssistantConfirmationRequest;
   executionTrace?: ModelExecutionTrace;
+  publicWorkflowAudits?: PublicWorkflowAuditSummary[];
   uiDsl?: UIDslDocument;
 };
 

@@ -1,12 +1,62 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useArtifactWorkflowController } from "../app/controllers/useArtifactWorkflowController";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
+import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 
-function completedRun(): AgentRun {
+function mindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
+  const verification = {
+    checkedAt: "2026-07-20T02:00:00.000Z",
+    errors: verificationStatus === "fail"
+      ? [{
+          code: "missing_selected_paper_coverage",
+          message: "选中文献 demo-1 没有被思维导图节点覆盖。"
+        }]
+      : [],
+    repairable: verificationStatus === "fail",
+    status: verificationStatus,
+    warnings: []
+  };
+
+  return {
+    artifactId: "artifact-mindmap-1",
+    createdAt: "2026-07-20T02:00:00.000Z",
+    root: {
+      children: [],
+      confidence: "high",
+      id: "root",
+      label: "Attention 思维导图",
+      nodeType: "topic",
+      sourceRefs: []
+    },
+    runId: "analysis-1",
+    sources: {
+      externalReferences: [],
+      inferences: [],
+      selectedPapers: []
+    },
+    title: "Attention 思维导图",
+    verification,
+    version: "liteasy.mindmap-artifact/v1"
+  };
+}
+
+function artifactWorkflow(status: "blocked" | "verified" = "verified") {
+  const mindmap = mindmapArtifact(status === "verified" ? "pass" : "fail");
+  return {
+    mindmap,
+    status,
+    verification: mindmap.verification
+  };
+}
+
+function completedRun(options: {
+  workflowStatus?: "blocked" | "verified";
+} = {}): AgentRun {
   return {
     apiVersion: "liteasy.agent/v1",
     completedAt: "2026-07-20T02:00:00.000Z",
@@ -44,7 +94,8 @@ function completedRun(): AgentRun {
             query: "analysis",
             status: "completed"
           }
-        }
+        },
+        artifactWorkflow: artifactWorkflow(options.workflowStatus ?? "verified")
       },
       runId: "run-1",
       sequence: 1,
@@ -110,6 +161,146 @@ describe("useArtifactWorkflowController", () => {
     expect(result.current.model.artifactTasks).toEqual([]);
   });
 
+  test("marks a persisted in-flight thin-reading task as interrupted after restart", async () => {
+    window.localStorage.setItem("liteasy.artifact-task-recovery/v1", JSON.stringify([{
+      artifactId: "artifact-thin-interrupted",
+      id: "artifact-task-4",
+      message: "正在生成薄读下一层",
+      progress: 58,
+      stage: "thin_reading_generating_branch",
+      status: "running",
+      type: "thin_reading"
+    }]));
+    const onAnalysisHint = vi.fn();
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactStore: createArtifactStore(),
+        artifactResultClient: artifactResultClient(),
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint,
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.model.artifactTasks).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-interrupted",
+        stage: "failed",
+        status: "failed",
+        type: "thin_reading"
+      })
+    ]);
+    expect(onAnalysisHint).toHaveBeenCalledWith(expect.stringContaining("未完成的生成任务"));
+    expect(window.localStorage.getItem("liteasy.artifact-task-recovery/v1")).toBeNull();
+  });
+
+  test("re-submits a validated interrupted thin-reading branch as a new model request", async () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-retry",
+      papers: [{ id: paper.id, title: paper.title }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [{ id: "section-1", label: "实验", sectionKey: "experiments" }],
+        recommendations: [],
+        summary: "论文的实验部分仍有待展开。",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+    const snapshot = createThinReadingBranchRecoverySnapshot({
+      artifactId: thinReadingDocument.artifactId,
+      document: thinReadingDocument,
+      parentNodeId: thinReadingDocument.rootNodeId,
+      primaryPaperId: paper.id,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiments" }
+    });
+    window.localStorage.setItem("liteasy.artifact-task-recovery/v1", JSON.stringify([{
+      artifactId: thinReadingDocument.artifactId,
+      id: "artifact-task-4",
+      message: "正在生成薄读下一层",
+      progress: 58,
+      stage: "thin_reading_generating_branch",
+      status: "running",
+      thinReadingBranchRecovery: snapshot,
+      type: "thin_reading"
+    }]));
+    const localRepository = {
+      list: vi.fn(async () => [{
+        artifactId: thinReadingDocument.artifactId,
+        papers: [{ id: paper.id, title: paper.title }],
+        thinReadingDocument,
+        title: "薄读",
+        type: "thin_reading" as const
+      }]),
+      replace: vi.fn(async () => undefined)
+    };
+    const generatedRun = completedRun();
+    generatedRun.events[0] = {
+      ...generatedRun.events[0],
+      metadata: {
+        analysis: (generatedRun.events[0] as Extract<AgentRun["events"][number], { type: "assistant.message" }>).metadata.analysis,
+        thinReading: {
+          rootSeed: {
+            evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+            omittedSections: [],
+            recommendations: [],
+            summary: "实验结果显示方法具有可复核的提升。",
+            withinPaperClosure: true
+          }
+        }
+      }
+    } as AgentRun["events"][number];
+    const runAgentAnalysis = vi.fn(async () => generatedRun);
+    const onAnalysisHint = vi.fn();
+    const artifactStore = createArtifactStore();
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactLocalRepository: localRepository,
+        artifactResultClient: artifactResultClient(),
+        artifactStore,
+        getImportedChunksByPaperId: () => ({ [paper.id]: buildImportedChunksForPaper(paper) }),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint,
+        queueImportForPapers: vi.fn(() => "already_imported"),
+        runAgentAnalysis
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.model.artifactTasks).toEqual([
+      expect.objectContaining({
+        id: "artifact-task-4",
+        recoveredAfterRestart: true,
+        status: "failed",
+        thinReadingBranchRecovery: snapshot
+      })
+    ]);
+    await act(async () => {
+      await result.current.actions.retryInterruptedThinReadingBranch("artifact-task-4");
+    });
+
+    expect(runAgentAnalysis).toHaveBeenCalledWith("thin_reading", expect.any(Function), expect.objectContaining({
+      thinReadingContext: expect.objectContaining({ parentNodeId: thinReadingDocument.rootNodeId })
+    }));
+    expect(onAnalysisHint).toHaveBeenCalledWith(expect.stringContaining("新的模型请求"));
+    expect(Object.keys(result.current.model.artifactTabs[0]?.thinReadingDocument?.nodes ?? [])).toHaveLength(2);
+  });
+
   test("updates workflow state when imported selected papers start analysis", async () => {
     const artifactStore = createArtifactStore();
     const onAnalysisHint = vi.fn();
@@ -136,7 +327,7 @@ describe("useArtifactWorkflowController", () => {
     expect(result.current.model.artifactTasks).toEqual([
       expect.objectContaining({ status: "running", type: "mindmap" })
     ]);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定模态启动分析。");
+    expect(onAnalysisHint).toHaveBeenLastCalledWith("当前选中文献集已导入，正在按指定 AI 分析启动。");
 
     await act(async () => {
       await Promise.resolve();
@@ -145,11 +336,51 @@ describe("useArtifactWorkflowController", () => {
 
     expect(result.current.model.artifactTabs).toEqual([
       expect.objectContaining({
+        mindmapArtifact: expect.objectContaining({
+          verification: expect.objectContaining({ status: "pass" })
+        }),
         preview: expect.objectContaining({ rootLabel: "Attention Is All You Need" }),
         title: "Literature Mind Map",
         type: "mindmap"
       })
     ]);
+  });
+
+  test("marks a mindmap task failed when artifact workflow audit blocks persistence", async () => {
+    const artifactStore = createArtifactStore();
+    const onAnalysisHint = vi.fn();
+    const client = artifactResultClient();
+
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactStore,
+        artifactResultClient: client,
+        getImportedChunksByPaperId: () => ({
+          [paper.id]: buildImportedChunksForPaper(paper)
+        }),
+        getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
+        getSelectedPapers: () => [paper],
+        onAnalysisHint,
+        queueImportForPapers: vi.fn(() => "already_imported"),
+        runAgentAnalysis: vi.fn(async () => completedRun({ workflowStatus: "blocked" }))
+      })
+    );
+
+    act(() => {
+      result.current.actions.startAnalysis("mindmap");
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(client.save).not.toHaveBeenCalled();
+    expect(result.current.model.artifactTasks[0]).toEqual(expect.objectContaining({
+      stage: "failed",
+      status: "failed"
+    }));
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(expect.stringContaining("审计未通过"));
   });
 
   test("restores saved artifacts into the catalog and opens them on demand", async () => {
@@ -166,6 +397,7 @@ describe("useArtifactWorkflowController", () => {
       artifactType: "mindmap" as const,
       citations: [],
       createdAt: "2026-07-20T03:00:00.000Z",
+      mindmapArtifact: mindmapArtifact("pass"),
       papers: [{ id: paper.id, title: paper.title }],
       title: "Saved Mind Map",
       uiDsl: {
@@ -180,6 +412,7 @@ describe("useArtifactWorkflowController", () => {
         surface: "center_artifact" as const,
         version: "liteasy.ui/v1" as const
       },
+      verification: mindmapArtifact("pass").verification,
       version: "liteasy.agent-artifact/v1" as const
     };
     const client = {
@@ -208,6 +441,9 @@ describe("useArtifactWorkflowController", () => {
       expect.objectContaining({
         agentRunId: "run-saved",
         artifactId: "artifact-saved",
+        mindmapArtifact: expect.objectContaining({
+          verification: expect.objectContaining({ status: "pass" })
+        }),
         resultPath: "project-docs/agent-results/artifact-saved.json"
       })
     ]);
@@ -274,6 +510,115 @@ describe("useArtifactWorkflowController", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       "同步 Agent 产物服务失败，已保留本地记录：endpoint changed after login"
     );
+  });
+
+  test("restores and updates a locally cached thin-reading artifact", async () => {
+    const artifactStore = createArtifactStore();
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-reading",
+      papers: [{ id: paper.id, title: paper.title }],
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"]
+        },
+        omittedSections: [
+          { id: "section-experiment", label: "实验", sectionKey: "experiment" }
+        ],
+        recommendations: [],
+        summary: "ColBERT 的核心是用 MaxSim 保留 token-level matching signals。",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+    const localRepository = {
+      list: vi.fn(async () => [{
+        artifactId: "artifact-thin-reading",
+        createdAt: "2026-07-21T01:00:00.000Z",
+        papers: [{ id: paper.id, title: paper.title }],
+        thinReadingDocument,
+        title: "薄读",
+        type: "thin_reading" as const
+      }]),
+      replace: vi.fn(async () => undefined)
+    };
+    const client = artifactResultClient();
+    client.list.mockRejectedValueOnce(new Error("endpoint unavailable"));
+
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactLocalRepository: localRepository,
+        artifactResultClient: client,
+        artifactStore,
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "zh-CN" }),
+        type: "thin_reading"
+      })
+    ]);
+
+    act(() => {
+      result.current.actions.openArtifact("artifact-thin-reading");
+      result.current.actions.updateThinReadingDocument(
+        "artifact-thin-reading",
+        createThinReadingDocument({
+          artifactId: "artifact-thin-reading",
+          papers: [{ id: paper.id, title: paper.title }],
+          rootSeed: {
+            evidence: {
+              externalKnowledge: [],
+              paperEvidence: ["evidence-1"]
+            },
+            omittedSections: [
+              { id: "section-evaluation", label: "Evaluation", sectionKey: "evaluation" }
+            ],
+            recommendations: [],
+            summary: "ColBERT keeps token-level matching signals through MaxSim interaction.",
+            withinPaperClosure: true
+          },
+          targetLanguage: "en-US"
+        })
+      );
+    });
+
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "en-US" })
+      })
+    ]);
+    expect(result.current.model.artifactTabs).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "en-US" })
+      })
+    ]);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(localRepository.replace).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        artifactId: "artifact-thin-reading",
+        thinReadingDocument: expect.objectContaining({ targetLanguage: "en-US" })
+      })
+    ]);
   });
 
   test("refreshes server artifacts when login changes the result endpoint", async () => {

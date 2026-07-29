@@ -6,7 +6,7 @@ export type AgentConsumer = "cli" | "frontend" | "mcp";
 
 export type AgentMode = "command" | "explain" | "qa";
 
-export type AgentArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "tree";
+export type AgentArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "thin_reading" | "tree";
 
 export type AgentRunStatus =
   | "cancelled"
@@ -43,6 +43,7 @@ export type AgentCapability = {
 
 export type AgentAttachment = {
   mediaType?: string;
+  metadata?: Record<string, AgentJsonValue>;
   name?: string;
   source: "artifact" | "paper" | "selection";
   uri: string;
@@ -98,7 +99,7 @@ export type AgentConfirmationRequest = {
 };
 
 export type AgentEventPayload =
-  | { inputMode: AgentMode; message: string; type: "run.started" }
+  | { idempotencyKey: string; inputMode: AgentMode; message: string; type: "run.started" }
   | { type: "context.prepared" }
   | { delta: string; type: "assistant.delta" }
   | {
@@ -165,6 +166,7 @@ export type AgentEvent = AgentEventPayload & {
 
 export type AgentRun = {
   apiVersion: AgentApiVersion;
+  attachments?: AgentAttachment[];
   completedAt?: string;
   createdAt: string;
   events: AgentEvent[];
@@ -173,6 +175,87 @@ export type AgentRun = {
   runId: string;
   sessionId: string;
   status: AgentRunStatus;
+};
+
+export type AgentWorkflowTraceRecord = {
+  artifactId?: string;
+  capturedAt: string;
+  internalOnly: true;
+  runId: string;
+  sessionId: string;
+  trace: AgentJsonValue;
+  traceId: string;
+  version?: string;
+};
+
+export type AgentWorkflowTraceAuditEvent =
+  | {
+      artifactId?: string;
+      emittedAt: string;
+      eventId: string;
+      internalOnly: true;
+      runId: string;
+      sessionId: string;
+      traceId: string;
+      type: "workflow.started";
+      version?: string;
+    }
+  | {
+      artifactId?: string;
+      details?: AgentJsonValue;
+      emittedAt: string;
+      eventId: string;
+      internalOnly: true;
+      kind: string;
+      runId: string;
+      sessionId: string;
+      status: "blocked" | "completed";
+      stepId: string;
+      summary: string;
+      traceId: string;
+      type: "workflow.step.blocked" | "workflow.step.completed";
+    }
+  | {
+      artifactId?: string;
+      emittedAt: string;
+      eventId: string;
+      internalOnly: true;
+      runId: string;
+      sessionId: string;
+      status: "blocked" | "completed";
+      traceId: string;
+      type: "workflow.blocked" | "workflow.completed";
+    };
+
+export type AgentWorkflowTraceAuditSummary = {
+  artifactId?: string;
+  blockedStep?: {
+    kind: string;
+    stepId: string;
+    summary: string;
+  };
+  completedStepCount: number;
+  failedIssueCodes: string[];
+  internalOnly: true;
+  repairAttempted: boolean;
+  repairSucceeded: boolean;
+  runId: string;
+  sessionId: string;
+  status: "blocked" | "completed";
+  stepCount: number;
+  traceId: string;
+};
+
+export type PublicWorkflowAuditSummary = {
+  auditLevel: "brief";
+  checks: Array<{
+    label: string;
+    status: "blocked" | "passed" | "warning";
+    summary?: string;
+  }>;
+  disclosure: "public";
+  issueLabels: string[];
+  status: "blocked" | "passed";
 };
 
 export type AgentApiErrorCode =
@@ -212,6 +295,22 @@ export type AgentPublicApi = {
     runId: string;
     sessionId: string;
   }) => Promise<AgentApiResult<AgentRun>>;
+  listWorkflowTraces: (input: {
+    runId?: string;
+    sessionId: string;
+  }) => Promise<AgentApiResult<AgentWorkflowTraceRecord[]>>;
+  listWorkflowTraceEvents: (input: {
+    runId?: string;
+    sessionId: string;
+  }) => Promise<AgentApiResult<AgentWorkflowTraceAuditEvent[]>>;
+  listWorkflowTraceSummaries: (input: {
+    runId?: string;
+    sessionId: string;
+  }) => Promise<AgentApiResult<AgentWorkflowTraceAuditSummary[]>>;
+  listPublicWorkflowAuditSummaries: (input: {
+    runId?: string;
+    sessionId: string;
+  }) => Promise<AgentApiResult<PublicWorkflowAuditSummary[]>>;
   listCapabilities: () => Promise<AgentApiResult<AgentCapability[]>>;
   resolveConfirmation: (
     input: ResolveAgentConfirmationRequest

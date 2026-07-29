@@ -13,7 +13,12 @@ import type {
 } from "./artifact.types";
 import type { createArtifactStore } from "./artifact.store";
 import { generateCenterArtifactUIDslDocument } from "../generative-ui/uiDslGenerator";
-import type { AgentRun } from "../agent-api/agentApi.types";
+import type { AgentCitation, AgentRun } from "../agent-api/agentApi.types";
+import type {
+  MindmapArtifact,
+  MindmapArtifactWorkflowMetadata,
+  MindmapVerificationReport
+} from "../artifact-workflow/mindmapArtifact.types";
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { ArtifactResultClient } from "./artifactResultClient";
 import {
@@ -22,13 +27,56 @@ import {
   parseStreamingOutlineMarkdown
 } from "./artifactOutline";
 import { createEvidenceBackedBaseGraph } from "../intuition-graph/createBaseGraph";
+import {
+  advanceThinReadingDocument,
+  applyThinReadingAnnotationSyncResults,
+  createThinReadingDocument,
+  findThinReadingChildBySource,
+  truncateThinReadingTitle
+} from "../thin-reading/thinReadingProjection";
+import {
+  createHttpIntuechoSyncAdapter,
+  listThinReadingPendingPublicAnnotations
+} from "../thin-reading/thinReadingIntuechoSyncQueue";
+import {
+  createThinReadingBranchRecoverySnapshot,
+  validateThinReadingBranchRecoverySnapshot
+} from "./artifactTaskRecovery";
+import { resolveThinReadingTargetLanguage } from "../thin-reading/thinReadingAgent";
+import type {
+  ThinReadingBranchSource,
+  ThinReadingDocument,
+  ThinReadingGenerationContext,
+  ThinReadingNodeSeed
+} from "../thin-reading/thinReading.types";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
+
+type AgentArtifactMetadata = {
+  analysis?: CompletedMultiPaperAnalysis;
+  artifactWorkflow?: MindmapArtifactWorkflowMetadata;
+  thinReading?: {
+    context?: ThinReadingGenerationContext;
+    rootSeed?: ThinReadingNodeSeed;
+  };
+};
+
+type VerifiedMindmapMetadata = {
+  mindmapArtifact: MindmapArtifact;
+  verification: MindmapVerificationReport;
+};
 
 export type AgentArtifactGenerationOptions = {
   regeneratedFromArtifactId?: string;
   sourcePaperIds?: string[];
   supplementalContext?: string;
+  thinReadingContext?: ThinReadingGenerationContext;
+};
+
+export type GenerateThinReadingBranchInput = {
+  artifactId: string;
+  document: ThinReadingDocument;
+  source: ThinReadingBranchSource;
 };
 
 export type DuplicateArtifactGenerationConfirmation = {
@@ -45,6 +93,9 @@ type UseArtifactActionsInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getIntuechoEndpoint?: () => string;
+  getAssistantLanguage?: () => string;
+  getActiveReaderPaper?: () => Paper | null;
   getModelDiagnosticContext?: () => {
     endpoint?: string;
     model?: string;
@@ -56,7 +107,11 @@ type UseArtifactActionsInput = {
   onArtifactCatalogChanged: (catalog: ArtifactTab[]) => void;
   onArtifactTabsChanged: (tabs: ArtifactTab[]) => void;
   onArtifactTasksChanged: (tasks: ArtifactTask[]) => void;
-  queueImportForPapers: (papers: Paper[], onComplete?: () => void) => ImportQueueStatus;
+  queueImportForPapers: (
+    papers: Paper[],
+    onComplete?: () => void,
+    onFailure?: (input: { error: Error; paper: Paper }) => void
+  ) => ImportQueueStatus;
   runAgentAnalysis: (
     artifactType: ArtifactType,
     onProgress: (input: {
@@ -72,6 +127,10 @@ type UseArtifactActionsInput = {
 };
 
 function getArtifactTitle(type: ArtifactType) {
+  if (type === "thin_reading") {
+    return "薄读";
+  }
+
   if (type === "tree") {
     return "Literature Tree Analysis";
   }
@@ -132,16 +191,137 @@ function buildFailureRecovery(message: string) {
   ];
 }
 
+function formatVerificationFailure(
+  verification: MindmapVerificationReport | undefined,
+  fallback: string
+) {
+  const messages = verification?.errors.map((issue) => issue.message).filter(Boolean) ?? [];
+  return messages.length > 0 ? messages.join("；") : fallback;
+}
+
+function requireVerifiedMindmapMetadata(
+  artifactWorkflow: MindmapArtifactWorkflowMetadata | undefined
+): VerifiedMindmapMetadata {
+  if (!artifactWorkflow) {
+    throw new Error("思维导图审计未通过：缺少 Artifact Workflow 审计结果。");
+  }
+
+  const verification = artifactWorkflow.verification ?? artifactWorkflow.mindmap.verification;
+  if (
+    artifactWorkflow.status !== "verified" ||
+    artifactWorkflow.mindmap.verification.status !== "pass" ||
+    verification.status !== "pass"
+  ) {
+    throw new Error(
+      `思维导图审计未通过：${formatVerificationFailure(verification, "workflow 未返回可保存的通过态产物。")}`
+    );
+  }
+
+  return {
+    mindmapArtifact: artifactWorkflow.mindmap,
+    verification
+  };
+}
+
+function requireThinReadingSeed(
+  metadata: AgentArtifactMetadata,
+  fallbackContext: ThinReadingGenerationContext
+) {
+  const rootSeed = metadata.thinReading?.rootSeed;
+  if (!rootSeed) {
+    throw new Error("薄读 Agent run 缺少可持久化的 rootSeed。");
+  }
+  return {
+    context: metadata.thinReading?.context ?? fallbackContext,
+    rootSeed
+  };
+}
+
+function createRootThinReadingContext(input: {
+  artifactId: string;
+  papers: Paper[];
+  targetLanguage: string;
+}): ThinReadingGenerationContext {
+  const primaryPaper = input.papers[0];
+  return {
+    artifactId: input.artifactId,
+    depth: 0,
+    paperIds: input.papers.map((paper) => paper.id),
+    primaryPaperId: primaryPaper?.id,
+    primaryPaperTitle: primaryPaper?.title,
+    source: { kind: "root_overview" },
+    targetLanguage: input.targetLanguage
+  };
+}
+
+function thinReadingTitleForSource(source: ThinReadingBranchSource, targetLanguage: string) {
+  if (source.kind === "omitted_section") {
+    return source.label;
+  }
+  return truncateThinReadingTitle(
+    source.excerpt,
+    targetLanguage.startsWith("en") ? "Selected passage" : "正文选区"
+  );
+}
+
 const artifactTypeLabels: Record<Exclude<ArtifactType, "skill_doc">, string> = {
   comparison_table: "对比表",
   layered_graph: "分层关系图",
   mindmap: "思维导图",
   ppt: "PPT",
+  thin_reading: "薄读",
   tree: "树形展开"
 };
 
 function normalizePaperIds(papers: Array<{ id: string }>) {
   return [...new Set(papers.map((paper) => paper.id))].sort();
+}
+
+function papersForArtifactScope(
+  artifactType: ArtifactType,
+  papers: Paper[],
+  activeReaderPaper?: Paper | null
+) {
+  // Thin reading starts from one paper; cross-paper artifacts retain the full selection.
+  if (artifactType !== "thin_reading") {
+    return papers;
+  }
+  const readerPaper = activeReaderPaper && papers.find((paper) => paper.id === activeReaderPaper.id);
+  return readerPaper ? [readerPaper] : papers.slice(0, 1);
+}
+
+function createThinReadingResultDocument(input: {
+  agentRun?: AgentRun;
+  analysis?: CompletedMultiPaperAnalysis;
+  answer?: string;
+  citations?: AgentCitation[];
+  createdAt: string;
+  document: ThinReadingDocument;
+  existing?: ArtifactTab;
+  papers: Array<{ id: string; title: string }>;
+  uiDsl?: ArtifactTab["uiDsl"];
+}) {
+  const activeNode = input.document.nodes[input.document.activeNodeId] ??
+    input.document.nodes[input.document.rootNodeId];
+  return {
+    agent: {
+      apiVersion: input.agentRun?.apiVersion ?? "liteasy.agent/v1",
+      runId: input.agentRun?.runId ?? input.existing?.agentRunId ?? `local-update-${input.document.artifactId}`,
+      sessionId: input.agentRun?.sessionId ?? "thin-reading-local",
+      status: "completed" as const
+    },
+    analysis: input.analysis ?? input.existing?.analysis,
+    answer: input.answer ?? input.existing?.answer ?? activeNode.summary,
+    artifactId: input.document.artifactId,
+    artifactType: "thin_reading" as const,
+    citations: input.citations ?? input.existing?.citations ?? [],
+    createdAt: input.createdAt,
+    papers: input.papers,
+    thinReadingDocument: input.document,
+    title: "薄读",
+    uiDsl: input.uiDsl,
+    version: "liteasy.agent-artifact/v1" as const
+  };
 }
 
 export function findDuplicateArtifacts(
@@ -181,6 +361,9 @@ export function useArtifactActions({
   confirmDuplicateGeneration = confirmDuplicateGenerationInBrowser,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getIntuechoEndpoint,
+  getAssistantLanguage,
+  getActiveReaderPaper,
   getModelDiagnosticContext,
   getSelectedDocumentSet,
   getSelectedPapers,
@@ -204,6 +387,7 @@ export function useArtifactActions({
     queuedTaskId?: string,
     generationOptions?: AgentArtifactGenerationOptions
   ) {
+    const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
     if (!queuedTaskId) {
       syncArtifacts(taskId);
@@ -242,8 +426,35 @@ export function useArtifactActions({
         artifactStore.updateTask(taskId, progress);
         syncArtifacts(taskId);
       };
-      const agentRun = generationOptions
-        ? await runAgentAnalysis(artifactType, onProgress, generationOptions)
+      const thinReadingArtifactId = artifactType === "thin_reading"
+        ? createArtifactId(taskId)
+        : undefined;
+      const thinReadingTargetLanguage = resolveThinReadingTargetLanguage(getAssistantLanguage?.());
+      const thinReadingContext = artifactType === "thin_reading"
+        ? generationOptions?.thinReadingContext ?? createRootThinReadingContext({
+            artifactId: thinReadingArtifactId!,
+            papers: scopedPapers,
+            targetLanguage: thinReadingTargetLanguage
+          })
+        : undefined;
+      const rootThinReadingPaperId = thinReadingContext?.source.kind === "root_overview"
+        ? thinReadingContext.primaryPaperId
+        : undefined;
+      const effectiveGenerationOptions: AgentArtifactGenerationOptions | undefined =
+        artifactType === "thin_reading"
+          ? {
+              ...generationOptions,
+              sourcePaperIds:
+                rootThinReadingPaperId !== undefined
+                  ? rootThinReadingPaperId
+                    ? [rootThinReadingPaperId]
+                    : scopedPapers.map((paper) => paper.id)
+                  : generationOptions?.sourcePaperIds ?? scopedPapers.map((paper) => paper.id),
+              thinReadingContext
+            }
+          : generationOptions;
+      const agentRun = effectiveGenerationOptions
+        ? await runAgentAnalysis(artifactType, onProgress, effectiveGenerationOptions)
         : await runAgentAnalysis(artifactType, onProgress);
       if (artifactStore.getTask(taskId)?.status === "cancelled" || agentRun.status === "cancelled") {
         artifactStore.cancelTask(taskId);
@@ -263,16 +474,63 @@ export function useArtifactActions({
         answerEvent.metadata &&
         typeof answerEvent.metadata === "object" &&
         !Array.isArray(answerEvent.metadata)
-          ? answerEvent.metadata as { analysis?: CompletedMultiPaperAnalysis }
+          ? answerEvent.metadata as AgentArtifactMetadata
           : {};
       if (!metadata.analysis) {
         throw new Error("Agent run 缺少可持久化的 AnalysisRun/Evidence/Claim");
       }
-      const artifactId = `${createArtifactId(taskId)}-${agentRun.runId}`
+      const verifiedMindmap = artifactType === "mindmap"
+        ? requireVerifiedMindmapMetadata(metadata.artifactWorkflow)
+        : undefined;
+      const rawArtifactId = artifactType === "thin_reading"
+        ? thinReadingArtifactId!
+        : `${createArtifactId(taskId)}-${agentRun.runId}`;
+      const artifactId = rawArtifactId
         .replace(/[^A-Za-z0-9._-]/g, "-")
         .slice(0, 120);
       const title = getArtifactTitle(artifactType);
       const createdAt = new Date().toISOString();
+      if (artifactType === "thin_reading") {
+        const thinReading = requireThinReadingSeed(metadata, thinReadingContext!);
+        const thinReadingDocument = createThinReadingDocument({
+          artifactId,
+          papers: scopedPapers.map((paper) => ({ ...paper })),
+          rootSeed: thinReading.rootSeed,
+          targetLanguage: thinReading.context.targetLanguage
+        });
+        artifactStore.updateTask(taskId, {
+          message: "正在原子保存薄读结果",
+          progress: 95,
+          stage: "thin_reading_saving"
+        });
+        syncArtifacts(taskId);
+        const document = createThinReadingResultDocument({
+          agentRun,
+          analysis: metadata.analysis,
+          answer: answerEvent.message,
+          citations: answerEvent.citations,
+          createdAt,
+          document: thinReadingDocument,
+          papers: scopedPapers.map((paper) => ({ id: paper.id, title: paper.title }))
+        });
+        const resultPath = await artifactResultClient.save(document);
+        artifactStore.completeTask(taskId, {
+          agentRunId: agentRun.runId,
+          analysis: metadata.analysis,
+          answer: answerEvent.message,
+          artifactId,
+          citations: answerEvent.citations,
+          createdAt,
+          papers: document.papers,
+          resultPath,
+          thinReadingDocument,
+          title: "薄读",
+          type: "thin_reading"
+        });
+        syncArtifacts(taskId);
+        onAnalysisHint(`薄读 Agent 生成完成并已保存：${resultPath}`);
+        return;
+      }
       const evidenceOutlineNodes = buildArtifactOutline({
         analysis: metadata.analysis,
         papers: selectedPapers,
@@ -314,6 +572,12 @@ export function useArtifactActions({
         citations: answerEvent.citations ?? [],
         createdAt,
         intuitionGraph,
+        ...(verifiedMindmap
+          ? {
+              mindmapArtifact: verifiedMindmap.mindmapArtifact,
+              verification: verifiedMindmap.verification
+            }
+          : {}),
         outlineMarkdown,
         outlineNodes,
         papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title })),
@@ -338,6 +602,12 @@ export function useArtifactActions({
         citations: answerEvent.citations,
         createdAt,
         intuitionGraph,
+        ...(verifiedMindmap
+          ? {
+              mindmapArtifact: verifiedMindmap.mindmapArtifact,
+              verification: verifiedMindmap.verification
+            }
+          : {}),
         outlineMarkdown,
         outlineNodes,
         papers: document.papers,
@@ -397,7 +667,8 @@ export function useArtifactActions({
   }
 
   function startAnalysisForPapers(artifactType: ArtifactType, selectedPapers: Paper[]) {
-    if (selectedPapers.length === 0) {
+    const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
+    if (scopedPapers.length === 0) {
       const message = "请通过 @ 指定论文，或在左栏勾选并锁定文献后再生成产物。";
       onAnalysisHint(message);
       return message;
@@ -406,14 +677,14 @@ export function useArtifactActions({
       const existingArtifacts = findDuplicateArtifacts(
         artifactStore.getCatalog(),
         artifactType,
-        selectedPapers
+        scopedPapers
       );
       if (
         existingArtifacts.length > 0 &&
         !confirmDuplicateGeneration({
           artifactType,
           existingArtifacts,
-          papers: selectedPapers
+          papers: scopedPapers
         })
       ) {
         const message = `已取消重复生成“${artifactTypeLabels[artifactType]}”产物。`;
@@ -423,22 +694,40 @@ export function useArtifactActions({
     }
     const importedChunksByPaperId = getImportedChunksByPaperId();
     let queuedTaskId: string | undefined;
-    const importStatus = queueImportForPapers(selectedPapers, () => {
-      const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
-      void startArtifactTask(
-        artifactType,
-        selectedPapers,
-        getImportedChunksByPaperId(),
-        taskId
-      );
-      onAnalysisHint("导入完成，已按指定模态启动主工作流。");
-    });
+    const importStatus = queueImportForPapers(
+      scopedPapers,
+      () => {
+        const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
+        void startArtifactTask(
+          artifactType,
+          scopedPapers,
+          getImportedChunksByPaperId(),
+          taskId
+        );
+        onAnalysisHint("导入完成，已按指定 AI 分析启动主工作流。");
+      },
+      ({ error, paper }) => {
+        const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
+        artifactStore.failTask(taskId, {
+          failedStage: artifactType === "thin_reading"
+            ? "thin_reading_parsing_document"
+            : "waiting_for_import",
+          message: `《${paper.title}》PDF 导入失败：${error.message}`,
+          occurredAt: new Date().toISOString(),
+          recovery: [
+            "完全重启 Tauri 以加载最新的本地 PDF 读取命令",
+            "确认文件位于 LiteasyLibrary 内且未损坏后重试"
+          ]
+        });
+        syncArtifacts(taskId);
+      }
+    );
 
     if (importStatus === "already_imported") {
       queuedTaskId = artifactStore.createTask(artifactType);
       syncArtifacts(queuedTaskId);
-      void startArtifactTask(artifactType, selectedPapers, importedChunksByPaperId, queuedTaskId);
-      const message = "当前选中文献集已导入，正在按指定模态启动分析。";
+      void startArtifactTask(artifactType, scopedPapers, importedChunksByPaperId, queuedTaskId);
+      const message = "当前选中文献集已导入，正在按指定 AI 分析启动。";
       onAnalysisHint(message);
       return message;
     }
@@ -453,7 +742,7 @@ export function useArtifactActions({
       queuedTaskId = artifactStore.createTask(artifactType);
       syncArtifacts(queuedTaskId);
     }
-    const message = "当前选中文献集尚未全部导入，系统会先导入，再自动启动该模态分析。";
+    const message = "当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。";
     onAnalysisHint(message);
     return message;
   }
@@ -467,7 +756,7 @@ export function useArtifactActions({
     }
 
     if (!selectedSet.locked) {
-      const message = "请先锁定选中文献集，再启动模态分析。";
+      const message = "请先锁定选中文献集，再启动 AI 分析。";
       onAnalysisHint(message);
       return message;
     }
@@ -610,15 +899,18 @@ export function useArtifactActions({
       citations: result.citations,
       createdAt: result.createdAt,
       intuitionGraph: result.intuitionGraph,
+      mindmapArtifact: result.mindmapArtifact,
       outlineMarkdown: result.outlineMarkdown ?? (outlineNodes ? outlineToMarkdown(outlineNodes) : undefined),
       outlineNodes,
       papers: result.papers,
       regeneratedFromArtifactId: result.regeneratedFromArtifactId,
       resultPath: `project-docs/agent-results/${result.artifactId}.json`,
+      thinReadingDocument: result.thinReadingDocument,
       title: result.title,
       type: result.artifactType,
       supplementalContext: result.supplementalContext,
-      uiDsl
+      uiDsl,
+      verification: result.verification
     });
     syncArtifacts();
   }
@@ -646,6 +938,261 @@ export function useArtifactActions({
       markdown
     });
     syncArtifacts();
+  }
+
+  async function generateThinReadingBranch({
+    artifactId,
+    document,
+    source
+  }: GenerateThinReadingBranchInput) {
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
+    if (!existing || existing.type !== "thin_reading") {
+      throw new Error("找不到可继续深入的薄读产物。");
+    }
+    const primaryPaperId = document.paperIds[0];
+    if (!primaryPaperId) {
+      throw new Error("该薄读产物缺少主论文，无法继续生成下一层。");
+    }
+    const scopedDocument: ThinReadingDocument = {
+      ...document,
+      paperIds: [primaryPaperId],
+      paperIdentities: document.paperIdentities?.[primaryPaperId]
+        ? { [primaryPaperId]: document.paperIdentities[primaryPaperId] }
+        : undefined
+    };
+    const activeNode = scopedDocument.nodes[scopedDocument.activeNodeId] ?? scopedDocument.nodes[scopedDocument.rootNodeId];
+    const existingChild = findThinReadingChildBySource(scopedDocument, activeNode.id, source);
+    if (existingChild) {
+      updateThinReadingDocument(artifactId, {
+        ...scopedDocument,
+        activeNodeId: existingChild.id
+      });
+      return;
+    }
+    const primaryPaper = (existing.papers ?? []).find((paper) => paper.id === primaryPaperId);
+    if (!primaryPaper) {
+      throw new Error("该薄读产物缺少来源论文，无法继续生成下一层。");
+    }
+    const papers = [{ id: primaryPaper.id, title: primaryPaper.title }] as Paper[];
+    const selectedExternalSources = source.kind === "selected_text" && source.externalSourceIds?.length
+      ? (activeNode.evidence.externalSources ?? []).filter((externalSource) => (
+        source.externalSourceIds?.includes(externalSource.id)
+      ))
+      : undefined;
+    const taskId = artifactStore.createTask("thin_reading");
+    let recoverySnapshot;
+    try {
+      recoverySnapshot = createThinReadingBranchRecoverySnapshot({
+        artifactId,
+        document: scopedDocument,
+        parentNodeId: activeNode.id,
+        primaryPaperId,
+        source
+      });
+    } catch {
+      // A normal branch may still run; only bounded, auditable inputs are restart-recoverable.
+    }
+    artifactStore.updateTask(taskId, {
+      artifactId,
+      ...(recoverySnapshot ? { thinReadingBranchRecovery: recoverySnapshot } : {})
+    });
+    artifactStore.startTask(taskId);
+    syncArtifacts(taskId);
+    const context: ThinReadingGenerationContext = {
+      artifactId,
+      depth: activeNode.depth + 1,
+      paperIds: [primaryPaperId],
+      primaryPaperId,
+      primaryPaperIdentity: scopedDocument.paperIdentities?.[primaryPaperId]
+        ? scopedDocument.paperIdentities[primaryPaperId].primary
+        : undefined,
+      primaryPaperTitle: primaryPaper.title,
+      parentClaims: activeNode.evidence.claims ? [...activeNode.evidence.claims] : undefined,
+      parentEvidenceSpans: activeNode.evidence.paperEvidenceSpans
+        ? [...activeNode.evidence.paperEvidenceSpans]
+        : undefined,
+      parentNodeId: activeNode.id,
+      parentWithinPaperClosure: activeNode.withinPaperClosure,
+      parentSummary: activeNode.summary,
+      parentTitle: activeNode.title,
+      prompt: source.kind === "selected_text" ? source.prompt : undefined,
+      selectedExternalSources,
+      source,
+      targetLanguage: document.targetLanguage
+    };
+    const onProgress = (progress: {
+      agentRunId?: string;
+      message: string;
+      partialAnswer?: string;
+      partialOutlineNodes?: ArtifactTask["partialOutlineNodes"];
+      progress: number;
+      stage: ArtifactTaskStage;
+    }) => {
+      artifactStore.updateTask(taskId, progress);
+      syncArtifacts(taskId);
+    };
+    try {
+      const agentRun = await runAgentAnalysis("thin_reading", onProgress, {
+        sourcePaperIds: [primaryPaperId],
+        thinReadingContext: context
+      });
+      if (agentRun.status !== "completed") {
+        throw new Error(`薄读 Agent run 未完成：${agentRun.status}`);
+      }
+      const answerEvent = [...agentRun.events]
+        .reverse()
+        .find((event) => event.type === "assistant.message");
+      if (!answerEvent || answerEvent.type !== "assistant.message") {
+        throw new Error("薄读 Agent run 没有返回下一层结果。");
+      }
+      const metadata =
+        answerEvent.metadata &&
+        typeof answerEvent.metadata === "object" &&
+        !Array.isArray(answerEvent.metadata)
+          ? answerEvent.metadata as AgentArtifactMetadata
+          : {};
+      if (!metadata.analysis) {
+        throw new Error("薄读 Agent run 缺少可持久化的 AnalysisRun/Evidence/Claim");
+      }
+      const thinReading = requireThinReadingSeed(metadata, context);
+      const nextDocument = advanceThinReadingDocument(scopedDocument, {
+        parentNodeId: activeNode.id,
+        seed: thinReading.rootSeed,
+        source,
+        title: thinReadingTitleForSource(source, document.targetLanguage)
+      });
+      artifactStore.updateTask(taskId, {
+        message: "正在保存薄读下一层",
+        progress: 95,
+        stage: "thin_reading_saving"
+      });
+      syncArtifacts(taskId);
+      const createdAt = existing.createdAt ?? new Date().toISOString();
+      const resultPath = await artifactResultClient.save(createThinReadingResultDocument({
+        agentRun,
+        analysis: metadata.analysis,
+        answer: answerEvent.message,
+        citations: answerEvent.citations,
+        createdAt,
+        document: nextDocument,
+        existing,
+        papers,
+        uiDsl: existing.uiDsl
+      }));
+      artifactStore.completeTask(taskId, {
+        ...existing,
+        agentRunId: agentRun.runId,
+        analysis: metadata.analysis,
+        answer: answerEvent.message,
+        citations: answerEvent.citations,
+        papers,
+        resultPath,
+        thinReadingDocument: nextDocument
+      });
+      syncArtifacts(taskId);
+      onAnalysisHint(`薄读下一层已由 Agent 生成并保存：${resultPath}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const modelContext = getModelDiagnosticContext?.() ?? {};
+      artifactStore.failTask(taskId, {
+        ...modelContext,
+        failedStage: artifactStore.getTask(taskId)?.stage ?? "generating_answer",
+        message,
+        occurredAt: new Date().toISOString(),
+        recovery: buildFailureRecovery(message)
+      });
+      syncArtifacts(taskId);
+      onAnalysisHint(`薄读下一层生成失败：${message}`);
+      throw error;
+    }
+  }
+
+  async function retryInterruptedThinReadingBranch(taskId: string) {
+    const task = artifactStore.getTask(taskId);
+    const snapshot = task?.thinReadingBranchRecovery;
+    if (!task || task.status !== "failed" || !task.recoveredAfterRestart || !snapshot) {
+      throw new Error("该中断任务缺少可验证的薄读分支输入，不能重新提交。");
+    }
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === snapshot.artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === snapshot.artifactId);
+    const document = existing?.type === "thin_reading" ? existing.thinReadingDocument : undefined;
+    if (!document) {
+      throw new Error("原薄读文档不可用，不能重新提交中断任务。");
+    }
+    const validation = validateThinReadingBranchRecoverySnapshot(snapshot, document);
+    if (!validation.valid) {
+      throw new Error(`原输入无法通过当前文档核验：${validation.reason}`);
+    }
+    onAnalysisHint("正在重新提交同一薄读输入。这是新的模型请求，不会续跑已中断的调用。");
+    await generateThinReadingBranch({
+      artifactId: snapshot.artifactId,
+      document,
+      source: snapshot.source
+    });
+  }
+
+  function updateThinReadingDocument(artifactId: string, nextDocument: NonNullable<ArtifactTab["thinReadingDocument"]>) {
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
+    if (!existing || existing.type !== "thin_reading") {
+      return;
+    }
+    const primaryPaperId = nextDocument.paperIds[0];
+    const papers = primaryPaperId
+      ? (existing.papers ?? []).filter((paper) => paper.id === primaryPaperId)
+      : [];
+
+    artifactStore.upsertTab({
+      ...existing,
+      papers,
+      thinReadingDocument: nextDocument
+    });
+    syncArtifacts();
+    void artifactResultClient.save(createThinReadingResultDocument({
+      createdAt: existing.createdAt ?? new Date().toISOString(),
+      document: nextDocument,
+      existing,
+      papers,
+      uiDsl: existing.uiDsl
+    })).catch((error) => {
+      onAnalysisHint(`薄读本地状态保存失败：${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  async function syncThinReadingAnnotations(input: {
+    artifactId: string;
+    document: ThinReadingDocument;
+  }) {
+    const endpoint = getIntuechoEndpoint?.().trim() ?? "";
+    if (!endpoint) {
+      throw new Error("尚未配置 Intuecho HTTPS 同步端点；批注仍保留在本地等待同步队列。");
+    }
+    const pending = listThinReadingPendingPublicAnnotations(input.document);
+    if (pending.length === 0) {
+      return;
+    }
+    const results = await createHttpIntuechoSyncAdapter({ endpoint }).syncPendingAnnotations(pending);
+    const current = artifactStore.getOpenTabs().find((tab) => tab.artifactId === input.artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === input.artifactId);
+    if (!current || current.type !== "thin_reading" || !current.thinReadingDocument) {
+      return;
+    }
+    const expectedUpdatedAtByAnnotationId = new Map(pending.map((item) => [item.annotationId, item.updatedAt]));
+    const nextDocument = applyThinReadingAnnotationSyncResults(
+      current.thinReadingDocument,
+      results,
+      new Date().toISOString(),
+      expectedUpdatedAtByAnnotationId
+    );
+    updateThinReadingDocument(input.artifactId, nextDocument);
+    const synced = results.filter((result) => result.status === "synced").length;
+    const failed = results.filter((result) => result.status === "failed").length;
+    onAnalysisHint(
+      failed > 0
+        ? `Intuecho 同步完成：${synced} 条已确认，${failed} 条仍在本地队列等待重试。`
+        : `Intuecho 已确认同步 ${synced} 条共享批注。`
+    );
   }
 
   async function saveSkillDocument(artifactId: string) {
@@ -679,12 +1226,16 @@ export function useArtifactActions({
     openArtifact,
     openSkillDocument,
     regenerateArtifact,
+    retryInterruptedThinReadingBranch,
+    generateThinReadingBranch,
     restoreArtifactResult,
     saveSkillDocument,
     startAnalysis,
     startAnalysisForPapers,
     startArtifactTask,
+    syncThinReadingAnnotations,
     syncArtifacts,
-    updateSkillDocument
+    updateSkillDocument,
+    updateThinReadingDocument
   };
 }

@@ -57,6 +57,73 @@ test("posts to the OpenAI Responses API and extracts text output", async () => {
   });
 });
 
+test("requests strict JSON Schema output when an artifact supplies an output format", async () => {
+  let requestBody;
+  const provider = createOpenAIResponsesProvider({
+    apiKey: "sk-test",
+    fetchImpl: async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return {
+        json: async () => ({ output_text: "{}" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  await provider({
+    model: "gpt-5-mini",
+    outputFormat: {
+      name: "liteasy_thin_reading",
+      schema: { additionalProperties: false, type: "object" },
+      strict: true
+    },
+    prompt: "Return a thin reading JSON object."
+  });
+
+  assert.deepEqual(requestBody.text, {
+    format: {
+      name: "liteasy_thin_reading",
+      schema: { additionalProperties: false, type: "object" },
+      strict: true,
+      type: "json_schema"
+    }
+  });
+});
+
+test("retries once without schema fields when an OpenAI-compatible endpoint rejects them", async () => {
+  const requestBodies = [];
+  const provider = createOpenAIResponsesProvider({
+    apiKey: "sk-test",
+    fetchImpl: async (_url, init) => {
+      requestBodies.push(JSON.parse(init.body));
+      if (requestBodies.length === 1) {
+        return {
+          json: async () => ({ error: { message: "unknown parameter: text.format" } }),
+          ok: false,
+          status: 400
+        };
+      }
+      return {
+        json: async () => ({ output_text: "{}" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  const answer = await provider({
+    model: "gpt-5-mini",
+    outputFormat: { name: "thin_reading", schema: { type: "object" }, strict: true },
+    prompt: "Return JSON."
+  });
+
+  assert.equal(answer, "{}");
+  assert.equal(requestBodies.length, 2);
+  assert.ok(requestBodies[0].text?.format);
+  assert.equal(requestBodies[1].text, undefined);
+});
+
 test("throws a readable error when the OpenAI provider returns a non-ok status", async () => {
   const provider = createOpenAIResponsesProvider({
     apiKey: "sk-test",

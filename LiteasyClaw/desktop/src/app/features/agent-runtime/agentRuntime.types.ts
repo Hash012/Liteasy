@@ -3,6 +3,7 @@ import type { ArtifactType } from "../artifacts/artifact.types";
 import type { UIDslDocument } from "../generative-ui/generativeUi.types";
 import type { ExecutionJournal } from "../generative-ui/executionJournal";
 import type { OrganizationSummary } from "../organization/organization.types";
+import type { AcademicProfile } from "../profile/profile.types";
 import type { SelectedDocumentSetSnapshot } from "../selection/selection.types";
 import type { SettingsState, UpdateSettingCommand } from "../settings/settings.types";
 import type { GeneratedThemeInput } from "../theme/generatedTheme";
@@ -91,6 +92,7 @@ export type AgentRuntimeContextView = {
     organizationName?: string;
   };
   profile: {
+    academic?: AcademicProfile;
     personalizationSummary?: string;
   };
   recommendations: {

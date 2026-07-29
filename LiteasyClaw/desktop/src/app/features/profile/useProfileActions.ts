@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AccountSession } from "../account/account.types";
-import type { AcademicProfile } from "./profile.types";
-import { buildAcademicProfileAssistantSummary, defaultAcademicProfile } from "./profile.types";
+import {
+  buildAcademicProfileAssistantSummary,
+  defaultAcademicProfile,
+  type AcademicProfile
+} from "./profile.types";
 import {
   createAcademicProfileClient,
   type AcademicProfileTransport,
   type PersonalizationSignal
 } from "./academicProfileClient";
+import {
+  clearAcademicProfile,
+  loadAcademicProfile,
+  saveAcademicProfile
+} from "./profileStorage";
 
 type UseProfileActionsInput = {
   accountSession?: AccountSession | null;
@@ -18,11 +26,12 @@ function isMockEndpoint(endpoint: string) {
   return endpoint.startsWith("mock://");
 }
 
-function toAcademicProfile(profile: AcademicProfile) {
+function toAcademicProfile(profile: Partial<AcademicProfile>): AcademicProfile {
   return {
-    disciplines: profile.disciplines,
-    stage: profile.stage
-  } satisfies AcademicProfile;
+    ...defaultAcademicProfile,
+    ...profile,
+    disciplines: Array.isArray(profile.disciplines) ? profile.disciplines : []
+  };
 }
 
 export function useProfileActions({
@@ -31,7 +40,7 @@ export function useProfileActions({
   transport
 }: UseProfileActionsInput = {}) {
   const [academicArchiveOpen, setAcademicArchiveOpen] = useState(false);
-  const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(defaultAcademicProfile);
+  const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(loadAcademicProfile);
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
   const [personalizationSummary, setPersonalizationSummary] = useState<string | undefined>();
@@ -46,7 +55,6 @@ export function useProfileActions({
 
   useEffect(() => {
     if (!accountSession || !client) {
-      setAcademicProfile(defaultAcademicProfile);
       setPersonalizationSummary(undefined);
       setPersonalizationVersion(0);
       return;
@@ -59,7 +67,9 @@ export function useProfileActions({
         if (!active) {
           return;
         }
-        setAcademicProfile(toAcademicProfile(snapshot.profile));
+        const nextProfile = toAcademicProfile(snapshot.profile);
+        setAcademicProfile(nextProfile);
+        saveAcademicProfile(nextProfile);
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
       })
@@ -91,8 +101,9 @@ export function useProfileActions({
   }
 
   function updateAcademicProfile(nextProfile: AcademicProfile) {
+    setAcademicProfile(nextProfile);
+    saveAcademicProfile(nextProfile);
     if (!accountSession || !client) {
-      setAcademicProfile(nextProfile);
       setProfileClearMessage("学术档案已更新。");
       return;
     }
@@ -100,13 +111,15 @@ export function useProfileActions({
     return client
       .save(accountSession, nextProfile)
       .then((snapshot) => {
-        setAcademicProfile(toAcademicProfile(snapshot.profile));
+        const savedProfile = toAcademicProfile({ ...nextProfile, ...snapshot.profile });
+        setAcademicProfile(savedProfile);
+        saveAcademicProfile(savedProfile);
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
         setProfileClearMessage("学术档案已保存。");
       })
       .catch(() => {
-        setProfileClearMessage("学术档案保存失败，请检查云端连接后重试。");
+        setProfileClearMessage("学术档案已保存在本机；云端同步失败，请稍后重试。");
       });
   }
 
@@ -115,26 +128,30 @@ export function useProfileActions({
   }
 
   function clearUserProfile() {
+    const clearedProfile = { ...defaultAcademicProfile };
+    setAcademicProfile(clearedProfile);
+    clearAcademicProfile();
+    setPersonalizationSummary(undefined);
+    setPersonalizationVersion(0);
+    setClearProfileConfirmOpen(false);
+
     if (!accountSession || !client) {
-      setAcademicProfile(defaultAcademicProfile);
-      setPersonalizationSummary(undefined);
-      setPersonalizationVersion(0);
-      setClearProfileConfirmOpen(false);
-      setProfileClearMessage("已清空学科、补充说明和研究阶段。");
+      setProfileClearMessage("学术档案已清空。");
       return;
     }
 
     return client
       .clear(accountSession)
       .then((snapshot) => {
-        setAcademicProfile(toAcademicProfile(snapshot.profile));
+        const nextProfile = toAcademicProfile(snapshot.profile);
+        setAcademicProfile(nextProfile);
+        saveAcademicProfile(nextProfile);
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
-        setClearProfileConfirmOpen(false);
-        setProfileClearMessage("已清空学术档案，并重置个性化调整。");
+        setProfileClearMessage("学术档案已清空，并已同步到云端。");
       })
       .catch(() => {
-        setProfileClearMessage("学术档案清空失败，请检查云端连接后重试。");
+        setProfileClearMessage("学术档案已在本机清空；云端同步失败，请稍后重试。");
       });
   }
 
@@ -150,7 +167,7 @@ export function useProfileActions({
         setPersonalizationVersion(snapshot.personalizationVersion);
       })
       .catch(() => {
-        // 个性化更新不能影响阅读、收藏或问答等主流程。
+        // Personalization updates must never interrupt the primary reading workflow.
       });
   }
 
@@ -167,11 +184,11 @@ export function useProfileActions({
     clearUserProfile,
     closeAcademicArchive,
     closeClearProfileConfirm,
+    markProfileExported,
     openAcademicArchive,
     openClearProfileConfirm,
-    markProfileExported,
-    profileClearMessage,
     personalizationVersion,
+    profileClearMessage,
     recordPersonalizationSignal,
     updateAcademicProfile
   };

@@ -22,11 +22,17 @@ import {
   type AgentPublicApi,
   type AgentRun,
   type AgentSession,
+  type AgentWorkflowTraceRecord,
   type CreateAgentSessionRequest,
   type ResolveAgentConfirmationRequest,
   type SubmitAgentTurnRequest
 } from "../../features/agent-api/agentApi.types";
 import { getRegisteredActionMetadata } from "../../features/skills/actionRegistry";
+import {
+  projectPublicWorkflowAuditSummary,
+  projectWorkflowTraceEvents,
+  summarizeWorkflowTraceEvents
+} from "./agentWorkflowTraceProjection";
 import {
   AGENT_STATE_SNAPSHOT_VERSION,
   parseAgentStateSnapshot,
@@ -122,6 +128,55 @@ function asJsonValue(value: unknown): AgentJsonValue {
 
 function asJsonRecord(value: Record<string, unknown>): Record<string, AgentJsonValue> {
   return asJsonValue(value) as Record<string, AgentJsonValue>;
+}
+
+function cloneAttachments(
+  attachments: SubmitAgentTurnRequest["attachments"]
+): SubmitAgentTurnRequest["attachments"] {
+  return attachments ? asJsonValue(attachments) as SubmitAgentTurnRequest["attachments"] : undefined;
+}
+
+function stableJsonValue(value: AgentJsonValue): AgentJsonValue {
+  if (Array.isArray(value)) {
+    return value.map(stableJsonValue);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+        .map(([key, entry]) => [key, stableJsonValue(entry)])
+    );
+  }
+
+  return value;
+}
+
+function sameAttachments(
+  left: SubmitAgentTurnRequest["attachments"],
+  right: SubmitAgentTurnRequest["attachments"]
+) {
+  return JSON.stringify(stableJsonValue(asJsonValue(left ?? []))) ===
+    JSON.stringify(stableJsonValue(asJsonValue(right ?? [])));
+}
+
+function getRecordValue(value: unknown, key: string): unknown {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function getOptionalString(value: unknown, key: string): string | undefined {
+  const candidate = getRecordValue(value, key);
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
+function getWorkflowTraceFromMetadata(metadata: AgentJsonValue | undefined): AgentJsonValue | undefined {
+  const artifactWorkflow = getRecordValue(metadata, "artifactWorkflow");
+  const workflowTrace = getRecordValue(artifactWorkflow, "workflowTrace");
+  return getRecordValue(workflowTrace, "internalOnly") === true
+    ? asJsonValue(workflowTrace)
+    : undefined;
 }
 
 function isHumanConfirmation(event: AgentRuntimeEvent): event is HumanConfirmationRequest {
@@ -243,6 +298,7 @@ export function createAgentApplicationService(
   ports: AgentApplicationPorts
 ): AgentPublicApi {
   const sessions = new Map<string, StoredSession>();
+  const workflowTraces: AgentWorkflowTraceRecord[] = [];
   const pendingConfirmations = new Map<string, PendingConfirmation>();
   const abortControllers = new Map<string, AbortController>();
   const now = ports.now ?? (() => new Date());
@@ -305,7 +361,10 @@ export function createAgentApplicationService(
       ),
       session: asJsonValue(stored.session) as unknown as AgentSession
     })),
-    version: AGENT_STATE_SNAPSHOT_VERSION
+    version: AGENT_STATE_SNAPSHOT_VERSION,
+    workflowTraces: workflowTraces.map((trace) =>
+      asJsonValue(trace) as unknown as AgentWorkflowTraceRecord
+    )
   });
 
   const reportPersistenceError = (error: unknown) => {
@@ -375,6 +434,13 @@ export function createAgentApplicationService(
       });
       sessions.set(stored.session.sessionId, stored);
     });
+    workflowTraces.splice(
+      0,
+      workflowTraces.length,
+      ...(snapshot.workflowTraces ?? []).map((trace) =>
+        asJsonValue(trace) as unknown as AgentWorkflowTraceRecord
+      )
+    );
 
     snapshot.pendingConfirmations.forEach((pending) => {
       const stored = sessions.get(pending.sessionId);
@@ -455,6 +521,40 @@ export function createAgentApplicationService(
       finishRun(stored, run, hasFailure ? "failed" : "completed");
     }
   };
+
+  const recordWorkflowTrace = (
+    stored: StoredSession,
+    run: AgentRun,
+    metadata: AgentJsonValue | undefined
+  ) => {
+    const trace = getWorkflowTraceFromMetadata(metadata);
+    if (!trace) {
+      return;
+    }
+    const existingIndex = workflowTraces.findIndex(
+      (record) => record.runId === run.runId && record.sessionId === stored.session.sessionId
+    );
+    const record: AgentWorkflowTraceRecord = {
+      artifactId: getOptionalString(trace, "artifactId"),
+      capturedAt: now().toISOString(),
+      internalOnly: true,
+      runId: run.runId,
+      sessionId: stored.session.sessionId,
+      trace,
+      traceId: getOptionalString(trace, "traceId") ?? `workflow-trace:${run.runId}`,
+      version: getOptionalString(trace, "version")
+    };
+    if (existingIndex >= 0) {
+      workflowTraces[existingIndex] = record;
+    } else {
+      workflowTraces.push(record);
+    }
+  };
+
+  const listScopedWorkflowTraces = (sessionId: string, runId?: string) =>
+    workflowTraces.filter((trace) =>
+      trace.sessionId === sessionId && (!runId || trace.runId === runId)
+    );
 
   return {
     async createSession(input: CreateAgentSessionRequest) {
@@ -542,7 +642,8 @@ export function createAgentApplicationService(
         if (
           existingRun.input.message !== request.input.message ||
           existingRun.input.mode !== request.input.mode ||
-          existingRun.input.artifactType !== request.input.artifactType
+          existingRun.input.artifactType !== request.input.artifactType ||
+          !sameAttachments(existingRun.attachments, request.attachments)
         ) {
           return apiError(
             "idempotency_conflict",
@@ -555,6 +656,7 @@ export function createAgentApplicationService(
       const runId = createId("run");
       const run: AgentRun = {
         apiVersion: AGENT_API_VERSION,
+        attachments: cloneAttachments(request.attachments),
         createdAt: now().toISOString(),
         events: [],
         idempotencyKey: request.idempotencyKey,
@@ -568,6 +670,7 @@ export function createAgentApplicationService(
       const abortController = new AbortController();
       abortControllers.set(runId, abortController);
       emit(stored, run, {
+        idempotencyKey: request.idempotencyKey,
         inputMode: request.input.mode,
         message: request.input.message,
         type: "run.started"
@@ -649,6 +752,7 @@ export function createAgentApplicationService(
             metadata: knowledgeResult.metadata,
             type: "assistant.message"
           });
+          recordWorkflowTrace(stored, run, knowledgeResult.metadata);
           if (knowledgeResult.ui) {
             emit(stored, run, {
               document: knowledgeResult.ui,
@@ -781,6 +885,72 @@ export function createAgentApplicationService(
         return apiError("run_not_found", `Agent run not found: ${runId}`);
       }
       return { data: run, ok: true };
+    },
+
+    async listWorkflowTraces({ runId, sessionId }) {
+      await ensureHydrated();
+      const sessionResult = getStoredSession(sessionId);
+      if (!sessionResult.ok) {
+        return sessionResult;
+      }
+      if (runId && !sessionResult.data.runs.has(runId)) {
+        return apiError("run_not_found", `Agent run not found: ${runId}`);
+      }
+      return {
+        data: listScopedWorkflowTraces(sessionId, runId)
+          .map((trace) => asJsonValue(trace) as unknown as AgentWorkflowTraceRecord),
+        ok: true
+      };
+    },
+
+    async listWorkflowTraceEvents({ runId, sessionId }) {
+      await ensureHydrated();
+      const sessionResult = getStoredSession(sessionId);
+      if (!sessionResult.ok) {
+        return sessionResult;
+      }
+      if (runId && !sessionResult.data.runs.has(runId)) {
+        return apiError("run_not_found", `Agent run not found: ${runId}`);
+      }
+      return {
+        data: listScopedWorkflowTraces(sessionId, runId)
+          .flatMap(projectWorkflowTraceEvents),
+        ok: true
+      };
+    },
+
+    async listWorkflowTraceSummaries({ runId, sessionId }) {
+      await ensureHydrated();
+      const sessionResult = getStoredSession(sessionId);
+      if (!sessionResult.ok) {
+        return sessionResult;
+      }
+      if (runId && !sessionResult.data.runs.has(runId)) {
+        return apiError("run_not_found", `Agent run not found: ${runId}`);
+      }
+      return {
+        data: listScopedWorkflowTraces(sessionId, runId)
+          .map((trace) => summarizeWorkflowTraceEvents(projectWorkflowTraceEvents(trace))),
+        ok: true
+      };
+    },
+
+    async listPublicWorkflowAuditSummaries({ runId, sessionId }) {
+      await ensureHydrated();
+      const sessionResult = getStoredSession(sessionId);
+      if (!sessionResult.ok) {
+        return sessionResult;
+      }
+      if (runId && !sessionResult.data.runs.has(runId)) {
+        return apiError("run_not_found", `Agent run not found: ${runId}`);
+      }
+      return {
+        data: listScopedWorkflowTraces(sessionId, runId)
+          .map((trace) => projectPublicWorkflowAuditSummary(
+            summarizeWorkflowTraceEvents(projectWorkflowTraceEvents(trace))
+          )),
+        ok: true
+      };
     },
 
     async listCapabilities() {

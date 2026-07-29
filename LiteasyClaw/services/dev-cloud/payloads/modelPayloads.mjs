@@ -98,6 +98,10 @@ export async function generateAnswer(body, providers) {
     };
   }
 
+  if (body.requireLive === true) {
+    throw new Error(`当前开发云未配置真实 provider：${providerId}`);
+  }
+
   if (providerId !== "openai") {
     throw new Error(`当前开发云未注册 provider：${providerId}`);
   }

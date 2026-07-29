@@ -1,6 +1,16 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import {
+  buildTargetEvidenceRects,
+  findQuoteRangeInTextLayer,
+  shouldLoadPdfFromLocalBytes
+} from "../app/features/pdf/PdfReader";
+import { normalizePdfTextForSearch } from "../app/features/pdf/pdfTextSearch";
+import {
+  pdfAnnotationAutoPublicStorageKey,
+  pdfAnnotationStorageKey
+} from "../app/features/pdf/pdfAnnotationStorage";
 import { ReaderPane } from "../app/layout/ReaderPane";
 
 const readerTestPaper = {
@@ -11,6 +21,7 @@ const readerTestPaper = {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 function makeRect({ height, left, top, width }: { height: number; left: number; top: number; width: number }) {
@@ -26,6 +37,13 @@ function makeRect({ height, left, top, width }: { height: number; left: number; 
     y: top
   } as DOMRect;
 }
+
+test("distinguishes managed desktop paths from browser PDF sources", () => {
+  expect(shouldLoadPdfFromLocalBytes("/home/octopus/LiteasyLibrary/paper.pdf")).toBe(true);
+  expect(shouldLoadPdfFromLocalBytes("C:\\Users\\reader\\LiteasyLibrary\\paper.pdf")).toBe(true);
+  expect(shouldLoadPdfFromLocalBytes("/papers/fixture.pdf")).toBe(false);
+  expect(shouldLoadPdfFromLocalBytes("blob:http://localhost/paper")).toBe(false);
+});
 
 function makeRectList(rects: DOMRect[]) {
   return {
@@ -69,6 +87,125 @@ function mockPdfSelection({
 }
 
 describe("ReaderPane", () => {
+  test("matches Agent evidence quotes across PDF text-layer spans", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = [
+      "<span>ColBERT uses late</span>",
+      "<span> interaction to preserve</span>",
+      "<span> token-level matching signals.</span>"
+    ].join("");
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "late interaction to preserve token-level matching"
+    );
+
+    expect(range?.toString().replace(/\s+/g, " ")).toContain(
+      "late interaction to preserve token-level matching"
+    );
+  });
+
+  test("uses a persisted page-text offset to disambiguate repeated evidence quotes", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = [
+      "<span>first token-level matching signal. </span>",
+      "<span>padding between occurrences. </span>",
+      "<span>second token-level matching signal.</span>"
+    ].join("");
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "token-level matching signal",
+      48
+    );
+
+    expect(range?.startContainer.parentElement?.textContent).toContain(
+      "second token-level matching signal"
+    );
+  });
+
+  test("uses the shared Unicode-normalized offset to disambiguate repeated evidence quotes", () => {
+    const textLayer = document.createElement("div");
+    const pageText = "first multimodal AI reference. padding. second multi\u00admodal \uFF21I reference.";
+    textLayer.innerHTML = [
+      "<span>first multimodal AI reference. padding. </span>",
+      "<span>second multi\u00admodal \uFF21I reference.</span>"
+    ].join("");
+    const normalizedPage = normalizePdfTextForSearch(pageText);
+    const secondOccurrence = normalizedPage.indexOf(
+      "multimodal ai reference",
+      normalizedPage.indexOf("multimodal ai reference") + 1
+    );
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "multimodal AI reference",
+      secondOccurrence
+    );
+
+    expect(range?.startContainer.parentElement?.textContent).toContain("second multi\u00admodal \uFF21I reference");
+  });
+
+  test("matches a quote across PDF line-break hyphenation and Unicode dash drift", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = [
+      "<span>The late inter-</span>",
+      "<span>action path preserves token‐level signals.</span>"
+    ].join("");
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "late interaction path preserves token-level signals"
+    );
+
+    expect(range?.toString().replace(/\s+/g, " ")).toContain(
+      "late inter-action path preserves token‐level signals"
+    );
+  });
+
+  test("keeps Agent evidence highlight coordinates stable across PDF zoom scales", () => {
+    const textLayer = document.createElement("div");
+    textLayer.innerHTML = "<span>late interaction independently encodes query and document tokens</span>";
+    const page = document.createElement("article");
+    let scale = 1;
+    const originalGetClientRects = Object.getOwnPropertyDescriptor(Range.prototype, "getClientRects");
+    Object.defineProperty(Range.prototype, "getClientRects", {
+      configurable: true,
+      value: () => makeRectList([
+        makeRect({ height: 16 * scale, left: 120 * scale, top: 160 * scale, width: 320 * scale })
+      ])
+    });
+    vi.spyOn(page, "getBoundingClientRect").mockImplementation(() => makeRect({
+      height: 980 * scale,
+      left: 20 * scale,
+      top: 40 * scale,
+      width: 760 * scale
+    }));
+
+    try {
+      const at100Percent = buildTargetEvidenceRects(
+        textLayer,
+        page,
+        "late interaction independently encodes query and document tokens"
+      );
+      scale = 2;
+      const at200Percent = buildTargetEvidenceRects(
+        textLayer,
+        page,
+        "late interaction independently encodes query and document tokens"
+      );
+
+      expect(at100Percent).toHaveLength(1);
+      expect(at200Percent).toEqual(at100Percent);
+    } finally {
+      if (originalGetClientRects) {
+        Object.defineProperty(Range.prototype, "getClientRects", originalGetClientRects);
+      } else {
+        delete (Range.prototype as { getClientRects?: unknown }).getClientRects;
+      }
+    }
+  });
+
   test("renders the reader header and leaves artifact generation to the floating launcher", () => {
     const onStartAnalysis = vi.fn();
 
@@ -84,8 +221,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    const readerHeader = screen.getByLabelText("Reader 标题栏");
-    expect(within(readerHeader).getByText("Reader", { selector: ".reader-pane-title" })).toBeInTheDocument();
+    const readerHeader = screen.getByLabelText("PDF 标题栏");
     expect(within(readerHeader).queryByText("AI-driven paper-assisted reading platform")).not.toBeInTheDocument();
     expect(within(readerHeader).queryByText("云端模型能力")).not.toBeInTheDocument();
     expect(within(readerHeader).getByRole("toolbar", { name: "PDF 阅读批注工具栏" })).toBeInTheDocument();
@@ -110,7 +246,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    const emptyState = screen.getByLabelText("Reader 空状态");
+    const emptyState = screen.getByLabelText("PDF 空状态");
     expect(within(emptyState).getByRole("img", { name: "LiteasyClaw" })).toBeInTheDocument();
     expect(screen.queryByText("选择文献后开始阅读")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("PDF 阅读器")).not.toBeInTheDocument();
@@ -143,7 +279,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    const readerHeader = screen.getByLabelText("Reader 标题栏");
+    const readerHeader = screen.getByLabelText("PDF 标题栏");
     const layoutControls = within(readerHeader).getByRole("toolbar", { name: "阅读区布局控制" });
     expect(within(layoutControls).getByRole("button", { name: "折叠左侧栏" })).toHaveAttribute(
       "title",
@@ -257,12 +393,13 @@ describe("ReaderPane", () => {
       "title",
       "把选中文段加入右侧对话上下文"
     );
+    expect(within(selectionMenu).queryByRole("button", { name: /深入/ })).not.toBeInTheDocument();
 
     await user.click(within(selectionMenu).getByRole("button", { name: "高亮" }));
     expect(screen.getByText("已创建高亮批注。")).toBeInTheDocument();
     expect(screen.getByText("vector database systems")).toBeInTheDocument();
     expect(screen.getAllByText("vector database systems")).toHaveLength(1);
-    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByText("高亮标注")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/高亮标注/)).toBeInTheDocument();
 
     mockPdfSelection({
       ancestor: getPdfTextNode(),
@@ -272,7 +409,73 @@ describe("ReaderPane", () => {
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
     expect(screen.getByText("注释")).toBeInTheDocument();
-    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByText("旁注")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/旁注/)).toBeInTheDocument();
+  });
+
+  test("restores local PDF annotations when the same paper is reopened", async () => {
+    const user = userEvent.setup();
+    const selectionRect = makeRect({ height: 20, left: 180, top: 220, width: 160 });
+    const first = render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    mockPdfSelection({ ancestor: getPdfTextNode(), boundingRect: selectionRect, text: "persistent PDF annotation" });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "高亮" }));
+    expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain("persistent PDF annotation");
+
+    first.unmount();
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    expect(await screen.findByText("persistent PDF annotation")).toBeInTheDocument();
+  });
+
+  test("queues a PDF annotation for Intuecho without claiming that it is already public", async () => {
+    const user = userEvent.setup();
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "新批注自动公开到 Intuecho" }));
+
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: makeRect({ height: 20, left: 180, top: 220, width: 160 }),
+      text: "a publicly queued PDF annotation"
+    });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
+
+    expect(screen.getAllByText("等待 Intuecho 同步").length).toBeGreaterThan(0);
+    expect(screen.queryByText("已同步到 Intuecho")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain("pending_public");
+    expect(window.localStorage.getItem(pdfAnnotationAutoPublicStorageKey(readerTestPaper)!)).toBe("true");
   });
 
   test("uses line-level PDF text rects instead of one tall selection box", async () => {
@@ -612,5 +815,58 @@ describe("ReaderPane", () => {
 
     expect(screen.getByLabelText("PDF.js 页面 1")).toHaveClass("evidence-target");
     expect(screen.getByRole("button", { name: "缩略图" })).toHaveClass("active");
+  });
+
+  test("reports page-level positioning when the PDF text layer cannot match evidence", async () => {
+    render(
+      <ReaderPane
+        analysisHint="已找到引用证据。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={["paper-1"]}
+        selectionLocked={true}
+        targetEvidence={{
+          evidenceId: "evidence-unmatched",
+          page: 1,
+          paperId: "paper-1",
+          quote: "a quote that is not available in this text layer",
+          requestId: 2
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("已定位到第 1 页；原文文本层未能精确匹配，当前为页级定位。")).toBeInTheDocument();
+    });
+  });
+
+  test("reports OCR evidence as an explicit page-level fallback without claiming a text-layer match", async () => {
+    render(
+      <ReaderPane
+        analysisHint="已找到 OCR 证据。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={["paper-1"]}
+        selectionLocked={true}
+        targetEvidence={{
+          evidenceId: "evidence-ocr",
+          page: 1,
+          paperId: "paper-1",
+          quote: "OCR-derived quote",
+          requestId: 3,
+          textExtraction: "ocr"
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("已定位到第 1 页；该证据来自 OCR 识别，当前只能页级定位。"))
+        .toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/Agent 引用证据高亮/)).not.toBeInTheDocument();
   });
 });

@@ -99,6 +99,12 @@ export const defaultConfig = {
     process.env.OPENAI_API_KEY ??
     (useHardcodedDevSecrets ? hardcodedDevSecrets.openaiApiKey : undefined),
   policyVersion: "dev-policy-v1",
+  recommendationEmbeddingApiKey: process.env.LITEASY_RECOMMENDATION_EMBEDDING_API_KEY,
+  recommendationEmbeddingBaseUrl: process.env.LITEASY_RECOMMENDATION_EMBEDDING_BASE_URL,
+  recommendationEmbeddingModel: process.env.LITEASY_RECOMMENDATION_EMBEDDING_MODEL,
+  recommendationRerankerApiKey: process.env.LITEASY_RECOMMENDATION_RERANKER_API_KEY,
+  recommendationRerankerBaseUrl: process.env.LITEASY_RECOMMENDATION_RERANKER_BASE_URL,
+  recommendationRerankerModel: process.env.LITEASY_RECOMMENDATION_RERANKER_MODEL,
   syncedAt: "2026-05-14T09:30:00Z"
 };
 

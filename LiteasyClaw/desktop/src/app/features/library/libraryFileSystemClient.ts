@@ -36,3 +36,10 @@ export const persistDroppedPdfFiles: PersistDroppedPdfFiles = async ({ files, ta
     targetFolderPath
   });
 };
+
+export type ReadLocalLibraryPdf = (sourcePath: string) => Promise<Uint8Array>;
+
+export const readLocalLibraryPdf: ReadLocalLibraryPdf = async (sourcePath) => {
+  const bytes = await invoke<number[]>("read_local_library_pdf", { sourcePath });
+  return new Uint8Array(bytes);
+};

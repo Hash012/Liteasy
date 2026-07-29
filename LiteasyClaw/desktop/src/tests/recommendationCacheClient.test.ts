@@ -64,6 +64,7 @@ test("posts generated recommendations to the recommendation-cache put endpoint",
         relevanceScore: 0.92,
         reason: "cached",
         source: "Semantic Scholar",
+        sourceKind: "cache",
         title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
       }
     ]
@@ -72,6 +73,38 @@ test("posts generated recommendations to the recommendation-cache put endpoint",
   expect(requests[0].url).toBe(
     "https://liteasy.example.com/control-plane/v1/recommendation-cache/put"
   );
+});
+
+test("rejects cached recommendation lookups without explicit source provenance", async () => {
+  const client = createRecommendationCacheClient({
+    endpoint: "https://liteasy.example.com/control-plane",
+    transport: async () => ({
+      json: async () => ({
+        cacheHit: true,
+        recommendations: [
+          {
+            discoveredAt: "2026-05-14T08:15:00Z",
+            id: "rec-bert-1",
+            relatedDocumentTitle: "BERT: Pre-training of Deep Bidirectional Transformers",
+            relevanceBand: "high",
+            relevanceScore: 0.92,
+            reason: "cached",
+            source: "Semantic Scholar",
+            title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
+          }
+        ]
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  await expect(client.get({
+    selectionKey: "demo-2",
+    sessionId: "demo-session-1",
+    sortMode: "relevance",
+    workspaceKey: "local:/tmp/LiteasyLibrary"
+  })).rejects.toThrow("关联推荐缓存返回格式无效");
 });
 
 test("posts a scoped cache clear request to the recommendation-cache clear endpoint", async () => {

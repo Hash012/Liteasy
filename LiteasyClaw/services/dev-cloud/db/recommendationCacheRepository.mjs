@@ -1,6 +1,7 @@
 import { readJsonFile, writeJsonFile } from "./jsonFileStore.mjs";
 
 const recommendationCacheFilename = "recommendation-cache.json";
+const defaultRecommendationCacheMaxAgeMs = 24 * 60 * 60 * 1000;
 
 function buildScopeKey(scope) {
   return [
@@ -16,11 +17,25 @@ function readRecommendationCacheState() {
   return readJsonFile(recommendationCacheFilename, {});
 }
 
-export function getRecommendationCache(scope) {
+export function getRecommendationCache(scope, options = {}) {
   const state = readRecommendationCacheState();
   const entry = state[buildScopeKey(scope)];
 
   if (!entry) {
+    return {
+      cacheHit: false,
+      recommendations: []
+    };
+  }
+
+  const cachedAt = typeof entry.cachedAt === "string" ? Date.parse(entry.cachedAt) : Number.NaN;
+  const now = options.now instanceof Date ? options.now.getTime() : Date.now();
+  const maxAgeMs = Number.isFinite(options.maxAgeMs)
+    ? Math.max(0, options.maxAgeMs)
+    : defaultRecommendationCacheMaxAgeMs;
+  if (!Number.isFinite(cachedAt) || now - cachedAt > maxAgeMs) {
+    delete state[buildScopeKey(scope)];
+    writeJsonFile(recommendationCacheFilename, state);
     return {
       cacheHit: false,
       recommendations: []
@@ -57,6 +72,22 @@ export function clearRecommendationCache(scope) {
   return {
     cleared: true
   };
+}
+
+export function clearRecommendationCacheForSession(sessionId) {
+  const state = readRecommendationCacheState();
+  const prefix = `${sessionId}::`;
+  let clearedCount = 0;
+  for (const key of Object.keys(state)) {
+    if (key.startsWith(prefix)) {
+      delete state[key];
+      clearedCount += 1;
+    }
+  }
+  if (clearedCount > 0) {
+    writeJsonFile(recommendationCacheFilename, state);
+  }
+  return clearedCount;
 }
 
 export function resetRecommendationCacheData() {

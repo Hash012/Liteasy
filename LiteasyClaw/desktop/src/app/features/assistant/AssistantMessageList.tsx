@@ -8,6 +8,12 @@ import { getAuditVerdictLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 
+function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
+  if (status === "passed") return "通过";
+  if (status === "warning") return "注意";
+  return "需复核";
+}
+
 type AssistantMessageListProps = {
   messages: AssistantMessage[];
   mode: AssistantMode;
@@ -82,6 +88,32 @@ export function AssistantMessageList({
                 <span>{message.audit.rationale}</span>
               </div>
             ) : null}
+            {message.publicWorkflowAudits?.length ? (
+              <div className={`assistant-public-audit-card ${message.publicWorkflowAudits[0].status}`}>
+                <strong>公开审计过程</strong>
+                {message.publicWorkflowAudits.map((audit, auditIndex) => (
+                  <div className="assistant-public-audit-summary" key={`${message.id}-public-audit-${auditIndex}`}>
+                    {audit.issueLabels.length ? (
+                      <div className="assistant-public-audit-issues">
+                        {audit.issueLabels.map((label) => (
+                          <span key={label}>{label}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="assistant-public-audit-checks">
+                      {audit.checks.map((check) => (
+                        <div className="assistant-public-audit-check" key={check.label}>
+                          <span>
+                            {check.label}：{getPublicAuditStatusLabel(check.status)}
+                          </span>
+                          {check.summary ? <small>{check.summary}</small> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {message.executionTrace ? (
               <div className="assistant-execution-trace">
                 模型链路：{formatModelExecutionLabel(message.executionTrace)}
@@ -142,6 +174,17 @@ export function AssistantMessageList({
                     ↻
                   </button>
                 </>
+              ) : null}
+              {message.role === "assistant" && onRegenerateMessage ? (
+                <button
+                  aria-label="重新生成回复"
+                  className="assistant-message-action"
+                  onClick={() => onRegenerateMessage(message.id)}
+                  title="重新生成"
+                  type="button"
+                >
+                  ↻
+                </button>
               ) : null}
             </div>
           </div>

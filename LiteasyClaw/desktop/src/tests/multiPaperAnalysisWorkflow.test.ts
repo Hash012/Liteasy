@@ -77,6 +77,23 @@ test("retrieves bounded evidence with a fair per-paper first pass", () => {
   expect(prepared.evidencePrompt).toContain(`[${prepared.evidence[0].id}] Paper A p.1`);
 });
 
+test("preserves page-text offsets from retrieval chunks into analysis evidence", () => {
+  const prepared = prepareMultiPaperAnalysis({
+    createId: createIdFactory(),
+    importedChunksByPaperId: {
+      "paper-a": [{
+        ...chunk("paper-a", "Paper A", 2, "late interaction", ["retrieval"]),
+        pageTextEnd: 48,
+        pageTextStart: 12
+      }]
+    },
+    query: "late interaction",
+    selectedPapers: [{ id: "paper-a", title: "Paper A" }]
+  });
+
+  expect(prepared.evidence[0]).toMatchObject({ pageTextEnd: 48, pageTextStart: 12 });
+});
+
 test("uses adaptive stratified coverage instead of collapsing a paper to a few top chunks", () => {
   const evidenceChunks = Array.from({ length: 40 }, (_, index) =>
     chunk(
@@ -98,6 +115,59 @@ test("uses adaptive stratified coverage instead of collapsing a paper to a few t
   expect(prepared.run.plan.maxEvidencePerPaper).toBe(28);
   expect(Math.max(...prepared.evidence.map((item) => item.page))).toBeGreaterThan(30);
   expect(new Set(prepared.evidence.map((item) => item.page)).size).toBeGreaterThan(20);
+});
+
+test("prioritizes decisive claims and limits when a thin-reading launch query is generic", () => {
+  const prepared = prepareMultiPaperAnalysis({
+    createId: createIdFactory(),
+    importedChunksByPaperId: {
+      "paper-a": [
+        chunk("paper-a", "Paper A", 1, "navigation boilerplate", ["front matter"]),
+        chunk("paper-a", "Paper A", 2, "We introduce a method and show its central contribution.", ["method"]),
+        chunk("paper-a", "Paper A", 9, "Conclusion: the method improves recall but has a limitation under sparse data.", ["conclusion"])
+      ]
+    },
+    limits: { maxEvidencePerPaper: 2, maxTotalEvidence: 2 },
+    query: "generate a thin-reading overview",
+    selectedPapers: [{ id: "paper-a", title: "Paper A" }]
+  });
+
+  expect(prepared.evidence.map((item) => item.page)).toEqual([2, 9]);
+  expect(prepared.evidence.map((item) => item.retrievalReason)).toEqual([
+    "rhetorical_core_evidence",
+    "rhetorical_core_evidence"
+  ]);
+});
+
+test("uses corpus-aware BM25 ranking so rare query evidence beats repeated boilerplate", () => {
+  const prepared = prepareMultiPaperAnalysis({
+    createId: createIdFactory(),
+    importedChunksByPaperId: {
+      "paper-a": [
+        ...Array.from({ length: 10 }, (_, index) => chunk(
+          "paper-a",
+          "Paper A",
+          index + 1,
+          "retrieval system boilerplate describes retrieval system setup",
+          ["retrieval"]
+        )),
+        chunk(
+          "paper-a",
+          "Paper A",
+          11,
+          "The calibration residual identifies the rare failure regime for the retrieval system.",
+          ["calibration"]
+        )
+      ]
+    },
+    limits: { maxEvidencePerPaper: 1, maxTotalEvidence: 1 },
+    query: "calibration residual retrieval",
+    selectedPapers: [{ id: "paper-a", title: "Paper A" }]
+  });
+
+  expect(prepared.evidence).toHaveLength(1);
+  expect(prepared.evidence[0].page).toBe(11);
+  expect(prepared.evidence[0].retrievalReason).toBe("query_overlap_within_selected_paper");
 });
 
 test("splits one paper into parallel section-analysis subtasks", () => {
@@ -299,6 +369,7 @@ test("runs section-analysis model calls before the final artifact synthesis", as
   expect(prompts.filter((prompt) => prompt.includes("并行子任务"))).toHaveLength(4);
   expect(prompts.at(-1)).toContain("并行分析子任务记录");
   expect(result.answer).toContain("Method details");
+  expect(result.artifactWorkflow).toBeUndefined();
 });
 
 test("a single selected paper still creates AnalysisRun metadata for modal output", async () => {
@@ -320,4 +391,10 @@ test("a single selected paper still creates AnalysisRun metadata for modal outpu
       status: "completed"
     }
   });
+  expect(result.artifactWorkflow).toEqual(expect.objectContaining({
+    mindmap: expect.objectContaining({
+      verification: expect.objectContaining({ status: "pass" })
+    }),
+    status: "verified"
+  }));
 });

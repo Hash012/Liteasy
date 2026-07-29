@@ -12,11 +12,16 @@ import { createModelSemanticPlanner } from "../../features/agent-runtime/modelSe
 import { createExecutionJournal } from "../../features/generative-ui/executionJournal";
 import { createModelAssistedUIDslGenerator } from "../../features/generative-ui/uiDslGenerator";
 import type { ModelTransport } from "../../features/models/modelHttpClient";
+import type { AcademicProfile } from "../../features/profile/profile.types";
 import type { RetrievalChunk } from "../../features/retrieval/retrieval.types";
 import type { SettingsState } from "../../features/settings/settings.types";
 import type { createSettingsStore } from "../../features/settings/settings.store";
 import type { ActionContext } from "../../features/skills/actionRegistry";
 import type { Paper, WorkspaceSource } from "../../features/workspace/workspace.types";
+import {
+  getAgentRequestThinReadingContext,
+  resolveAgentKnowledgeScope
+} from "./agentRequestScope";
 import { createDesktopAgentService } from "./createDesktopAgentService";
 import { createTauriAgentStateStore } from "./tauriAgentStateStore";
 import { useTauriAgentHostBridge } from "./useTauriAgentHostBridge";
@@ -24,8 +29,11 @@ import { useTauriAgentHostBridge } from "./useTauriAgentHostBridge";
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 export type AssistantAgentControllerInput = {
+  academicProfile?: AcademicProfile;
+  getAllPapers?: () => Paper[];
   getImportedChunksByPaperId?: () => Record<string, RetrievalChunk[]>;
   getRecommendations?: () => AgentRecommendationContextItem[];
+  getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getSelectedPapers?: () => Paper[];
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
@@ -61,9 +69,18 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
 
   if (!apiRef.current) {
     apiRef.current = createDesktopAgentService({
-      getEnvironment() {
+      getEnvironment({ request } = {}) {
         const current = inputRef.current;
+        const knowledgeScope = resolveAgentKnowledgeScope({
+          allPapers: current.getAllPapers?.() ?? current.selectedPapers,
+          fallbackImportedChunksByPaperId:
+            current.getImportedChunksByPaperId?.() ?? current.importedChunksByPaperId,
+          fallbackSelectedPapers: current.getSelectedPapers?.() ?? current.selectedPapers,
+          getImportedChunksForPaperId: current.getImportedChunksForPaperId,
+          request
+        });
         const runtimeContext = buildAgentRuntimeContextView({
+          academicProfile: current.academicProfile,
           importedCount: current.importedSelectedCount,
           organizationName: current.runtimeOrganizationName,
           profilePersonalizationSummary: current.profilePersonalizationSummary,
@@ -76,11 +93,11 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
 
         return {
           knowledge: {
-            importedChunksByPaperId:
-              current.getImportedChunksByPaperId?.() ?? current.importedChunksByPaperId,
+            importedChunksByPaperId: knowledgeScope.importedChunksByPaperId,
             modelTransport: current.modelTransport,
-            selectedPapers: current.getSelectedPapers?.() ?? current.selectedPapers,
-            settings: current.settingsStore.getState()
+            selectedPapers: knowledgeScope.selectedPapers,
+            settings: current.settingsStore.getState(),
+            thinReadingContext: getAgentRequestThinReadingContext(request)
           },
           runtime: {
             applyGeneratedTheme: current.onApplyGeneratedTheme,

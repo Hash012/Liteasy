@@ -31,7 +31,7 @@ const child = spawn(process.execPath, [resolve(scriptDir, "dev-with-cloud.mjs")]
     OPENAI_API_KEY: apiKey,
     OPENAI_BASE_URL: apiEndpoint,
     VITE_LITEASY_OPENAI_MODEL:
-      process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.5"
+      process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini"
   },
   stdio: "inherit"
 });

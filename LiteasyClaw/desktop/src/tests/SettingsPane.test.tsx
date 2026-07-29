@@ -1,9 +1,65 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { SettingsPane } from "../app/layout/SettingsPane";
 
 describe("SettingsPane", () => {
+  test("lets users toggle public workflow audit visibility from Agent settings", async () => {
+    const user = userEvent.setup();
+    const onUpdateSetting = vi.fn();
+
+    render(
+      <SettingsPane
+        documentMetadataSyncResult={null}
+        documentMetadataSyncStatus="idle"
+        onUpdateSetting={onUpdateSetting}
+        settings={{
+          "assistant.public_audit.enabled": false
+        }}
+      />
+    );
+
+    const pane = screen.getByLabelText("左边栏设置");
+    await user.click(within(pane).getByRole("button", { name: "展开 Agent 设置" }));
+    const toggle = within(pane).getByRole("checkbox", { name: "显示公开审计过程" });
+
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+
+    expect(onUpdateSetting).toHaveBeenCalledWith({
+      intent: "update_setting",
+      target: "assistant.public_audit.enabled",
+      value: true
+    });
+  });
+
+  test("stores the OpenAlex key as a password setting for external thin-reading research", async () => {
+    const user = userEvent.setup();
+    const onUpdateSetting = vi.fn();
+
+    render(
+      <SettingsPane
+        documentMetadataSyncResult={null}
+        documentMetadataSyncStatus="idle"
+        onUpdateSetting={onUpdateSetting}
+        settings={{ "thin_reading.openalex_api_key": "" }}
+      />
+    );
+
+    const pane = screen.getByLabelText("左边栏设置");
+    await user.click(within(pane).getByRole("button", { name: "展开 Agent 设置" }));
+    const input = within(pane).getByLabelText("OpenAlex API 密钥");
+
+    expect(input).toHaveAttribute("type", "password");
+    fireEvent.change(input, { target: { value: "test-openalex-key" } });
+    expect(onUpdateSetting).toHaveBeenLastCalledWith({
+      intent: "update_setting",
+      target: "thin_reading.openalex_api_key",
+      value: "test-openalex-key"
+    });
+  });
+
   test("renders a collapsible, user-facing metadata sync section", async () => {
     const user = userEvent.setup();
     const onRetryDocumentMetadataSync = vi.fn();

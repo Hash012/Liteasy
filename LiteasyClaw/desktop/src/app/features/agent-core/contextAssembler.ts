@@ -1,4 +1,5 @@
 import type { AgentRuntimeContextView } from "../agent-runtime/agentRuntime.types";
+import { buildAcademicProfileAssistantSummary } from "../profile/profile.types";
 import type { AgentCoreCatalogEntry, AgentCoreConfig, AgentMemoryEntry } from "./agentCoreConfig";
 import { buildAgentMd } from "./agentMd";
 
@@ -11,13 +12,19 @@ export type AgentCorePromptContext = {
 };
 
 function summarizeEntries(label: string, entries: AgentCoreCatalogEntry[]) {
+  const executableActionAliases: Record<string, string[]> = {
+    "artifact-generate": ["artifact.generate"],
+    "organization-library-open": ["organization.open_shared_library"],
+    "settings-adjust": ["settings.update"]
+  };
   const body = entries
     .map((entry) => {
       const status = entry.status === "active" ? "active" : entry.status === "review" ? "review" : "planned";
-      return `- ${entry.id} (${status}, risk=${entry.risk}): ${entry.description}`;
+      const actionAliases = executableActionAliases[entry.id];
+      const actionSummary = actionAliases?.length ? ` actions=${actionAliases.join(",")}` : "";
+      return `- ${entry.id} (${status}, risk=${entry.risk}${actionSummary}): ${entry.description}`;
     })
     .join("\n");
-
   return [`## ${label}`, body || "- 暂无条目。"].join("\n");
 }
 
@@ -25,12 +32,10 @@ function summarizeMemories(memories: AgentMemoryEntry[]) {
   if (memories.length === 0) {
     return "## Memory\n- 当前没有可注入的长期记忆。";
   }
-
   return [
     "## Memory",
     ...memories.map(
-      (memory) =>
-        `- [${memory.namespace}/${memory.type}/重要性:${memory.importance}] ${memory.summary}`
+      (memory) => `- [${memory.namespace}/${memory.type}/重要性 ${memory.importance}] ${memory.summary}`
     )
   ].join("\n");
 }
@@ -40,12 +45,17 @@ function summarizeRuntimeContext(contextView?: AgentRuntimeContextView) {
     return "## Runtime Context\n- 当前没有运行时上下文。";
   }
 
+  const profileSummary = contextView.profile.personalizationSummary ??
+    (contextView.profile.academic
+      ? buildAcademicProfileAssistantSummary(contextView.profile.academic)
+      : undefined);
+
   return [
     "## Runtime Context",
     `- 选中文献：${contextView.selection.selectedCount} 篇，已导入 ${contextView.selection.importedCount} 篇。`,
     `- 选区锁定：${contextView.selection.locked ? "是" : "否"}。`,
-    `- 云账号：${contextView.cloud.connected ? "已连接" : "未连接"}。`,
-    `- 学术档案：${contextView.profile.personalizationSummary ?? "待补充学科或研究阶段"}。`,
+    `- 云账户：${contextView.cloud.connected ? "已连接" : "未连接"}。`,
+    `- 学术档案：${profileSummary ?? "待补充学科或研究阶段"}。`,
     ...(contextView.recommendations.totalCount > 0
       ? [
           `- 当前推荐：${contextView.recommendations.totalCount} 条，其中优先参考：`,
@@ -68,12 +78,6 @@ export function buildAgentCorePromptContext(input: {
   runtimeContext?: AgentRuntimeContextView;
 }): AgentCorePromptContext {
   const { config, memories, runtimeContext } = input;
-
-  /*
-   * 这里把 Agent 的上下文拆成几个明确分区，而不是拼成一大段散文。
-   * 原因和《Agent 开发指南》中的工具描述原则一致：LLM 更容易遵守边界清楚、
-   * 优先级明确的信息结构；后续做压缩时也能按分区裁剪。
-   */
   return {
     agentMd: buildAgentMd(config),
     budgetSummary: [
@@ -101,4 +105,3 @@ export function formatAgentCorePromptContext(context: AgentCorePromptContext) {
     context.budgetSummary
   ].join("\n\n");
 }
-

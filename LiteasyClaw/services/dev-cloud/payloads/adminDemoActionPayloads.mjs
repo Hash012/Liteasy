@@ -10,11 +10,15 @@ import {
 import {
   resetRecommendationCacheData
 } from "../db/recommendationCacheRepository.mjs";
+import { resetRecommendationCandidateData } from "../db/recommendationCandidateRepository.mjs";
+import { resetRecommendationFeedbackData } from "../db/recommendationFeedbackRepository.mjs";
 import { resetSessions, reseedSessions } from "../db/sessionRepository.mjs";
 
 export function buildAdminDemoResetPayload() {
   resetCollectionData();
   resetRecommendationCacheData();
+  resetRecommendationCandidateData();
+  resetRecommendationFeedbackData();
   resetOrganizationData();
   resetSessions();
   resetAdminActivities();

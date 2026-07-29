@@ -56,6 +56,7 @@ const artifactTypeLabels: Record<ArtifactType, string> = {
   mindmap: "思维导图",
   ppt: "演示文稿",
   skill_doc: "技能文档",
+  thin_reading: "薄读",
   tree: "文献树"
 };
 
@@ -69,6 +70,15 @@ const artifactStageLabels: Record<ArtifactTask["stage"], string> = {
   retrieving_evidence: "检索论文证据",
   saving_result: "持久保存",
   structuring_artifact: "构建产物结构",
+  thin_reading_generating_branch: "生成薄读下一层",
+  thin_reading_generating_root: "生成薄读总述",
+  thin_reading_parsing_document: "解析论文文本",
+  thin_reading_planning: "规划薄读路径",
+  thin_reading_repairing_trace: "修复句级证据映射",
+  thin_reading_retrieving_evidence: "检索薄读证据",
+  thin_reading_retrieving_external_knowledge: "检索外部文献",
+  thin_reading_saving: "保存薄读节点",
+  thin_reading_validating: "核验薄读证据",
   waiting_for_import: "等待 PDF 解析"
 };
 

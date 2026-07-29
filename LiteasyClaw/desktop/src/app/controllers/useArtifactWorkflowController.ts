@@ -14,12 +14,18 @@ import type { Paper, SelectedDocumentSet } from "../features/workspace/workspace
 import type { ImportQueueStatus } from "../features/workspace/useWorkspaceActions";
 import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { ArtifactResultClient } from "../features/artifacts/artifactResultClient";
+import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/thin-reading/thinReading.types";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { DuplicateArtifactGenerationConfirmation } from "../features/artifacts/useArtifactActions";
 import {
   createArtifactLocalRepository,
   type ArtifactLocalRepository
 } from "../features/artifacts/artifactLocalRepository";
+import {
+  persistInterruptedArtifactTasks,
+  takeInterruptedArtifactTasks,
+  validateThinReadingBranchRecoverySnapshot
+} from "../features/artifacts/artifactTaskRecovery";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
@@ -33,6 +39,9 @@ type UseArtifactWorkflowControllerInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getIntuechoEndpoint?: () => string;
+  getAssistantLanguage?: () => string;
+  getActiveReaderPaper?: () => Paper | null;
   getModelDiagnosticContext?: () => {
     endpoint?: string;
     model?: string;
@@ -41,7 +50,11 @@ type UseArtifactWorkflowControllerInput = {
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
   onAnalysisHint: (message: string) => void;
-  queueImportForPapers: (papers: Paper[], onComplete?: () => void) => ImportQueueStatus;
+  queueImportForPapers: (
+    papers: Paper[],
+    onComplete?: () => void,
+    onFailure?: (input: { error: Error; paper: Paper }) => void
+  ) => ImportQueueStatus;
   runAgentAnalysis: (
     artifactType: ArtifactType,
     onProgress: (input: {
@@ -66,14 +79,22 @@ type ArtifactWorkflowActions = {
   cancelArtifactTask: (taskId: string) => Promise<string>;
   closeArtifactTab: (artifactId: string) => void;
   deleteArtifact: (artifactId: string) => Promise<string>;
+  generateThinReadingBranch: (input: {
+    artifactId: string;
+    document: ThinReadingDocument;
+    source: ThinReadingBranchSource;
+  }) => Promise<void>;
   handleAssistantArtifact: (artifactType: ArtifactType) => string;
   openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
   openArtifact: (artifactId: string) => string;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
+  retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   saveSkillDocument: (artifactId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
   updateSkillDocument: (artifactId: string, markdown: string) => void;
+  updateThinReadingDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
+  syncThinReadingAnnotations: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
 };
 
 export function useArtifactWorkflowController({
@@ -84,6 +105,9 @@ export function useArtifactWorkflowController({
   confirmDuplicateGeneration,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getIntuechoEndpoint,
+  getAssistantLanguage,
+  getActiveReaderPaper,
   getModelDiagnosticContext,
   getSelectedDocumentSet,
   getSelectedPapers,
@@ -124,19 +148,27 @@ export function useArtifactWorkflowController({
     persistCatalog(catalog);
   }
 
+  function handleArtifactTasksChanged(tasks: ArtifactTask[]) {
+    persistInterruptedArtifactTasks(tasks);
+    setArtifactTasks(tasks);
+  }
+
   const artifactActions = useArtifactActions({
     artifactStore,
     artifactResultClient,
     confirmDuplicateGeneration,
     cancelAgentRun,
     getImportedChunksByPaperId,
+    getIntuechoEndpoint,
+    getAssistantLanguage,
+    getActiveReaderPaper,
     getModelDiagnosticContext,
     getSelectedDocumentSet,
     getSelectedPapers,
     onAnalysisHint,
     onArtifactCatalogChanged: handleArtifactCatalogChanged,
     onArtifactTabsChanged: setArtifactTabs,
-    onArtifactTasksChanged: setArtifactTasks,
+    onArtifactTasksChanged: handleArtifactTasksChanged,
     queueImportForPapers,
     runAgentAnalysis
   });
@@ -145,6 +177,7 @@ export function useArtifactWorkflowController({
     let active = true;
 
     async function restoreArtifacts() {
+      let hydratedThisRun = false;
       if (!localHydratedRef.current) {
         try {
           const cachedArtifacts = await localRepositoryRef.current?.list();
@@ -159,12 +192,9 @@ export function useArtifactWorkflowController({
             );
           }
         }
-        if (!active) {
-          return;
-        }
         localHydratedRef.current = true;
         persistenceReadyRef.current = true;
-        artifactActions.syncArtifacts();
+        hydratedThisRun = true;
       }
 
       try {
@@ -180,6 +210,40 @@ export function useArtifactWorkflowController({
           );
         }
       }
+
+      if (!active) {
+        return;
+      }
+      const interruptedTasks = takeInterruptedArtifactTasks();
+      let recoverableBranchCount = 0;
+      interruptedTasks.forEach((task) => {
+        const tab = task.artifactId
+          ? artifactStore.getCatalog().find((candidate) => candidate.artifactId === task.artifactId)
+          : undefined;
+        const document = tab?.type === "thin_reading" ? tab.thinReadingDocument : undefined;
+        const validation = task.thinReadingBranchRecovery && document
+          ? validateThinReadingBranchRecoverySnapshot(task.thinReadingBranchRecovery, document)
+          : undefined;
+        if (validation?.valid) {
+          recoverableBranchCount += 1;
+          artifactStore.restoreInterruptedTask(task);
+          return;
+        }
+        artifactStore.restoreInterruptedTask({
+          ...task,
+          thinReadingBranchRecovery: undefined
+        });
+      });
+      if (interruptedTasks.length > 0) {
+        onAnalysisHint(
+          recoverableBranchCount > 0
+            ? "检测到应用重启前未完成的生成任务，已标记为中断；可核验的薄读分支可重新提交同一输入。"
+            : "检测到应用重启前未完成的生成任务，已标记为中断；请重新发起生成。"
+        );
+      }
+      if (hydratedThisRun || interruptedTasks.length > 0) {
+        artifactActions.syncArtifacts();
+      }
     }
 
     void restoreArtifacts();
@@ -193,14 +257,18 @@ export function useArtifactWorkflowController({
       cancelArtifactTask: artifactActions.cancelArtifactTask,
       closeArtifactTab: artifactActions.closeArtifactTab,
       deleteArtifact: artifactActions.deleteArtifact,
+      generateThinReadingBranch: artifactActions.generateThinReadingBranch,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
       openArtifact: artifactActions.openArtifact,
       openSkillDocument: artifactActions.openSkillDocument,
       regenerateArtifact: artifactActions.regenerateArtifact,
+      retryInterruptedThinReadingBranch: artifactActions.retryInterruptedThinReadingBranch,
       saveSkillDocument: artifactActions.saveSkillDocument,
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,
-      updateSkillDocument: artifactActions.updateSkillDocument
+      updateSkillDocument: artifactActions.updateSkillDocument,
+      updateThinReadingDocument: artifactActions.updateThinReadingDocument,
+      syncThinReadingAnnotations: artifactActions.syncThinReadingAnnotations
     },
     model: {
       artifactCatalog,

@@ -11,11 +11,13 @@ import type { Paper, WorkspaceSource } from "../features/workspace/workspace.typ
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { FrontendAgentClient } from "../features/agent-api/frontendAgentClient";
 import type { ExecutionJournal } from "../features/generative-ui/executionJournal";
+import type { AcademicProfile } from "../features/profile/profile.types";
 
 type SettingsStoreLike = ReturnType<typeof createSettingsStore>;
 
 type AssistantSidebarProps = {
   agentClient: FrontendAgentClient;
+  academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
   executionJournal?: ExecutionJournal;
   /** @deprecated Agent context is supplied by the AppShell controller. */
@@ -51,6 +53,7 @@ type AssistantSidebarProps = {
 
 export function AssistantSidebar({
   agentClient,
+  academicProfile,
   artifactTasks = [],
   executionJournal,
   importedChunksByPaperId,
@@ -91,6 +94,7 @@ export function AssistantSidebar({
       <div className="pane-body">
         <AssistantPane
           agentClient={agentClient}
+          academicProfile={academicProfile}
           artifactTasks={artifactTasks}
           executionJournal={executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}

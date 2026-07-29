@@ -47,6 +47,23 @@ describe("IntentInputAdapter", () => {
     });
   });
 
+  test("normalizes slash-prefixed text into command runtime input", () => {
+    expect(
+      adaptTextIntent({
+        activeMode: "qa",
+        parseSlashCommand: true,
+        value: "  / 打开组织共享文献库  "
+      })
+    ).toEqual({
+      kind: "message",
+      runtimeInput: {
+        message: "打开组织共享文献库",
+        mode: "command"
+      },
+      userMessageContent: "/打开组织共享文献库"
+    });
+  });
+
   test("unifies voice transcript and automation events with text input", () => {
     expect(
       adaptIntentInput({

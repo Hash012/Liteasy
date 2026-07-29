@@ -18,6 +18,9 @@ function createDesktopMockClient(
   generator: (input: GenerateAnswerInput) => Promise<string>
 ) {
   return async (input: GenerateAnswerInput): Promise<ModelGenerationResult> => {
+    if (input.requireLive) {
+      throw new Error("该任务必须使用真实模型链路；当前 endpoint 是 mock，本次生成已停止。");
+    }
     const answer = await generator(input);
 
     return {
