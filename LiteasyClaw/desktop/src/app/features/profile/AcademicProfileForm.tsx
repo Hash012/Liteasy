@@ -47,6 +47,9 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
 
   function toggleDiscipline(discipline: DisciplineCatalogItem) {
     const selected = draftProfile.disciplines.some((item) => item.code === discipline.code);
+    if (!selected && draftProfile.disciplines.length >= 12) {
+      return;
+    }
     updateDraftProfile(
       "disciplines",
       selected
@@ -66,8 +69,31 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
 
   return (
     <div className="personal-profile-form" aria-label="学术档案编辑表单">
+      <label className="personal-profile-field">
+        性别
+        <select
+          className="personal-profile-control"
+          onChange={(event) => updateDraftProfile("gender", event.target.value)}
+          value={draftProfile.gender}
+        >
+          <option value="未设置">未设置</option>
+          <option value="女">女</option>
+          <option value="男">男</option>
+          <option value="非二元/不便透露">非二元/不便透露</option>
+        </select>
+      </label>
+      <label className="personal-profile-field">
+        年龄
+        <input
+          className="personal-profile-control"
+          inputMode="numeric"
+          onChange={(event) => updateDraftProfile("age", event.target.value)}
+          placeholder="未设置"
+          value={draftProfile.age === "未设置" ? "" : draftProfile.age}
+        />
+      </label>
       <div className="personal-profile-fieldset">
-        <div className="personal-profile-field-label">研究学科</div>
+        <div className="personal-profile-field-label">研究学科（最多 12 个）</div>
         <div className="personal-profile-inline-controls">
           <label className="personal-profile-field">
             学科门类
@@ -97,7 +123,12 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
             const checked = draftProfile.disciplines.some((item) => item.code === discipline.code);
             return (
               <label className="discipline-option" key={discipline.code}>
-                <input checked={checked} onChange={() => toggleDiscipline(discipline)} type="checkbox" />
+                <input
+                  checked={checked}
+                  disabled={!checked && draftProfile.disciplines.length >= 12}
+                  onChange={() => toggleDiscipline(discipline)}
+                  type="checkbox"
+                />
                 <span>{disciplineText(discipline)}</span>
               </label>
             );
@@ -110,6 +141,7 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
                 {disciplineText(discipline)} 的补充说明（可选）
                 <input
                   className="personal-profile-control"
+                  maxLength={240}
                   onChange={(event) => updateDescription(discipline.code, event.target.value)}
                   placeholder="例如：自然语言处理与信息检索"
                   value={discipline.description}
@@ -133,6 +165,44 @@ export function AcademicProfileForm({ academicProfile, onSave }: AcademicProfile
           <option value="教师/研究员">教师/研究员</option>
           <option value="产业研发">产业研发</option>
         </select>
+      </label>
+      <label className="personal-profile-field">
+        研究主题
+        <textarea
+          className="personal-profile-control personal-profile-textarea"
+          onChange={(event) => updateDraftProfile("researchTopics", event.target.value)}
+          placeholder="例如：神经信息检索、向量数据库"
+          rows={2}
+          value={draftProfile.researchTopics}
+        />
+      </label>
+      <label className="personal-profile-field">
+        常用方法
+        <textarea
+          className="personal-profile-control personal-profile-textarea"
+          onChange={(event) => updateDraftProfile("researchMethods", event.target.value)}
+          placeholder="例如：对比学习、混合检索"
+          rows={2}
+          value={draftProfile.researchMethods}
+        />
+      </label>
+      <label className="personal-profile-field">
+        关注数据集
+        <input
+          className="personal-profile-control"
+          onChange={(event) => updateDraftProfile("researchDatasets", event.target.value)}
+          placeholder="例如：MS MARCO、BEIR"
+          value={draftProfile.researchDatasets}
+        />
+      </label>
+      <label className="personal-profile-field">
+        阅读语言
+        <input
+          className="personal-profile-control"
+          onChange={(event) => updateDraftProfile("preferredLanguages", event.target.value)}
+          placeholder="例如：中文、English"
+          value={draftProfile.preferredLanguages}
+        />
       </label>
       <button className="left-rail-button" onClick={saveAcademicProfile} type="button">
         保存学术档案

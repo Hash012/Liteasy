@@ -5,47 +5,41 @@ import {
   toRecommendationResearchProfile
 } from "../app/features/profile/profile.types";
 
-test("saves only the academic archive fields and clears retired research-detail fields", () => {
+test("normalizes and saves editable academic profile drafts", () => {
   const onSave = vi.fn();
   const { result } = renderHook(() =>
-    useAcademicProfileDraft({ academicProfile: defaultAcademicProfile, onSave })
+    useAcademicProfileDraft({
+      academicProfile: defaultAcademicProfile,
+      onSave
+    })
   );
 
+  act(() => result.current.updateDraftProfile("gender", "女"));
+  act(() => result.current.updateDraftProfile("age", " 28 "));
   act(() => result.current.updateDraftProfile("stage", "博士研究生"));
-  act(() => result.current.updateDraftProfile("disciplines", [{
-    categoryCode: "08",
-    categoryName: "工学",
-    code: "0812",
-    description: " 自然语言处理与信息检索 ",
-    name: "计算机科学与技术"
-  }]));
-  act(() => result.current.updateDraftProfile("researchTopics", " 神经检索，向量数据库\n神经检索"));
+  act(() => result.current.updateDraftProfile("researchTopics", " 神经检索，向量数据库\n神经检索 "));
   act(() => result.current.updateDraftProfile("researchMethods", "混合检索; 对比学习"));
   act(() => result.current.updateDraftProfile("researchDatasets", "MS MARCO、BEIR"));
   act(() => result.current.updateDraftProfile("preferredLanguages", "中文, English"));
   act(() => result.current.saveAcademicProfile());
 
   expect(onSave).toHaveBeenCalledWith({
-    ...defaultAcademicProfile,
-    disciplines: [{
-      categoryCode: "08",
-      categoryName: "工学",
-      code: "0812",
-      description: "自然语言处理与信息检索",
-      name: "计算机科学与技术"
-    }],
-    preferredLanguages: "",
-    researchDatasets: "",
-    researchMethods: "",
-    researchTopics: "",
+    age: "28",
+    disciplines: [],
+    gender: "女",
+    preferredLanguages: "中文、English",
+    researchDatasets: "MS MARCO、BEIR",
+    researchMethods: "混合检索、对比学习",
+    researchTopics: "神经检索、向量数据库",
     stage: "博士研究生"
   });
 });
 
-test("converts academic research interests to bounded recommendation fields", () => {
+test("converts research interests to bounded recommendation fields without demographics", () => {
   expect(toRecommendationResearchProfile({
     ...defaultAcademicProfile,
-    disciplines: [{ categoryCode: "08", categoryName: "工学", code: "0812", description: "", name: "信息检索" }],
+    age: "28",
+    gender: "女",
     preferredLanguages: "中文, English, 中文",
     researchDatasets: "BEIR",
     researchMethods: "hybrid retrieval",
@@ -54,29 +48,35 @@ test("converts academic research interests to bounded recommendation fields", ()
     datasets: ["BEIR"],
     languages: ["中文", "English"],
     methods: ["hybrid retrieval"],
-    topics: ["neural retrieval", "信息检索"]
+    topics: ["neural retrieval"]
   });
 });
 
 test("syncs draft when the saved academic profile changes", () => {
   const onSave = vi.fn();
-  const profile = {
-    ...defaultAcademicProfile,
-    disciplines: [{
-      categoryCode: "04",
-      categoryName: "教育学",
-      code: "0401",
-      description: "学习分析",
-      name: "教育学"
-    }],
-    stage: "博士研究生"
-  };
   const { result, rerender } = renderHook(
-    ({ academicProfile }) => useAcademicProfileDraft({ academicProfile, onSave }),
-    { initialProps: { academicProfile: profile } }
+    ({ academicProfile }) =>
+      useAcademicProfileDraft({
+        academicProfile,
+        onSave
+      }),
+    { initialProps: { academicProfile: {
+      ...defaultAcademicProfile,
+      age: "28",
+      gender: "女",
+      stage: "博士研究生"
+    } } }
   );
 
-  expect(result.current.draftProfile).toEqual(profile);
+  expect(result.current.draftProfile).toEqual({
+    ...defaultAcademicProfile,
+    age: "28",
+    gender: "女",
+    stage: "博士研究生"
+  });
+
   rerender({ academicProfile: defaultAcademicProfile });
+
   expect(result.current.draftProfile).toEqual(defaultAcademicProfile);
+  expect(result.current.visibleAge).toBe("");
 });

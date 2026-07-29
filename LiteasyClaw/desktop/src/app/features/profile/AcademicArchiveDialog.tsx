@@ -32,8 +32,8 @@ export function AcademicArchiveDialog({
 
         <div className="academic-archive-grid">
           <div className="academic-archive-card">档案所有者：{displayName}</div>
-            <div className="academic-archive-card">研究阶段：{formatAcademicProfile(academicProfile)}</div>
-            <div className="academic-archive-card">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
+          <div className="academic-archive-card">画像摘要：{formatAcademicProfile(academicProfile)}</div>
+          <div className="academic-archive-card">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
         </div>
         <button className="left-rail-button" onClick={onExport} type="button">导出学术档案</button>
       </div>

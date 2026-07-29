@@ -3656,7 +3656,7 @@ body {
 
 .personal-profile-fieldset {
   border: 1px solid #d8e4ee;
-  border-radius: 12px;
+  border-radius: 6px;
   padding: 12px;
 }
 
@@ -3683,7 +3683,7 @@ body {
 .discipline-option {
   align-items: flex-start;
   border: 1px solid #dbe6ef;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #40576d;
   cursor: pointer;
   display: flex;
@@ -3691,6 +3691,11 @@ body {
   gap: 8px;
   line-height: 1.45;
   padding: 7px 8px;
+}
+
+.discipline-option:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .discipline-option input {
@@ -3707,10 +3712,6 @@ body {
   gap: 6px;
 }
 
-.personal-profile-field-wide {
-  grid-column: 1 / -1;
-}
-
 .personal-profile-control {
   border: 1px solid #c7d8e7;
   border-radius: 10px;
@@ -3721,7 +3722,7 @@ body {
 }
 
 .personal-profile-textarea {
-  min-height: 64px;
+  min-height: 52px;
   resize: vertical;
 }
 
@@ -3783,61 +3784,6 @@ body {
   background: linear-gradient(180deg, rgba(255, 253, 253, 0.98) 0%, rgba(249, 238, 238, 0.98) 100%);
   box-shadow: 0 24px 54px rgba(126, 70, 70, 0.22);
   padding: 22px;
-}
-
-.profile-consent-backdrop {
-  background: rgba(44, 67, 88, 0.32);
-  backdrop-filter: blur(8px);
-}
-
-.profile-consent-dialog {
-  width: min(680px, 92vw);
-  border: 1px solid #c7d8e7;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(253, 254, 255, 0.98) 0%, rgba(236, 245, 251, 0.98) 100%);
-  box-shadow: 0 24px 54px rgba(70, 98, 126, 0.24);
-  padding: 22px;
-}
-
-.profile-consent-copy {
-  color: #5b7186;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.profile-consent-scopes {
-  display: grid;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.profile-consent-scope {
-  align-items: flex-start;
-  border: 1px solid #d1dfeb;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
-  color: #40576d;
-  cursor: pointer;
-  display: flex;
-  font-size: 13px;
-  gap: 10px;
-  padding: 12px;
-}
-
-.profile-consent-scope input {
-  accent-color: #3c769d;
-  margin-top: 3px;
-}
-
-.profile-consent-scope span {
-  display: grid;
-  gap: 4px;
-}
-
-.profile-consent-scope small {
-  color: #6c8195;
-  line-height: 1.45;
 }
 
 .clear-profile-actions {

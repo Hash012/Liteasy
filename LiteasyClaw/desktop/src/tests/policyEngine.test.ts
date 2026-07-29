@@ -24,7 +24,10 @@ const readyContextView: AgentRuntimeContextView = {
   cloud: {
     connected: true
   },
-  profile: {},
+  profile: {
+    enabled: false,
+    requiresConfirmation: true
+  },
   selection: {
     importedCount: 2,
     issues: [],

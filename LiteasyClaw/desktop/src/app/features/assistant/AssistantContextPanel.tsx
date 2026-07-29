@@ -26,7 +26,10 @@ function getCloudLabel(context: AgentRuntimeContextView) {
 }
 
 function getProfileLabel(context: AgentRuntimeContextView) {
-  return context.profile.personalizationSummary ? "已应用学术档案" : "待补充学科或研究阶段";
+  if (!context.profile.enabled) {
+    return "画像关闭";
+  }
+  return context.profile.personalizationSummary ? "画像开启 · 已应用学术档案" : "画像开启";
 }
 
 function getIssueLabel(issue: RuntimeContextIssue) {

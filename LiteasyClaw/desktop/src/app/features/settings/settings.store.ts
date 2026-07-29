@@ -5,6 +5,7 @@ export function createSettingsStore() {
     "network.recommendation.enabled": true,
     "network.recommendation.sort_mode": "relevance",
     "assistant.public_audit.enabled": false,
+    "profile.enabled": false,
     "assistant.default_output_mode": "mindmap",
     "assistant.language": "zh-CN",
     "import.ocr_language": "eng",

@@ -54,11 +54,13 @@ import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
 import { createExternalKnowledgeRunRepository } from "./db/externalKnowledgeRunRepository.mjs";
 import {
+  clearRecommendationCandidatesForUser,
   listRecommendationCandidateSources,
   updateRecommendationCandidateStatus,
   upsertRecommendationCandidates
 } from "./db/recommendationCandidateRepository.mjs";
 import { clearRecommendationCacheForSession } from "./db/recommendationCacheRepository.mjs";
+import { clearRecommendationFeedbackForUser } from "./db/recommendationFeedbackRepository.mjs";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 import {
   createPersonalizationRepository,
@@ -98,12 +100,12 @@ const availableEndpoints = [
   "POST /v1/agent-artifacts",
   "DELETE /v1/agent-artifacts/:artifactId",
   "POST /v1/recommendations",
+  "POST /v1/recommendations/feedback",
+  "POST /v1/research/external-knowledge",
   "POST /v1/profile/get",
   "POST /v1/profile/save",
   "POST /v1/profile/clear",
   "POST /v1/personalization/signal",
-  "POST /v1/recommendations/feedback",
-  "POST /v1/research/external-knowledge",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
   "POST /v1/recommendation-cache/clear",
@@ -314,6 +316,49 @@ function authorizeAccountScopedBody(request, response, body, authService) {
   }
 }
 
+function personalizedRecommendationBody(body, preferences) {
+  const currentProfile = body.researchProfile && typeof body.researchProfile === "object"
+    ? body.researchProfile
+    : {};
+  const disciplineTopics = Array.isArray(preferences.profile?.disciplines)
+    ? preferences.profile.disciplines.flatMap((discipline) => [
+        discipline?.name,
+        discipline?.description
+      ])
+    : [];
+  const behaviorTopics = Array.isArray(preferences.terms)
+    ? preferences.terms
+        .filter((term) => typeof term?.term === "string" && term.weight > 0)
+        .map((term) => term.term)
+    : [];
+  const topics = [...new Set([
+    ...(Array.isArray(currentProfile.topics) ? currentProfile.topics : []),
+    ...disciplineTopics,
+    ...behaviorTopics
+  ].filter((topic) => typeof topic === "string" && topic.trim()))].slice(0, 12);
+
+  return {
+    ...body,
+    ...(topics.length > 0
+      ? { researchProfile: { ...currentProfile, topics } }
+      : {})
+  };
+}
+
+function withoutSuppressedRecommendations(payload, preferences) {
+  const suppressed = new Set(
+    Array.isArray(preferences.suppressedRecommendationIds)
+      ? preferences.suppressedRecommendationIds
+      : []
+  );
+  return {
+    ...payload,
+    recommendations: Array.isArray(payload.recommendations)
+      ? payload.recommendations.filter((recommendation) => !suppressed.has(recommendation.id))
+      : []
+  };
+}
+
 export function createDevCloudRequestHandler(customConfig = {}) {
   const config = {
     ...defaultConfig,
@@ -332,10 +377,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   });
   const externalKnowledgeRunRepository =
     customConfig.externalKnowledgeRunRepository ?? createExternalKnowledgeRunRepository(database);
-  const accountRepository = createAccountRepository(database);
-  const sessionRepository = createAuthSessionRepository(database);
   const personalizationRepository =
     customConfig.personalizationRepository ?? createPersonalizationRepository(database);
+  const accountRepository = createAccountRepository(database);
+  const sessionRepository = createAuthSessionRepository(database);
   const authService = customConfig.authService ?? createAuthService({
     accountRepository,
     sessionDurationMs: config.accountSessionDurationMs,
@@ -645,7 +690,23 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (!authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
-      const profileResult = normalizeRecommendationResearchProfile(body.researchProfile);
+      const personalizationPreferences =
+        personalizationRepository.getRecommendationPreferences(body.sessionId);
+      const requestedProfileResult = normalizeRecommendationResearchProfile(body.researchProfile);
+      if (!requestedProfileResult.ok) {
+        writeJson(request, response, 400, {
+          error: requestedProfileResult.error,
+          message: "研究画像格式无效或超过允许范围。"
+        });
+        return;
+      }
+      const personalizedBody = personalizedRecommendationBody(
+        requestedProfileResult.value
+          ? { ...body, researchProfile: requestedProfileResult.value }
+          : body,
+        personalizationPreferences
+      );
+      const profileResult = normalizeRecommendationResearchProfile(personalizedBody.researchProfile);
       if (!profileResult.ok) {
         writeJson(request, response, 400, {
           error: profileResult.error,
@@ -654,10 +715,18 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
       const recommendationBody = profileResult.value
-        ? { ...body, researchProfile: profileResult.value }
-        : body;
+        ? { ...personalizedBody, researchProfile: profileResult.value }
+        : personalizedBody;
       if (customConfig.recommendationMode === "demo") {
-        writeJson(request, response, 200, buildRecommendationPayload(recommendationBody));
+        writeJson(
+          request,
+          response,
+          200,
+          withoutSuppressedRecommendations(
+            buildRecommendationPayload(recommendationBody),
+            personalizationPreferences
+          )
+        );
         return;
       }
       const selectedDocuments = Array.isArray(body.selectedDocuments)
@@ -755,12 +824,12 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           body.sessionId,
           externalReranker.recommendations.filter((candidate) => candidate.sourceKind === "live")
         );
-        writeJson(request, response, 200, {
+        writeJson(request, response, 200, withoutSuppressedRecommendations({
           ...payload,
           externalReranker: externalReranker.audit,
           recommendations: externalReranker.recommendations,
           semanticRetrieval: semanticRetrieval.audit
-        });
+        }, personalizationPreferences));
       } catch (error) {
         if (error instanceof ExternalKnowledgeError) {
           writeJson(request, response, error.statusCode, { error: error.code, message: error.message });
@@ -774,21 +843,6 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
-/* Historical merge alternatives retained below for traceability while the combined handlers follow.
-      writeJson(
-        request,
-        response,
-        200,
-        buildRecommendationPayload(
-          body,
-          personalizationRepository.getRecommendationPreferences(body.sessionId)
-        )
-      );
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/v1/profile/get") {
---- alternative branch ---
     if (method === "POST" && url.pathname === "/v1/recommendations/feedback") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
@@ -822,141 +876,6 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         });
         return;
       }
---- end merge alternatives ---
-      const body = await readJsonOrWriteError(request, response);
-      if (body === null) {
-        return;
-      }
---- original profile branch ---
-      if (!authorizeAccountScopedBody(request, response, body, authService)) {
-        return;
-      }
-
-      writeJson(request, response, 200, personalizationRepository.get(body.sessionId));
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/v1/profile/save") {
-      const body = await readJsonOrWriteError(request, response);
-      if (body === null) {
-        return;
-      }
-      if (!authorizeAccountScopedBody(request, response, body, authService)) {
-        return;
-      }
-
-      try {
-        writeJson(request, response, 200, personalizationRepository.save(body.sessionId, body.profile));
-      } catch (error) {
-        if (error instanceof PersonalizationValidationError) {
-          writeJson(request, response, 400, { error: "invalid_academic_profile", message: error.message });
-          return;
-        }
-        throw error;
-      }
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/v1/profile/clear") {
-      const body = await readJsonOrWriteError(request, response);
-      if (body === null) {
-        return;
-      }
-      if (!authorizeAccountScopedBody(request, response, body, authService)) {
-        return;
-      }
-
-      writeJson(request, response, 200, personalizationRepository.clear(body.sessionId));
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/v1/personalization/signal") {
-      const body = await readJsonOrWriteError(request, response);
-      if (body === null) {
-        return;
-      }
-      if (!authorizeAccountScopedBody(request, response, body, authService)) {
-        return;
-      }
-
-      try {
-        writeJson(request, response, 200, personalizationRepository.recordSignal(body.sessionId, body.signal));
-      } catch (error) {
-        if (error instanceof PersonalizationValidationError) {
-          writeJson(request, response, 400, { error: "invalid_personalization_signal", message: error.message });
-          return;
-        }
-        throw error;
---- external knowledge branch ---
-      let retrievalRun;
-      try {
-        if (typeof body.artifactId === "string") {
-          const resumed = externalKnowledgeRunRepository.begin(body);
-          if (resumed.payload) {
-            writeJson(request, response, 200, { ...resumed.payload, retrieval: resumed.run });
-            return;
-          }
-          retrievalRun = resumed.run;
-        }
-        const payload = await searchExternalKnowledge(body, {
-          allowCrossrefOnlyFallback: !openAlexApiKey && crossrefEnabled,
-          crossrefEnabled,
-          crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
-          crossrefTransport: customConfig.crossrefTransport,
-          openAlexApiKey,
-          openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
-          openAlexTransport: customConfig.openAlexTransport
-        });
-        const completedRun = typeof body.artifactId === "string"
-          ? externalKnowledgeRunRepository.complete(body, payload)
-          : undefined;
-        writeJson(request, response, 200, completedRun ? { ...payload, retrieval: completedRun } : payload);
-      } catch (error) {
-        const statusCode = error instanceof ExternalKnowledgeError
-          ? error.statusCode
-          : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
-            ? 400
-            : 502;
-        const failedRun = typeof body.artifactId === "string" && retrievalRun
-          ? externalKnowledgeRunRepository.fail(body, error)
-          : undefined;
-        writeJson(request, response, statusCode, {
-          error: error instanceof ExternalKnowledgeError
-            ? error.code
-            : error instanceof Error && error.message === "invalid_external_knowledge_artifact_id"
-              ? "invalid_external_knowledge_artifact_id"
-              : "external_knowledge_unavailable",
-          message: error instanceof Error ? error.message : "外部知识检索不可用。",
-          ...(failedRun ? { retrieval: failedRun } : {})
-        });
---- end alternative branch ---
-*/
-    if (method === "POST" && url.pathname === "/v1/recommendations/feedback") {
-      const body = await readJsonOrWriteError(request, response);
-      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
-        return;
-      }
-      const payload = buildRecommendationFeedbackPayload(body);
-      if ("error" in payload) {
-        writeJson(request, response, 400, payload);
-        return;
-      }
-      updateRecommendationCandidateStatus(body.sessionId, body.candidate, payload.feedback.action);
-      const invalidatedCacheEntries = clearRecommendationCacheForSession(body.sessionId);
-      writeJson(request, response, 200, { ...payload, invalidatedCacheEntries });
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
-      const openAlexApiKey = openAlexApiKeyFromRequest(request);
-      const crossrefEnabled = customConfig.crossrefEnabled !== false;
-      if (!openAlexApiKey && !crossrefEnabled) {
-        writeJson(request, response, 503, {
-          error: "openalex_api_key_required",
-          message: "OpenAlex 外部文献检索需要有效 OpenAlex API 密钥。"
-        });
-        return;
-      }
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
         return;
@@ -1024,7 +943,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         writeJson(request, response, 200, personalizationRepository.save(body.sessionId, body.profile));
       } catch (error) {
         if (error instanceof PersonalizationValidationError) {
-          writeJson(request, response, 400, { error: "invalid_academic_profile", message: error.message });
+          writeJson(request, response, 400, {
+            error: "invalid_academic_profile",
+            message: error.message
+          });
           return;
         }
         throw error;
@@ -1037,7 +959,11 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
-      writeJson(request, response, 200, personalizationRepository.clear(body.sessionId));
+      const snapshot = personalizationRepository.clear(body.sessionId);
+      clearRecommendationCacheForSession(body.sessionId);
+      clearRecommendationFeedbackForUser(body.sessionId);
+      clearRecommendationCandidatesForUser(body.sessionId);
+      writeJson(request, response, 200, snapshot);
       return;
     }
 
@@ -1047,10 +973,15 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
       try {
-        writeJson(request, response, 200, personalizationRepository.recordSignal(body.sessionId, body.signal));
+        const snapshot = personalizationRepository.recordSignal(body.sessionId, body.signal);
+        clearRecommendationCacheForSession(body.sessionId);
+        writeJson(request, response, 200, snapshot);
       } catch (error) {
         if (error instanceof PersonalizationValidationError) {
-          writeJson(request, response, 400, { error: "invalid_personalization_signal", message: error.message });
+          writeJson(request, response, 400, {
+            error: "invalid_personalization_signal",
+            message: error.message
+          });
           return;
         }
         throw error;

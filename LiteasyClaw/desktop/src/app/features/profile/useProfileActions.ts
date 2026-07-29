@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AccountSession } from "../account/account.types";
-import {
-  buildAcademicProfileAssistantSummary,
-  defaultAcademicProfile,
-  type AcademicProfile
-} from "./profile.types";
+import type { AcademicProfile } from "./profile.types";
+import { buildAcademicProfileAssistantSummary, defaultAcademicProfile } from "./profile.types";
 import {
   createAcademicProfileClient,
   type AcademicProfileTransport,
@@ -19,6 +16,8 @@ import {
 type UseProfileActionsInput = {
   accountSession?: AccountSession | null;
   controlPlaneEndpoint?: string;
+  onProfileSamplingChanged?: (enabled: boolean) => void;
+  profileSamplingEnabled?: boolean;
   transport?: AcademicProfileTransport;
 };
 
@@ -26,25 +25,27 @@ function isMockEndpoint(endpoint: string) {
   return endpoint.startsWith("mock://");
 }
 
-function toAcademicProfile(profile: Partial<AcademicProfile>): AcademicProfile {
-  return {
-    ...defaultAcademicProfile,
-    ...profile,
-    disciplines: Array.isArray(profile.disciplines) ? profile.disciplines : []
-  };
+function localOnlyProfile(profile: AcademicProfile): AcademicProfile {
+  return { ...profile, disciplines: [] };
 }
 
 export function useProfileActions({
   accountSession = null,
   controlPlaneEndpoint = "mock://control-plane",
+  onProfileSamplingChanged,
+  profileSamplingEnabled = false,
   transport
 }: UseProfileActionsInput = {}) {
   const [academicArchiveOpen, setAcademicArchiveOpen] = useState(false);
-  const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(loadAcademicProfile);
+  const [academicProfile, setAcademicProfile] = useState<AcademicProfile>(() =>
+    localOnlyProfile(loadAcademicProfile())
+  );
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
   const [personalizationSummary, setPersonalizationSummary] = useState<string | undefined>();
   const [personalizationVersion, setPersonalizationVersion] = useState(0);
+  const currentSessionIdRef = useRef(accountSession?.sessionId);
+  currentSessionIdRef.current = accountSession?.sessionId;
   const client = useMemo(
     () =>
       accountSession && !isMockEndpoint(controlPlaneEndpoint)
@@ -54,28 +55,35 @@ export function useProfileActions({
   );
 
   useEffect(() => {
+    const localProfile = localOnlyProfile(loadAcademicProfile());
+    setAcademicProfile(localProfile);
+    setPersonalizationSummary(undefined);
+    setPersonalizationVersion(0);
+    setProfileClearMessage(undefined);
+
     if (!accountSession || !client) {
-      setPersonalizationSummary(undefined);
-      setPersonalizationVersion(0);
       return;
     }
 
+    const sessionId = accountSession.sessionId;
     let active = true;
     void client
       .get(accountSession)
       .then((snapshot) => {
-        if (!active) {
+        if (!active || currentSessionIdRef.current !== sessionId) {
           return;
         }
-        const nextProfile = toAcademicProfile(snapshot.profile);
-        setAcademicProfile(nextProfile);
-        saveAcademicProfile(nextProfile);
+        setAcademicProfile({
+          ...localProfile,
+          disciplines: snapshot.profile.disciplines,
+          stage: snapshot.profile.stage
+        });
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
       })
       .catch(() => {
-        if (active) {
-          setProfileClearMessage("学术档案暂未同步，将在网络恢复后继续保存。");
+        if (active && currentSessionIdRef.current === sessionId) {
+          setProfileClearMessage("云端学术档案加载失败，请检查连接后重新登录。");
         }
       });
 
@@ -100,86 +108,106 @@ export function useProfileActions({
     setClearProfileConfirmOpen(false);
   }
 
-  function updateAcademicProfile(nextProfile: AcademicProfile) {
-    setAcademicProfile(nextProfile);
-    saveAcademicProfile(nextProfile);
+  function toggleProfileSampling() {
+    setProfileClearMessage(undefined);
+    onProfileSamplingChanged?.(!profileSamplingEnabled);
+  }
+
+  async function updateAcademicProfile(nextProfile: AcademicProfile) {
+    saveAcademicProfile(localOnlyProfile(nextProfile));
     if (!accountSession || !client) {
-      setProfileClearMessage("学术档案已更新。");
+      setAcademicProfile(nextProfile);
+      setProfileClearMessage("学术档案已保存到本机。");
       return;
     }
 
-    return client
-      .save(accountSession, nextProfile)
-      .then((snapshot) => {
-        const savedProfile = toAcademicProfile({ ...nextProfile, ...snapshot.profile });
-        setAcademicProfile(savedProfile);
-        saveAcademicProfile(savedProfile);
-        setPersonalizationSummary(snapshot.assistantSummary);
-        setPersonalizationVersion(snapshot.personalizationVersion);
-        setProfileClearMessage("学术档案已保存。");
-      })
-      .catch(() => {
-        setProfileClearMessage("学术档案已保存在本机；云端同步失败，请稍后重试。");
+    const sessionId = accountSession.sessionId;
+    try {
+      const snapshot = await client.save(accountSession, {
+        disciplines: nextProfile.disciplines,
+        stage: nextProfile.stage
       });
+      if (currentSessionIdRef.current !== sessionId) {
+        return;
+      }
+      setAcademicProfile({
+        ...nextProfile,
+        disciplines: snapshot.profile.disciplines,
+        stage: snapshot.profile.stage
+      });
+      setPersonalizationSummary(snapshot.assistantSummary);
+      setPersonalizationVersion(snapshot.personalizationVersion);
+      setProfileClearMessage("学术档案已保存并同步。");
+    } catch {
+      if (currentSessionIdRef.current === sessionId) {
+        setAcademicProfile(nextProfile);
+        setProfileClearMessage("本机档案已保存，云端同步失败，请检查连接后重试。");
+      }
+    }
   }
 
   function markProfileExported() {
     setProfileClearMessage("学术档案已导出。");
   }
 
-  function clearUserProfile() {
-    const clearedProfile = { ...defaultAcademicProfile };
-    setAcademicProfile(clearedProfile);
+  async function clearUserProfile() {
+    if (accountSession && client) {
+      const sessionId = accountSession.sessionId;
+      try {
+        const snapshot = await client.clear(accountSession);
+        if (currentSessionIdRef.current !== sessionId) {
+          return;
+        }
+        clearAcademicProfile();
+        setAcademicProfile({ ...defaultAcademicProfile, disciplines: [] });
+        setPersonalizationSummary(snapshot.assistantSummary);
+        setPersonalizationVersion(snapshot.personalizationVersion);
+        setClearProfileConfirmOpen(false);
+        setProfileClearMessage("已清空学术档案和个性化数据。");
+        onProfileSamplingChanged?.(false);
+      } catch {
+        if (currentSessionIdRef.current === sessionId) {
+          setProfileClearMessage("学术档案清空失败，请检查云端连接后重试。");
+        }
+      }
+      return;
+    }
+
     clearAcademicProfile();
+    setAcademicProfile({ ...defaultAcademicProfile, disciplines: [] });
     setPersonalizationSummary(undefined);
     setPersonalizationVersion(0);
     setClearProfileConfirmOpen(false);
-
-    if (!accountSession || !client) {
-      setProfileClearMessage("学术档案已清空。");
-      return;
-    }
-
-    return client
-      .clear(accountSession)
-      .then((snapshot) => {
-        const nextProfile = toAcademicProfile(snapshot.profile);
-        setAcademicProfile(nextProfile);
-        saveAcademicProfile(nextProfile);
-        setPersonalizationSummary(snapshot.assistantSummary);
-        setPersonalizationVersion(snapshot.personalizationVersion);
-        setProfileClearMessage("学术档案已清空，并已同步到云端。");
-      })
-      .catch(() => {
-        setProfileClearMessage("学术档案已在本机清空；云端同步失败，请稍后重试。");
-      });
+    setProfileClearMessage("已清空本机学术档案。");
+    onProfileSamplingChanged?.(false);
   }
 
-  function recordPersonalizationSignal(signal: PersonalizationSignal) {
-    if (!accountSession || !client) {
+  async function recordPersonalizationSignal(signal: PersonalizationSignal) {
+    if (!profileSamplingEnabled || !accountSession || !client) {
       return;
     }
 
-    return client
-      .recordSignal(accountSession, signal)
-      .then((snapshot) => {
-        setPersonalizationSummary(snapshot.assistantSummary);
-        setPersonalizationVersion(snapshot.personalizationVersion);
-      })
-      .catch(() => {
-        // Personalization updates must never interrupt the primary reading workflow.
-      });
+    const sessionId = accountSession.sessionId;
+    try {
+      const snapshot = await client.recordSignal(accountSession, signal);
+      if (currentSessionIdRef.current !== sessionId) {
+        return;
+      }
+      setPersonalizationSummary(snapshot.assistantSummary);
+      setPersonalizationVersion(snapshot.personalizationVersion);
+    } catch {
+      // Personalization updates must not interrupt reading or collection workflows.
+    }
   }
 
   return {
     academicArchiveOpen,
     academicProfile,
-    assistantProfileSummary: [
-      buildAcademicProfileAssistantSummary(academicProfile),
-      personalizationSummary
-    ]
-      .filter((value): value is string => Boolean(value))
-      .join("；") || undefined,
+    assistantProfileSummary: profileSamplingEnabled
+      ? [buildAcademicProfileAssistantSummary(academicProfile), personalizationSummary]
+          .filter((value): value is string => Boolean(value))
+          .join("；") || undefined
+      : undefined,
     clearProfileConfirmOpen,
     clearUserProfile,
     closeAcademicArchive,
@@ -189,7 +217,9 @@ export function useProfileActions({
     openClearProfileConfirm,
     personalizationVersion,
     profileClearMessage,
+    profileSamplingEnabled,
     recordPersonalizationSignal,
+    toggleProfileSampling,
     updateAcademicProfile
   };
 }

@@ -291,6 +291,47 @@ test("executes recommendation settings through runtime", async () => {
   expect(settingsStore.getState()["network.recommendation.enabled"]).toBe(false);
 });
 
+test("returns confirmation for profile sampling before mutation", async () => {
+  const settingsStore = createSettingsStore();
+
+  const result = await runAgentRuntime(
+    {
+      message: "开启用户画像",
+      mode: "command"
+    },
+    {
+      profileUnlocked: true,
+      settingsStore
+    }
+  );
+
+  expect(result).toEqual({
+    events: [
+      {
+        plan: expect.objectContaining({
+          intentId: "settings.update",
+          riskLevel: "medium",
+          summary: "开启用户画像"
+        }),
+        type: "plan_preview"
+      },
+      expect.objectContaining({
+        action: {
+          actionId: "settings.update",
+          payload: {
+            target: "profile.enabled",
+            value: true
+          }
+        },
+        summary: "用户画像会影响个性化采样与后续回答策略，请确认后再开启。",
+        type: "confirmation_request"
+      })
+    ],
+    settingsChanged: false
+  });
+  expect(settingsStore.getState()["profile.enabled"]).toBe(false);
+});
+
 test("returns a clarification request when a mind map command lacks ready selection context", async () => {
   await expect(
     runAgentRuntime(

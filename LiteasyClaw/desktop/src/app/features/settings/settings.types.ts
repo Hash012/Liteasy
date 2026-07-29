@@ -2,6 +2,7 @@ export type SettingKey =
   | "network.recommendation.enabled"
   | "network.recommendation.sort_mode"
   | "assistant.public_audit.enabled"
+  | "profile.enabled"
   | "assistant.default_output_mode"
   | "assistant.language"
   | "import.ocr_language"
@@ -15,6 +16,7 @@ export type SettingsState = {
   "network.recommendation.enabled": boolean;
   "network.recommendation.sort_mode": "relevance" | "retrieved_at";
   "assistant.public_audit.enabled": boolean;
+  "profile.enabled": boolean;
   "assistant.default_output_mode": string;
   "assistant.language": string;
   "import.ocr_language": "chi_sim" | "eng" | "eng+chi_sim";

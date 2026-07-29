@@ -198,58 +198,6 @@ describe("useRecommendations", () => {
     expect(result.current.recommendationMessage).toBe("已清理当前工作区的关联推荐缓存。");
   });
 
-/* Refresh behaviour is covered by the controller integration test.
-  test("refreshes recommendations by invalidating the current cache scope", async () => {
-    const cacheClear = vi.fn(async () => ({ cleared: true }));
-    const cacheGet = vi.fn(async () => ({
-      cacheHit: false,
-      recommendations: []
-    }));
-    const recommendationFetch = vi.fn(async () => [{
-      discoveredAt: "2026-05-14T08:15:00Z",
-      id: "rec-refresh-1",
-      relatedDocumentTitle: "Attention Is All You Need",
-      relevanceBand: "high" as const,
-      relevanceScore: 0.96,
-      reason: "refreshed",
-      source: "Semantic Scholar",
-      title: "Fresh Retrieval Result"
-    }]);
-
-    const { result } = renderHook(() =>
-      useRecommendations({
-        accountSession,
-        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
-        recommendationCacheDeps: {
-          clear: cacheClear,
-          get: cacheGet,
-          put: vi.fn(async () => ({ cachedAt: "2026-05-14T08:15:00Z", ok: true as const }))
-        },
-        recommendationGeneratorDeps: { fetch: recommendationFetch },
-        recommendationsEnabled: true,
-        recommendationSortMode: "relevance",
-        selectedPapers,
-        workspaceRevision: 0,
-        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
-      })
-    );
-
-    await waitFor(() => {
-      expect(recommendationFetch).toHaveBeenCalledTimes(1);
-    });
-
-    await act(async () => {
-      await expect(result.current.refreshRecommendations()).resolves.toBe(
-        "已开始刷新当前选中文献集的推荐。"
-      );
-    });
-
-    await waitFor(() => {
-      expect(recommendationFetch).toHaveBeenCalledTimes(2);
-    });
-    expect(cacheClear).toHaveBeenCalledTimes(1);
-    expect(result.current.recommendationItems[0]?.title).toBe("Fresh Retrieval Result");
-*/
   test("records a negative preference and removes the dismissed candidate", async () => {
     const candidate = {
       canonicalId: "openalex:W200",

@@ -9,7 +9,7 @@ export type PersonalizationSignal =
 export type AcademicProfileSnapshot = {
   assistantSummary?: string;
   personalizationVersion: number;
-  profile: AcademicProfile & { profileVersion: number };
+  profile: Pick<AcademicProfile, "disciplines" | "stage"> & { profileVersion: number };
 };
 
 export type AcademicProfileTransportRequest = {
@@ -118,7 +118,7 @@ export function createAcademicProfileClient({
     recordSignal(session: AccountSession, signal: PersonalizationSignal) {
       return request("signal", { sessionId: session.sessionId, signal });
     },
-    save(session: AccountSession, profile: AcademicProfile) {
+    save(session: AccountSession, profile: Pick<AcademicProfile, "disciplines" | "stage">) {
       return request("save", { profile, sessionId: session.sessionId });
     }
   };

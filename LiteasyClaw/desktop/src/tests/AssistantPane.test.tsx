@@ -885,7 +885,6 @@ test("resolves short command follow-up phrases from the previous ambiguous comma
   expect(screen.getByText("已打开组织面板。")).toBeInTheDocument();
 });
 
-/* Removed obsolete profile-toggle tests: the product now keeps only the academic archive.
 test("routes command mode through runtime confirmation before profile sampling changes", async () => {
   const user = userEvent.setup();
   const settingsStore = createSettingsStore();
@@ -941,7 +940,6 @@ test("continues a confirmed command from the human confirmation UI", async () =>
   expect(screen.getByText("已更新 用户画像：true")).toBeInTheDocument();
 });
 
-*/
 test("renders the expandable runtime context panel inside the assistant", async () => {
   const user = userEvent.setup();
 

@@ -84,9 +84,11 @@ import {
 import { useAssistantAgentController } from "../controllers/agent/useAssistantAgentController";
 import { runAgentArtifactAnalysis } from "../controllers/agent/runAgentArtifactAnalysis";
 import { getDefaultModelForProvider } from "../features/models/modelPolicy";
+import type { AcademicProfileTransport } from "../features/profile/academicProfileClient";
 
 type AppShellProps = {
   accountTransport?: AccountTransport;
+  academicProfileTransport?: AcademicProfileTransport;
   controlPlaneTransport?: ControlPlaneTransport;
   documentMetadataTransport?: DocumentMetadataTransport;
   initialSettings?: Partial<SettingsState>;
@@ -107,6 +109,7 @@ type RuntimeTheme =
 
 export function AppShell({
   accountTransport,
+  academicProfileTransport,
   controlPlaneTransport,
   documentMetadataTransport,
   initialSettings,
@@ -141,16 +144,6 @@ export function AppShell({
       throw new Error("Agent cancel runner is not ready");
     }
   );
-  const refreshRecommendationsRef = useRef<(
-    input: { scope: "current_workspace" | "selected_document_set" }
-  ) => Promise<string>>(
-    async () => "推荐刷新功能正在初始化，请稍后重试。"
-  );
-  const getRecommendationItemsRef = useRef(() => [] as Array<{
-    reason: string;
-    relevanceScore: number;
-    title: string;
-  }>);
   const artifactResultClientRef = useRef<ReturnType<typeof createArtifactResultClient> | null>(null);
   if (!artifactResultClientRef.current) {
     artifactResultClientRef.current = createArtifactResultClient({
@@ -178,6 +171,7 @@ export function AppShell({
   const [openReaderPaperIds, setOpenReaderPaperIds] = useState<string[]>([]);
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
   const [readerEvidenceTarget, setReaderEvidenceTarget] = useState<PdfEvidenceTarget | null>(null);
+  const [registrationWelcomeMessageId, setRegistrationWelcomeMessageId] = useState(0);
   const readerEvidenceRequestRef = useRef(0);
   const [readerConversationContext, setReaderConversationContext] =
     useState<ReaderConversationContext | null>(null);
@@ -199,7 +193,6 @@ export function AppShell({
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏 AI 按钮启动分析。"
   );
-  const [registrationWelcomeMessageId, setRegistrationWelcomeMessageId] = useState(0);
   const modelSettings = useModelSettingsActions({
     localDevCloudEnv,
     onSettingsChanged: (nextSettings) => setSettingsState(cloneSettingsState(nextSettings)),
@@ -400,13 +393,21 @@ export function AppShell({
   } = cloudAccount.model;
   const profileActions = useProfileActions({
     accountSession,
-    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"]
+    controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
+    onProfileSamplingChanged: (enabled) => {
+      settingsStoreRef.current.apply({
+        intent: "update_setting",
+        target: "profile.enabled",
+        value: enabled
+      });
+      setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
+    },
+    profileSamplingEnabled: settingsState["profile.enabled"],
+    transport: academicProfileTransport
   });
   function handleProfileExport() {
     downloadAcademicProfileExport(
-      createAcademicProfileExport({
-        academicProfile: profileActions.academicProfile
-      })
+      createAcademicProfileExport({ academicProfile: profileActions.academicProfile })
     );
     profileActions.markProfileExported();
   }
@@ -638,7 +639,6 @@ export function AppShell({
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getImportedChunksForPaperId: (paperId) =>
       importStoreRef.current.getParsedChunksByDocumentId(paperId),
-    getRecommendations: () => getRecommendationItemsRef.current(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
     importedChunksByPaperId,
     importedSelectedCount,
@@ -652,7 +652,6 @@ export function AppShell({
     onMoveDockItem: runtimeActionContext.moveDockItem,
     onOpenAcademicArchive: runtimeActionContext.openAcademicArchive,
     onOpenOrganizationSharedLibrary: organizationShell.actions.openOrganizationSharedLibrary,
-    onRefreshRecommendations: (input) => refreshRecommendationsRef.current(input),
     onSettingsChanged: (nextSettings) =>
       setSettingsState(cloneSettingsState(nextSettings)),
     profilePersonalizationSummary: profileActions.assistantProfileSummary,
@@ -696,18 +695,13 @@ export function AppShell({
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
     personalizationVersion: profileActions.personalizationVersion,
-    researchProfile: toRecommendationResearchProfile(profileActions.academicProfile),
+    researchProfile: settingsState["profile.enabled"]
+      ? toRecommendationResearchProfile(profileActions.academicProfile)
+      : undefined,
     selectedPapers,
     workspaceRevision: workspaceState.workspaceRevision,
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
   });
-  refreshRecommendationsRef.current = async () => knowledgeSync.actions.refreshRecommendations();
-  getRecommendationItemsRef.current = () =>
-    knowledgeSync.model.recommendationItems.map(({ reason, relevanceScore, title }) => ({
-      reason,
-      relevanceScore,
-      title
-    }));
   const {
     collectionItems,
     collectionMessage,
@@ -775,7 +769,7 @@ export function AppShell({
   }, {});
 
   function openPaperInReader(paperId: string) {
-    const paper = workspaceState.papers.find((item) => item.id === paperId);
+    const paper = workspaceState.papers.find((candidate) => candidate.id === paperId);
     if (!paper) {
       return;
     }
@@ -844,16 +838,16 @@ export function AppShell({
     onAddExternalPaper: workspaceActions.addExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
-    onCollectRecommendation: (recommendation) => {
-      void knowledgeSync.actions.collectRecommendation(recommendation);
-      void profileActions.recordPersonalizationSignal({
+    onCollectRecommendation: async (recommendation) => {
+      await knowledgeSync.actions.collectRecommendation(recommendation);
+      await profileActions.recordPersonalizationSignal({
         kind: "recommendation_saved",
         title: recommendation.title
       });
     },
-    onDismissRecommendation: (recommendation) => {
-      void knowledgeSync.actions.dismissRecommendation(recommendation);
-      void profileActions.recordPersonalizationSignal({
+    onDismissRecommendation: async (recommendation) => {
+      await knowledgeSync.actions.dismissRecommendation(recommendation);
+      await profileActions.recordPersonalizationSignal({
         kind: "recommendation_dismissed",
         recommendationId: recommendation.id
       });
@@ -897,6 +891,7 @@ export function AppShell({
     onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
     onSelectOrganization: organizationShell.actions.selectOrganization,
     onToggleLock: workspaceActions.toggleSelectionLock,
+    onToggleProfileSampling: profileActions.toggleProfileSampling,
     onToggleSelection: workspaceActions.toggleSelection,
     onUpdateSetting: (command) => {
       settingsStoreRef.current.apply(command);
@@ -910,6 +905,7 @@ export function AppShell({
     papers: workspaceState.papers,
     profileClearMessage: profileActions.profileClearMessage,
     profileReadPaperCount: workspaceState.papers.length,
+    profileSamplingEnabled: settingsState["profile.enabled"],
     recommendationItems,
     recommendationMessage,
     recommendationPending,
@@ -1092,11 +1088,12 @@ export function AppShell({
           onSettingsChanged={(nextSettings) =>
             setSettingsState(cloneSettingsState(nextSettings))
           }
+          profilePersonalizationSummary={profileActions.assistantProfileSummary}
           profileUnlocked={accountSession !== null}
           registrationWelcomeMessage={
             registrationWelcomeMessageId > 0
               ? {
-                  content: "欢迎来到Liteasy，请完善学术档案",
+                  content: "欢迎来到 Liteasy，请完善学术档案。",
                   id: registrationWelcomeMessageId
                 }
               : undefined

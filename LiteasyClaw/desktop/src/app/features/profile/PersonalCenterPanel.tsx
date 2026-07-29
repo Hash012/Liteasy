@@ -6,16 +6,15 @@ import {
   ChevronDownRegular,
   ChevronRightRegular,
   DeleteRegular,
+  EyeOffRegular,
+  EyeRegular,
   PersonRegular,
   SignOutRegular
 } from "@fluentui/react-icons";
 import type { OrganizationSummary } from "../organization/organization.types";
 import { AcademicProfileForm } from "./AcademicProfileForm";
 import type { AcademicProfile } from "./profile.types";
-import {
-  formatAcademicProfile,
-  formatAcademicResearchProfile
-} from "./profile.types";
+import { formatAcademicProfile, formatAcademicResearchProfile } from "./profile.types";
 
 type PersonalCenterPanelProps = {
   academicProfile: AcademicProfile;
@@ -23,9 +22,11 @@ type PersonalCenterPanelProps = {
   onClearProfile: () => void;
   onLogout: () => void;
   onOpenAcademicArchive: () => void;
+  onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
   organizationSummary: OrganizationSummary | null;
   profileClearMessage?: string;
+  profileSamplingEnabled: boolean;
   readPaperCount: number;
 };
 
@@ -35,9 +36,11 @@ export function PersonalCenterPanel({
   onClearProfile,
   onLogout,
   onOpenAcademicArchive,
+  onToggleProfileSampling,
   onUpdateAcademicProfile,
   organizationSummary,
   profileClearMessage,
+  profileSamplingEnabled,
   readPaperCount
 }: PersonalCenterPanelProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(["profile", "academic"]);
@@ -75,10 +78,16 @@ export function PersonalCenterPanel({
           <span>学术档案配置</span>
         </button>
         {isExpanded("profile") ? <div className="sidebar-section-content">
-          <div className="personal-center-row">研究阶段：{formatAcademicProfile(academicProfile)}</div>
-          <div className="personal-center-row">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
-          <AcademicProfileForm academicProfile={academicProfile} onSave={onUpdateAcademicProfile} />
-          {profileClearMessage ? <div className="personal-center-row">{profileClearMessage}</div> : null}
+        <div className="personal-center-row">{formatAcademicProfile(academicProfile)}</div>
+        <div className="personal-center-row">研究学科：{formatAcademicResearchProfile(academicProfile)}</div>
+        <AcademicProfileForm academicProfile={academicProfile} onSave={onUpdateAcademicProfile} />
+        {profileClearMessage ? <div className="personal-center-row">{profileClearMessage}</div> : null}
+        <div className="personal-center-row">个性化行为信号：{profileSamplingEnabled ? "开启" : "关闭"}</div>
+        <Tooltip content={profileSamplingEnabled ? "停止记录阅读和推荐行为信号" : "允许记录阅读和推荐行为信号"} positioning="below" relationship="description">
+          <button aria-label={profileSamplingEnabled ? "关闭个性化行为信号" : "开启个性化行为信号"} className="left-rail-button icon-only" onClick={onToggleProfileSampling} type="button">
+            {profileSamplingEnabled ? <EyeOffRegular /> : <EyeRegular />}
+          </button>
+        </Tooltip>
         </div> : null}
       </section>
 
@@ -94,8 +103,8 @@ export function PersonalCenterPanel({
             <Tooltip content="学术档案" positioning="below" relationship="description">
               <button aria-label="学术档案" className="left-rail-button icon-only" onClick={onOpenAcademicArchive} type="button"><ArchiveRegular /></button>
             </Tooltip>
-            <Tooltip content="清空学术档案" positioning="below" relationship="description">
-              <button aria-label="清空学术档案" className="left-rail-button danger icon-only" onClick={onClearProfile} type="button"><DeleteRegular /></button>
+            <Tooltip content="清空学术档案和个性化数据" positioning="below" relationship="description">
+              <button aria-label="清空学术档案和个性化数据" className="left-rail-button danger icon-only" onClick={onClearProfile} type="button"><DeleteRegular /></button>
             </Tooltip>
           </div>
           </div> : null}

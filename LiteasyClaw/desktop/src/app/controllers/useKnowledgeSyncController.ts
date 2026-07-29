@@ -114,7 +114,6 @@ export function useKnowledgeSyncController({
       },
       dismissRecommendation: (recommendation: RecommendationItem) =>
         recommendations.recordRecommendationFeedback(recommendation, "dismissed"),
-      refreshRecommendations: recommendations.refreshRecommendations,
       retryCollectionSync: collection.retry,
       retryDocumentMetadataSync: documentMetadataSync.retrySync
     },

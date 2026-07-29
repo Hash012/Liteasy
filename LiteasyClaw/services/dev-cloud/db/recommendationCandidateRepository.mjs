@@ -154,6 +154,16 @@ export function updateRecommendationCandidateStatus(userId, candidate, action, n
   return updated;
 }
 
+export function clearRecommendationCandidatesForUser(userId) {
+  const state = readState();
+  const cleared = Array.isArray(state[userId]) ? state[userId].length : 0;
+  delete state[userId];
+  if (cleared > 0) {
+    writeJsonFile(recommendationCandidateFilename, state);
+  }
+  return cleared;
+}
+
 export function resetRecommendationCandidateData() {
   writeJsonFile(recommendationCandidateFilename, {});
   return { reset: true };

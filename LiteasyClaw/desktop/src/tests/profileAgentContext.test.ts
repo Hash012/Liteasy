@@ -9,7 +9,7 @@ import {
 
 describe("profile and Agent context boundary", () => {
   test("injects the selected disciplines and research stage", () => {
-    const profileSummary = buildAcademicProfileAssistantSummary({
+    const academicProfile = {
       ...defaultAcademicProfile,
       disciplines: [{
         categoryCode: "08",
@@ -19,18 +19,14 @@ describe("profile and Agent context boundary", () => {
         name: "计算机科学与技术"
       }],
       stage: "博士研究生"
-    });
+    };
+    const profileSummary = buildAcademicProfileAssistantSummary(academicProfile);
     const runtimeContext = buildAgentRuntimeContextView({
+      academicProfile,
       importedCount: 1,
+      profileEnabled: true,
       profilePersonalizationSummary: profileSummary,
       profileUnlocked: true,
-      recommendations: [
-        {
-          reason: "与当前研究方向相关",
-          relevanceScore: 0.92,
-          title: "Causal Retrieval for Scholarly Search"
-        }
-      ],
       selectedCount: 1,
       selectionLocked: true
     });
@@ -40,7 +36,6 @@ describe("profile and Agent context boundary", () => {
       runtimeContext
     });
 
-    expect(prompt.runtimeSummary).toContain("学术档案：研究阶段：博士研究生；研究学科：工学 · 计算机科学与技术（自然语言处理）。");
-    expect(prompt.runtimeSummary).toContain("Causal Retrieval for Scholarly Search（相关度 0.92）：与当前研究方向相关");
+    expect(prompt.runtimeSummary).toContain("学术档案与当前关注：研究阶段：博士研究生；研究学科：工学 · 计算机科学与技术（自然语言处理）。");
   });
 });

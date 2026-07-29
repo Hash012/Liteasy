@@ -1,8 +1,4 @@
-import type {
-  AgentRecommendationContextItem,
-  AgentRuntimeContextView,
-  RuntimeContextIssue
-} from "./agentRuntime.types";
+import type { AgentRuntimeContextView, RuntimeContextIssue } from "./agentRuntime.types";
 import type { AcademicProfile } from "../profile/profile.types";
 import type { WorkspaceSource } from "../workspace/workspace.types";
 
@@ -10,9 +6,9 @@ export type AgentRuntimeContextViewInput = {
   academicProfile?: AcademicProfile;
   importedCount: number;
   organizationName?: string;
+  profileEnabled: boolean;
   profilePersonalizationSummary?: string;
   profileUnlocked: boolean;
-  recommendations?: AgentRecommendationContextItem[];
   selectedCount: number;
   selectionLocked: boolean;
   workspace?: Partial<WorkspaceSource>;
@@ -22,35 +18,41 @@ function hasAcademicProfile(profile: AcademicProfile | undefined): profile is Ac
   if (!profile) {
     return false;
   }
-  return (
+  return profile.age !== "未设置" ||
+    (profile.disciplines ?? []).length > 0 ||
+    profile.gender !== "未设置" ||
     profile.stage !== "未设置" ||
-    (profile.disciplines?.length ?? 0) > 0 ||
-    Boolean(
-      profile.researchTopics ||
-        profile.researchMethods ||
-        profile.researchDatasets ||
-        profile.preferredLanguages
-    )
-  );
+    Boolean(profile.researchTopics || profile.researchMethods || profile.researchDatasets);
+}
+
+function formatAcademicProfileBrief(profile: AcademicProfile) {
+  return [
+    `${profile.gender}/${profile.age}/${profile.stage}`,
+    profile.researchTopics ? `主题:${profile.researchTopics}` : ""
+  ].filter(Boolean).join("/");
 }
 
 function getSelectionIssues(input: AgentRuntimeContextViewInput): RuntimeContextIssue[] {
   const issues: RuntimeContextIssue[] = [];
+
   if (input.selectedCount === 0) {
     issues.push("selection_empty");
   }
+
   if (!input.selectionLocked) {
     issues.push("selection_unlocked");
   }
+
   if (input.selectedCount > 0 && input.importedCount < input.selectedCount) {
     issues.push("documents_not_imported");
   }
+
   return issues;
 }
 
 export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput): AgentRuntimeContextView {
   const issues = getSelectionIssues(input);
-  const recommendations = input.recommendations ?? [];
+  const workspaceType = input.workspace?.type ?? "unknown";
 
   return {
     cloud: {
@@ -58,21 +60,14 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
       ...(input.organizationName ? { organizationName: input.organizationName } : {})
     },
     profile: {
-      ...(hasAcademicProfile(input.academicProfile)
-        ? {
-            academic: {
-              ...input.academicProfile,
-              disciplines: (input.academicProfile.disciplines ?? []).map((discipline) => ({ ...discipline }))
-            }
-          }
+      ...(input.profileEnabled && hasAcademicProfile(input.academicProfile)
+        ? { academic: { ...input.academicProfile } }
         : {}),
-      ...(input.profilePersonalizationSummary
+      enabled: input.profileEnabled,
+      ...(input.profileEnabled && input.profilePersonalizationSummary
         ? { personalizationSummary: input.profilePersonalizationSummary }
-        : {})
-    },
-    recommendations: {
-      items: recommendations.slice(0, 3).map((recommendation) => ({ ...recommendation })),
-      totalCount: recommendations.length
+        : {}),
+      requiresConfirmation: true
     },
     selection: {
       importedCount: input.importedCount,
@@ -83,7 +78,7 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
     },
     workspace: {
       ...(input.workspace?.rootPath ? { rootPath: input.workspace.rootPath } : {}),
-      type: input.workspace?.type ?? "unknown"
+      type: workspaceType
     }
   };
 }
@@ -91,9 +86,13 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
 export function formatAgentRuntimeContextSummary(context: AgentRuntimeContextView) {
   const lockLabel = context.selection.locked ? "已锁定" : "未锁定";
   const cloudLabel = context.cloud.connected ? "云账号已连接" : "云账号未连接";
-  const profileLabel = context.profile.personalizationSummary || context.profile.academic
-    ? "学术档案已应用"
-    : "学术档案待补充";
+  const profileLabel = context.profile.enabled
+    ? context.profile.personalizationSummary
+      ? "画像开启（学术档案与个性化已应用）"
+      : context.profile.academic
+      ? `画像开启（${formatAcademicProfileBrief(context.profile.academic)}）`
+      : "画像开启"
+    : "画像关闭";
 
   return [
     "上下文",

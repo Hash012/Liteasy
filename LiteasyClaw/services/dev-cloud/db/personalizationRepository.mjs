@@ -60,6 +60,10 @@ function normalizeProfile(profile) {
       !categoryName ||
       !code ||
       !name ||
+      categoryCode.length > 12 ||
+      categoryName.length > 80 ||
+      code.length > 24 ||
+      name.length > 120 ||
       description.length > 240
     ) {
       throw new PersonalizationValidationError("研究学科格式无效。");
@@ -88,8 +92,12 @@ function extractTerms(value) {
     return [];
   }
 
-  const matches = normalized.match(/[a-z0-9][a-z0-9-]{2,}|[\u4e00-\u9fff]{2,}/g) ?? [];
-  return [...new Set(matches)].slice(0, 16);
+  const latinTerms = normalized.match(/[a-z0-9][a-z0-9-]{2,}/g) ?? [];
+  const chineseRuns = normalized.match(/[\u4e00-\u9fff]{2,}/g) ?? [];
+  const chineseTerms = chineseRuns.flatMap((run) =>
+    Array.from({ length: run.length - 1 }, (_, index) => run.slice(index, index + 2))
+  );
+  return [...new Set([...latinTerms, ...chineseTerms])].slice(0, 16);
 }
 
 function buildAssistantSummary(terms) {

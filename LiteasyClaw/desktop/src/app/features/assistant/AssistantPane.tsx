@@ -101,6 +101,7 @@ type AssistantPaneProps = {
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;
+  profilePersonalizationSummary?: string;
   profileUnlocked?: boolean;
   registrationWelcomeMessage?: { content: string; id: number };
   readerConversationContext?: ReaderConversationContext | null;
@@ -247,6 +248,7 @@ export function AssistantPane({
   onOpenOrganizationSharedLibrary,
   onActiveSessionChange,
   onSettingsChanged,
+  profilePersonalizationSummary,
   profileUnlocked = false,
   registrationWelcomeMessage,
   readerConversationContext = null,
@@ -300,6 +302,8 @@ export function AssistantPane({
     academicProfile,
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
+    profileEnabled: Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
+    profilePersonalizationSummary,
     profileUnlocked,
     selectedCount: selectedSetStatus.selectedCount,
     selectionLocked: selectedSetStatus.selectionLocked,
@@ -497,7 +501,7 @@ export function AssistantPane({
       "打开设置面板",
       "打开组织共享文献库",
       "关闭联网推荐",
-      "查看学术档案",
+      "开启用户画像",
       "生成思维导图",
       "把窗口切分成两个",
       "把 AI 助手放到下栏"

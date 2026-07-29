@@ -88,6 +88,26 @@ export function routeCommand(input: string): SkillInvocation | null {
     };
   }
 
+  if (normalized === "开启用户画像") {
+    return {
+      skillId: "settings.adjust",
+      input: {
+        target: "profile.enabled",
+        value: true
+      }
+    };
+  }
+
+  if (normalized === "关闭用户画像") {
+    return {
+      skillId: "settings.adjust",
+      input: {
+        target: "profile.enabled",
+        value: false
+      }
+    };
+  }
+
   if (isOpenOrganizationSharedLibraryCommand(normalized)) {
     return {
       skillId: "organization.open_shared_library",

@@ -119,15 +119,14 @@ export function useRecommendations({
   workspaceSourceKey
 }: UseRecommendationsInput) {
   const suppressNextCachedMessageRef = useRef(false);
-  const [refreshVersion, setRefreshVersion] = useState(0);
   const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile);
   const currentScope = accountSession
-    ? {
+      ? {
+        personalizationVersion,
         selectionKey,
         sessionId: accountSession.sessionId,
         sortMode: recommendationSortMode,
-        workspaceKey: workspaceSourceKey,
-        personalizationVersion
+        workspaceKey: workspaceSourceKey
       }
     : null;
   const [recommendationItems, setRecommendationItems] = useState<RecommendationItem[]>([]);
@@ -327,7 +326,6 @@ export function useRecommendations({
     recommendationsEnabled,
     recommendationSortMode,
     personalizationVersion,
-    refreshVersion,
     selectionKey,
     workspaceSourceKey
   ]);
@@ -360,54 +358,6 @@ export function useRecommendations({
     setRecommendationPending(false);
     setRecommendationStatus("idle");
     setRecommendationMessage("已清理当前工作区的关联推荐缓存。");
-  }
-
-  async function refreshRecommendations() {
-    if (!recommendationsEnabled) {
-      return "联网推荐当前已关闭，请先开启后再刷新。";
-    }
-
-    if (!accountSession || !currentScope) {
-      return "请先登录云账号后再刷新推荐。";
-    }
-
-    if (selectedPapers.length === 0) {
-      return "请先选择至少一篇文献后再刷新推荐。";
-    }
-
-    const cacheApi = recommendationCacheDeps ?? {
-      clear: (scope: RecommendationCacheScope) =>
-        clearCloudRecommendationCache(
-          {
-            controlPlaneEndpoint,
-            scope
-          },
-          {
-            transport: recommendationCacheTransport
-          }
-        )
-    };
-
-    try {
-      await cacheApi.clear(currentScope);
-    } catch {
-      return "推荐缓存清理失败，暂时无法刷新推荐。";
-    }
-
-    suppressNextCachedMessageRef.current = true;
-    setRecommendationItems([]);
-    setRecommendationPending(true);
-    setRecommendationStatus("loading");
-    setRecommendationMessage("正在刷新与当前选中文献集相关的推荐...");
-    setRefreshVersion((current) => current + 1);
-    return "已开始刷新当前选中文献集的推荐。";
-  }
-
-  function dismissRecommendation(recommendationId: string) {
-    setRecommendationItems((currentItems) =>
-      currentItems.filter((recommendation) => recommendation.id !== recommendationId)
-    );
-    setRecommendationMessage("已减少类似推荐，后续结果会继续调整。");
   }
 
   async function recordRecommendationFeedback(
@@ -443,8 +393,6 @@ export function useRecommendations({
 
   return {
     clearRecommendationCache,
-    dismissRecommendation,
-    refreshRecommendations,
     recordRecommendationFeedback,
     recommendationItems,
     recommendationMessage,
