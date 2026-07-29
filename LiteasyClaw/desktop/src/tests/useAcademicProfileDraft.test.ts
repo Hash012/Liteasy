@@ -5,7 +5,7 @@ import {
   toRecommendationResearchProfile
 } from "../app/features/profile/profile.types";
 
-test("normalizes and saves editable academic profile drafts", () => {
+test("saves only the academic archive fields and clears retired research-detail fields", () => {
   const onSave = vi.fn();
   const { result } = renderHook(() =>
     useAcademicProfileDraft({ academicProfile: defaultAcademicProfile, onSave })
@@ -34,10 +34,10 @@ test("normalizes and saves editable academic profile drafts", () => {
       description: "自然语言处理与信息检索",
       name: "计算机科学与技术"
     }],
-    preferredLanguages: "中文、English",
-    researchDatasets: "MS MARCO、BEIR",
-    researchMethods: "混合检索、对比学习",
-    researchTopics: "神经检索、向量数据库",
+    preferredLanguages: "",
+    researchDatasets: "",
+    researchMethods: "",
+    researchTopics: "",
     stage: "博士研究生"
   });
 });
