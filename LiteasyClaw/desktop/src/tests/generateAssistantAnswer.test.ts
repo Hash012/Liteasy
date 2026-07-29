@@ -1536,6 +1536,132 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
   expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
 });
 
+test("drops an unsupported external-only sentence when external expansion was automatic", async () => {
+  const store = createSettingsStore();
+  const generationPrompts: string[] = [];
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "CoreNEURON",
+        snippet: "CoreNEURON accelerates the Cortex model by two to four times.",
+        summary: "CoreNEURON 将 Cortex 模型加速 2-4 倍。",
+        tags: ["CoreNEURON", "Cortex"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        reviewAttempts += 1;
+        const externalSentenceLine = prompt.split("\n").find((line) => line.includes("external=openalex:W42"));
+        const unsupportedSentenceId = externalSentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(reviewAttempts === 1
+              ? {
+                  reason: "外部来源摘要没有提及可塑性，不能支持该句。",
+                  unsupportedSentenceIds: [unsupportedSentenceId],
+                  verdict: "fail"
+                }
+              : {
+                  reason: "删除无支持的外部句后，其余句均由论文证据直接支持。",
+                  unsupportedSentenceIds: [],
+                  verdict: "pass"
+                }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationPrompts.push(prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const paperSentence = "论文证据显示，CoreNEURON 将 Cortex 模型加速 2-4 倍。";
+      const externalSentence = "主题检索提示可塑性与学习理论相关，但本文不深入探讨。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: paperSentence }],
+            externalKnowledge: ["openalex:W42"],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "benchmark",
+            recommendations: [],
+            summary: `${paperSentence}${externalSentence}`,
+            summarySentences: [
+              { evidenceIds: [evidenceId], externalKnowledge: [], status: "grounded", text: paperSentence },
+              { evidenceIds: [], externalKnowledge: ["openalex:W42"], status: "weak", text: externalSentence }
+            ],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "CoreNEURON" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-external-fallback",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: true,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "CoreNEURON",
+      source: { kind: "selected_text", excerpt: "Cortex 模型性能" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({
+        provider: "openalex",
+        query: "CoreNEURON Cortex 模型性能",
+        sources: [{
+          abstract: "A general theory of efficient learning systems.",
+          authors: ["A. Author"],
+          id: "openalex:W42",
+          provider: "openalex",
+          relation: "topic_search",
+          relevance: 0.61,
+          retrievalQuery: "CoreNEURON Cortex 模型性能",
+          sourceRecordUrl: "https://openalex.org/W42",
+          sourceId: "W42",
+          title: "Efficient Learning Systems",
+          url: "https://openalex.org/W42",
+          year: 2024
+        }],
+        status: "available"
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  expect(generationPrompts).toHaveLength(1);
+  expect(reviewAttempts).toBe(2);
+  expect(result.thinReading?.rootSeed.summary).not.toContain("可塑性");
+  expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual([]);
+  expect(result.thinReading?.rootSeed.evidence.externalSources).toEqual([]);
+  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(true);
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 1, repaired: true });
+});
+
 test("keeps a selected canonical external source available when a follow-up lookup is empty", async () => {
   const store = createSettingsStore();
   let modelPrompt = "";

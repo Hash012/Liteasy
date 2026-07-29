@@ -707,6 +707,68 @@ async function reviewThinReadingEvidence(input: {
   });
 }
 
+function canFallbackFromExternalThinReadingEvidence(context: ThinReadingGenerationContext) {
+  if (context.parentWithinPaperClosure === false) {
+    return false;
+  }
+  if (context.source.kind === "selected_text" && context.source.externalSourceIds?.length) {
+    return false;
+  }
+  return !externalResearchIntent.test(thinReadingSourceText(context));
+}
+
+function removeUnsupportedExternalSentences(input: {
+  node: ThinReadingNodeSeed;
+  review: ThinReadingEvidenceReview;
+}): ThinReadingNodeSeed | undefined {
+  const summarySentences = input.node.evidence.summarySentences ?? [];
+  const unsupportedIds = new Set(input.review.unsupportedSentenceIds);
+  const unsupported = summarySentences.filter((sentence) => unsupportedIds.has(sentence.id));
+  if (
+    unsupported.length === 0 ||
+    unsupported.some((sentence) => sentence.evidenceIds.length > 0 || sentence.externalKnowledge.length === 0)
+  ) {
+    return undefined;
+  }
+  const remainingSentences = summarySentences.filter((sentence) => !unsupportedIds.has(sentence.id));
+  if (remainingSentences.length === 0) {
+    return undefined;
+  }
+  let summary = input.node.summary;
+  for (const sentence of unsupported) {
+    const sentenceIndex = summary.indexOf(sentence.text);
+    if (sentenceIndex < 0) {
+      return undefined;
+    }
+    summary = `${summary.slice(0, sentenceIndex)}${summary.slice(sentenceIndex + sentence.text.length)}`;
+  }
+  summary = summary.replace(/\s+/g, " ").trim();
+  if (summary.length < 24) {
+    return undefined;
+  }
+  const remainingExternalIds = new Set(
+    remainingSentences.flatMap((sentence) => sentence.externalKnowledge)
+  );
+  const staysOutsidePaper = remainingExternalIds.size > 0;
+  return {
+    ...input.node,
+    ...(staysOutsidePaper ? {} : { closureState: "inside_paper" }),
+    evidence: {
+      ...input.node.evidence,
+      claims: input.node.evidence.claims?.filter((claim) => claim.evidenceIds.length > 0),
+      externalKnowledge: input.node.evidence.externalKnowledge.filter((sourceId) =>
+        remainingExternalIds.has(sourceId)
+      ),
+      externalSources: input.node.evidence.externalSources?.filter((source) =>
+        remainingExternalIds.has(source.id)
+      ),
+      summarySentences: remainingSentences
+    },
+    summary,
+    withinPaperClosure: !staysOutsidePaper
+  };
+}
+
 async function generateThinReadingWithQualityRepair(input: {
   context: ThinReadingGenerationContext;
   gateway: ReturnType<typeof createModelGatewayFromSettings>;
@@ -828,6 +890,7 @@ async function generateThinReadingWithQualityRepair(input: {
   const repairReasons: string[] = [];
   let prompt = basePrompt;
   let targetedEvidenceRepair: Parameters<typeof buildThinReadingRepairPrompt>[0]["targetedEvidenceRepair"];
+  let deterministicRepairApplied = false;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const generation = await input.gateway.generateAnswer({
       model: input.model,
@@ -843,7 +906,7 @@ async function generateThinReadingWithQualityRepair(input: {
       signal: input.signal
     });
     try {
-      const parsedRootSeed = parseThinReadingModelSeed(generation.answer, {
+      let parsedRootSeed = parseThinReadingModelSeed(generation.answer, {
         analysis: plannedEvidence,
         analysisEvidence: plannedEvidence.evidence,
         ancestorSummaries: input.context.ancestorSummaries,
@@ -854,7 +917,7 @@ async function generateThinReadingWithQualityRepair(input: {
         requiredChineseTerminology,
         targetLanguage: input.context.targetLanguage
       });
-      const evidenceReview = evidencePlan || parsedRootSeed.evidence.externalKnowledge.length > 0
+      let evidenceReview = evidencePlan || parsedRootSeed.evidence.externalKnowledge.length > 0
         ? await reviewThinReadingEvidence({
           gateway: input.gateway,
           model: input.model,
@@ -865,6 +928,29 @@ async function generateThinReadingWithQualityRepair(input: {
           signal: input.signal
         })
         : undefined;
+      if (evidenceReview?.verdict === "fail") {
+        const deterministicRepair = canFallbackFromExternalThinReadingEvidence(input.context)
+          ? removeUnsupportedExternalSentences({ node: parsedRootSeed, review: evidenceReview })
+          : undefined;
+        if (deterministicRepair) {
+          const failedReviewReason = evidenceReview.reason;
+          const repairedReview = await reviewThinReadingEvidence({
+            gateway: input.gateway,
+            model: input.model,
+            node: deterministicRepair,
+            onProgress: input.onProgress,
+            prepared: plannedEvidence,
+            provider: input.provider,
+            signal: input.signal
+          });
+          if (repairedReview.verdict === "pass") {
+            parsedRootSeed = deterministicRepair;
+            evidenceReview = repairedReview;
+            deterministicRepairApplied = true;
+            repairReasons.push(`已删除无直接支持的纯外部来源句：${failedReviewReason}`);
+          }
+        }
+      }
       if (evidenceReview?.verdict === "fail") {
         targetedEvidenceRepair = {
           node: parsedRootSeed,
@@ -877,7 +963,7 @@ async function generateThinReadingWithQualityRepair(input: {
       }
       const qualityGate = {
         attempts: attempt,
-        repaired: attempt > 1,
+        repaired: attempt > 1 || deterministicRepairApplied,
         repairReasons: repairReasons.map((reason) => reason.slice(0, 600))
       } as const;
       const persistedEvidenceIds = new Set(parsedRootSeed.evidence.paperEvidence);

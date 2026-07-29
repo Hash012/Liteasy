@@ -958,6 +958,37 @@ describe("useArtifactActions", () => {
     });
   });
 
+  test("diagnoses evidence-review failures as source support problems", async () => {
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({ imported: true });
+    runAgentAnalysis.mockImplementationOnce(async (_artifactType, onProgress) => {
+      onProgress?.({
+        message: "正在复核薄读句子与证据的对应关系",
+        progress: 73,
+        stage: "thin_reading_planning"
+      });
+      throw new Error("薄读证据复核未通过：外部来源摘要没有直接支持该句。");
+    });
+
+    act(() => {
+      result.current.startAnalysis("thin_reading");
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(artifactStore.getTasks()[0]).toMatchObject({
+      failure: {
+        failedStage: "thin_reading_planning",
+        recovery: [
+          expect.stringContaining("标题或摘要未直接支持"),
+          expect.stringContaining("只使用目标论文内证据")
+        ]
+      },
+      status: "failed"
+    });
+  });
+
   test("cancels a running Agent artifact and never saves its partial result", async () => {
     const artifactStore = createArtifactStore();
     const cancelAgentRun = vi.fn(async () => undefined);

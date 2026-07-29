@@ -168,6 +168,12 @@ function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
       "若 PDF 没有文字层，请检查 OCR 语言设置并查看导入阶段返回的具体页码错误。"
     ];
   }
+  if (normalized.includes("证据复核未通过")) {
+    return [
+      "绑定来源的标题或摘要未直接支持正文判断，系统已阻止保存该句。",
+      "重新生成以检索更直接的来源，或明确要求只使用目标论文内证据。"
+    ];
+  }
   if (normalized.includes("401") || normalized.includes("unauthorized") || normalized.includes("api key")) {
     return [
       "确认 project-docs/test-api.md 中的 API key 已同步到 dev-cloud/.env.local。",
