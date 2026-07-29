@@ -75,11 +75,16 @@ export type ThinReadingExternalSource = {
   authors: readonly string[];
   arxivId?: string;
   doi?: string;
+  evidenceBasis?: "abstract" | "full_text";
+  fullTextEvidence?: readonly ThinReadingExternalEvidence[];
+  fullTextUrl?: string;
   id: string;
   isRetracted?: boolean;
   provider: "arxiv" | "crossref" | "openalex";
   relation: "cited_by_target" | "cites_target" | "related" | "topic_search";
   relevance: number;
+  retrievalIntents?: readonly ("challenge" | "context" | "support")[];
+  retrievalQueries?: readonly string[];
   retrievalQuery: string;
   sourceRecordUrl: string;
   sourceId: string;
@@ -87,6 +92,23 @@ export type ThinReadingExternalSource = {
   url: string;
   year?: number;
 };
+
+export type ThinReadingExternalEvidence = {
+  contentHash: string;
+  finalUrl: string;
+  id: string;
+  page: number;
+  pageTextEnd?: number;
+  pageTextStart?: number;
+  quote: string;
+  textExtraction: "embedded";
+};
+
+export type ThinReadingPropositionVerdict =
+  | "supported"
+  | "partial"
+  | "contradicted"
+  | "insufficient";
 
 export type ThinReadingClaimStatus = "grounded" | "unsupported" | "weak";
 
@@ -151,6 +173,11 @@ export type ThinReadingGenerationAudit = {
     query?: string;
   }[];
   evidenceReview?: {
+    propositionVerdicts?: readonly {
+      proposition: string;
+      sentenceId: string;
+      verdict: ThinReadingPropositionVerdict;
+    }[];
     reason: string;
     unsupportedSentenceIds: readonly string[];
     verdict: "pass";

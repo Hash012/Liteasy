@@ -49,8 +49,13 @@ import type {
 } from "../thin-reading/thinReading.types";
 import {
   createThinReadingExternalKnowledgeClient,
+  thinReadingExternalCandidateLimit,
   type ThinReadingExternalKnowledgeTransport
 } from "../thin-reading/thinReadingExternalKnowledgeClient";
+import {
+  enrichThinReadingSourcesWithFullText,
+  type ThinReadingExternalPdfTransport
+} from "../thin-reading/thinReadingExternalFullTextClient";
 import { executeThinReadingEvidenceToolPlan } from "../thin-reading/thinReadingEvidenceTools";
 
 type GenerateAssistantAnswerInput = {
@@ -70,6 +75,7 @@ type GenerateAssistantAnswerInput = {
   thinReadingContext?: ThinReadingGenerationContext | null;
   thinReadingClosurePolicy?: ThinReadingClosurePolicy;
   thinReadingExternalKnowledgeTransport?: ThinReadingExternalKnowledgeTransport;
+  thinReadingExternalPdfTransport?: ThinReadingExternalPdfTransport;
 };
 
 function isMockEndpoint(endpoint: string) {
@@ -456,15 +462,80 @@ function buildThinReadingExternalQuery(context: ThinReadingGenerationContext) {
     .slice(0, 500);
 }
 
+export type ThinReadingExternalQueryPlanItem = {
+  intent: "challenge" | "context" | "support";
+  query: string;
+};
+
+function appendExternalQueryFocus(query: string, focus: string) {
+  const suffix = ` ${focus}`;
+  return `${query.slice(0, Math.max(1, 500 - suffix.length)).trim()}${suffix}`.trim();
+}
+
+export function buildThinReadingExternalQueryPlan(
+  context: ThinReadingGenerationContext
+): ThinReadingExternalQueryPlanItem[] {
+  const baseQuery = buildThinReadingExternalQuery(context);
+  const candidates: ThinReadingExternalQueryPlanItem[] = [
+    { intent: "support", query: baseQuery },
+    {
+      intent: "challenge",
+      query: appendExternalQueryFocus(baseQuery, "limitations failure cases conflicting results")
+    },
+    {
+      intent: "context",
+      query: appendExternalQueryFocus(baseQuery, "replication comparison follow-up research")
+    }
+  ];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = candidate.query.replace(/\s+/g, " ").trim().toLowerCase();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 function mergeThinReadingExternalSources(
   ...groups: Array<readonly ThinReadingExternalSource[] | undefined>
 ): ThinReadingExternalSource[] {
   const sources = new Map<string, ThinReadingExternalSource>();
+  const relationRank = (source: ThinReadingExternalSource) => (
+    source.relation === "cited_by_target" || source.relation === "cites_target" ? 2 :
+      source.relation === "related" ? 1 : 0
+  );
   for (const group of groups) {
     for (const source of group ?? []) {
-      if (!sources.has(source.id)) {
+      const existing = sources.get(source.id);
+      if (!existing) {
         sources.set(source.id, source);
+        continue;
       }
+      const sourceWins = relationRank(source) > relationRank(existing) ||
+        (relationRank(source) === relationRank(existing) && source.relevance > existing.relevance);
+      const primary = sourceWins ? source : existing;
+      sources.set(source.id, {
+        ...primary,
+        evidenceBasis: existing.evidenceBasis === "full_text" || source.evidenceBasis === "full_text"
+          ? "full_text"
+          : "abstract",
+        ...(existing.fullTextEvidence?.length || source.fullTextEvidence?.length
+          ? { fullTextEvidence: existing.fullTextEvidence?.length ? existing.fullTextEvidence : source.fullTextEvidence }
+          : {}),
+        ...(existing.fullTextUrl || source.fullTextUrl
+          ? { fullTextUrl: existing.fullTextUrl ?? source.fullTextUrl }
+          : {}),
+        retrievalIntents: [...new Set([
+          ...(existing.retrievalIntents ?? ["support"]),
+          ...(source.retrievalIntents ?? ["support"])
+        ])],
+        retrievalQueries: [...new Set([
+          ...(existing.retrievalQueries ?? [existing.retrievalQuery]),
+          ...(source.retrievalQueries ?? [source.retrievalQuery])
+        ])]
+      });
     }
   }
   return [...sources.values()];
@@ -474,6 +545,7 @@ export function prioritizeThinReadingGenerationSources(input: {
   context: ThinReadingGenerationContext;
   sources: readonly ThinReadingExternalSource[];
 }) {
+  const maximumGenerationSources = 8;
   const explicitlySelected = new Set([
     ...(input.context.selectedExternalSources ?? []).map((source) => source.id),
     ...(input.context.source.kind === "selected_text" ? input.context.source.externalSourceIds ?? [] : [])
@@ -481,20 +553,40 @@ export function prioritizeThinReadingGenerationSources(input: {
   const trustedSources = input.sources.filter((source) => source.isRetracted !== true && (
     source.abstract.replace(/\s+/g, " ").trim().length >= 16 || explicitlySelected.has(source.id)
   ));
+  const compareSources = (left: ThinReadingExternalSource, right: ThinReadingExternalSource) => {
+    const relationRank = (source: ThinReadingExternalSource) => (
+      source.relation === "cited_by_target" || source.relation === "cites_target" ? 2 :
+        source.relation === "related" ? 1 : 0
+    );
+    const explicitRank = Number(explicitlySelected.has(right.id)) - Number(explicitlySelected.has(left.id));
+    const publicationRank = (source: ThinReadingExternalSource) => source.provider === "arxiv" ? 1 : 0;
+    return relationRank(right) - relationRank(left) ||
+      explicitRank ||
+      publicationRank(left) - publicationRank(right) ||
+      right.relevance - left.relevance;
+  };
   const hasCitationEdge = trustedSources.some((source) =>
     source.relation === "cited_by_target" || source.relation === "cites_target"
   );
   if (!hasCitationEdge) {
-    return [...trustedSources].sort((left, right) => {
-      const publicationRank = (source: ThinReadingExternalSource) => source.provider === "arxiv" ? 1 : 0;
-      return publicationRank(left) - publicationRank(right) || right.relevance - left.relevance;
-    });
+    return [...trustedSources].sort(compareSources).slice(0, maximumGenerationSources);
   }
   return trustedSources.filter((source) =>
     source.relation === "cited_by_target" ||
     source.relation === "cites_target" ||
     explicitlySelected.has(source.id)
-  );
+  ).sort(compareSources).slice(0, maximumGenerationSources);
+}
+
+function shouldAcquireThinReadingFullText(context: ThinReadingGenerationContext) {
+  const focus = context.source.kind === "selected_text"
+    ? `${context.source.excerpt} ${context.source.prompt ?? ""}`
+    : context.source.kind === "omitted_section"
+      ? context.source.label
+      : context.prompt ?? "";
+  return context.interpretationPlan?.requestedDepth === "deep" ||
+    externalResearchIntent.test(focus) ||
+    /实验|方法|局限|失败|消融|复现|矛盾|冲突|experiment|method|limitation|failure|ablation|replicat|contradict/i.test(focus);
 }
 
 function truncateThinReadingRepairEvidence(value: string, maximum = 1200) {
@@ -987,6 +1079,9 @@ async function generateThinReadingWithQualityRepair(input: {
         } : {}),
         ...(evidenceReview ? {
           evidenceReview: {
+            ...(evidenceReview.propositionVerdicts ? {
+              propositionVerdicts: evidenceReview.propositionVerdicts.map((item) => ({ ...item }))
+            } : {}),
             reason: evidenceReview.reason,
             unsupportedSentenceIds: [...evidenceReview.unsupportedSentenceIds],
             verdict: "pass"
@@ -1052,7 +1147,8 @@ export async function generateAssistantAnswer({
   signal,
   thinReadingContext,
   thinReadingClosurePolicy,
-  thinReadingExternalKnowledgeTransport
+  thinReadingExternalKnowledgeTransport,
+  thinReadingExternalPdfTransport
 }: GenerateAssistantAnswerInput) {
   if (signal?.aborted) {
     throw new Error("Assistant answer generation was cancelled");
@@ -1129,18 +1225,46 @@ export async function generateAssistantAnswer({
       });
       let externalKnowledge;
       try {
-        externalKnowledge = await createThinReadingExternalKnowledgeClient({
+        const externalKnowledgeClient = createThinReadingExternalKnowledgeClient({
           endpoint: activeEndpoint,
           openAlexApiKey: settings["thin_reading.openalex_api_key"],
           transport: thinReadingExternalKnowledgeTransport
-        })({
-          artifactId: context.artifactId,
-          limit: 5,
-          query: buildThinReadingExternalQuery(context),
-          signal,
-          targetPaperIdentity: context.primaryPaperIdentity,
-          targetPaperTitle: context.primaryPaperTitle
         });
+        const queryPlan = buildThinReadingExternalQueryPlan(context);
+        const retrievalResults = await Promise.allSettled(queryPlan.map((item) => (
+          externalKnowledgeClient({
+            artifactId: context.artifactId,
+            intent: item.intent,
+            limit: item.intent === "support" ? thinReadingExternalCandidateLimit : 12,
+            query: item.query,
+            signal,
+            targetPaperIdentity: item.intent === "support" ? context.primaryPaperIdentity : undefined,
+            targetPaperTitle: context.primaryPaperTitle
+          })
+        )));
+        if (signal?.aborted) {
+          throw new DOMException("The operation was aborted", "AbortError");
+        }
+        const completedRetrievals = retrievalResults.flatMap((result) => (
+          result.status === "fulfilled" ? [result.value] : []
+        ));
+        if (completedRetrievals.length === 0) {
+          const firstFailure = retrievalResults.find((result) => result.status === "rejected");
+          throw firstFailure?.status === "rejected"
+            ? firstFailure.reason
+            : new Error("外部文献多路检索未返回结果。");
+        }
+        externalKnowledge = {
+          retrievals: completedRetrievals.flatMap((result) => result.retrieval ? [result.retrieval] : []),
+          sources: mergeThinReadingExternalSources(...completedRetrievals.map((result) => result.sources))
+        };
+        if (retrievalResults.some((result) => result.status === "rejected")) {
+          onProgress?.({
+            phase: "retrieving_external_knowledge",
+            progress: 52,
+            summary: "部分检索路径暂不可用，正在使用其余可追溯来源"
+          });
+        }
       } catch (error) {
         if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
           throw error;
@@ -1155,7 +1279,7 @@ export async function generateAssistantAnswer({
           summary: "联网检索暂不可用，正在复用已验证的外部文献"
         });
       }
-      if (externalKnowledge.retrieval?.reused) {
+      if (externalKnowledge.retrievals?.some((retrieval) => retrieval.reused)) {
         onProgress?.({
           phase: "retrieving_external_knowledge",
           progress: 52,
@@ -1166,12 +1290,25 @@ export async function generateAssistantAnswer({
         carriedExternalSources,
         externalKnowledge.sources
       );
-      const externalSources = prioritizeThinReadingGenerationSources({
+      let externalSources = prioritizeThinReadingGenerationSources({
         context,
         sources: retrievedSources
       });
       if (externalSources.length === 0) {
         throw new Error("论文内证据不足且未检索到可信、可追溯的外部文献，本次薄读生成已停止。");
+      }
+      if (shouldAcquireThinReadingFullText(context) && externalSources.some((source) => source.fullTextUrl)) {
+        onProgress?.({
+          phase: "retrieving_external_knowledge",
+          progress: 53,
+          summary: "正在核验高价值来源的开放全文与页级证据"
+        });
+        externalSources = await enrichThinReadingSourcesWithFullText({
+          endpoint: activeEndpoint,
+          signal,
+          sources: externalSources,
+          transport: thinReadingExternalPdfTransport
+        });
       }
       context = { ...context, externalSources };
     } else if (carriedExternalSources.length > 0) {

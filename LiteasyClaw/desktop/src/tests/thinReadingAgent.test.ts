@@ -237,10 +237,34 @@ describe("thinReadingAgent", () => {
     const sentenceId = node.evidence.summarySentences[0].id;
     expect(prompt).toContain("证据复核 Agent");
     expect(prompt).toContain(sentenceId);
+    expect(prompt).toContain("supported（直接支持）");
+    expect(prompt).toContain("contradicted（证据明确冲突）");
+    expect(parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{
+          proposition: "taxonomy 组织知识地图",
+          sentenceId,
+          verdict: "partial"
+        }],
+        reason: "证据仅支持提出 taxonomy，不能支持它组织整张知识地图。",
+        unsupportedSentenceIds: [sentenceId],
+        verdict: "fail"
+      }),
+      sentenceIds: [sentenceId]
+    }).propositionVerdicts).toEqual([expect.objectContaining({ sentenceId, verdict: "partial" })]);
     expect(parseThinReadingEvidenceReview({
       output: JSON.stringify({ reason: "该句将 taxonomy 的作用夸大为因果结论。", unsupportedSentenceIds: [sentenceId], verdict: "fail" }),
       sentenceIds: [sentenceId]
     })).toMatchObject({ verdict: "fail", unsupportedSentenceIds: [sentenceId] });
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 是主轴", sentenceId, verdict: "supported" }],
+        reason: "命题与整句判定相互矛盾，因此该输出必须被拒绝。",
+        unsupportedSentenceIds: [sentenceId],
+        verdict: "fail"
+      }),
+      sentenceIds: [sentenceId]
+    })).toThrow("必须与 unsupportedSentenceIds 完全对应");
     expect(() => parseThinReadingEvidenceReview({
       output: JSON.stringify({ reason: "该句没有对应的论文证据，因此不能被复核通过。", unsupportedSentenceIds: ["invented-sentence"], verdict: "fail" }),
       sentenceIds: [sentenceId]

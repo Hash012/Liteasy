@@ -11,6 +11,7 @@ export type ThinReadingExternalKnowledgeTransport = (request: {
 
 type SearchInput = {
   artifactId: string;
+  intent?: "challenge" | "context" | "support";
   limit?: number;
   query: string;
   signal?: AbortSignal;
@@ -20,6 +21,8 @@ type SearchInput = {
     value: string;
   };
 };
+
+export const thinReadingExternalCandidateLimit = 32;
 
 export type ThinReadingExternalRetrievalState = {
   attempts: number;
@@ -69,6 +72,7 @@ function isExternalSource(value: unknown): value is ThinReadingExternalSource {
       source.relation === "related" ||
       source.relation === "topic_search") &&
     typeof source.relevance === "number" && Number.isFinite(source.relevance) &&
+    (source.fullTextUrl === undefined || (typeof source.fullTextUrl === "string" && /^https:\/\//i.test(source.fullTextUrl))) &&
     (source.isRetracted === undefined || typeof source.isRetracted === "boolean") &&
     typeof source.retrievalQuery === "string";
 }
@@ -114,7 +118,7 @@ export function createThinReadingExternalKnowledgeClient(input: {
     const response = await (input.transport ?? defaultTransport)({
       body: JSON.stringify({
         artifactId: search.artifactId,
-        limit: search.limit ?? 5,
+        limit: search.limit ?? thinReadingExternalCandidateLimit,
         query: search.query,
         targetPaperIdentity: search.targetPaperIdentity,
         targetPaperTitle: search.targetPaperTitle
@@ -154,11 +158,17 @@ export function createThinReadingExternalKnowledgeClient(input: {
     ) {
       throw new Error("外部文献检索返回格式无效");
     }
+    const sources = payload.sources as ThinReadingExternalSource[];
     return {
       ...(isRetrievalState("retrieval" in payload ? payload.retrieval : undefined)
         ? { retrieval: payload.retrieval }
         : {}),
-      sources: payload.sources.filter(isTrustedThinReadingExternalSource)
+      sources: sources.filter(isTrustedThinReadingExternalSource).map((source) => ({
+        ...source,
+        evidenceBasis: "abstract" as const,
+        retrievalIntents: [search.intent ?? "support"],
+        retrievalQueries: [search.query]
+      }))
     };
   };
 }

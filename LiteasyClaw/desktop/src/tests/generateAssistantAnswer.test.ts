@@ -1,4 +1,5 @@
 import {
+  buildThinReadingExternalQueryPlan,
   generateAssistantAnswer,
   planThinReadingInterpretation,
   prioritizeThinReadingGenerationSources,
@@ -39,6 +40,53 @@ test("prioritizes verified citation edges over unselected topic-search sources f
     },
     sources
   }).map((source) => source.id)).toEqual(["openalex:W1", "openalex:W2"]);
+});
+
+test("keeps the generation context bounded after retrieving a larger candidate pool", () => {
+  const sources = Array.from({ length: 12 }, (_, index) => ({
+    abstract: `This abstract directly supports retrieval candidate ${index}.`,
+    authors: [],
+    id: `openalex:W${index + 10}`,
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 1 - index / 20,
+    retrievalQuery: "retrieval evaluation",
+    sourceId: `W${index + 10}`,
+    sourceRecordUrl: `https://openalex.org/W${index + 10}`,
+    title: `Retrieval candidate ${index}`,
+    url: `https://openalex.org/W${index + 10}`
+  }));
+
+  const selected = prioritizeThinReadingGenerationSources({
+    context: {
+      artifactId: "artifact-candidate-pool",
+      depth: 1,
+      paperIds: ["paper-1"],
+      primaryPaperId: "paper-1",
+      source: { kind: "selected_text" as const, excerpt: "retrieval evaluation" },
+      targetLanguage: "en-US"
+    },
+    sources
+  });
+
+  expect(selected).toHaveLength(8);
+  expect(selected.map((source) => source.id)).toEqual(sources.slice(0, 8).map((source) => source.id));
+});
+
+test("builds bounded support, challenge, and context queries for external evidence", () => {
+  const plan = buildThinReadingExternalQueryPlan({
+    artifactId: "artifact-query-plan",
+    depth: 2,
+    paperIds: ["paper-1"],
+    primaryPaperId: "paper-1",
+    primaryPaperTitle: "A Retrieval Study",
+    source: { kind: "selected_text", excerpt: "late interaction efficiency" },
+    targetLanguage: "en-US"
+  });
+
+  expect(plan.map((item) => item.intent)).toEqual(["support", "challenge", "context"]);
+  expect(plan.every((item) => item.query.length <= 500)).toBe(true);
+  expect(plan.find((item) => item.intent === "challenge")?.query).toContain("conflicting results");
 });
 
 test("generates cloud-proxy answers by default", async () => {
@@ -1515,22 +1563,31 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     }
   });
 
-  expect(externalRequests).toHaveLength(1);
+  expect(externalRequests).toHaveLength(3);
   expect(progressSummaries).toContain("正在复用已验证的外部文献来源");
-  expect(JSON.parse(externalRequests[0].body)).toMatchObject({
+  const externalBodies = externalRequests.map((request) => JSON.parse(request.body));
+  expect(externalBodies[0]).toMatchObject({
+    limit: 32,
     targetPaperIdentity: {
       kind: "local_paper_id",
       value: "demo-1"
     }
   });
-  expect(externalRequests[0].url).toContain("/v1/research/external-knowledge");
-  expect(externalRequests[0].headers).toMatchObject({ "X-OpenAlex-Api-Key": "user-openalex-key" });
-  expect(externalRequests[0].body).not.toContain("user-openalex-key");
+  expect(externalBodies.slice(1).map((body) => body.limit)).toEqual([12, 12]);
+  expect(externalBodies.map((body) => body.query)).toEqual(expect.arrayContaining([
+    expect.stringContaining("conflicting results"),
+    expect.stringContaining("follow-up research")
+  ]));
+  expect(externalRequests.every((request) => request.url.includes("/v1/research/external-knowledge"))).toBe(true);
+  expect(externalRequests.every((request) => request.headers["X-OpenAlex-Api-Key"] === "user-openalex-key")).toBe(true);
+  expect(externalRequests.every((request) => !request.body.includes("user-openalex-key"))).toBe(true);
   expect(modelRequestBody).not.toContain("user-openalex-key");
   expect(modelPrompt).toContain("openalex:W42");
   expect(modelPrompt).toContain("Efficient Multi-vector Retrieval");
   expect(result.thinReading?.rootSeed.evidence.externalSources?.[0]).toMatchObject({
+    evidenceBasis: "abstract",
     id: "openalex:W42",
+    retrievalIntents: ["support", "challenge", "context"],
     url: "https://openalex.org/W42"
   });
   expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);

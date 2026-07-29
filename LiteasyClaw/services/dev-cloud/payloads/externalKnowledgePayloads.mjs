@@ -2,10 +2,13 @@ const openAlexEndpoint = "https://api.openalex.org/works";
 const crossrefEndpoint = "https://api.crossref.org/works";
 const arxivEndpoint = "https://export.arxiv.org/api/query";
 const maximumQueryLength = 500;
-const maximumResults = 8;
-const maximumGraphNeighborsPerRelation = 3;
+const maximumResults = 32;
+const maximumGraphNeighborsPerRelation = 6;
 const maximumArxivFeedBytes = 1024 * 1024;
 const minimumArxivRequestIntervalMs = 3000;
+const reciprocalRankConstant = 60;
+const diversityWeight = 0.22;
+const retrievalRanks = Symbol("externalKnowledgeRetrievalRanks");
 let arxivTransportQueue = Promise.resolve();
 let nextArxivRequestAt = 0;
 
@@ -188,6 +191,10 @@ function normalizeWork(work, input, rank) {
   const doi = normalizeDoi(work?.doi);
   const arxivId = arxivIdFromWork(work);
   const landingPage = normalizeText(work?.primary_location?.landing_page_url);
+  const fullTextUrl = [
+    work?.primary_location?.pdf_url,
+    work?.best_oa_location?.pdf_url
+  ].map(normalizeText).find((candidate) => /^https:\/\//i.test(candidate));
   const url = landingPage || doi || normalizeText(work?.id);
   if (!url || !/^https?:\/\//i.test(url)) {
     return null;
@@ -212,6 +219,7 @@ function normalizeWork(work, input, rank) {
     ...(arxivId ? { arxivId } : {}),
     authors,
     doi,
+    ...(fullTextUrl ? { fullTextUrl } : {}),
     id: `openalex:${sourceId}`,
     ...(typeof work?.is_retracted === "boolean" ? { isRetracted: work.is_retracted } : {}),
     ...(openAccessAvailable ? { openAccessAvailable: true } : {}),
@@ -448,7 +456,11 @@ export async function searchOpenAlexExternalKnowledge(body, options = {}) {
     targetPaperTitle,
     targetWork
   }, options);
-  const sources = mergeExternalSources([...graphSources, ...searchedSources], limit);
+  const sources = mergeExternalSources(
+    [...graphSources, ...searchedSources],
+    limit,
+    { rerank: false }
+  );
   return {
     provider: "openalex",
     query,
@@ -492,11 +504,20 @@ function normalizeCrossrefWork(item, query, rank) {
   const openAccessAvailable = Array.isArray(item?.link) && item.link.some((link) => (
     /pdf/i.test(normalizeText(link?.["content-type"])) && /^https?:\/\//i.test(normalizeText(link?.URL))
   ));
+  const fullTextUrl = Array.isArray(item?.link)
+    ? item.link
+        .map((link) => ({
+          contentType: normalizeText(link?.["content-type"]),
+          url: normalizeText(link?.URL)
+        }))
+        .find((link) => /pdf/i.test(link.contentType) && /^https:\/\//i.test(link.url))?.url
+    : undefined;
   return {
     abstract: normalizeText(item?.abstract).replace(/<[^>]*>/g, "").slice(0, 2400),
     ...(arxivId ? { arxivId } : {}),
     authors: crossrefAuthors(item),
     doi: `https://doi.org/${doiKey}`,
+    ...(fullTextUrl ? { fullTextUrl } : {}),
     id: `crossref:${doiKey}`,
     ...(isRetracted ? { isRetracted: true } : {}),
     ...(openAccessAvailable ? { openAccessAvailable: true } : {}),
@@ -597,6 +618,7 @@ function normalizeArxivEntry(entry, query, targetPaperTitle, rank) {
     authors: xmlTagValues(entry, "name").slice(0, 12),
     ...(doi ? { doi } : {}),
     id: `arxiv:${arxivId}`,
+    fullTextUrl: `https://arxiv.org/pdf/${arxivId}`,
     openAccessAvailable: true,
     provider: "arxiv",
     relation: "topic_search",
@@ -676,6 +698,73 @@ function relationRank(relation) {
   return 1;
 }
 
+function sourceTokens(source) {
+  return new Set(
+    normalizeTitle(`${source?.title ?? ""} ${source?.abstract ?? ""}`)
+      .split(" ")
+      .filter((token) => token.length > 2)
+  );
+}
+
+function sourceSimilarity(left, right) {
+  const leftTokens = sourceTokens(left);
+  const rightTokens = sourceTokens(right);
+  if (leftTokens.size === 0 || rightTokens.size === 0) {
+    return 0;
+  }
+  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  return intersection / (leftTokens.size + rightTokens.size - intersection);
+}
+
+function retrievalRankScore(source) {
+  const ranks = source?.[retrievalRanks] instanceof Map
+    ? [...source[retrievalRanks].values()]
+    : [];
+  const maximumRrf = 3 / (reciprocalRankConstant + 1);
+  const rrf = ranks.reduce((sum, rank) => sum + 1 / (reciprocalRankConstant + rank), 0);
+  return maximumRrf > 0 ? Math.min(1, rrf / maximumRrf) : 0;
+}
+
+function fusedRelevance(source) {
+  const query = source?.retrievalQuery ?? "";
+  const lexical = lexicalOverlap(query, `${source?.title ?? ""} ${source?.abstract ?? ""}`);
+  const relation = relationRank(source?.relation) / 3;
+  const records = Array.isArray(source?.sourceRecords) ? source.sourceRecords.length : 1;
+  const providerAgreement = Math.min(1, Math.max(0, records - 1) / 2);
+  const abstractQuality = Math.min(1, normalizeText(source?.abstract).length / 320);
+  const score =
+    0.28 * Math.max(0, Math.min(1, source?.relevance ?? 0)) +
+    0.24 * lexical +
+    0.2 * relation +
+    0.12 * retrievalRankScore(source) +
+    0.08 * providerAgreement +
+    0.05 * abstractQuality +
+    0.03 * (source?.openAccessAvailable === true ? 1 : 0);
+  return Number(Math.min(1, score).toFixed(3));
+}
+
+function diversifySources(sources, limit) {
+  const remaining = [...sources];
+  const selected = [];
+  while (remaining.length > 0 && selected.length < limit) {
+    remaining.sort((left, right) => {
+      const leftSimilarity = selected.length === 0
+        ? 0
+        : Math.max(...selected.map((source) => sourceSimilarity(left, source)));
+      const rightSimilarity = selected.length === 0
+        ? 0
+        : Math.max(...selected.map((source) => sourceSimilarity(right, source)));
+      const leftScore = (1 - diversityWeight) * left.relevance - diversityWeight * leftSimilarity;
+      const rightScore = (1 - diversityWeight) * right.relevance - diversityWeight * rightSimilarity;
+      return rightScore - leftScore ||
+        relationRank(right.relation) - relationRank(left.relation) ||
+        left.title.localeCompare(right.title);
+    });
+    selected.push(remaining.shift());
+  }
+  return selected;
+}
+
 function sourceRecord(source) {
   return {
     ...(source.arxivId ? { arxivId: source.arxivId } : {}),
@@ -697,9 +786,16 @@ function mergeSourceRecords(...sources) {
     .slice(0, 6);
 }
 
-function mergeExternalSources(sources, limit) {
+function mergeExternalSources(sources, limit, options = {}) {
   const deduplicated = new Map();
-  for (const source of sources) {
+  const providerRanks = new Map();
+  for (const rawSource of sources) {
+    const providerRank = (providerRanks.get(rawSource.provider) ?? 0) + 1;
+    providerRanks.set(rawSource.provider, providerRank);
+    const source = {
+      ...rawSource,
+      [retrievalRanks]: new Map([[rawSource.provider, providerRank]])
+    };
     const doiIdentity = sourceDoiKey(source);
     const arxivIdentity = sourceArxivKey(source);
     const key = doiIdentity
@@ -717,7 +813,9 @@ function mergeExternalSources(sources, limit) {
       continue;
     }
     const sourceWins = relationRank(source.relation) > relationRank(existing.relation) ||
-      (relationRank(source.relation) === relationRank(existing.relation) && source.relevance > existing.relevance);
+      (source.provider === existing.provider &&
+        relationRank(source.relation) === relationRank(existing.relation) &&
+        source.relevance > existing.relevance);
     const primary = sourceWins ? source : existing;
     const doiKey = sourceDoiKey(primary) || sourceDoiKey(existing) || sourceDoiKey(source);
     const arxivKey = sourceArxivKey(primary) || sourceArxivKey(existing) || sourceArxivKey(source);
@@ -731,7 +829,14 @@ function mergeExternalSources(sources, limit) {
       ...(existing.openAccessAvailable === true || source.openAccessAvailable === true
         ? { openAccessAvailable: true }
         : {}),
-      sourceRecords: mergeSourceRecords(existing, source)
+      ...(primary.fullTextUrl || existing.fullTextUrl || source.fullTextUrl
+        ? { fullTextUrl: primary.fullTextUrl || existing.fullTextUrl || source.fullTextUrl }
+        : {}),
+      sourceRecords: mergeSourceRecords(existing, source),
+      [retrievalRanks]: new Map([
+        ...(existing[retrievalRanks] ?? new Map()),
+        ...(source[retrievalRanks] ?? new Map())
+      ])
     };
     if (existingEntry) {
       deduplicated.delete(existingEntry[0]);
@@ -743,9 +848,25 @@ function mergeExternalSources(sources, limit) {
       merged
     );
   }
-  return [...deduplicated.values()]
-    .sort((left, right) => relationRank(right.relation) - relationRank(left.relation) || right.relevance - left.relevance || left.title.localeCompare(right.title))
-    .slice(0, limit);
+  const deduplicatedSources = [...deduplicated.values()];
+  if (options.rerank === false) {
+    return deduplicatedSources
+      .sort((left, right) => relationRank(right.relation) - relationRank(left.relation) ||
+        right.relevance - left.relevance || left.title.localeCompare(right.title))
+      .slice(0, limit)
+      .map((source) => {
+        const { [retrievalRanks]: _ranks, ...publicSource } = source;
+        return publicSource;
+      });
+  }
+  const reranked = deduplicatedSources.map((source) => ({
+    ...source,
+    relevance: fusedRelevance(source)
+  }));
+  return diversifySources(reranked, limit).map((source) => {
+    const { [retrievalRanks]: _ranks, ...publicSource } = source;
+    return publicSource;
+  });
 }
 
 export async function searchExternalKnowledge(body, options = {}) {
@@ -779,7 +900,11 @@ export async function searchExternalKnowledge(body, options = {}) {
     (!arxivEnabled || arxiv.status === "rejected")) {
     throw openAlex.reason instanceof Error ? openAlex.reason : crossref.reason ?? arxiv.reason;
   }
-  const sources = mergeExternalSources([...openAlexSources, ...crossrefSources, ...arxivSources], limit);
+  const sources = mergeExternalSources(
+    [...openAlexSources, ...crossrefSources, ...arxivSources],
+    limit,
+    { rerank: options.rerank !== false }
+  );
   const providers = [
     ...(openAlexSources.length > 0 ? ["openalex"] : []),
     ...(crossrefSources.length > 0 ? ["crossref"] : []),

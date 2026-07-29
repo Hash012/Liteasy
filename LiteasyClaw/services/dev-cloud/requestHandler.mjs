@@ -70,6 +70,7 @@ import {
   ExternalKnowledgeError,
   searchExternalKnowledge
 } from "./payloads/externalKnowledgePayloads.mjs";
+import { fetchSecurePdf, SecurePdfFetchError } from "./securePdfFetch.mjs";
 
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
 // 仍保留明确上限以防止本地开发服务被无界请求占满内存。
@@ -102,6 +103,7 @@ const availableEndpoints = [
   "POST /v1/recommendations",
   "POST /v1/recommendations/feedback",
   "POST /v1/research/external-knowledge",
+  "POST /v1/research/external-pdf",
   "POST /v1/profile/get",
   "POST /v1/profile/save",
   "POST /v1/profile/clear",
@@ -391,6 +393,12 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     customConfig.agentArtifactRepository ?? createAgentArtifactRepository({
       resultDirectory: customConfig.agentArtifactResultDirectory
     });
+  const configuredExternalPdfConcurrency = Number(customConfig.maximumConcurrentExternalPdfFetches);
+  const maximumConcurrentExternalPdfFetches = Math.max(
+    1,
+    Math.min(8, Number.isFinite(configuredExternalPdfConcurrency) ? Math.floor(configuredExternalPdfConcurrency) : 4)
+  );
+  let activeExternalPdfFetches = 0;
 
   return async (request, response) => {
     const method = request.method ?? "GET";
@@ -754,7 +762,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
             crossrefTransport: customConfig.crossrefTransport,
             openAlexApiKey: openAlexApiKeyFromRequest(request),
             openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
-            openAlexTransport: customConfig.openAlexTransport
+            openAlexTransport: customConfig.openAlexTransport,
+            rerank: false
           });
           return {
             relatedDocumentTitle: document.title,
@@ -785,7 +794,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
             crossrefTransport: customConfig.crossrefTransport,
             openAlexApiKey: openAlexApiKeyFromRequest(request),
             openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
-            openAlexTransport: customConfig.openAlexTransport
+            openAlexTransport: customConfig.openAlexTransport,
+            rerank: false
           });
           sourceGroups.push({
             relatedDocumentTitle: "研究画像",
@@ -925,6 +935,54 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           message: error instanceof Error ? error.message : "外部知识检索不可用。",
           ...(failedRun ? { retrieval: failedRun } : {})
         });
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/research/external-pdf") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) {
+        return;
+      }
+      if (typeof body.url !== "string" || body.url.length > 2_048 ||
+        typeof body.sourceId !== "string" || !/^[^\s\u0000-\u001f\u007f]{1,180}$/.test(body.sourceId)) {
+        writeJson(request, response, 400, {
+          error: "invalid_external_pdf_request",
+          message: "外部 PDF 请求缺少有效的来源 ID 或 URL。"
+        });
+        return;
+      }
+      if (activeExternalPdfFetches >= maximumConcurrentExternalPdfFetches) {
+        writeJson(request, response, 429, {
+          error: "external_pdf_capacity_reached",
+          message: "外部 PDF 核验任务已达到并发上限，请稍后重试。"
+        });
+        return;
+      }
+      activeExternalPdfFetches += 1;
+      try {
+        const pdf = await fetchSecurePdf(body.url, {
+          maximumBytes: customConfig.externalPdfMaximumBytes,
+          maximumRedirects: customConfig.externalPdfMaximumRedirects,
+          resolver: customConfig.externalPdfResolver,
+          timeoutMs: customConfig.externalPdfTimeoutMs,
+          transport: customConfig.externalPdfTransport
+        });
+        writeJson(request, response, 200, {
+          byteLength: pdf.bytes.byteLength,
+          bytesBase64: pdf.bytes.toString("base64"),
+          contentHash: pdf.contentHash,
+          contentType: pdf.contentType,
+          finalUrl: pdf.finalUrl,
+          sourceId: body.sourceId
+        });
+      } catch (error) {
+        writeJson(request, response, error instanceof SecurePdfFetchError ? error.statusCode : 502, {
+          error: error instanceof SecurePdfFetchError ? error.code : "external_pdf_unavailable",
+          message: error instanceof Error ? error.message : "外部 PDF 当前不可用。"
+        });
+      } finally {
+        activeExternalPdfFetches -= 1;
       }
       return;
     }

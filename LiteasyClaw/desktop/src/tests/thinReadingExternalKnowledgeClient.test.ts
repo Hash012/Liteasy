@@ -17,6 +17,7 @@ describe("thinReadingExternalKnowledgeClient", () => {
           abstract: "A follow-up abstract.",
           authors: ["A. Author"],
           doi: "https://doi.org/10.1000/follow-up",
+          fullTextUrl: "https://example.org/follow-up.pdf",
           id: "openalex:W42",
           provider: "openalex",
           relation: "cites_target",
@@ -56,7 +57,10 @@ describe("thinReadingExternalKnowledgeClient", () => {
       },
       sources: [expect.objectContaining({
         doi: "https://doi.org/10.1000/follow-up",
+        evidenceBasis: "abstract",
+        fullTextUrl: "https://example.org/follow-up.pdf",
         id: "openalex:W42",
+        retrievalIntents: ["support"],
         sourceRecordUrl: "https://openalex.org/W42",
         sourceId: "W42",
         url: "https://openalex.org/W42"
@@ -69,6 +73,7 @@ describe("thinReadingExternalKnowledgeClient", () => {
       url: "https://liteasy.example.com/v1/research/external-knowledge"
     }));
     expect(String(transport.mock.calls[0][0].body)).toContain('"targetPaperIdentity":{"kind":"doi","value":"10.1000/colbert"}');
+    expect(JSON.parse(String(transport.mock.calls[0][0].body)).limit).toBe(32);
     expect(String(transport.mock.calls[0][0].body)).not.toContain("user-openalex-key");
   });
 
