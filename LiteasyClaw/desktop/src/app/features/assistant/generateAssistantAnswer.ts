@@ -974,6 +974,7 @@ async function generateThinReadingWithQualityRepair(input: {
   prepared: PreparedMultiPaperAnalysis;
   provider: string;
   signal?: AbortSignal;
+  externalSourcesPromise?: Promise<readonly ThinReadingExternalSource[] | undefined>;
 }): Promise<{
   evidenceLoop?: ThinReadingGenerationAudit["evidenceLoop"];
   evidencePlan?: ThinReadingEvidencePlan;
@@ -1091,11 +1092,20 @@ async function generateThinReadingWithQualityRepair(input: {
         ]
       }
     : undefined;
+  const resolvedExternalSources = input.externalSourcesPromise
+    ? await input.externalSourcesPromise
+    : undefined;
+  const generationContext = input.externalSourcesPromise
+    ? {
+        ...input.context,
+        ...(resolvedExternalSources ? { externalSources: resolvedExternalSources } : {})
+      }
+    : input.context;
   const plannedEvidence = evidencePlan
     ? scopeThinReadingEvidence(input.prepared, combinedEvidence.map((evidence) => evidence.id))
     : input.prepared;
   const basePrompt = buildThinReadingAgentPrompt({
-    context: input.context,
+    context: generationContext,
     prepared: plannedEvidence
   });
   const repairReasons: string[] = [];
@@ -1122,8 +1132,8 @@ async function generateThinReadingWithQualityRepair(input: {
         analysisEvidence: plannedEvidence.evidence,
         ancestorSummaries: input.context.ancestorSummaries,
         coverageEvidence: input.prepared.evidence,
-        externalSources: input.context.externalSources,
-        requireExternalKnowledge: requiresThinReadingExternalKnowledge(input.context),
+        externalSources: generationContext.externalSources,
+        requireExternalKnowledge: requiresThinReadingExternalKnowledge(generationContext),
         requireExplicitTraceability: true,
         requiredChineseTerminology,
         targetLanguage: input.context.targetLanguage
@@ -1140,7 +1150,7 @@ async function generateThinReadingWithQualityRepair(input: {
         })
         : undefined;
       if (evidenceReview?.verdict === "fail") {
-        const deterministicRepair = canFallbackFromExternalThinReadingEvidence(input.context)
+        const deterministicRepair = canFallbackFromExternalThinReadingEvidence(generationContext)
           ? removeUnsupportedExternalSentences({ node: parsedRootSeed, review: evidenceReview })
           : undefined;
         if (deterministicRepair) {
@@ -1241,7 +1251,7 @@ async function generateThinReadingWithQualityRepair(input: {
       prompt = buildThinReadingRepairPrompt({
         basePrompt,
         invalidOutput: generation.answer,
-        requireExternalKnowledge: requiresThinReadingExternalKnowledge(input.context),
+        requireExternalKnowledge: requiresThinReadingExternalKnowledge(generationContext),
         reason,
         targetedEvidenceRepair
       });
@@ -1336,7 +1346,8 @@ export async function generateAssistantAnswer({
       context.externalSources,
       context.selectedExternalSources
     );
-    if (shouldRetrieveThinReadingExternalKnowledge(context, thinReadingClosurePolicy)) {
+    const externalSourcesPromise = shouldRetrieveThinReadingExternalKnowledge(context, thinReadingClosurePolicy)
+      ? (async (): Promise<readonly ThinReadingExternalSource[]> => {
       onProgress?.({
         phase: "retrieving_external_knowledge",
         progress: 46,
@@ -1429,16 +1440,13 @@ export async function generateAssistantAnswer({
           transport: thinReadingExternalPdfTransport
         });
       }
-      context = { ...context, externalSources };
-    } else if (carriedExternalSources.length > 0) {
-      context = { ...context, externalSources: carriedExternalSources };
-    }
+      return externalSources;
+      })()
+      : Promise.resolve(carriedExternalSources.length > 0 ? carriedExternalSources : undefined);
     onProgress?.({
       phase: "generating_answer",
       progress: 55,
-      summary: context.source.kind === "root_overview"
-        ? "正在调用真实模型生成薄读总述"
-        : "正在调用真实模型生成薄读下一层"
+      summary: "正在并行准备本地证据与外部来源"
     });
     const thinReadingGeneration = await generateThinReadingWithQualityRepair({
       context,
@@ -1448,7 +1456,8 @@ export async function generateAssistantAnswer({
       onProgress,
       prepared: preparedAnalysis,
       provider,
-      signal
+      signal,
+      externalSourcesPromise
     });
     const { evidenceLoop, evidencePlan, evidenceReview, evidenceToolCalls, generation, qualityGate, rootSeed } = thinReadingGeneration;
     if (signal?.aborted) {

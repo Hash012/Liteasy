@@ -2400,5 +2400,9 @@
         "relevanceScore": 0.426
       }
     ]
+  },
+  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785314191562349113-0::relevance": {
+    "cachedAt": "2026-07-29T17:33:28.562Z",
+    "recommendations": []
   }
 }
