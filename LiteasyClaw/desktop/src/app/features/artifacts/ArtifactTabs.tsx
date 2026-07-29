@@ -16,6 +16,7 @@ type ArtifactTabsProps = {
   activeArtifactId?: string | null;
   analysisHint: string;
   canStartAnalysis: boolean;
+  intuechoEndpoint?: string;
   onActivateArtifact?: (artifactId: string) => void;
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
@@ -127,6 +128,7 @@ export function ArtifactTabs({
   activeArtifactId,
   analysisHint,
   canStartAnalysis,
+  intuechoEndpoint,
   onActivateArtifact,
   onDynamicAction,
   onDeleteArtifact,
@@ -217,6 +219,7 @@ export function ArtifactTabs({
       <ThinReadingTab
         artifactId={activeTab.artifactId}
         document={activeTab.thinReadingDocument}
+        intuechoEndpoint={intuechoEndpoint}
         generationProgress={activeThinReadingTask?.status === "running" ? {
           message: activeThinReadingTask.message,
           progress: activeThinReadingTask.progress,

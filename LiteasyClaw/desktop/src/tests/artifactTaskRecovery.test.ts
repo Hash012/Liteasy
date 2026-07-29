@@ -155,4 +155,16 @@ describe("artifactTaskRecovery", () => {
       reason: "原分支引用的论文证据已变化。"
     });
   });
+
+  test("does not persist a legacy omitted-section branch as retryable input", () => {
+    const document = createDocument();
+
+    expect(() => createThinReadingBranchRecoverySnapshot({
+      artifactId: document.artifactId,
+      document,
+      parentNodeId: document.rootNodeId,
+      primaryPaperId: "paper-1",
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiments" }
+    })).toThrow("薄读分支输入超出可恢复范围");
+  });
 });

@@ -237,14 +237,7 @@ describe("thinReadingProjection", () => {
         omittedSections: [
           { id: "section-experiment", label: "Experiments", sectionKey: "experiment" }
         ],
-        recommendations: [
-          {
-            compatibility: 0.84,
-            id: "intuecho-en",
-            note: "A local pending Intuecho lead.",
-            relationship: "method and problem framing"
-          }
-        ],
+        recommendations: [],
         summary: "ColBERT keeps contextualized token embeddings and uses MaxSim for late interaction."
       }),
       targetLanguage: "en-US"
@@ -252,12 +245,27 @@ describe("thinReadingProjection", () => {
     const root = document.nodes[document.rootNodeId];
 
     expect(root.omittedSections.map((token) => token.label)).toEqual(["Experiments"]);
-    expect(root.recommendations[0]).toMatchObject({
-      note: "A local pending Intuecho lead.",
-      relationship: "method and problem framing"
-    });
+    expect(root.recommendations).toEqual([]);
     expect(root.summary).toContain("ColBERT keeps contextualized token embeddings");
     expect(root.summary).not.toMatch(/围绕|薄读|可用上下文/);
+  });
+
+  test("filters legacy local recommendation leads from new thin-reading documents", () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-local-lead",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed({
+        recommendations: [{
+          compatibility: 0.84,
+          id: "legacy-local-lead",
+          note: "模型生成的本地联想。",
+          relationship: "方法与问题设定",
+          source: "local_agent_lead"
+        }]
+      })
+    });
+
+    expect(document.nodes[document.rootNodeId].recommendations).toEqual([]);
   });
 
   test("adds an omitted-section branch without mutating the input document", () => {

@@ -538,7 +538,7 @@ describe("useArtifactActions", () => {
       await result.current.generateThinReadingBranch({
         artifactId: document.artifactId,
         document,
-        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+        source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
       });
     });
 
@@ -566,7 +566,7 @@ describe("useArtifactActions", () => {
           ],
           parentNodeId: document.rootNodeId,
           parentSummary: expect.stringContaining("Transformer"),
-          source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+          source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
         })
       })
     );
@@ -581,7 +581,7 @@ describe("useArtifactActions", () => {
     const generated = advanceThinReadingDocument(root, {
       parentNodeId: root.rootNodeId,
       seed: fixture.rootSeed,
-      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" },
+      source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" },
       title: "实验"
     });
     const document = { ...generated, activeNodeId: generated.rootNodeId };
@@ -603,7 +603,7 @@ describe("useArtifactActions", () => {
       await result.current.generateThinReadingBranch({
         artifactId: document.artifactId,
         document,
-        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+        source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
       });
     });
 
@@ -614,6 +614,36 @@ describe("useArtifactActions", () => {
         thinReadingDocument: expect.objectContaining({ paperIds: ["paper-attention"] })
       })
     );
+  });
+
+  test("rejects a branch request that does not originate in the active summary body", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true,
+      selectedPapers: papers
+    });
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-07-28T00:00:00.000Z",
+      papers,
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+    })).rejects.toThrow("薄读只能从当前层正文中选取有证据映射的文字继续深入");
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "selected_text", excerpt: "不在本层正文中的文字" }
+    })).rejects.toThrow("薄读只能从当前层正文中选取有证据映射的文字继续深入");
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
   });
 
   test("applies assistant language to generated thin-reading content", async () => {
@@ -784,6 +814,39 @@ describe("useArtifactActions", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       expect.stringContaining("route missing")
     );
+  });
+
+  test("diagnoses an external literature route 404 as a stale dev-cloud service", async () => {
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true
+    });
+    runAgentAnalysis.mockImplementationOnce(async (_artifactType, onProgress) => {
+      onProgress?.({
+        message: "正在检索可追溯的外部文献来源",
+        progress: 46,
+        stage: "thin_reading_retrieving_external_knowledge"
+      });
+      throw new Error("外部文献检索失败（404）");
+    });
+
+    act(() => {
+      result.current.startAnalysis("thin_reading");
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(artifactStore.getTasks()[0]).toMatchObject({
+      failure: {
+        failedStage: "thin_reading_retrieving_external_knowledge",
+        recovery: [
+          expect.stringContaining("/v1/research/external-knowledge"),
+          expect.stringContaining("仅重启 Tauri 不会更新")
+        ]
+      },
+      status: "failed"
+    });
   });
 
   test("cancels a running Agent artifact and never saves its partial result", async () => {

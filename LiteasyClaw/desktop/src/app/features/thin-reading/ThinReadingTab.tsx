@@ -18,6 +18,10 @@ import {
 import { listThinReadingPendingPublicAnnotations } from "./thinReadingIntuechoSyncQueue";
 import { getThinReadingPaperTypeLabel } from "./thinReadingPromptRegistry";
 import { getThinReadingUiCopy } from "./thinReadingI18n";
+import {
+  useThinReadingCommunityRecommendations,
+  type ThinReadingCommunityRecommendationState
+} from "./useThinReadingCommunityRecommendations";
 import type {
   ThinReadingAnnotationTarget,
   ThinReadingBranchSource,
@@ -45,6 +49,8 @@ export type ThinReadingTabProps = {
     progress: number;
     stageLabel?: string;
   };
+  communityRecommendationState?: ThinReadingCommunityRecommendationState;
+  intuechoEndpoint?: string;
   taskFailureMessage?: string;
   onGenerateBranch?: (input: {
     artifactId: string;
@@ -151,8 +157,10 @@ function getSummarySentences(
 
 export function ThinReadingTab({
   artifactId,
+  communityRecommendationState,
   document,
   generationProgress,
+  intuechoEndpoint,
   taskFailureMessage,
   onGenerateBranch,
   onOpenEvidence,
@@ -162,6 +170,11 @@ export function ThinReadingTab({
   papers
 }: ThinReadingTabProps) {
   const activeNode = document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId];
+  const fetchedCommunityRecommendationState = useThinReadingCommunityRecommendations({
+    endpoint: intuechoEndpoint,
+    scope: activeNode.recommendationScope
+  });
+  const resolvedCommunityRecommendationState = communityRecommendationState ?? fetchedCommunityRecommendationState;
   const contentRef = useRef<HTMLDivElement>(null);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [selection, setSelection] = useState<ThinReadingSelection | null>(null);
@@ -222,12 +235,13 @@ export function ThinReadingTab({
       setSelection(null);
       return;
     }
+    if (!selectionIsInLayerBody(range)) {
+      setSelection(null);
+      return;
+    }
     const rect = range.getBoundingClientRect();
     const target = annotationTargetForSelection(range);
     const externalSourceIds = summaryExternalSourceIdsForSelection(range);
-    if (target.kind === "external_knowledge") {
-      externalSourceIds.push(target.source);
-    }
     setSelection({
       evidenceIds: summaryEvidenceIdsForSelection(range),
       externalSourceIds: [...new Set(externalSourceIds)],
@@ -242,6 +256,13 @@ export function ThinReadingTab({
 
   function summaryEvidenceIdsForSelection(range: Range) {
     return summarySourceIdsForSelection(range, "data-thin-reading-summary-evidence-ids");
+  }
+
+  function selectionIsInLayerBody(range: Range) {
+    const element = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? range.commonAncestorContainer as HTMLElement
+      : range.commonAncestorContainer.parentElement;
+    return Boolean(element?.closest("[data-thin-reading-layer-body]"));
   }
 
   function summaryExternalSourceIdsForSelection(range: Range) {
@@ -339,7 +360,7 @@ export function ThinReadingTab({
   }
 
   async function deepenSelection() {
-    if (!selection) return;
+    if (!selection || selection.target.kind !== "node_summary") return;
     const source: ThinReadingBranchSource = {
       kind: "selected_text",
       excerpt: selection.excerpt,
@@ -394,22 +415,6 @@ export function ThinReadingTab({
     }
   }
 
-  function advanceOmittedSection(sectionKey: string, label: string) {
-    const source: ThinReadingBranchSource = { kind: "omitted_section", label, sectionKey };
-    void generateBranch(source);
-  }
-
-  function deepenRecommendation(input: {
-    note: string;
-    relationship: string;
-  }) {
-    void generateBranch({
-      kind: "selected_text",
-      excerpt: input.note,
-      prompt: labels.deepenIntuechoPrompt(input.relationship)
-    });
-  }
-
   async function syncIntuecho() {
     if (!onSyncIntuecho || syncingIntuecho) {
       return;
@@ -437,7 +442,6 @@ export function ThinReadingTab({
   const nodeAnnotations = document.annotations.filter((annotation) => annotation.nodeId === activeNode.id);
   const paperEvidenceSpans = activeNode.evidence.paperEvidenceSpans ?? [];
   const summarySentences = getSummarySentences(activeNode);
-  const externalSources = activeNode.evidence.externalSources ?? [];
   const visibleGenerationProgress = generationProgress ?? (generating
     ? { message: labels.generating, progress: null, stageLabel: undefined }
     : null);
@@ -522,50 +526,11 @@ export function ThinReadingTab({
         ref={contentRef}
       >
         <article className="thin-reading__article">
-          <div className="thin-reading__article-meta">
-            {sourceLabel(activeNode.source, labels)}
-            {paperTypeLabel ? ` · ${paperTypeLabel}` : ""}
-            {" · "}
-            {closureState === "outside_paper" ? labels.externalKnowledge : labels.paperEvidence}
-          </div>
+          {paperTypeLabel ? <div className="thin-reading__article-meta">{paperTypeLabel}</div> : null}
           {closureState === "near_boundary" ? (
             <section className="thin-reading__near-boundary" aria-label={labels.nearBoundary}>
               <strong>{labels.nearBoundary}</strong>
               <span>{labels.nearBoundaryReason}</span>
-            </section>
-          ) : null}
-          {closureState === "outside_paper" ? (
-            <section className="thin-reading__external-context" aria-label={labels.externalBoundary}>
-              <div>
-                <strong>{labels.externalBoundary}</strong>
-                <span>{labels.externalBoundaryReason}</span>
-              </div>
-              {externalSources.length > 0 ? (
-                <ul aria-label={labels.externalSources}>
-                  {externalSources.map((source) => (
-                    <li
-                      data-thin-reading-annotation-target="external_knowledge"
-                      data-thin-reading-external-source={source.id}
-                      key={source.id}
-                    >
-                      <a href={source.url} onClick={preserveTextSelection} rel="noreferrer" target="_blank">
-                        {source.title}
-                      </a>
-                      <a
-                        aria-label={labels.externalRecordOpen(source.title)}
-                        className="thin-reading__external-record-link"
-                        href={source.sourceRecordUrl}
-                        onClick={preserveTextSelection}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {source.provider === "openalex" ? "OpenAlex" : "Crossref"}
-                      </a>
-                      <small>{labels.evidenceExternalRelation(source.relation)}</small>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </section>
           ) : null}
           <h2>{activeNode.title}</h2>
@@ -573,6 +538,7 @@ export function ThinReadingTab({
             <p
               className="thin-reading__summary"
               data-thin-reading-annotation-target="node_summary"
+              data-thin-reading-layer-body
               data-testid="thin-reading-summary"
             >
               {summarySentences.map((sentence, index) => {
@@ -623,6 +589,8 @@ export function ThinReadingTab({
                             <a
                               aria-label={labels.evidenceExternalOpen(source.title)}
                               className="thin-reading__summary-marker"
+                              data-thin-reading-annotation-target="external_knowledge"
+                              data-thin-reading-external-source={source.id}
                               href={source.url}
                               onClick={preserveTextSelection}
                               rel="noreferrer"
@@ -642,31 +610,12 @@ export function ThinReadingTab({
                         </sup>
                       );
                     })}
-                    {sentence.evidenceIds.length === 0 && sentence.externalKnowledge.length === 0 ? (
-                      <sup>
-                        <span
-                          className="thin-reading__summary-marker is-static"
-                          title={labels.evidenceReviewTitle}
-                        >
-                          {labels.evidenceReview}
-                        </span>
-                      </sup>
-                    ) : null}
                     {index < summarySentences.length - 1 ? " " : ""}
                   </span>
                 );
               })}
             </p>
           </section>
-          {activeNode.omittedSections.length > 0 ? (
-            <div className="thin-reading__omitted" aria-label={labels.omittedRegion}>
-              {activeNode.omittedSections.map((section) => (
-                <button disabled={generationInProgress} key={section.id} onClick={() => advanceOmittedSection(section.sectionKey, section.label)} type="button">
-                  {section.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
           {visibleGenerationProgress ? (
             <div aria-live="polite" className="thin-reading__status">
               {visibleGenerationProgress.stageLabel ? <strong>{visibleGenerationProgress.stageLabel}</strong> : null}
@@ -751,84 +700,88 @@ export function ThinReadingTab({
                 )}
               </article>
             )) : <p className="thin-reading__annotation-empty">{labels.annotationEmpty}</p>}
+            {pendingPublicQueue.length > 0 ? (
+              <div className="thin-reading__pending-summary">
+                <span>{labels.pendingSync} · {pendingPublicQueue.length}</span>
+                <button disabled={!onSyncIntuecho || syncingIntuecho} onClick={() => void syncIntuecho()} type="button">{labels.syncNow}</button>
+              </div>
+            ) : null}
           </section>
         </article>
 
-        <aside className={`thin-reading__intuecho ${intuechoCollapsed ? "is-collapsed" : ""}`} aria-label={labels.recommendationRegion}>
-          {intuechoCollapsed ? (
-            <button
-              aria-expanded="false"
-              aria-label={labels.expandIntuecho}
-              className="thin-reading__intuecho-rail"
-              onClick={() => setIntuechoCollapsed(false)}
-              title={labels.expandIntuecho}
-              type="button"
-            >
-              <LightbulbRegular aria-hidden="true" />
-              <span>Intuecho</span>
-              {pendingPublicQueue.length > 0 ? (
-                <small>{pendingPublicQueue.length}</small>
-              ) : null}
-            </button>
-          ) : (
-            <>
+        {(
+          <aside className={`thin-reading__intuecho ${intuechoCollapsed ? "is-collapsed" : ""}`} aria-label={labels.recommendationRegion}>
+            {intuechoCollapsed ? (
               <button
-                aria-expanded="true"
-                aria-label={labels.collapseIntuecho}
-                className="thin-reading__intuecho-toggle"
-                onClick={() => setIntuechoCollapsed(true)}
-                title={labels.collapseIntuecho}
+                aria-expanded="false"
+                aria-label={labels.expandIntuecho}
+                className="thin-reading__intuecho-rail"
+                onClick={() => setIntuechoCollapsed(false)}
+                title={labels.expandIntuecho}
                 type="button"
               >
-                <ChevronRightRegular aria-hidden="true" />
+                <LightbulbRegular aria-hidden="true" />
+                <span>Intuecho</span>
               </button>
-              <div className="thin-reading__intuecho-mark">∿</div>
-              <h2>Intuecho</h2>
-              <p className="thin-reading__intuecho-caption">{labels.recommendationCaption}</p>
-              <div className="thin-reading__recommendations">
-                {activeNode.recommendations.map((recommendation) => (
-                  <div
-                    className="thin-reading__recommendation"
-                    data-thin-reading-annotation-target="recommendation"
-                    data-thin-reading-recommendation-id={recommendation.id}
-                    key={recommendation.id}
-                  >
-                    <strong>{recommendation.relationship}</strong>
-                    <small className="thin-reading__recommendation-source">
-                      {recommendation.source === "intuecho_community"
-                        ? labels.communityRecommendation
-                        : labels.localRecommendation}
-                    </small>
-                    <span>{recommendation.note}</span>
-                    <div className="thin-reading__recommendation-actions">
-                      <button
-                        aria-label={labels.deepenIntuecho(recommendation.relationship)}
-                        disabled={generationInProgress}
-                        onClick={() => deepenRecommendation({
-                          note: recommendation.note,
-                          relationship: recommendation.relationship
-                        })}
-                        type="button"
-                      >
-                        {labels.deepen}
-                      </button>
-                      <button onClick={() => annotateBlock({
-                        excerpt: recommendation.note,
-                        target: { kind: "recommendation", nodeId: activeNode.id, recommendationId: recommendation.id }
-                      })} type="button">{labels.annotate}</button>
+            ) : (
+              <>
+                <button
+                  aria-expanded="true"
+                  aria-label={labels.collapseIntuecho}
+                  className="thin-reading__intuecho-toggle"
+                  onClick={() => setIntuechoCollapsed(true)}
+                  title={labels.collapseIntuecho}
+                  type="button"
+                >
+                  <ChevronRightRegular aria-hidden="true" />
+                </button>
+                <div className="thin-reading__intuecho-mark">∿</div>
+                <h2>Intuecho</h2>
+                <p className="thin-reading__intuecho-caption">{labels.communityRecommendationCaption}</p>
+                {resolvedCommunityRecommendationState.status === "unconfigured" ? (
+                  <p className="thin-reading__recommendation-empty">{labels.communityRecommendationUnconfigured}</p>
+                ) : null}
+                {resolvedCommunityRecommendationState.status === "unavailable" ? (
+                  <p className="thin-reading__recommendation-empty">{labels.communityRecommendationUnavailable}</p>
+                ) : null}
+                {resolvedCommunityRecommendationState.status === "loading" ? (
+                  <p className="thin-reading__recommendation-empty" role="status">{labels.communityRecommendationLoading}</p>
+                ) : null}
+                {resolvedCommunityRecommendationState.status === "error" ? (
+                  <p className="thin-reading__error" role="alert">
+                    {labels.communityRecommendationFailed(resolvedCommunityRecommendationState.message)}
+                  </p>
+                ) : null}
+                {resolvedCommunityRecommendationState.status === "ready" ? (
+                  resolvedCommunityRecommendationState.recommendations.length === 0 ? (
+                    <p className="thin-reading__recommendation-empty">{labels.communityRecommendationEmpty}</p>
+                  ) : (
+                    <div className="thin-reading__recommendations">
+                      {resolvedCommunityRecommendationState.recommendations.map((recommendation) => (
+                        <div
+                          className="thin-reading__recommendation"
+                          data-thin-reading-annotation-target="recommendation"
+                          data-thin-reading-recommendation-id={recommendation.id}
+                          key={recommendation.id}
+                        >
+                          <strong>{recommendation.relationship}</strong>
+                          <small className="thin-reading__recommendation-source">{labels.communityRecommendation}</small>
+                          <span>{recommendation.note}</span>
+                          <div className="thin-reading__recommendation-actions">
+                            <button onClick={() => annotateBlock({
+                              excerpt: recommendation.note,
+                              target: { kind: "recommendation", nodeId: activeNode.id, recommendationId: recommendation.id }
+                            })} type="button">{labels.annotate}</button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-              {pendingPublicQueue.length > 0 ? (
-                <div className="thin-reading__pending-summary">
-                  <span>{labels.pendingSync} · {pendingPublicQueue.length}</span>
-                  <button disabled={!onSyncIntuecho || syncingIntuecho} onClick={() => void syncIntuecho()} type="button">{labels.syncNow}</button>
-                </div>
-              ) : null}
-            </>
-          )}
-        </aside>
+                  )
+                ) : null}
+              </>
+            )}
+          </aside>
+        )}
       </div>
 
       {selection ? (
@@ -841,9 +794,13 @@ export function ThinReadingTab({
             top: selection.top
           }}
         >
-          <label htmlFor="thin-reading-prompt">{labels.deepenPrompt}</label>
-          <input id="thin-reading-prompt" maxLength={600} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-          <button disabled={generationInProgress} onClick={() => void deepenSelection()} type="button">{labels.deepen}</button>
+          {selection.target.kind === "node_summary" ? (
+            <>
+              <label htmlFor="thin-reading-prompt">{labels.deepenPrompt}</label>
+              <input id="thin-reading-prompt" maxLength={600} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+              <button disabled={generationInProgress} onClick={() => void deepenSelection()} type="button">{labels.deepen}</button>
+            </>
+          ) : null}
           <label htmlFor="thin-reading-annotation">{labels.annotate}</label>
           <input id="thin-reading-annotation" value={annotationBody} onChange={(event) => setAnnotationBody(event.target.value)} />
           <label>

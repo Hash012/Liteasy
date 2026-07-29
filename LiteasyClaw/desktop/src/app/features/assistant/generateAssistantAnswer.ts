@@ -44,6 +44,7 @@ import type {
   ThinReadingGenerationContext,
   ThinReadingGenerationAudit,
   ThinReadingExternalSource,
+  ThinReadingInterpretationPlan,
   ThinReadingNodeSeed
 } from "../thin-reading/thinReading.types";
 import {
@@ -116,6 +117,30 @@ type ThinReadingGenerationResult = {
 
 const minimumEvidenceForModelPlanning = 8;
 const maximumEvidenceAcrossPlanningRounds = 18;
+
+function isUnavailableThinReadingEvidenceIdError(error: unknown) {
+  return error instanceof Error && error.message.startsWith("薄读证据规划引用了不可用的 evidence ID：");
+}
+
+function buildThinReadingEvidencePlanRetryPrompt(input: {
+  allowedEvidenceIds: readonly string[];
+  basePrompt: string;
+}) {
+  return [
+    input.basePrompt,
+    "",
+    "上一轮证据规划返回了本轮目录之外的 evidence ID，不能使用。现在只修复规划 JSON，不写摘要。",
+    "selectedEvidenceIds 中的每一项必须从下方“可用证据目录”逐字复制；父层、选区、历史输出和任何其他上下文里的 ID 一律不可用。",
+    `本轮唯一允许的 evidence ID：${input.allowedEvidenceIds.join(", ")}。`,
+    "不要复述、解释或保留上一轮 ID；重新选择直接相关的本轮证据后，仅返回符合原 schema 的 JSON。"
+  ].join("\n");
+}
+
+function requiresThinReadingExternalKnowledge(context: ThinReadingGenerationContext) {
+  return Boolean(context.externalSources?.length) && (
+    context.interpretationPlan?.externalKnowledgeNeeded ?? context.source.kind !== "root_overview"
+  );
+}
 
 type AnalysisSubtask = {
   evidencePrompt: string;
@@ -305,9 +330,84 @@ function scopeThinReadingInput(input: {
 }
 
 const externalResearchIntent = /(?:外部|论文外|后续研究|相关工作|最新进展|对照研究|引用网络|external|follow[- ]?up|related work|later work|citation)/i;
+const deepReadingIntent = /(?:深入|详细|严谨|深度|原理|机制|推导|因果|比较|局限|本质|deep|detail|rigor|mechanism|derive|causal|compare|limitation)/i;
+const whyReadingIntent = /(?:为什么|为何|原因|动机|意义|作用|why|reason|motivat|rationale|significance)/i;
+const howReadingIntent = /(?:怎么样|如何|怎么|方法|实现|过程|步骤|机制|架构|how|method|implement|process|mechanism|architecture)/i;
+const whatReadingIntent = /(?:是什么|何谓|定义|概念|含义|what|define|definition|meaning|concept)/i;
+
+function thinReadingSourceText(context: ThinReadingGenerationContext) {
+  if (context.source.kind === "selected_text") {
+    return [context.source.excerpt, context.source.prompt, context.prompt].filter(Boolean).join(" ");
+  }
+  if (context.source.kind === "omitted_section") {
+    return [context.source.label, context.source.sectionKey, context.prompt].filter(Boolean).join(" ");
+  }
+  return context.prompt ?? "";
+}
+
+export function planThinReadingInterpretation(input: {
+  context: ThinReadingGenerationContext;
+  policy?: ThinReadingClosurePolicy;
+  prepared: {
+    evidence: readonly Pick<PreparedMultiPaperAnalysis["evidence"][number], "quote" | "summary" | "terms">[];
+  };
+}): ThinReadingInterpretationPlan {
+  const sourceText = thinReadingSourceText(input.context);
+  const corpus = input.prepared.evidence
+    .map((evidence) => `${evidence.summary} ${evidence.quote} ${evidence.terms.join(" ")}`)
+    .join(" ");
+  const asksWhy = whyReadingIntent.test(sourceText);
+  const asksHow = howReadingIntent.test(sourceText);
+  const asksWhat = whatReadingIntent.test(sourceText);
+  const requestedIntentCount = Number(asksWhy) + Number(asksHow) + Number(asksWhat);
+  const intent = requestedIntentCount !== 1
+    ? "mixed"
+    : asksWhy
+      ? "why"
+      : asksHow
+        ? "how"
+        : "what";
+  const requestedDepth = deepReadingIntent.test(sourceText) || input.context.depth >= 2 ? "deep" : "standard";
+  const hasWhyEvidence = /(?:because|due to|therefore|motivat|rationale|challenge|原因|由于|因此|动机|挑战|为了)/i.test(corpus);
+  const hasHowEvidence = /(?:method|algorithm|process|architecture|implement|mechanism|framework|enable|support|\buse(?:s|d|ing)?\b|通过|采用|支持|方法|算法|流程|架构|实现|机制|框架)/i.test(corpus);
+  const hasWhatEvidence = /(?:define|definition|refer(?:s)? to|consist|comprise|定义|是指|构成|包括)/i.test(corpus);
+  const missingIntentSupport = intent === "why"
+    ? !hasWhyEvidence
+    : intent === "how"
+      ? !hasHowEvidence
+      : intent === "what"
+        ? !hasWhatEvidence
+        : false;
+  const explicitExternalRequest = externalResearchIntent.test(sourceText) ||
+    input.context.parentWithinPaperClosure === false ||
+    Boolean(input.context.source.kind === "selected_text" && input.context.source.externalSourceIds?.length);
+  const depthLimit = Math.max(1, Math.floor((input.policy ?? defaultThinReadingClosurePolicy).maximumInternalDepth));
+  const insufficientForDepth = requestedDepth === "deep" && (
+    input.prepared.evidence.length < 4 || missingIntentSupport || input.context.depth >= depthLimit
+  );
+  const externalKnowledgeNeeded = explicitExternalRequest || missingIntentSupport || insufficientForDepth;
+  const gap = explicitExternalRequest
+    ? "用户要求论文外关系、后续研究或外部语境"
+    : missingIntentSupport
+      ? `论文内证据不足以完整回答“${intent === "why" ? "为什么" : intent === "how" ? "怎么样" : "是什么"}”`
+      : insufficientForDepth
+        ? "论文内证据不足以满足用户要求的解释深度"
+        : undefined;
+  const discourseMoves = intent === "what"
+    ? ["先给出对象的最小定义", "再说明边界与构成", "最后说明它在本文中的作用"]
+    : intent === "why"
+      ? ["先指出要解释的现象或问题", "补齐必要前提", "给出因果或论证链", "收束到适用边界"]
+      : intent === "how"
+        ? ["先说明目标与输入", "按依赖关系展开关键步骤", "解释步骤为何有效", "最后交代结果与条件"]
+        : ["先给出核心判断", "再展开机制或论证", "用关键证据连接判断", "最后交代边界与遗漏"];
+  const externalQuery = externalKnowledgeNeeded
+    ? [input.context.primaryPaperTitle, sourceText, gap].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 500)
+    : undefined;
+  return { discourseMoves, externalKnowledgeNeeded, externalQuery, gap, intent, requestedDepth };
+}
 
 export type ThinReadingClosurePolicy = {
-  // A root overview is always paper-bounded. Later levels can request outside context.
+  // The root may use traceable literature to place the paper in its knowledge context.
   maximumInternalDepth: number;
 };
 
@@ -317,8 +417,11 @@ export const defaultThinReadingClosurePolicy: Readonly<ThinReadingClosurePolicy>
 
 export function shouldRetrieveThinReadingExternalKnowledge(
   context: ThinReadingGenerationContext,
-  policy: ThinReadingClosurePolicy = defaultThinReadingClosurePolicy
+  _policy: ThinReadingClosurePolicy = defaultThinReadingClosurePolicy
 ) {
+  if (context.interpretationPlan) {
+    return context.interpretationPlan.externalKnowledgeNeeded;
+  }
   if (context.source.kind === "root_overview") {
     return false;
   }
@@ -328,9 +431,6 @@ export function shouldRetrieveThinReadingExternalKnowledge(
   if (context.source.kind === "selected_text" && context.source.externalSourceIds?.length) {
     return true;
   }
-  if (context.depth >= Math.max(1, Math.floor(policy.maximumInternalDepth))) {
-    return true;
-  }
   const sourceText = context.source.kind === "selected_text"
     ? `${context.source.excerpt}\n${context.source.prompt ?? ""}`
     : context.source.label;
@@ -338,6 +438,9 @@ export function shouldRetrieveThinReadingExternalKnowledge(
 }
 
 function buildThinReadingExternalQuery(context: ThinReadingGenerationContext) {
+  if (context.interpretationPlan?.externalQuery) {
+    return context.interpretationPlan.externalQuery;
+  }
   const sourceFocus = context.source.kind === "selected_text"
     ? `${context.source.excerpt} ${context.source.prompt ?? ""} ${
         context.selectedExternalSources?.map((source) => source.title).join(" ") ?? ""
@@ -375,17 +478,30 @@ export function prioritizeThinReadingGenerationSources(input: {
     ...(input.context.selectedExternalSources ?? []).map((source) => source.id),
     ...(input.context.source.kind === "selected_text" ? input.context.source.externalSourceIds ?? [] : [])
   ]);
-  const hasCitationEdge = input.sources.some((source) =>
+  const trustedSources = input.sources.filter((source) => source.isRetracted !== true && (
+    source.abstract.replace(/\s+/g, " ").trim().length >= 16 || explicitlySelected.has(source.id)
+  ));
+  const hasCitationEdge = trustedSources.some((source) =>
     source.relation === "cited_by_target" || source.relation === "cites_target"
   );
   if (!hasCitationEdge) {
-    return [...input.sources];
+    return [...trustedSources].sort((left, right) => {
+      const publicationRank = (source: ThinReadingExternalSource) => source.provider === "arxiv" ? 1 : 0;
+      return publicationRank(left) - publicationRank(right) || right.relevance - left.relevance;
+    });
   }
-  return input.sources.filter((source) =>
+  return trustedSources.filter((source) =>
     source.relation === "cited_by_target" ||
     source.relation === "cites_target" ||
     explicitlySelected.has(source.id)
   );
+}
+
+function truncateThinReadingRepairEvidence(value: string, maximum = 1200) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= maximum
+    ? normalized
+    : `${normalized.slice(0, maximum).trimEnd()}…`;
 }
 
 function buildThinReadingRepairPrompt(input: {
@@ -393,7 +509,31 @@ function buildThinReadingRepairPrompt(input: {
   invalidOutput: string;
   requireExternalKnowledge: boolean;
   reason: string;
+  targetedEvidenceRepair?: {
+    node: ThinReadingNodeSeed;
+    prepared: PreparedMultiPaperAnalysis;
+    review: ThinReadingEvidenceReview;
+  };
 }) {
+  const targetedRepair = input.targetedEvidenceRepair;
+  const unsupportedSentenceIds = new Set(targetedRepair?.review.unsupportedSentenceIds ?? []);
+  const unsupportedSentences = targetedRepair?.node.evidence.summarySentences?.filter((sentence) =>
+    unsupportedSentenceIds.has(sentence.id)
+  ) ?? [];
+  const supportedSentences = targetedRepair?.node.evidence.summarySentences?.filter((sentence) =>
+    !unsupportedSentenceIds.has(sentence.id)
+  ) ?? [];
+  const relevantEvidenceIds = new Set(
+    unsupportedSentences.flatMap((sentence) => sentence.evidenceIds)
+  );
+  const relevantEvidence = targetedRepair?.prepared.evidence
+    .filter((evidence) => relevantEvidenceIds.has(evidence.id))
+    .slice(0, 12)
+    .map((evidence) => [
+      `[${evidence.id}] paper=${evidence.paperTitle}; page=${evidence.page}`,
+      `quote=${JSON.stringify(truncateThinReadingRepairEvidence(evidence.quote))}`
+    ].join("; "))
+    .join("\n") ?? "";
   return [
     input.basePrompt,
     "",
@@ -403,11 +543,23 @@ function buildThinReadingRepairPrompt(input: {
     "- 将 summary 压缩为一段核心总述：中文不超过 520 字符，英文不超过 1,000 字符；删去平均章节复述，只保留改变读者理解的结论、机制、证据边界或局限。",
     "- 中文输出中，关键原文术语首次承担实质含义时必须写成“原文术语（准确中文释义）”，不得只保留中文或把两者拆开，更不得反向写成“中文（原文术语）”；正确：late interaction（后期交互），错误：后期交互（late interaction）。",
     "- summarySentences 必须按顺序完整覆盖 100% 的 summary 原文，每项 text 必须逐字取自 summary。",
-    "- 每个非 unsupported 句子必须引用 paperEvidence 中的 evidence ID 或 externalKnowledge 中的本轮 source ID。",
+    "- 每个正文句都必须引用 paperEvidence 中的 evidence ID 或 externalKnowledge 中的本轮 source ID；无来源句必须从 summary 与 summarySentences 中删除，或改写为绑定来源直接支持的最小命题。",
     "- grounded 句子必须有论文内 evidence ID；只有外部来源的句子使用 weak。",
     "- 不得把未列入 paperEvidence / externalKnowledge 的 ID 填入句级映射。",
-    "- claims.evidenceIds 只允许 paperEvidence 中的论文 evidence ID；openalex: source ID 只能写入 summarySentences.externalKnowledge，不能写入 claims.evidenceIds。",
+    "- claims.evidenceIds 只允许 paperEvidence 中的论文 evidence ID；任何外部 source ID（openalex:/crossref:/arxiv:）只能写入 summarySentences.externalKnowledge，不能写入 claims.evidenceIds。",
     "- 对每个 summarySentences 条目逐一检查 externalKnowledge：只有该条目中的全部 source relation 都是 cited_by_target 或 cites_target，才可使用引用、被引用、citation 或 citation relationship。只要包含 topic_search 或 related，就必须拆成独立句，并分别称为主题检索命中或相关线索，不能使用任何 citation 措辞。",
+    ...(targetedRepair ? [
+      "本轮属于证据复核后的定向修复，以下约束优先：",
+      `- 只允许修改这些失败句及依赖它们的 claims：${targetedRepair.review.unsupportedSentenceIds.join("；")}。`,
+      "- 已通过句子必须逐字保留，并保留各自 evidenceIds、externalKnowledge 与 status；不得借修复之机重写整篇或引入新判断。",
+      "- 对失败句删除证据未明确表达的首创性、唯一性、最优性、数量级、显著性、因果性、能力边界或“使之成为可能”等修饰；改写为绑定 evidence 直接蕴含的最小命题。",
+      "- 若绑定 evidence 无法直接支持任何有信息量的改写，必须从 summary、summarySentences 与相关 claims 中删除该句；不得将它标记 unsupported 后保留在正文，不得换绑相邻 evidence，也不得凭常识补强。",
+      "- summary、summarySentences.text 与相关 claims 必须同步，不能只改其中一个字段。",
+      `- 证据复核理由：${targetedRepair.review.reason}`,
+      `失败句数据：\n${unsupportedSentences.map((sentence) => JSON.stringify(sentence)).join("\n") || "无"}`,
+      `必须原样保留的已通过句：\n${supportedSentences.map((sentence) => JSON.stringify(sentence)).join("\n") || "无"}`,
+      `失败句绑定的论文原文证据：\n${relevantEvidence || "无"}`
+    ] : []),
     ...(input.requireExternalKnowledge ? [
       "- 本轮已检索论文外来源：withinPaperClosure 必须为 false，externalKnowledge 不得为空，且至少一个 summarySentences 条目必须映射本轮 external source ID。"
     ] : []),
@@ -436,6 +588,11 @@ async function planThinReadingEvidence(input: {
     progress: 43,
     summary: "正在规划薄读核心证据"
   });
+  const allowedEvidenceIds = input.prepared.evidence.map((item) => item.id);
+  const basePrompt = buildThinReadingEvidencePlanPrompt({
+    context: input.context,
+    prepared: input.prepared
+  });
   const generation = await input.gateway.generateAnswer({
     model: input.model,
     outputFormat: {
@@ -443,18 +600,36 @@ async function planThinReadingEvidence(input: {
       schema: thinReadingEvidencePlanJsonSchema,
       strict: true
     },
-    prompt: buildThinReadingEvidencePlanPrompt({
-      context: input.context,
-      prepared: input.prepared
-    }),
+    prompt: basePrompt,
     provider: input.provider,
     requireLive: true,
     signal: input.signal
   });
-  return parseThinReadingEvidencePlan({
-    allowedEvidenceIds: input.prepared.evidence.map((item) => item.id),
-    output: generation.answer
-  });
+  try {
+    return parseThinReadingEvidencePlan({ allowedEvidenceIds, output: generation.answer });
+  } catch (error) {
+    if (!isUnavailableThinReadingEvidenceIdError(error)) {
+      throw error;
+    }
+    input.onProgress?.({
+      phase: "repairing_evidence_plan",
+      progress: 43,
+      summary: "证据规划包含历史标识，正在按本轮证据目录校正"
+    });
+    const retry = await input.gateway.generateAnswer({
+      model: input.model,
+      outputFormat: {
+        name: "liteasy_thin_reading_evidence_plan",
+        schema: thinReadingEvidencePlanJsonSchema,
+        strict: true
+      },
+      prompt: buildThinReadingEvidencePlanRetryPrompt({ allowedEvidenceIds, basePrompt }),
+      provider: input.provider,
+      requireLive: true,
+      signal: input.signal
+    });
+    return parseThinReadingEvidencePlan({ allowedEvidenceIds, output: retry.answer });
+  }
 }
 
 async function observeThinReadingEvidence(input: {
@@ -652,6 +827,7 @@ async function generateThinReadingWithQualityRepair(input: {
   });
   const repairReasons: string[] = [];
   let prompt = basePrompt;
+  let targetedEvidenceRepair: Parameters<typeof buildThinReadingRepairPrompt>[0]["targetedEvidenceRepair"];
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const generation = await input.gateway.generateAnswer({
       model: input.model,
@@ -671,12 +847,12 @@ async function generateThinReadingWithQualityRepair(input: {
         analysis: plannedEvidence,
         analysisEvidence: plannedEvidence.evidence,
         externalSources: input.context.externalSources,
-        requireExternalKnowledge: Boolean(input.context.externalSources?.length),
+        requireExternalKnowledge: requiresThinReadingExternalKnowledge(input.context),
         requireExplicitTraceability: true,
         requiredChineseTerminology,
         targetLanguage: input.context.targetLanguage
       });
-      const evidenceReview = evidencePlan
+      const evidenceReview = evidencePlan || parsedRootSeed.evidence.externalKnowledge.length > 0
         ? await reviewThinReadingEvidence({
           gateway: input.gateway,
           model: input.model,
@@ -688,9 +864,14 @@ async function generateThinReadingWithQualityRepair(input: {
         })
         : undefined;
       if (evidenceReview?.verdict === "fail") {
-          throw new Error(
-            `薄读证据复核未通过：${evidenceReview.reason}。需修复句子：${evidenceReview.unsupportedSentenceIds.join("；")}。`
-          );
+        targetedEvidenceRepair = {
+          node: parsedRootSeed,
+          prepared: plannedEvidence,
+          review: evidenceReview
+        };
+        throw new Error(
+          `薄读证据复核未通过：${evidenceReview.reason}。需修复句子：${evidenceReview.unsupportedSentenceIds.join("；")}。`
+        );
       }
       const qualityGate = {
         attempts: attempt,
@@ -703,6 +884,12 @@ async function generateThinReadingWithQualityRepair(input: {
         evidenceIds: call.evidenceIds.filter((id) => persistedEvidenceIds.has(id))
       }));
       const generationAudit: ThinReadingGenerationAudit = {
+        ...(input.context.interpretationPlan ? {
+          interpretationPlan: {
+            ...input.context.interpretationPlan,
+            discourseMoves: [...input.context.interpretationPlan.discourseMoves]
+          }
+        } : {}),
         ...(evidenceLoop ? { evidenceLoop } : {}),
         ...(evidencePlan ? {
           evidencePlan: {
@@ -752,8 +939,9 @@ async function generateThinReadingWithQualityRepair(input: {
       prompt = buildThinReadingRepairPrompt({
         basePrompt,
         invalidOutput: generation.answer,
-        requireExternalKnowledge: Boolean(input.context.externalSources?.length),
-        reason
+        requireExternalKnowledge: requiresThinReadingExternalKnowledge(input.context),
+        reason,
+        targetedEvidenceRepair
       });
     }
   }
@@ -831,6 +1019,16 @@ export async function generateAssistantAnswer({
       selectedPapers: analysisInputPapers,
       settings
     });
+    const userPrompt = context.prompt ?? (thinReadingContext ? undefined : question);
+    context = {
+      ...context,
+      ...(userPrompt ? { prompt: userPrompt } : {}),
+      interpretationPlan: planThinReadingInterpretation({
+        context: { ...context, ...(userPrompt ? { prompt: userPrompt } : {}) },
+        policy: thinReadingClosurePolicy,
+        prepared: preparedAnalysis
+      })
+    };
     const carriedExternalSources = mergeThinReadingExternalSources(
       context.externalSources,
       context.selectedExternalSources
@@ -841,18 +1039,34 @@ export async function generateAssistantAnswer({
         progress: 46,
         summary: "正在检索可追溯的外部文献来源"
       });
-      const externalKnowledge = await createThinReadingExternalKnowledgeClient({
-        endpoint: activeEndpoint,
-        openAlexApiKey: settings["thin_reading.openalex_api_key"],
-        transport: thinReadingExternalKnowledgeTransport
-      })({
-        artifactId: context.artifactId,
-        limit: 5,
-        query: buildThinReadingExternalQuery(context),
-        signal,
-        targetPaperIdentity: context.primaryPaperIdentity,
-        targetPaperTitle: context.primaryPaperTitle
-      });
+      let externalKnowledge;
+      try {
+        externalKnowledge = await createThinReadingExternalKnowledgeClient({
+          endpoint: activeEndpoint,
+          openAlexApiKey: settings["thin_reading.openalex_api_key"],
+          transport: thinReadingExternalKnowledgeTransport
+        })({
+          artifactId: context.artifactId,
+          limit: 5,
+          query: buildThinReadingExternalQuery(context),
+          signal,
+          targetPaperIdentity: context.primaryPaperIdentity,
+          targetPaperTitle: context.primaryPaperTitle
+        });
+      } catch (error) {
+        if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+          throw error;
+        }
+        if (carriedExternalSources.length === 0) {
+          throw error;
+        }
+        externalKnowledge = { sources: [] };
+        onProgress?.({
+          phase: "retrieving_external_knowledge",
+          progress: 52,
+          summary: "联网检索暂不可用，正在复用已验证的外部文献"
+        });
+      }
       if (externalKnowledge.retrieval?.reused) {
         onProgress?.({
           phase: "retrieving_external_knowledge",
@@ -869,7 +1083,7 @@ export async function generateAssistantAnswer({
         sources: retrievedSources
       });
       if (externalSources.length === 0) {
-        throw new Error("未检索到可追溯的外部文献来源，本次论文闭包外生成已停止。");
+        throw new Error("论文内证据不足且未检索到可信、可追溯的外部文献，本次薄读生成已停止。");
       }
       context = { ...context, externalSources };
     } else if (carriedExternalSources.length > 0) {

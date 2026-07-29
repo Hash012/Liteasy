@@ -1,5 +1,6 @@
 import {
   generateAssistantAnswer,
+  planThinReadingInterpretation,
   prioritizeThinReadingGenerationSources,
   shouldRetrieveThinReadingExternalKnowledge
 } from "../app/features/assistant/generateAssistantAnswer";
@@ -385,7 +386,7 @@ test("stops live thin-reading before the model call when PDF text evidence is un
   expect(modelTransport).not.toHaveBeenCalled();
 });
 
-test("limits external retrieval to explicit beyond-paper thin-reading branches", () => {
+test("retrieves external literature only for a concrete interpretation gap or beyond-paper request", () => {
   const baseContext = {
     artifactId: "artifact-scope",
     depth: 1,
@@ -393,6 +394,12 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
     primaryPaperTitle: "ColBERT",
     targetLanguage: "zh-CN"
   } as const;
+
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    depth: 0,
+    source: { kind: "root_overview" }
+  })).toBe(false);
 
   expect(shouldRetrieveThinReadingExternalKnowledge({
     ...baseContext,
@@ -411,7 +418,7 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
     ...baseContext,
     depth: 3,
     source: { kind: "selected_text", excerpt: "MaxSim" }
-  })).toBe(true);
+  })).toBe(false);
   expect(shouldRetrieveThinReadingExternalKnowledge({
     ...baseContext,
     depth: 2,
@@ -426,6 +433,32 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
       excerpt: "A follow-up study"
     }
   }, { maximumInternalDepth: 4 })).toBe(true);
+});
+
+test("plans why/how/what explanations from the user prompt and retrieves only for missing support", () => {
+  const baseContext = {
+    artifactId: "artifact-interpretation-plan",
+    depth: 1,
+    paperIds: ["paper-1"],
+    primaryPaperTitle: "Target Paper",
+    source: { kind: "selected_text" as const, excerpt: "核心结论", prompt: "为什么会得到这个结论？" },
+    targetLanguage: "zh-CN"
+  };
+  const plan = planThinReadingInterpretation({
+    context: baseContext,
+    prepared: {
+      evidence: [{ summary: "论文报告了最终结果。", quote: "The final result is reported.", terms: ["result"] }]
+    }
+  });
+
+  expect(plan).toMatchObject({
+    externalKnowledgeNeeded: true,
+    intent: "why",
+    requestedDepth: "standard"
+  });
+  expect(plan.gap).toContain("为什么");
+  expect(plan.discourseMoves.join(" ")).toContain("因果");
+  expect(shouldRetrieveThinReadingExternalKnowledge({ ...baseContext, interpretationPlan: plan })).toBe(true);
 });
 
 test("parses thin-reading structured output from a live model request", async () => {
@@ -523,7 +556,7 @@ test("parses thin-reading structured output from a live model request", async ()
     },
     thinReadingExternalKnowledgeTransport: async () => {
       externalRetrievalCalls += 1;
-      throw new Error("root thin-reading must not retrieve external sources");
+      throw new Error("external literature is temporarily unavailable");
     }
   });
 
@@ -792,6 +825,10 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
   expect(prompts[2]).not.toContain("Evidence summary 8");
   expect(prompts[3]).toContain("证据复核 Agent");
   expect(prompts[4]).toContain("薄读证据复核未通过");
+  expect(prompts[4]).toContain("只允许修改这些失败句及依赖它们的 claims");
+  expect(prompts[4]).toContain("改写为绑定 evidence 直接蕴含的最小命题");
+  expect(prompts[4]).toContain("Evidence passage 1 describes the method and result");
+  expect(prompts[4]).toContain("必须原样保留的已通过句");
   expect(prompts[5]).toContain("证据复核 Agent");
   expect(result.thinReading?.evidencePlan).toMatchObject({ selectedEvidenceIds: plannedEvidenceIds });
   expect(result.thinReading?.evidenceLoop).toMatchObject({
@@ -799,6 +836,151 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
     stopReason: "observation_sufficient"
   });
   expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual(plannedEvidenceIds);
+});
+
+test("retries a cross-layer evidence ID with the current planning allowlist", async () => {
+  const store = createSettingsStore();
+  const planningPrompts: string[] = [];
+  let planningAttempts = 0;
+  let currentEvidenceIds: string[] = [];
+  const staleEvidenceId = "evidence-previous-layer-7f2e";
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+        page: index + 1,
+        paperId: "demo-1",
+        paperTitle: "Branch Planning Paper",
+        snippet: `Branch evidence passage ${index + 1} describes the method mechanism.`,
+        summary: `Branch evidence summary ${index + 1} explains the method mechanism.`,
+        tags: ["branch", `signal-${index + 1}`]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据规划 Agent")) {
+        planningPrompts.push(prompt);
+        planningAttempts += 1;
+        currentEvidenceIds = [...prompt.matchAll(/\[(evidence-[^\]]+)\] p\.\d+/g)]
+          .slice(0, 2)
+          .map((match) => match[1]);
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              focus: ["核心机制"],
+              selectedEvidenceIds: planningAttempts === 1 ? [staleEvidenceId] : currentEvidenceIds
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据观察 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              decision: "stop",
+              focus: [],
+              pageRequests: [],
+              reason: "首轮观察已覆盖本次下钻所需的直接证据。",
+              searchQueries: [],
+              selectedEvidenceIds: []
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "每个句子均由本轮指定证据直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const summary = "该段方法的核心机制由本轮多条直接论文证据共同支持。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [currentEvidenceIds[0]], status: "grounded", text: "该段方法由直接证据支持。" }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: currentEvidenceIds,
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{ evidenceIds: [currentEvidenceIds[0]], externalKnowledge: [], status: "grounded", text: summary }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "解释选中段落的机制",
+    selectedPapers: [{ id: "demo-1", title: "Branch Planning Paper" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-stale-evidence-plan",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentClaims: [{
+        evidenceIds: [staleEvidenceId],
+        id: "thin-reading-claim-previous-layer",
+        status: "grounded",
+        text: "上一层给出了待细化的机制判断。"
+      }],
+      parentEvidenceSpans: [{
+        chunkId: "demo-1:previous-layer:chunk-1",
+        confidence: 0.9,
+        id: staleEvidenceId,
+        page: 2,
+        paperId: "demo-1",
+        quote: "Previous-layer evidence quote."
+      }],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "Branch Planning Paper",
+      source: {
+        evidenceIds: [staleEvidenceId],
+        excerpt: "待细化的机制判断",
+        kind: "selected_text"
+      },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(planningAttempts).toBe(2);
+  expect(planningPrompts).toHaveLength(2);
+  expect(planningPrompts[0]).not.toContain(staleEvidenceId);
+  expect(planningPrompts[0]).not.toContain("thin-reading-claim-previous-layer");
+  expect(planningPrompts[0]).not.toContain("demo-1:previous-layer:chunk-1");
+  expect(planningPrompts[1]).toContain("上一轮证据规划返回了本轮目录之外的 evidence ID");
+  expect(planningPrompts[1]).toContain("本轮唯一允许的 evidence ID");
+  expect(planningPrompts[1]).not.toContain(staleEvidenceId);
+  expect(result.thinReading?.evidencePlan?.selectedEvidenceIds).toEqual(currentEvidenceIds);
+  expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual(currentEvidenceIds);
 });
 
 test("executes a bounded second evidence-tool round after observing a concrete gap", async () => {
@@ -1247,6 +1429,20 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     modelTransport: async (request) => {
       modelRequestBody = request.body;
       modelPrompt = String(JSON.parse(request.body).prompt);
+      if (modelPrompt.includes("薄读的证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "外部句由绑定来源摘要直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
       return {
         json: async () => ({
           answer: JSON.stringify({
@@ -1383,6 +1579,20 @@ test("keeps a selected canonical external source available when a follow-up look
     mode: "qa",
     modelTransport: async (request) => {
       modelPrompt = String(JSON.parse(request.body).prompt);
+      if (modelPrompt.includes("薄读的证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "外部句由绑定来源摘要直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
       return {
         json: async () => ({
           answer: JSON.stringify({
@@ -1482,6 +1692,6 @@ test("stops beyond-paper generation when external retrieval returns no sources",
       ok: true,
       status: 200
     })
-  })).rejects.toThrow("闭包外生成已停止");
+  })).rejects.toThrow("未检索到可信、可追溯的外部文献");
   expect(modelCalls).toBe(0);
 });

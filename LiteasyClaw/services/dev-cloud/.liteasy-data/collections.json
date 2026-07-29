@@ -1,6 +1,292 @@
 {
   "demo-session-1": [
     {
+      "authors": [
+        "BAI XIAOMO"
+      ],
+      "canonicalId": "doi:10.21428/92fbeb44.c0a6e991",
+      "discoveredAt": "2026-07-29T12:57:33.119Z",
+      "id": "reading-candidate:doi:10.21428/92fbeb44.c0a6e991",
+      "identityResolution": {
+        "aliases": [
+          "crossref:10.21428/92fbeb44.c0a6e991"
+        ],
+        "canonicalId": "doi:10.21428/92fbeb44.c0a6e991",
+        "doi": "https://doi.org/10.21428/92fbeb44.c0a6e991",
+        "lineageStatus": "single_record",
+        "providers": [
+          "crossref"
+        ],
+        "records": [
+          {
+            "id": "crossref:10.21428/92fbeb44.c0a6e991",
+            "provider": "crossref",
+            "doi": "https://doi.org/10.21428/92fbeb44.c0a6e991",
+            "recordUrl": "https://api.crossref.org/works/10.21428%2F92fbeb44.c0a6e991",
+            "title": "Camera Ready- RETURN",
+            "url": "https://doi.org/10.21428/92fbeb44.c0a6e991"
+          }
+        ],
+        "consistent": true,
+        "version": "recommendation-identity/v2"
+      },
+      "qualityGate": {
+        "checks": {
+          "canonicalIdentity": true,
+          "crossProviderConsistent": true,
+          "notKnownRetracted": true,
+          "plausiblePublicationYear": true,
+          "supportedProvider": true,
+          "traceableHttpsSource": true,
+          "usableTitle": true
+        },
+        "passed": true,
+        "reasons": [],
+        "version": "recommendation-quality/v1"
+      },
+      "relatedDocumentTitle": "heliox_camera_ready",
+      "relatedDocumentTitles": [
+        "heliox_camera_ready"
+      ],
+      "relation": "topic_search",
+      "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+      "scoreComponents": {
+        "preference": 0,
+        "profileRelevance": 0,
+        "providerRelevance": 0.592,
+        "sourceRelevance": 0.592,
+        "fusionScore": 0.884,
+        "lexicalRelevance": 0.728916,
+        "preFusionRelevance": 0.592,
+        "baseRelevance": 0.544,
+        "diversityPenalty": 0.18,
+        "finalScore": 0.364
+      },
+      "primaryProvider": "crossref",
+      "source": "Crossref",
+      "sourceKind": "live",
+      "sourceUrl": "https://doi.org/10.21428/92fbeb44.c0a6e991",
+      "title": "Camera Ready- RETURN",
+      "rankingFusion": {
+        "calibratedScore": 0.544,
+        "fusionScore": 0.884,
+        "k": 10,
+        "routes": [
+          {
+            "contribution": 0.029167,
+            "id": "provider",
+            "rank": 2,
+            "score": 0.592,
+            "weight": 0.35
+          },
+          {
+            "contribution": 0.023077,
+            "id": "lexical_bm25",
+            "rank": 3,
+            "score": 0.728916,
+            "weight": 0.3
+          }
+        ],
+        "version": "recommendation-ranking-fusion/v1"
+      },
+      "relevanceBand": "low",
+      "relevanceScore": 0.364,
+      "savedAt": "2026-07-29T12:57:53.427Z"
+    },
+    {
+      "authors": [],
+      "canonicalId": "doi:10.2307/j.ctvbtzntg.7",
+      "discoveredAt": "2026-07-29T12:57:33.119Z",
+      "id": "reading-candidate:doi:10.2307/j.ctvbtzntg.7",
+      "identityResolution": {
+        "aliases": [
+          "crossref:10.2307/j.ctvbtzntg.7"
+        ],
+        "canonicalId": "doi:10.2307/j.ctvbtzntg.7",
+        "doi": "https://doi.org/10.2307/j.ctvbtzntg.7",
+        "lineageStatus": "single_record",
+        "providers": [
+          "crossref"
+        ],
+        "records": [
+          {
+            "id": "crossref:10.2307/j.ctvbtzntg.7",
+            "provider": "crossref",
+            "doi": "https://doi.org/10.2307/j.ctvbtzntg.7",
+            "recordUrl": "https://api.crossref.org/works/10.2307%2Fj.ctvbtzntg.7",
+            "title": "Ready camera",
+            "url": "https://doi.org/10.2307/j.ctvbtzntg.7",
+            "year": 2019
+          }
+        ],
+        "consistent": true,
+        "version": "recommendation-identity/v2"
+      },
+      "publishedYear": 2019,
+      "qualityGate": {
+        "checks": {
+          "canonicalIdentity": true,
+          "crossProviderConsistent": true,
+          "notKnownRetracted": true,
+          "plausiblePublicationYear": true,
+          "supportedProvider": true,
+          "traceableHttpsSource": true,
+          "usableTitle": true
+        },
+        "passed": true,
+        "reasons": [],
+        "version": "recommendation-quality/v1"
+      },
+      "relatedDocumentTitle": "heliox_camera_ready",
+      "relatedDocumentTitles": [
+        "heliox_camera_ready"
+      ],
+      "relation": "topic_search",
+      "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+      "scoreComponents": {
+        "preference": 0,
+        "profileRelevance": 0,
+        "providerRelevance": 0.817,
+        "sourceRelevance": 0.817,
+        "fusionScore": 1,
+        "lexicalRelevance": 1,
+        "preFusionRelevance": 0.817,
+        "baseRelevance": 0.817,
+        "diversityPenalty": 0,
+        "finalScore": 0.817
+      },
+      "primaryProvider": "crossref",
+      "source": "Crossref",
+      "sourceKind": "live",
+      "sourceUrl": "https://doi.org/10.2307/j.ctvbtzntg.7",
+      "title": "Ready camera",
+      "rankingFusion": {
+        "calibratedScore": 0.817,
+        "fusionScore": 1,
+        "k": 10,
+        "routes": [
+          {
+            "contribution": 0.031818,
+            "id": "provider",
+            "rank": 1,
+            "score": 0.817,
+            "weight": 0.35
+          },
+          {
+            "contribution": 0.027273,
+            "id": "lexical_bm25",
+            "rank": 1,
+            "score": 1,
+            "weight": 0.3
+          }
+        ],
+        "version": "recommendation-ranking-fusion/v1"
+      },
+      "relevanceBand": "high",
+      "relevanceScore": 0.817,
+      "savedAt": "2026-07-29T12:57:45.438Z"
+    },
+    {
+      "abstract": "There is an increasing demand for extending existing DBMSs with vector indices to become unified systems that can support modern predictive applications, which require joint querying of vector embeddings and structured properties and connections of objects. We present NaviX, a Na tive v ector i nde X for graph DBMSs (GDBMSs) that has two main design goals. First, we aim to implement a disk-based vector index that leverages the core storage and query processing capabilities of the underlying GDBMS. To this end, NaviX is a hierarchical navigable small world (HNSW) index, which is itself a graph-based structure. Second, we aim to evaluate predicate-agnostic filtered vector search queries, where the k nearest neighbors (kNNs) of a query vector υ Q are searched across an arbitrary subset S of vectors that is specified by an ad-hoc selection sub-query Q S . We adopt a prefiltering-based approach that evaluates Q S first and passes the full information about S to the kNN search operator. We study how to design a prefiltering-based search algorithm that is robust under different selectivities as well as correlations of S with υ Q . We propose an adaptive algorithm that utilizes local selectivity of each vector in the HNSW graph to pick a suitable heuristic at each iteration of the kNN search algorithm. We demonstrate NaviX's robustness and efficiency through extensive experiments against both existing prefiltering- and postfiltering-based baselines.",
+      "authors": [
+        "Gaurav Sehgal",
+        "Semih Salihoğlu"
+      ],
+      "canonicalId": "doi:10.14778/3749646.3749704",
+      "discoveredAt": "2026-07-29T12:20:21.392Z",
+      "id": "reading-candidate:doi:10.14778/3749646.3749704",
+      "identityResolution": {
+        "aliases": [
+          "crossref:10.14778/3749646.3749704",
+          "arxiv:9646.37497"
+        ],
+        "arxivId": "9646.37497",
+        "canonicalId": "doi:10.14778/3749646.3749704",
+        "doi": "https://doi.org/10.14778/3749646.3749704",
+        "lineageStatus": "single_record",
+        "providers": [
+          "crossref"
+        ],
+        "records": [
+          {
+            "id": "crossref:10.14778/3749646.3749704",
+            "provider": "crossref",
+            "arxivId": "9646.37497",
+            "doi": "https://doi.org/10.14778/3749646.3749704",
+            "recordUrl": "https://api.crossref.org/works/10.14778%2F3749646.3749704",
+            "title": "NaviX: A Native Vector Index Design for Graph DBMSs With Robust Predicate-Agnostic Search Performance",
+            "url": "https://doi.org/10.14778/3749646.3749704",
+            "year": 2025
+          }
+        ],
+        "consistent": true,
+        "version": "recommendation-identity/v2"
+      },
+      "publishedYear": 2025,
+      "qualityGate": {
+        "checks": {
+          "canonicalIdentity": true,
+          "crossProviderConsistent": true,
+          "notKnownRetracted": true,
+          "plausiblePublicationYear": true,
+          "supportedProvider": true,
+          "traceableHttpsSource": true,
+          "usableTitle": true
+        },
+        "passed": true,
+        "reasons": [],
+        "version": "recommendation-quality/v1"
+      },
+      "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+      "relatedDocumentTitles": [
+        "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+      ],
+      "relation": "topic_search",
+      "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+      "scoreComponents": {
+        "preference": 0,
+        "profileRelevance": 0,
+        "providerRelevance": 0.425,
+        "sourceRelevance": 0.425,
+        "fusionScore": 1,
+        "lexicalRelevance": 1,
+        "preFusionRelevance": 0.425,
+        "baseRelevance": 0.425,
+        "diversityPenalty": 0,
+        "finalScore": 0.425
+      },
+      "primaryProvider": "crossref",
+      "source": "Crossref",
+      "sourceKind": "live",
+      "sourceUrl": "https://doi.org/10.14778/3749646.3749704",
+      "title": "NaviX: A Native Vector Index Design for Graph DBMSs With Robust Predicate-Agnostic Search Performance",
+      "rankingFusion": {
+        "calibratedScore": 0.425,
+        "fusionScore": 1,
+        "k": 10,
+        "routes": [
+          {
+            "contribution": 0.031818,
+            "id": "provider",
+            "rank": 1,
+            "score": 0.425,
+            "weight": 0.35
+          },
+          {
+            "contribution": 0.027273,
+            "id": "lexical_bm25",
+            "rank": 1,
+            "score": 1,
+            "weight": 0.3
+          }
+        ],
+        "version": "recommendation-ranking-fusion/v1"
+      },
+      "relevanceBand": "low",
+      "relevanceScore": 0.425,
+      "savedAt": "2026-07-29T12:55:34.526Z"
+    },
+    {
       "id": "rec-bert-1",
       "reason": "同样关注大规模预训练语言模型的迁移能力。",
       "savedAt": "2026-05-14T10:30:00.000Z",

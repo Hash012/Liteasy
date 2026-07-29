@@ -790,7 +790,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
       const openAlexApiKey = openAlexApiKeyFromRequest(request);
       const crossrefEnabled = customConfig.crossrefEnabled !== false;
-      if (!openAlexApiKey && !crossrefEnabled) {
+      const arxivEnabled = customConfig.arxivEnabled === true;
+      if (!openAlexApiKey && !crossrefEnabled && !arxivEnabled) {
         writeJson(request, response, 503, {
           error: "openalex_api_key_required",
           message: "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。"
@@ -812,7 +813,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           retrievalRun = resumed.run;
         }
         const payload = await searchExternalKnowledge(body, {
-          allowCrossrefOnlyFallback: !openAlexApiKey && crossrefEnabled,
+          allowCrossrefOnlyFallback: !openAlexApiKey && (crossrefEnabled || arxivEnabled),
+          arxivEnabled,
+          arxivTimeoutMs: customConfig.arxivTimeoutMs,
+          arxivTransport: customConfig.arxivTransport,
           crossrefEnabled,
           crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
           crossrefTransport: customConfig.crossrefTransport,

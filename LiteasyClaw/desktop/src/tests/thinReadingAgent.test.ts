@@ -85,12 +85,17 @@ describe("thinReadingAgent", () => {
 
     expect(prompt).toContain("初步论文类型：综述型论文");
     expect(prompt).toContain("paperType");
-    expect(prompt).toContain("包括 openalex: 或 crossref:");
+    expect(prompt).toContain("包括 openalex:、crossref: 或 arxiv:");
     expect(prompt).toContain("summarySentences");
     expect(prompt).toContain("每个内容性句子都必须能追溯");
+    expect(prompt).toContain("采用保守的学术断言强度");
+    expect(prompt).toContain("忠实保留证据限定词与适用范围");
+    expect(prompt).toContain("明确区分论文作者声称、理论推导、实验观察和 Agent 推断");
     expect(prompt).toContain("evidence-survey-taxonomy");
     expect(prompt).toContain("分类框架");
-    expect(prompt).toContain("label 必须是短按钮文案");
+    expect(prompt).toContain("omittedSections 是兼容字段");
+    expect(prompt).toContain("必须返回空数组");
+    expect(prompt).toContain("不得将无证据句写入正文");
     expect(prompt).toContain("不要复制整张 evidence 矩阵");
     expect(prompt).toContain("留存测试");
     expect(prompt).toContain("人工留存案例");
@@ -101,6 +106,27 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("首次承担实质含义");
     expect(prompt).toContain("late interaction（后期交互）");
     expect(prompt).toContain("错误：后期交互（late interaction）");
+  });
+
+  test("turns the interpretation intent into a discourse plan instead of an evidence list", () => {
+    const prompt = buildThinReadingAgentPrompt({
+      context: {
+        ...context,
+        interpretationPlan: {
+          discourseMoves: ["先指出问题", "补齐必要前提", "给出因果链", "收束到边界"],
+          externalKnowledgeNeeded: false,
+          intent: "why",
+          requestedDepth: "deep"
+        },
+        prompt: "为什么这个方法有效？"
+      },
+      prepared
+    });
+
+    expect(prompt).toContain("推测的用户主意图：为什么");
+    expect(prompt).toContain("先指出问题 -> 补齐必要前提 -> 给出因果链 -> 收束到边界");
+    expect(prompt).toContain("不得按 evidence ID 顺序逐条复述");
+    expect(prompt).toContain("不得输出关联证据的并列堆砌");
   });
 
   test("builds and validates an evidence-only reading plan", () => {
@@ -219,24 +245,23 @@ describe("thinReadingAgent", () => {
     })).toThrow("不存在的 summary sentence ID");
   });
 
-  test("includes parent claims and evidence spans when generating a branch", () => {
-    const prompt = buildThinReadingAgentPrompt({
-      context: {
+  test("keeps parent semantic context while hiding transient evidence identifiers", () => {
+    const branchContext: ThinReadingGenerationContext = {
         ...context,
         depth: 1,
         parentClaims: [
           {
-            evidenceIds: ["evidence-survey-taxonomy"],
-            id: "claim-parent-taxonomy",
+            evidenceIds: ["evidence-previous-layer-claim"],
+            id: "thin-reading-claim-previous-layer",
             status: "grounded",
             text: "上一层判断认为 taxonomy 是这篇综述留给读者的主轴。"
           }
         ],
         parentEvidenceSpans: [
           {
-            chunkId: "paper-survey:p2:chunk-1",
+            chunkId: "paper-survey:previous-layer:chunk-1",
             confidence: 0.91,
-            id: "evidence-survey-taxonomy",
+            id: "evidence-previous-layer-span",
             page: 2,
             pageTextEnd: 59,
             pageTextStart: 2,
@@ -247,17 +272,32 @@ describe("thinReadingAgent", () => {
         parentNodeId: "thin-reading-root",
         parentSummary: "上一层总述聚焦 taxonomy。",
         parentTitle: "Survey overview",
-        source: { kind: "omitted_section", label: "分类轴线", sectionKey: "taxonomy" }
-      },
-      prepared
-    });
+        source: {
+          evidenceIds: ["evidence-previous-layer-selection"],
+          excerpt: "taxonomy（分类框架）",
+          kind: "selected_text"
+        }
+      };
+    const prompt = buildThinReadingAgentPrompt({ context: branchContext, prepared });
+    const planningPrompt = buildThinReadingEvidencePlanPrompt({ context: branchContext, prepared });
 
     expect(prompt).toContain("上一层关键判断");
-    expect(prompt).toContain("claim-parent-taxonomy");
     expect(prompt).toContain("taxonomy 是这篇综述留给读者的主轴");
     expect(prompt).toContain("上一层论文内证据 span");
     expect(prompt).toContain("This survey presents a taxonomy");
     expect(prompt).toContain("本轮输出仍只能引用下方可用 evidence ID");
+    expect(prompt).toContain("选区在上一层具有论文证据映射");
+    expect(planningPrompt).toContain("选区在上一层具有论文证据映射");
+    for (const identifier of [
+      "evidence-previous-layer-claim",
+      "evidence-previous-layer-span",
+      "evidence-previous-layer-selection",
+      "thin-reading-claim-previous-layer",
+      "paper-survey:previous-layer:chunk-1"
+    ]) {
+      expect(prompt).not.toContain(identifier);
+      expect(planningPrompt).not.toContain(identifier);
+    }
   });
 
   test("anchors an external-source selection to its canonical source in the branch prompt", () => {
@@ -288,20 +328,20 @@ describe("thinReadingAgent", () => {
       prepared
     });
 
-    expect(prompt).toContain("选区对应的已验证外部 source ID：openalex:W42");
+    expect(prompt).toContain("选区在上一层关联过外部来源");
     expect(prompt).toContain("A Follow-up Study");
     expect(prompt).toContain("relation=related");
     expect(prompt).toContain("NARRATION RULE: this exact source may only be called a related-work lead");
     expect(prompt).toContain("不同 relation 的 source 不得在同一句中合并为笼统的 citation 结论");
   });
 
-  test("prioritizes evidence linked to a selected summary passage", () => {
+  test("uses a selected summary passage as a semantic focus rather than an evidence allowlist", () => {
     const prompt = buildThinReadingAgentPrompt({
       context: {
         ...context,
         depth: 1,
         source: {
-          evidenceIds: ["evidence-survey-taxonomy"],
+          evidenceIds: ["evidence-previous-layer-selection"],
           excerpt: "taxonomy（分类框架）",
           kind: "selected_text"
         }
@@ -309,8 +349,9 @@ describe("thinReadingAgent", () => {
       prepared
     });
 
-    expect(prompt).toContain("选区对应的本轮论文 evidence ID：evidence-survey-taxonomy");
-    expect(prompt).toContain("优先说明这些证据如何支持、限定或需要细化该选区");
+    expect(prompt).toContain("选区在上一层具有论文证据映射");
+    expect(prompt).toContain("必须在本轮可用证据目录中重新选择能直接支持该讲解的 ID");
+    expect(prompt).not.toContain("evidence-previous-layer-selection");
   });
 
   test("treats selected text, user context, and retrieved evidence as untrusted data", () => {
@@ -424,10 +465,7 @@ describe("thinReadingAgent", () => {
       summary: expect.stringContaining("taxonomy"),
       withinPaperClosure: true
     });
-    expect(seed.omittedSections[0]).toMatchObject({
-      label: "分类轴线",
-      sectionKey: "taxonomy"
-    });
+    expect(seed.omittedSections).toEqual([]);
   });
 
   test("creates sentence-level evidence mapping when the model omits summarySentences", () => {
@@ -474,6 +512,41 @@ describe("thinReadingAgent", () => {
       analysisEvidence: prepared.evidence,
       requireExplicitTraceability: true
     })).toThrow("summarySentences 必须显式覆盖正文");
+  });
+
+  test("rejects unsupported and unbound body sentences in live generation", () => {
+    const output = {
+      claims: [],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "这篇综述用 taxonomy 组织 vector database systems 的知识地图。",
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "unsupported",
+        text: "这篇综述用 taxonomy 组织 vector database systems 的知识地图。"
+      }],
+      withinPaperClosure: true
+    };
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(output), {
+      analysisEvidence: prepared.evidence,
+      requireExplicitTraceability: true
+    })).toThrow("标记为 unsupported");
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...output,
+      summarySentences: [{
+        ...output.summarySentences[0],
+        evidenceIds: [],
+        status: "weak"
+      }]
+    }), {
+      analysisEvidence: prepared.evidence,
+      requireExplicitTraceability: true
+    })).toThrow("缺少论文 evidence 或可信外部来源");
   });
 
   test("rejects a nearly complete sentence map that leaves displayed summary content untraced", () => {
@@ -715,7 +788,7 @@ describe("thinReadingAgent", () => {
     ]);
   });
 
-  test("normalizes long omitted section labels from live model output", () => {
+  test("discards omitted-section output because generation may only continue from body text", () => {
     const seed = parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
       claims: [],
@@ -738,14 +811,7 @@ describe("thinReadingAgent", () => {
       analysisEvidence: prepared.evidence
     });
 
-    expect(seed.omittedSections[0]).toMatchObject({
-      label: "ACORN-γ 与 ACORN-1 的详细构造与搜索算法",
-      sectionKey: "method_details"
-    });
-    expect(seed.omittedSections[1]).toMatchObject({
-      label: "相关工作",
-      sectionKey: "related_work"
-    });
+    expect(seed.omittedSections).toEqual([]);
   });
 
   test("rejects descriptive or combined evidence references instead of silently attributing them", () => {

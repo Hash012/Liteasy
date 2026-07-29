@@ -154,7 +154,7 @@ function createArtifactId(taskId: string) {
   return taskId.replace("artifact-task-", "artifact-");
 }
 
-function buildFailureRecovery(message: string) {
+function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
   const normalized = message.toLowerCase();
   if (normalized.includes("401") || normalized.includes("unauthorized") || normalized.includes("api key")) {
     return [
@@ -167,6 +167,16 @@ function buildFailureRecovery(message: string) {
     normalized.includes("not found") ||
     normalized.includes("unsupported route")
   ) {
+    if (
+      failedStage === "thin_reading_retrieving_external_knowledge" ||
+      normalized.includes("外部文献检索") ||
+      normalized.includes("external-knowledge")
+    ) {
+      return [
+        "确认当前 dev-cloud 已提供 POST /v1/research/external-knowledge 路由。",
+        "完全停止并重新启动 dev-cloud；仅重启 Tauri 不会更新独立运行的 Node 服务。"
+      ];
+    }
     return [
       "确认上游地址支持 OpenAI Responses API 的 /responses 路由。",
       "确认 OPENAI_BASE_URL 只包含 API 根路径，例如以 /v1 结尾。"
@@ -252,6 +262,12 @@ function createRootThinReadingContext(input: {
     source: { kind: "root_overview" },
     targetLanguage: input.targetLanguage
   };
+}
+
+function isThinReadingBodyExcerpt(summary: string, excerpt: string) {
+  const normalizedSummary = summary.replace(/\s+/g, "").trim();
+  const normalizedExcerpt = excerpt.replace(/\s+/g, "").trim();
+  return normalizedExcerpt.length > 0 && normalizedSummary.includes(normalizedExcerpt);
 }
 
 function thinReadingTitleForSource(source: ThinReadingBranchSource, targetLanguage: string) {
@@ -629,12 +645,13 @@ export function useArtifactActions({
       const currentTask = artifactStore.getTask(taskId);
       const message = error instanceof Error ? error.message : String(error);
       const modelContext = getModelDiagnosticContext?.() ?? {};
+      const failedStage = currentTask?.stage ?? "generating_answer";
       artifactStore.failTask(taskId, {
         ...modelContext,
-        failedStage: currentTask?.stage ?? "generating_answer",
+        failedStage,
         message,
         occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message)
+        recovery: buildFailureRecovery(message, failedStage)
       });
       syncArtifacts(taskId);
       onAnalysisHint(`Agent 分析失败：${message}`);
@@ -962,6 +979,9 @@ export function useArtifactActions({
         : undefined
     };
     const activeNode = scopedDocument.nodes[scopedDocument.activeNodeId] ?? scopedDocument.nodes[scopedDocument.rootNodeId];
+    if (source.kind !== "selected_text" || !isThinReadingBodyExcerpt(activeNode.summary, source.excerpt)) {
+      throw new Error("薄读只能从当前层正文中选取有证据映射的文字继续深入。");
+    }
     const existingChild = findThinReadingChildBySource(scopedDocument, activeNode.id, source);
     if (existingChild) {
       updateThinReadingDocument(artifactId, {
@@ -1095,12 +1115,13 @@ export function useArtifactActions({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const modelContext = getModelDiagnosticContext?.() ?? {};
+      const failedStage = artifactStore.getTask(taskId)?.stage ?? "generating_answer";
       artifactStore.failTask(taskId, {
         ...modelContext,
-        failedStage: artifactStore.getTask(taskId)?.stage ?? "generating_answer",
+        failedStage,
         message,
         occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message)
+        recovery: buildFailureRecovery(message, failedStage)
       });
       syncArtifacts(taskId);
       onAnalysisHint(`薄读下一层生成失败：${message}`);

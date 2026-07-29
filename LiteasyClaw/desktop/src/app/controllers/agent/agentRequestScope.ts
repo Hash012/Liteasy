@@ -36,13 +36,6 @@ function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | und
   if (source.kind === "root_overview") {
     return { kind: "root_overview" };
   }
-  if (source.kind === "omitted_section") {
-    const label = typeof source.label === "string" ? source.label.trim() : "";
-    const sectionKey = typeof source.sectionKey === "string" ? source.sectionKey.trim() : "";
-    return label.length > 0 && label.length <= 48 && sectionKey.length > 0 && sectionKey.length <= 96
-      ? { kind: "omitted_section", label, sectionKey }
-      : undefined;
-  }
   if (source.kind === "selected_text") {
     const evidenceIds = source.evidenceIds;
     const externalSourceIds = source.externalSourceIds;

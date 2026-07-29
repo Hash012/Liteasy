@@ -73,9 +73,11 @@ export type ThinReadingEvidenceSpan = {
 export type ThinReadingExternalSource = {
   abstract: string;
   authors: readonly string[];
+  arxivId?: string;
   doi?: string;
   id: string;
-  provider: "crossref" | "openalex";
+  isRetracted?: boolean;
+  provider: "arxiv" | "crossref" | "openalex";
   relation: "cited_by_target" | "cites_target" | "related" | "topic_search";
   relevance: number;
   retrievalQuery: string;
@@ -87,6 +89,17 @@ export type ThinReadingExternalSource = {
 };
 
 export type ThinReadingClaimStatus = "grounded" | "unsupported" | "weak";
+
+export type ThinReadingInterpretationIntent = "how" | "mixed" | "what" | "why";
+
+export type ThinReadingInterpretationPlan = {
+  discourseMoves: readonly string[];
+  externalKnowledgeNeeded: boolean;
+  externalQuery?: string;
+  gap?: string;
+  intent: ThinReadingInterpretationIntent;
+  requestedDepth: "deep" | "standard";
+};
 
 export type ThinReadingClosureState = "inside_paper" | "near_boundary" | "outside_paper";
 
@@ -108,6 +121,7 @@ export type ThinReadingSummarySentence = {
 // This is deliberately attached to the generated node rather than the transient Agent run.
 // A reader reopening an artifact must be able to inspect how its evidence boundary was chosen.
 export type ThinReadingGenerationAudit = {
+  interpretationPlan?: ThinReadingInterpretationPlan;
   evidenceLoop?: {
     rounds: readonly {
       focus: readonly string[];
@@ -190,6 +204,7 @@ export type ThinReadingGenerationContext = {
   source: ThinReadingNodeSource;
   targetLanguage: string;
   externalSources?: readonly ThinReadingExternalSource[];
+  interpretationPlan?: ThinReadingInterpretationPlan;
   selectedExternalSources?: readonly ThinReadingExternalSource[];
 };
 

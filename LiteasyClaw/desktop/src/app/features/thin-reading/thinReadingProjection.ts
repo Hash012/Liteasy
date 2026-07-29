@@ -101,6 +101,12 @@ function freezeRecommendation(
   return Object.freeze({ ...recommendation });
 }
 
+function retainCommunityRecommendations(
+  recommendations: readonly ThinReadingIntuechoRecommendation[]
+) {
+  return recommendations.filter((recommendation) => recommendation.source === "intuecho_community");
+}
+
 function freezeEvidenceSpan(span: ThinReadingEvidenceSpan): ThinReadingEvidenceSpan {
   return Object.freeze({ ...span });
 }
@@ -129,6 +135,12 @@ function freezeSummarySentence(sentence: ThinReadingSummarySentence): ThinReadin
 
 function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGenerationAudit {
   return Object.freeze({
+    interpretationPlan: audit.interpretationPlan
+      ? Object.freeze({
+          ...audit.interpretationPlan,
+          discourseMoves: Object.freeze([...audit.interpretationPlan.discourseMoves])
+        })
+      : undefined,
     evidenceLoop: audit.evidenceLoop
       ? Object.freeze({
           rounds: Object.freeze(audit.evidenceLoop.rounds.map((round) => Object.freeze({
@@ -292,7 +304,7 @@ export function createThinReadingDocument(
       paperId: primaryPaperId,
       paperIdentity: primaryPaperId ? paperIdentities[primaryPaperId] : undefined
     },
-    recommendations: input.rootSeed.recommendations,
+    recommendations: retainCommunityRecommendations(input.rootSeed.recommendations),
     source: { kind: "root_overview" },
     summary: input.rootSeed.summary,
     title: rootTitle,
@@ -374,7 +386,7 @@ export function advanceThinReadingDocument(
     paperType: input.seed.paperType,
     parentId: parent.id,
     recommendationScope: recommendationScopeForSource(document, source),
-    recommendations: input.seed.recommendations,
+    recommendations: retainCommunityRecommendations(input.seed.recommendations),
     source,
     summary: input.seed.summary,
     title: input.title,

@@ -160,6 +160,41 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
   assert.equal(response.json.retrieval.status, "completed");
 });
 
+test("uses traceable arXiv topic results for thin-reading external knowledge", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "thin-reading-arxiv-only",
+      query: "neural retrieval systems",
+      targetPaperTitle: "Target Paper"
+    }),
+    handler: createDevCloudRequestHandler({
+      arxivEnabled: true,
+      arxivTransport: async () => ({
+        ok: true,
+        status: 200,
+        text: async () => `<feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <id>https://arxiv.org/abs/2401.01234v2</id>
+            <published>2024-01-03T00:00:00Z</published>
+            <title>Efficient Neural Retrieval Systems</title>
+            <summary>This preprint reports a bounded and traceable neural retrieval method.</summary>
+            <author><name>Ada Researcher</name></author>
+          </entry>
+        </feed>`
+      }),
+      crossrefEnabled: false
+    }),
+    headers: { "content-type": "application/json", "x-openalex-api-key": "" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(response.json.provider, "arxiv");
+  assert.equal(response.json.sources[0].id, "arxiv:2401.01234");
+  assert.equal(response.json.sources[0].sourceRecordUrl, "https://arxiv.org/abs/2401.01234");
+});
+
 test("does not degrade to Crossref-only sources when the configured OpenAlex key is rejected", async () => {
   const response = await invokeHandler({
     body: JSON.stringify({ artifactId: "artifact-openalex-key-invalid", query: "ColBERT" }),

@@ -958,6 +958,7 @@ export function AppShell({
           canStartAnalysis={
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
           }
+          intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
           }}

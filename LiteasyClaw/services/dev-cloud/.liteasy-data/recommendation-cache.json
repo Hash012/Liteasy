@@ -1,262 +1,4 @@
 {
-  "demo-session-1::local_library:本地文献库::demo-1::relevance": {
-    "cachedAt": "2026-07-27T05:53:49.892Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "sourceKind": "mock",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::demo-1|dropped-4-1-pdf-33830322::relevance": {
-    "cachedAt": "2026-07-01T12:48:46.426Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::dropped-4-1-pdf-33830322::relevance": {
-    "cachedAt": "2026-07-01T12:48:51.019Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::demo-2::relevance": {
-    "cachedAt": "2026-07-29T07:36:16.321Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-vdbms-1",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "high",
-        "relevanceScore": 0.92,
-        "reason": "同样关注向量数据库系统架构与相似度检索能力。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-vdbms-2",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.78,
-        "reason": "补充开源向量数据库系统实现，便于和综述框架对照。",
-        "source": "arXiv Watch",
-        "sourceKind": "mock",
-        "title": "Milvus: A Purpose-Built Vector Data Management System"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::demo-3::relevance": {
-    "cachedAt": "2026-07-27T05:52:11.223Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "sourceKind": "mock",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::rec-bert-1::relevance": {
-    "cachedAt": "2026-07-01T13:14:23.575Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::demo-2|rec-bert-1::relevance": {
-    "cachedAt": "2026-07-01T13:17:38.936Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-vdbms-1",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "high",
-        "relevanceScore": 0.92,
-        "reason": "同样关注向量数据库系统架构与相似度检索能力。",
-        "source": "Semantic Scholar",
-        "title": "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-vdbms-2",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.78,
-        "reason": "补充开源向量数据库系统实现，便于和综述框架对照。",
-        "source": "arXiv Watch",
-        "title": "Milvus: A Purpose-Built Vector Data Management System"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::demo-1|demo-2::relevance": {
-    "cachedAt": "2026-07-01T13:20:50.660Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-vdbms-1",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "high",
-        "relevanceScore": 0.92,
-        "reason": "同样关注向量数据库系统架构与相似度检索能力。",
-        "source": "Semantic Scholar",
-        "title": "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-vdbms-2",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.78,
-        "reason": "补充开源向量数据库系统实现，便于和综述框架对照。",
-        "source": "arXiv Watch",
-        "title": "Milvus: A Purpose-Built Vector Data Management System"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::demo-2|demo-3::relevance": {
-    "cachedAt": "2026-07-28T14:51:48.662Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "sourceKind": "mock",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
-  "demo-session-1::organization_shared:org:org-demo-2:文献运营共享库::org-ops-doc-1::relevance": {
-    "cachedAt": "2026-07-01T13:23:56.475Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
   "account-session-tjminfo24-ruc-edu-cn::local_library:本地文献库::demo-1::relevance": {
     "cachedAt": "2026-07-03T12:40:34.113Z",
     "recommendations": [
@@ -382,58 +124,6 @@
       }
     ]
   },
-  "demo-session-1::local_library:本地文献库::demo-1|demo-3::relevance": {
-    "cachedAt": "2026-07-28T04:51:04.462Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "sourceKind": "mock",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
-  "demo-session-1::local_library:本地文献库::demo-1|demo-2|demo-3::relevance": {
-    "cachedAt": "2026-07-23T10:27:58.834Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
   "user:0099dd75-8e8c-4245-8b59-68f06b2477f7::local_library:本地文献库::demo-3::relevance": {
     "cachedAt": "2026-07-26T00:28:27.074Z",
     "recommendations": [
@@ -484,165 +174,912 @@
       }
     ]
   },
-  "demo-session-1::local_library:本地文献库::dropped-heliox-camera-ready-pdf-1508724::relevance": {
-    "cachedAt": "2026-07-29T07:34:07.180Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "sourceKind": "mock",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "demo-session-1::organization_shared:org:org-demo-1:组织共享文献库::org-doc-1::relevance": {
-    "cachedAt": "2026-07-29T07:36:42.912Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "sourceKind": "mock",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
   "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785311517746316016-0::relevance": {
-    "cachedAt": "2026-07-29T07:52:00.026Z",
+    "cachedAt": "2026-07-29T12:59:17.066Z",
     "recommendations": [
       {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
+        "authors": [],
+        "canonicalId": "doi:10.14217/9781848593596-4-en",
+        "discoveredAt": "2026-07-29T12:59:17.057Z",
+        "id": "reading-candidate:doi:10.14217/9781848593596-4-en",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.14217/9781848593596-4-en"
+          ],
+          "canonicalId": "doi:10.14217/9781848593596-4-en",
+          "doi": "https://doi.org/10.14217/9781848593596-4-en",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.14217/9781848593596-4-en",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.14217/9781848593596-4-en",
+              "recordUrl": "https://api.crossref.org/works/10.14217%2F9781848593596-4-en",
+              "title": "Preparation of Camera-Ready Copy",
+              "url": "https://doi.org/10.14217/9781848593596-4-en",
+              "year": 1983
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 1983,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitles": [
+          "heliox_camera_ready"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.517,
+          "sourceRelevance": 0.517,
+          "fusionScore": 0.946,
+          "lexicalRelevance": 0.829653,
+          "preFusionRelevance": 0.667,
+          "baseRelevance": 0.642,
+          "diversityPenalty": 0,
+          "finalScore": 0.642
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.14217/9781848593596-4-en",
+        "title": "Preparation of Camera-Ready Copy",
+        "rankingFusion": {
+          "calibratedScore": 0.642,
+          "fusionScore": 0.946,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.517,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.829653,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.007692,
+              "id": "personalization",
+              "rank": 3,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "medium",
+        "relevanceScore": 0.642
       },
       {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "authors": [],
+        "canonicalId": "doi:10.4135/9781452229669.n537",
+        "discoveredAt": "2026-07-29T12:59:17.057Z",
+        "id": "reading-candidate:doi:10.4135/9781452229669.n537",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.4135/9781452229669.n537"
+          ],
+          "canonicalId": "doi:10.4135/9781452229669.n537",
+          "doi": "https://doi.org/10.4135/9781452229669.n537",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.4135/9781452229669.n537",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.4135/9781452229669.n537",
+              "recordUrl": "https://api.crossref.org/works/10.4135%2F9781452229669.n537",
+              "title": "Camera-Ready Art",
+              "url": "https://doi.org/10.4135/9781452229669.n537",
+              "year": 2004
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2004,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitles": [
+          "heliox_camera_ready"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.479,
+          "sourceRelevance": 0.479,
+          "fusionScore": 0.961,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.629,
+          "baseRelevance": 0.612,
+          "diversityPenalty": 0.12,
+          "finalScore": 0.492
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.4135/9781452229669.n537",
+        "title": "Camera-Ready Art",
+        "rankingFusion": {
+          "calibratedScore": 0.612,
+          "fusionScore": 0.961,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.479,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.009091,
+              "id": "personalization",
+              "rank": 1,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
         "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "sourceKind": "mock",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
+        "relevanceScore": 0.492
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
+        "discoveredAt": "2026-07-29T12:59:17.057Z",
+        "id": "reading-candidate:doi:10.1016/0039-128x(90)90065-j",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1016/0039-128x(90)90065-j"
+          ],
+          "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
+          "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1016/0039-128x(90)90065-j",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
+              "recordUrl": "https://api.crossref.org/works/10.1016%2F0039-128x(90)90065-j",
+              "title": "On typeset versus camera-ready journals",
+              "url": "https://doi.org/10.1016/0039-128x(90)90065-j",
+              "year": 1990
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 1990,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitles": [
+          "heliox_camera_ready"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.457,
+          "sourceRelevance": 0.457,
+          "fusionScore": 0.856,
+          "lexicalRelevance": 0.764535,
+          "preFusionRelevance": 0.607,
+          "baseRelevance": 0.546,
+          "diversityPenalty": 0.12,
+          "finalScore": 0.426
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1016/0039-128x(90)90065-j",
+        "title": "On typeset versus camera-ready journals",
+        "rankingFusion": {
+          "calibratedScore": 0.546,
+          "fusionScore": 0.856,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.457,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.023077,
+              "id": "lexical_bm25",
+              "rank": 3,
+              "score": 0.764535,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.008333,
+              "id": "personalization",
+              "rank": 2,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.426
       }
     ]
   },
-  "demo-session-1::local_library:本地文献库::demo-3|dropped-heliox-camera-ready-pdf-1508724::relevance": {
-    "cachedAt": "2026-07-29T08:20:52.724Z",
+  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785311517746316016-0|reading-candidate:doi:10.14217/9781848593596-4-en::relevance": {
+    "cachedAt": "2026-07-29T12:59:50.518Z",
     "recommendations": [
       {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+        "authors": [],
+        "canonicalId": "doi:10.1515/9780824890810-014",
+        "discoveredAt": "2026-07-29T12:59:50.511Z",
+        "id": "reading-candidate:doi:10.1515/9780824890810-014",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1515/9780824890810-014"
+          ],
+          "canonicalId": "doi:10.1515/9780824890810-014",
+          "doi": "https://doi.org/10.1515/9780824890810-014",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1515/9780824890810-014",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1515/9780824890810-014",
+              "recordUrl": "https://api.crossref.org/works/10.1515%2F9780824890810-014",
+              "title": "APPENDIX F. PREPARATION OF THE CAMERA-READY COPY BY COMPUTER",
+              "url": "https://doi.org/10.1515/9780824890810-014",
+              "year": 1995
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 1995,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
+        "relatedDocumentTitles": [
+          "Preparation of Camera-Ready Copy"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.663,
+          "sourceRelevance": 0.663,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.813,
+          "baseRelevance": 0.813,
+          "diversityPenalty": 0,
+          "finalScore": 0.813
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1515/9780824890810-014",
+        "title": "APPENDIX F. PREPARATION OF THE CAMERA-READY COPY BY COMPUTER",
+        "rankingFusion": {
+          "calibratedScore": 0.813,
+          "fusionScore": 1,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.663,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.009091,
+              "id": "personalization",
+              "rank": 1,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
         "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
+        "relevanceScore": 0.813
       },
       {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+        "authors": [],
+        "canonicalId": "doi:10.1016/0957-4158(91)90013-z",
+        "discoveredAt": "2026-07-29T12:59:50.511Z",
+        "id": "reading-candidate:doi:10.1016/0957-4158(91)90013-z",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1016/0957-4158(91)90013-z"
+          ],
+          "canonicalId": "doi:10.1016/0957-4158(91)90013-z",
+          "doi": "https://doi.org/10.1016/0957-4158(91)90013-z",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1016/0957-4158(91)90013-z",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1016/0957-4158(91)90013-z",
+              "recordUrl": "https://api.crossref.org/works/10.1016%2F0957-4158(91)90013-z",
+              "title": "Instructions for the submission of camera-ready copy",
+              "url": "https://doi.org/10.1016/0957-4158(91)90013-z",
+              "year": 1991
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 1991,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
+        "relatedDocumentTitles": [
+          "Preparation of Camera-Ready Copy"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.638,
+          "sourceRelevance": 0.638,
+          "fusionScore": 0.907,
+          "lexicalRelevance": 0.579904,
+          "preFusionRelevance": 0.788,
+          "baseRelevance": 0.737,
+          "diversityPenalty": 0.103,
+          "finalScore": 0.634
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1016/0957-4158(91)90013-z",
+        "title": "Instructions for the submission of camera-ready copy",
+        "rankingFusion": {
+          "calibratedScore": 0.737,
+          "fusionScore": 0.907,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.638,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.579904,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.007692,
+              "id": "personalization",
+              "rank": 3,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
         "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "sourceKind": "mock",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785313732256434307-0::relevance": {
-    "cachedAt": "2026-07-29T08:28:59.543Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
+        "relevanceScore": 0.634
       },
       {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "abstract": "Mixed states of a quantum system, represented by density operators, can be decomposed as a statistical mixture of pure states in a number of ways where each decomposition can be viewed as a different preparation recipe. However the fact that the density matrix contains full information about the ensemble makes it impossible to estimate the preparation basis for the quantum system. Here we present a measurement scheme to (seemingly) improve the performance of unsharp measurements. We argue that in some situations this scheme is capable of providing statistics from a single copy of the quantum system, thus making it possible to perform state tomography from a single copy. One of the byproduct of the scheme is a way to distinguish between different preparation methods used to prepare the state of the quantum system. However, our numerical simulations disagree with our intuitive predictions. We show that a counter-intuitive property of a biased classical random walk is responsible for the proposed mechanism not working.",
+        "authors": [
+          "Sandeep K Goyal",
+          "Rajeev Singh",
+          "Sibasish Ghosh"
+        ],
+        "canonicalId": "doi:10.1103/physreva.93.012114",
+        "discoveredAt": "2026-07-29T12:59:50.511Z",
+        "id": "reading-candidate:doi:10.1103/physreva.93.012114",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:1511.03149"
+          ],
+          "arxivId": "1511.03149",
+          "canonicalId": "doi:10.1103/physreva.93.012114",
+          "doi": "https://doi.org/10.1103/physreva.93.012114",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:1511.03149",
+              "provider": "arxiv",
+              "arxivId": "1511.03149",
+              "doi": "https://doi.org/10.1103/physreva.93.012114",
+              "recordUrl": "https://arxiv.org/abs/1511.03149",
+              "title": "An almost convincing scheme for discriminating the preparation basis of quantum ensemble and why it will not work",
+              "url": "https://arxiv.org/abs/1511.03149",
+              "year": 2015
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2015,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
+        "relatedDocumentTitles": [
+          "Preparation of Camera-Ready Copy"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0.011,
+          "profileRelevance": 0,
+          "providerRelevance": 0.625,
+          "sourceRelevance": 0.625,
+          "fusionScore": 0.801,
+          "lexicalRelevance": 0.576737,
+          "preFusionRelevance": 0.636,
+          "baseRelevance": 0.547,
+          "diversityPenalty": 0.051,
+          "finalScore": 0.496
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/1511.03149",
+        "title": "An almost convincing scheme for discriminating the preparation basis of quantum ensemble and why it will not work",
+        "rankingFusion": {
+          "calibratedScore": 0.547,
+          "fusionScore": 0.801,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.625,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.021429,
+              "id": "lexical_bm25",
+              "rank": 4,
+              "score": 0.576737,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.00625,
+              "id": "personalization",
+              "rank": 6,
+              "score": 0.011,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
         "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "sourceKind": "mock",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785314276294111520-3::relevance": {
-    "cachedAt": "2026-07-29T08:38:03.452Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "sourceKind": "mock",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
+        "relevanceScore": 0.496
       },
       {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "sourceKind": "mock",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
+        "authors": [],
+        "canonicalId": "doi:10.1016/0957-4158(94)90062-0",
+        "discoveredAt": "2026-07-29T12:59:50.511Z",
+        "id": "reading-candidate:doi:10.1016/0957-4158(94)90062-0",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1016/0957-4158(94)90062-0"
+          ],
+          "canonicalId": "doi:10.1016/0957-4158(94)90062-0",
+          "doi": "https://doi.org/10.1016/0957-4158(94)90062-0",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1016/0957-4158(94)90062-0",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1016/0957-4158(94)90062-0",
+              "recordUrl": "https://api.crossref.org/works/10.1016%2F0957-4158(94)90062-0",
+              "title": "Instructions for the submission of camera-ready copy",
+              "url": "https://doi.org/10.1016/0957-4158(94)90062-0",
+              "year": 1994
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 1994,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
+        "relatedDocumentTitles": [
+          "Preparation of Camera-Ready Copy"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.563,
+          "sourceRelevance": 0.563,
+          "fusionScore": 0.81,
+          "lexicalRelevance": 0.579904,
+          "preFusionRelevance": 0.713,
+          "baseRelevance": 0.618,
+          "diversityPenalty": 0.18,
+          "finalScore": 0.438
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1016/0957-4158(94)90062-0",
+        "title": "Instructions for the submission of camera-ready copy",
+        "rankingFusion": {
+          "calibratedScore": 0.618,
+          "fusionScore": 0.81,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.025,
+              "id": "provider",
+              "rank": 4,
+              "score": 0.563,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.023077,
+              "id": "lexical_bm25",
+              "rank": 3,
+              "score": 0.579904,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.007143,
+              "id": "personalization",
+              "rank": 4,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.438
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
+        "discoveredAt": "2026-07-29T12:59:50.511Z",
+        "id": "reading-candidate:doi:10.1016/0039-128x(90)90065-j",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1016/0039-128x(90)90065-j"
+          ],
+          "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
+          "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1016/0039-128x(90)90065-j",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
+              "recordUrl": "https://api.crossref.org/works/10.1016%2F0039-128x(90)90065-j",
+              "title": "On typeset versus camera-ready journals",
+              "url": "https://doi.org/10.1016/0039-128x(90)90065-j",
+              "year": 1990
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 1990,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitles": [
+          "heliox_camera_ready"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.457,
+          "sourceRelevance": 0.457,
+          "fusionScore": 0.694,
+          "lexicalRelevance": 0.211971,
+          "preFusionRelevance": 0.607,
+          "baseRelevance": 0.477,
+          "diversityPenalty": 0.072,
+          "finalScore": 0.405
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1016/0039-128x(90)90065-j",
+        "title": "On typeset versus camera-ready journals",
+        "rankingFusion": {
+          "calibratedScore": 0.477,
+          "fusionScore": 0.694,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.021875,
+              "id": "provider",
+              "rank": 6,
+              "score": 0.457,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.01875,
+              "id": "lexical_bm25",
+              "rank": 6,
+              "score": 0.211971,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.006667,
+              "id": "personalization",
+              "rank": 5,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.405
+      },
+      {
+        "authors": [],
+        "canonicalId": "doi:10.4135/9781452229669.n537",
+        "discoveredAt": "2026-07-29T12:59:50.511Z",
+        "id": "reading-candidate:doi:10.4135/9781452229669.n537",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.4135/9781452229669.n537"
+          ],
+          "canonicalId": "doi:10.4135/9781452229669.n537",
+          "doi": "https://doi.org/10.4135/9781452229669.n537",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.4135/9781452229669.n537",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.4135/9781452229669.n537",
+              "recordUrl": "https://api.crossref.org/works/10.4135%2F9781452229669.n537",
+              "title": "Camera-Ready Art",
+              "url": "https://doi.org/10.4135/9781452229669.n537",
+              "year": 2004
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2004,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitles": [
+          "heliox_camera_ready"
+        ],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0.15,
+          "profileRelevance": 0,
+          "providerRelevance": 0.479,
+          "sourceRelevance": 0.479,
+          "fusionScore": 0.758,
+          "lexicalRelevance": 0.223792,
+          "preFusionRelevance": 0.629,
+          "baseRelevance": 0.522,
+          "diversityPenalty": 0.12,
+          "finalScore": 0.402
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.4135/9781452229669.n537",
+        "title": "Camera-Ready Art",
+        "rankingFusion": {
+          "calibratedScore": 0.522,
+          "fusionScore": 0.758,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.023333,
+              "id": "provider",
+              "rank": 5,
+              "score": 0.479,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.02,
+              "id": "lexical_bm25",
+              "rank": 5,
+              "score": 0.223792,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.008333,
+              "id": "personalization",
+              "rank": 2,
+              "score": 0.15,
+              "weight": 0.1
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.402
       }
     ]
   }
