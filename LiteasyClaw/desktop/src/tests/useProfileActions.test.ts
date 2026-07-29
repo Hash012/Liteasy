@@ -1,6 +1,11 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { useProfileActions } from "../app/features/profile/useProfileActions";
+import { defaultAcademicProfile } from "../app/features/profile/profile.types";
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 describe("useProfileActions", () => {
   test("tracks academic archive state and requests profile sampling changes", () => {
@@ -69,24 +74,48 @@ describe("useProfileActions", () => {
       })
     );
 
-    expect(result.current.academicProfile).toEqual({ age: "未设置", gender: "未设置", stage: "未设置" });
+    expect(result.current.academicProfile).toEqual(defaultAcademicProfile);
 
     act(() =>
       result.current.updateAcademicProfile({
+        ...defaultAcademicProfile,
         age: "28",
         gender: "女",
+        researchTopics: "神经信息检索",
         stage: "博士研究生"
       })
     );
 
-    expect(result.current.academicProfile).toEqual({ age: "28", gender: "女", stage: "博士研究生" });
+    expect(result.current.academicProfile).toEqual({
+      ...defaultAcademicProfile,
+      age: "28",
+      gender: "女",
+      researchTopics: "神经信息检索",
+      stage: "博士研究生"
+    });
     expect(result.current.profileClearMessage).toBe("画像配置已更新。");
 
     act(() => result.current.openClearProfileConfirm());
     act(() => result.current.clearUserProfile());
 
-    expect(result.current.academicProfile).toEqual({ age: "未设置", gender: "未设置", stage: "未设置" });
+    expect(result.current.academicProfile).toEqual(defaultAcademicProfile);
     expect(onProfileSamplingChanged).toHaveBeenLastCalledWith(false);
+  });
+
+  test("restores the device-local research profile across hook instances", () => {
+    const first = renderHook(() => useProfileActions());
+    act(() => first.result.current.updateAcademicProfile({
+      ...defaultAcademicProfile,
+      preferredLanguages: "中文、English",
+      researchMethods: "混合检索",
+      researchTopics: "神经信息检索"
+    }));
+    first.unmount();
+
+    const restored = renderHook(() => useProfileActions());
+    expect(restored.result.current.academicProfile.researchTopics).toBe("神经信息检索");
+    expect(restored.result.current.academicProfile.researchMethods).toBe("混合检索");
+    expect(restored.result.current.academicProfile.preferredLanguages).toBe("中文、English");
   });
 
 });

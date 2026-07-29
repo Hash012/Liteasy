@@ -29,6 +29,7 @@ fn main() {
             import::mock_import,
             local_library::load_local_library_snapshot,
             local_library::import_local_library_pdfs,
+            local_library::read_local_library_pdf,
             local_library::move_local_library_resource,
             skill_documents::save_skill_document
         ])

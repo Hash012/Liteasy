@@ -42,6 +42,7 @@ export type LeftPaneProps = {
   onClearProfile: () => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (item: RecommendationItem) => void;
+  onDismissRecommendation: (item: RecommendationItem) => void;
   onRetryCollectionSync?: () => void;
   onCreateOrganization?: () => void;
   onImportSelectedSet: () => void;
@@ -130,6 +131,7 @@ export function LeftPane({
   onClearProfile,
   onClearRecommendations,
   onCollectRecommendation,
+  onDismissRecommendation,
   onRetryCollectionSync,
   onCreateOrganization,
   onImportSelectedSet,
@@ -277,6 +279,7 @@ export function LeftPane({
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
             onCollectRecommendation={onCollectRecommendation}
+            onDismissRecommendation={onDismissRecommendation}
             onImportSelectedSet={onImportSelectedSet}
             onLoginRequired={onLoginRequired}
             onOpenOrganizationWorkspace={() => {

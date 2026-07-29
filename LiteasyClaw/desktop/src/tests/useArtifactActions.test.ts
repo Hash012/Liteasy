@@ -334,7 +334,11 @@ describe("useArtifactActions", () => {
     });
 
     expect(message).toBe("当前选中文献集尚未全部导入，系统会先导入，再自动启动该 AI 分析。");
-    expect(queueImportForPapers).toHaveBeenCalledWith([paper], expect.any(Function));
+    expect(queueImportForPapers).toHaveBeenCalledWith(
+      [paper],
+      expect.any(Function),
+      expect.any(Function)
+    );
     expect(onArtifactTasksChanged).toHaveBeenLastCalledWith([
       expect.objectContaining({
         message: "等待 PDF 解析与索引",
@@ -487,7 +491,11 @@ describe("useArtifactActions", () => {
       await Promise.resolve();
     });
 
-    expect(queueImportForPapers).toHaveBeenCalledWith([secondPaper], expect.any(Function));
+    expect(queueImportForPapers).toHaveBeenCalledWith(
+      [secondPaper],
+      expect.any(Function),
+      expect.any(Function)
+    );
     expect(runAgentAnalysis).toHaveBeenCalledWith(
       "thin_reading",
       expect.any(Function),

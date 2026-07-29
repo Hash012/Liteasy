@@ -9,6 +9,7 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { compactPdfTextForSearch, normalizePdfTextForSearch } from "./pdfTextSearch";
+import { ensureReadableStreamAsyncIterator } from "./pdfStreamCompatibility";
 import type { Paper } from "../workspace/workspace.types";
 import type { ReaderConversationContext } from "../assistant/assistantContext.types";
 import {
@@ -30,6 +31,7 @@ import {
 } from "./pdfAnnotationIntuechoSync";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 
+ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type AnnotationKind = PdfAnnotationKind;
@@ -52,6 +54,7 @@ type TextLayerPosition = {
 type PdfSidebarMode = "thumbnails" | "annotations";
 
 type PdfReaderProps = {
+  loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   selectedPapers: Paper[];
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
@@ -106,6 +109,25 @@ function resolvePdfDisplaySource(sourcePath: string | undefined) {
   } catch {
     return undefined;
   }
+}
+
+export function shouldLoadPdfFromLocalBytes(sourcePath: string | undefined) {
+  if (!sourcePath) return false;
+  const trimmed = sourcePath.trim();
+  const lower = trimmed.toLowerCase().replace(/\\/g, "/");
+  if (
+    lower.startsWith("blob:") ||
+    lower.startsWith("data:") ||
+    lower.startsWith("http:") ||
+    lower.startsWith("https:") ||
+    lower.startsWith("fixtures/") ||
+    lower.startsWith("./fixtures/") ||
+    lower.startsWith("/papers/") ||
+    lower.startsWith("/fixtures/")
+  ) {
+    return false;
+  }
+  return lower.startsWith("/") || /^[a-z]:\//.test(lower);
 }
 
 function getAnnotationLabel(kind: AnnotationKind) {
@@ -489,7 +511,7 @@ export function findQuoteRangeInTextLayer(
   });
 }
 
-function buildTargetEvidenceRects(
+export function buildTargetEvidenceRects(
   textLayer: HTMLElement,
   pageElement: HTMLElement,
   quote: string,
@@ -857,6 +879,7 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
 }
 
 export function PdfReader({
+  loadPdfSource,
   selectedPapers,
   targetEvidence,
   zoom,
@@ -936,7 +959,10 @@ export function PdfReader({
     setPageCount(1);
     setFocusedPage(1);
 
-    if (!pdfDisplaySource) {
+    const localSourcePath = loadPdfSource && shouldLoadPdfFromLocalBytes(activePaper?.sourcePath)
+      ? activePaper!.sourcePath
+      : undefined;
+    if (!pdfDisplaySource && !localSourcePath) {
       setPdfDocument(null);
       setStatus(
         activePaper?.sourcePath
@@ -953,13 +979,20 @@ export function PdfReader({
     }
 
     let cancelled = false;
-    const loadingTask = pdfjsLib.getDocument({
-      url: pdfDisplaySource
-    });
+    let loadingTask: ReturnType<typeof pdfjsLib.getDocument> | null = null;
     setStatus("正在用 PDF.js 加载文档。");
 
-    loadingTask.promise
+    const sourcePromise = localSourcePath
+      ? loadPdfSource!(localSourcePath).then((data) => ({ data }))
+      : Promise.resolve({ url: pdfDisplaySource! });
+    sourcePromise
+      .then((source) => {
+        if (cancelled) return null;
+        loadingTask = pdfjsLib.getDocument(source);
+        return loadingTask.promise;
+      })
       .then((document) => {
+        if (!document) return;
         if (cancelled) {
           void document.destroy();
           return;
@@ -969,18 +1002,19 @@ export function PdfReader({
         setPageCount(document.numPages);
         setStatus(`已加载 ${document.numPages} 页 PDF，可直接选中文本批注。`);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
           setPdfDocument(null);
-          setStatus("PDF.js 暂时无法解析该文件，已保留应用内阅读画布。");
+          const reason = error instanceof Error ? error.message : String(error);
+          setStatus(`PDF.js 无法解析该文件：${reason}`);
         }
       });
 
     return () => {
       cancelled = true;
-      void loadingTask.destroy();
+      void loadingTask?.destroy();
     };
-  }, [activePaper?.sourcePath, annotationStorageKey, autoPublicStorageKey, pdfDisplaySource]);
+  }, [activePaper?.sourcePath, annotationStorageKey, autoPublicStorageKey, loadPdfSource, pdfDisplaySource]);
 
   useEffect(() => {
     if (annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey) {

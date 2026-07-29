@@ -17,11 +17,17 @@ function hasAcademicProfile(profile: AcademicProfile | undefined): profile is Ac
   if (!profile) {
     return false;
   }
-  return profile.age !== "未设置" || profile.gender !== "未设置" || profile.stage !== "未设置";
+  return profile.age !== "未设置" ||
+    profile.gender !== "未设置" ||
+    profile.stage !== "未设置" ||
+    Boolean(profile.researchTopics || profile.researchMethods || profile.researchDatasets);
 }
 
 function formatAcademicProfileBrief(profile: AcademicProfile) {
-  return `${profile.gender}/${profile.age}/${profile.stage}`;
+  return [
+    `${profile.gender}/${profile.age}/${profile.stage}`,
+    profile.researchTopics ? `主题:${profile.researchTopics}` : ""
+  ].filter(Boolean).join("/");
 }
 
 function getSelectionIssues(input: AgentRuntimeContextViewInput): RuntimeContextIssue[] {

@@ -74,12 +74,84 @@ describe("artifactLocalRepository", () => {
     ]);
   });
 
+  test("restores a valid persisted generation audit and rejects forged evidence-plan provenance", async () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-audit-cache",
+      papers: [{ id: "paper-1", title: "Paper one" }],
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          generationAudit: {
+            evidencePlan: { focus: ["核心贡献"], selectedEvidenceIds: ["evidence-1"] },
+            evidenceReview: { reason: "每句均有直接证据。", unsupportedSentenceIds: [], verdict: "pass" },
+            model: { id: "gpt-5-mini", provider: "openai" },
+            qualityGate: { attempts: 1, repaired: false, repairReasons: [] },
+            version: "liteasy.thin-reading-agent/v1"
+          },
+          paperEvidence: ["evidence-1"]
+        },
+        omittedSections: [],
+        recommendations: [],
+        summary: "A traceable summary with persisted audit provenance.",
+        withinPaperClosure: true
+      },
+      targetLanguage: "en-US"
+    });
+    const forgedDocument = JSON.parse(JSON.stringify(document)) as typeof document;
+    forgedDocument.nodes[forgedDocument.rootNodeId].evidence.generationAudit!.evidencePlan!.selectedEvidenceIds = ["evidence-forged"];
+    const repository = createArtifactLocalRepository({
+      load: vi.fn(async () => ({
+        artifacts: [
+          { artifactId: document.artifactId, thinReadingDocument: document, title: "Valid audit", type: "thin_reading" },
+          { artifactId: "artifact-thin-audit-forged", thinReadingDocument: { ...forgedDocument, artifactId: "artifact-thin-audit-forged" }, title: "Forged audit", type: "thin_reading" }
+        ],
+        savedAt: "2026-07-29T00:00:00.000Z",
+        version: "liteasy.artifact-catalog/v1"
+      })),
+      save: vi.fn(async () => undefined)
+    });
+
+    await expect(repository.list()).resolves.toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-audit-cache",
+        thinReadingDocument: expect.objectContaining({
+          nodes: expect.objectContaining({
+            [document.rootNodeId]: expect.objectContaining({
+              evidence: expect.objectContaining({
+                generationAudit: expect.objectContaining({
+                  evidencePlan: { focus: ["核心贡献"], selectedEvidenceIds: ["evidence-1"] }
+                })
+              })
+            })
+          })
+        })
+      })
+    ]);
+  });
+
   test("preserves matching selected-passage evidence scope and rejects a mismatched cache", async () => {
     const root = createThinReadingDocument({
       artifactId: "artifact-thin-selected-scope",
       papers: [{ id: "paper-1", title: "Paper one" }],
       rootSeed: {
-        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        evidence: {
+          externalKnowledge: [],
+          externalSources: [{
+            abstract: "A traceable external lead.",
+            authors: ["A. Author"],
+            id: "openalex:W42",
+            provider: "openalex",
+            relation: "related",
+            relevance: 0.8,
+            retrievalQuery: "Paper one follow-up",
+            sourceId: "W42",
+            sourceRecordUrl: "https://openalex.org/W42",
+            title: "A Follow-up Paper",
+            url: "https://openalex.org/W42",
+            year: 2025
+          }],
+          paperEvidence: ["evidence-1"]
+        },
         omittedSections: [],
         recommendations: [],
         summary: "Paper one uses an evidence-backed method.",
@@ -99,6 +171,7 @@ describe("artifactLocalRepository", () => {
       source: {
         kind: "selected_text",
         evidenceIds: ["evidence-1"],
+        externalSourceIds: ["openalex:W42"],
         excerpt: "The method preserves a matching signal."
       },
       title: "Method"
@@ -113,7 +186,7 @@ describe("artifactLocalRepository", () => {
           ...child,
           recommendationScope: {
             ...child.recommendationScope,
-            evidenceIds: ["different-evidence"]
+            externalSourceIds: ["openalex:W99"]
           }
         }
       }
@@ -136,7 +209,10 @@ describe("artifactLocalRepository", () => {
         thinReadingDocument: expect.objectContaining({
           nodes: expect.objectContaining({
             [child.id]: expect.objectContaining({
-              recommendationScope: expect.objectContaining({ evidenceIds: ["evidence-1"] })
+              recommendationScope: expect.objectContaining({
+                evidenceIds: ["evidence-1"],
+                externalSourceIds: ["openalex:W42"]
+              })
             })
           })
         })

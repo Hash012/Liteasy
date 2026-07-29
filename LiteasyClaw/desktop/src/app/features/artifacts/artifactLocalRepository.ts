@@ -86,7 +86,8 @@ function isCachedThinReadingNodeSource(value: unknown): value is Record<string, 
   return value.kind === "selected_text" &&
     typeof value.excerpt === "string" && value.excerpt.trim().length > 0 &&
     (value.prompt === undefined || typeof value.prompt === "string") &&
-    hasUniqueOptionalStringArray(value, "evidenceIds");
+    hasUniqueOptionalStringArray(value, "evidenceIds") &&
+    hasUniqueOptionalStringArray(value, "externalSourceIds");
 }
 
 function isCachedRecommendationScope(value: unknown): value is Record<string, unknown> {
@@ -103,7 +104,8 @@ function isCachedRecommendationScope(value: unknown): value is Record<string, un
   return value.kind === "selected_passage" &&
     (value.paperId === undefined || typeof value.paperId === "string") &&
     typeof value.excerpt === "string" && value.excerpt.trim().length > 0 &&
-    hasUniqueOptionalStringArray(value, "evidenceIds");
+    hasUniqueOptionalStringArray(value, "evidenceIds") &&
+    hasUniqueOptionalStringArray(value, "externalSourceIds");
 }
 
 function scopeMatchesCachedNodeSource(scope: unknown, source: unknown) {
@@ -118,7 +120,8 @@ function scopeMatchesCachedNodeSource(scope: unknown, source: unknown) {
   }
   return scope.kind === "selected_passage" &&
     scope.excerpt === source.excerpt &&
-    equalStringArrays(scope.evidenceIds, source.evidenceIds);
+    equalStringArrays(scope.evidenceIds, source.evidenceIds) &&
+    equalStringArrays(scope.externalSourceIds, source.externalSourceIds);
 }
 
 function isCachedAnnotationTarget(value: unknown, nodeId: string) {
@@ -288,6 +291,43 @@ function isCachedRecommendation(value: unknown) {
   return value.source === undefined || value.source === "local_agent_lead" || value.source === "intuecho_community";
 }
 
+function isCachedGenerationAudit(value: unknown, availableEvidenceIds: Set<string>, sentenceIds: Set<string>) {
+  if (!isRecord(value) || value.version !== "liteasy.thin-reading-agent/v1" || !isRecord(value.model) ||
+    typeof value.model.id !== "string" || value.model.id.trim().length === 0 ||
+    typeof value.model.provider !== "string" || value.model.provider.trim().length === 0 ||
+    !isRecord(value.qualityGate) || typeof value.qualityGate.attempts !== "number" ||
+    !Number.isInteger(value.qualityGate.attempts) || value.qualityGate.attempts < 1 || value.qualityGate.attempts > 2 ||
+    typeof value.qualityGate.repaired !== "boolean" || !isStringArray(value.qualityGate.repairReasons) ||
+    value.qualityGate.repairReasons.length !== value.qualityGate.attempts - 1 ||
+    value.qualityGate.repaired !== (value.qualityGate.attempts > 1) ||
+    !value.qualityGate.repairReasons.every((reason) => reason.length <= 600)) {
+    return false;
+  }
+  if (value.evidencePlan !== undefined && (!isRecord(value.evidencePlan) ||
+    !isStringArray(value.evidencePlan.focus) || value.evidencePlan.focus.length < 1 || value.evidencePlan.focus.length > 5 ||
+    !isStringArray(value.evidencePlan.selectedEvidenceIds) || value.evidencePlan.selectedEvidenceIds.length < 1 ||
+    value.evidencePlan.selectedEvidenceIds.length > 12 ||
+    !value.evidencePlan.selectedEvidenceIds.every((id) => availableEvidenceIds.has(id)))) {
+    return false;
+  }
+  if (value.evidenceReview !== undefined && (!isRecord(value.evidenceReview) ||
+    value.evidenceReview.verdict !== "pass" || typeof value.evidenceReview.reason !== "string" ||
+    value.evidenceReview.reason.trim().length === 0 || value.evidenceReview.reason.length > 420 ||
+    !isStringArray(value.evidenceReview.unsupportedSentenceIds) ||
+    !value.evidenceReview.unsupportedSentenceIds.every((id) => sentenceIds.has(id)))) {
+    return false;
+  }
+  if (value.evidenceToolCalls !== undefined && (!Array.isArray(value.evidenceToolCalls) ||
+    !value.evidenceToolCalls.every((call) => isRecord(call) &&
+      (call.kind === "read" || call.kind === "search" || call.kind === "view") &&
+      isStringArray(call.evidenceIds) && call.evidenceIds.every((id) => availableEvidenceIds.has(id)) &&
+      (call.query === undefined || typeof call.query === "string") &&
+      (call.pages === undefined || (Array.isArray(call.pages) && call.pages.every((page) => Number.isInteger(page) && page > 0)))))) {
+    return false;
+  }
+  return value.evidencePlan === undefined || value.evidenceReview !== undefined;
+}
+
 function normalizeCachedThinReadingDocument(value: unknown): unknown {
   if (!isRecord(value) || !isRecord(value.nodes)) {
     return value;
@@ -449,6 +489,15 @@ function isCachedThinReadingDocument(value: unknown, artifactId: string) {
       })))) {
       return false;
     }
+    const sentenceIds = new Set<string>(
+      Array.isArray(summarySentences)
+        ? summarySentences.flatMap((sentence) => isRecord(sentence) && typeof sentence.id === "string" ? [sentence.id] : [])
+        : []
+    );
+    if (node.evidence.generationAudit !== undefined &&
+      !isCachedGenerationAudit(node.evidence.generationAudit, availableEvidenceIds, sentenceIds)) {
+      return false;
+    }
     if (!node.childIds.every((childId) => isRecord(nodes[childId]))) {
       return false;
     }
@@ -471,16 +520,24 @@ function isCachedThinReadingDocument(value: unknown, artifactId: string) {
       return true;
     }
     const selectedEvidenceIds = node.source.evidenceIds;
-    if (selectedEvidenceIds === undefined || (isStringArray(selectedEvidenceIds) && selectedEvidenceIds.length === 0)) {
-      return true;
-    }
-    if (!isStringArray(selectedEvidenceIds)) {
-      return false;
-    }
     const parentEvidence = isRecord(parent.evidence) && isStringArray(parent.evidence.paperEvidence)
       ? new Set(parent.evidence.paperEvidence)
       : null;
-    return parentEvidence !== null && selectedEvidenceIds.every((evidenceId) => parentEvidence.has(evidenceId));
+    if (selectedEvidenceIds !== undefined &&
+      (!isStringArray(selectedEvidenceIds) || parentEvidence === null || !selectedEvidenceIds.every((evidenceId) => parentEvidence.has(evidenceId)))) {
+      return false;
+    }
+    const selectedExternalSourceIds = node.source.externalSourceIds;
+    const parentExternalSources = isRecord(parent.evidence) && Array.isArray(parent.evidence.externalSources)
+      ? new Set(parent.evidence.externalSources.flatMap((source) => (
+        isRecord(source) && typeof source.id === "string" ? [source.id] : []
+      )))
+      : null;
+    return selectedExternalSourceIds === undefined || (
+      isStringArray(selectedExternalSourceIds) &&
+      parentExternalSources !== null &&
+      selectedExternalSourceIds.every((sourceId) => parentExternalSources.has(sourceId))
+    );
   });
 }
 

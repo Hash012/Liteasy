@@ -38,6 +38,10 @@ import {
   createHttpIntuechoSyncAdapter,
   listThinReadingPendingPublicAnnotations
 } from "../thin-reading/thinReadingIntuechoSyncQueue";
+import {
+  createThinReadingBranchRecoverySnapshot,
+  validateThinReadingBranchRecoverySnapshot
+} from "./artifactTaskRecovery";
 import { resolveThinReadingTargetLanguage } from "../thin-reading/thinReadingAgent";
 import type {
   ThinReadingBranchSource,
@@ -103,7 +107,11 @@ type UseArtifactActionsInput = {
   onArtifactCatalogChanged: (catalog: ArtifactTab[]) => void;
   onArtifactTabsChanged: (tabs: ArtifactTab[]) => void;
   onArtifactTasksChanged: (tasks: ArtifactTask[]) => void;
-  queueImportForPapers: (papers: Paper[], onComplete?: () => void) => ImportQueueStatus;
+  queueImportForPapers: (
+    papers: Paper[],
+    onComplete?: () => void,
+    onFailure?: (input: { error: Error; paper: Paper }) => void
+  ) => ImportQueueStatus;
   runAgentAnalysis: (
     artifactType: ArtifactType,
     onProgress: (input: {
@@ -686,16 +694,34 @@ export function useArtifactActions({
     }
     const importedChunksByPaperId = getImportedChunksByPaperId();
     let queuedTaskId: string | undefined;
-    const importStatus = queueImportForPapers(scopedPapers, () => {
-      const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
-      void startArtifactTask(
-        artifactType,
-        scopedPapers,
-        getImportedChunksByPaperId(),
-        taskId
-      );
-      onAnalysisHint("导入完成，已按指定 AI 分析启动主工作流。");
-    });
+    const importStatus = queueImportForPapers(
+      scopedPapers,
+      () => {
+        const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
+        void startArtifactTask(
+          artifactType,
+          scopedPapers,
+          getImportedChunksByPaperId(),
+          taskId
+        );
+        onAnalysisHint("导入完成，已按指定 AI 分析启动主工作流。");
+      },
+      ({ error, paper }) => {
+        const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
+        artifactStore.failTask(taskId, {
+          failedStage: artifactType === "thin_reading"
+            ? "thin_reading_parsing_document"
+            : "waiting_for_import",
+          message: `《${paper.title}》PDF 导入失败：${error.message}`,
+          occurredAt: new Date().toISOString(),
+          recovery: [
+            "完全重启 Tauri 以加载最新的本地 PDF 读取命令",
+            "确认文件位于 LiteasyLibrary 内且未损坏后重试"
+          ]
+        });
+        syncArtifacts(taskId);
+      }
+    );
 
     if (importStatus === "already_imported") {
       queuedTaskId = artifactStore.createTask(artifactType);
@@ -949,7 +975,28 @@ export function useArtifactActions({
       throw new Error("该薄读产物缺少来源论文，无法继续生成下一层。");
     }
     const papers = [{ id: primaryPaper.id, title: primaryPaper.title }] as Paper[];
+    const selectedExternalSources = source.kind === "selected_text" && source.externalSourceIds?.length
+      ? (activeNode.evidence.externalSources ?? []).filter((externalSource) => (
+        source.externalSourceIds?.includes(externalSource.id)
+      ))
+      : undefined;
     const taskId = artifactStore.createTask("thin_reading");
+    let recoverySnapshot;
+    try {
+      recoverySnapshot = createThinReadingBranchRecoverySnapshot({
+        artifactId,
+        document: scopedDocument,
+        parentNodeId: activeNode.id,
+        primaryPaperId,
+        source
+      });
+    } catch {
+      // A normal branch may still run; only bounded, auditable inputs are restart-recoverable.
+    }
+    artifactStore.updateTask(taskId, {
+      artifactId,
+      ...(recoverySnapshot ? { thinReadingBranchRecovery: recoverySnapshot } : {})
+    });
     artifactStore.startTask(taskId);
     syncArtifacts(taskId);
     const context: ThinReadingGenerationContext = {
@@ -970,6 +1017,7 @@ export function useArtifactActions({
       parentSummary: activeNode.summary,
       parentTitle: activeNode.title,
       prompt: source.kind === "selected_text" ? source.prompt : undefined,
+      selectedExternalSources,
       source,
       targetLanguage: document.targetLanguage
     };
@@ -1060,6 +1108,30 @@ export function useArtifactActions({
     }
   }
 
+  async function retryInterruptedThinReadingBranch(taskId: string) {
+    const task = artifactStore.getTask(taskId);
+    const snapshot = task?.thinReadingBranchRecovery;
+    if (!task || task.status !== "failed" || !task.recoveredAfterRestart || !snapshot) {
+      throw new Error("该中断任务缺少可验证的薄读分支输入，不能重新提交。");
+    }
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === snapshot.artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === snapshot.artifactId);
+    const document = existing?.type === "thin_reading" ? existing.thinReadingDocument : undefined;
+    if (!document) {
+      throw new Error("原薄读文档不可用，不能重新提交中断任务。");
+    }
+    const validation = validateThinReadingBranchRecoverySnapshot(snapshot, document);
+    if (!validation.valid) {
+      throw new Error(`原输入无法通过当前文档核验：${validation.reason}`);
+    }
+    onAnalysisHint("正在重新提交同一薄读输入。这是新的模型请求，不会续跑已中断的调用。");
+    await generateThinReadingBranch({
+      artifactId: snapshot.artifactId,
+      document,
+      source: snapshot.source
+    });
+  }
+
   function updateThinReadingDocument(artifactId: string, nextDocument: NonNullable<ArtifactTab["thinReadingDocument"]>) {
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
@@ -1101,7 +1173,18 @@ export function useArtifactActions({
       return;
     }
     const results = await createHttpIntuechoSyncAdapter({ endpoint }).syncPendingAnnotations(pending);
-    const nextDocument = applyThinReadingAnnotationSyncResults(input.document, results);
+    const current = artifactStore.getOpenTabs().find((tab) => tab.artifactId === input.artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === input.artifactId);
+    if (!current || current.type !== "thin_reading" || !current.thinReadingDocument) {
+      return;
+    }
+    const expectedUpdatedAtByAnnotationId = new Map(pending.map((item) => [item.annotationId, item.updatedAt]));
+    const nextDocument = applyThinReadingAnnotationSyncResults(
+      current.thinReadingDocument,
+      results,
+      new Date().toISOString(),
+      expectedUpdatedAtByAnnotationId
+    );
     updateThinReadingDocument(input.artifactId, nextDocument);
     const synced = results.filter((result) => result.status === "synced").length;
     const failed = results.filter((result) => result.status === "failed").length;
@@ -1143,6 +1226,7 @@ export function useArtifactActions({
     openArtifact,
     openSkillDocument,
     regenerateArtifact,
+    retryInterruptedThinReadingBranch,
     generateThinReadingBranch,
     restoreArtifactResult,
     saveSkillDocument,

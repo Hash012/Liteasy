@@ -227,6 +227,7 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
       withinPaperClosure: false
     },
     gold: {
+      expectedExternalSources: [{ id: "openalex:W2741809807", relation: "topic_search" }],
       expectedWithinPaperClosure: false,
       id: "gold-branch-external-boundary",
       paperType: "survey",
@@ -280,6 +281,7 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
       withinPaperClosure: false
     },
     gold: {
+      expectedExternalSources: [{ id: "openalex:W3177828909", relation: "cites_target" }],
       expectedWithinPaperClosure: false,
       id: "gold-branch-external-bert-cited-by-alphafold",
       paperType: "experimental",

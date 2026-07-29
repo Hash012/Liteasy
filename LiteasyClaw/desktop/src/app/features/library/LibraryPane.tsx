@@ -13,6 +13,7 @@ import {
   ChevronDownRegular,
   ChevronRightRegular,
   DocumentPdfRegular,
+  DismissRegular,
   FolderRegular,
   LockClosedRegular,
   LockOpenRegular,
@@ -64,6 +65,7 @@ type LibraryPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearRecommendations: () => void;
   onCollectRecommendation: (recommendation: RecommendationItem) => void;
+  onDismissRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
   onLoginRequired?: () => void;
   onOpenOrganizationWorkspace: () => void;
@@ -191,6 +193,14 @@ function getRecommendationSourceKindLabel(sourceKind: RecommendationItem["source
   return "联网来源";
 }
 
+function getRecommendationRelationLabel(relation: RecommendationItem["relation"]) {
+  if (relation === "cited_by_target") return "目标论文引用";
+  if (relation === "cites_target") return "后续引用目标论文";
+  if (relation === "related") return "相关工作";
+  if (relation === "topic_search") return "主题检索线索";
+  return undefined;
+}
+
 function getDataTransferTypes(dataTransfer: Pick<DataTransfer, "types">) {
   return Array.from(dataTransfer.types ?? []);
 }
@@ -238,6 +248,7 @@ export function LibraryPane({
   onAddDroppedPdfFiles,
   onClearRecommendations,
   onCollectRecommendation,
+  onDismissRecommendation,
   onLoginRequired,
   onOpenOrganizationWorkspace,
   onOpenPaper,
@@ -992,10 +1003,28 @@ export function LibraryPane({
                   </span>
                 </div>
                 <div className="recommendation-related">关联：{item.relatedDocumentTitle}</div>
+                {item.relation ? (
+                  <div className="recommendation-related">关系：{getRecommendationRelationLabel(item.relation)}</div>
+                ) : null}
+                {item.publishedYear ? (
+                  <div className="recommendation-related">发表：{item.publishedYear}</div>
+                ) : null}
                 <div className={`recommendation-band ${item.relevanceBand}`}>
                   {getRelevanceLabel(item.relevanceBand)}
                 </div>
                 <div className="recommendation-reason">{item.reason}</div>
+                <div className="recommendation-actions">
+                  <Tooltip content="不感兴趣" relationship="label">
+                    <button
+                      aria-label={`不感兴趣：${item.title}`}
+                      className="library-button ghost library-icon-button"
+                      onClick={() => void onDismissRecommendation(item)}
+                      type="button"
+                    >
+                      <DismissRegular />
+                    </button>
+                  </Tooltip>
+                </div>
               </li>
             ))}
           </ul>

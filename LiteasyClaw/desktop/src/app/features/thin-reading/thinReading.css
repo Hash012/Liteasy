@@ -124,6 +124,10 @@
 .thin-reading__generation-progress { background: rgba(62, 109, 104, .16); border-radius: 999px; height: 4px; overflow: hidden; width: min(260px, 100%); }
 .thin-reading__generation-progress > span { background: #477b79; display: block; height: 100%; transition: width 180ms ease; }
 .thin-reading__error { background: #f9e7e1; color: #9b4c3f; }
+.thin-reading__recovery { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px; }
+.thin-reading__recovery button { background: #3e6d68; border: 0; border-radius: 4px; color: #fff; font: inherit; padding: 7px 10px; }
+.thin-reading__recovery button:disabled { cursor: wait; opacity: 0.65; }
+.thin-reading__recovery small { color: #5b6f6b; font-size: 12px; }
 .thin-reading__annotations { border-top: 1px solid var(--thin-line); display: grid; gap: 12px; margin-top: 38px; padding-top: 22px; }
 .thin-reading__annotation-toolbar, .thin-reading__annotation-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
 .thin-reading__annotation-toolbar label, .thin-reading__annotation-actions label { align-items: center; color: var(--thin-muted); display: inline-flex; font-size: 12px; gap: 6px; }

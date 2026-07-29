@@ -93,6 +93,29 @@ export function createArtifactStore() {
       task.stage = "failed";
       task.status = "failed";
     },
+    restoreInterruptedTask(task: Pick<ArtifactTask, "agentRunId" | "artifactId" | "id" | "message" | "progress" | "thinReadingBranchRecovery" | "type">) {
+      const recovered: ArtifactTask = {
+        ...(task.agentRunId ? { agentRunId: task.agentRunId } : {}),
+        ...(task.artifactId ? { artifactId: task.artifactId } : {}),
+        ...(task.thinReadingBranchRecovery ? { thinReadingBranchRecovery: task.thinReadingBranchRecovery } : {}),
+        failure: {
+          failedStage: "failed",
+          message: "应用在生成期间重启，原模型调用已中断。请重新发起生成。",
+          occurredAt: new Date().toISOString(),
+          recovery: ["重新发起生成"]
+        },
+        id: task.id,
+        message: "生成已因应用重启而中断，请重新发起。",
+        progress: Math.max(0, Math.min(100, task.progress)),
+        recoveredAfterRestart: true,
+        stage: "failed",
+        status: "failed",
+        type: task.type
+      };
+      tasks.set(recovered.id, recovered);
+      const suffix = recovered.id.match(/artifact-task-(\d+)$/)?.[1];
+      sequence = Math.max(sequence, Number(suffix) || 0);
+    },
     cancelTask(id: string) {
       const task = tasks.get(id);
       if (!task || task.status === "completed" || task.status === "failed") return false;

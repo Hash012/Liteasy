@@ -128,6 +128,12 @@ describe("useRecommendations", () => {
         },
         recommendationsEnabled: true,
         recommendationSortMode: "relevance",
+        researchProfile: {
+          datasets: ["BEIR"],
+          languages: ["中文"],
+          methods: ["hybrid retrieval"],
+          topics: ["neural retrieval"]
+        },
         selectedPapers,
         workspaceRevision: 0,
         workspaceSourceKey: "local:/tmp/LiteasyLibrary"
@@ -139,6 +145,14 @@ describe("useRecommendations", () => {
     });
 
     expect(recommendationFetch).toHaveBeenCalledTimes(1);
+    expect(recommendationFetch).toHaveBeenCalledWith(expect.objectContaining({
+      researchProfile: {
+        datasets: ["BEIR"],
+        languages: ["中文"],
+        methods: ["hybrid retrieval"],
+        topics: ["neural retrieval"]
+      }
+    }));
     expect(cachePut).toHaveBeenCalledTimes(1);
     expect(result.current.recommendationItems).toEqual(generatedRecommendations);
     expect(result.current.recommendationMessage).toBe("已获取 1 条关联推荐。");
@@ -180,5 +194,50 @@ describe("useRecommendations", () => {
     expect(cacheClear).toHaveBeenCalledTimes(1);
     expect(result.current.recommendationItems).toEqual([]);
     expect(result.current.recommendationMessage).toBe("已清理当前工作区的关联推荐缓存。");
+  });
+
+  test("records a negative preference and removes the dismissed candidate", async () => {
+    const candidate = {
+      canonicalId: "openalex:W200",
+      discoveredAt: "2026-07-29T00:00:00Z",
+      id: "reading-candidate:openalex:W200",
+      relatedDocumentTitle: "Attention Is All You Need",
+      relevanceBand: "high" as const,
+      relevanceScore: 0.9,
+      reason: "related",
+      source: "OpenAlex",
+      sourceKind: "live" as const,
+      sourceUrl: "https://openalex.org/W200",
+      title: "Candidate Transformer Paper"
+    };
+    const feedbackRecord = vi.fn(async () => ({ action: "dismissed" }));
+    const { result } = renderHook(() => useRecommendations({
+      accountSession,
+      controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+      recommendationCacheDeps: {
+        clear: vi.fn(),
+        get: vi.fn(async () => ({ cacheHit: true, recommendations: [candidate] })),
+        put: vi.fn()
+      },
+      recommendationFeedbackDeps: { record: feedbackRecord },
+      recommendationsEnabled: true,
+      recommendationSortMode: "relevance",
+      selectedPapers,
+      workspaceRevision: 0,
+      workspaceSourceKey: "local:/tmp/LiteasyLibrary"
+    }));
+    await waitFor(() => expect(result.current.recommendationItems).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.recordRecommendationFeedback(candidate, "dismissed");
+    });
+
+    expect(feedbackRecord).toHaveBeenCalledWith({
+      action: "dismissed",
+      candidate,
+      sessionId: "demo-session-1"
+    });
+    expect(result.current.recommendationItems).toEqual([]);
+    expect(result.current.recommendationMessage).toContain("降低相似候选排序");
   });
 });

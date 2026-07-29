@@ -119,6 +119,37 @@ test("retries once without JSON-object mode when a compatible DeepSeek endpoint 
   assert.equal(requestBodies[1].response_format, undefined);
 });
 
+test("retries transient DeepSeek failures before returning a structured answer", async () => {
+  let attempts = 0;
+  const provider = createDeepSeekChatCompletionsProvider({
+    apiKey: "sk-deepseek-test",
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return {
+          body: { cancel: async () => undefined },
+          ok: false,
+          status: 503
+        };
+      }
+      return {
+        json: async () => ({ choices: [{ message: { content: "{}" } }] }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  const answer = await provider({
+    model: "deepseek-v4-flash",
+    outputFormat: { name: "thin_reading", schema: { type: "object" }, strict: true },
+    prompt: "Return JSON."
+  });
+
+  assert.equal(answer, "{}");
+  assert.equal(attempts, 2);
+});
+
 test("throws a readable error when the DeepSeek provider returns a non-ok status", async () => {
   const provider = createDeepSeekChatCompletionsProvider({
     apiKey: "sk-deepseek-test",

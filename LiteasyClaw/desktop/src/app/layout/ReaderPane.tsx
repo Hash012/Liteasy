@@ -17,6 +17,7 @@ type ReaderPaneProps = {
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
   layoutCollapsed?: PaneCollapseState;
+  loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
   onGenerateThinReadingBranch?: (input: {
@@ -52,6 +53,7 @@ export function ReaderPane({
   artifactTabs,
   artifactTasks,
   layoutCollapsed = defaultLayoutCollapsed,
+  loadPdfSource,
   onArtifactDynamicAction,
   onOpenEvidence,
   onGenerateThinReadingBranch,
@@ -127,6 +129,7 @@ export function ReaderPane({
         >
           <PdfReader
             intuechoEndpoint={intuechoEndpoint}
+            loadPdfSource={loadPdfSource}
             onAddSelectionToConversation={onAddReaderContextToConversation}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}

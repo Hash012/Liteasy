@@ -32,6 +32,7 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     onClearProfile: vi.fn(),
     onClearRecommendations: vi.fn(),
     onCollectRecommendation: vi.fn(),
+    onDismissRecommendation: vi.fn(),
     onRetryCollectionSync: vi.fn(),
     onCreateOrganization: vi.fn(),
     onImportSelectedSet: vi.fn(),
@@ -56,7 +57,15 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     papers: [],
     profileClearMessage: undefined,
     profileReadPaperCount: 0,
-    academicProfile: { age: "未设置", gender: "未设置", stage: "未设置" },
+    academicProfile: {
+      age: "未设置",
+      gender: "未设置",
+      preferredLanguages: "",
+      researchDatasets: "",
+      researchMethods: "",
+      researchTopics: "",
+      stage: "未设置"
+    },
     profileSamplingEnabled: false,
     recommendationItems: [],
     recommendationMessage: "推荐",
@@ -926,11 +935,19 @@ describe("LeftPane", () => {
     await user.clear(within(personalCenter).getByLabelText("年龄"));
     await user.type(within(personalCenter).getByLabelText("年龄"), "28");
     await user.selectOptions(within(personalCenter).getByLabelText("学段"), "博士研究生");
+    await user.type(within(personalCenter).getByLabelText("研究主题"), "神经检索, 向量数据库");
+    await user.type(within(personalCenter).getByLabelText("常用方法"), "混合检索");
+    await user.type(within(personalCenter).getByLabelText("关注数据集"), "BEIR");
+    await user.type(within(personalCenter).getByLabelText("阅读语言"), "中文, English");
     await user.click(within(personalCenter).getByRole("button", { name: "保存画像配置" }));
 
     expect(onUpdateAcademicProfile).toHaveBeenCalledWith({
       age: "28",
       gender: "女",
+      preferredLanguages: "中文、English",
+      researchDatasets: "BEIR",
+      researchMethods: "混合检索",
+      researchTopics: "神经检索、向量数据库",
       stage: "博士研究生"
     });
   });
@@ -994,5 +1011,33 @@ describe("LeftPane", () => {
     rerender(<LeftPane {...createProps({ leftRailView: "profile" })} />);
     expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "返回文献库" })).not.toBeInTheDocument();
+  });
+
+  test("forwards explicit negative feedback from a live recommendation", async () => {
+    const user = userEvent.setup();
+    const onDismissRecommendation = vi.fn();
+    const recommendation = {
+      canonicalId: "openalex:W200",
+      discoveredAt: "2026-07-29T00:00:00Z",
+      id: "reading-candidate:openalex:W200",
+      relatedDocumentTitle: "Target Paper",
+      relevanceBand: "high" as const,
+      relevanceScore: 0.9,
+      reason: "主题检索线索",
+      source: "OpenAlex",
+      sourceKind: "live" as const,
+      sourceUrl: "https://openalex.org/W200",
+      title: "Candidate Paper"
+    };
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      onDismissRecommendation,
+      recommendationItems: [recommendation],
+      recommendationStatus: "ready"
+    })} />);
+
+    await user.click(screen.getByRole("button", { name: "不感兴趣：Candidate Paper" }));
+
+    expect(onDismissRecommendation).toHaveBeenCalledWith(recommendation);
   });
 });

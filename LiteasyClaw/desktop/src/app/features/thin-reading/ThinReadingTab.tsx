@@ -45,12 +45,14 @@ export type ThinReadingTabProps = {
     progress: number;
     stageLabel?: string;
   };
+  taskFailureMessage?: string;
   onGenerateBranch?: (input: {
     artifactId: string;
     document: ThinReadingDocument;
     source: ThinReadingBranchSource;
   }) => Promise<void>;
   onOpenEvidence?: (request: ThinReadingEvidenceOpenRequest) => void;
+  onRetryInterruptedBranch?: () => Promise<void>;
   onSyncIntuecho?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onUpdateDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   papers: Array<{ id: string; title: string }>;
@@ -59,6 +61,7 @@ export type ThinReadingTabProps = {
 type ThinReadingSelection = {
   bottom?: number;
   evidenceIds: readonly string[];
+  externalSourceIds: readonly string[];
   excerpt: string;
   left: number;
   target: ThinReadingAnnotationTarget;
@@ -150,8 +153,10 @@ export function ThinReadingTab({
   artifactId,
   document,
   generationProgress,
+  taskFailureMessage,
   onGenerateBranch,
   onOpenEvidence,
+  onRetryInterruptedBranch,
   onSyncIntuecho,
   onUpdateDocument,
   papers
@@ -164,12 +169,14 @@ export function ThinReadingTab({
   const [annotationBody, setAnnotationBody] = useState("");
   const [annotationPublic, setAnnotationPublic] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [retryingInterruptedBranch, setRetryingInterruptedBranch] = useState(false);
   const [generationError, setGenerationError] = useState("");
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [editingAnnotationBody, setEditingAnnotationBody] = useState("");
   const [intuechoCollapsed, setIntuechoCollapsed] = useState(false);
   const [syncingIntuecho, setSyncingIntuecho] = useState(false);
   const labels = getThinReadingUiCopy(document.targetLanguage);
+  const generationInProgress = generating || Boolean(generationProgress);
   const paperTitle = useMemo(
     () => papers.find((paper) => document.paperIds.includes(paper.id))?.title ?? labels.untitledPaper,
     [document.paperIds, labels.untitledPaper, papers]
@@ -216,18 +223,32 @@ export function ThinReadingTab({
       return;
     }
     const rect = range.getBoundingClientRect();
+    const target = annotationTargetForSelection(range);
+    const externalSourceIds = summaryExternalSourceIdsForSelection(range);
+    if (target.kind === "external_knowledge") {
+      externalSourceIds.push(target.source);
+    }
     setSelection({
       evidenceIds: summaryEvidenceIdsForSelection(range),
+      externalSourceIds: [...new Set(externalSourceIds)],
       excerpt,
       ...resolveThinReadingSelectionPopoverPosition(rect, {
         height: window.innerHeight,
         width: window.innerWidth
       }),
-      target: annotationTargetForSelection(range),
+      target,
     });
   }
 
   function summaryEvidenceIdsForSelection(range: Range) {
+    return summarySourceIdsForSelection(range, "data-thin-reading-summary-evidence-ids");
+  }
+
+  function summaryExternalSourceIdsForSelection(range: Range) {
+    return summarySourceIdsForSelection(range, "data-thin-reading-summary-external-source-ids");
+  }
+
+  function summarySourceIdsForSelection(range: Range, attribute: string) {
     const content = contentRef.current;
     if (!content) {
       return [];
@@ -235,7 +256,7 @@ export function ThinReadingTab({
     const commonElement = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
       ? range.commonAncestorContainer as HTMLElement
       : range.commonAncestorContainer.parentElement;
-    const sentenceElements = [...content.querySelectorAll<HTMLElement>("[data-thin-reading-summary-evidence-ids]")];
+    const sentenceElements = [...content.querySelectorAll<HTMLElement>(`[${attribute}]`)];
     const intersecting = sentenceElements.filter((element) => {
       if (typeof range.intersectsNode === "function") {
         return range.intersectsNode(element);
@@ -243,7 +264,7 @@ export function ThinReadingTab({
       return element.contains(range.commonAncestorContainer) || commonElement?.contains(element);
     });
     return [...new Set(intersecting.flatMap((element) => (
-      (element.dataset.thinReadingSummaryEvidenceIds ?? "").split(",").filter(Boolean)
+      (element.getAttribute(attribute) ?? "").split(",").filter(Boolean)
     )))];
   }
 
@@ -268,6 +289,9 @@ export function ThinReadingTab({
   }
 
   async function generateBranch(source: ThinReadingBranchSource) {
+    if (generationInProgress) {
+      return;
+    }
     setGenerationError("");
     const existingChild = findThinReadingChildBySource(document, activeNode.id, source);
     if (existingChild) {
@@ -285,6 +309,19 @@ export function ThinReadingTab({
       setGenerationError(error instanceof Error ? error.message : String(error));
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function retryInterruptedBranch() {
+    if (!onRetryInterruptedBranch || generationInProgress) return;
+    setGenerationError("");
+    setRetryingInterruptedBranch(true);
+    try {
+      await onRetryInterruptedBranch();
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRetryingInterruptedBranch(false);
     }
   }
 
@@ -307,6 +344,7 @@ export function ThinReadingTab({
       kind: "selected_text",
       excerpt: selection.excerpt,
       ...(selection.evidenceIds.length > 0 ? { evidenceIds: selection.evidenceIds } : {}),
+      ...(selection.externalSourceIds.length > 0 ? { externalSourceIds: selection.externalSourceIds } : {}),
       ...(prompt ? { prompt } : {})
     };
     await generateBranch(source);
@@ -348,6 +386,12 @@ export function ThinReadingTab({
     event.preventDefault();
     event.stopPropagation();
     openEvidenceSpan(span);
+  }
+
+  function preserveTextSelection(event: ReactMouseEvent<HTMLAnchorElement>) {
+    if (window.getSelection()?.toString().trim()) {
+      event.preventDefault();
+    }
   }
 
   function advanceOmittedSection(sectionKey: string, label: string) {
@@ -397,6 +441,7 @@ export function ThinReadingTab({
   const visibleGenerationProgress = generationProgress ?? (generating
     ? { message: labels.generating, progress: null, stageLabel: undefined }
     : null);
+  const visibleGenerationError = generationError || taskFailureMessage;
   const ancestorPath = [] as Array<ThinReadingDocument["nodes"][string]>;
   const visitedNodeIds = new Set<string>();
   let pathNode: ThinReadingDocument["nodes"][string] | undefined = activeNode;
@@ -503,13 +548,14 @@ export function ThinReadingTab({
                       data-thin-reading-external-source={source.id}
                       key={source.id}
                     >
-                      <a href={source.url} rel="noreferrer" target="_blank">
+                      <a href={source.url} onClick={preserveTextSelection} rel="noreferrer" target="_blank">
                         {source.title}
                       </a>
                       <a
                         aria-label={labels.externalRecordOpen(source.title)}
                         className="thin-reading__external-record-link"
                         href={source.sourceRecordUrl}
+                        onClick={preserveTextSelection}
                         rel="noreferrer"
                         target="_blank"
                       >
@@ -534,6 +580,7 @@ export function ThinReadingTab({
                   <span
                     className="thin-reading__summary-sentence"
                     data-thin-reading-summary-evidence-ids={sentence.evidenceIds.join(",")}
+                    data-thin-reading-summary-external-source-ids={sentence.externalKnowledge.join(",")}
                     key={sentence.id}
                   >
                     {sentence.text}
@@ -577,6 +624,7 @@ export function ThinReadingTab({
                               aria-label={labels.evidenceExternalOpen(source.title)}
                               className="thin-reading__summary-marker"
                               href={source.url}
+                              onClick={preserveTextSelection}
                               rel="noreferrer"
                               target="_blank"
                               title={`${labels.evidenceExternalRelation(source.relation)} · ${labels.evidenceExternalTitle([source.title])}`}
@@ -613,7 +661,7 @@ export function ThinReadingTab({
           {activeNode.omittedSections.length > 0 ? (
             <div className="thin-reading__omitted" aria-label={labels.omittedRegion}>
               {activeNode.omittedSections.map((section) => (
-                <button disabled={generating} key={section.id} onClick={() => advanceOmittedSection(section.sectionKey, section.label)} type="button">
+                <button disabled={generationInProgress} key={section.id} onClick={() => advanceOmittedSection(section.sectionKey, section.label)} type="button">
                   {section.label}
                 </button>
               ))}
@@ -637,7 +685,15 @@ export function ThinReadingTab({
               ) : null}
             </div>
           ) : null}
-          {generationError ? <div className="thin-reading__error">{generationError}</div> : null}
+          {visibleGenerationError ? <div className="thin-reading__error">{visibleGenerationError}</div> : null}
+          {onRetryInterruptedBranch ? (
+            <div className="thin-reading__recovery">
+              <button disabled={generationInProgress || retryingInterruptedBranch} onClick={() => void retryInterruptedBranch()} type="button">
+                {retryingInterruptedBranch ? labels.retryingInterrupted : labels.retryInterrupted}
+              </button>
+              <small>{labels.retryInterruptedDescription}</small>
+            </div>
+          ) : null}
           <section className="thin-reading__annotations" aria-label={labels.annotationRegion}>
             <div className="thin-reading__annotation-toolbar">
               <h3>{labels.annotate}</h3>
@@ -657,15 +713,16 @@ export function ThinReadingTab({
                   <>
                     <textarea
                       aria-label={labels.editAnnotation}
+                      disabled={syncingIntuecho}
                       onChange={(event) => setEditingAnnotationBody(event.target.value)}
                       value={editingAnnotationBody}
                     />
                     <div className="thin-reading__annotation-actions">
-                      <button onClick={() => {
+                      <button disabled={syncingIntuecho} onClick={() => {
                         update(updateThinReadingAnnotation(document, annotation.id, editingAnnotationBody));
                         setEditingAnnotationId(null);
                       }} type="button">{labels.save}</button>
-                      <button onClick={() => setEditingAnnotationId(null)} type="button">{labels.cancel}</button>
+                      <button disabled={syncingIntuecho} onClick={() => setEditingAnnotationId(null)} type="button">{labels.cancel}</button>
                     </div>
                   </>
                 ) : (
@@ -678,16 +735,17 @@ export function ThinReadingTab({
                       <label>
                         <input
                           checked={annotation.visibility === "pending_public"}
+                          disabled={syncingIntuecho}
                           onChange={(event) => update(setThinReadingAnnotationPublic(document, annotation.id, event.currentTarget.checked))}
                           type="checkbox"
                         />
                         {labels.public}
                       </label>
-                      <button onClick={() => {
+                      <button disabled={syncingIntuecho} onClick={() => {
                         setEditingAnnotationId(annotation.id);
                         setEditingAnnotationBody(annotation.body);
                       }} type="button">{labels.edit}</button>
-                      <button onClick={() => update(deleteThinReadingAnnotation(document, annotation.id))} type="button">{labels.delete}</button>
+                      <button disabled={syncingIntuecho} onClick={() => update(deleteThinReadingAnnotation(document, annotation.id))} type="button">{labels.delete}</button>
                     </div>
                   </>
                 )}
@@ -745,7 +803,7 @@ export function ThinReadingTab({
                     <div className="thin-reading__recommendation-actions">
                       <button
                         aria-label={labels.deepenIntuecho(recommendation.relationship)}
-                        disabled={generating}
+                        disabled={generationInProgress}
                         onClick={() => deepenRecommendation({
                           note: recommendation.note,
                           relationship: recommendation.relationship
@@ -785,7 +843,7 @@ export function ThinReadingTab({
         >
           <label htmlFor="thin-reading-prompt">{labels.deepenPrompt}</label>
           <input id="thin-reading-prompt" maxLength={600} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-          <button disabled={generating} onClick={() => void deepenSelection()} type="button">{labels.deepen}</button>
+          <button disabled={generationInProgress} onClick={() => void deepenSelection()} type="button">{labels.deepen}</button>
           <label htmlFor="thin-reading-annotation">{labels.annotate}</label>
           <input id="thin-reading-annotation" value={annotationBody} onChange={(event) => setAnnotationBody(event.target.value)} />
           <label>

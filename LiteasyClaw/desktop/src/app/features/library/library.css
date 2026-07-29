@@ -976,3 +976,15 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+.recommendation-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.recommendation-actions .library-icon-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+}

@@ -37,24 +37,29 @@ function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | und
     return { kind: "root_overview" };
   }
   if (source.kind === "omitted_section") {
-    return typeof source.label === "string" && typeof source.sectionKey === "string"
-      ? { kind: "omitted_section", label: source.label, sectionKey: source.sectionKey }
+    const label = typeof source.label === "string" ? source.label.trim() : "";
+    const sectionKey = typeof source.sectionKey === "string" ? source.sectionKey.trim() : "";
+    return label.length > 0 && label.length <= 48 && sectionKey.length > 0 && sectionKey.length <= 96
+      ? { kind: "omitted_section", label, sectionKey }
       : undefined;
   }
   if (source.kind === "selected_text") {
     const evidenceIds = source.evidenceIds;
+    const externalSourceIds = source.externalSourceIds;
     if (
-      typeof source.excerpt !== "string" ||
-      (source.prompt !== undefined && typeof source.prompt !== "string") ||
-      (evidenceIds !== undefined && (!isStringArray(evidenceIds) || evidenceIds.length > 12 || evidenceIds.some((id) => id.trim().length === 0 || id.length > 160)))
+      typeof source.excerpt !== "string" || source.excerpt.trim().length === 0 || source.excerpt.length > 1_600 ||
+      (source.prompt !== undefined && (typeof source.prompt !== "string" || source.prompt.length > 600)) ||
+      (evidenceIds !== undefined && (!isStringArray(evidenceIds) || evidenceIds.length > 12 || evidenceIds.some((id) => id.trim().length === 0 || id.length > 160))) ||
+      (externalSourceIds !== undefined && (!isStringArray(externalSourceIds) || externalSourceIds.length > 12 || externalSourceIds.some((id) => id.trim().length === 0 || id.length > 180)))
     ) {
       return undefined;
     }
     return {
       ...(evidenceIds?.length ? { evidenceIds: [...new Set(evidenceIds)] } : {}),
-      excerpt: source.excerpt,
+      ...(externalSourceIds?.length ? { externalSourceIds: [...new Set(externalSourceIds)] } : {}),
+      excerpt: source.excerpt.trim(),
       kind: "selected_text",
-      ...(source.prompt !== undefined ? { prompt: source.prompt } : {})
+      ...(source.prompt?.trim() ? { prompt: source.prompt.trim() } : {})
     };
   }
   return undefined;
@@ -130,14 +135,14 @@ function normalizeExternalSources(value: unknown): ThinReadingGenerationContext[
   if (!Array.isArray(value)) {
     return undefined;
   }
-  const sources = value.filter(isCanonicalOpenAlexSource);
+  const sources = value.filter(isCanonicalExternalSource);
   return sources.length > 0
     ? sources.map((source) => ({
         abstract: source.abstract,
         authors: [...source.authors],
         doi: "doi" in source && typeof source.doi === "string" ? source.doi : undefined,
         id: source.id,
-        provider: "openalex" as const,
+        provider: source.provider,
         relation: source.relation,
         relevance: source.relevance,
         retrievalQuery: source.retrievalQuery,
@@ -150,26 +155,38 @@ function normalizeExternalSources(value: unknown): ThinReadingGenerationContext[
     : undefined;
 }
 
-function isCanonicalOpenAlexSource(value: unknown): value is ThinReadingExternalSource {
+function hasExternalSourceContent(source: Partial<ThinReadingExternalSource>) {
+  return typeof source.url === "string" && /^https:\/\//i.test(source.url) &&
+    typeof source.title === "string" && source.title.trim().length > 0 &&
+    typeof source.abstract === "string" &&
+    Array.isArray(source.authors) && source.authors.every((author) => typeof author === "string") &&
+    typeof source.relevance === "number" && Number.isFinite(source.relevance) &&
+    typeof source.retrievalQuery === "string";
+}
+
+function isCanonicalExternalSource(value: unknown): value is ThinReadingExternalSource {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
   const source = value as Partial<ThinReadingExternalSource>;
   const sourceId = source.sourceId?.trim().toUpperCase() ?? "";
-  return source.provider === "openalex" &&
+  const isOpenAlex = source.provider === "openalex" &&
     /^W\d+$/.test(sourceId) &&
     source.id === `openalex:${sourceId}` &&
     source.sourceRecordUrl === `https://openalex.org/${sourceId}` &&
-    typeof source.url === "string" && /^https:\/\//i.test(source.url) &&
-    typeof source.title === "string" && source.title.trim().length > 0 &&
-    typeof source.abstract === "string" &&
-    Array.isArray(source.authors) && source.authors.every((author) => typeof author === "string") &&
     (source.relation === "cited_by_target" ||
       source.relation === "cites_target" ||
       source.relation === "related" ||
-      source.relation === "topic_search") &&
-    typeof source.relevance === "number" && Number.isFinite(source.relevance) &&
-    typeof source.retrievalQuery === "string";
+      source.relation === "topic_search");
+  const crossrefDoi = source.sourceId?.trim().toLowerCase() ?? "";
+  const isCrossref = source.provider === "crossref" &&
+    /^[^\s/]+\/[^\s]+$/.test(crossrefDoi) &&
+    source.id === `crossref:${crossrefDoi}` &&
+    source.doi === `https://doi.org/${crossrefDoi}` &&
+    source.url === `https://doi.org/${crossrefDoi}` &&
+    source.sourceRecordUrl === `https://api.crossref.org/works/${encodeURIComponent(crossrefDoi)}` &&
+    source.relation === "topic_search";
+  return (isOpenAlex || isCrossref) && hasExternalSourceContent(source);
 }
 
 function isPaperIdentityKind(value: unknown): value is PaperIdentityCandidate["kind"] {
@@ -230,6 +247,18 @@ export function getAgentRequestThinReadingContext(
   ) {
     return null;
   }
+  const selectedExternalSources = normalizeExternalSources(candidate.selectedExternalSources);
+  if (selectedExternalSources?.length) {
+    const selectedExternalSourceIds = source.kind === "selected_text"
+      ? new Set(source.externalSourceIds ?? [])
+      : new Set<string>();
+    if (
+      selectedExternalSourceIds.size !== selectedExternalSources.length ||
+      selectedExternalSources.some((externalSource) => !selectedExternalSourceIds.has(externalSource.id))
+    ) {
+      return null;
+    }
+  }
   return {
     artifactId: candidate.artifactId,
     depth: candidate.depth,
@@ -248,7 +277,8 @@ export function getAgentRequestThinReadingContext(
     parentTitle: typeof candidate.parentTitle === "string" ? candidate.parentTitle : undefined,
     source,
     targetLanguage: candidate.targetLanguage,
-    externalSources: normalizeExternalSources(candidate.externalSources)
+    externalSources: normalizeExternalSources(candidate.externalSources),
+    selectedExternalSources
   };
 }
 

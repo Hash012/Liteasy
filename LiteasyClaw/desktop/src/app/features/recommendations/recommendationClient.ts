@@ -1,5 +1,9 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
-import type { RecommendationItem, RecommendationRequestDocument } from "./recommendation.types";
+import type {
+  RecommendationItem,
+  RecommendationRequestDocument,
+  RecommendationResearchProfile
+} from "./recommendation.types";
 
 export type RecommendationTransportRequest = {
   body: string;
@@ -14,6 +18,7 @@ export type RecommendationTransport = (
 
 type CreateRecommendationClientInput = {
   endpoint: string;
+  openAlexApiKey?: string;
   transport?: RecommendationTransport;
 };
 
@@ -22,6 +27,7 @@ type RecommendationPayload = {
 };
 
 type RecommendationClientInput = {
+  researchProfile?: RecommendationResearchProfile;
   selectedDocuments: RecommendationRequestDocument[];
   sessionId: string;
 };
@@ -92,19 +98,23 @@ async function defaultTransport(
 
 export function createRecommendationClient({
   endpoint,
+  openAlexApiKey,
   transport = defaultTransport
 }: CreateRecommendationClientInput) {
   return async ({
+    researchProfile,
     selectedDocuments,
     sessionId
   }: RecommendationClientInput): Promise<RecommendationItem[]> => {
     const response = await transport({
       body: JSON.stringify({
+        ...(researchProfile ? { researchProfile } : {}),
         selectedDocuments,
         sessionId
       }),
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        ...(openAlexApiKey?.trim() ? { "X-OpenAlex-Api-Key": openAlexApiKey.trim() } : {})
       },
       method: "POST",
       url: buildRecommendationUrl(endpoint)

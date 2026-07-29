@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useArtifactWorkflowController } from "../app/controllers/useArtifactWorkflowController";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
+import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
@@ -158,6 +159,146 @@ describe("useArtifactWorkflowController", () => {
 
     expect(result.current.model.artifactTabs).toEqual([]);
     expect(result.current.model.artifactTasks).toEqual([]);
+  });
+
+  test("marks a persisted in-flight thin-reading task as interrupted after restart", async () => {
+    window.localStorage.setItem("liteasy.artifact-task-recovery/v1", JSON.stringify([{
+      artifactId: "artifact-thin-interrupted",
+      id: "artifact-task-4",
+      message: "正在生成薄读下一层",
+      progress: 58,
+      stage: "thin_reading_generating_branch",
+      status: "running",
+      type: "thin_reading"
+    }]));
+    const onAnalysisHint = vi.fn();
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactStore: createArtifactStore(),
+        artifactResultClient: artifactResultClient(),
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint,
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.model.artifactTasks).toEqual([
+      expect.objectContaining({
+        artifactId: "artifact-thin-interrupted",
+        stage: "failed",
+        status: "failed",
+        type: "thin_reading"
+      })
+    ]);
+    expect(onAnalysisHint).toHaveBeenCalledWith(expect.stringContaining("未完成的生成任务"));
+    expect(window.localStorage.getItem("liteasy.artifact-task-recovery/v1")).toBeNull();
+  });
+
+  test("re-submits a validated interrupted thin-reading branch as a new model request", async () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-retry",
+      papers: [{ id: paper.id, title: paper.title }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [{ id: "section-1", label: "实验", sectionKey: "experiments" }],
+        recommendations: [],
+        summary: "论文的实验部分仍有待展开。",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+    const snapshot = createThinReadingBranchRecoverySnapshot({
+      artifactId: thinReadingDocument.artifactId,
+      document: thinReadingDocument,
+      parentNodeId: thinReadingDocument.rootNodeId,
+      primaryPaperId: paper.id,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiments" }
+    });
+    window.localStorage.setItem("liteasy.artifact-task-recovery/v1", JSON.stringify([{
+      artifactId: thinReadingDocument.artifactId,
+      id: "artifact-task-4",
+      message: "正在生成薄读下一层",
+      progress: 58,
+      stage: "thin_reading_generating_branch",
+      status: "running",
+      thinReadingBranchRecovery: snapshot,
+      type: "thin_reading"
+    }]));
+    const localRepository = {
+      list: vi.fn(async () => [{
+        artifactId: thinReadingDocument.artifactId,
+        papers: [{ id: paper.id, title: paper.title }],
+        thinReadingDocument,
+        title: "薄读",
+        type: "thin_reading" as const
+      }]),
+      replace: vi.fn(async () => undefined)
+    };
+    const generatedRun = completedRun();
+    generatedRun.events[0] = {
+      ...generatedRun.events[0],
+      metadata: {
+        analysis: (generatedRun.events[0] as Extract<AgentRun["events"][number], { type: "assistant.message" }>).metadata.analysis,
+        thinReading: {
+          rootSeed: {
+            evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+            omittedSections: [],
+            recommendations: [],
+            summary: "实验结果显示方法具有可复核的提升。",
+            withinPaperClosure: true
+          }
+        }
+      }
+    } as AgentRun["events"][number];
+    const runAgentAnalysis = vi.fn(async () => generatedRun);
+    const onAnalysisHint = vi.fn();
+    const artifactStore = createArtifactStore();
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactLocalRepository: localRepository,
+        artifactResultClient: artifactResultClient(),
+        artifactStore,
+        getImportedChunksByPaperId: () => ({ [paper.id]: buildImportedChunksForPaper(paper) }),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint,
+        queueImportForPapers: vi.fn(() => "already_imported"),
+        runAgentAnalysis
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.model.artifactTasks).toEqual([
+      expect.objectContaining({
+        id: "artifact-task-4",
+        recoveredAfterRestart: true,
+        status: "failed",
+        thinReadingBranchRecovery: snapshot
+      })
+    ]);
+    await act(async () => {
+      await result.current.actions.retryInterruptedThinReadingBranch("artifact-task-4");
+    });
+
+    expect(runAgentAnalysis).toHaveBeenCalledWith("thin_reading", expect.any(Function), expect.objectContaining({
+      thinReadingContext: expect.objectContaining({ parentNodeId: thinReadingDocument.rootNodeId })
+    }));
+    expect(onAnalysisHint).toHaveBeenCalledWith(expect.stringContaining("新的模型请求"));
+    expect(Object.keys(result.current.model.artifactTabs[0]?.thinReadingDocument?.nodes ?? [])).toHaveLength(2);
   });
 
   test("updates workflow state when imported selected papers start analysis", async () => {

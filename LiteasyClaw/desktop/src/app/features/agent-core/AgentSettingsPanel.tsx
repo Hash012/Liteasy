@@ -131,7 +131,7 @@ export function AgentSettingsPanel({
         <label className="agent-settings-toggle-row">
           <span className="agent-settings-row-main">
             <span className="agent-settings-row-title">识别语言</span>
-            <span className="agent-settings-row-description">仅用于没有文字层的 PDF；OCR 证据仍只支持页级定位。</span>
+            <span className="agent-settings-row-description">仅用于没有文字层的 PDF；English、简体中文和双语均可离线识别，OCR 证据仍只支持页级定位。</span>
           </span>
           <select
             aria-label="扫描 PDF OCR 语言"
@@ -161,6 +161,23 @@ export function AgentSettingsPanel({
             placeholder="https://intuecho.example.com"
             type="url"
             value={settings?.["thin_reading.intuecho_endpoint"] ?? ""}
+          />
+        </label>
+      </div>
+      <div className="agent-settings-section" aria-label="OpenAlex 外部文献检索">
+        <div className="agent-settings-section-title">OpenAlex 外部文献检索</div>
+        <label className="agent-settings-toggle-row">
+          <span className="agent-settings-row-main">
+            <span className="agent-settings-row-title">API 密钥</span>
+            <span className="agent-settings-row-description">仅用于当前用户的闭包外文献检索；不会写入薄读产物、缓存或提示词。</span>
+          </span>
+          <input
+            aria-label="OpenAlex API 密钥"
+            autoComplete="off"
+            onChange={(event) => onUpdateSetting?.({ intent: "update_setting", target: "thin_reading.openalex_api_key", value: event.currentTarget.value.trim() })}
+            placeholder="OpenAlex api_key"
+            type="password"
+            value={settings?.["thin_reading.openalex_api_key"] ?? ""}
           />
         </label>
       </div>

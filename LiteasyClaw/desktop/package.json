@@ -15,6 +15,7 @@
     "test:thin-reading-eval": "vitest run src/tests/thinReadingEvaluation.test.ts src/tests/thinReadingRealPdfGold.test.ts",
     "test:thin-reading-live-model": "node scripts/thin-reading-live-model-eval.mjs",
     "test:thin-reading-external-live": "node scripts/thin-reading-external-knowledge-live-eval.mjs",
+    "test:thin-reading-ocr-offline": "node scripts/thin-reading-ocr-offline-eval.mjs",
     "test:thin-reading-openalex-live": "node scripts/thin-reading-openalex-live-eval.mjs",
     "tauri": "tauri"
   },

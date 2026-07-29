@@ -1885,7 +1885,6 @@ test("drags a recommendation into local collection and restores it on next rende
       within(collectionZone).getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
-
   expect(within(collectionZone).getByText("来源：Semantic Scholar")).toBeInTheDocument();
   unmount();
 
@@ -2235,12 +2234,14 @@ test("clears visible recommendation cache on user request", async () => {
   expect(recommendationCacheGetCount).toBeGreaterThanOrEqual(1);
 });
 
-test("reuses cached recommendations until a collected paper is added to the library", async () => {
+test("refreshes recommendations after collected-paper feedback invalidates the cache", async () => {
   const user = userEvent.setup();
   let recommendationRequestCount = 0;
   let recommendationCacheGetCount = 0;
   let recommendationCachePutCount = 0;
   let recommendationCacheClearCount = 0;
+  let recommendationFeedbackCount = 0;
+  let recommendationFeedbackInvalidatedCache = false;
   let collectionItems: Array<{
     id: string;
     reason: string;
@@ -2267,8 +2268,19 @@ test("reuses cached recommendations until a collected paper is added to the libr
         };
       }
 
-      if (String(input).includes("/v1/recommendations")) {
+      if (String(input).endsWith("/v1/recommendations/feedback")) {
+        recommendationFeedbackCount += 1;
+        recommendationFeedbackInvalidatedCache = true;
+        return {
+          json: async () => ({ feedback: { action: "saved" }, invalidatedCacheEntries: 1 }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      if (String(input).endsWith("/v1/recommendations")) {
         recommendationRequestCount += 1;
+        recommendationFeedbackInvalidatedCache = false;
         return {
           json: async () => ({
             recommendations: [
@@ -2323,9 +2335,9 @@ test("reuses cached recommendations until a collected paper is added to the libr
         recommendationCacheGetCount += 1;
         return {
           json: async () => ({
-            cacheHit: recommendationRequestCount > 0,
+            cacheHit: recommendationRequestCount > 0 && !recommendationFeedbackInvalidatedCache,
             recommendations:
-              recommendationRequestCount > 0
+              recommendationRequestCount > 0 && !recommendationFeedbackInvalidatedCache
                 ? [
                     {
                       discoveredAt: "2026-05-14T08:15:00Z",
@@ -2434,6 +2446,7 @@ test("reuses cached recommendations until a collected paper is added to the libr
       within(collectionZone).getByText("VBASE: Unifying Online Vector Similarity Search and Relational Queries")
     ).toBeInTheDocument();
   });
+  await waitFor(() => expect(recommendationFeedbackCount).toBe(1));
 
   await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
@@ -2442,11 +2455,12 @@ test("reuses cached recommendations until a collected paper is added to the libr
 
   await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
-    expect(screen.getByText("已显示当前选中文献集的缓存推荐。")).toBeInTheDocument();
+    expect(screen.getByText("已获取 1 条关联推荐。")).toBeInTheDocument();
   });
-  expect(recommendationRequestCount).toBe(1);
+  expect(recommendationRequestCount).toBe(2);
+  expect(recommendationFeedbackCount).toBe(1);
   expect(recommendationCacheGetCount).toBeGreaterThanOrEqual(2);
-  expect(recommendationCachePutCount).toBe(1);
+  expect(recommendationCachePutCount).toBe(2);
 
 
   const restoredCollectionZone = screen.getByLabelText("收藏投放区");
@@ -2464,7 +2478,7 @@ test("reuses cached recommendations until a collected paper is added to the libr
   await waitFor(() => {
     expect(screen.getByText("已显示当前选中文献集的缓存推荐。")).toBeInTheDocument();
   });
-  expect(recommendationRequestCount).toBe(1);
+  expect(recommendationRequestCount).toBe(2);
   expect(recommendationCacheGetCount).toBeGreaterThanOrEqual(3);
   expect(recommendationCacheClearCount).toBe(0);
 }, 10000);

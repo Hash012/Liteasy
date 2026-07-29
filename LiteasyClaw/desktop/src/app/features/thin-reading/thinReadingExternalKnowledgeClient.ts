@@ -86,11 +86,16 @@ async function defaultTransport(request: Parameters<ThinReadingExternalKnowledge
 
 export function createThinReadingExternalKnowledgeClient(input: {
   endpoint: string;
+  openAlexApiKey?: string;
   transport?: ThinReadingExternalKnowledgeTransport;
 }) {
   return async (search: SearchInput): Promise<ThinReadingExternalKnowledgeResult> => {
     if (!/^[A-Za-z0-9._-]{1,120}$/.test(search.artifactId)) {
       throw new Error("外部文献检索缺少有效 artifactId");
+    }
+    const openAlexApiKey = input.openAlexApiKey?.trim() ?? "";
+    if (openAlexApiKey && (openAlexApiKey.length > 512 || /\s/.test(openAlexApiKey))) {
+      throw new Error("OpenAlex API 密钥格式无效，请在设置中重新配置。");
     }
     const response = await (input.transport ?? defaultTransport)({
       body: JSON.stringify({
@@ -100,12 +105,29 @@ export function createThinReadingExternalKnowledgeClient(input: {
         targetPaperIdentity: search.targetPaperIdentity,
         targetPaperTitle: search.targetPaperTitle
       }),
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(openAlexApiKey ? { "X-OpenAlex-Api-Key": openAlexApiKey } : {})
+      },
       method: "POST",
       signal: search.signal,
       url: `${input.endpoint.replace(/\/+$/, "")}/v1/research/external-knowledge`
     });
     if (!response.ok) {
+      try {
+        const payload = await response.json();
+        if (
+          payload && typeof payload === "object" &&
+          (payload as { error?: unknown }).error === "openalex_api_key_required" &&
+          typeof (payload as { message?: unknown }).message === "string"
+        ) {
+          throw new Error((payload as { message: string }).message);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("OpenAlex")) {
+          throw error;
+        }
+      }
       throw new Error(`外部文献检索失败（${response.status}）`);
     }
     const payload = await response.json();

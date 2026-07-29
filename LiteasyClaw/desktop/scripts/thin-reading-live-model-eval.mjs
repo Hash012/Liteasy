@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findAvailablePort } from "./devPorts.mjs";
+import { requireOpenAlexApiKey } from "./openalex-api-key.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(scriptDir, "..");
@@ -53,6 +54,9 @@ const env = {
   LITEASY_DEV_CLOUD_PORT: String(port),
   LITEASY_MODEL_PROVIDER: provider
 };
+if (process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE === "bert-external") {
+  env.LITEASY_OPENALEX_API_KEY = requireOpenAlexApiKey();
+}
 if (provider === "openai") {
   if (!fs.existsSync(testApiPath)) {
     throw new Error(`Missing test API configuration: ${testApiPath}`);
@@ -67,6 +71,7 @@ if (provider === "openai") {
   env.OPENAI_BASE_URL = apiEndpoint;
   env.VITE_LITEASY_OPENAI_MODEL = process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini";
 }
+console.log(`Starting thin-reading live eval (provider=${provider}, case=${process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE ?? "colbert"}).`);
 const cloud = spawn(process.execPath, [resolve(repoRoot, "services/dev-cloud/server.mjs")], {
   cwd: desktopDir,
   env,
@@ -103,7 +108,9 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 try {
+  console.log("Waiting for the local dev cloud health check.");
   await waitForHealth(endpoint);
+  console.log("Dev cloud is ready; starting Vitest with a 120-second live-test timeout.");
   const vitestBinary = resolve(
     desktopDir,
     "node_modules",
@@ -112,7 +119,7 @@ try {
   );
   evaluator = spawn(
     vitestBinary,
-    ["run", "src/tests/thinReadingLiveModelEval.test.ts"],
+    ["run", "src/tests/thinReadingLiveModelEval.test.ts", "--reporter=verbose", "--testTimeout=120000"],
     {
       cwd: desktopDir,
       env: {
@@ -133,6 +140,8 @@ try {
   });
   if (exitCode === 0) {
     console.log("Thin-reading live model eval passed through the desktop generation path.");
+  } else {
+    console.error(`Thin-reading live model eval failed with exit code ${exitCode}.`);
   }
   process.exitCode = exitCode;
 } finally {

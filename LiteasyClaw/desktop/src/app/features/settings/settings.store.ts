@@ -10,6 +10,7 @@ export function createSettingsStore() {
     "assistant.language": "zh-CN",
     "import.ocr_language": "eng",
     "thin_reading.intuecho_endpoint": "",
+    "thin_reading.openalex_api_key": "",
     "models.default_provider": "openai",
     "models.cloud_proxy_endpoint": "mock://cloud-proxy",
     "models.control_plane_endpoint": "mock://control-plane"

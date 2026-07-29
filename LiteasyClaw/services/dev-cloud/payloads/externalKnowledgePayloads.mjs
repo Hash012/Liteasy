@@ -1,7 +1,13 @@
 const openAlexEndpoint = "https://api.openalex.org/works";
 const crossrefEndpoint = "https://api.crossref.org/works";
+const arxivEndpoint = "https://export.arxiv.org/api/query";
 const maximumQueryLength = 500;
 const maximumResults = 8;
+const maximumGraphNeighborsPerRelation = 3;
+const maximumArxivFeedBytes = 1024 * 1024;
+const minimumArxivRequestIntervalMs = 3000;
+let arxivTransportQueue = Promise.resolve();
+let nextArxivRequestAt = 0;
 
 function normalizeText(value) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
@@ -45,7 +51,12 @@ function normalizeDoiKey(value) {
 }
 
 function sourceDoiKey(source) {
-  return normalizeDoiKey(source?.doi ?? source?.sourceId);
+  const doi = normalizeDoiKey(source?.doi ?? source?.sourceId);
+  return /^10\.\d{4,9}\/\S+$/.test(doi) ? doi : "";
+}
+
+function sourceArxivKey(source) {
+  return normalizeArxivKey(source?.arxivId ?? source?.sourceId);
 }
 
 function normalizeArxivKey(value) {
@@ -78,6 +89,10 @@ function workExternalValues(work) {
     ...Object.values(work?.ids ?? {}),
     ...locations.flatMap((location) => [location?.landing_page_url, location?.pdf_url])
   ].map(normalizeText).filter(Boolean);
+}
+
+function arxivIdFromWork(work) {
+  return workExternalValues(work).map(normalizeArxivKey).find(Boolean) || undefined;
 }
 
 function matchesTargetIdentity(work, identity) {
@@ -129,6 +144,14 @@ function relationToTarget(work, targetWork) {
   return relatedIds.has(sourceId) ? "related" : "topic_search";
 }
 
+function graphWorkIds(targetWork, field) {
+  return [...new Set(
+    (Array.isArray(targetWork?.[field]) ? targetWork[field] : [])
+      .map(sourceIdFromValue)
+      .filter(Boolean)
+  )].slice(0, maximumGraphNeighborsPerRelation);
+}
+
 function lexicalOverlap(query, title) {
   const stopWords = new Set([
     "follow", "following", "paper", "related", "research", "study", "work",
@@ -163,6 +186,7 @@ function normalizeWork(work, input, rank) {
     return null;
   }
   const doi = normalizeDoi(work?.doi);
+  const arxivId = arxivIdFromWork(work);
   const landingPage = normalizeText(work?.primary_location?.landing_page_url);
   const url = landingPage || doi || normalizeText(work?.id);
   if (!url || !/^https?:\/\//i.test(url)) {
@@ -178,11 +202,19 @@ function normalizeWork(work, input, rank) {
     1,
     Number((0.55 / (rank + 1) + 0.45 * lexicalOverlap(input.query, title)).toFixed(3))
   );
+  const openAccessAvailable = Boolean(
+    work?.open_access?.is_oa ||
+    work?.primary_location?.pdf_url ||
+    work?.best_oa_location?.pdf_url
+  );
   return {
     abstract: reconstructAbstract(work?.abstract_inverted_index),
+    ...(arxivId ? { arxivId } : {}),
     authors,
     doi,
     id: `openalex:${sourceId}`,
+    ...(typeof work?.is_retracted === "boolean" ? { isRetracted: work.is_retracted } : {}),
+    ...(openAccessAvailable ? { openAccessAvailable: true } : {}),
     provider: "openalex",
     relation: relationToTarget(work, input.targetWork),
     relevance,
@@ -193,6 +225,11 @@ function normalizeWork(work, input, rank) {
     url,
     year: Number.isInteger(work?.publication_year) ? work.publication_year : undefined
   };
+}
+
+function normalizeGraphWork(work, input, rank, relation) {
+  const source = normalizeWork(work, input, rank);
+  return source ? { ...source, relation } : null;
 }
 
 export class ExternalKnowledgeError extends Error {
@@ -207,12 +244,46 @@ async function defaultOpenAlexTransport(url, options) {
   return fetch(url, options);
 }
 
+function waitForArxivRequestSlot(delayMs, signal) {
+  if (signal?.aborted) {
+    return Promise.reject(Object.assign(new Error("arXiv request aborted"), { name: "AbortError" }));
+  }
+  if (delayMs <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, delayMs);
+    const abort = () => {
+      clearTimeout(timeout);
+      reject(Object.assign(new Error("arXiv request aborted"), { name: "AbortError" }));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+async function defaultArxivTransport(url, options) {
+  const request = arxivTransportQueue.then(async () => {
+    await waitForArxivRequestSlot(Math.max(0, nextArxivRequestAt - Date.now()), options?.signal);
+    nextArxivRequestAt = Date.now() + minimumArxivRequestIntervalMs;
+    return fetch(url, options);
+  });
+  arxivTransportQueue = request.catch(() => undefined);
+  return request;
+}
+
 async function fetchOpenAlexPayload(url, options = {}) {
+  const requestUrl = new URL(url);
+  if (typeof options.openAlexApiKey === "string" && options.openAlexApiKey) {
+    requestUrl.searchParams.set("api_key", options.openAlexApiKey);
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 8000);
   let response;
   try {
-    response = await (options.transport ?? defaultOpenAlexTransport)(url.toString(), {
+    response = await (options.transport ?? defaultOpenAlexTransport)(requestUrl.toString(), {
       headers: { Accept: "application/json", "User-Agent": "LiteasyClaw/0.1" },
       signal: controller.signal
     });
@@ -228,6 +299,13 @@ async function fetchOpenAlexPayload(url, options = {}) {
   }
   if (options.allowNotFound && response?.status === 404) {
     return null;
+  }
+  if (response?.status === 401 || response?.status === 403) {
+    throw new ExternalKnowledgeError(
+      "openalex_api_key_required",
+      "OpenAlex API 密钥无效或已失效。请在 Liteasy 设置中更新 OpenAlex API 密钥后重试。",
+      503
+    );
   }
   if (!response?.ok) {
     throw new ExternalKnowledgeError(
@@ -268,6 +346,63 @@ async function resolveTargetWork(works, input, options) {
   return target && sourceIdFromWork(target) ? target : undefined;
 }
 
+async function fetchOpenAlexWorkById(workId, options) {
+  const normalizedWorkId = sourceIdFromValue(workId);
+  if (!normalizedWorkId) {
+    return null;
+  }
+  return fetchOpenAlexPayload(`${openAlexEndpoint}/${normalizedWorkId}`, {
+    ...options,
+    allowNotFound: true
+  });
+}
+
+async function fetchOpenAlexWorksById(workIds, options) {
+  const results = await Promise.allSettled(
+    workIds.map((workId) => fetchOpenAlexWorkById(workId, options))
+  );
+  return results.flatMap((result) => (
+    result.status === "fulfilled" && result.value ? [result.value] : []
+  ));
+}
+
+async function fetchOpenAlexCitingWorks(targetWork, limit, options) {
+  const targetId = sourceIdFromWork(targetWork);
+  if (!targetId) {
+    return [];
+  }
+  const url = new URL(openAlexEndpoint);
+  // OpenAlex's `cites` filter returns works that explicitly reference the target work.
+  url.searchParams.set("filter", `cites:${targetId}`);
+  url.searchParams.set("per-page", String(Math.min(maximumGraphNeighborsPerRelation, limit)));
+  try {
+    const payload = await fetchOpenAlexPayload(url, options);
+    return (Array.isArray(payload?.results) ? payload.results : [])
+      // Do not trust a provider-side filter blindly. The relation label is a claim surfaced to
+      // readers, so retain it only when the returned graph field independently proves it.
+      .filter((work) => workOpenAlexIds(work).has(targetId));
+  } catch {
+    // The ordinary query remains useful when a graph endpoint is temporarily unavailable.
+    return [];
+  }
+}
+
+async function expandTargetCitationNeighborhood(input, options) {
+  if (!input.targetWork || options.expandCitationGraph === false) {
+    return [];
+  }
+  const [referencedWorks, relatedWorks, citingWorks] = await Promise.all([
+    fetchOpenAlexWorksById(graphWorkIds(input.targetWork, "referenced_works"), options),
+    fetchOpenAlexWorksById(graphWorkIds(input.targetWork, "related_works"), options),
+    fetchOpenAlexCitingWorks(input.targetWork, input.limit, options)
+  ]);
+  return [
+    ...referencedWorks.map((work, index) => normalizeGraphWork(work, input, index, "cited_by_target")),
+    ...citingWorks.map((work, index) => normalizeGraphWork(work, input, index, "cites_target")),
+    ...relatedWorks.map((work, index) => normalizeGraphWork(work, input, index, "related"))
+  ].filter(Boolean);
+}
+
 export async function searchOpenAlexExternalKnowledge(body, options = {}) {
   const query = normalizeText(body?.query);
   const targetPaperTitle = normalizeText(body?.targetPaperTitle);
@@ -281,6 +416,14 @@ export async function searchOpenAlexExternalKnowledge(body, options = {}) {
       400
     );
   }
+  if (typeof options.openAlexApiKey !== "string" || !options.openAlexApiKey.trim() ||
+    options.openAlexApiKey.length > 512 || /\s/.test(options.openAlexApiKey)) {
+    throw new ExternalKnowledgeError(
+      "openalex_api_key_required",
+      "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。",
+      503
+    );
+  }
 
   const url = new URL(openAlexEndpoint);
   url.searchParams.set("search", query);
@@ -291,7 +434,7 @@ export async function searchOpenAlexExternalKnowledge(body, options = {}) {
     targetPaperIdentity: body?.targetPaperIdentity,
     targetPaperTitle
   }, options);
-  const sources = works
+  const searchedSources = works
     .map((work, rank) => normalizeWork(work, { query, targetPaperTitle, targetWork }, rank))
     .filter(Boolean)
     .filter((source) => (
@@ -299,6 +442,13 @@ export async function searchOpenAlexExternalKnowledge(body, options = {}) {
       lexicalOverlap(query, `${source.title} ${source.abstract}`) > 0
     ))
     .slice(0, limit);
+  const graphSources = await expandTargetCitationNeighborhood({
+    limit,
+    query,
+    targetPaperTitle,
+    targetWork
+  }, options);
+  const sources = mergeExternalSources([...graphSources, ...searchedSources], limit);
   return {
     provider: "openalex",
     query,
@@ -324,6 +474,10 @@ function crossrefYear(item) {
 
 function normalizeCrossrefWork(item, query, rank) {
   const doiKey = normalizeDoiKey(item?.DOI);
+  const arxivId = [
+    item?.DOI,
+    ...(Array.isArray(item?.["alternative-id"]) ? item["alternative-id"] : [])
+  ].map(normalizeArxivKey).find(Boolean);
   const title = normalizeText(Array.isArray(item?.title) ? item.title[0] : "");
   if (!doiKey || !title) {
     return null;
@@ -332,11 +486,20 @@ function normalizeCrossrefWork(item, query, rank) {
     1,
     Number((0.45 / (rank + 1) + 0.55 * lexicalOverlap(query, title)).toFixed(3))
   );
+  const isRetracted = Array.isArray(item?.["update-to"]) && item["update-to"].some((update) => (
+    normalizeText(update?.type).toLowerCase() === "retraction"
+  ));
+  const openAccessAvailable = Array.isArray(item?.link) && item.link.some((link) => (
+    /pdf/i.test(normalizeText(link?.["content-type"])) && /^https?:\/\//i.test(normalizeText(link?.URL))
+  ));
   return {
     abstract: normalizeText(item?.abstract).replace(/<[^>]*>/g, "").slice(0, 2400),
+    ...(arxivId ? { arxivId } : {}),
     authors: crossrefAuthors(item),
     doi: `https://doi.org/${doiKey}`,
     id: `crossref:${doiKey}`,
+    ...(isRetracted ? { isRetracted: true } : {}),
+    ...(openAccessAvailable ? { openAccessAvailable: true } : {}),
     provider: "crossref",
     relation: "topic_search",
     relevance,
@@ -380,21 +543,205 @@ async function searchCrossrefExternalKnowledge(body, options = {}) {
     .filter((source) => lexicalOverlap(query, `${source.title} ${source.abstract}`) > 0);
 }
 
+function decodeXmlCodePoint(value, radix) {
+  const codePoint = Number.parseInt(value, radix);
+  return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff &&
+    !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+    ? String.fromCodePoint(codePoint)
+    : "";
+}
+
+function decodeXmlText(value) {
+  return normalizeText(value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&#(\d+);/g, (_, code) => decodeXmlCodePoint(code, 10))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => decodeXmlCodePoint(code, 16))
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&"));
+}
+
+function xmlTagValue(xml, tagName) {
+  const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = xml.match(new RegExp(`<${escapedTagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTagName}>`, "i"));
+  return match ? decodeXmlText(match[1]) : "";
+}
+
+function xmlTagValues(xml, tagName) {
+  const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...xml.matchAll(new RegExp(`<${escapedTagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTagName}>`, "gi"))]
+    .map((match) => decodeXmlText(match[1]));
+}
+
+function normalizeArxivEntry(entry, query, targetPaperTitle, rank) {
+  const rawId = xmlTagValue(entry, "id");
+  const arxivId = normalizeArxivKey(rawId);
+  const title = xmlTagValue(entry, "title");
+  if (!arxivId || !title || normalizeTitle(title) === normalizeTitle(targetPaperTitle)) {
+    return null;
+  }
+  const doiKey = normalizeDoiKey(xmlTagValue(entry, "arxiv:doi"));
+  const doi = /^10\.\d{4,9}\/\S+$/.test(doiKey) ? `https://doi.org/${doiKey}` : undefined;
+  const published = xmlTagValue(entry, "published");
+  const year = /^\d{4}-/.test(published) ? Number.parseInt(published.slice(0, 4), 10) : undefined;
+  const relevance = Math.min(
+    1,
+    Number((0.5 / (rank + 1) + 0.5 * lexicalOverlap(query, title)).toFixed(3))
+  );
+  const url = `https://arxiv.org/abs/${arxivId}`;
+  return {
+    abstract: xmlTagValue(entry, "summary").slice(0, 2400),
+    arxivId,
+    authors: xmlTagValues(entry, "name").slice(0, 12),
+    ...(doi ? { doi } : {}),
+    id: `arxiv:${arxivId}`,
+    openAccessAvailable: true,
+    provider: "arxiv",
+    relation: "topic_search",
+    relevance,
+    retrievalQuery: query,
+    sourceRecordUrl: url,
+    sourceId: arxivId,
+    title,
+    url,
+    ...(Number.isInteger(year) ? { year } : {})
+  };
+}
+
+async function searchArxivExternalKnowledge(body, options = {}) {
+  const query = normalizeText(body?.query);
+  const targetPaperTitle = normalizeText(body?.targetPaperTitle);
+  const limit = Number.isInteger(body?.limit)
+    ? Math.min(maximumResults, Math.max(1, body.limit))
+    : 5;
+  if (!query || query.length > maximumQueryLength) {
+    throw new ExternalKnowledgeError(
+      "invalid_external_knowledge_query",
+      `query 必须为 1-${maximumQueryLength} 个字符。`,
+      400
+    );
+  }
+  const url = new URL(arxivEndpoint);
+  url.searchParams.set("search_query", `all:${query.replace(/[\"\\]/g, " ")}`);
+  url.searchParams.set("start", "0");
+  url.searchParams.set("max_results", String(Math.min(maximumResults + 1, limit + 1)));
+  url.searchParams.set("sortBy", "relevance");
+  url.searchParams.set("sortOrder", "descending");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 8000);
+  let response;
+  try {
+    response = await (options.transport ?? defaultArxivTransport)(url.toString(), {
+      headers: { Accept: "application/atom+xml", "User-Agent": "LiteasyClaw/0.1" },
+      signal: controller.signal
+    });
+  } catch (error) {
+    const timedOut = controller.signal.aborted || error?.name === "AbortError";
+    throw new ExternalKnowledgeError(
+      timedOut ? "arxiv_timeout" : "arxiv_unavailable",
+      timedOut ? "arXiv 检索超时。" : "arXiv 当前不可用。",
+      timedOut ? 504 : 502
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response?.ok) {
+    throw new ExternalKnowledgeError(
+      "arxiv_upstream_error",
+      `arXiv 返回 HTTP ${response?.status ?? "unknown"}。`,
+      502
+    );
+  }
+  let xml;
+  try {
+    xml = await response.text();
+  } catch {
+    throw new ExternalKnowledgeError("arxiv_invalid_response", "arXiv 返回格式无效。", 502);
+  }
+  if (typeof xml !== "string" || xml.length > maximumArxivFeedBytes || /<!DOCTYPE/i.test(xml)) {
+    throw new ExternalKnowledgeError("arxiv_invalid_response", "arXiv 返回格式无效。", 502);
+  }
+  return [...xml.matchAll(/<entry(?:\s[^>]*)?>([\s\S]*?)<\/entry>/gi)]
+    .map((match, rank) => normalizeArxivEntry(match[1], query, targetPaperTitle, rank))
+    .filter(Boolean)
+    .filter((source) => lexicalOverlap(query, `${source.title} ${source.abstract}`) > 0)
+    .slice(0, limit);
+}
+
 function relationRank(relation) {
   if (relation === "cited_by_target" || relation === "cites_target") return 3;
   if (relation === "related") return 2;
   return 1;
 }
 
+function sourceRecord(source) {
+  return {
+    ...(source.arxivId ? { arxivId: source.arxivId } : {}),
+    ...(source.doi ? { doi: source.doi } : {}),
+    id: source.id,
+    provider: source.provider,
+    ...(source.sourceRecordUrl ? { recordUrl: source.sourceRecordUrl } : {}),
+    title: source.title,
+    url: source.url,
+    ...(Number.isInteger(source.year) ? { year: source.year } : {})
+  };
+}
+
+function mergeSourceRecords(...sources) {
+  const records = sources.flatMap((source) => (
+    Array.isArray(source?.sourceRecords) ? source.sourceRecords : [sourceRecord(source)]
+  ));
+  return [...new Map(records.map((record) => [`${record.provider}:${record.id}`, record])).values()]
+    .slice(0, 6);
+}
+
 function mergeExternalSources(sources, limit) {
   const deduplicated = new Map();
   for (const source of sources) {
-    const key = sourceDoiKey(source) || `${source.provider}:${source.sourceId}`;
-    const existing = deduplicated.get(key);
-    if (!existing || relationRank(source.relation) > relationRank(existing.relation) ||
-      (relationRank(source.relation) === relationRank(existing.relation) && source.relevance > existing.relevance)) {
+    const doiIdentity = sourceDoiKey(source);
+    const arxivIdentity = sourceArxivKey(source);
+    const key = doiIdentity
+      ? `doi:${doiIdentity}`
+      : arxivIdentity
+        ? `arxiv:${arxivIdentity}`
+        : `${source.provider}:${source.sourceId}`;
+    const existingEntry = [...deduplicated.entries()].find(([, candidate]) => (
+      (doiIdentity && sourceDoiKey(candidate) === doiIdentity) ||
+      (arxivIdentity && sourceArxivKey(candidate) === arxivIdentity)
+    ));
+    const existing = existingEntry?.[1];
+    if (!existing) {
       deduplicated.set(key, source);
+      continue;
     }
+    const sourceWins = relationRank(source.relation) > relationRank(existing.relation) ||
+      (relationRank(source.relation) === relationRank(existing.relation) && source.relevance > existing.relevance);
+    const primary = sourceWins ? source : existing;
+    const doiKey = sourceDoiKey(primary) || sourceDoiKey(existing) || sourceDoiKey(source);
+    const arxivKey = sourceArxivKey(primary) || sourceArxivKey(existing) || sourceArxivKey(source);
+    const merged = {
+      ...primary,
+      ...(doiKey ? { doi: `https://doi.org/${doiKey}` } : {}),
+      ...(doiKey ? { canonicalPaperId: `doi:${doiKey}` } : {}),
+      ...(!doiKey && arxivKey ? { canonicalPaperId: `arxiv:${arxivKey}` } : {}),
+      ...(arxivKey ? { arxivId: arxivKey } : {}),
+      ...(existing.isRetracted === true || source.isRetracted === true ? { isRetracted: true } : {}),
+      ...(existing.openAccessAvailable === true || source.openAccessAvailable === true
+        ? { openAccessAvailable: true }
+        : {}),
+      sourceRecords: mergeSourceRecords(existing, source)
+    };
+    if (existingEntry) {
+      deduplicated.delete(existingEntry[0]);
+    }
+    const mergedDoi = sourceDoiKey(merged);
+    const mergedArxiv = sourceArxivKey(merged);
+    deduplicated.set(
+      mergedDoi ? `doi:${mergedDoi}` : mergedArxiv ? `arxiv:${mergedArxiv}` : key,
+      merged
+    );
   }
   return [...deduplicated.values()]
     .sort((left, right) => relationRank(right.relation) - relationRank(left.relation) || right.relevance - left.relevance || left.title.localeCompare(right.title))
@@ -404,20 +751,42 @@ function mergeExternalSources(sources, limit) {
 export async function searchExternalKnowledge(body, options = {}) {
   const limit = Number.isInteger(body?.limit) ? Math.min(maximumResults, Math.max(1, body.limit)) : 5;
   const crossrefEnabled = options.crossrefEnabled !== false;
-  const [openAlex, crossref] = await Promise.allSettled([
-    searchOpenAlexExternalKnowledge(body, { timeoutMs: options.openAlexTimeoutMs, transport: options.openAlexTransport }),
+  const arxivEnabled = options.arxivEnabled === true;
+  const [openAlex, crossref, arxiv] = await Promise.allSettled([
+    searchOpenAlexExternalKnowledge(body, {
+      openAlexApiKey: options.openAlexApiKey,
+      timeoutMs: options.openAlexTimeoutMs,
+      transport: options.openAlexTransport
+    }),
     !crossrefEnabled
       ? Promise.resolve([])
-      : searchCrossrefExternalKnowledge(body, { timeoutMs: options.crossrefTimeoutMs, transport: options.crossrefTransport })
+      : searchCrossrefExternalKnowledge(body, { timeoutMs: options.crossrefTimeoutMs, transport: options.crossrefTransport }),
+    !arxivEnabled
+      ? Promise.resolve([])
+      : searchArxivExternalKnowledge(body, { timeoutMs: options.arxivTimeoutMs, transport: options.arxivTransport })
   ]);
   const openAlexSources = openAlex.status === "fulfilled" ? openAlex.value.sources : [];
   const crossrefSources = crossref.status === "fulfilled" ? crossref.value : [];
-  if (openAlex.status === "rejected" && (!crossrefEnabled || crossref.status === "rejected")) {
-    throw openAlex.reason instanceof Error ? openAlex.reason : crossref.reason;
+  const arxivSources = arxiv.status === "fulfilled" ? arxiv.value : [];
+  const canUseFallbackWithoutOpenAlex = options.allowCrossrefOnlyFallback === true &&
+    (crossref.status === "fulfilled" || arxiv.status === "fulfilled");
+  if (openAlex.status === "rejected" && openAlex.reason instanceof ExternalKnowledgeError &&
+    openAlex.reason.code === "openalex_api_key_required" && !canUseFallbackWithoutOpenAlex) {
+    throw openAlex.reason;
   }
-  const sources = mergeExternalSources([...openAlexSources, ...crossrefSources], limit);
+  if (openAlex.status === "rejected" &&
+    (!crossrefEnabled || crossref.status === "rejected") &&
+    (!arxivEnabled || arxiv.status === "rejected")) {
+    throw openAlex.reason instanceof Error ? openAlex.reason : crossref.reason ?? arxiv.reason;
+  }
+  const sources = mergeExternalSources([...openAlexSources, ...crossrefSources, ...arxivSources], limit);
+  const providers = [
+    ...(openAlexSources.length > 0 ? ["openalex"] : []),
+    ...(crossrefSources.length > 0 ? ["crossref"] : []),
+    ...(arxivSources.length > 0 ? ["arxiv"] : [])
+  ];
   return {
-    provider: crossrefSources.length > 0 && openAlexSources.length > 0 ? "openalex+crossref" : crossrefSources.length > 0 ? "crossref" : "openalex",
+    provider: providers.join("+") || (arxivEnabled ? "arxiv" : crossrefEnabled ? "crossref" : "openalex"),
     query: normalizeText(body?.query),
     sources,
     status: sources.length > 0 ? "available" : "empty"

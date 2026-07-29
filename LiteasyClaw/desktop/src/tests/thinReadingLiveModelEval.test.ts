@@ -237,6 +237,7 @@ const liveGoldCases: Record<string, LiveThinReadingGoldCase> = {
 
 const liveCase = liveGoldCases[liveCaseId];
 const rootLiveTest = liveEndpoint && liveCase ? test : test.skip;
+const liveOpenAlexApiKey = process.env.LITEASY_OPENALEX_API_KEY?.trim() ?? "";
 
 rootLiveTest("meets a live thin-reading quality gate through the desktop model path", async () => {
   if (!liveCase) {
@@ -325,7 +326,7 @@ rootLiveTest("meets a live thin-reading quality gate through the desktop model p
 
   expect(quality.metrics.summaryCoreRecall.score).toBeGreaterThanOrEqual(0.75);
   expect(quality.metrics.evidenceGrounding.score).toBe(1);
-  expect(quality.metrics.sentenceBoundaryCoverage.score).toBeGreaterThanOrEqual(0.95);
+  expect(quality.metrics.sentenceBoundaryCoverage.score).toBe(1);
   expect(quality.metrics.languageConsistency.score).toBe(1);
   expect(
     quality.metrics.terminologyRetention.score,
@@ -339,6 +340,9 @@ rootLiveTest("meets a live thin-reading quality gate through the desktop model p
 }, 120_000);
 
 externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", async () => {
+  if (!liveOpenAlexApiKey) {
+    throw new Error("bert-external live eval requires an OpenAlex API key from its dedicated local configuration.");
+  }
   const store = createSettingsStore();
   store.apply({
     intent: "update_setting",
@@ -350,9 +354,15 @@ externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", 
     target: "models.default_provider",
     value: liveProvider
   });
+  store.apply({
+    intent: "update_setting",
+    target: "thin_reading.openalex_api_key",
+    value: liveOpenAlexApiKey
+  });
 
   const paperId = "live-bert-external";
   const title = "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding";
+  console.info("[thin-reading-live-eval] external branch: requesting OpenAlex retrieval and model generation.");
   const result = await generateAssistantAnswer({
     artifactType: "thin_reading",
     importedChunksByPaperId: {
@@ -400,6 +410,8 @@ externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", 
     }
   });
 
+  console.info("[thin-reading-live-eval] external branch: generation returned; evaluating provenance and quality gates.");
+
   expect(result.executionTrace).toMatchObject({
     backend: "dev_cloud",
     mode: "live",
@@ -437,6 +449,7 @@ externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", 
   expect(quality.metrics.externalRelationFidelity.score).toBe(1);
   expect(quality.metrics.sentenceBoundaryCoverage.score).toBe(1);
   expect(quality.metrics.paperTypeAccuracy.score).toBe(1);
+  console.info("[thin-reading-live-eval] external branch: all quality gates passed.");
 }, 120_000);
 
 chineseBranchLiveTest("keeps Chinese terminology and parent continuity in a live in-paper branch", async () => {
@@ -537,7 +550,7 @@ chineseBranchLiveTest("keeps Chinese terminology and parent continuity in a live
   expect(quality.metrics.branchRelevance.score).toBeGreaterThanOrEqual(0.8);
   expect(quality.metrics.evidenceGrounding.score).toBe(1);
   expect(quality.metrics.languageConsistency.score).toBe(1);
-  expect(quality.metrics.sentenceBoundaryCoverage.score).toBeGreaterThanOrEqual(0.95);
+  expect(quality.metrics.sentenceBoundaryCoverage.score).toBe(1);
   expect(quality.metrics.terminologyRetention.score).toBe(1);
   expect(quality.passed, `live quality issues=${quality.issues.map((issue) => issue.code).join(",")}`).toBe(true);
 }, 120_000);

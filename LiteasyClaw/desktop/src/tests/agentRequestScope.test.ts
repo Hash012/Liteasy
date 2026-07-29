@@ -167,6 +167,7 @@ test("normalizes selected-passage evidence ids and rejects malformed attachment 
           paperIds: ["paper-a"],
           source: {
             evidenceIds: ["evidence-selected", "evidence-selected", "evidence-boundary"],
+            externalSourceIds: ["openalex:W42", "openalex:W42"],
             excerpt: "the selected passage",
             kind: "selected_text" as const
           },
@@ -183,6 +184,7 @@ test("normalizes selected-passage evidence ids and rejects malformed attachment 
 
   expect(getAgentRequestThinReadingContext(request)?.source).toEqual({
     evidenceIds: ["evidence-selected", "evidence-boundary"],
+    externalSourceIds: ["openalex:W42"],
     excerpt: "the selected passage",
     kind: "selected_text"
   });
@@ -190,4 +192,129 @@ test("normalizes selected-passage evidence ids and rejects malformed attachment 
   const malformed = structuredClone(request);
   malformed.attachments[0].metadata.thinReadingContext.source.evidenceIds = [42] as unknown as string[];
   expect(getAgentRequestThinReadingContext(malformed)).toBeNull();
+
+  const overlongSelection = structuredClone(request);
+  overlongSelection.attachments[0].metadata.thinReadingContext.source.excerpt = "x".repeat(1_601);
+  expect(getAgentRequestThinReadingContext(overlongSelection)).toBeNull();
+
+  const overlongPrompt = structuredClone(request);
+  overlongPrompt.attachments[0].metadata.thinReadingContext.source.prompt = "x".repeat(601);
+  expect(getAgentRequestThinReadingContext(overlongPrompt)).toBeNull();
+
+  const overlongSection = structuredClone(request) as unknown as {
+    attachments: Array<{ metadata: { thinReadingContext: { source: unknown } } }>;
+  };
+  overlongSection.attachments[0].metadata.thinReadingContext.source = {
+    kind: "omitted_section",
+    label: "x".repeat(49),
+    sectionKey: "method"
+  };
+  expect(getAgentRequestThinReadingContext(
+    overlongSection as Parameters<typeof getAgentRequestThinReadingContext>[0]
+  )).toBeNull();
+});
+
+test("requires carried external sources to exactly match the selected external source ids", () => {
+  const selectedSource = {
+    abstract: "A verified follow-up study.",
+    authors: ["A. Author"],
+    id: "openalex:W42",
+    provider: "openalex" as const,
+    relation: "related" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up",
+    sourceId: "W42",
+    sourceRecordUrl: "https://openalex.org/W42",
+    title: "A Follow-up Study",
+    url: "https://openalex.org/W42",
+    year: 2025
+  };
+  const request = {
+    attachments: [{
+      metadata: {
+        thinReadingContext: {
+          artifactId: "artifact-thin-external-selection",
+          depth: 2,
+          paperIds: ["paper-a"],
+          selectedExternalSources: [selectedSource],
+          source: {
+            externalSourceIds: [selectedSource.id],
+            excerpt: selectedSource.title,
+            kind: "selected_text" as const
+          },
+          targetLanguage: "en-US"
+        }
+      },
+      source: "selection" as const,
+      uri: "liteasy://selection/current"
+    }],
+    idempotencyKey: "artifact:thin:external-selection",
+    input: { artifactType: "thin_reading" as const, message: "deepen", mode: "qa" as const },
+    sessionId: "session-external-selection"
+  };
+
+  expect(getAgentRequestThinReadingContext(request)?.selectedExternalSources).toEqual([selectedSource]);
+
+  const mismatched = structuredClone(request);
+  mismatched.attachments[0].metadata.thinReadingContext.source.externalSourceIds = ["openalex:W99"];
+  expect(getAgentRequestThinReadingContext(mismatched)).toBeNull();
+});
+
+test("preserves strict Crossref topic-search provenance while rejecting a forged citation relation", () => {
+  const request = {
+    attachments: [{
+      metadata: {
+        thinReadingContext: {
+          artifactId: "artifact-thin-crossref",
+          depth: 3,
+          externalSources: [
+            {
+              abstract: "A verified Crossref topic result.",
+              authors: ["A. Author"],
+              doi: "https://doi.org/10.1038/s41586-021-03819-2",
+              id: "crossref:10.1038/s41586-021-03819-2",
+              provider: "crossref" as const,
+              relation: "topic_search" as const,
+              relevance: 0.9,
+              retrievalQuery: "protein structure prediction",
+              sourceId: "10.1038/s41586-021-03819-2",
+              sourceRecordUrl: "https://api.crossref.org/works/10.1038%2Fs41586-021-03819-2",
+              title: "Highly accurate protein structure prediction with AlphaFold",
+              url: "https://doi.org/10.1038/s41586-021-03819-2"
+            },
+            {
+              abstract: "Forged relation must not survive normalization.",
+              authors: [],
+              doi: "https://doi.org/10.1000/forged",
+              id: "crossref:10.1000/forged",
+              provider: "crossref" as const,
+              relation: "cites_target" as const,
+              relevance: 1,
+              retrievalQuery: "forged",
+              sourceId: "10.1000/forged",
+              sourceRecordUrl: "https://api.crossref.org/works/10.1000%2Fforged",
+              title: "Forged Crossref relation",
+              url: "https://doi.org/10.1000/forged"
+            }
+          ],
+          paperIds: ["paper-a"],
+          source: { kind: "selected_text" as const, excerpt: "an external extension" },
+          targetLanguage: "en-US"
+        }
+      },
+      source: "selection" as const,
+      uri: "liteasy://selection/current"
+    }],
+    idempotencyKey: "artifact:thin:crossref",
+    input: { artifactType: "thin_reading" as const, message: "deepen", mode: "qa" as const },
+    sessionId: "session-crossref"
+  };
+
+  expect(getAgentRequestThinReadingContext(request)?.externalSources).toEqual([
+    expect.objectContaining({
+      id: "crossref:10.1038/s41586-021-03819-2",
+      provider: "crossref",
+      relation: "topic_search"
+    })
+  ]);
 });

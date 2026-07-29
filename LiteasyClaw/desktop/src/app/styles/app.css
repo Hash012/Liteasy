@@ -3666,6 +3666,11 @@ body {
   padding: 8px 10px;
 }
 
+.personal-profile-textarea {
+  min-height: 52px;
+  resize: vertical;
+}
+
 .personal-center-footnote {
   line-height: 1.5;
 }

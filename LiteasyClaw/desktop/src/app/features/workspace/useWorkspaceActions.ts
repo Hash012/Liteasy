@@ -8,6 +8,7 @@ import type { createImportStore } from "../import/import.store";
 import type { createWorkspaceStore } from "./workspace.store";
 import type { MoveLocalLibraryResource } from "../library/libraryFileSystemClient";
 import type { PersistDroppedPdfFiles } from "../library/libraryFileSystemClient";
+import type { ReadLocalLibraryPdf } from "../library/libraryFileSystemClient";
 import {
   buildMovedFolderPath,
   buildMovedPaper,
@@ -39,11 +40,18 @@ function buildDroppedPaperId(file: File) {
     .replace(/^-|-$/g, "")}-${file.size}`;
 }
 
+function createBrowserPdfSource(file: File, fallbackPath: string) {
+  return typeof URL.createObjectURL === "function"
+    ? URL.createObjectURL(file)
+    : fallbackPath;
+}
+
 type UseWorkspaceActionsInput = {
   extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
   ocrLanguage?: PdfOcrLanguage;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
+  loadPdfSource?: ReadLocalLibraryPdf;
   moveLocalLibraryResource?: MoveLocalLibraryResource;
   persistDroppedPdfFiles?: PersistDroppedPdfFiles;
   onAnalysisHint: (message: string) => void;
@@ -75,6 +83,7 @@ export function useWorkspaceActions({
   extractPaperChunks,
   importDocument,
   importStore,
+  loadPdfSource,
   moveLocalLibraryResource,
   persistDroppedPdfFiles,
   onAnalysisHint,
@@ -83,7 +92,10 @@ export function useWorkspaceActions({
   ocrLanguage = "eng",
   workspaceStore
 }: UseWorkspaceActionsInput) {
-  const resolvePaperChunks = extractPaperChunks ?? ((paper: Paper) => extractImportedChunksForPaper(paper, { ocrLanguage }));
+  const resolvePaperChunks = extractPaperChunks ?? ((paper: Paper) => extractImportedChunksForPaper(paper, {
+    loadPdfSource,
+    ocrLanguage
+  }));
   function syncWorkspace() {
     onWorkspaceChanged(cloneWorkspaceState(workspaceStore.getState()));
   }
@@ -308,7 +320,8 @@ export function useWorkspaceActions({
     pdfFiles.forEach((file) => {
       const title = normalizeDroppedFileTitle(file.name);
       const targetRoot = state.workspaceSource.rootPath || "本地文献库";
-      const sourcePath = `${targetFolderPath ?? `${targetRoot}/papers`}/${file.name}`;
+      const fallbackPath = `${targetFolderPath ?? `${targetRoot}/papers`}/${file.name}`;
+      const sourcePath = createBrowserPdfSource(file, fallbackPath);
       const added = workspaceStore.addPaper({
         id: buildDroppedPaperId(file),
         sourcePath,
@@ -364,7 +377,11 @@ export function useWorkspaceActions({
     ) as Record<string, RetrievalChunk[]>;
   }
 
-  function queueImportForPapers(papers: Paper[], onComplete?: () => void): ImportQueueStatus {
+  function queueImportForPapers(
+    papers: Paper[],
+    onComplete?: () => void,
+    onFailure?: (input: { error: Error; paper: Paper }) => void
+  ): ImportQueueStatus {
     if (papers.length === 0) {
       return "idle";
     }
@@ -372,6 +389,7 @@ export function useWorkspaceActions({
     let pending = 0;
     let importing = false;
     let alreadyImported = 0;
+    let failed = false;
 
     papers.forEach((paper) => {
       const latestJob = importStore.getLatestJobByDocumentId(paper.id);
@@ -424,14 +442,18 @@ export function useWorkspaceActions({
               chunks
             });
           })
-          .catch(() => {
+          .catch((error) => {
+            failed = true;
             importStore.markFailed(jobId);
-            onAnalysisHint(`《${paper.title}》解析失败；请确认 PDF 可读取且包含文本层。`);
+            const normalizedError = error instanceof Error ? error : new Error(String(error));
+            const reason = normalizedError.message;
+            onAnalysisHint(`《${paper.title}》解析失败：${reason}`);
+            onFailure?.({ error: normalizedError, paper });
           })
           .finally(() => {
             syncImportJobs();
             pending -= 1;
-            if (pending === 0) {
+            if (pending === 0 && !failed) {
               onComplete?.();
             }
           });

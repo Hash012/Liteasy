@@ -11,6 +11,7 @@ import type {
   ThinReadingClosureState,
   ThinReadingEvidenceSpan,
   ThinReadingExternalSource,
+  ThinReadingGenerationAudit,
   ThinReadingNode,
   ThinReadingNodeEvidence,
   ThinReadingNodeSource,
@@ -74,6 +75,9 @@ function freezeSource(source: ThinReadingNodeSource): ThinReadingNodeSource {
     ...source,
     evidenceIds: source.kind === "selected_text" && source.evidenceIds
       ? Object.freeze([...source.evidenceIds])
+      : undefined,
+    externalSourceIds: source.kind === "selected_text" && source.externalSourceIds
+      ? Object.freeze([...source.externalSourceIds])
       : undefined
   });
 }
@@ -83,6 +87,9 @@ function freezeScope(scope: ThinReadingRecommendationScope): ThinReadingRecommen
     ...scope,
     evidenceIds: scope.kind === "selected_passage" && scope.evidenceIds
       ? Object.freeze([...scope.evidenceIds])
+      : undefined,
+    externalSourceIds: scope.kind === "selected_passage" && scope.externalSourceIds
+      ? Object.freeze([...scope.externalSourceIds])
       : undefined,
     paperIdentity: scope.paperIdentity ? freezePaperIdentity(scope.paperIdentity) : undefined
   });
@@ -120,6 +127,55 @@ function freezeSummarySentence(sentence: ThinReadingSummarySentence): ThinReadin
   });
 }
 
+function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGenerationAudit {
+  return Object.freeze({
+    evidenceLoop: audit.evidenceLoop
+      ? Object.freeze({
+          rounds: Object.freeze(audit.evidenceLoop.rounds.map((round) => Object.freeze({
+            ...round,
+            focus: Object.freeze([...round.focus]),
+            observedEvidenceIds: Object.freeze([...round.observedEvidenceIds]),
+            pageRequests: Object.freeze([...round.pageRequests]),
+            searchQueries: Object.freeze([...round.searchQueries]),
+            selectedEvidenceIds: Object.freeze([...round.selectedEvidenceIds]),
+            toolCalls: Object.freeze(round.toolCalls.map((call) => Object.freeze({
+              ...call,
+              evidenceIds: Object.freeze([...call.evidenceIds]),
+              pages: call.pages ? Object.freeze([...call.pages]) : undefined
+            })))
+          }))),
+          stopReason: audit.evidenceLoop.stopReason,
+          stopReasonDetail: audit.evidenceLoop.stopReasonDetail
+        })
+      : undefined,
+    evidencePlan: audit.evidencePlan
+      ? Object.freeze({
+          focus: Object.freeze([...audit.evidencePlan.focus]),
+          selectedEvidenceIds: Object.freeze([...audit.evidencePlan.selectedEvidenceIds])
+        })
+      : undefined,
+    evidenceReview: audit.evidenceReview
+      ? Object.freeze({
+          ...audit.evidenceReview,
+          unsupportedSentenceIds: Object.freeze([...audit.evidenceReview.unsupportedSentenceIds])
+        })
+      : undefined,
+    evidenceToolCalls: audit.evidenceToolCalls
+      ? Object.freeze(audit.evidenceToolCalls.map((call) => Object.freeze({
+          ...call,
+          evidenceIds: Object.freeze([...call.evidenceIds]),
+          pages: call.pages ? Object.freeze([...call.pages]) : undefined
+        })))
+      : undefined,
+    model: Object.freeze({ ...audit.model }),
+    qualityGate: Object.freeze({
+      ...audit.qualityGate,
+      repairReasons: Object.freeze([...audit.qualityGate.repairReasons])
+    }),
+    version: audit.version
+  });
+}
+
 function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvidence {
   return Object.freeze({
     claims: evidence.claims
@@ -128,6 +184,9 @@ function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvide
     externalKnowledge: Object.freeze([...evidence.externalKnowledge]),
     externalSources: evidence.externalSources
       ? Object.freeze(evidence.externalSources.map(freezeExternalSource))
+      : undefined,
+    generationAudit: evidence.generationAudit
+      ? freezeGenerationAudit(evidence.generationAudit)
       : undefined,
     paperEvidence: Object.freeze([...evidence.paperEvidence]),
     paperEvidenceSpans: evidence.paperEvidenceSpans
@@ -268,6 +327,7 @@ function recommendationScopeForSource(
   return {
     kind: "selected_passage",
     ...(source.evidenceIds ? { evidenceIds: [...source.evidenceIds] } : {}),
+    ...(source.externalSourceIds ? { externalSourceIds: [...source.externalSourceIds] } : {}),
     excerpt: source.excerpt,
     paperId,
     paperIdentity
@@ -491,11 +551,16 @@ export function applyThinReadingAnnotationSyncResults(
     | { annotationId: string; intuechoAnnotationId: string; status: "synced"; syncedAt: string }
     | { annotationId: string; status: "pending_public" }
   )[],
-  attemptedAt = new Date().toISOString()
+  attemptedAt = new Date().toISOString(),
+  expectedUpdatedAtByAnnotationId?: ReadonlyMap<string, string>
 ): ThinReadingDocument {
   const resultsByAnnotationId = new Map(results.map((result) => [result.annotationId, result]));
   const annotations = document.annotations.map((annotation) => {
     if (annotation.visibility !== "pending_public") {
+      return annotation;
+    }
+    if (annotation.syncState?.status === "synced" ||
+      (expectedUpdatedAtByAnnotationId && expectedUpdatedAtByAnnotationId.get(annotation.id) !== annotation.updatedAt)) {
       return annotation;
     }
     const result = resultsByAnnotationId.get(annotation.id);
