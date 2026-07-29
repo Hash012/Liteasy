@@ -2,9 +2,11 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFPageProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { normalizePdfTextForSearch } from "../pdf/pdfTextSearch";
+import { ensureReadableStreamAsyncIterator } from "../pdf/pdfStreamCompatibility";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper } from "../workspace/workspace.types";
 
+ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export type ExtractedPdfPage = {

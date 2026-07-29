@@ -1080,6 +1080,7 @@ export function AppShell({
         artifactTabs={artifactTabs}
         artifactTasks={artifactTasks}
         layoutCollapsed={paneLayout.collapsed}
+        loadPdfSource={readLocalLibraryPdf}
         onArtifactDynamicAction={(action) => {
           void handleArtifactCanvasAction(action);
         }}

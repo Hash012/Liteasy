@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { buildTargetEvidenceRects, findQuoteRangeInTextLayer } from "../app/features/pdf/PdfReader";
+import {
+  buildTargetEvidenceRects,
+  findQuoteRangeInTextLayer,
+  shouldLoadPdfFromLocalBytes
+} from "../app/features/pdf/PdfReader";
 import { normalizePdfTextForSearch } from "../app/features/pdf/pdfTextSearch";
 import {
   pdfAnnotationAutoPublicStorageKey,
@@ -33,6 +37,13 @@ function makeRect({ height, left, top, width }: { height: number; left: number; 
     y: top
   } as DOMRect;
 }
+
+test("distinguishes managed desktop paths from browser PDF sources", () => {
+  expect(shouldLoadPdfFromLocalBytes("/home/octopus/LiteasyLibrary/paper.pdf")).toBe(true);
+  expect(shouldLoadPdfFromLocalBytes("C:\\Users\\reader\\LiteasyLibrary\\paper.pdf")).toBe(true);
+  expect(shouldLoadPdfFromLocalBytes("/papers/fixture.pdf")).toBe(false);
+  expect(shouldLoadPdfFromLocalBytes("blob:http://localhost/paper")).toBe(false);
+});
 
 function makeRectList(rects: DOMRect[]) {
   return {
