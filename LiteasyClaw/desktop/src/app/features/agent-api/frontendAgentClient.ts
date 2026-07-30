@@ -17,6 +17,7 @@ export type FrontendAgentClient = {
     confirmationId: string,
     decision: ResolveAgentConfirmationRequest["decision"]
   ) => Promise<AgentApiResult<AgentRun>>;
+  createSessionClient: (clientSessionId: string) => FrontendAgentClient;
   getSession: () => AgentSession | null;
   listPublicWorkflowAuditSummaries: (input: {
     runId?: string;
@@ -111,6 +112,13 @@ export function createFrontendAgentClient(
     },
 
     connect,
+
+    createSessionClient(clientSessionId) {
+      return createFrontendAgentClient(api, {
+        ...options,
+        clientSessionId
+      });
+    },
 
     async confirm(confirmationId, decision) {
       const activeSession = await requireSession();

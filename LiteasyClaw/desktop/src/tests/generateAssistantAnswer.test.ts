@@ -1,12 +1,14 @@
 import {
+  buildThinReadingExternalQueryPlan,
   generateAssistantAnswer,
+  planThinReadingInterpretation,
   prioritizeThinReadingGenerationSources,
   shouldRetrieveThinReadingExternalKnowledge
 } from "../app/features/assistant/generateAssistantAnswer";
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
-test("prioritizes verified citation edges over unselected topic-search sources for generation", () => {
+test("prioritizes verified citation edges while retaining bounded topic-search context", () => {
   const sources = [
     {
       abstract: "A graph-linked paper.", authors: [], id: "openalex:W1", provider: "openalex" as const,
@@ -14,7 +16,7 @@ test("prioritizes verified citation edges over unselected topic-search sources f
       sourceRecordUrl: "https://openalex.org/W1", title: "Graph source", url: "https://openalex.org/W1"
     },
     {
-      abstract: "A topic result.", authors: [], id: "openalex:W2", provider: "openalex" as const,
+      abstract: "A traceable topic result with reviewable source content.", authors: [], id: "openalex:W2", provider: "openalex" as const,
       relation: "topic_search" as const, relevance: 0.7, retrievalQuery: "BERT", sourceId: "W2",
       sourceRecordUrl: "https://openalex.org/W2", title: "Topic source", url: "https://openalex.org/W2"
     }
@@ -29,7 +31,8 @@ test("prioritizes verified citation edges over unselected topic-search sources f
   };
 
   expect(prioritizeThinReadingGenerationSources({ context, sources }).map((source) => source.id)).toEqual([
-    "openalex:W1"
+    "openalex:W1",
+    "openalex:W2"
   ]);
   expect(prioritizeThinReadingGenerationSources({
     context: {
@@ -38,6 +41,53 @@ test("prioritizes verified citation edges over unselected topic-search sources f
     },
     sources
   }).map((source) => source.id)).toEqual(["openalex:W1", "openalex:W2"]);
+});
+
+test("keeps the generation context bounded after retrieving a larger candidate pool", () => {
+  const sources = Array.from({ length: 12 }, (_, index) => ({
+    abstract: `This abstract directly supports retrieval candidate ${index}.`,
+    authors: [],
+    id: `openalex:W${index + 10}`,
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 1 - index / 20,
+    retrievalQuery: "retrieval evaluation",
+    sourceId: `W${index + 10}`,
+    sourceRecordUrl: `https://openalex.org/W${index + 10}`,
+    title: `Retrieval candidate ${index}`,
+    url: `https://openalex.org/W${index + 10}`
+  }));
+
+  const selected = prioritizeThinReadingGenerationSources({
+    context: {
+      artifactId: "artifact-candidate-pool",
+      depth: 1,
+      paperIds: ["paper-1"],
+      primaryPaperId: "paper-1",
+      source: { kind: "selected_text" as const, excerpt: "retrieval evaluation" },
+      targetLanguage: "en-US"
+    },
+    sources
+  });
+
+  expect(selected).toHaveLength(8);
+  expect(selected.map((source) => source.id)).toEqual(sources.slice(0, 8).map((source) => source.id));
+});
+
+test("builds bounded support, challenge, and context queries for external evidence", () => {
+  const plan = buildThinReadingExternalQueryPlan({
+    artifactId: "artifact-query-plan",
+    depth: 2,
+    paperIds: ["paper-1"],
+    primaryPaperId: "paper-1",
+    primaryPaperTitle: "A Retrieval Study",
+    source: { kind: "selected_text", excerpt: "late interaction efficiency" },
+    targetLanguage: "en-US"
+  });
+
+  expect(plan.map((item) => item.intent)).toEqual(["support", "challenge", "context"]);
+  expect(plan.every((item) => item.query.length <= 500)).toBe(true);
+  expect(plan.find((item) => item.intent === "challenge")?.query).toContain("conflicting results");
 });
 
 test("generates cloud-proxy answers by default", async () => {
@@ -380,12 +430,12 @@ test("stops live thin-reading before the model call when PDF text evidence is un
     question: "生成薄读",
     selectedPapers: [{ id: "scan-1", title: "扫描版论文" }],
     settings: store.getState()
-  })).rejects.toThrow("未能从《扫描版论文》提取可引用文本");
+  })).rejects.toThrow("《扫描版论文》没有可用的本地文本索引");
 
   expect(modelTransport).not.toHaveBeenCalled();
 });
 
-test("limits external retrieval to explicit beyond-paper thin-reading branches", () => {
+test("retrieves external literature only for a concrete interpretation gap or beyond-paper request", () => {
   const baseContext = {
     artifactId: "artifact-scope",
     depth: 1,
@@ -393,6 +443,12 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
     primaryPaperTitle: "ColBERT",
     targetLanguage: "zh-CN"
   } as const;
+
+  expect(shouldRetrieveThinReadingExternalKnowledge({
+    ...baseContext,
+    depth: 0,
+    source: { kind: "root_overview" }
+  })).toBe(false);
 
   expect(shouldRetrieveThinReadingExternalKnowledge({
     ...baseContext,
@@ -411,7 +467,7 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
     ...baseContext,
     depth: 3,
     source: { kind: "selected_text", excerpt: "MaxSim" }
-  })).toBe(true);
+  })).toBe(false);
   expect(shouldRetrieveThinReadingExternalKnowledge({
     ...baseContext,
     depth: 2,
@@ -426,6 +482,32 @@ test("limits external retrieval to explicit beyond-paper thin-reading branches",
       excerpt: "A follow-up study"
     }
   }, { maximumInternalDepth: 4 })).toBe(true);
+});
+
+test("plans why/how/what explanations from the user prompt and retrieves only for missing support", () => {
+  const baseContext = {
+    artifactId: "artifact-interpretation-plan",
+    depth: 1,
+    paperIds: ["paper-1"],
+    primaryPaperTitle: "Target Paper",
+    source: { kind: "selected_text" as const, excerpt: "核心结论", prompt: "为什么会得到这个结论？" },
+    targetLanguage: "zh-CN"
+  };
+  const plan = planThinReadingInterpretation({
+    context: baseContext,
+    prepared: {
+      evidence: [{ summary: "论文报告了最终结果。", quote: "The final result is reported.", terms: ["result"] }]
+    }
+  });
+
+  expect(plan).toMatchObject({
+    externalKnowledgeNeeded: true,
+    intent: "why",
+    requestedDepth: "standard"
+  });
+  expect(plan.gap).toContain("为什么");
+  expect(plan.discourseMoves.join(" ")).toContain("因果");
+  expect(shouldRetrieveThinReadingExternalKnowledge({ ...baseContext, interpretationPlan: plan })).toBe(true);
 });
 
 test("parses thin-reading structured output from a live model request", async () => {
@@ -523,7 +605,7 @@ test("parses thin-reading structured output from a live model request", async ()
     },
     thinReadingExternalKnowledgeTransport: async () => {
       externalRetrievalCalls += 1;
-      throw new Error("root thin-reading must not retrieve external sources");
+      throw new Error("external literature is temporarily unavailable");
     }
   });
 
@@ -694,7 +776,7 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
       status: 200
     }),
     importedChunksByPaperId: {
-      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
         page: index + 1,
         paperId: "demo-1",
         paperTitle: "Planning Paper",
@@ -792,6 +874,10 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
   expect(prompts[2]).not.toContain("Evidence summary 8");
   expect(prompts[3]).toContain("证据复核 Agent");
   expect(prompts[4]).toContain("薄读证据复核未通过");
+  expect(prompts[4]).toContain("只允许修改这些失败句及依赖它们的 claims");
+  expect(prompts[4]).toContain("改写为绑定 evidence 直接蕴含的最小命题");
+  expect(prompts[4]).toContain("Evidence passage 1 describes the method and result");
+  expect(prompts[4]).toContain("必须原样保留的已通过句");
   expect(prompts[5]).toContain("证据复核 Agent");
   expect(result.thinReading?.evidencePlan).toMatchObject({ selectedEvidenceIds: plannedEvidenceIds });
   expect(result.thinReading?.evidenceLoop).toMatchObject({
@@ -799,6 +885,151 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
     stopReason: "observation_sufficient"
   });
   expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual(plannedEvidenceIds);
+});
+
+test("retries a cross-layer evidence ID with the current planning allowlist", async () => {
+  const store = createSettingsStore();
+  const planningPrompts: string[] = [];
+  let planningAttempts = 0;
+  let currentEvidenceIds: string[] = [];
+  const staleEvidenceId = "evidence-previous-layer-7f2e";
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
+        page: index + 1,
+        paperId: "demo-1",
+        paperTitle: "Branch Planning Paper",
+        snippet: `Branch evidence passage ${index + 1} describes the method mechanism.`,
+        summary: `Branch evidence summary ${index + 1} explains the method mechanism.`,
+        tags: ["branch", `signal-${index + 1}`]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据规划 Agent")) {
+        planningPrompts.push(prompt);
+        planningAttempts += 1;
+        currentEvidenceIds = [...prompt.matchAll(/\[(evidence-[^\]]+)\] p\.\d+/g)]
+          .slice(0, 2)
+          .map((match) => match[1]);
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              focus: ["核心机制"],
+              selectedEvidenceIds: planningAttempts === 1 ? [staleEvidenceId] : currentEvidenceIds
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据观察 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              decision: "stop",
+              focus: [],
+              pageRequests: [],
+              reason: "首轮观察已覆盖本次下钻所需的直接证据。",
+              searchQueries: [],
+              selectedEvidenceIds: []
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "每个句子均由本轮指定证据直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const summary = "该段方法的核心机制由本轮多条直接论文证据共同支持。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [currentEvidenceIds[0]], status: "grounded", text: "该段方法由直接证据支持。" }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: currentEvidenceIds,
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{ evidenceIds: [currentEvidenceIds[0]], externalKnowledge: [], status: "grounded", text: summary }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "解释选中段落的机制",
+    selectedPapers: [{ id: "demo-1", title: "Branch Planning Paper" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-stale-evidence-plan",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentClaims: [{
+        evidenceIds: [staleEvidenceId],
+        id: "thin-reading-claim-previous-layer",
+        status: "grounded",
+        text: "上一层给出了待细化的机制判断。"
+      }],
+      parentEvidenceSpans: [{
+        chunkId: "demo-1:previous-layer:chunk-1",
+        confidence: 0.9,
+        id: staleEvidenceId,
+        page: 2,
+        paperId: "demo-1",
+        quote: "Previous-layer evidence quote."
+      }],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "Branch Planning Paper",
+      source: {
+        evidenceIds: [staleEvidenceId],
+        excerpt: "待细化的机制判断",
+        kind: "selected_text"
+      },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(planningAttempts).toBe(2);
+  expect(planningPrompts).toHaveLength(2);
+  expect(planningPrompts[0]).not.toContain(staleEvidenceId);
+  expect(planningPrompts[0]).not.toContain("thin-reading-claim-previous-layer");
+  expect(planningPrompts[0]).not.toContain("demo-1:previous-layer:chunk-1");
+  expect(planningPrompts[1]).toContain("上一轮证据规划返回了本轮目录之外的 evidence ID");
+  expect(planningPrompts[1]).toContain("本轮唯一允许的 evidence ID");
+  expect(planningPrompts[1]).not.toContain(staleEvidenceId);
+  expect(result.thinReading?.evidencePlan?.selectedEvidenceIds).toEqual(currentEvidenceIds);
+  expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual(currentEvidenceIds);
 });
 
 test("executes a bounded second evidence-tool round after observing a concrete gap", async () => {
@@ -809,7 +1040,7 @@ test("executes a bounded second evidence-tool round after observing a concrete g
     artifactType: "thin_reading",
     auditTransport: async () => ({ json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }), ok: true, status: 200 }),
     importedChunksByPaperId: {
-      "demo-1": Array.from({ length: 8 }, (_, index) => ({
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
         page: index + 1,
         paperId: "demo-1",
         paperTitle: "Tool Loop Paper",
@@ -1247,6 +1478,20 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     modelTransport: async (request) => {
       modelRequestBody = request.body;
       modelPrompt = String(JSON.parse(request.body).prompt);
+      if (modelPrompt.includes("薄读的证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "外部句由绑定来源摘要直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
       return {
         json: async () => ({
           answer: JSON.stringify({
@@ -1319,25 +1564,408 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     }
   });
 
-  expect(externalRequests).toHaveLength(1);
+  expect(externalRequests).toHaveLength(3);
   expect(progressSummaries).toContain("正在复用已验证的外部文献来源");
-  expect(JSON.parse(externalRequests[0].body)).toMatchObject({
+  const externalBodies = externalRequests.map((request) => JSON.parse(request.body));
+  expect(externalBodies[0]).toMatchObject({
+    limit: 32,
     targetPaperIdentity: {
       kind: "local_paper_id",
       value: "demo-1"
     }
   });
-  expect(externalRequests[0].url).toContain("/v1/research/external-knowledge");
-  expect(externalRequests[0].headers).toMatchObject({ "X-OpenAlex-Api-Key": "user-openalex-key" });
-  expect(externalRequests[0].body).not.toContain("user-openalex-key");
+  expect(externalBodies.slice(1).map((body) => body.limit)).toEqual([12, 12]);
+  expect(externalBodies.map((body) => body.includeArxiv)).toEqual([true, false, false]);
+  expect(externalBodies.map((body) => body.query)).toEqual(expect.arrayContaining([
+    expect.stringContaining("conflicting results"),
+    expect.stringContaining("follow-up research")
+  ]));
+  expect(externalRequests.every((request) => request.url.includes("/v1/research/external-knowledge"))).toBe(true);
+  expect(externalRequests.every((request) => request.headers["X-OpenAlex-Api-Key"] === "user-openalex-key")).toBe(true);
+  expect(externalRequests.every((request) => !request.body.includes("user-openalex-key"))).toBe(true);
   expect(modelRequestBody).not.toContain("user-openalex-key");
   expect(modelPrompt).toContain("openalex:W42");
   expect(modelPrompt).toContain("Efficient Multi-vector Retrieval");
   expect(result.thinReading?.rootSeed.evidence.externalSources?.[0]).toMatchObject({
+    evidenceBasis: "abstract",
     id: "openalex:W42",
+    retrievalIntents: ["support", "challenge", "context"],
     url: "https://openalex.org/W42"
   });
   expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
+});
+
+test("drops an unsupported external-only sentence when external expansion was automatic", async () => {
+  const store = createSettingsStore();
+  const generationPrompts: string[] = [];
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "CoreNEURON",
+        snippet: "CoreNEURON accelerates the Cortex model by two to four times.",
+        summary: "CoreNEURON 将 Cortex 模型加速 2-4 倍。",
+        tags: ["CoreNEURON", "Cortex"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        reviewAttempts += 1;
+        const externalSentenceLine = prompt.split("\n").find((line) => line.includes("external=openalex:W42"));
+        const unsupportedSentenceId = externalSentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(reviewAttempts === 1
+              ? {
+                  reason: "外部来源摘要没有提及可塑性，不能支持该句。",
+                  unsupportedSentenceIds: [unsupportedSentenceId],
+                  verdict: "fail"
+                }
+              : {
+                  reason: "删除无支持的外部句后，其余句均由论文证据直接支持。",
+                  unsupportedSentenceIds: [],
+                  verdict: "pass"
+                }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationPrompts.push(prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const paperSentence = "论文证据显示，CoreNEURON 将 Cortex 模型加速 2-4 倍。";
+      const externalSentence = "主题检索提示可塑性与学习理论相关，但本文不深入探讨。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: paperSentence }],
+            externalKnowledge: ["openalex:W42"],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "benchmark",
+            recommendations: [],
+            summary: `${paperSentence}${externalSentence}`,
+            summarySentences: [
+              { evidenceIds: [evidenceId], externalKnowledge: [], status: "grounded", text: paperSentence },
+              { evidenceIds: [], externalKnowledge: ["openalex:W42"], status: "weak", text: externalSentence }
+            ],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "CoreNEURON" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-external-fallback",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: true,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "CoreNEURON",
+      source: { kind: "selected_text", excerpt: "Cortex 模型性能" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({
+        provider: "openalex",
+        query: "CoreNEURON Cortex 模型性能",
+        sources: [{
+          abstract: "A general theory of efficient learning systems.",
+          authors: ["A. Author"],
+          id: "openalex:W42",
+          provider: "openalex",
+          relation: "topic_search",
+          relevance: 0.61,
+          retrievalQuery: "CoreNEURON Cortex 模型性能",
+          sourceRecordUrl: "https://openalex.org/W42",
+          sourceId: "W42",
+          title: "Efficient Learning Systems",
+          url: "https://openalex.org/W42",
+          year: 2024
+        }],
+        status: "available"
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  expect(generationPrompts).toHaveLength(1);
+  expect(reviewAttempts).toBe(2);
+  expect(result.thinReading?.rootSeed.summary).not.toContain("可塑性");
+  expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual([]);
+  expect(result.thinReading?.rootSeed.evidence.externalSources).toEqual([]);
+  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(true);
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 1, repaired: true });
+});
+
+test("replaces one unsupported required external source with a focused retrieval", async () => {
+  const store = createSettingsStore();
+  const externalQueries: string[] = [];
+  const generationPrompts: string[] = [];
+  let generationAttempts = 0;
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const externalSource = (id: string, title: string, abstract: string) => ({
+    abstract,
+    authors: ["A. Author"],
+    id: `openalex:${id}`,
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: `https://openalex.org/${id}`,
+    sourceId: id,
+    title,
+    url: `https://openalex.org/${id}`,
+    year: 2025
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        reviewAttempts += 1;
+        const sourceId = reviewAttempts === 1 ? "openalex:W1" : "openalex:W2";
+        const sentenceLine = prompt.split("\n").find((line) => line.includes(`external=${sourceId}`));
+        const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(reviewAttempts === 1
+              ? {
+                  reason: "初始外部来源只涉及相邻主题，不能支持后续研究的具体命题。",
+                  unsupportedSentenceIds: [sentenceId],
+                  verdict: "fail"
+                }
+              : {
+                  reason: "替代来源摘要直接支持该外部句。",
+                  unsupportedSentenceIds: [],
+                  verdict: "pass"
+                }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationAttempts += 1;
+      generationPrompts.push(prompt);
+      const sourceId = generationAttempts === 1 ? "openalex:W1" : "openalex:W2";
+      const text = generationAttempts === 1
+        ? "初始线索讨论相邻主题，但不能据此断言后续研究的具体改进。"
+        : "后续研究将 late interaction 扩展为更高效的多向量检索。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [sourceId],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: text,
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [sourceId],
+              status: "weak",
+              text
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-external-recovery",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "selected_text", excerpt: "论文外的后续研究" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async (request) => {
+      externalQueries.push(JSON.parse(request.body).query);
+      const source = externalQueries.length <= 3
+        ? externalSource("W1", "Adjacent Retrieval Topic", "A study about a neighboring retrieval topic.")
+        : externalSource("W2", "Efficient Multi-vector Retrieval", "This follow-up study extends late interaction with a more efficient multi-vector retrieval method.");
+      return {
+        json: async () => ({ provider: "openalex", query: "external", sources: [source], status: "available" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalQueries).toHaveLength(4);
+  expect(externalQueries[3]).toContain("direct evidence for the requested claim");
+  expect(generationPrompts).toHaveLength(2);
+  expect(generationPrompts[1]).toContain("openalex:W2");
+  expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual(["openalex:W2"]);
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 2, repaired: true });
+});
+
+test("returns a closure boundary when a required external claim has no replacement evidence", async () => {
+  const store = createSettingsStore();
+  let externalRequests = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const unsupportedSource = {
+    abstract: "A study about a neighboring retrieval topic.",
+    authors: ["A. Author"],
+    id: "openalex:W1",
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: "https://openalex.org/W1",
+    sourceId: "W1",
+    title: "Adjacent Retrieval Topic",
+    url: "https://openalex.org/W1",
+    year: 2025
+  };
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        const sentenceLine = prompt.split("\n").find((line) => line.includes("external=openalex:W1"));
+        const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该来源只涉及相邻主题，不能直接支持所问外部命题。",
+              unsupportedSentenceIds: [sentenceId],
+              verdict: "fail"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: ["openalex:W1"],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: ["openalex:W1"],
+              status: "weak",
+              text: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-external-boundary",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "selected_text", excerpt: "论文外的后续研究" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRequests += 1;
+      return {
+        json: async () => ({ provider: "openalex", query: "external", sources: [unsupportedSource], status: "available" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalRequests).toBe(4);
+  expect(result.thinReading?.rootSeed.summary).toContain("未找到能直接支持");
+  expect(result.thinReading?.rootSeed.closureState).toBe("near_boundary");
+  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(true);
+  expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual([]);
 });
 
 test("keeps a selected canonical external source available when a follow-up lookup is empty", async () => {
@@ -1383,6 +2011,20 @@ test("keeps a selected canonical external source available when a follow-up look
     mode: "qa",
     modelTransport: async (request) => {
       modelPrompt = String(JSON.parse(request.body).prompt);
+      if (modelPrompt.includes("薄读的证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "外部句由绑定来源摘要直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
       return {
         json: async () => ({
           answer: JSON.stringify({
@@ -1482,6 +2124,6 @@ test("stops beyond-paper generation when external retrieval returns no sources",
       ok: true,
       status: 200
     })
-  })).rejects.toThrow("闭包外生成已停止");
+  })).rejects.toThrow("未检索到可信、可追溯的外部文献");
   expect(modelCalls).toBe(0);
 });

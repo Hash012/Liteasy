@@ -93,6 +93,7 @@ type UseArtifactActionsInput = {
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
+  getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getIntuechoEndpoint?: () => string;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -101,6 +102,7 @@ type UseArtifactActionsInput = {
     model?: string;
     provider?: string;
   };
+  getPaperById?: (paperId: string) => Paper | undefined;
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
   onAnalysisHint: (message: string) => void;
@@ -154,8 +156,24 @@ function createArtifactId(taskId: string) {
   return taskId.replace("artifact-task-", "artifact-");
 }
 
-function buildFailureRecovery(message: string) {
+function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
   const normalized = message.toLowerCase();
+  if (
+    normalized.includes("文本索引") ||
+    normalized.includes("重新导入来源 pdf") ||
+    failedStage === "thin_reading_parsing_document"
+  ) {
+    return [
+      "确认来源 PDF 仍位于当前本地文献库中，然后重新执行导入。",
+      "若 PDF 没有文字层，请检查 OCR 语言设置并查看导入阶段返回的具体页码错误。"
+    ];
+  }
+  if (normalized.includes("证据复核未通过")) {
+    return [
+      "绑定来源的标题或摘要未直接支持正文判断，系统已阻止保存该句。",
+      "重新生成以检索更直接的来源，或明确要求只使用目标论文内证据。"
+    ];
+  }
   if (normalized.includes("401") || normalized.includes("unauthorized") || normalized.includes("api key")) {
     return [
       "确认 project-docs/test-api.md 中的 API key 已同步到 dev-cloud/.env.local。",
@@ -167,6 +185,16 @@ function buildFailureRecovery(message: string) {
     normalized.includes("not found") ||
     normalized.includes("unsupported route")
   ) {
+    if (
+      failedStage === "thin_reading_retrieving_external_knowledge" ||
+      normalized.includes("外部文献检索") ||
+      normalized.includes("external-knowledge")
+    ) {
+      return [
+        "确认当前 dev-cloud 已提供 POST /v1/research/external-knowledge 路由。",
+        "完全停止并重新启动 dev-cloud；仅重启 Tauri 不会更新独立运行的 Node 服务。"
+      ];
+    }
     return [
       "确认上游地址支持 OpenAI Responses API 的 /responses 路由。",
       "确认 OPENAI_BASE_URL 只包含 API 根路径，例如以 /v1 结尾。"
@@ -252,6 +280,36 @@ function createRootThinReadingContext(input: {
     source: { kind: "root_overview" },
     targetLanguage: input.targetLanguage
   };
+}
+
+function isThinReadingBodyExcerpt(summary: string, excerpt: string) {
+  const normalizedSummary = summary.replace(/\s+/g, "").trim();
+  const normalizedExcerpt = excerpt.replace(/\s+/g, "").trim();
+  return normalizedExcerpt.length > 0 && normalizedSummary.includes(normalizedExcerpt);
+}
+
+function isThinReadingOmittedSectionSource(
+  node: ThinReadingDocument["nodes"][string],
+  source: ThinReadingBranchSource
+) {
+  return source.kind === "omitted_section" && node.omittedSections.some((section) => (
+    section.sectionKey === source.sectionKey && section.label === source.label
+  ));
+}
+
+function thinReadingAncestorSummaries(
+  document: ThinReadingDocument,
+  nodeId: string
+): NonNullable<ThinReadingGenerationContext["ancestorSummaries"]> {
+  const path: Array<NonNullable<ThinReadingGenerationContext["ancestorSummaries"]>[number]> = [];
+  const visited = new Set<string>();
+  let node: ThinReadingDocument["nodes"][string] | undefined = document.nodes[nodeId];
+  while (node && !visited.has(node.id)) {
+    path.unshift({ nodeId: node.id, summary: node.summary, title: node.title });
+    visited.add(node.id);
+    node = node.parentId ? document.nodes[node.parentId] : undefined;
+  }
+  return path;
 }
 
 function thinReadingTitleForSource(source: ThinReadingBranchSource, targetLanguage: string) {
@@ -361,10 +419,12 @@ export function useArtifactActions({
   confirmDuplicateGeneration = confirmDuplicateGenerationInBrowser,
   cancelAgentRun,
   getImportedChunksByPaperId,
+  getImportedChunksForPaperId,
   getIntuechoEndpoint,
   getAssistantLanguage,
   getActiveReaderPaper,
   getModelDiagnosticContext,
+  getPaperById,
   getSelectedDocumentSet,
   getSelectedPapers,
   onAnalysisHint,
@@ -378,6 +438,55 @@ export function useArtifactActions({
     onArtifactTasksChanged(artifactStore.getTasks().map((task) => ({ ...task })));
     onArtifactCatalogChanged(artifactStore.getCatalog());
     onArtifactTabsChanged([...artifactStore.getOpenTabs()]);
+  }
+
+  function importedChunksForPaper(paperId: string) {
+    return getImportedChunksForPaperId?.(paperId) ??
+      getImportedChunksByPaperId()[paperId] ??
+      [];
+  }
+
+  async function ensureThinReadingPaperImported(paper: Paper) {
+    if (importedChunksForPaper(paper.id).length > 0) {
+      return;
+    }
+    if (!paper.sourcePath) {
+      throw new Error(
+        `《${paper.title}》缺少本地 PDF 路径，无法重新建立薄读文本索引。请在文献库中重新导入该 PDF。`
+      );
+    }
+
+    onAnalysisHint(`《${paper.title}》的薄读文本索引已失效，正在从原 PDF 自动重新建立。`);
+    await new Promise<void>((resolve, reject) => {
+      const status = queueImportForPapers(
+        [paper],
+        resolve,
+        ({ error }) => reject(new Error(
+          `《${paper.title}》重新建立薄读文本索引失败：${error.message}`
+        ))
+      );
+      if (status === "already_imported") {
+        if (importedChunksForPaper(paper.id).length > 0) {
+          resolve();
+        } else {
+          reject(new Error(
+            `《${paper.title}》的导入记录不包含可引用文本，请重新导入该 PDF。`
+          ));
+        }
+      } else if (status === "importing") {
+        reject(new Error(
+          `《${paper.title}》正在建立文本索引，请等待导入完成后重试。`
+        ));
+      } else if (status === "idle") {
+        reject(new Error(`无法为《${paper.title}》启动 PDF 文本索引。`));
+      }
+    });
+
+    if (importedChunksForPaper(paper.id).length === 0) {
+      throw new Error(
+        `《${paper.title}》导入完成，但没有生成可引用文本索引。请检查 PDF 解析结果后重试。`
+      );
+    }
   }
 
   async function startArtifactTask(
@@ -629,12 +738,13 @@ export function useArtifactActions({
       const currentTask = artifactStore.getTask(taskId);
       const message = error instanceof Error ? error.message : String(error);
       const modelContext = getModelDiagnosticContext?.() ?? {};
+      const failedStage = currentTask?.stage ?? "generating_answer";
       artifactStore.failTask(taskId, {
         ...modelContext,
-        failedStage: currentTask?.stage ?? "generating_answer",
+        failedStage,
         message,
         occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message)
+        recovery: buildFailureRecovery(message, failedStage)
       });
       syncArtifacts(taskId);
       onAnalysisHint(`Agent 分析失败：${message}`);
@@ -962,6 +1072,11 @@ export function useArtifactActions({
         : undefined
     };
     const activeNode = scopedDocument.nodes[scopedDocument.activeNodeId] ?? scopedDocument.nodes[scopedDocument.rootNodeId];
+    const validBodySelection = source.kind === "selected_text" &&
+      isThinReadingBodyExcerpt(activeNode.summary, source.excerpt);
+    if (!validBodySelection && !isThinReadingOmittedSectionSource(activeNode, source)) {
+      throw new Error("薄读只能从当前层正文选区或当前层列出的未覆盖模块继续深入。");
+    }
     const existingChild = findThinReadingChildBySource(scopedDocument, activeNode.id, source);
     if (existingChild) {
       updateThinReadingDocument(artifactId, {
@@ -970,11 +1085,20 @@ export function useArtifactActions({
       });
       return;
     }
-    const primaryPaper = (existing.papers ?? []).find((paper) => paper.id === primaryPaperId);
-    if (!primaryPaper) {
+    const persistedPaper = (existing.papers ?? []).find((paper) => paper.id === primaryPaperId);
+    if (!persistedPaper) {
       throw new Error("该薄读产物缺少来源论文，无法继续生成下一层。");
     }
-    const papers = [{ id: primaryPaper.id, title: primaryPaper.title }] as Paper[];
+    const activeReaderPaper = getActiveReaderPaper?.();
+    const primaryPaper = getPaperById?.(primaryPaperId) ??
+      getSelectedPapers().find((paper) => paper.id === primaryPaperId) ??
+      (activeReaderPaper?.id === primaryPaperId ? activeReaderPaper : undefined);
+    if (!primaryPaper) {
+      throw new Error(
+        `《${persistedPaper.title}》已不在当前文献库中，无法重新建立薄读文本索引。请重新导入原 PDF。`
+      );
+    }
+    const papers = [{ id: persistedPaper.id, title: persistedPaper.title }] as Paper[];
     const selectedExternalSources = source.kind === "selected_text" && source.externalSourceIds?.length
       ? (activeNode.evidence.externalSources ?? []).filter((externalSource) => (
         source.externalSourceIds?.includes(externalSource.id)
@@ -997,9 +1121,24 @@ export function useArtifactActions({
       artifactId,
       ...(recoverySnapshot ? { thinReadingBranchRecovery: recoverySnapshot } : {})
     });
+    syncArtifacts(taskId);
+    try {
+      await ensureThinReadingPaperImported(primaryPaper);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      artifactStore.failTask(taskId, {
+        failedStage: "thin_reading_parsing_document",
+        message,
+        occurredAt: new Date().toISOString(),
+        recovery: buildFailureRecovery(message, "thin_reading_parsing_document")
+      });
+      syncArtifacts(taskId);
+      throw error;
+    }
     artifactStore.startTask(taskId);
     syncArtifacts(taskId);
     const context: ThinReadingGenerationContext = {
+      ancestorSummaries: thinReadingAncestorSummaries(scopedDocument, activeNode.id),
       artifactId,
       depth: activeNode.depth + 1,
       paperIds: [primaryPaperId],
@@ -1095,12 +1234,13 @@ export function useArtifactActions({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const modelContext = getModelDiagnosticContext?.() ?? {};
+      const failedStage = artifactStore.getTask(taskId)?.stage ?? "generating_answer";
       artifactStore.failTask(taskId, {
         ...modelContext,
-        failedStage: artifactStore.getTask(taskId)?.stage ?? "generating_answer",
+        failedStage,
         message,
         occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message)
+        recovery: buildFailureRecovery(message, failedStage)
       });
       syncArtifacts(taskId);
       onAnalysisHint(`薄读下一层生成失败：${message}`);

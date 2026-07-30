@@ -74,6 +74,45 @@ describe("artifactLocalRepository", () => {
     ]);
   });
 
+  test("removes legacy local recommendation leads when restoring thin-reading documents", async () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-legacy-lead",
+      papers: [{ id: "paper-1", title: "Paper one" }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "A traceable summary.",
+        withinPaperClosure: true
+      },
+      targetLanguage: "en-US"
+    });
+    const cachedDocument = JSON.parse(JSON.stringify(document)) as typeof document;
+    cachedDocument.nodes[cachedDocument.rootNodeId].recommendations = [{
+      compatibility: 0.82,
+      id: "legacy-local-lead",
+      note: "旧模型生成的本地联想。",
+      relationship: "方法与问题设定",
+      source: "local_agent_lead"
+    }];
+    const repository = createArtifactLocalRepository({
+      load: vi.fn(async () => ({
+        artifacts: [{
+          artifactId: document.artifactId,
+          thinReadingDocument: cachedDocument,
+          title: "Thin reading",
+          type: "thin_reading"
+        }],
+        savedAt: "2026-07-29T00:00:00.000Z",
+        version: "liteasy.artifact-catalog/v1"
+      })),
+      save: vi.fn(async () => undefined)
+    });
+
+    const [restored] = await repository.list();
+    expect(restored.thinReadingDocument?.nodes[document.rootNodeId].recommendations).toEqual([]);
+  });
+
   test("restores a valid persisted generation audit and rejects forged evidence-plan provenance", async () => {
     const document = createThinReadingDocument({
       artifactId: "artifact-thin-audit-cache",

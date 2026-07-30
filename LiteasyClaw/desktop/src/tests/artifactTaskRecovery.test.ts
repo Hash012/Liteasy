@@ -155,4 +155,25 @@ describe("artifactTaskRecovery", () => {
       reason: "原分支引用的论文证据已变化。"
     });
   });
+
+  test("persists an omitted-section branch only while it remains on the parent page", () => {
+    const document = createDocument();
+
+    const snapshot = createThinReadingBranchRecoverySnapshot({
+      artifactId: document.artifactId,
+      document,
+      parentNodeId: document.rootNodeId,
+      primaryPaperId: "paper-1",
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiments" }
+    });
+
+    expect(validateThinReadingBranchRecoverySnapshot(snapshot, document)).toEqual({ valid: true });
+    expect(validateThinReadingBranchRecoverySnapshot({
+      ...snapshot,
+      source: { kind: "omitted_section", label: "伪造板块", sectionKey: "forged" }
+    }, document)).toEqual({
+      valid: false,
+      reason: "原未覆盖模块已不在父页面的可深入列表中。"
+    });
+  });
 });

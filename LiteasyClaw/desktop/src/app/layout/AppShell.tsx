@@ -240,6 +240,8 @@ export function AppShell({
         : null;
     },
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
+    getImportedChunksForPaperId: (paperId) =>
+      importStoreRef.current.getParsedChunksByDocumentId(paperId),
     getIntuechoEndpoint: () => settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"],
     getModelDiagnosticContext: () => {
       const provider = settingsStoreRef.current.getState()["models.default_provider"];
@@ -249,6 +251,8 @@ export function AppShell({
         provider
       };
     },
+    getPaperById: (paperId) =>
+      workspaceStoreRef.current.getState().papers.find((paper) => paper.id === paperId),
     getSelectedDocumentSet: () => workspaceStoreRef.current.getSelectedDocumentSet(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
     onAnalysisHint: setAnalysisHint,
@@ -1013,6 +1017,7 @@ export function AppShell({
           canStartAnalysis={
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
           }
+          intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
           }}

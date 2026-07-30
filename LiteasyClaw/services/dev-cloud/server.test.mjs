@@ -127,6 +127,7 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
               DOI: "10.1000/crossref-only",
               abstract: "<jats:p>ColBERT retrieval replication.</jats:p>",
               author: [{ family: "Researcher", given: "Casey" }],
+              link: [{ "content-type": "application/pdf", URL: "https://example.org/crossref-only.pdf" }],
               title: ["ColBERT retrieval replication"]
             }]
           }
@@ -151,7 +152,9 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     abstract: "ColBERT retrieval replication.",
     authors: ["Casey Researcher"],
     doi: "https://doi.org/10.1000/crossref-only",
+    fullTextUrl: "https://example.org/crossref-only.pdf",
     id: "crossref:10.1000/crossref-only",
+    openAccessAvailable: true,
     provider: "crossref",
     relation: "topic_search",
     relevance: response.json.sources[0].relevance,
@@ -162,6 +165,99 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     url: "https://doi.org/10.1000/crossref-only"
   });
   assert.equal(response.json.retrieval.status, "completed");
+});
+
+test("uses traceable arXiv topic results for thin-reading external knowledge", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "thin-reading-arxiv-only",
+      query: "neural retrieval systems",
+      targetPaperTitle: "Target Paper"
+    }),
+    handler: createDevCloudRequestHandler({
+      arxivEnabled: true,
+      arxivTransport: async () => ({
+        ok: true,
+        status: 200,
+        text: async () => `<feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <id>https://arxiv.org/abs/2401.01234v2</id>
+            <published>2024-01-03T00:00:00Z</published>
+            <title>Efficient Neural Retrieval Systems</title>
+            <summary>This preprint reports a bounded and traceable neural retrieval method.</summary>
+            <author><name>Ada Researcher</name></author>
+          </entry>
+        </feed>`
+      }),
+      crossrefEnabled: false
+    }),
+    headers: { "content-type": "application/json", "x-openalex-api-key": "" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(response.json.provider, "arxiv");
+  assert.equal(response.json.sources[0].id, "arxiv:2401.01234");
+  assert.equal(response.json.sources[0].fullTextUrl, "https://arxiv.org/pdf/2401.01234");
+  assert.equal(response.json.sources[0].sourceRecordUrl, "https://arxiv.org/abs/2401.01234");
+});
+
+test("allows secondary thin-reading retrievals to opt out of the rate-limited arXiv route", async () => {
+  let arxivCalls = 0;
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "thin-reading-secondary-no-arxiv",
+      includeArxiv: false,
+      query: "replication limitations"
+    }),
+    handler: createDevCloudRequestHandler({
+      arxivEnabled: true,
+      arxivTransport: async () => {
+        arxivCalls += 1;
+        throw new Error("arXiv should be skipped for secondary intent");
+      },
+      crossrefEnabled: false,
+      openAlexTransport: async () => ({
+        json: async () => ({ results: [] }),
+        ok: true,
+        status: 200
+      })
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(response.json.status, "empty");
+  assert.equal(arxivCalls, 0);
+});
+
+test("returns only a validated external PDF with content-addressed provenance", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      sourceId: "openalex:W42",
+      url: "https://papers.example.test/paper.pdf"
+    }),
+    handler: createDevCloudRequestHandler({
+      externalPdfResolver: async () => [{ address: "93.184.216.34", family: 4 }],
+      externalPdfTransport: async () => new Response(Buffer.from("%PDF-1.7\nverified"), {
+        headers: { "content-type": "application/pdf" },
+        status: 200
+      })
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-pdf"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.sourceId, "openalex:W42");
+  assert.equal(response.json.finalUrl, "https://papers.example.test/paper.pdf");
+  assert.equal(response.json.byteLength, 17);
+  assert.equal(response.json.contentHash.length, 64);
+  assert.equal(Buffer.from(response.json.bytesBase64, "base64").toString("ascii"), "%PDF-1.7\nverified");
 });
 
 test("does not degrade to Crossref-only sources when the configured OpenAlex key is rejected", async () => {
@@ -247,6 +343,7 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/recommendations",
     "POST /v1/recommendations/feedback",
     "POST /v1/research/external-knowledge",
+    "POST /v1/research/external-pdf",
     "POST /v1/profile/get",
     "POST /v1/profile/save",
     "POST /v1/profile/clear",
@@ -374,7 +471,10 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
                 display_name: "Multi-vector dense retrieval after ColBERT",
                 doi: "https://doi.org/10.1000/example",
                 id: "https://openalex.org/W123456789",
-                primary_location: { landing_page_url: "https://example.org/paper" },
+                primary_location: {
+                  landing_page_url: "https://example.org/paper",
+                  pdf_url: "https://example.org/paper.pdf"
+                },
                 publication_year: 2025
               },
               {
@@ -402,7 +502,9 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
       abstract: "Multi-vector dense retrieval",
       authors: ["Jane Researcher"],
       doi: "https://doi.org/10.1000/example",
+      fullTextUrl: "https://example.org/paper.pdf",
       id: "openalex:W123456789",
+      openAccessAvailable: true,
       provider: "openalex",
       relation: "topic_search",
       relevance: response.json.sources[0].relevance,
@@ -416,6 +518,73 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
   ]);
   assert.ok(response.json.sources[0].relevance > 0);
   assert.ok(response.json.sources[0].relevance <= 1);
+});
+
+test("retrieves up to 32 external candidates before generation-side narrowing", async () => {
+  const requestedUrls = [];
+  const response = await invokeHandler({
+    body: JSON.stringify({ limit: 100, query: "retrieval candidate" }),
+    handlerOptions: {
+      crossrefEnabled: false,
+      openAlexTransport: async (url) => {
+        requestedUrls.push(url);
+        return {
+          json: async () => ({
+            results: Array.from({ length: 40 }, (_, index) => ({
+              abstract_inverted_index: { candidate: [1], retrieval: [0] },
+              display_name: `Retrieval candidate ${index}`,
+              id: `https://openalex.org/W${1000 + index}`
+            }))
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.sources.length, 32);
+  assert.equal(new URL(requestedUrls[0]).searchParams.get("per-page"), "33");
+});
+
+test("diversifies near-duplicate external candidates with an MMR-style penalty", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ limit: 3, query: "retrieval methods" }),
+    handlerOptions: {
+      crossrefEnabled: false,
+      openAlexTransport: async () => ({
+        json: async () => ({ results: [
+          {
+            abstract_inverted_index: { benchmark: [2], dense: [0], methods: [4], retrieval: [1], repeated: [3] },
+            display_name: "Dense retrieval benchmark repeated methods",
+            id: "https://openalex.org/W8101"
+          },
+          {
+            abstract_inverted_index: { benchmark: [2], dense: [0], methods: [4], retrieval: [1], repeated: [3] },
+            display_name: "Dense retrieval benchmark repeated methods extension",
+            id: "https://openalex.org/W8102"
+          },
+          {
+            abstract_inverted_index: { compression: [2], methods: [4], multilingual: [0], retrieval: [1], survey: [3] },
+            display_name: "Multilingual retrieval compression survey methods",
+            id: "https://openalex.org/W8103"
+          }
+        ] }),
+        ok: true,
+        status: 200
+      })
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json.sources.map((source) => source.sourceId), ["W8101", "W8103", "W8102"]);
 });
 
 test("merges Crossref topic results without inventing graph relations or duplicating a DOI", async () => {

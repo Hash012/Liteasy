@@ -143,6 +143,7 @@ export function ReaderPane({
               <ArtifactTabs
                 analysisHint={analysisHint}
                 canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
+                intuechoEndpoint={intuechoEndpoint}
                 onDynamicAction={onArtifactDynamicAction}
                 onGenerateThinReadingBranch={onGenerateThinReadingBranch}
                 onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}

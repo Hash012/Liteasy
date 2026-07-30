@@ -842,6 +842,54 @@ test("opens a full thin-reading tab from the floating modality launcher", async 
   const user = userEvent.setup();
   const modelTransport = vi.fn(async (request) => {
     const body = JSON.parse(request.body) as { prompt?: string };
+    if (body.prompt?.includes("薄读的证据规划 Agent")) {
+      const evidenceIds = [...body.prompt.matchAll(/\[(evidence-[^\]]+)\]/g)]
+        .map((match) => match[1]);
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            focus: ["核心贡献与机制"],
+            pageRequests: [],
+            searchQueries: [],
+            selectedEvidenceIds: [...new Set(evidenceIds)].slice(0, 8)
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+    if (body.prompt?.includes("薄读的证据观察 Agent")) {
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            decision: "stop",
+            focus: [],
+            pageRequests: [],
+            reason: "已观察证据足以支撑核心贡献与机制。",
+            searchQueries: [],
+            selectedEvidenceIds: []
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+    if (body.prompt?.includes("薄读的证据复核 Agent")) {
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            reason: "每个句子均由指定 evidence 直接支持。",
+            unsupportedSentenceIds: [],
+            verdict: "pass"
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
     if (body.prompt?.includes("Liteasy 薄读 Agent")) {
       const evidenceId = body.prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       const thinReadingAnswer = JSON.stringify({

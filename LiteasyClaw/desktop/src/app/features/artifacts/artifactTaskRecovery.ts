@@ -11,6 +11,8 @@ const storageKey = "liteasy.artifact-task-recovery/v1";
 const maxExcerptLength = 6000;
 const maxPromptLength = 1200;
 const maxSourceReferenceCount = 64;
+const maxSectionLabelLength = 96;
+const maxSectionKeyLength = 96;
 
 export type ThinReadingBranchRecoverySnapshot = {
   artifactId: string;
@@ -33,7 +35,9 @@ function isRecoverableBranchSource(value: unknown): value is ThinReadingBranchSo
   const source = value as Record<string, unknown>;
   if (source.kind === "omitted_section") {
     return typeof source.label === "string" && source.label.trim().length > 0 &&
-      typeof source.sectionKey === "string" && source.sectionKey.trim().length > 0;
+      source.label.length <= maxSectionLabelLength &&
+      typeof source.sectionKey === "string" && source.sectionKey.trim().length > 0 &&
+      source.sectionKey.length <= maxSectionKeyLength;
   }
   if (source.kind !== "selected_text" || typeof source.excerpt !== "string" ||
     source.excerpt.trim().length === 0 || source.excerpt.length > maxExcerptLength) return false;
@@ -75,14 +79,7 @@ export function createThinReadingBranchRecoverySnapshot(input: {
 
 function excerptIsAuditable(source: Extract<ThinReadingBranchSource, { kind: "selected_text" }>, parent: ThinReadingNode) {
   const text = source.excerpt.trim();
-  const candidates = [
-    parent.summary,
-    ...(parent.evidence.claims ?? []).map((claim) => claim.text),
-    ...(parent.evidence.summarySentences ?? []).map((sentence) => sentence.text),
-    ...(parent.evidence.paperEvidenceSpans ?? []).map((span) => span.quote),
-    ...(parent.evidence.externalSources ?? []).flatMap((externalSource) => [externalSource.title, externalSource.abstract])
-  ];
-  return candidates.some((candidate) => candidate.includes(text));
+  return parent.summary.replace(/\s+/g, "").includes(text.replace(/\s+/g, ""));
 }
 
 export function validateThinReadingBranchRecoverySnapshot(
@@ -102,9 +99,11 @@ export function validateThinReadingBranchRecoverySnapshot(
   }
   if (snapshot.source.kind === "omitted_section") {
     const source = snapshot.source;
-    return parent.omittedSections.some((section) =>
+    return parent.omittedSections.some((section) => (
       section.sectionKey === source.sectionKey && section.label === source.label
-    ) ? { valid: true } : { valid: false, reason: "原漏读段已不在父节点的可深入范围内。" };
+    ))
+      ? { valid: true }
+      : { valid: false, reason: "原未覆盖模块已不在父页面的可深入列表中。" };
   }
   const evidenceIds = new Set([...parent.evidence.paperEvidence, ...(parent.evidence.paperEvidenceSpans ?? []).map((span) => span.id)]);
   if ((snapshot.source.evidenceIds ?? []).some((id) => !evidenceIds.has(id))) {
@@ -116,7 +115,7 @@ export function validateThinReadingBranchRecoverySnapshot(
   }
   return excerptIsAuditable(snapshot.source, parent)
     ? { valid: true }
-    : { valid: false, reason: "原选区已无法在父节点的可审计内容中复核。" };
+    : { valid: false, reason: "原选区已无法在父节点正文中复核。" };
 }
 
 function isPersistedTask(value: unknown): value is PersistedTask {

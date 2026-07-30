@@ -41,6 +41,26 @@ test("frontend client creates a session and forwards stable events", async () =>
   ]);
 });
 
+test("frontend clients created for different conversations retain separate public sessions", async () => {
+  const client = createFrontendAgentClient(createApi());
+  const firstConversation = client.createSessionClient("assistant-pane:conversation-one");
+  const secondConversation = client.createSessionClient("assistant-pane:conversation-two");
+
+  await firstConversation.send({ message: "first question", mode: "qa" });
+  await secondConversation.send({ message: "second question", mode: "qa" });
+  await firstConversation.send({ message: "first follow-up", mode: "qa" });
+
+  expect(firstConversation.getSession()).toMatchObject({
+    clientSessionId: "assistant-pane:conversation-one",
+    status: "active"
+  });
+  expect(secondConversation.getSession()).toMatchObject({
+    clientSessionId: "assistant-pane:conversation-two",
+    status: "active"
+  });
+  expect(firstConversation.getSession()?.sessionId).not.toBe(secondConversation.getSession()?.sessionId);
+});
+
 test("CLI adapter emits JSONL events followed by the run snapshot", async () => {
   const api = createApi();
   const cli = createAgentCliAdapter(api);

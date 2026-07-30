@@ -17,6 +17,7 @@ describe("thinReadingExternalKnowledgeClient", () => {
           abstract: "A follow-up abstract.",
           authors: ["A. Author"],
           doi: "https://doi.org/10.1000/follow-up",
+          fullTextUrl: "https://example.org/follow-up.pdf",
           id: "openalex:W42",
           provider: "openalex",
           relation: "cites_target",
@@ -56,7 +57,10 @@ describe("thinReadingExternalKnowledgeClient", () => {
       },
       sources: [expect.objectContaining({
         doi: "https://doi.org/10.1000/follow-up",
+        evidenceBasis: "abstract",
+        fullTextUrl: "https://example.org/follow-up.pdf",
         id: "openalex:W42",
+        retrievalIntents: ["support"],
         sourceRecordUrl: "https://openalex.org/W42",
         sourceId: "W42",
         url: "https://openalex.org/W42"
@@ -69,7 +73,30 @@ describe("thinReadingExternalKnowledgeClient", () => {
       url: "https://liteasy.example.com/v1/research/external-knowledge"
     }));
     expect(String(transport.mock.calls[0][0].body)).toContain('"targetPaperIdentity":{"kind":"doi","value":"10.1000/colbert"}');
+    expect(JSON.parse(String(transport.mock.calls[0][0].body))).toMatchObject({
+      includeArxiv: true,
+      limit: 32
+    });
     expect(String(transport.mock.calls[0][0].body)).not.toContain("user-openalex-key");
+  });
+
+  test("skips rate-limited arXiv fan-out for secondary retrieval intents", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async (request) => {
+        requests.push(JSON.parse(request.body));
+        return { json: async () => ({ sources: [] }), ok: true, status: 200 };
+      }
+    });
+
+    await client({ artifactId: "artifact-intents", intent: "challenge", query: "failure cases" });
+    await client({ artifactId: "artifact-intents", intent: "context", query: "follow-up work" });
+
+    expect(requests).toEqual([
+      expect.objectContaining({ includeArxiv: false, query: "failure cases" }),
+      expect.objectContaining({ includeArxiv: false, query: "follow-up work" })
+    ]);
   });
 
   test("rejects malformed configured API keys before sending a retrieval request", async () => {
@@ -169,6 +196,79 @@ describe("thinReadingExternalKnowledgeClient", () => {
     await expect(client({ artifactId: "artifact-crossref", query: "replication" })).resolves.toMatchObject({
       sources: [expect.objectContaining({ id: "crossref:10.1000/crossref-only", relation: "topic_search" })]
     });
+  });
+
+  test("accepts a canonical arXiv preprint and preserves its explicit identity", async () => {
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async () => ({
+        json: async () => ({
+          sources: [{
+            abstract: "This preprint reports a reproducible method and enough detail for sentence-level review.",
+            arxivId: "2101.01234",
+            authors: ["A. Author"],
+            id: "arxiv:2101.01234",
+            provider: "arxiv",
+            relation: "topic_search",
+            relevance: 0.75,
+            retrievalQuery: "reproducible method",
+            sourceId: "2101.01234",
+            sourceRecordUrl: "https://arxiv.org/abs/2101.01234",
+            title: "A Reproducible Method",
+            url: "https://arxiv.org/abs/2101.01234"
+          }]
+        }),
+        ok: true,
+        status: 200
+      })
+    });
+
+    await expect(client({ artifactId: "artifact-arxiv", query: "reproducible method" }))
+      .resolves.toMatchObject({ sources: [expect.objectContaining({ provider: "arxiv" })] });
+  });
+
+  test("filters retracted records and records without reviewable source content", async () => {
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async () => ({
+        json: async () => ({
+          sources: [
+            {
+              abstract: "This abstract is long enough to inspect, but the bibliographic record is retracted.",
+              authors: ["R. Author"],
+              id: "openalex:W42",
+              isRetracted: true,
+              provider: "openalex",
+              relation: "related",
+              relevance: 0.8,
+              retrievalQuery: "test",
+              sourceId: "W42",
+              sourceRecordUrl: "https://openalex.org/W42",
+              title: "Retracted Work",
+              url: "https://example.org/retracted"
+            },
+            {
+              abstract: "Unavailable",
+              authors: ["N. Author"],
+              id: "openalex:W43",
+              provider: "openalex",
+              relation: "topic_search",
+              relevance: 0.7,
+              retrievalQuery: "test",
+              sourceId: "W43",
+              sourceRecordUrl: "https://openalex.org/W43",
+              title: "No Reviewable Abstract",
+              url: "https://example.org/no-abstract"
+            }
+          ]
+        }),
+        ok: true,
+        status: 200
+      })
+    });
+
+    await expect(client({ artifactId: "artifact-untrusted", query: "test" }))
+      .resolves.toMatchObject({ sources: [] });
   });
 
   test("stops before transport when the artifact boundary is invalid", async () => {

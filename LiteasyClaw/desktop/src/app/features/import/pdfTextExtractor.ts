@@ -30,6 +30,7 @@ export type PdfOcrLanguage = "chi_sim" | "eng" | "eng+chi_sim";
 export type PdfExtractionOptions = {
   createOcrWorker?: (language: string) => Promise<PdfOcrWorker>;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  ocrEnabled?: boolean;
   ocrLanguage?: PdfOcrLanguage;
 };
 
@@ -245,7 +246,7 @@ export async function extractPdfPages(
         scannedPageNumbers.push(pageNumber);
       }
     }
-    if (scannedPageNumbers.length > 0) {
+    if (scannedPageNumbers.length > 0 && options.ocrEnabled !== false) {
       let worker: PdfOcrWorker | null = null;
       try {
         worker = await (options.createOcrWorker ?? createPdfOcrWorker)(options.ocrLanguage ?? "eng");

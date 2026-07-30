@@ -11,6 +11,7 @@ export type ThinReadingExternalKnowledgeTransport = (request: {
 
 type SearchInput = {
   artifactId: string;
+  intent?: "challenge" | "context" | "support";
   limit?: number;
   query: string;
   signal?: AbortSignal;
@@ -20,6 +21,8 @@ type SearchInput = {
     value: string;
   };
 };
+
+export const thinReadingExternalCandidateLimit = 32;
 
 export type ThinReadingExternalRetrievalState = {
   attempts: number;
@@ -51,7 +54,15 @@ function isExternalSource(value: unknown): value is ThinReadingExternalSource {
     source.url === `https://doi.org/${crossrefDoi}` &&
     source.sourceRecordUrl === `https://api.crossref.org/works/${encodeURIComponent(crossrefDoi)}` &&
     source.relation === "topic_search";
-  return (isOpenAlex || isCrossref) &&
+  const arxivId = source.sourceId?.trim() ?? "";
+  const isArxiv = source.provider === "arxiv" &&
+    /^(?:[a-z-]+(?:\.[a-z]{2})?\/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?$/i.test(arxivId) &&
+    source.id === `arxiv:${arxivId}` &&
+    source.arxivId === arxivId &&
+    source.url === `https://arxiv.org/abs/${arxivId}` &&
+    source.sourceRecordUrl === source.url &&
+    source.relation === "topic_search";
+  return (isOpenAlex || isCrossref || isArxiv) &&
     typeof source.url === "string" && /^https:\/\//i.test(source.url) &&
     typeof source.title === "string" && source.title.trim().length > 0 &&
     typeof source.abstract === "string" &&
@@ -61,7 +72,14 @@ function isExternalSource(value: unknown): value is ThinReadingExternalSource {
       source.relation === "related" ||
       source.relation === "topic_search") &&
     typeof source.relevance === "number" && Number.isFinite(source.relevance) &&
+    (source.fullTextUrl === undefined || (typeof source.fullTextUrl === "string" && /^https:\/\//i.test(source.fullTextUrl))) &&
+    (source.isRetracted === undefined || typeof source.isRetracted === "boolean") &&
     typeof source.retrievalQuery === "string";
+}
+
+export function isTrustedThinReadingExternalSource(source: ThinReadingExternalSource) {
+  return source.isRetracted !== true &&
+    source.abstract.replace(/\s+/g, " ").trim().length >= 16;
 }
 
 function isRetrievalState(value: unknown): value is ThinReadingExternalRetrievalState {
@@ -100,7 +118,8 @@ export function createThinReadingExternalKnowledgeClient(input: {
     const response = await (input.transport ?? defaultTransport)({
       body: JSON.stringify({
         artifactId: search.artifactId,
-        limit: search.limit ?? 5,
+        includeArxiv: (search.intent ?? "support") === "support",
+        limit: search.limit ?? thinReadingExternalCandidateLimit,
         query: search.query,
         targetPaperIdentity: search.targetPaperIdentity,
         targetPaperTitle: search.targetPaperTitle
@@ -140,11 +159,17 @@ export function createThinReadingExternalKnowledgeClient(input: {
     ) {
       throw new Error("外部文献检索返回格式无效");
     }
+    const sources = payload.sources as ThinReadingExternalSource[];
     return {
       ...(isRetrievalState("retrieval" in payload ? payload.retrieval : undefined)
         ? { retrieval: payload.retrieval }
         : {}),
-      sources: payload.sources
+      sources: sources.filter(isTrustedThinReadingExternalSource).map((source) => ({
+        ...source,
+        evidenceBasis: "abstract" as const,
+        retrievalIntents: [search.intent ?? "support"],
+        retrievalQueries: [search.query]
+      }))
     };
   };
 }

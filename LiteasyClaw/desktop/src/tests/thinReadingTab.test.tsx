@@ -13,6 +13,7 @@ import {
 } from "../app/features/thin-reading/thinReadingProjection";
 import type { ThinReadingNodeSeed } from "../app/features/thin-reading/thinReading.types";
 import type { ThinReadingDocument } from "../app/features/thin-reading/thinReading.types";
+import type { ThinReadingCommunityRecommendationState } from "../app/features/thin-reading/useThinReadingCommunityRecommendations";
 
 function makeDocument(): ThinReadingDocument {
   return createThinReadingDocument(createThinReadingFixture());
@@ -22,11 +23,13 @@ function renderTab(
   document: ThinReadingDocument,
   onUpdateDocument = vi.fn(),
   onOpenEvidence?: Parameters<typeof ThinReadingTab>[0]["onOpenEvidence"],
-  onSyncIntuecho?: Parameters<typeof ThinReadingTab>[0]["onSyncIntuecho"]
+  onSyncIntuecho?: Parameters<typeof ThinReadingTab>[0]["onSyncIntuecho"],
+  communityRecommendationState?: ThinReadingCommunityRecommendationState
 ) {
   return render(
     <ThinReadingTab
       artifactId={document.artifactId}
+      communityRecommendationState={communityRecommendationState}
       document={document}
       onOpenEvidence={onOpenEvidence}
       onSyncIntuecho={onSyncIntuecho}
@@ -34,6 +37,25 @@ function renderTab(
       papers={createThinReadingFixture().papers}
     />
   );
+}
+
+function readyCommunityRecommendationState(): ThinReadingCommunityRecommendationState {
+  return {
+    recommendations: [{
+      compatibility: 0.82,
+      id: "community-recommendation-1",
+      note: "社区成员讨论了 self-attention 对并行化的影响。",
+      paperIdentity: {
+        id: "doi:10.48550/arxiv.1706.03762",
+        kind: "doi",
+        source: "metadata",
+        value: "10.48550/arxiv.1706.03762"
+      },
+      relationship: "方法与问题设定",
+      source: "intuecho_community"
+    }],
+    status: "ready"
+  };
 }
 
 afterEach(() => {
@@ -66,17 +88,41 @@ describe("ThinReadingTab", () => {
 
     renderTab(document, vi.fn(), vi.fn());
 
-    expect(screen.getByText("总述")).toBeInTheDocument();
+    expect(screen.getByText("总述", { selector: ".is-active" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
-    expect(screen.getByText("本地阅读线索")).toBeInTheDocument();
-    expect(screen.queryByText("社区共享批注")).not.toBeInTheDocument();
+    expect(screen.getByText("连接 Intuecho 社区后显示共享批注推荐")).toBeInTheDocument();
+    expect(screen.queryByText("本地阅读线索")).not.toBeInTheDocument();
     expect(screen.getByTestId("thin-reading-summary")).toHaveTextContent("self-attention");
     expect(screen.getByRole("button", { name: /打开证据句/ })).toHaveTextContent("证1");
     expect(screen.queryByText("依据")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /已由论文证据支撑/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "实验" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "实验" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "深入了解实验" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "深入了解局限" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
+  });
+
+  test("uses a declared omitted-module button as the complete branch topic", async () => {
+    const document = makeDocument();
+    const onGenerateBranch = vi.fn(async () => undefined);
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "深入了解实验" }));
+
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+    }));
   });
 
   test("labels recovered branch submission as a new model request", async () => {
@@ -138,7 +184,7 @@ describe("ThinReadingTab", () => {
     const { container } = renderTab(secondLevel);
 
     expect(screen.getByText("接近论文原文闭包")).toBeInTheDocument();
-    expect(container.querySelector(".thin-reading__article-meta")).toHaveTextContent("论文内证据");
+    expect(container.querySelector(".thin-reading__article-meta")).not.toBeInTheDocument();
     expect(screen.queryByText("已越出论文原文闭包")).not.toBeInTheDocument();
   });
 
@@ -249,7 +295,7 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("link", { name: "打开外部来源：A Follow-up Study" })).toHaveTextContent("外1");
   });
 
-  test("labels a Crossref record as its provider while keeping its accessible record name provider-neutral", () => {
+  test("opens a Crossref source directly from its compact sentence marker", () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument({
       ...fixture,
@@ -286,8 +332,8 @@ describe("ThinReadingTab", () => {
 
     renderTab(document);
 
-    expect(screen.getByRole("link", { name: "打开来源记录：Highly accurate protein structure prediction with AlphaFold" }))
-      .toHaveTextContent("Crossref");
+    expect(screen.getByRole("link", { name: "打开外部来源：Highly accurate protein structure prediction with AlphaFold" }))
+      .toHaveAttribute("href", "https://doi.org/10.1038/s41586-021-03819-2");
   });
 
   test("forwards persisted page-text offsets when opening evidence", () => {
@@ -358,28 +404,24 @@ describe("ThinReadingTab", () => {
     );
 
     expect(screen.getByLabelText("Thin reading page")).toBeInTheDocument();
-    expect(screen.getByText("Overview")).toBeInTheDocument();
+    expect(screen.getByText("Overview", { selector: ".is-active" })).toBeInTheDocument();
     expect(screen.getByText("English")).toBeInTheDocument();
     expect(screen.getByText(/Local identity only/)).toBeInTheDocument();
-    expect(globalThis.document.querySelector(".thin-reading__article-meta")).toHaveTextContent("Paper evidence");
+    expect(globalThis.document.querySelector(".thin-reading__article-meta")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Open evidence 1 for/ })).toHaveTextContent("E1");
     expect(screen.getByRole("button", { name: "Collapse Intuecho recommendations" })).toBeInTheDocument();
+    expect(screen.getByText("Connect Intuecho to view community shared annotations")).toBeInTheDocument();
     expect(screen.getByText("No annotations yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explore Method" })).toBeInTheDocument();
     expect(screen.queryByText("暂无批注")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Explore Intuecho recommendation: Method and evidence" }));
-    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith(expect.objectContaining({
-      source: {
-        kind: "selected_text",
-        excerpt: "A local recommendation lead about the method.",
-        prompt: "Explore this local Intuecho recommendation lead: Method and evidence"
-      }
-    })));
+    expect(screen.queryByRole("button", { name: "Explore Intuecho recommendation: Method and evidence" })).not.toBeInTheDocument();
+    expect(onGenerateBranch).not.toHaveBeenCalled();
   });
 
   test("collapses and restores the Intuecho recommendation rail", () => {
     const document = makeDocument();
-    renderTab(document);
+    renderTab(document, vi.fn(), undefined, undefined, readyCommunityRecommendationState());
 
     fireEvent.click(screen.getByRole("button", { name: "收起 Intuecho 推荐栏" }));
 
@@ -390,6 +432,49 @@ describe("ThinReadingTab", () => {
 
     expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "收起 Intuecho 推荐栏" })).toBeInTheDocument();
+  });
+
+  test("shows an empty state only after a connected community request returns no results", () => {
+    const document = makeDocument();
+    renderTab(document, vi.fn(), undefined, undefined, { recommendations: [], status: "ready" });
+
+    expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByText("暂无社区推荐")).toBeInTheDocument();
+  });
+
+  test("keeps the community rail visible when the current paper cannot be matched", () => {
+    const document = makeDocument();
+    renderTab(document, vi.fn(), undefined, undefined, { recommendations: [], status: "unavailable" });
+
+    expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByText("当前文献仅有本地身份，无法匹配社区共享批注")).toBeInTheDocument();
+  });
+
+  test("shows loading and failure states for a configured community source", () => {
+    const document = makeDocument();
+    const { rerender } = render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        communityRecommendationState={{ recommendations: [], status: "loading" }}
+        document={document}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("正在加载社区推荐");
+
+    rerender(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        communityRecommendationState={{ message: "HTTP 503", recommendations: [], status: "error" }}
+        document={document}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("加载社区推荐失败：HTTP 503");
   });
 
   test("opens a branch menu for multiple generated children", () => {
@@ -520,6 +605,33 @@ describe("ThinReadingTab", () => {
     }));
   });
 
+  test("does not offer selection deepening for a generation error", () => {
+    const document = makeDocument();
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+        taskFailureMessage="生成本层内容失败"
+      />
+    );
+    const error = screen.getByText("生成本层内容失败");
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "生成本层内容失败",
+      getRangeAt: () => ({
+        commonAncestorContainer: error,
+        getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
+      }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(error);
+
+    expect(screen.queryByLabelText("深入提示（可选）")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "深入" })).not.toBeInTheDocument();
+  });
+
   test("honors automatic publication when saving an annotation from selected text", () => {
     const document = setThinReadingAutoPublic(makeDocument(), true);
     const onUpdateDocument = vi.fn();
@@ -548,23 +660,23 @@ describe("ThinReadingTab", () => {
     expect(updatedDocument.pendingPublicAnnotationIds).toEqual([updatedDocument.annotations[0].id]);
   });
 
-  test("lets Intuecho recommendation text enter the same selection deepen flow", async () => {
+  test("does not offer selection deepening for a community recommendation", () => {
     const document = makeDocument();
-    const onGenerateBranch = vi.fn(async () => undefined);
+    const communityRecommendationState = readyCommunityRecommendationState();
     render(
       <ThinReadingTab
         artifactId={document.artifactId}
+        communityRecommendationState={communityRecommendationState}
         document={document}
-        onGenerateBranch={onGenerateBranch}
         onUpdateDocument={vi.fn()}
         papers={createThinReadingFixture().papers}
       />
     );
-    const recommendationNote = screen.getByText("本地待同步的理解线索，关注 self-attention 如何替代 recurrence。");
+    const recommendationNote = screen.getByText("社区成员讨论了 self-attention 对并行化的影响。");
 
     vi.spyOn(window, "getSelection").mockReturnValue({
       rangeCount: 1,
-      toString: () => "self-attention 如何替代 recurrence",
+      toString: () => "self-attention 对并行化",
       getRangeAt: () =>
         ({
           commonAncestorContainer: recommendationNote,
@@ -573,16 +685,8 @@ describe("ThinReadingTab", () => {
     } as unknown as Selection);
     fireEvent.mouseUp(recommendationNote);
 
-    fireEvent.click(screen.getByRole("button", { name: "深入" }));
-
-    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
-      artifactId: document.artifactId,
-      document,
-      source: {
-        kind: "selected_text",
-        excerpt: "self-attention 如何替代 recurrence"
-      }
-    }));
+    expect(screen.queryByLabelText("深入提示（可选）")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "深入" })).not.toBeInTheDocument();
   });
 
   test("preserves an external source target when saving a selected external reading lead", () => {
@@ -624,11 +728,11 @@ describe("ThinReadingTab", () => {
     });
     const onUpdateDocument = vi.fn();
     renderTab(document, onUpdateDocument);
-    const sourceLink = screen.getByRole("link", { name: "A Follow-up Study" });
+    const sourceLink = screen.getByRole("link", { name: "打开外部来源：A Follow-up Study" });
 
     vi.spyOn(window, "getSelection").mockReturnValue({
       rangeCount: 1,
-      toString: () => "A Follow-up Study",
+      toString: () => "外1",
       getRangeAt: () => ({
         commonAncestorContainer: sourceLink,
         getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
@@ -649,7 +753,7 @@ describe("ThinReadingTab", () => {
     });
   });
 
-  test("keeps the selected external source id when deepening an external reading lead", async () => {
+  test("allows external reading leads to be annotated but not deepened", () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument({
       ...fixture,
@@ -696,30 +800,22 @@ describe("ThinReadingTab", () => {
         papers={fixture.papers}
       />
     );
-    const sourceLink = screen.getByRole("link", { name: "A Follow-up Study" });
+    const sourceLink = screen.getByRole("link", { name: "打开外部来源：A Follow-up Study" });
     vi.spyOn(window, "getSelection").mockReturnValue({
       rangeCount: 1,
-      toString: () => "A Follow-up Study",
+      toString: () => "外1",
       getRangeAt: () => ({
         commonAncestorContainer: sourceLink,
         getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
       }) as Range
     } as unknown as Selection);
     fireEvent.mouseUp(sourceLink);
-    fireEvent.click(screen.getByRole("button", { name: "深入" }));
-
-    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
-      artifactId: document.artifactId,
-      document,
-      source: {
-        externalSourceIds: ["openalex:W42"],
-        excerpt: "A Follow-up Study",
-        kind: "selected_text"
-      }
-    }));
+    expect(screen.getByRole("textbox", { name: "批注" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "深入" })).not.toBeInTheDocument();
+    expect(onGenerateBranch).not.toHaveBeenCalled();
   });
 
-  test("can deepen an Intuecho recommendation directly without pretending it is synced community data", async () => {
+  test("does not expose a direct deepening action for an Intuecho recommendation", () => {
     const document = makeDocument();
     const onGenerateBranch = vi.fn(async () => undefined);
     render(
@@ -732,17 +828,8 @@ describe("ThinReadingTab", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "深入 Intuecho 推荐：方法与问题设定" }));
-
-    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
-      artifactId: document.artifactId,
-      document,
-      source: {
-        kind: "selected_text",
-        excerpt: "本地待同步的理解线索，关注 self-attention 如何替代 recurrence。",
-        prompt: "围绕 Intuecho 本地推荐线索继续深入：方法与问题设定"
-      }
-    }));
+    expect(screen.queryByRole("button", { name: "深入 Intuecho 推荐：方法与问题设定" })).not.toBeInTheDocument();
+    expect(onGenerateBranch).not.toHaveBeenCalled();
   });
 
   test("saves pending-public annotations locally", () => {
@@ -798,7 +885,7 @@ describe("ThinReadingTab", () => {
     }));
   });
 
-  test("marks unsupported summary sentences without highlighting the body text", () => {
+  test("does not add a pending-review marker to legacy unsupported summary sentences", () => {
     const fixture = createThinReadingFixture();
     const unsupportedSeed: ThinReadingNodeSeed = {
       ...fixture.rootSeed,
@@ -833,11 +920,11 @@ describe("ThinReadingTab", () => {
     renderTab(document);
 
     expect(screen.queryByText("依据")).not.toBeInTheDocument();
-    expect(screen.getByText("待核")).toHaveClass("thin-reading__summary-marker", "is-static");
+    expect(screen.queryByText("待核")).not.toBeInTheDocument();
     expect(globalThis.document.querySelector(".thin-reading__summary-sentence--unsupported")).toBeNull();
   });
 
-  test("marks legacy summaries without sentence-level mappings as pending review", () => {
+  test("does not add a pending-review marker to legacy summaries without sentence mappings", () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument({
       ...fixture,
@@ -854,7 +941,7 @@ describe("ThinReadingTab", () => {
 
     renderTab(document, vi.fn(), onOpenEvidence);
 
-    expect(screen.getAllByText("待核")).toHaveLength(2);
+    expect(screen.queryByText("待核")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /打开证据句/ })).not.toBeInTheDocument();
     expect(onOpenEvidence).not.toHaveBeenCalled();
   });
@@ -904,11 +991,8 @@ describe("ThinReadingTab", () => {
     expect(marker).toHaveTextContent("外1");
     expect(marker).toHaveAttribute("href", "https://openalex.org/W42");
     expect(marker.getAttribute("title")).toContain("相关工作");
-    expect(screen.getByRole("link", { name: "打开来源记录：A Follow-up Study" }))
-      .toHaveAttribute("href", "https://openalex.org/W42");
     expect(marker.closest("sup")).not.toBeNull();
-    expect(screen.getByLabelText("已越出论文原文闭包")).toHaveTextContent("本层主要依据论文外的可追溯来源");
-    expect(screen.getByRole("link", { name: "A Follow-up Study" })).toHaveAttribute("href", "https://openalex.org/W42");
-    expect(screen.getByLabelText("本轮外部来源")).toHaveTextContent("相关工作");
+    expect(screen.queryByLabelText("已越出论文原文闭包")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("本轮外部来源")).not.toBeInTheDocument();
   });
 });

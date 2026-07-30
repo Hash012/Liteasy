@@ -292,7 +292,9 @@ function isCachedRecommendation(value: unknown) {
 }
 
 function isCachedGenerationAudit(value: unknown, availableEvidenceIds: Set<string>, sentenceIds: Set<string>) {
-  if (!isRecord(value) || value.version !== "liteasy.thin-reading-agent/v1" || !isRecord(value.model) ||
+  if (!isRecord(value) ||
+    (value.version !== "liteasy.thin-reading-agent/v1" && value.version !== "liteasy.thin-reading-agent/v2") ||
+    !isRecord(value.model) ||
     typeof value.model.id !== "string" || value.model.id.trim().length === 0 ||
     typeof value.model.provider !== "string" || value.model.provider.trim().length === 0 ||
     !isRecord(value.qualityGate) || typeof value.qualityGate.attempts !== "number" ||
@@ -301,6 +303,17 @@ function isCachedGenerationAudit(value: unknown, availableEvidenceIds: Set<strin
     value.qualityGate.repairReasons.length !== value.qualityGate.attempts - 1 ||
     value.qualityGate.repaired !== (value.qualityGate.attempts > 1) ||
     !value.qualityGate.repairReasons.every((reason) => reason.length <= 600)) {
+    return false;
+  }
+  if (value.interpretationPlan !== undefined && (!isRecord(value.interpretationPlan) ||
+    (value.interpretationPlan.intent !== "what" && value.interpretationPlan.intent !== "why" &&
+      value.interpretationPlan.intent !== "how" && value.interpretationPlan.intent !== "mixed") ||
+    (value.interpretationPlan.requestedDepth !== "standard" && value.interpretationPlan.requestedDepth !== "deep") ||
+    typeof value.interpretationPlan.externalKnowledgeNeeded !== "boolean" ||
+    !isStringArray(value.interpretationPlan.discourseMoves) ||
+    value.interpretationPlan.discourseMoves.length < 1 || value.interpretationPlan.discourseMoves.length > 6 ||
+    (value.interpretationPlan.externalQuery !== undefined && typeof value.interpretationPlan.externalQuery !== "string") ||
+    (value.interpretationPlan.gap !== undefined && typeof value.interpretationPlan.gap !== "string"))) {
     return false;
   }
   if (value.evidencePlan !== undefined && (!isRecord(value.evidencePlan) ||
@@ -333,15 +346,24 @@ function normalizeCachedThinReadingDocument(value: unknown): unknown {
     return value;
   }
   const nodes = Object.fromEntries(Object.entries(value.nodes).map(([nodeId, node]) => {
-    if (!isRecord(node) || !isRecord(node.evidence) || !Array.isArray(node.evidence.externalSources)) {
+    if (!isRecord(node)) {
       return [nodeId, node];
     }
     return [nodeId, {
       ...node,
-      evidence: {
-        ...node.evidence,
-        externalSources: node.evidence.externalSources.map(normalizeCachedExternalSource)
-      }
+      ...(isRecord(node.evidence) && Array.isArray(node.evidence.externalSources)
+        ? {
+            evidence: {
+              ...node.evidence,
+              externalSources: node.evidence.externalSources.map(normalizeCachedExternalSource)
+            }
+          }
+        : {}),
+      recommendations: Array.isArray(node.recommendations)
+        ? node.recommendations.filter((recommendation) => (
+            isRecord(recommendation) && recommendation.source === "intuecho_community"
+          ))
+        : []
     }];
   }));
   return { ...value, nodes };

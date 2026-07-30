@@ -111,7 +111,8 @@ describe("thinReadingPromptRegistry", () => {
 
     expect(systemsPrompt).toContain("私有覆盖审计：检查 部署场景、架构、关键数据/控制路径、组件职责、实测运行结果和取舍或失效边界");
     expect(systemsPrompt).toContain("不要输出这份审计");
-    expect(systemsPrompt).toContain("遗漏板块入口");
+    expect(systemsPrompt).toContain("不要用固定章节清单填补未覆盖内容");
+    expect(systemsPrompt).not.toContain("遗漏板块入口");
     expect(humanitiesPrompt).toContain("私有覆盖审计：检查 中心论题、材料、历史或概念语境、解释路径、反向解读和解释边界");
     expect(humanitiesPrompt).not.toContain("部署场景、架构、关键数据/控制路径");
   });

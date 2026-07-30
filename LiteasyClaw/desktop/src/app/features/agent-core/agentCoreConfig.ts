@@ -48,7 +48,7 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
     summary: "Liteasy 学术工作台 Agent：优先服务文献理解、知识组织、产物生成和受控工作区操作。"
   },
   budget: {
-    maxIterations: 12,
+    maxIterations: 64,
     maxToolCalls: 32,
     staleObservationTurns: 3
   },

@@ -208,7 +208,7 @@ describe("useArtifactWorkflowController", () => {
       papers: [{ id: paper.id, title: paper.title }],
       rootSeed: {
         evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
-        omittedSections: [{ id: "section-1", label: "实验", sectionKey: "experiments" }],
+        omittedSections: [],
         recommendations: [],
         summary: "论文的实验部分仍有待展开。",
         withinPaperClosure: true
@@ -220,7 +220,7 @@ describe("useArtifactWorkflowController", () => {
       document: thinReadingDocument,
       parentNodeId: thinReadingDocument.rootNodeId,
       primaryPaperId: paper.id,
-      source: { kind: "omitted_section", label: "实验", sectionKey: "experiments" }
+      source: { kind: "selected_text", excerpt: "实验部分" }
     });
     window.localStorage.setItem("liteasy.artifact-task-recovery/v1", JSON.stringify([{
       artifactId: thinReadingDocument.artifactId,
@@ -267,6 +267,9 @@ describe("useArtifactWorkflowController", () => {
         artifactResultClient: artifactResultClient(),
         artifactStore,
         getImportedChunksByPaperId: () => ({ [paper.id]: buildImportedChunksForPaper(paper) }),
+        getImportedChunksForPaperId: (paperId) =>
+          paperId === paper.id ? buildImportedChunksForPaper(paper) : [],
+        getPaperById: (paperId) => paperId === paper.id ? paper : undefined,
         getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
         getSelectedPapers: () => [],
         onAnalysisHint,

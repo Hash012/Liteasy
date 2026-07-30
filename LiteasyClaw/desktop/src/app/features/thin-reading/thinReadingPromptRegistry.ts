@@ -5,7 +5,7 @@ import type {
 } from "./thinReading.types";
 
 type ThinReadingPromptLanguage = "en-US" | "zh-CN";
-type ThinReadingPromptStage = "omitted_section" | "root" | "selected_text";
+type ThinReadingPromptStage = "root" | "selected_text";
 
 type WeightedPattern = {
   pattern: RegExp;
@@ -20,8 +20,6 @@ type ThinReadingPaperTypeProfile = {
   matchers: readonly WeightedPattern[];
   focusEn: string;
   focusZh: string;
-  omittedHintEn: string;
-  omittedHintZh: string;
   retentionTestEn: string;
   retentionTestZh: string;
 };
@@ -50,8 +48,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /\bbenchmark(s|ing)?\b|leaderboard|evaluation suite|testbed/i, weight: 5 },
       { pattern: /基准|排行榜|评测套件|测试床|评测框架/, weight: 5 }
     ],
-    omittedHintEn: "Good omitted buttons often include task design, metrics, dataset composition, baselines, leaderboard findings, and limitations.",
-    omittedHintZh: "遗漏按钮通常可落在任务设计、指标、数据组成、baseline、榜单发现和局限。",
     retentionTestEn: "After reading only the overview, the reader should know what became measurable or newly comparable and which result changes matter.",
     retentionTestZh: "读者只看总述后，应知道什么对象因此变得可测/可比较，以及哪些结果变化真正重要。"
   },
@@ -66,8 +62,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /\bdataset\b|corpus|annotations?|resource|collection protocol/i, weight: 5 },
       { pattern: /数据集|语料|标注|资源|采集流程|构建流程/, weight: 5 }
     ],
-    omittedHintEn: "Good omitted buttons often include construction pipeline, annotation protocol, coverage, evaluation usage, and known bias.",
-    omittedHintZh: "遗漏按钮通常可落在构建流程、标注规范、覆盖范围、评测用途和偏差。",
     retentionTestEn: "After reading only the overview, the reader should know what resource now exists, why it is usable, and where its coverage or bias boundaries lie.",
     retentionTestZh: "读者只看总述后，应知道新增资源是什么、为什么可用，以及覆盖范围/偏差边界在哪里。"
   },
@@ -83,8 +77,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /pre-?train(?:ing)?|fine-?tun(?:e|ing)|downstream task|transfer learning/i, weight: 4 },
       { pattern: /实验|消融|评估|基线|准确率|结果|性能提升|指标|预训练|微调|下游任务|迁移学习/, weight: 3 }
     ],
-    omittedHintEn: "Good omitted buttons often include method details, experiments, ablations, assumptions, failure cases, and related-work position.",
-    omittedHintZh: "遗漏按钮通常可落在方法细节、实验、消融、假设、失败案例和相关工作位置。",
     retentionTestEn: "After reading only the overview, the reader should know the central result, the mechanism or reasoning path, and the decisive evidence that makes it credible.",
     retentionTestZh: "读者只看总述后，应知道核心结论、关键机制/推理路径，以及让结论可信的决定性证据。"
   },
@@ -99,8 +91,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /ethnograph|archival|qualitative|histori|philosoph|interpret|case study/i, weight: 4 },
       { pattern: /人文|历史|哲学|档案|质性|阐释|个案|田野/, weight: 4 }
     ],
-    omittedHintEn: "Good omitted buttons often include concepts, historical context, argument path, source interpretation, and counter-readings.",
-    omittedHintZh: "遗漏按钮通常可落在概念、历史语境、论证路径、材料解释和反向解读。",
     retentionTestEn: "After reading only the overview, the reader should know the thesis, the interpretive route, the key textual or historical evidence, and the limits of that reading.",
     retentionTestZh: "读者只看总述后，应知道中心论题、解释路径、关键文本/历史证据，以及这种解释的边界。"
   },
@@ -115,8 +105,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /position|perspective|opinion|manifesto|agenda|call for/i, weight: 5 },
       { pattern: /观点|立场|议程|倡议|展望|呼吁/, weight: 5 }
     ],
-    omittedHintEn: "Good omitted buttons often include assumptions, argument supports, objections, implications, and research agenda.",
-    omittedHintZh: "遗漏按钮通常可落在前提、论据、反驳、含义和研究议程。",
     retentionTestEn: "After reading only the overview, the reader should know the stance, the reframing move, the strongest reasons, and what remains contested.",
     retentionTestZh: "读者只看总述后，应知道作者立场、问题重构方式、最强理由，以及仍有争议之处。"
   },
@@ -131,8 +119,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /\bsurvey\b|review|taxonomy|systematic literature/i, weight: 6 },
       { pattern: /综述|文献综述|分类法|系统回顾|知识图谱/, weight: 6 }
     ],
-    omittedHintEn: "Good omitted buttons often include taxonomy branches, comparison axes, historical trajectory, open problems, and practical guidance.",
-    omittedHintZh: "遗漏按钮通常可落在分类分支、比较轴线、历史脉络、开放问题和实践建议。",
     retentionTestEn: "After reading only the overview, the reader should know the organizing map, the main comparison axes, and which unsolved problems structure the field.",
     retentionTestZh: "读者只看总述后，应知道组织领域的知识地图、主要比较轴线，以及哪些未解问题支撑这个领域。"
   },
@@ -147,8 +133,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /system|architecture|pipeline|runtime|throughput|latency|scalab|distributed/i, weight: 4 },
       { pattern: /系统|架构|流水线|运行时|吞吐|延迟|扩展性|分布式/, weight: 4 }
     ],
-    omittedHintEn: "Good omitted buttons often include architecture, data flow, scheduler/runtime, performance, reliability, and deployment constraints.",
-    omittedHintZh: "遗漏按钮通常可落在架构、数据流、调度/运行时、性能、可靠性和部署约束。",
     retentionTestEn: "After reading only the overview, the reader should know the architecture, the central data/control flow, the key tradeoff, and the measured operational consequence.",
     retentionTestZh: "读者只看总述后，应知道系统架构、核心数据/控制流、关键工程取舍，以及实测的运行后果。"
   },
@@ -163,8 +147,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
       { pattern: /theorem|proof|lemma|derivation|bound|convergence|optimality/i, weight: 5 },
       { pattern: /定理|证明|引理|推导|收敛|上界|下界|最优性/, weight: 5 }
     ],
-    omittedHintEn: "Good omitted buttons often include assumptions, proof sketch, definitions, corollaries, counterexamples, and relation to prior theory.",
-    omittedHintZh: "遗漏按钮通常可落在假设、证明梗概、定义、推论、反例和既有理论关系。",
     retentionTestEn: "After reading only the overview, the reader should know the formal result, the assumptions, the proof route, and why the bound or theorem changes the theory map.",
     retentionTestZh: "读者只看总述后，应知道形式化结论、前提假设、证明路线，以及这个界/定理为什么改变理论地图。"
   },
@@ -176,8 +158,6 @@ const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfil
     labelEn: "unclassified paper",
     labelZh: "未分类论文",
     matchers: [],
-    omittedHintEn: "Good omitted buttons should be based on evidence sections not covered by the summary.",
-    omittedHintZh: "遗漏按钮应来自证据中实际存在但总述未覆盖的板块。",
     retentionTestEn: "After reading only the overview, the reader should know the few claims the evidence most strongly supports, not a balanced table of contents.",
     retentionTestZh: "读者只看总述后，应知道证据最强支撑的少数主轴，而不是一份平均章节目录。"
   }
@@ -288,12 +268,12 @@ const paperTypeFewShots: Record<ThinReadingPaperType, ThinReadingFewShotSet> = {
   unknown: {
     en: [
       "Signal: mixed evidence without a stable genre. Retain: the two or three strongest supported claims and mark type uncertainty.",
-      "Signal: a hybrid method/resource paper. Retain: the primary contribution first; move the secondary contribution to an omitted branch.",
+      "Signal: a hybrid method/resource paper. Retain: the primary contribution first; include the secondary contribution only when direct evidence makes it necessary to interpret the primary one.",
       "Signal: sparse evidence. Retain: only what evidence supports, expose coverage limits, and avoid filling a conventional section template."
     ],
     zh: [
       "信号：证据混合且体裁不稳定。留存：证据最强支撑的两三个判断，并明确类型不确定。",
-      "信号：方法/资源混合论文。留存：先讲主要贡献，把次要贡献放入遗漏分支。",
+      "信号：方法/资源混合论文。留存：先讲主要贡献；只有直接证据表明次要贡献是理解主轴所必需时才纳入。",
       "信号：证据稀疏。留存：只讲证据支持的内容，暴露覆盖限制，不补齐惯常章节模板。"
     ]
   }
@@ -331,9 +311,6 @@ function promptLanguage(targetLanguage: string): ThinReadingPromptLanguage {
 }
 
 function stageForSource(source: ThinReadingNodeSource): ThinReadingPromptStage {
-  if (source.kind === "omitted_section") {
-    return "omitted_section";
-  }
   return source.kind === "selected_text" ? "selected_text" : "root";
 }
 
@@ -349,17 +326,11 @@ function stageQualityGate(language: ThinReadingPromptLanguage, stage: ThinReadin
     if (stage === "root") {
       return "Quality gate: before writing, internally discard details that would not change the reader's retained mental model of the paper.";
     }
-    if (stage === "omitted_section") {
-      return "Quality gate: explain how this omitted section changes, strengthens, limits, or repositions the parent node; do not restate the overview.";
-    }
     return "Quality gate: answer why the selected words are worth drilling into, preserving parent terminology, evidence boundaries, and the user hint.";
   }
 
   if (stage === "root") {
     return "质量门控：写作前在内部丢弃不会改变读者脑中论文模型的细节，不要按章节平均压缩。";
-  }
-  if (stage === "omitted_section") {
-    return "质量门控：说明该遗漏板块如何改变、补强、限制或重新定位上一层结论，不要复述总述。";
   }
   return "质量门控：回答“为什么这些被选词句值得继续读”，并保持上一层术语、证据边界和用户提示的连续性。";
 }
@@ -369,13 +340,13 @@ function commonEvidenceGate(language: ThinReadingPromptLanguage) {
     return [
       "Evidence gate: use the highest-leverage evidence IDs first: claims, methods, decisive results, limitations, then context.",
       "Anti-summary gate: if the paragraph can be rearranged as a section-by-section table of contents, rewrite it around the retained core.",
-      "Trace gate: every content sentence must have current evidence IDs, an allowed external source ID from this retrieval turn, or unsupported status."
+      "Trace gate: every content sentence must have current evidence IDs or an allowed external source ID from this retrieval turn; delete or rewrite anything else as a directly supported minimal proposition."
     ].join("\n");
   }
   return [
     "证据门控：优先使用信息量最高的 evidence ID：主张、方法机制、决定性结果、局限，再到背景。",
     "反摘要门控：如果这段话能被改写成按章节排列的目录，就必须围绕“读后留下的核心印象”重写。",
-    "溯源门控：每个内容句必须对应本轮 evidence ID、本轮检索白名单中的 external source ID，或标记 unsupported。"
+    "溯源门控：每个内容句必须对应本轮 evidence ID 或本轮检索白名单中的 external source ID；其余内容必须删除或改写为有直接支持的最小命题。"
   ].join("\n");
 }
 
@@ -386,12 +357,12 @@ function coverageAuditGate(
   if (language === "en-US") {
     return [
       `Private coverage audit: check ${profile.coverageAuditEn}.`,
-      "Do not output this audit or force every facet into the overview. Retain only evidence-supported facets that materially change the reader's mental model; turn a salient uncovered facet into an omitted-section token instead of a fixed chapter list."
+      "Do not output this audit or force every facet into the overview. Retain only evidence-supported facets that materially change the reader's mental model; do not fill gaps with a fixed chapter list."
     ].join("\n");
   }
   return [
     `私有覆盖审计：检查 ${profile.coverageAuditZh}。`,
-    "不要输出这份审计，也不要把每个维度硬塞进总述。只保留有证据且会改变读者认知模型的维度；重要但未覆盖的维度应生成遗漏板块入口，而不是固定章节清单。"
+    "不要输出这份审计，也不要把每个维度硬塞进总述。只保留有证据且会改变读者认知模型的维度；不要用固定章节清单填补未覆盖内容。"
   ].join("\n");
 }
 
@@ -490,9 +461,7 @@ export function buildThinReadingPromptGuidance(input: {
   if (language === "en-US") {
     const stageInstruction = stage === "root"
       ? "Stage: root overview. Produce one focused paragraph for the whole paper."
-      : stage === "omitted_section"
-        ? "Stage: omitted section. Explain why this omitted section matters to the paper's retained core."
-        : "Stage: selected text. Explain the selected words in continuity with the parent node and user prompt.";
+      : "Stage: selected text. Explain the selected words in continuity with the parent node and user prompt.";
     return [
       `Initial paper type: ${profile.labelEn} (${inferredPaperType}). Keep this paperType in JSON unless current evidence directly establishes that another type is the paper's primary contribution; title taxonomy or a single familiar term is not enough to override it.`,
       `Allowed paperType values: ${typeList}.`,
@@ -503,7 +472,6 @@ export function buildThinReadingPromptGuidance(input: {
       classification.conflict && classification.runnerUp
         ? `Type conflict: ${inferredPaperType} and ${classification.runnerUp.paperType} are close. Decide by the paper's primary contribution and the reader's retained mental model, not by section names or venue conventions.`
         : `Type confidence: ${classification.confidence}.`,
-      `Omitted-section rule: ${profile.omittedHintEn}`,
       coverageAuditGate(language, profile),
       stageQualityGate(language, stage),
       commonEvidenceGate(language),
@@ -513,9 +481,7 @@ export function buildThinReadingPromptGuidance(input: {
 
   const stageInstruction = stage === "root"
     ? "阶段：初始总述。输出全篇的一段有取舍的核心总述。"
-    : stage === "omitted_section"
-      ? "阶段：遗漏板块。解释这个未覆盖板块为什么会改变或补强上一层留下的核心印象。"
-      : "阶段：正文选区。围绕选中的词句继续讲清楚，并保持和上一层术语、证据、用户提示的连贯性。";
+    : "阶段：正文选区。围绕选中的词句继续讲清楚，并保持和上一层术语、证据、用户提示的连贯性。";
   return [
     `初步论文类型：${profile.labelZh}（${inferredPaperType}）。JSON 中默认保持这一 paperType；只有本轮证据直接证明另一类型才是论文的主要贡献时才能修正，不能仅凭标题分类或一个熟悉术语改写类型。`,
     `paperType 只能取：${typeList}。`,
@@ -526,7 +492,6 @@ export function buildThinReadingPromptGuidance(input: {
     classification.conflict && classification.runnerUp
       ? `类型冲突：${inferredPaperType} 与 ${classification.runnerUp.paperType} 分数接近。必须按论文的主要贡献和读者应留下的认知模型裁决，不能按章节名或发表场景机械选择。`
       : `类型判断置信度：${classification.confidence}。`,
-    `遗漏板块规则：${profile.omittedHintZh}`,
     coverageAuditGate(language, profile),
     stageQualityGate(language, stage),
     commonEvidenceGate(language),

@@ -201,16 +201,29 @@ test("normalizes selected-passage evidence ids and rejects malformed attachment 
   overlongPrompt.attachments[0].metadata.thinReadingContext.source.prompt = "x".repeat(601);
   expect(getAgentRequestThinReadingContext(overlongPrompt)).toBeNull();
 
-  const overlongSection = structuredClone(request) as unknown as {
+  const omittedSection = structuredClone(request) as unknown as {
     attachments: Array<{ metadata: { thinReadingContext: { source: unknown } } }>;
   };
-  overlongSection.attachments[0].metadata.thinReadingContext.source = {
+  omittedSection.attachments[0].metadata.thinReadingContext.source = {
     kind: "omitted_section",
-    label: "x".repeat(49),
+    label: "方法",
     sectionKey: "method"
   };
   expect(getAgentRequestThinReadingContext(
-    overlongSection as Parameters<typeof getAgentRequestThinReadingContext>[0]
+    omittedSection as Parameters<typeof getAgentRequestThinReadingContext>[0]
+  )?.source).toEqual({
+    kind: "omitted_section",
+    label: "方法",
+    sectionKey: "method"
+  });
+
+  omittedSection.attachments[0].metadata.thinReadingContext.source = {
+    kind: "omitted_section",
+    label: "x".repeat(97),
+    sectionKey: "method"
+  };
+  expect(getAgentRequestThinReadingContext(
+    omittedSection as Parameters<typeof getAgentRequestThinReadingContext>[0]
   )).toBeNull();
 });
 

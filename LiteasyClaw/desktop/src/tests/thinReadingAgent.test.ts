@@ -7,7 +7,8 @@ import {
   parseThinReadingEvidenceObservation,
   parseThinReadingEvidencePlan,
   parseThinReadingEvidenceReview,
-  parseThinReadingModelSeed
+  parseThinReadingModelSeed,
+  resolveThinReadingOmittedSections
 } from "../app/features/thin-reading/thinReadingAgent";
 import { classifyThinReadingPaper } from "../app/features/thin-reading/thinReadingPromptRegistry";
 import type { PreparedMultiPaperAnalysis } from "../app/features/paper-analysis/analysis.types";
@@ -85,12 +86,18 @@ describe("thinReadingAgent", () => {
 
     expect(prompt).toContain("初步论文类型：综述型论文");
     expect(prompt).toContain("paperType");
-    expect(prompt).toContain("包括 openalex: 或 crossref:");
+    expect(prompt).toContain("包括 openalex:、crossref: 或 arxiv:");
     expect(prompt).toContain("summarySentences");
     expect(prompt).toContain("每个内容性句子都必须能追溯");
+    expect(prompt).toContain("采用保守的学术断言强度");
+    expect(prompt).toContain("忠实保留证据限定词与适用范围");
+    expect(prompt).toContain("明确区分论文作者声称、理论推导、实验观察和 Agent 推断");
     expect(prompt).toContain("evidence-survey-taxonomy");
     expect(prompt).toContain("分类框架");
-    expect(prompt).toContain("label 必须是短按钮文案");
+    expect(prompt).toContain("omittedSections 必须在 summary 定稿之后生成");
+    expect(prompt).toContain("差集中的合格模块都应返回，最多 8 个");
+    expect(prompt).toContain("禁止设想点击后的文章再反推按钮");
+    expect(prompt).toContain("不得将无证据句写入正文");
     expect(prompt).toContain("不要复制整张 evidence 矩阵");
     expect(prompt).toContain("留存测试");
     expect(prompt).toContain("人工留存案例");
@@ -101,6 +108,346 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("首次承担实质含义");
     expect(prompt).toContain("late interaction（后期交互）");
     expect(prompt).toContain("错误：后期交互（late interaction）");
+  });
+
+  test("turns the interpretation intent into a discourse plan instead of an evidence list", () => {
+    const prompt = buildThinReadingAgentPrompt({
+      context: {
+        ...context,
+        interpretationPlan: {
+          discourseMoves: ["先指出问题", "补齐必要前提", "给出因果链", "收束到边界"],
+          externalKnowledgeNeeded: false,
+          intent: "why",
+          requestedDepth: "deep"
+        },
+        prompt: "为什么这个方法有效？"
+      },
+      prepared
+    });
+
+    expect(prompt).toContain("推测的用户主意图：为什么");
+    expect(prompt).toContain("先指出问题 -> 补齐必要前提 -> 给出因果链 -> 收束到边界");
+    expect(prompt).toContain("不得按 evidence ID 顺序逐条复述");
+    expect(prompt).toContain("不得输出关联证据的并列堆砌");
+  });
+
+  test("requires branch explanations to retain numbers when they summarize a numeric paper assertion", () => {
+    const numericEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-numeric-result",
+      quote: "On the evaluation dataset, the score rises from 0.34 to 0.39, an improvement of 14.7%.",
+      summary: "实验得分从 0.34 提升到 0.39，增幅为 14.7%。",
+      terms: ["检索性能"]
+    };
+    const numericAnalysis = {
+      ...prepared,
+      evidence: [numericEvidence],
+      evidencePrompt: `[${numericEvidence.id}] ${numericEvidence.quote}`
+    };
+    const baseOutput = {
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "目标数据集上的性能得到提升。" }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [numericEvidence.id],
+      paperType: "experimental",
+      summary: "该方法在目标数据集上的检索性能明显提升，效果优于此前基线。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标数据集上的检索性能明显提升，效果优于此前基线。"
+      }],
+      withinPaperClosure: true
+    };
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("概括了包含数值的论文断言（0.34、0.39、14.7）");
+
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "得分从 0.34 提升到 0.39。" }],
+      summary: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。"
+      }]
+    }), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toContain("14.7%");
+
+    expect(buildThinReadingAgentPrompt({
+      context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
+      prepared: numericAnalysis
+    })).toContain("按原文断言拆成最小命题");
+  });
+
+  test("requires 4096 only for the sentence that summarizes its source assertion", () => {
+    const mixedEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-projection-and-interaction",
+      quote: "The encoder projects each vector to 4096 dimensions with a linear layer. Late interaction compares query and document token vectors with MaxSim.",
+      summary: "编码器用线性层将向量投影到 4096 维；后期交互用 MaxSim 比较查询和文档词元向量。",
+      terms: ["encoder", "late interaction", "MaxSim"]
+    };
+    const mixedAnalysis = {
+      ...prepared,
+      evidence: [mixedEvidence],
+      evidencePrompt: `[${mixedEvidence.id}] ${mixedEvidence.quote}`
+    };
+    const baseOutput = (text: string) => ({
+      claims: [{ evidenceIds: [mixedEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [mixedEvidence.id],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [mixedEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "Late interaction compares query and document token vectors with MaxSim."
+    )), {
+      analysis: mixedAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("Late interaction");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The encoder projects each vector to a fixed dimension with a linear layer."
+    )), {
+      analysis: mixedAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("4096");
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The encoder projects each vector to 4096 dimensions with a linear layer."
+    )), {
+      analysis: mixedAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("4096");
+  });
+
+  test("keeps formula bounds only when a branch sentence explains the constraint", () => {
+    const constraintEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-symbolic-bound",
+      quote: "The compression parameter Mβ = 0 retains no candidate edges. The parameter controls how many candidate edges are retained during construction.",
+      summary: "压缩参数 Mβ=0 时不保留候选边；该参数控制构建时保留的候选边数量。",
+      terms: ["compression parameter"]
+    };
+    const constraintAnalysis = {
+      ...prepared,
+      evidence: [constraintEvidence],
+      evidencePrompt: `[${constraintEvidence.id}] ${constraintEvidence.quote}`
+    };
+    const baseOutput = (text: string) => ({
+      claims: [{ evidenceIds: [constraintEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [constraintEvidence.id],
+      paperType: "theoretical",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [constraintEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The compression parameter controls how many candidate edges are retained during construction."
+    )), {
+      analysis: constraintAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("controls");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The compression parameter has a lower-bound constraint."
+    )), {
+      analysis: constraintAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("（0）");
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The compression parameter Mβ = 0 retains no candidate edges."
+    )), {
+      analysis: constraintAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    }).summary).toContain("Mβ = 0");
+  });
+
+  test("still requires a measured zero rather than accepting a qualitative substitute", () => {
+    const zeroMeasurement = {
+      ...prepared.evidence[0],
+      id: "evidence-zero-percent",
+      quote: "The controlled input has an error rate of 0%.",
+      summary: "受控输入的错误率为 0%。",
+      terms: ["error rate"]
+    };
+    const zeroAnalysis = {
+      ...prepared,
+      evidence: [zeroMeasurement],
+      evidencePrompt: `[${zeroMeasurement.id}] ${zeroMeasurement.quote}`
+    };
+    const baseOutput = (text: string) => ({
+      claims: [{ evidenceIds: [zeroMeasurement.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [zeroMeasurement.id],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [zeroMeasurement.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      "The controlled input has no observed errors."
+    )), {
+      analysis: zeroAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("（0）");
+  });
+
+  test("treats an equality-form metric as a measurement rather than a formula boundary", () => {
+    const metricEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-f1-equality",
+      quote: "F1 = 0.8 on the benchmark. The encoder uses late interaction.",
+      summary: "该基准上的 F1 为 0.8；编码器使用 late interaction。",
+      terms: ["F1", "late interaction"]
+    };
+    const metricAnalysis = {
+      ...prepared,
+      evidence: [metricEvidence],
+      evidencePrompt: `[${metricEvidence.id}] ${metricEvidence.quote}`
+    };
+    const text = "The F1 score is strong on the benchmark.";
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [{ evidenceIds: [metricEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [metricEvidence.id],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [metricEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: metricAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "en-US"
+    })).toThrow("（0.8）");
+  });
+
+  test("retains quantitative counts but ignores document-structural numbers", () => {
+    const baseOutput = (evidenceId: string, text: string) => ({
+      claims: [{ evidenceIds: [evidenceId], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [evidenceId],
+      paperType: "experimental",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [evidenceId],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+    const structuralEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-structural-number",
+      quote: "Passage 1, Page 2, Section 3, Figure 4, Table 5, and Chunk 6 describe the method mechanism.",
+      summary: "第 1 段说明方法机制。"
+    };
+    const structuralAnalysis = {
+      ...prepared,
+      evidence: [structuralEvidence],
+      evidencePrompt: `[${structuralEvidence.id}] ${structuralEvidence.quote}`
+    };
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      structuralEvidence.id,
+      "该段直接说明了方法的核心机制与其在整体流程中的作用。"
+    )), {
+      analysis: structuralAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toBe("该段直接说明了方法的核心机制与其在整体流程中的作用。");
+
+    const quantitativeEvidence = {
+      ...structuralEvidence,
+      id: "evidence-sample-count",
+      quote: "Passage 1 reports that the experiment evaluates 100 samples.",
+      summary: "第 1 段报告该实验评估了 100 个样本。"
+    };
+    const quantitativeAnalysis = {
+      ...prepared,
+      evidence: [quantitativeEvidence],
+      evidencePrompt: `[${quantitativeEvidence.id}] ${quantitativeEvidence.quote}`
+    };
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      quantitativeEvidence.id,
+      "该实验在数量充足且具有代表性的样本上完成了评估。"
+    )), {
+      analysis: quantitativeAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("概括了包含数值的论文断言（100）");
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput(
+      quantitativeEvidence.id,
+      "该实验评估了 100 个样本，并据此报告了方法的实验表现。"
+    )), {
+      analysis: quantitativeAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).toBe("该实验评估了 100 个样本，并据此报告了方法的实验表现。");
   });
 
   test("builds and validates an evidence-only reading plan", () => {
@@ -209,34 +556,58 @@ describe("thinReadingAgent", () => {
     const sentenceId = node.evidence.summarySentences[0].id;
     expect(prompt).toContain("证据复核 Agent");
     expect(prompt).toContain(sentenceId);
+    expect(prompt).toContain("supported（直接支持）");
+    expect(prompt).toContain("contradicted（证据明确冲突）");
+    expect(prompt).toContain("正文必须与生成和检索过程隔离");
+    expect(parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{
+          proposition: "taxonomy 组织知识地图",
+          sentenceId,
+          verdict: "partial"
+        }],
+        reason: "证据仅支持提出 taxonomy，不能支持它组织整张知识地图。",
+        unsupportedSentenceIds: [sentenceId],
+        verdict: "fail"
+      }),
+      sentenceIds: [sentenceId]
+    }).propositionVerdicts).toEqual([expect.objectContaining({ sentenceId, verdict: "partial" })]);
     expect(parseThinReadingEvidenceReview({
       output: JSON.stringify({ reason: "该句将 taxonomy 的作用夸大为因果结论。", unsupportedSentenceIds: [sentenceId], verdict: "fail" }),
       sentenceIds: [sentenceId]
     })).toMatchObject({ verdict: "fail", unsupportedSentenceIds: [sentenceId] });
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 是主轴", sentenceId, verdict: "supported" }],
+        reason: "命题与整句判定相互矛盾，因此该输出必须被拒绝。",
+        unsupportedSentenceIds: [sentenceId],
+        verdict: "fail"
+      }),
+      sentenceIds: [sentenceId]
+    })).toThrow("必须与 unsupportedSentenceIds 完全对应");
     expect(() => parseThinReadingEvidenceReview({
       output: JSON.stringify({ reason: "该句没有对应的论文证据，因此不能被复核通过。", unsupportedSentenceIds: ["invented-sentence"], verdict: "fail" }),
       sentenceIds: [sentenceId]
     })).toThrow("不存在的 summary sentence ID");
   });
 
-  test("includes parent claims and evidence spans when generating a branch", () => {
-    const prompt = buildThinReadingAgentPrompt({
-      context: {
+  test("keeps parent semantic context while hiding transient evidence identifiers", () => {
+    const branchContext: ThinReadingGenerationContext = {
         ...context,
         depth: 1,
         parentClaims: [
           {
-            evidenceIds: ["evidence-survey-taxonomy"],
-            id: "claim-parent-taxonomy",
+            evidenceIds: ["evidence-previous-layer-claim"],
+            id: "thin-reading-claim-previous-layer",
             status: "grounded",
             text: "上一层判断认为 taxonomy 是这篇综述留给读者的主轴。"
           }
         ],
         parentEvidenceSpans: [
           {
-            chunkId: "paper-survey:p2:chunk-1",
+            chunkId: "paper-survey:previous-layer:chunk-1",
             confidence: 0.91,
-            id: "evidence-survey-taxonomy",
+            id: "evidence-previous-layer-span",
             page: 2,
             pageTextEnd: 59,
             pageTextStart: 2,
@@ -247,17 +618,32 @@ describe("thinReadingAgent", () => {
         parentNodeId: "thin-reading-root",
         parentSummary: "上一层总述聚焦 taxonomy。",
         parentTitle: "Survey overview",
-        source: { kind: "omitted_section", label: "分类轴线", sectionKey: "taxonomy" }
-      },
-      prepared
-    });
+        source: {
+          evidenceIds: ["evidence-previous-layer-selection"],
+          excerpt: "taxonomy（分类框架）",
+          kind: "selected_text"
+        }
+      };
+    const prompt = buildThinReadingAgentPrompt({ context: branchContext, prepared });
+    const planningPrompt = buildThinReadingEvidencePlanPrompt({ context: branchContext, prepared });
 
     expect(prompt).toContain("上一层关键判断");
-    expect(prompt).toContain("claim-parent-taxonomy");
     expect(prompt).toContain("taxonomy 是这篇综述留给读者的主轴");
     expect(prompt).toContain("上一层论文内证据 span");
     expect(prompt).toContain("This survey presents a taxonomy");
     expect(prompt).toContain("本轮输出仍只能引用下方可用 evidence ID");
+    expect(prompt).toContain("选区在上一层具有论文证据映射");
+    expect(planningPrompt).toContain("选区在上一层具有论文证据映射");
+    for (const identifier of [
+      "evidence-previous-layer-claim",
+      "evidence-previous-layer-span",
+      "evidence-previous-layer-selection",
+      "thin-reading-claim-previous-layer",
+      "paper-survey:previous-layer:chunk-1"
+    ]) {
+      expect(prompt).not.toContain(identifier);
+      expect(planningPrompt).not.toContain(identifier);
+    }
   });
 
   test("anchors an external-source selection to its canonical source in the branch prompt", () => {
@@ -288,20 +674,21 @@ describe("thinReadingAgent", () => {
       prepared
     });
 
-    expect(prompt).toContain("选区对应的已验证外部 source ID：openalex:W42");
+    expect(prompt).toContain("选区在上一层关联过外部来源");
     expect(prompt).toContain("A Follow-up Study");
     expect(prompt).toContain("relation=related");
-    expect(prompt).toContain("NARRATION RULE: this exact source may only be called a related-work lead");
+    expect(prompt).toContain("PROVENANCE RULE: relation and source ID are internal metadata");
+    expect(prompt).toContain("State only a scholarly proposition directly supported");
     expect(prompt).toContain("不同 relation 的 source 不得在同一句中合并为笼统的 citation 结论");
   });
 
-  test("prioritizes evidence linked to a selected summary passage", () => {
+  test("uses a selected summary passage as a semantic focus rather than an evidence allowlist", () => {
     const prompt = buildThinReadingAgentPrompt({
       context: {
         ...context,
         depth: 1,
         source: {
-          evidenceIds: ["evidence-survey-taxonomy"],
+          evidenceIds: ["evidence-previous-layer-selection"],
           excerpt: "taxonomy（分类框架）",
           kind: "selected_text"
         }
@@ -309,8 +696,9 @@ describe("thinReadingAgent", () => {
       prepared
     });
 
-    expect(prompt).toContain("选区对应的本轮论文 evidence ID：evidence-survey-taxonomy");
-    expect(prompt).toContain("优先说明这些证据如何支持、限定或需要细化该选区");
+    expect(prompt).toContain("选区在上一层具有论文证据映射");
+    expect(prompt).toContain("必须在本轮可用证据目录中重新选择能直接支持该讲解的 ID");
+    expect(prompt).not.toContain("evidence-previous-layer-selection");
   });
 
   test("treats selected text, user context, and retrieved evidence as untrusted data", () => {
@@ -424,10 +812,9 @@ describe("thinReadingAgent", () => {
       summary: expect.stringContaining("taxonomy"),
       withinPaperClosure: true
     });
-    expect(seed.omittedSections[0]).toMatchObject({
-      label: "分类轴线",
-      sectionKey: "taxonomy"
-    });
+    expect(seed.omittedSections).toEqual([
+      expect.objectContaining({ label: "分类轴线", sectionKey: "taxonomy" })
+    ]);
   });
 
   test("creates sentence-level evidence mapping when the model omits summarySentences", () => {
@@ -474,6 +861,41 @@ describe("thinReadingAgent", () => {
       analysisEvidence: prepared.evidence,
       requireExplicitTraceability: true
     })).toThrow("summarySentences 必须显式覆盖正文");
+  });
+
+  test("rejects unsupported and unbound body sentences in live generation", () => {
+    const output = {
+      claims: [],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      recommendations: [],
+      summary: "这篇综述用 taxonomy 组织 vector database systems 的知识地图。",
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "unsupported",
+        text: "这篇综述用 taxonomy 组织 vector database systems 的知识地图。"
+      }],
+      withinPaperClosure: true
+    };
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(output), {
+      analysisEvidence: prepared.evidence,
+      requireExplicitTraceability: true
+    })).toThrow("标记为 unsupported");
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...output,
+      summarySentences: [{
+        ...output.summarySentences[0],
+        evidenceIds: [],
+        status: "weak"
+      }]
+    }), {
+      analysisEvidence: prepared.evidence,
+      requireExplicitTraceability: true
+    })).toThrow("缺少论文 evidence 或可信外部来源");
   });
 
   test("rejects a nearly complete sentence map that leaves displayed summary content untraced", () => {
@@ -715,7 +1137,7 @@ describe("thinReadingAgent", () => {
     ]);
   });
 
-  test("normalizes long omitted section labels from live model output", () => {
+  test("keeps concise omitted-section topics and removes bracketed detail from button labels", () => {
     const seed = parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
       claims: [],
@@ -738,14 +1160,44 @@ describe("thinReadingAgent", () => {
       analysisEvidence: prepared.evidence
     });
 
-    expect(seed.omittedSections[0]).toMatchObject({
-      label: "ACORN-γ 与 ACORN-1 的详细构造与搜索算法",
-      sectionKey: "method_details"
-    });
-    expect(seed.omittedSections[1]).toMatchObject({
-      label: "相关工作",
-      sectionKey: "related_work"
-    });
+    expect(seed.omittedSections).toEqual([
+      expect.objectContaining({
+        label: "ACORN-γ 与 ACORN-1 的详细构造与搜索算法",
+        sectionKey: "method_details"
+      }),
+      expect.objectContaining({ label: "相关工作", sectionKey: "related_work" })
+    ]);
+  });
+
+  test("keeps every uncovered topic when the semantic difference contains more than four", () => {
+    const candidates = ["定义", "数据", "流程", "指标", "案例", "复现"].map((label, index) => ({
+      label,
+      sectionKey: `custom_${index}`
+    }));
+
+    expect(resolveThinReadingOmittedSections({
+      candidates,
+      currentSummary: "当前页只讲核心结论。",
+      paperType: "unknown"
+    }).map((item) => item.label)).toEqual(["定义", "数据", "流程", "指标", "案例", "复现"]);
+  });
+
+  test("uses paper evidence as a fallback without repeating modules covered by ancestors", () => {
+    expect(resolveThinReadingOmittedSections({
+      ancestorSummaries: [{ summary: "上一层已经讲清实验评测与主要结果。" }],
+      candidates: [],
+      currentSummary: "当前页聚焦核心方法。",
+      evidence: [{
+        quote: "The ablation compares multiple baselines and reports a limitation.",
+        summary: "消融实验比较基线，并报告适用局限。",
+        terms: ["ablation", "baseline", "limitation"]
+      }],
+      paperType: "experimental",
+      targetLanguage: "zh-CN"
+    })).toEqual([
+      expect.objectContaining({ label: "消融与对比", sectionKey: "ablation" }),
+      expect.objectContaining({ label: "局限与边界", sectionKey: "limitations" })
+    ]);
   });
 
   test("rejects descriptive or combined evidence references instead of silently attributing them", () => {
@@ -958,6 +1410,89 @@ describe("thinReadingAgent", () => {
     })).toThrow("summarySentences 必须映射本轮 external source ID");
   });
 
+  test("keeps topic-search provenance internal while allowing supported scholarly content", () => {
+    const externalSource = {
+      abstract: "The study organizes ablation experiments by module to separate layout and vectorization factors.",
+      authors: ["A. Author"],
+      id: "arxiv:2507.08038",
+      provider: "arxiv" as const,
+      relation: "topic_search" as const,
+      relevance: 0.88,
+      retrievalQuery: "module ablation planning",
+      sourceRecordUrl: "https://export.arxiv.org/api/query?id_list=2507.08038",
+      sourceId: "2507.08038",
+      title: "Planning Modular Ablation Experiments",
+      url: "https://arxiv.org/abs/2507.08038"
+    };
+    const summary = "该研究按模块组织消融实验，以区分布局和向量化因素。";
+
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      claims: [],
+      externalKnowledge: [externalSource.id],
+      omittedSections: [],
+      paperEvidence: [],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: [externalSource.id],
+        status: "weak",
+        text: summary
+      }],
+      withinPaperClosure: false
+    }), {
+      externalSources: [externalSource],
+      requireExplicitTraceability: true,
+      requireExternalKnowledge: true
+    }).summary).toBe(summary);
+
+    const prompt = buildThinReadingAgentPrompt({
+      context: { ...context, depth: 1, externalSources: [externalSource], source: { kind: "omitted_section", label: "消融实验", sectionKey: "ablation" } },
+      prepared
+    });
+    expect(prompt).toContain("正文只陈述来源标题、摘要或页级原文直接支持的学术命题");
+    expect(prompt).toContain("这些定义仅供内部核验，不得照搬进正文");
+    expect(prompt).not.toContain("may only be called a topic-search result");
+    expect(prompt).not.toContain("只能称对应 source 为主题检索命中");
+  });
+
+  test.each([
+    "外部主题检索（arxiv:2507.08038）提供了消融实验规划的相关背景。",
+    "检索结果提示该方向值得继续阅读，但没有直接陈述任何可供学习的学术命题。",
+    "该方向可参考 openalex:W42，后续研究可以据此继续讨论消融实验的组织方式。"
+  ])("rejects retrieval-process narration from thin-reading body: %s", (summary) => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      claims: [],
+      externalKnowledge: ["arxiv:2507.08038"],
+      omittedSections: [],
+      paperEvidence: [],
+      paperType: "experimental",
+      summary,
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: ["arxiv:2507.08038"],
+        status: "weak",
+        text: summary
+      }],
+      withinPaperClosure: false
+    }), {
+      externalSources: [{
+        abstract: "The study organizes ablation experiments by module.",
+        authors: [],
+        id: "arxiv:2507.08038",
+        provider: "arxiv",
+        relation: "topic_search",
+        relevance: 0.8,
+        retrievalQuery: "ablation planning",
+        sourceRecordUrl: "https://export.arxiv.org/api/query?id_list=2507.08038",
+        sourceId: "2507.08038",
+        title: "Planning Modular Ablation Experiments",
+        url: "https://arxiv.org/abs/2507.08038"
+      }],
+      requireExplicitTraceability: true
+    })).toThrow("泄漏了 external source ID 或检索过程");
+  });
+
   test("rejects a topic-search result that is described as a citation relationship", () => {
     expect(() => parseThinReadingModelSeed(JSON.stringify({
       claims: [],
@@ -988,7 +1523,7 @@ describe("thinReadingAgent", () => {
         title: "Topic result",
         url: "https://doi.org/10.1000/topic"
       }]
-    })).toThrow("topic_search 只能表述为主题检索命中");
+    })).toThrow("topic_search/related 是内部溯源关系");
   });
 
   test("rejects citation language for a topic result when another retrieved source has a citation edge", () => {
@@ -1020,6 +1555,6 @@ describe("thinReadingAgent", () => {
           sourceRecordUrl: "https://openalex.org/W43", sourceId: "W43", title: "Graph result", url: "https://doi.org/10.1000/graph"
         }
       ]
-    })).toThrow("topic_search 只能表述为主题检索命中");
+    })).toThrow("topic_search/related 是内部溯源关系");
   });
 });

@@ -186,6 +186,7 @@ const paper: Paper = {
 
 function renderArtifactActions(options: {
   activeReaderPaper?: Paper | null;
+  allPapers?: Paper[];
   assistantLanguage?: string;
   confirmDuplicateGeneration?: ReturnType<typeof vi.fn>;
   diagnosticContext?: { endpoint: string; model: string; provider: string };
@@ -203,14 +204,19 @@ function renderArtifactActions(options: {
     documentIds: selectedPapers.map((item) => item.id),
     locked: options.locked ?? true
   };
-  const importedChunks = options.imported
+  const importedChunks: Record<string, RetrievalChunk[]> = options.imported
     ? Object.fromEntries(selectedPapers.map((item) => [item.id, buildImportedChunksForPaper(item)]))
     : {};
   const queueImportForPapers = vi.fn((queuedPapers: Paper[], onComplete?: () => void) => {
     if (options.imported) {
       return "already_imported";
     }
-    window.setTimeout(() => onComplete?.(), 1200);
+    window.setTimeout(() => {
+      queuedPapers.forEach((item) => {
+        importedChunks[item.id] = buildImportedChunksForPaper(item);
+      });
+      onComplete?.();
+    }, 1200);
     return queuedPapers.length > 0 ? "started" : "idle";
   });
   const runAgentAnalysis = vi.fn(async () => createCompletedAgentRun());
@@ -233,9 +239,11 @@ function renderArtifactActions(options: {
         : undefined,
       getActiveReaderPaper: () => options.activeReaderPaper ?? null,
       getImportedChunksByPaperId: () => importedChunks,
+      getImportedChunksForPaperId: (paperId) => importedChunks[paperId] ?? [],
       getModelDiagnosticContext: options.diagnosticContext
         ? () => options.diagnosticContext!
         : undefined,
+      getPaperById: (paperId) => (options.allPapers ?? selectedPapers).find((item) => item.id === paperId),
       getSelectedDocumentSet: () => selectedDocumentSet,
       getSelectedPapers: () => selectedPapers,
       onAnalysisHint,
@@ -538,7 +546,7 @@ describe("useArtifactActions", () => {
       await result.current.generateThinReadingBranch({
         artifactId: document.artifactId,
         document,
-        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+        source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
       });
     });
 
@@ -566,7 +574,7 @@ describe("useArtifactActions", () => {
           ],
           parentNodeId: document.rootNodeId,
           parentSummary: expect.stringContaining("Transformer"),
-          source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+          source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
         })
       })
     );
@@ -575,13 +583,96 @@ describe("useArtifactActions", () => {
     );
   });
 
+  test("rebuilds a historical thin-reading paper index before generating a branch", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const sourcePaper: Paper = {
+      id: "paper-attention",
+      sourcePath: "/library/attention.pdf",
+      title: "Attention Is All You Need"
+    };
+    const currentlySelectedPaper: Paper = {
+      id: "paper-current",
+      sourcePath: "/library/current.pdf",
+      title: "Currently selected paper"
+    };
+    const {
+      artifactStore,
+      onAnalysisHint,
+      queueImportForPapers,
+      result,
+      runAgentAnalysis
+    } = renderArtifactActions({
+      allPapers: [sourcePaper, currentlySelectedPaper],
+      imported: false,
+      selectedPapers: [currentlySelectedPaper]
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-07-28T00:00:00.000Z",
+      papers: [{ id: sourcePaper.id, title: sourcePaper.title }],
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+
+    await act(async () => {
+      const generation = result.current.generateThinReadingBranch({
+        artifactId: document.artifactId,
+        document,
+        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+      });
+      await vi.advanceTimersByTimeAsync(1200);
+      await generation;
+    });
+
+    expect(queueImportForPapers).toHaveBeenCalledWith(
+      [sourcePaper],
+      expect.any(Function),
+      expect.any(Function)
+    );
+    expect(onAnalysisHint).toHaveBeenCalledWith(
+      "《Attention Is All You Need》的薄读文本索引已失效，正在从原 PDF 自动重新建立。"
+    );
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({ sourcePaperIds: [sourcePaper.id] })
+    );
+  });
+
+  test("reports a missing historical source PDF without invoking the model", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      allPapers: [],
+      imported: false,
+      selectedPapers: []
+    });
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      papers: [{ id: "paper-attention", title: "Attention Is All You Need" }],
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+    })).rejects.toThrow("已不在当前文献库中");
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+  });
+
   test("reuses an existing branch without retaining legacy multi-paper refs", async () => {
     const fixture = createThinReadingFixture();
     const root = createThinReadingDocument(fixture);
     const generated = advanceThinReadingDocument(root, {
       parentNodeId: root.rootNodeId,
       seed: fixture.rootSeed,
-      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" },
+      source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" },
       title: "实验"
     });
     const document = { ...generated, activeNodeId: generated.rootNodeId };
@@ -603,7 +694,7 @@ describe("useArtifactActions", () => {
       await result.current.generateThinReadingBranch({
         artifactId: document.artifactId,
         document,
-        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+        source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
       });
     });
 
@@ -614,6 +705,54 @@ describe("useArtifactActions", () => {
         thinReadingDocument: expect.objectContaining({ paperIds: ["paper-attention"] })
       })
     );
+  });
+
+  test("accepts a declared omitted module and rejects undeclared module or body input", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true,
+      selectedPapers: papers
+    });
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-07-28T00:00:00.000Z",
+      papers,
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+
+    await act(async () => {
+      await result.current.generateThinReadingBranch({
+        artifactId: document.artifactId,
+        document,
+        source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+      });
+    });
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({
+        thinReadingContext: expect.objectContaining({
+          ancestorSummaries: [expect.objectContaining({ nodeId: document.rootNodeId })],
+          source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" }
+        })
+      })
+    );
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "omitted_section", label: "伪造板块", sectionKey: "forged" }
+    })).rejects.toThrow("薄读只能从当前层正文选区或当前层列出的未覆盖模块继续深入");
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "selected_text", excerpt: "不在本层正文中的文字" }
+    })).rejects.toThrow("薄读只能从当前层正文选区或当前层列出的未覆盖模块继续深入");
+    expect(runAgentAnalysis).toHaveBeenCalledTimes(1);
   });
 
   test("applies assistant language to generated thin-reading content", async () => {
@@ -784,6 +923,70 @@ describe("useArtifactActions", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       expect.stringContaining("route missing")
     );
+  });
+
+  test("diagnoses an external literature route 404 as a stale dev-cloud service", async () => {
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true
+    });
+    runAgentAnalysis.mockImplementationOnce(async (_artifactType, onProgress) => {
+      onProgress?.({
+        message: "正在检索可追溯的外部文献来源",
+        progress: 46,
+        stage: "thin_reading_retrieving_external_knowledge"
+      });
+      throw new Error("外部文献检索失败（404）");
+    });
+
+    act(() => {
+      result.current.startAnalysis("thin_reading");
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(artifactStore.getTasks()[0]).toMatchObject({
+      failure: {
+        failedStage: "thin_reading_retrieving_external_knowledge",
+        recovery: [
+          expect.stringContaining("/v1/research/external-knowledge"),
+          expect.stringContaining("仅重启 Tauri 不会更新")
+        ]
+      },
+      status: "failed"
+    });
+  });
+
+  test("diagnoses evidence-review failures as source support problems", async () => {
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({ imported: true });
+    runAgentAnalysis.mockImplementationOnce(async (_artifactType, onProgress) => {
+      onProgress?.({
+        message: "正在复核薄读句子与证据的对应关系",
+        progress: 73,
+        stage: "thin_reading_planning"
+      });
+      throw new Error("薄读证据复核未通过：外部来源摘要没有直接支持该句。");
+    });
+
+    act(() => {
+      result.current.startAnalysis("thin_reading");
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(artifactStore.getTasks()[0]).toMatchObject({
+      failure: {
+        failedStage: "thin_reading_planning",
+        recovery: [
+          expect.stringContaining("标题或摘要未直接支持"),
+          expect.stringContaining("只使用目标论文内证据")
+        ]
+      },
+      status: "failed"
+    });
   });
 
   test("cancels a running Agent artifact and never saves its partial result", async () => {
