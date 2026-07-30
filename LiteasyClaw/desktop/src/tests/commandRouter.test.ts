@@ -25,9 +25,7 @@ test("maps generating a mind map to an artifact skill invocation", () => {
 });
 
 test("maps disabling profile sampling to a settings skill invocation", () => {
-  const result = routeCommand("关闭用户画像");
-
-  expect(result).toEqual({
+  expect(routeCommand("关闭用户画像")).toEqual({
     skillId: "settings.adjust",
     input: {
       target: "profile.enabled",

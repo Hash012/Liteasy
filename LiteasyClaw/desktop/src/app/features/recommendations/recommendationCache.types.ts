@@ -1,6 +1,7 @@
 import type { RecommendationItem } from "./recommendation.types";
 
 export type RecommendationCacheScope = {
+  personalizationVersion?: number;
   selectionKey: string;
   sessionId: string;
   sortMode: "relevance" | "retrieved_at";

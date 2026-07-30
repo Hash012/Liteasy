@@ -16,7 +16,6 @@ Mermaid diagrams are rendered to SVG before PDF export.
 Required one-time setup:
   npm install --prefix LiteasyClaw/tools/md-to-pdf --registry=https://registry.npmjs.org`);
 }
-
 try {
   const args = parseCliArgs(process.argv.slice(2));
   if (args.help) {
@@ -30,4 +29,3 @@ try {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
-

@@ -26,10 +26,10 @@ function getCloudLabel(context: AgentRuntimeContextView) {
 }
 
 function getProfileLabel(context: AgentRuntimeContextView) {
-  const enabledLabel = context.profile.enabled ? "画像开启" : "画像关闭";
-  const confirmationLabel = context.profile.requiresConfirmation ? "命令需确认" : "命令可直接执行";
-
-  return `${enabledLabel} · ${confirmationLabel}`;
+  if (!context.profile.enabled) {
+    return "画像关闭";
+  }
+  return context.profile.personalizationSummary ? "画像开启 · 已应用学术档案" : "画像开启";
 }
 
 function getIssueLabel(issue: RuntimeContextIssue) {

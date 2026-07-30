@@ -55,7 +55,7 @@ test("expands grouped context details", async () => {
   expect(within(panel).getByText("Cloud")).toBeInTheDocument();
   expect(within(panel).getByText("已连接 · Liteasy AI Reading Lab")).toBeInTheDocument();
   expect(within(panel).getByText("Profile")).toBeInTheDocument();
-  expect(within(panel).getByText("画像关闭 · 命令需确认")).toBeInTheDocument();
+  expect(within(panel).getByText("画像关闭")).toBeInTheDocument();
 });
 
 test("renders the same context view produced for planner and policy contexts", async () => {
@@ -67,7 +67,8 @@ test("renders the same context view produced for planner and policy contexts", a
       },
       profile: {
         enabled: true,
-        requiresConfirmation: false
+        requiresConfirmation: false,
+        personalizationSummary: "研究阶段：博士研究生"
       },
       selection: {
         importedCount: 0,
@@ -93,5 +94,5 @@ test("renders the same context view produced for planner and policy contexts", a
   expect(within(panel).getByText("工作区未知")).toBeInTheDocument();
   expect(within(panel).getByText("未知工作区")).toBeInTheDocument();
   expect(within(panel).getByText("未连接")).toBeInTheDocument();
-  expect(within(panel).getByText("画像开启 · 命令可直接执行")).toBeInTheDocument();
+  expect(within(panel).getByText("画像开启 · 已应用学术档案")).toBeInTheDocument();
 });

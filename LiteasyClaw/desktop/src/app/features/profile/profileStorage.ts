@@ -7,8 +7,19 @@ function isAcademicProfile(value: unknown): value is AcademicProfile {
     return false;
   }
   const candidate = value as Partial<Record<keyof AcademicProfile, unknown>>;
-  return Object.keys(defaultAcademicProfile).every(
-    (key) => typeof candidate[key as keyof AcademicProfile] === "string"
+  const disciplines = candidate.disciplines;
+  const validDisciplines = typeof disciplines === "undefined" || (
+    Array.isArray(disciplines) && disciplines.every((discipline) => {
+      if (!discipline || typeof discipline !== "object") {
+        return false;
+      }
+      const item = discipline as Record<string, unknown>;
+      return ["categoryCode", "categoryName", "code", "description", "name"]
+        .every((key) => typeof item[key] === "string");
+    })
+  );
+  return validDisciplines && Object.entries(defaultAcademicProfile).every(([key, defaultValue]) =>
+    Array.isArray(defaultValue) || typeof candidate[key as keyof AcademicProfile] === "string"
   );
 }
 
@@ -18,7 +29,9 @@ export function loadAcademicProfile(): AcademicProfile {
   }
   try {
     const parsed: unknown = JSON.parse(window.localStorage.getItem(academicProfileStorageKey) ?? "null");
-    return isAcademicProfile(parsed) ? parsed : { ...defaultAcademicProfile };
+    return isAcademicProfile(parsed)
+      ? { ...defaultAcademicProfile, ...parsed, disciplines: parsed.disciplines ?? [] }
+      : { ...defaultAcademicProfile, disciplines: [] };
   } catch {
     return { ...defaultAcademicProfile };
   }

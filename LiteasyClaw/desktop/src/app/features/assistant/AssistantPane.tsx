@@ -101,7 +101,9 @@ type AssistantPaneProps = {
   onOpenOrganizationSharedLibrary?: () => string | Promise<string>;
   onActiveSessionChange?: (session: AssistantSessionHistoryItem) => void;
   onSettingsChanged?: (settings: SettingsState) => void;
+  profilePersonalizationSummary?: string;
   profileUnlocked?: boolean;
+  registrationWelcomeMessage?: { content: string; id: number };
   readerConversationContext?: ReaderConversationContext | null;
   runtimeOrganizationName?: string;
   availablePapers?: Paper[];
@@ -246,7 +248,9 @@ export function AssistantPane({
   onOpenOrganizationSharedLibrary,
   onActiveSessionChange,
   onSettingsChanged,
+  profilePersonalizationSummary,
   profileUnlocked = false,
+  registrationWelcomeMessage,
   readerConversationContext = null,
   runtimeOrganizationName,
   runtimeWorkspace,
@@ -266,6 +270,7 @@ export function AssistantPane({
     initialSessionRef.current
   ]);
   const knownArtifactTaskIdsRef = useRef(new Set<string>());
+  const deliveredRegistrationWelcomeMessageIdsRef = useRef(new Set<number>());
   const executionJournalRef = useRef(executionJournal ?? createExecutionJournal());
   const processedAgentRunSequencesRef = useRef(new Map<string, number>());
   const activeConversationRunRef = useRef<{
@@ -298,6 +303,7 @@ export function AssistantPane({
     importedCount: selectedSetStatus.importedCount,
     organizationName: runtimeOrganizationName,
     profileEnabled: Boolean(settingsStoreRef.current.getState()["profile.enabled"]),
+    profilePersonalizationSummary,
     profileUnlocked,
     selectedCount: selectedSetStatus.selectedCount,
     selectionLocked: selectedSetStatus.selectionLocked,
@@ -437,6 +443,21 @@ export function AssistantPane({
     sessionRegistryRef.current = nextSessions;
     setSessionHistory([...nextSessions]);
   }
+
+  useEffect(() => {
+    if (
+      !registrationWelcomeMessage ||
+      deliveredRegistrationWelcomeMessageIdsRef.current.has(registrationWelcomeMessage.id)
+    ) {
+      return;
+    }
+
+    deliveredRegistrationWelcomeMessageIdsRef.current.add(registrationWelcomeMessage.id);
+    assistantStoreRef.current.addMessage(
+      createMessage("assistant", registrationWelcomeMessage.content)
+    );
+    syncAssistant();
+  }, [registrationWelcomeMessage]);
 
   function saveActiveConversation() {
     const activeSession = sessionRegistryRef.current.find(

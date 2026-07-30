@@ -7,6 +7,7 @@ export type AgentRuntimeContextViewInput = {
   importedCount: number;
   organizationName?: string;
   profileEnabled: boolean;
+  profilePersonalizationSummary?: string;
   profileUnlocked: boolean;
   selectedCount: number;
   selectionLocked: boolean;
@@ -18,6 +19,7 @@ function hasAcademicProfile(profile: AcademicProfile | undefined): profile is Ac
     return false;
   }
   return profile.age !== "未设置" ||
+    (profile.disciplines ?? []).length > 0 ||
     profile.gender !== "未设置" ||
     profile.stage !== "未设置" ||
     Boolean(profile.researchTopics || profile.researchMethods || profile.researchDatasets);
@@ -62,6 +64,9 @@ export function buildAgentRuntimeContextView(input: AgentRuntimeContextViewInput
         ? { academic: { ...input.academicProfile } }
         : {}),
       enabled: input.profileEnabled,
+      ...(input.profileEnabled && input.profilePersonalizationSummary
+        ? { personalizationSummary: input.profilePersonalizationSummary }
+        : {}),
       requiresConfirmation: true
     },
     selection: {
@@ -82,7 +87,9 @@ export function formatAgentRuntimeContextSummary(context: AgentRuntimeContextVie
   const lockLabel = context.selection.locked ? "已锁定" : "未锁定";
   const cloudLabel = context.cloud.connected ? "云账号已连接" : "云账号未连接";
   const profileLabel = context.profile.enabled
-    ? context.profile.academic
+    ? context.profile.personalizationSummary
+      ? "画像开启（学术档案与个性化已应用）"
+      : context.profile.academic
       ? `画像开启（${formatAcademicProfileBrief(context.profile.academic)}）`
       : "画像开启"
     : "画像关闭";

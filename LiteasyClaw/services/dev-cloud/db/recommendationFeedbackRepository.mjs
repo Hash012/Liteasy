@@ -37,6 +37,16 @@ export function saveRecommendationFeedback(userId, feedback, now = new Date()) {
   return record;
 }
 
+export function clearRecommendationFeedbackForUser(userId) {
+  const state = readState();
+  const cleared = Array.isArray(state[userId]) ? state[userId].length : 0;
+  delete state[userId];
+  if (cleared > 0) {
+    writeJsonFile(recommendationFeedbackFilename, state);
+  }
+  return cleared;
+}
+
 export function resetRecommendationFeedbackData() {
   writeJsonFile(recommendationFeedbackFilename, {});
   return { reset: true };

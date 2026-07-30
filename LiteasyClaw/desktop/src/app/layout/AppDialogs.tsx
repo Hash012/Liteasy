@@ -45,10 +45,10 @@ export type AppDialogsProps = {
   onInviteMember: () => void;
   onJoinOrganization: (inviteCode: string) => void;
   onLeaveOrganization: () => void;
+  onExportProfile: () => void;
   onOpenSharedLibrary: (summary: OrganizationSummary) => void;
   onSelectOrganization: (organizationId: string) => void;
   organizationDialogOpen: boolean;
-  readPaperCount: number;
   summary: OrganizationSummary | null;
 };
 
@@ -83,10 +83,10 @@ export function AppDialogs({
   onInviteMember,
   onJoinOrganization,
   onLeaveOrganization,
+  onExportProfile,
   onOpenSharedLibrary,
   onSelectOrganization,
   organizationDialogOpen,
-  readPaperCount,
   summary
 }: AppDialogsProps) {
   return (
@@ -110,7 +110,7 @@ export function AppDialogs({
           academicProfile={academicProfile}
           accountSession={accountSession}
           onClose={onCloseAcademicArchive}
-          readPaperCount={readPaperCount}
+          onExport={onExportProfile}
         />
       ) : null}
       {createOrganizationOpen ? (

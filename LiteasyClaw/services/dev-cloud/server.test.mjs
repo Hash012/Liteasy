@@ -15,6 +15,10 @@ import {
   listRecommendationCandidates,
   upsertRecommendationCandidates
 } from "./db/recommendationCandidateRepository.mjs";
+import {
+  listRecommendationFeedback,
+  saveRecommendationFeedback
+} from "./db/recommendationFeedbackRepository.mjs";
 
 test.beforeEach(() => {
   process.env.LITEASY_DEV_CLOUD_DATA_DIR = fs.mkdtempSync(
@@ -243,6 +247,10 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/recommendations",
     "POST /v1/recommendations/feedback",
     "POST /v1/research/external-knowledge",
+    "POST /v1/profile/get",
+    "POST /v1/profile/save",
+    "POST /v1/profile/clear",
+    "POST /v1/personalization/signal",
     "POST /v1/recommendation-cache/get",
     "POST /v1/recommendation-cache/put",
     "POST /v1/recommendation-cache/clear",
@@ -256,6 +264,94 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/org/shared-library/manifest",
     "POST /v1/org/governance-summary"
   ]);
+});
+
+test("persists profile signals and clears every account personalization artifact", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "demo-session-1";
+  const discipline = {
+    categoryCode: "08",
+    categoryName: "工学",
+    code: "0812",
+    description: "自然语言处理",
+    name: "计算机科学与技术"
+  };
+  const invokeProfile = (url, body) => invokeHandler({
+    body: JSON.stringify({ sessionId, ...body }),
+    handler,
+    headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+    method: "POST",
+    url
+  });
+
+  const saveResponse = await invokeProfile("/v1/profile/save", {
+    profile: { disciplines: [discipline], stage: "博士研究生" }
+  });
+  assert.equal(saveResponse.statusCode, 200);
+  assert.deepEqual(saveResponse.json.profile.disciplines, [discipline]);
+  assert.equal(saveResponse.json.profile.stage, "博士研究生");
+
+  const getResponse = await invokeProfile("/v1/profile/get", {});
+  assert.deepEqual(getResponse.json.profile, saveResponse.json.profile);
+
+  const signalResponse = await invokeProfile("/v1/personalization/signal", {
+    signal: { kind: "paper_opened", title: "神经信息检索方法" }
+  });
+  assert.equal(signalResponse.statusCode, 200);
+  assert.match(signalResponse.json.assistantSummary, /神经/);
+  assert.equal(signalResponse.json.assistantSummary.includes("神经信息检索方法"), false);
+
+  await invokeProfile("/v1/personalization/signal", {
+    signal: { kind: "recommendation_dismissed", recommendationId: "rec-hidden" }
+  });
+  putRecommendationCache({
+    personalizationVersion: signalResponse.json.personalizationVersion,
+    selectionKey: "selection-1",
+    sessionId,
+    sortMode: "relevance",
+    workspaceKey: "workspace-1"
+  }, [{ id: "cached-rec" }]);
+  saveRecommendationFeedback(sessionId, {
+    action: "saved",
+    candidateId: "candidate-1",
+    source: "OpenAlex",
+    title: "Cached paper"
+  });
+  upsertRecommendationCandidates(sessionId, [{
+    canonicalId: "https://doi.org/10.1000/profile-clear",
+    id: "candidate-1",
+    qualityGate: { passed: true },
+    reason: "test",
+    relevanceBand: "high",
+    relevanceScore: 0.9,
+    scoreComponents: { sourceRelevance: 0.9 },
+    source: "OpenAlex",
+    sourceUrl: "https://example.test/paper",
+    title: "Cached paper"
+  }]);
+
+  const clearResponse = await invokeProfile("/v1/profile/clear", {});
+  assert.equal(clearResponse.statusCode, 200);
+  assert.deepEqual(clearResponse.json.profile.disciplines, []);
+  assert.equal(clearResponse.json.assistantSummary, undefined);
+  assert.deepEqual(listRecommendationFeedback(sessionId), []);
+  assert.deepEqual(listRecommendationCandidates(sessionId), []);
+  assert.equal(getRecommendationCache({
+    personalizationVersion: signalResponse.json.personalizationVersion,
+    selectionKey: "selection-1",
+    sessionId,
+    sortMode: "relevance",
+    workspaceKey: "workspace-1"
+  }).cacheHit, false);
+
+  const database = createDatabase();
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM academic_profiles WHERE owner_key = ?")
+    .get(sessionId).count, 0);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM personalization_terms WHERE owner_key = ?")
+    .get(sessionId).count, 0);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM recommendation_suppressions WHERE owner_key = ?")
+    .get(sessionId).count, 0);
+  database.close();
 });
 
 test("normalizes traceable OpenAlex works for external thin-reading research", async () => {

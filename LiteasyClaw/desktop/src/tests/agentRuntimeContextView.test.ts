@@ -7,7 +7,8 @@ test("builds a ready runtime context summary", () => {
   const context = buildAgentRuntimeContextView({
     importedCount: 2,
     organizationName: "Liteasy AI Reading Lab",
-    profileEnabled: false,
+    profileEnabled: true,
+    profilePersonalizationSummary: "研究阶段：博士研究生",
     profileUnlocked: true,
     selectedCount: 2,
     selectionLocked: true,
@@ -23,7 +24,8 @@ test("builds a ready runtime context summary", () => {
       organizationName: "Liteasy AI Reading Lab"
     },
     profile: {
-      enabled: false,
+      enabled: true,
+      personalizationSummary: "研究阶段：博士研究生",
       requiresConfirmation: true
     },
     selection: {
@@ -39,14 +41,14 @@ test("builds a ready runtime context summary", () => {
     }
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 2 篇 · 已锁定 · 已导入 2/2 · 云账号已连接 · 画像关闭"
+    "上下文 · 选中 2 篇 · 已锁定 · 已导入 2/2 · 云账号已连接 · 画像开启（学术档案与个性化已应用）"
   );
 });
 
 test("marks empty, unlocked, and partially imported selections as not ready", () => {
   const context = buildAgentRuntimeContextView({
     importedCount: 1,
-    profileEnabled: true,
+    profileEnabled: false,
     profileUnlocked: false,
     selectedCount: 3,
     selectionLocked: false
@@ -66,7 +68,7 @@ test("marks empty, unlocked, and partially imported selections as not ready", ()
     connected: false
   });
   expect(formatAgentRuntimeContextSummary(context)).toBe(
-    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 画像开启"
+    "上下文 · 选中 3 篇 · 未锁定 · 已导入 1/3 · 云账号未连接 · 画像关闭"
   );
 });
 
@@ -74,6 +76,7 @@ test("includes academic profile details when profile sampling is enabled", () =>
   const context = buildAgentRuntimeContextView({
     academicProfile: {
       age: "27",
+      disciplines: [],
       gender: "女",
       preferredLanguages: "中文、English",
       researchDatasets: "BEIR",
@@ -91,6 +94,7 @@ test("includes academic profile details when profile sampling is enabled", () =>
   expect(context.profile).toEqual({
     academic: {
       age: "27",
+      disciplines: [],
       gender: "女",
       preferredLanguages: "中文、English",
       researchDatasets: "BEIR",
