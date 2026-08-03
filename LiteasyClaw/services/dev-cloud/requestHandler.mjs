@@ -268,9 +268,9 @@ function configuredOpenAlexMailto(config, customConfig) {
 }
 
 function configuredOpenAlexServiceKey(config, customConfig) {
-  const configuredKey = typeof config.openAlexApiKey === "string"
-    ? config.openAlexApiKey.trim()
-    : "";
+  const configuredKey = typeof customConfig.openAlexApiKey === "string" && customConfig.openAlexApiKey.trim()
+    ? customConfig.openAlexApiKey.trim()
+    : (typeof config.openAlexApiKey === "string" ? config.openAlexApiKey.trim() : "");
   if (configuredKey) {
     return configuredKey;
   }
@@ -954,40 +954,41 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       const openAireEnabled = expandedSourcesEnabled && customConfig.openAireEnabled !== false;
       const oapenEnabled = expandedSourcesEnabled && customConfig.oapenEnabled !== false;
       const doajEnabled = expandedSourcesEnabled && customConfig.doajEnabled !== false;
+      const retrievalOptions = {
+        allowCrossrefOnlyFallback: true,
+        arxivEnabled: customConfig.arxivEnabled === true,
+        arxivTimeoutMs: customConfig.arxivTimeoutMs,
+        arxivTransport: customConfig.arxivTransport,
+        crossrefEnabled: customConfig.crossrefEnabled !== false,
+        crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+        crossrefTransport: customConfig.crossrefTransport,
+        openAlexApiKey,
+        openAlexMailto,
+        openAlexEnabled: Boolean(openAlexApiKey),
+        openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+        openAlexTransport: customConfig.openAlexTransport,
+        openAireEnabled,
+        openAireTimeoutMs: customConfig.openAireTimeoutMs,
+        openAireTransport: customConfig.openAireTransport,
+        oapenEnabled,
+        oapenTimeoutMs: customConfig.oapenTimeoutMs,
+        oapenTransport: customConfig.oapenTransport,
+        doajEnabled,
+        doajTimeoutMs: customConfig.doajTimeoutMs,
+        doajTransport: customConfig.doajTransport,
+        semanticScholarApiKey: customConfig.semanticScholarApiKey ?? config.semanticScholarApiKey,
+        semanticScholarEnabled,
+        semanticScholarTimeoutMs: customConfig.semanticScholarTimeoutMs,
+        semanticScholarTransport: customConfig.semanticScholarTransport,
+        rerank: false
+      };
       try {
         const sourceGroups = await Promise.all(selectedDocuments.map(async (document) => {
           const result = await externalKnowledgeSearch({
             limit: 5,
             query: document.title,
             targetPaperTitle: document.title
-          }, {
-            allowCrossrefOnlyFallback: true,
-            arxivEnabled: customConfig.arxivEnabled === true,
-            arxivTimeoutMs: customConfig.arxivTimeoutMs,
-            arxivTransport: customConfig.arxivTransport,
-            crossrefEnabled: customConfig.crossrefEnabled !== false,
-            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
-            crossrefTransport: customConfig.crossrefTransport,
-            openAlexApiKey,
-            openAlexMailto,
-            openAlexEnabled: Boolean(openAlexApiKey),
-            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
-            openAlexTransport: customConfig.openAlexTransport,
-            openAireEnabled,
-            openAireTimeoutMs: customConfig.openAireTimeoutMs,
-            openAireTransport: customConfig.openAireTransport,
-            oapenEnabled,
-            oapenTimeoutMs: customConfig.oapenTimeoutMs,
-            oapenTransport: customConfig.oapenTransport,
-            doajEnabled,
-            doajTimeoutMs: customConfig.doajTimeoutMs,
-            doajTransport: customConfig.doajTransport,
-            semanticScholarApiKey: config.semanticScholarApiKey,
-            semanticScholarEnabled,
-            semanticScholarTimeoutMs: customConfig.semanticScholarTimeoutMs,
-            semanticScholarTransport: customConfig.semanticScholarTransport,
-            rerank: false
-          });
+          }, retrievalOptions);
           return {
             relatedDocumentTitle: document.title,
             semanticQuery: document.title,
@@ -1007,34 +1008,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
             limit: 5,
             query: profileQuery,
             targetPaperTitle: profileQuery
-          }, {
-            allowCrossrefOnlyFallback: true,
-            arxivEnabled: customConfig.arxivEnabled === true,
-            arxivTimeoutMs: customConfig.arxivTimeoutMs,
-            arxivTransport: customConfig.arxivTransport,
-            crossrefEnabled: customConfig.crossrefEnabled !== false,
-            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
-            crossrefTransport: customConfig.crossrefTransport,
-            openAlexApiKey,
-            openAlexMailto,
-            openAlexEnabled: Boolean(openAlexApiKey),
-            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
-            openAlexTransport: customConfig.openAlexTransport,
-            openAireEnabled,
-            openAireTimeoutMs: customConfig.openAireTimeoutMs,
-            openAireTransport: customConfig.openAireTransport,
-            oapenEnabled,
-            oapenTimeoutMs: customConfig.oapenTimeoutMs,
-            oapenTransport: customConfig.oapenTransport,
-            doajEnabled,
-            doajTimeoutMs: customConfig.doajTimeoutMs,
-            doajTransport: customConfig.doajTransport,
-            semanticScholarApiKey: config.semanticScholarApiKey,
-            semanticScholarEnabled,
-            semanticScholarTimeoutMs: customConfig.semanticScholarTimeoutMs,
-            semanticScholarTransport: customConfig.semanticScholarTransport,
-            rerank: false
-          });
+          }, retrievalOptions);
           sourceGroups.push({
             relatedDocumentTitle: "研究画像",
             semanticQuery: profileQuery,
