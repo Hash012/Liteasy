@@ -682,6 +682,9 @@ export function buildLiveRecommendationPayload(body, sourceGroups, now = new Dat
         ].filter(Boolean).join(" "),
         relatedDocumentTitle,
         relatedDocumentTitles: [relatedDocumentTitle],
+        surfacingTags: typeof group?.surfacingTag === "string" && group.surfacingTag.trim()
+          ? [group.surfacingTag.trim()]
+          : [],
         ...(source.relation ? { relation: source.relation } : {}),
         baseRelevance,
         reason: `${recommendationReason(source)}${recommendationIdentityReason(identityResolution)}${preferenceReason}${profileReason}${semanticReason}${source.fromCandidatePool
@@ -750,6 +753,10 @@ export function buildLiveRecommendationPayload(body, sourceGroups, now = new Dat
         relatedDocumentTitles: [...new Set([
           ...existing.relatedDocumentTitles,
           ...candidate.relatedDocumentTitles
+        ])].slice(0, 12),
+        surfacingTags: [...new Set([
+          ...(existing.surfacingTags ?? []),
+          ...(candidate.surfacingTags ?? [])
         ])].slice(0, 12),
         source: combinedIdentity.providers.map((provider) => (
           provider === "openalex" ? "OpenAlex" : provider === "crossref" ? "Crossref" : "arXiv"

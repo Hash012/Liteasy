@@ -68,6 +68,7 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
       stage: "未设置"
     },
     profileSamplingEnabled: false,
+    profileTags: [],
     recommendationItems: [],
     recommendationMessage: "推荐",
     recommendationPending: false,

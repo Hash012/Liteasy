@@ -5,7 +5,8 @@ import { buildAcademicProfileAssistantSummary, defaultAcademicProfile } from "./
 import {
   createAcademicProfileClient,
   type AcademicProfileTransport,
-  type PersonalizationSignal
+  type PersonalizationSignal,
+  type UserTag
 } from "./academicProfileClient";
 import {
   clearAcademicProfile,
@@ -44,6 +45,7 @@ export function useProfileActions({
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
   const [personalizationSummary, setPersonalizationSummary] = useState<string | undefined>();
   const [personalizationVersion, setPersonalizationVersion] = useState(0);
+  const [profileTags, setProfileTags] = useState<UserTag[]>([]);
   const currentSessionIdRef = useRef(accountSession?.sessionId);
   currentSessionIdRef.current = accountSession?.sessionId;
   const client = useMemo(
@@ -59,6 +61,7 @@ export function useProfileActions({
     setAcademicProfile(localProfile);
     setPersonalizationSummary(undefined);
     setPersonalizationVersion(0);
+    setProfileTags([]);
     setProfileClearMessage(undefined);
 
     if (!accountSession || !client) {
@@ -80,6 +83,7 @@ export function useProfileActions({
         });
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
+        setProfileTags(snapshot.tags ?? []);
       })
       .catch(() => {
         if (active && currentSessionIdRef.current === sessionId) {
@@ -137,6 +141,7 @@ export function useProfileActions({
       });
       setPersonalizationSummary(snapshot.assistantSummary);
       setPersonalizationVersion(snapshot.personalizationVersion);
+      setProfileTags(snapshot.tags ?? []);
       setProfileClearMessage("学术档案已保存并同步。");
     } catch {
       if (currentSessionIdRef.current === sessionId) {
@@ -162,6 +167,7 @@ export function useProfileActions({
         setAcademicProfile({ ...defaultAcademicProfile, disciplines: [] });
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
+        setProfileTags(snapshot.tags ?? []);
         setClearProfileConfirmOpen(false);
         setProfileClearMessage("已清空学术档案和个性化数据。");
         onProfileSamplingChanged?.(false);
@@ -177,6 +183,7 @@ export function useProfileActions({
     setAcademicProfile({ ...defaultAcademicProfile, disciplines: [] });
     setPersonalizationSummary(undefined);
     setPersonalizationVersion(0);
+    setProfileTags([]);
     setClearProfileConfirmOpen(false);
     setProfileClearMessage("已清空本机学术档案。");
     onProfileSamplingChanged?.(false);
@@ -195,6 +202,7 @@ export function useProfileActions({
       }
       setPersonalizationSummary(snapshot.assistantSummary);
       setPersonalizationVersion(snapshot.personalizationVersion);
+      setProfileTags(snapshot.tags ?? []);
     } catch {
       // Personalization updates must not interrupt reading or collection workflows.
     }
@@ -218,6 +226,7 @@ export function useProfileActions({
     personalizationVersion,
     profileClearMessage,
     profileSamplingEnabled,
+    profileTags,
     recordPersonalizationSignal,
     toggleProfileSampling,
     updateAcademicProfile

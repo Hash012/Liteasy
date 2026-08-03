@@ -13,6 +13,7 @@ import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../
 import type { OrganizationGovernanceStatus, OrganizationGovernanceSummary, OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "../features/organization/organization.types";
 import type { CollectionItem } from "../features/collection/collection.types";
 import type { RecommendationItem, RecommendationStatus } from "../features/recommendations/recommendation.types";
+import type { UserTag } from "../features/profile/academicProfileClient";
 import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 import type { LeftRailView } from "./useLeftRailNavigation";
@@ -78,6 +79,7 @@ export type LeftPaneProps = {
   profileClearMessage?: string;
   profileReadPaperCount: number;
   profileSamplingEnabled: boolean;
+  profileTags: UserTag[];
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
   recommendationPending: boolean;
@@ -168,6 +170,7 @@ export function LeftPane({
   profileClearMessage,
   profileReadPaperCount,
   profileSamplingEnabled,
+  profileTags,
   recommendationItems,
   recommendationMessage,
   recommendationPending,
@@ -230,6 +233,7 @@ export function LeftPane({
               organizationSummary={organizationSummary}
               profileClearMessage={profileClearMessage}
               profileSamplingEnabled={profileSamplingEnabled}
+              profileTags={profileTags}
               readPaperCount={profileReadPaperCount}
             />
           ) : (

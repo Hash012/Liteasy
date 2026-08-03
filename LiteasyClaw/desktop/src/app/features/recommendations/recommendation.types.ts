@@ -81,6 +81,7 @@ export type RecommendationItem = {
   source: string;
   sourceKind: "cache" | "live" | "mock";
   sourceUrl?: string;
+  surfacingTags?: string[];
   title: string;
   externalReranker?: {
     finalScore: number;

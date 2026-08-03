@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { useRecommendations } from "../app/features/recommendations/useRecommendations";
 import type { AccountSession } from "../app/features/account/account.types";
 import type { Paper } from "../app/features/workspace/workspace.types";
+import type { RecommendationItem } from "../app/features/recommendations/recommendation.types";
 
 const accountSession: AccountSession = {
   email: "researcher@liteasy.dev",
@@ -91,7 +92,10 @@ describe("useRecommendations", () => {
     expect(cacheGet).toHaveBeenCalledTimes(1);
     expect(recommendationFetch).not.toHaveBeenCalled();
     expect(cachePut).not.toHaveBeenCalled();
-    expect(cacheGet.mock.calls[0][0].personalizationVersion).toBe(7);
+    // personalizationVersion is intentionally excluded from the cache scope so that
+    // a profile-load / signal that bumps the version does not invalidate the cache or
+    // drop an in-flight fetch (which previously made recommendations vanish on reload).
+    expect(cacheGet.mock.calls[0][0].personalizationVersion).toBeUndefined();
     expect(result.current.recommendationMessage).toBe("已显示当前选中文献集的缓存推荐。");
   });
 
@@ -241,5 +245,61 @@ describe("useRecommendations", () => {
     });
     expect(result.current.recommendationItems).toEqual([]);
     expect(result.current.recommendationMessage).toContain("降低相似候选排序");
+  });
+
+  test("a personalizationVersion bump while a fetch is in flight does not drop results or refetch", async () => {
+    let resolveFetch: ((items: RecommendationItem[]) => void) | undefined;
+    const fetchPromise = new Promise<RecommendationItem[]>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const cacheGet = vi.fn(async () => ({ cacheHit: false as const, recommendations: [] as RecommendationItem[] }));
+    const cachePut = vi.fn(async () => ({ cachedAt: "2026-05-14T08:15:00Z", ok: true as const }));
+    const recommendationFetch = vi.fn(() => fetchPromise);
+
+    const item: RecommendationItem = {
+      discoveredAt: "2026-05-14T08:15:00Z",
+      id: "rec-stable-1",
+      relatedDocumentTitle: "Attention Is All You Need",
+      relevanceBand: "high",
+      relevanceScore: 0.8,
+      reason: "stable",
+      source: "OpenAlex",
+      sourceKind: "live",
+      title: "Stable Recommendation Across Profile Loads"
+    };
+
+    const { result, rerender } = renderHook(
+      ({ pv }) => useRecommendations({
+        accountSession,
+        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+        recommendationCacheDeps: { clear: vi.fn(), get: cacheGet, put: cachePut },
+        recommendationGeneratorDeps: { fetch: recommendationFetch },
+        recommendationsEnabled: true,
+        recommendationSortMode: "relevance",
+        personalizationVersion: pv,
+        selectedPapers,
+        workspaceRevision: 0,
+        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
+      }),
+      { initialProps: { pv: 0 } }
+    );
+
+    await waitFor(() => expect(recommendationFetch).toHaveBeenCalledTimes(1));
+
+    // Simulate the profile loading / a signal bumping personalizationVersion mid-fetch.
+    rerender({ pv: 9 });
+    await Promise.resolve();
+
+    // The in-flight fetch must NOT have been cancelled and no second fetch started.
+    expect(recommendationFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFetch?.([item]);
+      await fetchPromise;
+    });
+
+    await waitFor(() => expect(result.current.recommendationItems).toHaveLength(1));
+    expect(result.current.recommendationItems[0].id).toBe("rec-stable-1");
+    expect(result.current.recommendationStatus).toBe("ready");
   });
 });

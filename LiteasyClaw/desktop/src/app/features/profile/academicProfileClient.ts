@@ -3,13 +3,22 @@ import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type { AcademicProfile } from "./profile.types";
 
 export type PersonalizationSignal =
-  | { kind: "paper_opened" | "recommendation_saved"; title: string }
+  | { kind: "paper_opened" | "recommendation_saved"; title: string; workId?: string }
   | { kind: "recommendation_dismissed"; recommendationId: string };
+
+export type UserTag = {
+  evidenceCount: number;
+  label: string;
+  signalSource?: string;
+  tagId?: string;
+  weight: number;
+};
 
 export type AcademicProfileSnapshot = {
   assistantSummary?: string;
   personalizationVersion: number;
   profile: Pick<AcademicProfile, "disciplines" | "stage"> & { profileVersion: number };
+  tags?: UserTag[];
 };
 
 export type AcademicProfileTransportRequest = {
@@ -45,6 +54,21 @@ function isAcademicDiscipline(value: unknown) {
   );
 }
 
+function isUserTag(value: unknown): value is UserTag {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "label" in value &&
+    typeof value.label === "string" &&
+    "weight" in value &&
+    typeof value.weight === "number" &&
+    "evidenceCount" in value &&
+    typeof value.evidenceCount === "number" &&
+    (!("signalSource" in value) || value.signalSource === undefined || typeof value.signalSource === "string") &&
+    (!("tagId" in value) || value.tagId === undefined || typeof value.tagId === "string")
+  );
+}
+
 function isSnapshot(value: unknown): value is AcademicProfileSnapshot {
   return (
     typeof value === "object" &&
@@ -61,7 +85,10 @@ function isSnapshot(value: unknown): value is AcademicProfileSnapshot {
     typeof value.profile.stage === "string" &&
     "profileVersion" in value.profile &&
     typeof value.profile.profileVersion === "number" &&
-    (!("assistantSummary" in value) || typeof value.assistantSummary === "string")
+    (!("assistantSummary" in value) || typeof value.assistantSummary === "string") &&
+    (!("tags" in value) ||
+      value.tags === undefined ||
+      (Array.isArray(value.tags) && value.tags.every(isUserTag)))
   );
 }
 

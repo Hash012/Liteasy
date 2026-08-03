@@ -1,212 +1,44 @@
 {
-  "account-session-tjminfo24-ruc-edu-cn::local_library:本地文献库::demo-1::relevance": {
-    "cachedAt": "2026-07-03T12:40:34.113Z",
+  "user:1d04896b-2ead-4f3a-b0ac-093f92df5120::local_library:本地文献库::demo-3::relevance::0": {
+    "cachedAt": "2026-08-03T03:47:00.923Z",
     "recommendations": [
       {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "account-session-tjminfo24-ruc-edu-cn::local_library:本地文献库::demo-2::relevance": {
-    "cachedAt": "2026-07-03T12:43:33.146Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-vdbms-1",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "high",
-        "relevanceScore": 0.92,
-        "reason": "同样关注向量数据库系统架构与相似度检索能力。",
-        "source": "Semantic Scholar",
-        "title": "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-vdbms-2",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.78,
-        "reason": "补充开源向量数据库系统实现，便于和综述框架对照。",
-        "source": "arXiv Watch",
-        "title": "Milvus: A Purpose-Built Vector Data Management System"
-      }
-    ]
-  },
-  "user:0099dd75-8e8c-4245-8b59-68f06b2477f7::local_library:本地文献库::demo-1::relevance": {
-    "cachedAt": "2026-07-16T13:43:21.004Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T07:30:00Z",
-        "id": "rec-colbert-1",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注神经检索中的稀疏/密集表示与效率权衡。",
-        "source": "Semantic Scholar",
-        "title": "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:00:00Z",
-        "id": "rec-colbert-2",
-        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.75,
-        "reason": "补充稠密段落检索路线，便于比较 late interaction 的取舍。",
-        "source": "Connected Papers",
-        "title": "Dense Passage Retrieval for Open-Domain Question Answering"
-      }
-    ]
-  },
-  "user:0099dd75-8e8c-4245-8b59-68f06b2477f7::local_library:本地文献库::demo-1|demo-2::relevance": {
-    "cachedAt": "2026-07-16T13:43:23.724Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-vdbms-1",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "high",
-        "relevanceScore": 0.92,
-        "reason": "同样关注向量数据库系统架构与相似度检索能力。",
-        "source": "Semantic Scholar",
-        "title": "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-vdbms-2",
-        "relatedDocumentTitle": "Survey of Vector Database Management Systems",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.78,
-        "reason": "补充开源向量数据库系统实现，便于和综述框架对照。",
-        "source": "arXiv Watch",
-        "title": "Milvus: A Purpose-Built Vector Data Management System"
-      }
-    ]
-  },
-  "user:0099dd75-8e8c-4245-8b59-68f06b2477f7::local_library:本地文献库::demo-1|demo-2|demo-3::relevance": {
-    "cachedAt": "2026-07-16T13:43:24.768Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
-  "user:0099dd75-8e8c-4245-8b59-68f06b2477f7::local_library:本地文献库::demo-3::relevance": {
-    "cachedAt": "2026-07-26T00:28:27.074Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
-  "user:0099dd75-8e8c-4245-8b59-68f06b2477f7::local_library:本地文献库::demo-1|demo-3::relevance": {
-    "cachedAt": "2026-07-26T00:28:28.366Z",
-    "recommendations": [
-      {
-        "discoveredAt": "2026-05-14T08:15:00Z",
-        "id": "rec-acorn-1",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "high",
-        "relevanceScore": 0.91,
-        "reason": "同样关注带结构化过滤条件的近似最近邻检索。",
-        "source": "Semantic Scholar",
-        "title": "Filtered-DiskANN: Graph Algorithms for Approximate Nearest Neighbor Search with Filters"
-      },
-      {
-        "discoveredAt": "2026-05-14T09:10:00Z",
-        "id": "rec-acorn-2",
-        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
-        "relevanceBand": "medium",
-        "relevanceScore": 0.79,
-        "reason": "补充混合结构化条件和向量检索的系统设计背景。",
-        "source": "arXiv Watch",
-        "title": "Efficient Filtered Approximate Nearest Neighbor Search"
-      }
-    ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785311517746316016-0::relevance": {
-    "cachedAt": "2026-07-29T12:59:17.066Z",
-    "recommendations": [
-      {
-        "authors": [],
-        "canonicalId": "doi:10.14217/9781848593596-4-en",
-        "discoveredAt": "2026-07-29T12:59:17.057Z",
-        "id": "reading-candidate:doi:10.14217/9781848593596-4-en",
+        "abstract": "There is an increasing demand for extending existing DBMSs with vector indices to become unified systems that can support modern predictive applications, which require joint querying of vector embeddings and structured properties and connections of objects. We present NaviX, a Na tive v ector i nde X for graph DBMSs (GDBMSs) that has two main design goals. First, we aim to implement a disk-based vector index that leverages the core storage and query processing capabilities of the underlying GDBMS. To this end, NaviX is a hierarchical navigable small world (HNSW) index, which is itself a graph-based structure. Second, we aim to evaluate predicate-agnostic filtered vector search queries, where the k nearest neighbors (kNNs) of a query vector υ Q are searched across an arbitrary subset S of vectors that is specified by an ad-hoc selection sub-query Q S . We adopt a prefiltering-based approach that evaluates Q S first and passes the full information about S to the kNN search operator. We study how to design a prefiltering-based search algorithm that is robust under different selectivities as well as correlations of S with υ Q . We propose an adaptive algorithm that utilizes local selectivity of each vector in the HNSW graph to pick a suitable heuristic at each iteration of the kNN search algorithm. We demonstrate NaviX's robustness and efficiency through extensive experiments against both existing prefiltering- and postfiltering-based baselines.",
+        "authors": [
+          "Gaurav Sehgal",
+          "Semih Salihoğlu"
+        ],
+        "canonicalId": "doi:10.14778/3749646.3749704",
+        "discoveredAt": "2026-08-03T03:47:00.863Z",
+        "id": "reading-candidate:doi:10.14778/3749646.3749704",
         "identityResolution": {
           "aliases": [
-            "crossref:10.14217/9781848593596-4-en"
+            "crossref:10.14778/3749646.3749704",
+            "arxiv:9646.37497"
           ],
-          "canonicalId": "doi:10.14217/9781848593596-4-en",
-          "doi": "https://doi.org/10.14217/9781848593596-4-en",
+          "arxivId": "9646.37497",
+          "canonicalId": "doi:10.14778/3749646.3749704",
+          "doi": "https://doi.org/10.14778/3749646.3749704",
           "lineageStatus": "single_record",
           "providers": [
             "crossref"
           ],
           "records": [
             {
-              "id": "crossref:10.14217/9781848593596-4-en",
+              "id": "crossref:10.14778/3749646.3749704",
               "provider": "crossref",
-              "doi": "https://doi.org/10.14217/9781848593596-4-en",
-              "recordUrl": "https://api.crossref.org/works/10.14217%2F9781848593596-4-en",
-              "title": "Preparation of Camera-Ready Copy",
-              "url": "https://doi.org/10.14217/9781848593596-4-en",
-              "year": 1983
+              "arxivId": "9646.37497",
+              "doi": "https://doi.org/10.14778/3749646.3749704",
+              "recordUrl": "https://api.crossref.org/works/10.14778%2F3749646.3749704",
+              "title": "NaviX: A Native Vector Index Design for Graph DBMSs With Robust Predicate-Agnostic Search Performance",
+              "url": "https://doi.org/10.14778/3749646.3749704",
+              "year": 2025
             }
           ],
           "consistent": true,
           "version": "recommendation-identity/v2"
         },
-        "publishedYear": 1983,
+        "publishedYear": 2025,
         "qualityGate": {
           "checks": {
             "canonicalIdentity": true,
@@ -221,138 +53,40 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
         "relatedDocumentTitles": [
-          "heliox_camera_ready"
+          "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
         ],
+        "surfacingTags": [],
         "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
         "scoreComponents": {
-          "preference": 0.15,
+          "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.517,
-          "sourceRelevance": 0.517,
-          "fusionScore": 0.946,
-          "lexicalRelevance": 0.829653,
-          "preFusionRelevance": 0.667,
-          "baseRelevance": 0.642,
+          "providerRelevance": 0.425,
+          "sourceRelevance": 0.425,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.425,
+          "baseRelevance": 0.425,
           "diversityPenalty": 0,
-          "finalScore": 0.642
+          "finalScore": 0.425
         },
         "primaryProvider": "crossref",
         "source": "Crossref",
         "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.14217/9781848593596-4-en",
-        "title": "Preparation of Camera-Ready Copy",
+        "sourceUrl": "https://doi.org/10.14778/3749646.3749704",
+        "title": "NaviX: A Native Vector Index Design for Graph DBMSs With Robust Predicate-Agnostic Search Performance",
         "rankingFusion": {
-          "calibratedScore": 0.642,
-          "fusionScore": 0.946,
+          "calibratedScore": 0.425,
+          "fusionScore": 1,
           "k": 10,
           "routes": [
             {
               "contribution": 0.031818,
               "id": "provider",
               "rank": 1,
-              "score": 0.517,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.025,
-              "id": "lexical_bm25",
-              "rank": 2,
-              "score": 0.829653,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.007692,
-              "id": "personalization",
-              "rank": 3,
-              "score": 0.15,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.642
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.4135/9781452229669.n537",
-        "discoveredAt": "2026-07-29T12:59:17.057Z",
-        "id": "reading-candidate:doi:10.4135/9781452229669.n537",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.4135/9781452229669.n537"
-          ],
-          "canonicalId": "doi:10.4135/9781452229669.n537",
-          "doi": "https://doi.org/10.4135/9781452229669.n537",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.4135/9781452229669.n537",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.4135/9781452229669.n537",
-              "recordUrl": "https://api.crossref.org/works/10.4135%2F9781452229669.n537",
-              "title": "Camera-Ready Art",
-              "url": "https://doi.org/10.4135/9781452229669.n537",
-              "year": 2004
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 2004,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "heliox_camera_ready",
-        "relatedDocumentTitles": [
-          "heliox_camera_ready"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.479,
-          "sourceRelevance": 0.479,
-          "fusionScore": 0.961,
-          "lexicalRelevance": 1,
-          "preFusionRelevance": 0.629,
-          "baseRelevance": 0.612,
-          "diversityPenalty": 0.12,
-          "finalScore": 0.492
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.4135/9781452229669.n537",
-        "title": "Camera-Ready Art",
-        "rankingFusion": {
-          "calibratedScore": 0.612,
-          "fusionScore": 0.961,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.029167,
-              "id": "provider",
-              "rank": 2,
-              "score": 0.479,
+              "score": 0.425,
               "weight": 0.35
             },
             {
@@ -361,50 +95,47 @@
               "rank": 1,
               "score": 1,
               "weight": 0.3
-            },
-            {
-              "contribution": 0.009091,
-              "id": "personalization",
-              "rank": 1,
-              "score": 0.15,
-              "weight": 0.1
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.492
+        "relevanceBand": "low",
+        "relevanceScore": 0.425
       },
       {
-        "authors": [],
-        "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
-        "discoveredAt": "2026-07-29T12:59:17.057Z",
-        "id": "reading-candidate:doi:10.1016/0039-128x(90)90065-j",
+        "authors": [
+          "Siham Eddamiri",
+          "El Moukhtar Zemmouri",
+          "Asmaa Benghabrit"
+        ],
+        "canonicalId": "doi:10.5220/0007228903670373",
+        "discoveredAt": "2026-08-03T03:47:00.863Z",
+        "id": "reading-candidate:doi:10.5220/0007228903670373",
         "identityResolution": {
           "aliases": [
-            "crossref:10.1016/0039-128x(90)90065-j"
+            "crossref:10.5220/0007228903670373"
           ],
-          "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
-          "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
+          "canonicalId": "doi:10.5220/0007228903670373",
+          "doi": "https://doi.org/10.5220/0007228903670373",
           "lineageStatus": "single_record",
           "providers": [
             "crossref"
           ],
           "records": [
             {
-              "id": "crossref:10.1016/0039-128x(90)90065-j",
+              "id": "crossref:10.5220/0007228903670373",
               "provider": "crossref",
-              "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
-              "recordUrl": "https://api.crossref.org/works/10.1016%2F0039-128x(90)90065-j",
-              "title": "On typeset versus camera-ready journals",
-              "url": "https://doi.org/10.1016/0039-128x(90)90065-j",
-              "year": 1990
+              "doi": "https://doi.org/10.5220/0007228903670373",
+              "recordUrl": "https://api.crossref.org/works/10.5220%2F0007228903670373",
+              "title": "RDF Data Clustering based on Resource and Predicate Embeddings",
+              "url": "https://doi.org/10.5220/0007228903670373",
+              "year": 2018
             }
           ],
           "consistent": true,
           "version": "recommendation-identity/v2"
         },
-        "publishedYear": 1990,
+        "publishedYear": 2018,
         "qualityGate": {
           "checks": {
             "canonicalIdentity": true,
@@ -419,301 +150,90 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
         "relatedDocumentTitles": [
-          "heliox_camera_ready"
+          "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
         ],
+        "surfacingTags": [],
         "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
         "scoreComponents": {
-          "preference": 0.15,
+          "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.457,
-          "sourceRelevance": 0.457,
-          "fusionScore": 0.856,
-          "lexicalRelevance": 0.764535,
-          "preFusionRelevance": 0.607,
-          "baseRelevance": 0.546,
-          "diversityPenalty": 0.12,
-          "finalScore": 0.426
+          "providerRelevance": 0.35,
+          "sourceRelevance": 0.35,
+          "fusionScore": 0.884,
+          "lexicalRelevance": 0.290167,
+          "preFusionRelevance": 0.35,
+          "baseRelevance": 0.322,
+          "diversityPenalty": 0.022,
+          "finalScore": 0.3
         },
         "primaryProvider": "crossref",
         "source": "Crossref",
         "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1016/0039-128x(90)90065-j",
-        "title": "On typeset versus camera-ready journals",
+        "sourceUrl": "https://doi.org/10.5220/0007228903670373",
+        "title": "RDF Data Clustering based on Resource and Predicate Embeddings",
         "rankingFusion": {
-          "calibratedScore": 0.546,
-          "fusionScore": 0.856,
+          "calibratedScore": 0.322,
+          "fusionScore": 0.884,
           "k": 10,
           "routes": [
             {
-              "contribution": 0.026923,
+              "contribution": 0.029167,
               "id": "provider",
-              "rank": 3,
-              "score": 0.457,
+              "rank": 2,
+              "score": 0.35,
               "weight": 0.35
             },
             {
               "contribution": 0.023077,
               "id": "lexical_bm25",
               "rank": 3,
-              "score": 0.764535,
+              "score": 0.290167,
               "weight": 0.3
-            },
-            {
-              "contribution": 0.008333,
-              "id": "personalization",
-              "rank": 2,
-              "score": 0.15,
-              "weight": 0.1
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
         "relevanceBand": "low",
-        "relevanceScore": 0.426
-      }
-    ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785311517746316016-0|reading-candidate:doi:10.14217/9781848593596-4-en::relevance": {
-    "cachedAt": "2026-07-29T12:59:50.518Z",
-    "recommendations": [
-      {
-        "authors": [],
-        "canonicalId": "doi:10.1515/9780824890810-014",
-        "discoveredAt": "2026-07-29T12:59:50.511Z",
-        "id": "reading-candidate:doi:10.1515/9780824890810-014",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1515/9780824890810-014"
-          ],
-          "canonicalId": "doi:10.1515/9780824890810-014",
-          "doi": "https://doi.org/10.1515/9780824890810-014",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1515/9780824890810-014",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1515/9780824890810-014",
-              "recordUrl": "https://api.crossref.org/works/10.1515%2F9780824890810-014",
-              "title": "APPENDIX F. PREPARATION OF THE CAMERA-READY COPY BY COMPUTER",
-              "url": "https://doi.org/10.1515/9780824890810-014",
-              "year": 1995
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 1995,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
-        "relatedDocumentTitles": [
-          "Preparation of Camera-Ready Copy"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.663,
-          "sourceRelevance": 0.663,
-          "fusionScore": 1,
-          "lexicalRelevance": 1,
-          "preFusionRelevance": 0.813,
-          "baseRelevance": 0.813,
-          "diversityPenalty": 0,
-          "finalScore": 0.813
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1515/9780824890810-014",
-        "title": "APPENDIX F. PREPARATION OF THE CAMERA-READY COPY BY COMPUTER",
-        "rankingFusion": {
-          "calibratedScore": 0.813,
-          "fusionScore": 1,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.031818,
-              "id": "provider",
-              "rank": 1,
-              "score": 0.663,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.027273,
-              "id": "lexical_bm25",
-              "rank": 1,
-              "score": 1,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.009091,
-              "id": "personalization",
-              "rank": 1,
-              "score": 0.15,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "high",
-        "relevanceScore": 0.813
+        "relevanceScore": 0.3
       },
       {
-        "authors": [],
-        "canonicalId": "doi:10.1016/0957-4158(91)90013-z",
-        "discoveredAt": "2026-07-29T12:59:50.511Z",
-        "id": "reading-candidate:doi:10.1016/0957-4158(91)90013-z",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1016/0957-4158(91)90013-z"
-          ],
-          "canonicalId": "doi:10.1016/0957-4158(91)90013-z",
-          "doi": "https://doi.org/10.1016/0957-4158(91)90013-z",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1016/0957-4158(91)90013-z",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1016/0957-4158(91)90013-z",
-              "recordUrl": "https://api.crossref.org/works/10.1016%2F0957-4158(91)90013-z",
-              "title": "Instructions for the submission of camera-ready copy",
-              "url": "https://doi.org/10.1016/0957-4158(91)90013-z",
-              "year": 1991
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 1991,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
-        "relatedDocumentTitles": [
-          "Preparation of Camera-Ready Copy"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.638,
-          "sourceRelevance": 0.638,
-          "fusionScore": 0.907,
-          "lexicalRelevance": 0.579904,
-          "preFusionRelevance": 0.788,
-          "baseRelevance": 0.737,
-          "diversityPenalty": 0.103,
-          "finalScore": 0.634
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1016/0957-4158(91)90013-z",
-        "title": "Instructions for the submission of camera-ready copy",
-        "rankingFusion": {
-          "calibratedScore": 0.737,
-          "fusionScore": 0.907,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.029167,
-              "id": "provider",
-              "rank": 2,
-              "score": 0.638,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.025,
-              "id": "lexical_bm25",
-              "rank": 2,
-              "score": 0.579904,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.007692,
-              "id": "personalization",
-              "rank": 3,
-              "score": 0.15,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.634
-      },
-      {
-        "abstract": "Mixed states of a quantum system, represented by density operators, can be decomposed as a statistical mixture of pure states in a number of ways where each decomposition can be viewed as a different preparation recipe. However the fact that the density matrix contains full information about the ensemble makes it impossible to estimate the preparation basis for the quantum system. Here we present a measurement scheme to (seemingly) improve the performance of unsharp measurements. We argue that in some situations this scheme is capable of providing statistics from a single copy of the quantum system, thus making it possible to perform state tomography from a single copy. One of the byproduct of the scheme is a way to distinguish between different preparation methods used to prepare the state of the quantum system. However, our numerical simulations disagree with our intuitive predictions. We show that a counter-intuitive property of a biased classical random walk is responsible for the proposed mechanism not working.",
+        "abstract": "We study distributed optimization in the presence of Byzantine adversaries, where both data and computation are distributed among $m$ worker machines, $t$ of which may be corrupt. The compromised nodes may collaboratively and arbitrarily deviate from their pre-specified programs, and a designated (master) node iteratively computes the model/parameter vector for generalized linear models. In this work, we primarily focus on two iterative algorithms: Proximal Gradient Descent (PGD) and Coordinate Descent (CD). Gradient descent (GD) is a special case of these algorithms. PGD is typically used in the data-parallel setting, where data is partitioned across different samples, whereas, CD is used in the model-parallelism setting, where data is partitioned across the parameter space. In this paper, we propose a method based on data encoding and error correction over real numbers to combat adversarial attacks. We can tolerate up to $t\\leq \\lfloor\\frac{m-1}{2}\\rfloor$ corrupt worker nodes, which is information-theoretically optimal. We give deterministic guarantees, and our method does not assume any probability distribution on the data. We develop a {\\em sparse} encoding scheme which enables computationally efficient data encoding and decoding. We demonstrate a trade-off between the corruption threshold and the resource requirements (storage, computational, and communication complexity). As an example, for $t\\leq\\frac{m}{3}$, our scheme incurs only a {\\em constant} overhead on these resources, over that required by the plain distributed PGD/CD algorithms which provide no adversarial protection. To the best of our knowledge, ours is the first paper that makes CD secure against adversarial attacks. Our encoding scheme extends efficiently to the data streaming model and for stochastic gradient descent (SGD). We also give experimental results to show the efficacy of our proposed schemes.",
         "authors": [
-          "Sandeep K Goyal",
-          "Rajeev Singh",
-          "Sibasish Ghosh"
+          "Deepesh Data",
+          "Linqi Song",
+          "Suhas Diggavi"
         ],
-        "canonicalId": "doi:10.1103/physreva.93.012114",
-        "discoveredAt": "2026-07-29T12:59:50.511Z",
-        "id": "reading-candidate:doi:10.1103/physreva.93.012114",
+        "canonicalId": "arxiv:1907.02664",
+        "discoveredAt": "2026-08-03T03:47:00.863Z",
+        "id": "reading-candidate:arxiv:1907.02664",
         "identityResolution": {
           "aliases": [
-            "arxiv:1511.03149"
+            "arxiv:1907.02664"
           ],
-          "arxivId": "1511.03149",
-          "canonicalId": "doi:10.1103/physreva.93.012114",
-          "doi": "https://doi.org/10.1103/physreva.93.012114",
+          "arxivId": "1907.02664",
+          "canonicalId": "arxiv:1907.02664",
           "lineageStatus": "single_record",
           "providers": [
             "arxiv"
           ],
           "records": [
             {
-              "id": "arxiv:1511.03149",
+              "id": "arxiv:1907.02664",
               "provider": "arxiv",
-              "arxivId": "1511.03149",
-              "doi": "https://doi.org/10.1103/physreva.93.012114",
-              "recordUrl": "https://arxiv.org/abs/1511.03149",
-              "title": "An almost convincing scheme for discriminating the preparation basis of quantum ensemble and why it will not work",
-              "url": "https://arxiv.org/abs/1511.03149",
-              "year": 2015
+              "arxivId": "1907.02664",
+              "recordUrl": "https://arxiv.org/abs/1907.02664",
+              "title": "Data Encoding for Byzantine-Resilient Distributed Optimization",
+              "url": "https://arxiv.org/abs/1907.02664",
+              "year": 2019
             }
           ],
           "consistent": true,
           "version": "recommendation-identity/v2"
         },
-        "publishedYear": 2015,
+        "publishedYear": 2019,
         "openAccessAvailable": true,
         "qualityGate": {
           "checks": {
@@ -729,190 +249,89 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
         "relatedDocumentTitles": [
-          "Preparation of Camera-Ready Copy"
+          "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
         ],
+        "surfacingTags": [],
         "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
         "scoreComponents": {
-          "preference": 0.011,
+          "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.625,
-          "sourceRelevance": 0.625,
-          "fusionScore": 0.801,
-          "lexicalRelevance": 0.576737,
-          "preFusionRelevance": 0.636,
-          "baseRelevance": 0.547,
-          "diversityPenalty": 0.051,
-          "finalScore": 0.496
+          "providerRelevance": 0.295,
+          "sourceRelevance": 0.295,
+          "fusionScore": 0.846,
+          "lexicalRelevance": 0.407479,
+          "preFusionRelevance": 0.295,
+          "baseRelevance": 0.263,
+          "diversityPenalty": 0.026,
+          "finalScore": 0.237
         },
         "primaryProvider": "arxiv",
         "source": "arXiv",
         "sourceKind": "live",
-        "sourceUrl": "https://arxiv.org/abs/1511.03149",
-        "title": "An almost convincing scheme for discriminating the preparation basis of quantum ensemble and why it will not work",
+        "sourceUrl": "https://arxiv.org/abs/1907.02664",
+        "title": "Data Encoding for Byzantine-Resilient Distributed Optimization",
         "rankingFusion": {
-          "calibratedScore": 0.547,
-          "fusionScore": 0.801,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.026923,
-              "id": "provider",
-              "rank": 3,
-              "score": 0.625,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.021429,
-              "id": "lexical_bm25",
-              "rank": 4,
-              "score": 0.576737,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.00625,
-              "id": "personalization",
-              "rank": 6,
-              "score": 0.011,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.496
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.1016/0957-4158(94)90062-0",
-        "discoveredAt": "2026-07-29T12:59:50.511Z",
-        "id": "reading-candidate:doi:10.1016/0957-4158(94)90062-0",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1016/0957-4158(94)90062-0"
-          ],
-          "canonicalId": "doi:10.1016/0957-4158(94)90062-0",
-          "doi": "https://doi.org/10.1016/0957-4158(94)90062-0",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1016/0957-4158(94)90062-0",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1016/0957-4158(94)90062-0",
-              "recordUrl": "https://api.crossref.org/works/10.1016%2F0957-4158(94)90062-0",
-              "title": "Instructions for the submission of camera-ready copy",
-              "url": "https://doi.org/10.1016/0957-4158(94)90062-0",
-              "year": 1994
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 1994,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "Preparation of Camera-Ready Copy",
-        "relatedDocumentTitles": [
-          "Preparation of Camera-Ready Copy"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.563,
-          "sourceRelevance": 0.563,
-          "fusionScore": 0.81,
-          "lexicalRelevance": 0.579904,
-          "preFusionRelevance": 0.713,
-          "baseRelevance": 0.618,
-          "diversityPenalty": 0.18,
-          "finalScore": 0.438
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1016/0957-4158(94)90062-0",
-        "title": "Instructions for the submission of camera-ready copy",
-        "rankingFusion": {
-          "calibratedScore": 0.618,
-          "fusionScore": 0.81,
+          "calibratedScore": 0.263,
+          "fusionScore": 0.846,
           "k": 10,
           "routes": [
             {
               "contribution": 0.025,
               "id": "provider",
               "rank": 4,
-              "score": 0.563,
+              "score": 0.295,
               "weight": 0.35
             },
             {
-              "contribution": 0.023077,
+              "contribution": 0.025,
               "id": "lexical_bm25",
-              "rank": 3,
-              "score": 0.579904,
+              "rank": 2,
+              "score": 0.407479,
               "weight": 0.3
-            },
-            {
-              "contribution": 0.007143,
-              "id": "personalization",
-              "rank": 4,
-              "score": 0.15,
-              "weight": 0.1
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
         "relevanceBand": "low",
-        "relevanceScore": 0.438
+        "relevanceScore": 0.237
       },
       {
-        "authors": [],
-        "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
-        "discoveredAt": "2026-07-29T12:59:50.511Z",
-        "id": "reading-candidate:doi:10.1016/0039-128x(90)90065-j",
+        "authors": [
+          "Siham Eddamiri",
+          "El Moukhtar Zemmouri",
+          "Asmaa Benghabrit"
+        ],
+        "canonicalId": "doi:10.5220/0007228900002053",
+        "discoveredAt": "2026-08-03T03:47:00.863Z",
+        "id": "reading-candidate:doi:10.5220/0007228900002053",
         "identityResolution": {
           "aliases": [
-            "crossref:10.1016/0039-128x(90)90065-j"
+            "crossref:10.5220/0007228900002053"
           ],
-          "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
-          "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
+          "canonicalId": "doi:10.5220/0007228900002053",
+          "doi": "https://doi.org/10.5220/0007228900002053",
           "lineageStatus": "single_record",
           "providers": [
             "crossref"
           ],
           "records": [
             {
-              "id": "crossref:10.1016/0039-128x(90)90065-j",
+              "id": "crossref:10.5220/0007228900002053",
               "provider": "crossref",
-              "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
-              "recordUrl": "https://api.crossref.org/works/10.1016%2F0039-128x(90)90065-j",
-              "title": "On typeset versus camera-ready journals",
-              "url": "https://doi.org/10.1016/0039-128x(90)90065-j",
-              "year": 1990
+              "doi": "https://doi.org/10.5220/0007228900002053",
+              "recordUrl": "https://api.crossref.org/works/10.5220%2F0007228900002053",
+              "title": "RDF Data Clustering based on Resource and Predicate Embeddings",
+              "url": "https://doi.org/10.5220/0007228900002053",
+              "year": 2018
             }
           ],
           "consistent": true,
           "version": "recommendation-identity/v2"
         },
-        "publishedYear": 1990,
+        "publishedYear": 2018,
         "qualityGate": {
           "checks": {
             "canonicalIdentity": true,
@@ -927,749 +346,490 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "heliox_camera_ready",
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
         "relatedDocumentTitles": [
-          "heliox_camera_ready"
+          "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
         ],
+        "surfacingTags": [],
         "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
         "scoreComponents": {
-          "preference": 0.15,
+          "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.457,
-          "sourceRelevance": 0.457,
-          "fusionScore": 0.694,
-          "lexicalRelevance": 0.211971,
-          "preFusionRelevance": 0.607,
-          "baseRelevance": 0.477,
-          "diversityPenalty": 0.072,
-          "finalScore": 0.405
+          "providerRelevance": 0.313,
+          "sourceRelevance": 0.313,
+          "fusionScore": 0.818,
+          "lexicalRelevance": 0.290167,
+          "preFusionRelevance": 0.313,
+          "baseRelevance": 0.273,
+          "diversityPenalty": 0.18,
+          "finalScore": 0.093
         },
         "primaryProvider": "crossref",
         "source": "Crossref",
         "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1016/0039-128x(90)90065-j",
-        "title": "On typeset versus camera-ready journals",
+        "sourceUrl": "https://doi.org/10.5220/0007228900002053",
+        "title": "RDF Data Clustering based on Resource and Predicate Embeddings",
         "rankingFusion": {
-          "calibratedScore": 0.477,
-          "fusionScore": 0.694,
+          "calibratedScore": 0.273,
+          "fusionScore": 0.818,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.313,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.021429,
+              "id": "lexical_bm25",
+              "rank": 4,
+              "score": 0.290167,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.093
+      }
+    ]
+  },
+  "user:1d04896b-2ead-4f3a-b0ac-093f92df5120::local_library:本地文献库::demo-1|demo-3::relevance::0": {
+    "cachedAt": "2026-08-03T04:32:46.314Z",
+    "recommendations": [
+      {
+        "abstract": "There is an increasing demand for extending existing DBMSs with vector indices to become unified systems that can support modern predictive applications, which require joint querying of vector embeddings and structured properties and connections of objects. We present NaviX, a Na tive v ector i nde X for graph DBMSs (GDBMSs) that has two main design goals. First, we aim to implement a disk-based vector index that leverages the core storage and query processing capabilities of the underlying GDBMS. To this end, NaviX is a hierarchical navigable small world (HNSW) index, which is itself a graph-based structure. Second, we aim to evaluate predicate-agnostic filtered vector search queries, where the k nearest neighbors (kNNs) of a query vector υ Q are searched across an arbitrary subset S of vectors that is specified by an ad-hoc selection sub-query Q S . We adopt a prefiltering-based approach that evaluates Q S first and passes the full information about S to the kNN search operator. We study how to design a prefiltering-based search algorithm that is robust under different selectivities as well as correlations of S with υ Q . We propose an adaptive algorithm that utilizes local selectivity of each vector in the HNSW graph to pick a suitable heuristic at each iteration of the kNN search algorithm. We demonstrate NaviX's robustness and efficiency through extensive experiments against both existing prefiltering- and postfiltering-based baselines.",
+        "authors": [
+          "Gaurav Sehgal",
+          "Semih Salihoğlu"
+        ],
+        "canonicalId": "doi:10.14778/3749646.3749704",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:doi:10.14778/3749646.3749704",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.14778/3749646.3749704",
+            "arxiv:9646.37497"
+          ],
+          "arxivId": "9646.37497",
+          "canonicalId": "doi:10.14778/3749646.3749704",
+          "doi": "https://doi.org/10.14778/3749646.3749704",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.14778/3749646.3749704",
+              "provider": "crossref",
+              "arxivId": "9646.37497",
+              "doi": "https://doi.org/10.14778/3749646.3749704",
+              "recordUrl": "https://api.crossref.org/works/10.14778%2F3749646.3749704",
+              "title": "NaviX: A Native Vector Index Design for Graph DBMSs With Robust Predicate-Agnostic Search Performance",
+              "url": "https://doi.org/10.14778/3749646.3749704",
+              "year": 2025
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2025,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+        "relatedDocumentTitles": [
+          "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.425,
+          "sourceRelevance": 0.425,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.425,
+          "baseRelevance": 0.425,
+          "diversityPenalty": 0,
+          "finalScore": 0.425
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.14778/3749646.3749704",
+        "title": "NaviX: A Native Vector Index Design for Graph DBMSs With Robust Predicate-Agnostic Search Performance",
+        "rankingFusion": {
+          "calibratedScore": 0.425,
+          "fusionScore": 1,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.425,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.425
+      },
+      {
+        "authors": [
+          "Siham Eddamiri",
+          "El Moukhtar Zemmouri",
+          "Asmaa Benghabrit"
+        ],
+        "canonicalId": "doi:10.5220/0007228903670373",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:doi:10.5220/0007228903670373",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.5220/0007228903670373"
+          ],
+          "canonicalId": "doi:10.5220/0007228903670373",
+          "doi": "https://doi.org/10.5220/0007228903670373",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.5220/0007228903670373",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.5220/0007228903670373",
+              "recordUrl": "https://api.crossref.org/works/10.5220%2F0007228903670373",
+              "title": "RDF Data Clustering based on Resource and Predicate Embeddings",
+              "url": "https://doi.org/10.5220/0007228903670373",
+              "year": 2018
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2018,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+        "relatedDocumentTitles": [
+          "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.35,
+          "sourceRelevance": 0.35,
+          "fusionScore": 0.832,
+          "lexicalRelevance": 0.450901,
+          "preFusionRelevance": 0.35,
+          "baseRelevance": 0.309,
+          "diversityPenalty": 0.022,
+          "finalScore": 0.287
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.5220/0007228903670373",
+        "title": "RDF Data Clustering based on Resource and Predicate Embeddings",
+        "rankingFusion": {
+          "calibratedScore": 0.309,
+          "fusionScore": 0.832,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.35,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.02,
+              "id": "lexical_bm25",
+              "rank": 5,
+              "score": 0.450901,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.287
+      },
+      {
+        "abstract": "Via is a forthcoming all-sky spectroscopic survey that will achieve 100 m s$^{-1}$ radial velocity stability for millions of faint ($G \\lesssim 21$) stars while reaching LSST's single-visit depth ($r \\approx 24$) for transient spectroscopy, opening new regimes in near-field cosmology and time-domain astrophysics. Via will deploy identical fiber-fed, multi-object spectrographs on the 6.5m MMT and Magellan/Clay telescopes for a five-year, dual-hemisphere survey of $>2{,}000{,}000$ stars beginning in 2027 - timed to complement LSST. Each instrument has 576 robotically positioned fibers over a $1^\\circ$ field of view, feeding two spectrographs: Viaspec ($R \\approx 15{,}000$; 505-595 nm; 540 fibers) and Boombox ($R \\approx 1{,}000$; 360-1010 nm; 36 fibers). Four key goals drive the survey: (1) a comprehensive survey of velocity perturbations in cold stellar streams, sensitive to $M \\lesssim 10^7$ subhalos below the threshold of galaxy formation, a stringent test of the particle nature of dark matter; (2) a chemodynamical census of Milky Way satellite galaxies to understand the formation of the faintest galaxies; (3) the first 3D tomographic maps of cold gas in the circumgalactic medium via NaI absorption; and (4) the rapid characterization of thousands of transients to the single-epoch survey depth of LSST. Ancillary science - including the Ly$α$ forest at $z \\approx 3$-$4$, polluted white dwarfs, exoplanet host characterization, fast radio burst host galaxies, and extragalactic dwarf galaxies - will leverage spare fibers in every pointing. The Via Project is a collaboration between the Center for Astrophysics $|$ Harvard & Smithsonian, Carnegie Observatories, Stanford University, and Yale University.",
+        "authors": [
+          "The Via Collaboration"
+        ],
+        "canonicalId": "arxiv:2606.18332",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2606.18332",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2606.18332"
+          ],
+          "arxivId": "2606.18332",
+          "canonicalId": "arxiv:2606.18332",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2606.18332",
+              "provider": "arxiv",
+              "arxivId": "2606.18332",
+              "recordUrl": "https://arxiv.org/abs/2606.18332",
+              "title": "The Via Project: Overview of the Science, Instrument, and Survey",
+              "url": "https://arxiv.org/abs/2606.18332",
+              "year": 2026
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2026,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.333,
+          "sourceRelevance": 0.333,
+          "fusionScore": 0.754,
+          "lexicalRelevance": 0.415269,
+          "preFusionRelevance": 0.333,
+          "baseRelevance": 0.276,
+          "diversityPenalty": 0.022,
+          "finalScore": 0.254
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2606.18332",
+        "title": "The Via Project: Overview of the Science, Instrument, and Survey",
+        "rankingFusion": {
+          "calibratedScore": 0.276,
+          "fusionScore": 0.754,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.333,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.017647,
+              "id": "lexical_bm25",
+              "rank": 7,
+              "score": 0.415269,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.254
+      },
+      {
+        "abstract": "Recent progress in neural information retrieval has demonstrated large gains in effectiveness, while often sacrificing the efficiency and interpretability of the neural model compared to classical approaches. This paper proposes ColBERTer, a neural retrieval model using contextualized late interaction (ColBERT) with enhanced reduction. Along the effectiveness Pareto frontier, ColBERTer's reductions dramatically lower ColBERT's storage requirements while simultaneously improving the interpretability of its token-matching scores. To this end, ColBERTer fuses single-vector retrieval, multi-vector refinement, and optional lexical matching components into one model. For its multi-vector component, ColBERTer reduces the number of stored vectors per document by learning unique whole-word representations for the terms in each document and learning to identify and remove word representations that are not essential to effective scoring. We employ an explicit multi-task, multi-stage training to facilitate using very small vector dimensions. Results on the MS MARCO and TREC-DL collection show that ColBERTer can reduce the storage footprint by up to 2.5x, while maintaining effectiveness. With just one dimension per token in its smallest setting, ColBERTer achieves index storage parity with the plaintext size, with very strong effectiveness results. Finally, we demonstrate ColBERTer's robustness on seven high-quality out-of-domain collections, yielding statistically significant gains over traditional retrieval baselines.",
+        "authors": [
+          "Sebastian Hofstätter",
+          "Omar Khattab",
+          "Sophia Althammer",
+          "Mete Sertkan",
+          "Allan Hanbury"
+        ],
+        "canonicalId": "arxiv:2203.13088",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2203.13088",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2203.13088"
+          ],
+          "arxivId": "2203.13088",
+          "canonicalId": "arxiv:2203.13088",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2203.13088",
+              "provider": "arxiv",
+              "arxivId": "2203.13088",
+              "recordUrl": "https://arxiv.org/abs/2203.13088",
+              "title": "Introducing Neural Bag of Whole-Words with ColBERTer: Contextualized Late Interactions using Enhanced Reduction",
+              "url": "https://arxiv.org/abs/2203.13088",
+              "year": 2022
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2022,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.292,
+          "sourceRelevance": 0.292,
+          "fusionScore": 0.733,
+          "lexicalRelevance": 0.686139,
+          "preFusionRelevance": 0.292,
+          "baseRelevance": 0.237,
+          "diversityPenalty": 0.014,
+          "finalScore": 0.223
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2203.13088",
+        "title": "Introducing Neural Bag of Whole-Words with ColBERTer: Contextualized Late Interactions using Enhanced Reduction",
+        "rankingFusion": {
+          "calibratedScore": 0.237,
+          "fusionScore": 0.733,
           "k": 10,
           "routes": [
             {
               "contribution": 0.021875,
               "id": "provider",
               "rank": 6,
-              "score": 0.457,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.01875,
-              "id": "lexical_bm25",
-              "rank": 6,
-              "score": 0.211971,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.006667,
-              "id": "personalization",
-              "rank": 5,
-              "score": 0.15,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "low",
-        "relevanceScore": 0.405
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.4135/9781452229669.n537",
-        "discoveredAt": "2026-07-29T12:59:50.511Z",
-        "id": "reading-candidate:doi:10.4135/9781452229669.n537",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.4135/9781452229669.n537"
-          ],
-          "canonicalId": "doi:10.4135/9781452229669.n537",
-          "doi": "https://doi.org/10.4135/9781452229669.n537",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.4135/9781452229669.n537",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.4135/9781452229669.n537",
-              "recordUrl": "https://api.crossref.org/works/10.4135%2F9781452229669.n537",
-              "title": "Camera-Ready Art",
-              "url": "https://doi.org/10.4135/9781452229669.n537",
-              "year": 2004
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 2004,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "heliox_camera_ready",
-        "relatedDocumentTitles": [
-          "heliox_camera_ready"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.479,
-          "sourceRelevance": 0.479,
-          "fusionScore": 0.758,
-          "lexicalRelevance": 0.223792,
-          "preFusionRelevance": 0.629,
-          "baseRelevance": 0.522,
-          "diversityPenalty": 0.12,
-          "finalScore": 0.402
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.4135/9781452229669.n537",
-        "title": "Camera-Ready Art",
-        "rankingFusion": {
-          "calibratedScore": 0.522,
-          "fusionScore": 0.758,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.023333,
-              "id": "provider",
-              "rank": 5,
-              "score": 0.479,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.02,
-              "id": "lexical_bm25",
-              "rank": 5,
-              "score": 0.223792,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.008333,
-              "id": "personalization",
-              "rank": 2,
-              "score": 0.15,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "low",
-        "relevanceScore": 0.402
-      }
-    ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785314276294111520-3::relevance": {
-    "cachedAt": "2026-07-29T14:58:22.390Z",
-    "recommendations": [
-      {
-        "authors": [],
-        "canonicalId": "doi:10.1163/2210-7886_asc-41553",
-        "discoveredAt": "2026-07-29T14:58:22.380Z",
-        "id": "reading-candidate:doi:10.1163/2210-7886_asc-41553",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1163/2210-7886_asc-41553"
-          ],
-          "canonicalId": "doi:10.1163/2210-7886_asc-41553",
-          "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1163/2210-7886_asc-41553",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
-              "recordUrl": "https://api.crossref.org/works/10.1163%2F2210-7886_asc-41553",
-              "title": "41553, 1882-01-16",
-              "url": "https://doi.org/10.1163/2210-7886_asc-41553"
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "s41467-023-41553-7",
-        "relatedDocumentTitles": [
-          "s41467-023-41553-7"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
-        "scoreComponents": {
-          "preference": 0,
-          "profileRelevance": 0,
-          "providerRelevance": 0.633,
-          "sourceRelevance": 0.633,
-          "fusionScore": 1,
-          "lexicalRelevance": 1,
-          "preFusionRelevance": 0.633,
-          "baseRelevance": 0.633,
-          "diversityPenalty": 0,
-          "finalScore": 0.633
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1163/2210-7886_asc-41553",
-        "title": "41553, 1882-01-16",
-        "rankingFusion": {
-          "calibratedScore": 0.633,
-          "fusionScore": 1,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.031818,
-              "id": "provider",
-              "rank": 1,
-              "score": 0.633,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.027273,
-              "id": "lexical_bm25",
-              "rank": 1,
-              "score": 1,
-              "weight": 0.3
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.633
-      },
-      {
-        "abstract": "Abstract Currently there is no way to reliably predict who is at higher or lower risk of cardiac toxicity from radiation, and the critical factors that alter radiation-induced heart disease are not completely clear. The heart produces and uses the most energy of all organs, with &amp;gt;90% of its energy produced via mitochondrial respiration. To maintain this energy output, ~30% of the heart volume is made up of mitochondria in cardiomyocytes. Such a high metabolic rate produces increased levels of reactive oxygen species (ROS), which have the potential to cause serious oxidative damage to the heart. Antioxidant enzymes such as superoxide dysmutases (SODs), catalase, and glutathione peroxidase can help to protect against ROS-mediated damage by converting superoxide to hydrogen peroxidase, and then hydrogen peroxide to water. Oxidative stressors, including therapeutic radiation therapy, have been shown to lead to long-term effects on mitochondrial function, as measured by excess formation of ROS including superoxide, mitochondrial-related gene expression, and altered mitochondrial morphology and functions such as mitochondrial respiration, pyruvate metabolism, and ion and lipid transport. While a potential link between aging-related signaling pathways, metabolic homeostasis, and radiation-induced normal tissue damage has recently been suggested, rigorous mechanistic data to support this intriguing idea has been limited. Mitochondrial detoxification pathways, which are dysregulated in normal tissues by radiation, lead to increased ROS levels and the disruption of mitochondrial reparative pathways. SIRT3 is one of three mitochondrial-located sirtuin proteins. SIRT3 is the primary deacetylase of mitochondrial proteins, and its deacetylase activity plays a key role in maintaining mitochondrial energy metabolism equilibrium and defending against cellular damage that occurs with aging. Lysine acetylation is an important post-translational modification that can regulate the function of mitochondrial proteins. The acetylation status of key mitochondrial detoxification proteins, which are Sirt3 deacetylation targets, may be dysregulated in normal tissue following radiation exposure. Loss of SIRT3 can dysregulate mitochondrial detoxification and metabolism, leading to the accumulation of cellular damage. Sirt3 KO mice demonstrate enhanced mitochondrial dysfunction, an",
-        "authors": [
-          "Carmen Bergom"
-        ],
-        "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
-        "discoveredAt": "2026-07-29T14:58:22.380Z",
-        "id": "reading-candidate:doi:10.1158/1557-3265.radsci21-ia-023",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1158/1557-3265.radsci21-ia-023"
-          ],
-          "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
-          "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1158/1557-3265.radsci21-ia-023",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
-              "recordUrl": "https://api.crossref.org/works/10.1158%2F1557-3265.radsci21-ia-023",
-              "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
-              "url": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
-              "year": 2021
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 2021,
-        "openAccessAvailable": true,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "s41467-023-41553-7",
-        "relatedDocumentTitles": [
-          "s41467-023-41553-7"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
-        "scoreComponents": {
-          "preference": 0,
-          "profileRelevance": 0,
-          "providerRelevance": 0.408,
-          "sourceRelevance": 0.408,
-          "fusionScore": 0.832,
-          "lexicalRelevance": 0.052882,
-          "preFusionRelevance": 0.408,
-          "baseRelevance": 0.36,
-          "diversityPenalty": 0,
-          "finalScore": 0.36
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
-        "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
-        "rankingFusion": {
-          "calibratedScore": 0.36,
-          "fusionScore": 0.832,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.029167,
-              "id": "provider",
-              "rank": 2,
-              "score": 0.408,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.02,
-              "id": "lexical_bm25",
-              "rank": 5,
-              "score": 0.052882,
-              "weight": 0.3
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "low",
-        "relevanceScore": 0.36
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
-        "discoveredAt": "2026-07-29T14:58:22.380Z",
-        "id": "reading-candidate:doi:10.1163/37612_wna_wo_wo_34_23_23",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1163/37612_wna_wo_wo_34_23_23"
-          ],
-          "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
-          "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1163/37612_wna_wo_wo_34_23_23",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
-              "recordUrl": "https://api.crossref.org/works/10.1163%2F37612_wna_wo_wo_34_23_23",
-              "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
-              "url": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23"
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "s41467-023-41553-7",
-        "relatedDocumentTitles": [
-          "s41467-023-41553-7"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0,
-          "profileRelevance": 0,
-          "providerRelevance": 0.333,
-          "sourceRelevance": 0.333,
-          "fusionScore": 0.846,
-          "lexicalRelevance": 0.231319,
-          "preFusionRelevance": 0.333,
-          "baseRelevance": 0.297,
-          "diversityPenalty": 0.036,
-          "finalScore": 0.261
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
-        "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
-        "rankingFusion": {
-          "calibratedScore": 0.297,
-          "fusionScore": 0.846,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.026923,
-              "id": "provider",
-              "rank": 3,
-              "score": 0.333,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.023077,
-              "id": "lexical_bm25",
-              "rank": 3,
-              "score": 0.231319,
-              "weight": 0.3
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "low",
-        "relevanceScore": 0.261
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.31030/1621886",
-        "discoveredAt": "2026-07-29T14:58:22.380Z",
-        "id": "reading-candidate:doi:10.31030/1621886",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.31030/1621886"
-          ],
-          "canonicalId": "doi:10.31030/1621886",
-          "doi": "https://doi.org/10.31030/1621886",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.31030/1621886",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.31030/1621886",
-              "recordUrl": "https://api.crossref.org/works/10.31030%2F1621886",
-              "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
-              "url": "https://doi.org/10.31030/1621886"
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "s41467-023-41553-7",
-        "relatedDocumentTitles": [
-          "s41467-023-41553-7"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0,
-          "profileRelevance": 0,
-          "providerRelevance": 0.296,
-          "sourceRelevance": 0.296,
-          "fusionScore": 0.846,
-          "lexicalRelevance": 0.23357,
-          "preFusionRelevance": 0.296,
-          "baseRelevance": 0.264,
-          "diversityPenalty": 0.036,
-          "finalScore": 0.228
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.31030/1621886",
-        "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
-        "rankingFusion": {
-          "calibratedScore": 0.264,
-          "fusionScore": 0.846,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.025,
-              "id": "provider",
-              "rank": 4,
-              "score": 0.296,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.025,
-              "id": "lexical_bm25",
-              "rank": 2,
-              "score": 0.23357,
-              "weight": 0.3
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "low",
-        "relevanceScore": 0.228
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.31096/pnaa-js_misc-023",
-        "discoveredAt": "2026-07-29T14:58:22.380Z",
-        "id": "reading-candidate:doi:10.31096/pnaa-js_misc-023",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.31096/pnaa-js_misc-023"
-          ],
-          "canonicalId": "doi:10.31096/pnaa-js_misc-023",
-          "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.31096/pnaa-js_misc-023",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
-              "recordUrl": "https://api.crossref.org/works/10.31096%2Fpnaa-js_misc-023",
-              "title": "Shull Misc Slide - JS_MISC-023",
-              "url": "https://doi.org/10.31096/pnaa-js_misc-023"
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "s41467-023-41553-7",
-        "relatedDocumentTitles": [
-          "s41467-023-41553-7"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0,
-          "profileRelevance": 0,
-          "providerRelevance": 0.273,
-          "sourceRelevance": 0.273,
-          "fusionScore": 0.758,
-          "lexicalRelevance": 0.20403,
-          "preFusionRelevance": 0.273,
-          "baseRelevance": 0.227,
-          "diversityPenalty": 0.045,
-          "finalScore": 0.182
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.31096/pnaa-js_misc-023",
-        "title": "Shull Misc Slide - JS_MISC-023",
-        "rankingFusion": {
-          "calibratedScore": 0.227,
-          "fusionScore": 0.758,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.023333,
-              "id": "provider",
-              "rank": 5,
-              "score": 0.273,
+              "score": 0.292,
               "weight": 0.35
             },
             {
               "contribution": 0.021429,
               "id": "lexical_bm25",
               "rank": 4,
-              "score": 0.20403,
+              "score": 0.686139,
               "weight": 0.3
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
         "relevanceBand": "low",
-        "relevanceScore": 0.182
-      }
-    ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785313732256434307-0|local-1785314276294111520-3::relevance": {
-    "cachedAt": "2026-07-29T14:58:28.272Z",
-    "recommendations": [
-      {
-        "authors": [],
-        "canonicalId": "doi:10.1163/2210-7886_asc-41553",
-        "discoveredAt": "2026-07-29T14:58:28.264Z",
-        "id": "reading-candidate:doi:10.1163/2210-7886_asc-41553",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1163/2210-7886_asc-41553"
-          ],
-          "canonicalId": "doi:10.1163/2210-7886_asc-41553",
-          "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1163/2210-7886_asc-41553",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1163/2210-7886_asc-41553",
-              "recordUrl": "https://api.crossref.org/works/10.1163%2F2210-7886_asc-41553",
-              "title": "41553, 1882-01-16",
-              "url": "https://doi.org/10.1163/2210-7886_asc-41553"
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "s41467-023-41553-7",
-        "relatedDocumentTitles": [
-          "s41467-023-41553-7"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
-        "scoreComponents": {
-          "preference": 0,
-          "profileRelevance": 0,
-          "providerRelevance": 0.633,
-          "sourceRelevance": 0.633,
-          "fusionScore": 1,
-          "lexicalRelevance": 1,
-          "preFusionRelevance": 0.633,
-          "baseRelevance": 0.633,
-          "diversityPenalty": 0,
-          "finalScore": 0.633
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1163/2210-7886_asc-41553",
-        "title": "41553, 1882-01-16",
-        "rankingFusion": {
-          "calibratedScore": 0.633,
-          "fusionScore": 1,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.031818,
-              "id": "provider",
-              "rank": 1,
-              "score": 0.633,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.027273,
-              "id": "lexical_bm25",
-              "rank": 1,
-              "score": 1,
-              "weight": 0.3
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.633
+        "relevanceScore": 0.223
       },
       {
-        "abstract": "Abstract Currently there is no way to reliably predict who is at higher or lower risk of cardiac toxicity from radiation, and the critical factors that alter radiation-induced heart disease are not completely clear. The heart produces and uses the most energy of all organs, with &amp;gt;90% of its energy produced via mitochondrial respiration. To maintain this energy output, ~30% of the heart volume is made up of mitochondria in cardiomyocytes. Such a high metabolic rate produces increased levels of reactive oxygen species (ROS), which have the potential to cause serious oxidative damage to the heart. Antioxidant enzymes such as superoxide dysmutases (SODs), catalase, and glutathione peroxidase can help to protect against ROS-mediated damage by converting superoxide to hydrogen peroxidase, and then hydrogen peroxide to water. Oxidative stressors, including therapeutic radiation therapy, have been shown to lead to long-term effects on mitochondrial function, as measured by excess formation of ROS including superoxide, mitochondrial-related gene expression, and altered mitochondrial morphology and functions such as mitochondrial respiration, pyruvate metabolism, and ion and lipid transport. While a potential link between aging-related signaling pathways, metabolic homeostasis, and radiation-induced normal tissue damage has recently been suggested, rigorous mechanistic data to support this intriguing idea has been limited. Mitochondrial detoxification pathways, which are dysregulated in normal tissues by radiation, lead to increased ROS levels and the disruption of mitochondrial reparative pathways. SIRT3 is one of three mitochondrial-located sirtuin proteins. SIRT3 is the primary deacetylase of mitochondrial proteins, and its deacetylase activity plays a key role in maintaining mitochondrial energy metabolism equilibrium and defending against cellular damage that occurs with aging. Lysine acetylation is an important post-translational modification that can regulate the function of mitochondrial proteins. The acetylation status of key mitochondrial detoxification proteins, which are Sirt3 deacetylation targets, may be dysregulated in normal tissue following radiation exposure. Loss of SIRT3 can dysregulate mitochondrial detoxification and metabolism, leading to the accumulation of cellular damage. Sirt3 KO mice demonstrate enhanced mitochondrial dysfunction, an",
+        "abstract": "We study distributed optimization in the presence of Byzantine adversaries, where both data and computation are distributed among $m$ worker machines, $t$ of which may be corrupt. The compromised nodes may collaboratively and arbitrarily deviate from their pre-specified programs, and a designated (master) node iteratively computes the model/parameter vector for generalized linear models. In this work, we primarily focus on two iterative algorithms: Proximal Gradient Descent (PGD) and Coordinate Descent (CD). Gradient descent (GD) is a special case of these algorithms. PGD is typically used in the data-parallel setting, where data is partitioned across different samples, whereas, CD is used in the model-parallelism setting, where data is partitioned across the parameter space. In this paper, we propose a method based on data encoding and error correction over real numbers to combat adversarial attacks. We can tolerate up to $t\\leq \\lfloor\\frac{m-1}{2}\\rfloor$ corrupt worker nodes, which is information-theoretically optimal. We give deterministic guarantees, and our method does not assume any probability distribution on the data. We develop a {\\em sparse} encoding scheme which enables computationally efficient data encoding and decoding. We demonstrate a trade-off between the corruption threshold and the resource requirements (storage, computational, and communication complexity). As an example, for $t\\leq\\frac{m}{3}$, our scheme incurs only a {\\em constant} overhead on these resources, over that required by the plain distributed PGD/CD algorithms which provide no adversarial protection. To the best of our knowledge, ours is the first paper that makes CD secure against adversarial attacks. Our encoding scheme extends efficiently to the data streaming model and for stochastic gradient descent (SGD). We also give experimental results to show the efficacy of our proposed schemes.",
         "authors": [
-          "Carmen Bergom"
+          "Deepesh Data",
+          "Linqi Song",
+          "Suhas Diggavi"
         ],
-        "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
-        "discoveredAt": "2026-07-29T14:58:28.264Z",
-        "id": "reading-candidate:doi:10.1158/1557-3265.radsci21-ia-023",
+        "canonicalId": "arxiv:1907.02664",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:1907.02664",
         "identityResolution": {
           "aliases": [
-            "crossref:10.1158/1557-3265.radsci21-ia-023"
+            "arxiv:1907.02664"
           ],
-          "canonicalId": "doi:10.1158/1557-3265.radsci21-ia-023",
-          "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
+          "arxivId": "1907.02664",
+          "canonicalId": "arxiv:1907.02664",
           "lineageStatus": "single_record",
           "providers": [
-            "crossref"
+            "arxiv"
           ],
           "records": [
             {
-              "id": "crossref:10.1158/1557-3265.radsci21-ia-023",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
-              "recordUrl": "https://api.crossref.org/works/10.1158%2F1557-3265.radsci21-ia-023",
-              "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
-              "url": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
-              "year": 2021
+              "id": "arxiv:1907.02664",
+              "provider": "arxiv",
+              "arxivId": "1907.02664",
+              "recordUrl": "https://arxiv.org/abs/1907.02664",
+              "title": "Data Encoding for Byzantine-Resilient Distributed Optimization",
+              "url": "https://arxiv.org/abs/1907.02664",
+              "year": 2019
             }
           ],
           "consistent": true,
           "version": "recommendation-identity/v2"
         },
-        "publishedYear": 2021,
+        "publishedYear": 2019,
         "openAccessAvailable": true,
         "qualityGate": {
           "checks": {
@@ -1685,82 +845,98 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitle": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
         "relatedDocumentTitles": [
-          "s41467-023-41553-7"
+          "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
         ],
+        "surfacingTags": [],
         "relation": "topic_search",
         "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
         "scoreComponents": {
           "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.408,
-          "sourceRelevance": 0.408,
-          "fusionScore": 0.811,
-          "lexicalRelevance": 0.035698,
-          "preFusionRelevance": 0.408,
-          "baseRelevance": 0.354,
-          "diversityPenalty": 0,
-          "finalScore": 0.354
+          "providerRelevance": 0.295,
+          "sourceRelevance": 0.295,
+          "fusionScore": 0.677,
+          "lexicalRelevance": 0.320025,
+          "preFusionRelevance": 0.295,
+          "baseRelevance": 0.228,
+          "diversityPenalty": 0.026,
+          "finalScore": 0.202
         },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
         "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1158/1557-3265.radsci21-ia-023",
-        "title": "Abstract IA-023: The role of sirtuins in radiation-induced cardiac dysfunction",
+        "sourceUrl": "https://arxiv.org/abs/1907.02664",
+        "title": "Data Encoding for Byzantine-Resilient Distributed Optimization",
         "rankingFusion": {
-          "calibratedScore": 0.354,
-          "fusionScore": 0.811,
+          "calibratedScore": 0.228,
+          "fusionScore": 0.677,
           "k": 10,
           "routes": [
             {
-              "contribution": 0.029167,
+              "contribution": 0.023333,
               "id": "provider",
-              "rank": 2,
-              "score": 0.408,
+              "rank": 5,
+              "score": 0.295,
               "weight": 0.35
             },
             {
-              "contribution": 0.01875,
+              "contribution": 0.016667,
               "id": "lexical_bm25",
-              "rank": 6,
-              "score": 0.035698,
+              "rank": 8,
+              "score": 0.320025,
               "weight": 0.3
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
         "relevanceBand": "low",
-        "relevanceScore": 0.354
+        "relevanceScore": 0.202
       },
       {
-        "authors": [],
-        "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
-        "discoveredAt": "2026-07-29T14:58:28.264Z",
-        "id": "reading-candidate:doi:10.1163/37612_wna_wo_wo_34_23_23",
+        "abstract": "In this work, we tackle the problem of text-to-video retrieval (T2VR). Inspired by the success of late interaction techniques in text-document, text-image, and text-video retrieval, our approach, Video-ColBERT, introduces a simple and efficient mechanism for fine-grained similarity assessment between queries and videos. Video-ColBERT is built upon 3 main components: a fine-grained spatial and temporal token-wise interaction, query and visual expansions, and a dual sigmoid loss during training. We find that this interaction and training paradigm leads to strong individual, yet compatible, representations for encoding video content. These representations lead to increases in performance on common text-to-video retrieval benchmarks compared to other bi-encoder methods.",
+        "authors": [
+          "Arun Reddy",
+          "Alexander Martin",
+          "Eugene Yang",
+          "Andrew Yates",
+          "Kate Sanders",
+          "Kenton Murray",
+          "Reno Kriz",
+          "Celso M. de Melo",
+          "Benjamin Van Durme",
+          "Rama Chellappa"
+        ],
+        "canonicalId": "arxiv:2503.19009",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2503.19009",
         "identityResolution": {
           "aliases": [
-            "crossref:10.1163/37612_wna_wo_wo_34_23_23"
+            "arxiv:2503.19009"
           ],
-          "canonicalId": "doi:10.1163/37612_wna_wo_wo_34_23_23",
-          "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
+          "arxivId": "2503.19009",
+          "canonicalId": "arxiv:2503.19009",
           "lineageStatus": "single_record",
           "providers": [
-            "crossref"
+            "arxiv"
           ],
           "records": [
             {
-              "id": "crossref:10.1163/37612_wna_wo_wo_34_23_23",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
-              "recordUrl": "https://api.crossref.org/works/10.1163%2F37612_wna_wo_wo_34_23_23",
-              "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
-              "url": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23"
+              "id": "arxiv:2503.19009",
+              "provider": "arxiv",
+              "arxivId": "2503.19009",
+              "recordUrl": "https://arxiv.org/abs/2503.19009",
+              "title": "Video-ColBERT: Contextualized Late Interaction for Text-to-Video Retrieval",
+              "url": "https://arxiv.org/abs/2503.19009",
+              "year": 2025
             }
           ],
           "consistent": true,
           "version": "recommendation-identity/v2"
         },
+        "publishedYear": 2025,
+        "openAccessAvailable": true,
         "qualityGate": {
           "checks": {
             "canonicalIdentity": true,
@@ -1775,77 +951,402 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
         "relatedDocumentTitles": [
-          "s41467-023-41553-7"
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
         ],
+        "surfacingTags": [],
         "relation": "topic_search",
         "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
         "scoreComponents": {
           "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.333,
-          "sourceRelevance": 0.333,
-          "fusionScore": 0.846,
-          "lexicalRelevance": 0.174126,
-          "preFusionRelevance": 0.333,
-          "baseRelevance": 0.297,
-          "diversityPenalty": 0.036,
-          "finalScore": 0.261
+          "providerRelevance": 0.267,
+          "sourceRelevance": 0.267,
+          "fusionScore": 0.771,
+          "lexicalRelevance": 0.727576,
+          "preFusionRelevance": 0.267,
+          "baseRelevance": 0.224,
+          "diversityPenalty": 0.045,
+          "finalScore": 0.179
         },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
         "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1163/37612_wna_wo_wo_34_23_23",
-        "title": "WO 34/023/023 - Autograph Letter to Lt Colonel Eyre",
+        "sourceUrl": "https://arxiv.org/abs/2503.19009",
+        "title": "Video-ColBERT: Contextualized Late Interaction for Text-to-Video Retrieval",
         "rankingFusion": {
-          "calibratedScore": 0.297,
-          "fusionScore": 0.846,
+          "calibratedScore": 0.224,
+          "fusionScore": 0.771,
           "k": 10,
           "routes": [
             {
-              "contribution": 0.026923,
+              "contribution": 0.020588,
               "id": "provider",
-              "rank": 3,
-              "score": 0.333,
+              "rank": 7,
+              "score": 0.267,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.727576,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.179
+      },
+      {
+        "abstract": "While Late Interaction models exhibit strong retrieval performance, many of their underlying dynamics remain understudied, potentially hiding performance bottlenecks. In this work, we focus on two topics in Late Interaction retrieval: a length bias that arises when using multi-vector scoring, and the similarity distribution beyond the best scores pooled by the MaxSim operator. We analyze these behaviors for state-of-the-art models on the NanoBEIR benchmark. Results show that while the theoretical length bias of causal Late Interaction models holds in practice, bi-directional models can also suffer from it in extreme cases. We also note that no significant similarity trend lies beyond the top-1 document token, validating that the MaxSim operator efficiently exploits the token-level similarity scores.",
+        "authors": [
+          "Antoine Edy",
+          "Max Conti",
+          "Quentin Macé"
+        ],
+        "canonicalId": "arxiv:2603.26259",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2603.26259",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2603.26259"
+          ],
+          "arxivId": "2603.26259",
+          "canonicalId": "arxiv:2603.26259",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2603.26259",
+              "provider": "arxiv",
+              "arxivId": "2603.26259",
+              "recordUrl": "https://arxiv.org/abs/2603.26259",
+              "title": "Working Notes on Late Interaction Dynamics: Analyzing Targeted Behaviors of Late Interaction Models",
+              "url": "https://arxiv.org/abs/2603.26259",
+              "year": 2026
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2026,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.25,
+          "sourceRelevance": 0.25,
+          "fusionScore": 0.596,
+          "lexicalRelevance": 0.287068,
+          "preFusionRelevance": 0.25,
+          "baseRelevance": 0.179,
+          "diversityPenalty": 0.045,
+          "finalScore": 0.134
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2603.26259",
+        "title": "Working Notes on Late Interaction Dynamics: Analyzing Targeted Behaviors of Late Interaction Models",
+        "rankingFusion": {
+          "calibratedScore": 0.179,
+          "fusionScore": 0.596,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.019444,
+              "id": "provider",
+              "rank": 8,
+              "score": 0.25,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.015789,
+              "id": "lexical_bm25",
+              "rank": 9,
+              "score": 0.287068,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.134
+      },
+      {
+        "abstract": "Multi-vector dense models, such as ColBERT, have proven highly effective in information retrieval. ColBERT's late interaction scoring approximates the joint query-document attention seen in cross-encoders while maintaining inference efficiency closer to traditional dense retrieval models, thanks to its bi-encoder architecture and recent optimizations in indexing and search. In this work we propose a number of incremental improvements to the ColBERT model architecture and training pipeline, using methods shown to work in the more mature single-vector embedding model training paradigm, particularly those that apply to heterogeneous multilingual data or boost efficiency with little tradeoff. Our new model, Jina-ColBERT-v2, demonstrates strong performance across a range of English and multilingual retrieval tasks.",
+        "authors": [
+          "Rohan Jha",
+          "Bo Wang",
+          "Michael Günther",
+          "Georgios Mastrapas",
+          "Saba Sturua",
+          "Isabelle Mohr",
+          "Andreas Koukounas",
+          "Mohammad Kalim Akram",
+          "Nan Wang",
+          "Han Xiao"
+        ],
+        "canonicalId": "arxiv:2408.16672",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2408.16672",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2408.16672"
+          ],
+          "arxivId": "2408.16672",
+          "canonicalId": "arxiv:2408.16672",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2408.16672",
+              "provider": "arxiv",
+              "arxivId": "2408.16672",
+              "recordUrl": "https://arxiv.org/abs/2408.16672",
+              "title": "Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever",
+              "url": "https://arxiv.org/abs/2408.16672",
+              "year": 2024
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2024,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.208,
+          "sourceRelevance": 0.208,
+          "fusionScore": 0.702,
+          "lexicalRelevance": 0.721517,
+          "preFusionRelevance": 0.208,
+          "baseRelevance": 0.165,
+          "diversityPenalty": 0.068,
+          "finalScore": 0.097
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2408.16672",
+        "title": "Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever",
+        "rankingFusion": {
+          "calibratedScore": 0.165,
+          "fusionScore": 0.702,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.018421,
+              "id": "provider",
+              "rank": 9,
+              "score": 0.208,
               "weight": 0.35
             },
             {
               "contribution": 0.023077,
               "id": "lexical_bm25",
               "rank": 3,
-              "score": 0.174126,
+              "score": 0.721517,
               "weight": 0.3
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
         "relevanceBand": "low",
-        "relevanceScore": 0.261
-      },
+        "relevanceScore": 0.097
+      }
+    ]
+  },
+  "user:1d04896b-2ead-4f3a-b0ac-093f92df5120::local_library:本地文献库::demo-1::relevance::0": {
+    "cachedAt": "2026-08-03T04:32:49.907Z",
+    "recommendations": [
       {
-        "authors": [],
-        "canonicalId": "doi:10.31030/1621886",
-        "discoveredAt": "2026-07-29T14:58:22.380Z",
-        "id": "reading-candidate:doi:10.31030/1621886",
+        "authors": [
+          "Carlos Lassance",
+          "Maroua Maachou",
+          "Joohee Park",
+          "Stéphane Clinchant"
+        ],
+        "canonicalId": "doi:10.1145/3477495.3531835",
+        "discoveredAt": "2026-08-03T04:32:49.768Z",
+        "id": "reading-candidate:doi:10.1145/3477495.3531835",
         "identityResolution": {
           "aliases": [
-            "crossref:10.31030/1621886"
+            "crossref:10.1145/3477495.3531835",
+            "crossref:10.1145/3477495.3531856",
+            "arxiv:7495.35318"
           ],
-          "canonicalId": "doi:10.31030/1621886",
-          "doi": "https://doi.org/10.31030/1621886",
+          "arxivId": "7495.35318",
+          "canonicalId": "doi:10.1145/3477495.3531835",
+          "doi": "https://doi.org/10.1145/3477495.3531835",
+          "lineageStatus": "possible_version_family",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "arxivId": "7495.35318",
+              "doi": "https://doi.org/10.1145/3477495.3531835",
+              "id": "crossref:10.1145/3477495.3531835",
+              "provider": "crossref",
+              "recordUrl": "https://api.crossref.org/works/10.1145%2F3477495.3531835",
+              "title": "Learned Token Pruning in Contextualized Late Interaction over BERT (ColBERT)",
+              "url": "https://doi.org/10.1145/3477495.3531835",
+              "year": 2022
+            },
+            {
+              "arxivId": "7495.35318",
+              "doi": "https://doi.org/10.1145/3477495.3531856",
+              "id": "crossref:10.1145/3477495.3531856",
+              "provider": "crossref",
+              "recordUrl": "https://api.crossref.org/works/10.1145%2F3477495.3531856",
+              "title": "BERT-based Dense Intra-ranking and Contextualized Late Interaction via Multi-task Learning for Long Document Retrieval",
+              "url": "https://doi.org/10.1145/3477495.3531856",
+              "year": 2022
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2022,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.5,
+          "sourceRelevance": 0.5,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.5,
+          "baseRelevance": 0.5,
+          "diversityPenalty": 0,
+          "finalScore": 0.5
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1145/3477495.3531835",
+        "title": "Learned Token Pruning in Contextualized Late Interaction over BERT (ColBERT)",
+        "rankingFusion": {
+          "calibratedScore": 0.5,
+          "fusionScore": 1,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.5,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "medium",
+        "relevanceScore": 0.5
+      },
+      {
+        "authors": [
+          "Yixiang Fang"
+        ],
+        "canonicalId": "doi:10.5353/th_991043979532303414",
+        "discoveredAt": "2026-08-03T04:32:49.768Z",
+        "id": "reading-candidate:doi:10.5353/th_991043979532303414",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.5353/th_991043979532303414"
+          ],
+          "canonicalId": "doi:10.5353/th_991043979532303414",
+          "doi": "https://doi.org/10.5353/th_991043979532303414",
           "lineageStatus": "single_record",
           "providers": [
             "crossref"
           ],
           "records": [
             {
-              "id": "crossref:10.31030/1621886",
+              "id": "crossref:10.5353/th_991043979532303414",
               "provider": "crossref",
-              "doi": "https://doi.org/10.31030/1621886",
-              "recordUrl": "https://api.crossref.org/works/10.31030%2F1621886",
-              "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
-              "url": "https://doi.org/10.31030/1621886"
+              "doi": "https://doi.org/10.5353/th_991043979532303414",
+              "recordUrl": "https://api.crossref.org/works/10.5353%2Fth_991043979532303414",
+              "title": "Effective and efficient community search over large attributed graphs",
+              "url": "https://doi.org/10.5353/th_991043979532303414"
             }
           ],
           "consistent": true,
@@ -1865,82 +1366,495 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
         "relatedDocumentTitles": [
-          "s41467-023-41553-7"
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
         ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.342,
+          "sourceRelevance": 0.342,
+          "fusionScore": 0.879,
+          "lexicalRelevance": 0.963403,
+          "preFusionRelevance": 0.342,
+          "baseRelevance": 0.313,
+          "diversityPenalty": 0.02,
+          "finalScore": 0.293
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.5353/th_991043979532303414",
+        "title": "Effective and efficient community search over large attributed graphs",
+        "rankingFusion": {
+          "calibratedScore": 0.313,
+          "fusionScore": 0.879,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.342,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.963403,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.293
+      },
+      {
+        "abstract": "Via is a forthcoming all-sky spectroscopic survey that will achieve 100 m s$^{-1}$ radial velocity stability for millions of faint ($G \\lesssim 21$) stars while reaching LSST's single-visit depth ($r \\approx 24$) for transient spectroscopy, opening new regimes in near-field cosmology and time-domain astrophysics. Via will deploy identical fiber-fed, multi-object spectrographs on the 6.5m MMT and Magellan/Clay telescopes for a five-year, dual-hemisphere survey of $>2{,}000{,}000$ stars beginning in 2027 - timed to complement LSST. Each instrument has 576 robotically positioned fibers over a $1^\\circ$ field of view, feeding two spectrographs: Viaspec ($R \\approx 15{,}000$; 505-595 nm; 540 fibers) and Boombox ($R \\approx 1{,}000$; 360-1010 nm; 36 fibers). Four key goals drive the survey: (1) a comprehensive survey of velocity perturbations in cold stellar streams, sensitive to $M \\lesssim 10^7$ subhalos below the threshold of galaxy formation, a stringent test of the particle nature of dark matter; (2) a chemodynamical census of Milky Way satellite galaxies to understand the formation of the faintest galaxies; (3) the first 3D tomographic maps of cold gas in the circumgalactic medium via NaI absorption; and (4) the rapid characterization of thousands of transients to the single-epoch survey depth of LSST. Ancillary science - including the Ly$α$ forest at $z \\approx 3$-$4$, polluted white dwarfs, exoplanet host characterization, fast radio burst host galaxies, and extragalactic dwarf galaxies - will leverage spare fibers in every pointing. The Via Project is a collaboration between the Center for Astrophysics $|$ Harvard & Smithsonian, Carnegie Observatories, Stanford University, and Yale University.",
+        "authors": [
+          "The Via Collaboration"
+        ],
+        "canonicalId": "arxiv:2606.18332",
+        "discoveredAt": "2026-08-03T04:32:49.768Z",
+        "id": "reading-candidate:arxiv:2606.18332",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2606.18332"
+          ],
+          "arxivId": "2606.18332",
+          "canonicalId": "arxiv:2606.18332",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2606.18332",
+              "provider": "arxiv",
+              "arxivId": "2606.18332",
+              "recordUrl": "https://arxiv.org/abs/2606.18332",
+              "title": "The Via Project: Overview of the Science, Instrument, and Survey",
+              "url": "https://arxiv.org/abs/2606.18332",
+              "year": 2026
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2026,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.333,
+          "sourceRelevance": 0.333,
+          "fusionScore": 0.74,
+          "lexicalRelevance": 0.51919,
+          "preFusionRelevance": 0.333,
+          "baseRelevance": 0.272,
+          "diversityPenalty": 0.022,
+          "finalScore": 0.25
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2606.18332",
+        "title": "The Via Project: Overview of the Science, Instrument, and Survey",
+        "rankingFusion": {
+          "calibratedScore": 0.272,
+          "fusionScore": 0.74,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.025,
+              "id": "provider",
+              "rank": 4,
+              "score": 0.333,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.01875,
+              "id": "lexical_bm25",
+              "rank": 6,
+              "score": 0.51919,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.25
+      },
+      {
+        "authors": [
+          "Omar Khattab",
+          "Matei Zaharia"
+        ],
+        "canonicalId": "doi:10.1145/3397271.3401075",
+        "discoveredAt": "2026-08-03T04:32:49.768Z",
+        "id": "reading-candidate:doi:10.1145/3397271.3401075",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1145/3397271.3401075",
+            "arxiv:7271.34010"
+          ],
+          "arxivId": "7271.34010",
+          "canonicalId": "doi:10.1145/3397271.3401075",
+          "doi": "https://doi.org/10.1145/3397271.3401075",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1145/3397271.3401075",
+              "provider": "crossref",
+              "arxivId": "7271.34010",
+              "doi": "https://doi.org/10.1145/3397271.3401075",
+              "recordUrl": "https://api.crossref.org/works/10.1145%2F3397271.3401075",
+              "title": "ColBERT",
+              "url": "https://doi.org/10.1145/3397271.3401075",
+              "year": 2020
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2020,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.496,
+          "sourceRelevance": 0.496,
+          "fusionScore": 0.776,
+          "lexicalRelevance": 0.108492,
+          "preFusionRelevance": 0.496,
+          "baseRelevance": 0.418,
+          "diversityPenalty": 0.18,
+          "finalScore": 0.238
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1145/3397271.3401075",
+        "title": "ColBERT",
+        "rankingFusion": {
+          "calibratedScore": 0.418,
+          "fusionScore": 0.776,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.496,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.016667,
+              "id": "lexical_bm25",
+              "rank": 8,
+              "score": 0.108492,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.238
+      },
+      {
+        "abstract": "Recent progress in neural information retrieval has demonstrated large gains in effectiveness, while often sacrificing the efficiency and interpretability of the neural model compared to classical approaches. This paper proposes ColBERTer, a neural retrieval model using contextualized late interaction (ColBERT) with enhanced reduction. Along the effectiveness Pareto frontier, ColBERTer's reductions dramatically lower ColBERT's storage requirements while simultaneously improving the interpretability of its token-matching scores. To this end, ColBERTer fuses single-vector retrieval, multi-vector refinement, and optional lexical matching components into one model. For its multi-vector component, ColBERTer reduces the number of stored vectors per document by learning unique whole-word representations for the terms in each document and learning to identify and remove word representations that are not essential to effective scoring. We employ an explicit multi-task, multi-stage training to facilitate using very small vector dimensions. Results on the MS MARCO and TREC-DL collection show that ColBERTer can reduce the storage footprint by up to 2.5x, while maintaining effectiveness. With just one dimension per token in its smallest setting, ColBERTer achieves index storage parity with the plaintext size, with very strong effectiveness results. Finally, we demonstrate ColBERTer's robustness on seven high-quality out-of-domain collections, yielding statistically significant gains over traditional retrieval baselines.",
+        "authors": [
+          "Sebastian Hofstätter",
+          "Omar Khattab",
+          "Sophia Althammer",
+          "Mete Sertkan",
+          "Allan Hanbury"
+        ],
+        "canonicalId": "arxiv:2203.13088",
+        "discoveredAt": "2026-08-03T04:32:49.768Z",
+        "id": "reading-candidate:arxiv:2203.13088",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2203.13088"
+          ],
+          "arxivId": "2203.13088",
+          "canonicalId": "arxiv:2203.13088",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2203.13088",
+              "provider": "arxiv",
+              "arxivId": "2203.13088",
+              "recordUrl": "https://arxiv.org/abs/2203.13088",
+              "title": "Introducing Neural Bag of Whole-Words with ColBERTer: Contextualized Late Interactions using Enhanced Reduction",
+              "url": "https://arxiv.org/abs/2203.13088",
+              "year": 2022
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2022,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.292,
+          "sourceRelevance": 0.292,
+          "fusionScore": 0.733,
+          "lexicalRelevance": 0.546149,
+          "preFusionRelevance": 0.292,
+          "baseRelevance": 0.237,
+          "diversityPenalty": 0.04,
+          "finalScore": 0.197
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2203.13088",
+        "title": "Introducing Neural Bag of Whole-Words with ColBERTer: Contextualized Late Interactions using Enhanced Reduction",
+        "rankingFusion": {
+          "calibratedScore": 0.237,
+          "fusionScore": 0.733,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.023333,
+              "id": "provider",
+              "rank": 5,
+              "score": 0.292,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.02,
+              "id": "lexical_bm25",
+              "rank": 5,
+              "score": 0.546149,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.197
+      },
+      {
+        "abstract": "While Late Interaction models exhibit strong retrieval performance, many of their underlying dynamics remain understudied, potentially hiding performance bottlenecks. In this work, we focus on two topics in Late Interaction retrieval: a length bias that arises when using multi-vector scoring, and the similarity distribution beyond the best scores pooled by the MaxSim operator. We analyze these behaviors for state-of-the-art models on the NanoBEIR benchmark. Results show that while the theoretical length bias of causal Late Interaction models holds in practice, bi-directional models can also suffer from it in extreme cases. We also note that no significant similarity trend lies beyond the top-1 document token, validating that the MaxSim operator efficiently exploits the token-level similarity scores.",
+        "authors": [
+          "Antoine Edy",
+          "Max Conti",
+          "Quentin Macé"
+        ],
+        "canonicalId": "arxiv:2603.26259",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2603.26259",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2603.26259"
+          ],
+          "arxivId": "2603.26259",
+          "canonicalId": "arxiv:2603.26259",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2603.26259",
+              "provider": "arxiv",
+              "arxivId": "2603.26259",
+              "recordUrl": "https://arxiv.org/abs/2603.26259",
+              "title": "Working Notes on Late Interaction Dynamics: Analyzing Targeted Behaviors of Late Interaction Models",
+              "url": "https://arxiv.org/abs/2603.26259",
+              "year": 2026
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2026,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
         "relation": "topic_search",
         "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 该候选来自近期持久候选池，本轮未将其标记为新发现。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
         "scoreComponents": {
           "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.296,
-          "sourceRelevance": 0.296,
-          "fusionScore": 0.846,
-          "lexicalRelevance": 0.174892,
-          "preFusionRelevance": 0.296,
-          "baseRelevance": 0.264,
-          "diversityPenalty": 0.036,
-          "finalScore": 0.228
+          "providerRelevance": 0.25,
+          "sourceRelevance": 0.25,
+          "fusionScore": 0.647,
+          "lexicalRelevance": 0.268177,
+          "preFusionRelevance": 0.25,
+          "baseRelevance": 0.188,
+          "diversityPenalty": 0.04,
+          "finalScore": 0.148
         },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
         "sourceKind": "cache",
-        "sourceUrl": "https://doi.org/10.31030/1621886",
-        "title": "DIN EN 2240-023:2010-09, Luft- und Raumfahrt_- Glühlampen_- Teil_023: Lampe, Kode_316_- Produktnorm; Deutsche und Englische Fassung EN_2240-023:2010",
+        "sourceUrl": "https://arxiv.org/abs/2603.26259",
+        "title": "Working Notes on Late Interaction Dynamics: Analyzing Targeted Behaviors of Late Interaction Models",
         "rankingFusion": {
-          "calibratedScore": 0.264,
-          "fusionScore": 0.846,
+          "calibratedScore": 0.188,
+          "fusionScore": 0.647,
           "k": 10,
           "routes": [
             {
-              "contribution": 0.025,
+              "contribution": 0.020588,
               "id": "provider",
-              "rank": 4,
-              "score": 0.296,
+              "rank": 7,
+              "score": 0.25,
               "weight": 0.35
             },
             {
-              "contribution": 0.025,
+              "contribution": 0.017647,
               "id": "lexical_bm25",
-              "rank": 2,
-              "score": 0.174892,
+              "rank": 7,
+              "score": 0.268177,
               "weight": 0.3
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
         "relevanceBand": "low",
-        "relevanceScore": 0.228
+        "relevanceScore": 0.148
       },
       {
-        "authors": [],
-        "canonicalId": "doi:10.1163/37612_wna_pro_pro_30_55_23_23",
-        "discoveredAt": "2026-07-29T14:58:28.264Z",
-        "id": "reading-candidate:doi:10.1163/37612_wna_pro_pro_30_55_23_23",
+        "abstract": "In this work, we tackle the problem of text-to-video retrieval (T2VR). Inspired by the success of late interaction techniques in text-document, text-image, and text-video retrieval, our approach, Video-ColBERT, introduces a simple and efficient mechanism for fine-grained similarity assessment between queries and videos. Video-ColBERT is built upon 3 main components: a fine-grained spatial and temporal token-wise interaction, query and visual expansions, and a dual sigmoid loss during training. We find that this interaction and training paradigm leads to strong individual, yet compatible, representations for encoding video content. These representations lead to increases in performance on common text-to-video retrieval benchmarks compared to other bi-encoder methods.",
+        "authors": [
+          "Arun Reddy",
+          "Alexander Martin",
+          "Eugene Yang",
+          "Andrew Yates",
+          "Kate Sanders",
+          "Kenton Murray",
+          "Reno Kriz",
+          "Celso M. de Melo",
+          "Benjamin Van Durme",
+          "Rama Chellappa"
+        ],
+        "canonicalId": "arxiv:2503.19009",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2503.19009",
         "identityResolution": {
           "aliases": [
-            "crossref:10.1163/37612_wna_pro_pro_30_55_23_23"
+            "arxiv:2503.19009"
           ],
-          "canonicalId": "doi:10.1163/37612_wna_pro_pro_30_55_23_23",
-          "doi": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23",
+          "arxivId": "2503.19009",
+          "canonicalId": "arxiv:2503.19009",
           "lineageStatus": "single_record",
           "providers": [
-            "crossref"
+            "arxiv"
           ],
           "records": [
             {
-              "id": "crossref:10.1163/37612_wna_pro_pro_30_55_23_23",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23",
-              "recordUrl": "https://api.crossref.org/works/10.1163%2F37612_wna_pro_pro_30_55_23_23",
-              "title": "PRO 30/55/023/023 - Copy Letter from H Clinton to Lord Amherst",
-              "url": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23"
+              "id": "arxiv:2503.19009",
+              "provider": "arxiv",
+              "arxivId": "2503.19009",
+              "recordUrl": "https://arxiv.org/abs/2503.19009",
+              "title": "Video-ColBERT: Contextualized Late Interaction for Text-to-Video Retrieval",
+              "url": "https://arxiv.org/abs/2503.19009",
+              "year": 2025
             }
           ],
           "consistent": true,
           "version": "recommendation-identity/v2"
         },
+        "publishedYear": 2025,
+        "openAccessAvailable": true,
         "qualityGate": {
           "checks": {
             "canonicalIdentity": true,
@@ -1955,454 +1869,161 @@
           "reasons": [],
           "version": "recommendation-quality/v1"
         },
-        "relatedDocumentTitle": "s41467-023-41553-7",
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
         "relatedDocumentTitles": [
-          "s41467-023-41553-7"
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
         ],
+        "surfacingTags": [],
         "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 该候选来自近期持久候选池，本轮未将其标记为新发现。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
         "scoreComponents": {
           "preference": 0,
           "profileRelevance": 0,
-          "providerRelevance": 0.296,
-          "sourceRelevance": 0.296,
-          "fusionScore": 0.758,
-          "lexicalRelevance": 0.172229,
-          "preFusionRelevance": 0.296,
-          "baseRelevance": 0.246,
-          "diversityPenalty": 0.072,
-          "finalScore": 0.174
+          "providerRelevance": 0.267,
+          "sourceRelevance": 0.267,
+          "fusionScore": 0.761,
+          "lexicalRelevance": 0.657699,
+          "preFusionRelevance": 0.267,
+          "baseRelevance": 0.222,
+          "diversityPenalty": 0.18,
+          "finalScore": 0.042
         },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1163/37612_wna_pro_pro_30_55_23_23",
-        "title": "PRO 30/55/023/023 - Copy Letter from H Clinton to Lord Amherst",
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "cache",
+        "sourceUrl": "https://arxiv.org/abs/2503.19009",
+        "title": "Video-ColBERT: Contextualized Late Interaction for Text-to-Video Retrieval",
         "rankingFusion": {
-          "calibratedScore": 0.246,
-          "fusionScore": 0.758,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.023333,
-              "id": "provider",
-              "rank": 5,
-              "score": 0.296,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.021429,
-              "id": "lexical_bm25",
-              "rank": 4,
-              "score": 0.172229,
-              "weight": 0.3
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "low",
-        "relevanceScore": 0.174
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.31096/pnaa-js_misc-023",
-        "discoveredAt": "2026-07-29T14:58:28.264Z",
-        "id": "reading-candidate:doi:10.31096/pnaa-js_misc-023",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.31096/pnaa-js_misc-023"
-          ],
-          "canonicalId": "doi:10.31096/pnaa-js_misc-023",
-          "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.31096/pnaa-js_misc-023",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.31096/pnaa-js_misc-023",
-              "recordUrl": "https://api.crossref.org/works/10.31096%2Fpnaa-js_misc-023",
-              "title": "Shull Misc Slide - JS_MISC-023",
-              "url": "https://doi.org/10.31096/pnaa-js_misc-023"
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "s41467-023-41553-7",
-        "relatedDocumentTitles": [
-          "s41467-023-41553-7"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0,
-          "profileRelevance": 0,
-          "providerRelevance": 0.273,
-          "sourceRelevance": 0.273,
-          "fusionScore": 0.709,
-          "lexicalRelevance": 0.153514,
-          "preFusionRelevance": 0.273,
-          "baseRelevance": 0.217,
-          "diversityPenalty": 0.045,
-          "finalScore": 0.172
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.31096/pnaa-js_misc-023",
-        "title": "Shull Misc Slide - JS_MISC-023",
-        "rankingFusion": {
-          "calibratedScore": 0.217,
-          "fusionScore": 0.709,
+          "calibratedScore": 0.222,
+          "fusionScore": 0.761,
           "k": 10,
           "routes": [
             {
               "contribution": 0.021875,
               "id": "provider",
               "rank": 6,
-              "score": 0.273,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.02,
-              "id": "lexical_bm25",
-              "rank": 5,
-              "score": 0.153514,
-              "weight": 0.3
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "low",
-        "relevanceScore": 0.172
-      }
-    ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785313732256434307-0::relevance": {
-    "cachedAt": "2026-07-29T15:29:08.612Z",
-    "recommendations": []
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785311517746316016-0|local-1785313732256434307-0::relevance": {
-    "cachedAt": "2026-07-29T15:29:22.144Z",
-    "recommendations": [
-      {
-        "authors": [],
-        "canonicalId": "doi:10.14217/9781848593596-4-en",
-        "discoveredAt": "2026-07-29T15:29:22.135Z",
-        "id": "reading-candidate:doi:10.14217/9781848593596-4-en",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.14217/9781848593596-4-en"
-          ],
-          "canonicalId": "doi:10.14217/9781848593596-4-en",
-          "doi": "https://doi.org/10.14217/9781848593596-4-en",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.14217/9781848593596-4-en",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.14217/9781848593596-4-en",
-              "recordUrl": "https://api.crossref.org/works/10.14217%2F9781848593596-4-en",
-              "title": "Preparation of Camera-Ready Copy",
-              "url": "https://doi.org/10.14217/9781848593596-4-en",
-              "year": 1983
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 1983,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "heliox_camera_ready",
-        "relatedDocumentTitles": [
-          "heliox_camera_ready"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.517,
-          "sourceRelevance": 0.517,
-          "fusionScore": 0.946,
-          "lexicalRelevance": 0.829653,
-          "preFusionRelevance": 0.667,
-          "baseRelevance": 0.642,
-          "diversityPenalty": 0,
-          "finalScore": 0.642
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.14217/9781848593596-4-en",
-        "title": "Preparation of Camera-Ready Copy",
-        "rankingFusion": {
-          "calibratedScore": 0.642,
-          "fusionScore": 0.946,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.031818,
-              "id": "provider",
-              "rank": 1,
-              "score": 0.517,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.025,
-              "id": "lexical_bm25",
-              "rank": 2,
-              "score": 0.829653,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.007692,
-              "id": "personalization",
-              "rank": 3,
-              "score": 0.15,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.642
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.4135/9781452229669.n537",
-        "discoveredAt": "2026-07-29T15:29:22.135Z",
-        "id": "reading-candidate:doi:10.4135/9781452229669.n537",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.4135/9781452229669.n537"
-          ],
-          "canonicalId": "doi:10.4135/9781452229669.n537",
-          "doi": "https://doi.org/10.4135/9781452229669.n537",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.4135/9781452229669.n537",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.4135/9781452229669.n537",
-              "recordUrl": "https://api.crossref.org/works/10.4135%2F9781452229669.n537",
-              "title": "Camera-Ready Art",
-              "url": "https://doi.org/10.4135/9781452229669.n537",
-              "year": 2004
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 2004,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "heliox_camera_ready",
-        "relatedDocumentTitles": [
-          "heliox_camera_ready"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.479,
-          "sourceRelevance": 0.479,
-          "fusionScore": 0.961,
-          "lexicalRelevance": 1,
-          "preFusionRelevance": 0.629,
-          "baseRelevance": 0.612,
-          "diversityPenalty": 0.12,
-          "finalScore": 0.492
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.4135/9781452229669.n537",
-        "title": "Camera-Ready Art",
-        "rankingFusion": {
-          "calibratedScore": 0.612,
-          "fusionScore": 0.961,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.029167,
-              "id": "provider",
-              "rank": 2,
-              "score": 0.479,
-              "weight": 0.35
-            },
-            {
-              "contribution": 0.027273,
-              "id": "lexical_bm25",
-              "rank": 1,
-              "score": 1,
-              "weight": 0.3
-            },
-            {
-              "contribution": 0.009091,
-              "id": "personalization",
-              "rank": 1,
-              "score": 0.15,
-              "weight": 0.1
-            }
-          ],
-          "version": "recommendation-ranking-fusion/v1"
-        },
-        "relevanceBand": "medium",
-        "relevanceScore": 0.492
-      },
-      {
-        "authors": [],
-        "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
-        "discoveredAt": "2026-07-29T15:29:22.135Z",
-        "id": "reading-candidate:doi:10.1016/0039-128x(90)90065-j",
-        "identityResolution": {
-          "aliases": [
-            "crossref:10.1016/0039-128x(90)90065-j"
-          ],
-          "canonicalId": "doi:10.1016/0039-128x(90)90065-j",
-          "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
-          "lineageStatus": "single_record",
-          "providers": [
-            "crossref"
-          ],
-          "records": [
-            {
-              "id": "crossref:10.1016/0039-128x(90)90065-j",
-              "provider": "crossref",
-              "doi": "https://doi.org/10.1016/0039-128x(90)90065-j",
-              "recordUrl": "https://api.crossref.org/works/10.1016%2F0039-128x(90)90065-j",
-              "title": "On typeset versus camera-ready journals",
-              "url": "https://doi.org/10.1016/0039-128x(90)90065-j",
-              "year": 1990
-            }
-          ],
-          "consistent": true,
-          "version": "recommendation-identity/v2"
-        },
-        "publishedYear": 1990,
-        "qualityGate": {
-          "checks": {
-            "canonicalIdentity": true,
-            "crossProviderConsistent": true,
-            "notKnownRetracted": true,
-            "plausiblePublicationYear": true,
-            "supportedProvider": true,
-            "traceableHttpsSource": true,
-            "usableTitle": true
-          },
-          "passed": true,
-          "reasons": [],
-          "version": "recommendation-quality/v1"
-        },
-        "relatedDocumentTitle": "heliox_camera_ready",
-        "relatedDocumentTitles": [
-          "heliox_camera_ready"
-        ],
-        "relation": "topic_search",
-        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 与你已收藏主题相近，相关性排序已提高。 已通过 provider / lexical_bm25 / personalization 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
-        "scoreComponents": {
-          "preference": 0.15,
-          "profileRelevance": 0,
-          "providerRelevance": 0.457,
-          "sourceRelevance": 0.457,
-          "fusionScore": 0.856,
-          "lexicalRelevance": 0.764535,
-          "preFusionRelevance": 0.607,
-          "baseRelevance": 0.546,
-          "diversityPenalty": 0.12,
-          "finalScore": 0.426
-        },
-        "primaryProvider": "crossref",
-        "source": "Crossref",
-        "sourceKind": "live",
-        "sourceUrl": "https://doi.org/10.1016/0039-128x(90)90065-j",
-        "title": "On typeset versus camera-ready journals",
-        "rankingFusion": {
-          "calibratedScore": 0.546,
-          "fusionScore": 0.856,
-          "k": 10,
-          "routes": [
-            {
-              "contribution": 0.026923,
-              "id": "provider",
-              "rank": 3,
-              "score": 0.457,
+              "score": 0.267,
               "weight": 0.35
             },
             {
               "contribution": 0.023077,
               "id": "lexical_bm25",
               "rank": 3,
-              "score": 0.764535,
+              "score": 0.657699,
               "weight": 0.3
-            },
-            {
-              "contribution": 0.008333,
-              "id": "personalization",
-              "rank": 2,
-              "score": 0.15,
-              "weight": 0.1
             }
           ],
           "version": "recommendation-ranking-fusion/v1"
         },
         "relevanceBand": "low",
-        "relevanceScore": 0.426
+        "relevanceScore": 0.042
+      },
+      {
+        "abstract": "Multi-vector dense models, such as ColBERT, have proven highly effective in information retrieval. ColBERT's late interaction scoring approximates the joint query-document attention seen in cross-encoders while maintaining inference efficiency closer to traditional dense retrieval models, thanks to its bi-encoder architecture and recent optimizations in indexing and search. In this work we propose a number of incremental improvements to the ColBERT model architecture and training pipeline, using methods shown to work in the more mature single-vector embedding model training paradigm, particularly those that apply to heterogeneous multilingual data or boost efficiency with little tradeoff. Our new model, Jina-ColBERT-v2, demonstrates strong performance across a range of English and multilingual retrieval tasks.",
+        "authors": [
+          "Rohan Jha",
+          "Bo Wang",
+          "Michael Günther",
+          "Georgios Mastrapas",
+          "Saba Sturua",
+          "Isabelle Mohr",
+          "Andreas Koukounas",
+          "Mohammad Kalim Akram",
+          "Nan Wang",
+          "Han Xiao"
+        ],
+        "canonicalId": "arxiv:2408.16672",
+        "discoveredAt": "2026-08-03T04:32:46.242Z",
+        "id": "reading-candidate:arxiv:2408.16672",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2408.16672"
+          ],
+          "arxivId": "2408.16672",
+          "canonicalId": "arxiv:2408.16672",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2408.16672",
+              "provider": "arxiv",
+              "arxivId": "2408.16672",
+              "recordUrl": "https://arxiv.org/abs/2408.16672",
+              "title": "Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever",
+              "url": "https://arxiv.org/abs/2408.16672",
+              "year": 2024
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2024,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 该候选来自近期持久候选池，本轮未将其标记为新发现。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.208,
+          "sourceRelevance": 0.208,
+          "fusionScore": 0.692,
+          "lexicalRelevance": 0.639796,
+          "preFusionRelevance": 0.208,
+          "baseRelevance": 0.163,
+          "diversityPenalty": 0.18,
+          "finalScore": 0
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "cache",
+        "sourceUrl": "https://arxiv.org/abs/2408.16672",
+        "title": "Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever",
+        "rankingFusion": {
+          "calibratedScore": 0.163,
+          "fusionScore": 0.692,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.019444,
+              "id": "provider",
+              "rank": 8,
+              "score": 0.208,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.021429,
+              "id": "lexical_bm25",
+              "rank": 4,
+              "score": 0.639796,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0
       }
     ]
-  },
-  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785314191562349113-0::relevance": {
-    "cachedAt": "2026-07-29T17:33:28.562Z",
-    "recommendations": []
   }
 }

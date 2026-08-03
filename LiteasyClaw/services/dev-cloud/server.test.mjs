@@ -11,19 +11,27 @@ import {
   putRecommendationCache
 } from "./db/recommendationCacheRepository.mjs";
 import {
+  createRecommendationCandidateRepository,
   listRecommendationCandidateSources,
   listRecommendationCandidates,
-  upsertRecommendationCandidates
+  setRecommendationCandidateRepository,
+  upsertRecommendationCandidates,
+  __resetRecommendationCandidateRepository
 } from "./db/recommendationCandidateRepository.mjs";
 import {
+  createRecommendationFeedbackRepository,
   listRecommendationFeedback,
-  saveRecommendationFeedback
+  saveRecommendationFeedback,
+  setRecommendationFeedbackRepository,
+  __resetRecommendationFeedbackRepository
 } from "./db/recommendationFeedbackRepository.mjs";
 
 test.beforeEach(() => {
   process.env.LITEASY_DEV_CLOUD_DATA_DIR = fs.mkdtempSync(
     path.join(os.tmpdir(), "liteasy-dev-cloud-test-")
   );
+  __resetRecommendationCandidateRepository();
+  __resetRecommendationFeedbackRepository();
 });
 
 async function invokeHandler({ body, handler, handlerOptions, headers = {}, method, url }) {
@@ -344,6 +352,13 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/recommendations/feedback",
     "POST /v1/research/external-knowledge",
     "POST /v1/research/external-pdf",
+    "POST /v1/works/resolve",
+    "GET /v1/concepts",
+    "GET /v1/concepts/:code",
+    "POST /v1/works/:workId/index",
+    "GET /v1/tags",
+    "GET /v1/tags/:id",
+    "GET /v1/tags/:id/works",
     "POST /v1/profile/get",
     "POST /v1/profile/save",
     "POST /v1/profile/clear",
@@ -2356,6 +2371,7 @@ test("returns provenance-bearing live reading candidates instead of demo recomme
     },
     relatedDocumentTitle: "Target Retrieval Paper",
     relatedDocumentTitles: ["Target Retrieval Paper"],
+    surfacingTags: [],
     relation: "topic_search",
     relevanceBand: "high",
     relevanceScore: 0.775,
@@ -2802,6 +2818,8 @@ test("keeps OpenAlex recommendations when the optional arXiv feed is invalid", a
 });
 
 test("migrates provider and arXiv candidate keys to DOI without duplicating history", () => {
+  const database = createDatabase({ databasePath: ":memory:" });
+  setRecommendationCandidateRepository(createRecommendationCandidateRepository(database));
   const qualityGate = { passed: true, checks: {}, reasons: [], version: "recommendation-quality/v1" };
   const baseCandidate = {
     canonicalId: "openalex:W900",
@@ -3532,4 +3550,369 @@ test("returns an audit score from the model audit endpoint", async () => {
       verdict: "pass"
     }
   });
+});
+
+test("POST /v1/works/resolve resolves a paper identity and is idempotent", async () => {
+  const body = JSON.stringify({
+    sessionId: "demo-session-1",
+    identities: [
+      { kind: "doi", value: "10.1145/3459615", sourceProvider: "crossref" },
+      { kind: "arxiv", value: "2106.04561", relation: "is_preprint_of", sourceProvider: "arxiv" }
+    ],
+    title: "ColBERT",
+    year: 2021,
+    type: "conference"
+  });
+
+  const first = await invokeHandler({
+    body,
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(first.statusCode, 201);
+  assert.equal(first.json.created, true);
+  assert.ok(first.json.work.id.startsWith("w_"));
+  assert.equal(first.json.identifiers.length, 2);
+
+  const second = await invokeHandler({
+    body,
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(second.statusCode, 201);
+  assert.equal(second.json.created, false);
+  assert.equal(second.json.work.id, first.json.work.id);
+});
+
+test("POST /v1/works/resolve rejects invalid identity kind with 400", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      identities: [{ kind: "bogus", value: "x" }]
+    }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "invalid_work_identity_kind");
+});
+
+test("POST /v1/works/resolve rejects empty identities with 400", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1", identities: [] }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "invalid_work_identity_count");
+});
+
+test("GET /v1/works/resolve reports method not allowed", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(response.statusCode, 405);
+  assert.equal(response.json.error, "method_not_allowed");
+});
+
+test("service index advertises POST /v1/works/resolve", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/"
+  });
+  assert.ok(response.json.endpoints.includes("POST /v1/works/resolve"));
+});
+
+test("GET /v1/concepts lists the seeded discipline catalog", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts?source=discipline_catalog&kind=discipline"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.concepts.length, 117);
+  const first = response.json.concepts[0];
+  assert.equal(first.source, "discipline_catalog");
+  assert.equal(first.conceptKind, "discipline");
+});
+
+test("GET /v1/concepts filters categories by kind", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts?source=discipline_catalog&kind=category"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.concepts.length, 14);
+});
+
+test("GET /v1/concepts/:code returns a discipline with parent", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts/0201"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.concept.label, "理论经济学");
+  assert.equal(response.json.concept.parentId, "discipline:cat:02");
+});
+
+test("GET /v1/concepts/:code returns 404 for unknown code", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts/9999"
+  });
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json.error, "concept_not_found");
+});
+
+test("POST /v1/concepts reports method not allowed", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/concepts"
+  });
+  assert.equal(response.statusCode, 405);
+  assert.equal(response.json.error, "method_not_allowed");
+});
+
+test("service index advertises concept endpoints", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/"
+  });
+  assert.ok(response.json.endpoints.includes("GET /v1/concepts"));
+  assert.ok(response.json.endpoints.includes("GET /v1/concepts/:code"));
+});
+
+test("POST /v1/works/:workId/index auto-tags a resolved work", async () => {
+  const resolve = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      identities: [{ kind: "doi", value: "10.1/indextest" }],
+      title: "ColBERT Efficient Passage Representation",
+      year: 2021
+    }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  const workId = resolve.json.work.id;
+
+  const index = await invokeHandler({
+    body: JSON.stringify({ title: "ColBERT Efficient Passage Representation" }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: `/v1/works/${workId}/index`
+  });
+  assert.equal(index.statusCode, 200);
+  assert.ok(index.json.tags.some((tag) => tag.normalized === "colbert"));
+
+  const tags = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/tags"
+  });
+  assert.ok(tags.json.tags.some((tag) => tag.normalized === "colbert"));
+});
+
+test("POST /v1/works/:workId/index rejects missing text with 400", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({}),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/w_dummy/index"
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "missing_index_text");
+});
+
+test("GET /v1/tags/:id/works returns works sharing a tag", async () => {
+  for (const doi of ["10.1/tagwork1", "10.1/tagwork2"]) {
+    const resolve = await invokeHandler({
+      body: JSON.stringify({
+        sessionId: "demo-session-1",
+        identities: [{ kind: "doi", value: doi }],
+        title: "ColBERT Dense Retrieval"
+      }),
+      handlerOptions: { recommendationMode: "demo" },
+      method: "POST",
+      url: "/v1/works/resolve"
+    });
+    await invokeHandler({
+      body: JSON.stringify({ title: "ColBERT Dense Retrieval" }),
+      handlerOptions: { recommendationMode: "demo" },
+      method: "POST",
+      url: `/v1/works/${resolve.json.work.id}/index`
+    });
+  }
+  const tag = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/tags"
+  });
+  const colbert = tag.json.tags.find((t) => t.normalized === "colbert");
+  assert.ok(colbert.occurrenceCount >= 2);
+
+  const works = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: `/v1/tags/${colbert.id}/works`
+  });
+  assert.equal(works.statusCode, 200);
+  assert.ok(works.json.works.length >= 2);
+});
+
+test("GET /v1/tags/:id returns 404 for unknown tag", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/tags/t_doesnotexist1234"
+  });
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json.error, "tag_not_found");
+});
+
+test("service index advertises tag endpoints", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/"
+  });
+  assert.ok(response.json.endpoints.includes("POST /v1/works/:workId/index"));
+  assert.ok(response.json.endpoints.includes("GET /v1/tags"));
+  assert.ok(response.json.endpoints.includes("GET /v1/tags/:id"));
+  assert.ok(response.json.endpoints.includes("GET /v1/tags/:id/works"));
+});
+
+test("profile/get exposes reading-derived tags and signal with workId links them", async () => {
+  const handler = createDevCloudRequestHandler();
+  // Resolve + index a paper so it has canonical tags.
+  const resolve = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      identities: [{ kind: "doi", value: "10.1/profile-tag-endpoint" }],
+      title: "ColBERT Dense Retrieval"
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  const workId = resolve.json.work.id;
+  await invokeHandler({
+    body: JSON.stringify({ title: "ColBERT Dense Retrieval" }),
+    handler,
+    method: "POST",
+    url: `/v1/works/${workId}/index`
+  });
+
+  // Open the paper: signal carries workId so the work's tags land in the profile.
+  const signal = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "ColBERT Dense Retrieval", workId }
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(signal.statusCode, 200);
+  const colbert = signal.json.tags.find((tag) => tag.label === "colbert");
+  assert.ok(colbert, "colbert tag surfaced in profile");
+  assert.ok(colbert.tagId, "colbert tag linked to canonical tag id");
+
+  // profile/get also exposes the tags.
+  const profile = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    handler,
+    method: "POST",
+    url: "/v1/profile/get"
+  });
+  assert.ok(profile.json.tags.some((tag) => tag.label === "colbert"));
+});
+
+test("signal with invalid workId still records title-derived tags", async () => {
+  const handler = createDevCloudRequestHandler();
+  const signal = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "神经信息检索方法", workId: "bad id" }
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(signal.statusCode, 200);
+  assert.ok(signal.json.tags.some((tag) => tag.label === "神经"));
+  assert.equal(signal.json.tags[0].tagId, null);
+});
+
+test("tag-driven recommendation surfaces candidates with surfacing tag provenance", async () => {
+  const stubSources = {
+    colbert: [
+      { id: "openalex:W100", provider: "openalex", relation: "topic_search", relevance: 0.9, title: "ColBERTv2 Passage Search", url: "https://openalex.org/W100" }
+    ],
+    retrieval: [
+      { id: "openalex:W101", provider: "openalex", relation: "topic_search", relevance: 0.85, title: "Dense Retrieval Survey", url: "https://openalex.org/W101" }
+    ]
+  };
+  const stubSearch = async (queryInput) => {
+    const key = typeof queryInput?.query === "string" ? queryInput.query : "";
+    return { sources: stubSources[key] ?? [] };
+  };
+
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    recommendationMode: "live",
+    searchExternalKnowledge: stubSearch
+  });
+
+  // Give the user reading-derived tags.
+  await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "ColBERT Retrieval" }
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+
+  // No selectedDocuments: recommendation is driven purely by user top tags.
+  const response = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    handler,
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.ok(response.json.recommendations.length > 0);
+  const colbertv2 = response.json.recommendations.find((r) => r.canonicalId === "openalex:W100");
+  assert.ok(colbertv2, "colbert-tagged candidate should be surfaced");
+  assert.deepEqual(colbertv2.surfacingTags, ["colbert"]);
+});
+
+test("recommendations returns empty when no selected documents and no user tags", async () => {
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    recommendationMode: "live",
+    searchExternalKnowledge: async () => ({ sources: [] })
+  });
+  const response = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    handler,
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json.recommendations, []);
 });

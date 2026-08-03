@@ -910,6 +910,7 @@ export function AppShell({
     profileClearMessage: profileActions.profileClearMessage,
     profileReadPaperCount: workspaceState.papers.length,
     profileSamplingEnabled: settingsState["profile.enabled"],
+    profileTags: profileActions.profileTags,
     recommendationItems,
     recommendationMessage,
     recommendationPending,

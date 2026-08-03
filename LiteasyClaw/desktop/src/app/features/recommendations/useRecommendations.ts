@@ -122,7 +122,6 @@ export function useRecommendations({
   const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile);
   const currentScope = accountSession
       ? {
-        personalizationVersion,
         selectionKey,
         sessionId: accountSession.sessionId,
         sortMode: recommendationSortMode,
@@ -325,7 +324,6 @@ export function useRecommendations({
     recommendationTransport,
     recommendationsEnabled,
     recommendationSortMode,
-    personalizationVersion,
     selectionKey,
     workspaceSourceKey
   ]);

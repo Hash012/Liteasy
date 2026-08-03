@@ -1003,6 +1003,11 @@ export function LibraryPane({
                   </span>
                 </div>
                 <div className="recommendation-related">关联：{item.relatedDocumentTitle}</div>
+                {item.surfacingTags && item.surfacingTags.length > 0 ? (
+                  <div className="recommendation-related recommendation-surfacing-tags">
+                    标签：{item.surfacingTags.join("、")}
+                  </div>
+                ) : null}
                 {item.relation ? (
                   <div className="recommendation-related">关系：{getRecommendationRelationLabel(item.relation)}</div>
                 ) : null}

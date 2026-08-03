@@ -27,6 +27,9 @@ project-docs/test-api.md
 # OS/editor noise
 .DS_Store
 Thumbs.db
+
+# One-click start/stop runtime state (.liteasy-run/)
+.liteasy-run/
 .omx/
 ICS2-13-Network-复习讲解.html
 tmp/

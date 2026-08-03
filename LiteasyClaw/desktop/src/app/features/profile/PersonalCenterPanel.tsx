@@ -15,6 +15,7 @@ import type { OrganizationSummary } from "../organization/organization.types";
 import { AcademicProfileForm } from "./AcademicProfileForm";
 import type { AcademicProfile } from "./profile.types";
 import { formatAcademicProfile, formatAcademicResearchProfile } from "./profile.types";
+import type { UserTag } from "./academicProfileClient";
 
 type PersonalCenterPanelProps = {
   academicProfile: AcademicProfile;
@@ -27,6 +28,7 @@ type PersonalCenterPanelProps = {
   organizationSummary: OrganizationSummary | null;
   profileClearMessage?: string;
   profileSamplingEnabled: boolean;
+  profileTags: UserTag[];
   readPaperCount: number;
 };
 
@@ -41,6 +43,7 @@ export function PersonalCenterPanel({
   organizationSummary,
   profileClearMessage,
   profileSamplingEnabled,
+  profileTags,
   readPaperCount
 }: PersonalCenterPanelProps) {
   const [expandedSections, setExpandedSections] = useState<string[]>(["profile", "academic"]);
@@ -88,6 +91,16 @@ export function PersonalCenterPanel({
             {profileSamplingEnabled ? <EyeOffRegular /> : <EyeRegular />}
           </button>
         </Tooltip>
+        <div className="personal-center-row personal-center-tags">
+          <span className="personal-center-tags-label">阅读 tag：</span>
+          {profileTags.length > 0
+            ? profileTags.map((tag) => (
+              <span key={tag.label} className="profile-tag-chip" title={`权重 ${tag.weight.toFixed(2)} · 证据 ${tag.evidenceCount}`}>
+                {tag.label}
+              </span>
+            ))
+            : <span className="personal-center-tags-empty">暂无（阅读文献后自动总结）</span>}
+        </div>
         </div> : null}
       </section>
 
