@@ -8,16 +8,26 @@ import type { UIDslActionRef } from "../features/generative-ui/generativeUi.type
 import { PdfReader, type PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
-import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/thin-reading/thinReading.types";
+import type {
+  ThinReadingBranchSource,
+  ThinReadingDocument,
+  ThinReadingExternalSource
+} from "../features/thin-reading/thinReading.types";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
 
 type ReaderPaneProps = {
+  allowServerPdfParsing?: boolean;
   analysisHint: string;
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
+  externalKnowledgeEndpoint?: string;
   layoutCollapsed?: PaneCollapseState;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  onAddExternalPdfToLibrary?: (input: { bytes: Uint8Array; fileName: string; title: string }) => Promise<void>;
+  onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
+  onPaperAnnotated?: (paperId: string) => Promise<void>;
+  onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
   onGenerateThinReadingBranch?: (input: {
@@ -49,11 +59,17 @@ const defaultLayoutCollapsed: PaneCollapseState = {
 };
 
 export function ReaderPane({
+  allowServerPdfParsing = false,
   analysisHint,
   artifactTabs,
   artifactTasks,
+  externalKnowledgeEndpoint,
   layoutCollapsed = defaultLayoutCollapsed,
   loadPdfSource,
+  onAddExternalPdfToLibrary,
+  onOpenExternalFullText,
+  onPaperAnnotated,
+  onPromoteExternalPaperToLibrary,
   onArtifactDynamicAction,
   onOpenEvidence,
   onGenerateThinReadingBranch,
@@ -128,8 +144,11 @@ export function ReaderPane({
           }`}
         >
           <PdfReader
+            allowServerPdfParsing={allowServerPdfParsing}
+            externalKnowledgeEndpoint={externalKnowledgeEndpoint}
             intuechoEndpoint={intuechoEndpoint}
             loadPdfSource={loadPdfSource}
+            onPaperAnnotated={onPaperAnnotated}
             onAddSelectionToConversation={onAddReaderContextToConversation}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
@@ -143,8 +162,10 @@ export function ReaderPane({
                 intuechoEndpoint={intuechoEndpoint}
                 onDynamicAction={onArtifactDynamicAction}
                 onGenerateThinReadingBranch={onGenerateThinReadingBranch}
+                onOpenExternalFullText={onOpenExternalFullText}
                 onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}
                 onOpenEvidence={onOpenEvidence}
+                onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
                 onSaveMarkdownTab={onSaveMarkdownTab}
                 onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}
                 onUpdateMarkdownTab={onUpdateMarkdownTab}

@@ -120,10 +120,12 @@ describe("desktop dev script", () => {
   });
 
   test("maps test-api credentials into the live dev-test-api launcher", () => {
+    // Normalized because the multi-line assertion below is written with \n, while the file
+    // is checked out with CRLF endings on Windows.
     const script = readFileSync(
       resolve(process.cwd(), "scripts/dev-with-test-api.mjs"),
       "utf8"
-    );
+    ).replace(/\r\n/g, "\n");
 
     expect(script).toContain('readField(content, "OPENAI_KEY")');
     expect(script).toContain('readField(content, "API_END_POINT")');

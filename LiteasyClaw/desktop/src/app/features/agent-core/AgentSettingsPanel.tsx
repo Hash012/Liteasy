@@ -164,23 +164,6 @@ export function AgentSettingsPanel({
           />
         </label>
       </div>
-      <div className="agent-settings-section" aria-label="OpenAlex 外部文献检索">
-        <div className="agent-settings-section-title">OpenAlex 外部文献检索</div>
-        <label className="agent-settings-toggle-row">
-          <span className="agent-settings-row-main">
-            <span className="agent-settings-row-title">API 密钥</span>
-            <span className="agent-settings-row-description">仅用于当前用户的闭包外文献检索；不会写入薄读产物、缓存或提示词。</span>
-          </span>
-          <input
-            aria-label="OpenAlex API 密钥"
-            autoComplete="off"
-            onChange={(event) => onUpdateSetting?.({ intent: "update_setting", target: "thin_reading.openalex_api_key", value: event.currentTarget.value.trim() })}
-            placeholder="OpenAlex api_key"
-            type="password"
-            value={settings?.["thin_reading.openalex_api_key"] ?? ""}
-          />
-        </label>
-      </div>
       <div className="agent-settings-section" aria-label="安全策略">
         <div className="agent-settings-section-title"><ShieldRegular /></div>
         <div className="agent-settings-chip-row">

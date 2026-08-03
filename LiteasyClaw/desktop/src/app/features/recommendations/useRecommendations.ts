@@ -26,7 +26,6 @@ import {
 type UseRecommendationsInput = {
   accountSession: AccountSession | null;
   controlPlaneEndpoint: string;
-  openAlexApiKey?: string;
   recommendationCacheDeps?: {
     clear: (scope: RecommendationCacheScope) => Promise<{ cleared: boolean }>;
     get: (scope: RecommendationCacheScope) => Promise<{
@@ -41,7 +40,6 @@ type UseRecommendationsInput = {
   recommendationGeneratorDeps?: {
     fetch: (input: {
       controlPlaneEndpoint: string;
-      openAlexApiKey?: string;
       researchProfile?: RecommendationResearchProfile;
       selectedDocuments: Array<{ id: string; title: string }>;
       sessionId: string;
@@ -103,7 +101,6 @@ function sortRecommendationItems(
 export function useRecommendations({
   accountSession,
   controlPlaneEndpoint,
-  openAlexApiKey,
   recommendationCacheDeps,
   recommendationFeedbackDeps,
   recommendationFeedbackTransport,
@@ -210,7 +207,6 @@ export function useRecommendations({
     const generatorApi = recommendationGeneratorDeps ?? {
       fetch: (input: {
         controlPlaneEndpoint: string;
-        openAlexApiKey?: string;
         researchProfile?: RecommendationResearchProfile;
         selectedDocuments: Array<{ id: string; title: string }>;
         sessionId: string;
@@ -236,26 +232,41 @@ export function useRecommendations({
       }
 
       if (cacheResult?.cacheHit) {
-        return {
-          fromCache: true as const,
-          recommendations: sortRecommendationItems(
+        if (active) {
+          setRecommendationItems(sortRecommendationItems(
             cacheResult.recommendations,
             recommendationSortMode
-          )
-        };
+          ));
+          setRecommendationStatus("ready");
+          setRecommendationMessage("已显示缓存推荐，正在联网刷新。");
+        }
       }
 
-      const generatedRecommendations = await generatorApi.fetch({
-        controlPlaneEndpoint,
-        openAlexApiKey,
-        researchProfile,
-        sortMode: recommendationSortMode,
-        selectedDocuments: selectedPapers.map((paper) => ({
-          id: paper.id,
-          title: paper.title
-        })),
-        sessionId: session.sessionId
-      });
+      let generatedRecommendations: RecommendationItem[];
+      try {
+        generatedRecommendations = await generatorApi.fetch({
+          controlPlaneEndpoint,
+          researchProfile,
+          sortMode: recommendationSortMode,
+          selectedDocuments: selectedPapers.map((paper) => ({
+            id: paper.id,
+            title: paper.title
+          })),
+          sessionId: session.sessionId
+        });
+      } catch (error) {
+        if (cacheResult?.cacheHit) {
+          return {
+            fromCache: true as const,
+            refreshError: error,
+            recommendations: sortRecommendationItems(
+              cacheResult.recommendations,
+              recommendationSortMode
+            )
+          };
+        }
+        throw error;
+      }
 
       try {
         await cacheApi.put(currentScope!, generatedRecommendations);
@@ -285,7 +296,10 @@ export function useRecommendations({
             suppressNextCachedMessageRef.current = false;
             return;
           }
-          setRecommendationMessage("已显示当前选中文献集的缓存推荐。");
+          const detail = formatCloudConnectionError(items.refreshError, {
+            controlPlaneEndpoint
+          });
+          setRecommendationMessage(`已显示缓存推荐；联网刷新失败。详细信息：${detail}`);
           return;
         }
 
@@ -319,7 +333,6 @@ export function useRecommendations({
   }, [
     accountSession?.sessionId,
     controlPlaneEndpoint,
-    openAlexApiKey,
     recommendationCacheTransport,
     recommendationTransport,
     recommendationsEnabled,

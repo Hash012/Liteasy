@@ -44,6 +44,9 @@ export function getRecommendationCache(scope, options = {}) {
 
   return {
     cacheHit: true,
+    cachedAt: entry.cachedAt,
+    expiresAt: new Date(cachedAt + maxAgeMs).toISOString(),
+    serverNow: new Date(now).toISOString(),
     recommendations: Array.isArray(entry.recommendations) ? entry.recommendations : []
   };
 }
@@ -60,6 +63,8 @@ export function putRecommendationCache(scope, recommendations) {
 
   return {
     cachedAt,
+    expiresAt: new Date(Date.parse(cachedAt) + defaultRecommendationCacheMaxAgeMs).toISOString(),
+    serverNow: cachedAt,
     ok: true
   };
 }

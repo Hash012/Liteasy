@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { SettingsPane } from "../app/layout/SettingsPane";
@@ -34,30 +34,22 @@ describe("SettingsPane", () => {
     });
   });
 
-  test("stores the OpenAlex key as a password setting for external thin-reading research", async () => {
+  test("does not ask desktop users for deployment secrets or PDF upload consent", async () => {
     const user = userEvent.setup();
-    const onUpdateSetting = vi.fn();
 
     render(
       <SettingsPane
         documentMetadataSyncResult={null}
         documentMetadataSyncStatus="idle"
-        onUpdateSetting={onUpdateSetting}
-        settings={{ "thin_reading.openalex_api_key": "" }}
       />
     );
 
     const pane = screen.getByLabelText("左边栏设置");
     await user.click(within(pane).getByRole("button", { name: "展开 Agent 设置" }));
-    const input = within(pane).getByLabelText("OpenAlex API 密钥");
-
-    expect(input).toHaveAttribute("type", "password");
-    fireEvent.change(input, { target: { value: "test-openalex-key" } });
-    expect(onUpdateSetting).toHaveBeenLastCalledWith({
-      intent: "update_setting",
-      target: "thin_reading.openalex_api_key",
-      value: "test-openalex-key"
-    });
+    expect(within(pane).queryByLabelText("OpenAlex API 密钥")).not.toBeInTheDocument();
+    expect(within(pane).queryByRole("checkbox", {
+      name: "允许上传 PDF 用于结构解析"
+    })).not.toBeInTheDocument();
   });
 
   test("renders a collapsible, user-facing metadata sync section", async () => {

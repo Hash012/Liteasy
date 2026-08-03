@@ -2554,10 +2554,11 @@ test("refreshes recommendations after collected-paper feedback invalidates the c
 
   await user.click(screen.getByLabelText("VBASE: Unifying Online Vector Similarity Search and Relational Queries"));
   await waitFor(() => {
-    expect(screen.getByText("已显示当前选中文献集的缓存推荐。")).toBeInTheDocument();
+    expect(screen.getByText("已获取 1 条关联推荐。")).toBeInTheDocument();
   });
-  expect(recommendationRequestCount).toBe(2);
+  expect(recommendationRequestCount).toBe(3);
   expect(recommendationCacheGetCount).toBeGreaterThanOrEqual(3);
+  expect(recommendationCachePutCount).toBe(3);
   expect(recommendationCacheClearCount).toBe(0);
 }, 10000);
 

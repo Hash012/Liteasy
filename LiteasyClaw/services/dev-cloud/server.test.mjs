@@ -37,10 +37,7 @@ test.beforeEach(() => {
 async function invokeHandler({ body, handler, handlerOptions, headers = {}, method, url }) {
   const chunks = body ? [Buffer.from(body)] : [];
   const request = Readable.from(chunks);
-  request.headers = url === "/v1/research/external-knowledge" &&
-    !("x-openalex-api-key" in headers)
-    ? { ...headers, "x-openalex-api-key": "test-openalex-api-key" }
-    : headers;
+  request.headers = headers;
   request.method = method;
   request.url = url;
 
@@ -66,6 +63,7 @@ async function invokeHandler({ body, handler, handlerOptions, headers = {}, meth
     crossrefEnabled: false,
     deepseekApiKey: undefined,
     defaultProvider: "openai",
+    openAlexApiKey: "test-openalex-api-key",
     openaiApiKey: undefined,
     recommendationMode: "demo",
     ...handlerOptions
@@ -97,28 +95,141 @@ test("allows browser CORS preflight from the desktop dev server", async () => {
   assert.equal(response.statusCode, 204);
   assert.equal(response.headers["Access-Control-Allow-Origin"], "http://127.0.0.1:1420");
   assert.equal(response.headers["Access-Control-Allow-Methods"], "DELETE,GET,POST,OPTIONS");
-  assert.equal(response.headers["Access-Control-Allow-Headers"], "Content-Type,X-OpenAlex-Api-Key");
+  assert.match(response.headers["Access-Control-Allow-Headers"], /^Content-Type,/);
+  assert.match(response.headers["Access-Control-Allow-Headers"], /X-Liteasy-Session-Id/);
 });
 
-test("requires an OpenAlex API key before external retrieval can enter the cache", async () => {
+test("never accepts a browser-owned OpenAlex key at the cloud boundary", async () => {
+  let requestedUrl = "";
+  const response = await invokeHandler({
+    body: JSON.stringify({ artifactId: "artifact-user-openalex-key", query: "anchor retrieval" }),
+    handler: createDevCloudRequestHandler({
+      crossrefEnabled: false,
+      openAlexApiKey: "service-fallback-key",
+      openAlexTransport: async (url) => {
+        requestedUrl = String(url);
+        return { json: async () => ({ results: [] }), ok: true, status: 200 };
+      }
+    }),
+    headers: {
+      "content-type": "application/json",
+      "x-openalex-api-key": "user-owned-key"
+    },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(new URL(requestedUrl).searchParams.get("api_key"), "service-fallback-key");
+});
+
+test("lets the desktop exclude server-side OpenAlex while retaining cached public providers", async () => {
+  let openAlexCalls = 0;
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "artifact-client-direct-openalex",
+      includeOpenAlex: false,
+      query: "anchor retrieval"
+    }),
+    handler: createDevCloudRequestHandler({
+      crossrefEnabled: true,
+      crossrefTransport: async () => ({
+        json: async () => ({ message: { items: [] } }),
+        ok: true,
+        status: 200
+      }),
+      openAlexApiKey: "service-fallback-key",
+      openAlexTransport: async () => {
+        openAlexCalls += 1;
+        return { json: async () => ({ results: [] }), ok: true, status: 200 };
+      }
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(openAlexCalls, 0);
+});
+
+test("parses a PDF with GROBID once and reuses only the fingerprinted TEI", async () => {
+  let grobidCalls = 0;
+  const handler = createDevCloudRequestHandler({
+    grobidTransport: async (_url, options) => {
+      grobidCalls += 1;
+      assert.equal(options.method, "POST");
+      assert.equal(options.body.get("consolidateCitations"), "1");
+      assert.deepEqual(options.body.getAll("teiCoordinates"), ["ref", "biblStruct", "note"]);
+      return {
+        ok: true,
+        status: 200,
+        text: async () => "<TEI><text><body><p>Parsed structure</p></body></text></TEI>"
+      };
+    }
+  });
+  const request = {
+    body: Buffer.from("%PDF-1.7\nfixture body"),
+    handler,
+    headers: { "content-type": "application/pdf" },
+    method: "POST",
+    url: "/v1/research/parse-pdf"
+  };
+
+  const first = await invokeHandler(request);
+  const second = await invokeHandler(request);
+
+  assert.equal(first.statusCode, 200, JSON.stringify(first.json));
+  assert.equal(first.json.parser, "grobid");
+  assert.equal(first.json.reused, false);
+  assert.match(first.json.contentFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(second.statusCode, 200, JSON.stringify(second.json));
+  assert.equal(second.json.reused, true);
+  assert.equal(second.json.contentFingerprint, first.json.contentFingerprint);
+  assert.equal(grobidCalls, 1);
+});
+
+test("rejects a non-PDF before contacting GROBID", async () => {
+  let grobidCalls = 0;
+  const response = await invokeHandler({
+    body: Buffer.from("not a pdf"),
+    handler: createDevCloudRequestHandler({
+      grobidTransport: async () => {
+        grobidCalls += 1;
+        throw new Error("should not run");
+      }
+    }),
+    headers: { "content-type": "application/pdf" },
+    method: "POST",
+    url: "/v1/research/parse-pdf"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "invalid_pdf");
+  assert.equal(grobidCalls, 0);
+});
+
+test("reports unavailable only when the unified retrieval service has no enabled source", async () => {
   let calls = 0;
   const response = await invokeHandler({
     body: JSON.stringify({ artifactId: "artifact-openalex-key-required", query: "ColBERT" }),
     handler: createDevCloudRequestHandler({
       crossrefEnabled: false,
+      openAlexEnabled: false,
+      openAlexApiKey: undefined,
       openAlexTransport: async () => {
         calls += 1;
         return { json: async () => ({ results: [] }), ok: true, status: 200 };
       }
     }),
-    headers: { "content-type": "application/json", "x-openalex-api-key": "" },
+    headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-knowledge"
   });
 
   assert.equal(response.statusCode, 503);
-  assert.equal(response.json.error, "openalex_api_key_required");
-  assert.match(response.json.message, /OpenAlex API 密钥/);
+  assert.equal(response.json.error, "external_knowledge_unavailable");
+  assert.match(response.json.message, /统一联网服务/);
   assert.equal(calls, 0);
 });
 
@@ -128,6 +239,8 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     body: JSON.stringify({ artifactId: "artifact-crossref-without-openalex", query: "ColBERT retrieval" }),
     handler: createDevCloudRequestHandler({
       crossrefEnabled: true,
+      openAlexEnabled: false,
+      openAlexApiKey: undefined,
       crossrefTransport: async () => ({
         json: async () => ({
           message: {
@@ -148,7 +261,7 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
         throw new Error("OpenAlex should not be called without a key");
       }
     }),
-    headers: { "content-type": "application/json", "x-openalex-api-key": "" },
+    headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-knowledge"
   });
@@ -164,6 +277,8 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     id: "crossref:10.1000/crossref-only",
     openAccessAvailable: true,
     provider: "crossref",
+    confidence: 0.3,
+    confidenceBasis: "algorithmic_retrieval",
     relation: "topic_search",
     relevance: response.json.sources[0].relevance,
     retrievalQuery: "ColBERT retrieval",
@@ -197,7 +312,9 @@ test("uses traceable arXiv topic results for thin-reading external knowledge", a
           </entry>
         </feed>`
       }),
-      crossrefEnabled: false
+      crossrefEnabled: false,
+      openAlexEnabled: false,
+      openAlexApiKey: undefined
     }),
     headers: { "content-type": "application/json", "x-openalex-api-key": "" },
     method: "POST",
@@ -268,7 +385,7 @@ test("returns only a validated external PDF with content-addressed provenance", 
   assert.equal(Buffer.from(response.json.bytesBase64, "base64").toString("ascii"), "%PDF-1.7\nverified");
 });
 
-test("does not degrade to Crossref-only sources when the configured OpenAlex key is rejected", async () => {
+test("continues with verified fallback sources when the service's graph connector is unavailable", async () => {
   const response = await invokeHandler({
     body: JSON.stringify({ artifactId: "artifact-openalex-key-invalid", query: "ColBERT" }),
     handler: createDevCloudRequestHandler({
@@ -276,8 +393,11 @@ test("does not degrade to Crossref-only sources when the configured OpenAlex key
       crossrefTransport: async () => ({
         json: async () => ({
           message: {
-            DOI: "10.1000/crossref-fallback",
-            title: ["A Crossref fallback that must not be returned"]
+            items: [{
+              abstract: "<jats:p>ColBERT remains a verified fallback source.</jats:p>",
+              DOI: "10.1000/crossref-fallback",
+              title: ["ColBERT fallback source"]
+            }]
           }
         }),
         ok: true,
@@ -289,15 +409,14 @@ test("does not degrade to Crossref-only sources when the configured OpenAlex key
         status: 401
       })
     }),
-    headers: { "content-type": "application/json", "x-openalex-api-key": "invalid-test-key" },
+    headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-knowledge"
   });
 
-  assert.equal(response.statusCode, 503);
-  assert.equal(response.json.error, "openalex_api_key_required");
-  assert.match(response.json.message, /API 密钥无效或已失效/);
-  assert.equal("sources" in response.json, false);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.sources.length, 1);
+  assert.equal(response.json.sources[0].id, "crossref:10.1000/crossref-fallback");
 });
 
 test("does not reflect an untrusted browser origin", async () => {
@@ -359,6 +478,7 @@ test("returns a helpful service index from the root path", async () => {
     "GET /v1/tags",
     "GET /v1/tags/:id",
     "GET /v1/tags/:id/works",
+    "POST /v1/research/parse-pdf",
     "POST /v1/profile/get",
     "POST /v1/profile/save",
     "POST /v1/profile/clear",
@@ -374,7 +494,21 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/org/list",
     "POST /v1/org/summary",
     "POST /v1/org/shared-library/manifest",
-    "POST /v1/org/governance-summary"
+    "POST /v1/org/governance-summary",
+    "POST /v1/library/documents/upload",
+    "POST /v1/library/documents/list",
+    "POST /v1/library/documents/trash",
+    "POST /v1/library/documents/restore",
+    "POST /v1/library/documents/update",
+    "POST /v1/library/documents/authorize",
+    "POST /v1/library/documents/download",
+    "POST /v1/library/folders/create",
+    "POST /v1/library/folders/update",
+    "POST /v1/library/quota",
+    "POST /v1/org/team-annotations/list",
+    "POST /v1/org/team-annotations/upload",
+    "POST /v1/org/team-annotations/withdraw",
+    "POST /v1/admin/storage-quota"
   ]);
 });
 
@@ -521,7 +655,9 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
       id: "openalex:W123456789",
       openAccessAvailable: true,
       provider: "openalex",
-      relation: "topic_search",
+      confidence: 0.3,
+    confidenceBasis: "algorithmic_retrieval",
+    relation: "topic_search",
       relevance: response.json.sources[0].relevance,
       retrievalQuery: "ColBERT late interaction retrieval",
       sourceRecordUrl: "https://openalex.org/W123456789",
@@ -649,6 +785,8 @@ test("merges Crossref topic results without inventing graph relations or duplica
     doi: "https://doi.org/10.1000/crossref-only",
     id: "crossref:10.1000/crossref-only",
     provider: "crossref",
+    confidence: 0.3,
+    confidenceBasis: "algorithmic_retrieval",
     relation: "topic_search",
     relevance: response.json.sources.find((source) => source.provider === "crossref").relevance,
     retrievalQuery: "retrieval evaluation",
@@ -962,12 +1100,10 @@ test("recovers an artifact-scoped external retrieval after failure and reuses th
     url: "/v1/research/external-knowledge"
   });
   assert.equal(second.statusCode, 200);
-  assert.deepEqual(second.json.retrieval, {
-    attempts: 2,
-    id: second.json.retrieval.id,
-    reused: false,
-    status: "completed"
-  });
+  assert.equal(second.json.retrieval.attempts, 2);
+  assert.equal(second.json.retrieval.reused, false);
+  assert.equal(second.json.retrieval.status, "completed");
+  assert.ok(Date.parse(second.json.retrieval.expiresAt) > Date.parse(second.json.retrieval.serverNow));
   assert.equal(second.json.sources[0].sourceId, "W401");
 
   const third = await invokeHandler({
@@ -978,24 +1114,20 @@ test("recovers an artifact-scoped external retrieval after failure and reuses th
     url: "/v1/research/external-knowledge"
   });
   assert.equal(third.statusCode, 200);
-  assert.deepEqual(third.json.retrieval, {
-    attempts: 2,
-    id: second.json.retrieval.id,
-    reused: true,
-    status: "completed"
-  });
+  assert.equal(third.json.retrieval.attempts, 2);
+  assert.equal(third.json.retrieval.id, second.json.retrieval.id);
+  assert.equal(third.json.retrieval.reused, true);
+  assert.equal(third.json.retrieval.status, "completed");
   assert.equal(calls, 2);
 });
 
 function expectExternalRetrievalFailure(response) {
   assert.equal(response.statusCode, 502);
   assert.equal(response.json.error, "openalex_unavailable");
-  assert.deepEqual(response.json.retrieval, {
-    attempts: 1,
-    id: response.json.retrieval.id,
-    reused: false,
-    status: "failed"
-  });
+  assert.equal(response.json.retrieval.attempts, 1);
+  assert.equal(response.json.retrieval.reused, false);
+  assert.equal(response.json.retrieval.status, "failed");
+  assert.ok(Date.parse(response.json.retrieval.expiresAt) > Date.parse(response.json.retrieval.serverNow));
 }
 
 test("rejects an unsafe artifact boundary before external retrieval", async () => {
@@ -1043,12 +1175,10 @@ test("returns an explicit empty external-knowledge result without synthetic sour
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.status, "empty");
   assert.deepEqual(response.json.sources, []);
-  assert.deepEqual(response.json.retrieval, {
-    attempts: 1,
-    id: response.json.retrieval.id,
-    reused: false,
-    status: "skipped"
-  });
+  assert.equal(response.json.retrieval.attempts, 1);
+  assert.equal(response.json.retrieval.reused, false);
+  assert.equal(response.json.retrieval.status, "skipped");
+  assert.ok(Date.parse(response.json.retrieval.expiresAt) > Date.parse(response.json.retrieval.serverNow));
 
   const reused = await invokeHandler({
     body: JSON.stringify(request),
@@ -2255,6 +2385,44 @@ test("rejects malformed recommendation research profiles before retrieval", asyn
   assert.equal(response.json.error, "research_profile_topics_invalid");
 });
 
+test("completes an implicit recommendation profile after behavior personalization", async () => {
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    expandedSourcesEnabled: false,
+    openAlexApiKey: "service-owned-key",
+    openAlexTransport: async () => ({
+      json: async () => ({ results: [] }),
+      ok: true,
+      status: 200
+    })
+  });
+  const signalResponse = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "Neural information retrieval" }
+    }),
+    handler,
+    headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(signalResponse.statusCode, 200);
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      selectedDocuments: [{ id: "paper-1", title: "Target Retrieval Paper" }],
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.deepEqual(response.json.recommendations, []);
+});
+
 test("returns provenance-bearing live reading candidates instead of demo recommendations", async () => {
   const response = await invokeHandler({
     body: JSON.stringify({
@@ -2262,6 +2430,10 @@ test("returns provenance-bearing live reading candidates instead of demo recomme
       sessionId: "demo-session-1"
     }),
     handler: createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
       crossrefEnabled: false,
       openAlexTransport: async () => ({
         json: async () => ({
@@ -2414,6 +2586,10 @@ test("applies a configured real embedding provider to recommendation ranking", a
       sessionId: "semantic-retrieval-user"
     }),
     handler: createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
       crossrefEnabled: false,
       openAlexTransport: async () => ({
         json: async () => ({
@@ -2778,6 +2954,10 @@ test("keeps OpenAlex recommendations when the optional arXiv feed is invalid", a
       sessionId: "arxiv-failure-user"
     }),
     handler: createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
       arxivEnabled: true,
       arxivTransport: async () => ({
         ok: true,
@@ -2908,6 +3088,10 @@ test("migrates provider and arXiv candidate keys to DOI without duplicating hist
 
 test("persists negative recommendation feedback, invalidates cache, and lowers similar candidates", async () => {
   const handler = createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
     crossrefEnabled: false,
     openAlexTransport: async () => ({
       json: async () => ({
@@ -3023,6 +3207,10 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
 test("reuses a recent persistent candidate without presenting it as a new live discovery", async () => {
   let retrievalCount = 0;
   const handler = createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
     crossrefEnabled: false,
     openAlexTransport: async () => {
       retrievalCount += 1;
@@ -3422,6 +3610,64 @@ test("returns a demo organization shared library manifest", async () => {
       title: "Team Notes on Long-Context Evaluation"
     }
   ]);
+});
+
+test("enforces organization upload, duplicate, and administrator recycle-bin rules", async () => {
+  const handler = createDevCloudRequestHandler({ databasePath: ":memory:" });
+  const pdf = Buffer.from("%PDF-1.7\norganization fixture\n%%EOF");
+  const upload = (duplicateAction) => invokeHandler({
+    body: pdf,
+    handler,
+    headers: {
+      "content-type": "application/pdf",
+      "x-liteasy-duplicate-action": duplicateAction,
+      "x-liteasy-file-name": encodeURIComponent("Shared.pdf"),
+      "x-liteasy-scope-id": "org-demo-1",
+      "x-liteasy-scope-type": "organization",
+      "x-liteasy-session-id": "demo-session-1"
+    },
+    method: "POST",
+    url: "/v1/library/documents/upload"
+  });
+
+  const first = await upload(undefined);
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.json.status, "imported");
+  const duplicate = await upload(undefined);
+  assert.equal(duplicate.json.status, "duplicate");
+  const copy = await upload("save_copy");
+  assert.equal(copy.json.document.fileName, "Shared (2).pdf");
+  assert.notEqual(copy.json.document.documentId, first.json.document.documentId);
+  assert.equal(copy.json.document.contentHash, first.json.document.contentHash);
+
+  const memberTrash = await invokeHandler({
+    body: JSON.stringify({
+      documentId: first.json.document.documentId,
+      scopeId: "org-demo-1",
+      scopeType: "organization",
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/trash"
+  });
+  assert.equal(memberTrash.statusCode, 403);
+
+  const ownerTrash = await invokeHandler({
+    body: JSON.stringify({
+      documentId: first.json.document.documentId,
+      scopeId: "org-demo-1",
+      scopeType: "organization",
+      sessionId: "demo-session-owner"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/trash"
+  });
+  assert.equal(ownerTrash.statusCode, 200);
+  assert.equal(ownerTrash.json.document.status, "trashed");
 });
 
 

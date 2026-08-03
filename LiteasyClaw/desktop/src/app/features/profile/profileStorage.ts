@@ -1,6 +1,23 @@
 import { defaultAcademicProfile, type AcademicProfile } from "./profile.types";
+import { resolveLocalAccountKey } from "../library/localAccountKey";
 
 const academicProfileStorageKey = "liteasy.academic-profile.v1";
+
+function scopedAcademicProfileStorageKey() {
+  return `${academicProfileStorageKey}:${resolveLocalAccountKey()}`;
+}
+
+function loadScopedAcademicProfileValue() {
+  const scopedKey = scopedAcademicProfileStorageKey();
+  const scopedValue = window.localStorage.getItem(scopedKey);
+  if (scopedValue !== null) return scopedValue;
+  const legacyValue = window.localStorage.getItem(academicProfileStorageKey);
+  if (legacyValue !== null) {
+    window.localStorage.setItem(scopedKey, legacyValue);
+    window.localStorage.removeItem(academicProfileStorageKey);
+  }
+  return legacyValue;
+}
 
 function isAcademicProfile(value: unknown): value is AcademicProfile {
   if (!value || typeof value !== "object") {
@@ -28,7 +45,9 @@ export function loadAcademicProfile(): AcademicProfile {
     return { ...defaultAcademicProfile };
   }
   try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(academicProfileStorageKey) ?? "null");
+    const parsed: unknown = JSON.parse(
+      loadScopedAcademicProfileValue() ?? "null"
+    );
     return isAcademicProfile(parsed)
       ? { ...defaultAcademicProfile, ...parsed, disciplines: parsed.disciplines ?? [] }
       : { ...defaultAcademicProfile, disciplines: [] };
@@ -42,7 +61,7 @@ export function saveAcademicProfile(profile: AcademicProfile) {
     return;
   }
   try {
-    window.localStorage.setItem(academicProfileStorageKey, JSON.stringify(profile));
+    window.localStorage.setItem(scopedAcademicProfileStorageKey(), JSON.stringify(profile));
   } catch {
     // Device-local persistence is best-effort in quota-constrained webviews.
   }
@@ -53,7 +72,7 @@ export function clearAcademicProfile() {
     return;
   }
   try {
-    window.localStorage.removeItem(academicProfileStorageKey);
+    window.localStorage.removeItem(scopedAcademicProfileStorageKey());
   } catch {
     // Device-local persistence is best-effort in quota-constrained webviews.
   }

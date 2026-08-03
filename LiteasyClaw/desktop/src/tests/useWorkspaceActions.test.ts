@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createImportStore } from "../app/features/import/import.store";
 import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
+import type { ExtractedPdfPage } from "../app/features/import/pdfTextExtractor";
 import { createWorkspaceStore } from "../app/features/workspace/workspace.store";
 import type { Paper, WorkspaceState } from "../app/features/workspace/workspace.types";
 import { useWorkspaceActions } from "../app/features/workspace/useWorkspaceActions";
@@ -22,8 +23,17 @@ function renderWorkspaceActions(
   papers: Paper[] = [],
   options: {
     extractPaperChunks?: (paper: Paper) => Promise<ReturnType<typeof buildImportedChunksForPaper>>;
+    extractPaperIndex?: (paper: Paper) => Promise<{
+      chunks: ReturnType<typeof buildImportedChunksForPaper>;
+      pages: ExtractedPdfPage[];
+    }>;
     moveLocalLibraryResource?: MoveLocalLibraryResource;
     persistDroppedPdfFiles?: PersistDroppedPdfFiles;
+    savePaperArtifact?: (input: {
+      artifactKind: string;
+      paperId: string;
+      snapshot: unknown;
+    }) => Promise<void>;
     workspaceRootPath?: string;
   } = {}
 ) {
@@ -42,13 +52,17 @@ function renderWorkspaceActions(
   const onWorkspaceChanged = vi.fn();
   const hook = renderHook(() =>
     useWorkspaceActions({
-      extractPaperChunks: options.extractPaperChunks ?? ((paper) => new Promise((resolve) => {
-        window.setTimeout(() => resolve(buildImportedChunksForPaper(paper)), 800);
-      })),
+      extractPaperChunks: options.extractPaperIndex
+        ? undefined
+        : options.extractPaperChunks ?? ((paper) => new Promise((resolve) => {
+            window.setTimeout(() => resolve(buildImportedChunksForPaper(paper)), 800);
+          })),
+      extractPaperIndex: options.extractPaperIndex,
       importDocument: vi.fn(() => Promise.resolve()),
       importStore,
       moveLocalLibraryResource: options.moveLocalLibraryResource,
       persistDroppedPdfFiles: options.persistDroppedPdfFiles,
+      savePaperArtifact: options.savePaperArtifact,
       onAnalysisHint,
       onImportJobsChanged,
       onWorkspaceChanged,
@@ -131,7 +145,7 @@ describe("useWorkspaceActions", () => {
       }],
       rootPath: "/tmp/LiteasyLibrary"
     }));
-    const { result, workspaceStore } = renderWorkspaceActions([], {
+    const { importStore, result, workspaceStore } = renderWorkspaceActions([], {
       persistDroppedPdfFiles,
       workspaceRootPath: "/tmp/LiteasyLibrary"
     });
@@ -151,6 +165,7 @@ describe("useWorkspaceActions", () => {
       sourcePath: "/tmp/LiteasyLibrary/courses/retrieval.pdf",
       title: "retrieval"
     }]);
+    expect(importStore.getLatestJobByDocumentId("local-1")?.status).toBe("queued");
   });
 
   test("keeps browser-uploaded PDF bytes reachable through a blob URL", async () => {
@@ -331,6 +346,59 @@ describe("useWorkspaceActions", () => {
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       "《Broken PDF》解析失败：read_local_library_pdf command not found"
     );
+  });
+
+  test("persists full text provenance during background import", async () => {
+    const paper = {
+      id: "paper-background-index",
+      sourcePath: "/tmp/LiteasyLibrary/papers/background.pdf",
+      title: "Background Index"
+    };
+    const pages: ExtractedPdfPage[] = [
+      {
+        page: 1,
+        text: "We compare with the ColBERT retrieval model [12].",
+        textExtraction: "embedded"
+      },
+      {
+        page: 2,
+        text: "OCR output whose character offsets must not become exact anchors.",
+        textExtraction: "ocr"
+      }
+    ];
+    const savePaperArtifact = vi.fn(async () => undefined);
+    const { importStore, result } = renderWorkspaceActions([paper], {
+      extractPaperIndex: async (input) => ({
+        chunks: buildImportedChunksForPaper(input),
+        pages
+      }),
+      savePaperArtifact
+    });
+
+    act(() => {
+      result.current.queueImportForPapers([paper]);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(importStore.getLatestJobByDocumentId(paper.id)?.status).toBe("parsed");
+    const fulltextWrite = savePaperArtifact.mock.calls.find(
+      ([input]) => input.artifactKind === "fulltext"
+    )?.[0];
+    expect(fulltextWrite?.snapshot).toMatchObject({
+      parser: "local_pdfjs",
+      pages: [
+        { page: 1, textExtraction: "embedded" },
+        { page: 2, textExtraction: "ocr" }
+      ],
+      version: 2
+    });
+    // Import writes the text and nothing else: what the text is *about* is decided later, by
+    // thin reading, against these same offsets.
+    expect(savePaperArtifact.mock.calls.map(([input]) => input.artifactKind)).toEqual(["fulltext"]);
   });
 
   test("fills missing DOI and arXiv metadata from explicitly marked first-page text", async () => {

@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { requireOpenAlexApiKey } from "./openalex-api-key.mjs";
+import { requireOpenAlexApiKey } from "../../services/dev-cloud/config.mjs";
 
 const target = Object.freeze({
   id: "W2963341956",

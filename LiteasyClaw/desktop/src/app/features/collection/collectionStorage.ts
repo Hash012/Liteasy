@@ -1,6 +1,23 @@
 import type { CollectionItem } from "./collection.types";
+import { resolveLocalAccountKey } from "../library/localAccountKey";
 
 const collectionStorageKey = "liteasy.collection.online.v1";
+
+function scopedCollectionStorageKey() {
+  return `${collectionStorageKey}:${resolveLocalAccountKey()}`;
+}
+
+function loadScopedCollectionValue() {
+  const scopedKey = scopedCollectionStorageKey();
+  const scopedValue = window.localStorage.getItem(scopedKey);
+  if (scopedValue !== null) return scopedValue;
+  const legacyValue = window.localStorage.getItem(collectionStorageKey);
+  if (legacyValue !== null) {
+    window.localStorage.setItem(scopedKey, legacyValue);
+    window.localStorage.removeItem(collectionStorageKey);
+  }
+  return legacyValue;
+}
 
 function isCollectionItem(item: unknown): item is CollectionItem {
   return (
@@ -24,7 +41,7 @@ export function loadStoredCollectionItems() {
     return [];
   }
 
-  const rawValue = window.localStorage.getItem(collectionStorageKey);
+  const rawValue = loadScopedCollectionValue();
   if (!rawValue) {
     return [];
   }
@@ -42,5 +59,5 @@ export function storeCollectionItems(items: CollectionItem[]) {
     return;
   }
 
-  window.localStorage.setItem(collectionStorageKey, JSON.stringify(items));
+  window.localStorage.setItem(scopedCollectionStorageKey(), JSON.stringify(items));
 }

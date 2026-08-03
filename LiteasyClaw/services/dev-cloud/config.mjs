@@ -86,6 +86,22 @@ export const defaultConfig = {
   localDirectEnabled: false,
   localDirectEndpoint: "http://127.0.0.1:8788",
   modelAccessMode: "cloud_proxy",
+  grobidEndpoint: process.env.GROBID_ENDPOINT ?? "http://127.0.0.1:8070",
+  // Deployment-owned secret. It is never returned to or accepted from a desktop client.
+  // OpenAlex requires a key for every API request as of 2026-02-13.
+  openAlexApiKey: process.env.OPENALEX_API_KEY,
+  // Retained as contact metadata for compatible connectors; it is not authentication and does
+  // not enable OpenAlex by itself now that the upstream requires an API key.
+  openAlexMailto: process.env.OPENALEX_MAILTO,
+  // How to use an anchor's own local reference subset, once the reader's client sends one.
+  //   off       — the paper-level neighbourhood, retained as a comparison arm.
+  //   additive  — the anchor's cited works on top of it, adding signal without removing noise.
+  //   exclusive — only the anchor's neighbourhood; related_works and whole-paper citing works are
+  //               dropped. The 40%-vs-68% gate measurement makes this the production default.
+  anchorReferenceMode: (() => {
+    const mode = (process.env.LITEASY_ANCHOR_REFERENCE_MODE ?? "").trim().toLowerCase();
+    return mode === "off" || mode === "additive" ? mode : "exclusive";
+  })(),
   hardcodedDevFakeAnswerPrefix: useHardcodedDevSecrets
     ? hardcodedDevSecrets.fakeAnswerPrefix
     : undefined,
@@ -105,8 +121,23 @@ export const defaultConfig = {
   recommendationRerankerApiKey: process.env.LITEASY_RECOMMENDATION_RERANKER_API_KEY,
   recommendationRerankerBaseUrl: process.env.LITEASY_RECOMMENDATION_RERANKER_BASE_URL,
   recommendationRerankerModel: process.env.LITEASY_RECOMMENDATION_RERANKER_MODEL,
+  semanticScholarApiKey: process.env.SEMANTIC_SCHOLAR_API_KEY,
   syncedAt: "2026-05-14T09:30:00Z"
 };
+
+/**
+ * For live evaluation scripts, which cannot run at all without the credential. Reads the
+ * same `OPENALEX_API_KEY` the service uses, so there is one place to configure it.
+ */
+export function requireOpenAlexApiKey(env = process.env) {
+  const apiKey = env.OPENALEX_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "缺少 OPENALEX_API_KEY。请在 services/dev-cloud/.env.local 中配置，或设置同名环境变量后重试。"
+    );
+  }
+  return apiKey;
+}
 
 export function buildOrigin(request) {
   const host = request.headers.host ?? "127.0.0.1:8787";

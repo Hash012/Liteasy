@@ -1,6 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFPageProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
+import { joinPdfTextItems, normalizePdfPageText } from "../pdf/pdfTextItems";
 import { normalizePdfTextForSearch } from "../pdf/pdfTextSearch";
 import { ensureReadableStreamAsyncIterator } from "../pdf/pdfStreamCompatibility";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
@@ -36,17 +37,6 @@ export type PdfExtractionOptions = {
 
 const defaultMaxChunkCharacters = 1_600;
 const defaultOverlapCharacters = 180;
-
-function normalizePdfText(value: string) {
-  return value
-    .replace(/-\s*\n\s*(?=[a-z])/g, "")
-    .replace(/\u00ad\s*\n?\s*/g, "")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n[ \t]+/g, "\n")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 function compact(value: string, maximum: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -88,7 +78,7 @@ function splitPageText(
   maximum: number,
   overlap: number
 ) {
-  const paragraphs = normalizePdfText(text)
+  const paragraphs = normalizePdfPageText(text)
     .split(/\n{2,}|(?<=\.)\s+(?=[A-Z][A-Za-z])/)
     .flatMap((paragraph) => splitLongParagraph(paragraph.trim(), maximum))
     .filter(Boolean);
@@ -144,7 +134,7 @@ export function buildPdfChunksFromPages(
   );
 
   return pages.flatMap((page) => {
-    const pageText = normalizePdfText(page.text);
+    const pageText = normalizePdfPageText(page.text);
     const pageTextForSearch = normalizePdfTextForSearch(pageText);
     let searchStart = 0;
     return splitPageText(pageText, maximum, overlap).map((snippet, chunkIndex) => {
@@ -173,15 +163,6 @@ export function buildPdfChunksFromPages(
       };
     });
   });
-}
-
-function isTextItem(item: unknown): item is { hasEOL?: boolean; str: string } {
-  return Boolean(
-    item &&
-      typeof item === "object" &&
-      "str" in item &&
-      typeof item.str === "string"
-  );
 }
 
 async function renderPdfPageForOcr(page: PDFPageProxy) {
@@ -219,7 +200,7 @@ async function createPdfOcrWorker(language: PdfOcrLanguage): Promise<PdfOcrWorke
 async function extractScannedPdfPageText(page: PDFPageProxy, worker: PdfOcrWorker) {
   const canvas = await renderPdfPageForOcr(page);
   const result = await worker.recognize(canvas);
-  return normalizePdfText(result.data.text);
+  return normalizePdfPageText(result.data.text);
 }
 
 export async function extractPdfPages(
@@ -233,13 +214,7 @@ export async function extractPdfPages(
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const content = await page.getTextContent();
-      const text = normalizePdfText(
-        content.items
-          .flatMap((item) =>
-            isTextItem(item) ? [`${item.str}${item.hasEOL ? "\n" : " "}`] : []
-          )
-          .join("")
-      );
+      const text = normalizePdfPageText(joinPdfTextItems(content.items));
       if (text) {
         pages.push({ page: pageNumber, text, textExtraction: "embedded" });
       } else {
@@ -279,6 +254,14 @@ export async function extractPdfChunksForPaper(
   paper: Paper,
   options: PdfExtractionOptions = {}
 ): Promise<RetrievalChunk[]> {
+  return (await extractPdfIndexForPaper(paper, options)).chunks;
+}
+
+/** Extracts once and exposes both retrieval chunks and the exact page text they were derived from. */
+export async function extractPdfIndexForPaper(
+  paper: Paper,
+  options: PdfExtractionOptions = {}
+) {
   if (!paper.sourcePath) {
     throw new Error(`Paper ${paper.id} does not have a PDF source path`);
   }
@@ -290,5 +273,5 @@ export async function extractPdfChunksForPaper(
   if (chunks.length === 0) {
     throw new Error(`No selectable text was extracted from ${paper.title}`);
   }
-  return chunks;
+  return { chunks, pages };
 }

@@ -44,24 +44,33 @@ describe("useRecommendations", () => {
     );
   });
 
-  test("loads cached recommendations before generating new ones", async () => {
+  test("shows cached recommendations while refreshing them from the network", async () => {
+    const cachedRecommendation = {
+      discoveredAt: "2026-05-14T08:15:00Z",
+      id: "rec-transformer-cached",
+      relatedDocumentTitle: "Attention Is All You Need",
+      relevanceBand: "high" as const,
+      relevanceScore: 0.91,
+      reason: "cached",
+      source: "Semantic Scholar",
+      sourceKind: "cache" as const,
+      title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+    };
+    const liveRecommendation = {
+      ...cachedRecommendation,
+      id: "rec-transformer-live",
+      reason: "fresh",
+      sourceKind: "live" as const,
+      sourceUrl: "https://openalex.org/W123"
+    };
     const cacheGet = vi.fn(async () => ({
       cacheHit: true,
-      recommendations: [
-        {
-          discoveredAt: "2026-05-14T08:15:00Z",
-          id: "rec-transformer-1",
-          relatedDocumentTitle: "Attention Is All You Need",
-          relevanceBand: "high" as const,
-          relevanceScore: 0.91,
-          reason: "cached",
-          source: "Semantic Scholar",
-          sourceKind: "cache",
-          title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
-        }
-      ]
+      recommendations: [cachedRecommendation]
     }));
-    const recommendationFetch = vi.fn(async () => []);
+    let resolveRefresh!: (recommendations: typeof liveRecommendation[]) => void;
+    const recommendationFetch = vi.fn(() => new Promise<typeof liveRecommendation[]>((resolve) => {
+      resolveRefresh = resolve;
+    }));
     const cachePut = vi.fn(async () => ({ cachedAt: "2026-05-14T08:15:00Z", ok: true as const }));
 
     const { result } = renderHook(() =>
@@ -86,7 +95,7 @@ describe("useRecommendations", () => {
     );
 
     await waitFor(() => {
-      expect(result.current.recommendationStatus).toBe("ready");
+      expect(result.current.recommendationItems).toEqual([cachedRecommendation]);
     });
 
     expect(cacheGet).toHaveBeenCalledTimes(1);
@@ -97,6 +106,64 @@ describe("useRecommendations", () => {
     // drop an in-flight fetch (which previously made recommendations vanish on reload).
     expect(cacheGet.mock.calls[0][0].personalizationVersion).toBeUndefined();
     expect(result.current.recommendationMessage).toBe("已显示当前选中文献集的缓存推荐。");
+    });
+    /* Superseded stale-while-revalidate expectations retained in history.
+    expect(recommendationFetch).toHaveBeenCalledTimes(1);
+    expect(result.current.recommendationPending).toBe(true);
+    expect(cacheGet.mock.calls[0][0].personalizationVersion).toBe(7);
+
+    resolveRefresh([liveRecommendation]);
+    await waitFor(() => {
+      expect(result.current.recommendationPending).toBe(false);
+    });
+
+    expect(cachePut).toHaveBeenCalledWith(expect.any(Object), [liveRecommendation]);
+    expect(result.current.recommendationItems).toEqual([liveRecommendation]);
+    expect(result.current.recommendationMessage).toBe("已获取 1 条关联推荐。");
+  });
+
+  test("keeps cached recommendations when the network refresh fails", async () => {
+    const cachedRecommendation = {
+      discoveredAt: "2026-05-14T08:15:00Z",
+      id: "rec-transformer-cached",
+      relatedDocumentTitle: "Attention Is All You Need",
+      relevanceBand: "high" as const,
+      relevanceScore: 0.91,
+      reason: "cached",
+      source: "Semantic Scholar",
+      sourceKind: "cache" as const,
+      title: "Cached Transformer Paper"
+    };
+    const { result } = renderHook(() =>
+      useRecommendations({
+        accountSession,
+        controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+        recommendationCacheDeps: {
+          clear: vi.fn(),
+          get: vi.fn(async () => ({ cacheHit: true, recommendations: [cachedRecommendation] })),
+          put: vi.fn()
+        },
+        recommendationGeneratorDeps: {
+          fetch: vi.fn(async () => {
+            throw new Error("external_knowledge_unavailable");
+          })
+        },
+        recommendationsEnabled: true,
+        recommendationSortMode: "relevance",
+        selectedPapers,
+        workspaceRevision: 0,
+        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.recommendationPending).toBe(false);
+    });
+
+    expect(result.current.recommendationItems).toEqual([cachedRecommendation]);
+    expect(result.current.recommendationStatus).toBe("ready");
+    expect(result.current.recommendationMessage).toContain("已显示缓存推荐；联网刷新失败");
+    */
   });
 
   test("generates recommendations on cache miss and writes them back to cache", async () => {
@@ -179,7 +246,7 @@ describe("useRecommendations", () => {
           put: vi.fn()
         },
         recommendationGeneratorDeps: {
-          fetch: vi.fn()
+          fetch: vi.fn(async () => [])
         },
         recommendationsEnabled: true,
         recommendationSortMode: "relevance",
@@ -224,6 +291,9 @@ describe("useRecommendations", () => {
         clear: vi.fn(),
         get: vi.fn(async () => ({ cacheHit: true, recommendations: [candidate] })),
         put: vi.fn()
+      },
+      recommendationGeneratorDeps: {
+        fetch: vi.fn(async () => [candidate])
       },
       recommendationFeedbackDeps: { record: feedbackRecord },
       recommendationsEnabled: true,

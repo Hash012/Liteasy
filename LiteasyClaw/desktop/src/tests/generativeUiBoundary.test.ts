@@ -3,7 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
-const repoSrc = dirname(fileURLToPath(import.meta.url)).replace(/\/tests$/, "");
+// Windows dirname yields backslashes, so matching only "/tests" left every path below
+// pointing inside src/tests and made all of these boundary checks fail with ENOENT.
+const repoSrc = dirname(fileURLToPath(import.meta.url)).replace(/[\\/]tests$/, "");
 
 function readSources(relativeDirectory: string) {
   const directory = join(repoSrc, relativeDirectory);

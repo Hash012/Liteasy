@@ -121,6 +121,32 @@ function getMemberRole(organization, sessionId) {
   );
 }
 
+export function getOrganizationMemberRole(organizationId, sessionId) {
+  const state = readOrganizationState();
+  const organization = state.organizations[organizationId];
+  return organization?.members.find((member) => member.id === sessionId)?.role ?? null;
+}
+
+export function setOrganizationLibraryDocumentVisibility(organizationId, document, visible) {
+  const state = readOrganizationState();
+  const organization = state.organizations[organizationId];
+  if (!organization) return false;
+  const documents = organization.sharedLibrary.documents.filter((entry) => entry.id !== document.documentId);
+  if (visible) {
+    documents.push({
+      id: document.documentId,
+      sourcePath: `org://${organizationId}/shared-library/${
+        document.folderId ? `${document.folderId}/` : ""
+      }${document.documentId}.pdf`,
+      title: document.fileName.replace(/\.pdf$/i, "")
+    });
+  }
+  organization.sharedLibrary.documents = documents;
+  organization.sharedLibrary.documentCount = documents.length;
+  writeOrganizationState(state);
+  return true;
+}
+
 function toOrganizationListItem(organization, sessionId) {
   return {
     canCreateOrganization: sessionId !== "session-basic",

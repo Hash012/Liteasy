@@ -2,7 +2,7 @@ import {
   runCrossrefThinReadingLiveEval,
   runOpenAlexThinReadingLiveEval
 } from "./thin-reading-openalex-live-eval.mjs";
-import { requireOpenAlexApiKey } from "./openalex-api-key.mjs";
+import { requireOpenAlexApiKey } from "../../services/dev-cloud/config.mjs";
 import { searchExternalKnowledge } from "../../services/dev-cloud/payloads/externalKnowledgePayloads.mjs";
 
 async function runExternalAggregatorLiveEval() {

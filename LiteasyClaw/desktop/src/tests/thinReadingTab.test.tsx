@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   resolveThinReadingSelectionPopoverPosition,
+  splitThinReadingSummaryTextByAnchors,
   ThinReadingTab
 } from "../app/features/thin-reading/ThinReadingTab";
 import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
@@ -81,6 +82,37 @@ describe("ThinReadingTab", () => {
       bottom: 64,
       left: 620
     });
+  });
+
+  test("splits a thin-reading sentence at its persisted anchor span", () => {
+    const sentence = {
+      evidenceIds: ["evidence-1"],
+      externalKnowledge: [],
+      id: "sentence-1",
+      status: "grounded" as const,
+      text: "Late interaction preserves fine-grained matching."
+    };
+    const segments = splitThinReadingSummaryTextByAnchors({
+      anchors: [{
+        end: 16,
+        evidenceIds: ["evidence-1"],
+        externalSourceIds: ["openalex:W1"],
+        id: "anchor-late-interaction",
+        importance: 0.9,
+        kind: "method",
+        label: "Late interaction",
+        searchQuery: "late interaction retrieval",
+        start: 0,
+        summarySentenceId: "sentence-1",
+        text: "Late interaction"
+      }],
+      sentence
+    });
+
+    expect(segments).toEqual([
+      expect.objectContaining({ anchor: expect.objectContaining({ id: "anchor-late-interaction" }), text: "Late interaction" }),
+      { text: " preserves fine-grained matching." }
+    ]);
   });
 
   test("renders the root thin-reading surface and its navigation", () => {

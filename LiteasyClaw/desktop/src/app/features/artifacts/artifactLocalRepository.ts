@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ArtifactTab, ArtifactType } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
+import { resolveLocalAccountKey } from "../library/localAccountKey";
 
 const browserStorageKey = "liteasy.artifact-catalog.v1";
 const databaseName = "liteasy-artifact-cache";
@@ -603,14 +604,19 @@ function normalizeSnapshot(value: unknown): ArtifactTab[] {
 
 function createTauriTransport(): ArtifactCatalogTransport {
   return {
-    load: () => invoke<unknown>("load_artifact_catalog_state"),
-    save: (snapshot) => invoke<void>("save_artifact_catalog_state", { snapshot })
+    load: () => invoke<unknown>("load_artifact_catalog_state", {
+      accountKey: resolveLocalAccountKey()
+    }),
+    save: (snapshot) => invoke<void>("save_artifact_catalog_state", {
+      accountKey: resolveLocalAccountKey(),
+      snapshot
+    })
   };
 }
 
 function openDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = window.indexedDB.open(databaseName, 1);
+    const request = window.indexedDB.open(`${databaseName}-${resolveLocalAccountKey()}`, 1);
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(objectStoreName)) {
@@ -659,11 +665,22 @@ function createIndexedDbTransport(): ArtifactCatalogTransport {
 function createLocalStorageTransport(): ArtifactCatalogTransport {
   return {
     async load() {
-      const serialized = window.localStorage.getItem(browserStorageKey);
+      const scopedKey = `${browserStorageKey}:${resolveLocalAccountKey()}`;
+      let serialized = window.localStorage.getItem(scopedKey);
+      if (serialized === null) {
+        serialized = window.localStorage.getItem(browserStorageKey);
+        if (serialized !== null) {
+          window.localStorage.setItem(scopedKey, serialized);
+          window.localStorage.removeItem(browserStorageKey);
+        }
+      }
       return serialized ? JSON.parse(serialized) : null;
     },
     async save(snapshot) {
-      window.localStorage.setItem(browserStorageKey, JSON.stringify(snapshot));
+      window.localStorage.setItem(
+        `${browserStorageKey}:${resolveLocalAccountKey()}`,
+        JSON.stringify(snapshot)
+      );
     }
   };
 }

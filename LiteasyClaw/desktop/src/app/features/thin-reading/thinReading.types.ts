@@ -72,17 +72,40 @@ export type ThinReadingEvidenceSpan = {
 
 export type ThinReadingExternalSource = {
   abstract: string;
+  accessStatus?: "metadata_only" | "open_access" | "restricted" | "unknown";
   authors: readonly string[];
   arxivId?: string;
+  canonicalPaperId?: string;
+  citationCount?: number;
+  /** Discrete provenance fact, kept apart from `relevance`: 1 the author cited it, 0.6 the
+   *  citation graph derived it, 0.3 an algorithm retrieved it. Encoded as opacity, never as
+   *  distance. */
+  confidence?: number;
+  confidenceBasis?:
+    | "algorithmic_retrieval"
+    | "author_citation"
+    | "canonical_registry"
+    | "citation_graph";
   doi?: string;
   evidenceBasis?: "abstract" | "full_text";
   fullTextEvidence?: readonly ThinReadingExternalEvidence[];
   fullTextUrl?: string;
   id: string;
   isRetracted?: boolean;
-  provider: "arxiv" | "crossref" | "openalex";
-  relation: "cited_by_target" | "cites_target" | "related" | "topic_search";
+  /** Device-local cache coordinates. Browser sessions and metadata-only results omit them. */
+  localPdfCachePath?: string;
+  localPdfContentHash?: string;
+  provider: "arxiv" | "crossref" | "doaj" | "oapen" | "openaire" | "openalex" | "semantic_scholar";
+  relation:
+    | "bibliographic_coupling"
+    | "cited_by_target"
+    | "cites_target"
+    | "co_cited"
+    | "related"
+    | "topic_search";
   relevance: number;
+  relationshipStrength?: number;
+  referencesCount?: number;
   retrievalIntents?: readonly ("challenge" | "context" | "support")[];
   retrievalQueries?: readonly string[];
   retrievalQuery: string;
@@ -90,6 +113,7 @@ export type ThinReadingExternalSource = {
   sourceId: string;
   title: string;
   url: string;
+  workType?: "article" | "book" | "chapter" | "dataset" | "other" | "preprint";
   year?: number;
 };
 
@@ -137,6 +161,25 @@ export type ThinReadingSummarySentence = {
   externalKnowledge: readonly string[];
   id: string;
   status: ThinReadingClaimStatus;
+  text: string;
+};
+
+// Anchors belong to the reader-facing thin-reading text, rather than to an
+// arbitrary position in the source PDF. Offsets keep the stored mapping exact
+// even when the same phrase occurs more than once in a sentence.
+export type ThinReadingAnchorKind = "claim" | "concept" | "limitation" | "method" | "result";
+
+export type ThinReadingAnchor = {
+  end: number;
+  evidenceIds: readonly string[];
+  externalSourceIds: readonly string[];
+  id: string;
+  importance: number;
+  kind: ThinReadingAnchorKind;
+  label: string;
+  searchQuery: string;
+  start: number;
+  summarySentenceId: string;
   text: string;
 };
 
@@ -195,6 +238,7 @@ export type ThinReadingGenerationAudit = {
 };
 
 export type ThinReadingNodeEvidence = {
+  anchors?: readonly ThinReadingAnchor[];
   claims?: readonly ThinReadingClaim[];
   externalKnowledge: readonly string[];
   externalSources?: readonly ThinReadingExternalSource[];

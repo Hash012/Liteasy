@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { Button } from "@fluentui/react-components";
 import {
   CommentRegular,
   DocumentRegular,
@@ -9,12 +10,14 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { compactPdfTextForSearch, normalizePdfTextForSearch } from "./pdfTextSearch";
+import { joinPdfTextItems, normalizePdfPageText } from "./pdfTextItems";
 import { ensureReadableStreamAsyncIterator } from "./pdfStreamCompatibility";
 import type { Paper } from "../workspace/workspace.types";
 import type { ReaderConversationContext } from "../assistant/assistantContext.types";
 import {
   loadPdfAnnotationAutoPublic,
   loadPdfAnnotations,
+  normalizePdfAnnotationPrivateState,
   pdfAnnotationAutoPublicStorageKey,
   pdfAnnotationStorageKey,
   savePdfAnnotationAutoPublic,
@@ -30,6 +33,11 @@ import {
   syncPdfAnnotationPendingItems
 } from "./pdfAnnotationIntuechoSync";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
+import { loadUserPaperArtifact, saveUserPaperArtifact } from "../library/userPaperArtifactClient";
+import type { PdfPageText } from "./citationAttribution";
+import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
+import { usePdfCitationParsing } from "./usePdfCitationParsing";
+import { usePdfFulltextStore } from "./usePdfFulltextStore";
 
 ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -40,7 +48,9 @@ type HighlightColor = PdfHighlightColor;
 type PdfSelection = {
   excerpt: string;
   menuLeft: number;
+  menuPlacement: "above" | "below";
   menuTop: number;
+  normalizedStart?: number;
   page: number;
   rects: PdfAnnotationRect[];
 };
@@ -54,7 +64,11 @@ type TextLayerPosition = {
 type PdfSidebarMode = "thumbnails" | "annotations";
 
 type PdfReaderProps = {
+  allowServerPdfParsing?: boolean;
+  /** Where the structured citation parser lives; its snapshot is what thin reading reads back. */
+  externalKnowledgeEndpoint?: string;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  onPaperAnnotated?: (paperId: string) => Promise<void>;
   selectedPapers: Paper[];
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
@@ -222,6 +236,22 @@ function getSelectionPageElement(range: Range, stageElement: HTMLElement) {
   return ancestorElement.closest<HTMLElement>(".pdf-page-shell");
 }
 
+function getElementContentRect(element: HTMLElement) {
+  const borderRect = element.getBoundingClientRect();
+  const left = borderRect.left + element.clientLeft;
+  const top = borderRect.top + element.clientTop;
+  const width = element.clientWidth || Math.max(0, borderRect.width - element.clientLeft * 2);
+  const height = element.clientHeight || Math.max(0, borderRect.height - element.clientTop * 2);
+  return {
+    bottom: top + height,
+    height,
+    left,
+    right: left + width,
+    top,
+    width
+  } as DOMRect;
+}
+
 function getRangeClientRects(range: Range) {
   const rects = Array.from(range.getClientRects()).filter(
     (rect) => rect.width > 1 && rect.height > 1
@@ -346,7 +376,7 @@ function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection
     return null;
   }
 
-  const pageRect = pageElement?.getBoundingClientRect();
+  const pageRect = getElementContentRect(pageElement);
   const pageNumber = Number(pageElement?.dataset.page ?? "1");
   const rects = buildAnnotationRects(range, pageRect);
   if (rects.length === 0) {
@@ -354,11 +384,35 @@ function buildSelectionFromRange(stageElement: HTMLElement, selection: Selection
   }
 
   const stageRect = stageElement.getBoundingClientRect();
+  const menuPosition = resolvePdfSelectionMenuPosition({
+    contentWidth: stageElement.scrollWidth,
+    rect: rangeRect,
+    scrollLeft: stageElement.scrollLeft,
+    scrollTop: stageElement.scrollTop,
+    stageRect: {
+      left: stageRect.left + stageElement.clientLeft,
+      top: stageRect.top + stageElement.clientTop
+    }
+  });
+  const textLayer = pageElement.querySelector<HTMLElement>(".pdf-text-layer");
+  let normalizedStart: number | undefined;
+  if (textLayer?.contains(range.startContainer)) {
+    try {
+      const prefix = document.createRange();
+      prefix.selectNodeContents(textLayer);
+      prefix.setEnd(range.startContainer, range.startOffset);
+      normalizedStart = normalizeQuoteForSearch(prefix.toString()).length;
+    } catch {
+      // The excerpt still identifies the anchor. This hint only disambiguates repeated text.
+    }
+  }
 
   return {
     excerpt,
-    menuLeft: Math.max(12, rangeRect.left - stageRect.left + stageElement.scrollLeft),
-    menuTop: Math.max(12, rangeRect.top - stageRect.top + stageElement.scrollTop - 44),
+    menuLeft: menuPosition.left,
+    menuPlacement: menuPosition.placement,
+    menuTop: menuPosition.top,
+    normalizedStart,
     page: Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : 1,
     rects
   };
@@ -388,6 +442,19 @@ function buildNormalizedTextLayerIndex(nodes: Text[]) {
 
   for (const node of nodes) {
     const value = node.nodeValue ?? "";
+    const firstContentOffset = value.search(/\S/);
+    // PDF extraction joins text items with one space, while PDF.js often renders adjacent
+    // positioned spans without a literal whitespace node. Keep both coordinate systems aligned
+    // so a persisted pageTextStart still selects the intended occurrence of a repeated quote.
+    if (text.length > 0 && !previousWasWhitespace && firstContentOffset >= 0) {
+      text += " ";
+      positions.push({
+        node,
+        normalizedOffset: text.length - 1,
+        offset: firstContentOffset
+      });
+      previousWasWhitespace = true;
+    }
     for (let offset = 0; offset < value.length; offset += 1) {
       const character = value[offset];
       if (/\s/.test(character)) {
@@ -521,7 +588,7 @@ export function buildTargetEvidenceRects(
   if (!range) {
     return [];
   }
-  return buildAnnotationRects(range, pageElement.getBoundingClientRect()).slice(0, 8);
+  return buildAnnotationRects(range, getElementContentRect(pageElement)).slice(0, 8);
 }
 
 function getInitialSelection(activePaper: Paper | null): PdfSelection {
@@ -530,6 +597,7 @@ function getInitialSelection(activePaper: Paper | null): PdfSelection {
       ? `当前选中文段来自《${activePaper.title}》第 1 页，后续会接入真实 PDF 文本选区。`
       : fallbackExcerpt,
     menuLeft: 120,
+    menuPlacement: "below",
     menuTop: 120,
     page: 1,
     rects: [{ height: 2.4, left: 16, top: 22, width: 58 }]
@@ -627,7 +695,10 @@ type PdfPageViewProps = {
   annotations: PdfAnnotation[];
   activePaper: Paper | null;
   focused: boolean;
+  /** This page rendered but yielded no text, so nothing on it can be located by character. */
+  noTextLayer?: boolean;
   onEvidenceHighlightResolved?: (matched: boolean) => void;
+  onPageTextRendered?: (input: PdfPageText) => void;
   pageNumber: number;
   pdfDocument: PDFDocumentProxy | null;
   stageWidth: number;
@@ -639,7 +710,9 @@ function PdfPageView({
   activePaper,
   annotations,
   focused,
+  noTextLayer = false,
   onEvidenceHighlightResolved,
+  onPageTextRendered,
   pageNumber,
   pdfDocument,
   stageWidth,
@@ -745,9 +818,19 @@ function PdfPageView({
         });
         await layer.render();
         if (!cancelled) {
+          onPageTextRendered?.({
+            page: pageNumber,
+            text: normalizePdfPageText(joinPdfTextItems(textContent.items))
+          });
           updateTargetHighlightRects();
         }
-      } catch {
+      } catch (error) {
+        // Swallowing this silently hid a total failure of the text layer, and with it every
+        // anchor, for as long as it took someone to inspect the DOM. A page that cannot render
+        // is worth saying out loud.
+        if (!cancelled) {
+          console.error(`PDF 第 ${pageNumber} 页渲染失败`, error);
+        }
         drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
         setTargetHighlightRects([]);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
@@ -762,7 +845,7 @@ function PdfPageView({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [activePaper?.id, focused, onEvidenceHighlightResolved, pageNumber, pageTitle, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
+  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageTextRendered, pageNumber, pageTitle, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
@@ -780,7 +863,19 @@ function PdfPageView({
       style={{ minHeight: pageSize.height, width: pageSize.width }}
     >
       <canvas aria-label={`PDF.js 页面画布 ${pageNumber}`} className="pdf-page-canvas" ref={canvasRef} />
+      {/* Degrading in the open, as the plan requires. A page with no text layer can carry no
+          character-level marks at all, and saying nothing leaves the reader believing the layer
+          found nothing worth marking rather than that it could not look. */}
+      {noTextLayer ? (
+        <p className="pdf-page-scanned-notice" role="note">
+          该页为扫描件，没有文本层，锚点只能页级定位
+        </p>
+      ) : null}
       <div aria-hidden="true" className="pdf-page-shadow" />
+      {/* The placeholder lives inside the pdf.js-owned container because a text selection only
+          opens the annotation menu when it falls within the text layer, and in jsdom this span
+          is the only text node there is. Mixing owners here is fragile — `textLayer.innerHTML`
+          is cleared on every render — so leave it alone unless the selection path moves too. */}
       <div className="textLayer pdf-text-layer" ref={textLayerRef}>
         <span className="pdf-text-layer-fallback">{fallbackExcerpt}</span>
       </div>
@@ -879,7 +974,10 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
 }
 
 export function PdfReader({
+  allowServerPdfParsing = false,
+  externalKnowledgeEndpoint = "",
   loadPdfSource,
+  onPaperAnnotated,
   selectedPapers,
   targetEvidence,
   zoom,
@@ -888,6 +986,8 @@ export function PdfReader({
 }: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const documentFrameRef = useRef<HTMLDivElement | null>(null);
+  const [documentFrameWidth, setDocumentFrameWidth] = useState(0);
   const [annotations, setAnnotations] = useState<PdfAnnotation[]>([]);
   const [selectedColor, setSelectedColor] = useState<HighlightColor>("yellow");
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
@@ -906,12 +1006,28 @@ export function PdfReader({
   const autoPublicStorageKey = pdfAnnotationAutoPublicStorageKey(activePaper);
   const [autoPublicAnnotations, setAutoPublicAnnotations] = useState(false);
   const [hydratedAnnotationStorageKey, setHydratedAnnotationStorageKey] = useState<string | null>(null);
+  const fulltext = usePdfFulltextStore(activePaper?.id);
+  const { documentHasNoTextLayer, pageTexts, scannedPages } = fulltext;
   const pageNumbers = useMemo(() => getPageNumbers(pageCount), [pageCount]);
+  /*
+   * Structured citation parsing, kept in the reader because this is where the PDF bytes are.
+   * Its snapshot is stored as the paper's `citations` artifact; thin reading reads it back when
+   * attributing references to the concepts it generated.
+   */
+  const citationParsing = usePdfCitationParsing({
+    activePaper,
+    allowServerPdfParsing,
+    endpoint: externalKnowledgeEndpoint,
+    // Parsing a partially-extracted document would store a snapshot missing whole sections of
+    // the bibliography, and nothing downstream could tell it apart from a complete one.
+    fullDocumentTextReady: pageCount > 0 && Object.keys(pageTexts).length >= pageCount,
+    loadPdfSource,
+    pageTexts
+  });
   const pendingPublicAnnotations = useMemo(
     () => listPdfAnnotationPendingPublicItems(annotations),
     [annotations]
   );
-
   const handleEvidenceHighlightResolved = useCallback((matched: boolean) => {
     if (!targetEvidence || targetEvidence.paperId !== activePaper?.id) {
       return;
@@ -923,6 +1039,8 @@ export function PdfReader({
         : `已定位到第 ${targetEvidence.page} 页；原文文本层未能精确匹配，当前为页级定位。`);
   }, [activePaper?.id, targetEvidence]);
 
+  const handlePageTextRendered = fulltext.onPageTextRendered;
+
   useEffect(() => {
     const stageElement = stageRef.current;
     if (!stageElement) {
@@ -932,6 +1050,8 @@ export function PdfReader({
 
     function updateLayout() {
       setStageWidth(measuredStageElement.clientWidth);
+      // The graph is laid out in the frame's own pixels, which is the stage minus its padding.
+      setDocumentFrameWidth(documentFrameRef.current?.clientWidth ?? 0);
     }
 
     updateLayout();
@@ -948,12 +1068,43 @@ export function PdfReader({
 
 
   useEffect(() => {
-    setAnnotations(loadPdfAnnotations(
-      annotationStorageKey,
-      activePaper ? resolvePaperIdentity(activePaper) : undefined
-    ));
+    const fallbackPaperIdentity = activePaper ? resolvePaperIdentity(activePaper) : undefined;
+    setHydratedAnnotationStorageKey(null);
+    setAnnotations(loadPdfAnnotations(annotationStorageKey, fallbackPaperIdentity));
     setAutoPublicAnnotations(loadPdfAnnotationAutoPublic(autoPublicStorageKey));
-    setHydratedAnnotationStorageKey(annotationStorageKey);
+    let cancelled = false;
+
+    if (!activePaper?.id) {
+      setHydratedAnnotationStorageKey(annotationStorageKey);
+      return undefined;
+    }
+
+    void loadUserPaperArtifact<unknown>({
+      artifactKind: "annotations",
+      paperId: activePaper.id
+    })
+      .then((snapshot) => {
+        const stored = normalizePdfAnnotationPrivateState(snapshot, fallbackPaperIdentity);
+        if (!cancelled && stored) {
+          setAnnotations(stored.annotations);
+          setAutoPublicAnnotations(stored.autoPublic);
+        }
+      })
+      .catch(() => {
+        // The browser cache remains a compatibility fallback when the user store is unavailable.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHydratedAnnotationStorageKey(annotationStorageKey);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePaper, annotationStorageKey, autoPublicStorageKey]);
+
+  useEffect(() => {
     setSelection(null);
     setActiveAnnotationId(null);
     setPageCount(1);
@@ -964,11 +1115,15 @@ export function PdfReader({
       : undefined;
     if (!pdfDisplaySource && !localSourcePath) {
       setPdfDocument(null);
-      setStatus(
-        activePaper?.sourcePath
-          ? "浏览器不能直接打开此 PDF 路径。"
-          : "选择文献后开始阅读，可在 PDF 文本层上选中文段。"
-      );
+      if (activePaper?.sourcePath) {
+        setStatus("浏览器不能直接打开此 PDF 路径。");
+      } else if (activePaper) {
+        // An entry with no body. Saying "select a paper" here would read as if nothing
+        // were open, and hint that the full text is one click away when it is not.
+        setStatus("本条目只有元数据，没有可阅读的全文。");
+      } else {
+        setStatus("选择文献后开始阅读，可在 PDF 文本层上选中文段。");
+      }
       return undefined;
     }
 
@@ -1014,13 +1169,42 @@ export function PdfReader({
       cancelled = true;
       void loadingTask?.destroy();
     };
-  }, [activePaper?.sourcePath, annotationStorageKey, autoPublicStorageKey, loadPdfSource, pdfDisplaySource]);
+  }, [activePaper?.sourcePath, loadPdfSource, pdfDisplaySource]);
 
   useEffect(() => {
     if (annotationStorageKey && hydratedAnnotationStorageKey === annotationStorageKey) {
       savePdfAnnotations(annotationStorageKey, annotations);
+      if (activePaper?.id) {
+        void saveUserPaperArtifact({
+          artifactKind: "annotations",
+          paperId: activePaper.id,
+          snapshot: {
+            annotations,
+            autoPublic: autoPublicAnnotations,
+            version: 1
+          }
+        }).catch(() => {
+          // The local browser copy remains available if the desktop user store cannot be written.
+        });
+        if (annotations.length > 0 && onPaperAnnotated) {
+          // Annotating a paper whose body is still in the disposable cache promotes it
+          // into the library, so clearing the cache cannot strip the body out from under
+          // the user's own marks.
+          void onPaperAnnotated(activePaper.id).catch((error) => {
+            const detail = error instanceof Error ? error.message : "未知错误";
+            setStatus(`批注已保存，但 PDF 自动转入文献库失败：${detail}。清理缓存前请重试。`);
+          });
+        }
+      }
     }
-  }, [annotationStorageKey, annotations, hydratedAnnotationStorageKey]);
+  }, [
+    activePaper?.id,
+    annotationStorageKey,
+    annotations,
+    autoPublicAnnotations,
+    hydratedAnnotationStorageKey,
+    onPaperAnnotated
+  ]);
 
   useEffect(() => {
     if (!targetEvidence || targetEvidence.paperId !== activePaper?.id) {
@@ -1088,10 +1272,26 @@ export function PdfReader({
     event.preventDefault();
     const stageRect = stageElement.getBoundingClientRect();
     if (nextSelection) {
+      const menuPosition = resolvePdfSelectionMenuPosition({
+        contentWidth: stageElement.scrollWidth,
+        rect: {
+          bottom: event.clientY,
+          left: event.clientX,
+          top: event.clientY,
+          width: 0
+        },
+        scrollLeft: stageElement.scrollLeft,
+        scrollTop: stageElement.scrollTop,
+        stageRect: {
+          left: stageRect.left + stageElement.clientLeft,
+          top: stageRect.top + stageElement.clientTop
+        }
+      });
       setSelection({
         ...nextSelection,
-        menuLeft: Math.max(12, event.clientX - stageRect.left + stageElement.scrollLeft),
-        menuTop: Math.max(12, event.clientY - stageRect.top + stageElement.scrollTop)
+        menuLeft: menuPosition.left,
+        menuPlacement: menuPosition.placement,
+        menuTop: menuPosition.top
       });
     } else {
       setSelection(selection);
@@ -1153,7 +1353,6 @@ export function PdfReader({
     clearBrowserSelection();
     setStatus("已将选中文段添加到对话。");
   }
-
 
   function openAnnotationEditor(annotation: PdfAnnotation) {
     setActiveAnnotationId(annotation.id);
@@ -1234,7 +1433,6 @@ export function PdfReader({
       setSyncingAnnotations(false);
     }
   }
-
 
   return (
     <section
@@ -1435,6 +1633,16 @@ export function PdfReader({
           aria-label="PDF 页面预览"
           className="pdf-main-stage"
         >
+          {/* Only the parser's own state lives up here now: whether the reader could produce a
+              structured citation snapshot for the paper it is showing. */}
+          <div aria-label="PDF 解析状态" className="pdf-parser-status">
+            {citationParsing.loading ? (
+              <span role="status">正在提取结构化引用…</span>
+            ) : citationParsing.parser === "grobid" ? (
+              <span role="note">结构化引用已就绪</span>
+            ) : null}
+            {citationParsing.warning ? <span role="status">{citationParsing.warning}</span> : null}
+          </div>
           {targetEvidence?.paperId === activePaper?.id ? (
             <div aria-live="polite" className="pdf-evidence-status" role="status">
               {status}
@@ -1447,26 +1655,35 @@ export function PdfReader({
             onMouseUp={handleTextSelection}
             ref={stageRef}
           >
-            <div aria-label="PDF.js 页面列表" className="pdf-page-list responsive">
-              {pageNumbers.map((pageNumber) => (
-                <PdfPageView
-                  activePaper={activePaper}
-                  annotations={annotations}
-                  focused={pageNumber === focusedPage}
-                  key={pageNumber}
-                  onEvidenceHighlightResolved={handleEvidenceHighlightResolved}
-                  pageNumber={pageNumber}
-                  pdfDocument={pdfDocument}
-                  stageWidth={stageWidth}
-                  targetEvidence={targetEvidence}
-                  zoom={zoom}
-                />
-              ))}
+            {documentHasNoTextLayer ? (
+              <p className="pdf-page-text-unavailable" role="note">
+                本篇没有可用文本层，无法按字符定位。完成 OCR 后才能选中正文与定位证据。
+              </p>
+            ) : null}
+            <div className="pdf-document-frame" ref={documentFrameRef}>
+              <div aria-label="PDF.js 页面列表" className="pdf-page-list responsive">
+                {pageNumbers.map((pageNumber) => (
+                  <PdfPageView
+                    activePaper={activePaper}
+                    annotations={annotations}
+                    focused={pageNumber === focusedPage}
+                    key={pageNumber}
+                    noTextLayer={scannedPages.has(pageNumber)}
+                    onEvidenceHighlightResolved={handleEvidenceHighlightResolved}
+                    onPageTextRendered={handlePageTextRendered}
+                    pageNumber={pageNumber}
+                    pdfDocument={pdfDocument}
+                    stageWidth={stageWidth}
+                    targetEvidence={targetEvidence}
+                    zoom={zoom}
+                  />
+                ))}
+              </div>
             </div>
             {selection ? (
               <div
                 aria-label="选中文本批注菜单"
-                className="pdf-selection-menu"
+                className={`pdf-selection-menu is-${selection.menuPlacement}`}
                 style={{ left: selection.menuLeft, top: selection.menuTop }}
               >
                 <div className="selection-menu-row">

@@ -37,8 +37,16 @@ const processes = [
     name: "dev:cloud"
   },
   {
-    args: buildDesktopViteArgs({ host: desktopHost, port: desktopPort }),
-    command: process.platform === "win32" ? "npx.cmd" : "npx",
+    // Run Vite's own JS entry with this Node binary, the same way the dev cloud is started
+    // above. Going through `npx` meant spawning `npx.cmd` on Windows, which current Node
+    // refuses without a shell — `spawn EINVAL` — so `tauri dev` could never boot there.
+    args: [
+      resolve(desktopDir, "node_modules/vite/bin/vite.js"),
+      ...buildDesktopViteArgs({ host: desktopHost, port: desktopPort }).filter(
+        (argument) => argument !== "vite"
+      )
+    ],
+    command: process.execPath,
     name: "dev:desktop"
   }
 ];

@@ -42,7 +42,9 @@ describe("thinReadingExternalFullTextClient", () => {
       ok: true,
       status: 200
     });
+    const cachePdf = vi.fn(async () => "C:\\cache\\paper.pdf");
     const client = createThinReadingExternalFullTextClient({
+      cachePdf,
       endpoint: "https://liteasy.example.test",
       transport
     });
@@ -50,6 +52,14 @@ describe("thinReadingExternalFullTextClient", () => {
     const first = await client(source);
     const second = await client(source);
     expect(first.evidenceBasis).toBe("full_text");
+    expect(first).toMatchObject({
+      localPdfCachePath: "C:\\cache\\paper.pdf",
+      localPdfContentHash: contentHash
+    });
+    expect(cachePdf).toHaveBeenCalledWith(expect.objectContaining({
+      bytes: expect.any(Uint8Array),
+      contentHash
+    }));
     expect(first.fullTextEvidence?.length).toBeGreaterThan(0);
     expect(first.fullTextEvidence).toEqual(second.fullTextEvidence);
     expect(first.fullTextEvidence?.[0]).toMatchObject({
@@ -62,7 +72,7 @@ describe("thinReadingExternalFullTextClient", () => {
     expect(first.fullTextEvidence?.[0].id).toMatch(
       new RegExp(`^external-evidence:openalex%3AW42:${contentHash}:p\\d+:c\\d+$`)
     );
-  });
+  }, 15_000);
 
   test("rejects a PDF whose returned bytes do not match the server hash", async () => {
     const bytesBase64 = btoa("%PDF-1.7\nnot a complete fixture");

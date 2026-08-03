@@ -2758,6 +2758,519 @@ body {
     #e8eef5;
 }
 
+.pdf-main-stage {
+  position: relative;
+}
+
+/*
+ * The mode bar. Two switches and one line of state, because those are the only two things a
+ * reader chooses here: whether the concepts are marked, and whether the graph is open. Everything
+ * else the layer knows about itself — how it was parsed, what degraded — is real but secondary,
+ * and lives behind the one button at the end rather than as four lines of standing text.
+ */
+.pdf-parser-status {
+  position: absolute;
+  z-index: 16;
+  top: 10px;
+  right: 18px;
+  display: flex;
+  gap: 10px;
+  max-width: min(560px, calc(100% - 36px));
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.pdf-page-text-unavailable {
+  margin: 0 auto 12px;
+  padding: 6px 12px;
+  border: 1px dashed var(--line-1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.association-layer {
+  --association-node-width: 152px;
+  --association-node-height: 54px;
+  --association-dot-size: 14px;
+  position: absolute;
+  z-index: 14;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+/* The dimmed page has to catch clicks, because clicking it is how the reader steps back one
+   layer. Passing them through to the text would make the gesture do nothing. */
+/* The host sets `--association-scrim` to its own paper colour; a cool grey veil over warm paper
+   reads as a rendering fault rather than as dimming. */
+.association-layer__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--association-scrim, rgba(232, 238, 245, 0.72));
+  pointer-events: auto;
+}
+
+.association-layer__edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.association-edge {
+  fill: none;
+  stroke: rgba(27, 102, 179, 0.85);
+  stroke-linecap: round;
+  stroke-width: 1.15;
+  opacity: var(--edge-opacity, 0.5);
+  transition: opacity 140ms ease, stroke 140ms ease, stroke-width 140ms ease;
+}
+
+.association-edge.is-crossing {
+  stroke: rgba(122, 78, 173, 0.9);
+  stroke-width: 1.4;
+}
+
+.association-edge.is-active {
+  stroke: var(--accent-1);
+  stroke-width: 2;
+  opacity: 1;
+}
+
+.association-edge.is-dimmed {
+  opacity: 0.07;
+}
+
+/* The anchor stays exactly where the text put it. This is the mark redrawn above the dimmed
+   page, because `opacity` on the page list makes a stacking context its children cannot escape. */
+.association-anchor__mark {
+  position: absolute;
+  z-index: 1;
+  border-radius: 3px;
+  background: rgba(27, 102, 179, 0.16);
+  box-shadow: inset 0 -2px 0 rgba(27, 102, 179, 0.85);
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.association-anchor__mark.is-claim,
+.association-anchor__mark.is-limitation {
+  background: rgba(181, 75, 45, 0.14);
+  box-shadow: inset 0 -2px 0 rgba(181, 75, 45, 0.7);
+}
+
+.association-anchor__chip {
+  position: absolute;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(320px, 46%);
+  padding: 4px 9px;
+  border: 1px solid rgba(27, 102, 179, 0.7);
+  border-radius: 999px;
+  background: #e9f3ff;
+  box-shadow: 0 4px 12px rgba(24, 34, 47, 0.12);
+  color: #15599c;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  pointer-events: auto;
+  text-align: left;
+  transform: translate(-6px, -50%);
+  transition: background 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.association-anchor__chip em {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(27, 102, 179, 0.16);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.association-anchor__chip:hover,
+.association-anchor__chip:focus-visible {
+  background: #d6e9ff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.2), 0 4px 12px rgba(24, 34, 47, 0.12);
+}
+
+.association-anchor.is-focused .association-anchor__chip {
+  border-color: var(--accent-1);
+  background: var(--accent-1);
+  color: #ffffff;
+}
+
+.association-anchor.is-focused .association-anchor__chip em {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.association-anchor.is-dimmed {
+  opacity: 0.22;
+}
+
+.association-node {
+  position: absolute;
+  z-index: 4;
+  top: var(--node-top);
+  left: var(--node-left);
+  display: grid;
+  gap: 1px;
+  width: var(--association-node-width);
+  min-height: var(--association-node-height);
+  padding: 7px 9px;
+  border: 1px solid rgba(24, 34, 47, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 14px rgba(24, 34, 47, 0.09);
+  color: var(--ink-1);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  text-align: left;
+  transform: translate(-50%, -50%);
+  transition:
+    width 140ms ease,
+    min-height 140ms ease,
+    padding 140ms ease,
+    border-radius 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+
+.association-node strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 700;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.association-node small {
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* How the link was established, as a bar down the leading edge. The legend names these three. */
+.association-node[data-basis="author_citation"],
+.association-node[data-basis="canonical_registry"] {
+  box-shadow: inset 3px 0 0 rgba(27, 102, 179, 0.9), 0 4px 14px rgba(24, 34, 47, 0.09);
+}
+
+.association-node[data-basis="citation_graph"] {
+  box-shadow: inset 3px 0 0 rgba(27, 102, 179, 0.5), 0 4px 14px rgba(24, 34, 47, 0.09);
+}
+
+.association-node[data-basis="algorithmic_retrieval"] {
+  box-shadow: inset 3px 0 0 rgba(27, 102, 179, 0.22), 0 4px 14px rgba(24, 34, 47, 0.09);
+}
+
+/* A paper sitting at the crossing of several anchors is the one thing this view can show that a
+   per-anchor nebula cannot, so it is called out rather than merged silently. */
+.association-node.is-crossing,
+.association-node.is-crossing[data-basis] {
+  border-color: rgba(122, 78, 173, 0.5);
+  box-shadow: inset 3px 0 0 rgba(122, 78, 173, 0.85), 0 4px 14px rgba(24, 34, 47, 0.12);
+}
+
+.association-node__crossing {
+  color: #6f43a5;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* Weak links rest as a dot so a page of six anchors stays readable, and become a full card the
+   moment the pointer or keyboard reaches them. Nothing is hidden, only postponed. */
+.association-node.is-dot {
+  width: var(--association-dot-size);
+  min-height: var(--association-dot-size);
+  height: var(--association-dot-size);
+  padding: 0;
+  border-color: rgba(27, 102, 179, 0.45);
+  border-radius: 50%;
+  background: rgba(27, 102, 179, 0.34);
+  box-shadow: 0 2px 6px rgba(24, 34, 47, 0.16);
+}
+
+.association-node.is-dot > * {
+  opacity: 0;
+  transition: opacity 90ms ease;
+}
+
+.association-node.is-dot:hover,
+.association-node.is-dot:focus-visible,
+.association-node.is-dot.is-active {
+  width: var(--association-node-width);
+  min-height: var(--association-node-height);
+  height: auto;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.association-node.is-dot:hover > *,
+.association-node.is-dot:focus-visible > *,
+.association-node.is-dot.is-active > * {
+  opacity: 1;
+}
+
+.association-node:hover,
+.association-node:focus-visible,
+.association-node.is-active {
+  z-index: 6;
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.16), 0 8px 20px rgba(24, 34, 47, 0.16);
+  outline: none;
+}
+
+.association-node.is-dimmed {
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+/* Hover carries the reason the link exists. The resting state carries no text at all, and a
+   native tooltip is both unstyleable and too slow to read a justification from. */
+.association-hover-card {
+  position: absolute;
+  z-index: 9;
+  display: grid;
+  gap: 4px;
+  width: 248px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 26px rgba(24, 34, 47, 0.2);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.association-hover-card strong {
+  color: var(--accent-1);
+  font-size: 11px;
+}
+
+.association-hover-card span {
+  color: var(--ink-1);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.association-hover-card small {
+  color: var(--ink-2);
+  font-size: 10.5px;
+}
+
+.association-overlay {
+  position: absolute;
+  z-index: 15;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* For hosts that are as tall as their content: the reading card has to be pinned to the window,
+   not to the middle of a long article. */
+.association-overlay.is-fixed {
+  position: fixed;
+  z-index: 40;
+}
+
+.association-legend {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink-2);
+  font-size: 10.5px;
+}
+
+.association-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.association-legend__line {
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(27, 102, 179, 0.85);
+}
+
+.association-legend__line.is-weak {
+  background: rgba(27, 102, 179, 0.28);
+}
+
+.association-legend__line.is-crossing {
+  background: rgba(122, 78, 173, 0.9);
+}
+
+.association-legend__note {
+  padding-left: 10px;
+  border-left: 1px solid var(--line-1);
+}
+
+.association-message {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  padding: 6px 12px;
+  border: 1px solid var(--line-1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 14px rgba(24, 34, 47, 0.1);
+  color: var(--ink-2);
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.association-message.is-error {
+  border-color: rgba(156, 47, 47, 0.4);
+  color: #9c2f2f;
+}
+
+.association-reading-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(24, 34, 47, 0.28);
+  pointer-events: auto;
+}
+
+/* Reading position: the selected node becomes the fully opaque centre card, held against the
+   window rather than the document so it is on screen whatever page the reader is on. */
+.association-reading-card {
+  position: absolute;
+  z-index: 5;
+  top: 49%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 8px;
+  width: min(430px, calc(100% - 80px));
+  max-height: min(430px, calc(100% - 32px));
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid rgba(27, 102, 179, 0.75);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 16px 42px rgba(24, 34, 47, 0.24);
+  color: var(--ink-1);
+  pointer-events: auto;
+}
+
+.association-reading-card h3 {
+  margin: 0;
+  padding-right: 22px;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.association-reading-card > small,
+.association-reading-card > p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.association-reading-card > small:last-child {
+  color: #8a5d24;
+}
+
+.association-reading-card__basis {
+  width: fit-content;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e9f3ff;
+  color: #15599c !important;
+}
+
+.association-reading-card__meta {
+  font-weight: 600;
+}
+
+.association-reading-card__abstract {
+  max-height: 120px;
+  overflow: auto;
+}
+
+.association-reading-card__dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.association-reading-card__dismiss:hover,
+.association-reading-card__dismiss:focus-visible {
+  background: #edf3f8;
+  color: var(--ink-1);
+  outline: none;
+}
+
+.association-reading-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.association-reading-card__actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-1);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.association-reading-card__actions > a svg {
+  width: 16px;
+  height: 16px;
+}
+
+/*
+ * The association view. Cards live beside the paper, in the same scroll container as the pages
+ * and positioned in document coordinates, so scrolling moves them like any other content and
+ * never triggers a relayout.
+ */
+.pdf-document-frame {
+  position: relative;
+  width: 100%;
+}
+
+
 .pdf-page-list {
   display: grid;
   justify-items: center;
@@ -3203,7 +3716,9 @@ body {
 .pdf-annotation-overlay {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  /* The text layer is z-index 2 so selections remain available across the page. Keep the
+     overlay above it as one stacking context; only actual marks opt back into pointer events. */
+  z-index: 3;
   pointer-events: none;
   user-select: none;
 }
@@ -3271,6 +3786,12 @@ body {
   backdrop-filter: blur(8px);
   user-select: none;
   min-width: 180px;
+  max-width: calc(100% - 24px);
+  transform: translate(-50%, calc(-100% - 8px));
+}
+
+.pdf-selection-menu.is-below {
+  transform: translate(-50%, 8px);
 }
 
 .pdf-selection-menu button {
@@ -4371,4 +4892,56 @@ body {
   color: #23384d;
   font: inherit;
   padding: 10px 12px;
+}
+
+.library-location-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.library-location-current {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.library-location-label {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* Paths are long and matter in full, so wrap rather than truncate them. */
+.library-location-path {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.library-location-move {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.library-location-rebuild {
+  border-top: 1px solid var(--colorNeutralStroke2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.library-location-rebuild-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.library-location-hint,
+.library-location-message {
+  font-size: 11px;
+  margin: 0;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
 }

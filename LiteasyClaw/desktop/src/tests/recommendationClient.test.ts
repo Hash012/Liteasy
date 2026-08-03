@@ -82,11 +82,10 @@ test("posts the selected document set to the cloud recommendation endpoint", asy
   ]);
 });
 
-test("forwards the configured OpenAlex key only to the recommendation retrieval request", async () => {
+test("does not expose source-provider credentials in a recommendation request", async () => {
   const requests: Array<{ headers: Record<string, string> }> = [];
   const client = createRecommendationClient({
     endpoint: "https://liteasy.example.com/control-plane",
-    openAlexApiKey: "openalex-test-key",
     transport: async (request) => {
       requests.push({ headers: request.headers });
       return {
@@ -101,10 +100,26 @@ test("forwards the configured OpenAlex key only to the recommendation retrieval 
 
   expect(requests).toEqual([{
     headers: {
-      "Content-Type": "application/json",
-      "X-OpenAlex-Api-Key": "openalex-test-key"
+        "Content-Type": "application/json"
     }
   }]);
+});
+
+test("preserves a unified retrieval-service error for the recommendation surface", async () => {
+  const client = createRecommendationClient({
+    endpoint: "https://liteasy.example.com/control-plane",
+    transport: async () => ({
+      json: async () => ({
+        error: "external_knowledge_unavailable",
+        message: "统一联网服务当前无法连接外部学术来源，请检查服务端网络连接后重试。"
+      }),
+      ok: false,
+      status: 502
+    })
+  });
+
+  await expect(client({ selectedDocuments: [], sessionId: "demo-session-1" }))
+    .rejects.toThrow("统一联网服务当前无法连接外部学术来源");
 });
 
 test("posts only the structured research profile fields used for recommendation", async () => {

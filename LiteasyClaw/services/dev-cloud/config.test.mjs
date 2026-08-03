@@ -13,6 +13,8 @@ test("loads model api keys from a local env file without overriding process env"
     [
       "OPENAI_API_KEY=openai-file-value",
       "DEEPSEEK_API_KEY=deepseek-file-value",
+      "OPENALEX_API_KEY=openalex-file-value",
+      "SEMANTIC_SCHOLAR_API_KEY=semantic-scholar-file-value",
       "LITEASY_MODEL_PROVIDER=deepseek"
     ].join("\n")
   );
@@ -24,6 +26,8 @@ test("loads model api keys from a local env file without overriding process env"
 
   assert.equal(env.OPENAI_API_KEY, "openai-existing-value");
   assert.equal(env.DEEPSEEK_API_KEY, "deepseek-file-value");
+  assert.equal(env.OPENALEX_API_KEY, "openalex-file-value");
+  assert.equal(env.SEMANTIC_SCHOLAR_API_KEY, "semantic-scholar-file-value");
   assert.equal(env.LITEASY_MODEL_PROVIDER, "deepseek");
 });
 

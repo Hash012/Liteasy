@@ -53,6 +53,15 @@ import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
 import { createExternalKnowledgeRunRepository } from "./db/externalKnowledgeRunRepository.mjs";
+import { createGrobidParseCacheRepository } from "./db/grobidParseCacheRepository.mjs";
+import {
+  createLibraryStorageRepository,
+  LibraryStorageError
+} from "./db/libraryStorageRepository.mjs";
+import {
+  getOrganizationMemberRole,
+  setOrganizationLibraryDocumentVisibility
+} from "./db/organizationRepository.mjs";
 import {
   clearRecommendationCandidatesForUser,
   createRecommendationCandidateRepository,
@@ -107,11 +116,20 @@ import {
   searchExternalKnowledge
 } from "./payloads/externalKnowledgePayloads.mjs";
 import { fetchSecurePdf, SecurePdfFetchError } from "./securePdfFetch.mjs";
+import {
+  fingerprintPdf,
+  GrobidParseError,
+  grobidParserVersion,
+  isPdfBytes,
+  parsePdfWithGrobid
+} from "./grobidClient.mjs";
 
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
 // 仍保留明确上限以防止本地开发服务被无界请求占满内存。
 const maximumJsonBodyBytes = 512 * 1024;
 const maximumAgentArtifactBodyBytes = 1024 * 1024;
+const maximumPdfParseBodyBytes = 40 * 1024 * 1024;
+const maximumLibraryPdfBytes = 256 * 1024 * 1024;
 
 const availableEndpoints = [
   "GET /",
@@ -147,6 +165,7 @@ const availableEndpoints = [
   "GET /v1/tags",
   "GET /v1/tags/:id",
   "GET /v1/tags/:id/works",
+  "POST /v1/research/parse-pdf",
   "POST /v1/profile/get",
   "POST /v1/profile/save",
   "POST /v1/profile/clear",
@@ -162,7 +181,21 @@ const availableEndpoints = [
   "POST /v1/org/list",
   "POST /v1/org/summary",
   "POST /v1/org/shared-library/manifest",
-  "POST /v1/org/governance-summary"
+  "POST /v1/org/governance-summary",
+  "POST /v1/library/documents/upload",
+  "POST /v1/library/documents/list",
+  "POST /v1/library/documents/trash",
+  "POST /v1/library/documents/restore",
+  "POST /v1/library/documents/update",
+  "POST /v1/library/documents/authorize",
+  "POST /v1/library/documents/download",
+  "POST /v1/library/folders/create",
+  "POST /v1/library/folders/update",
+  "POST /v1/library/quota",
+  "POST /v1/org/team-annotations/list",
+  "POST /v1/org/team-annotations/upload",
+  "POST /v1/org/team-annotations/withdraw",
+  "POST /v1/admin/storage-quota"
 ];
 
 const endpointMethods = new Map(
@@ -202,7 +235,15 @@ function buildCorsHeaders(request) {
         : undefined;
 
   const headers = {
-    "Access-Control-Allow-Headers": "Content-Type,X-OpenAlex-Api-Key",
+    "Access-Control-Allow-Headers": [
+      "Content-Type",
+      "X-Liteasy-Duplicate-Action",
+      "X-Liteasy-File-Name",
+      "X-Liteasy-Folder-Id",
+      "X-Liteasy-Scope-Id",
+      "X-Liteasy-Scope-Type",
+      "X-Liteasy-Session-Id"
+    ].join(", "),
     "Access-Control-Allow-Methods": "DELETE,GET,POST,OPTIONS",
     Vary: "Origin"
   };
@@ -219,10 +260,26 @@ function writeCorsPreflight(request, response) {
   response.end();
 }
 
-function openAlexApiKeyFromRequest(request) {
-  const value = request.headers["x-openalex-api-key"];
-  const apiKey = typeof value === "string" ? value.trim() : "";
-  return apiKey && apiKey.length <= 512 && !/\s/.test(apiKey) ? apiKey : "";
+function configuredOpenAlexMailto(config, customConfig) {
+  const configured = typeof customConfig.openAlexMailto === "string" && customConfig.openAlexMailto.trim()
+    ? customConfig.openAlexMailto.trim()
+    : (typeof config.openAlexMailto === "string" ? config.openAlexMailto.trim() : "");
+  return configured;
+}
+
+function configuredOpenAlexServiceKey(config, customConfig) {
+  const configuredKey = typeof config.openAlexApiKey === "string"
+    ? config.openAlexApiKey.trim()
+    : "";
+  if (configuredKey) {
+    return configuredKey;
+  }
+
+  // A custom transport is a server-owned connector used by integration tests and
+  // deployments with an authenticated upstream wrapper. It is never a browser input.
+  return customConfig.openAlexEnabled !== false && typeof customConfig.openAlexTransport === "function"
+    ? "server-configured-connector"
+    : "";
 }
 
 function writeJson(request, response, statusCode, payload) {
@@ -287,6 +344,32 @@ async function readJsonBody(request, maximumBytes = maximumJsonBodyBytes) {
   }
 
   return JSON.parse(rawBody);
+}
+
+function writePdf(request, response, fileName, bytes) {
+  response.writeHead(200, {
+    ...buildCorsHeaders(request),
+    "Cache-Control": "private, no-store",
+    "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    "Content-Length": bytes.length,
+    "Content-Type": "application/pdf"
+  });
+  response.end(bytes);
+}
+
+async function readBinaryBody(request, maximumBytes) {
+  const chunks = [];
+  let byteLength = 0;
+  for await (const chunk of request) {
+    byteLength += chunk.length;
+    if (byteLength > maximumBytes) {
+      const error = new Error("request_body_too_large");
+      error.code = "REQUEST_BODY_TOO_LARGE";
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 async function readJsonOrWriteError(
@@ -361,6 +444,41 @@ function authorizeAccountScopedBody(request, response, body, authService) {
   }
 }
 
+function authorizeLibraryScope(request, response, body, authService) {
+  if (!authorizeAccountScopedBody(request, response, body, authService)) return null;
+  const actorId = body.sessionId;
+  const scopeType = body.scopeType === "organization" ? "organization" : "user";
+  const scopeId = scopeType === "user" ? (body.scopeId || actorId) : body.scopeId;
+  if (scopeType === "user") {
+    if (scopeId !== actorId) {
+      writeJson(request, response, 403, { error: "personal_library_forbidden" });
+      return null;
+    }
+    return { actorId, role: "owner", scopeId, scopeType };
+  }
+  const role = getOrganizationMemberRole(scopeId, actorId);
+  if (!role) {
+    writeJson(request, response, 403, { error: "organization_membership_required" });
+    return null;
+  }
+  return { actorId, role, scopeId, scopeType };
+}
+
+function canManageOrganizationLibrary(scope) {
+  return scope.scopeType === "user" || scope.role === "owner" || scope.role === "admin";
+}
+
+function writeLibraryStorageError(request, response, error) {
+  if (error instanceof LibraryStorageError) {
+    writeJson(request, response, error.statusCode, { error: error.code, message: error.message });
+    return;
+  }
+  writeJson(request, response, 500, {
+    error: "library_storage_failed",
+    message: error instanceof Error ? error.message : "Library storage failed."
+  });
+}
+
 function personalizedRecommendationBody(body, preferences) {
   const currentProfile = body.researchProfile && typeof body.researchProfile === "object"
     ? body.researchProfile
@@ -381,18 +499,17 @@ function personalizedRecommendationBody(body, preferences) {
     ...disciplineTopics,
     ...behaviorTopics
   ].filter((topic) => typeof topic === "string" && topic.trim()))].slice(0, 12);
+  const researchProfile = {
+    datasets: Array.isArray(currentProfile.datasets) ? currentProfile.datasets : [],
+    languages: Array.isArray(currentProfile.languages) ? currentProfile.languages : [],
+    methods: Array.isArray(currentProfile.methods) ? currentProfile.methods : [],
+    topics
+  };
 
   return {
     ...body,
-    ...(topics.length > 0
-      ? {
-        researchProfile: {
-          datasets: Array.isArray(currentProfile.datasets) ? currentProfile.datasets : [],
-          languages: Array.isArray(currentProfile.languages) ? currentProfile.languages : [],
-          methods: Array.isArray(currentProfile.methods) ? currentProfile.methods : [],
-          topics
-        }
-      }
+    ...(Object.values(researchProfile).some((items) => items.length > 0)
+      ? { researchProfile }
       : {})
   };
 }
@@ -429,6 +546,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   });
   const externalKnowledgeRunRepository =
     customConfig.externalKnowledgeRunRepository ?? createExternalKnowledgeRunRepository(database);
+  const grobidParseCacheRepository =
+    customConfig.grobidParseCacheRepository ?? createGrobidParseCacheRepository(database);
   const personalizationRepository =
     customConfig.personalizationRepository ?? createPersonalizationRepository(database);
   const workRepository =
@@ -449,6 +568,12 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   setRecommendationFeedbackRepository(
     customConfig.recommendationFeedbackRepository ?? createRecommendationFeedbackRepository(database)
   );
+  const libraryStorageRepository =
+    customConfig.libraryStorageRepository ?? createLibraryStorageRepository(database, {
+      objectDirectory: customConfig.libraryStorageObjectDirectory,
+      now: customConfig.now
+  });
+  libraryStorageRepository.purgeExpired?.();
   const accountRepository = createAccountRepository(database);
   const sessionRepository = createAuthSessionRepository(database);
   const authService = customConfig.authService ?? createAuthService({
@@ -822,26 +947,47 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         writeJson(request, response, 200, { recommendations: [] });
         return;
       }
-      const retrievalOptions = {
-        allowCrossrefOnlyFallback: true,
-        arxivEnabled: customConfig.arxivEnabled === true,
-        arxivTimeoutMs: customConfig.arxivTimeoutMs,
-        arxivTransport: customConfig.arxivTransport,
-        crossrefEnabled: customConfig.crossrefEnabled !== false,
-        crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
-        crossrefTransport: customConfig.crossrefTransport,
-        openAlexApiKey: openAlexApiKeyFromRequest(request),
-        openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
-        openAlexTransport: customConfig.openAlexTransport,
-        rerank: false
-      };
+      const openAlexApiKey = configuredOpenAlexServiceKey(config, customConfig);
+      const openAlexMailto = configuredOpenAlexMailto(config, customConfig);
+      const expandedSourcesEnabled = customConfig.expandedSourcesEnabled !== false;
+      const semanticScholarEnabled = expandedSourcesEnabled && customConfig.semanticScholarEnabled !== false;
+      const openAireEnabled = expandedSourcesEnabled && customConfig.openAireEnabled !== false;
+      const oapenEnabled = expandedSourcesEnabled && customConfig.oapenEnabled !== false;
+      const doajEnabled = expandedSourcesEnabled && customConfig.doajEnabled !== false;
       try {
         const sourceGroups = await Promise.all(selectedDocuments.map(async (document) => {
           const result = await externalKnowledgeSearch({
             limit: 5,
             query: document.title,
             targetPaperTitle: document.title
-          }, retrievalOptions);
+          }, {
+            allowCrossrefOnlyFallback: true,
+            arxivEnabled: customConfig.arxivEnabled === true,
+            arxivTimeoutMs: customConfig.arxivTimeoutMs,
+            arxivTransport: customConfig.arxivTransport,
+            crossrefEnabled: customConfig.crossrefEnabled !== false,
+            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+            crossrefTransport: customConfig.crossrefTransport,
+            openAlexApiKey,
+            openAlexMailto,
+            openAlexEnabled: Boolean(openAlexApiKey),
+            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+            openAlexTransport: customConfig.openAlexTransport,
+            openAireEnabled,
+            openAireTimeoutMs: customConfig.openAireTimeoutMs,
+            openAireTransport: customConfig.openAireTransport,
+            oapenEnabled,
+            oapenTimeoutMs: customConfig.oapenTimeoutMs,
+            oapenTransport: customConfig.oapenTransport,
+            doajEnabled,
+            doajTimeoutMs: customConfig.doajTimeoutMs,
+            doajTransport: customConfig.doajTransport,
+            semanticScholarApiKey: config.semanticScholarApiKey,
+            semanticScholarEnabled,
+            semanticScholarTimeoutMs: customConfig.semanticScholarTimeoutMs,
+            semanticScholarTransport: customConfig.semanticScholarTransport,
+            rerank: false
+          });
           return {
             relatedDocumentTitle: document.title,
             semanticQuery: document.title,
@@ -861,7 +1007,34 @@ export function createDevCloudRequestHandler(customConfig = {}) {
             limit: 5,
             query: profileQuery,
             targetPaperTitle: profileQuery
-          }, retrievalOptions);
+          }, {
+            allowCrossrefOnlyFallback: true,
+            arxivEnabled: customConfig.arxivEnabled === true,
+            arxivTimeoutMs: customConfig.arxivTimeoutMs,
+            arxivTransport: customConfig.arxivTransport,
+            crossrefEnabled: customConfig.crossrefEnabled !== false,
+            crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
+            crossrefTransport: customConfig.crossrefTransport,
+            openAlexApiKey,
+            openAlexMailto,
+            openAlexEnabled: Boolean(openAlexApiKey),
+            openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+            openAlexTransport: customConfig.openAlexTransport,
+            openAireEnabled,
+            openAireTimeoutMs: customConfig.openAireTimeoutMs,
+            openAireTransport: customConfig.openAireTransport,
+            oapenEnabled,
+            oapenTimeoutMs: customConfig.oapenTimeoutMs,
+            oapenTransport: customConfig.oapenTransport,
+            doajEnabled,
+            doajTimeoutMs: customConfig.doajTimeoutMs,
+            doajTransport: customConfig.doajTransport,
+            semanticScholarApiKey: config.semanticScholarApiKey,
+            semanticScholarEnabled,
+            semanticScholarTimeoutMs: customConfig.semanticScholarTimeoutMs,
+            semanticScholarTransport: customConfig.semanticScholarTransport,
+            rerank: false
+          });
           sourceGroups.push({
             relatedDocumentTitle: "研究画像",
             semanticQuery: profileQuery,
@@ -997,6 +1170,64 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
+    if (method === "POST" && url.pathname === "/v1/research/parse-pdf") {
+      if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/pdf")) {
+        writeJson(request, response, 415, {
+          error: "invalid_pdf_content_type",
+          message: "结构解析只接受 application/pdf。"
+        });
+        return;
+      }
+      let pdfBytes;
+      try {
+        pdfBytes = await readBinaryBody(request, maximumPdfParseBodyBytes);
+      } catch (error) {
+        writeJson(request, response, error?.code === "REQUEST_BODY_TOO_LARGE" ? 413 : 400, {
+          error: error?.code === "REQUEST_BODY_TOO_LARGE" ? "request_body_too_large" : "invalid_pdf",
+          message: error?.code === "REQUEST_BODY_TOO_LARGE" ? "PDF 超过结构解析大小上限。" : "无法读取 PDF。"
+        });
+        return;
+      }
+      if (!isPdfBytes(pdfBytes)) {
+        writeJson(request, response, 400, { error: "invalid_pdf", message: "上传内容不是有效的 PDF。" });
+        return;
+      }
+      const contentFingerprint = fingerprintPdf(pdfBytes);
+      const cached = grobidParseCacheRepository.get(contentFingerprint);
+      if (cached?.parserVersion === grobidParserVersion) {
+        writeJson(request, response, 200, {
+          ...cached,
+          parser: "grobid",
+          reused: true
+        });
+        return;
+      }
+      try {
+        /*
+        const resolution = workRepository.resolveWork(
+          requestResult.value.identities,
+          requestResult.value.meta
+        );
+        const preferences = personalizationRepository.getRecommendationPreferences(body.sessionId);
+        writeJson(
+          request,
+          response,
+          201,
+          buildWorkResolutionSnapshot(resolution, preferences.personalizationVersion)
+        );
+      } catch (error) {
+        if (error instanceof WorkRepositoryError) {
+          writeJson(request, response, 400, {
+            error: error.code,
+            message: "论文身份解析失败：缺少有效标识。"
+          });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
     if (method === "GET" && url.pathname === "/v1/concepts") {
       const query = buildConceptListQuery(url.searchParams);
       writeJson(
@@ -1061,6 +1292,73 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           return;
         }
         throw error;
+        */
+        const tei = await parsePdfWithGrobid(pdfBytes, {
+          endpoint: config.grobidEndpoint,
+          timeoutMs: customConfig.grobidTimeoutMs,
+          transport: customConfig.grobidTransport
+        });
+        const stored = grobidParseCacheRepository.put({
+          contentFingerprint,
+          parserVersion: grobidParserVersion,
+          tei
+        });
+        writeJson(request, response, 200, {
+          ...stored,
+          parser: "grobid",
+          reused: false
+        });
+      } catch (error) {
+        writeJson(request, response, error instanceof GrobidParseError ? error.statusCode : 502, {
+          error: error instanceof GrobidParseError ? error.code : "grobid_unavailable",
+          message: error instanceof Error ? error.message : "结构解析服务不可用，已保留本地解析结果。"
+        });
+      }
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/v1/concepts") {
+      const query = buildConceptListQuery(url.searchParams);
+      writeJson(request, response, 200, buildConceptListPayload(conceptRepository.list(query)));
+      return;
+    }
+
+    if (method === "GET" && url.pathname.startsWith("/v1/concepts/")) {
+      const code = normalizeConceptCode(decodeURIComponent(url.pathname.slice("/v1/concepts/".length)));
+      if (!code) {
+        writeJson(request, response, 400, { error: "invalid_concept_code", message: "概念编码格式无效。" });
+        return;
+      }
+      const payload = buildConceptPayload(conceptRepository.getByCode(code));
+      writeJson(request, response, "error" in payload ? 404 : 200, payload);
+      return;
+    }
+
+    if (method === "POST" && url.pathname.startsWith("/v1/works/") && url.pathname.endsWith("/index")) {
+      const workId = decodeURIComponent(url.pathname.slice("/v1/works/".length, -"/index".length));
+      if (!/^[A-Za-z0-9._-]+$/.test(workId)) {
+        writeJson(request, response, 400, { error: "invalid_work_id", message: "论文标识格式无效。" });
+        return;
+      }
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const requestResult = buildWorkIndexRequest(body);
+      if (requestResult.error) {
+        writeJson(request, response, 400, {
+          error: requestResult.error,
+          message: "缺少可用于打标的论文标题或摘要。"
+        });
+        return;
+      }
+      try {
+        const result = tagRepository.indexWork(workId, requestResult.value);
+        writeJson(request, response, 200, buildWorkIndexSnapshot(result));
+      } catch (error) {
+        if (error instanceof TagRepositoryError) {
+          writeJson(request, response, 400, { error: error.code, message: "论文打标失败：标识无效。" });
+          return;
+        }
+        throw error;
       }
       return;
     }
@@ -1099,25 +1397,43 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     }
 
     if (method === "POST" && url.pathname === "/v1/research/external-knowledge") {
-      const openAlexApiKey = openAlexApiKeyFromRequest(request);
+      const openAlexApiKey = configuredOpenAlexServiceKey(config, customConfig);
+      const openAlexMailto = configuredOpenAlexMailto(config, customConfig);
       const crossrefEnabled = customConfig.crossrefEnabled !== false;
       const configuredArxivEnabled = customConfig.arxivEnabled === true;
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
         return;
       }
+      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
       const arxivEnabled = configuredArxivEnabled && body.includeArxiv !== false;
-      if (!openAlexApiKey && !crossrefEnabled && !arxivEnabled) {
+      const expandedSourcesEnabled = body.includeExpandedSources === true && customConfig.expandedSourcesEnabled !== false;
+      const semanticScholarEnabled = expandedSourcesEnabled && customConfig.semanticScholarEnabled !== false;
+      const openAireEnabled = expandedSourcesEnabled && customConfig.openAireEnabled !== false;
+      const oapenEnabled = expandedSourcesEnabled && customConfig.oapenEnabled !== false;
+      const doajEnabled = expandedSourcesEnabled && customConfig.doajEnabled !== false;
+      const openAlexEnabled = body.includeOpenAlex !== false && Boolean(openAlexApiKey);
+      if (!openAlexEnabled && !crossrefEnabled && !configuredArxivEnabled && !semanticScholarEnabled && !openAireEnabled && !oapenEnabled && !doajEnabled) {
         writeJson(request, response, 503, {
-          error: "openalex_api_key_required",
-          message: "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。"
+          error: "external_knowledge_unavailable",
+          message: "统一联网服务当前没有可用的文献来源，请稍后重试。"
         });
         return;
       }
+      // The anchor-reference mode is server configuration rather than something the client
+      // asks for, but it changes the result, so the cache has to key on it. Without this a
+      // stored answer from a previous mode would be replayed under the new one.
+      const anchorAwareRequest = Object.prototype.hasOwnProperty.call(body, "anchorReferences");
+      const anchorReferenceMode = anchorAwareRequest
+        ? (customConfig.anchorReferenceMode ?? config.anchorReferenceMode ?? "exclusive")
+        : "off";
+      const cacheKeyInput = { ...body, anchorReferenceMode };
       let retrievalRun;
       try {
         if (typeof body.artifactId === "string") {
-          const resumed = externalKnowledgeRunRepository.begin(body);
+          const resumed = externalKnowledgeRunRepository.begin(cacheKeyInput);
           if (resumed.payload) {
             writeJson(request, response, 200, { ...resumed.payload, retrieval: resumed.run });
             return;
@@ -1125,7 +1441,11 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           retrievalRun = resumed.run;
         }
         const payload = await searchExternalKnowledge(body, {
-          allowCrossrefOnlyFallback: !openAlexApiKey && (crossrefEnabled || arxivEnabled),
+          anchorReferenceMode,
+          allowCrossrefOnlyFallback: (
+            crossrefEnabled || arxivEnabled || semanticScholarEnabled || openAireEnabled || oapenEnabled
+              || doajEnabled
+          ),
           arxivEnabled,
           arxivTimeoutMs: customConfig.arxivTimeoutMs,
           arxivTransport: customConfig.arxivTransport,
@@ -1133,11 +1453,27 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           crossrefTimeoutMs: customConfig.crossrefTimeoutMs,
           crossrefTransport: customConfig.crossrefTransport,
           openAlexApiKey,
+          openAlexMailto,
+          openAlexEnabled,
           openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
-          openAlexTransport: customConfig.openAlexTransport
+          openAlexTransport: customConfig.openAlexTransport,
+          openAireEnabled,
+          openAireTimeoutMs: customConfig.openAireTimeoutMs,
+          openAireTransport: customConfig.openAireTransport,
+          oapenEnabled,
+          oapenTimeoutMs: customConfig.oapenTimeoutMs,
+          oapenTransport: customConfig.oapenTransport,
+          doajEnabled,
+          doajTimeoutMs: customConfig.doajTimeoutMs,
+          doajTransport: customConfig.doajTransport,
+          semanticScholarApiKey: customConfig.semanticScholarApiKey ?? config.semanticScholarApiKey,
+          semanticScholarEnabled,
+          semanticScholarTimeoutMs: customConfig.semanticScholarTimeoutMs,
+          semanticScholarTransport: customConfig.semanticScholarTransport,
+          rerank: body.deferRerank !== true
         });
         const completedRun = typeof body.artifactId === "string"
-          ? externalKnowledgeRunRepository.complete(body, payload)
+          ? externalKnowledgeRunRepository.complete(cacheKeyInput, payload)
           : undefined;
         writeJson(request, response, 200, completedRun ? { ...payload, retrieval: completedRun } : payload);
       } catch (error) {
@@ -1147,7 +1483,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
             ? 400
             : 502;
         const failedRun = typeof body.artifactId === "string" && retrievalRun
-          ? externalKnowledgeRunRepository.fail(body, error)
+          ? externalKnowledgeRunRepository.fail(cacheKeyInput, error)
           : undefined;
         writeJson(request, response, statusCode, {
           error: error instanceof ExternalKnowledgeError
@@ -1498,16 +1834,294 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
-      if (!authorizeAccountScopedBody(request, response, body, authService)) {
+      body.scopeId = body.organizationId;
+      body.scopeType = "organization";
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      const payload = buildOrganizationSharedLibraryManifestPayload(body);
+      const persistedDocuments = libraryStorageRepository.listDocuments(
+        "organization",
+        scope.scopeId,
+        "active"
+      );
+      const rootFolderId = payload.manifest.rootFolderId;
+      const persistedFolders = libraryStorageRepository.listFolders("organization", scope.scopeId);
+      payload.manifest.folders.push(...persistedFolders.map((folder) => ({
+        id: folder.folderId,
+        name: folder.name,
+        parentId: folder.parentFolderId ?? rootFolderId,
+        path: `org://${scope.scopeId}/shared-library/${folder.folderId}`
+      })));
+      payload.manifest.documents.push(...persistedDocuments.map((document) => ({
+        folderId: document.folderId ?? rootFolderId,
+        id: document.documentId,
+        sourcePath: `org://${scope.scopeId}/shared-library/${
+          document.folderId ? `${document.folderId}/` : ""
+        }${document.documentId}.pdf`,
+        title: document.fileName.replace(/\.pdf$/i, "")
+      })));
+      writeJson(request, response, 200, payload);
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/documents/update") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      if (!canManageOrganizationLibrary(scope)) {
+        writeJson(request, response, 403, { error: "organization_library_manage_forbidden" });
         return;
       }
+      try {
+        const changes = {};
+        if (Object.prototype.hasOwnProperty.call(body, "fileName")) changes.fileName = body.fileName;
+        if (Object.prototype.hasOwnProperty.call(body, "folderId")) changes.folderId = body.folderId;
+        writeJson(request, response, 200, {
+          document: libraryStorageRepository.updateDocument(body.documentId, scope, changes)
+        });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
 
-      writeJson(
-        request,
-        response,
-        200,
-        buildOrganizationSharedLibraryManifestPayload(body)
-      );
+    if (method === "POST" && url.pathname === "/v1/library/documents/upload") {
+      const authBody = {
+        scopeId: request.headers["x-liteasy-scope-id"],
+        scopeType: request.headers["x-liteasy-scope-type"],
+        sessionId: request.headers["x-liteasy-session-id"]
+      };
+      const scope = authorizeLibraryScope(request, response, authBody, authService);
+      if (!scope) return;
+      let bytes;
+      try {
+        bytes = await readBinaryBody(request, maximumLibraryPdfBytes);
+      } catch (error) {
+        writeJson(request, response, 413, { error: "request_body_too_large" });
+        return;
+      }
+      try {
+        const rawName = request.headers["x-liteasy-file-name"];
+        const fileName = decodeURIComponent(typeof rawName === "string" ? rawName : "Untitled paper.pdf");
+        const payload = libraryStorageRepository.uploadDocument({
+          bytes,
+          duplicateAction: request.headers["x-liteasy-duplicate-action"],
+          fileName,
+          folderId: request.headers["x-liteasy-folder-id"],
+          scopeId: scope.scopeId,
+          scopeType: scope.scopeType,
+          uploadedBy: scope.actorId
+        });
+        if (scope.scopeType === "organization" && payload.document) {
+          setOrganizationLibraryDocumentVisibility(scope.scopeId, payload.document, true);
+        }
+        writeJson(request, response, 200, payload);
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/documents/list") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      try {
+        libraryStorageRepository.purgeExpired();
+        writeJson(request, response, 200, {
+          documents: libraryStorageRepository.listDocuments(scope.scopeType, scope.scopeId, body.status),
+          quota: libraryStorageRepository.getQuota(scope.scopeType, scope.scopeId),
+          serverNow: new Date().toISOString()
+        });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (url.pathname === "/v1/library/documents/trash" || url.pathname === "/v1/library/documents/restore")
+    ) {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      if (!canManageOrganizationLibrary(scope)) {
+        writeJson(request, response, 403, { error: "organization_library_manage_forbidden" });
+        return;
+      }
+      try {
+        const document = url.pathname.endsWith("/trash")
+          ? libraryStorageRepository.trashDocument(body.documentId, scope)
+          : libraryStorageRepository.restoreDocument(body.documentId, scope);
+        if (scope.scopeType === "organization") {
+          setOrganizationLibraryDocumentVisibility(
+            scope.scopeId,
+            document,
+            document.status === "active"
+          );
+        }
+        writeJson(request, response, 200, { document });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/documents/authorize") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      try {
+        const document = libraryStorageRepository.authorizeDocument(body.documentId, scope);
+        const serverNow = new Date();
+        writeJson(request, response, 200, {
+          document,
+          expiresAt: new Date(serverNow.getTime() + 5 * 60 * 1000).toISOString(),
+          serverNow: serverNow.toISOString()
+        });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/documents/download") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      try {
+        const stored = libraryStorageRepository.readDocument(body.documentId, scope);
+        writePdf(request, response, stored.document.fileName, stored.bytes);
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/folders/create") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      if (!canManageOrganizationLibrary(scope)) {
+        writeJson(request, response, 403, { error: "organization_folder_manage_forbidden" });
+        return;
+      }
+      try {
+        const folder = libraryStorageRepository.createFolder({
+          createdBy: scope.actorId,
+          name: body.name,
+          parentFolderId: body.parentFolderId,
+          scopeId: scope.scopeId,
+          scopeType: scope.scopeType
+        });
+        writeJson(request, response, 200, { folder });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/folders/update") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      if (!canManageOrganizationLibrary(scope)) {
+        writeJson(request, response, 403, { error: "organization_folder_manage_forbidden" });
+        return;
+      }
+      try {
+        const changes = {};
+        if (Object.prototype.hasOwnProperty.call(body, "name")) changes.name = body.name;
+        if (Object.prototype.hasOwnProperty.call(body, "parentFolderId")) {
+          changes.parentFolderId = body.parentFolderId;
+        }
+        writeJson(request, response, 200, {
+          folder: libraryStorageRepository.updateFolder(body.folderId, scope, changes)
+        });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/quota") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      try {
+        writeJson(request, response, 200, libraryStorageRepository.getQuota(scope.scopeType, scope.scopeId));
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/storage-quota") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      try {
+        writeJson(
+          request,
+          response,
+          200,
+          libraryStorageRepository.setQuota(body.scopeType, body.scopeId, body.limitBytes)
+        );
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      [
+        "/v1/org/team-annotations/list",
+        "/v1/org/team-annotations/upload",
+        "/v1/org/team-annotations/withdraw"
+      ].includes(url.pathname)
+    ) {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      body.scopeId = body.organizationId;
+      body.scopeType = "organization";
+      const scope = authorizeLibraryScope(request, response, body, authService);
+      if (!scope) return;
+      try {
+        if (url.pathname.endsWith("/list")) {
+          writeJson(request, response, 200, {
+            annotations: libraryStorageRepository.listTeamAnnotations(
+              scope.scopeId,
+              body.documentId
+            )
+          });
+        } else if (url.pathname.endsWith("/upload")) {
+          writeJson(request, response, 200, {
+            annotation: libraryStorageRepository.uploadTeamAnnotation({
+              body: body.annotation,
+              documentId: body.documentId,
+              organizationId: scope.scopeId,
+              uploadedBy: scope.actorId
+            })
+          });
+        } else {
+          writeJson(request, response, 200, libraryStorageRepository.withdrawTeamAnnotation(
+            body.annotationId,
+            scope.actorId,
+            canManageOrganizationLibrary(scope)
+          ));
+        }
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
       return;
     }
 

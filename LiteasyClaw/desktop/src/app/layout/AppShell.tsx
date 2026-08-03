@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
 import type { ImportJob } from "../features/import/import.types";
@@ -53,14 +53,20 @@ import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
 import {
   moveLocalLibraryResource,
+  openLocalLibraryInFileManager,
   persistDroppedPdfFiles,
-  readLocalLibraryPdf
+  readLocalLibraryPdf,
+  setLocalLibraryRoot
 } from "../features/library/libraryFileSystemClient";
+import { isPaperCacheAvailable } from "../features/library/paperCacheClient";
+import { resolveReaderPaper } from "../features/library/cachedReaderPapers";
+import { createCloudLibraryStorageClient } from "../features/library/cloudLibraryStorageClient";
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
 import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
+import { useExternalPaperController } from "../controllers/useExternalPaperController";
 import type {
   ActionContext,
   DockMoveItemId,
@@ -189,6 +195,11 @@ export function AppShell({
   const [settingsState, setSettingsState] = useState<SettingsState>(() =>
     cloneSettingsState(settingsStoreRef.current.getState())
   );
+  const externalKnowledgeEndpoint =
+    settingsState["models.cloud_proxy_endpoint"].startsWith("http://") ||
+    settingsState["models.cloud_proxy_endpoint"].startsWith("https://")
+      ? settingsState["models.cloud_proxy_endpoint"]
+      : resolveLocalDevCloudEndpoint();
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏 AI 按钮启动分析。"
@@ -225,6 +236,15 @@ export function AppShell({
     ocrLanguage: settingsState["import.ocr_language"],
     workspaceStore: workspaceStoreRef.current
   });
+  const externalPapers = useExternalPaperController({
+    addExternalPdfToLibrary: workspaceActions.addExternalPdfToLibrary,
+    endpoint: externalKnowledgeEndpoint,
+    refreshLocalLibrary,
+    setActiveCenterArtifactId,
+    setActiveReaderPaperId,
+    setOpenReaderPaperIds
+  });
+  const { cachedReaderPapers } = externalPapers;
 
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
@@ -435,13 +455,20 @@ export function AppShell({
   }
   const selectedPapers = workspaceActions.getSelectedPapers();
   const openReaderPapers = openReaderPaperIds.flatMap((paperId) => {
-    const paper = workspaceState.papers.find((candidate) => candidate.id === paperId);
+    const paper = resolveReaderPaper({
+      cachedPapers: cachedReaderPapers,
+      libraryPapers: workspaceState.papers,
+      paperId
+    });
     return paper ? [paper] : [];
   });
   const activeReaderPaper =
     openReaderPapers.find((paper) => paper.id === activeReaderPaperId) ?? null;
   useEffect(() => {
-    const availablePaperIds = new Set(workspaceState.papers.map((paper) => paper.id));
+    const availablePaperIds = new Set([
+      ...workspaceState.papers.map((paper) => paper.id),
+      ...cachedReaderPapers.map((paper) => paper.id)
+    ]);
     setOpenReaderPaperIds((current) => {
       const next = current.filter((paperId) => availablePaperIds.has(paperId));
       return next.length === current.length ? current : next;
@@ -449,7 +476,7 @@ export function AppShell({
     setActiveReaderPaperId((current) =>
       current && availablePaperIds.has(current) ? current : null
     );
-  }, [workspaceState.papers]);
+  }, [cachedReaderPapers, workspaceState.papers]);
   const importedChunksByPaperId = workspaceActions.getImportedChunksByPaperId();
   const importedSelectedCount = workspaceActions.getImportedSelectedCount();
   const applyRuntimeLayoutPreset: ActionContext["applyLayoutPreset"] = (input) => {
@@ -694,7 +721,6 @@ export function AppShell({
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
     documentMetadataTransport,
     documents: workspaceState.papers,
-    openAlexApiKey: settingsState["thin_reading.openalex_api_key"],
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
@@ -773,8 +799,30 @@ export function AppShell({
   }, {});
 
   function openPaperInReader(paperId: string) {
-    const paper = workspaceState.papers.find((candidate) => candidate.id === paperId);
+    const paper = resolveReaderPaper({
+      cachedPapers: cachedReaderPapers,
+      libraryPapers: workspaceState.papers,
+      paperId
+    });
     if (!paper) {
+      return;
+    }
+
+    const organizationSource = paper.sourcePath?.match(/^org:\/\/([^/]+)\//);
+    if (organizationSource) {
+      void externalPapers.openCloudDocumentInReader({
+        documentId: paper.id,
+        scopeId: organizationSource[1],
+        scopeType: "organization",
+        title: paper.title
+      }).then(() => {
+        void profileActions.recordPersonalizationSignal({
+          kind: "paper_opened",
+          title: paper.title
+        });
+      }).catch((error) => {
+        setAnalysisHint(error instanceof Error ? error.message : "组织文献打开失败。");
+      });
       return;
     }
 
@@ -835,10 +883,58 @@ export function AppShell({
     governanceSummary: organizationGovernanceSummary,
     importJobs: importJobsByDocumentId,
     libraryPaperChildren,
+    libraryRootPath: localLibrarySnapshot?.rootPath ?? null,
+    onChangeLibraryRoot: isPaperCacheAvailable()
+      ? async (nextRootPath: string) => {
+          await setLocalLibraryRoot(nextRootPath);
+          await refreshLocalLibrary();
+        }
+      : undefined,
+    onOpenLibraryInFileManager: isPaperCacheAvailable()
+      ? openLocalLibraryInFileManager
+      : undefined,
     list: organizationList,
     listMessage: organizationListMessage,
     listStatus: organizationListStatus,
-    onAddDroppedPdfFiles: workspaceActions.addDroppedPdfFiles,
+    onAddDroppedPdfFiles: async (files, targetFolderPath) => {
+      const organizationId = workspaceState.workspaceSource.type === "organization_shared"
+        ? workspaceState.workspaceSource.rootPath.match(/^org:([^:]+):/)?.[1]
+        : undefined;
+      if (!organizationId) {
+        await workspaceActions.addDroppedPdfFiles(files, targetFolderPath);
+        return;
+      }
+      const cloudLibrary = createCloudLibraryStorageClient({ endpoint: externalKnowledgeEndpoint });
+      const organizationRoot = `org://${organizationId}/shared-library/`;
+      const relativeTarget = targetFolderPath?.startsWith(organizationRoot)
+        ? targetFolderPath.slice(organizationRoot.length)
+        : "";
+      const folderId = relativeTarget && !relativeTarget.includes("/")
+        ? relativeTarget
+        : undefined;
+      for (const file of files) {
+        const result = await cloudLibrary.uploadDocument({
+          file,
+          folderId,
+          onDuplicate: () => window.confirm(
+            "当前内容已存在。选择“确定”另存副本，选择“取消”停止本次上传。"
+          ),
+          scope: { scopeId: organizationId, scopeType: "organization" }
+        });
+        if (result.document) {
+          workspaceStoreRef.current.addPaper({
+            id: result.document.documentId,
+            sourcePath: `org://${organizationId}/shared-library/${
+              result.document.folderId ? `${result.document.folderId}/` : ""
+            }${result.document.documentId}.pdf`,
+            title: result.document.fileName.replace(/\.pdf$/i, "")
+          });
+        }
+      }
+      workspaceActions.syncWorkspace();
+      setAnalysisHint("组织文献已上传并同步到共享文献库。");
+    },
+    onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
     onAddExternalPaper: workspaceActions.addExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
@@ -1130,11 +1226,19 @@ export function AppShell({
     ];
     return (
       <ReaderPane
+        allowServerPdfParsing={false}
         analysisHint={analysisHint}
         artifactTabs={artifactTabs}
         artifactTasks={artifactTasks}
+        externalKnowledgeEndpoint={externalKnowledgeEndpoint}
         layoutCollapsed={paneLayout.collapsed}
-        loadPdfSource={readLocalLibraryPdf}
+        loadPdfSource={externalPapers.loadPdfSource}
+        onAddExternalPdfToLibrary={workspaceActions.addExternalPdfToLibrary}
+        onOpenExternalFullText={externalPapers.openExternalFullTextInReader}
+        onPaperAnnotated={
+          isPaperCacheAvailable() ? externalPapers.promoteCachedPaperToLibrary : undefined
+        }
+        onPromoteExternalPaperToLibrary={externalPapers.promoteExternalPaperToLibrary}
         onArtifactDynamicAction={(action) => {
           void handleArtifactCanvasAction(action);
         }}

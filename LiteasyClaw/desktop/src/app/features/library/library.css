@@ -623,14 +623,22 @@
 }
 
 .library-resource-action-message {
+  align-items: center;
   background: #edf6ff;
   border: 1px solid #d0e3f4;
   border-radius: 7px;
   color: #426682;
+  display: flex;
   font-size: 11px;
+  gap: 6px;
+  justify-content: space-between;
   line-height: 1.45;
   margin: 0 0 6px;
   padding: 6px 8px;
+}
+
+.library-resource-action-message > span {
+  min-width: 0;
 }
 
 .library-resource-context-menu {

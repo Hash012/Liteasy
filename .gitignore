@@ -34,3 +34,6 @@ Thumbs.db
 ICS2-13-Network-复习讲解.html
 tmp/
 .worktrees/
+
+# 检索验证门的采样产物：每次跑都会重新生成，标注结果按需另存
+LiteasyClaw/desktop/scripts/retrieval-gate-worksheet.json

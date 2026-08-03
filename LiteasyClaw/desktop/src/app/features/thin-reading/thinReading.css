@@ -44,7 +44,24 @@
 .thin-reading__breadcrumbs button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0; }
 .thin-reading__breadcrumbs button:hover, .thin-reading__breadcrumbs button:focus-visible { color: #3e6d68; outline: none; text-decoration: underline; }
 .thin-reading__breadcrumbs .is-active { color: #3e6d68; font-weight: 650; }
-.thin-reading__body { display: grid; gap: clamp(36px, 8vw, 120px); grid-template-columns: minmax(0, 700px) minmax(190px, 260px); margin: 0 auto; max-width: 1100px; padding: clamp(38px, 6vw, 76px) 24px 80px; }
+.thin-reading__modebar { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin: 0 auto; max-width: 1100px; padding: 16px 24px 0; width: 100%; }
+.thin-reading__mode { align-items: center; background: #fffefa; border: 1px solid var(--thin-line); border-radius: 8px; color: #33555a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 650; gap: 7px; height: 34px; padding: 0 13px; }
+.thin-reading__mode:hover:not(:disabled), .thin-reading__mode:focus-visible { border-color: #7fa8a4; outline: none; }
+.thin-reading__mode.is-active { background: #e5efea; border-color: #4d8079; box-shadow: inset 0 0 0 1px #4d8079; color: #22514c; }
+.thin-reading__mode:disabled { cursor: default; opacity: .45; }
+.thin-reading__mode-state { align-items: center; display: inline-flex; gap: 8px; min-width: 0; }
+.thin-reading__mode-pill { background: #e5efea; border-radius: 999px; color: #3e6d68; flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 3px 9px; }
+.thin-reading__mode-copy { color: var(--thin-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.thin-reading__body { --association-scrim: rgba(251, 250, 245, .76); display: grid; gap: clamp(36px, 8vw, 120px); grid-template-columns: minmax(0, 700px) minmax(190px, 260px); margin: 0 auto; max-width: 1100px; padding: clamp(38px, 6vw, 76px) 24px 80px; position: relative; }
+.thin-reading.is-external .thin-reading__body { --association-scrim: rgba(247, 241, 232, .78); }
+.thin-reading.is-near-boundary .thin-reading__body { --association-scrim: rgba(245, 248, 241, .78); }
+
+/* With the graph open the prose recedes and the anchors are redrawn bright on top of it. Dimming
+   rather than covering keeps the shape of the paragraph the reader was in. */
+.thin-reading__body.is-graph-dimmed > .thin-reading__article,
+.thin-reading__body.is-graph-dimmed > .thin-reading__intuecho { filter: saturate(.7); opacity: .3; transition: opacity 180ms ease, filter 180ms ease; }
+.thin-reading__body.is-marks-hidden .thin-reading__anchor { background: transparent; color: inherit; text-decoration: none; }
 .thin-reading.is-intuecho-collapsed .thin-reading__body { gap: clamp(24px, 5vw, 72px); grid-template-columns: minmax(0, 740px) 52px; }
 .thin-reading__article { min-width: 0; }
 .thin-reading__near-boundary {
@@ -71,6 +88,43 @@
   user-select: text;
 }
 .thin-reading__summary-sentence { outline-offset: 3px; }
+.thin-reading__anchor {
+  background: #d9eaff;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  color: #174c86;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline 1px rgba(23, 76, 134, .46);
+  text-underline-offset: 3px;
+  vertical-align: baseline;
+}
+.thin-reading__anchor:hover, .thin-reading__anchor:focus-visible, .thin-reading__anchor.is-active {
+  background: #a9d4ff;
+  color: #083d76;
+  outline: 2px solid #4b9fe8;
+  outline-offset: 1px;
+}
+.thin-reading__anchor-sources {
+  border-left: 3px solid #4b9fe8;
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  max-width: 36em;
+  padding: 4px 0 4px 14px;
+}
+.thin-reading__anchor-sources-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; }
+.thin-reading__anchor-sources-heading span { color: #527d77; font-size: 12px; font-weight: 700; }
+.thin-reading__anchor-sources-heading strong { color: #174c86; font-size: 14px; }
+.thin-reading__anchor-sources ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.thin-reading__anchor-sources li { display: grid; gap: 2px; }
+.thin-reading__anchor-sources a { color: #255f9b; font-size: 13px; font-weight: 650; line-height: 1.45; text-decoration: none; }
+.thin-reading__anchor-sources a:hover, .thin-reading__anchor-sources a:focus-visible { text-decoration: underline; }
+.thin-reading__anchor-sources li span, .thin-reading__anchor-sources > p { color: var(--thin-muted); font-family: Inter, "Noto Sans SC", system-ui, sans-serif; font-size: 12px; line-height: 1.55; margin: 0; }
+.thin-reading__anchor-source-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 3px; }
+.thin-reading__anchor-source-actions button { background: #fffefa; border: 1px solid #aac9e8; border-radius: 4px; color: #255f9b; cursor: pointer; font-family: Inter, "Noto Sans SC", system-ui, sans-serif; font-size: 11px; padding: 4px 7px; }
+.thin-reading__anchor-source-actions button:hover, .thin-reading__anchor-source-actions button:focus-visible { background: #e6f2ff; outline: none; }
+.thin-reading__anchor-source-actions button:disabled { cursor: wait; opacity: .6; }
 .thin-reading__summary-sentence > sup {
   font-size: .52em;
   line-height: 0;
