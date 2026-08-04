@@ -227,10 +227,11 @@ function buildCorsHeaders(request) {
     configuredOrigins instanceof Set &&
     typeof origin === "string" &&
     configuredOrigins.has(origin);
+  const isDesktopOrigin = origin === "tauri://localhost";
   const allowOrigin =
     typeof origin !== "string"
       ? "*"
-      : isLoopbackOrigin || isConfiguredOrigin
+      : isLoopbackOrigin || isDesktopOrigin || isConfiguredOrigin
         ? origin
         : undefined;
 

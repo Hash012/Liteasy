@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import {
   createThinReadingBranchRecoverySnapshot,
@@ -72,6 +72,24 @@ describe("artifactTaskRecovery", () => {
       })
     ]);
     expect(takeInterruptedArtifactTasks()).toEqual([]);
+  });
+
+  test("does not block generation when task recovery exceeds browser storage quota", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+      throw new DOMException("quota exceeded", "QuotaExceededError");
+    });
+
+    expect(() => persistInterruptedArtifactTasks([{
+      id: "artifact-task-9",
+      message: "正在准备 Agent 上下文",
+      progress: 15,
+      stage: "preparing_context",
+      status: "running",
+      type: "mindmap"
+    }])).not.toThrow();
+
+    expect(window.localStorage.getItem("liteasy.artifact-task-recovery/v1")).toBeNull();
+    setItem.mockRestore();
   });
 
   test("restores an interrupted task as an explicit retryable failure", () => {

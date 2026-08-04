@@ -99,19 +99,13 @@ describe("useRecommendations", () => {
     });
 
     expect(cacheGet).toHaveBeenCalledTimes(1);
-    expect(recommendationFetch).not.toHaveBeenCalled();
-    expect(cachePut).not.toHaveBeenCalled();
+    expect(recommendationFetch).toHaveBeenCalledTimes(1);
+    expect(result.current.recommendationPending).toBe(true);
     // personalizationVersion is intentionally excluded from the cache scope so that
     // a profile-load / signal that bumps the version does not invalidate the cache or
     // drop an in-flight fetch (which previously made recommendations vanish on reload).
     expect(cacheGet.mock.calls[0][0].personalizationVersion).toBeUndefined();
-    expect(result.current.recommendationMessage).toBe("已显示当前选中文献集的缓存推荐。");
-    });
-    /* Superseded stale-while-revalidate expectations retained in history.
-    expect(recommendationFetch).toHaveBeenCalledTimes(1);
-    expect(result.current.recommendationPending).toBe(true);
-    expect(cacheGet.mock.calls[0][0].personalizationVersion).toBe(7);
-
+    expect(result.current.recommendationMessage).toBe("已显示缓存推荐，正在联网刷新。");
     resolveRefresh([liveRecommendation]);
     await waitFor(() => {
       expect(result.current.recommendationPending).toBe(false);
@@ -163,7 +157,6 @@ describe("useRecommendations", () => {
     expect(result.current.recommendationItems).toEqual([cachedRecommendation]);
     expect(result.current.recommendationStatus).toBe("ready");
     expect(result.current.recommendationMessage).toContain("已显示缓存推荐；联网刷新失败");
-    */
   });
 
   test("generates recommendations on cache miss and writes them back to cache", async () => {

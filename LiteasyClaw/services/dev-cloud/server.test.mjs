@@ -99,6 +99,21 @@ test("allows browser CORS preflight from the desktop dev server", async () => {
   assert.match(response.headers["Access-Control-Allow-Headers"], /X-Liteasy-Session-Id/);
 });
 
+test("allows CORS preflight from the Tauri desktop origin", async () => {
+  const response = await invokeHandler({
+    method: "OPTIONS",
+    headers: {
+      "access-control-request-headers": "content-type",
+      "access-control-request-method": "POST",
+      origin: "tauri://localhost"
+    },
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.headers["Access-Control-Allow-Origin"], "tauri://localhost");
+});
+
 test("never accepts a browser-owned OpenAlex key at the cloud boundary", async () => {
   let requestedUrl = "";
   const response = await invokeHandler({

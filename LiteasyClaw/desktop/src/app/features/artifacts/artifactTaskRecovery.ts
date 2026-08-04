@@ -13,6 +13,8 @@ const maxPromptLength = 1200;
 const maxSourceReferenceCount = 64;
 const maxSectionLabelLength = 96;
 const maxSectionKeyLength = 96;
+const maxPersistedTaskCount = 6;
+const maxPersistedTaskMessageLength = 480;
 
 export type ThinReadingBranchRecoverySnapshot = {
   artifactId: string;
@@ -150,11 +152,12 @@ export function persistInterruptedArtifactTasks(tasks: readonly ArtifactTask[]) 
   }
   const pending = tasks
     .filter((task) => task.status === "queued" || task.status === "running")
+    .slice(0, maxPersistedTaskCount)
     .map(({ agentRunId, artifactId, id, message, progress, stage, status, thinReadingBranchRecovery, type }) => ({
       ...(agentRunId ? { agentRunId } : {}),
       ...(artifactId ? { artifactId } : {}),
       id,
-      message,
+      message: message.slice(0, maxPersistedTaskMessageLength),
       progress,
       stage,
       status,
@@ -165,7 +168,17 @@ export function persistInterruptedArtifactTasks(tasks: readonly ArtifactTask[]) 
     storage.removeItem(storageKey);
     return;
   }
-  storage.setItem(storageKey, JSON.stringify(pending));
+  try {
+    storage.setItem(storageKey, JSON.stringify(pending));
+  } catch {
+    // Task recovery is optional. Browsers can reject writes once their local quota is
+    // full; leaving the exception uncaught would prevent the actual Agent task from starting.
+    try {
+      storage.removeItem(storageKey);
+    } catch {
+      // Storage may be unavailable altogether; generation still remains usable.
+    }
+  }
 }
 
 export function takeInterruptedArtifactTasks(): PersistedTask[] {
