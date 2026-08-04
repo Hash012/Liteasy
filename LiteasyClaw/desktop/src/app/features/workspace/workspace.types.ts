@@ -1,4 +1,6 @@
 export type Paper = {
+  forumTopicId?: string;
+  forumWorkId?: string;
   arxivId?: string;
   authors?: readonly string[] | string;
   doi?: string;

@@ -1,0 +1,12 @@
+{
+  "name": "intuecho-mvp",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "services/*", "packages/*"],
+  "scripts": {
+    "build": "npm run build --workspace=@intuecho/web && npm run check --workspace=@intuecho/api",
+    "test": "npm run test --workspace=@intuecho/api",
+    "dev:web": "npm run dev --workspace=@intuecho/web",
+    "dev:api": "npm run dev --workspace=@intuecho/api"
+  }
+}

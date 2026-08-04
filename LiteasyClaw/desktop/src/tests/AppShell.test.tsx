@@ -1030,7 +1030,7 @@ test("opens a full thin-reading tab from the floating modality launcher", async 
   });
   expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeInTheDocument();
-  expect(screen.getByText("Intuecho")).toBeInTheDocument();
+  expect(screen.getByText("论坛")).toBeInTheDocument();
   const thinReadingRequest = modelTransport.mock.calls
     .map(([request]) => JSON.parse(request.body) as { prompt?: string; requireLive?: boolean })
     .find((request) => request.prompt?.includes("Liteasy 薄读 Agent"));

@@ -5,9 +5,11 @@ import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
 import type { UIDslActionRef } from "../features/generative-ui/generativeUi.types";
-import { PdfReader, type PdfEvidenceTarget } from "../features/pdf/PdfReader";
+import { PdfReader, type PdfEvidenceTarget, type PdfForumSelection } from "../features/pdf/PdfReader";
+import type { PdfAnnotation } from "../features/pdf/pdfAnnotationStorage";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
+import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
@@ -30,6 +32,9 @@ type ReaderPaneProps = {
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
+  onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
+  onPostToForum?: (selection: PdfForumSelection) => Promise<void>;
+  onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ draftId: string }>;
   onGenerateThinReadingBranch?: (input: {
     artifactId: string;
     document: ThinReadingDocument;
@@ -72,6 +77,9 @@ export function ReaderPane({
   onPromoteExternalPaperToLibrary,
   onArtifactDynamicAction,
   onOpenEvidence,
+  onLoadForumFeed,
+  onPostToForum,
+  onSyncAnnotationToForum,
   onGenerateThinReadingBranch,
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
@@ -146,10 +154,11 @@ export function ReaderPane({
           <PdfReader
             allowServerPdfParsing={allowServerPdfParsing}
             externalKnowledgeEndpoint={externalKnowledgeEndpoint}
-            intuechoEndpoint={intuechoEndpoint}
             loadPdfSource={loadPdfSource}
             onPaperAnnotated={onPaperAnnotated}
             onAddSelectionToConversation={onAddReaderContextToConversation}
+            onPostToForum={onPostToForum}
+            onSyncAnnotationToForum={onSyncAnnotationToForum}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
             zoom={zoom}
@@ -165,6 +174,7 @@ export function ReaderPane({
                 onOpenExternalFullText={onOpenExternalFullText}
                 onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}
                 onOpenEvidence={onOpenEvidence}
+                onLoadForumFeed={onLoadForumFeed}
                 onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
                 onSaveMarkdownTab={onSaveMarkdownTab}
                 onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}

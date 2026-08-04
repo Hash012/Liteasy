@@ -75,7 +75,10 @@ import type {
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionExecutor";
 import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
-import type { PdfEvidenceTarget } from "../features/pdf/PdfReader";
+import type { PdfEvidenceTarget, PdfForumSelection } from "../features/pdf/PdfReader";
+import type { PdfAnnotation } from "../features/pdf/pdfAnnotationStorage";
+import type { Paper } from "../features/workspace/workspace.types";
+import { useForumController } from "../features/forum/useForumController";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
 import { generateWorkbenchOverlayUIDslDocument } from "../features/generative-ui/uiDslGenerator";
 import { DockRegion } from "../features/dock/DockRegion";
@@ -168,6 +171,7 @@ export function AppShell({
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const { isOnline } = useConnectivity();
+  const forum = useForumController();
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
   const [activeCenterArtifactId, setActiveCenterArtifactId] = useState<string | null>(null);
@@ -1086,6 +1090,59 @@ export function AppShell({
     ];
   }
 
+  function resolveForumPaperMapping(paper: Paper) {
+    const paperSearchText = `${paper.id} ${paper.title} ${paper.sourcePath ?? ""}`.toLowerCase();
+    const starterPaper = starterPapers.find((candidate) => {
+      const starterFile = candidate.sourcePath?.split(/[\\/]/).pop()?.replace(/\.pdf$/i, "").toLowerCase();
+      return candidate.id === paper.id || candidate.title === paper.title || Boolean(starterFile && paperSearchText.includes(starterFile));
+    });
+    return {
+      forumTopicId: paper.forumTopicId ?? starterPaper?.forumTopicId,
+      forumWorkId: paper.forumWorkId ?? starterPaper?.forumWorkId
+    };
+  }
+
+  function postSelectionToForum(selection: PdfForumSelection) {
+    const excerpt = selection.excerpt.trim();
+    const { forumTopicId, forumWorkId } = resolveForumPaperMapping(selection.paper);
+    return forum.createDraftAndOpen({
+      anchorHash: `${selection.paper.id}:${selection.page}:${excerpt}`,
+      citationEnabled: Boolean(forumWorkId && excerpt.length >= 8),
+      excerpt,
+      language: "zh-CN",
+      page: selection.page,
+      topicId: forumTopicId ?? "rag-reliability",
+      ...(forumWorkId ? { workId: forumWorkId } : {})
+    });
+  }
+
+  async function syncAnnotationToForum(input: { annotation: PdfAnnotation; paper: Paper }) {
+    const excerpt = input.annotation.excerpt.trim();
+    if (excerpt.length < 8) {
+      throw new Error("引用文段至少需要 8 个字符，才能同步到论坛草稿。");
+    }
+    const { forumTopicId, forumWorkId } = resolveForumPaperMapping(input.paper);
+    if (!forumTopicId) {
+      throw new Error("该论文尚未关联研究主题，暂时无法创建论坛草稿。");
+    }
+    return forum.createDraft(
+      {
+        anchorHash: `pdf:${input.annotation.paperIdentity.paperId}:${input.annotation.id}`,
+        citationEnabled: Boolean(forumWorkId),
+        excerpt,
+        language: "zh-CN",
+        page: input.annotation.page,
+        topicId: forumTopicId,
+        ...(forumWorkId ? { workId: forumWorkId } : {})
+      },
+      {
+        body: input.annotation.note?.trim() ?? "",
+        citationEnabled: Boolean(forumWorkId),
+        tags: []
+      }
+    );
+  }
+
   function renderArtifactSurface(
     tabs = artifactTabs,
     activeArtifactId: string | null = activeCenterArtifactId
@@ -1099,6 +1156,7 @@ export function AppShell({
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
           }
           intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
+          onLoadForumFeed={forum.loadFeed}
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
           }}
@@ -1246,6 +1304,9 @@ export function AppShell({
         onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
         onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
         intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
+        onLoadForumFeed={forum.loadFeed}
+        onPostToForum={postSelectionToForum}
+        onSyncAnnotationToForum={syncAnnotationToForum}
         onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
         onSaveMarkdownTab={(artifactId) => {

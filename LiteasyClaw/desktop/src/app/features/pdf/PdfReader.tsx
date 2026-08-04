@@ -29,8 +29,7 @@ import {
 } from "./pdfAnnotationStorage";
 import {
   listPdfAnnotationPendingPublicItems,
-  PDF_ANNOTATION_PENDING_LABEL,
-  syncPdfAnnotationPendingItems
+  PDF_ANNOTATION_PENDING_LABEL
 } from "./pdfAnnotationIntuechoSync";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 import { loadUserPaperArtifact, saveUserPaperArtifact } from "../library/userPaperArtifactClient";
@@ -73,7 +72,14 @@ type PdfReaderProps = {
   targetEvidence?: PdfEvidenceTarget | null;
   zoom: number;
   onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
-  intuechoEndpoint?: string;
+  onPostToForum?: (selection: PdfForumSelection) => Promise<void>;
+  onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ draftId: string }>;
+};
+
+export type PdfForumSelection = {
+  excerpt: string;
+  page: number;
+  paper: Paper;
 };
 
 
@@ -982,7 +988,8 @@ export function PdfReader({
   targetEvidence,
   zoom,
   onAddSelectionToConversation,
-  intuechoEndpoint = ""
+  onPostToForum,
+  onSyncAnnotationToForum
 }: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -998,6 +1005,7 @@ export function PdfReader({
   const [stageWidth, setStageWidth] = useState(960);
   const [status, setStatus] = useState("选择文段后可添加高亮、划线，或把选中文段交给 AI。");
   const [selection, setSelection] = useState<PdfSelection | null>(null);
+  const [forumPending, setForumPending] = useState(false);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const [syncingAnnotations, setSyncingAnnotations] = useState(false);
@@ -1354,6 +1362,21 @@ export function PdfReader({
     setStatus("已将选中文段添加到对话。");
   }
 
+  async function postSelectionToForum() {
+    if (!selection || !activePaper || !onPostToForum || forumPending) return;
+    setForumPending(true);
+    try {
+      await onPostToForum({ excerpt: selection.excerpt, page: selection.page, paper: activePaper });
+      setStatus("已打开论坛发布页。");
+      setSelection(null);
+      clearBrowserSelection();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "论坛暂时无法打开，请稍后重试。");
+    } finally {
+      setForumPending(false);
+    }
+  }
+
   function openAnnotationEditor(annotation: PdfAnnotation) {
     setActiveAnnotationId(annotation.id);
     setAnnotationNoteDraft(annotation.note || "");
@@ -1418,17 +1441,38 @@ export function PdfReader({
   async function syncPublicAnnotations() {
     if (syncingAnnotations || pendingPublicAnnotations.length === 0) return;
     setSyncingAnnotations(true);
+    const attemptedAt = new Date().toISOString();
+    const results: Array<{ annotationId: string; draftId?: string; error?: string }> = [];
     try {
-      const results = await syncPdfAnnotationPendingItems({ endpoint: intuechoEndpoint, items: pendingPublicAnnotations });
-      const attemptedAt = new Date().toISOString();
+      if (!activePaper || !onSyncAnnotationToForum) {
+        setStatus("论坛同步功能暂不可用，请确认当前阅读器已连接论坛。");
+        return;
+      }
+      for (const item of pendingPublicAnnotations) {
+        const annotation = annotations.find((candidate) => candidate.id === item.annotationId);
+        if (!annotation) {
+          results.push({ annotationId: item.annotationId, error: "找不到本地批注，无法创建论坛草稿。" });
+          continue;
+        }
+        try {
+          const { draftId } = await onSyncAnnotationToForum({ annotation, paper: activePaper });
+          results.push({ annotationId: item.annotationId, draftId });
+        } catch (error) {
+          results.push({
+            annotationId: item.annotationId,
+            error: error instanceof Error ? error.message : "论坛草稿创建失败。"
+          });
+        }
+      }
       setAnnotations((current) => current.map((annotation) => {
         const result = results.find((item) => item.annotationId === annotation.id);
         if (!result) return annotation;
-        return result.status === "synced"
-          ? { ...annotation, syncState: { intuechoAnnotationId: result.intuechoAnnotationId, status: "synced", syncedAt: result.syncedAt } }
-          : { ...annotation, syncState: { error: result.error, lastAttemptAt: attemptedAt, status: "failed" } };
+        return result.draftId
+          ? { ...annotation, syncState: { forumDraftId: result.draftId, status: "synced", syncedAt: attemptedAt } }
+          : { ...annotation, syncState: { error: result.error ?? "论坛草稿创建失败。", lastAttemptAt: attemptedAt, status: "failed" } };
       }));
-      setStatus(results.some((result) => result.status === "synced") ? "已收到 Intuecho 同步确认。" : "公开批注仍在本地等待 Intuecho 同步。");
+      const syncedCount = results.filter((result) => result.draftId).length;
+      setStatus(syncedCount > 0 ? `已同步 ${syncedCount} 条批注到论坛草稿。` : "批注仍在本地等待论坛同步。");
     } finally {
       setSyncingAnnotations(false);
     }
@@ -1513,7 +1557,7 @@ export function PdfReader({
                       onChange={(event) => setAutoPublic(event.currentTarget.checked)}
                       type="checkbox"
                     />
-                    新批注自动公开到 Intuecho
+                    新批注自动加入论坛同步队列
                   </label>
                   {pendingPublicAnnotations.length > 0 ? (
                     <div className="pdf-public-annotation-status">
@@ -1611,11 +1655,11 @@ export function PdfReader({
                               onChange={(event) => setAnnotationPublic(annotation.id, event.currentTarget.checked)}
                               type="checkbox"
                             />
-                            公开到 Intuecho
+                            同步到论坛
                           </label>
                           {annotation.visibility === "pending_public" ? <small>{PDF_ANNOTATION_PENDING_LABEL}</small> : null}
-                          {annotation.syncState?.status === "synced" ? <small>已同步到 Intuecho</small> : null}
-                          {annotation.syncState?.status === "failed" ? <small>同步失败：{annotation.syncState.error}</small> : null}
+                          {annotation.syncState?.status === "synced" ? <small>已同步到论坛草稿</small> : null}
+                          {annotation.syncState?.status === "failed" ? <small>论坛同步失败：{annotation.syncState.error}</small> : null}
                         </li>
                       ))}
                     </ul>
@@ -1718,6 +1762,13 @@ export function PdfReader({
                     加入对话
                   </button>
                 </div>
+                {onPostToForum ? (
+                  <div className="selection-menu-row">
+                    <button disabled={forumPending} onClick={() => void postSelectionToForum()} title="带着当前选区去论坛发帖" type="button" className="add-to-forum">
+                      {forumPending ? "正在打开…" : "发到论坛"}
+                    </button>
+                  </div>
+                ) : null}
                               </div>
             ) : null}
           </div>

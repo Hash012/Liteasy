@@ -151,7 +151,6 @@ function getArtifactTitle(type: ArtifactType) {
 
   return "Literature Mind Map";
 }
-
 function createArtifactId(taskId: string) {
   return taskId.replace("artifact-task-", "artifact-");
 }
@@ -680,7 +679,7 @@ export function useArtifactActions({
           : {}),
         outlineMarkdown,
         outlineNodes,
-        papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title })),
+        papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title, forumTopicId: paper.forumTopicId, forumWorkId: paper.forumWorkId })),
         regeneratedFromArtifactId: generationOptions?.regeneratedFromArtifactId,
         supplementalContext: generationOptions?.supplementalContext,
         title,

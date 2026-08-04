@@ -1,0 +1,8 @@
+node_modules/
+apps/web/dist/
+services/api/data/*.db
+services/api/data/*.db-shm
+services/api/data/*.db-wal
+*.tsbuildinfo
+apps/web/vite.config.js
+apps/web/vite.config.d.ts

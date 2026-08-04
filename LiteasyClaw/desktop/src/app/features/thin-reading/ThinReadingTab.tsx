@@ -28,6 +28,7 @@ import {
   useThinReadingCommunityRecommendations,
   type ThinReadingCommunityRecommendationState
 } from "./useThinReadingCommunityRecommendations";
+import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
 import type {
   ThinReadingAnnotationTarget,
   ThinReadingAnchor,
@@ -59,6 +60,7 @@ export type ThinReadingTabProps = {
   };
   communityRecommendationState?: ThinReadingCommunityRecommendationState;
   intuechoEndpoint?: string;
+  onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
   taskFailureMessage?: string;
   onGenerateBranch?: (input: {
     artifactId: string;
@@ -71,7 +73,7 @@ export type ThinReadingTabProps = {
   onRetryInterruptedBranch?: () => Promise<void>;
   onSyncIntuecho?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onUpdateDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
-  papers: Array<{ id: string; title: string }>;
+  papers: Array<{ forumWorkId?: string; id: string; title: string }>;
 };
 
 type ThinReadingSelection = {
@@ -207,6 +209,7 @@ export function ThinReadingTab({
   document,
   generationProgress,
   intuechoEndpoint,
+  onLoadForumFeed,
   taskFailureMessage,
   onGenerateBranch,
   onOpenExternalFullText,
@@ -241,12 +244,45 @@ export function ThinReadingTab({
   const [editingAnnotationBody, setEditingAnnotationBody] = useState("");
   const [intuechoCollapsed, setIntuechoCollapsed] = useState(false);
   const [syncingIntuecho, setSyncingIntuecho] = useState(false);
+  const [forumPosts, setForumPosts] = useState<ForumPost[]>([]);
+  const [forumState, setForumState] = useState<"idle" | "loading" | "ready" | "error" | "unmapped">("idle");
+  const [forumRefresh, setForumRefresh] = useState(0);
   const labels = getThinReadingUiCopy(document.targetLanguage);
   const generationInProgress = generating || Boolean(generationProgress);
   const paperTitle = useMemo(
     () => papers.find((paper) => document.paperIds.includes(paper.id))?.title ?? labels.untitledPaper,
     [document.paperIds, labels.untitledPaper, papers]
   );
+  const linkedPaper = papers.find((paper) => document.paperIds.includes(paper.id));
+  const forumWorkId = linkedPaper?.forumWorkId;
+
+  useEffect(() => {
+    let active = true;
+    if (!onLoadForumFeed) return undefined;
+    if (!forumWorkId) {
+      setForumPosts([]);
+      setForumState("unmapped");
+      return undefined;
+    }
+    setForumState("loading");
+    void onLoadForumFeed({ workId: forumWorkId }).then((posts) => {
+      if (active) {
+        setForumPosts(posts);
+        setForumState("ready");
+      }
+    }).catch(() => active && setForumState("error"));
+    return () => {
+      active = false;
+    };
+  }, [activeNode.id, forumRefresh, forumWorkId, onLoadForumFeed]);
+
+  useEffect(() => {
+    function refreshForumFeed() {
+      setForumRefresh((current) => current + 1);
+    }
+    window.addEventListener("focus", refreshForumFeed);
+    return () => window.removeEventListener("focus", refreshForumFeed);
+  }, []);
   const primaryIdentity = document.paperIdentities?.[document.paperIds[0] ?? ""]?.primary;
   const parent = activeNode.parentId ? document.nodes[activeNode.parentId] : undefined;
   const branches = listThinReadingBranchOptions(document, activeNode.id);
@@ -985,7 +1021,7 @@ export function ThinReadingTab({
                 type="button"
               >
                 <LightbulbRegular aria-hidden="true" />
-                <span>Intuecho</span>
+              <span>论坛</span>
               </button>
             ) : (
               <>
@@ -999,9 +1035,30 @@ export function ThinReadingTab({
                 >
                   <ChevronRightRegular aria-hidden="true" />
                 </button>
-                <div className="thin-reading__intuecho-mark">∿</div>
-                <h2>Intuecho</h2>
-                <p className="thin-reading__intuecho-caption">{labels.communityRecommendationCaption}</p>
+            <div className="thin-reading__intuecho-mark">∿</div>
+            <h2>论坛</h2>
+            <p className="thin-reading__intuecho-caption">{labels.communityRecommendationCaption}</p>
+            {onLoadForumFeed ? (
+              <div className="thin-reading__forum-feed">
+                {forumState === "loading" ? <span>正在读取论坛帖子…</span> : null}
+                {forumState === "error" ? <span>论坛暂时无法连接。</span> : null}
+                {forumState === "unmapped" ? <span>该论文尚未接入论坛。</span> : null}
+                {forumState === "ready" && forumPosts.length === 0 ? <span>暂无相关帖子。</span> : null}
+                {forumPosts.map((post) => (
+                  <a
+                    className="thin-reading__forum-post"
+                    href={`${import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174"}/works/${post.work_id ?? ""}`}
+                    key={post.id}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <strong>{post.title ?? "用户帖子"}</strong>
+                    <span>{post.body}</span>
+                    <small>{post.author_name} · 有帮助 {post.helpful}</small>
+                  </a>
+                ))}
+              </div>
+            ) : null}
                 {resolvedCommunityRecommendationState.status === "unconfigured" ? (
                   <p className="thin-reading__recommendation-empty">{labels.communityRecommendationUnconfigured}</p>
                 ) : null}

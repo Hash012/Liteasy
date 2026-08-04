@@ -6,6 +6,7 @@ export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
 export type PdfAnnotationVisibility = "private" | "pending_public";
 export type PdfAnnotationSyncState =
   | { error: string; lastAttemptAt: string; status: "failed" }
+  | { forumDraftId: string; status: "synced"; syncedAt: string }
   | { intuechoAnnotationId: string; status: "synced"; syncedAt: string };
 
 export type PdfAnnotationRect = {
@@ -75,7 +76,14 @@ function isPaperIdentity(value: unknown): value is PaperIdentity {
 function isSyncState(value: unknown): value is PdfAnnotationSyncState {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PdfAnnotationSyncState>;
-  return (candidate.status === "synced" && typeof candidate.intuechoAnnotationId === "string" && typeof candidate.syncedAt === "string") ||
+  const syncedCandidate = candidate as {
+    forumDraftId?: unknown;
+    intuechoAnnotationId?: unknown;
+    syncedAt?: unknown;
+  };
+  return (candidate.status === "synced" &&
+    (typeof syncedCandidate.forumDraftId === "string" || typeof syncedCandidate.intuechoAnnotationId === "string") &&
+    typeof syncedCandidate.syncedAt === "string") ||
     (candidate.status === "failed" && typeof candidate.error === "string" && typeof candidate.lastAttemptAt === "string");
 }
 

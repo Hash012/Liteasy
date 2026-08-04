@@ -186,7 +186,7 @@ describe("ArtifactTabs", () => {
     );
 
     expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByText("连接 Intuecho 社区后显示共享批注推荐")).toBeInTheDocument();
     expect(container.querySelector(".artifact-card")).toBeNull();
 

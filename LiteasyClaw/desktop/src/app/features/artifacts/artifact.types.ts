@@ -72,6 +72,8 @@ export type ArtifactPreview = {
 };
 
 export type ArtifactPaperRef = {
+  forumTopicId?: string;
+  forumWorkId?: string;
   id: string;
   title: string;
 };

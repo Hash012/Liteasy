@@ -1,6 +1,6 @@
 import type { PdfAnnotation } from "./pdfAnnotationStorage";
 
-export const PDF_ANNOTATION_PENDING_LABEL = "等待 Intuecho 同步";
+export const PDF_ANNOTATION_PENDING_LABEL = "等待论坛同步";
 
 export type PdfAnnotationIntuechoQueueItem = {
   annotationId: string;

@@ -15,12 +15,14 @@ import type {
   ThinReadingDocument,
   ThinReadingExternalSource
 } from "../thin-reading/thinReading.types";
+import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
   analysisHint: string;
   canStartAnalysis: boolean;
   intuechoEndpoint?: string;
+  onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
   onActivateArtifact?: (artifactId: string) => void;
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
@@ -135,6 +137,7 @@ export function ArtifactTabs({
   analysisHint,
   canStartAnalysis,
   intuechoEndpoint,
+  onLoadForumFeed,
   onActivateArtifact,
   onDynamicAction,
   onDeleteArtifact,
@@ -246,6 +249,7 @@ export function ArtifactTabs({
         onOpenEvidence={onOpenEvidence}
         onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
         onSyncIntuecho={onSyncThinReadingAnnotations}
+        onLoadForumFeed={onLoadForumFeed}
         onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
         papers={activeTab.papers ?? []}
       />

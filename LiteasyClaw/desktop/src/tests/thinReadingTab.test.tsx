@@ -121,7 +121,7 @@ describe("ThinReadingTab", () => {
     renderTab(document, vi.fn(), vi.fn());
 
     expect(screen.getByText("总述", { selector: ".is-active" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByText("连接 Intuecho 社区后显示共享批注推荐")).toBeInTheDocument();
     expect(screen.queryByText("本地阅读线索")).not.toBeInTheDocument();
     expect(screen.getByTestId("thin-reading-summary")).toHaveTextContent("self-attention");
@@ -457,12 +457,12 @@ describe("ThinReadingTab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "收起 Intuecho 推荐栏" }));
 
-    expect(screen.queryByRole("heading", { name: "Intuecho" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "论坛" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "展开 Intuecho 推荐栏" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "展开 Intuecho 推荐栏" }));
 
-    expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "收起 Intuecho 推荐栏" })).toBeInTheDocument();
   });
 
@@ -470,7 +470,7 @@ describe("ThinReadingTab", () => {
     const document = makeDocument();
     renderTab(document, vi.fn(), undefined, undefined, { recommendations: [], status: "ready" });
 
-    expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByText("暂无社区推荐")).toBeInTheDocument();
   });
 
@@ -478,7 +478,7 @@ describe("ThinReadingTab", () => {
     const document = makeDocument();
     renderTab(document, vi.fn(), undefined, undefined, { recommendations: [], status: "unavailable" });
 
-    expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByText("当前文献仅有本地身份，无法匹配社区共享批注")).toBeInTheDocument();
   });
 

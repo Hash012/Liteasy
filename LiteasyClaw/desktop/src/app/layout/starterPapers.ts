@@ -3,6 +3,8 @@ import type { Paper } from "../features/workspace/workspace.types";
 export const starterPapers: Paper[] = [
   {
     id: "demo-1",
+    forumTopicId: "rag-reliability",
+    forumWorkId: "colbert-demo",
     title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
     sourcePath: "/papers/colbert-late-interaction.pdf"
   },

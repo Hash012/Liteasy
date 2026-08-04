@@ -3831,6 +3831,14 @@ body {
   background: #e9f3ff;
   color: var(--accent-1);
 }
+.pdf-selection-menu .add-to-forum {
+  background: transparent;
+  color: var(--ink-1);
+}
+.pdf-selection-menu .add-to-forum:hover {
+  background: #e9f3ff;
+  color: var(--accent-1);
+}
 
 @media (max-width: 1080px) {
   .pane {

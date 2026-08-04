@@ -203,6 +203,11 @@
 .thin-reading__recommendation strong { color: #537c78; font-size: 12px; }
 .thin-reading__recommendation-source { color: #8b7770; font-size: 10px; line-height: 1.35; }
 .thin-reading__recommendation span { color: #69777a; font-size: 12px; line-height: 1.65; }
+.thin-reading__forum-feed { display: grid; gap: 10px; margin-top: 18px; color: var(--thin-muted); font-size: 11px; line-height: 1.55; }
+.thin-reading__forum-post { display: grid; gap: 4px; border-bottom: 1px solid var(--thin-line); color: inherit; padding-bottom: 10px; text-decoration: none; }
+.thin-reading__forum-post:hover { color: #2d6864; }
+.thin-reading__forum-post strong { color: #456e6c; font-size: 12px; }
+.thin-reading__forum-post small { color: #8a9794; font-size: 10px; }
 .thin-reading__recommendation-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .thin-reading__selection-popover { align-items: center; background: #fffefa; border: 1px solid #c8d7d1; border-radius: 6px; box-shadow: 0 8px 22px rgba(45, 61, 59, .16); display: flex; flex-wrap: wrap; gap: 8px; max-height: calc(100vh - 24px); overflow: auto; padding: 7px; position: fixed; z-index: 5; }
 .thin-reading__selection-popover label { color: var(--thin-muted); font-size: 11px; }

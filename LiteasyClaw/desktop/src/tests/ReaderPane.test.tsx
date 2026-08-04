@@ -508,7 +508,7 @@ describe("ReaderPane", () => {
     expect(await screen.findByText("persistent PDF annotation")).toBeInTheDocument();
   });
 
-  test("queues a PDF annotation for Intuecho without claiming that it is already public", async () => {
+  test("queues a PDF annotation for the forum without claiming that it is already public", async () => {
     const user = userEvent.setup();
     render(
       <ReaderPane
@@ -522,7 +522,7 @@ describe("ReaderPane", () => {
       />
     );
 
-    await user.click(screen.getByRole("checkbox", { name: "新批注自动公开到 Intuecho" }));
+    await user.click(screen.getByRole("checkbox", { name: "新批注自动加入论坛同步队列" }));
 
     mockPdfSelection({
       ancestor: getPdfTextNode(),
@@ -532,10 +532,73 @@ describe("ReaderPane", () => {
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
 
-    expect(screen.getAllByText("等待 Intuecho 同步").length).toBeGreaterThan(0);
-    expect(screen.queryByText("已同步到 Intuecho")).not.toBeInTheDocument();
+    expect(screen.getAllByText("等待论坛同步").length).toBeGreaterThan(0);
+    expect(screen.queryByText("已同步到论坛草稿")).not.toBeInTheDocument();
     expect(window.localStorage.getItem(pdfAnnotationStorageKey(readerTestPaper)!)).toContain("pending_public");
     expect(window.localStorage.getItem(pdfAnnotationAutoPublicStorageKey(readerTestPaper)!)).toBe("true");
+  });
+
+  test("creates a forum draft for each pending PDF annotation", async () => {
+    const user = userEvent.setup();
+    const onSyncAnnotationToForum = vi.fn(async () => ({ draftId: "draft-1" }));
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onStartAnalysis={vi.fn()}
+        onSyncAnnotationToForum={onSyncAnnotationToForum}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "新批注自动加入论坛同步队列" }));
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: makeRect({ height: 20, left: 180, top: 220, width: 160 }),
+      text: "a forum draft annotation"
+    });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
+    await user.click(screen.getByRole("button", { name: "立即同步" }));
+
+    expect(onSyncAnnotationToForum).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("已同步 1 条批注到论坛草稿。")).toBeInTheDocument();
+    expect(screen.getByText("已同步到论坛草稿")).toBeInTheDocument();
+  });
+
+  test("sends the selected PDF text to the forum callback", async () => {
+    const user = userEvent.setup();
+    const onPostToForum = vi.fn(async () => undefined);
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onPostToForum={onPostToForum}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[readerTestPaper]}
+        selectedPaperIds={[readerTestPaper.id]}
+        selectionLocked={true}
+      />
+    );
+
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: makeRect({ height: 20, left: 180, top: 220, width: 160 }),
+      text: "forum context selection"
+    });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(screen.getByRole("button", { name: "发到论坛" }));
+
+    expect(onPostToForum).toHaveBeenCalledWith({
+      excerpt: "forum context selection",
+      page: 1,
+      paper: readerTestPaper
+    });
+    expect(await screen.findByText("已打开论坛发布页。")).toBeInTheDocument();
   });
 
   test("uses line-level PDF text rects instead of one tall selection box", async () => {
