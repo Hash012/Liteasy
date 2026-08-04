@@ -273,7 +273,10 @@ export function LibraryPane({
 }: LibraryPaneProps) {
   const selectedCount = selectedPaperIds.length;
   const [activeCollectionId, setActiveCollectionId] = useState<LibraryCollectionId>("my-library");
-  const [collapsedSectionIds, setCollapsedSectionIds] = useState<LibrarySectionId[]>([]);
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<LibrarySectionId[]>([
+    "collections",
+    "recommendations"
+  ]);
   const activeCollection =
     findLibraryCollection(libraryCollections, activeCollectionId) ??
     libraryCollections[0];
