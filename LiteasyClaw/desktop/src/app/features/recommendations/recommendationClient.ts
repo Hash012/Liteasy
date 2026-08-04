@@ -18,7 +18,6 @@ export type RecommendationTransport = (
 
 type CreateRecommendationClientInput = {
   endpoint: string;
-  openAlexApiKey?: string;
   transport?: RecommendationTransport;
 };
 
@@ -98,7 +97,6 @@ async function defaultTransport(
 
 export function createRecommendationClient({
   endpoint,
-  openAlexApiKey,
   transport = defaultTransport
 }: CreateRecommendationClientInput) {
   return async ({
@@ -113,14 +111,23 @@ export function createRecommendationClient({
         sessionId
       }),
       headers: {
-        "Content-Type": "application/json",
-        ...(openAlexApiKey?.trim() ? { "X-OpenAlex-Api-Key": openAlexApiKey.trim() } : {})
+        "Content-Type": "application/json"
       },
       method: "POST",
       url: buildRecommendationUrl(endpoint)
     });
 
     if (!response.ok) {
+      try {
+        const payload = await response.json();
+        if (payload && typeof payload === "object" && typeof (payload as { message?: unknown }).message === "string") {
+          throw new Error((payload as { message: string }).message);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.length > 0) {
+          throw error;
+        }
+      }
       throw new Error(`关联推荐获取失败（${response.status}）`);
     }
 

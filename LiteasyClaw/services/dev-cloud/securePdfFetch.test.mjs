@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchSecurePdf, isPublicIpAddress } from "./securePdfFetch.mjs";
+import { fetchSecurePdf, isPublicIpAddress, resolvePdfProxyUrl } from "./securePdfFetch.mjs";
 
 const publicResolver = async () => [{ address: "93.184.216.34", family: 4 }];
 
@@ -24,6 +24,40 @@ test("downloads a bounded PDF and records its final URL and content hash", async
   assert.equal(pdf.finalUrl, "https://papers.example.test/paper.pdf");
   assert.equal(pdf.contentHash.length, 64);
   assert.equal(pdf.bytes.toString("ascii"), "%PDF-1.7\ntraceable");
+});
+
+test("pins a validated public IP when fetching through a configured proxy", async () => {
+  let observedUrl;
+  let observedHeaders;
+  const pdf = await fetchSecurePdf("https://papers.example.test/paper.pdf", {
+    proxyUrl: "http://127.0.0.1:7897",
+    resolver: publicResolver,
+    transport: async (url, init) => {
+      observedUrl = url;
+      observedHeaders = init.headers;
+      return new Response(Buffer.from("%PDF-1.7\nproxied"), {
+        headers: { "content-type": "application/pdf" },
+        status: 200
+      });
+    }
+  });
+
+  assert.equal(new URL(observedUrl).hostname, "93.184.216.34");
+  assert.equal(observedHeaders.Host, "papers.example.test");
+  assert.equal(pdf.finalUrl, "https://papers.example.test/paper.pdf");
+});
+
+test("honors NO_PROXY only for exact hosts and subdomains", () => {
+  const env = {
+    HTTPS_PROXY: "http://127.0.0.1:7897",
+    NO_PROXY: "example.test,.trusted.example"
+  };
+  assert.equal(resolvePdfProxyUrl(new URL("https://example.test/paper.pdf"), env), undefined);
+  assert.equal(resolvePdfProxyUrl(new URL("https://sub.trusted.example/paper.pdf"), env), undefined);
+  assert.equal(
+    resolvePdfProxyUrl(new URL("https://notexample.test/paper.pdf"), env),
+    "http://127.0.0.1:7897"
+  );
 });
 
 test("rejects a PDF URL resolving to private infrastructure", async () => {

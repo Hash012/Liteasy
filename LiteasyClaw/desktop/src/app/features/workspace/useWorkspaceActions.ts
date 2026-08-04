@@ -1,6 +1,10 @@
 import type { ImportJob } from "../import/import.types";
-import { extractImportedChunksForPaper } from "../import/importFixtures";
-import type { PdfOcrLanguage } from "../import/pdfTextExtractor";
+import { buildImportedChunksForPaper } from "../import/importFixtures";
+import {
+  extractPdfIndexForPaper,
+  type ExtractedPdfPage,
+  type PdfOcrLanguage
+} from "../import/pdfTextExtractor";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { Paper, WorkspaceState } from "./workspace.types";
 import { inferPaperIdentityMetadataFromPdfText } from "../paper-identity/paperIdentity";
@@ -9,6 +13,9 @@ import type { createWorkspaceStore } from "./workspace.store";
 import type { MoveLocalLibraryResource } from "../library/libraryFileSystemClient";
 import type { PersistDroppedPdfFiles } from "../library/libraryFileSystemClient";
 import type { ReadLocalLibraryPdf } from "../library/libraryFileSystemClient";
+import { sanitizeExternalPdfFileName } from "../library/externalPdfDownload";
+import { saveUserPaperArtifact } from "../library/userPaperArtifactClient";
+import { buildPaperFulltextSnapshot } from "../pdf/paperFulltextStore";
 import {
   buildMovedFolderPath,
   buildMovedPaper,
@@ -26,6 +33,12 @@ export type ImportQueueStatus = "already_imported" | "idle" | "importing" | "sta
 type ExternalLibraryItem = {
   id: string;
   source: string;
+  title: string;
+};
+
+type ExternalPdfLibraryItem = {
+  bytes: Uint8Array;
+  fileName: string;
   title: string;
 };
 
@@ -48,12 +61,17 @@ function createBrowserPdfSource(file: File, fallbackPath: string) {
 
 type UseWorkspaceActionsInput = {
   extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
+  extractPaperIndex?: (paper: Paper) => Promise<{
+    chunks: RetrievalChunk[];
+    pages: ExtractedPdfPage[];
+  }>;
   ocrLanguage?: PdfOcrLanguage;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
   loadPdfSource?: ReadLocalLibraryPdf;
   moveLocalLibraryResource?: MoveLocalLibraryResource;
   persistDroppedPdfFiles?: PersistDroppedPdfFiles;
+  savePaperArtifact?: typeof saveUserPaperArtifact;
   onAnalysisHint: (message: string) => void;
   onImportJobsChanged: (jobsByDocumentId: Record<string, ImportJob>) => void;
   onWorkspaceChanged: (state: WorkspaceState) => void;
@@ -81,21 +99,53 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 
 export function useWorkspaceActions({
   extractPaperChunks,
+  extractPaperIndex,
   importDocument,
   importStore,
   loadPdfSource,
   moveLocalLibraryResource,
   persistDroppedPdfFiles,
+  savePaperArtifact = saveUserPaperArtifact,
   onAnalysisHint,
   onImportJobsChanged,
   onWorkspaceChanged,
   ocrLanguage = "eng",
   workspaceStore
 }: UseWorkspaceActionsInput) {
-  const resolvePaperChunks = extractPaperChunks ?? ((paper: Paper) => extractImportedChunksForPaper(paper, {
-    loadPdfSource,
-    ocrLanguage
-  }));
+  const resolvePaperIndex = extractPaperIndex ?? (extractPaperChunks
+    ? async (paper: Paper) => ({ chunks: await extractPaperChunks(paper), pages: undefined })
+    : async (paper: Paper) => {
+        try {
+          return await extractPdfIndexForPaper(paper, { loadPdfSource, ocrLanguage });
+        } catch (error) {
+          if (["demo-1", "demo-2", "demo-3"].includes(paper.id)) {
+            return { chunks: buildImportedChunksForPaper(paper), pages: undefined };
+          }
+          throw error;
+        }
+      });
+
+  /**
+   * The durable text of an imported paper.
+   *
+   * Kept at import time, and kept in the library rather than the cache, because thin reading
+   * positions its evidence against these offsets and OCR is not reproducible: re-extracting a
+   * scanned paper later can yield different text and silently move every span that points into it.
+   */
+  async function persistExtractedPaperArtifacts(paper: Paper, pages: ExtractedPdfPage[]) {
+    await savePaperArtifact({
+      artifactKind: "fulltext",
+      paperId: paper.id,
+      snapshot: buildPaperFulltextSnapshot({
+        extractedAt: new Date().toISOString(),
+        pageTextExtractions: Object.fromEntries(pages
+          .filter((page) => page.textExtraction)
+          .map((page) => [page.page, page.textExtraction!])),
+        pageTexts: Object.fromEntries(pages.map((page) => [page.page, page.text]))
+      })
+    });
+  }
+
   function syncWorkspace() {
     onWorkspaceChanged(cloneWorkspaceState(workspaceStore.getState()));
   }
@@ -297,18 +347,28 @@ export function useWorkspaceActions({
     const state = workspaceStore.getState();
     if (persistDroppedPdfFiles && state.workspaceSource.type === "local_library") {
       try {
+        const previousPapersById = new Map(state.papers.map((paper) => [paper.id, paper]));
         const snapshot = await persistDroppedPdfFiles({ files: pdfFiles, targetFolderPath });
-        workspaceStore.openWorkspace(snapshot.entries.map((entry) => ({
+        const persistedPapers = snapshot.entries.map((entry) => ({
           id: entry.id,
-          sourcePath: entry.path,
+          // Bodyless entries carry no path; they stay listed but not openable.
+          sourcePath: entry.path ?? undefined,
           title: entry.title
-        })), {
+        }));
+        workspaceStore.openWorkspace(persistedPapers, {
           rootPath: snapshot.rootPath,
           type: "local_library"
         });
         syncWorkspace();
         const target = targetFolderPath ? normalizeWorkspacePath(targetFolderPath) : `${snapshot.rootPath}/papers`;
         onAnalysisHint(`已保存 ${pdfFiles.length} 个 PDF 到 ${target}。`);
+        const papersToExtract = persistedPapers.filter((paper) => {
+          const previous = previousPapersById.get(paper.id);
+          return Boolean(paper.sourcePath) && (!previous || previous.sourcePath !== paper.sourcePath);
+        });
+        queueImportForPapers(papersToExtract, () => {
+          onAnalysisHint(`已完成 ${papersToExtract.length} 篇 PDF 的全文抽取与搜索索引。`);
+        });
         return;
       } catch (error) {
         onAnalysisHint(`保存到本地文献库失败：${error instanceof Error ? error.message : String(error)}`);
@@ -316,7 +376,7 @@ export function useWorkspaceActions({
       }
     }
 
-    let addedCount = 0;
+    const addedPapers: Paper[] = [];
     pdfFiles.forEach((file) => {
       const title = normalizeDroppedFileTitle(file.name);
       const targetRoot = state.workspaceSource.rootPath || "本地文献库";
@@ -329,17 +389,39 @@ export function useWorkspaceActions({
       });
 
       if (added) {
-        addedCount += 1;
+        addedPapers.push({
+          id: buildDroppedPaperId(file),
+          sourcePath,
+          title
+        });
       }
     });
 
-    if (addedCount > 0) {
+    if (addedPapers.length > 0) {
       syncWorkspace();
-      onAnalysisHint(`已将 ${addedCount} 个 PDF 加入文献库。`);
+      onAnalysisHint(`已将 ${addedPapers.length} 个 PDF 加入文献库。`);
+      queueImportForPapers(addedPapers, () => {
+        onAnalysisHint(`已完成 ${addedPapers.length} 篇 PDF 的全文抽取与搜索索引。`);
+      });
       return;
     }
 
     onAnalysisHint("拖入的 PDF 已经在文献库中。");
+  }
+
+  async function addExternalPdfToLibrary(item: ExternalPdfLibraryItem) {
+    if (item.bytes.byteLength < 5) {
+      throw new Error("下载的 PDF 文件为空。");
+    }
+    if (workspaceStore.getState().workspaceSource.type !== "local_library") {
+      throw new Error("请先切换到你的本地文献库，再保存关联论文。");
+    }
+    const fileBytes = new Uint8Array(item.bytes.byteLength);
+    fileBytes.set(item.bytes);
+    const file = new File([fileBytes.buffer], sanitizeExternalPdfFileName(item.fileName || item.title), {
+      type: "application/pdf"
+    });
+    await addDroppedPdfFiles([file]);
   }
 
   function toggleSelection(paperId: string) {
@@ -418,10 +500,13 @@ export function useWorkspaceActions({
       window.setTimeout(() => {
         importStore.markParsing(jobId);
         syncImportJobs();
-        void resolvePaperChunks(paper)
-          .then((chunks) => {
+        void resolvePaperIndex(paper)
+          .then(async ({ chunks, pages }) => {
             if (chunks.length === 0) {
               throw new Error("PDF did not contain extractable text");
+            }
+            if (pages?.length) {
+              await persistExtractedPaperArtifacts(paper, pages);
             }
             const firstPage = Math.min(...chunks.map((chunk) => chunk.page));
             const firstPageText = chunks
@@ -507,6 +592,7 @@ export function useWorkspaceActions({
 
   return {
     addDroppedPdfFiles,
+    addExternalPdfToLibrary,
     addExternalPaperToLibrary,
     getImportedChunksByPaperId,
     getImportedSelectedCount,

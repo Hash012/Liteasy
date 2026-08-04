@@ -124,6 +124,33 @@ describe("ReaderPane", () => {
     );
   });
 
+  test("keeps persisted offsets aligned when PDF.js omits spaces between positioned spans", () => {
+    const textLayer = document.createElement("div");
+    const prefixItems = Array.from({ length: 40 }, (_, index) => `x${index}`);
+    const pageItems = [
+      ...prefixItems,
+      "first repeated evidence phrase",
+      "second repeated evidence phrase"
+    ];
+    for (const item of pageItems) {
+      const span = document.createElement("span");
+      span.textContent = item;
+      textLayer.append(span);
+    }
+    const normalizedPage = normalizePdfTextForSearch(pageItems.join(" "));
+    const firstOccurrence = normalizedPage.indexOf("repeated evidence phrase");
+
+    const range = findQuoteRangeInTextLayer(
+      textLayer,
+      "repeated evidence phrase",
+      firstOccurrence
+    );
+
+    expect(range?.startContainer.parentElement?.textContent).toContain(
+      "first repeated evidence phrase"
+    );
+  });
+
   test("uses the shared Unicode-normalized offset to disambiguate repeated evidence quotes", () => {
     const textLayer = document.createElement("div");
     const pageText = "first multimodal AI reference. padding. second multi\u00admodal \uFF21I reference.";
@@ -410,6 +437,39 @@ describe("ReaderPane", () => {
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
     expect(screen.getByText("注释")).toBeInTheDocument();
     expect(within(screen.getByLabelText("PDF 批注覆盖层")).getByLabelText(/旁注/)).toBeInTheDocument();
+  });
+
+  test("keeps a cached-paper promotion failure visible after saving the annotation", async () => {
+    const user = userEvent.setup();
+    render(
+      <ReaderPane
+        analysisHint="可以启动中栏分析。"
+        artifactTabs={[]}
+        artifactTasks={[]}
+        onPaperAnnotated={vi.fn().mockRejectedValue(new Error("磁盘空间不足"))}
+        onStartAnalysis={vi.fn()}
+        selectedPapers={[{
+          id: "cached-paper-promotion-failure",
+          sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+          title: "Cached paper"
+        }]}
+        selectedPaperIds={["cached-paper-promotion-failure"]}
+        selectionLocked={true}
+      />
+    );
+
+    mockPdfSelection({
+      ancestor: getPdfTextNode(),
+      boundingRect: makeRect({ height: 20, left: 180, top: 220, width: 160 }),
+      text: "cached paper annotation"
+    });
+    fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
+    await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", {
+      name: "高亮"
+    }));
+
+    expect(await screen.findByText(/批注已保存，但 PDF 自动转入文献库失败：磁盘空间不足/u))
+      .toBeInTheDocument();
   });
 
   test("restores local PDF annotations when the same paper is reopened", async () => {

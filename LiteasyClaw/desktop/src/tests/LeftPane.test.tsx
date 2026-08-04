@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
+import { externalPdfDragMimeType } from "../app/features/library/externalPdfDownload";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
 
@@ -68,6 +69,7 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
       stage: "未设置"
     },
     profileSamplingEnabled: false,
+    profileTags: [],
     recommendationItems: [],
     recommendationMessage: "推荐",
     recommendationPending: false,
@@ -281,6 +283,92 @@ describe("LeftPane", () => {
         }
       });
     }).not.toThrow();
+  });
+
+  test("saves a metadata-only association dropped into the library", async () => {
+    const onAddExternalPdf = vi.fn(() => Promise.resolve());
+    const source = {
+      abstract: "A metadata-only result without a legal open-access PDF.",
+      accessStatus: "metadata_only" as const,
+      authors: ["Ada Researcher"],
+      confidence: 0.6,
+      confidenceBasis: "citation_graph" as const,
+      doi: "10.1000/metadata-only",
+      id: "crossref:metadata-only",
+      provider: "crossref" as const,
+      relation: "cites_target" as const,
+      relevance: 0.82,
+      retrievalQuery: "metadata only paper",
+      sourceId: "metadata-only",
+      sourceRecordUrl: "https://api.crossref.org/works/10.1000/metadata-only",
+      title: "Metadata Only Paper",
+      url: "https://doi.org/10.1000/metadata-only",
+      year: 2024
+    };
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          onAddExternalPdf
+        })}
+      />
+    );
+
+    fireEvent.drop(screen.getByLabelText("我的文献库投放区"), {
+      dataTransfer: {
+        files: [],
+        getData: (type: string) => type === externalPdfDragMimeType ? JSON.stringify(source) : "",
+        types: [externalPdfDragMimeType]
+      }
+    });
+
+    await waitFor(() => expect(onAddExternalPdf).toHaveBeenCalledWith(source));
+    expect(await screen.findByText(/已保存《Metadata Only Paper》的无本体条目/)).toBeInTheDocument();
+  });
+
+  test("offers retry when an external association cannot be added", async () => {
+    const user = userEvent.setup();
+    const onAddExternalPdf = vi.fn()
+      .mockRejectedValueOnce(new Error("network unavailable"))
+      .mockResolvedValueOnce(undefined);
+    const source = {
+      abstract: "An open-access paper.",
+      accessStatus: "open_access" as const,
+      authors: ["Grace Author"],
+      fullTextUrl: "https://example.org/paper.pdf",
+      id: "openalex:oa-paper",
+      provider: "openalex" as const,
+      relation: "related" as const,
+      relevance: 0.75,
+      retrievalQuery: "open access paper",
+      sourceId: "oa-paper",
+      sourceRecordUrl: "https://openalex.org/W123",
+      title: "Open Access Paper",
+      url: "https://openalex.org/W123"
+    };
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          onAddExternalPdf
+        })}
+      />
+    );
+
+    fireEvent.drop(screen.getByLabelText("我的文献库投放区"), {
+      dataTransfer: {
+        files: [],
+        getData: (type: string) => type === externalPdfDragMimeType ? JSON.stringify(source) : "",
+        types: [externalPdfDragMimeType]
+      }
+    });
+
+    expect(await screen.findByText("加入文献库失败：network unavailable")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "重试" }));
+
+    await waitFor(() => expect(onAddExternalPdf).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/已保存《Open Access Paper》的 PDF，正在后台抽取全文/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument();
   });
 
   test("renders collections and source folders as one collapsible hierarchy", async () => {

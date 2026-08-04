@@ -11,7 +11,6 @@ import type { SettingsState } from "../settings/settings.types";
 
 type RecommendationRuntimeInput = {
   controlPlaneEndpoint: string;
-  openAlexApiKey?: string;
   researchProfile?: RecommendationResearchProfile;
   sortMode: SettingsState["network.recommendation.sort_mode"];
   selectedDocuments: RecommendationRequestDocument[];
@@ -132,7 +131,6 @@ export async function fetchCloudRecommendations(
 
   const client = createRecommendationClient({
     endpoint: input.controlPlaneEndpoint,
-    openAlexApiKey: input.openAlexApiKey,
     transport: deps.transport
   });
 

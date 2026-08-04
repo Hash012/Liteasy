@@ -10,7 +10,11 @@ import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { ObsidianLikeGraphCanvas } from "../layered-reading/ObsidianLikeGraphCanvas";
 import { defaultGraphViewState } from "../layered-reading/layeredReading.types";
 import { ThinReadingTab } from "../thin-reading/ThinReadingTab";
-import type { ThinReadingBranchSource, ThinReadingDocument } from "../thin-reading/thinReading.types";
+import type {
+  ThinReadingBranchSource,
+  ThinReadingDocument,
+  ThinReadingExternalSource
+} from "../thin-reading/thinReading.types";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
@@ -21,6 +25,8 @@ type ArtifactTabsProps = {
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
   onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
+  onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
+  onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onGenerateThinReadingBranch?: (input: {
     artifactId: string;
@@ -134,6 +140,8 @@ export function ArtifactTabs({
   onDeleteArtifact,
   onGenerateThinReadingBranch,
   onOpenEvidence,
+  onOpenExternalFullText,
+  onPromoteExternalPaperToLibrary,
   onSyncThinReadingAnnotations,
   onRegenerateArtifact,
   onRetryInterruptedThinReadingBranch,
@@ -234,7 +242,9 @@ export function ArtifactTabs({
           ? () => onRetryInterruptedThinReadingBranch(activeThinReadingTask.id)
           : undefined}
         onGenerateBranch={onGenerateThinReadingBranch}
+        onOpenExternalFullText={onOpenExternalFullText}
         onOpenEvidence={onOpenEvidence}
+        onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
         onSyncIntuecho={onSyncThinReadingAnnotations}
         onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
         papers={activeTab.papers ?? []}

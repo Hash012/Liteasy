@@ -1,4 +1,9 @@
 import { buildPdfChunksFromPages, extractPdfPages } from "../import/pdfTextExtractor";
+import {
+  cacheExternalPdf,
+  isPaperCacheAvailable,
+  type CacheExternalPdf
+} from "../library/paperCacheClient";
 import type { ModelTransportResponse } from "../models/modelHttpClient";
 import type { Paper } from "../workspace/workspace.types";
 import type { ThinReadingExternalEvidence, ThinReadingExternalSource } from "./thinReading.types";
@@ -124,6 +129,7 @@ function selectRelevantEvidence(
 }
 
 export function createThinReadingExternalFullTextClient(input: {
+  cachePdf?: CacheExternalPdf;
   endpoint: string;
   transport?: ThinReadingExternalPdfTransport;
 }) {
@@ -145,6 +151,18 @@ export function createThinReadingExternalFullTextClient(input: {
     if (bytes.byteLength !== payload.byteLength || await sha256(bytes) !== payload.contentHash) {
       throw new Error("外部 PDF 完整性校验失败");
     }
+    let localPdfCachePath: string | undefined;
+    const cachePdf = input.cachePdf ?? (isPaperCacheAvailable() ? cacheExternalPdf : undefined);
+    if (cachePdf) {
+      try {
+        localPdfCachePath = await cachePdf({
+          bytes,
+          contentHash: payload.contentHash
+        });
+      } catch {
+        // Evidence extraction can continue when a local cache write is temporarily unavailable.
+      }
+    }
     const pages = await extractPdfPages(bytes, { ocrEnabled: false });
     const paper: Paper = { id: source.id, title: source.title };
     const chunks = buildPdfChunksFromPages(paper, pages);
@@ -152,19 +170,26 @@ export function createThinReadingExternalFullTextClient(input: {
     return {
       ...source,
       evidenceBasis: "full_text",
-      fullTextEvidence: selectRelevantEvidence(source, chunks, payload.contentHash, payload.finalUrl)
+      fullTextEvidence: selectRelevantEvidence(source, chunks, payload.contentHash, payload.finalUrl),
+      ...(localPdfCachePath ? {
+        localPdfCachePath,
+        localPdfContentHash: payload.contentHash
+      } : {})
     };
   };
 }
 
 export async function enrichThinReadingSourcesWithFullText(input: {
+  cachePdf?: CacheExternalPdf;
   endpoint: string;
+  maximumSources?: number;
   signal?: AbortSignal;
   sources: readonly ThinReadingExternalSource[];
   transport?: ThinReadingExternalPdfTransport;
 }) {
   const client = createThinReadingExternalFullTextClient(input);
-  const candidates = input.sources.filter((source) => source.fullTextUrl).slice(0, maximumFullTextSources);
+  const maximumSources = Math.max(0, input.maximumSources ?? maximumFullTextSources);
+  const candidates = input.sources.filter((source) => source.fullTextUrl).slice(0, maximumSources);
   const enriched = await Promise.allSettled(candidates.map((source) => client(source, input.signal)));
   if (input.signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
   const byId = new Map(enriched.flatMap((result) => result.status === "fulfilled" ? [[result.value.id, result.value] as const] : []));

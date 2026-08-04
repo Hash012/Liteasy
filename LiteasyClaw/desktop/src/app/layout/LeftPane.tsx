@@ -12,7 +12,9 @@ import type { ImportJob } from "../features/import/import.types";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
 import type { OrganizationGovernanceStatus, OrganizationGovernanceSummary, OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "../features/organization/organization.types";
 import type { CollectionItem } from "../features/collection/collection.types";
+import type { ExternalPdfDragPayload } from "../features/library/externalPdfDownload";
 import type { RecommendationItem, RecommendationStatus } from "../features/recommendations/recommendation.types";
+import type { UserTag } from "../features/profile/academicProfileClient";
 import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 import type { LeftRailView } from "./useLeftRailNavigation";
@@ -27,6 +29,9 @@ export type LeftPaneProps = {
   documentMetadataSyncMessage?: string;
   documentMetadataSyncResult: DocumentMetadataSyncResult | null;
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
+  libraryRootPath?: string | null;
+  onChangeLibraryRoot?: (nextRootPath: string) => Promise<void>;
+  onOpenLibraryInFileManager?: () => Promise<void>;
   governanceMessage: string;
   importJobs: Record<string, ImportJob>;
   libraryPaperChildren?: Record<string, LibraryPaperChildItem[]>;
@@ -37,8 +42,9 @@ export type LeftPaneProps = {
   listMessage: string;
   organizationActionMessage?: string;
   listStatus: OrganizationListStatus;
+  onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onAddExternalPaper: (item: { id: string; source: string; title: string }) => void;
-  onAddDroppedPdfFiles?: (files: File[]) => void;
+  onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
   onCollectRecommendation: (item: RecommendationItem) => void;
@@ -78,6 +84,7 @@ export type LeftPaneProps = {
   profileClearMessage?: string;
   profileReadPaperCount: number;
   profileSamplingEnabled: boolean;
+  profileTags: UserTag[];
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
   recommendationPending: boolean;
@@ -117,6 +124,9 @@ export function LeftPane({
   documentMetadataSyncMessage,
   documentMetadataSyncResult,
   documentMetadataSyncStatus,
+  libraryRootPath,
+  onChangeLibraryRoot,
+  onOpenLibraryInFileManager,
   governanceMessage,
   importJobs,
   libraryPaperChildren,
@@ -126,6 +136,7 @@ export function LeftPane({
   list,
   listMessage,
   listStatus,
+  onAddExternalPdf,
   onAddExternalPaper,
   onAddDroppedPdfFiles,
   onClearProfile,
@@ -168,6 +179,7 @@ export function LeftPane({
   profileClearMessage,
   profileReadPaperCount,
   profileSamplingEnabled,
+  profileTags,
   recommendationItems,
   recommendationMessage,
   recommendationPending,
@@ -230,6 +242,7 @@ export function LeftPane({
               organizationSummary={organizationSummary}
               profileClearMessage={profileClearMessage}
               profileSamplingEnabled={profileSamplingEnabled}
+              profileTags={profileTags}
               readPaperCount={profileReadPaperCount}
             />
           ) : (
@@ -260,6 +273,9 @@ export function LeftPane({
             documentMetadataSyncMessage={documentMetadataSyncMessage}
             documentMetadataSyncResult={documentMetadataSyncResult}
             documentMetadataSyncStatus={documentMetadataSyncStatus}
+            libraryRootPath={libraryRootPath}
+            onChangeLibraryRoot={onChangeLibraryRoot}
+            onOpenLibraryInFileManager={onOpenLibraryInFileManager}
             onOpenSkillDocument={onOpenSkillDocument}
             onRetryDocumentMetadataSync={onRetryDocumentMetadataSync}
             onUpdateSetting={onUpdateSetting}
@@ -275,6 +291,7 @@ export function LeftPane({
             collectionStatus={collectionStatus}
             importJobs={importJobs}
             paperChildren={libraryPaperChildren}
+            onAddExternalPdf={onAddExternalPdf}
             onAddExternalPaper={onAddExternalPaper}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}

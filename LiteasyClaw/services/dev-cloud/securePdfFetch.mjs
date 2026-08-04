@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import dns from "node:dns/promises";
 import net from "node:net";
-import { Agent, fetch as undiciFetch } from "undici";
+import { Agent, ProxyAgent, fetch as undiciFetch } from "undici";
 
 const defaultMaximumBytes = 16 * 1024 * 1024;
 const defaultMaximumRedirects = 4;
@@ -71,6 +71,31 @@ function validatePdfUrl(value) {
   return url;
 }
 
+function noProxyMatches(hostname, value) {
+  return value
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .some((entry) => {
+      if (entry === "*") return true;
+      const normalized = entry.replace(/^\./, "").split(":", 1)[0];
+      return hostname === normalized || hostname.endsWith(`.${normalized}`);
+    });
+}
+
+export function resolvePdfProxyUrl(url, env = process.env) {
+  const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const noProxy = env.NO_PROXY ?? env.no_proxy ?? "";
+  if (noProxyMatches(hostname, noProxy)) return undefined;
+  return env.HTTPS_PROXY ?? env.https_proxy ?? env.HTTP_PROXY ?? env.http_proxy;
+}
+
+function pinnedPdfUrl(url, address) {
+  const pinned = new URL(url);
+  pinned.hostname = net.isIP(address) === 6 ? `[${address}]` : address;
+  return pinned;
+}
+
 async function readBoundedBody(response, maximumBytes) {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
@@ -99,21 +124,37 @@ export async function fetchSecurePdf(value, options = {}) {
     const hostname = currentUrl.hostname.replace(/^\[|\]$/g, "");
     const records = await resolvePublicAddresses(hostname, resolver);
     const allowedAddresses = new Map(records.map((record) => [record.address, record.family]));
-    const dispatcher = options.transport ? undefined : new Agent({
-      connect: {
-        lookup(_hostname, _options, callback) {
-          const [address, family] = allowedAddresses.entries().next().value;
-          callback(null, address, family);
-        }
-      }
-    });
+    const configuredProxyUrl = options.proxyUrl === false
+      ? undefined
+      : options.proxyUrl ?? resolvePdfProxyUrl(currentUrl, options.env);
+    const [pinnedAddress] = allowedAddresses.entries().next().value;
+    const requestUrl = configuredProxyUrl ? pinnedPdfUrl(currentUrl, pinnedAddress) : currentUrl;
+    const dispatcher = options.transport
+      ? undefined
+      : configuredProxyUrl
+        ? new ProxyAgent({
+            requestTls: { servername: hostname },
+            uri: configuredProxyUrl
+          })
+        : new Agent({
+            connect: {
+              lookup(_hostname, _options, callback) {
+                const [address, family] = allowedAddresses.entries().next().value;
+                callback(null, address, family);
+              }
+            }
+          });
+    const headers = {
+      Accept: "application/pdf,application/octet-stream;q=0.8",
+      ...(configuredProxyUrl ? { Host: currentUrl.host } : {})
+    };
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response;
     try {
-      response = await (options.transport ?? undiciFetch)(currentUrl, {
+      response = await (options.transport ?? undiciFetch)(requestUrl, {
         ...(dispatcher ? { dispatcher } : {}),
-        headers: { Accept: "application/pdf,application/octet-stream;q=0.8" },
+        headers,
         redirect: "manual",
         signal: controller.signal
       });

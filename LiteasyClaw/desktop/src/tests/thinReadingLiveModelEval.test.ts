@@ -237,7 +237,6 @@ const liveGoldCases: Record<string, LiveThinReadingGoldCase> = {
 
 const liveCase = liveGoldCases[liveCaseId];
 const rootLiveTest = liveEndpoint && liveCase ? test : test.skip;
-const liveOpenAlexApiKey = process.env.LITEASY_OPENALEX_API_KEY?.trim() ?? "";
 
 rootLiveTest("meets a live thin-reading quality gate through the desktop model path", async () => {
   if (!liveCase) {
@@ -339,10 +338,7 @@ rootLiveTest("meets a live thin-reading quality gate through the desktop model p
   expect(quality.passed, `live quality issues=${quality.issues.map((issue) => issue.code).join(",")}`).toBe(true);
 }, 120_000);
 
-externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", async () => {
-  if (!liveOpenAlexApiKey) {
-    throw new Error("bert-external live eval requires an OpenAlex API key from its dedicated local configuration.");
-  }
+externalLiveTest("keeps a live beyond-paper branch traceable through the unified retrieval service", async () => {
   const store = createSettingsStore();
   store.apply({
     intent: "update_setting",
@@ -354,15 +350,9 @@ externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", 
     target: "models.default_provider",
     value: liveProvider
   });
-  store.apply({
-    intent: "update_setting",
-    target: "thin_reading.openalex_api_key",
-    value: liveOpenAlexApiKey
-  });
-
   const paperId = "live-bert-external";
   const title = "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding";
-  console.info("[thin-reading-live-eval] external branch: requesting OpenAlex retrieval and model generation.");
+  console.info("[thin-reading-live-eval] external branch: requesting unified retrieval and model generation.");
   const result = await generateAssistantAnswer({
     artifactType: "thin_reading",
     importedChunksByPaperId: {
@@ -376,7 +366,7 @@ externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", 
       }]
     },
     mode: "qa",
-    question: "Explore the beyond-paper evidence boundary: use the retrieved OpenAlex record to explain how AlphaFold relates to BERT, without treating the relationship as BERT paper evidence.",
+    question: "Explore the beyond-paper evidence boundary: use the retrieved source to explain how AlphaFold relates to BERT, without treating the relationship as BERT paper evidence.",
     selectedPapers: [{
       doi: "10.18653/v1/N19-1423",
       id: paperId,
@@ -404,7 +394,7 @@ externalLiveTest("keeps a live beyond-paper branch traceable through OpenAlex", 
       source: {
         kind: "selected_text",
         excerpt: "AlphaFold citation relationship to BERT",
-        prompt: "Use only the retrieved OpenAlex source and clearly preserve the external-evidence boundary."
+        prompt: "Use only the retrieved source and clearly preserve the external-evidence boundary."
       },
       targetLanguage: "en-US"
     }

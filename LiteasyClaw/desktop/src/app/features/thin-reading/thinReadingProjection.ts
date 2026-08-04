@@ -4,6 +4,7 @@ import type {
   ThinReadingAnnotation,
   ThinReadingAnnotationSyncState,
   ThinReadingAnnotationTarget,
+  ThinReadingAnchor,
   ThinReadingDocument,
   ThinReadingBranchSource,
   ThinReadingIntuechoRecommendation,
@@ -133,6 +134,14 @@ function freezeSummarySentence(sentence: ThinReadingSummarySentence): ThinReadin
   });
 }
 
+function freezeAnchor(anchor: ThinReadingAnchor): ThinReadingAnchor {
+  return Object.freeze({
+    ...anchor,
+    evidenceIds: Object.freeze([...anchor.evidenceIds]),
+    externalSourceIds: Object.freeze([...anchor.externalSourceIds])
+  });
+}
+
 function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGenerationAudit {
   return Object.freeze({
     interpretationPlan: audit.interpretationPlan
@@ -190,6 +199,9 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
 
 function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvidence {
   return Object.freeze({
+    anchors: evidence.anchors
+      ? Object.freeze(evidence.anchors.map(freezeAnchor))
+      : undefined,
     claims: evidence.claims
       ? Object.freeze(evidence.claims.map(freezeClaim))
       : undefined,

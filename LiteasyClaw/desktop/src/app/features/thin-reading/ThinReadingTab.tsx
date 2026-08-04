@@ -15,6 +15,12 @@ import {
   setThinReadingAutoPublic,
   updateThinReadingAnnotation
 } from "./thinReadingProjection";
+import {
+  AssociationGraphLayer,
+  AssociationReadingOverlay,
+  type PageGraphAnchorView
+} from "../associations/AssociationGraphLayer";
+import { useAnchorRects } from "../associations/useAnchorRects";
 import { listThinReadingPendingPublicAnnotations } from "./thinReadingIntuechoSyncQueue";
 import { getThinReadingPaperTypeLabel } from "./thinReadingPromptRegistry";
 import { getThinReadingUiCopy } from "./thinReadingI18n";
@@ -24,9 +30,11 @@ import {
 } from "./useThinReadingCommunityRecommendations";
 import type {
   ThinReadingAnnotationTarget,
+  ThinReadingAnchor,
   ThinReadingBranchSource,
   ThinReadingDocument,
   ThinReadingEvidenceSpan,
+  ThinReadingExternalSource,
   ThinReadingSummarySentence
 } from "./thinReading.types";
 import "./thinReading.css";
@@ -57,7 +65,9 @@ export type ThinReadingTabProps = {
     document: ThinReadingDocument;
     source: ThinReadingBranchSource;
   }) => Promise<void>;
+  onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
   onOpenEvidence?: (request: ThinReadingEvidenceOpenRequest) => void;
+  onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onRetryInterruptedBranch?: () => Promise<void>;
   onSyncIntuecho?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onUpdateDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
@@ -155,6 +165,42 @@ function getSummarySentences(
   }));
 }
 
+type SummaryTextSegment = {
+  anchor?: ThinReadingAnchor;
+  text: string;
+};
+
+export function splitThinReadingSummaryTextByAnchors(input: {
+  anchors: readonly ThinReadingAnchor[];
+  sentence: ThinReadingSummarySentence;
+}): SummaryTextSegment[] {
+  const applicableAnchors = input.anchors
+    .filter((anchor) => (
+      anchor.summarySentenceId === input.sentence.id &&
+      anchor.start >= 0 &&
+      anchor.end > anchor.start &&
+      anchor.end <= input.sentence.text.length &&
+      input.sentence.text.slice(anchor.start, anchor.end) === anchor.text
+    ))
+    .sort((left, right) => left.start - right.start || right.end - left.end);
+  const segments: SummaryTextSegment[] = [];
+  let cursor = 0;
+  for (const anchor of applicableAnchors) {
+    if (anchor.start < cursor) {
+      continue;
+    }
+    if (anchor.start > cursor) {
+      segments.push({ text: input.sentence.text.slice(cursor, anchor.start) });
+    }
+    segments.push({ anchor, text: anchor.text });
+    cursor = anchor.end;
+  }
+  if (cursor < input.sentence.text.length || segments.length === 0) {
+    segments.push({ text: input.sentence.text.slice(cursor) });
+  }
+  return segments;
+}
+
 export function ThinReadingTab({
   artifactId,
   communityRecommendationState,
@@ -163,7 +209,9 @@ export function ThinReadingTab({
   intuechoEndpoint,
   taskFailureMessage,
   onGenerateBranch,
+  onOpenExternalFullText,
   onOpenEvidence,
+  onPromoteExternalPaperToLibrary,
   onRetryInterruptedBranch,
   onSyncIntuecho,
   onUpdateDocument,
@@ -184,6 +232,11 @@ export function ThinReadingTab({
   const [generating, setGenerating] = useState(false);
   const [retryingInterruptedBranch, setRetryingInterruptedBranch] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
+  const [anchorMarksEnabled, setAnchorMarksEnabled] = useState(true);
+  const [associationGraphOpen, setAssociationGraphOpen] = useState(false);
+  const [activeSourceId, setActiveSourceId] = useState<string | null>(null);
+  const [externalPaperActionId, setExternalPaperActionId] = useState<string | null>(null);
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [editingAnnotationBody, setEditingAnnotationBody] = useState("");
   const [intuechoCollapsed, setIntuechoCollapsed] = useState(false);
@@ -215,7 +268,27 @@ export function ThinReadingTab({
     setBranchMenuOpen(false);
     setSelection(null);
     setPrompt("");
+    setActiveAnchorId(null);
+    setActiveSourceId(null);
   }, [activeNode.id]);
+
+  // One layer off per Escape, the same rule the PDF reader follows: a paper card returns to the
+  // graph, and only closing the graph returns to the quiet article.
+  useEffect(() => {
+    if (!associationGraphOpen) return undefined;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setActiveSourceId((currentSource) => {
+        if (currentSource) return null;
+        setAssociationGraphOpen(false);
+        setActiveAnchorId(null);
+        return null;
+      });
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [associationGraphOpen]);
 
   function update(nextDocument: ThinReadingDocument) {
     onUpdateDocument(artifactId, nextDocument);
@@ -415,6 +488,56 @@ export function ThinReadingTab({
     }
   }
 
+  // Clicking a concept in the prose opens the graph on it. The mark keeps its place in the
+  // sentence; the layer draws around it rather than replacing the text with a list.
+  function toggleActiveAnchor(anchorId: string) {
+    if (window.getSelection()?.toString().trim()) {
+      return;
+    }
+    setActiveSourceId(null);
+    setActiveAnchorId((current) => (
+      associationGraphOpen && current === anchorId ? null : anchorId
+    ));
+    setAssociationGraphOpen(true);
+  }
+
+  function toggleAssociationGraph() {
+    setAssociationGraphOpen((current) => {
+      if (current) {
+        setActiveAnchorId(null);
+        setActiveSourceId(null);
+      }
+      return !current;
+    });
+  }
+
+  function popAssociationStage() {
+    if (activeSourceId) {
+      setActiveSourceId(null);
+      return;
+    }
+    setAssociationGraphOpen(false);
+    setActiveAnchorId(null);
+  }
+
+  async function runAnchorPaperAction(
+    source: ThinReadingExternalSource,
+    action: (source: ThinReadingExternalSource) => Promise<void>
+  ) {
+    if (externalPaperActionId) {
+      return;
+    }
+    setGenerationError("");
+    setExternalPaperActionId(source.id);
+    try {
+      await action(source);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExternalPaperActionId(null);
+    }
+  }
+
   function advanceOmittedSection(sectionKey: string, label: string) {
     void generateBranch({ kind: "omitted_section", label, sectionKey });
   }
@@ -446,6 +569,62 @@ export function ThinReadingTab({
   const nodeAnnotations = document.annotations.filter((annotation) => annotation.nodeId === activeNode.id);
   const paperEvidenceSpans = activeNode.evidence.paperEvidenceSpans ?? [];
   const summarySentences = getSummarySentences(activeNode);
+  const anchors = activeNode.evidence.anchors ?? [];
+  const activeAnchor = anchors.find((anchor) => anchor.id === activeAnchorId) ?? null;
+
+  /*
+   * The association graph over the generated article.
+   *
+   * The anchors are already in the prose as marks, and the sources they point at are already on
+   * the artifact — so all the graph needs is where those marks landed after the text was laid out.
+   * That is measured, never computed: the same sentence wraps differently at another width.
+   */
+  const anchorSourcesByAnchorId = useMemo(() => Object.fromEntries(
+    anchors
+      .map((anchor) => [
+        anchor.id,
+        anchor.externalSourceIds.flatMap((sourceId) => {
+          const source = externalSourceById.get(sourceId);
+          return source ? [source] : [];
+        })
+      ] as const)
+      .filter(([, sources]) => sources.length > 0)
+  ), [anchors, externalSourceById]);
+  const anchorMeasurement = useAnchorRects({
+    containerRef: contentRef,
+    enabled: associationGraphOpen,
+    signature: `${activeNode.id}|${anchors.length}|${intuechoCollapsed}`
+  });
+  const graphAnchorViews = useMemo<PageGraphAnchorView[]>(() => anchors.flatMap((anchor) => {
+    const rects = anchorMeasurement.rectsByAnchorId[anchor.id];
+    return rects && rects.length > 0
+      ? [{ anchorId: anchor.id, kind: anchor.kind, label: anchor.label, rects }]
+      : [];
+  }), [anchorMeasurement, anchors]);
+  const graphSourceCount = useMemo(
+    () => Object.values(anchorSourcesByAnchorId).reduce((total, sources) => total + sources.length, 0),
+    [anchorSourcesByAnchorId]
+  );
+  const activeSource = activeSourceId
+    ? externalSourceById.get(activeSourceId) ?? null
+    : null;
+  const associationStateLabel = activeSource
+    ? "阅读位"
+    : associationGraphOpen
+      ? activeAnchor ? "聚焦概念" : "页级关联图"
+      : anchorMarksEnabled ? "概念标记" : "正文";
+  const associationStateCopy = activeSource
+    ? "Esc 返回关联图"
+    : associationGraphOpen
+      ? activeAnchor
+        ? `正在聚焦「${activeAnchor.label}」及其关联文献`
+        : "悬停看判断依据 · 点击进阅读位"
+      : anchors.length === 0
+        // A disabled pair of switches has to say why, or it reads as broken rather than as empty.
+        ? "这一节的正文没有标出可展开的概念"
+        : anchorMarksEnabled
+          ? "概念留在正文原位 · 点击展开它的关联"
+          : "未显示概念标记与关联图层";
   const visibleGenerationProgress = generationProgress ?? (generating
     ? { message: labels.generating, progress: null, stageLabel: undefined }
     : null);
@@ -523,8 +702,41 @@ export function ThinReadingTab({
         ))}
       </div>
 
+      {/* The two switches a reader actually makes here, plus one line saying which state the
+          article is resting in. Kept above the body so the graph never covers its own controls. */}
+      <div aria-label="概念与关联图工具" className="thin-reading__modebar">
+        <button
+          aria-pressed={anchorMarksEnabled}
+          className={`thin-reading__mode ${anchorMarksEnabled ? "is-active" : ""}`}
+          disabled={anchors.length === 0 || associationGraphOpen}
+          onClick={() => setAnchorMarksEnabled((current) => !current)}
+          title={associationGraphOpen
+            ? "关联图打开时，概念由图层直接标出"
+            : "显示或隐藏正文里的概念标记"}
+          type="button"
+        >
+          概念标记
+        </button>
+        <button
+          aria-pressed={associationGraphOpen}
+          className={`thin-reading__mode ${associationGraphOpen ? "is-active" : ""}`}
+          disabled={anchors.length === 0}
+          onClick={toggleAssociationGraph}
+          title="在薄读正文之上铺开这些概念的关联文献"
+          type="button"
+        >
+          页级关联图
+        </button>
+        <span className="thin-reading__mode-state">
+          <span className="thin-reading__mode-pill">{associationStateLabel}</span>
+          <span className="thin-reading__mode-copy">{associationStateCopy}</span>
+        </span>
+      </div>
+
       <div
-        className="thin-reading__body"
+        className={`thin-reading__body${associationGraphOpen ? " is-graph-dimmed" : ""}${
+          anchorMarksEnabled ? "" : " is-marks-hidden"
+        }`}
         onKeyUp={inspectSelection}
         onMouseUp={inspectSelection}
         ref={contentRef}
@@ -553,7 +765,32 @@ export function ThinReadingTab({
                     data-thin-reading-summary-external-source-ids={sentence.externalKnowledge.join(",")}
                     key={sentence.id}
                   >
-                    {sentence.text}
+                    {splitThinReadingSummaryTextByAnchors({ anchors, sentence }).map((segment, segmentIndex) => (
+                      segment.anchor ? (
+                        <mark
+                          aria-label={`查看“${segment.anchor.label}”关联论文`}
+                          aria-pressed={activeAnchor?.id === segment.anchor.id}
+                          className={`thin-reading__anchor ${activeAnchor?.id === segment.anchor.id ? "is-active" : ""}`}
+                          // Read by `useAnchorRects`: this is the element the graph measures.
+                          data-anchor-id={segment.anchor.id}
+                          data-thin-reading-anchor-id={segment.anchor.id}
+                          data-thin-reading-summary-external-source-ids={segment.anchor.externalSourceIds.join(",")}
+                          key={segment.anchor.id}
+                          onClick={() => toggleActiveAnchor(segment.anchor!.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleActiveAnchor(segment.anchor!.id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          title={`${segment.anchor.label} · ${Math.round(segment.anchor.importance * 100)}%`}
+                        >
+                          {segment.text}
+                        </mark>
+                      ) : <span key={`${sentence.id}-text-${segmentIndex}`}>{segment.text}</span>
+                    ))}
                     {sentence.evidenceIds.map((evidenceId, evidenceIndex) => {
                       const span = paperEvidenceSpans.find((candidate) => candidate.id === evidenceId);
                       const canOpenEvidence = Boolean(
@@ -809,7 +1046,42 @@ export function ThinReadingTab({
             )}
           </aside>
         )}
+
+        {/* Inside the body, in the body's own coordinates: the layer scrolls with the article and
+            never re-lays-out while the reader moves through it. */}
+        {associationGraphOpen ? (
+          <AssociationGraphLayer
+            activeSourceId={activeSourceId}
+            anchors={graphAnchorViews}
+            documentHeight={anchorMeasurement.height}
+            focusedAnchorId={activeAnchorId}
+            frameWidth={anchorMeasurement.width}
+            onClose={popAssociationStage}
+            onFocusAnchor={setActiveAnchorId}
+            onSelectSource={(sourceId) => setActiveSourceId(sourceId || null)}
+            sourcesByAnchor={anchorSourcesByAnchorId}
+          />
+        ) : null}
       </div>
+
+      {associationGraphOpen ? (
+        <AssociationReadingOverlay
+          activeSource={activeSource}
+          anchorCount={graphAnchorViews.length}
+          anchored="viewport"
+          emptyAnchorsMessage="这一节的正文没有可展开的概念。"
+          emptySourcesMessage="这些概念还没有检索到可验证的关联文献。"
+          onAddToLibrary={onPromoteExternalPaperToLibrary
+            ? (source) => void runAnchorPaperAction(source, onPromoteExternalPaperToLibrary)
+            : undefined}
+          onClose={popAssociationStage}
+          onOpenFullText={onOpenExternalFullText
+            ? (source) => void runAnchorPaperAction(source, onOpenExternalFullText)
+            : undefined}
+          onSelectSource={(sourceId) => setActiveSourceId(sourceId || null)}
+          sourceCount={graphSourceCount}
+        />
+      ) : null}
 
       {selection ? (
         <div

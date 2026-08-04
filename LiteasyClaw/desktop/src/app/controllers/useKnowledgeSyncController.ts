@@ -19,7 +19,6 @@ type UseKnowledgeSyncControllerInput = {
   accountSession: AccountSession | null;
   collectionTransport?: CollectionTransport;
   controlPlaneEndpoint: string;
-  openAlexApiKey?: string;
   documentMetadataTransport?: DocumentMetadataTransport;
   documents: Paper[];
   recommendationCacheDeps?: {
@@ -38,7 +37,6 @@ type UseKnowledgeSyncControllerInput = {
   recommendationGeneratorDeps?: {
     fetch: (input: {
       controlPlaneEndpoint: string;
-      openAlexApiKey?: string;
       researchProfile?: RecommendationResearchProfile;
       selectedDocuments: Array<{ id: string; title: string }>;
       sessionId: string;
@@ -59,7 +57,6 @@ export function useKnowledgeSyncController({
   accountSession,
   collectionTransport,
   controlPlaneEndpoint,
-  openAlexApiKey,
   documentMetadataTransport,
   documents,
   recommendationCacheDeps,
@@ -83,7 +80,6 @@ export function useKnowledgeSyncController({
   const recommendations = useRecommendations({
     accountSession,
     controlPlaneEndpoint,
-    openAlexApiKey,
     recommendationCacheDeps,
     recommendationCacheTransport,
     recommendationFeedbackTransport,

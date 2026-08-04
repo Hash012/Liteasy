@@ -5,6 +5,7 @@ import type {
 import { z } from "zod";
 import { buildThinReadingPromptGuidance } from "./thinReadingPromptRegistry";
 import type {
+  ThinReadingAnchor,
   ThinReadingGenerationContext,
   ThinReadingClaim,
   ThinReadingEvidenceSpan,
@@ -73,6 +74,14 @@ const thinReadingPaperTypeSchema = z.enum([
 const maximumOmittedSections = 8;
 
 const thinReadingModelOutputSchema = z.object({
+  anchors: z.array(z.object({
+    importance: z.number().finite().min(0).max(1),
+    kind: z.enum(["claim", "concept", "limitation", "method", "result"]),
+    label: normalizedStringSchema({ maximumLength: 72, minimumLength: 2 }),
+    searchQuery: normalizedStringSchema({ maximumLength: 180, minimumLength: 3 }),
+    summarySentenceIndex: z.number().int().min(0),
+    text: normalizedStringSchema({ maximumLength: 160, minimumLength: 2 })
+  }).strict()).max(8).default([]),
   claims: z.array(z.object({
     evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).default([]),
     status: z.enum(["grounded", "unsupported", "weak"]).default("weak"),
@@ -103,6 +112,23 @@ const stringArraySchema = { items: jsonString, type: "array" } as const;
 export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
   additionalProperties: false,
   properties: {
+    anchors: {
+      items: {
+        additionalProperties: false,
+        properties: {
+          importance: { maximum: 1, minimum: 0, type: "number" },
+          kind: { enum: ["claim", "concept", "limitation", "method", "result"], type: "string" },
+          label: jsonString,
+          searchQuery: jsonString,
+          summarySentenceIndex: { minimum: 0, type: "integer" },
+          text: jsonString
+        },
+        required: ["summarySentenceIndex", "text", "label", "kind", "importance", "searchQuery"],
+        type: "object"
+      },
+      maxItems: 8,
+      type: "array"
+    },
     claims: {
       items: {
         additionalProperties: false,
@@ -149,6 +175,7 @@ export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
     "withinPaperClosure",
     "paperEvidence",
     "claims",
+    "anchors",
     "externalKnowledge",
     "omittedSections"
   ],
@@ -1177,6 +1204,47 @@ function buildSummarySentences(input: {
   });
 }
 
+function buildThinReadingAnchors(input: {
+  parsed: ParsedThinReadingModelOutput;
+  summarySentences: readonly ThinReadingSummarySentence[];
+}): ThinReadingAnchor[] {
+  const anchors: ThinReadingAnchor[] = [];
+  const occupiedRanges = new Set<string>();
+
+  for (const candidate of input.parsed.anchors) {
+    const sentence = input.summarySentences[candidate.summarySentenceIndex];
+    if (!sentence) {
+      throw new Error(`薄读锚点引用了不存在的摘要句：${candidate.summarySentenceIndex + 1}。`);
+    }
+    const start = sentence.text.indexOf(candidate.text);
+    const nextStart = start < 0 ? -1 : sentence.text.indexOf(candidate.text, start + candidate.text.length);
+    if (start < 0 || nextStart >= 0) {
+      throw new Error(`薄读锚点必须逐字对应且只出现一次于摘要句中：${candidate.text}。`);
+    }
+    const end = start + candidate.text.length;
+    const rangeKey = `${sentence.id}\u0000${start}\u0000${end}`;
+    if (occupiedRanges.has(rangeKey)) {
+      continue;
+    }
+    occupiedRanges.add(rangeKey);
+    anchors.push({
+      end,
+      evidenceIds: sentence.evidenceIds,
+      externalSourceIds: [],
+      id: `thin-reading-anchor-${stableHash(`${sentence.id}\u0000${start}\u0000${end}\u0000${candidate.label}`)}`,
+      importance: candidate.importance,
+      kind: candidate.kind,
+      label: candidate.label,
+      searchQuery: candidate.searchQuery,
+      start,
+      summarySentenceId: sentence.id,
+      text: candidate.text
+    });
+  }
+
+  return anchors;
+}
+
 export function parseThinReadingModelSeed(
   output: string,
   options: ParseThinReadingModelSeedOptions = {}
@@ -1286,6 +1354,7 @@ export function parseThinReadingModelSeed(
     parsed,
     paperEvidence
   });
+  const anchors = buildThinReadingAnchors({ parsed, summarySentences });
   const coverageGap = options.analysis?.run.coverage.missingPaperIds.length ?? 0;
   const retrievalConfidence = options.analysis?.retrievalConfidence;
   const hasInsufficientRetrieval = coverageGap > 0 ||
@@ -1293,6 +1362,7 @@ export function parseThinReadingModelSeed(
 
   return {
     evidence: {
+      anchors,
       claims,
       externalKnowledge: parsed.externalKnowledge,
       externalSources,
@@ -1511,6 +1581,7 @@ export function buildThinReadingAgentPrompt(input: {
     formatParentEvidenceSpans(input.context.parentEvidenceSpans),
     formatExternalSources(input.context.externalSources),
     externalRelationSentenceRule(),
+    "Reader-facing anchors: after forming summarySentences, return 3–8 non-overlapping high-value anchors for the contribution, mechanism, result, or limitation. Cover every sentence that contains an independent high-value contribution, mechanism, result, or limitation; a dense sentence may have more than one anchor, while background transitions need none. Prefer preserving a distinct valuable concept over stopping at an arbitrary small count. Each anchor.text must be an exact contiguous phrase copied from summarySentences[summarySentenceIndex].text and occur exactly once in that sentence. Use a concise label and a specific academic searchQuery. Anchors belong to the thin-reading output, never to a source-PDF coordinate, and must not contain source IDs or retrieval-process language.",
     "内部工作流（只在脑中执行，不要输出这些步骤）：",
     "1. Context assembly：先识别当前层级、目标论文、既定模块/正文选区、完整祖先阅读路径与父节点 claim/evidence。",
     "2. Evidence sieve：从证据矩阵中选出最能改变读者理解的 evidence ID，区分主张、机制、结果、局限和背景。",
@@ -1553,6 +1624,7 @@ export function buildThinReadingAgentPrompt(input: {
     '  "withinPaperClosure": true,',
     '  "paperEvidence": ["evidence-id"],',
     '  "claims": [{"text": "claim text", "evidenceIds": ["evidence-id"], "status": "grounded"}],',
+    '  "anchors": [{"summarySentenceIndex": 0, "text": "exact phrase from the sentence", "label": "short concept", "kind": "concept", "importance": 0.82, "searchQuery": "specific academic query"}],',
     '  "externalKnowledge": ["external-source-id"],',
     '  "omittedSections": [{"sectionKey": "experimental_validation", "label": "实验验证"}]',
     "}",

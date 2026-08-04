@@ -3,7 +3,10 @@ import ReactDOM from "react-dom/client";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import App from "./App";
 import { ThinReadingTab } from "./app/features/thin-reading/ThinReadingTab";
-import { createThinReadingFixture } from "./app/features/thin-reading/thinReadingFixtures";
+import {
+  createThinReadingAnchorGraphFixture,
+  createThinReadingFixture
+} from "./app/features/thin-reading/thinReadingFixtures";
 import { createThinReadingDocument } from "./app/features/thin-reading/thinReadingProjection";
 import type { CreateThinReadingDocumentInput } from "./app/features/thin-reading/thinReading.types";
 import { extractPdfPages } from "./app/features/import/pdfTextExtractor";
@@ -15,6 +18,7 @@ const externalBrowserFixture = import.meta.env.DEV && window.location.search.inc
 const ocrBrowserFixture = import.meta.env.DEV && window.location.search.includes("thin-reading-ocr-fixture");
 const progressBrowserFixture = import.meta.env.DEV && window.location.search.includes("thin-reading-progress-fixture");
 const readerEvidenceBrowserFixture = import.meta.env.DEV && window.location.search.includes("thin-reading-reader-evidence-fixture");
+const anchorGraphBrowserFixture = import.meta.env.DEV && window.location.search.includes("thin-reading-anchor-graph-fixture");
 
 function createExternalThinReadingFixture() {
   const fixture = createThinReadingFixture();
@@ -58,7 +62,9 @@ const fixture = browserFixture || progressBrowserFixture
   ? createThinReadingFixture()
   : externalBrowserFixture
     ? createExternalThinReadingFixture()
-    : null;
+    : anchorGraphBrowserFixture
+      ? createThinReadingAnchorGraphFixture()
+      : null;
 
 function ThinReadingBrowserFixture({
   fixture,

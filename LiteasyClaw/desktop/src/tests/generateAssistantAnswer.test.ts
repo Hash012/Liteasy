@@ -554,6 +554,14 @@ test("parses thin-reading structured output from a live model request", async ()
       return {
         json: async () => ({
           answer: JSON.stringify({
+            anchors: [{
+              importance: 0.9,
+              kind: "method",
+              label: "Late interaction",
+              searchQuery: "late interaction passage retrieval",
+              summarySentenceIndex: 0,
+              text: "MaxSim late interaction"
+            }],
             externalKnowledge: [],
             claims: [
               {
@@ -605,7 +613,25 @@ test("parses thin-reading structured output from a live model request", async ()
     },
     thinReadingExternalKnowledgeTransport: async () => {
       externalRetrievalCalls += 1;
-      throw new Error("external literature is temporarily unavailable");
+      return {
+        json: async () => ({
+          sources: [{
+            abstract: "This study evaluates late interaction for efficient passage retrieval with fine-grained token matching.",
+            authors: ["Ada Scholar"],
+            id: "openalex:W123",
+            provider: "openalex",
+            relation: "related",
+            relevance: 0.83,
+            retrievalQuery: "late interaction passage retrieval",
+            sourceId: "W123",
+            sourceRecordUrl: "https://openalex.org/W123",
+            title: "Late Interaction Retrieval",
+            url: "https://example.org/late-interaction"
+          }]
+        }),
+        ok: true,
+        status: 200
+      };
     }
   });
 
@@ -636,6 +662,12 @@ test("parses thin-reading structured output from a live model request", async ()
           paperId: "demo-1",
           quote: expect.stringContaining("MaxSim")
         })
+      ],
+      anchors: [
+        expect.objectContaining({
+          externalSourceIds: ["openalex:W123"],
+          text: "MaxSim late interaction"
+        })
       ]
     },
     paperType: "experimental",
@@ -643,7 +675,7 @@ test("parses thin-reading structured output from a live model request", async ()
     withinPaperClosure: true
   });
   expect(result.content).toContain("ColBERT 的核心贡献");
-  expect(externalRetrievalCalls).toBe(0);
+  expect(externalRetrievalCalls).toBe(1);
 });
 
 test("runs thin-reading through the DeepSeek provider without downgrading to mock data", async () => {
@@ -885,6 +917,88 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
     stopReason: "observation_sufficient"
   });
   expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual(plannedEvidenceIds);
+});
+
+test("continues thin reading with a bounded deterministic evidence scope when planning API fails", async () => {
+  const store = createSettingsStore();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const generationPrompts: string[] = [];
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": Array.from({ length: 24 }, (_, index) => ({
+        page: index + 1,
+        paperId: "demo-1",
+        paperTitle: "Resilient Planning Paper",
+        snippet: `Evidence passage ${index + 1} describes the method.`,
+        summary: `Evidence summary ${index + 1}.`,
+        tags: ["method"]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_plan") {
+        return {
+          json: async () => ({ error: "temporary planning failure" }),
+          ok: false,
+          status: 502
+        };
+      }
+      generationPrompts.push(String(body.prompt));
+      const evidenceId = String(body.prompt).match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "";
+      const summary = "该论文的方法由确定性范围内的证据直接支持，并清楚界定了核心机制与结论边界。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            anchors: [],
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: summary }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            summary,
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: summary
+            }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "Resilient Planning Paper" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-planning-fallback",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "Resilient Planning Paper",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(result.thinReading?.evidencePlan).toBeUndefined();
+  expect(result.thinReading?.rootSeed.summary).toContain("确定性范围");
+  expect(generationPrompts[0]).toContain("Evidence summary 18");
+  expect(generationPrompts[0]).not.toContain("Evidence summary 19");
 });
 
 test("retries a cross-layer evidence ID with the current planning allowlist", async () => {
@@ -1450,12 +1564,6 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     target: "models.cloud_proxy_endpoint",
     value: "https://liteasy.example.com/model-proxy"
   });
-  store.apply({
-    intent: "update_setting",
-    target: "thin_reading.openalex_api_key",
-    value: "user-openalex-key"
-  });
-
   const result = await generateAssistantAnswer({
     artifactType: "thin_reading",
     auditTransport: async () => ({
@@ -1581,9 +1689,9 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     expect.stringContaining("follow-up research")
   ]));
   expect(externalRequests.every((request) => request.url.includes("/v1/research/external-knowledge"))).toBe(true);
-  expect(externalRequests.every((request) => request.headers["X-OpenAlex-Api-Key"] === "user-openalex-key")).toBe(true);
-  expect(externalRequests.every((request) => !request.body.includes("user-openalex-key"))).toBe(true);
-  expect(modelRequestBody).not.toContain("user-openalex-key");
+  expect(externalRequests.every((request) => request.headers["Content-Type"] === "application/json")).toBe(true);
+  expect(externalRequests.every((request) => !request.body.includes("api_key"))).toBe(true);
+  expect(modelRequestBody).not.toContain("api_key");
   expect(modelPrompt).toContain("openalex:W42");
   expect(modelPrompt).toContain("Efficient Multi-vector Retrieval");
   expect(result.thinReading?.rootSeed.evidence.externalSources?.[0]).toMatchObject({

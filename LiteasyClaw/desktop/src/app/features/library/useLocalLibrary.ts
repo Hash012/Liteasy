@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createLocalLibraryClient } from "./localLibraryClient";
 import type { LocalLibrarySnapshot } from "./localLibrary.types";
+import { resolveLocalAccountKey } from "./localAccountKey";
 
 type LocalLibraryLoader = () => Promise<LocalLibrarySnapshot>;
 
@@ -18,6 +19,7 @@ function canUseTauriLocalLibrary(loader?: LocalLibraryLoader) {
 }
 
 export function useLocalLibrary(loader?: LocalLibraryLoader) {
+  const accountKey = resolveLocalAccountKey();
   const [snapshot, setSnapshot] = useState<LocalLibrarySnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +36,7 @@ export function useLocalLibrary(loader?: LocalLibraryLoader) {
       setError(message);
       throw cause;
     }
-  }, [loader]);
+  }, [accountKey, loader]);
 
   useEffect(() => {
     void refresh().catch(() => {

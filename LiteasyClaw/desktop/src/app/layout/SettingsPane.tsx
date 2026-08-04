@@ -1,13 +1,17 @@
 import { useState } from "react";
-import { ChevronDownRegular, ChevronRightRegular, DatabaseRegular, SettingsRegular, BotRegular } from "@fluentui/react-icons";
+import { ChevronDownRegular, ChevronRightRegular, DatabaseRegular, FolderRegular, SettingsRegular, BotRegular } from "@fluentui/react-icons";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
+import { LibraryLocationPanel } from "../features/library/LibraryLocationPanel";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 
 type SettingsPaneProps = {
   documentMetadataSyncMessage?: string;
+  libraryRootPath?: string | null;
+  onChangeLibraryRoot?: (nextRootPath: string) => Promise<void>;
+  onOpenLibraryInFileManager?: () => Promise<void>;
   documentMetadataSyncResult: DocumentMetadataSyncResult | null;
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
   onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
@@ -18,6 +22,9 @@ type SettingsPaneProps = {
 
 export function SettingsPane({
   documentMetadataSyncMessage,
+  libraryRootPath,
+  onChangeLibraryRoot,
+  onOpenLibraryInFileManager,
   documentMetadataSyncResult,
   documentMetadataSyncStatus,
   onOpenSkillDocument,
@@ -27,6 +34,7 @@ export function SettingsPane({
 }: SettingsPaneProps) {
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [syncExpanded, setSyncExpanded] = useState(true);
+  const [libraryExpanded, setLibraryExpanded] = useState(false);
   return (
     <section aria-label="左边栏设置" className="settings-panel">
       <div aria-hidden="true" className="settings-panel-icon"><SettingsRegular /></div>
@@ -56,6 +64,20 @@ export function SettingsPane({
             message={documentMetadataSyncMessage ?? ""}
             onRetrySync={onRetryDocumentMetadataSync}
             status={documentMetadataSyncStatus}
+          />
+        </div> : null}
+      </section>
+      <section className="sidebar-section settings-library-section">
+        <button aria-expanded={libraryExpanded} aria-label={`${libraryExpanded ? "收起" : "展开"}文献库位置`} className="sidebar-section-header" onClick={() => setLibraryExpanded((current) => !current)} type="button">
+          <span aria-hidden="true" className="sidebar-section-disclosure">{libraryExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
+          <FolderRegular />
+          <span>文献库位置</span>
+        </button>
+        {libraryExpanded ? <div className="sidebar-section-content">
+          <LibraryLocationPanel
+            onChangeRoot={onChangeLibraryRoot}
+            onOpenInFileManager={onOpenLibraryInFileManager}
+            rootPath={libraryRootPath}
           />
         </div> : null}
       </section>

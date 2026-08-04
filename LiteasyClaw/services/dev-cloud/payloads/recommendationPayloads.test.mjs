@@ -492,3 +492,47 @@ test("rejects known retractions and implausible publication years before ranking
   assert.equal(result.recommendations[0].openAccessAvailable, true);
   assert.equal(result.recommendations[0].qualityGate.passed, true);
 });
+
+test("attaches surfacingTags to candidates from a tag-driven source group", () => {
+  const result = buildLiveRecommendationPayload(
+    { selectedDocuments: [] },
+    [{
+      relatedDocumentTitle: "tag:colbert",
+      semanticQuery: "colbert",
+      surfacingTag: "colbert",
+      sources: [
+        source("W10", "ColBERTv2: Effective Passage Search", 0.9),
+        source("W11", "Dense Passage Retrieval Survey", 0.8)
+      ]
+    }],
+    new Date("2026-07-29T00:00:00.000Z")
+  );
+  assert.ok(result.recommendations.length > 0);
+  for (const candidate of result.recommendations) {
+    assert.deepEqual(candidate.surfacingTags, ["colbert"]);
+  }
+});
+
+test("unions surfacingTags when the same work is surfaced by multiple tags", () => {
+  const result = buildLiveRecommendationPayload(
+    { selectedDocuments: [] },
+    [
+      {
+        relatedDocumentTitle: "tag:colbert",
+        semanticQuery: "colbert",
+        surfacingTag: "colbert",
+        sources: [source("W20", "ColBERT Passage Search", 0.9)]
+      },
+      {
+        relatedDocumentTitle: "tag:retrieval",
+        semanticQuery: "retrieval",
+        surfacingTag: "retrieval",
+        sources: [source("W20", "ColBERT Passage Search", 0.85)]
+      }
+    ],
+    new Date("2026-07-29T00:00:00.000Z")
+  );
+  const shared = result.recommendations.find((c) => c.canonicalId === "openalex:W20");
+  assert.ok(shared);
+  assert.deepEqual([...shared.surfacingTags].sort(), ["colbert", "retrieval"]);
+});

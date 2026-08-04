@@ -183,3 +183,104 @@ test("keeps a real PDF evidence overlay aligned after zooming", async ({ page })
     expect(Math.abs(Number.parseFloat(after[key] ?? "NaN") - Number.parseFloat(before[key] ?? "NaN"))).toBeLessThan(0.1);
   }
 });
+
+test("anchors the PDF selection menu to the real selected text", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto("/?thin-reading-reader-evidence-fixture");
+  const textLayer = page.locator(".pdf-text-layer").first();
+  await expect.poll(async () => textLayer.evaluate((element) => element.textContent?.trim().length ?? 0), {
+    timeout: 90_000
+  }).toBeGreaterThan(20);
+
+  const selectionRect = await textLayer.evaluate((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node && !(node.textContent?.trim())) node = walker.nextNode();
+    if (!node?.textContent) throw new Error("PDF text layer has no selectable text node.");
+    const range = document.createRange();
+    range.setStart(node, 0);
+    range.setEnd(node, Math.min(12, node.textContent.length));
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    const rect = range.getBoundingClientRect();
+    element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    return { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top };
+  });
+  const menu = page.getByLabel("选中文本批注菜单");
+  await expect(menu).toBeVisible();
+  const menuRect = await menu.boundingBox();
+  expect(menuRect).not.toBeNull();
+  expect(Math.abs(
+    (menuRect!.x + menuRect!.width / 2) - (selectionRect.left + selectionRect.right) / 2
+  )).toBeLessThan(3);
+  if (await menu.evaluate((element) => element.classList.contains("is-above"))) {
+    expect(menuRect!.y + menuRect!.height).toBeLessThanOrEqual(selectionRect.top - 6);
+  } else {
+    expect(menuRect!.y).toBeGreaterThanOrEqual(selectionRect.bottom + 6);
+  }
+});
+
+test("draws the thin-reading page graph around the concepts where the prose put them", async ({ page }, testInfo) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto("/?thin-reading-anchor-graph-fixture");
+
+  const marks = page.locator(".thin-reading__anchor");
+  await expect(marks).toHaveCount(5);
+  await page.getByRole("button", { name: "页级关联图" }).click();
+
+  const graph = page.getByRole("region", { exact: true, name: "页级关联图" });
+  await expect(graph).toBeVisible();
+  const chips = graph.locator(".association-anchor__chip");
+  await expect(chips).toHaveCount(5);
+
+  // Each chip stands where its own words are, not at a centre the layer invented.
+  const drift = await page.evaluate(() => {
+    const results: number[] = [];
+    for (const chip of document.querySelectorAll<HTMLElement>(".association-anchor__chip")) {
+      const label = chip.textContent?.trim() ?? "";
+      const mark = [...document.querySelectorAll<HTMLElement>(".thin-reading__anchor")]
+        .find((candidate) => candidate.textContent?.trim() === label);
+      if (!mark) continue;
+      const markRect = mark.getClientRects()[0];
+      const chipRect = chip.getBoundingClientRect();
+      results.push(Math.hypot(chipRect.left - markRect.left, chipRect.top - markRect.top));
+    }
+    return results;
+  });
+  expect(drift).toHaveLength(5);
+  expect(Math.max(...drift)).toBeLessThan(14);
+
+  // Nothing lands on another node or on the concept it belongs to.
+  const collisions = await page.evaluate(() => {
+    const boxes = [...document.querySelectorAll(".association-node")].map((node) => node.getBoundingClientRect());
+    const chipBoxes = [...document.querySelectorAll(".association-anchor__chip")].map((chip) => chip.getBoundingClientRect());
+    const hit = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    let count = 0;
+    for (let index = 0; index < boxes.length; index += 1) {
+      for (let other = index + 1; other < boxes.length; other += 1) if (hit(boxes[index], boxes[other])) count += 1;
+      for (const chip of chipBoxes) if (hit(boxes[index], chip)) count += 1;
+    }
+    return count;
+  });
+  expect(collisions).toBe(0);
+
+  await expect(graph.locator(".association-node.is-crossing")).toHaveCount(1);
+  await expect(graph.locator(".association-edge.is-crossing")).toHaveCount(2);
+  await testInfo.attach("thin-reading-association-graph", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png"
+  });
+
+  await chips.first().click();
+  await expect(graph.locator(".association-anchor.is-dimmed")).toHaveCount(4);
+
+  await page.getByRole("button", { name: /核心方法的原始定义与理论依据/ }).click();
+  await expect(page.getByLabel("关联论文：核心方法的原始定义与理论依据")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("关联论文：核心方法的原始定义与理论依据")).not.toBeVisible();
+  await expect(graph).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(graph).not.toBeVisible();
+});

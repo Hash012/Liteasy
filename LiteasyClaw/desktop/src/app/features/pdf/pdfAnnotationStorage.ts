@@ -1,4 +1,5 @@
 import type { PaperIdentity } from "../paper-identity/paperIdentity";
+import { resolveLocalAccountKey } from "../library/localAccountKey";
 
 export type PdfAnnotationKind = "highlight" | "underline" | "note";
 export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
@@ -28,6 +29,12 @@ export type PdfAnnotation = {
   text: string;
   updatedAt: string;
   visibility: PdfAnnotationVisibility;
+};
+
+export type PdfAnnotationPrivateState = {
+  annotations: PdfAnnotation[];
+  autoPublic: boolean;
+  version: 1;
 };
 
 const storagePrefix = "liteasy.pdf-annotations/v1";
@@ -106,7 +113,7 @@ export function pdfAnnotationStorageKey(paper: { id: string; sourcePath?: string
   if (!paper?.id) {
     return null;
   }
-  return `${storagePrefix}:${paper.id}:${stableHash(paper.sourcePath ?? "")}`;
+  return `${storagePrefix}:${resolveLocalAccountKey()}:${paper.id}:${stableHash(paper.sourcePath ?? "")}`;
 }
 
 export function pdfAnnotationAutoPublicStorageKey(paper: { id: string; sourcePath?: string } | null) {
@@ -114,9 +121,29 @@ export function pdfAnnotationAutoPublicStorageKey(paper: { id: string; sourcePat
   return annotationKey ? annotationKey.replace(storagePrefix, autoPublicStoragePrefix) : null;
 }
 
+function legacyAnnotationStorageKey(storageKey: string) {
+  const accountSegment = `:${resolveLocalAccountKey()}:`;
+  return storageKey.includes(accountSegment)
+    ? storageKey.replace(accountSegment, ":")
+    : storageKey;
+}
+
+function loadScopedAnnotationValue(storageKey: string) {
+  const scopedValue = window.localStorage.getItem(storageKey);
+  if (scopedValue !== null) return scopedValue;
+  const legacyKey = legacyAnnotationStorageKey(storageKey);
+  if (legacyKey === storageKey) return null;
+  const legacyValue = window.localStorage.getItem(legacyKey);
+  if (legacyValue !== null) {
+    window.localStorage.setItem(storageKey, legacyValue);
+    window.localStorage.removeItem(legacyKey);
+  }
+  return legacyValue;
+}
+
 export function loadPdfAnnotationAutoPublic(storageKey: string | null) {
   if (!storageKey || typeof window === "undefined") return false;
-  return window.localStorage.getItem(storageKey) === "true";
+  return loadScopedAnnotationValue(storageKey) === "true";
 }
 
 export function savePdfAnnotationAutoPublic(storageKey: string | null, enabled: boolean) {
@@ -128,30 +155,54 @@ export function savePdfAnnotationAutoPublic(storageKey: string | null, enabled: 
   }
 }
 
+export function normalizePdfAnnotations(value: unknown, fallbackPaperIdentity?: PaperIdentity): PdfAnnotation[] {
+  if (!Array.isArray(value)) return [];
+  const now = new Date().toISOString();
+  return value.flatMap((annotation) => {
+    if (isAnnotation(annotation)) {
+      return [{ ...annotation, rects: annotation.rects.map((rect) => ({ ...rect })) }];
+    }
+    if (fallbackPaperIdentity && isLegacyAnnotation(annotation)) {
+      return [{
+        ...annotation,
+        createdAt: now,
+        paperIdentity: fallbackPaperIdentity,
+        rects: annotation.rects.map((rect) => ({ ...rect })),
+        updatedAt: now,
+        visibility: "private" as const
+      }];
+    }
+    return [];
+  });
+}
+
+export function normalizePdfAnnotationPrivateState(
+  value: unknown,
+  fallbackPaperIdentity?: PaperIdentity
+): PdfAnnotationPrivateState | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const candidate = value as { annotations?: unknown; autoPublic?: unknown; version?: unknown };
+  if (!Array.isArray(candidate.annotations)) {
+    return undefined;
+  }
+  return {
+    annotations: normalizePdfAnnotations(candidate.annotations, fallbackPaperIdentity),
+    autoPublic: candidate.autoPublic === true,
+    version: 1
+  };
+}
+
 export function loadPdfAnnotations(storageKey: string | null, fallbackPaperIdentity?: PaperIdentity): PdfAnnotation[] {
   if (!storageKey || typeof window === "undefined") {
     return [];
   }
   try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
-    if (!Array.isArray(value)) return [];
-    const now = new Date().toISOString();
-    return value.flatMap((annotation) => {
-      if (isAnnotation(annotation)) {
-        return [{ ...annotation, rects: annotation.rects.map((rect) => ({ ...rect })) }];
-      }
-      if (fallbackPaperIdentity && isLegacyAnnotation(annotation)) {
-        return [{
-          ...annotation,
-          createdAt: now,
-          paperIdentity: fallbackPaperIdentity,
-          rects: annotation.rects.map((rect) => ({ ...rect })),
-          updatedAt: now,
-          visibility: "private" as const
-        }];
-      }
-      return [];
-    });
+    return normalizePdfAnnotations(
+      JSON.parse(loadScopedAnnotationValue(storageKey) ?? "[]"),
+      fallbackPaperIdentity
+    );
   } catch {
     return [];
   }

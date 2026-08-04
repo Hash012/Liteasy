@@ -136,7 +136,7 @@ export function buildAdminConsoleHtml(request, config, builders) {
       .stack span { border-radius: 999px; background: #f1efe8; color: #5c6470; font-size: 12px; font-weight: 800; padding: 4px 9px; }
       form { border: 1px solid #e2dccf; border-radius: 14px; background: #fbfaf7; display: grid; gap: 12px; margin-top: 14px; padding: 16px; }
       label { display: grid; gap: 6px; color: #5c6470; font-size: 13px; font-weight: 800; }
-      select { border: 1px solid #d9d2c3; border-radius: 10px; color: #1f3345; font: inherit; padding: 9px 10px; }
+      input, select { border: 1px solid #d9d2c3; border-radius: 10px; color: #1f3345; font: inherit; padding: 9px 10px; }
       button { border: 1px solid #24415f; border-radius: 999px; background: #1f3345; color: #fff; cursor: pointer; font: inherit; font-weight: 800; padding: 10px 14px; }
       .form-status { color: #315f3d; font-size: 13px; font-weight: 800; min-height: 18px; }
     </style>
@@ -180,6 +180,24 @@ export function buildAdminConsoleHtml(request, config, builders) {
           <button type="submit">保存 API 策略</button>
           <div class="form-status" id="api-policy-status"></div>
         </form>
+        <h2>存储配额</h2>
+        <form id="storage-quota-form">
+          <div class="label">按用户或组织设置服务端逻辑空间</div>
+          <label>范围
+            <select name="scopeType">
+              <option value="user">个人云文献库</option>
+              <option value="organization">组织文献库</option>
+            </select>
+          </label>
+          <label>用户 ID / 组织 ID
+            <input name="scopeId" required maxlength="180" placeholder="user:... 或 org-..." />
+          </label>
+          <label>配额（GB）
+            <input name="limitGb" required min="0" step="0.1" type="number" value="20" />
+          </label>
+          <button type="submit">保存存储配额</button>
+          <div class="form-status" id="storage-quota-status"></div>
+        </form>
         <h2>用户与账号</h2>
         <div class="grid">
           <div class="metric"><span>活跃客户用户</span><strong>${escapeHtml(dashboard.users.activeUsers)}</strong><span>来自 ${escapeHtml(dashboard.users.desktopCustomers)} 个客户组织</span></div>
@@ -215,6 +233,8 @@ export function buildAdminConsoleHtml(request, config, builders) {
       const form = document.getElementById("api-policy-form");
       const status = document.getElementById("api-policy-status");
       const demoOpsStatus = document.getElementById("demo-ops-status");
+      const storageQuotaForm = document.getElementById("storage-quota-form");
+      const storageQuotaStatus = document.getElementById("storage-quota-status");
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const formData = new FormData(form);
@@ -231,6 +251,24 @@ export function buildAdminConsoleHtml(request, config, builders) {
         status.textContent = response.ok
           ? "已保存策略：" + payload.policy.policyVersion
           : "策略保存失败";
+      });
+      storageQuotaForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(storageQuotaForm);
+        const limitGb = Number(formData.get("limitGb"));
+        const response = await fetch("/v1/admin/storage-quota", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            limitBytes: Math.round(limitGb * 1024 * 1024 * 1024),
+            scopeId: formData.get("scopeId"),
+            scopeType: formData.get("scopeType")
+          })
+        });
+        const payload = await response.json();
+        storageQuotaStatus.textContent = response.ok
+          ? "已保存：" + (payload.usedBytes / 1024 / 1024 / 1024).toFixed(2) + " / " + limitGb.toFixed(2) + " GB"
+          : "配额保存失败：" + (payload.message || payload.error || response.status);
       });
       document.getElementById("demo-reset-button")?.addEventListener("click", async () => {
         const response = await fetch("/v1/admin/demo-reset", {

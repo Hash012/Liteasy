@@ -398,19 +398,10 @@ export function findDuplicateArtifacts(
   });
 }
 
-function confirmDuplicateGenerationInBrowser({
-  artifactType,
-  existingArtifacts,
-  papers
-}: DuplicateArtifactGenerationConfirmation) {
-  if (typeof window === "undefined" || typeof window.confirm !== "function") {
-    return false;
-  }
-  const paperList = papers.map((paper) => `- ${paper.title}`).join("\n");
-  return window.confirm(
-    `当前文献集合已经存在 ${existingArtifacts.length} 个“${artifactTypeLabels[artifactType]}”产物：\n\n` +
-    `${paperList}\n\n仍要生成新的产物吗？新结果会另存，不会覆盖已有产物。`
-  );
+function confirmDuplicateGenerationInBrowser(_input: DuplicateArtifactGenerationConfirmation) {
+  // Native confirm dialogs can be suppressed by embedded browser shells. Since every
+  // generation is persisted as a new artifact, a repeat never overwrites prior work.
+  return true;
 }
 
 export function useArtifactActions({

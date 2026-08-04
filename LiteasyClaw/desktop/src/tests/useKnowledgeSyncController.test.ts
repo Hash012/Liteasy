@@ -56,7 +56,7 @@ describe("useKnowledgeSyncController", () => {
           put: vi.fn()
         },
         recommendationGeneratorDeps: {
-          fetch: vi.fn()
+          fetch: vi.fn(async () => [])
         },
         recommendationsEnabled: true,
         recommendationSortMode: "relevance",
@@ -107,7 +107,7 @@ describe("useKnowledgeSyncController", () => {
         put: vi.fn()
       },
       recommendationFeedbackTransport,
-      recommendationGeneratorDeps: { fetch: vi.fn() },
+      recommendationGeneratorDeps: { fetch: vi.fn(async () => []) },
       recommendationsEnabled: true,
       recommendationSortMode: "relevance",
       selectedPapers,

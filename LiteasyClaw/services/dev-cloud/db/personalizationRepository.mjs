@@ -129,7 +129,8 @@ function toPublicSnapshot(state) {
   return {
     assistantSummary: state.assistantSummary,
     personalizationVersion: state.personalizationVersion,
-    profile: state.profile
+    profile: state.profile,
+    tags: state.tags
   };
 }
 
@@ -183,11 +184,21 @@ export function createPersonalizationRepository(database) {
     WHERE owner_key = ?
   `);
   const upsertTerm = database.prepare(`
-    INSERT INTO personalization_terms (owner_key, term, weight, updated_at)
-    VALUES (@ownerKey, @term, @weight, @updatedAt)
+    INSERT INTO personalization_terms (owner_key, term, weight, updated_at, tag_id, signal_source)
+    VALUES (@ownerKey, @term, @weight, @updatedAt, @tagId, @signalSource)
     ON CONFLICT(owner_key, term) DO UPDATE SET
       weight = MIN(6, MAX(-4, personalization_terms.weight + excluded.weight)),
+      evidence_count = personalization_terms.evidence_count + 1,
+      signal_source = COALESCE(excluded.signal_source, personalization_terms.signal_source),
+      tag_id = COALESCE(excluded.tag_id, personalization_terms.tag_id),
       updated_at = excluded.updated_at
+  `);
+  const listWorkTags = database.prepare(`
+    SELECT t.id AS tag_id, t.label, t.normalized
+    FROM paper_tags pt
+    JOIN tags t ON t.id = pt.tag_id
+    WHERE pt.work_id = ?
+    ORDER BY t.normalized
   `);
   const addSuppression = database.prepare(`
     INSERT INTO recommendation_suppressions (owner_key, recommendation_id, created_at)
@@ -195,10 +206,25 @@ export function createPersonalizationRepository(database) {
     ON CONFLICT(owner_key, recommendation_id) DO NOTHING
   `);
 
+  const listUserTags = database.prepare(`
+    SELECT term, weight, evidence_count, signal_source, tag_id
+    FROM personalization_terms
+    WHERE owner_key = ? AND weight > 0
+    ORDER BY weight DESC, evidence_count DESC, updated_at DESC, term ASC
+    LIMIT 12
+  `);
+
   function readState(ownerKey) {
     const profile = mapProfile(findProfile.get(ownerKey));
     const state = findState.get(ownerKey);
     const terms = listTerms.all(ownerKey);
+    const tags = listUserTags.all(ownerKey).map((row) => ({
+      evidenceCount: row.evidence_count,
+      label: row.term,
+      signalSource: row.signal_source,
+      tagId: row.tag_id,
+      weight: Number(row.weight)
+    }));
     return {
       assistantSummary: buildAssistantSummary(terms),
       personalizationVersion: state?.version ?? 0,
@@ -206,6 +232,7 @@ export function createPersonalizationRepository(database) {
       suppressedRecommendationIds: listSuppressions
         .all(ownerKey)
         .map((row) => row.recommendation_id),
+      tags,
       terms
     };
   }
@@ -241,8 +268,27 @@ export function createPersonalizationRepository(database) {
       });
     } else {
       const weight = signalWeights[signal.kind];
+      // 统一按 normalized term 去重：标题抽取 + 论文已打标 tag 合并后每条只 upsert 一次，
+      // 避免 title 与 work tag 重叠时 evidence_count 翻倍。
+      const tagByTerm = new Map();
       for (const term of extractTerms(signal.title)) {
-        upsertTerm.run({ ownerKey, term, updatedAt, weight });
+        tagByTerm.set(term, null);
+      }
+      if (signal.workId) {
+        for (const workTag of listWorkTags.all(signal.workId)) {
+          // work tag 提供规范化 tag_id，覆盖同名 title 抽取项。
+          tagByTerm.set(workTag.normalized, workTag.tag_id);
+        }
+      }
+      for (const [term, tagId] of tagByTerm) {
+        upsertTerm.run({
+          ownerKey,
+          signalSource: signal.kind,
+          tagId,
+          term,
+          updatedAt,
+          weight
+        });
       }
     }
     insertState.run({ ownerKey, updatedAt });
@@ -284,7 +330,22 @@ export function createPersonalizationRepository(database) {
         throw new PersonalizationValidationError("文献标题无效。");
       }
 
-      return toPublicSnapshot(recordSignal(ownerKey, signal));
+      const validated = { kind: signal.kind };
+      if (signal.kind === "recommendation_dismissed") {
+        validated.recommendationId = signal.recommendationId;
+      } else {
+        validated.title = signal.title;
+        if (
+          typeof signal.workId === "string" &&
+          signal.workId.length > 0 &&
+          signal.workId.length <= 80 &&
+          /^[A-Za-z0-9._-]+$/.test(signal.workId)
+        ) {
+          validated.workId = signal.workId;
+        }
+      }
+
+      return toPublicSnapshot(recordSignal(ownerKey, validated));
     },
 
     save(ownerKey, profile) {

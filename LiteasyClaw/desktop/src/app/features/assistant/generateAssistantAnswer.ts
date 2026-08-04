@@ -57,6 +57,7 @@ import {
   type ThinReadingExternalPdfTransport
 } from "../thin-reading/thinReadingExternalFullTextClient";
 import { executeThinReadingEvidenceToolPlan } from "../thin-reading/thinReadingEvidenceTools";
+import { loadThinReadingAnchorReferenceIndex } from "../thin-reading/thinReadingAnchorReferences";
 
 type GenerateAssistantAnswerInput = {
   agentCoreContext?: AgentCorePromptContext;
@@ -567,6 +568,14 @@ function mergeThinReadingExternalSources(
         ...(existing.fullTextUrl || source.fullTextUrl
           ? { fullTextUrl: existing.fullTextUrl ?? source.fullTextUrl }
           : {}),
+        ...(existing.localPdfCachePath || source.localPdfCachePath
+          ? {
+              localPdfCachePath: existing.localPdfCachePath ?? source.localPdfCachePath,
+              localPdfContentHash: existing.localPdfCachePath
+                ? existing.localPdfContentHash
+                : source.localPdfContentHash
+            }
+          : {}),
         retrievalIntents: [...new Set([
           ...(existing.retrievalIntents ?? ["support"]),
           ...(source.retrievalIntents ?? ["support"])
@@ -631,6 +640,120 @@ export function prioritizeThinReadingGenerationSources(input: {
     if (selected.size >= maximumGenerationSources) break;
   }
   return [...selected.values()];
+}
+
+function selectThinReadingAnchorSources(sources: readonly ThinReadingExternalSource[]) {
+  const usable = sources
+    .filter((source) => source.isRetracted !== true)
+    .sort((left, right) => right.relevance - left.relevance);
+  const highRelevance = usable.filter((source) => source.relevance >= 0.42);
+  return (highRelevance.length > 0 ? highRelevance : usable).slice(0, 4);
+}
+
+function selectThinReadingAnchorFullTextCandidates(
+  groups: readonly (readonly ThinReadingExternalSource[])[]
+) {
+  const selected = new Map<string, ThinReadingExternalSource>();
+  const maximumAutomaticPdfs = 8;
+  const maximumGroupSize = Math.max(0, ...groups.map((group) => group.length));
+  for (let rank = 0; rank < maximumGroupSize; rank += 1) {
+    for (const group of groups) {
+      const candidate = group.filter((source) => source.fullTextUrl)[rank];
+      if (candidate) selected.set(candidate.id, candidate);
+      if (selected.size >= maximumAutomaticPdfs) return [...selected.values()];
+    }
+  }
+  return [...selected.values()];
+}
+
+async function attachThinReadingAnchorSources(input: {
+  context: ThinReadingGenerationContext;
+  endpoint: string;
+  importedChunksByPaperId: Record<string, RetrievalChunk[]>;
+  onProgress?: GenerateAssistantAnswerInput["onProgress"];
+  pdfTransport?: ThinReadingExternalPdfTransport;
+  seed: ThinReadingNodeSeed;
+  signal?: AbortSignal;
+  transport?: ThinReadingExternalKnowledgeTransport;
+}): Promise<ThinReadingNodeSeed> {
+  const anchors = input.seed.evidence.anchors ?? [];
+  if (anchors.length === 0) {
+    return input.seed;
+  }
+
+  input.onProgress?.({
+    phase: "retrieving_external_knowledge",
+    progress: 74,
+    summary: "正在围绕薄读锚点检索关联论文"
+  });
+  const search = createThinReadingExternalKnowledgeClient({
+    endpoint: input.endpoint,
+    transport: input.transport
+  });
+  const referencesByAnchorId = input.context.primaryPaperId
+    ? await loadThinReadingAnchorReferenceIndex({
+        anchors,
+        evidenceSpans: input.seed.evidence.paperEvidenceSpans ?? [],
+        importedChunks: input.importedChunksByPaperId[input.context.primaryPaperId] ?? [],
+        paperId: input.context.primaryPaperId
+      }).catch(() => new Map())
+    : new Map();
+  const results = await Promise.allSettled(anchors.map((anchor) => search({
+    // Presence keeps this an anchor-aware request. When local citations exist, their
+    // bibliography entries seed the graph before the query fills remaining coverage.
+    anchorReferences: referencesByAnchorId.get(anchor.id) ?? [],
+    artifactId: input.context.artifactId,
+    intent: "context",
+    limit: 12,
+    query: anchor.searchQuery,
+    signal: input.signal,
+    targetPaperIdentity: input.context.primaryPaperIdentity,
+    targetPaperTitle: input.context.primaryPaperTitle
+  })));
+  if (input.signal?.aborted) {
+    throw new DOMException("The operation was aborted", "AbortError");
+  }
+
+  const sourcesByAnchorId = new Map<string, readonly ThinReadingExternalSource[]>();
+  const retrievedSourceGroups: ThinReadingExternalSource[][] = [];
+  results.forEach((result, index) => {
+    if (result.status !== "fulfilled") {
+      return;
+    }
+    const selected = selectThinReadingAnchorSources(result.value.sources);
+    sourcesByAnchorId.set(anchors[index].id, selected);
+    retrievedSourceGroups.push(selected);
+  });
+  if (retrievedSourceGroups.length === 0) {
+    return input.seed;
+  }
+
+  let externalSources = mergeThinReadingExternalSources(
+    input.seed.evidence.externalSources,
+    ...retrievedSourceGroups
+  );
+  const fullTextCandidates = selectThinReadingAnchorFullTextCandidates(retrievedSourceGroups);
+  if (fullTextCandidates.length > 0) {
+    const enrichedCandidates = await enrichThinReadingSourcesWithFullText({
+      endpoint: input.endpoint,
+      maximumSources: fullTextCandidates.length,
+      signal: input.signal,
+      sources: fullTextCandidates,
+      transport: input.pdfTransport
+    });
+    externalSources = mergeThinReadingExternalSources(externalSources, enrichedCandidates);
+  }
+  return {
+    ...input.seed,
+    evidence: {
+      ...input.seed.evidence,
+      anchors: anchors.map((anchor) => ({
+        ...anchor,
+        externalSourceIds: sourcesByAnchorId.get(anchor.id)?.map((source) => source.id) ?? []
+      })),
+      externalSources
+    }
+  };
 }
 
 function shouldAcquireThinReadingFullText(context: ThinReadingGenerationContext) {
@@ -745,18 +868,31 @@ async function planThinReadingEvidence(input: {
     context: input.context,
     prepared: input.prepared
   });
-  const generation = await input.gateway.generateAnswer({
-    model: input.model,
-    outputFormat: {
-      name: "liteasy_thin_reading_evidence_plan",
-      schema: thinReadingEvidencePlanJsonSchema,
-      strict: true
-    },
-    prompt: basePrompt,
-    provider: input.provider,
-    requireLive: true,
-    signal: input.signal
-  });
+  let generation: Awaited<ReturnType<typeof input.gateway.generateAnswer>>;
+  try {
+    generation = await input.gateway.generateAnswer({
+      model: input.model,
+      outputFormat: {
+        name: "liteasy_thin_reading_evidence_plan",
+        schema: thinReadingEvidencePlanJsonSchema,
+        strict: true
+      },
+      prompt: basePrompt,
+      provider: input.provider,
+      requireLive: true,
+      signal: input.signal
+    });
+  } catch (error) {
+    if (input.signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+      throw error;
+    }
+    input.onProgress?.({
+      phase: "planning_evidence",
+      progress: 43,
+      summary: "模型证据规划暂不可用，正在使用确定性证据范围继续薄读"
+    });
+    return undefined;
+  }
   try {
     return parseThinReadingEvidencePlan({ allowedEvidenceIds, output: generation.answer });
   } catch (error) {
@@ -1079,13 +1215,25 @@ async function generateThinReadingWithQualityRepair(input: {
   const firstEvidenceToolResult = firstEvidencePlan
     ? executeThinReadingEvidenceToolPlan({ plan: firstEvidencePlan, prepared: input.prepared })
     : undefined;
-  const evidenceObservation = firstEvidencePlan && firstEvidenceToolResult
-    ? await observeThinReadingEvidence({
-      ...input,
-      firstPlan: firstEvidencePlan,
-      observedEvidenceIds: firstEvidenceToolResult.evidence.map((evidence) => evidence.id)
-    })
-    : undefined;
+  let evidenceObservation: ThinReadingEvidenceObservation | undefined;
+  if (firstEvidencePlan && firstEvidenceToolResult) {
+    try {
+      evidenceObservation = await observeThinReadingEvidence({
+        ...input,
+        firstPlan: firstEvidencePlan,
+        observedEvidenceIds: firstEvidenceToolResult.evidence.map((evidence) => evidence.id)
+      });
+    } catch (error) {
+      if (input.signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+        throw error;
+      }
+      input.onProgress?.({
+        phase: "observing_evidence",
+        progress: 47,
+        summary: "补充证据观察暂不可用，正在使用首轮证据继续生成"
+      });
+    }
+  }
   const secondEvidencePlan = evidenceObservation?.decision === "continue" && firstEvidencePlan
     ? {
         focus: evidenceObservation.focus.length > 0
@@ -1191,9 +1339,14 @@ async function generateThinReadingWithQualityRepair(input: {
         ...(resolvedExternalSources ? { externalSources: resolvedExternalSources } : {})
       }
     : input.context;
+  const deterministicEvidenceIds = input.prepared.evidence
+    .slice(0, maximumEvidenceAcrossPlanningRounds)
+    .map((evidence) => evidence.id);
   const plannedEvidence = evidencePlan
     ? scopeThinReadingEvidence(input.prepared, combinedEvidence.map((evidence) => evidence.id))
-    : input.prepared;
+    : input.prepared.evidence.length > maximumEvidenceAcrossPlanningRounds
+      ? scopeThinReadingEvidence(input.prepared, deterministicEvidenceIds)
+      : input.prepared;
   let basePrompt = buildThinReadingAgentPrompt({
     context: generationContext,
     prepared: plannedEvidence
@@ -1547,7 +1700,6 @@ export async function generateAssistantAnswer({
       try {
         const externalKnowledgeClient = createThinReadingExternalKnowledgeClient({
           endpoint: activeEndpoint,
-          openAlexApiKey: settings["thin_reading.openalex_api_key"],
           transport: thinReadingExternalKnowledgeTransport
         });
         const queryPlan = buildThinReadingExternalQueryPlan(context);
@@ -1643,7 +1795,6 @@ export async function generateAssistantAnswer({
         try {
           const externalKnowledgeClient = createThinReadingExternalKnowledgeClient({
             endpoint: activeEndpoint,
-            openAlexApiKey: settings["thin_reading.openalex_api_key"],
             transport: thinReadingExternalKnowledgeTransport
           });
           const result = await externalKnowledgeClient({
@@ -1702,10 +1853,28 @@ export async function generateAssistantAnswer({
       signal,
       externalSourcesPromise
     });
-    const { evidenceLoop, evidencePlan, evidenceReview, evidenceToolCalls, generation, qualityGate, rootSeed } = thinReadingGeneration;
+    const {
+      evidenceLoop,
+      evidencePlan,
+      evidenceReview,
+      evidenceToolCalls,
+      generation,
+      qualityGate,
+      rootSeed: generatedRootSeed
+    } = thinReadingGeneration;
     if (signal?.aborted) {
       throw new Error("Assistant answer generation was cancelled");
     }
+    const rootSeed = await attachThinReadingAnchorSources({
+      context,
+      endpoint: activeEndpoint,
+      importedChunksByPaperId,
+      onProgress,
+      pdfTransport: thinReadingExternalPdfTransport,
+      seed: generatedRootSeed,
+      signal,
+      transport: thinReadingExternalKnowledgeTransport
+    });
     onProgress?.({
       phase: "auditing_answer",
       progress: 78,

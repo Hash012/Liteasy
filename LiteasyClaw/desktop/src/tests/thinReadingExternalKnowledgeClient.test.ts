@@ -36,7 +36,6 @@ describe("thinReadingExternalKnowledgeClient", () => {
     }));
     const client = createThinReadingExternalKnowledgeClient({
       endpoint: "https://liteasy.example.com/",
-      openAlexApiKey: "user-openalex-key",
       transport
     });
 
@@ -68,16 +67,18 @@ describe("thinReadingExternalKnowledgeClient", () => {
     });
     expect(transport).toHaveBeenCalledWith(expect.objectContaining({
       body: expect.stringContaining('"artifactId":"artifact-thin-external"'),
-      headers: expect.objectContaining({ "X-OpenAlex-Api-Key": "user-openalex-key" }),
+      headers: { "Content-Type": "application/json" },
       method: "POST",
       url: "https://liteasy.example.com/v1/research/external-knowledge"
     }));
     expect(String(transport.mock.calls[0][0].body)).toContain('"targetPaperIdentity":{"kind":"doi","value":"10.1000/colbert"}');
     expect(JSON.parse(String(transport.mock.calls[0][0].body))).toMatchObject({
       includeArxiv: true,
+      includeExpandedSources: true,
+      includeOpenAlex: true,
       limit: 32
     });
-    expect(String(transport.mock.calls[0][0].body)).not.toContain("user-openalex-key");
+    expect(String(transport.mock.calls[0][0].body)).not.toContain("api_key");
   });
 
   test("skips rate-limited arXiv fan-out for secondary retrieval intents", async () => {
@@ -99,25 +100,111 @@ describe("thinReadingExternalKnowledgeClient", () => {
     ]);
   });
 
-  test("rejects malformed configured API keys before sending a retrieval request", async () => {
-    const transport = vi.fn();
+  test("requests service-owned OpenAlex without handling a credential in the desktop", async () => {
+    const requests: Array<{
+      body: string;
+      headers: Record<string, string>;
+      signal?: AbortSignal;
+    }> = [];
     const client = createThinReadingExternalKnowledgeClient({
       endpoint: "https://liteasy.example.com",
-      openAlexApiKey: "not a valid key",
-      transport
+      transport: async (request) => {
+        requests.push({
+          body: request.body,
+          headers: request.headers,
+          signal: request.signal
+        });
+        return {
+          json: async () => ({
+            sources: [{
+              abstract: "Reviewable OpenAlex evidence returned by the deployment service.",
+              authors: ["A. Author"],
+              id: "openalex:W900",
+              provider: "openalex",
+              relation: "topic_search",
+              relevance: 0.8,
+              retrievalQuery: "anchor retrieval",
+              sourceId: "W900",
+              sourceRecordUrl: "https://openalex.org/W900",
+              title: "Service-owned OpenAlex anchor retrieval",
+              url: "https://openalex.org/W900"
+            }]
+          }),
+          ok: true,
+          status: 200
+        };
+      }
     });
 
-    await expect(client({ artifactId: "artifact-invalid-key", query: "test" })).rejects.toThrow("API 密钥格式无效");
-    expect(transport).not.toHaveBeenCalled();
+    const controller = new AbortController();
+    const result = await client({
+      artifactId: "artifact-byok",
+      query: "anchor retrieval",
+      signal: controller.signal
+    });
+
+    expect(requests[0].headers).toEqual({ "Content-Type": "application/json" });
+    expect(JSON.parse(requests[0].body)).toMatchObject({
+      includeOpenAlex: true
+    });
+    expect(requests[0].body).not.toContain("api_key");
+    expect(requests[0].signal).toBe(controller.signal);
+    expect(result.sources).toEqual([
+      expect.objectContaining({ id: "openalex:W900", provider: "openalex" })
+    ]);
   });
 
-  test("surfaces the actionable OpenAlex key requirement instead of a generic 503", async () => {
+  test("sends the anchor's own cited references, which is what makes retrieval anchor-level", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async (request) => {
+        requests.push(JSON.parse(request.body));
+        return { json: async () => ({ sources: [] }), ok: true, status: 200 };
+      }
+    });
+
+    await client({
+      anchorReferences: [{ number: 2, text: "Bahdanau et al. Attention mechanism." }],
+      artifactId: "artifact-anchor",
+      query: "self-attention"
+    });
+    // Empty is meaningful: this remains an anchor-aware request, but it has no local graph seed.
+    await client({ anchorReferences: [], artifactId: "artifact-anchor", query: "self-attention" });
+
+    expect(requests[0].anchorReferences).toEqual([
+      { number: 2, text: "Bahdanau et al. Attention mechanism." }
+    ]);
+    expect(requests[1].anchorReferences).toEqual([]);
+  });
+
+  test("sends translated and direct query variants in a single resumable request", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async (request) => {
+        requests.push(JSON.parse(request.body));
+        return { json: async () => ({ sources: [] }), ok: true, status: 200 };
+      }
+    });
+
+    await client({
+      artifactId: "artifact-bilingual",
+      query: "knowledge graph completion",
+      queryVariants: ["knowledge graph completion", "知识图谱补全"]
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].queryVariants).toEqual(["knowledge graph completion", "知识图谱补全"]);
+  });
+
+  test("surfaces a unified retrieval-service failure without asking the reader to configure a source key", async () => {
     const client = createThinReadingExternalKnowledgeClient({
       endpoint: "https://liteasy.example.com",
       transport: async () => ({
         json: async () => ({
-          error: "openalex_api_key_required",
-          message: "OpenAlex 外部文献检索需要有效 API 密钥。请在 Liteasy 设置中配置 OpenAlex API 密钥后重试。"
+          error: "external_knowledge_unavailable",
+          message: "统一联网服务当前没有可用的文献来源，请稍后重试。"
         }),
         ok: false,
         status: 503
@@ -125,7 +212,7 @@ describe("thinReadingExternalKnowledgeClient", () => {
     });
 
     await expect(client({ artifactId: "artifact-key-required", query: "test" }))
-      .rejects.toThrow("请在 Liteasy 设置中配置 OpenAlex API 密钥");
+      .rejects.toThrow("统一联网服务当前没有可用的文献来源");
   });
 
   test("rejects malformed source payloads", async () => {
@@ -227,6 +314,54 @@ describe("thinReadingExternalKnowledgeClient", () => {
       .resolves.toMatchObject({ sources: [expect.objectContaining({ provider: "arxiv" })] });
   });
 
+  test("accepts canonical DOAJ and OAPEN provenance for open humanities material", async () => {
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async () => ({
+        json: async () => ({
+          sources: [
+            {
+              abstract: "An open access journal article with an inspectable humanities abstract.",
+              authors: ["J. Author"],
+              id: "doaj:f0c0f90b-8ab1-4a00-a013-888888888888",
+              provider: "doaj",
+              relation: "topic_search",
+              relevance: 0.8,
+              retrievalQuery: "social history",
+              sourceId: "f0c0f90b-8ab1-4a00-a013-888888888888",
+              sourceRecordUrl: "https://doaj.org/article/f0c0f90b-8ab1-4a00-a013-888888888888",
+              title: "A Journal History",
+              url: "https://doaj.org/article/f0c0f90b-8ab1-4a00-a013-888888888888"
+            },
+            {
+              abstract: "An open access humanities book with sufficient metadata for review.",
+              authors: ["B. Author"],
+              id: "oapen:20.500.12657/25287",
+              provider: "oapen",
+              relation: "topic_search",
+              relevance: 0.78,
+              retrievalQuery: "social history",
+              sourceId: "20.500.12657/25287",
+              sourceRecordUrl: "https://library.oapen.org/handle/20.500.12657/25287",
+              title: "An Open History Book",
+              url: "https://library.oapen.org/handle/20.500.12657/25287"
+            }
+          ]
+        }),
+        ok: true,
+        status: 200
+      })
+    });
+
+    await expect(client({ artifactId: "artifact-humanities-oa", query: "social history" }))
+      .resolves.toMatchObject({
+        sources: [
+          expect.objectContaining({ provider: "doaj" }),
+          expect.objectContaining({ provider: "oapen" })
+        ]
+      });
+  });
+
   test("filters retracted records and records without reviewable source content", async () => {
     const client = createThinReadingExternalKnowledgeClient({
       endpoint: "https://liteasy.example.com",
@@ -268,6 +403,37 @@ describe("thinReadingExternalKnowledgeClient", () => {
     });
 
     await expect(client({ artifactId: "artifact-untrusted", query: "test" }))
+      .resolves.toMatchObject({ sources: [] });
+  });
+
+  test("keeps a verified citation-graph record without an abstract for the association view only", async () => {
+    const client = createThinReadingExternalKnowledgeClient({
+      endpoint: "https://liteasy.example.com",
+      transport: async () => ({
+        json: async () => ({
+          sources: [{
+            abstract: "",
+            authors: ["Cited Author"],
+            confidenceBasis: "author_citation",
+            id: "openalex:W44",
+            provider: "openalex",
+            relation: "cited_by_target",
+            relevance: 0.95,
+            retrievalQuery: "anchor",
+            sourceId: "W44",
+            sourceRecordUrl: "https://openalex.org/W44",
+            title: "A Verified Local Anchor Reference",
+            url: "https://openalex.org/W44"
+          }]
+        }),
+        ok: true,
+        status: 200
+      })
+    });
+
+    await expect(client({ artifactId: "artifact-graph", intent: "context", query: "anchor" }))
+      .resolves.toMatchObject({ sources: [expect.objectContaining({ id: "openalex:W44" })] });
+    await expect(client({ artifactId: "artifact-generation", intent: "support", query: "anchor" }))
       .resolves.toMatchObject({ sources: [] });
   });
 

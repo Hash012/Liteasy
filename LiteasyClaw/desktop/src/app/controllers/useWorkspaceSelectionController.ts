@@ -53,7 +53,9 @@ export function useWorkspaceSelectionController({
 
     workspaceStore.openWorkspace((localLibraryEntries ?? []).map((entry) => ({
       id: entry.id,
-      sourcePath: entry.path,
+      // A bodyless entry has no path to load, so the reader shows "entry only" instead
+      // of failing to open a file that was never there.
+      sourcePath: entry.path ?? undefined,
       title: entry.title
     })), {
       rootPath: localLibraryRootPath,

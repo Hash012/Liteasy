@@ -104,10 +104,52 @@ describe("thinReadingAgent", () => {
     expect(prompt.match(/信号：/g)).toHaveLength(3);
     expect(prompt).toContain("反摘要门控");
     expect(prompt).toContain("Skeptical audit");
+    expect(prompt).toContain("Reader-facing anchors");
+    expect(prompt).toContain("3–8 non-overlapping high-value anchors");
+    expect(prompt).toContain("Cover every sentence that contains an independent high-value");
     expect(prompt).toContain("读后留存测试");
     expect(prompt).toContain("首次承担实质含义");
     expect(prompt).toContain("late interaction（后期交互）");
     expect(prompt).toContain("错误：后期交互（late interaction）");
+  });
+
+  test("maps an agent anchor onto an exact span of the thin-reading sentence", () => {
+    const summary = "这篇综述以 taxonomy 组织 vector database systems，并明确了关键研究空白。";
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      anchors: [{
+        importance: 0.9,
+        kind: "concept",
+        label: "分类框架",
+        searchQuery: "vector database taxonomy survey",
+        summarySentenceIndex: 0,
+        text: "taxonomy"
+      }],
+      claims: [],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      summary,
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: prepared,
+      targetLanguage: "zh-CN"
+    });
+
+    expect(seed.evidence.anchors).toEqual([expect.objectContaining({
+      end: summary.indexOf("taxonomy") + "taxonomy".length,
+      evidenceIds: ["evidence-survey-taxonomy"],
+      externalSourceIds: [],
+      label: "分类框架",
+      start: summary.indexOf("taxonomy"),
+      text: "taxonomy"
+    })]);
   });
 
   test("turns the interpretation intent into a discourse plan instead of an evidence list", () => {

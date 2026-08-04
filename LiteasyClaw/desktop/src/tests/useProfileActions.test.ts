@@ -181,6 +181,64 @@ describe("useProfileActions", () => {
     expect(result.current.assistantProfileSummary).not.toContain("A 的关注");
   });
 
+  test("exposes reading-derived tags from the personalization snapshot", async () => {
+    const transport = vi.fn(async ({ url }: { url: string }) => {
+      const stage = { disciplines: [], profileVersion: 0, stage: "未设置" };
+      if (url.endsWith("/v1/personalization/signal")) {
+        return {
+          json: async () => ({
+            assistantSummary: "近期产品内关注：colbert",
+            personalizationVersion: 2,
+            profile: stage,
+            tags: [{ evidenceCount: 2, label: "colbert", signalSource: "paper_opened", weight: 0.3 }]
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (url.endsWith("/v1/profile/clear")) {
+        return {
+          json: async () => ({ personalizationVersion: 3, profile: stage, tags: [] }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          personalizationVersion: 1,
+          profile: stage,
+          tags: [{ evidenceCount: 1, label: "retrieval", signalSource: "paper_opened", weight: 0.15 }]
+        }),
+        ok: true,
+        status: 200
+      };
+    });
+    const { result } = renderHook(() => useProfileActions({
+      accountSession: {
+        email: "reader@example.com",
+        expiresAt: "2027-01-01T00:00:00Z",
+        name: "Reader",
+        sessionId: "reader-session"
+      },
+      controlPlaneEndpoint: "http://control-plane.test",
+      profileSamplingEnabled: true,
+      transport
+    }));
+
+    await waitFor(() => expect(result.current.profileTags).toHaveLength(1));
+    expect(result.current.profileTags[0].label).toBe("retrieval");
+
+    await act(() => result.current.recordPersonalizationSignal({
+      kind: "paper_opened",
+      title: "ColBERT Retrieval"
+    }));
+    await waitFor(() => expect(result.current.profileTags.some((tag) => tag.label === "colbert")).toBe(true));
+
+    act(() => result.current.openClearProfileConfirm());
+    await act(() => result.current.clearUserProfile());
+    await waitFor(() => expect(result.current.profileTags).toHaveLength(0));
+  });
+
   test("does not send behavior signals while profile sampling is disabled", async () => {
     const transport = vi.fn(async () => ({
       json: async () => ({

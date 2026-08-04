@@ -1,0 +1,105 @@
+{
+  "comment": "检索精度验证门的样本集。每条是一个锚点。中文锚点写上 translatedQuery，脚本会同时跑「直接检索」与「先译成英文再检索」两条路以便对比。人文社科必须单独成组——那个领域引用结构稀疏、DOI 覆盖低，是两条路径同时退化的地方。 targetPaperIdentity 是引用图扩展的前提——没有它 resolveTargetWork 解析不到目标论文，二阶引用指标不会触发。真实场景里读者正在读的论文一定有这个标识。",
+  "anchors": [
+    {
+      "anchorId": "stem-self-attention",
+      "domain": "stem",
+      "language": "en",
+      "query": "self-attention mechanism sequence transduction",
+      "targetPaperTitle": "Attention Is All You Need",
+      "targetPaperIdentity": {
+        "kind": "doi",
+        "value": "10.65215/2q58a426"
+      }
+    },
+    {
+      "anchorId": "stem-bleu",
+      "domain": "stem",
+      "language": "en",
+      "query": "BLEU automatic evaluation machine translation",
+      "anchorReferences": [
+        {
+          "number": 30,
+          "text": "Papineni, K., Roukos, S., Ward, T., and Zhu, W. J. BLEU: a method for automatic evaluation of machine translation. ACL, 2002."
+        }
+      ],
+      "targetPaperTitle": "Attention Is All You Need",
+      "targetPaperIdentity": {
+        "kind": "doi",
+        "value": "10.65215/2q58a426"
+      }
+    },
+    {
+      "anchorId": "stem-imagenet",
+      "domain": "stem",
+      "language": "en",
+      "query": "ImageNet large scale image classification benchmark",
+      "anchorReferences": [
+        {
+          "number": 36,
+          "text": "Russakovsky, O. et al. ImageNet Large Scale Visual Recognition Challenge. International Journal of Computer Vision, 2015."
+        }
+      ],
+      "targetPaperTitle": "Deep Residual Learning for Image Recognition",
+      "targetPaperIdentity": {
+        "kind": "doi",
+        "value": "10.1109/cvpr.2016.90"
+      }
+    },
+    {
+      "anchorId": "hum-orientalism",
+      "domain": "humanities",
+      "language": "en",
+      "query": "Orientalism discourse representation of the East",
+      "targetPaperTitle": "Orientalism"
+    },
+    {
+      "anchorId": "hum-actor-network",
+      "domain": "humanities",
+      "language": "en",
+      "query": "actor-network theory sociology of translation",
+      "targetPaperTitle": "Reassembling the Social",
+      "targetPaperIdentity": {
+        "kind": "doi",
+        "value": "10.1093/oso/9780199256044.001.0001"
+      }
+    },
+    {
+      "anchorId": "hum-habitus",
+      "domain": "humanities",
+      "language": "en",
+      "query": "habitus cultural capital reproduction",
+      "targetPaperTitle": "Distinction: A Social Critique of the Judgement of Taste",
+      "targetPaperIdentity": {
+        "kind": "doi",
+        "value": "10.4324/9781315680347-10"
+      }
+    },
+    {
+      "anchorId": "zh-self-attention",
+      "domain": "stem",
+      "language": "zh",
+      "query": "自注意力机制",
+      "translatedQuery": "self-attention mechanism",
+      "targetPaperTitle": "Attention Is All You Need",
+      "targetPaperIdentity": {
+        "kind": "doi",
+        "value": "10.65215/2q58a426"
+      }
+    },
+    {
+      "anchorId": "zh-knowledge-graph",
+      "domain": "stem",
+      "language": "zh",
+      "query": "知识图谱补全 表示学习",
+      "translatedQuery": "knowledge graph completion representation learning"
+    },
+    {
+      "anchorId": "zh-field-theory",
+      "domain": "humanities",
+      "language": "zh",
+      "query": "场域理论 文化资本",
+      "translatedQuery": "field theory cultural capital Bourdieu"
+    }
+  ]
+}

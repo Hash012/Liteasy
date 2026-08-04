@@ -6,7 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode
 } from "react";
-import { Tooltip } from "@fluentui/react-components";
+import { Button, Tooltip } from "@fluentui/react-components";
 import {
   ArrowSyncRegular,
   BookmarkRegular,
@@ -27,6 +27,10 @@ import "./library.css";
 import type { ImportJob } from "../import/import.types";
 import type { RecommendationItem, RecommendationStatus } from "../recommendations/recommendation.types";
 import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
+import {
+  externalPdfDragMimeType,
+  type ExternalPdfDragPayload
+} from "./externalPdfDownload";
 import { parseLibraryDragPayload } from "./libraryDragPayload";
 import {
   buildWorkspaceFolderTree,
@@ -61,6 +65,7 @@ type LibraryPaneProps = {
   recommendationStatus: RecommendationStatus;
   canOpenOrganizationWorkspace: boolean;
   organizationWorkspaceLabel?: string;
+  onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onAddExternalPaper: (item: CollectionItem | RecommendationItem) => void;
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearRecommendations: () => void;
@@ -245,6 +250,7 @@ export function LibraryPane({
   canOpenOrganizationWorkspace,
   organizationWorkspaceLabel = "组织共享文献库",
   onAddExternalPaper,
+  onAddExternalPdf,
   onAddDroppedPdfFiles,
   onClearRecommendations,
   onCollectRecommendation,
@@ -283,6 +289,7 @@ export function LibraryPane({
   const [contextMenu, setContextMenu] = useState<ResourceContextMenu | null>(null);
   const [operationDialog, setOperationDialog] = useState<ResourceOperationDialog | null>(null);
   const [resourceActionMessage, setResourceActionMessage] = useState("");
+  const [failedExternalPaper, setFailedExternalPaper] = useState<ExternalPdfDragPayload | null>(null);
   const [dropTargetFolderPath, setDropTargetFolderPath] = useState<string | null>(null);
   const [fileDropActive, setFileDropActive] = useState(false);
   const [importFolderPath, setImportFolderPath] = useState(() => {
@@ -294,6 +301,25 @@ export function LibraryPane({
   const [fileInputKey, setFileInputKey] = useState(0);
   const resourceEditingEnabled = workspaceSourceType === "local_library";
   const normalizedWorkspaceRoot = normalizeWorkspacePath(workspaceLabel);
+
+  function importExternalPdf(item: ExternalPdfDragPayload) {
+    if (!onAddExternalPdf) {
+      setResourceActionMessage("当前环境无法把关联论文写入本地文献库。");
+      return;
+    }
+    setFailedExternalPaper(null);
+    setResourceActionMessage(item.fullTextUrl
+      ? `下载中：正在取得《${item.title}》的开放全文…`
+      : `正在保存《${item.title}》的无本体条目…`);
+    void Promise.resolve(onAddExternalPdf(item)).then(() => {
+      setResourceActionMessage(item.fullTextUrl
+        ? `已保存《${item.title}》的 PDF，正在后台抽取全文并建立搜索索引。`
+        : `已保存《${item.title}》的无本体条目；未发现可合法下载的开放全文。`);
+    }).catch((error) => {
+      setFailedExternalPaper(item);
+      setResourceActionMessage(`加入文献库失败：${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
 
   useEffect(() => {
     if (!resourceEditingEnabled) {
@@ -748,7 +774,8 @@ export function LibraryPane({
         className="library-section library-drop-zone"
         onDragOver={(event) => {
           event.preventDefault();
-          if (getDataTransferTypes(event.dataTransfer).includes("Files")) {
+          const dataTransferTypes = getDataTransferTypes(event.dataTransfer);
+          if (dataTransferTypes.includes("Files") || dataTransferTypes.includes(externalPdfDragMimeType)) {
             event.dataTransfer.dropEffect = "copy";
             setFileDropActive(true);
           }
@@ -765,6 +792,16 @@ export function LibraryPane({
           );
           if (droppedPdfFiles.length > 0) {
             importPdfFiles(droppedPdfFiles);
+            setFileDropActive(false);
+            return;
+          }
+
+          const externalPdf = parseLibraryDragPayload<ExternalPdfDragPayload>(
+            event.dataTransfer,
+            externalPdfDragMimeType
+          );
+          if (externalPdf) {
+            importExternalPdf(externalPdf);
             setFileDropActive(false);
             return;
           }
@@ -860,7 +897,17 @@ export function LibraryPane({
         ) : null}
         {resourceActionMessage ? (
           <div aria-live="polite" className="library-resource-action-message">
-            {resourceActionMessage}
+            <span>{resourceActionMessage}</span>
+            {failedExternalPaper ? (
+              <Button
+                appearance="subtle"
+                icon={<ArrowSyncRegular />}
+                onClick={() => importExternalPdf(failedExternalPaper)}
+                size="small"
+              >
+                重试
+              </Button>
+            ) : null}
           </div>
         ) : null}
         <div className="library-collection-browser">
@@ -1003,6 +1050,11 @@ export function LibraryPane({
                   </span>
                 </div>
                 <div className="recommendation-related">关联：{item.relatedDocumentTitle}</div>
+                {item.surfacingTags && item.surfacingTags.length > 0 ? (
+                  <div className="recommendation-related recommendation-surfacing-tags">
+                    标签：{item.surfacingTags.join("、")}
+                  </div>
+                ) : null}
                 {item.relation ? (
                   <div className="recommendation-related">关系：{getRecommendationRelationLabel(item.relation)}</div>
                 ) : null}

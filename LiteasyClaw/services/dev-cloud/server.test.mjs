@@ -11,28 +11,33 @@ import {
   putRecommendationCache
 } from "./db/recommendationCacheRepository.mjs";
 import {
+  createRecommendationCandidateRepository,
   listRecommendationCandidateSources,
   listRecommendationCandidates,
-  upsertRecommendationCandidates
+  setRecommendationCandidateRepository,
+  upsertRecommendationCandidates,
+  __resetRecommendationCandidateRepository
 } from "./db/recommendationCandidateRepository.mjs";
 import {
+  createRecommendationFeedbackRepository,
   listRecommendationFeedback,
-  saveRecommendationFeedback
+  saveRecommendationFeedback,
+  setRecommendationFeedbackRepository,
+  __resetRecommendationFeedbackRepository
 } from "./db/recommendationFeedbackRepository.mjs";
 
 test.beforeEach(() => {
   process.env.LITEASY_DEV_CLOUD_DATA_DIR = fs.mkdtempSync(
     path.join(os.tmpdir(), "liteasy-dev-cloud-test-")
   );
+  __resetRecommendationCandidateRepository();
+  __resetRecommendationFeedbackRepository();
 });
 
 async function invokeHandler({ body, handler, handlerOptions, headers = {}, method, url }) {
   const chunks = body ? [Buffer.from(body)] : [];
   const request = Readable.from(chunks);
-  request.headers = url === "/v1/research/external-knowledge" &&
-    !("x-openalex-api-key" in headers)
-    ? { ...headers, "x-openalex-api-key": "test-openalex-api-key" }
-    : headers;
+  request.headers = headers;
   request.method = method;
   request.url = url;
 
@@ -58,6 +63,7 @@ async function invokeHandler({ body, handler, handlerOptions, headers = {}, meth
     crossrefEnabled: false,
     deepseekApiKey: undefined,
     defaultProvider: "openai",
+    openAlexApiKey: "test-openalex-api-key",
     openaiApiKey: undefined,
     recommendationMode: "demo",
     ...handlerOptions
@@ -89,28 +95,156 @@ test("allows browser CORS preflight from the desktop dev server", async () => {
   assert.equal(response.statusCode, 204);
   assert.equal(response.headers["Access-Control-Allow-Origin"], "http://127.0.0.1:1420");
   assert.equal(response.headers["Access-Control-Allow-Methods"], "DELETE,GET,POST,OPTIONS");
-  assert.equal(response.headers["Access-Control-Allow-Headers"], "Content-Type,X-OpenAlex-Api-Key");
+  assert.match(response.headers["Access-Control-Allow-Headers"], /^Content-Type,/);
+  assert.match(response.headers["Access-Control-Allow-Headers"], /X-Liteasy-Session-Id/);
 });
 
-test("requires an OpenAlex API key before external retrieval can enter the cache", async () => {
+test("allows CORS preflight from the Tauri desktop origin", async () => {
+  const response = await invokeHandler({
+    method: "OPTIONS",
+    headers: {
+      "access-control-request-headers": "content-type",
+      "access-control-request-method": "POST",
+      origin: "tauri://localhost"
+    },
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.headers["Access-Control-Allow-Origin"], "tauri://localhost");
+});
+
+test("never accepts a browser-owned OpenAlex key at the cloud boundary", async () => {
+  let requestedUrl = "";
+  const response = await invokeHandler({
+    body: JSON.stringify({ artifactId: "artifact-user-openalex-key", query: "anchor retrieval" }),
+    handler: createDevCloudRequestHandler({
+      crossrefEnabled: false,
+      openAlexApiKey: "service-fallback-key",
+      openAlexTransport: async (url) => {
+        requestedUrl = String(url);
+        return { json: async () => ({ results: [] }), ok: true, status: 200 };
+      }
+    }),
+    headers: {
+      "content-type": "application/json",
+      "x-openalex-api-key": "user-owned-key"
+    },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(new URL(requestedUrl).searchParams.get("api_key"), "service-fallback-key");
+});
+
+test("lets the desktop exclude server-side OpenAlex while retaining cached public providers", async () => {
+  let openAlexCalls = 0;
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "artifact-client-direct-openalex",
+      includeOpenAlex: false,
+      query: "anchor retrieval"
+    }),
+    handler: createDevCloudRequestHandler({
+      crossrefEnabled: true,
+      crossrefTransport: async () => ({
+        json: async () => ({ message: { items: [] } }),
+        ok: true,
+        status: 200
+      }),
+      openAlexApiKey: "service-fallback-key",
+      openAlexTransport: async () => {
+        openAlexCalls += 1;
+        return { json: async () => ({ results: [] }), ok: true, status: 200 };
+      }
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-knowledge"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(openAlexCalls, 0);
+});
+
+test("parses a PDF with GROBID once and reuses only the fingerprinted TEI", async () => {
+  let grobidCalls = 0;
+  const handler = createDevCloudRequestHandler({
+    grobidTransport: async (_url, options) => {
+      grobidCalls += 1;
+      assert.equal(options.method, "POST");
+      assert.equal(options.body.get("consolidateCitations"), "1");
+      assert.deepEqual(options.body.getAll("teiCoordinates"), ["ref", "biblStruct", "note"]);
+      return {
+        ok: true,
+        status: 200,
+        text: async () => "<TEI><text><body><p>Parsed structure</p></body></text></TEI>"
+      };
+    }
+  });
+  const request = {
+    body: Buffer.from("%PDF-1.7\nfixture body"),
+    handler,
+    headers: { "content-type": "application/pdf" },
+    method: "POST",
+    url: "/v1/research/parse-pdf"
+  };
+
+  const first = await invokeHandler(request);
+  const second = await invokeHandler(request);
+
+  assert.equal(first.statusCode, 200, JSON.stringify(first.json));
+  assert.equal(first.json.parser, "grobid");
+  assert.equal(first.json.reused, false);
+  assert.match(first.json.contentFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(second.statusCode, 200, JSON.stringify(second.json));
+  assert.equal(second.json.reused, true);
+  assert.equal(second.json.contentFingerprint, first.json.contentFingerprint);
+  assert.equal(grobidCalls, 1);
+});
+
+test("rejects a non-PDF before contacting GROBID", async () => {
+  let grobidCalls = 0;
+  const response = await invokeHandler({
+    body: Buffer.from("not a pdf"),
+    handler: createDevCloudRequestHandler({
+      grobidTransport: async () => {
+        grobidCalls += 1;
+        throw new Error("should not run");
+      }
+    }),
+    headers: { "content-type": "application/pdf" },
+    method: "POST",
+    url: "/v1/research/parse-pdf"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "invalid_pdf");
+  assert.equal(grobidCalls, 0);
+});
+
+test("reports unavailable only when the unified retrieval service has no enabled source", async () => {
   let calls = 0;
   const response = await invokeHandler({
     body: JSON.stringify({ artifactId: "artifact-openalex-key-required", query: "ColBERT" }),
     handler: createDevCloudRequestHandler({
       crossrefEnabled: false,
+      openAlexEnabled: false,
+      openAlexApiKey: undefined,
       openAlexTransport: async () => {
         calls += 1;
         return { json: async () => ({ results: [] }), ok: true, status: 200 };
       }
     }),
-    headers: { "content-type": "application/json", "x-openalex-api-key": "" },
+    headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-knowledge"
   });
 
   assert.equal(response.statusCode, 503);
-  assert.equal(response.json.error, "openalex_api_key_required");
-  assert.match(response.json.message, /OpenAlex API 密钥/);
+  assert.equal(response.json.error, "external_knowledge_unavailable");
+  assert.match(response.json.message, /统一联网服务/);
   assert.equal(calls, 0);
 });
 
@@ -120,6 +254,8 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     body: JSON.stringify({ artifactId: "artifact-crossref-without-openalex", query: "ColBERT retrieval" }),
     handler: createDevCloudRequestHandler({
       crossrefEnabled: true,
+      openAlexEnabled: false,
+      openAlexApiKey: undefined,
       crossrefTransport: async () => ({
         json: async () => ({
           message: {
@@ -140,7 +276,7 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
         throw new Error("OpenAlex should not be called without a key");
       }
     }),
-    headers: { "content-type": "application/json", "x-openalex-api-key": "" },
+    headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-knowledge"
   });
@@ -156,6 +292,8 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     id: "crossref:10.1000/crossref-only",
     openAccessAvailable: true,
     provider: "crossref",
+    confidence: 0.3,
+    confidenceBasis: "algorithmic_retrieval",
     relation: "topic_search",
     relevance: response.json.sources[0].relevance,
     retrievalQuery: "ColBERT retrieval",
@@ -189,7 +327,9 @@ test("uses traceable arXiv topic results for thin-reading external knowledge", a
           </entry>
         </feed>`
       }),
-      crossrefEnabled: false
+      crossrefEnabled: false,
+      openAlexEnabled: false,
+      openAlexApiKey: undefined
     }),
     headers: { "content-type": "application/json", "x-openalex-api-key": "" },
     method: "POST",
@@ -260,7 +400,7 @@ test("returns only a validated external PDF with content-addressed provenance", 
   assert.equal(Buffer.from(response.json.bytesBase64, "base64").toString("ascii"), "%PDF-1.7\nverified");
 });
 
-test("does not degrade to Crossref-only sources when the configured OpenAlex key is rejected", async () => {
+test("continues with verified fallback sources when the service's graph connector is unavailable", async () => {
   const response = await invokeHandler({
     body: JSON.stringify({ artifactId: "artifact-openalex-key-invalid", query: "ColBERT" }),
     handler: createDevCloudRequestHandler({
@@ -268,8 +408,11 @@ test("does not degrade to Crossref-only sources when the configured OpenAlex key
       crossrefTransport: async () => ({
         json: async () => ({
           message: {
-            DOI: "10.1000/crossref-fallback",
-            title: ["A Crossref fallback that must not be returned"]
+            items: [{
+              abstract: "<jats:p>ColBERT remains a verified fallback source.</jats:p>",
+              DOI: "10.1000/crossref-fallback",
+              title: ["ColBERT fallback source"]
+            }]
           }
         }),
         ok: true,
@@ -281,15 +424,14 @@ test("does not degrade to Crossref-only sources when the configured OpenAlex key
         status: 401
       })
     }),
-    headers: { "content-type": "application/json", "x-openalex-api-key": "invalid-test-key" },
+    headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-knowledge"
   });
 
-  assert.equal(response.statusCode, 503);
-  assert.equal(response.json.error, "openalex_api_key_required");
-  assert.match(response.json.message, /API 密钥无效或已失效/);
-  assert.equal("sources" in response.json, false);
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.sources.length, 1);
+  assert.equal(response.json.sources[0].id, "crossref:10.1000/crossref-fallback");
 });
 
 test("does not reflect an untrusted browser origin", async () => {
@@ -344,6 +486,14 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/recommendations/feedback",
     "POST /v1/research/external-knowledge",
     "POST /v1/research/external-pdf",
+    "POST /v1/works/resolve",
+    "GET /v1/concepts",
+    "GET /v1/concepts/:code",
+    "POST /v1/works/:workId/index",
+    "GET /v1/tags",
+    "GET /v1/tags/:id",
+    "GET /v1/tags/:id/works",
+    "POST /v1/research/parse-pdf",
     "POST /v1/profile/get",
     "POST /v1/profile/save",
     "POST /v1/profile/clear",
@@ -359,7 +509,21 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/org/list",
     "POST /v1/org/summary",
     "POST /v1/org/shared-library/manifest",
-    "POST /v1/org/governance-summary"
+    "POST /v1/org/governance-summary",
+    "POST /v1/library/documents/upload",
+    "POST /v1/library/documents/list",
+    "POST /v1/library/documents/trash",
+    "POST /v1/library/documents/restore",
+    "POST /v1/library/documents/update",
+    "POST /v1/library/documents/authorize",
+    "POST /v1/library/documents/download",
+    "POST /v1/library/folders/create",
+    "POST /v1/library/folders/update",
+    "POST /v1/library/quota",
+    "POST /v1/org/team-annotations/list",
+    "POST /v1/org/team-annotations/upload",
+    "POST /v1/org/team-annotations/withdraw",
+    "POST /v1/admin/storage-quota"
   ]);
 });
 
@@ -506,7 +670,9 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
       id: "openalex:W123456789",
       openAccessAvailable: true,
       provider: "openalex",
-      relation: "topic_search",
+      confidence: 0.3,
+    confidenceBasis: "algorithmic_retrieval",
+    relation: "topic_search",
       relevance: response.json.sources[0].relevance,
       retrievalQuery: "ColBERT late interaction retrieval",
       sourceRecordUrl: "https://openalex.org/W123456789",
@@ -634,6 +800,8 @@ test("merges Crossref topic results without inventing graph relations or duplica
     doi: "https://doi.org/10.1000/crossref-only",
     id: "crossref:10.1000/crossref-only",
     provider: "crossref",
+    confidence: 0.3,
+    confidenceBasis: "algorithmic_retrieval",
     relation: "topic_search",
     relevance: response.json.sources.find((source) => source.provider === "crossref").relevance,
     retrievalQuery: "retrieval evaluation",
@@ -947,12 +1115,10 @@ test("recovers an artifact-scoped external retrieval after failure and reuses th
     url: "/v1/research/external-knowledge"
   });
   assert.equal(second.statusCode, 200);
-  assert.deepEqual(second.json.retrieval, {
-    attempts: 2,
-    id: second.json.retrieval.id,
-    reused: false,
-    status: "completed"
-  });
+  assert.equal(second.json.retrieval.attempts, 2);
+  assert.equal(second.json.retrieval.reused, false);
+  assert.equal(second.json.retrieval.status, "completed");
+  assert.ok(Date.parse(second.json.retrieval.expiresAt) > Date.parse(second.json.retrieval.serverNow));
   assert.equal(second.json.sources[0].sourceId, "W401");
 
   const third = await invokeHandler({
@@ -963,24 +1129,20 @@ test("recovers an artifact-scoped external retrieval after failure and reuses th
     url: "/v1/research/external-knowledge"
   });
   assert.equal(third.statusCode, 200);
-  assert.deepEqual(third.json.retrieval, {
-    attempts: 2,
-    id: second.json.retrieval.id,
-    reused: true,
-    status: "completed"
-  });
+  assert.equal(third.json.retrieval.attempts, 2);
+  assert.equal(third.json.retrieval.id, second.json.retrieval.id);
+  assert.equal(third.json.retrieval.reused, true);
+  assert.equal(third.json.retrieval.status, "completed");
   assert.equal(calls, 2);
 });
 
 function expectExternalRetrievalFailure(response) {
   assert.equal(response.statusCode, 502);
   assert.equal(response.json.error, "openalex_unavailable");
-  assert.deepEqual(response.json.retrieval, {
-    attempts: 1,
-    id: response.json.retrieval.id,
-    reused: false,
-    status: "failed"
-  });
+  assert.equal(response.json.retrieval.attempts, 1);
+  assert.equal(response.json.retrieval.reused, false);
+  assert.equal(response.json.retrieval.status, "failed");
+  assert.ok(Date.parse(response.json.retrieval.expiresAt) > Date.parse(response.json.retrieval.serverNow));
 }
 
 test("rejects an unsafe artifact boundary before external retrieval", async () => {
@@ -1028,12 +1190,10 @@ test("returns an explicit empty external-knowledge result without synthetic sour
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.status, "empty");
   assert.deepEqual(response.json.sources, []);
-  assert.deepEqual(response.json.retrieval, {
-    attempts: 1,
-    id: response.json.retrieval.id,
-    reused: false,
-    status: "skipped"
-  });
+  assert.equal(response.json.retrieval.attempts, 1);
+  assert.equal(response.json.retrieval.reused, false);
+  assert.equal(response.json.retrieval.status, "skipped");
+  assert.ok(Date.parse(response.json.retrieval.expiresAt) > Date.parse(response.json.retrieval.serverNow));
 
   const reused = await invokeHandler({
     body: JSON.stringify(request),
@@ -2240,6 +2400,44 @@ test("rejects malformed recommendation research profiles before retrieval", asyn
   assert.equal(response.json.error, "research_profile_topics_invalid");
 });
 
+test("completes an implicit recommendation profile after behavior personalization", async () => {
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    expandedSourcesEnabled: false,
+    openAlexApiKey: "service-owned-key",
+    openAlexTransport: async () => ({
+      json: async () => ({ results: [] }),
+      ok: true,
+      status: 200
+    })
+  });
+  const signalResponse = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "Neural information retrieval" }
+    }),
+    handler,
+    headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(signalResponse.statusCode, 200);
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      selectedDocuments: [{ id: "paper-1", title: "Target Retrieval Paper" }],
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.deepEqual(response.json.recommendations, []);
+});
+
 test("returns provenance-bearing live reading candidates instead of demo recommendations", async () => {
   const response = await invokeHandler({
     body: JSON.stringify({
@@ -2247,6 +2445,10 @@ test("returns provenance-bearing live reading candidates instead of demo recomme
       sessionId: "demo-session-1"
     }),
     handler: createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
       crossrefEnabled: false,
       openAlexTransport: async () => ({
         json: async () => ({
@@ -2356,6 +2558,7 @@ test("returns provenance-bearing live reading candidates instead of demo recomme
     },
     relatedDocumentTitle: "Target Retrieval Paper",
     relatedDocumentTitles: ["Target Retrieval Paper"],
+    surfacingTags: [],
     relation: "topic_search",
     relevanceBand: "high",
     relevanceScore: 0.775,
@@ -2398,6 +2601,10 @@ test("applies a configured real embedding provider to recommendation ranking", a
       sessionId: "semantic-retrieval-user"
     }),
     handler: createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
       crossrefEnabled: false,
       openAlexTransport: async () => ({
         json: async () => ({
@@ -2762,6 +2969,10 @@ test("keeps OpenAlex recommendations when the optional arXiv feed is invalid", a
       sessionId: "arxiv-failure-user"
     }),
     handler: createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
       arxivEnabled: true,
       arxivTransport: async () => ({
         ok: true,
@@ -2802,6 +3013,8 @@ test("keeps OpenAlex recommendations when the optional arXiv feed is invalid", a
 });
 
 test("migrates provider and arXiv candidate keys to DOI without duplicating history", () => {
+  const database = createDatabase({ databasePath: ":memory:" });
+  setRecommendationCandidateRepository(createRecommendationCandidateRepository(database));
   const qualityGate = { passed: true, checks: {}, reasons: [], version: "recommendation-quality/v1" };
   const baseCandidate = {
     canonicalId: "openalex:W900",
@@ -2890,6 +3103,10 @@ test("migrates provider and arXiv candidate keys to DOI without duplicating hist
 
 test("persists negative recommendation feedback, invalidates cache, and lowers similar candidates", async () => {
   const handler = createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
     crossrefEnabled: false,
     openAlexTransport: async () => ({
       json: async () => ({
@@ -3005,6 +3222,10 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
 test("reuses a recent persistent candidate without presenting it as a new live discovery", async () => {
   let retrievalCount = 0;
   const handler = createDevCloudRequestHandler({
+      // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
+      // OpenAlex, arXiv and Crossref. Leaving the expanded ones on sends real network
+      // requests that time out after 8s.
+      expandedSourcesEnabled: false,
     crossrefEnabled: false,
     openAlexTransport: async () => {
       retrievalCount += 1;
@@ -3406,6 +3627,64 @@ test("returns a demo organization shared library manifest", async () => {
   ]);
 });
 
+test("enforces organization upload, duplicate, and administrator recycle-bin rules", async () => {
+  const handler = createDevCloudRequestHandler({ databasePath: ":memory:" });
+  const pdf = Buffer.from("%PDF-1.7\norganization fixture\n%%EOF");
+  const upload = (duplicateAction) => invokeHandler({
+    body: pdf,
+    handler,
+    headers: {
+      "content-type": "application/pdf",
+      "x-liteasy-duplicate-action": duplicateAction,
+      "x-liteasy-file-name": encodeURIComponent("Shared.pdf"),
+      "x-liteasy-scope-id": "org-demo-1",
+      "x-liteasy-scope-type": "organization",
+      "x-liteasy-session-id": "demo-session-1"
+    },
+    method: "POST",
+    url: "/v1/library/documents/upload"
+  });
+
+  const first = await upload(undefined);
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.json.status, "imported");
+  const duplicate = await upload(undefined);
+  assert.equal(duplicate.json.status, "duplicate");
+  const copy = await upload("save_copy");
+  assert.equal(copy.json.document.fileName, "Shared (2).pdf");
+  assert.notEqual(copy.json.document.documentId, first.json.document.documentId);
+  assert.equal(copy.json.document.contentHash, first.json.document.contentHash);
+
+  const memberTrash = await invokeHandler({
+    body: JSON.stringify({
+      documentId: first.json.document.documentId,
+      scopeId: "org-demo-1",
+      scopeType: "organization",
+      sessionId: "demo-session-1"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/trash"
+  });
+  assert.equal(memberTrash.statusCode, 403);
+
+  const ownerTrash = await invokeHandler({
+    body: JSON.stringify({
+      documentId: first.json.document.documentId,
+      scopeId: "org-demo-1",
+      scopeType: "organization",
+      sessionId: "demo-session-owner"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/trash"
+  });
+  assert.equal(ownerTrash.statusCode, 200);
+  assert.equal(ownerTrash.json.document.status, "trashed");
+});
+
 
 test("returns a demo organization governance summary", async () => {
   const response = await invokeHandler({
@@ -3532,4 +3811,369 @@ test("returns an audit score from the model audit endpoint", async () => {
       verdict: "pass"
     }
   });
+});
+
+test("POST /v1/works/resolve resolves a paper identity and is idempotent", async () => {
+  const body = JSON.stringify({
+    sessionId: "demo-session-1",
+    identities: [
+      { kind: "doi", value: "10.1145/3459615", sourceProvider: "crossref" },
+      { kind: "arxiv", value: "2106.04561", relation: "is_preprint_of", sourceProvider: "arxiv" }
+    ],
+    title: "ColBERT",
+    year: 2021,
+    type: "conference"
+  });
+
+  const first = await invokeHandler({
+    body,
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(first.statusCode, 201);
+  assert.equal(first.json.created, true);
+  assert.ok(first.json.work.id.startsWith("w_"));
+  assert.equal(first.json.identifiers.length, 2);
+
+  const second = await invokeHandler({
+    body,
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(second.statusCode, 201);
+  assert.equal(second.json.created, false);
+  assert.equal(second.json.work.id, first.json.work.id);
+});
+
+test("POST /v1/works/resolve rejects invalid identity kind with 400", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      identities: [{ kind: "bogus", value: "x" }]
+    }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "invalid_work_identity_kind");
+});
+
+test("POST /v1/works/resolve rejects empty identities with 400", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1", identities: [] }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "invalid_work_identity_count");
+});
+
+test("GET /v1/works/resolve reports method not allowed", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/works/resolve"
+  });
+  assert.equal(response.statusCode, 405);
+  assert.equal(response.json.error, "method_not_allowed");
+});
+
+test("service index advertises POST /v1/works/resolve", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/"
+  });
+  assert.ok(response.json.endpoints.includes("POST /v1/works/resolve"));
+});
+
+test("GET /v1/concepts lists the seeded discipline catalog", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts?source=discipline_catalog&kind=discipline"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.concepts.length, 117);
+  const first = response.json.concepts[0];
+  assert.equal(first.source, "discipline_catalog");
+  assert.equal(first.conceptKind, "discipline");
+});
+
+test("GET /v1/concepts filters categories by kind", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts?source=discipline_catalog&kind=category"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.concepts.length, 14);
+});
+
+test("GET /v1/concepts/:code returns a discipline with parent", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts/0201"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.concept.label, "理论经济学");
+  assert.equal(response.json.concept.parentId, "discipline:cat:02");
+});
+
+test("GET /v1/concepts/:code returns 404 for unknown code", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/concepts/9999"
+  });
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json.error, "concept_not_found");
+});
+
+test("POST /v1/concepts reports method not allowed", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/concepts"
+  });
+  assert.equal(response.statusCode, 405);
+  assert.equal(response.json.error, "method_not_allowed");
+});
+
+test("service index advertises concept endpoints", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/"
+  });
+  assert.ok(response.json.endpoints.includes("GET /v1/concepts"));
+  assert.ok(response.json.endpoints.includes("GET /v1/concepts/:code"));
+});
+
+test("POST /v1/works/:workId/index auto-tags a resolved work", async () => {
+  const resolve = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      identities: [{ kind: "doi", value: "10.1/indextest" }],
+      title: "ColBERT Efficient Passage Representation",
+      year: 2021
+    }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  const workId = resolve.json.work.id;
+
+  const index = await invokeHandler({
+    body: JSON.stringify({ title: "ColBERT Efficient Passage Representation" }),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: `/v1/works/${workId}/index`
+  });
+  assert.equal(index.statusCode, 200);
+  assert.ok(index.json.tags.some((tag) => tag.normalized === "colbert"));
+
+  const tags = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/tags"
+  });
+  assert.ok(tags.json.tags.some((tag) => tag.normalized === "colbert"));
+});
+
+test("POST /v1/works/:workId/index rejects missing text with 400", async () => {
+  const response = await invokeHandler({
+    body: JSON.stringify({}),
+    handlerOptions: { recommendationMode: "demo" },
+    method: "POST",
+    url: "/v1/works/w_dummy/index"
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.error, "missing_index_text");
+});
+
+test("GET /v1/tags/:id/works returns works sharing a tag", async () => {
+  for (const doi of ["10.1/tagwork1", "10.1/tagwork2"]) {
+    const resolve = await invokeHandler({
+      body: JSON.stringify({
+        sessionId: "demo-session-1",
+        identities: [{ kind: "doi", value: doi }],
+        title: "ColBERT Dense Retrieval"
+      }),
+      handlerOptions: { recommendationMode: "demo" },
+      method: "POST",
+      url: "/v1/works/resolve"
+    });
+    await invokeHandler({
+      body: JSON.stringify({ title: "ColBERT Dense Retrieval" }),
+      handlerOptions: { recommendationMode: "demo" },
+      method: "POST",
+      url: `/v1/works/${resolve.json.work.id}/index`
+    });
+  }
+  const tag = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/tags"
+  });
+  const colbert = tag.json.tags.find((t) => t.normalized === "colbert");
+  assert.ok(colbert.occurrenceCount >= 2);
+
+  const works = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: `/v1/tags/${colbert.id}/works`
+  });
+  assert.equal(works.statusCode, 200);
+  assert.ok(works.json.works.length >= 2);
+});
+
+test("GET /v1/tags/:id returns 404 for unknown tag", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/v1/tags/t_doesnotexist1234"
+  });
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json.error, "tag_not_found");
+});
+
+test("service index advertises tag endpoints", async () => {
+  const response = await invokeHandler({
+    handlerOptions: { recommendationMode: "demo" },
+    method: "GET",
+    url: "/"
+  });
+  assert.ok(response.json.endpoints.includes("POST /v1/works/:workId/index"));
+  assert.ok(response.json.endpoints.includes("GET /v1/tags"));
+  assert.ok(response.json.endpoints.includes("GET /v1/tags/:id"));
+  assert.ok(response.json.endpoints.includes("GET /v1/tags/:id/works"));
+});
+
+test("profile/get exposes reading-derived tags and signal with workId links them", async () => {
+  const handler = createDevCloudRequestHandler();
+  // Resolve + index a paper so it has canonical tags.
+  const resolve = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      identities: [{ kind: "doi", value: "10.1/profile-tag-endpoint" }],
+      title: "ColBERT Dense Retrieval"
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/works/resolve"
+  });
+  const workId = resolve.json.work.id;
+  await invokeHandler({
+    body: JSON.stringify({ title: "ColBERT Dense Retrieval" }),
+    handler,
+    method: "POST",
+    url: `/v1/works/${workId}/index`
+  });
+
+  // Open the paper: signal carries workId so the work's tags land in the profile.
+  const signal = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "ColBERT Dense Retrieval", workId }
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(signal.statusCode, 200);
+  const colbert = signal.json.tags.find((tag) => tag.label === "colbert");
+  assert.ok(colbert, "colbert tag surfaced in profile");
+  assert.ok(colbert.tagId, "colbert tag linked to canonical tag id");
+
+  // profile/get also exposes the tags.
+  const profile = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    handler,
+    method: "POST",
+    url: "/v1/profile/get"
+  });
+  assert.ok(profile.json.tags.some((tag) => tag.label === "colbert"));
+});
+
+test("signal with invalid workId still records title-derived tags", async () => {
+  const handler = createDevCloudRequestHandler();
+  const signal = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "神经信息检索方法", workId: "bad id" }
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+  assert.equal(signal.statusCode, 200);
+  assert.ok(signal.json.tags.some((tag) => tag.label === "神经"));
+  assert.equal(signal.json.tags[0].tagId, null);
+});
+
+test("tag-driven recommendation surfaces candidates with surfacing tag provenance", async () => {
+  const stubSources = {
+    colbert: [
+      { id: "openalex:W100", provider: "openalex", relation: "topic_search", relevance: 0.9, title: "ColBERTv2 Passage Search", url: "https://openalex.org/W100" }
+    ],
+    retrieval: [
+      { id: "openalex:W101", provider: "openalex", relation: "topic_search", relevance: 0.85, title: "Dense Retrieval Survey", url: "https://openalex.org/W101" }
+    ]
+  };
+  const stubSearch = async (queryInput) => {
+    const key = typeof queryInput?.query === "string" ? queryInput.query : "";
+    return { sources: stubSources[key] ?? [] };
+  };
+
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    recommendationMode: "live",
+    searchExternalKnowledge: stubSearch
+  });
+
+  // Give the user reading-derived tags.
+  await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "demo-session-1",
+      signal: { kind: "paper_opened", title: "ColBERT Retrieval" }
+    }),
+    handler,
+    method: "POST",
+    url: "/v1/personalization/signal"
+  });
+
+  // No selectedDocuments: recommendation is driven purely by user top tags.
+  const response = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    handler,
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.ok(response.json.recommendations.length > 0);
+  const colbertv2 = response.json.recommendations.find((r) => r.canonicalId === "openalex:W100");
+  assert.ok(colbertv2, "colbert-tagged candidate should be surfaced");
+  assert.deepEqual(colbertv2.surfacingTags, ["colbert"]);
+});
+
+test("recommendations returns empty when no selected documents and no user tags", async () => {
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: false,
+    recommendationMode: "live",
+    searchExternalKnowledge: async () => ({ sources: [] })
+  });
+  const response = await invokeHandler({
+    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    handler,
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json.recommendations, []);
 });

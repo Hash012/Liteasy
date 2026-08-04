@@ -27,6 +27,10 @@ test("limits discipline descriptions to 240 characters", async () => {
   const description = within(screen.getByLabelText("已选研究学科")).getByRole("textbox");
 
   expect(description).toHaveAttribute("maxlength", "240");
-  await user.type(description, "a".repeat(241));
+  // Pasted rather than typed. Sending 241 individual keystrokes took ~3.7s on its own and timed
+  // out under parallel load, which made every full run fail somewhere unrelated to the change
+  // being tested. Paste is also how anyone actually enters a description this long.
+  await user.click(description);
+  await user.paste("a".repeat(241));
   expect(description).toHaveValue("a".repeat(240));
 });

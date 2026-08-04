@@ -1,3 +1,4 @@
+use crate::local_library::account_namespace;
 use serde_json::Value;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -7,16 +8,34 @@ use tauri::{AppHandle, Manager};
 
 const MAX_ARTIFACT_CATALOG_BYTES: u64 = 64 * 1024 * 1024;
 
-fn catalog_path(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
+fn catalog_path(app: &AppHandle, account_key: Option<&str>) -> Result<PathBuf, String> {
+    let app_data = app
+        .path()
         .app_data_dir()
-        .map(|directory| directory.join("artifact-catalog.v1.json"))
-        .map_err(|error| format!("Could not resolve artifact catalog directory: {error}"))
+        .map_err(|error| format!("Could not resolve artifact catalog directory: {error}"))?;
+    let legacy_path = app_data.join("artifact-catalog.v1.json");
+    let path = app_data
+        .join("artifact-catalog")
+        .join(account_namespace(account_key))
+        .join("catalog.v1.json");
+    if !path.exists() && legacy_path.exists() {
+        let parent = path
+            .parent()
+            .ok_or_else(|| "Artifact catalog path has no parent".to_string())?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Could not create artifact catalog directory: {error}"))?;
+        fs::rename(&legacy_path, &path)
+            .map_err(|error| format!("Could not migrate artifact catalog: {error}"))?;
+    }
+    Ok(path)
 }
 
 #[tauri::command]
-pub fn load_artifact_catalog_state(app: AppHandle) -> Result<Option<Value>, String> {
-    let path = catalog_path(&app)?;
+pub fn load_artifact_catalog_state(
+    app: AppHandle,
+    account_key: Option<String>,
+) -> Result<Option<Value>, String> {
+    let path = catalog_path(&app, account_key.as_deref())?;
     if !path.exists() {
         return Ok(None);
     }
@@ -28,15 +47,19 @@ pub fn load_artifact_catalog_state(app: AppHandle) -> Result<Option<Value>, Stri
             MAX_ARTIFACT_CATALOG_BYTES
         ));
     }
-    let serialized = fs::read(&path)
-        .map_err(|error| format!("Could not read artifact catalog: {error}"))?;
+    let serialized =
+        fs::read(&path).map_err(|error| format!("Could not read artifact catalog: {error}"))?;
     serde_json::from_slice(&serialized)
         .map(Some)
         .map_err(|error| format!("Stored artifact catalog is invalid JSON: {error}"))
 }
 
 #[tauri::command]
-pub fn save_artifact_catalog_state(app: AppHandle, snapshot: Value) -> Result<(), String> {
+pub fn save_artifact_catalog_state(
+    app: AppHandle,
+    snapshot: Value,
+    account_key: Option<String>,
+) -> Result<(), String> {
     let serialized = serde_json::to_vec(&snapshot)
         .map_err(|error| format!("Could not encode artifact catalog: {error}"))?;
     if serialized.len() as u64 > MAX_ARTIFACT_CATALOG_BYTES {
@@ -46,7 +69,7 @@ pub fn save_artifact_catalog_state(app: AppHandle, snapshot: Value) -> Result<()
         ));
     }
 
-    let path = catalog_path(&app)?;
+    let path = catalog_path(&app, account_key.as_deref())?;
     let parent = path
         .parent()
         .ok_or_else(|| "Artifact catalog path has no parent".to_string())?;
