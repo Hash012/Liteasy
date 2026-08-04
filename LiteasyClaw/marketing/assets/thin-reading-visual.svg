@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" role="img" aria-labelledby="title desc">
+  <title id="title">薄读层级展开</title>
+  <desc id="desc">从一篇文献的核心理解出发，逐层进入方法、实验和局限。</desc>
+  <rect width="720" height="420" fill="#ecf0ea"/>
+  <rect x="62" y="48" width="245" height="322" rx="5" fill="#fffdf8" stroke="#b9c9c0"/>
+  <text x="88" y="82" fill="#2f6a58" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1">THIN READING / LAYER 0</text>
+  <text x="88" y="124" fill="#18201d" font-family="Noto Serif SC, serif" font-size="23" font-weight="600">一篇文献</text>
+  <path d="M88 153H278M88 177H278M88 201H252" stroke="#bccbc2" stroke-width="4"/>
+  <rect x="88" y="224" width="190" height="52" rx="3" fill="#dce9e1"/>
+  <text x="104" y="246" fill="#2f6a58" font-family="Noto Sans SC, sans-serif" font-size="13" font-weight="600">核心理解</text>
+  <text x="104" y="265" fill="#587064" font-family="Noto Sans SC, sans-serif" font-size="11">先留下最值得记住的部分</text>
+  <path d="M88 303H278M88 327H232" stroke="#d2dbd4" stroke-width="4"/>
+  <path d="M337 209H422" stroke="#c85b45" stroke-width="2"/>
+  <path d="M407 197L422 209L407 221" fill="none" stroke="#c85b45" stroke-width="2"/>
+  <circle cx="492" cy="210" r="76" fill="#2f6a58"/>
+  <circle cx="492" cy="210" r="90" fill="none" stroke="#c85b45" stroke-width="1" stroke-dasharray="2 8"/>
+  <text x="492" y="204" fill="#fff" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="21" font-weight="600">核心理解</text>
+  <text x="492" y="229" fill="#d6e6dd" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1">GO DEEPER</text>
+  <g fill="#fffdf8" stroke="#9eb0a7">
+    <rect x="596" y="62" width="86" height="42" rx="3"/><rect x="596" y="188" width="86" height="42" rx="3"/><rect x="596" y="314" width="86" height="42" rx="3"/>
+  </g>
+  <path d="M550 174L596 83M568 210H596M550 246L596 335" fill="none" stroke="#719080" stroke-width="2"/>
+  <g fill="#18201d" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="14">
+    <text x="639" y="88">方法</text><text x="639" y="214">实验</text><text x="639" y="340">局限</text>
+  </g>
+</svg>

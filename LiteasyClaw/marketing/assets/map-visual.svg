@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" role="img" aria-labelledby="title desc">
+  <title id="title">文献知识关系图</title>
+  <desc id="desc">文献中的问题、方法、证据与启发围绕核心关系连接。</desc>
+  <rect width="720" height="420" fill="#f3f6ee"/>
+  <path d="M360 210C285 150 226 104 142 82M360 210C435 150 494 104 578 82M360 210C286 270 226 316 142 338M360 210C434 270 494 316 578 338" fill="none" stroke="#4b806b" stroke-width="2"/>
+  <path d="M360 210C294 210 245 210 188 210M360 210C426 210 475 210 532 210" fill="none" stroke="#d0dbd1" stroke-width="1" stroke-dasharray="5 7"/>
+  <g fill="#dce9e1" stroke="#b7cbbd">
+    <circle cx="128" cy="76" r="42"/><circle cx="592" cy="76" r="42"/><circle cx="128" cy="344" r="42"/><circle cx="592" cy="344" r="42"/>
+  </g>
+  <ellipse cx="360" cy="210" rx="88" ry="55" fill="#c85b45"/>
+  <text x="360" y="204" fill="#fff" text-anchor="middle" font-family="Noto Serif SC, serif" font-size="20" font-weight="600">文献关系</text>
+  <text x="360" y="229" fill="#f9ddd6" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1">KNOWLEDGE MAP</text>
+  <g fill="#18201d" text-anchor="middle" font-family="Noto Sans SC, sans-serif">
+    <text x="128" y="82" font-size="18" font-weight="600">问题</text>
+    <text x="592" y="82" font-size="18" font-weight="600">方法</text>
+    <text x="128" y="350" font-size="18" font-weight="600">证据</text>
+    <text x="592" y="350" font-size="18" font-weight="600">启发</text>
+  </g>
+  <g fill="#719080">
+    <circle cx="264" cy="140" r="4"/><circle cx="456" cy="140" r="4"/><circle cx="264" cy="280" r="4"/><circle cx="456" cy="280" r="4"/>
+  </g>
+</svg>

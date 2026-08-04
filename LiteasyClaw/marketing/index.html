@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="LiteasyClaw 是面向科研训练的文献工作流 AI 工具，让理解、验证与输出在同一工作台完成。"
+    />
+    <meta property="og:title" content="LiteasyClaw | 让文献理解成为科研工作流" />
+    <meta
+      property="og:description"
+      content="从文献解析、分层阅读到原文验证与知识输出。"
+    />
+    <meta property="og:type" content="website" />
+    <title>LiteasyClaw | 让文献理解成为科研工作流</title>
+    <link rel="preload" href="assets/program.png" as="image" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到正文</a>
+
+    <header class="site-header" data-header>
+      <div class="nav-shell">
+        <a class="brand" href="#top" aria-label="LiteasyClaw 首页">
+          <img class="brand-icon" src="assets/brand-icon.png" alt="" />
+          <span>LiteasyClaw</span>
+        </a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
+          <span class="sr-only">打开导航</span>
+          <span aria-hidden="true">+</span>
+        </button>
+        <nav id="site-nav" class="site-nav" aria-label="主导航" data-site-nav>
+          <a href="#" data-future-link="github-community">GitHub 社区</a>
+          <a href="#" data-future-link="user-forum">用户论坛</a>
+          <a class="nav-cta" href="#waitlist">加入体验计划</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section id="top" class="hero" aria-labelledby="hero-title">
+        <div class="hero-media" aria-hidden="true">
+          <img src="assets/program.png" alt="" />
+        </div>
+        <div class="hero-shade" aria-hidden="true"></div>
+        <div class="hero-content content-shell">
+          <p class="eyebrow light">LITEASYCLAW / RESEARCH WORKBENCH</p>
+          <h1 id="hero-title">把文献读懂，<br />也把理解留下。</h1>
+          <p class="hero-copy">
+            LiteasyClaw 面向科研训练场景，将文献解析、分层阅读、原文验证与知识输出，
+            组织成一条可以持续使用的科研工作流。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#waitlist">加入首批体验计划 <span aria-hidden="true">&#8594;</span></a>
+            <a class="text-link light-link" href="#workflow">探索产品工作流 <span aria-hidden="true">&#8595;</span></a>
+          </div>
+        </div>
+        <p class="hero-caption">当前桌面工作台界面</p>
+      </section>
+
+      <section class="proof-strip" aria-label="LiteasyClaw 产品原则">
+        <div class="content-shell proof-grid">
+          <article>
+            <span class="proof-index">01</span>
+            <h2>有据可查</h2>
+            <p>关键结论回到文献原文，理解过程不再是无法检查的黑箱。</p>
+          </article>
+          <article>
+            <span class="proof-index">02</span>
+            <h2>读得更深</h2>
+            <p>从整体结构到局部细节，按自己的问题逐层展开复杂文献。</p>
+          </article>
+          <article>
+            <span class="proof-index">03</span>
+            <h2>理解可复用</h2>
+            <p>把阅读结果沉淀为树状解析、思维导图、问答记录与汇报材料。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="workflow" class="section workflow-section" aria-labelledby="workflow-title">
+        <div class="content-shell section-intro split-intro">
+          <div>
+            <p class="eyebrow">READING LOOP</p>
+            <h2 id="workflow-title">从找到文献，<br />到形成自己的理解。</h2>
+          </div>
+          <p>
+            LiteasyClaw 将文献、阅读上下文、追问记录和后续产物放在同一工作区，
+            让科研阅读不再停留在一次性的摘要和问答。
+          </p>
+        </div>
+        <div class="content-shell workflow-layout">
+          <div class="workflow-steps" role="tablist" aria-label="阅读工作流步骤">
+            <button class="workflow-step is-active" id="step-workspace" type="button" role="tab" aria-selected="true" aria-controls="workflow-panel" data-step="workspace">
+              <span>01</span> 建立工作区
+            </button>
+            <button class="workflow-step" id="step-select" type="button" role="tab" aria-selected="false" aria-controls="workflow-panel" data-step="select">
+              <span>02</span> 锁定文献
+            </button>
+            <button class="workflow-step" id="step-import" type="button" role="tab" aria-selected="false" aria-controls="workflow-panel" data-step="import">
+              <span>03</span> 导入理解
+            </button>
+            <button class="workflow-step" id="step-ask" type="button" role="tab" aria-selected="false" aria-controls="workflow-panel" data-step="ask">
+              <span>04</span> 追问与定位
+            </button>
+            <button class="workflow-step" id="step-artifact" type="button" role="tab" aria-selected="false" aria-controls="workflow-panel" data-step="artifact">
+              <span>05</span> 生成产物
+            </button>
+          </div>
+          <div id="workflow-panel" class="workflow-display" role="tabpanel" aria-labelledby="step-workspace" tabindex="0">
+            <div class="workflow-copy">
+              <p class="step-number">01 / 05</p>
+              <h3 data-workflow-title>建立工作区</h3>
+              <p data-workflow-copy>从本地文献库开始，建立一处专注于当前课题的阅读上下文。</p>
+            </div>
+            <div class="workbench-frame" data-workflow-media>
+              <img src="assets/program.png" alt="LiteasyClaw 当前三栏科研阅读工作台" />
+              <span class="focus-outline focus-left" aria-hidden="true"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence" class="section evidence-section" aria-labelledby="evidence-title">
+        <div class="content-shell evidence-layout">
+          <div class="evidence-copy">
+            <p class="eyebrow">SOURCE-GROUNDED</p>
+            <h2 id="evidence-title">AI 不只给出答案，<br />还要说明答案从哪里来。</h2>
+            <p>
+              LiteasyClaw 通过原文锚定、引用回链和可信验证，让文献解读能够回到具体段落与上下文。
+              当证据不足时，结果应当保留不确定性，而不是用看似完整的答案替代真实依据。
+            </p>
+            <div class="citation-chip">
+              <span class="citation-dot" aria-hidden="true"></span>
+              <span>引用定位：文献原文与相关上下文</span>
+            </div>
+          </div>
+          <div class="evidence-visual" aria-label="回答与文献原文位置的关系示意">
+            <div class="answer-note">
+              <p class="note-label">AI 解读</p>
+              <p>回答保留与当前文献及相关上下文的关联，方便继续检查和追问。</p>
+              <span class="note-source">查看原文位置 &#8594;</span>
+            </div>
+            <div class="evidence-line" aria-hidden="true"></div>
+            <div class="source-page">
+              <img src="assets/program.png" alt="" />
+              <span class="source-highlight" aria-hidden="true"></span>
+              <p>文献正文 / 阅读器</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="artifacts" class="section artifacts-section" aria-labelledby="artifacts-title">
+        <div class="content-shell section-intro artifacts-intro">
+          <div>
+            <p class="eyebrow">LEARNING ARTIFACTS</p>
+            <h2 id="artifacts-title">同一篇文献，<br />可以成为不同的理解入口。</h2>
+          </div>
+          <p>根据当前的阅读目标选择合适的表达方式：快速建立整体判断，拆解论证结构，梳理知识关系，准备汇报，或针对问题继续追问。</p>
+        </div>
+        <div class="content-shell artifact-layout">
+          <div class="artifact-tabs" role="tablist" aria-label="学习产物预览">
+            <button id="artifact-thin" class="artifact-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="artifact-panel" data-artifact="thin">薄读</button>
+            <button id="artifact-tree" class="artifact-tab" type="button" role="tab" aria-selected="false" aria-controls="artifact-panel" data-artifact="tree">树形展开</button>
+            <button id="artifact-map" class="artifact-tab" type="button" role="tab" aria-selected="false" aria-controls="artifact-panel" data-artifact="map">思维导图</button>
+            <button id="artifact-ppt" class="artifact-tab" type="button" role="tab" aria-selected="false" aria-controls="artifact-panel" data-artifact="ppt">PPT</button>
+            <button id="artifact-qa" class="artifact-tab" type="button" role="tab" aria-selected="false" aria-controls="artifact-panel" data-artifact="qa">问答式解析</button>
+          </div>
+          <div id="artifact-panel" class="artifact-panel" role="tabpanel" aria-labelledby="artifact-thin" tabindex="0">
+            <div class="artifact-description">
+              <p class="artifact-kicker" data-artifact-kicker>逐层阅读</p>
+              <h3 data-artifact-title>薄读</h3>
+              <p data-artifact-copy>先抓住一篇文献真正值得留下的核心，再沿着问题逐层深入。</p>
+              <span data-artifact-use>适合：快速建立整体判断</span>
+            </div>
+            <div class="artifact-preview artifact-thin-preview" data-artifact-preview aria-label="薄读产物形态预览">
+              <div class="thin-toolbar"><span>薄读</span><span>总述 · 第 0 层</span></div>
+              <p>检索不必在速度与表达能力之间二选一。文献的关键在于以更精细的匹配方式，把两者重新组织起来。</p>
+              <div class="thin-tokens"><span>深入了解实验</span><span>方法细节</span><span>局限</span></div>
+            </div>
+          </div>
+        </div>
+        <p class="content-shell artifact-disclaimer">产物形态预览。实际生成内容依赖当前文献、导入状态与可用模型能力。</p>
+      </section>
+
+      <section id="frontier" class="section frontier-section" aria-labelledby="frontier-title">
+        <div class="content-shell frontier-layout">
+          <div class="frontier-visual" aria-hidden="true">
+            <img class="frontier-image" src="assets/thin-reading-visual.svg" alt="薄读从文献核心理解逐层展开到方法、实验与局限" />
+          </div>
+          <div class="frontier-copy">
+            <p class="eyebrow">WHAT COMES NEXT</p>
+            <h2 id="frontier-title">先理解文献，<br />再沿着自己的问题继续深入。</h2>
+            <p>
+              薄读正在构建一种更轻量的阅读方式：先保留文献中最值得理解的核心，再根据兴趣和疑问逐层进入具体章节与文字。
+            </p>
+            <p>
+              Intuecho 是未来的社区方向。阅读中的直觉、批注与讨论，也可以沉淀为可被发现、交流和连接的知识网络。
+            </p>
+            <div class="status-row"><span>薄读 / 正在构建</span><span>Intuecho / 未来计划</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="waitlist" class="section waitlist-section" aria-labelledby="waitlist-title">
+        <div class="content-shell waitlist-layout">
+          <div>
+            <p class="eyebrow">FIRST EXPERIENCE</p>
+            <h2 id="waitlist-title">让下一篇重要文献，<br />真正变成自己的理解。</h2>
+            <p>加入首批体验计划，参与 LiteasyClaw 科研阅读工作台的早期体验与打磨。</p>
+            <ul class="trust-list">
+              <li>桌面优先的科研阅读工作台</li>
+              <li>本地文献默认保留在设备上</li>
+              <li>自然语言交互经过明确的权限与执行边界控制</li>
+            </ul>
+          </div>
+          <form class="waitlist-form" data-waitlist-form>
+            <div class="form-heading">
+              <p>首批体验计划</p>
+              <span>填写约 1 分钟</span>
+            </div>
+            <label>
+              邮箱 <em>*</em>
+              <input name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+            </label>
+            <label>
+              你的身份 <em>*</em>
+              <select name="role" required>
+                <option value="" selected disabled>请选择</option>
+                <option>本科生</option>
+                <option>研究生</option>
+                <option>青年研究者</option>
+                <option>研究团队成员</option>
+                <option>其他学习者</option>
+              </select>
+            </label>
+            <label>
+              研究领域 <span>可选</span>
+              <input name="field" type="text" placeholder="例如：信息检索、材料科学" />
+            </label>
+            <label>
+              最想解决的问题 <span>可选</span>
+              <textarea name="problem" rows="3" placeholder="阅读、比较、整理或汇报文献时，最困扰你的是什么？"></textarea>
+            </label>
+            <button class="button button-primary form-submit" type="submit">提交体验申请 <span aria-hidden="true">&#8594;</span></button>
+            <p class="form-status" aria-live="polite" data-form-status></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="content-shell footer-layout">
+        <a class="brand footer-brand" href="#top"><span class="brand-mark" aria-hidden="true">L</span><span>LiteasyClaw</span></a>
+        <p>为真正的文献理解而构建。</p>
+        <p class="footer-note">Desktop-first research workbench</p>
+      </div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
