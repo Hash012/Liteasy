@@ -4,6 +4,7 @@ import { afterEach, vi } from "vitest";
 import { AssistantPane } from "../app/features/assistant/AssistantPane";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
+import type { AgentEvent } from "../app/features/agent-api/agentApi.types";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -125,6 +126,105 @@ test("shows public workflow audit summaries after a public Agent run when enable
     runId: "run-public-audit",
     sessionId: "session-public-audit"
   });
+});
+
+test("projects public Agent streaming events into the expandable work status card", async () => {
+  const user = userEvent.setup();
+  const listeners = new Set<(event: AgentEvent) => void>();
+  const runId = "run-streaming-worklog";
+  const sessionId = "session-streaming-worklog";
+  const agentClient: FrontendAgentClient = {
+    cancel: vi.fn(),
+    close: vi.fn(),
+    connect: vi.fn(),
+    confirm: vi.fn(),
+    getSession: () => ({ sessionId, status: "active" }),
+    listPublicWorkflowAuditSummaries: vi.fn(),
+    send: vi.fn(async (_input, options) => {
+      const base = {
+        apiVersion: "liteasy.agent/v1" as const,
+        emittedAt: "2026-07-31T00:00:00.000Z",
+        runId,
+        sessionId
+      };
+      const events = [
+        {
+          ...base,
+          eventId: "stream-started",
+          idempotencyKey: options?.idempotencyKey ?? "missing-key",
+          inputMode: "qa" as const,
+          message: "解释方法",
+          sequence: 1,
+          type: "run.started" as const
+        },
+        { ...base, eventId: "stream-context", sequence: 2, type: "context.prepared" as const },
+        {
+          ...base,
+          delta: "正在整理方法与证据。",
+          eventId: "stream-answer",
+          sequence: 3,
+          type: "assistant.delta" as const
+        },
+        {
+          ...base,
+          action: { actionId: "artifact.generate", arguments: { apiKey: "never-render" } },
+          eventId: "stream-tool",
+          sequence: 4,
+          type: "action.requested" as const
+        },
+        {
+          ...base,
+          artifact: { artifactType: "mindmap" },
+          eventId: "stream-output",
+          sequence: 5,
+          type: "artifact.requested" as const
+        },
+        {
+          ...base,
+          eventId: "stream-message",
+          message: "已生成结构化说明。",
+          sequence: 6,
+          type: "assistant.message" as const
+        },
+        { ...base, eventId: "stream-complete", sequence: 7, type: "run.completed" as const }
+      ] as AgentEvent[];
+      events.forEach((event) => listeners.forEach((listener) => listener(event)));
+      return {
+        data: {
+          ...base,
+          createdAt: "2026-07-31T00:00:00.000Z",
+          events,
+          idempotencyKey: options?.idempotencyKey ?? "missing-key",
+          input: { message: "解释方法", mode: "qa" },
+          status: "completed" as const
+        },
+        ok: true as const
+      };
+    }),
+    subscribe: vi.fn((listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    })
+  };
+
+  render(
+    <AssistantPane
+      agentClient={agentClient}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{ importedCount: 1, selectedCount: 1, selectionLocked: true }}
+    />
+  );
+
+  await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "解释方法");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(await screen.findByText("Agent 已完成本次工作")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "查看工作详情" }));
+  expect(screen.getByLabelText("实时生成内容")).toHaveTextContent("正在整理方法与证据。");
+  expect(screen.getByText("工具调用：artifact.generate")).toBeInTheDocument();
+  expect(screen.getByText("产物已请求")).toBeInTheDocument();
+  expect(screen.getByText("调用参数已隐藏。")).toBeInTheDocument();
+  expect(screen.queryByText("never-render")).not.toBeInTheDocument();
 });
 
 

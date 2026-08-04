@@ -27,10 +27,14 @@ describe("thin-reading style contract", () => {
 
   test("keeps prose readable and allows long technical terms to wrap", () => {
     const summary = block(".thin-reading__summary");
+    const collapsedBody = block(".thin-reading.is-intuecho-collapsed .thin-reading__body");
 
     expect(summary).toMatch(/font-size:\s*19px;/);
     expect(summary).toMatch(/line-height:\s*1\.92;/);
     expect(summary).toMatch(/overflow-wrap:\s*anywhere;/);
     expect(summary).toMatch(/user-select:\s*text;/);
+    expect(collapsedBody).toMatch(/grid-template-columns:\s*minmax\(0, 780px\);/);
+    expect(collapsedBody).toMatch(/justify-content:\s*center;/);
+    expect(collapsedBody).not.toMatch(/34px/);
   });
 });

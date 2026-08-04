@@ -1,10 +1,44 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import { ArtifactTabs } from "../app/features/artifacts/ArtifactTabs";
 import type { ArtifactTab } from "../app/features/artifacts/artifact.types";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 
 describe("ArtifactTabs", () => {
+  test("renders the persisted ACORN thin-reading preview without taking down the workspace", async () => {
+    const result = JSON.parse(readFileSync(
+      resolve(process.cwd(), "../../project-docs/agent-results/preview-acorn-thin-reading-20260730.json"),
+      "utf8"
+    ));
+    const tab: ArtifactTab = {
+      artifactId: result.artifactId,
+      answer: result.answer,
+      createdAt: result.createdAt,
+      papers: result.papers,
+      thinReadingDocument: result.thinReadingDocument,
+      title: result.title,
+      type: "thin_reading"
+    };
+
+    render(
+      <ArtifactTabs
+        activeArtifactId={tab.artifactId}
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+      />
+    );
+
+    expect(await screen.findByRole("main", { name: "薄读页面" })).toBeInTheDocument();
+    expect(screen.getAllByText("ACORN：谓词无关的混合向量检索薄读")).toHaveLength(2);
+  });
+
   test("shows real Agent phase progress separately from PDF readiness", () => {
     render(
       <ArtifactTabs
@@ -35,6 +69,37 @@ describe("ArtifactTabs", () => {
     expect(screen.getByText("正在调用模型生成分析结构")).toBeInTheDocument();
     expect(screen.getByText("ColBERT 使用 late interaction。")).toBeInTheDocument();
     expect(screen.queryByText(/PDF 解析完成只表示证据可检索/)).not.toBeInTheDocument();
+  });
+
+  test("lets users collapse and reopen the live artifact generation content", () => {
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[]}
+        tasks={[{
+          id: "artifact-task-live-output",
+          message: "正在接收 Agent 输出",
+          partialAnswer: "第一段实时内容",
+          progress: 68,
+          stage: "generating_answer",
+          status: "running",
+          type: "tree"
+        }]}
+      />
+    );
+
+    expect(screen.getByText("当前阶段：流式生成")).toBeInTheDocument();
+    expect(screen.getByLabelText("实时生成内容")).toHaveTextContent("第一段实时内容");
+
+    fireEvent.click(screen.getByRole("button", { name: "收起实时生成内容" }));
+    expect(screen.queryByLabelText("实时生成内容")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "查看实时生成内容" }));
+    expect(screen.getByLabelText("实时生成内容")).toHaveTextContent("第一段实时内容");
   });
 
   test("shows provider, model, endpoint and recovery guidance after generation fails", () => {
@@ -125,6 +190,10 @@ describe("ArtifactTabs", () => {
     expect(screen.getByText("ColBERT")).toBeInTheDocument();
     expect(screen.getByText("Late interaction")).toBeInTheDocument();
     expect(screen.getByText("demo-1 p.2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "导出为文档" }));
+    expect(screen.getByRole("menuitem", { name: "Markdown (.md)" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "HTML (.html)" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "PDF (.pdf)" })).toBeInTheDocument();
   });
 
   test("renders thin-reading tabs as a full-page surface without generic artifact card chrome", () => {
@@ -186,9 +255,11 @@ describe("ArtifactTabs", () => {
     );
 
     expect(screen.getByLabelText("薄读页面")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开 Intuecho 推荐栏" }));
     expect(screen.getByRole("heading", { name: "Intuecho" })).toBeInTheDocument();
     expect(screen.getByText("连接 Intuecho 社区后显示共享批注推荐")).toBeInTheDocument();
     expect(container.querySelector(".artifact-card")).toBeNull();
+    expect(screen.getByRole("button", { name: "导出为文档" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /打开证据句/ }));
     expect(onOpenEvidence).toHaveBeenCalledWith({
@@ -199,6 +270,29 @@ describe("ArtifactTabs", () => {
       paperId: "paper-1",
       quote: "ColBERT uses MaxSim."
     });
+  });
+
+  test("offers document export for editable Skill documents", () => {
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onSaveMarkdownTab={vi.fn()}
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[{
+          artifactId: "skill-document",
+          markdown: "# Skill 文档",
+          title: "论文解读 Skill",
+          type: "skill_doc"
+        }]}
+        tasks={[]}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "导出为文档" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存文档" })).toBeInTheDocument();
   });
 
   test("surfaces live thin-reading Agent phase progress in the reading page", () => {

@@ -106,7 +106,10 @@ describe("artifactTaskRecovery", () => {
       source: {
         evidenceIds: ["evidence-1"],
         excerpt: "bounded evidence chain",
-        kind: "selected_text"
+        kind: "selected_text",
+        prompt: "用 mermaid 图呈现这段话的因果关系",
+        quickCommand: "mermaid_causal",
+        requestedOutput: "mermaid"
       }
     });
     persistInterruptedArtifactTasks([{
@@ -122,6 +125,23 @@ describe("artifactTaskRecovery", () => {
 
     expect(takeInterruptedArtifactTasks()[0]?.thinReadingBranchRecovery).toEqual(snapshot);
     expect(validateThinReadingBranchRecoverySnapshot(snapshot, document)).toEqual({ valid: true });
+  });
+
+  test("rejects a recovery snapshot whose quick command and output type disagree", () => {
+    const document = createDocument();
+
+    expect(() => createThinReadingBranchRecoverySnapshot({
+      artifactId: document.artifactId,
+      document,
+      parentNodeId: document.rootNodeId,
+      primaryPaperId: "paper-1",
+      source: {
+        excerpt: "bounded evidence chain",
+        kind: "selected_text",
+        quickCommand: "mermaid_causal",
+        requestedOutput: "html_demo"
+      }
+    })).toThrow("薄读分支输入超出可恢复范围");
   });
 
   test("rejects a recovery snapshot when its evidence no longer belongs to the parent node", () => {

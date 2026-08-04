@@ -9,6 +9,7 @@ test("keeps thin-reading prose and evidence markers readable on desktop", async 
   await expect(evidenceMarker).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解实验" })).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解局限" })).toBeVisible();
+  await page.getByRole("button", { name: "展开 Intuecho 推荐栏" }).click();
   await expect(page.getByRole("heading", { name: "Intuecho" })).toBeVisible();
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
   const fontSizes = await evidenceMarker.evaluate((marker) => {
@@ -27,6 +28,7 @@ test("keeps the community recommendation rail visible without a configured sourc
   await expect(summary).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解实验" })).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解局限" })).toBeVisible();
+  await page.getByRole("button", { name: "展开 Intuecho 推荐栏" }).click();
   await expect(page.getByRole("heading", { name: "Intuecho" })).toBeVisible();
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -39,6 +41,7 @@ test("keeps generation progress visible and prevents duplicate branch starts", a
 
   await expect(page.getByText("核验薄读证据", { exact: true })).toBeVisible();
   await expect(page.getByText("正在核验句级证据映射", { exact: true })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "LLM 实时工作窗口" })).toBeVisible();
   const progressbar = page.getByRole("progressbar", { name: "薄读 Agent 进度" });
   await expect(progressbar).toHaveAttribute("aria-valuenow", "64");
   await expect(page.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
@@ -104,8 +107,62 @@ test("keeps mobile selection actions visible and saves an annotation", async ({ 
 test("renders the community recommendation empty state for the local thin-reading fixture", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
   await page.goto("/?thin-reading-fixture");
+  await page.getByRole("button", { name: "展开 Intuecho 推荐栏" }).click();
   await expect(page.locator(".thin-reading__intuecho")).toHaveCount(1);
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
+});
+
+test("switches thin-reading graph forms and reclaims the collapsed recommendation column", async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto("/?thin-reading-fixture");
+
+  await expect(page.getByText("Graph View", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".thin-reading__intuecho")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "展开 Intuecho 推荐栏" })).toBeVisible();
+
+  const collapsedLayout = await page.locator(".thin-reading__body").evaluate((element) => ({
+    columns: getComputedStyle(element).gridTemplateColumns,
+    width: element.getBoundingClientRect().width
+  }));
+  expect(collapsedLayout.columns.trim().split(/\s+/)).toHaveLength(1);
+  expect(collapsedLayout.width).toBeLessThanOrEqual(901);
+
+  await page.getByRole("button", { name: "关系网络" }).click();
+  await expect(page.getByRole("heading", { name: "薄读页面网络" })).toBeVisible();
+  await page.getByRole("button", { name: "思维导图" }).click();
+  await expect(page.getByRole("heading", { name: "薄读层次思维导图" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "思维导图" })).toHaveAttribute("aria-pressed", "true");
+  const mindmapNode = page.locator(".thin-reading__graph.is-mindmap .thin-reading__mindmap-node").first();
+  await expect(mindmapNode).toBeVisible();
+  expect((await mindmapNode.boundingBox())?.width).toBeGreaterThan(160);
+
+  await page.getByRole("button", { name: "收起结构图" }).click();
+  await expect(page.getByRole("group", { name: "选择薄读结构图形式" })).toBeVisible();
+});
+
+test("keeps deep mind-map branches in columns and copies a dragged subtree into a split pane", async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto("/?thin-reading-mindmap-fixture");
+  await page.getByRole("button", { name: "思维导图" }).click();
+
+  const depthZero = page.locator('[data-mindmap-depth="0"]').first();
+  const depthOne = page.locator('[data-mindmap-depth="1"]').first();
+  const depthTwo = page.locator('[data-mindmap-depth="2"]').first();
+  const formulaNode = page.locator('[data-mindmap-depth="4"] > .thin-reading__mindmap-node').first();
+  await expect(depthZero).toHaveClass(/is-horizontal/);
+  await expect(depthOne).toHaveClass(/is-horizontal/);
+  await expect(depthTwo).toHaveClass(/is-vertical/);
+  await expect(formulaNode.locator(".katex").first()).toBeVisible();
+
+  const primaryScroll = page.getByTestId("mindmap-primary-scroll");
+  await expect(primaryScroll).toHaveCSS("overflow-x", "auto");
+  await expect(primaryScroll).toHaveCSS("overflow-y", "auto");
+  await formulaNode.dragTo(page.getByRole("region", { name: "拖到此处创建对照分栏" }));
+
+  const split = page.getByRole("region", { name: /对照阅读：累计动作敏感度/ });
+  await expect(split).toBeVisible();
+  await expect(page.getByTestId("mindmap-split-scroll")).toHaveCSS("overflow-y", "auto");
+  await expect(page.locator('[data-mindmap-depth="4"]')).toHaveCount(2);
 });
 
 test("keeps external source markers selectable for annotation but not deeper reading", async ({ page }) => {
@@ -182,4 +239,84 @@ test("keeps a real PDF evidence overlay aligned after zooming", async ({ page })
   for (const key of ["height", "left", "top", "width"] as const) {
     expect(Math.abs(Number.parseFloat(after[key] ?? "NaN") - Number.parseFloat(before[key] ?? "NaN"))).toBeLessThan(0.1);
   }
+});
+
+test("uses the full paper width while resolving and bounding MinerU images in source and translation", async ({ page }) => {
+  await page.setViewportSize({ height: 1_000, width: 1_800 });
+  await page.goto("/?paper-resource-fixture");
+
+  const resource = page.getByRole("main", { name: /Space-efficient translation layer 提取图文版/ });
+  const multimodal = page.getByRole("region", { name: "按论文原文顺序排列的图文版" });
+  const sourceImage = page.getByAltText("Architecture diagram");
+  await expect(resource).toBeVisible();
+  await expect(sourceImage).toBeVisible();
+  const initialGeometry = await page.evaluate(() => {
+    const resourceElement = document.querySelector(".paper-resource-tab")!;
+    const contentElement = document.querySelector(".paper-resource-tab__multimodal-list")!;
+    const imageElement = document.querySelector<HTMLImageElement>(".mineru-markdown__image")!;
+    const markdownElement = document.querySelector<HTMLElement>(".mineru-markdown")!;
+    return {
+      contentWidth: contentElement.getBoundingClientRect().width,
+      imageWidth: imageElement.getBoundingClientRect().width,
+      markdownWidth: markdownElement.getBoundingClientRect().width,
+      resourceWidth: resourceElement.getBoundingClientRect().width,
+      src: imageElement.src
+    };
+  });
+  expect(initialGeometry.contentWidth).toBeGreaterThan(initialGeometry.resourceWidth * 0.9);
+  expect(initialGeometry.markdownWidth).toBeLessThanOrEqual(780);
+  expect(initialGeometry.imageWidth).toBeLessThanOrEqual(720);
+  expect(initialGeometry.src).toMatch(/^data:image\/svg\+xml/);
+  await expect(multimodal).toBeVisible();
+
+  await page.getByRole("button", { name: "翻译文本" }).click();
+  await page.getByRole("button", { name: "确认翻译为 中文" }).click();
+  await expect(page.getByText(/中文解释内容/).first()).toBeVisible();
+  await expect(page.getByAltText("Architecture diagram")).toHaveCount(2);
+  const translatedGeometry = await page.locator(".paper-resource-tab__translation").evaluate((element) => ({
+    borderRadius: getComputedStyle(element).borderRadius,
+    resourceWidth: element.closest(".paper-resource-tab")!.getBoundingClientRect().width,
+    width: element.getBoundingClientRect().width
+  }));
+  expect(translatedGeometry.width).toBeGreaterThan(translatedGeometry.resourceWidth * 0.9);
+  expect(translatedGeometry.borderRadius).toBe("0px");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("keeps legacy page-based ACORN extraction inside the viewport with hostile intrinsic widths", async ({ page }) => {
+  await page.setViewportSize({ height: 1_000, width: 1_600 });
+  await page.goto("/?paper-resource-fallback-fixture");
+
+  await expect(page.getByText("第 1 页")).toBeVisible();
+  const oversizedImage = page.getByAltText("Oversized ACORN figure");
+  await oversizedImage.scrollIntoViewIfNeeded();
+  await expect(oversizedImage).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const resource = document.querySelector<HTMLElement>(".paper-resource-tab")!;
+    const fallbackPage = document.querySelector<HTMLElement>(".paper-resource-tab__multimodal-page")!;
+    const markdown = fallbackPage.querySelector<HTMLElement>(".mineru-markdown")!;
+    const image = fallbackPage.querySelector<HTMLImageElement>("figure img")!;
+    const resourceRect = resource.getBoundingClientRect();
+    const markdownRect = markdown.getBoundingClientRect();
+    return {
+      fallbackClientWidth: fallbackPage.clientWidth,
+      fallbackScrollWidth: fallbackPage.scrollWidth,
+      imageWidth: image.getBoundingClientRect().width,
+      markdownLeft: markdownRect.left,
+      markdownRight: markdownRect.right,
+      markdownWidth: markdownRect.width,
+      resourceClientWidth: resource.clientWidth,
+      resourceLeft: resourceRect.left,
+      resourceRight: resourceRect.right,
+      resourceScrollWidth: resource.scrollWidth
+    };
+  });
+
+  expect(geometry.resourceScrollWidth).toBeLessThanOrEqual(geometry.resourceClientWidth + 1);
+  expect(geometry.fallbackScrollWidth).toBeLessThanOrEqual(geometry.fallbackClientWidth + 1);
+  expect(geometry.markdownWidth).toBeLessThanOrEqual(780);
+  expect(geometry.markdownLeft).toBeGreaterThanOrEqual(geometry.resourceLeft);
+  expect(geometry.markdownRight).toBeLessThanOrEqual(geometry.resourceRight);
+  expect(geometry.imageWidth).toBeLessThanOrEqual(720);
 });

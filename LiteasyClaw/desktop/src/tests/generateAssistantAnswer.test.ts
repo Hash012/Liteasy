@@ -887,6 +887,81 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
   expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual(plannedEvidenceIds);
 });
 
+test("continues with indexed evidence when the optional evidence planner receives a 502", async () => {
+  const store = createSettingsStore();
+  const progressSummaries: string[] = [];
+  const prompts: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
+        page: index + 1,
+        paperId: "demo-1",
+        paperTitle: "Fallback Planning Paper",
+        snippet: `Evidence passage ${index + 1} directly supports the method.`,
+        summary: `Evidence summary ${index + 1}.`,
+        tags: ["method"]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      prompts.push(prompt);
+      if (prompt.includes("证据规划 Agent")) {
+        return {
+          json: async () => ({ error: "OpenAI Responses API 请求失败（502）：openai_error" }),
+          ok: false,
+          status: 502
+        };
+      }
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "";
+      const summary = "该论文的方法由已索引的论文内证据直接支持，并明确说明了方法与结果之间的关系。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: "方法得到论文内证据支持。" }],
+            externalKnowledge: [],
+            mermaid: "",
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            summary,
+            summarySentences: [{ evidenceIds: [evidenceId], externalKnowledge: [], status: "grounded", text: summary }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    onProgress: (progress) => progressSummaries.push(progress.summary),
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "Fallback Planning Paper" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-planning-fallback",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "Fallback Planning Paper",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts[0]).toContain("证据规划 Agent");
+  expect(progressSummaries).toContain("证据规划服务暂时不可用，正在使用已索引全文继续生成");
+  expect(result.thinReading?.evidencePlan).toBeUndefined();
+  expect(result.thinReading?.rootSeed.summary).toContain("论文内证据");
+});
+
 test("retries a cross-layer evidence ID with the current planning allowlist", async () => {
   const store = createSettingsStore();
   const planningPrompts: string[] = [];
@@ -2126,4 +2201,145 @@ test("stops beyond-paper generation when external retrieval returns no sources",
     })
   })).rejects.toThrow("未检索到可信、可追溯的外部文献");
   expect(modelCalls).toBe(0);
+});
+
+test("runs at most two responsibility Subagents for a genuinely large thin-reading load", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+  let selectedEvidenceIds: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "paper-large": Array.from({ length: 20 }, (_, index) => ({
+        page: index + 1,
+        paperId: "paper-large",
+        paperTitle: "Large Architecture Paper",
+        snippet: `Component ${index + 1} sends state to the next processing stage under a bounded condition. `.repeat(140),
+        summary: `Component ${index + 1} participates in the architecture pipeline.`,
+        tags: ["architecture", "pipeline"]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      prompts.push(prompt);
+      if (prompt.includes("证据规划 Agent")) {
+        selectedEvidenceIds = [...prompt.matchAll(/\[(evidence-[^\]]+)\]/g)]
+          .slice(0, 3)
+          .map((match) => match[1]);
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              focus: ["核心组件关系"],
+              pageRequests: [],
+              searchQueries: [],
+              selectedEvidenceIds
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据观察 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              decision: "stop",
+              focus: [],
+              pageRequests: [],
+              reason: "首轮已经覆盖核心组件、处理顺序和边界。",
+              searchQueries: [],
+              selectedEvidenceIds: []
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("关系梳理 Subagent")) {
+        return {
+          json: async () => ({
+            answer: `组件按处理顺序连接〔${selectedEvidenceIds[0]}〕。`,
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("视觉编辑 Subagent")) {
+        return {
+          json: async () => ({
+            answer: `适合用流程图呈现，但必须回到〔${selectedEvidenceIds[0]}〕核验。`,
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: [],
+              reason: "每个句子都由绑定证据直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const summary = "系统把多个组件按依赖顺序连接起来，让状态沿处理流水线逐步传递，并保留证据给出的条件边界。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [selectedEvidenceIds[0]], status: "grounded", text: "组件按依赖顺序连接。" }],
+            externalKnowledge: [],
+            interactiveDemo: null,
+            mermaid: "flowchart LR\n  A[输入组件] --> B[处理组件] --> C[结果组件]",
+            omittedSections: [],
+            paperEvidence: [selectedEvidenceIds[0]],
+            paperType: "systems",
+            recommendedFigures: [],
+            summary,
+            summarySentences: [{ evidenceIds: [selectedEvidenceIds[0]], externalKnowledge: [], status: "grounded", text: summary }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "paper-large", title: "Large Architecture Paper" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-large-workload",
+      depth: 0,
+      paperIds: ["paper-large"],
+      primaryPaperId: "paper-large",
+      primaryPaperTitle: "Large Architecture Paper",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts.filter((prompt) => prompt.includes("关系梳理 Subagent"))).toHaveLength(1);
+  expect(prompts.filter((prompt) => prompt.includes("视觉编辑 Subagent"))).toHaveLength(1);
+  expect(prompts.find((prompt) => prompt.includes("你是 Liteasy 薄读 Agent"))).toContain("Subagent 私有工作记录");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.workload).toMatchObject({
+    maxConcurrency: 2,
+    strategy: "parallel"
+  });
 });

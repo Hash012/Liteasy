@@ -5,16 +5,26 @@ import { cloneSettingsState, createSeededSettingsStore } from "../app/features/s
 
 describe("AppShell state helpers", () => {
   test("provides starter papers without sharing mutable arrays", () => {
-    expect(starterPapers.map((paper) => paper.id)).toEqual(["demo-1", "demo-2", "demo-3"]);
+    expect(starterPapers.map((paper) => paper.id)).toEqual([
+      "demo-1",
+      "demo-2",
+      "demo-3",
+      "local-qvla",
+      "local-compactflash-ftl"
+    ]);
     expect(starterPapers.map((paper) => paper.title)).toEqual([
       "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
       "Survey of Vector Database Management Systems",
-      "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+      "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",
+      "QVLA",
+      "A space-efficient flash translation layer for CompactFlash systems"
     ]);
     expect(starterPapers.map((paper) => paper.sourcePath)).toEqual([
       "/papers/colbert-late-interaction.pdf",
       "/papers/survey-vector-database-management-systems.pdf",
-      "/papers/acorn-vector-search.pdf"
+      "/papers/acorn-vector-search.pdf",
+      "/home/tianjiaming/LiteasyLibrary/papers/QVLA.pdf",
+      "/home/tianjiaming/LiteasyLibrary/papers/A_space-efficient_flash_translation_layer_for_CompactFlash_systems.pdf"
     ]);
   });
 

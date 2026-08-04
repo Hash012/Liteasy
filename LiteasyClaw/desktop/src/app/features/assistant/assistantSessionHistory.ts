@@ -91,6 +91,17 @@ function getConversationTitle(messages: AssistantMessage[], fallback: string) {
   return messages.find((message) => message.role === "user")?.content.trim() || fallback;
 }
 
+function formatArtifactLiveOutput(value: string | undefined) {
+  const content = value?.trim();
+  if (!content) return "";
+  // Keep readable streamed prose in the activity session, while preventing partial
+  // JSON objects, trace IDs and tool envelopes from becoming user-facing chat text.
+  if (/^[{\[]/.test(content.replace(/^```json\s*/i, ""))) {
+    return "实时内容正在产物区域整理为可读页面。";
+  }
+  return `\n实时生成内容：\n${content}`;
+}
+
 export function createAssistantSession({
   id,
   kind = "conversation",
@@ -152,7 +163,15 @@ export function upsertAssistantSession(
   return sessions.map((candidate) => candidate.id === session.id ? session : candidate);
 }
 
-export function getArtifactTaskSessionId(taskId: string) {
+export function getArtifactTaskSessionId(
+  taskId: string,
+  task?: Pick<ArtifactTask, "artifactId" | "type">
+) {
+  // A thin-reading artifact is a paper-bound reading trail. Its root and every
+  // deeper page therefore belong to one conversation surface, not one session per run.
+  if (task?.type === "thin_reading" && task.artifactId) {
+    return `artifact:thin-reading:${task.artifactId}`;
+  }
   return `artifact-task:${taskId}`;
 }
 
@@ -161,7 +180,7 @@ export function createArtifactTaskSession(
   previous?: AssistantSessionHistoryItem,
   now: () => number = Date.now
 ): AssistantSessionHistoryItem {
-  const sessionId = getArtifactTaskSessionId(task.id);
+  const sessionId = getArtifactTaskSessionId(task.id, task);
   const title = `生成：${artifactTypeLabels[task.type]}`;
   const progress = Math.max(0, Math.min(100, Math.round(task.progress)));
   const progressMessage = [
@@ -180,7 +199,7 @@ export function createArtifactTaskSession(
           ...task.failure.recovery.map((item) => `- 建议：${item}`)
         ].filter(Boolean).join("\n")
       : "",
-    task.partialAnswer?.trim() ? `\n实时生成内容：\n${task.partialAnswer.trim()}` : ""
+    formatArtifactLiveOutput(task.partialAnswer)
   ].filter(Boolean).join("\n");
   const timestamp = createTimestamp(now);
   const status: AssistantSessionStatus =

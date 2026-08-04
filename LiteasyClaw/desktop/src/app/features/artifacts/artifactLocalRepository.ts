@@ -83,9 +83,19 @@ function isCachedThinReadingNodeSource(value: unknown): value is Record<string, 
     return typeof value.label === "string" && value.label.trim().length > 0 &&
       typeof value.sectionKey === "string" && value.sectionKey.trim().length > 0;
   }
+  const expectedOutput = value.quickCommand === "mermaid_causal"
+    ? "mermaid"
+    : value.quickCommand === "html_algorithm_animation" || value.quickCommand === "html_svg_structure"
+      ? "html_demo"
+      : undefined;
   return value.kind === "selected_text" &&
     typeof value.excerpt === "string" && value.excerpt.trim().length > 0 &&
     (value.prompt === undefined || typeof value.prompt === "string") &&
+    (value.quickCommand === undefined || value.quickCommand === "html_algorithm_animation" ||
+      value.quickCommand === "html_svg_structure" || value.quickCommand === "mermaid_causal") &&
+    (value.requestedOutput === undefined || value.requestedOutput === "explanation" ||
+      value.requestedOutput === "html_demo" || value.requestedOutput === "mermaid") &&
+    (expectedOutput === undefined || value.requestedOutput === expectedOutput) &&
     hasUniqueOptionalStringArray(value, "evidenceIds") &&
     hasUniqueOptionalStringArray(value, "externalSourceIds");
 }
@@ -231,7 +241,7 @@ function isCachedEvidenceSpan(value: unknown, paperIds: ReadonlySet<string>) {
     (page !== undefined && (typeof page !== "number" || !Number.isInteger(page) || page < 1)) ||
     (pageTextStart !== undefined && (typeof pageTextStart !== "number" || !Number.isInteger(pageTextStart) || pageTextStart < 0)) ||
     (pageTextEnd !== undefined && (typeof pageTextEnd !== "number" || !Number.isInteger(pageTextEnd) || pageTextEnd < 0)) ||
-    (textExtraction !== undefined && textExtraction !== "embedded" && textExtraction !== "ocr")) {
+    (textExtraction !== undefined && textExtraction !== "embedded" && textExtraction !== "mineru" && textExtraction !== "ocr")) {
     return false;
   }
   return pageTextStart === undefined || pageTextEnd === undefined ||
@@ -314,6 +324,23 @@ function isCachedGenerationAudit(value: unknown, availableEvidenceIds: Set<strin
     value.interpretationPlan.discourseMoves.length < 1 || value.interpretationPlan.discourseMoves.length > 6 ||
     (value.interpretationPlan.externalQuery !== undefined && typeof value.interpretationPlan.externalQuery !== "string") ||
     (value.interpretationPlan.gap !== undefined && typeof value.interpretationPlan.gap !== "string"))) {
+    return false;
+  }
+  if (value.contextManagement !== undefined && (!isRecord(value.contextManagement) ||
+    typeof value.contextManagement.tokenBudget !== "number" || value.contextManagement.tokenBudget < 1 ||
+    typeof value.contextManagement.estimatedTokens !== "number" || value.contextManagement.estimatedTokens < 0 ||
+    typeof value.contextManagement.droppedAncestors !== "number" || value.contextManagement.droppedAncestors < 0 ||
+    typeof value.contextManagement.droppedClaims !== "number" || value.contextManagement.droppedClaims < 0 ||
+    typeof value.contextManagement.droppedEvidenceSpans !== "number" || value.contextManagement.droppedEvidenceSpans < 0)) {
+    return false;
+  }
+  if (value.workload !== undefined && (!isRecord(value.workload) ||
+    (value.workload.strategy !== "direct" && value.workload.strategy !== "guided" && value.workload.strategy !== "parallel") ||
+    (value.workload.maxConcurrency !== 0 && value.workload.maxConcurrency !== 1 && value.workload.maxConcurrency !== 2) ||
+    typeof value.workload.contextBudgetTokens !== "number" || value.workload.contextBudgetTokens < 1 ||
+    typeof value.workload.evidenceCharacters !== "number" || value.workload.evidenceCharacters < 0 ||
+    typeof value.workload.evidenceCount !== "number" || value.workload.evidenceCount < 0 ||
+    typeof value.workload.reason !== "string" || !isStringArray(value.workload.plannedSubagents))) {
     return false;
   }
   if (value.evidencePlan !== undefined && (!isRecord(value.evidencePlan) ||
@@ -472,6 +499,30 @@ function isCachedThinReadingDocument(value: unknown, artifactId: string) {
       return false;
     }
     const availableEvidenceIds = new Set<string>(paperEvidence);
+    if (node.evidence.mermaid !== undefined &&
+      (typeof node.evidence.mermaid !== "string" || node.evidence.mermaid.length > 8_000)) {
+      return false;
+    }
+    if (node.evidence.interactiveDemo !== undefined && (
+      !isRecord(node.evidence.interactiveDemo) || node.evidence.interactiveDemo.kind !== "html" ||
+      typeof node.evidence.interactiveDemo.title !== "string" || !node.evidence.interactiveDemo.title.trim() ||
+      typeof node.evidence.interactiveDemo.description !== "string" || !node.evidence.interactiveDemo.description.trim() ||
+      typeof node.evidence.interactiveDemo.html !== "string" || node.evidence.interactiveDemo.html.length < 80 ||
+      node.evidence.interactiveDemo.html.length > 60_000
+    )) {
+      return false;
+    }
+    if (node.evidence.recommendedFigures !== undefined && (
+      !Array.isArray(node.evidence.recommendedFigures) || node.evidence.recommendedFigures.length > 2 ||
+      new Set(node.evidence.recommendedFigures.map((figure) => isRecord(figure) ? figure.figureId : undefined)).size !== node.evidence.recommendedFigures.length ||
+      !node.evidence.recommendedFigures.every((figure) => isRecord(figure) &&
+        typeof figure.figureId === "string" && figure.figureId.trim().length > 0 &&
+        typeof figure.reason === "string" && figure.reason.trim().length > 0 &&
+        isStringArray(figure.evidenceIds) && figure.evidenceIds.length > 0 &&
+        figure.evidenceIds.every((evidenceId) => availableEvidenceIds.has(evidenceId)))
+    )) {
+      return false;
+    }
     const spans = node.evidence.paperEvidenceSpans;
     if (spans !== undefined && (!Array.isArray(spans) ||
       new Set(spans.map((span) => isRecord(span) ? span.id : undefined)).size !== spans.length ||

@@ -41,8 +41,18 @@ function isRecoverableBranchSource(value: unknown): value is ThinReadingBranchSo
   }
   if (source.kind !== "selected_text" || typeof source.excerpt !== "string" ||
     source.excerpt.trim().length === 0 || source.excerpt.length > maxExcerptLength) return false;
+  const expectedOutput = source.quickCommand === "mermaid_causal"
+    ? "mermaid"
+    : source.quickCommand === "html_algorithm_animation" || source.quickCommand === "html_svg_structure"
+      ? "html_demo"
+      : undefined;
   return (source.prompt === undefined ||
       (typeof source.prompt === "string" && source.prompt.length <= maxPromptLength)) &&
+    (source.quickCommand === undefined || source.quickCommand === "html_algorithm_animation" ||
+      source.quickCommand === "html_svg_structure" || source.quickCommand === "mermaid_causal") &&
+    (source.requestedOutput === undefined || source.requestedOutput === "explanation" ||
+      source.requestedOutput === "html_demo" || source.requestedOutput === "mermaid") &&
+    (expectedOutput === undefined || source.requestedOutput === expectedOutput) &&
     (source.evidenceIds === undefined || isUniqueBoundedStringArray(source.evidenceIds)) &&
     (source.externalSourceIds === undefined || isUniqueBoundedStringArray(source.externalSourceIds));
 }

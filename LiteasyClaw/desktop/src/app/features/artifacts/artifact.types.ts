@@ -7,6 +7,8 @@ import type {
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { IntuitionGraphDocument } from "../intuition-graph/intuitionGraph.types";
 import type { ThinReadingDocument } from "../thin-reading/thinReading.types";
+import type { MineruFigure } from "../import/import.types";
+import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { ThinReadingBranchRecoverySnapshot } from "./artifactTaskRecovery";
 
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
@@ -90,6 +92,8 @@ export type ArtifactTab = {
   artifactId: string;
   citations?: AgentCitation[];
   createdAt?: string;
+  figures?: MineruFigure[];
+  mineruTextChunks?: RetrievalChunk[];
   intuitionGraph?: IntuitionGraphDocument;
   markdown?: string;
   mindmapArtifact?: MindmapArtifact;
@@ -121,6 +125,8 @@ export type AgentArtifactResult = {
   artifactType: Exclude<ArtifactType, "skill_doc">;
   citations: AgentCitation[];
   createdAt: string;
+  figures?: MineruFigure[];
+  mineruTextChunks?: RetrievalChunk[];
   intuitionGraph?: IntuitionGraphDocument;
   mindmapArtifact?: MindmapArtifact;
   outlineMarkdown?: string;

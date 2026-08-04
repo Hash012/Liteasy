@@ -7,7 +7,8 @@ export type Citation = {
 export type RetrievalChunk = {
   pageTextEnd?: number;
   pageTextStart?: number;
-  textExtraction?: "embedded" | "ocr";
+  sourceMarkdown?: string;
+  textExtraction?: "embedded" | "mineru" | "ocr";
   paperId: string;
   paperTitle: string;
   page: number;

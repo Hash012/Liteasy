@@ -44,6 +44,11 @@ test("saves and lists Git-visible Agent artifact documents", async () => {
       status: 200
     })
     .mockResolvedValueOnce({
+      json: async () => ({ artifact: { ...document, title: "Renamed map" } }),
+      ok: true,
+      status: 200
+    })
+    .mockResolvedValueOnce({
       json: async () => ({ artifactId: "artifact-1", deleted: true }),
       ok: true,
       status: 200
@@ -57,10 +62,18 @@ test("saves and lists Git-visible Agent artifact documents", async () => {
     "project-docs/agent-results/artifact-1.json"
   );
   await expect(client.list()).resolves.toEqual([document]);
+  await expect(client.rename("artifact-1", "Renamed map")).resolves.toEqual({
+    ...document,
+    title: "Renamed map"
+  });
   await expect(client.delete("artifact-1")).resolves.toBeUndefined();
   expect(transport.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/agent-artifacts");
   expect(transport.mock.calls[0][1]).toMatchObject({ method: "POST" });
   expect(transport.mock.calls[2]).toEqual([
+    "http://127.0.0.1:8787/v1/agent-artifacts/artifact-1",
+    expect.objectContaining({ method: "PATCH" })
+  ]);
+  expect(transport.mock.calls[3]).toEqual([
     "http://127.0.0.1:8787/v1/agent-artifacts/artifact-1",
     { method: "DELETE" }
   ]);

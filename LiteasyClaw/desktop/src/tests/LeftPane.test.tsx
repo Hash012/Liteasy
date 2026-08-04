@@ -560,6 +560,38 @@ describe("LeftPane", () => {
     );
   });
 
+  test("finds an artifact by name and renames it from its resource menu", async () => {
+    const user = userEvent.setup();
+    const onRenamePaperChild = vi.fn(async (_item, _paper, title) => `已重命名多模态产物：${title}`);
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          libraryPaperChildren: {
+            "demo-1": [{ id: "artifact-1", kind: "artifact", label: "QVLA 薄读" }]
+          },
+          onRenamePaperChild,
+          papers: [{ id: "demo-1", sourcePath: "/papers/QVLA.pdf", title: "QVLA" }]
+        })}
+      />
+    );
+
+    await user.type(screen.getByLabelText("搜索文件与产物"), "薄读");
+    const artifact = screen.getByRole("button", { name: "QVLA 薄读" });
+    expect(artifact).toBeInTheDocument();
+    fireEvent.contextMenu(artifact);
+    await user.click(screen.getByRole("menuitem", { name: "重命名产物…" }));
+    await user.clear(screen.getByLabelText("新名称"));
+    await user.type(screen.getByLabelText("新名称"), "QVLA 精读");
+    await user.click(screen.getByRole("button", { name: "确认" }));
+
+    expect(onRenamePaperChild).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "artifact-1" }),
+      expect.objectContaining({ id: "demo-1" }),
+      "QVLA 精读"
+    );
+  });
+
 
   test("renders organization action feedback in the organization view", () => {
     render(

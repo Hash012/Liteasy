@@ -11,6 +11,7 @@ import type { ArtifactTab, ArtifactTask } from "../app/features/artifacts/artifa
 import type { Paper } from "../app/features/workspace/workspace.types";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
+import type { MineruFigure } from "../app/features/import/import.types";
 
 function createMindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -192,6 +193,7 @@ function renderArtifactActions(options: {
   diagnosticContext?: { endpoint: string; model: string; provider: string };
   imported?: boolean;
   locked?: boolean;
+  mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   selectedPapers?: Paper[];
 } = {}) {
   const artifactStore = createArtifactStore();
@@ -240,6 +242,7 @@ function renderArtifactActions(options: {
       getActiveReaderPaper: () => options.activeReaderPaper ?? null,
       getImportedChunksByPaperId: () => importedChunks,
       getImportedChunksForPaperId: (paperId) => importedChunks[paperId] ?? [],
+      getMineruFiguresForPaperId: (paperId) => options.mineruFiguresByPaperId?.[paperId] ?? [],
       getModelDiagnosticContext: options.diagnosticContext
         ? () => options.diagnosticContext!
         : undefined,
@@ -581,6 +584,93 @@ describe("useArtifactActions", () => {
     expect(artifactStore.getOpenTabs().find((tab) => tab.artifactId === document.artifactId)).toEqual(
       expect.objectContaining({ papers: [{ id: "paper-attention", title: "Attention Is All You Need" }] })
     );
+  });
+
+  test("rejects a second thin-reading branch request while the artifact already has an active task", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const { artifactStore, onAnalysisHint, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true,
+      selectedPapers: papers
+    });
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      papers,
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+    const runningTaskId = artifactStore.createTask("thin_reading");
+    artifactStore.updateTask(runningTaskId, { artifactId: document.artifactId });
+    artifactStore.startTask(runningTaskId);
+
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
+    })).rejects.toThrow("已有生成任务正在运行");
+
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    expect(onAnalysisHint).toHaveBeenCalledWith(expect.stringContaining("不会重复提交"));
+  });
+
+  test("caps thin-reading MinerU figure metadata instead of dropping large figure sets", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const figures: MineruFigure[] = Array.from({ length: 30 }, (_, index) => ({
+      alt: `Figure ${index}`,
+      analysis: {
+        description: `Figure description ${index}`,
+        importance: index < 3 ? "primary" : index < 18 ? "supporting" : "reference",
+        kind: "workflow",
+        placement: index < 3 ? "method" : "evidence",
+        title: `Figure title ${index}`
+      },
+      dataUrl: "data:image/png;base64,AAAA",
+      id: `figure-${index.toString().padStart(2, "0")}`,
+      page: index + 1
+    }));
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true,
+      mineruFiguresByPaperId: { "paper-attention": figures },
+      selectedPapers: papers
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-07-28T00:00:00.000Z",
+      papers,
+      thinReadingDocument: document,
+      title: "薄读",
+      type: "thin_reading"
+    });
+
+    await act(async () => {
+      await result.current.generateThinReadingBranch({
+        artifactId: document.artifactId,
+        document,
+        source: { kind: "selected_text", excerpt: "Transformer 用 self-attention" }
+      });
+    });
+
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({
+        thinReadingContext: expect.objectContaining({
+          availableFigures: expect.arrayContaining([
+            expect.objectContaining({ id: "figure-00", importance: "primary" }),
+            expect.objectContaining({ id: "figure-01", importance: "primary" }),
+            expect.objectContaining({ id: "figure-02", importance: "primary" })
+          ])
+        })
+      })
+    );
+    const availableFigures = runAgentAnalysis.mock.calls[0]?.[2]?.thinReadingContext?.availableFigures;
+    expect(availableFigures).toHaveLength(24);
+    expect(availableFigures.some((figure: { id: string }) => figure.id === "figure-29")).toBe(false);
   });
 
   test("rebuilds a historical thin-reading paper index before generating a branch", async () => {

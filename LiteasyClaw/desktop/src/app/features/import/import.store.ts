@@ -1,5 +1,5 @@
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
-import type { ImportJob } from "./import.types";
+import type { ImportJob, MineruFigure } from "./import.types";
 
 export function createImportStore() {
   const jobs = new Map<string, ImportJob>();
@@ -24,12 +24,13 @@ export function createImportStore() {
       if (!job) return;
       job.status = "parsing";
     },
-    markParsed(id: string, payload: { paperId: string; chunks?: RetrievalChunk[] }) {
+    markParsed(id: string, payload: { paperId: string; chunks?: RetrievalChunk[]; mineruFigures?: MineruFigure[] }) {
       const job = jobs.get(id);
       if (!job) return;
       job.status = "parsed";
       job.paperId = payload.paperId;
       job.parsedChunks = payload.chunks ?? [];
+      job.mineruFigures = payload.mineruFigures ?? [];
     },
     markFailed(id: string) {
       const job = jobs.get(id);

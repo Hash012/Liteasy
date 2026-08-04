@@ -347,6 +347,44 @@ describe("thinReadingProjection", () => {
     expect(Object.isFrozen((child.source as Extract<typeof child.source, { kind: "selected_text" }>).externalSourceIds)).toBe(true);
   });
 
+  test("retains generated diagrams, demos, and model-selected MinerU figures", () => {
+    const visualSeed = seed();
+    visualSeed.evidence = {
+      ...visualSeed.evidence,
+      interactiveDemo: {
+        description: "拖动滑块观察匹配得分",
+        html: "<!doctype html><html><body><input type=range><script>location='https://attacker.example'</script></body></html>",
+        kind: "html",
+        title: "MaxSim 动画"
+      },
+      mermaid: "flowchart LR\nA[查询] --> B[MaxSim] --> C[得分]",
+      recommendedFigures: [{
+        evidenceIds: ["evidence-1"],
+        figureId: "paper-1:figure-2",
+        reason: "该图直接展示 token 级匹配关系"
+      }]
+    };
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-visuals",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: visualSeed,
+      targetLanguage: "zh-CN"
+    });
+    const evidence = document.nodes[document.rootNodeId].evidence;
+
+    expect(evidence.mermaid).toContain("MaxSim");
+    expect(evidence.interactiveDemo).toMatchObject({ kind: "html", title: "MaxSim 动画" });
+    expect(evidence.interactiveDemo?.html).toContain("<input type=range>");
+    expect(evidence.interactiveDemo?.html).toContain("<script>location='https://attacker.example'</script>");
+    expect(evidence.recommendedFigures).toEqual([expect.objectContaining({
+      figureId: "paper-1:figure-2",
+      evidenceIds: ["evidence-1"]
+    })]);
+    expect(Object.isFrozen(evidence.interactiveDemo)).toBe(true);
+    expect(Object.isFrozen(evidence.recommendedFigures)).toBe(true);
+    expect(Object.isFrozen(evidence.recommendedFigures?.[0]?.evidenceIds)).toBe(true);
+  });
+
   test("keeps fixture helpers on the production input shape", () => {
     const fixture = createThinReadingFixture();
     const document = createThinReadingDocument(fixture);

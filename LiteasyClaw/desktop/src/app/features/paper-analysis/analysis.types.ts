@@ -23,7 +23,7 @@ export type AnalysisEvidence = {
   page: number;
   pageTextEnd?: number;
   pageTextStart?: number;
-  textExtraction?: "embedded" | "ocr";
+  textExtraction?: "embedded" | "mineru" | "ocr";
   paperId: string;
   paperTitle: string;
   quote: string;

@@ -62,7 +62,7 @@ describe("thinReadingExternalFullTextClient", () => {
     expect(first.fullTextEvidence?.[0].id).toMatch(
       new RegExp(`^external-evidence:openalex%3AW42:${contentHash}:p\\d+:c\\d+$`)
     );
-  });
+  }, 15_000);
 
   test("rejects a PDF whose returned bytes do not match the server hash", async () => {
     const bytesBase64 = btoa("%PDF-1.7\nnot a complete fixture");

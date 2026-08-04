@@ -1,4 +1,5 @@
 import type { UIDslActionRef, UIDslDocument, UIDslNode } from "./generativeUi.types";
+import { GeneratedMindMap } from "./GeneratedMindMap";
 import { validateUIDslDocument } from "./uiDslValidator";
 import { validateUIDslUx } from "./uxValidator";
 
@@ -138,6 +139,9 @@ export function OutlineTree({
   variant: "mindmap" | "tree";
 }) {
   const normalized = normalizeOutlineNodes(nodes);
+  if (variant === "mindmap") {
+    return <GeneratedMindMap nodes={normalized} />;
+  }
   const ids = new Set(normalized.map((node) => node.id));
   const byParent = new Map<string | undefined, VisualOutlineNode[]>();
   normalized.forEach((node) => {

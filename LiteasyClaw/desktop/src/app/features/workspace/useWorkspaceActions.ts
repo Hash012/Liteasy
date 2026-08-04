@@ -1,4 +1,4 @@
-import type { ImportJob } from "../import/import.types";
+import type { ImportJob, MineruFigure } from "../import/import.types";
 import { extractImportedChunksForPaper } from "../import/importFixtures";
 import type { PdfOcrLanguage } from "../import/pdfTextExtractor";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
@@ -48,6 +48,7 @@ function createBrowserPdfSource(file: File, fallbackPath: string) {
 
 type UseWorkspaceActionsInput = {
   extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
+  extractPaperResources?: (paper: Paper) => Promise<{ chunks: RetrievalChunk[]; figures: MineruFigure[] }>;
   ocrLanguage?: PdfOcrLanguage;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
@@ -81,6 +82,7 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 
 export function useWorkspaceActions({
   extractPaperChunks,
+  extractPaperResources,
   importDocument,
   importStore,
   loadPdfSource,
@@ -418,8 +420,11 @@ export function useWorkspaceActions({
       window.setTimeout(() => {
         importStore.markParsing(jobId);
         syncImportJobs();
-        void resolvePaperChunks(paper)
-          .then((chunks) => {
+        void (extractPaperResources
+          ? extractPaperResources(paper)
+          : resolvePaperChunks(paper).then((chunks) => ({ chunks, figures: [] }))
+        )
+          .then(({ chunks, figures }) => {
             if (chunks.length === 0) {
               throw new Error("PDF did not contain extractable text");
             }
@@ -439,7 +444,8 @@ export function useWorkspaceActions({
             }
             importStore.markParsed(jobId, {
               paperId: paper.id,
-              chunks
+              chunks,
+              mineruFigures: figures
             });
           })
           .catch((error) => {

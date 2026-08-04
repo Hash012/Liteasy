@@ -21,6 +21,7 @@ import type {
 } from "../artifact-workflow/mindmapArtifact.types";
 import type { CompletedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
 import type { ArtifactResultClient } from "./artifactResultClient";
+import type { MineruFigure } from "../import/import.types";
 import {
   buildArtifactOutline,
   outlineToMarkdown,
@@ -94,6 +95,7 @@ type UseArtifactActionsInput = {
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
+  getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -267,11 +269,13 @@ function requireThinReadingSeed(
 
 function createRootThinReadingContext(input: {
   artifactId: string;
+  figures?: readonly MineruFigure[];
   papers: Paper[];
   targetLanguage: string;
 }): ThinReadingGenerationContext {
   const primaryPaper = input.papers[0];
   return {
+    availableFigures: toThinReadingFigureCandidates(input.figures),
     artifactId: input.artifactId,
     depth: 0,
     paperIds: input.papers.map((paper) => paper.id),
@@ -280,6 +284,29 @@ function createRootThinReadingContext(input: {
     source: { kind: "root_overview" },
     targetLanguage: input.targetLanguage
   };
+}
+
+function toThinReadingFigureCandidates(figures: readonly MineruFigure[] | undefined) {
+  const importanceRank = (importance: "primary" | "supporting" | "reference" | undefined) => (
+    importance === "primary" ? 0 : importance === "supporting" ? 1 : importance === "reference" ? 3 : 2
+  );
+  const candidates = (figures ?? [])
+    .map((figure) => ({
+      description: figure.analysis?.description,
+      id: figure.id,
+      importance: figure.analysis?.importance,
+      kind: figure.analysis?.kind,
+      page: figure.page,
+      placement: figure.analysis?.placement,
+      title: figure.analysis?.title ?? figure.alt
+    }))
+    .sort((left, right) => (
+      importanceRank(left.importance) - importanceRank(right.importance) ||
+      left.page - right.page ||
+      left.id.localeCompare(right.id)
+    ))
+    .slice(0, 24);
+  return candidates.length > 0 ? candidates : undefined;
 }
 
 function isThinReadingBodyExcerpt(summary: string, excerpt: string) {
@@ -356,6 +383,8 @@ function createThinReadingResultDocument(input: {
   createdAt: string;
   document: ThinReadingDocument;
   existing?: ArtifactTab;
+  figures?: MineruFigure[];
+  mineruTextChunks?: RetrievalChunk[];
   papers: Array<{ id: string; title: string }>;
   uiDsl?: ArtifactTab["uiDsl"];
 }) {
@@ -374,6 +403,8 @@ function createThinReadingResultDocument(input: {
     artifactType: "thin_reading" as const,
     citations: input.citations ?? input.existing?.citations ?? [],
     createdAt: input.createdAt,
+    figures: input.figures ?? input.existing?.figures,
+    mineruTextChunks: input.mineruTextChunks ?? input.existing?.mineruTextChunks,
     papers: input.papers,
     thinReadingDocument: input.document,
     title: "薄读",
@@ -420,6 +451,7 @@ export function useArtifactActions({
   cancelAgentRun,
   getImportedChunksByPaperId,
   getImportedChunksForPaperId,
+  getMineruFiguresForPaperId,
   getIntuechoEndpoint,
   getAssistantLanguage,
   getActiveReaderPaper,
@@ -540,8 +572,9 @@ export function useArtifactActions({
         : undefined;
       const thinReadingTargetLanguage = resolveThinReadingTargetLanguage(getAssistantLanguage?.());
       const thinReadingContext = artifactType === "thin_reading"
-        ? generationOptions?.thinReadingContext ?? createRootThinReadingContext({
+          ? generationOptions?.thinReadingContext ?? createRootThinReadingContext({
             artifactId: thinReadingArtifactId!,
+            figures: scopedPapers.flatMap((paper) => getMineruFiguresForPaperId?.(paper.id) ?? []),
             papers: scopedPapers,
             targetLanguage: thinReadingTargetLanguage
           })
@@ -620,6 +653,10 @@ export function useArtifactActions({
           citations: answerEvent.citations,
           createdAt,
           document: thinReadingDocument,
+          figures: scopedPapers.flatMap((paper) => getMineruFiguresForPaperId?.(paper.id) ?? []),
+          mineruTextChunks: scopedPapers.flatMap((paper) =>
+            getImportedChunksForPaperId?.(paper.id) ?? importedChunksByPaperId[paper.id] ?? []
+          ),
           papers: scopedPapers.map((paper) => ({ id: paper.id, title: paper.title }))
         });
         const resultPath = await artifactResultClient.save(document);
@@ -630,6 +667,8 @@ export function useArtifactActions({
           artifactId,
           citations: answerEvent.citations,
           createdAt,
+          figures: document.figures,
+          mineruTextChunks: document.mineruTextChunks,
           papers: document.papers,
           resultPath,
           thinReadingDocument,
@@ -1008,6 +1047,8 @@ export function useArtifactActions({
       artifactId: result.artifactId,
       citations: result.citations,
       createdAt: result.createdAt,
+      figures: result.figures,
+      mineruTextChunks: result.mineruTextChunks,
       intuitionGraph: result.intuitionGraph,
       mindmapArtifact: result.mindmapArtifact,
       outlineMarkdown: result.outlineMarkdown ?? (outlineNodes ? outlineToMarkdown(outlineNodes) : undefined),
@@ -1055,6 +1096,14 @@ export function useArtifactActions({
     document,
     source
   }: GenerateThinReadingBranchInput) {
+    const runningTask = artifactStore.getTasks().find((task) => (
+      task.type === "thin_reading" && task.artifactId === artifactId &&
+      (task.status === "queued" || task.status === "running")
+    ));
+    if (runningTask) {
+      onAnalysisHint("薄读生成已经在运行，请等待当前任务完成，系统不会重复提交同一页面的生成请求。");
+      throw new Error("该薄读页面已有生成任务正在运行，请勿重复点击。");
+    }
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
     if (!existing || existing.type !== "thin_reading") {
@@ -1139,6 +1188,9 @@ export function useArtifactActions({
     syncArtifacts(taskId);
     const context: ThinReadingGenerationContext = {
       ancestorSummaries: thinReadingAncestorSummaries(scopedDocument, activeNode.id),
+      availableFigures: toThinReadingFigureCandidates(
+        getMineruFiguresForPaperId?.(primaryPaperId)
+      ),
       artifactId,
       depth: activeNode.depth + 1,
       paperIds: [primaryPaperId],
@@ -1216,6 +1268,7 @@ export function useArtifactActions({
         createdAt,
         document: nextDocument,
         existing,
+        figures: existing.figures,
         papers,
         uiDsl: existing.uiDsl
       }));

@@ -1,3 +1,5 @@
+import { Button, Tooltip } from "@fluentui/react-components";
+import { FullScreenMaximizeRegular } from "@fluentui/react-icons";
 import { Background, Controls, ReactFlow, type Edge, type Node, type NodeMouseHandler } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } from "d3-force";
@@ -11,6 +13,7 @@ type GraphCanvasProps = {
   view: GraphViewState;
   onViewChange: (next: GraphViewState) => void;
   onExpand?: (nodeId: string) => void;
+  onOpenInTab?: () => void;
 };
 
 type LayoutNode = { id: string; x: number; y: number };
@@ -34,7 +37,7 @@ function nodeLabel(node: IntuitionGraphNode) {
   return node.status === "complete" ? node.label : `${node.label} · 待展开`;
 }
 
-export function ObsidianLikeGraphCanvas({ graph, view, onViewChange, onExpand }: GraphCanvasProps) {
+export function ObsidianLikeGraphCanvas({ graph, view, onViewChange, onExpand, onOpenInTab }: GraphCanvasProps) {
   const [hoveredNodeId, setHoveredNodeId] = useState<string>();
   const projection = useMemo(() => projectIntuitionGraph(graph, view), [graph, view]);
   const positions = useMemo(() => layout(projection.nodes, projection.edges), [projection.edges, projection.nodes]);
@@ -69,6 +72,7 @@ export function ObsidianLikeGraphCanvas({ graph, view, onViewChange, onExpand }:
       <header className="layered-graph-toolbar">
         <div className="layered-graph-control"><span>内容</span>{(["auto", 0, 1, 2, 3, 4] as SemanticLevelPreference[]).map((level) => <button className={view.semanticLevel === level ? "active" : ""} key={String(level)} onClick={() => changeLevel(level)} type="button">{level === "auto" ? "自动" : `L${level}`}</button>)}</div>
         <div className="layered-graph-control"><span>邻域</span>{([1, 2, 3] as GraphRadius[]).map((radius) => <button className={view.graphRadius === radius ? "active" : ""} key={radius} onClick={() => onViewChange({ ...view, graphRadius: radius })} type="button">{radius} 跳</button>)}</div>
+        {onOpenInTab ? <Tooltip content="在独立标签页放大查看" relationship="label"><Button appearance="subtle" aria-label="放大查看认知图" icon={<FullScreenMaximizeRegular />} onClick={onOpenInTab} size="small" /></Tooltip> : null}
       </header>
       <div className="layered-graph-content">
         <div className="layered-graph-canvas">

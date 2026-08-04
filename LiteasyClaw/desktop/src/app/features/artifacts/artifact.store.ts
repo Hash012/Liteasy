@@ -65,6 +65,17 @@ export function createArtifactStore() {
     upsertCatalogEntry(payload: ArtifactTab) {
       catalog.set(payload.artifactId, payload);
     },
+    renameCatalogEntry(artifactId: string, title: string) {
+      const catalogEntry = catalog.get(artifactId);
+      if (!catalogEntry) return false;
+      const renamed = { ...catalogEntry, title };
+      catalog.set(artifactId, renamed);
+      const tabIndex = tabs.findIndex((tab) => tab.artifactId === artifactId);
+      if (tabIndex >= 0) {
+        tabs.splice(tabIndex, 1, renamed);
+      }
+      return true;
+    },
     openCatalogEntry(artifactId: string) {
       const entry = catalog.get(artifactId);
       if (!entry) return false;

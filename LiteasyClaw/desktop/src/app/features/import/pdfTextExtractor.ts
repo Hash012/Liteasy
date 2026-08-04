@@ -10,7 +10,7 @@ ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export type ExtractedPdfPage = {
-  textExtraction?: "embedded" | "ocr";
+  textExtraction?: "embedded" | "mineru" | "ocr";
   page: number;
   text: string;
 };

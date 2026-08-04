@@ -1,5 +1,12 @@
 import { createModelGatewayFromSettings } from "../app/features/models/modelRuntime";
+import {
+  clearTrustedModelProxyEndpointsForTests,
+  trustModelProxyEndpointFromPolicy
+} from "../app/features/models/modelProxyTrust";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+import { beforeEach } from "vitest";
+
+beforeEach(() => clearTrustedModelProxyEndpointsForTests());
 
 test("uses the mock cloud endpoint by default for the current desktop runtime", async () => {
   const settings = createSettingsStore().getState();
@@ -58,4 +65,51 @@ test("uses the injected http client when the cloud endpoint is a real url", asyn
     provider: "openai",
     source: "cloud_proxy"
   });
+});
+
+test.each([
+  "https://api.mosshubs.com/v1",
+  "https://api.openai.com/v1",
+  "https://nowcoding.ai/v1"
+])("rejects a direct model upstream used as the cloud proxy endpoint: %s", (endpoint) => {
+  const store = createSettingsStore();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: endpoint
+  });
+
+  expect(() => createModelGatewayFromSettings(store.getState())).toThrow(
+    "已阻止前端直连模型上游"
+  );
+});
+
+test("rejects credentials and query secrets in the cloud proxy endpoint", () => {
+  const store = createSettingsStore();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://user:secret@liteasy.example.com/model-proxy?token=secret"
+  });
+
+  expect(() => createModelGatewayFromSettings(store.getState())).toThrow(
+    "不能包含凭据、查询参数或片段"
+  );
+});
+
+test("rejects an arbitrary remote proxy until a control-plane policy trusts it", () => {
+  const store = createSettingsStore();
+  const endpoint = "https://models.customer.example/liteasy-proxy";
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: endpoint
+  });
+
+  expect(() => createModelGatewayFromSettings(store.getState())).toThrow(
+    "尚未通过控制面策略验证"
+  );
+
+  trustModelProxyEndpointFromPolicy(endpoint);
+  expect(() => createModelGatewayFromSettings(store.getState())).not.toThrow();
 });

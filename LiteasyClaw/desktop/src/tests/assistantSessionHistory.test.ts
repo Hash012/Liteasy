@@ -2,6 +2,7 @@ import {
   archiveAssistantSession,
   createArtifactTaskSession,
   createAssistantSession,
+  getArtifactTaskSessionId,
   restoreAssistantSession,
   snapshotAssistantSession,
   upsertAssistantSession
@@ -133,6 +134,17 @@ test("projects artifact progress into a stable generation session", () => {
   expect(completed.status).toBe("completed");
   expect(completed.messages[1].content).toContain("进度：100%");
   expect(completed.messages[1].content).toContain("完整结果");
+});
+
+test("keeps all pages of one thin-reading artifact in its paper-bound session", () => {
+  expect(getArtifactTaskSessionId("thin-root", {
+    artifactId: "artifact-paper-attention",
+    type: "thin_reading"
+  })).toBe("artifact:thin-reading:artifact-paper-attention");
+  expect(getArtifactTaskSessionId("thin-branch", {
+    artifactId: "artifact-paper-attention",
+    type: "thin_reading"
+  })).toBe("artifact:thin-reading:artifact-paper-attention");
 });
 
 test("projects detailed artifact failures into the AI generation session", () => {

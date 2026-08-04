@@ -58,6 +58,7 @@ export type LeftPaneProps = {
   onOpenOrganizationDialog: () => void;
   onOpenPaper?: (paperId: string) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
+  onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
   onMoveLibraryFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
   onMoveLibraryPaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
@@ -151,6 +152,7 @@ export function LeftPane({
   onOpenOrganizationDialog,
   onOpenPaper,
   onOpenPaperChild,
+  onRenamePaperChild,
   onRefreshLocalLibrary,
   onMoveLibraryFolder,
   onMoveLibraryPaper,
@@ -301,6 +303,7 @@ export function LeftPane({
             }}
             onOpenPaper={onOpenPaper}
             onOpenPaperChild={onOpenPaperChild}
+            onRenamePaperChild={onRenamePaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}
             onMoveFolder={onMoveLibraryFolder}
             onMovePaper={onMoveLibraryPaper}

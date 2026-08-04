@@ -224,9 +224,9 @@ test("streams public Agent progress events to the artifact task", async () => {
     stage: "preparing_context"
   });
   expect(onProgress).toHaveBeenCalledWith({
-    message: "正在并行分析论文区段（1 个 SubAgent 已返回内容）",
+    message: "正在并行分析论文区段（1 路工作记录已更新）",
     partialAnswer:
-      "【SubAgent 工作记录 · ColBERT · 方法区段】\nMaxSim 在每个 query token 上取最大相似度。",
+      "### ColBERT · 方法区段\n\nMaxSim 在每个 query token 上取最大相似度。",
     progress: 48,
     stage: "generating_answer"
   });

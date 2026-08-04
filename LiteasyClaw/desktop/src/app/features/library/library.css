@@ -12,6 +12,11 @@
   padding: 0 10px 8px;
 }
 
+.library-search-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .library-button {
   border: 1px solid #bdd2e3;
   border-radius: 999px;
@@ -600,6 +605,12 @@
 
 .library-child-icon.note {
   color: #a27729;
+}
+.library-child-icon.extracted_text {
+  color: #3c78a5;
+}
+.library-child-icon.figures {
+  color: #8a5ea7;
 }
 
 .library-child-label {

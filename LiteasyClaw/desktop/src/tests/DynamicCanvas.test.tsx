@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { DynamicCanvas } from "../app/features/generative-ui/DynamicCanvas";
@@ -116,4 +116,64 @@ test("renders fallback when DSL fails UX validation", () => {
   );
 
   expect(screen.getByLabelText("动态界面降级")).toBeInTheDocument();
+});
+
+function createMindMapDocument(): UIDslDocument {
+  return {
+    ...createActionDocument(),
+    id: "ui-qvla-mindmap",
+    surface: "center_artifact",
+    root: {
+      children: [{
+        component: "ActionBar",
+        id: "mindmap-actions",
+        props: { actionIds: ["reset-theme"] }
+      }],
+      component: "MindMap",
+      id: "artifact-mindmap",
+      props: {
+        nodes: [
+          { evidenceIds: ["evidence-root"], id: "qvla-root", kind: "root", label: "QVLA 论文思维导图" },
+          { id: "qvla-section", kind: "section", label: "动作空间敏感度分析", parentId: "qvla-root" },
+          { id: "qvla-formula", kind: "term", label: "累计动作敏感度 `S_(l,c)^(b)`", parentId: "qvla-section" },
+          { id: "qvla-definition", kind: "term", label: "定义：量化动作与参考动作偏差的期望", parentId: "qvla-formula" }
+        ],
+        title: "Literature Mind Map"
+      }
+    }
+  };
+}
+
+function createDataTransfer() {
+  const values = new Map<string, string>();
+  return {
+    dropEffect: "none",
+    effectAllowed: "none",
+    getData: (type: string) => values.get(type) ?? "",
+    setData: (type: string, value: string) => values.set(type, value)
+  } as unknown as DataTransfer;
+}
+
+test("renders generated mind maps with hybrid columns, KaTeX, and a copied split pane", () => {
+  const { container } = render(<DynamicCanvas document={createMindMapDocument()} onAction={vi.fn()} />);
+
+  expect(container.querySelector('[data-generated-mindmap-depth="0"]')).toHaveClass("is-horizontal");
+  expect(container.querySelector('[data-generated-mindmap-depth="1"]')).toHaveClass("is-horizontal");
+  expect(container.querySelector('[data-generated-mindmap-depth="2"]')).toHaveClass("is-vertical");
+  expect(container.querySelector('[data-generated-mindmap-node-id="qvla-formula"] .katex')).toBeInTheDocument();
+
+  const formulaNode = container.querySelector<HTMLElement>(
+    '[data-generated-mindmap-node-id="qvla-formula"] > .genui-mindmap-node'
+  );
+  const dropzone = screen.getByLabelText("拖到此处创建生成思维导图对照分栏");
+  const dataTransfer = createDataTransfer();
+  fireEvent.dragStart(formulaNode!, { dataTransfer });
+  fireEvent.dragOver(dropzone, { dataTransfer });
+  fireEvent.drop(dropzone, { dataTransfer });
+
+  const primary = screen.getByLabelText("完整生成思维导图");
+  const split = screen.getByLabelText(/生成思维导图对照阅读：累计动作敏感度/);
+  expect(within(primary).getByTestId("generated-mindmap-primary-scroll")).toBeInTheDocument();
+  expect(within(split).getByTestId("generated-mindmap-split-scroll")).toBeInTheDocument();
+  expect(container.querySelectorAll('[data-generated-mindmap-node-id="qvla-formula"]')).toHaveLength(2);
 });

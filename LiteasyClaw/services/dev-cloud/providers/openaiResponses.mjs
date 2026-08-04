@@ -24,7 +24,57 @@ function describeNetworkError(error) {
 }
 
 function isRetryableStatus(status) {
-  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  return status === 408 || status === 429 || status === 500 || status === 502 ||
+    status === 503 || status === 504 || status === 520 || status === 522 || status === 524;
+}
+
+const retryableNetworkCodes = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EAI_AGAIN",
+  "ETIMEDOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_SOCKET_TIMEOUT"
+]);
+
+function getErrorCode(error) {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+  if (typeof error.code === "string") {
+    return error.code;
+  }
+  return getErrorCode(error.cause);
+}
+
+/**
+ * Kept public so the model policy can switch models only after a failure that
+ * is safe to retry. Authentication, invalid model names and malformed requests
+ * must remain visible to the caller instead of being hidden by failover.
+ */
+export function isRetryableOpenAIResponsesError(error) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  if (error.retryable === true || isRetryableStatus(error.status)) {
+    return true;
+  }
+  if (error.name === "AbortError" || retryableNetworkCodes.has(getErrorCode(error))) {
+    return true;
+  }
+  return isRetryableOpenAIResponsesError(error.cause);
+}
+
+function createResponsesError(message, { cause, status } = {}) {
+  const error = new Error(message, cause ? { cause } : undefined);
+  if (typeof status === "number") {
+    error.status = status;
+    error.retryable = isRetryableStatus(status);
+  } else if (isRetryableOpenAIResponsesError(cause)) {
+    error.retryable = true;
+  }
+  return error;
 }
 
 function getRetryDelayMs(response, attempt) {
@@ -85,11 +135,16 @@ function extractOutputText(payload) {
   return null;
 }
 
-function buildResponseRequest(input, stream = false) {
+function buildResponseRequest(input, stream = false, options = {}) {
+  const includeOutputFormat = options.includeOutputFormat ?? true;
+  const includeReasoning = options.includeReasoning ?? true;
   return {
-    input: input.prompt,
+    input: input.input ?? input.prompt,
     model: input.model,
-    ...(input.outputFormat ? {
+    ...(includeReasoning && input.reasoningEffort ? {
+      reasoning: { effort: input.reasoningEffort }
+    } : {}),
+    ...(includeOutputFormat && input.outputFormat ? {
       text: {
         format: {
           name: input.outputFormat.name,
@@ -103,15 +158,20 @@ function buildResponseRequest(input, stream = false) {
   };
 }
 
+function shouldRetryWithoutResponsesExtensions(response) {
+  // Some OpenAI-compatible gateways surface unsupported Responses fields as a
+  // generic upstream 502 rather than a descriptive 4xx. Once the bounded
+  // transient retry has been exhausted, retry without only the optional fields.
+  return response.status === 400 || response.status === 422 ||
+    response.status === 500 || response.status === 502;
+}
+
 async function requestResponseWithStructuredOutputFallback(input, fetchImpl, stream = false) {
-  const request = (includeOutputFormat) => fetchWithTransientRetry(
+  const request = (options) => fetchWithTransientRetry(
     fetchImpl,
     buildResponsesUrl(input.apiBaseUrl),
     {
-      body: JSON.stringify(buildResponseRequest(
-        includeOutputFormat ? input : { ...input, outputFormat: undefined },
-        stream
-      )),
+      body: JSON.stringify(buildResponseRequest(input, stream, options)),
       headers: {
         Authorization: `Bearer ${input.apiKey}`,
         "Content-Type": "application/json"
@@ -120,12 +180,26 @@ async function requestResponseWithStructuredOutputFallback(input, fetchImpl, str
     }
   );
 
-  const response = await request(true);
-  // A compatible proxy may reject the Responses JSON-schema field entirely. The caller's
-  // Zod parser and trace gate remain mandatory when falling back to prompted JSON.
-  if (input.outputFormat && (response.status === 400 || response.status === 422)) {
-    await response.body?.cancel?.().catch?.(() => undefined);
-    return request(false);
+  let response = await request();
+  // Compatible endpoints sometimes expose a model but not the current Responses
+  // extensions. Preserve the user-selected reasoning effort where supported, then
+  // degrade one field at a time while keeping the caller's JSON validation mandatory.
+  if (shouldRetryWithoutResponsesExtensions(response)) {
+    const needsReasoningFallback = Boolean(input.reasoningEffort);
+    const needsSchemaFallback = Boolean(input.outputFormat);
+    if (needsReasoningFallback) {
+      await response.body?.cancel?.().catch?.(() => undefined);
+      response = await request({
+        includeOutputFormat: needsSchemaFallback,
+        includeReasoning: false
+      });
+    }
+    // A compatible proxy may reject the Responses JSON-schema field entirely. The
+    // caller's Zod parser and trace gate remain mandatory for prompted JSON fallback.
+    if (needsSchemaFallback && shouldRetryWithoutResponsesExtensions(response)) {
+      await response.body?.cancel?.().catch?.(() => undefined);
+      response = await request({ includeOutputFormat: false, includeReasoning: false });
+    }
   }
   return response;
 }
@@ -155,27 +229,30 @@ async function readErrorMessage(response) {
 export function createOpenAIResponsesProvider({
   apiBaseUrl = defaultBaseUrl,
   apiKey,
-  fetchImpl = fetchWithConfiguredProxy
+  fetchImpl = fetchWithConfiguredProxy,
+  reasoningEffort
 }) {
   return async (input) => {
     let response;
     try {
       response = await requestResponseWithStructuredOutputFallback(
-        { ...input, apiBaseUrl, apiKey },
+        { ...input, apiBaseUrl, apiKey, reasoningEffort: input.reasoningEffort ?? reasoningEffort },
         fetchImpl
       );
     } catch (error) {
-      throw new Error(
-        `OpenAI Responses API 连接失败（endpoint=${describeEndpoint(apiBaseUrl)}）：${describeNetworkError(error)}`
+      throw createResponsesError(
+        `OpenAI Responses API 连接失败（endpoint=${describeEndpoint(apiBaseUrl)}）：${describeNetworkError(error)}`,
+        { cause: error }
       );
     }
 
     if (!response.ok) {
       const detail = await readErrorMessage(response);
-      throw new Error(
+      throw createResponsesError(
         detail
           ? `OpenAI Responses API 请求失败（${response.status}，endpoint=${describeEndpoint(apiBaseUrl)}）：${detail}`
-          : `OpenAI Responses API 请求失败（${response.status}，endpoint=${describeEndpoint(apiBaseUrl)}）`
+          : `OpenAI Responses API 请求失败（${response.status}，endpoint=${describeEndpoint(apiBaseUrl)}）`,
+        { status: response.status }
       );
     }
 
@@ -192,7 +269,8 @@ export function createOpenAIResponsesProvider({
 export function createOpenAIResponsesStreamProvider({
   apiBaseUrl = defaultBaseUrl,
   apiKey,
-  fetchImpl = fetchWithConfiguredProxy
+  fetchImpl = fetchWithConfiguredProxy,
+  reasoningEffort
 }) {
   return async function* streamOpenAIResponse(input) {
     const maximumStreamAttempts = 2;
@@ -200,22 +278,24 @@ export function createOpenAIResponsesStreamProvider({
       let response;
       try {
         response = await requestResponseWithStructuredOutputFallback(
-          { ...input, apiBaseUrl, apiKey },
+          { ...input, apiBaseUrl, apiKey, reasoningEffort: input.reasoningEffort ?? reasoningEffort },
           fetchImpl,
           true
         );
       } catch (error) {
-        throw new Error(
-          `OpenAI Responses API 流式连接失败（endpoint=${describeEndpoint(apiBaseUrl)}）：${describeNetworkError(error)}`
+        throw createResponsesError(
+          `OpenAI Responses API 流式连接失败（endpoint=${describeEndpoint(apiBaseUrl)}）：${describeNetworkError(error)}`,
+          { cause: error }
         );
       }
 
       if (!response.ok) {
         const detail = await readErrorMessage(response);
-        throw new Error(
+        throw createResponsesError(
           detail
             ? `OpenAI Responses API 流式请求失败（${response.status}，endpoint=${describeEndpoint(apiBaseUrl)}）：${detail}`
-            : `OpenAI Responses API 流式请求失败（${response.status}，endpoint=${describeEndpoint(apiBaseUrl)}）`
+            : `OpenAI Responses API 流式请求失败（${response.status}，endpoint=${describeEndpoint(apiBaseUrl)}）`,
+          { status: response.status }
         );
       }
       if (!response.body) {

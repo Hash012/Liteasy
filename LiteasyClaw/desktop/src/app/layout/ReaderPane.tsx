@@ -9,6 +9,8 @@ import { PdfReader, type PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/thin-reading/thinReading.types";
+import type { MineruFigure } from "../features/import/import.types";
+import type { VisualizationTabData } from "../features/visualization/visualization.types";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
 
@@ -20,6 +22,7 @@ type ReaderPaneProps = {
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
+  onOpenVisualization?: (data: VisualizationTabData) => void;
   onGenerateThinReadingBranch?: (input: {
     artifactId: string;
     document: ThinReadingDocument;
@@ -28,6 +31,7 @@ type ReaderPaneProps = {
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
   intuechoEndpoint?: string;
+  mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   pdfBackground?: string;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
@@ -57,10 +61,12 @@ export function ReaderPane({
   loadPdfSource,
   onArtifactDynamicAction,
   onOpenEvidence,
+  onOpenVisualization,
   onGenerateThinReadingBranch,
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
   intuechoEndpoint,
+  mineruFiguresByPaperId,
   pdfBackground,
   onSaveMarkdownTab,
   onStartAnalysis,
@@ -144,10 +150,12 @@ export function ReaderPane({
                 analysisHint={analysisHint}
                 canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
                 intuechoEndpoint={intuechoEndpoint}
+                mineruFiguresByPaperId={mineruFiguresByPaperId}
                 onDynamicAction={onArtifactDynamicAction}
                 onGenerateThinReadingBranch={onGenerateThinReadingBranch}
                 onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}
                 onOpenEvidence={onOpenEvidence}
+                onOpenVisualization={onOpenVisualization}
                 onSaveMarkdownTab={onSaveMarkdownTab}
                 onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}
                 onUpdateMarkdownTab={onUpdateMarkdownTab}

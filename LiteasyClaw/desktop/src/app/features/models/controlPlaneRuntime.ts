@@ -5,6 +5,7 @@ import {
   type ControlPlanePolicySnapshotResult,
   type ModelPolicySnapshot
 } from "./controlPlaneClient";
+import { trustModelProxyEndpointFromPolicy } from "./modelProxyTrust";
 
 type ControlPlaneRuntimeDeps = {
   transport?: ControlPlaneTransport;
@@ -39,5 +40,7 @@ export async function fetchModelPolicySnapshot(
     transport: deps.transport
   });
 
-  return client();
+  const result = await client();
+  trustModelProxyEndpointFromPolicy(result.snapshot["models.cloud_proxy_endpoint"]);
+  return result;
 }

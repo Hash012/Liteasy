@@ -69,7 +69,7 @@ export type PdfEvidenceTarget = {
   page: number;
   pageTextEnd?: number;
   pageTextStart?: number;
-  textExtraction?: "embedded" | "ocr";
+  textExtraction?: "embedded" | "mineru" | "ocr";
   paperId: string;
   quote: string;
   requestId: number;

@@ -2799,6 +2799,16 @@ test("syncs visible workspace document metadata after cloud account login", asyn
         id: "demo-3",
         sourcePath: "/papers/acorn-vector-search.pdf",
         title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+      },
+      {
+        id: "local-qvla",
+        sourcePath: "/home/tianjiaming/LiteasyLibrary/papers/QVLA.pdf",
+        title: "QVLA"
+      },
+      {
+        id: "local-compactflash-ftl",
+        sourcePath: "/home/tianjiaming/LiteasyLibrary/papers/A_space-efficient_flash_translation_layer_for_CompactFlash_systems.pdf",
+        title: "A space-efficient flash translation layer for CompactFlash systems"
       }
     ],
     sessionId: "demo-session-1",
@@ -6003,11 +6013,11 @@ test("opens the personal center in the left rail and toggles user profile sampli
   expect(within(leftPane).getByText("Liteasy Researcher")).toBeInTheDocument();
   expect(within(leftPane).getByText("Liteasy AI Reading Lab")).toBeInTheDocument();
   expect(within(leftPane).getByText("性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
-  expect(within(leftPane).getByText("已阅读 3 篇")).toBeInTheDocument();
+  expect(within(leftPane).getByText("已阅读 5 篇")).toBeInTheDocument();
 
   await user.click(within(leftPane).getByRole("button", { name: "开启个性化行为信号" }));
 
-  expect(within(leftPane).getByText("已阅读 3 篇")).toBeInTheDocument();
+  expect(within(leftPane).getByText("已阅读 5 篇")).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "学术档案" })).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "清空学术档案和个性化数据" })).toBeInTheDocument();
 }, 10000);

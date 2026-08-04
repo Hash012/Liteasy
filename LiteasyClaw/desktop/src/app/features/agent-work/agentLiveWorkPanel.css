@@ -1,0 +1,20 @@
+.agent-live-work { background: rgba(251, 253, 252, .97); border: 1px solid #cbdcd7; border-radius: 10px; box-shadow: 0 8px 24px rgba(38, 66, 63, .12); color: #294946; display: grid; gap: 8px; isolation: isolate; min-width: 0; padding: 10px 12px; }
+.agent-live-work.is-floating { bottom: 18px; max-height: min(460px, calc(100vh - 36px)); max-width: min(390px, calc(100vw - 28px)); overflow: auto; position: fixed; right: 18px; width: 360px; z-index: 20; }
+.agent-live-work__header { align-items: start; display: grid; gap: 9px; grid-template-columns: 10px minmax(0, 1fr) auto; }
+.agent-live-work__pulse { animation: agent-live-work-pulse 1.2s ease-in-out infinite; background: #2f8177; border-radius: 999px; box-shadow: 0 0 0 4px rgba(47, 129, 119, .12); height: 8px; margin-top: 5px; width: 8px; }
+.agent-live-work__heading { display: grid; gap: 2px; min-width: 0; }
+.agent-live-work__heading strong { font-size: 12px; }
+.agent-live-work__heading span { color: #617572; font-size: 11px; line-height: 1.4; }
+.agent-live-work__progress { background: rgba(47, 129, 119, .14); border-radius: 999px; height: 5px; overflow: hidden; }
+.agent-live-work__progress > span { background: #2f8177; border-radius: inherit; display: block; height: 100%; transition: width 180ms ease; }
+.agent-live-work__body { background: #f4f8f6; border-radius: 7px; color: #435c59; font-size: 12px; line-height: 1.6; max-height: 260px; overflow: auto; overflow-wrap: anywhere; padding: 9px 10px; }
+.agent-live-work__body > :first-child { margin-top: 0; }
+.agent-live-work__body > :last-child { margin-bottom: 0; }
+.agent-live-work__body p, .agent-live-work__body ul, .agent-live-work__body ol { margin: 6px 0; }
+.agent-live-work__body ul, .agent-live-work__body ol { padding-left: 20px; }
+.agent-live-work__body code { background: #e5eeea; border-radius: 3px; font-family: "Cascadia Code", Consolas, monospace; padding: 1px 3px; }
+.agent-live-work__body pre { background: #e8f0ed; border-radius: 5px; overflow: auto; padding: 8px; }
+.agent-live-work__body small { border-top: 1px solid #dce7e3; color: #70817e; display: block; font-size: 10px; margin-top: 8px; padding-top: 6px; }
+@keyframes agent-live-work-pulse { 50% { opacity: .45; transform: scale(.82); } }
+@media (max-width: 720px) { .agent-live-work.is-floating { bottom: 12px; left: 12px; max-width: none; right: 12px; width: auto; } }
+@media (prefers-reduced-motion: reduce) { .agent-live-work__pulse { animation: none; } }

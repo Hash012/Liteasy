@@ -110,6 +110,116 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("错误：后期交互（late interaction）");
   });
 
+  test("gives concise visual guidance and exposes only MinerU figure metadata", () => {
+    const prompt = buildThinReadingAgentPrompt({
+      context: {
+        ...context,
+        availableFigures: [{
+          description: "展示编码、匹配与聚合步骤。",
+          id: "figure-method-1",
+          kind: "workflow",
+          page: 4,
+          title: "方法流程"
+        }],
+        source: {
+          excerpt: "解释这个算法",
+          kind: "selected_text",
+          quickCommand: "html_algorithm_animation",
+          requestedOutput: "html_demo"
+        }
+      },
+      prepared
+    });
+
+    expect(prompt).toContain("图文讲解要求（短而硬）");
+    expect(prompt).toContain("figure-method-1");
+    expect(prompt).toContain("单文件、离线、响应式的 HTML");
+    expect(prompt).toContain("可以使用内联 HTML、CSS、SVG 与 JavaScript");
+    expect(prompt).toContain("不得依赖远程资源");
+    expect(prompt).toContain("recommendedFigures");
+    expect(prompt).not.toContain("data:image/");
+  });
+
+  test("validates model-selected figures and requested interactive output", () => {
+    const summary = "这段算法先编码输入，再逐项匹配，最后聚合得到结果，并保留适用边界。";
+    const baseOutput = {
+      claims: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        status: "grounded",
+        text: "论文证据给出算法的主要处理关系。"
+      }],
+      externalKnowledge: [],
+      interactiveDemo: {
+        description: "逐步展示编码、匹配和聚合状态。",
+        html: "<!doctype html><html><body><style>.pulse{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{0%{opacity:.3}50%{opacity:1}100%{opacity:.3}}</style><svg viewBox='0 0 100 50'><circle class='pulse' cx='20' cy='25' r='8'/><rect x='45' y='15' width='20' height='20' rx='4'/></svg></body></html>",
+        kind: "html",
+        title: "算法步骤动画"
+      },
+      mermaid: "",
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "experimental",
+      recommendedFigures: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        figureId: "figure-method-1",
+        reason: "这张图直接呈现正文解释的处理顺序。"
+      }],
+      summary,
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    };
+
+    expect(parseThinReadingModelSeed(JSON.stringify(baseOutput), {
+      analysis: prepared,
+      availableFigureIds: ["figure-method-1"],
+      requestedOutput: "html_demo",
+      targetLanguage: "zh-CN"
+    }).evidence).toMatchObject({
+      interactiveDemo: { kind: "html", title: "算法步骤动画" },
+      recommendedFigures: [{ figureId: "figure-method-1" }]
+    });
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      recommendedFigures: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        figureId: "figure-outside-catalog",
+        reason: "不可用的图不应通过质量门。"
+      }]
+    }), {
+      analysis: prepared,
+      availableFigureIds: ["figure-method-1"],
+      requestedOutput: "html_demo"
+    })).toThrow("不可用的 MinerU figure ID");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      interactiveDemo: null,
+      mermaid: "",
+      recommendedFigures: []
+    }), {
+      analysis: prepared,
+      requestedOutput: "mermaid"
+    })).toThrow("本轮快捷命令要求 Mermaid");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      interactiveDemo: {
+        ...baseOutput.interactiveDemo,
+        html: "<!doctype html><html><body><button onclick='alert(1)'>next</button></body></html>"
+      }
+    }), {
+      analysis: prepared,
+      availableFigureIds: ["figure-method-1"],
+      requestedOutput: "html_demo"
+    })).not.toThrow();
+  });
+
   test("turns the interpretation intent into a discourse plan instead of an evidence list", () => {
     const prompt = buildThinReadingAgentPrompt({
       context: {
@@ -1022,9 +1132,8 @@ describe("thinReadingAgent", () => {
     }), options)).not.toThrow();
   });
 
-  test("rejects an overlong Chinese summary even when its JSON and evidence references are valid", () => {
-    const firstSentence = "甲".repeat(270);
-    const secondSentence = "乙".repeat(270);
+  test("accepts a long Chinese summary when every sentence remains evidence-grounded", () => {
+    const sentences = ["甲", "乙", "丙", "丁"].map((character) => `${character.repeat(330)}。`);
     expect(() => parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
       claims: [],
@@ -1032,26 +1141,18 @@ describe("thinReadingAgent", () => {
       paperEvidence: ["evidence-survey-taxonomy"],
       paperType: "survey",
       recommendations: [],
-      summary: `${firstSentence}。${secondSentence}。`,
-      summarySentences: [
-        {
-          evidenceIds: ["evidence-survey-taxonomy"],
-          externalKnowledge: [],
-          status: "grounded",
-          text: `${firstSentence}。`
-        },
-        {
-          evidenceIds: ["evidence-survey-taxonomy"],
-          externalKnowledge: [],
-          status: "grounded",
-          text: `${secondSentence}。`
-        }
-      ],
+      summary: sentences.join(""),
+      summarySentences: sentences.map((text) => ({
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      })),
       withinPaperClosure: true
     }), {
       analysisEvidence: prepared.evidence,
       targetLanguage: "zh-CN"
-    })).toThrow("中文总述过长");
+    })).not.toThrow();
   });
 
   test("rejects a newline-separated summary instead of preserving a section-list presentation", () => {

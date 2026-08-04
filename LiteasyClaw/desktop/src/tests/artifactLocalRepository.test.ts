@@ -74,6 +74,50 @@ describe("artifactLocalRepository", () => {
     ]);
   });
 
+  test("restores test-stage thin-reading HTML demos without a markup compliance gate", async () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-html-demo",
+      papers: [{ id: "paper-1", title: "Paper one" }],
+      rootSeed: {
+        evidence: {
+          externalKnowledge: [],
+          interactiveDemo: {
+            description: "展示结构层次。",
+            html: "<!doctype html><html><body><style>.node{fill:#4f6bed}</style><svg viewBox='0 0 120 80'><rect class='node' x='12' y='16' width='36' height='20' rx='6'/><rect x='72' y='44' width='36' height='20' rx='6'/></svg></body></html>",
+            kind: "html",
+            title: "结构示意"
+          },
+          paperEvidence: ["evidence-1"]
+        },
+        omittedSections: [],
+        recommendations: [],
+        summary: "A traceable summary.",
+        withinPaperClosure: true
+      },
+      targetLanguage: "en-US"
+    });
+    const invalidDocument = JSON.parse(JSON.stringify(document)) as typeof document;
+    invalidDocument.artifactId = "artifact-thin-html-demo-invalid";
+    invalidDocument.nodes[invalidDocument.rootNodeId].evidence.interactiveDemo!.html =
+      "<!doctype html><html><body><div onclick='fetch(\"https://attacker.example\")'>step</div></body></html>";
+    const repository = createArtifactLocalRepository({
+      load: vi.fn(async () => ({
+        artifacts: [
+          { artifactId: document.artifactId, thinReadingDocument: document, title: "Thin reading", type: "thin_reading" },
+          { artifactId: invalidDocument.artifactId, thinReadingDocument: invalidDocument, title: "Broken thin reading", type: "thin_reading" }
+        ],
+        savedAt: "2026-08-02T00:00:00.000Z",
+        version: "liteasy.artifact-catalog/v1"
+      })),
+      save: vi.fn(async () => undefined)
+    });
+
+    await expect(repository.list()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ artifactId: "artifact-thin-html-demo", thinReadingDocument: document }),
+      expect.objectContaining({ artifactId: "artifact-thin-html-demo-invalid", thinReadingDocument: invalidDocument })
+    ]));
+  });
+
   test("removes legacy local recommendation leads when restoring thin-reading documents", async () => {
     const document = createThinReadingDocument({
       artifactId: "artifact-thin-legacy-lead",
