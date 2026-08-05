@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Liteasy x OpenClaw Architecture</title>
+    <style>
+      :root {
+        --bg: #eef4f8;
+        --panel: rgba(255, 255, 255, 0.84);
+        --panel-strong: #ffffff;
+        --ink: #17324a;
+        --muted: #587189;
+        --line: #c7d7e4;
+        --accent: #2b6ea6;
+        --accent-soft: #d8ebf7;
+        --branch: #2f8c6a;
+        --branch-soft: #d9f1e8;
+        --warn: #b06a26;
+        --warn-soft: #f9e7cf;
+        --claw: #8d4fc8;
+        --claw-soft: #efe2fb;
+        --shadow: 0 18px 34px rgba(101, 126, 150, 0.12);
+        --radius: 22px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 18%),
+          linear-gradient(180deg, #dde8f1 0%, #edf4f8 40%, #f6fafc 100%);
+      }
+
+      .page {
+        width: min(1600px, calc(100vw - 32px));
+        margin: 16px auto 24px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .hero,
+      .panel {
+        background: var(--panel);
+        border: 1px solid rgba(197, 214, 229, 0.95);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .hero {
+        padding: 22px 26px 24px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .hero-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: start;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.1;
+        letter-spacing: 0.01em;
+      }
+
+      .subtitle {
+        max-width: 900px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .badge {
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #34526c;
+        background: #edf4f9;
+        border: 1px solid #d4e2ee;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .toggle {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        color: #2d4760;
+        background: linear-gradient(180deg, #ffffff 0%, #ddebf7 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+      }
+
+      .toggle.active {
+        color: white;
+        background: linear-gradient(180deg, #4e88ba 0%, #2b6ea6 100%);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.8fr);
+        gap: 16px;
+      }
+
+      .panel {
+        padding: 18px;
+      }
+
+      .section-title {
+        margin: 0 0 14px;
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .layers {
+        display: grid;
+        gap: 14px;
+      }
+
+      .layer {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .layer-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .layer-name {
+        font-size: 17px;
+        font-weight: 800;
+      }
+
+      .layer-tag {
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .tag-ui {
+        color: #2b6ea6;
+        background: var(--accent-soft);
+      }
+
+      .tag-agent {
+        color: #2f8c6a;
+        background: var(--branch-soft);
+      }
+
+      .tag-boundary {
+        color: #9b6329;
+        background: var(--warn-soft);
+      }
+
+      .tag-cloud {
+        color: #6c4d99;
+        background: #ede4f7;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 10px;
+      }
+
+      .card {
+        position: relative;
+        min-height: 108px;
+        padding: 12px 12px 14px;
+        border-radius: 16px;
+        border: 1px solid #d7e4ee;
+        background: var(--panel-strong);
+        overflow: hidden;
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .card::after {
+        content: attr(data-role);
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        color: #607890;
+        background: #edf4f9;
+      }
+
+      .flow {
+        display: grid;
+        gap: 10px;
+      }
+
+      .flow-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .flow-node,
+      .flow-arrow {
+        padding: 10px 12px;
+        border-radius: 14px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .flow-node {
+        background: #fff;
+        border: 1px solid #d5e3ee;
+      }
+
+      .flow-arrow {
+        color: #67839d;
+        background: transparent;
+        border: 0;
+        padding-inline: 0;
+      }
+
+      .legend {
+        display: grid;
+        gap: 10px;
+      }
+
+      .legend-item {
+        display: grid;
+        grid-template-columns: 14px 1fr;
+        gap: 10px;
+        align-items: start;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .legend-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        margin-top: 2px;
+      }
+
+      .dot-claw {
+        background: var(--claw);
+      }
+
+      .dot-ui {
+        background: var(--accent);
+      }
+
+      .dot-main {
+        background: var(--branch);
+      }
+
+      .map-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .map-item {
+        border: 1px solid #d9e5ef;
+        border-radius: 16px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.86);
+      }
+
+      .map-item h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+
+      .map-item p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .openclaw {
+        border-color: rgba(141, 79, 200, 0.45);
+        box-shadow: inset 0 0 0 1px rgba(141, 79, 200, 0.12);
+      }
+
+      .openclaw::before {
+        content: "OpenClaw相关";
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        color: #70459d;
+        background: var(--claw-soft);
+      }
+
+      body.highlight-openclaw .openclaw {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 236, 255, 0.92) 100%);
+        border-color: rgba(141, 79, 200, 0.9);
+        box-shadow:
+          0 0 0 3px rgba(141, 79, 200, 0.18),
+          inset 0 0 0 1px rgba(141, 79, 200, 0.18);
+      }
+
+      body.highlight-openclaw .non-openclaw {
+        opacity: 0.46;
+      }
+
+      .footnote {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      @media (max-width: 1100px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-top {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body class="highlight-openclaw">
+    <div class="page">
+      <section class="hero">
+        <div class="hero-top">
+          <div>
+            <h1>Liteasy 最终理想技术架构</h1>
+            <div class="subtitle">
+              这张图把 Liteasy 作为“桌面优先科研 agent 工作台”的完整理想架构拆成主干、分支、边界、云端与基础设施五层。
+              其中紫色高亮部分代表与 OpenClaw 范式直接相关的架构单元，包括 skills、tools/action boundary、allowlist、direct dispatch 和 plugin-friendly runtime。
+            </div>
+          </div>
+          <div class="badges">
+            <span class="badge">桌面优先</span>
+            <span class="badge">个人科研用户起步</span>
+            <span class="badge">中栏主干 + 右栏分支</span>
+            <span class="badge">OpenClaw-inspired runtime</span>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="toggle active" id="toggle-openclaw" type="button">高亮 OpenClaw 相关部分</button>
+        </div>
+      </section>
+
+      <div class="grid">
+        <section class="panel">
+          <h2 class="section-title">完整理想架构</h2>
+          <div class="layers">
+            <div class="layer non-openclaw">
+              <div class="layer-head">
+                <div class="layer-name">A. 用户交互层</div>
+                <div class="layer-tag tag-ui">UI Layer</div>
+              </div>
+              <div class="cards">
+                <div class="card" data-role="工作台">
+                  <h3>左栏工作区视图</h3>
+                  <p>按目录层级展开母目录与子目录，是用户看见的工作区，不直接等于分析对象。</p>
+                </div>
+                <div class="card" data-role="主干入口">
+                  <h3>中栏模态按钮</h3>
+                  <p>树形展开、思维导图、PPT 等固定按钮。先指定模态，再启动主工作流。</p>
+                </div>
+                <div class="card openclaw" data-role="分支入口">
+                  <h3>右栏 Assistant</h3>
+                  <p>不是主干入口，而是导入后的分支控制台，承担问答、解释、设置、补充产物等分支能力。</p>
+                </div>
+                <div class="card" data-role="对象">
+                  <h3>选中文献集</h3>
+                  <p>由用户勾选并锁定形成，基本单位是单文件，是 AI runtime 的默认分析对象。</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="layer non-openclaw">
+              <div class="layer-head">
+                <div class="layer-name">B. 主干工作流层</div>
+                <div class="layer-tag tag-main">Mainline</div>
+              </div>
+              <div class="flow">
+                <div class="flow-row">
+                  <div class="flow-node">工作区</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node">勾选文件</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node">形成选中文献集</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node">导入</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node">指定模态</div>
+                  <div class="flow-arrow">→</div>
+                  <div class="flow-node">启动分析</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="layer">
+              <div class="layer-head">
+                <div class="layer-name">C. Agent 工作流层</div>
+                <div class="layer-tag tag-agent">Runtime</div>
+              </div>
+              <div class="cards">
+                <div class="card non-openclaw" data-role="上下文">
+                  <h3>上下文装配</h3>
+                  <p>拉取已导入的选中文献集、当前模态、对话历史、画像偏好、引用上下文。</p>
+                </div>
+                <div class="card openclaw" data-role="语义层">
+                  <h3>Skill Registry</h3>
+                  <p>把 settings.adjust、artifact.generate、paper.qa、concept.explain 等任务语义统一注册。</p>
+                </div>
+                <div class="card openclaw" data-role="安全层">
+                  <h3>Action Registry</h3>
+                  <p>只有注册 action 才能真正改软件状态，例如 settings.update、analysis.start、artifact.open_tab。</p>
+                </div>
+                <div class="card openclaw" data-role="权限">
+                  <h3>Allowlist / Policy</h3>
+                  <p>按模式、身份、风险等级控制 skill 与 action 的可用性，fail-closed，不默认放开。</p>
+                </div>
+                <div class="card non-openclaw" data-role="模型编排">
+                  <h3>生成 + 审计双模型</h3>
+                  <p>主模型产出答案或大纲，审计模型给出可信度、问题点、返工建议。</p>
+                </div>
+                <div class="card openclaw" data-role="触发方式">
+                  <h3>Direct Dispatch</h3>
+                  <p>中栏模态按钮属于确定性直达主工作流；右栏自然语言分支则走 skill 选择与 action 执行。</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="layer non-openclaw">
+              <div class="layer-head">
+                <div class="layer-name">D. 本地能力层</div>
+                <div class="layer-tag tag-boundary">Local Engine</div>
+              </div>
+              <div class="cards">
+                <div class="card" data-role="预处理">
+                  <h3>文献导入引擎</h3>
+                  <p>PDF 解析、OCR、切块、索引、本地缓存。导入状态挂在单文件上，而不是挂在整个工作区上。</p>
+                </div>
+                <div class="card" data-role="存储">
+                  <h3>本地存储</h3>
+                  <p>SQLite、全文索引、向量缓存、会话缓存、本地日志和权限状态。</p>
+                </div>
+                <div class="card" data-role="桌面壳">
+                  <h3>Tauri + Rust</h3>
+                  <p>桌面壳负责文件系统、系统通知、权限控制、窗口生命周期和本地能力调用。</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="layer non-openclaw">
+              <div class="layer-head">
+                <div class="layer-name">E. 云端与基础设施层</div>
+                <div class="layer-tag tag-cloud">Cloud</div>
+              </div>
+              <div class="cards">
+                <div class="card" data-role="业务服务">
+                  <h3>业务服务</h3>
+                  <p>账号、同步、组织、推荐、订阅、后台治理。早期可薄，后期向平台扩展。</p>
+                </div>
+                <div class="card" data-role="异步任务">
+                  <h3>异步任务系统</h3>
+                  <p>长耗时导图、PPT、流程图、视频等任务放到队列与 worker 中执行。</p>
+                </div>
+                <div class="card" data-role="模型网关">
+                  <h3>统一模型网关</h3>
+                  <p>统一接入大模型、embedding、rerank、OCR、TTS、ASR，避免业务代码散接模型。</p>
+                </div>
+                <div class="card openclaw" data-role="生态边界">
+                  <h3>Plugin-Friendly Runtime</h3>
+                  <p>未来插件应优先扩 tools / skills，而不是把业务逻辑直接塞进页面组件。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel">
+          <h2 class="section-title">OpenClaw 对应关系</h2>
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-dot dot-claw"></div>
+              <div>紫色高亮：直接借用 OpenClaw 范式的部分</div>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot dot-main"></div>
+              <div>绿色主干：Liteasy 自己的固定科研产品主链路，不应被纯聊天入口替代</div>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot dot-ui"></div>
+              <div>蓝色 UI：Liteasy 的产品化、桌面化、可视化交互层</div>
+            </div>
+          </div>
+
+          <div class="map-list" style="margin-top: 16px">
+            <div class="map-item">
+              <h3>OpenClaw 的 Tools → Liteasy 的 Action Registry</h3>
+              <p>Liteasy 不应让 assistant 直接改软件，而应通过 `settings.update`、`analysis.start`、`artifact.open_tab` 这类 typed action 执行。</p>
+            </div>
+            <div class="map-item">
+              <h3>OpenClaw 的 Skills → Liteasy 的 Skill Registry</h3>
+              <p>`settings.adjust`、`artifact.generate`、`paper.qa`、`concept.explain` 等都属于任务语义层，不直接等于底层执行。</p>
+            </div>
+            <div class="map-item">
+              <h3>OpenClaw 的 Allow/Deny → Liteasy 的模式/身份/风险控制</h3>
+              <p>不是“系统里有 skill 就能调用”，而是必须按当前模式、用户身份和风险等级决定是否允许执行。</p>
+            </div>
+            <div class="map-item">
+              <h3>OpenClaw 的 Direct Dispatch → Liteasy 的中栏模态按钮</h3>
+              <p>用户已经明确指定模态，所以系统应该确定性直达主工作流，而不是再让模型猜“你是要导图还是 PPT”。</p>
+            </div>
+            <div class="map-item">
+              <h3>OpenClaw 的 Plugin + Skill → Liteasy 后续插件生态</h3>
+              <p>专注度插件、TODO、外部学术检索、组织知识源都适合用 plugin 提供能力、skill 提供工作流约束。</p>
+            </div>
+            <div class="map-item">
+              <h3>不照搬的部分</h3>
+              <p>Liteasy 不应该把用户主交互做成 slash command 式 skill 面板。它首先是科研产品，其次才是在内部借鉴 OpenClaw runtime。</p>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top: 16px; padding: 14px">
+            <h2 class="section-title" style="font-size: 16px; margin-bottom: 10px">最终判断</h2>
+            <div class="footnote">
+              Liteasy 最合理的落法不是“把 OpenClaw 做成 Liteasy”，而是“把 OpenClaw 式 runtime 装进 Liteasy 这个科研产品里”。
+              所以真正的组合是：
+              <strong>中栏固定模态按钮主干 + 右栏 skill/action 分支 + 底层 allowlist 与 direct dispatch 边界</strong>。
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      const body = document.body;
+      const toggle = document.getElementById("toggle-openclaw");
+
+      toggle.addEventListener("click", () => {
+        const active = body.classList.toggle("highlight-openclaw");
+        toggle.classList.toggle("active", active);
+        toggle.textContent = active ? "高亮 OpenClaw 相关部分" : "恢复 OpenClaw 高亮";
+      });
+    </script>
+  </body>
+</html>
