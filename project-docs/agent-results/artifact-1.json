@@ -957,7 +957,7 @@
         "summary": "FilteredVamana, and 𝐿 𝑠𝑚𝑎𝑙𝑙 from 10 to 330 in increments of 20 for StitchedVamana. NHQ: We evaluate the two algorithms, NHQ-NPG_NSW and NHQ-NPG_KGraph, proposed in [63]. For both we use the recommended parameters in the released codebase [12]. These parameters were selected using a hyperparameter grid search in order to generate the Pareto-optimal reca…",
         "terms": [
           "PDF 全文",
-          "第 10 页",
+          "第 9 页",
           "页内片段 2",
           "For",
           "NHQ-",
@@ -1462,8 +1462,8 @@
           "实验与结果",
           "局限与分歧"
         ],
-        "maxEvidencePerPaper": 28,
-        "maxTotalEvidence": 28,
+        "maxEvidencePerPaper": 26,
+        "maxTotalEvidence": 26,
         "paperIds": [
           "demo-3"
         ],
@@ -2403,7 +2403,196 @@
               "unsupportedSentenceIds": [],
               "verdict": "pass"
             },
-            "evidenceToolCalls": [
+            {
+              "chunkId": "local-compactflash-ftl:p1:chunk-4",
+              "confidence": 0.94,
+              "id": "evidence-5-a23ac384-f79b-4f71-ad39-2fcae98c9a08",
+              "normalizedQuote": "the amount of which varies significantly depending on the management algorithm. in this paper, we propose a novel ftl design aimed at mass storage compactflash systems [3]. the main motivation of the proposed ftl is that coarse grain address translation lowers management overhead whereas fine grain address translation is efficient in handling small size writes. the proposed scheme combines the two different granularities in address translation to allow efficient handling of write requests smaller than a block while reducing storage overhead of page-level address translation. authorized licensed use limited to: renmin university. downloaded on june 02, 2026 at 14:16:39 utc from ieee xplore. restrictions apply. 366 ieee transactions on consumer electronics, vol. 48, no. 2, may 2002 jesung kim, sang lyul min, and yookun cho are with the school of computer science and engineering, seoul national university, korea. e-mail: jskim@archi.snu.ac.kr, symin@dandelion.snu.ac.kr, cho@ssrnet.snu.ac.kr. jong min kim is with samsung electronics, korea. email: jmkim@archi.snu.ac.kr. sam h. noh is with the school of information and computer engineering, hong-ik university, korea. e-mail: samhnoh@hongik.ac.kr. contributed paper manuscript received april 10, 2002 0098 3063/00 \\$10.00 © 2002 ieee",
+              "page": 1,
+              "pageTextEnd": 5364,
+              "pageTextStart": 4068,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "the amount of which varies significantly depending on the management algorithm.\n\nIn this paper, we propose a novel FTL design aimed at mass storage CompactFlash systems [3].\n\nThe main motivation of the proposed FTL is that coarse grain address translation lowers management overhead whereas fine grain address translation is efficient in handling small size writes.\n\nThe proposed scheme combines the two different granularities in address translation to allow efficient handling of write requests smaller than a block while reducing storage overhead of page-level address translation.\n\nAuthorized licensed use limited to: Renmin University.\n\nDownloaded on June 02, 2026 at 14:16:39 UTC from IEEE Xplore.\n\nRestrictions apply.\n\n366\n\nIEEE Transactions on Consumer Electronics, Vol. 48, No. 2, MAY 2002\n\nJesung Kim, Sang Lyul Min, and Yookun Cho are with the School of Computer Science and Engineering, Seoul National University, Korea. E-mail: jskim@archi.snu.ac.kr, symin@dandelion.snu.ac.kr, cho@ssrnet.snu.ac.kr.\n\nJong Min Kim is with Samsung Electronics, Korea.\n\nEmail: jmkim@archi.snu.ac.kr.\n\nSam H.\n\nNoh is with the School of Information and Computer Engineering, Hong-Ik University, Korea. E-mail: samhnoh@hongik.ac.kr.\n\nContributed Paper\n\nManuscript received April 10, 2002\n\n0098 3063/00 \\$10.00 © 2002 IEEE"
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p3:chunk-13",
+              "confidence": 0.7,
+              "id": "evidence-11-10fcc073-438b-4c30-beae-56daff891ddd",
+              "normalizedQuote": "level, while a small fixed number of blocks are managed at the finer page level. the former holds ordinary data and are called data blocks. we refer to the latter as log blocks. log blocks are used as temporary storage for small size writes to data blocks. when an update to a page in a data block is requested, a log block is allocated from the pool of free blocks that have been erased in advance and the update is performed to the log block incrementally from the first page. on each write, the logical address of the page is also stored in the spare area that is associated with each page. note that the write to the spare area can be performed simultaneously as the corresponding page is written with virtually no overhead. 368 ieee transactions on consumer electronics, vol. 48, no. 2, may 2002 authorized licensed use limited to: renmin university. downloaded on june 02, 2026 at 14:16:39 utc from ieee xplore. restrictions apply.",
+              "page": 3,
+              "pageTextEnd": 4601,
+              "pageTextStart": 3664,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "level, while a small fixed number of blocks are managed at the finer page level.\n\nThe former holds ordinary data and are called data blocks.\n\nWe refer to the latter as log blocks.\n\nLog blocks are used as temporary storage for small size writes to data blocks.\n\nWhen an update to a page in a data block is requested, a log block is allocated from the pool of free blocks that have been erased in advance and the update is performed to the log block incrementally from the first page.\n\nOn each write, the logical address of the page is also stored in the spare area that is associated with each page.\n\nNote that the write to the spare area can be performed simultaneously as the corresponding page is written with virtually no overhead.\n\n368\n\nIEEE Transactions on Consumer Electronics, Vol. 48, No. 2, MAY 2002\n\nAuthorized licensed use limited to: Renmin University.\n\nDownloaded on June 02, 2026 at 14:16:39 UTC from IEEE Xplore.\n\nRestrictions apply."
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p4:chunk-15",
+              "confidence": 0.87,
+              "id": "evidence-12-134bd901-e615-461c-b9e5-b48ce8e5c7de",
+              "normalizedQuote": "after copying all the pages, the new block now becomes the data block, and the former data block and the log block are returned to the pool of free blocks, waiting to be erased. the merge operation requires n-page read operations, n-page write operations, and two-block erase operations (one for the log block and the other for the former data block), where n is the number of pages per block. as a result, it produces two free blocks while consuming one free block, giving an efficiency of producing one free block per two erase operations. there are special situations where the merge operation can be performed with only one erase operation, resulting in an ideal efficiency of producing one free block per one erase operation. this situation occurs when all the pages in a block are written sequentially starting from the first logical page to the last logical page. in this case, we can simplify the merge operation by making the log block the new data block and returning the data block to the pool of free blocks (see fig. 2b). we call this simplified version of the merge operation the switch operation. note that a similar operation is also possible in the replacement block scheme. however, the merge operation in the replacement block scheme incurs excessive erasure since many pages in the replacement blocks may remain unused due to the limitation of the placement of each page (see fig. 2c). our merge operations are similar more to the cleaning mechanism used in the log-structured file system [11] in that it collects valid items to reclaim free space (see",
+              "page": 4,
+              "pageTextEnd": 2959,
+              "pageTextStart": 1387,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "After copying all the pages, the new block now becomes the data block, and the former data block and the log block are returned to the pool of free blocks, waiting to be erased.\n\nThe merge operation requires n-page read operations, n-page write operations, and two-block erase operations (one for the log block and the other for the former data block), where n is the number of pages per block.\n\nAs a result, it produces two free blocks while consuming one free block, giving an efficiency of producing one free block per two erase operations.\n\nThere are special situations where the merge operation can be performed with only one erase operation, resulting in an ideal efficiency of producing one free block per one erase operation.\n\nThis situation occurs when all the pages in a block are written sequentially starting from the first logical page to the last logical page.\n\nIn this case, we can simplify the merge operation by making the log block the new data block and returning the data block to the pool of free blocks (see Fig. 2b).\n\nWe call this simplified version of the merge operation the switch operation.\n\nNote that a similar operation is also possible in the replacement block scheme.\n\nHowever, the merge operation in the replacement block scheme incurs excessive erasure since many pages in the replacement blocks may remain unused due to the limitation of the placement of each page (see Fig. 2c).\n\nOur merge operations are similar more to the cleaning mechanism used in the log-structured file system [11] in that it collects valid items to reclaim free space (see"
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p5:chunk-17",
+              "confidence": 0.75,
+              "id": "evidence-14-14b7cff8-6624-468a-a87c-f6af3d474fac",
+              "normalizedQuote": "fig. 2d). the difference lies in the fact that our scheme restricts pages in a log block to be from the same data block, and efficiency of the merge operation is independent of the number of valid pages in the log block. in contrast, the cleaning operation in the log-structured file system consumes a portion of an empty block to relocate valid pages in the block being cleaned, and thus the efficiency is inversely proportional to the number of valid pages, which depends on the utilization as well as the policy of selecting a block to be cleaned [1], [11], [12], [13], [14]. c. the map block both the merge operation and the switch operation change the mapping of the data block and thus, require an update to the mapping information. in previous schemes, mapping information is stored for each page/block in the associated spare area in the form of logical address tags. basically, these tags provide physical-to-logical reverse translation information and needs to be reconstructed as a conventional logical-to-physical mapping table. this requires scanning of the entire space of flash memory to collect logical address tags scattered across all the pages/blocks, which is prohibitively time- and power-consuming especially in nand-type flash memory where reading a few bytes costs virtually the same as reading a page. moreover, the mapping table is generally required to be present in sram as a whole. in our proposed scheme, the mapping table is stored in dedicated blocks what we call map blocks to enable faster startup and on-demand fetching.",
+              "page": 5,
+              "pageTextEnd": 1555,
+              "pageTextStart": 0,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "Fig. 2d).\n\nThe difference lies in the fact that our scheme restricts pages in a log block to be from the same data block, and efficiency of the merge operation is independent of the number of valid pages in the log block.\n\nIn contrast, the cleaning operation in the log-structured file system consumes a portion of an empty block to relocate valid pages in the block being cleaned, and thus the efficiency is inversely proportional to the number of valid pages, which depends on the utilization as well as the policy of selecting a block to be cleaned [1], [11], [12], [13], [14].\n\nC.\n\nThe Map block\n\nBoth the merge operation and the switch operation change the mapping of the data block and thus, require an update to the mapping information.\n\nIn previous schemes, mapping information is stored for each page/block in the associated spare area in the form of logical address tags.\n\nBasically, these tags provide physical-to-logical reverse translation information and needs to be reconstructed as a conventional logical-to-physical mapping table.\n\nThis requires scanning of the entire space of flash memory to collect logical address tags scattered across all the pages/blocks, which is prohibitively time- and power-consuming especially in NAND-type flash memory where reading a few bytes costs virtually the same as reading a page.\n\nMoreover, the mapping table is generally required to be present in SRAM as a whole.\n\nIn our proposed scheme, the mapping table is stored in dedicated blocks what we call map blocks to enable faster startup and on-demand fetching."
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p5:chunk-20",
+              "confidence": 0.75,
+              "id": "evidence-15-14098d2f-661d-4743-a30c-864d3dff610b",
+              "normalizedQuote": "to further simplify the process, the map directory can also be included in the mapping table along with the maps for log blocks and free blocks provided that there is a room. once the map directory is constructed, address translation can be performed similarly to the case of the conventional two-level page table. first, the map directory is looked up using high-ordered bits of the logical address from the host to obtain the location of the page containing the required mapping table entry. second, the located page is fetched to sram if it is not currently there (i.e., fetched on demand). the required mapping table entry can then be accessed by indexing the fetched page using middle-ordered bits of the logical address that are obtained by truncating the high-ordered bits used to index the map directory and the low-ordered bits used for the block offset. finally, we get the physical address of the target page by adding the block offset to the physical block address recorded in the mapping table entry. 370 ieee transactions on consumer electronics, vol. 48, no. 2, may 2002 authorized licensed use limited to: renmin university. downloaded on june 02, 2026 at 14:16:39 utc from ieee xplore. restrictions apply.",
+              "page": 5,
+              "pageTextEnd": 5207,
+              "pageTextStart": 3985,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "To further simplify the process, the map directory can also be included in the mapping table along with the maps for log blocks and free blocks provided that there is a room.\n\nOnce the map directory is constructed, address translation can be performed similarly to the case of the conventional two-level page table.\n\nFirst, the map directory is looked up using high-ordered bits of the logical address from the host to obtain the location of the page containing the required mapping table entry.\n\nSecond, the located page is fetched to SRAM if it is not currently there (i.e., fetched on demand).\n\nThe required mapping table entry can then be accessed by indexing the fetched page using middle-ordered bits of the logical address that are obtained by truncating the high-ordered bits used to index the map directory and the low-ordered bits used for the block offset.\n\nFinally, we get the physical address of the target page by adding the block offset to the physical block address recorded in the mapping table entry.\n\n370\n\nIEEE Transactions on Consumer Electronics, Vol. 48, No. 2, MAY 2002\n\nAuthorized licensed use limited to: Renmin University.\n\nDownloaded on June 02, 2026 at 14:16:39 UTC from IEEE Xplore.\n\nRestrictions apply."
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p6:chunk-21",
+              "confidence": 0.84,
+              "id": "evidence-16-4b321a8f-ba96-474b-956c-3ec944207c78",
+              "normalizedQuote": "d. atomicity of host requests flash-memory-based storage subsystems such as compactflash systems should maintain a consistent state even when there is an unexpected power-outage since, for example, users of a digital camera are allowed to remove the compactflash card from the digital camera at any time. therefore, assuring consistency of internal data structures is an important requirement of any ftl. in our proposed scheme, updates of meta-data (i.e., the mapping table) are performed in a single atomic write operation as explained in the previous subsection. this assures that the meta-data stored in flash memory is always consistent, even in the case where a write operation to the map block fails due to an unexpected power outage. as briefly explained in section ii, failure of write operations can be detected by checking ecc code stored in the spare area for each page. thus, simply ignoring the page with an ecc error leads to reconstruction of the mapping table to the state exactly the same as before the interrupted write operation is issued. furthermore, we can handle a long sequential write request from the host as a single atomic operation by delaying updates of mapping information until all the data from the host is received completely. the received data is stored temporarily in free blocks and switched to data blocks simultaneously by updating the corresponding mapping table entries after all the data are stored. the update of the mapping table effectively commits the host request. note that this modification does not degrade performance.",
+              "page": 6,
+              "pageTextEnd": 1570,
+              "pageTextStart": 0,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "D.\n\nAtomicity of Host Requests\n\nFlash-memory-based storage subsystems such as CompactFlash systems should maintain a consistent state even when there is an unexpected power-outage since, for example, users of a digital camera are allowed to remove the CompactFlash card from the digital camera at any time.\n\nTherefore, assuring consistency of internal data structures is an important requirement of any FTL.\n\nIn our proposed scheme, updates of meta-data (i.e., the mapping table) are performed in a single atomic write operation as explained in the previous subsection.\n\nThis assures that the meta-data stored in flash memory is always consistent, even in the case where a write operation to the map block fails due to an unexpected power outage.\n\nAs briefly explained in Section II, failure of write operations can be detected by checking ECC code stored in the spare area for each page.\n\nThus, simply ignoring the page with an ECC error leads to reconstruction of the mapping table to the state exactly the same as before the interrupted write operation is issued.\n\nFurthermore, we can handle a long sequential write request from the host as a single atomic operation by delaying updates of mapping information until all the data from the host is received completely.\n\nThe received data is stored temporarily in free blocks and switched to data blocks simultaneously by updating the corresponding mapping table entries after all the data are stored.\n\nThe update of the mapping table effectively commits the host request.\n\nNote that this modification does not degrade performance."
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p6:chunk-22",
+              "confidence": 0.82,
+              "id": "evidence-17-4ca29ec6-093a-400c-a39c-50c19f00f632",
+              "normalizedQuote": "table entries after all the data are stored. the update of the mapping table effectively commits the host request. note that this modification does not degrade performance. in fact, it improves performance since several updates of the mapping table are piggy-backed to a single write operation. this feature is useful in simplifying file-system level consistency management since large data structures can be updated in a single atomic operation $[15]$ , $[16]$ . there are a few cases that need to be handled more carefully. first, if small size writes are directed to a log block and are interrupted in the middle, partial results can be seen by the host after a restart. this case can be addressed by introducing a bit for each page in the log block that indicates the end of a sequence of a write. that is, a page in a log block with the bit cleared is regarded as valid only when it is followed by a page with the bit set. second, a sufficient number of free blocks need to be available for buffering the data from the host, or otherwise atomicity of the request cannot be guaranteed. for this case, the file system has a choice of letting the storage system either to return an error or to take the risk. finally, a sequence of blocks involved in a request may extend beyond the boundary of a map fragment, and thus requires two sequential writes to the map block before it can be committed. this situation can be addressed by using a similar bit flag indicating the end of a sequence of a write as explained above.",
+              "page": 6,
+              "pageTextEnd": 2919,
+              "pageTextStart": 1398,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "table entries after all the data are stored.\n\nThe update of the mapping table effectively commits the host request.\n\nNote that this modification does not degrade performance.\n\nIn fact, it improves performance since several updates of the mapping table are piggy-backed to a single write operation.\n\nThis feature is useful in simplifying file-system level consistency management since large data structures can be updated in a single atomic operation $[15]$ , $[16]$ .\n\nThere are a few cases that need to be handled more carefully.\n\nFirst, if small size writes are directed to a log block and are interrupted in the middle, partial results can be seen by the host after a restart.\n\nThis case can be addressed by introducing a bit for each page in the log block that indicates the end of a sequence of a write.\n\nThat is, a page in a log block with the bit cleared is regarded as valid only when it is followed by a page with the bit set.\n\nSecond, a sufficient number of free blocks need to be available for buffering the data from the host, or otherwise atomicity of the request cannot be guaranteed.\n\nFor this case, the file system has a choice of letting the storage system either to return an error or to take the risk.\n\nFinally, a sequence of blocks involved in a request may extend beyond the boundary of a map fragment, and thus requires two sequential writes to the map block before it can be committed.\n\nThis situation can be addressed by using a similar bit flag indicating the end of a sequence of a write as explained above."
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p7:chunk-26",
+              "confidence": 0.9,
+              "id": "evidence-19-dd3463fd-71db-4a6b-8da8-f51635f65ad7",
+              "normalizedQuote": "and the main source of this overhead is the pages copied when merge/clean operations are performed. before the measurement, the system was warmed up by running the same trace. from the results, we can note that the proposed log block scheme performs significantly better than the replacement block scheme in terms of the number of extra erase operations consistently in every case, while overall performance varies substantially depending on the host system (note the scale of the y-axis). this result comes from the fact that the replacement block is not efficient in handling small size writes that are repeated frequently, such as meta-data updates, due to its limitation of block-level mapping. in contrast, our proposed scheme handles small size writes in the log block using page-level mapping, while long sequential writes are performed as efficiently as in block-level mapping. one interesting result is that our proposed scheme sometimes even outperforms the page-level remapping scheme that requires much more hardware resources. this is especially notable for kodak where more than 25% of host requests are smaller in size than a block. a number of reasons are possible. first, it is well known that the performance of file systems based on logging is generally very sensitive to the utilization (i.e., the ratio of storage allocated for files to the total capacity) of the file system [1], [11], [12], [13], [14].",
+              "page": 7,
+              "pageTextEnd": 2784,
+              "pageTextStart": 1359,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "and the main source of this overhead is the pages copied when merge/clean operations are performed.\n\nBefore the measurement, the system was warmed up by running the same trace.\n\nFrom the results, we can note that the proposed log block scheme performs significantly better than the replacement block scheme in terms of the number of extra erase operations consistently in every case, while overall performance varies substantially depending on the host system (note the scale of the y-axis).\n\nThis result comes from the fact that the replacement block is not efficient in handling small size writes that are repeated frequently, such as meta-data updates, due to its limitation of block-level mapping.\n\nIn contrast, our proposed scheme handles small size writes in the log block using page-level mapping, while long sequential writes are performed as efficiently as in block-level mapping.\n\nOne interesting result is that our proposed scheme sometimes even outperforms the page-level remapping scheme that requires much more hardware resources.\n\nThis is especially notable for Kodak where more than 25% of host requests are smaller in size than a block. A number of reasons are possible.\n\nFirst, it is well known that the performance of file systems based on logging is generally very sensitive to the utilization (i.e., the ratio of storage allocated for files to the total capacity) of the file system [1], [11], [12], [13], [14]."
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p7:chunk-28",
+              "confidence": 0.9,
+              "id": "evidence-21-4170687e-b83f-441a-89e2-744aef763caf",
+              "normalizedQuote": "of our proposed scheme. for this purpose, we generated a synthetic trace long enough to stress the storage system by emulating a digital camera based on microsoft fat. fig. 6a plots the write frequency of the generated trace for logical addresses. the figure clearly shows a hot spot created by frequent updates of fat. we drove the simulator with the trace and counted the number of erase operations performed on each physical block and the result is shown in fig. 6b. the result indicates that the hot spot is evenly distributed as physical blocks are exchanged by merge/switch operations. however, there still exists blocks that are exceptionally worn, which we observed are map blocks. this situation can be rectified by swapping them with free blocks periodically as shown in fig. 6c, although the detailed description is not included in this paper due to the limitation of space. we also have performed simulation for different block sizes and different numbers of extra blocks, and obtained similar results. overall, the proposed scheme performs significantly better than previous block-level remapping schemes and gives more stable performance characteristics compared to the page-level remapping scheme while keeping resource requirements substantially lower. 372 ieee transactions on consumer electronics, vol. 48, no. 2, may 2002 authorized licensed use limited to: renmin university. downloaded on june 02, 2026 at 14:16:39 utc from ieee xplore. restrictions apply.",
+              "page": 7,
+              "pageTextEnd": 5482,
+              "pageTextStart": 4005,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "of our proposed scheme.\n\nFor this purpose, we generated a synthetic trace long enough to stress the storage system by emulating a digital camera based on Microsoft FAT.\n\nFig. 6a plots the write frequency of the generated trace for logical addresses.\n\nThe figure clearly shows a hot spot created by frequent updates of FAT.\n\nWe drove the simulator with the trace and counted the number of erase operations performed on each physical block and the result is shown in Fig. 6b.\n\nThe result indicates that the hot spot is evenly distributed as physical blocks are exchanged by merge/switch operations.\n\nHowever, there still exists blocks that are exceptionally worn, which we observed are map blocks.\n\nThis situation can be rectified by swapping them with free blocks periodically as shown in Fig. 6c, although the detailed description is not included in this paper due to the limitation of space.\n\nWe also have performed simulation for different block sizes and different numbers of extra blocks, and obtained similar results.\n\nOverall, the proposed scheme performs significantly better than previous block-level remapping schemes and gives more stable performance characteristics compared to the page-level remapping scheme while keeping resource requirements substantially lower.\n\n372\n\nIEEE Transactions on Consumer Electronics, Vol. 48, No. 2, MAY 2002\n\nAuthorized licensed use limited to: Renmin University.\n\nDownloaded on June 02, 2026 at 14:16:39 UTC from IEEE Xplore.\n\nRestrictions apply."
+            },
+            {
+              "chunkId": "local-compactflash-ftl:p9:chunk-31",
+              "confidence": 0.98,
+              "id": "evidence-24-c755125a-4275-485d-8ef6-4a55e0f8b31b",
+              "normalizedQuote": "translation schemes data are placed in a sequence as they arrive, which is useful in reducing the seek time for magnetic disks but which is not of consequence in flash memory. we have further reduced resource requirements by organizing translation information in a way that can be fetched on demand from flash memory. we met our budget of 6kb of sram to store the mapping table as well as other ftl data structures independently of the capacity of the storage system. for future work, we are planning to study design issues that are largely ignored in the current scheme. first, we are exploring more efficient replacement algorithms for log blocks that consider both recency and utilization. second, we are designing an intelligent background merging technique to minimize interference between demand requests and merge operations based on a model that predicts the available time for background processing before the next demand request. acknowledgements the authors would like to thank jae yong jung and jongmoo choi for their contribution to design and implementation of an earlier version of the scheme. this paper would not be possible without their contribution. the authors are also grateful to do-hyung kim for his help in implementation and evaluation of an experimental version of the wear leveling scheme, and yongsuk lee, dong hwan jeon, and eun-ae kim for their help in performance evaluation.",
+              "page": 9,
+              "pageTextEnd": 2734,
+              "pageTextStart": 1327,
+              "textExtraction": "mineru",
+              "paperId": "local-compactflash-ftl",
+              "quote": "translation schemes data are placed in a sequence as they arrive, which is useful in reducing the seek time for magnetic disks but which is not of consequence in flash memory.\n\nWe have further reduced resource requirements by organizing translation information in a way that can be fetched on demand from flash memory.\n\nWe met our budget of 6KB of SRAM to store the mapping table as well as other FTL data structures independently of the capacity of the storage system.\n\nFor future work, we are planning to study design issues that are largely ignored in the current scheme.\n\nFirst, we are exploring more efficient replacement algorithms for log blocks that consider both recency and utilization.\n\nSecond, we are designing an intelligent background merging technique to minimize interference between demand requests and merge operations based on a model that predicts the available time for background processing before the next demand request.\n\nACKNOWLEDGEMENTS\n\nThe authors would like to thank Jae Yong Jung and Jongmoo Choi for their contribution to design and implementation of an earlier version of the scheme.\n\nThis paper would not be possible without their contribution.\n\nThe authors are also grateful to Do-Hyung Kim for his help in implementation and evaluation of an experimental version of the wear leveling scheme, and Yongsuk Lee, Dong Hwan Jeon, and Eun-ae Kim for their help in performance evaluation."
+            }
+          ],
+          "summarySentences": [
+            {
+              "evidenceIds": [
+                "evidence-4-cde5d98d-d63b-4d31-9901-feebcc2ceeeb",
+                "evidence-5-a23ac384-f79b-4f71-ad39-2fcae98c9a08"
+              ],
+              "externalKnowledge": [],
+              "id": "thin-reading-sentence-bb21594b",
+              "status": "grounded",
+              "text": "这是一项面向 CompactFlash 的 flash translation layer（闪存转换层：将主机写请求重定向到预先擦除的闪存空位置的软件层）架构：它在块级映射的低管理开销与页级映射对小写入的适应性之间折中。"
+            },
+            {
+              "evidenceIds": [
+                "evidence-11-10fcc073-438b-4c30-beae-56daff891ddd",
+                "evidence-12-134bd901-e615-461c-b9e5-b48ce8e5c7de"
+              ],
+              "externalKnowledge": [],
+              "id": "thin-reading-sentence-b7775522",
+              "status": "grounded",
+              "text": "普通数据由块级管理，小更新写入 log blocks（日志块：按页暂存同一数据块更新的块），之后通过 merge operation（合并操作：复制有效页并回收原数据块和日志块）或顺序写入时的 switch operation（切换操作：将日志块直接转为数据块）回收空间。"
+            },
+            {
+              "evidenceIds": [
+                "evidence-14-14b7cff8-6624-468a-a87c-f6af3d474fac",
+                "evidence-15-14098d2f-661d-4743-a30c-864d3dff610b",
+                "evidence-16-4b321a8f-ba96-474b-956c-3ec944207c78"
+              ],
+              "externalKnowledge": [],
+              "id": "thin-reading-sentence-1651dab9",
+              "status": "grounded",
+              "text": "为减少 SRAM 并加快启动，mapping table（映射表）存于专用 map blocks（映射块：保存映射信息的专用闪存块），经目录定位后按需调入；映射元数据以单次原子写更新，断电写失败时可忽略 ECC 出错页而恢复中断前状态。"
+            },
+            {
+              "evidenceIds": [
+                "evidence-17-4ca29ec6-093a-400c-a39c-50c19f00f632",
+                "evidence-19-dd3463fd-71db-4a6b-8da8-f51635f65ad7",
+                "evidence-21-4170687e-b83f-441a-89e2-744aef763caf",
+                "evidence-24-c755125a-4275-485d-8ef6-4a55e0f8b31b"
+              ],
+              "externalKnowledge": [],
+              "id": "thin-reading-sentence-6272b593",
+              "status": "grounded",
+              "text": "迹驱动仿真中，该方案的额外擦除在每个案例均少于替换块方案，整体性能较页级重映射更稳定，并以 6KB SRAM 保存映射表及其他 FTL 数据结构；但请求原子性要求足够空闲块，映射块也可能异常磨损。"
+            }
+          ]
+        },
+        "omittedSections": [
+          {
+            "id": "section-d2d1f69e",
+            "label": "磨损均衡",
+            "sectionKey": "wear_leveling"
+          },
+          {
+            "id": "section-8641a0bc",
+            "label": "实验验证",
+            "sectionKey": "experiments"
+          },
+          {
+            "id": "section-30048311",
+            "label": "局限与边界",
+            "sectionKey": "limitations"
+          }
+        ],
+        "paperType": "systems",
+        "recommendationScope": {
+          "kind": "whole_paper",
+          "paperId": "local-compactflash-ftl",
+          "paperIdentity": {
+            "candidates": [
               {
                 "evidenceIds": [
                   "evidence-6-0c33f651-ce70-4831-93fe-2f42da923051",
@@ -2461,9 +2650,69 @@
                 ]
               }
             ],
+            "paperId": "local-compactflash-ftl",
+            "primary": {
+              "id": "local_paper_id:local-compactflash-ftl",
+              "kind": "local_paper_id",
+              "source": "local",
+              "value": "local-compactflash-ftl"
+            },
+            "sourcePath": "/home/tianjiaming/LiteasyLibrary/papers/A_space-efficient_flash_translation_layer_for_CompactFlash_systems.pdf",
+            "title": "A space-efficient flash translation layer for CompactFlash systems"
+          }
+        },
+        "recommendations": [],
+        "source": {
+          "kind": "root_overview"
+        },
+        "summary": "这是一项面向 CompactFlash 的 flash translation layer（闪存转换层：将主机写请求重定向到预先擦除的闪存空位置的软件层）架构：它在块级映射的低管理开销与页级映射对小写入的适应性之间折中。普通数据由块级管理，小更新写入 log blocks（日志块：按页暂存同一数据块更新的块），之后通过 merge operation（合并操作：复制有效页并回收原数据块和日志块）或顺序写入时的 switch operation（切换操作：将日志块直接转为数据块）回收空间。为减少 SRAM 并加快启动，mapping table（映射表）存于专用 map blocks（映射块：保存映射信息的专用闪存块），经目录定位后按需调入；映射元数据以单次原子写更新，断电写失败时可忽略 ECC 出错页而恢复中断前状态。迹驱动仿真中，该方案的额外擦除在每个案例均少于替换块方案，整体性能较页级重映射更稳定，并以 6KB SRAM 保存映射表及其他 FTL 数据结构；但请求原子性要求足够空闲块，映射块也可能异常磨损。",
+        "title": "A space-efficient flash translation layer for CompactFlash systems",
+        "withinPaperClosure": true
+      },
+      "thin-reading-node-ee3f1f73": {
+        "childIds": [
+          "thin-reading-node-bb90930b"
+        ],
+        "closureState": "inside_paper",
+        "createdAt": "1970-01-01T01:31:10.463Z",
+        "depth": 1,
+        "id": "thin-reading-node-ee3f1f73",
+        "evidence": {
+          "claims": [
+            {
+              "evidenceIds": [
+                "evidence-21-226a9520-a010-4adf-a365-1507108ad19b"
+              ],
+              "id": "thin-reading-claim-e635dc66",
+              "status": "grounded",
+              "text": "本文的磨损均衡依托合并/切换操作交换物理块，使合成负载中的逻辑写入热点所对应的擦除负担均匀分散。"
+            },
+            {
+              "evidenceIds": [
+                "evidence-21-226a9520-a010-4adf-a365-1507108ad19b"
+              ],
+              "id": "thin-reading-claim-d26761a2",
+              "status": "grounded",
+              "text": "映射块仍会异常磨损；作者仅以图示表明定期与空闲块交换可纠正该问题，未展开该方案。"
+            }
+          ],
+          "externalKnowledge": [],
+          "externalSources": [],
+          "generationAudit": {
+            "interpretationPlan": {
+              "discourseMoves": [
+                "先给出核心判断",
+                "再展开机制或论证",
+                "用关键证据连接判断",
+                "最后交代边界与遗漏"
+              ],
+              "externalKnowledgeNeeded": false,
+              "intent": "mixed",
+              "requestedDepth": "standard"
+            },
             "model": {
-              "id": "deepseek-v4-flash",
-              "provider": "deepseek"
+              "id": "gpt-5.6-terra",
+              "provider": "openai"
             },
             "qualityGate": {
               "attempts": 1,
@@ -2662,7 +2911,9 @@
         },
         "recommendations": [],
         "source": {
-          "kind": "root_overview"
+          "kind": "omitted_section",
+          "label": "磨损均衡",
+          "sectionKey": "wear_leveling"
         },
         "summary": "ACORN 提出了一种谓词无关（predicate-agnostic）的高性能混合搜索（hybrid search）方法，将向量嵌入与结构化数据上的属性、关键词等谓词联合过滤，解决了既有混合搜索系统要么性能差、要么仅支持受约束谓词集合的问题。核心机制是谓词子图遍历（predicate subgraph traversal）：在构建阶段用谓词无关的邻居扩展策略把 HNSW（层级可导航小世界图）改造成更稠密的图，使查询时能只在通过谓词的子图上搜索，从而模拟理论上最优但不可构造的分区索引（oracle partition index）。ACORN 提供两个索引变体：为搜索效率设计的 ACORN-γ，以及为资源受限场景以 9-53 倍更低构建时间接近其性能的 ACORN-1。在 SIFT1M、Paper、LAION、TripClick 四个数据集上，ACORN-γ 在 0.9 召回率下取得 2-1000 倍于既有方法的每秒查询数（QPS）提升。边界在于：对谓词通过率过低、子图可能不连通的查询，ACORN 回退到预过滤（pre-filtering）；构建时间和空间随 γ 增大而增加。",
         "title": "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data",

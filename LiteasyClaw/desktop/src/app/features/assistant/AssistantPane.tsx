@@ -6,6 +6,7 @@ import { AssistantHistoryPanel } from "./AssistantHistoryPanel";
 import { AssistantMessageList } from "./AssistantMessageList";
 import type {
   AssistantConfirmationRequest,
+  AgentActivityStatus,
   AssistantMessage,
   AssistantComposerSuggestion,
   AssistantContextToken,
@@ -13,6 +14,11 @@ import type {
   AssistantState,
   SelectedSetStatus
 } from "./assistant.types";
+import {
+  applyAgentActivityEvent,
+  completeAgentActivity,
+  createAgentActivity
+} from "./agentActivity";
 import type { FrontendAgentClient } from "../agent-api/frontendAgentClient";
 import type {
   AgentConfirmationRequest,
@@ -274,10 +280,13 @@ export function AssistantPane({
   const deliveredRegistrationWelcomeMessageIdsRef = useRef(new Set<number>());
   const executionJournalRef = useRef(executionJournal ?? createExecutionJournal());
   const processedAgentRunSequencesRef = useRef(new Map<string, number>());
+  const processedAgentActivityEventIdsRef = useRef(new Set<string>());
+  const agentActivityMessageIdsByRunRef = useRef(new Map<string, string>());
   const activeConversationRunRef = useRef<{
     cancelRequested: boolean;
     cancelSent: boolean;
     client: FrontendAgentClient;
+    activityMessageId: string;
     message: string;
     runId?: string;
   } | null>(null);
@@ -340,15 +349,20 @@ export function AssistantPane({
       // 只保留最近几个 PDF 选区，避免用户连续框选时把模型上下文撑得过大。
       return [...withoutDuplicate, readerConversationContext].slice(-4);
     });
+    const sourceLabel = readerConversationContext.source === "figures"
+      ? "论文插图"
+      : readerConversationContext.source === "extracted_text"
+        ? "论文提取文本"
+        : "PDF 选区";
     setComposerContextTokens((currentTokens) => [
       ...currentTokens.filter((token) => token.id !== `pdf-selection-${contextKey}`),
       {
         detail: `第 ${readerConversationContext.page} 页`,
         id: `pdf-selection-${contextKey}`,
         kind: "pdf_selection",
-        label: readerConversationContext.paperTitle ?? "PDF 选区",
+        label: readerConversationContext.paperTitle ?? sourceLabel,
         prompt: [
-          `PDF 选区：${readerConversationContext.paperTitle ?? "当前文档"} 第 ${
+          `${sourceLabel}：${readerConversationContext.paperTitle ?? "当前文档"} 第 ${
             readerConversationContext.page
           } 页`,
           readerConversationContext.excerpt
@@ -379,7 +393,7 @@ export function AssistantPane({
 
     const newRunningTasks: ArtifactTask[] = [];
     artifactTasks.forEach((task) => {
-      const sessionId = getArtifactTaskSessionId(task.id);
+      const sessionId = getArtifactTaskSessionId(task.id, task);
       const previousSession = nextSessions.find((session) => session.id === sessionId);
       nextSessions = upsertAssistantSession(
         nextSessions,
@@ -387,7 +401,10 @@ export function AssistantPane({
       );
       if (
         !knownArtifactTaskIdsRef.current.has(task.id) &&
-        (task.status === "queued" || task.status === "running")
+        (task.status === "queued" || task.status === "running") &&
+        // Thin-reading pages update their paper-bound session quietly. Generating a
+        // lower level must never steal focus from the reader's active conversation.
+        task.type !== "thin_reading"
       ) {
         newRunningTasks.push(task);
       }
@@ -396,7 +413,7 @@ export function AssistantPane({
 
     const taskToOpen = newRunningTasks[newRunningTasks.length - 1];
     const nextActiveSessionId = taskToOpen
-      ? getArtifactTaskSessionId(taskToOpen.id)
+      ? getArtifactTaskSessionId(taskToOpen.id, taskToOpen)
       : activeSessionIdRef.current;
     const activeArtifactSession = nextSessions.find(
       (session) => session.id === nextActiveSessionId && session.kind === "artifact_generation"
@@ -749,6 +766,55 @@ export function AssistantPane({
     });
   }
 
+  function startAgentActivity(statusText = "Agent 正在准备任务") {
+    const activityMessage = createMessage("assistant", "");
+    activityMessage.agentActivity = createAgentActivity(statusText);
+    assistantStoreRef.current.addMessage(activityMessage);
+    return activityMessage.id;
+  }
+
+  function updateAgentActivity(
+    messageId: string,
+    update: (activity: NonNullable<AssistantMessage["agentActivity"]>) => NonNullable<AssistantMessage["agentActivity"]>
+  ) {
+    const currentMessages = assistantStoreRef.current.getState().messages;
+    assistantStoreRef.current.replaceMessages(
+      currentMessages.map((message) =>
+        message.id === messageId && message.agentActivity
+          ? { ...message, agentActivity: update(message.agentActivity) }
+          : message
+      )
+    );
+  }
+
+  function appendPublicAgentActivityEvent(event: AgentEvent) {
+    if (processedAgentActivityEventIdsRef.current.has(event.eventId)) {
+      return;
+    }
+    const activityMessageId = agentActivityMessageIdsByRunRef.current.get(event.runId);
+    if (!activityMessageId) {
+      return;
+    }
+    processedAgentActivityEventIdsRef.current.add(event.eventId);
+    updateAgentActivity(activityMessageId, (activity) => applyAgentActivityEvent(activity, event));
+  }
+
+  function finalizePublicAgentActivity(run: AgentRun) {
+    const activityMessageId = agentActivityMessageIdsByRunRef.current.get(run.runId);
+    if (!activityMessageId) {
+      return;
+    }
+    const status: Exclude<AgentActivityStatus, "working"> =
+      run.status === "completed"
+        ? "completed"
+        : run.status === "cancelled"
+          ? "cancelled"
+          : run.status === "failed"
+            ? "failed"
+            : "waiting";
+    updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, status));
+  }
+
   function rememberPendingClarification(events: AgentRuntimeEvent[], previousInput: string) {
     const clarificationEvent = [...events]
       .reverse()
@@ -855,9 +921,13 @@ export function AssistantPane({
     const lastSequence = processedAgentRunSequencesRef.current.get(run.runId) ?? 0;
     run.events
       .filter((event) => event.sequence > lastSequence)
-      .forEach(appendPublicAgentEvent);
+      .forEach((event) => {
+        appendPublicAgentActivityEvent(event);
+        appendPublicAgentEvent(event);
+      });
     const latestSequence = run.events[run.events.length - 1]?.sequence ?? lastSequence;
     processedAgentRunSequencesRef.current.set(run.runId, latestSequence);
+    finalizePublicAgentActivity(run);
   }
 
   function appendPublicWorkflowAuditsToLatestAssistantMessage(
@@ -926,7 +996,9 @@ export function AssistantPane({
     }
 
     const idempotencyKey = createConversationIdempotencyKey(mode);
+    const activityMessageId = startAgentActivity("Agent 正在连接服务");
     const trackedRun = {
+      activityMessageId,
       cancelRequested: false,
       cancelSent: false,
       client: sessionAgentClient,
@@ -936,6 +1008,7 @@ export function AssistantPane({
       cancelRequested: boolean;
       cancelSent: boolean;
       client: FrontendAgentClient;
+      activityMessageId: string;
       idempotencyKey: string;
       message: string;
       runId?: string;
@@ -973,9 +1046,17 @@ export function AssistantPane({
         activeConversationRunRef.current === trackedRun
       ) {
         trackedRun.runId = event.runId;
+        agentActivityMessageIdsByRunRef.current.set(event.runId, trackedRun.activityMessageId);
+        appendPublicAgentActivityEvent(event);
+        syncAssistant();
         if (trackedRun.cancelRequested) {
           void cancelTrackedRun();
         }
+        return;
+      }
+      if (trackedRun.runId === event.runId && activeConversationRunRef.current === trackedRun) {
+        appendPublicAgentActivityEvent(event);
+        syncAssistant();
       }
     });
     assistantStoreRef.current.setPending(true);
@@ -983,9 +1064,11 @@ export function AssistantPane({
     try {
       const result = await sessionAgentClient.send({ message, mode }, { idempotencyKey });
       if (!result.ok) {
+        updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
         assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
         return;
       }
+      agentActivityMessageIdsByRunRef.current.set(result.data.runId, activityMessageId);
       consumePublicAgentRun(result.data);
       await appendPublicWorkflowAuditForRun(result.data, sessionAgentClient);
       if (result.data.status === "cancelled") {
@@ -1010,6 +1093,7 @@ export function AssistantPane({
       setInput("");
       setEditingMessageId(null);
     } catch (error) {
+      updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
       assistantStoreRef.current.addMessage(
         createMessage("assistant", getAssistantErrorMessage(error))
       );

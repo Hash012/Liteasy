@@ -11,6 +11,7 @@
   "dependencies": {
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.11.1",
+    "mineru-open-sdk": "^0.2.5",
     "undici": "^6.27.0"
   },
   "engines": {

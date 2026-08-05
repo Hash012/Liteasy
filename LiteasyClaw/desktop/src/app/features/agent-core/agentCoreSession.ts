@@ -1,7 +1,8 @@
 import type { AgentRuntimeContextView, AgentRuntimeEvent } from "../agent-runtime/agentRuntime.types";
 import {
   defaultAgentCoreConfig,
-  type AgentCoreConfig
+  type AgentCoreConfig,
+  type AgentMemoryEntry
 } from "./agentCoreConfig";
 import { createAgentBudgetGuard, type AgentTurnFingerprint } from "./budgetGuard";
 import {
@@ -53,7 +54,13 @@ export type AgentCoreSession = {
   }) => AgentCorePrepareResult;
 };
 
-export function createAgentCoreSession(config: AgentCoreConfig = defaultAgentCoreConfig): AgentCoreSession {
+export function createAgentCoreSession(
+  config: AgentCoreConfig = defaultAgentCoreConfig,
+  personalization: {
+    getMemories?: () => AgentMemoryEntry[];
+    getUserStateSummary?: () => string;
+  } = {}
+): AgentCoreSession {
   const memoryStore = createAgentMemoryStore(config.memories);
   const budgetGuard = createAgentBudgetGuard(config);
 
@@ -81,14 +88,18 @@ export function createAgentCoreSession(config: AgentCoreConfig = defaultAgentCor
         };
       }
 
-      const memories = memoryStore.search({
+      const activeMemoryStore = personalization.getMemories
+        ? createAgentMemoryStore(personalization.getMemories())
+        : memoryStore;
+      const memories = activeMemoryStore.search({
         limit: 4,
         query: message
       });
       const prompt = buildAgentCorePromptContext({
         config,
         memories,
-        runtimeContext
+        runtimeContext,
+        userStateSummary: personalization.getUserStateSummary?.()
       });
 
       return {
@@ -123,4 +134,3 @@ export function createAgentCoreSession(config: AgentCoreConfig = defaultAgentCor
     }
   };
 }
-

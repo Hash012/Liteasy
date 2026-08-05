@@ -47,6 +47,40 @@ function readArtifact(filePath) {
   return validateArtifact(JSON.parse(fs.readFileSync(filePath, "utf8")));
 }
 
+function validateTitle(title) {
+  if (typeof title !== "string") {
+    throw new Error("invalid_agent_artifact_title");
+  }
+  const normalized = title.trim().replace(/\s+/g, " ");
+  if (!normalized || normalized.length > 160) {
+    throw new Error("invalid_agent_artifact_title");
+  }
+  return normalized;
+}
+
+function writeArtifact(resultDirectory, document) {
+  fs.mkdirSync(resultDirectory, { recursive: true, mode: 0o755 });
+  const destination = artifactPath(resultDirectory, document.artifactId);
+  const temporary = `${destination}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(document, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o644
+    });
+    fs.renameSync(temporary, destination);
+  } catch (error) {
+    if (fs.existsSync(temporary)) {
+      fs.unlinkSync(temporary);
+    }
+    throw error;
+  }
+  return {
+    artifact: document,
+    path: `project-docs/agent-results/${document.artifactId}.json`
+  };
+}
+
 export function createAgentArtifactRepository(options = {}) {
   const resultDirectory = options.resultDirectory ?? defaultResultDirectory;
 
@@ -70,26 +104,20 @@ export function createAgentArtifactRepository(options = {}) {
 
     save(document) {
       const validated = validateArtifact(document);
-      fs.mkdirSync(resultDirectory, { recursive: true, mode: 0o755 });
-      const destination = artifactPath(resultDirectory, validated.artifactId);
-      const temporary = `${destination}.${process.pid}.${Date.now()}.tmp`;
-      try {
-        fs.writeFileSync(temporary, `${JSON.stringify(validated, null, 2)}\n`, {
-          encoding: "utf8",
-          flag: "wx",
-          mode: 0o644
-        });
-        fs.renameSync(temporary, destination);
-      } catch (error) {
-        if (fs.existsSync(temporary)) {
-          fs.unlinkSync(temporary);
-        }
-        throw error;
+      return writeArtifact(resultDirectory, validated);
+    },
+
+    rename(artifactId, title) {
+      const validatedArtifactId = validateArtifactId(artifactId);
+      const destination = artifactPath(resultDirectory, validatedArtifactId);
+      if (!fs.existsSync(destination) || !fs.statSync(destination).isFile()) {
+        return null;
       }
-      return {
-        artifact: validated,
-        path: `project-docs/agent-results/${validated.artifactId}.json`
-      };
+      const artifact = readArtifact(destination);
+      return writeArtifact(resultDirectory, {
+        ...artifact,
+        title: validateTitle(title)
+      });
     },
 
     remove(artifactId) {

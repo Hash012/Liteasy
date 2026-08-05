@@ -1,3 +1,4 @@
+import { Button } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
 import type {
   ArtifactRegenerationRequest,
@@ -8,6 +9,7 @@ import type {
 import { DynamicCanvas, OutlineTree } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
 import { ObsidianLikeGraphCanvas } from "../layered-reading/ObsidianLikeGraphCanvas";
+import { MermaidPreview } from "../mermaid/MermaidPreview";
 import { defaultGraphViewState } from "../layered-reading/layeredReading.types";
 import { ThinReadingTab } from "../thin-reading/ThinReadingTab";
 import type {
@@ -16,17 +18,23 @@ import type {
   ThinReadingExternalSource
 } from "../thin-reading/thinReading.types";
 import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
+import type { MineruFigure } from "../import/import.types";
+import type { VisualizationTabData } from "../visualization/visualization.types";
+import { AgentLiveWorkPanel } from "../agent-work/AgentLiveWorkPanel";
+import { ArtifactExportMenu } from "./ArtifactExportMenu";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
   analysisHint: string;
   canStartAnalysis: boolean;
   intuechoEndpoint?: string;
+  mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
   onActivateArtifact?: (artifactId: string) => void;
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
   onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
+  onOpenVisualization?: (data: VisualizationTabData) => void;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
@@ -54,7 +62,7 @@ export type ArtifactEvidenceOpenRequest = {
   page: number;
   pageTextEnd?: number;
   pageTextStart?: number;
-  textExtraction?: "embedded" | "ocr";
+  textExtraction?: "embedded" | "mineru" | "ocr";
   paperId: string;
   quote: string;
 };
@@ -132,17 +140,37 @@ function cleanAgentAnswer(answer: string) {
     .trim();
 }
 
+function mermaidBlocks(value: string | undefined) {
+  if (!value) return [];
+  return [...value.matchAll(/```mermaid\s*([\s\S]*?)```/gi)]
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+}
+
+// Persisted artifacts may predate fields added to the reading workflow. Normalize at
+// the display boundary so an older result can never crash the entire workbench.
+function normalizeThinReadingDocument(document: ThinReadingDocument): ThinReadingDocument {
+  return {
+    ...document,
+    annotationSettings: document.annotationSettings ?? { autoPublic: false },
+    annotations: document.annotations ?? [],
+    pendingPublicAnnotationIds: document.pendingPublicAnnotationIds ?? []
+  };
+}
+
 export function ArtifactTabs({
   activeArtifactId,
   analysisHint,
   canStartAnalysis,
   intuechoEndpoint,
+  mineruFiguresByPaperId,
   onLoadForumFeed,
   onActivateArtifact,
   onDynamicAction,
   onDeleteArtifact,
   onGenerateThinReadingBranch,
   onOpenEvidence,
+  onOpenVisualization,
   onOpenExternalFullText,
   onPromoteExternalPaperToLibrary,
   onSyncThinReadingAnnotations,
@@ -226,14 +254,18 @@ export function ArtifactTabs({
       return <div className="artifact-empty">薄读内容缺失</div>;
     }
 
+    const document = normalizeThinReadingDocument(activeTab.thinReadingDocument);
     return (
       <ThinReadingTab
         artifactId={activeTab.artifactId}
-        document={activeTab.thinReadingDocument}
+        document={document}
+        headerAction={<ArtifactExportMenu tab={{ ...activeTab, thinReadingDocument: document }} />}
         intuechoEndpoint={intuechoEndpoint}
         generationProgress={activeThinReadingTask?.status === "running" ? {
           message: activeThinReadingTask.message,
+          partialAnswer: activeThinReadingTask.partialAnswer,
           progress: activeThinReadingTask.progress,
+          runKey: activeThinReadingTask.id,
           stageLabel: taskStageLabels[activeThinReadingTask.stage]
         } : undefined}
         taskFailureMessage={activeThinReadingTask?.status === "failed"
@@ -252,6 +284,12 @@ export function ArtifactTabs({
         onLoadForumFeed={onLoadForumFeed}
         onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
         papers={activeTab.papers ?? []}
+        figures={[
+          ...(activeTab.figures ?? []),
+          ...(activeTab.papers ?? []).flatMap((paper) => mineruFiguresByPaperId?.[paper.id] ?? [])
+        ].filter((figure, index, figures) => figures.findIndex((candidate) => (
+          candidate.dataUrl === figure.dataUrl || candidate.id === figure.id
+        )) === index)}
       />
     );
   }
@@ -260,11 +298,14 @@ export function ArtifactTabs({
     <div className="artifact-layout">
       <div className="artifact-toolbar">
         <span className="artifact-title">多模态产物</span>
-        {activeTask && (
-          <span className={`artifact-status-badge ${activeTask.status}`}>
-            {taskStatusLabels[activeTask.status]}
-          </span>
-        )}
+        <div className="artifact-toolbar-actions">
+          {activeTask && (
+            <span className={`artifact-status-badge ${activeTask.status}`}>
+              {taskStatusLabels[activeTask.status]}
+            </span>
+          )}
+          {activeTab ? <ArtifactExportMenu tab={activeTab} /> : null}
+        </div>
       </div>
 
       {tabs.length > 1 ? (
@@ -297,7 +338,10 @@ export function ArtifactTabs({
       {activeTask && activeTask.status !== "completed" ? (
         <section className={`artifact-progress-panel ${activeTask.status}`} aria-live="polite">
           <div className="artifact-progress-copy">
-            <strong>{activeTask.message}</strong>
+            <div>
+              <strong>{activeTask.message}</strong>
+              <small>当前阶段：{taskStageLabels[activeTask.stage]}</small>
+            </div>
             <span>{activeTask.progress}%</span>
           </div>
           <div
@@ -310,16 +354,23 @@ export function ArtifactTabs({
           >
             <span style={{ width: `${activeTask.progress}%` }} />
           </div>
-          {activeTask.partialOutlineNodes && activeTask.partialOutlineNodes.length > 0 ? (
-            <div className="artifact-stream-tree" aria-label="正在生成的树形预览">
-              <OutlineTree
-                nodes={activeTask.partialOutlineNodes.map((node) => ({ ...node }))}
-                variant={activeTask.type === "mindmap" || activeTask.type === "layered_graph" ? "mindmap" : "tree"}
-              />
-            </div>
-          ) : activeTask.partialAnswer ? (
-            <div className="artifact-stream-preview">{cleanAgentAnswer(activeTask.partialAnswer)}</div>
-          ) : null}
+          <div className="artifact-live-output">
+            <AgentLiveWorkPanel
+              markdown={activeTask.partialAnswer}
+              message=""
+              progress={activeTask.progress}
+              runKey={activeTask.id}
+              stageLabel={taskStageLabels[activeTask.stage]}
+            />
+            {activeTask.partialOutlineNodes && activeTask.partialOutlineNodes.length > 0 ? (
+              <div className="artifact-stream-tree" aria-label="正在生成的树形预览">
+                <OutlineTree
+                  nodes={activeTask.partialOutlineNodes.map((node) => ({ ...node }))}
+                  variant={activeTask.type === "mindmap" || activeTask.type === "layered_graph" ? "mindmap" : "tree"}
+                />
+              </div>
+            ) : null}
+          </div>
           {activeTask.failure ? (
             <details className="artifact-failure-diagnostic" open>
               <summary>查看失败详情与恢复建议</summary>
@@ -369,13 +420,15 @@ export function ArtifactTabs({
                 <div className="skill-doc-path">{activeTab.sourcePath}</div>
               ) : null}
             </div>
-            <button
-              className="skill-doc-save-button"
-              onClick={() => onSaveMarkdownTab?.(activeTab.artifactId)}
-              type="button"
-            >
-              保存文档
-            </button>
+            <div className="skill-doc-actions">
+              <button
+                className="skill-doc-save-button"
+                onClick={() => onSaveMarkdownTab?.(activeTab.artifactId)}
+                type="button"
+              >
+                保存文档
+              </button>
+            </div>
           </div>
           <textarea
             aria-label={`编辑 Skill 文档：${activeTab.title}`}
@@ -525,9 +578,13 @@ export function ArtifactTabs({
             </details>
           ) : null}
           <div className="artifact-card-body">
+            {mermaidBlocks(activeTab.answer).map((code, index) => (
+              <MermaidPreview code={code} key={`${activeTab.artifactId}-mermaid-${index}`} onOpenInTab={() => onOpenVisualization?.({ code, id: `mermaid:${activeTab.artifactId}:${index}`, kind: "mermaid", title: `${activeTab.title} · 关系与流程` })} title="关系与流程" />
+            ))}
             {graphMode && activeTab.intuitionGraph ? (
               <ObsidianLikeGraphCanvas
                 graph={activeTab.intuitionGraph}
+                onOpenInTab={() => onOpenVisualization?.({ graph: activeTab.intuitionGraph!, id: `intuition-graph:${activeTab.artifactId}`, kind: "intuition_graph", title: `${activeTab.title} · 认知图` })}
                 onViewChange={setGraphView}
                 view={graphView}
               />

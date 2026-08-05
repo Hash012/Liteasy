@@ -1,9 +1,77 @@
 import { createDeepSeekChatCompletionsProvider } from "../providers/deepseekChatCompletions.mjs";
 import {
   createOpenAIResponsesProvider,
-  createOpenAIResponsesStreamProvider
+  createOpenAIResponsesStreamProvider,
+  isRetryableOpenAIResponsesError
 } from "../providers/openaiResponses.mjs";
 import { generateMockAnswer } from "../providers/mockProvider.mjs";
+
+// This compatible gateway currently exposes these three GPT-5.6 variants.
+// Keep the order explicit: it is the product's reliability policy, rather
+// than a silent preference inferred from a stale user-selected model.
+export const openAIModelFailoverOrder = [
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "gpt-5.6-sol"
+];
+
+function modelLabel(model) {
+  return model.replace(/^gpt-/i, "GPT ").replace(/-/g, " ");
+}
+
+function createAllModelsUnavailableError(lastError) {
+  const attempted = openAIModelFailoverOrder.map(modelLabel).join(" → ");
+  return new Error(
+    `模型服务暂时不可用：已依次尝试 ${attempted}，均遇到可重试的上游服务错误。请稍后重试。`,
+    lastError ? { cause: lastError } : undefined
+  );
+}
+
+/**
+ * Retry with another model only for errors explicitly marked as transient by
+ * the Responses provider (502/503/timeouts etc.). Permanent request/auth
+ * failures deliberately stop here so the user receives the real problem.
+ */
+export function createOpenAIModelFailoverProvider(provider) {
+  return async (input) => {
+    let lastError;
+    for (const model of openAIModelFailoverOrder) {
+      try {
+        return await provider({ ...input, model });
+      } catch (error) {
+        if (!isRetryableOpenAIResponsesError(error)) {
+          throw error;
+        }
+        lastError = error;
+      }
+    }
+    throw createAllModelsUnavailableError(lastError);
+  };
+}
+
+export function createOpenAIModelFailoverStreamProvider(provider) {
+  return async function* streamWithModelFailover(input) {
+    let lastError;
+    for (const model of openAIModelFailoverOrder) {
+      let emittedOutput = false;
+      try {
+        for await (const delta of provider({ ...input, model })) {
+          emittedOutput = true;
+          yield delta;
+        }
+        return;
+      } catch (error) {
+        // Never splice two answers together: after any visible delta, surface
+        // the original stream error instead of changing models mid-answer.
+        if (emittedOutput || !isRetryableOpenAIResponsesError(error)) {
+          throw error;
+        }
+        lastError = error;
+      }
+    }
+    throw createAllModelsUnavailableError(lastError);
+  };
+}
 
 function clampScore(score) {
   return Math.max(0, Math.min(1, Number(score.toFixed(2))));
@@ -26,10 +94,11 @@ export function buildProviderRegistry(config) {
     config.hardcodedDevForceLocalFakeModel
       ? async (input) => `${config.hardcodedDevFakeAnswerPrefix ?? "实验默认回复"}：${input.prompt}`
       : config.openaiApiKey && config.openaiApiKey.length > 0
-      ? createOpenAIResponsesProvider({
+      ? createOpenAIModelFailoverProvider(createOpenAIResponsesProvider({
           apiBaseUrl: config.openaiApiBaseUrl,
-          apiKey: config.openaiApiKey
-        })
+          apiKey: config.openaiApiKey,
+          reasoningEffort: config.openaiReasoningEffort
+        }))
       : null;
   const deepseekProvider =
     config.deepseekApiKey && config.deepseekApiKey.length > 0
@@ -50,10 +119,11 @@ export function buildStreamingProviderRegistry(config) {
   return {
     openai:
       config.openaiApiKey && config.openaiApiKey.length > 0
-        ? createOpenAIResponsesStreamProvider({
+        ? createOpenAIModelFailoverStreamProvider(createOpenAIResponsesStreamProvider({
             apiBaseUrl: config.openaiApiBaseUrl,
-            apiKey: config.openaiApiKey
-          })
+            apiKey: config.openaiApiKey,
+            reasoningEffort: config.openaiReasoningEffort
+          }))
         : null
   };
 }

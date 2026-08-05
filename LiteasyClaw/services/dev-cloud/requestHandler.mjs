@@ -6,7 +6,11 @@ import {
   buildAdminDemoReseedPayload
 } from "./payloads/adminDemoActionPayloads.mjs";
 import { buildAdminDemoStatePayload } from "./payloads/adminDemoStatePayloads.mjs";
-import { defaultConfig, getPublicOrigin } from "./config.mjs";
+import {
+  buildPublicRuntimeSummary,
+  defaultConfig,
+  getPublicOrigin
+} from "./config.mjs";
 import {
   buildCollectionListPayload,
   buildCollectionSavePayload
@@ -78,6 +82,10 @@ import {
 } from "./db/recommendationFeedbackRepository.mjs";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 import {
+  createMineruExtractionCacheKey,
+  createMineruExtractionRepository
+} from "./mineruExtractionRepository.mjs";
+import {
   createPersonalizationRepository,
   PersonalizationValidationError
 } from "./db/personalizationRepository.mjs";
@@ -116,6 +124,7 @@ import {
   searchExternalKnowledge
 } from "./payloads/externalKnowledgePayloads.mjs";
 import { fetchSecurePdf, SecurePdfFetchError } from "./securePdfFetch.mjs";
+import { extractPdfWithMineru } from "./mineruPdfExtraction.mjs";
 import {
   fingerprintPdf,
   GrobidParseError,
@@ -153,6 +162,7 @@ const availableEndpoints = [
   "POST /v1/model/audit",
   "GET /v1/agent-artifacts",
   "POST /v1/agent-artifacts",
+  "PATCH /v1/agent-artifacts/:artifactId",
   "DELETE /v1/agent-artifacts/:artifactId",
   "POST /v1/recommendations",
   "POST /v1/recommendations/feedback",
@@ -295,6 +305,19 @@ function writeJson(request, response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function writePdf(request, response, bytes) {
+  response.writeHead(200, {
+    ...buildCorsHeaders(request),
+    "Cache-Control": "no-store",
+    "Content-Length": bytes.byteLength,
+    "Content-Type": "application/pdf",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
+  });
+  response.end(bytes);
+}
+
 async function writeNdjsonStream(request, response, stream) {
   response.writeHead(200, {
     ...buildCorsHeaders(request),
@@ -347,7 +370,7 @@ async function readJsonBody(request, maximumBytes = maximumJsonBodyBytes) {
   return JSON.parse(rawBody);
 }
 
-function writePdf(request, response, fileName, bytes) {
+function writeLibraryPdf(request, response, fileName, bytes) {
   response.writeHead(200, {
     ...buildCorsHeaders(request),
     "Cache-Control": "private, no-store",
@@ -529,11 +552,26 @@ function withoutSuppressedRecommendations(payload, preferences) {
   };
 }
 
+function withConfiguredOpenAIModel(body, config) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return body;
+  }
+  const provider = typeof body.provider === "string" ? body.provider : "openai";
+  const hasModel = typeof body.model === "string" && body.model.trim().length > 0;
+  return provider === "openai" && !hasModel
+    ? { ...body, model: config.openaiModel }
+    : body;
+}
+
 export function createDevCloudRequestHandler(customConfig = {}) {
   const config = {
     ...defaultConfig,
     ...customConfig
   };
+  const runtimeSummary = buildPublicRuntimeSummary(config, {
+    pid: customConfig.runtimePid,
+    startedAt: customConfig.runtimeStartedAt
+  });
   const providers = {
     ...buildProviderRegistry(config),
     ...(customConfig.providers ?? {})
@@ -587,6 +625,12 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     customConfig.agentArtifactRepository ?? createAgentArtifactRepository({
       resultDirectory: customConfig.agentArtifactResultDirectory
     });
+  const mineruExtractionRepository =
+    customConfig.mineruExtractionRepository ?? createMineruExtractionRepository({
+      cacheDirectory: customConfig.mineruExtractionCacheDirectory
+    });
+  const mineruExtractionsInFlight = new Map();
+  const extractMineruPdf = customConfig.extractPdfWithMineru ?? extractPdfWithMineru;
   const configuredExternalPdfConcurrency = Number(customConfig.maximumConcurrentExternalPdfFetches);
   const maximumConcurrentExternalPdfFetches = Math.max(
     1,
@@ -610,7 +654,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     }
 
     if (method === "GET" && url.pathname === "/healthz") {
-      writeJson(request, response, 200, { ok: true });
+      writeJson(request, response, 200, {
+        ok: true,
+        runtime: runtimeSummary
+      });
       return;
     }
 
@@ -642,6 +689,31 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
       try {
         writeJson(request, response, 201, agentArtifactRepository.save(body));
+      } catch (error) {
+        writeJson(request, response, 400, {
+          error: error instanceof Error ? error.message : "invalid_agent_artifact"
+        });
+      }
+      return;
+    }
+
+    if (method === "PATCH" && url.pathname.startsWith("/v1/agent-artifacts/")) {
+      const artifactId = url.pathname.slice("/v1/agent-artifacts/".length);
+      const body = await readJsonOrWriteError(
+        request,
+        response,
+        maximumAgentArtifactBodyBytes
+      );
+      if (body === null) {
+        return;
+      }
+      try {
+        const renamed = agentArtifactRepository.rename(artifactId, body.title);
+        if (!renamed) {
+          writeJson(request, response, 404, { error: "agent_artifact_not_found" });
+          return;
+        }
+        writeJson(request, response, 200, renamed);
       } catch (error) {
         writeJson(request, response, 400, {
           error: error instanceof Error ? error.message : "invalid_agent_artifact"
@@ -732,7 +804,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
 
       try {
-        writeJson(request, response, 200, await generateAnswer(body, providers));
+        writeJson(request, response, 200, await generateAnswer(withConfiguredOpenAIModel(body, config), providers));
       } catch (error) {
         const message = error instanceof Error ? error.message : "unknown_error";
         const statusCode =
@@ -753,7 +825,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       await writeNdjsonStream(
         request,
         response,
-        generateAnswerStream(body, providers, streamingProviders)
+        generateAnswerStream(withConfiguredOpenAIModel(body, config), providers, streamingProviders)
       );
       return;
     }
@@ -1521,6 +1593,88 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
+    if (method === "GET" && url.pathname === "/v1/local-library/pdf") {
+      try {
+        const bytes = await readLocalLibraryPdfForBrowser(url.searchParams.get("path") ?? "", {
+          rootPath: customConfig.localLibraryRootPath
+        });
+        writePdf(request, response, bytes);
+      } catch (error) {
+        writeJson(request, response, error instanceof LocalLibraryPdfError ? error.statusCode : 500, {
+          error: "local_library_pdf_unavailable",
+          message: error instanceof Error ? error.message : "本地 PDF 当前不可用。"
+        });
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/pdf/mineru-extract") {
+      const body = await readJsonOrWriteError(request, response, maximumMineruRequestBytes);
+      if (body === null) {
+        return;
+      }
+      const filename = typeof body.filename === "string" ? body.filename.trim() : "";
+      const bytesBase64 = typeof body.bytesBase64 === "string" ? body.bytesBase64.trim() : "";
+      if (!filename || filename.length > 180 || !/\.pdf$/i.test(filename) || !bytesBase64 ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(bytesBase64)) {
+        writeJson(request, response, 400, {
+          error: "invalid_mineru_pdf_request",
+          message: "MinerU 解析需要有效的 PDF 文件名和 Base64 文件内容。"
+        });
+        return;
+      }
+      const bytes = Buffer.from(bytesBase64, "base64");
+      if (bytes.byteLength === 0 || bytes.byteLength > maximumMineruPdfBytes ||
+        bytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
+        writeJson(request, response, 413, {
+          error: "invalid_mineru_pdf_content",
+          message: "PDF 无效，或超过 24 MB 的本地解析上传上限。"
+        });
+        return;
+      }
+      try {
+        const cacheKey = createMineruExtractionCacheKey(bytes);
+        const cached = mineruExtractionRepository.get(cacheKey);
+        if (cached) {
+          writeJson(request, response, 200, { ...cached, cache: "hit" });
+          return;
+        }
+        const existingExtraction = mineruExtractionsInFlight.get(cacheKey);
+        if (existingExtraction) {
+          const extracted = await existingExtraction;
+          writeJson(request, response, 200, { ...extracted, cache: "hit" });
+          return;
+        }
+        const extraction = extractMineruPdf({
+          bytes,
+          filename,
+          modelConfig: {
+            apiBaseUrl: customConfig.openaiApiBaseUrl ?? defaultConfig.openaiApiBaseUrl,
+            apiKey: customConfig.openaiApiKey ?? defaultConfig.openaiApiKey,
+            model: customConfig.openaiModel ?? defaultConfig.openaiModel,
+            reasoningEffort: customConfig.openaiReasoningEffort ?? defaultConfig.openaiReasoningEffort
+          },
+          token: customConfig.mineruToken ?? defaultConfig.mineruToken
+        }).then((extracted) => {
+          mineruExtractionRepository.save(cacheKey, extracted);
+          return extracted;
+        });
+        mineruExtractionsInFlight.set(cacheKey, extraction);
+        try {
+          const extracted = await extraction;
+          writeJson(request, response, 200, { ...extracted, cache: "miss" });
+        } finally {
+          mineruExtractionsInFlight.delete(cacheKey);
+        }
+      } catch (error) {
+        writeJson(request, response, 502, {
+          error: "mineru_extraction_failed",
+          message: error instanceof Error ? error.message : "MinerU PDF 解析失败。"
+        });
+      }
+      return;
+    }
+
     if (method === "POST" && url.pathname === "/v1/profile/get") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
@@ -1972,7 +2126,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (!scope) return;
       try {
         const stored = libraryStorageRepository.readDocument(body.documentId, scope);
-        writePdf(request, response, stored.document.fileName, stored.bytes);
+        writeLibraryPdf(request, response, stored.document.fileName, stored.bytes);
       } catch (error) {
         writeLibraryStorageError(request, response, error);
       }

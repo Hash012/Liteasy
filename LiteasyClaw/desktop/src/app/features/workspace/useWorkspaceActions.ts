@@ -1,4 +1,4 @@
-import type { ImportJob } from "../import/import.types";
+import type { ImportJob, MineruFigure } from "../import/import.types";
 import { buildImportedChunksForPaper } from "../import/importFixtures";
 import {
   extractPdfIndexForPaper,
@@ -65,6 +65,10 @@ type UseWorkspaceActionsInput = {
     chunks: RetrievalChunk[];
     pages: ExtractedPdfPage[];
   }>;
+  extractPaperResources?: (paper: Paper) => Promise<{
+    chunks: RetrievalChunk[];
+    figures: MineruFigure[];
+  }>;
   ocrLanguage?: PdfOcrLanguage;
   importDocument?: (sourcePath: string) => Promise<unknown>;
   importStore: ImportStore;
@@ -100,6 +104,7 @@ export function buildImportJobsByDocumentId(workspaceStore: WorkspaceStore, impo
 export function useWorkspaceActions({
   extractPaperChunks,
   extractPaperIndex,
+  extractPaperResources,
   importDocument,
   importStore,
   loadPdfSource,
@@ -123,6 +128,15 @@ export function useWorkspaceActions({
           }
           throw error;
         }
+      });
+  const resolvePaperResources = extractPaperResources
+    ? async (paper: Paper) => ({
+        ...(await extractPaperResources(paper)),
+        pages: undefined
+      })
+    : async (paper: Paper) => ({
+        ...(await resolvePaperIndex(paper)),
+        figures: [] as MineruFigure[]
       });
 
   /**
@@ -500,8 +514,8 @@ export function useWorkspaceActions({
       window.setTimeout(() => {
         importStore.markParsing(jobId);
         syncImportJobs();
-        void resolvePaperIndex(paper)
-          .then(async ({ chunks, pages }) => {
+        void resolvePaperResources(paper)
+          .then(async ({ chunks, figures, pages }) => {
             if (chunks.length === 0) {
               throw new Error("PDF did not contain extractable text");
             }
@@ -524,7 +538,8 @@ export function useWorkspaceActions({
             }
             importStore.markParsed(jobId, {
               paperId: paper.id,
-              chunks
+              chunks,
+              mineruFigures: figures
             });
           })
           .catch((error) => {

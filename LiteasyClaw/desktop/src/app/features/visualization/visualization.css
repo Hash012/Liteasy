@@ -1,0 +1,12 @@
+.visualization-tab { background: #f7f9fb; display: grid; gap: 16px; height: 100%; overflow: auto; padding: 22px; }
+.visualization-tab > header { background: #fff; border: 1px solid #d8e1e8; border-radius: 8px; padding: 16px 18px; }
+.visualization-tab > header > span { color: #3b678b; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.visualization-tab h1 { color: #1d2b36; font-size: 22px; margin: 4px 0; }
+.visualization-tab p { color: #647681; font-size: 12px; margin: 0; }
+.visualization-tab .mermaid-preview, .visualization-tab .thin-reading__graph { background: #fff; border: 1px solid #d8e1e8; border-radius: 8px; }
+.visualization-tab .html-demo-preview { background: #fff; border: 1px solid #d8e1e8; border-radius: 8px; display: grid; gap: 12px; overflow: hidden; padding: 14px; }
+.visualization-tab .html-demo-preview__toolbar { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+.visualization-tab .html-demo-preview__meta { display: grid; gap: 4px; }
+.visualization-tab .html-demo-preview__meta strong { color: #1d2b36; font-size: 14px; line-height: 1.4; }
+.visualization-tab .html-demo-preview__meta span { color: #647681; font-size: 12px; line-height: 1.5; }
+.visualization-tab .html-demo-preview__frame { background: #fff; border: 1px solid #d8e1e8; border-radius: 8px; min-height: 420px; width: 100%; }

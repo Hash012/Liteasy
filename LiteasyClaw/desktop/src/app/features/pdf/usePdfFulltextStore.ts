@@ -12,7 +12,7 @@ import {
   samePaperPageTexts
 } from "./paperFulltextStore";
 
-type TextExtraction = "embedded" | "ocr";
+type TextExtraction = "embedded" | "mineru" | "ocr";
 
 /** Owns the durable PDF text-position snapshot; the renderer only reports finished page text. */
 export function usePdfFulltextStore(activePaperId: string | undefined) {

@@ -6,25 +6,29 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode
 } from "react";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Button, Input, Tooltip } from "@fluentui/react-components";
 import {
   ArrowSyncRegular,
   BookmarkRegular,
   ChevronDownRegular,
   ChevronRightRegular,
   DocumentPdfRegular,
+  DocumentTextRegular,
   DismissRegular,
   FolderRegular,
   LockClosedRegular,
   LockOpenRegular,
   LibraryRegular,
+  ImageMultipleRegular,
   LightbulbRegular,
   NoteRegular,
+  SearchRegular,
   SparkleRegular
 } from "@fluentui/react-icons";
 import type { CollectionItem } from "../collection/collection.types";
 import "./library.css";
 import type { ImportJob } from "../import/import.types";
+import type { PaperResourceKind } from "../import/paperResource.types";
 import type { RecommendationItem, RecommendationStatus } from "../recommendations/recommendation.types";
 import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
 import {
@@ -43,7 +47,7 @@ import {
 
 export type LibraryPaperChildItem = {
   id: string;
-  kind: "artifact" | "note";
+  kind: "artifact" | "note" | PaperResourceKind;
   label: string;
   meta?: string;
 };
@@ -76,6 +80,7 @@ type LibraryPaneProps = {
   onOpenOrganizationWorkspace: () => void;
   onOpenPaper?: (paperId: string) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
+  onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
   onMoveFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
   onMovePaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
@@ -107,6 +112,7 @@ type LibraryCollection = {
 type ResourceContextMenu = {
   left: number;
   target:
+    | { item: LibraryPaperChildItem; kind: "artifact"; paper: Paper }
     | { folder: WorkspaceFolderNode; kind: "folder" }
     | { kind: "paper"; paper: Paper };
   top: number;
@@ -115,6 +121,7 @@ type ResourceContextMenu = {
 type ResourceOperationDialog = {
   action: "move" | "rename";
   target:
+    | { item: LibraryPaperChildItem; kind: "artifact"; paper: Paper }
     | { folder: WorkspaceFolderNode; kind: "folder" }
     | { kind: "paper"; paper: Paper };
   value: string;
@@ -232,6 +239,10 @@ function paperMatchesCollection(paper: Paper, collectionId: LibraryCollectionId)
   );
 }
 
+function matchesSearch(value: string | undefined, searchQuery: string) {
+  return Boolean(value?.toLocaleLowerCase().includes(searchQuery));
+}
+
 export function LibraryPane({
   accountSessionAvailable = false,
   activePaperId,
@@ -259,6 +270,7 @@ export function LibraryPane({
   onOpenOrganizationWorkspace,
   onOpenPaper,
   onOpenPaperChild,
+  onRenamePaperChild,
   onRefreshLocalLibrary,
   onMoveFolder,
   onMovePaper,
@@ -280,7 +292,21 @@ export function LibraryPane({
   const activeCollection =
     findLibraryCollection(libraryCollections, activeCollectionId) ??
     libraryCollections[0];
-  const visiblePapers = papers.filter((paper) => paperMatchesCollection(paper, activeCollection.id));
+  const [searchQuery, setSearchQuery] = useState("");
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
+  const visiblePapers = papers.filter((paper) => {
+    if (!paperMatchesCollection(paper, activeCollection.id)) {
+      return false;
+    }
+    if (!normalizedSearchQuery) {
+      return true;
+    }
+    return matchesSearch(paper.title, normalizedSearchQuery) ||
+      matchesSearch(paper.sourcePath, normalizedSearchQuery) ||
+      (paperChildren[paper.id] ?? []).some((item) =>
+        matchesSearch(item.label, normalizedSearchQuery) || matchesSearch(item.meta, normalizedSearchQuery)
+      );
+  });
   const folderTree = buildWorkspaceFolderTree(
     visiblePapers,
     workspaceSourceType === "local_library" ? workspaceLabel : undefined
@@ -390,10 +416,14 @@ export function LibraryPane({
     const value = action === "rename"
       ? target.kind === "paper"
         ? target.paper.title
-        : target.folder.name
+        : target.kind === "artifact"
+          ? target.item.label
+          : target.folder.name
       : target.kind === "paper"
         ? getWorkspaceParentPath(target.paper.sourcePath ?? "")
-        : getWorkspaceParentPath(target.folder.path);
+        : target.kind === "folder"
+          ? getWorkspaceParentPath(target.folder.path)
+          : "";
     setContextMenu(null);
     setOperationDialog({ action, target, value });
   }
@@ -405,7 +435,13 @@ export function LibraryPane({
       return;
     }
     let message = "";
-    if (dialog.target.kind === "paper") {
+    if (dialog.target.kind === "artifact") {
+      message = await onRenamePaperChild?.(
+        dialog.target.item,
+        dialog.target.paper,
+        dialog.value
+      ) ?? "";
+    } else if (dialog.target.kind === "paper") {
       message = dialog.action === "rename"
         ? await onRenamePaper?.(dialog.target.paper.id, dialog.value) ?? ""
         : await onMovePaper?.(dialog.target.paper.id, dialog.value) ?? "";
@@ -519,7 +555,13 @@ export function LibraryPane({
 
   function renderPaper(paper: Paper, depth: number) {
     const children = paperChildren[paper.id] ?? [];
-    const expanded = expandedPaperIds.includes(paper.id);
+    const matchingChildren = normalizedSearchQuery
+      ? children.filter((item) =>
+        matchesSearch(item.label, normalizedSearchQuery) || matchesSearch(item.meta, normalizedSearchQuery)
+      )
+      : children;
+    const expanded = expandedPaperIds.includes(paper.id) ||
+      (Boolean(normalizedSearchQuery) && matchingChildren.length > 0);
     const selected = selectedPaperIds.includes(paper.id);
     const active = activePaperId === paper.id;
 
@@ -579,16 +621,29 @@ export function LibraryPane({
         </div>
         {expanded ? (
           <ul aria-label={`${paper.title}的关联条目`} className="library-paper-children">
-            {children.length > 0 ? children.map((item) => (
+            {matchingChildren.length > 0 ? matchingChildren.map((item) => (
               <li key={`${item.kind}-${item.id}`}>
                 <button
                   className="library-paper-child"
                   onClick={() => onOpenPaperChild?.(item, paper)}
+                  onContextMenu={(event) => {
+                    if (item.kind === "artifact") {
+                      openContextMenu(event, { item, kind: "artifact", paper });
+                    }
+                  }}
                   title={item.meta ?? item.label}
                   type="button"
                 >
                   <span aria-hidden="true" className={`library-child-icon ${item.kind}`}>
-                    {item.kind === "artifact" ? <SparkleRegular /> : <NoteRegular />}
+                    {item.kind === "artifact"
+                      ? <SparkleRegular />
+                      : item.kind === "extracted_text"
+                        ? <DocumentTextRegular />
+                      : item.kind === "figures"
+                        ? <ImageMultipleRegular />
+                        : item.kind === "multimodal"
+                          ? <ImageMultipleRegular />
+                        : <NoteRegular />}
                   </span>
                   <span className="library-child-label">{item.label}</span>
                   {item.meta ? <span className="library-child-meta">{item.meta}</span> : null}
@@ -721,7 +776,9 @@ export function LibraryPane({
                       {folderTree.map((node) => renderFolder(node, depth + 1))}
                     </ul>
                   ) : (
-                    <div className="library-empty-collection">当前 Collection 暂无文献</div>
+                    <div className="library-empty-collection">
+                      {normalizedSearchQuery ? "未找到匹配的文件或产物" : "当前 Collection 暂无文献"}
+                    </div>
                   )}
                 </div>
               </li>
@@ -735,6 +792,15 @@ export function LibraryPane({
   return (
     <div className="library-pane">
       <div className="library-toolbar">
+        <Input
+          aria-label="搜索文件与产物"
+          className="library-search-input"
+          contentBefore={<SearchRegular aria-hidden="true" />}
+          onChange={(_, data) => setSearchQuery(data.value)}
+          placeholder="搜索文件与产物"
+          size="small"
+          value={searchQuery}
+        />
         <Tooltip
           content={selectionLocked ? "解除选中文献集锁定" : "锁定选中文献集"}
           positioning="below"
@@ -1098,7 +1164,9 @@ export function LibraryPane({
           <div className="library-resource-context-heading">
             {contextMenu.target.kind === "paper"
               ? contextMenu.target.paper.title
-              : contextMenu.target.folder.name}
+              : contextMenu.target.kind === "artifact"
+                ? contextMenu.target.item.label
+                : contextMenu.target.folder.name}
           </div>
           {contextMenu.target.kind === "paper" ? (
             <>
@@ -1167,6 +1235,27 @@ export function LibraryPane({
                 复制文献标题
               </button>
             </>
+          ) : contextMenu.target.kind === "artifact" ? (
+            <>
+              <button onClick={() => {
+                const target = contextMenu.target;
+                if (target.kind === "artifact") {
+                  onOpenPaperChild?.(target.item, target.paper);
+                }
+                setContextMenu(null);
+              }} role="menuitem" type="button">
+                打开产物
+              </button>
+              <div className="library-resource-context-separator" />
+              <button
+                disabled={!onRenamePaperChild}
+                onClick={() => openOperationDialog("rename", contextMenu.target)}
+                role="menuitem"
+                type="button"
+              >
+                重命名产物…
+              </button>
+            </>
           ) : (
             <>
               <button onClick={() => {
@@ -1230,7 +1319,7 @@ export function LibraryPane({
           >
             <strong>
               {operationDialog.action === "rename"
-                ? `重命名${operationDialog.target.kind === "folder" ? "目录" : "文献"}`
+                ? `重命名${operationDialog.target.kind === "folder" ? "目录" : operationDialog.target.kind === "artifact" ? "产物" : "文献"}`
                 : `移动${operationDialog.target.kind === "folder" ? "目录" : "文献"}`}
             </strong>
             <label>
@@ -1253,7 +1342,9 @@ export function LibraryPane({
             <small>
               当前：{operationDialog.target.kind === "paper"
                 ? operationDialog.target.paper.sourcePath ?? operationDialog.target.paper.title
-                : operationDialog.target.folder.path}
+                : operationDialog.target.kind === "artifact"
+                  ? operationDialog.target.item.label
+                  : operationDialog.target.folder.path}
             </small>
             <div className="library-resource-dialog-actions">
               <button onClick={() => setOperationDialog(null)} type="button">取消</button>

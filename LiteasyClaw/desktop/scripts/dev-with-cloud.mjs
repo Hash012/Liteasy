@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { loadSecretEnvFile } from "../../services/dev-cloud/config.mjs";
 import {
   buildChildEnv,
   buildDesktopViteArgs,
@@ -14,6 +15,7 @@ import {
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(scriptDir, "..");
 const repoRoot = resolve(desktopDir, "..");
+loadSecretEnvFile();
 const cloudHost = resolveRequestedCloudHost();
 const requestedCloudPort = resolveRequestedCloudPort();
 const cloudPort = await findAvailablePort(requestedCloudPort, cloudHost);

@@ -25,19 +25,28 @@ function renderTab(
   onUpdateDocument = vi.fn(),
   onOpenEvidence?: Parameters<typeof ThinReadingTab>[0]["onOpenEvidence"],
   onSyncIntuecho?: Parameters<typeof ThinReadingTab>[0]["onSyncIntuecho"],
-  communityRecommendationState?: ThinReadingCommunityRecommendationState
+  communityRecommendationState?: ThinReadingCommunityRecommendationState,
+  onOpenVisualization?: Parameters<typeof ThinReadingTab>[0]["onOpenVisualization"],
+  figures?: Parameters<typeof ThinReadingTab>[0]["figures"]
 ) {
   return render(
     <ThinReadingTab
       artifactId={document.artifactId}
       communityRecommendationState={communityRecommendationState}
       document={document}
+      figures={figures}
       onOpenEvidence={onOpenEvidence}
+      onOpenVisualization={onOpenVisualization}
       onSyncIntuecho={onSyncIntuecho}
       onUpdateDocument={onUpdateDocument}
       papers={createThinReadingFixture().papers}
     />
   );
+}
+
+function expandIntuecho() {
+  const toggle = screen.queryByRole("button", { name: /^(展开|Expand) Intuecho/ });
+  if (toggle) fireEvent.click(toggle);
 }
 
 function readyCommunityRecommendationState(): ThinReadingCommunityRecommendationState {
@@ -133,6 +142,46 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "深入了解局限" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "回到上一层：总述" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
+  });
+
+  test("offers relationship-network and mind-map hierarchy views without a top Graph View button", () => {
+    const root = makeDocument();
+    const document = advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: {
+        evidence: { externalKnowledge: [], paperEvidence: [] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "实验结果。",
+        withinPaperClosure: true
+      },
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" },
+      title: "实验"
+    });
+    const rootActive = { ...document, activeNodeId: document.rootNodeId };
+    const onUpdateDocument = vi.fn();
+
+    const { container } = renderTab(rootActive, onUpdateDocument);
+    expect(screen.queryByText("Graph View")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "关系网络" }));
+
+    expect(screen.getByLabelText("薄读页面关系图")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "薄读页面网络" })).toBeInTheDocument();
+    expect(screen.getByLabelText("选择要聚焦的薄读层级")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "思维导图" }));
+    expect(screen.getByRole("heading", { name: "薄读层次思维导图" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "思维导图" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("完整思维导图")).toBeInTheDocument();
+    expect(screen.getByText("前两级向右展开，第三级起在父节点下方单列排列")).toBeInTheDocument();
+    expect(container.querySelector(".thin-reading__mindmap-node")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByLabelText("完整思维导图")).getByRole("button", { exact: true, name: "实验" }));
+    expect(onUpdateDocument).toHaveBeenCalledWith(rootActive.artifactId, {
+      ...rootActive,
+      activeNodeId: document.activeNodeId
+    });
+    fireEvent.click(screen.getByRole("button", { name: "收起结构图" }));
+    expect(screen.queryByLabelText("薄读页面关系图")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("选择薄读结构图形式")).toBeInTheDocument();
   });
 
   test("uses a declared omitted-module button as the complete branch topic", async () => {
@@ -441,6 +490,7 @@ describe("ThinReadingTab", () => {
     expect(screen.getByText(/Local identity only/)).toBeInTheDocument();
     expect(globalThis.document.querySelector(".thin-reading__article-meta")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Open evidence 1 for/ })).toHaveTextContent("E1");
+    expandIntuecho();
     expect(screen.getByRole("button", { name: "Collapse Intuecho recommendations" })).toBeInTheDocument();
     expect(screen.getByText("Connect Intuecho to view community shared annotations")).toBeInTheDocument();
     expect(screen.getByText("No annotations yet")).toBeInTheDocument();
@@ -454,13 +504,16 @@ describe("ThinReadingTab", () => {
   test("collapses and restores the Intuecho recommendation rail", () => {
     const document = makeDocument();
     renderTab(document, vi.fn(), undefined, undefined, readyCommunityRecommendationState());
+    expandIntuecho();
 
     fireEvent.click(screen.getByRole("button", { name: "收起 Intuecho 推荐栏" }));
 
     expect(screen.queryByRole("heading", { name: "论坛" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "展开 Intuecho 推荐栏" })).toBeInTheDocument();
+    const floatingTrigger = screen.getByRole("button", { name: "展开 Intuecho 推荐栏" });
+    expect(floatingTrigger).toHaveClass("thin-reading__intuecho-floating");
+    expect(floatingTrigger.closest("aside")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "展开 Intuecho 推荐栏" }));
+    fireEvent.click(floatingTrigger);
 
     expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "收起 Intuecho 推荐栏" })).toBeInTheDocument();
@@ -469,6 +522,7 @@ describe("ThinReadingTab", () => {
   test("shows an empty state only after a connected community request returns no results", () => {
     const document = makeDocument();
     renderTab(document, vi.fn(), undefined, undefined, { recommendations: [], status: "ready" });
+    expandIntuecho();
 
     expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByText("暂无社区推荐")).toBeInTheDocument();
@@ -477,6 +531,7 @@ describe("ThinReadingTab", () => {
   test("keeps the community rail visible when the current paper cannot be matched", () => {
     const document = makeDocument();
     renderTab(document, vi.fn(), undefined, undefined, { recommendations: [], status: "unavailable" });
+    expandIntuecho();
 
     expect(screen.getByRole("heading", { name: "论坛" })).toBeInTheDocument();
     expect(screen.getByText("当前文献仅有本地身份，无法匹配社区共享批注")).toBeInTheDocument();
@@ -493,6 +548,8 @@ describe("ThinReadingTab", () => {
         papers={createThinReadingFixture().papers}
       />
     );
+
+    expandIntuecho();
 
     expect(screen.getByRole("status")).toHaveTextContent("正在加载社区推荐");
 
@@ -637,6 +694,89 @@ describe("ThinReadingTab", () => {
     }));
   });
 
+  test("launches a quick command with structured output requirements from selected text", async () => {
+    const document = makeDocument();
+    const onGenerateBranch = vi.fn(async () => undefined);
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+    const paragraph = screen.getByTestId("thin-reading-summary");
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "被选中的摘要",
+      getRangeAt: () =>
+        ({
+          commonAncestorContainer: paragraph,
+          getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
+        }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(paragraph);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "深入提示（可选）" }), {
+      target: { value: "强调并行化收益" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "将这个算法做成 HTML 动画" }));
+
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document,
+      source: {
+        evidenceIds: ["evidence-attention-self-attention"],
+        excerpt: "被选中的摘要",
+        kind: "selected_text",
+        prompt: "请把这段内容做成一个真正易懂的 HTML 动画：用单文件内联 HTML/CSS/SVG，逐步展示算法关键步骤，只呈现证据支持的状态变化，并配 2-3 句简短说明。\n\n用户补充：强调并行化收益",
+        quickCommand: "html_algorithm_animation",
+        requestedOutput: "html_demo"
+      }
+    }));
+  });
+
+  test("closes the selection menu immediately and locks duplicate generation while the model is running", async () => {
+    const document = makeDocument();
+    let finishGeneration!: () => void;
+    const onGenerateBranch = vi.fn(() => new Promise<void>((resolve) => {
+      finishGeneration = resolve;
+    }));
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+    const paragraph = screen.getByTestId("thin-reading-summary");
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "被选中的摘要",
+      getRangeAt: () => ({
+        commonAncestorContainer: paragraph,
+        getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
+      }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(paragraph);
+
+    const command = screen.getByRole("button", { name: "将这个算法做成 HTML 动画" });
+    fireEvent.click(command);
+    fireEvent.click(command);
+
+    expect(screen.queryByLabelText("快捷命令列表")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("LLM 实时工作窗口")).toBeInTheDocument();
+    expect(screen.getByText(/请求已提交.*请勿重复点击/)).toBeInTheDocument();
+    expect(onGenerateBranch).toHaveBeenCalledTimes(1);
+
+    finishGeneration();
+    await waitFor(() => expect(screen.queryByLabelText("LLM 实时工作窗口")).not.toBeInTheDocument());
+  });
+
   test("does not offer selection deepening for a generation error", () => {
     const document = makeDocument();
     render(
@@ -704,6 +844,7 @@ describe("ThinReadingTab", () => {
         papers={createThinReadingFixture().papers}
       />
     );
+    expandIntuecho();
     const recommendationNote = screen.getByText("社区成员讨论了 self-attention 对并行化的影响。");
 
     vi.spyOn(window, "getSelection").mockReturnValue({
@@ -864,6 +1005,107 @@ describe("ThinReadingTab", () => {
     expect(onGenerateBranch).not.toHaveBeenCalled();
   });
 
+  test("prefers agent-recommended MinerU figures and shows the recommendation reason", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          recommendedFigures: [
+            {
+              evidenceIds: ["evidence-attention-self-attention"],
+              figureId: "figure-b",
+              reason: "先看整体信息流。"
+            },
+            {
+              evidenceIds: ["evidence-attention-self-attention"],
+              figureId: "figure-a",
+              reason: "再看 token 间对齐细节。"
+            }
+          ]
+        }
+      }
+    });
+    const figures = [
+      {
+        alt: "Figure A",
+        dataUrl: "data:image/png;base64,aaa",
+        id: "figure-a",
+        page: 2,
+        sourcePath: "/tmp/figure-a.png",
+        analysis: {
+          description: "局部细节。",
+          importance: "primary" as const,
+          kind: "architecture" as const,
+          placement: "method" as const,
+          selectionReason: "旧启发式理由 A",
+          title: "结构细节图"
+        }
+      },
+      {
+        alt: "Figure B",
+        dataUrl: "data:image/png;base64,bbb",
+        id: "figure-b",
+        page: 3,
+        sourcePath: "/tmp/figure-b.png",
+        analysis: {
+          description: "整体流程。",
+          importance: "supporting" as const,
+          kind: "workflow" as const,
+          placement: "overview" as const,
+          selectionReason: "旧启发式理由 B",
+          title: "整体流程图"
+        }
+      }
+    ];
+
+    const { container } = renderTab(document, vi.fn(), undefined, undefined, undefined, undefined, figures);
+
+    expect(container.querySelectorAll(".thin-reading__figure-embed h4")[0]).toHaveTextContent("整体流程图");
+    expect(container.querySelectorAll(".thin-reading__figure-embed h4")[1]).toHaveTextContent("结构细节图");
+    expect(container.querySelector(".thin-reading__summary-unit .thin-reading__figure-embed")).not.toBeNull();
+    expect(container.querySelector(".thin-reading__visual-evidence")).toBeNull();
+    expect(screen.getByText("模型建议读者先看：先看整体信息流。")).toBeInTheDocument();
+    expect(screen.getByText("模型建议读者先看：再看 token 间对齐细节。")).toBeInTheDocument();
+  });
+
+  test("renders an inline HTML demo and forwards it to the visualization tab", () => {
+    const fixture = createThinReadingFixture();
+    const onOpenVisualization = vi.fn();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          interactiveDemo: {
+            description: "逐步演示 self-attention 如何聚合上下文。",
+            html: "<section>demo</section>",
+            kind: "html",
+            title: "Self-attention 动画"
+          }
+        }
+      }
+    });
+
+    renderTab(document, vi.fn(), undefined, undefined, undefined, onOpenVisualization);
+
+    expect(screen.getByLabelText("HTML Demo：Self-attention 动画")).toBeInTheDocument();
+    expect(screen.getByTitle("Self-attention 动画")).toHaveAttribute("srcdoc", expect.stringContaining("<section>demo</section>"));
+
+    fireEvent.click(screen.getByRole("button", { name: "在独立标签页打开 HTML Demo：Self-attention 动画" }));
+
+    expect(onOpenVisualization).toHaveBeenCalledWith({
+      description: "逐步演示 self-attention 如何聚合上下文。",
+      html: "<section>demo</section>",
+      id: `html-demo:${document.artifactId}:${document.activeNodeId}`,
+      kind: "html_demo",
+      title: "Self-attention 动画"
+    });
+  });
+
   test("saves pending-public annotations locally", () => {
     const document = makeDocument();
     const onUpdateDocument = vi.fn();
@@ -906,6 +1148,7 @@ describe("ThinReadingTab", () => {
     });
     const onSyncIntuecho = vi.fn(async () => undefined);
     renderTab(document, vi.fn(), undefined, onSyncIntuecho);
+    expandIntuecho();
 
     const syncButton = screen.getByRole("button", { name: "同步公开批注" });
     expect(syncButton).toBeEnabled();

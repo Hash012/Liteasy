@@ -17,6 +17,13 @@ export type ThinReadingPaperType =
   | "theoretical"
   | "unknown";
 
+export type ThinReadingQuickCommand =
+  | "html_algorithm_animation"
+  | "html_svg_structure"
+  | "mermaid_causal";
+
+export type ThinReadingRequestedOutput = "explanation" | "html_demo" | "mermaid";
+
 export type ThinReadingNodeSource =
   | { kind: "root_overview" }
   | { kind: "omitted_section"; label: string; sectionKey: string }
@@ -26,6 +33,8 @@ export type ThinReadingNodeSource =
       externalSourceIds?: readonly string[];
       excerpt: string;
       prompt?: string;
+      quickCommand?: ThinReadingQuickCommand;
+      requestedOutput?: ThinReadingRequestedOutput;
     };
 
 export type ThinReadingBranchSource = Exclude<ThinReadingNodeSource, { kind: "root_overview" }>;
@@ -65,7 +74,7 @@ export type ThinReadingEvidenceSpan = {
   page?: number;
   pageTextEnd?: number;
   pageTextStart?: number;
-  textExtraction?: "embedded" | "ocr";
+  textExtraction?: "embedded" | "mineru" | "ocr";
   paperId: string;
   quote: string;
 };
@@ -147,6 +156,47 @@ export type ThinReadingInterpretationPlan = {
   requestedDepth: "deep" | "standard";
 };
 
+export type ThinReadingFigureCandidate = {
+  description?: string;
+  id: string;
+  importance?: "primary" | "reference" | "supporting";
+  kind?: "architecture" | "chart" | "comparison" | "example" | "formula" | "other" | "result" | "table" | "workflow";
+  page: number;
+  placement?: "evidence" | "method" | "overview" | "results";
+  title: string;
+};
+
+export type ThinReadingFigureRecommendation = {
+  evidenceIds: readonly string[];
+  figureId: string;
+  reason: string;
+};
+
+export type ThinReadingInteractiveDemo = {
+  description: string;
+  html: string;
+  kind: "html";
+  title: string;
+};
+
+export type ThinReadingWorkloadAudit = {
+  contextBudgetTokens: number;
+  evidenceCharacters: number;
+  evidenceCount: number;
+  maxConcurrency: 0 | 1 | 2;
+  plannedSubagents: readonly string[];
+  reason: string;
+  strategy: "direct" | "guided" | "parallel";
+};
+
+export type ThinReadingContextAudit = {
+  droppedAncestors: number;
+  droppedClaims: number;
+  droppedEvidenceSpans: number;
+  estimatedTokens: number;
+  tokenBudget: number;
+};
+
 export type ThinReadingClosureState = "inside_paper" | "near_boundary" | "outside_paper";
 
 export type ThinReadingClaim = {
@@ -186,6 +236,7 @@ export type ThinReadingAnchor = {
 // This is deliberately attached to the generated node rather than the transient Agent run.
 // A reader reopening an artifact must be able to inspect how its evidence boundary was chosen.
 export type ThinReadingGenerationAudit = {
+  contextManagement?: ThinReadingContextAudit;
   interpretationPlan?: ThinReadingInterpretationPlan;
   evidenceLoop?: {
     rounds: readonly {
@@ -234,6 +285,7 @@ export type ThinReadingGenerationAudit = {
     repaired: boolean;
     repairReasons: readonly string[];
   };
+  workload?: ThinReadingWorkloadAudit;
   version: "liteasy.thin-reading-agent/v1" | "liteasy.thin-reading-agent/v2";
 };
 
@@ -243,6 +295,11 @@ export type ThinReadingNodeEvidence = {
   externalKnowledge: readonly string[];
   externalSources?: readonly ThinReadingExternalSource[];
   generationAudit?: ThinReadingGenerationAudit;
+  interactiveDemo?: ThinReadingInteractiveDemo;
+  // Mermaid is persisted next to the explanation it clarifies, so a reopened thin-reading
+  // artifact retains both its source diagram and the reader's choice of visualization.
+  mermaid?: string;
+  recommendedFigures?: readonly ThinReadingFigureRecommendation[];
   paperEvidence: readonly string[];
   paperEvidenceSpans?: readonly ThinReadingEvidenceSpan[];
   summarySentences?: readonly ThinReadingSummarySentence[];
@@ -266,6 +323,7 @@ export type ThinReadingAncestorSummary = {
 
 export type ThinReadingGenerationContext = {
   ancestorSummaries?: readonly ThinReadingAncestorSummary[];
+  availableFigures?: readonly ThinReadingFigureCandidate[];
   artifactId: string;
   depth: number;
   paperIds: readonly string[];

@@ -6,7 +6,7 @@ import { OrganizationSidebarPanel } from "../features/organization/OrganizationS
 import { PersonalCenterPanel } from "../features/profile/PersonalCenterPanel";
 import { SettingsPane } from "./SettingsPane";
 import type { AcademicProfile } from "../features/profile/profile.types";
-import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
+import type { AgentCoreCatalogEntry, AgentMemoryEntry } from "../features/agent-core/agentCoreConfig";
 import type { AccountSession } from "../features/account/account.types";
 import type { ImportJob } from "../features/import/import.types";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
@@ -22,6 +22,8 @@ import type { LeftRailView } from "./useLeftRailNavigation";
 export type LeftPaneProps = {
   activePaperId?: string | null;
   academicProfile: AcademicProfile;
+  agentMemories: AgentMemoryEntry[];
+  agentRecentState: string;
   accountSession: AccountSession | null;
   collectionItems: CollectionItem[];
   collectionMessage: string;
@@ -62,6 +64,7 @@ export type LeftPaneProps = {
   onOpenOrganizationDialog: () => void;
   onOpenPaper?: (paperId: string) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
+  onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
   onMoveLibraryFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
   onMoveLibraryPaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
@@ -74,6 +77,8 @@ export type LeftPaneProps = {
   onSelectOrganization?: (organizationId: string) => void;
   onToggleProfileSampling: () => void;
   onUpdateAcademicProfile: (profile: AcademicProfile) => void;
+  onUpdateAgentMemories: (memories: AgentMemoryEntry[]) => void;
+  onUpdateAgentRecentState: (summary: string) => void;
   onToggleSelection: (paperId: string) => void;
   onToggleLock: () => void;
   onUpdateSetting?: (command: UpdateSettingCommand) => void;
@@ -117,6 +122,8 @@ function getPaneHeader(leftRailView: LeftRailView) {
 export function LeftPane({
   activePaperId,
   academicProfile,
+  agentMemories,
+  agentRecentState,
   accountSession,
   collectionItems,
   collectionMessage,
@@ -156,6 +163,7 @@ export function LeftPane({
   onOpenOrganizationDialog,
   onOpenPaper,
   onOpenPaperChild,
+  onRenamePaperChild,
   onRefreshLocalLibrary,
   onMoveLibraryFolder,
   onMoveLibraryPaper,
@@ -168,6 +176,8 @@ export function LeftPane({
   onSelectOrganization,
   onToggleProfileSampling,
   onUpdateAcademicProfile,
+  onUpdateAgentMemories,
+  onUpdateAgentRecentState,
   onToggleSelection,
   onToggleLock,
   onUpdateSetting,
@@ -233,12 +243,16 @@ export function LeftPane({
           accountSession ? (
             <PersonalCenterPanel
               academicProfile={academicProfile}
+              agentMemories={agentMemories}
+              agentRecentState={agentRecentState}
               accountSession={accountSession}
               onClearProfile={onClearProfile}
               onLogout={onLogout}
               onOpenAcademicArchive={onOpenAcademicArchive}
               onToggleProfileSampling={onToggleProfileSampling}
               onUpdateAcademicProfile={onUpdateAcademicProfile}
+              onUpdateAgentMemories={onUpdateAgentMemories}
+              onUpdateAgentRecentState={onUpdateAgentRecentState}
               organizationSummary={organizationSummary}
               profileClearMessage={profileClearMessage}
               profileSamplingEnabled={profileSamplingEnabled}
@@ -306,6 +320,7 @@ export function LeftPane({
             }}
             onOpenPaper={onOpenPaper}
             onOpenPaperChild={onOpenPaperChild}
+            onRenamePaperChild={onRenamePaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}
             onMoveFolder={onMoveLibraryFolder}
             onMovePaper={onMoveLibraryPaper}

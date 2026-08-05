@@ -10,6 +10,8 @@ import type { PdfAnnotation } from "../features/pdf/pdfAnnotationStorage";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
+import type { MineruFigure } from "../features/import/import.types";
+import type { VisualizationTabData } from "../features/visualization/visualization.types";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
@@ -32,6 +34,7 @@ type ReaderPaneProps = {
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
+  onOpenVisualization?: (data: VisualizationTabData) => void;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
   onPostToForum?: (selection: PdfForumSelection) => Promise<void>;
   onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ draftId: string }>;
@@ -43,6 +46,8 @@ type ReaderPaneProps = {
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
   intuechoEndpoint?: string;
+  mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
+  pdfBackground?: string;
   onSaveMarkdownTab?: (artifactId: string) => void;
   onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
   onToggleBottomPane?: () => void;
@@ -77,6 +82,7 @@ export function ReaderPane({
   onPromoteExternalPaperToLibrary,
   onArtifactDynamicAction,
   onOpenEvidence,
+  onOpenVisualization,
   onLoadForumFeed,
   onPostToForum,
   onSyncAnnotationToForum,
@@ -84,6 +90,8 @@ export function ReaderPane({
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
   intuechoEndpoint,
+  mineruFiguresByPaperId,
+  pdfBackground,
   onSaveMarkdownTab,
   onStartAnalysis,
   onToggleBottomPane,
@@ -155,6 +163,7 @@ export function ReaderPane({
             allowServerPdfParsing={allowServerPdfParsing}
             externalKnowledgeEndpoint={externalKnowledgeEndpoint}
             loadPdfSource={loadPdfSource}
+            pdfBackground={pdfBackground}
             onPaperAnnotated={onPaperAnnotated}
             onAddSelectionToConversation={onAddReaderContextToConversation}
             onPostToForum={onPostToForum}
@@ -169,11 +178,13 @@ export function ReaderPane({
                 analysisHint={analysisHint}
                 canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
                 intuechoEndpoint={intuechoEndpoint}
+                mineruFiguresByPaperId={mineruFiguresByPaperId}
                 onDynamicAction={onArtifactDynamicAction}
                 onGenerateThinReadingBranch={onGenerateThinReadingBranch}
                 onOpenExternalFullText={onOpenExternalFullText}
                 onSyncThinReadingAnnotations={onSyncThinReadingAnnotations}
                 onOpenEvidence={onOpenEvidence}
+                onOpenVisualization={onOpenVisualization}
                 onLoadForumFeed={onLoadForumFeed}
                 onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
                 onSaveMarkdownTab={onSaveMarkdownTab}

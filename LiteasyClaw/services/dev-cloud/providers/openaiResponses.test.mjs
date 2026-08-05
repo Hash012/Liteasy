@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import {
   createOpenAIResponsesProvider,
-  createOpenAIResponsesStreamProvider
+  createOpenAIResponsesStreamProvider,
+  isRetryableOpenAIResponsesError
 } from "./openaiResponses.mjs";
 
 test("posts to the OpenAI Responses API and extracts text output", async () => {
@@ -89,6 +90,40 @@ test("requests strict JSON Schema output when an artifact supplies an output for
       type: "json_schema"
     }
   });
+});
+
+test("passes image input and the configured high reasoning effort to a Responses-compatible endpoint", async () => {
+  let requestBody;
+  const provider = createOpenAIResponsesProvider({
+    apiKey: "sk-test",
+    fetchImpl: async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return {
+        json: async () => ({ output_text: "{}" }),
+        ok: true,
+        status: 200
+      };
+    },
+    reasoningEffort: "high"
+  });
+
+  await provider({
+    input: [{
+      content: [
+        { text: "Inspect this figure", type: "input_text" },
+        { detail: "high", image_url: "data:image/png;base64,AA==", type: "input_image" }
+      ],
+      role: "user"
+    }],
+    model: "gpt-5.6-terra"
+  });
+
+  assert.deepEqual(requestBody.input[0].content[1], {
+    detail: "high",
+    image_url: "data:image/png;base64,AA==",
+    type: "input_image"
+  });
+  assert.deepEqual(requestBody.reasoning, { effort: "high" });
 });
 
 test("retries once without schema fields when an OpenAI-compatible endpoint rejects them", async () => {
@@ -211,6 +246,71 @@ test("retries transient 503 responses before returning a live answer", async () 
 
   assert.equal(await provider({ model: "gpt-5.5", prompt: "test" }), "recovered");
   assert.equal(attempts, 3);
+});
+
+test("treats Cloudflare 520, 522, and 524 responses as retryable", () => {
+  for (const status of [520, 522, 524]) {
+    assert.equal(isRetryableOpenAIResponsesError({ status }), true);
+  }
+});
+
+test("retries a Cloudflare 524 response before returning a live answer", async () => {
+  let attempts = 0;
+  const provider = createOpenAIResponsesProvider({
+    apiKey: "sk-test",
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return {
+          body: { cancel: async () => undefined },
+          json: async () => ({ error: { message: "upstream timeout" } }),
+          ok: false,
+          status: 524
+        };
+      }
+      return {
+        json: async () => ({ output_text: "recovered" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  assert.equal(await provider({ model: "gpt-5.6-terra", prompt: "test" }), "recovered");
+  assert.equal(attempts, 2);
+});
+
+test("drops optional Responses extensions after a compatible proxy returns generic 502 errors", async () => {
+  const requests = [];
+  const provider = createOpenAIResponsesProvider({
+    apiKey: "sk-test",
+    reasoningEffort: "high",
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body);
+      requests.push(body);
+      if (body.reasoning || body.text?.format) {
+        return {
+          body: { cancel: async () => undefined },
+          json: async () => ({ error: "openai_error" }),
+          ok: false,
+          status: 502
+        };
+      }
+      return {
+        json: async () => ({ output_text: "兼容降级后恢复" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  assert.equal(await provider({
+    model: "gpt-5.6-terra",
+    outputFormat: { name: "structured", schema: { type: "object" }, strict: true },
+    prompt: "test"
+  }), "兼容降级后恢复");
+  assert.equal(requests.some((body) => !body.reasoning && body.text?.format), true);
+  assert.equal(requests.some((body) => !body.reasoning && !body.text), true);
 });
 
 test("yields output_text deltas from the OpenAI Responses SSE stream", async () => {

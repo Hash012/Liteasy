@@ -2034,6 +2034,13 @@
           "externalKnowledge": [],
           "externalSources": [],
           "generationAudit": {
+            "contextManagement": {
+              "droppedAncestors": 0,
+              "droppedClaims": 0,
+              "droppedEvidenceSpans": 0,
+              "estimatedTokens": 1020,
+              "tokenBudget": 7000
+            },
             "interpretationPlan": {
               "discourseMoves": [
                 "先给出核心判断",
@@ -2106,7 +2113,7 @@
                 }
               ],
               "stopReason": "observation_sufficient",
-              "stopReasonDetail": "已观察证据足以支撑核心机制、结果和限定。"
+              "stopReasonDetail": "已观察证据足以支撑该方法论文的核心主张、以动作空间敏感度驱动的按通道位宽分配机制、决定性量化结果，以及校准集规模的稳定性限定。"
             },
             "evidencePlan": {
               "focus": [
@@ -2241,8 +2248,8 @@
               }
             ],
             "model": {
-              "id": "deepseek-v4-flash",
-              "provider": "deepseek"
+              "id": "gpt-5.6-terra",
+              "provider": "openai"
             },
             "qualityGate": {
               "attempts": 2,
@@ -2253,6 +2260,7 @@
             },
             "version": "liteasy.thin-reading-agent/v2"
           },
+          "mermaid": "flowchart TD\n  A[逐通道候选位宽] --> B[动作空间敏感度]\n  B --> C[全局位宽分配]\n  C --> D[混合精度与剪枝]\n  D --> E[受限位宽预算]",
           "paperEvidence": [
             "evidence-3-61facdb1-9638-41c3-b7bd-048e69c834f3",
             "evidence-6-6c2140e7-0a71-40c6-8475-19fcf6969e8d",
@@ -2417,6 +2425,11 @@
             "id": "section-15d6c6e1",
             "label": "消融与对比",
             "sectionKey": "ablation"
+          },
+          {
+            "id": "section-30048311",
+            "label": "局限与边界",
+            "sectionKey": "limitations"
           }
         ],
         "paperType": "experimental",

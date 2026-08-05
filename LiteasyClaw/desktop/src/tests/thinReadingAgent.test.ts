@@ -1064,9 +1064,8 @@ describe("thinReadingAgent", () => {
     }), options)).not.toThrow();
   });
 
-  test("rejects an overlong Chinese summary even when its JSON and evidence references are valid", () => {
-    const firstSentence = "甲".repeat(270);
-    const secondSentence = "乙".repeat(270);
+  test("accepts a long Chinese summary when every sentence remains evidence-grounded", () => {
+    const sentences = ["甲", "乙", "丙", "丁"].map((character) => `${character.repeat(330)}。`);
     expect(() => parseThinReadingModelSeed(JSON.stringify({
       externalKnowledge: [],
       claims: [],
@@ -1074,26 +1073,18 @@ describe("thinReadingAgent", () => {
       paperEvidence: ["evidence-survey-taxonomy"],
       paperType: "survey",
       recommendations: [],
-      summary: `${firstSentence}。${secondSentence}。`,
-      summarySentences: [
-        {
-          evidenceIds: ["evidence-survey-taxonomy"],
-          externalKnowledge: [],
-          status: "grounded",
-          text: `${firstSentence}。`
-        },
-        {
-          evidenceIds: ["evidence-survey-taxonomy"],
-          externalKnowledge: [],
-          status: "grounded",
-          text: `${secondSentence}。`
-        }
-      ],
+      summary: sentences.join(""),
+      summarySentences: sentences.map((text) => ({
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      })),
       withinPaperClosure: true
     }), {
       analysisEvidence: prepared.evidence,
       targetLanguage: "zh-CN"
-    })).toThrow("中文总述过长");
+    })).not.toThrow();
   });
 
   test("rejects a newline-separated summary instead of preserving a section-list presentation", () => {

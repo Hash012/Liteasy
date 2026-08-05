@@ -55,10 +55,21 @@ async function openOrganizationPanel(user: ReturnType<typeof userEvent.setup>) {
 async function openLibraryPanel(user: ReturnType<typeof userEvent.setup>) {
   const existingLibrary = screen.queryByLabelText("我的文献库投放区");
   if (existingLibrary && !existingLibrary.closest("[hidden]")) {
+    await expandLibraryCloudSections(user);
     return existingLibrary;
   }
   await user.click(screen.getByRole("button", { name: "文献库" }));
+  await expandLibraryCloudSections(user);
   return screen.getByLabelText("我的文献库投放区");
+}
+
+async function expandLibraryCloudSections(user: ReturnType<typeof userEvent.setup>) {
+  for (const label of ["展开收藏", "展开关联推荐"]) {
+    const toggle = screen.queryByRole("button", { name: label });
+    if (toggle) {
+      await user.click(toggle);
+    }
+  }
 }
 
 async function openProfilePanel(user: ReturnType<typeof userEvent.setup>) {
@@ -820,6 +831,7 @@ test("renders artifact content from imported selected-document chunks", async ()
   expect(
     screen.getAllByText("Survey of Vector Database Management Systems").length
   ).toBeGreaterThan(1);
+  await user.click(screen.getByRole("button", { name: "展开：关键名词与概念" }));
   expect(screen.getByText("向量数据库管理系统")).toBeInTheDocument();
   expect(screen.getByText("向量索引")).toBeInTheDocument();
 
@@ -1974,6 +1986,7 @@ test("drags a recommendation into local collection and restores it on next rende
     />
   );
 
+  await expandLibraryCloudSections(user);
   const restoredCollectionZone = screen.getByLabelText("收藏投放区");
   await waitFor(() => {
     expect(
@@ -2092,6 +2105,7 @@ test("drags collected and recommended papers into the local library without dupl
 
   await loginThroughDialog(user);
   await expectStoredAccountSession();
+  await expandLibraryCloudSections(user);
 
   await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
@@ -2294,6 +2308,7 @@ test("clears visible recommendation cache on user request", async () => {
 
   await loginThroughDialog(user);
   await expectStoredAccountSession();
+  await expandLibraryCloudSections(user);
 
   await user.click(screen.getByLabelText("Survey of Vector Database Management Systems"));
   await waitFor(() => {
@@ -2800,6 +2815,16 @@ test("syncs visible workspace document metadata after cloud account login", asyn
         id: "demo-3",
         sourcePath: "/papers/acorn-vector-search.pdf",
         title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
+      },
+      {
+        id: "local-qvla",
+        sourcePath: "/home/tianjiaming/LiteasyLibrary/papers/QVLA.pdf",
+        title: "QVLA"
+      },
+      {
+        id: "local-compactflash-ftl",
+        sourcePath: "/home/tianjiaming/LiteasyLibrary/papers/A_space-efficient_flash_translation_layer_for_CompactFlash_systems.pdf",
+        title: "A space-efficient flash translation layer for CompactFlash systems"
       }
     ],
     sessionId: "demo-session-1",
@@ -6004,11 +6029,11 @@ test("opens the personal center in the left rail and toggles user profile sampli
   expect(within(leftPane).getByText("Liteasy Researcher")).toBeInTheDocument();
   expect(within(leftPane).getByText("Liteasy AI Reading Lab")).toBeInTheDocument();
   expect(within(leftPane).getByText("性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
-  expect(within(leftPane).getByText("已阅读 3 篇")).toBeInTheDocument();
+  expect(within(leftPane).getByText("已阅读 5 篇")).toBeInTheDocument();
 
   await user.click(within(leftPane).getByRole("button", { name: "开启个性化行为信号" }));
 
-  expect(within(leftPane).getByText("已阅读 3 篇")).toBeInTheDocument();
+  expect(within(leftPane).getByText("已阅读 5 篇")).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "学术档案" })).toBeInTheDocument();
   expect(within(leftPane).getByRole("button", { name: "清空学术档案和个性化数据" })).toBeInTheDocument();
 }, 10000);

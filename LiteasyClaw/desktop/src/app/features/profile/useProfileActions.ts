@@ -13,6 +13,11 @@ import {
   loadAcademicProfile,
   saveAcademicProfile
 } from "./profileStorage";
+import {
+  loadAgentPersonalization,
+  saveAgentPersonalization,
+  type AgentPersonalization
+} from "../agent-core/agentPersonalization";
 
 type UseProfileActionsInput = {
   accountSession?: AccountSession | null;
@@ -43,6 +48,25 @@ export function useProfileActions({
   );
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
+  const [agentPersonalization, setAgentPersonalization] = useState<AgentPersonalization>(
+    loadAgentPersonalization
+  );
+
+  function updateAgentMemories(memories: AgentPersonalization["memories"]) {
+    setAgentPersonalization((current) => {
+      const next = { ...current, memories: memories.map((memory) => ({ ...memory })) };
+      saveAgentPersonalization(next);
+      return next;
+    });
+  }
+
+  function updateAgentRecentStateOverride(recentStateOverride: string) {
+    setAgentPersonalization((current) => {
+      const next = { ...current, recentStateOverride: recentStateOverride.slice(0, 1200) };
+      saveAgentPersonalization(next);
+      return next;
+    });
+  }
   const [personalizationSummary, setPersonalizationSummary] = useState<string | undefined>();
   const [personalizationVersion, setPersonalizationVersion] = useState(0);
   const [profileTags, setProfileTags] = useState<UserTag[]>([]);
@@ -211,6 +235,8 @@ export function useProfileActions({
   return {
     academicArchiveOpen,
     academicProfile,
+    agentMemories: agentPersonalization.memories,
+    agentRecentStateOverride: agentPersonalization.recentStateOverride,
     assistantProfileSummary: profileSamplingEnabled
       ? [buildAcademicProfileAssistantSummary(academicProfile), personalizationSummary]
           .filter((value): value is string => Boolean(value))
@@ -229,6 +255,8 @@ export function useProfileActions({
     profileTags,
     recordPersonalizationSignal,
     toggleProfileSampling,
+    updateAgentMemories,
+    updateAgentRecentStateOverride,
     updateAcademicProfile
   };
 }

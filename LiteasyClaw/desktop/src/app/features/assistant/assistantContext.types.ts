@@ -3,6 +3,5 @@ export type ReaderConversationContext = {
   page: number;
   paperId?: string;
   paperTitle?: string;
-  source: "pdf_selection";
+  source: "pdf_selection" | "extracted_text" | "figures";
 };
-

@@ -54,6 +54,41 @@ test("injects enabled academic profile details into the core prompt context", ()
   );
 });
 
+test("reads edited memories and recent user state for each new turn", () => {
+  let memories = [{
+    id: "user-focus",
+    importance: "高" as const,
+    namespace: "local-user",
+    summary: "优先用清晰的中文解释生物信息学论文。",
+    type: "偏好" as const
+  }];
+  let recentState = "用户正在比较两篇基因组学论文，并已锁定文献集。";
+  const session = createAgentCoreSession(undefined, {
+    getMemories: () => memories,
+    getUserStateSummary: () => recentState
+  });
+
+  const first = session.prepareTurn({ message: "帮我解释生物信息学论文", mode: "qa" });
+  expect(first.ok).toBe(true);
+  if (!first.ok) throw new Error("expected prepared turn");
+  expect(first.turn.runtimeContext.prompt.memorySummary).toContain("生物信息学论文");
+  expect(first.turn.runtimeContext.promptText).toContain("用户正在比较两篇基因组学论文");
+
+  memories = [{
+    id: "user-focus",
+    importance: "高",
+    namespace: "local-user",
+    summary: "优先用英文给出可复现实验步骤。",
+    type: "偏好"
+  }];
+  recentState = "用户已切换到实验复现任务。";
+  const second = session.prepareTurn({ message: "给我实验步骤", mode: "qa" });
+  expect(second.ok).toBe(true);
+  if (!second.ok) throw new Error("expected prepared turn");
+  expect(second.turn.runtimeContext.prompt.memorySummary).toContain("可复现实验步骤");
+  expect(second.turn.runtimeContext.promptText).toContain("用户已切换到实验复现任务");
+});
+
 test("blocks the same failed request after two failed observations", () => {
   const session = createAgentCoreSession();
 

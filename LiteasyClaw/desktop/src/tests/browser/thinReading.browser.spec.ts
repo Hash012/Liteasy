@@ -9,7 +9,7 @@ test("keeps thin-reading prose and evidence markers readable on desktop", async 
   await expect(evidenceMarker).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解实验" })).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解局限" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Intuecho" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "论坛" })).toBeVisible();
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
   const fontSizes = await evidenceMarker.evaluate((marker) => {
     const summaryFontSize = Number.parseFloat(getComputedStyle(marker.closest("[data-testid='thin-reading-summary']")!).fontSize);
@@ -27,7 +27,7 @@ test("keeps the community recommendation rail visible without a configured sourc
   await expect(summary).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解实验" })).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解局限" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Intuecho" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "论坛" })).toBeVisible();
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page).toHaveScreenshot("thin-reading-mobile.png", { fullPage: true });
@@ -39,6 +39,7 @@ test("keeps generation progress visible and prevents duplicate branch starts", a
 
   await expect(page.getByText("核验薄读证据", { exact: true })).toBeVisible();
   await expect(page.getByText("正在核验句级证据映射", { exact: true })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "LLM 实时工作窗口" })).toBeVisible();
   const progressbar = page.getByRole("progressbar", { name: "薄读 Agent 进度" });
   await expect(progressbar).toHaveAttribute("aria-valuenow", "64");
   await expect(page.getByRole("button", { name: "查看已生成的下一层页面" })).toBeDisabled();
@@ -106,6 +107,60 @@ test("renders the community recommendation empty state for the local thin-readin
   await page.goto("/?thin-reading-fixture");
   await expect(page.locator(".thin-reading__intuecho")).toHaveCount(1);
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
+});
+
+test("switches thin-reading graph forms and reclaims the collapsed recommendation column", async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto("/?thin-reading-fixture");
+
+  await expect(page.getByText("Graph View", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "收起 Intuecho 推荐栏" }).click();
+  await expect(page.locator(".thin-reading__intuecho")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "展开 Intuecho 推荐栏" })).toBeVisible();
+
+  const collapsedLayout = await page.locator(".thin-reading__body").evaluate((element) => ({
+    columns: getComputedStyle(element).gridTemplateColumns,
+    width: element.getBoundingClientRect().width
+  }));
+  expect(collapsedLayout.columns.trim().split(/\s+/)).toHaveLength(1);
+  expect(collapsedLayout.width).toBeLessThanOrEqual(901);
+
+  await page.getByRole("button", { name: "关系网络" }).click();
+  await expect(page.getByRole("heading", { name: "薄读页面网络" })).toBeVisible();
+  await page.getByRole("button", { name: "思维导图" }).click();
+  await expect(page.getByRole("heading", { name: "薄读层次思维导图" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "思维导图" })).toHaveAttribute("aria-pressed", "true");
+  const mindmapNode = page.locator(".thin-reading__graph.is-mindmap .thin-reading__mindmap-node").first();
+  await expect(mindmapNode).toBeVisible();
+  expect((await mindmapNode.boundingBox())?.width).toBeGreaterThan(160);
+
+  await page.getByRole("button", { name: "收起结构图" }).click();
+  await expect(page.getByRole("group", { name: "选择薄读结构图形式" })).toBeVisible();
+});
+
+test("keeps deep mind-map branches in columns and copies a dragged subtree into a split pane", async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto("/?thin-reading-mindmap-fixture");
+  await page.getByRole("button", { name: "思维导图" }).click();
+
+  const depthZero = page.locator('[data-mindmap-depth="0"]').first();
+  const depthOne = page.locator('[data-mindmap-depth="1"]').first();
+  const depthTwo = page.locator('[data-mindmap-depth="2"]').first();
+  const formulaNode = page.locator('[data-mindmap-depth="4"] > .thin-reading__mindmap-node').first();
+  await expect(depthZero).toHaveClass(/is-horizontal/);
+  await expect(depthOne).toHaveClass(/is-horizontal/);
+  await expect(depthTwo).toHaveClass(/is-vertical/);
+  await expect(formulaNode.locator(".katex").first()).toBeVisible();
+
+  const primaryScroll = page.getByTestId("mindmap-primary-scroll");
+  await expect(primaryScroll).toHaveCSS("overflow-x", "auto");
+  await expect(primaryScroll).toHaveCSS("overflow-y", "auto");
+  await formulaNode.dragTo(page.getByRole("region", { name: "拖到此处创建对照分栏" }));
+
+  const split = page.getByRole("region", { name: /对照阅读：累计动作敏感度/ });
+  await expect(split).toBeVisible();
+  await expect(page.getByTestId("mindmap-split-scroll")).toHaveCSS("overflow-y", "auto");
+  await expect(page.locator('[data-mindmap-depth="4"]')).toHaveCount(2);
 });
 
 test("keeps external source markers selectable for annotation but not deeper reading", async ({ page }) => {
@@ -193,7 +248,7 @@ test("anchors the PDF selection menu to the real selected text", async ({ page }
     timeout: 90_000
   }).toBeGreaterThan(20);
 
-  const selectionRect = await textLayer.evaluate((element) => {
+  await textLayer.evaluate((element) => {
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     let node = walker.nextNode();
     while (node && !(node.textContent?.trim())) node = walker.nextNode();
@@ -204,12 +259,16 @@ test("anchors the PDF selection menu to the real selected text", async ({ page }
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
-    const rect = range.getBoundingClientRect();
     element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-    return { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top };
   });
   const menu = page.getByLabel("选中文本批注菜单");
   await expect(menu).toBeVisible();
+  const selectionRect = await page.evaluate(() => {
+    const range = window.getSelection()?.getRangeAt(0);
+    if (!range) throw new Error("PDF selection was cleared before the menu rendered.");
+    const rect = range.getBoundingClientRect();
+    return { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top };
+  });
   const menuRect = await menu.boundingBox();
   expect(menuRect).not.toBeNull();
   expect(Math.abs(

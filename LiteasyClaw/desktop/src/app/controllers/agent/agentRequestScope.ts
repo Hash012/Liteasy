@@ -53,9 +53,19 @@ function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | und
   if (source.kind === "selected_text") {
     const evidenceIds = source.evidenceIds;
     const externalSourceIds = source.externalSourceIds;
+    const expectedOutput = source.quickCommand === "mermaid_causal"
+      ? "mermaid"
+      : source.quickCommand === "html_algorithm_animation" || source.quickCommand === "html_svg_structure"
+        ? "html_demo"
+        : undefined;
     if (
       typeof source.excerpt !== "string" || source.excerpt.trim().length === 0 || source.excerpt.length > 1_600 ||
       (source.prompt !== undefined && (typeof source.prompt !== "string" || source.prompt.length > 600)) ||
+      (source.quickCommand !== undefined && source.quickCommand !== "html_algorithm_animation" &&
+        source.quickCommand !== "html_svg_structure" && source.quickCommand !== "mermaid_causal") ||
+      (source.requestedOutput !== undefined && source.requestedOutput !== "explanation" &&
+        source.requestedOutput !== "html_demo" && source.requestedOutput !== "mermaid") ||
+      (expectedOutput !== undefined && source.requestedOutput !== expectedOutput) ||
       (evidenceIds !== undefined && (!isStringArray(evidenceIds) || evidenceIds.length > 12 || evidenceIds.some((id) => id.trim().length === 0 || id.length > 160))) ||
       (externalSourceIds !== undefined && (!isStringArray(externalSourceIds) || externalSourceIds.length > 12 || externalSourceIds.some((id) => id.trim().length === 0 || id.length > 180)))
     ) {
@@ -66,10 +76,52 @@ function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | und
       ...(externalSourceIds?.length ? { externalSourceIds: [...new Set(externalSourceIds)] } : {}),
       excerpt: source.excerpt.trim(),
       kind: "selected_text",
-      ...(source.prompt?.trim() ? { prompt: source.prompt.trim() } : {})
+      ...(source.prompt?.trim() ? { prompt: source.prompt.trim() } : {}),
+      ...(source.quickCommand ? { quickCommand: source.quickCommand } : {}),
+      ...(source.requestedOutput ? { requestedOutput: source.requestedOutput } : {})
     };
   }
   return undefined;
+}
+
+function normalizeAvailableFigures(
+  value: unknown
+): ThinReadingGenerationContext["availableFigures"] {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const boundedValue = value.slice(0, 24);
+  const figures = boundedValue.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const figure = item as NonNullable<ThinReadingGenerationContext["availableFigures"]>[number];
+    if (
+      typeof figure.id !== "string" || !figure.id.trim() || figure.id.length > 180 ||
+      typeof figure.title !== "string" || !figure.title.trim() || figure.title.length > 240 ||
+      typeof figure.page !== "number" || !Number.isFinite(figure.page) || figure.page < 1 ||
+      (figure.description !== undefined && (typeof figure.description !== "string" || figure.description.length > 600)) ||
+      (figure.importance !== undefined && figure.importance !== "primary" &&
+        figure.importance !== "supporting" && figure.importance !== "reference") ||
+      (figure.kind !== undefined && figure.kind !== "architecture" && figure.kind !== "chart" &&
+        figure.kind !== "comparison" && figure.kind !== "example" && figure.kind !== "formula" &&
+        figure.kind !== "result" && figure.kind !== "table" && figure.kind !== "workflow" &&
+        figure.kind !== "other") ||
+      (figure.placement !== undefined && figure.placement !== "overview" &&
+        figure.placement !== "evidence" && figure.placement !== "method" &&
+        figure.placement !== "results")
+    ) {
+      return [];
+    }
+    return [{
+      description: figure.description?.trim(),
+      id: figure.id.trim(),
+      importance: figure.importance,
+      kind: figure.kind,
+      page: Math.trunc(figure.page),
+      placement: figure.placement,
+      title: figure.title.trim()
+    }];
+  });
+  return figures.length === boundedValue.length ? figures : undefined;
 }
 
 function normalizeAncestorSummaries(value: unknown): ThinReadingAncestorSummary[] | undefined {
@@ -293,6 +345,7 @@ export function getAgentRequestThinReadingContext(
   }
   return {
     ancestorSummaries: normalizeAncestorSummaries(candidate.ancestorSummaries),
+    availableFigures: normalizeAvailableFigures(candidate.availableFigures),
     artifactId: candidate.artifactId,
     depth: candidate.depth,
     paperIds: [...candidate.paperIds],

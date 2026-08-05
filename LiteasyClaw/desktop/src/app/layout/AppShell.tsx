@@ -1,11 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
-import type { ImportJob } from "../features/import/import.types";
+import type { ImportJob, MineruFigure } from "../features/import/import.types";
+import { extractMineruPdfResources } from "../features/import/mineruPdfClient";
+import { extractImportedChunksForPaper } from "../features/import/importFixtures";
+import { PaperResourceTab } from "../features/import/PaperResourceTab";
+import type { PaperResourceKind } from "../features/import/paperResource.types";
+import { VisualizationTab } from "../features/visualization/VisualizationTab";
+import type { VisualizationTabData } from "../features/visualization/visualization.types";
+import type { RetrievalChunk } from "../features/retrieval/retrieval.types";
 import { cloneSettingsState } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
+import { resolvePdfReadingBackground } from "../features/settings/viewSettings";
 import { useProfileActions } from "../features/profile/useProfileActions";
 import {
   createAcademicProfileExport,
@@ -85,13 +93,14 @@ import { DockRegion } from "../features/dock/DockRegion";
 import { useDockLayout } from "../features/dock/useDockLayout";
 import type { DockItemId, DockRegionId } from "../features/dock/dock.types";
 import { DockLayoutControls } from "./DockLayoutControls";
-import { DocumentPdfRegular } from "@fluentui/react-icons";
+import { DocumentPdfRegular, DocumentTextRegular, ImageMultipleRegular } from "@fluentui/react-icons";
 import {
   createGeneratedThemeStyle,
   type GeneratedThemeInput
 } from "../features/theme/generatedTheme";
 import { useAssistantAgentController } from "../controllers/agent/useAssistantAgentController";
 import { runAgentArtifactAnalysis } from "../controllers/agent/runAgentArtifactAnalysis";
+import { usePaperTranslationController } from "../controllers/usePaperTranslationController";
 import { getDefaultModelForProvider } from "../features/models/modelPolicy";
 import type { AcademicProfileTransport } from "../features/profile/academicProfileClient";
 
@@ -115,6 +124,20 @@ type RuntimeTheme =
   | { kind: "default" }
   | { kind: "preset"; preset: "playful" }
   | { kind: "generated"; theme: GeneratedThemeInput };
+
+type OpenPaperResource = {
+  kind: PaperResourceKind;
+  paperId: string;
+};
+
+type PaperMineruResources = {
+  figures: MineruFigure[];
+  textChunks: RetrievalChunk[];
+};
+
+function paperResourceTabId(resource: OpenPaperResource) {
+  return `paper-resource-${resource.kind}-${resource.paperId}`;
+}
 
 export function AppShell({
   accountTransport,
@@ -180,6 +203,10 @@ export function AppShell({
   >({});
   const [openReaderPaperIds, setOpenReaderPaperIds] = useState<string[]>([]);
   const [activeReaderPaperId, setActiveReaderPaperId] = useState<string | null>(null);
+  const [openPaperResources, setOpenPaperResources] = useState<OpenPaperResource[]>([]);
+  const [activePaperResourceId, setActivePaperResourceId] = useState<string | null>(null);
+  const [openVisualizations, setOpenVisualizations] = useState<VisualizationTabData[]>([]);
+  const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const [readerEvidenceTarget, setReaderEvidenceTarget] = useState<PdfEvidenceTarget | null>(null);
   const [registrationWelcomeMessageId, setRegistrationWelcomeMessageId] = useState(0);
   const readerEvidenceRequestRef = useRef(0);
@@ -194,6 +221,7 @@ export function AppShell({
   });
   const workspaceState = workspaceSelection.model.workspaceState;
   const workspaceLabel = workspaceSelection.model.workspaceLabel;
+  const workspacePaperIdentityKey = workspaceState.papers.map((paper) => paper.id).join("\u0000");
   const setWorkspaceLabel = workspaceSelection.actions.setWorkspaceLabel;
   const setWorkspaceState = workspaceSelection.actions.setWorkspaceState;
   const [settingsState, setSettingsState] = useState<SettingsState>(() =>
@@ -205,6 +233,7 @@ export function AppShell({
       ? settingsState["models.cloud_proxy_endpoint"]
       : resolveLocalDevCloudEndpoint();
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
+  const savedMineruResourcesRef = useRef<Record<string, PaperMineruResources>>({});
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏 AI 按钮启动分析。"
   );
@@ -213,6 +242,45 @@ export function AppShell({
     onSettingsChanged: (nextSettings) => setSettingsState(cloneSettingsState(nextSettings)),
     settingsStore: settingsStoreRef.current
   });
+  const paperTranslation = usePaperTranslationController({
+    modelTransport,
+    settingsStore: settingsStoreRef.current
+  });
+  const loadPaperPdfBytes = useCallback(async (sourcePath: string) => {
+    const hasTauriInvoke = typeof window !== "undefined" &&
+      typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function";
+    if (hasTauriInvoke) {
+      return readLocalLibraryPdf(sourcePath);
+    }
+
+    // Built-in browser fixtures stay on Vite. User-library PDFs go through the
+    // loopback service, which enforces the same LiteasyLibrary boundary as Tauri.
+    if (/^\/(?:papers|fixtures)\//.test(sourcePath)) {
+      const response = await fetch(sourcePath);
+      if (!response.ok) {
+        throw new Error(`无法读取内置 PDF：HTTP ${response.status}`);
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    }
+    const configuredEndpoint = settingsState["models.cloud_proxy_endpoint"];
+    const endpoint = configuredEndpoint.startsWith("http")
+      ? configuredEndpoint
+      : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv);
+    const response = await fetch(
+      `${endpoint.replace(/\/$/, "")}/v1/local-library/pdf?path=${encodeURIComponent(sourcePath)}`
+    );
+    if (!response.ok) {
+      let message = `无法读取本地 PDF：HTTP ${response.status}`;
+      try {
+        const payload = await response.json() as { message?: string };
+        message = payload.message ?? message;
+      } catch {
+        // Keep the transport-level error when the response cannot be decoded.
+      }
+      throw new Error(message);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }, [localDevCloudEnv, settingsState]);
   const leftRail = useLeftRailNavigation();
   function openDockedLeftRailView(view: LeftRailView) {
     leftRail.setLeftRailView(view);
@@ -223,12 +291,34 @@ export function AppShell({
     }
   }
   const workspaceActions = useWorkspaceActions({
+    extractPaperResources: (paper) => {
+      const savedMaterial = savedMineruResourcesRef.current[paper.id];
+      if (savedMaterial) {
+        return Promise.resolve({
+          chunks: savedMaterial.textChunks,
+          figures: savedMaterial.figures
+        });
+      }
+      // Built-in samples retain the local PDF.js path that keeps the offline/demo
+      // workspace instant. Managed library files use MinerU for exact text and
+      // high-resolution figures.
+      if (/^\/(?:papers|fixtures)\//.test(paper.sourcePath ?? "")) {
+        return extractImportedChunksForPaper(paper, {
+          loadPdfSource: loadPaperPdfBytes,
+          ocrLanguage: settingsState["import.ocr_language"]
+        }).then((chunks) => ({ chunks, figures: [] }));
+      }
+      return extractMineruPdfResources({
+        endpoint: settingsState["models.cloud_proxy_endpoint"].startsWith("http")
+          ? settingsState["models.cloud_proxy_endpoint"]
+          : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv),
+        loadPdfSource: loadPaperPdfBytes,
+        paper
+      });
+    },
     importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
-    loadPdfSource: typeof window !== "undefined" &&
-      typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
-      ? readLocalLibraryPdf
-      : undefined,
+    loadPdfSource: loadPaperPdfBytes,
     moveLocalLibraryResource,
     persistDroppedPdfFiles: typeof window !== "undefined" &&
       typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function"
@@ -240,6 +330,9 @@ export function AppShell({
     ocrLanguage: settingsState["import.ocr_language"],
     workspaceStore: workspaceStoreRef.current
   });
+  const mineruFiguresByPaperId = Object.fromEntries(
+    Object.entries(importJobsByDocumentId).map(([paperId, job]) => [paperId, job.mineruFigures ?? []])
+  ) as Record<string, MineruFigure[]>;
   const externalPapers = useExternalPaperController({
     addExternalPdfToLibrary: workspaceActions.addExternalPdfToLibrary,
     endpoint: externalKnowledgeEndpoint,
@@ -265,6 +358,7 @@ export function AppShell({
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getImportedChunksForPaperId: (paperId) =>
       importStoreRef.current.getParsedChunksByDocumentId(paperId),
+    getMineruFiguresForPaperId: (paperId) => mineruFiguresByPaperId[paperId] ?? [],
     getIntuechoEndpoint: () => settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"],
     getModelDiagnosticContext: () => {
       const provider = settingsStoreRef.current.getState()["models.default_provider"];
@@ -284,6 +378,87 @@ export function AppShell({
       agentArtifactRunnerRef.current(artifactType, onProgress, options)
   });
   const { artifactCatalog, artifactTabs, artifactTasks } = artifactWorkflow.model;
+  const savedMineruResourcesByPaperId = workspaceState.papers.reduce<Record<string, PaperMineruResources>>(
+    (resources, paper) => {
+      const artifact = artifactCatalog.find((candidate) => {
+        const hasMineruMaterial = (candidate.figures?.length ?? 0) > 0 ||
+          (candidate.mineruTextChunks?.length ?? 0) > 0;
+        return hasMineruMaterial && candidate.papers?.some((sourcePaper) => (
+          sourcePaper.id === paper.id ||
+          sourcePaper.title === paper.title ||
+          sourcePaper.title.startsWith(`${paper.title}：`) ||
+          paper.title.startsWith(`${sourcePaper.title}：`)
+        ));
+      });
+      if (artifact) {
+        resources[paper.id] = {
+          figures: artifact.figures ?? [],
+          textChunks: artifact.mineruTextChunks ?? []
+        };
+      }
+      return resources;
+    },
+    {}
+  );
+  savedMineruResourcesRef.current = savedMineruResourcesByPaperId;
+
+  function getPaperMineruResources(paperId: string): PaperMineruResources | null {
+    const imported = importJobsByDocumentId[paperId];
+    const saved = savedMineruResourcesByPaperId[paperId];
+    if (imported?.status !== "parsed" && !saved) return null;
+    // The offline PDF.js import may finish before a saved MinerU artifact is
+    // rehydrated. Do not let that empty figure array hide high-resolution assets.
+    const figureById = new Map<string, MineruFigure>();
+    [...(saved?.figures ?? []), ...(imported?.mineruFigures ?? [])].forEach((figure) => {
+      figureById.set(figure.id, figure);
+    });
+    const importedChunks = imported?.parsedChunks ?? [];
+    const savedChunks = saved?.textChunks ?? [];
+    // Prefer the persisted MinerU text over an earlier PDF.js fallback import;
+    // mixing both creates duplicate paragraphs in the ordered reading view.
+    const textChunks = importedChunks.some((chunk) => chunk.textExtraction === "mineru") || savedChunks.length === 0
+      ? importedChunks
+      : savedChunks;
+    return {
+      figures: [...figureById.values()],
+      textChunks
+    };
+  }
+
+  const savedMineruResourceSignature = artifactCatalog
+    .map((artifact) => `${artifact.artifactId}:${artifact.figures?.length ?? 0}:${artifact.mineruTextChunks?.length ?? 0}`)
+    .sort()
+    .join("|");
+
+  useEffect(() => {
+    const restored: Record<string, ImportJob> = {};
+    for (const paper of workspaceState.papers) {
+      const material = savedMineruResourcesByPaperId[paper.id];
+      const latestJob = importStoreRef.current.getLatestJobByDocumentId(paper.id);
+      if (!material || latestJob?.status === "parsed") {
+        continue;
+      }
+      // A persisted artifact is an authoritative MinerU result. Rehydrate it into
+      // the import store so re-opening or regenerating a thin reading never submits
+      // the same PDF to MinerU again.
+      const jobId = importStoreRef.current.startImport({
+        documentId: paper.id,
+        sourcePath: paper.sourcePath ?? `fixtures/${paper.id}.pdf`
+      });
+      importStoreRef.current.markParsed(jobId, {
+        chunks: material.textChunks,
+        mineruFigures: material.figures,
+        paperId: paper.id
+      });
+      const job = importStoreRef.current.getJob(jobId);
+      if (job) {
+        restored[paper.id] = job;
+      }
+    }
+    if (Object.keys(restored).length > 0) {
+      setImportJobsByDocumentId((current) => ({ ...current, ...restored }));
+    }
+  }, [artifactCatalog, savedMineruResourceSignature, workspacePaperIdentityKey]);
 
   function getArtifactRegion(artifactId: string): DockRegionId {
     return dock.findDynamicItemRegion(artifactId) ?? "main";
@@ -293,6 +468,9 @@ export function AppShell({
     const regionId = getArtifactRegion(artifactId);
     if (regionId === "main") {
       setActiveCenterArtifactId(artifactId);
+      setActivePaperResourceId(null);
+      setActiveReaderPaperId(null);
+      setActiveVisualizationId(null);
       return;
     }
     setActiveSideArtifactIds((current) => ({
@@ -668,13 +846,24 @@ export function AppShell({
     settingsStore: settingsStoreRef.current,
     startArtifactAnalysis: artifactWorkflow.actions.handleAssistantArtifact
   };
+  const generatedAgentRecentState = [
+    `用户正在“${workspaceLabel}”中工作。`,
+    `当前打开 ${openReaderPaperIds.length} 篇 PDF。`,
+    `当前选中 ${workspaceState.selectedPaperIds.length} 篇文献${workspaceState.selectionLocked ? "，且已锁定为任务上下文" : ""}。`,
+    profileActions.academicProfile.researchTopics
+      ? `研究主题偏好：${profileActions.academicProfile.researchTopics}。`
+      : ""
+  ].filter(Boolean).join(" ");
+  const agentRecentState = profileActions.agentRecentStateOverride.trim() || generatedAgentRecentState;
   const assistantAgent = useAssistantAgentController({
     academicProfile: profileActions.academicProfile,
+    getAgentMemories: () => profileActions.agentMemories,
     getAllPapers: () => workspaceStoreRef.current.getState().papers,
     getImportedChunksByPaperId: workspaceActions.getImportedChunksByPaperId,
     getImportedChunksForPaperId: (paperId) =>
       importStoreRef.current.getParsedChunksByDocumentId(paperId),
     getSelectedPapers: workspaceActions.getSelectedPapers,
+    getUserStateSummary: () => agentRecentState,
     importedChunksByPaperId,
     importedSelectedCount,
     modelTransport,
@@ -787,10 +976,38 @@ export function AppShell({
   const libraryPaperChildren = workspaceState.papers.reduce<
     Record<string, LibraryPaperChildItem[]>
   >((entries, paper) => {
-    entries[paper.id] = artifactCatalog
+    const resources = getPaperMineruResources(paper.id);
+    const extractedResources: LibraryPaperChildItem[] = resources
+      ? [
+          ...(resources.textChunks.length > 0 ? [{
+            id: `text-${paper.id}`,
+            kind: "extracted_text" as const,
+            label: "论文提取文本",
+            meta: `MinerU · ${resources.textChunks.length} 个文本片段`
+          }] : []),
+          ...(resources.figures.length > 0 ? [{
+            id: `figures-${paper.id}`,
+            kind: "figures" as const,
+            label: "论文插图",
+            meta: `MinerU · ${resources.figures.length} 张高清图表`
+          }] : []),
+          ...(resources.textChunks.length > 0 || resources.figures.length > 0 ? [{
+            id: `multimodal-${paper.id}`,
+            kind: "multimodal" as const,
+            label: "论文提取图文版",
+            meta: `MinerU · 按原文顺序组合文本与 ${resources.figures.length} 张图表`
+          }] : [])
+        ]
+      : [];
+    const savedArtifacts = artifactCatalog
       .filter(
         (tab) =>
           tab.papers?.some((sourcePaper) => sourcePaper.id === paper.id) ||
+          tab.papers?.some((sourcePaper) =>
+            sourcePaper.title === paper.title ||
+            sourcePaper.title.startsWith(`${paper.title}：`) ||
+            paper.title.startsWith(`${sourcePaper.title}：`)
+          ) ||
           tab.analysis?.run.coverage.selectedPaperIds.includes(paper.id)
       )
       .map((tab) => ({
@@ -799,6 +1016,7 @@ export function AppShell({
         label: tab.title,
         meta: tab.createdAt ? new Date(tab.createdAt).toLocaleString() : undefined
       }));
+    entries[paper.id] = [...extractedResources, ...savedArtifacts];
     return entries;
   }, {});
 
@@ -838,7 +1056,103 @@ export function AppShell({
       current.includes(paperId) ? current : [...current, paperId]
     );
     setActiveReaderPaperId(paperId);
+    setActivePaperResourceId(null);
     setActiveCenterArtifactId(null);
+    setActiveVisualizationId(null);
+  }
+
+  function openPaperResource(paperId: string, kind: PaperResourceKind) {
+    const resources = getPaperMineruResources(paperId);
+    if (!resources || (kind === "figures" ? resources.figures.length === 0 : kind === "multimodal" ? resources.textChunks.length === 0 && resources.figures.length === 0 : resources.textChunks.length === 0)) {
+      setAnalysisHint("该论文尚未完成 MinerU 解析，完成后会在这里提供提取文本和论文插图。");
+      return;
+    }
+    const resource = { kind, paperId } as const;
+    const resourceId = paperResourceTabId(resource);
+    setOpenPaperResources((current) => current.some((item) => paperResourceTabId(item) === resourceId)
+      ? current
+      : [...current, resource]);
+    setActivePaperResourceId(resourceId);
+    setActiveReaderPaperId(null);
+    setActiveCenterArtifactId(null);
+    setActiveVisualizationId(null);
+  }
+
+  function openVisualization(data: VisualizationTabData) {
+    setOpenVisualizations((current) => current.some((item) => item.id === data.id) ? current : [...current, data]);
+    setActiveVisualizationId(data.id);
+    setActiveReaderPaperId(null);
+    setActivePaperResourceId(null);
+    setActiveCenterArtifactId(null);
+  }
+
+  function closeVisualization(visualizationId: string) {
+    setOpenVisualizations((current) => {
+      const next = current.filter((item) => item.id !== visualizationId);
+      setActiveVisualizationId((active) => active === visualizationId ? next[0]?.id ?? null : active);
+      return next;
+    });
+  }
+
+  function closePaperResource(resourceId: string) {
+    setOpenPaperResources((current) => {
+      const closingIndex = current.findIndex((resource) => paperResourceTabId(resource) === resourceId);
+      const next = current.filter((resource) => paperResourceTabId(resource) !== resourceId);
+      setActivePaperResourceId((active) => {
+        if (active !== resourceId) return active;
+        return next[Math.min(closingIndex, next.length - 1)]
+          ? paperResourceTabId(next[Math.min(closingIndex, next.length - 1)])
+          : null;
+      });
+      return next;
+    });
+  }
+
+  function addPaperResourceToConversation(resource: OpenPaperResource) {
+    const paper = workspaceState.papers.find((candidate) => candidate.id === resource.paperId);
+    const materials = getPaperMineruResources(resource.paperId);
+    if (!paper || !materials) return;
+    const excerpt = resource.kind === "figures"
+      ? materials.figures.map((figure) => (
+        `第 ${figure.page} 页图表：${figure.analysis?.title ?? figure.alt}\n${figure.analysis?.description ?? "原文高清插图"}`
+      )).join("\n\n")
+      : resource.kind === "multimodal"
+        ? materials.textChunks.slice(0, 12).map((chunk) => `第 ${chunk.page} 页：${chunk.snippet}`).join("\n\n")
+      : materials.textChunks.slice(0, 12).map((chunk) => (
+        `第 ${chunk.page} 页：${chunk.snippet}`
+      )).join("\n\n");
+    if (!excerpt) return;
+    addReaderContextToConversation({
+      excerpt: excerpt.slice(0, 12_000),
+      page: resource.kind === "figures"
+        ? materials.figures[0]?.page ?? 1
+        : materials.textChunks[0]?.page ?? 1,
+      paperId: paper.id,
+      paperTitle: paper.title,
+      source: resource.kind === "figures" ? "figures" : "extracted_text"
+    });
+    setAnalysisHint(`已将《${paper.title}》的${resource.kind === "figures" ? "插图说明" : resource.kind === "multimodal" ? "图文素材" : "提取文本"}加入对话。`);
+  }
+
+  function renderPaperResource(resource: OpenPaperResource) {
+    const paper = workspaceState.papers.find((candidate) => candidate.id === resource.paperId);
+    const materials = getPaperMineruResources(resource.paperId);
+    if (!paper || !materials) return null;
+    return (
+      <PaperResourceTab
+        figures={materials.figures}
+        kind={resource.kind}
+        onLoadTranslations={(markedSource) => paperTranslation.actions.loadPaperResourceTranslations(paper, markedSource)}
+        onCreatePresentation={() => {
+          artifactWorkflow.actions.startAnalysisForPapers("ppt", [paper]);
+          setAnalysisHint(`正在使用《${paper.title}》的 MinerU 素材制作展示内容。`);
+        }}
+        onTranslate={(sourceLanguage, targetLanguage, markedSource, options) => paperTranslation.actions.translatePaperResource(paper, sourceLanguage, targetLanguage, markedSource, options)}
+        onUseInConversation={() => addPaperResourceToConversation(resource)}
+        paper={paper}
+        textChunks={materials.textChunks}
+      />
+    );
   }
 
   function closeReaderPaper(paperId: string) {
@@ -875,6 +1189,8 @@ export function AppShell({
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
     activePaperId: activeReaderPaper?.id ?? null,
     academicProfile: profileActions.academicProfile,
+    agentMemories: profileActions.agentMemories,
+    agentRecentState,
     accountSession,
     collectionItems,
     collectionMessage,
@@ -975,11 +1291,21 @@ export function AppShell({
     },
     onMoveLibraryFolder: workspaceActions.moveFolder,
     onMoveLibraryPaper: workspaceActions.movePaper,
-    onOpenPaperChild: (item) => {
+    onOpenPaperChild: (item, paper) => {
       if (item.kind === "artifact") {
         artifactWorkflow.actions.openArtifact(item.id);
         activateArtifactSurface(item.id);
+        return;
       }
+      if (item.kind === "extracted_text" || item.kind === "figures" || item.kind === "multimodal") {
+        openPaperResource(paper.id, item.kind);
+      }
+    },
+    onRenamePaperChild: async (item, _paper, requestedName) => {
+      if (item.kind !== "artifact") {
+        return "仅支持重命名已保存的多模态产物。";
+      }
+      return artifactWorkflow.actions.renameArtifact(item.id, requestedName);
     },
     onOpenSharedLibrary: (summary) => {
       void organizationShell.actions.openOrganizationSharedLibrary(summary);
@@ -1002,6 +1328,8 @@ export function AppShell({
       setSettingsState(cloneSettingsState(settingsStoreRef.current.getState()));
     },
     onUpdateAcademicProfile: profileActions.updateAcademicProfile,
+    onUpdateAgentMemories: profileActions.updateAgentMemories,
+    onUpdateAgentRecentState: profileActions.updateAgentRecentStateOverride,
     organizationActionMessage,
     organizationSummary,
     organizationSummaryMessage,
@@ -1161,6 +1489,7 @@ export function AppShell({
             void handleArtifactCanvasAction(action);
           }}
           onOpenEvidence={openEvidenceInReader}
+          onOpenVisualization={openVisualization}
           onDeleteArtifact={async (artifactId) => {
             const message = await artifactWorkflow.actions.deleteArtifact(artifactId);
             const remainingTabs = artifactTabs.filter(
@@ -1301,6 +1630,7 @@ export function AppShell({
           void handleArtifactCanvasAction(action);
         }}
         onOpenEvidence={openEvidenceInReader}
+        onOpenVisualization={openVisualization}
         onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
         onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
         intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
@@ -1344,11 +1674,50 @@ export function AppShell({
           onActivate: () => {
             setActiveReaderPaperId(paper.id);
             setActiveCenterArtifactId(null);
+            setActiveVisualizationId(null);
           },
           onClose: () => closeReaderPaper(paper.id),
           render: () => renderReaderPaper(paper.id),
-          selected: activeCenterArtifactId === null && activeReaderPaperId === paper.id,
+          selected: activeVisualizationId === null && activeCenterArtifactId === null && activePaperResourceId === null && activeReaderPaperId === paper.id,
           title: paper.title
+        }))
+      : [];
+    const dynamicPaperResourceTabs = regionId === "main"
+      ? openPaperResources.map((resource) => {
+          const paper = workspaceState.papers.find((candidate) => candidate.id === resource.paperId);
+          const id = paperResourceTabId(resource);
+          return {
+            icon: resource.kind === "figures" || resource.kind === "multimodal" ? <ImageMultipleRegular /> : <DocumentTextRegular />,
+            id,
+            kind: "document" as const,
+            onActivate: () => {
+              setActivePaperResourceId(id);
+              setActiveReaderPaperId(null);
+              setActiveCenterArtifactId(null);
+              setActiveVisualizationId(null);
+            },
+            onClose: () => closePaperResource(id),
+            render: () => renderPaperResource(resource),
+            selected: activeVisualizationId === null && activeCenterArtifactId === null && activePaperResourceId === id,
+            title: `${paper?.title ?? "论文"} · ${resource.kind === "figures" ? "插图" : resource.kind === "multimodal" ? "图文版" : "提取文本"}`
+          };
+        })
+      : [];
+    const dynamicVisualizationTabs = regionId === "main"
+      ? openVisualizations.map((visualization) => ({
+          icon: <DocumentTextRegular />,
+          id: visualization.id,
+          kind: "document" as const,
+          onActivate: () => {
+            setActiveVisualizationId(visualization.id);
+            setActiveReaderPaperId(null);
+            setActivePaperResourceId(null);
+            setActiveCenterArtifactId(null);
+          },
+          onClose: () => closeVisualization(visualization.id),
+          render: () => <VisualizationTab data={visualization} />,
+          selected: activeCenterArtifactId === null && activePaperResourceId === null && activeReaderPaperId === null && activeVisualizationId === visualization.id,
+          title: visualization.title
         }))
       : [];
     const dynamicArtifactTabs = artifactTabs
@@ -1374,7 +1743,7 @@ export function AppShell({
           title: tab.title
         };
       });
-    const dynamicTabs = [...dynamicReaderTabs, ...dynamicArtifactTabs];
+    const dynamicTabs = [...dynamicReaderTabs, ...dynamicPaperResourceTabs, ...dynamicVisualizationTabs, ...dynamicArtifactTabs];
     return (
       <DockRegion
         dynamicTabs={dynamicTabs}
@@ -1418,10 +1787,13 @@ export function AppShell({
     );
   }
 
-  const appFrameStyle =
-    runtimeTheme.kind === "generated"
+  const appFrameStyle = {
+    ...(runtimeTheme.kind === "generated"
       ? (createGeneratedThemeStyle(runtimeTheme.theme) as CSSProperties)
-      : undefined;
+      : {}),
+    fontFamily: settingsState["view.font_family"],
+    fontSize: `${settingsState["view.font_size"]}px`
+  } as CSSProperties;
   const appFrameClassName = `app-frame${
     runtimeTheme.kind === "preset" && runtimeTheme.preset === "playful" ? " theme-playful" : ""
   }${runtimeTheme.kind === "generated" ? " theme-generated" : ""}`;

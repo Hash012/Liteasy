@@ -92,6 +92,18 @@ describe("desktop dev script", () => {
     );
   });
 
+  test("loads the service env file before choosing the cloud port", () => {
+    const script = readFileSync(
+      resolve(process.cwd(), "scripts/dev-with-cloud.mjs"),
+      "utf8"
+    );
+
+    const loadIndex = script.indexOf("loadSecretEnvFile();");
+    const portIndex = script.indexOf("resolveRequestedCloudPort();");
+    expect(loadIndex).toBeGreaterThan(-1);
+    expect(portIndex).toBeGreaterThan(loadIndex);
+  });
+
   test("can expose the frontend and dev cloud for Windows browser access", () => {
     const desktopHost = resolveRequestedDesktopHost({
       LITEASY_DESKTOP_HOST: "0.0.0.0"

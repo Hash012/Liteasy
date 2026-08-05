@@ -9,7 +9,9 @@ describe("useAppShellStores", () => {
     expect(result.current.workspaceStoreRef.current.getState().papers.map((paper) => paper.id)).toEqual([
       "demo-1",
       "demo-2",
-      "demo-3"
+      "demo-3",
+      "local-qvla",
+      "local-compactflash-ftl"
     ]);
 
     const workspaceStore = result.current.workspaceStoreRef.current;
@@ -22,6 +24,8 @@ describe("useAppShellStores", () => {
       "demo-1",
       "demo-2",
       "demo-3",
+      "local-qvla",
+      "local-compactflash-ftl",
       "paper-3"
     ]);
   });

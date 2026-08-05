@@ -8,7 +8,7 @@
  */
 export type PaperFulltextPage = {
   /** OCR positions must never be confused with a selectable PDF text layer. */
-  textExtraction?: "embedded" | "ocr";
+  textExtraction?: "embedded" | "mineru" | "ocr";
   page: number;
   text: string;
 };
@@ -31,7 +31,7 @@ function isPage(value: unknown): value is PaperFulltextPage {
   return typeof candidate.page === "number" && Number.isInteger(candidate.page) &&
     candidate.page > 0 && typeof candidate.text === "string" &&
     (candidate.textExtraction === undefined || candidate.textExtraction === "embedded" ||
-      candidate.textExtraction === "ocr");
+      candidate.textExtraction === "mineru" || candidate.textExtraction === "ocr");
 }
 
 export function normalizePaperFulltext(value: unknown): PaperFulltextSnapshot | undefined {
@@ -71,7 +71,7 @@ export function paperFulltextPagesToRecord(
 
 export function paperFulltextExtractionsToRecord(
   pages: readonly PaperFulltextPage[]
-): Record<number, "embedded" | "ocr"> {
+): Record<number, "embedded" | "mineru" | "ocr"> {
   return Object.fromEntries(
     pages.map((page) => [page.page, page.textExtraction ?? "embedded"])
   );
@@ -133,7 +133,7 @@ export function samePaperPageTexts(left: PaperPageTextRecord, right: PaperPageTe
 
 export function buildPaperFulltextSnapshot(input: {
   extractedAt: string;
-  pageTextExtractions?: Readonly<Record<number, "embedded" | "ocr">>;
+  pageTextExtractions?: Readonly<Record<number, "embedded" | "mineru" | "ocr">>;
   pageTexts: PaperPageTextRecord;
 }): PaperFulltextSnapshot {
   return {

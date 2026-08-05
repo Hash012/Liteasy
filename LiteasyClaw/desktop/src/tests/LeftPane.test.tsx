@@ -156,8 +156,14 @@ describe("LeftPane", () => {
 
     await user.click(screen.getByRole("button", { name: "展开我的文献库" }));
     expect(screen.getByLabelText("PDF 文件拖拽导入区")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "收起收藏" }).querySelector("svg")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "收起关联推荐" }).querySelector("svg")).toBeInTheDocument();
+    const collectionSection = screen.getByRole("button", { name: "展开收藏" });
+    const recommendationSection = screen.getByRole("button", { name: "展开关联推荐" });
+    expect(collectionSection.querySelector("svg")).toBeInTheDocument();
+    expect(recommendationSection.querySelector("svg")).toBeInTheDocument();
+    await user.click(collectionSection);
+    await user.click(recommendationSection);
+    expect(screen.getByRole("button", { name: "收起收藏" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "收起关联推荐" })).toHaveAttribute("aria-expanded", "true");
   });
 
   test("switches between local and organization library views from the literature list", async () => {
@@ -512,6 +518,7 @@ describe("LeftPane", () => {
     );
 
     const collectionZone = screen.getByLabelText("收藏投放区");
+    fireEvent.click(within(collectionZone).getByRole("button", { name: "展开收藏" }));
     expect(within(collectionZone).getByText("正在同步云端收藏...")).toBeInTheDocument();
   });
 
@@ -537,6 +544,7 @@ describe("LeftPane", () => {
     );
 
     const collectionZone = screen.getByLabelText("收藏投放区");
+    await user.click(within(collectionZone).getByRole("button", { name: "展开收藏" }));
     expect(within(collectionZone).getByText("云端收藏暂时不可用。")).toBeInTheDocument();
     await user.click(within(collectionZone).getByRole("button", { name: "重试同步" }));
     expect(onRetryCollectionSync).toHaveBeenCalledTimes(1);
@@ -645,6 +653,38 @@ describe("LeftPane", () => {
     expect(onOpenPaperChild).toHaveBeenCalledWith(
       expect.objectContaining({ id: "artifact-1", kind: "artifact" }),
       expect.objectContaining({ id: "demo-1" })
+    );
+  });
+
+  test("finds an artifact by name and renames it from its resource menu", async () => {
+    const user = userEvent.setup();
+    const onRenamePaperChild = vi.fn(async (_item, _paper, title) => `已重命名多模态产物：${title}`);
+    render(
+      <LeftPane
+        {...createProps({
+          leftRailView: "library",
+          libraryPaperChildren: {
+            "demo-1": [{ id: "artifact-1", kind: "artifact", label: "QVLA 薄读" }]
+          },
+          onRenamePaperChild,
+          papers: [{ id: "demo-1", sourcePath: "/papers/QVLA.pdf", title: "QVLA" }]
+        })}
+      />
+    );
+
+    await user.type(screen.getByLabelText("搜索文件与产物"), "薄读");
+    const artifact = screen.getByRole("button", { name: "QVLA 薄读" });
+    expect(artifact).toBeInTheDocument();
+    fireEvent.contextMenu(artifact);
+    await user.click(screen.getByRole("menuitem", { name: "重命名产物…" }));
+    await user.clear(screen.getByLabelText("新名称"));
+    await user.type(screen.getByLabelText("新名称"), "QVLA 精读");
+    await user.click(screen.getByRole("button", { name: "确认" }));
+
+    expect(onRenamePaperChild).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "artifact-1" }),
+      expect.objectContaining({ id: "demo-1" }),
+      "QVLA 精读"
     );
   });
 
@@ -992,6 +1032,8 @@ describe("LeftPane", () => {
     );
 
     expect(screen.getByText("收藏")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开收藏" }));
+    fireEvent.click(screen.getByRole("button", { name: "展开关联推荐" }));
     const loginButtons = screen.getAllByRole("button", { name: "登录后可用" });
     expect(loginButtons.length).toBeGreaterThan(0);
     expect(loginButtons[0]).toHaveAttribute("title", "登录后可用的云端收藏会显示在这里。");
@@ -1126,6 +1168,7 @@ describe("LeftPane", () => {
       recommendationStatus: "ready"
     })} />);
 
+    await user.click(screen.getByRole("button", { name: "展开关联推荐" }));
     await user.click(screen.getByRole("button", { name: "不感兴趣：Candidate Paper" }));
 
     expect(onDismissRecommendation).toHaveBeenCalledWith(recommendation);

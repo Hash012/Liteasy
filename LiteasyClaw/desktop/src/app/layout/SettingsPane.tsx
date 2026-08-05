@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ChevronDownRegular, ChevronRightRegular, DatabaseRegular, FolderRegular, SettingsRegular, BotRegular } from "@fluentui/react-icons";
+import { BotRegular, ChevronDownRegular, ChevronRightRegular, DatabaseRegular, EyeRegular, FolderRegular, SettingsRegular } from "@fluentui/react-icons";
 import { AgentSettingsPanel } from "../features/agent-core/AgentSettingsPanel";
+import { ViewSettingsPanel } from "../features/settings/ViewSettingsPanel";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import { LibraryLocationPanel } from "../features/library/LibraryLocationPanel";
 import { DocumentMetadataSyncPanel } from "../features/metadata/DocumentMetadataSyncPanel";
@@ -32,12 +33,23 @@ export function SettingsPane({
   onUpdateSetting,
   settings
 }: SettingsPaneProps) {
+  const [viewExpanded, setViewExpanded] = useState(true);
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [syncExpanded, setSyncExpanded] = useState(true);
   const [libraryExpanded, setLibraryExpanded] = useState(false);
   return (
     <section aria-label="左边栏设置" className="settings-panel">
       <div aria-hidden="true" className="settings-panel-icon"><SettingsRegular /></div>
+      <section className="sidebar-section settings-view-section">
+        <button aria-expanded={viewExpanded} aria-label={`${viewExpanded ? "收起" : "展开"} View 设置`} className="sidebar-section-header" onClick={() => setViewExpanded((current) => !current)} type="button">
+          <span aria-hidden="true" className="sidebar-section-disclosure">{viewExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
+          <EyeRegular />
+          <span>View</span>
+        </button>
+        {viewExpanded ? <div className="sidebar-section-content">
+          <ViewSettingsPanel onUpdateSetting={onUpdateSetting} settings={settings} />
+        </div> : null}
+      </section>
       <section className="sidebar-section settings-agent-section">
         <button aria-expanded={agentExpanded} aria-label={`${agentExpanded ? "收起" : "展开"} Agent 设置`} className="sidebar-section-header" onClick={() => setAgentExpanded((current) => !current)} type="button">
           <span aria-hidden="true" className="sidebar-section-disclosure">{agentExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>

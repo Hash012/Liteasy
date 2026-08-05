@@ -1,5 +1,9 @@
 import { ProxyAgent } from "undici";
 
+// Keep a stable reference so callers that temporarily adapt globalThis.fetch (for
+// SDKs that do not accept a transport) cannot recursively invoke this helper.
+const nativeFetch = globalThis.fetch;
+
 function resolveProxyUrl(url) {
   const lowerUrl = url.toLowerCase();
   if (lowerUrl.startsWith("https://")) {
@@ -30,10 +34,10 @@ function shouldBypassProxy(url) {
 export async function fetchWithConfiguredProxy(url, options = {}) {
   const proxyUrl = shouldBypassProxy(url) ? undefined : resolveProxyUrl(url);
   if (!proxyUrl) {
-    return fetch(url, options);
+    return nativeFetch(url, options);
   }
 
-  return fetch(url, {
+  return nativeFetch(url, {
     ...options,
     dispatcher: new ProxyAgent(proxyUrl)
   });

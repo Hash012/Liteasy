@@ -53,7 +53,7 @@ describe("useModelSettingsActions", () => {
     const hook = renderHook(() =>
       useModelSettingsActions({
         localDevCloudEnv: {
-          VITE_LITEASY_DEV_CLOUD_PORT: "8790"
+          VITE_LITEASY_DEV_CLOUD_PORT: "8791"
         },
         onSettingsChanged,
         settingsStore
@@ -62,8 +62,8 @@ describe("useModelSettingsActions", () => {
 
     act(() => hook.result.current.applyInjectedLocalDevCloudDefaults());
 
-    expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe("http://127.0.0.1:8790");
-    expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("http://127.0.0.1:8790");
+    expect(settingsStore.getState()["models.cloud_proxy_endpoint"]).toBe("http://127.0.0.1:8791");
+    expect(settingsStore.getState()["models.control_plane_endpoint"]).toBe("http://127.0.0.1:8791");
     expect(onSettingsChanged).toHaveBeenLastCalledWith(settingsStore.getState());
   });
 

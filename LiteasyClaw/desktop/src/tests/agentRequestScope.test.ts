@@ -142,6 +142,60 @@ test("preserves reader-prioritized paper order and thin-reading context", () => 
   expect(getAgentRequestThinReadingContext(malformedIdentityRequest)?.primaryPaperIdentity).toBeUndefined();
 });
 
+test("normalizes thin-reading visual commands and metadata-only MinerU figures", () => {
+  const request = {
+    attachments: [{
+      metadata: {
+        paperIds: ["paper-a"],
+        thinReadingContext: {
+          artifactId: "artifact-visual-command",
+          availableFigures: [{
+            description: "展示算法结构。",
+            id: "figure-1",
+            kind: "architecture",
+            page: 3,
+            title: "算法结构"
+          }],
+          depth: 1,
+          paperIds: ["paper-a"],
+          source: {
+            excerpt: "选中的算法描述",
+            kind: "selected_text",
+            prompt: "将这个算法做成 HTML 动画",
+            quickCommand: "html_algorithm_animation",
+            requestedOutput: "html_demo"
+          },
+          targetLanguage: "zh-CN"
+        }
+      },
+      source: "selection" as const,
+      uri: "liteasy://selection/current"
+    }],
+    idempotencyKey: "artifact:thin:visual-command",
+    input: { artifactType: "thin_reading" as const, message: "继续", mode: "qa" as const },
+    sessionId: "session-visual-command"
+  };
+
+  expect(getAgentRequestThinReadingContext(request)).toMatchObject({
+    availableFigures: [{ id: "figure-1", page: 3, title: "算法结构" }],
+    source: {
+      quickCommand: "html_algorithm_animation",
+      requestedOutput: "html_demo"
+    }
+  });
+
+  const largeFigureRequest = structuredClone(request);
+  largeFigureRequest.attachments[0].metadata.thinReadingContext.availableFigures = Array.from(
+    { length: 30 },
+    (_, index) => ({ id: `figure-${index}`, page: index + 1, title: `图 ${index}` })
+  );
+  expect(getAgentRequestThinReadingContext(largeFigureRequest)?.availableFigures).toHaveLength(24);
+
+  const mismatched = structuredClone(request);
+  mismatched.attachments[0].metadata.thinReadingContext.source.requestedOutput = "mermaid";
+  expect(getAgentRequestThinReadingContext(mismatched)).toBeNull();
+});
+
 test("falls back to the current selected context without a selection attachment", () => {
   const scope = resolveAgentKnowledgeScope({
     allPapers: papers,

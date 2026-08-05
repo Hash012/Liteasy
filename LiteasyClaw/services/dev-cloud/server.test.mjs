@@ -481,6 +481,7 @@ test("returns a helpful service index from the root path", async () => {
     "POST /v1/model/audit",
     "GET /v1/agent-artifacts",
     "POST /v1/agent-artifacts",
+    "PATCH /v1/agent-artifacts/:artifactId",
     "DELETE /v1/agent-artifacts/:artifactId",
     "POST /v1/recommendations",
     "POST /v1/recommendations/feedback",
@@ -1280,6 +1281,14 @@ test("streams model deltas as NDJSON", async () => {
 
 test("returns a healthy status from the health endpoint", async () => {
   const response = await invokeHandler({
+    handlerOptions: {
+      defaultProvider: "openai",
+      openaiApiBaseUrl: "https://user:password@nowcoding.ai/v1?token=secret",
+      openaiApiKey: "sk-health-secret",
+      openaiModel: "gpt-5.6-terra",
+      runtimePid: 4242,
+      runtimeStartedAt: "2026-08-01T00:00:00.000Z"
+    },
     method: "GET",
     headers: {
       host: "127.0.0.1:8787"
@@ -1290,8 +1299,17 @@ test("returns a healthy status from the health endpoint", async () => {
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers["Content-Type"], "application/json; charset=utf-8");
   assert.deepEqual(response.json, {
-    ok: true
+    ok: true,
+    runtime: {
+      provider: "openai",
+      upstreamBaseUrl: "https://nowcoding.ai/v1",
+      hasApiKey: true,
+      selectedModel: "gpt-5.6-terra",
+      pid: 4242,
+      startedAt: "2026-08-01T00:00:00.000Z"
+    }
   });
+  assert.doesNotMatch(response.body, /password|secret|sk-health-secret/);
 });
 
 test("deletes a persisted Agent artifact by validated id", async (context) => {
@@ -1351,6 +1369,46 @@ test("deletes a persisted Agent artifact by validated id", async (context) => {
   });
   assert.equal(unsafe.statusCode, 400);
   assert.equal(unsafe.json.error, "invalid_agent_artifact_id");
+});
+
+test("renames a persisted Agent artifact without changing its id", async (context) => {
+  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-agent-artifacts-"));
+  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
+  const handlerOptions = { agentArtifactResultDirectory: resultDirectory };
+  const artifact = {
+    agent: { apiVersion: "liteasy.agent/v1", runId: "run-1", sessionId: "session-1", status: "completed" },
+    answer: "analysis",
+    artifactId: "artifact-rename",
+    artifactType: "tree",
+    citations: [],
+    createdAt: "2026-07-20T00:00:00.000Z",
+    papers: [],
+    title: "Before",
+    uiDsl: { version: "liteasy.ui/v1" },
+    version: "liteasy.agent-artifact/v1"
+  };
+  await invokeHandler({
+    body: JSON.stringify(artifact),
+    handlerOptions,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/agent-artifacts"
+  });
+
+  const renamed = await invokeHandler({
+    body: JSON.stringify({ title: "  After   rename " }),
+    handlerOptions,
+    headers: { "content-type": "application/json" },
+    method: "PATCH",
+    url: "/v1/agent-artifacts/artifact-rename"
+  });
+  assert.equal(renamed.statusCode, 200);
+  assert.equal(renamed.json.artifact.artifactId, "artifact-rename");
+  assert.equal(renamed.json.artifact.title, "After rename");
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(resultDirectory, "artifact-rename.json"), "utf8")).title,
+    "After rename"
+  );
 });
 
 test("prefers a configured public origin for deploy-facing links and policy payloads", async () => {
@@ -2301,6 +2359,35 @@ test("uses the configured openai provider when an api key is available", async (
       provider: "openai"
     }
   });
+});
+
+test("supplies the configured OpenAI model when a browser request omits it", async () => {
+  let capturedInput;
+  const response = await invokeHandler({
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      host: "127.0.0.1:8787"
+    },
+    body: JSON.stringify({
+      prompt: "生成一条简短说明。",
+      provider: "openai"
+    }),
+    url: "/v1/model/generate",
+    handlerOptions: {
+      openaiApiKey: "sk-test",
+      openaiModel: "gpt-5.6-terra",
+      providers: {
+        openai: async (input) => {
+          capturedInput = input;
+          return "已生成";
+        }
+      }
+    }
+  });
+
+  assert.equal(capturedInput.model, "gpt-5.6-terra");
+  assert.equal(response.json.answer, "已生成");
 });
 
 test("returns a demo account session from the account login endpoint", async () => {

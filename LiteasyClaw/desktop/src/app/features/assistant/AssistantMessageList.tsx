@@ -7,6 +7,8 @@ import type {
 import { getAuditVerdictLabel } from "./assistantPresentation";
 import { DynamicCanvas } from "../generative-ui/DynamicCanvas";
 import type { UIDslActionRef } from "../generative-ui/generativeUi.types";
+import { AgentActivityCard } from "./AgentActivityCard";
+import { ArrowClockwiseRegular, CopyRegular, EditRegular } from "@fluentui/react-icons";
 
 function getPublicAuditStatusLabel(status: "blocked" | "passed" | "warning") {
   if (status === "passed") return "通过";
@@ -47,97 +49,107 @@ export function AssistantMessageList({
     <div className="assistant-messages">
       {messages.map((message, index) => {
         return (
-          <div className={`assistant-message ${message.role}`} key={message.id}>
-            {message.contextTokens?.length ? (
-              <div className="assistant-message-token-row">
-                {message.contextTokens.map((token) => (
-                  <span className={`assistant-message-token ${token.kind}`} key={token.id}>
-                    <strong>{token.label}</strong>
-                    {token.detail ? <span>{token.detail}</span> : null}
+          <article
+            aria-label={message.role === "user" ? "你的消息" : "AI 回复"}
+            className={`assistant-message-wrap ${message.role}`}
+            key={message.id}
+          >
+            <div className={`assistant-message ${message.role}`}>
+              <div className="assistant-message-heading" aria-hidden="true">
+                {message.role === "user" ? "你" : "AI"}
+              </div>
+              {message.contextTokens?.length ? (
+                <div className="assistant-message-token-row">
+                  {message.contextTokens.map((token) => (
+                    <span className={`assistant-message-token ${token.kind}`} key={token.id}>
+                      <strong>{token.label}</strong>
+                      {token.detail ? <span>{token.detail}</span> : null}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {message.agentActivity ? <AgentActivityCard activity={message.agentActivity} /> : null}
+              {message.content &&
+              (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
+                <div className="assistant-answer-text">{message.content}</div>
+              ) : null}
+              {message.uiDsl ? (
+                <DynamicCanvas
+                  document={message.uiDsl}
+                  onAction={(action) => onDynamicAction?.(action, message.uiDsl?.audit.traceId ?? "")}
+                />
+              ) : null}
+              {message.citations?.length ? (
+                <div className="assistant-citation-card">
+                  <strong>原文定位</strong>
+                  <span>
+                    {message.citations[0].paperId} · 第 {message.citations[0].page} 页
                   </span>
-                ))}
-              </div>
-            ) : null}
-            {message.content &&
-            (!message.uiDsl || message.citations?.length || message.audit || message.executionTrace) ? (
-              <div className="assistant-answer-text">{message.content}</div>
-            ) : null}
-            {message.uiDsl ? (
-              <DynamicCanvas
-                document={message.uiDsl}
-                onAction={(action) => onDynamicAction?.(action, message.uiDsl?.audit.traceId ?? "")}
-              />
-            ) : null}
-            {message.citations?.length ? (
-              <div className="assistant-citation-card">
-                <strong>原文定位</strong>
-                <span>
-                  {message.citations[0].paperId} · 第 {message.citations[0].page} 页
-                </span>
-                <span>{message.citations[0].snippet}</span>
-                <span>可信度 {message.confidence?.toFixed(2)}</span>
-              </div>
-            ) : null}
-            {message.audit ? (
-              <div className={`assistant-audit-card ${message.audit.verdict}`}>
-                <strong>模型审计</strong>
-                <span>审计模型 {message.audit.model}</span>
-                <span>
-                  审计评分 {message.audit.score.toFixed(2)} · {getAuditVerdictLabel(message.audit.verdict)}
-                </span>
-                <span>{message.audit.rationale}</span>
-              </div>
-            ) : null}
-            {message.publicWorkflowAudits?.length ? (
-              <div className={`assistant-public-audit-card ${message.publicWorkflowAudits[0].status}`}>
-                <strong>公开审计过程</strong>
-                {message.publicWorkflowAudits.map((audit, auditIndex) => (
-                  <div className="assistant-public-audit-summary" key={`${message.id}-public-audit-${auditIndex}`}>
-                    {audit.issueLabels.length ? (
-                      <div className="assistant-public-audit-issues">
-                        {audit.issueLabels.map((label) => (
-                          <span key={label}>{label}</span>
+                  <span>{message.citations[0].snippet}</span>
+                  <span>可信度 {message.confidence?.toFixed(2)}</span>
+                </div>
+              ) : null}
+              {message.audit ? (
+                <div className={`assistant-audit-card ${message.audit.verdict}`}>
+                  <strong>模型审计</strong>
+                  <span>审计模型 {message.audit.model}</span>
+                  <span>
+                    审计评分 {message.audit.score.toFixed(2)} · {getAuditVerdictLabel(message.audit.verdict)}
+                  </span>
+                  <span>{message.audit.rationale}</span>
+                </div>
+              ) : null}
+              {message.publicWorkflowAudits?.length ? (
+                <div className={`assistant-public-audit-card ${message.publicWorkflowAudits[0].status}`}>
+                  <strong>公开审计过程</strong>
+                  {message.publicWorkflowAudits.map((audit, auditIndex) => (
+                    <div className="assistant-public-audit-summary" key={`${message.id}-public-audit-${auditIndex}`}>
+                      {audit.issueLabels.length ? (
+                        <div className="assistant-public-audit-issues">
+                          {audit.issueLabels.map((label) => (
+                            <span key={label}>{label}</span>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="assistant-public-audit-checks">
+                        {audit.checks.map((check) => (
+                          <div className="assistant-public-audit-check" key={check.label}>
+                            <span>
+                              {check.label}：{getPublicAuditStatusLabel(check.status)}
+                            </span>
+                            {check.summary ? <small>{check.summary}</small> : null}
+                          </div>
                         ))}
                       </div>
-                    ) : null}
-                    <div className="assistant-public-audit-checks">
-                      {audit.checks.map((check) => (
-                        <div className="assistant-public-audit-check" key={check.label}>
-                          <span>
-                            {check.label}：{getPublicAuditStatusLabel(check.status)}
-                          </span>
-                          {check.summary ? <small>{check.summary}</small> : null}
-                        </div>
-                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {message.executionTrace ? (
-              <div className="assistant-execution-trace">
-                模型链路：{formatModelExecutionLabel(message.executionTrace)}
-              </div>
-            ) : null}
-            {message.confirmation ? (
-              <div className="assistant-confirmation-actions">
-                <button
-                  className="assistant-message-action"
-                  onClick={() => onConfirmRequest?.(message.confirmation!)}
-                  type="button"
-                >
-                  确认执行
-                </button>
-                <button
-                  className="assistant-message-action"
-                  onClick={() => onRejectRequest?.(message.confirmation!)}
-                  type="button"
-                >
-                  取消
-                </button>
-              </div>
-            ) : null}
-            <div className="assistant-message-actions">
+                  ))}
+                </div>
+              ) : null}
+              {message.executionTrace ? (
+                <div className="assistant-execution-trace">
+                  模型链路：{formatModelExecutionLabel(message.executionTrace)}
+                </div>
+              ) : null}
+              {message.confirmation ? (
+                <div className="assistant-confirmation-actions">
+                  <button
+                    className="assistant-message-action"
+                    onClick={() => onConfirmRequest?.(message.confirmation!)}
+                    type="button"
+                  >
+                    确认执行
+                  </button>
+                  <button
+                    className="assistant-message-action"
+                    onClick={() => onRejectRequest?.(message.confirmation!)}
+                    type="button"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div aria-label="消息操作" className="assistant-message-actions">
               {message.role === "user" ? (
                 <>
                   <button
@@ -153,7 +165,7 @@ export function AssistantMessageList({
                     title="复制"
                     type="button"
                   >
-                    ⧉
+                    <CopyRegular aria-hidden="true" />
                   </button>
                   <button
                     aria-label={`编辑：${message.content}`}
@@ -162,7 +174,7 @@ export function AssistantMessageList({
                     title="编辑"
                     type="button"
                   >
-                    ✎
+                    <EditRegular aria-hidden="true" />
                   </button>
                   <button
                     aria-label={`重试：${message.content}`}
@@ -171,7 +183,7 @@ export function AssistantMessageList({
                     title="重试"
                     type="button"
                   >
-                    ↻
+                    <ArrowClockwiseRegular aria-hidden="true" />
                   </button>
                 </>
               ) : null}
@@ -183,11 +195,11 @@ export function AssistantMessageList({
                   title="重新生成"
                   type="button"
                 >
-                  ↻
+                    <ArrowClockwiseRegular aria-hidden="true" />
                 </button>
               ) : null}
             </div>
-          </div>
+          </article>
         );
       })}
     </div>

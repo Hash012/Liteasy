@@ -144,6 +144,9 @@ function freezeAnchor(anchor: ThinReadingAnchor): ThinReadingAnchor {
 
 function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGenerationAudit {
   return Object.freeze({
+    contextManagement: audit.contextManagement
+      ? Object.freeze({ ...audit.contextManagement })
+      : undefined,
     interpretationPlan: audit.interpretationPlan
       ? Object.freeze({
           ...audit.interpretationPlan,
@@ -193,6 +196,12 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
       ...audit.qualityGate,
       repairReasons: Object.freeze([...audit.qualityGate.repairReasons])
     }),
+    workload: audit.workload
+      ? Object.freeze({
+          ...audit.workload,
+          plannedSubagents: Object.freeze([...audit.workload.plannedSubagents])
+        })
+      : undefined,
     version: audit.version
   });
 }
@@ -212,9 +221,21 @@ function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvide
     generationAudit: evidence.generationAudit
       ? freezeGenerationAudit(evidence.generationAudit)
       : undefined,
+    interactiveDemo: evidence.interactiveDemo
+      ? Object.freeze({
+          ...evidence.interactiveDemo
+        })
+      : undefined,
+    mermaid: evidence.mermaid,
     paperEvidence: Object.freeze([...evidence.paperEvidence]),
     paperEvidenceSpans: evidence.paperEvidenceSpans
       ? Object.freeze(evidence.paperEvidenceSpans.map(freezeEvidenceSpan))
+      : undefined,
+    recommendedFigures: evidence.recommendedFigures
+      ? Object.freeze(evidence.recommendedFigures.map((figure) => Object.freeze({
+          ...figure,
+          evidenceIds: Object.freeze([...figure.evidenceIds])
+        })))
       : undefined,
     summarySentences: evidence.summarySentences
       ? Object.freeze(evidence.summarySentences.map(freezeSummarySentence))

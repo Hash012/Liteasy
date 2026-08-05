@@ -2235,3 +2235,144 @@ test("stops beyond-paper generation when external retrieval returns no sources",
   })).rejects.toThrow("未检索到可信、可追溯的外部文献");
   expect(modelCalls).toBe(0);
 });
+
+test("runs at most two responsibility Subagents for a genuinely large thin-reading load", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+  let selectedEvidenceIds: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "paper-large": Array.from({ length: 20 }, (_, index) => ({
+        page: index + 1,
+        paperId: "paper-large",
+        paperTitle: "Large Architecture Paper",
+        snippet: `Component ${index + 1} sends state to the next processing stage under a bounded condition. `.repeat(140),
+        summary: `Component ${index + 1} participates in the architecture pipeline.`,
+        tags: ["architecture", "pipeline"]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      prompts.push(prompt);
+      if (prompt.includes("证据规划 Agent")) {
+        selectedEvidenceIds = [...prompt.matchAll(/\[(evidence-[^\]]+)\]/g)]
+          .slice(0, 3)
+          .map((match) => match[1]);
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              focus: ["核心组件关系"],
+              pageRequests: [],
+              searchQueries: [],
+              selectedEvidenceIds
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据观察 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              decision: "stop",
+              focus: [],
+              pageRequests: [],
+              reason: "首轮已经覆盖核心组件、处理顺序和边界。",
+              searchQueries: [],
+              selectedEvidenceIds: []
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("关系梳理 Subagent")) {
+        return {
+          json: async () => ({
+            answer: `组件按处理顺序连接〔${selectedEvidenceIds[0]}〕。`,
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("视觉编辑 Subagent")) {
+        return {
+          json: async () => ({
+            answer: `适合用流程图呈现，但必须回到〔${selectedEvidenceIds[0]}〕核验。`,
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("薄读的证据复核 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: [],
+              reason: "每个句子都由绑定证据直接支持。",
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const summary = "系统把多个组件按依赖顺序连接起来，让状态沿处理流水线逐步传递，并保留证据给出的条件边界。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [selectedEvidenceIds[0]], status: "grounded", text: "组件按依赖顺序连接。" }],
+            externalKnowledge: [],
+            interactiveDemo: null,
+            mermaid: "flowchart LR\n  A[输入组件] --> B[处理组件] --> C[结果组件]",
+            omittedSections: [],
+            paperEvidence: [selectedEvidenceIds[0]],
+            paperType: "systems",
+            recommendedFigures: [],
+            summary,
+            summarySentences: [{ evidenceIds: [selectedEvidenceIds[0]], externalKnowledge: [], status: "grounded", text: summary }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "paper-large", title: "Large Architecture Paper" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-large-workload",
+      depth: 0,
+      paperIds: ["paper-large"],
+      primaryPaperId: "paper-large",
+      primaryPaperTitle: "Large Architecture Paper",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts.filter((prompt) => prompt.includes("关系梳理 Subagent"))).toHaveLength(1);
+  expect(prompts.filter((prompt) => prompt.includes("视觉编辑 Subagent"))).toHaveLength(1);
+  expect(prompts.find((prompt) => prompt.includes("你是 Liteasy 薄读 Agent"))).toContain("Subagent 私有工作记录");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.workload).toMatchObject({
+    maxConcurrency: 2,
+    strategy: "parallel"
+  });
+});

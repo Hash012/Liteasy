@@ -175,10 +175,10 @@ export async function runAgentArtifactAnalysis(
         label: event.label
       });
       const visibleWorklog = [...subtaskDrafts.values()]
-        .map((draft) => `【SubAgent 工作记录 · ${draft.label}】\n${draft.content}`)
+        .map((draft) => `### ${draft.label}\n\n${draft.content}`)
         .join("\n\n");
       onProgress?.({
-        message: `正在并行分析论文区段（${subtaskDrafts.size} 个 SubAgent 已返回内容）`,
+        message: `正在并行分析论文区段（${subtaskDrafts.size} 路工作记录已更新）`,
         partialAnswer: visibleWorklog.slice(-6_000),
         progress: 48,
         stage: artifactType === "thin_reading"

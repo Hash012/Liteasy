@@ -17,6 +17,7 @@ import type { ArtifactResultClient } from "../features/artifacts/artifactResultC
 import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/thin-reading/thinReading.types";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { DuplicateArtifactGenerationConfirmation } from "../features/artifacts/useArtifactActions";
+import type { MineruFigure } from "../features/import/import.types";
 import {
   createArtifactLocalRepository,
   type ArtifactLocalRepository
@@ -40,6 +41,7 @@ type UseArtifactWorkflowControllerInput = {
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
+  getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
@@ -89,6 +91,7 @@ type ArtifactWorkflowActions = {
   handleAssistantArtifact: (artifactType: ArtifactType) => string;
   openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
   openArtifact: (artifactId: string) => string;
+  renameArtifact: (artifactId: string, requestedName: string) => Promise<string>;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   saveSkillDocument: (artifactId: string) => Promise<void>;
@@ -108,6 +111,7 @@ export function useArtifactWorkflowController({
   cancelAgentRun,
   getImportedChunksByPaperId,
   getImportedChunksForPaperId,
+  getMineruFiguresForPaperId,
   getIntuechoEndpoint,
   getAssistantLanguage,
   getActiveReaderPaper,
@@ -164,6 +168,7 @@ export function useArtifactWorkflowController({
     cancelAgentRun,
     getImportedChunksByPaperId,
     getImportedChunksForPaperId,
+    getMineruFiguresForPaperId,
     getIntuechoEndpoint,
     getAssistantLanguage,
     getActiveReaderPaper,
@@ -266,6 +271,26 @@ export function useArtifactWorkflowController({
       generateThinReadingBranch: artifactActions.generateThinReadingBranch,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
       openArtifact: artifactActions.openArtifact,
+      renameArtifact: async (artifactId, requestedName) => {
+        const current = artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
+        if (!current || current.type === "skill_doc") {
+          return "找不到可重命名的已保存多模态产物。";
+        }
+        try {
+          const renamed = await artifactResultClient.rename(artifactId, requestedName);
+          if (!artifactStore.renameCatalogEntry(artifactId, renamed.title)) {
+            return "产物已改名，但当前列表未找到对应条目；刷新文献库后即可看到。";
+          }
+          artifactActions.syncArtifacts();
+          const message = `已重命名多模态产物：${renamed.title}`;
+          onAnalysisHint(message);
+          return message;
+        } catch (error) {
+          const message = `重命名多模态产物失败：${error instanceof Error ? error.message : String(error)}`;
+          onAnalysisHint(message);
+          return message;
+        }
+      },
       openSkillDocument: artifactActions.openSkillDocument,
       regenerateArtifact: artifactActions.regenerateArtifact,
       retryInterruptedThinReadingBranch: artifactActions.retryInterruptedThinReadingBranch,

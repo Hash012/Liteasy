@@ -1,0 +1,94 @@
+import { describe, expect, test } from "vitest";
+import {
+  artifactMarkdownToHtml,
+  createArtifactHtml,
+  createArtifactMarkdown
+} from "../app/features/artifacts/artifactDocumentExport";
+import type { ArtifactTab, ArtifactType } from "../app/features/artifacts/artifact.types";
+import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
+
+const artifactTypes: ArtifactType[] = [
+  "comparison_table",
+  "layered_graph",
+  "mindmap",
+  "ppt",
+  "skill_doc",
+  "thin_reading",
+  "tree"
+];
+
+function createTab(type: ArtifactType): ArtifactTab {
+  const base: ArtifactTab = {
+    answer: "核心结论来自论文证据。",
+    artifactId: `artifact-${type}`,
+    outlineNodes: [{
+      evidenceIds: ["evidence-private-123"],
+      id: "root",
+      kind: "root",
+      label: "核心结构 [evidence-private-123]"
+    }],
+    papers: [{ id: "paper-1", title: "QVLA" }],
+    title: `${type} 导出样例`,
+    type
+  };
+  if (type === "skill_doc") return { ...base, markdown: "# Skill 文档\n\n执行步骤。" };
+  if (type === "thin_reading") {
+    return {
+      ...base,
+      thinReadingDocument: createThinReadingDocument(createThinReadingFixture())
+    };
+  }
+  return base;
+}
+
+describe("artifact document export", () => {
+  test.each(artifactTypes)("creates portable Markdown and HTML for %s", (type) => {
+    const tab = createTab(type);
+    const markdown = createArtifactMarkdown(tab);
+    const html = createArtifactHtml(tab);
+
+    expect(markdown).toContain(type === "skill_doc" ? "Skill 文档" : tab.title);
+    expect(markdown).not.toContain("evidence-private-123");
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain("<meta charset=\"utf-8\"");
+    expect(html).not.toContain("evidence-private-123");
+  });
+
+  test("converts headings, nested list items, code, and quotes into printable HTML", () => {
+    const html = artifactMarkdownToHtml([
+      "# 标题",
+      "- 一级",
+      "  - 二级",
+      "> 证据摘录",
+      "```mermaid",
+      "A --> B",
+      "```"
+    ].join("\n"));
+
+    expect(html).toContain("<h1>标题</h1>");
+    expect(html).toContain('class="list-item depth-1"');
+    expect(html).toContain("<blockquote>证据摘录</blockquote>");
+    expect(html).toContain('class="language-mermaid"');
+  });
+
+  test("includes thin-reading Agent analysis and removes internal evidence IDs everywhere", () => {
+    const tab = createTab("thin_reading");
+    tab.answer = "补充 Agent 结论 [evidence-private-123]。";
+    const document = tab.thinReadingDocument!;
+    const rootNode = document.nodes[document.rootNodeId];
+    tab.thinReadingDocument = {
+      ...document,
+      nodes: {
+        ...document.nodes,
+        [rootNode.id]: { ...rootNode, summary: `${rootNode.summary} evidence-private-123` }
+      }
+    };
+
+    const markdown = createArtifactMarkdown(tab);
+
+    expect(markdown).toContain("## Agent 分析");
+    expect(markdown).toContain("补充 Agent 结论。");
+    expect(markdown).not.toContain("evidence-private-123");
+  });
+});

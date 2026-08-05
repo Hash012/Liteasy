@@ -27,6 +27,7 @@ function isArtifactResult(value: unknown): value is AgentArtifactResult {
     typeof candidate.answer === "string" &&
     Array.isArray(candidate.papers) &&
     Array.isArray(candidate.citations) &&
+    (candidate.mineruTextChunks === undefined || Array.isArray(candidate.mineruTextChunks)) &&
     (candidate.uiDsl === undefined || Boolean(candidate.uiDsl)) &&
     (candidate.thinReadingDocument === undefined || typeof candidate.thinReadingDocument === "object") &&
     (candidate.intuitionGraph === undefined || IntuitionGraphDocumentSchema.safeParse(candidate.intuitionGraph).success) &&
@@ -62,6 +63,22 @@ export function createArtifactResultClient(input: {
       }
       const payload = await response.json() as { artifacts?: unknown[] };
       return (payload.artifacts ?? []).filter(isArtifactResult);
+    },
+
+    async rename(artifactId: string, title: string) {
+      const response = await transport(
+        `${endpoint(input.getBaseEndpoint())}/${encodeURIComponent(artifactId)}`,
+        {
+          body: JSON.stringify({ title }),
+          headers: { "Content-Type": "application/json" },
+          method: "PATCH"
+        }
+      );
+      const payload = await response.json() as { artifact?: unknown; error?: string };
+      if (!response.ok || !isArtifactResult(payload.artifact)) {
+        throw new Error(payload.error ?? `重命名 Agent 产物失败：HTTP ${response.status}`);
+      }
+      return payload.artifact;
     },
 
     async save(document: AgentArtifactResult) {

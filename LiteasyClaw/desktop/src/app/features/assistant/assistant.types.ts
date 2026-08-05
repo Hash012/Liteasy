@@ -14,6 +14,7 @@ export type { AssistantMode };
 export type AssistantConfirmationRequest = HumanConfirmationRequest | AgentConfirmationRequest;
 
 export type AssistantMessage = {
+  agentActivity?: AgentActivity;
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -25,6 +26,34 @@ export type AssistantMessage = {
   executionTrace?: ModelExecutionTrace;
   publicWorkflowAudits?: PublicWorkflowAuditSummary[];
   uiDsl?: UIDslDocument;
+};
+
+export type AgentActivityStatus =
+  | "cancelled"
+  | "completed"
+  | "failed"
+  | "waiting"
+  | "working";
+
+export type AgentActivityEntry = {
+  content?: string;
+  id: string;
+  kind: "analysis" | "output" | "tool";
+  label: string;
+  status: "completed" | "failed" | "running" | "waiting";
+};
+
+/**
+ * A user-facing projection of an Agent run. It intentionally excludes opaque
+ * ids, raw tool arguments, and backend configuration so the worklog is useful
+ * without exposing implementation details or credentials.
+ */
+export type AgentActivity = {
+  entries: AgentActivityEntry[];
+  generatedContent: string;
+  progress?: number;
+  status: AgentActivityStatus;
+  statusText: string;
 };
 
 export type AssistantContextToken = {

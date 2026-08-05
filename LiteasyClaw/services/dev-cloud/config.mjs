@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { hardcodedDevSecrets } from "./devHardcodedSecrets.mjs";
 
 const configDir = dirname(fileURLToPath(import.meta.url));
-
 function stripMatchingQuotes(value) {
   if (
     (value.startsWith('"') && value.endsWith('"')) ||
@@ -52,11 +51,13 @@ export function loadSecretEnvFile(
   }
 
   const content = fs.readFileSync(envFilePath, "utf8");
+  const definedKeys = new Set();
   content.split(/\r?\n/).forEach((line) => {
     const parsed = parseEnvLine(line);
-    if (!parsed) {
+    if (!parsed || definedKeys.has(parsed.key)) {
       return;
     }
+    definedKeys.add(parsed.key);
 
     if (Object.prototype.hasOwnProperty.call(env, parsed.key) && env[parsed.key] !== "") {
       return;
@@ -86,6 +87,7 @@ export const defaultConfig = {
   localDirectEnabled: false,
   localDirectEndpoint: "http://127.0.0.1:8788",
   modelAccessMode: "cloud_proxy",
+  mineruToken: process.env.MINERU_TOKEN,
   grobidEndpoint: process.env.GROBID_ENDPOINT ?? "http://127.0.0.1:8070",
   // Deployment-owned secret. It is never returned to or accepted from a desktop client.
   // OpenAlex requires a key for every API request as of 2026-02-13.
@@ -114,6 +116,8 @@ export const defaultConfig = {
   openaiApiKey:
     process.env.OPENAI_API_KEY ??
     (useHardcodedDevSecrets ? hardcodedDevSecrets.openaiApiKey : undefined),
+  openaiModel: process.env.OPENAI_MODEL ?? process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini",
+  openaiReasoningEffort: process.env.OPENAI_REASONING_EFFORT,
   policyVersion: "dev-policy-v1",
   recommendationEmbeddingApiKey: process.env.LITEASY_RECOMMENDATION_EMBEDDING_API_KEY,
   recommendationEmbeddingBaseUrl: process.env.LITEASY_RECOMMENDATION_EMBEDDING_BASE_URL,
@@ -124,6 +128,66 @@ export const defaultConfig = {
   semanticScholarApiKey: process.env.SEMANTIC_SCHOLAR_API_KEY,
   syncedAt: "2026-05-14T09:30:00Z"
 };
+
+function sanitizeUpstreamBaseUrl(value, apiKey) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value);
+    let sanitized = `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, "");
+    const secrets = typeof apiKey === "string"
+      ? new Set([apiKey, apiKey.trim()].filter(Boolean))
+      : new Set();
+    for (const secret of secrets) {
+      sanitized = sanitized
+        .replaceAll(secret, "[redacted]")
+        .replaceAll(encodeURIComponent(secret), "[redacted]");
+    }
+    return sanitized;
+  } catch {
+    return "invalid upstream base URL";
+  }
+}
+
+export function buildPublicRuntimeSummary(
+  config = defaultConfig,
+  {
+    pid = process.pid,
+    startedAt = new Date().toISOString()
+  } = {}
+) {
+  const provider = typeof config.defaultProvider === "string"
+    ? config.defaultProvider
+    : "openai";
+  const isDeepSeek = provider === "deepseek";
+  const isOpenAI = provider === "openai";
+  const apiKey = isDeepSeek
+    ? config.deepseekApiKey
+    : isOpenAI
+      ? config.openaiApiKey
+      : undefined;
+  const upstreamBaseUrl = isDeepSeek
+    ? config.deepseekApiBaseUrl
+    : isOpenAI
+      ? config.openaiApiBaseUrl
+      : undefined;
+  const selectedModel = isDeepSeek
+    ? config.deepseekModel ?? null
+    : isOpenAI
+      ? config.openaiModel ?? null
+      : null;
+
+  return {
+    provider,
+    upstreamBaseUrl: sanitizeUpstreamBaseUrl(upstreamBaseUrl, apiKey),
+    hasApiKey: typeof apiKey === "string" && apiKey.trim().length > 0,
+    selectedModel,
+    pid,
+    startedAt
+  };
+}
 
 /**
  * For live evaluation scripts, which cannot run at all without the credential. Reads the

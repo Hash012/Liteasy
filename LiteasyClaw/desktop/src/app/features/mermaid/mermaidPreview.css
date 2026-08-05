@@ -1,0 +1,19 @@
+.mermaid-preview { border: 1px solid #d7e0e8; border-radius: 6px; background: #fff; overflow: hidden; margin: 18px 0; }
+.mermaid-preview__header { min-height: 42px; display: flex; align-items: center; gap: 12px; padding: 6px 10px; border-bottom: 1px solid #e5ebf0; background: #f8fafc; }
+.mermaid-preview__header > div { display: inline-flex; align-items: center; gap: 6px; color: #29465b; white-space: nowrap; }
+.mermaid-preview__header > button { margin-left: auto; }
+.mermaid-preview__svg { overflow: auto; padding: 18px; min-height: 220px; text-align: center; }
+.mermaid-preview__svg svg { max-width: 100%; height: auto; }
+.mermaid-preview__graph { height: 390px; background: #fbfcfe; }
+.mermaid-preview__graph--force { background: #20252b; }
+.mermaid-preview__graph--force .react-flow__edge-path { stroke-linecap: round; }
+.mermaid-preview__obsidian-node { align-items: center; background: #2d353d; border: 1px solid #87b8ea; border-radius: 50%; box-shadow: 0 0 0 1px rgb(135 184 234 / 16%), 0 3px 12px rgb(0 0 0 / 25%); color: #eef6ff; cursor: grab; display: flex; justify-content: center; padding: 9px; text-align: center; }
+.mermaid-preview__obsidian-node:active { cursor: grabbing; }
+.mermaid-preview__obsidian-node span { display: -webkit-box; font-size: 11px; line-height: 1.3; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.mermaid-preview__obsidian-handle { background: transparent; border: 0; height: 1px; min-height: 1px; min-width: 1px; opacity: 0; pointer-events: none; width: 1px; }
+.mermaid-preview__node { width: 170px; max-height: 76px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; padding: 10px 12px; border: 1px solid #8ba3b8; border-radius: 6px; background: #fff; box-shadow: 0 1px 3px rgb(28 53 70 / 12%); color: #173844; font-size: 12px; line-height: 18px; cursor: grab; }
+.mermaid-preview__node:active { cursor: grabbing; }
+.mermaid-preview__empty, .mermaid-preview__error, .mermaid-preview__loading { margin: 0; padding: 24px; color: #526a7d; }
+.mermaid-preview__error { color: #a4262c; }
+.mermaid-preview__repaired { margin: 0; padding: 7px 12px; background: #eff6fc; color: #245a7a; font-size: 12px; }
+.mermaid-preview__fallback > strong { display: block; padding: 9px 12px; color: #4d6172; font-size: 13px; }

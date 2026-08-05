@@ -48,6 +48,24 @@ describe("AssistantMessageList", () => {
     expect(screen.getByText(/模型链路：/)).toBeInTheDocument();
   });
 
+  test("uses direct, labelled conversation rows and keeps message actions outside their content", () => {
+    const messages: AssistantMessage[] = [
+      { content: "这是我的问题", id: "user-message", role: "user" },
+      { content: "这是直接排版的回复", id: "assistant-message", role: "assistant" }
+    ];
+
+    const { container } = render(
+      <AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />
+    );
+
+    expect(screen.getByLabelText("你的消息")).toHaveClass("assistant-message-wrap", "user");
+    expect(screen.getByLabelText("AI 回复")).toHaveClass("assistant-message-wrap", "assistant");
+    expect(screen.getByText("你")).toBeInTheDocument();
+    expect(screen.getByText("AI")).toBeInTheDocument();
+    expect(container.querySelector(".assistant-message-actions")?.parentElement)
+      .toHaveClass("assistant-message-wrap");
+  });
+
   test("renders user-safe public workflow audit summaries without internal identifiers", () => {
     const messages: AssistantMessage[] = [
       {
@@ -81,6 +99,81 @@ describe("AssistantMessageList", () => {
     expect(screen.getByText("证据与来源：需复核")).toBeInTheDocument();
     expect(screen.getByText("已尝试自动修复，但仍需人工复核。")).toBeInTheDocument();
     expect(screen.queryByText(/trace-|run-|session-|stepId/)).not.toBeInTheDocument();
+  });
+
+  test("keeps Agent work details collapsible while exposing streamed content, tool calls, and output", async () => {
+    const user = userEvent.setup();
+    const messages: AssistantMessage[] = [
+      {
+        agentActivity: {
+          entries: [
+            {
+              content: "调用参数已隐藏。",
+              id: "tool-1",
+              kind: "tool",
+              label: "工具调用：artifact.generate",
+              status: "completed"
+            },
+            {
+              content: "已创建可查看的产物。",
+              id: "output-1",
+              kind: "output",
+              label: "产物已请求",
+              status: "completed"
+            }
+          ],
+          generatedContent: "正在组织可追溯的分析结论。",
+          status: "completed",
+          statusText: "Agent 已完成本次工作"
+        },
+        content: "",
+        id: "assistant-activity",
+        role: "assistant"
+      }
+    ];
+
+    render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
+
+    expect(screen.getByLabelText("Agent 工作状态")).toBeInTheDocument();
+    expect(screen.queryByLabelText("实时生成内容")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "查看工作详情" }));
+
+    expect(screen.getByLabelText("实时生成内容")).toHaveTextContent("正在组织可追溯的分析结论。");
+    expect(screen.getByText("工具调用：artifact.generate")).toBeInTheDocument();
+    expect(screen.getByText("已创建可查看的产物。")).toBeInTheDocument();
+  });
+
+  test("does not display structured Agent metadata as realtime content", async () => {
+    const user = userEvent.setup();
+    const messages: AssistantMessage[] = [
+      {
+        agentActivity: {
+          entries: [
+            {
+              content: '{"internalToolArguments":{"paperId":"secret-paper"}}',
+              id: "tool-result",
+              kind: "tool",
+              label: "工具调用：检索论文",
+              status: "completed"
+            }
+          ],
+          generatedContent: '{"runId":"internal-run","step":"retrieve"}',
+          status: "completed",
+          statusText: "已完成检索"
+        },
+        content: "",
+        id: "assistant-safe-activity",
+        role: "assistant"
+      }
+    ];
+
+    render(<AssistantMessageList messages={messages} mode="qa" onModeChange={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "查看工作详情" }));
+
+    expect(screen.getByText("工具调用：检索论文")).toBeInTheDocument();
+    expect(screen.queryByText(/internal-run|internalToolArguments|secret-paper/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("实时生成内容")).not.toBeInTheDocument();
   });
 
   test("forwards dynamic action refs with their DSL trace id", async () => {
