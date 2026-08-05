@@ -2025,5 +2025,517 @@
         "relevanceScore": 0
       }
     ]
+  },
+  "demo-session-1::local_library:本地文献库::demo-1::relevance::0": {
+    "cachedAt": "2026-08-05T17:28:52.417Z",
+    "recommendations": [
+      {
+        "authors": [
+          "Carlos Lassance",
+          "Maroua Maachou",
+          "Joohee Park",
+          "Stéphane Clinchant"
+        ],
+        "canonicalId": "doi:10.1145/3477495.3531835",
+        "discoveredAt": "2026-08-05T17:28:52.401Z",
+        "id": "reading-candidate:doi:10.1145/3477495.3531835",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1145/3477495.3531835",
+            "crossref:10.1145/3477495.3531856",
+            "arxiv:7495.35318"
+          ],
+          "arxivId": "7495.35318",
+          "canonicalId": "doi:10.1145/3477495.3531835",
+          "doi": "https://doi.org/10.1145/3477495.3531835",
+          "lineageStatus": "possible_version_family",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "arxivId": "7495.35318",
+              "doi": "https://doi.org/10.1145/3477495.3531835",
+              "id": "crossref:10.1145/3477495.3531835",
+              "provider": "crossref",
+              "recordUrl": "https://api.crossref.org/works/10.1145%2F3477495.3531835",
+              "title": "Learned Token Pruning in Contextualized Late Interaction over BERT (ColBERT)",
+              "url": "https://doi.org/10.1145/3477495.3531835",
+              "year": 2022
+            },
+            {
+              "arxivId": "7495.35318",
+              "doi": "https://doi.org/10.1145/3477495.3531856",
+              "id": "crossref:10.1145/3477495.3531856",
+              "provider": "crossref",
+              "recordUrl": "https://api.crossref.org/works/10.1145%2F3477495.3531856",
+              "title": "BERT-based Dense Intra-ranking and Contextualized Late Interaction via Multi-task Learning for Long Document Retrieval",
+              "url": "https://doi.org/10.1145/3477495.3531856",
+              "year": 2022
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2022,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.5,
+          "sourceRelevance": 0.5,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.5,
+          "baseRelevance": 0.5,
+          "diversityPenalty": 0,
+          "finalScore": 0.5
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1145/3477495.3531835",
+        "title": "Learned Token Pruning in Contextualized Late Interaction over BERT (ColBERT)",
+        "rankingFusion": {
+          "calibratedScore": 0.5,
+          "fusionScore": 1,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.5,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "medium",
+        "relevanceScore": 0.5
+      },
+      {
+        "authors": [
+          "Yixiang Fang"
+        ],
+        "canonicalId": "doi:10.5353/th_991043979532303414",
+        "discoveredAt": "2026-08-05T17:28:52.401Z",
+        "id": "reading-candidate:doi:10.5353/th_991043979532303414",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.5353/th_991043979532303414"
+          ],
+          "canonicalId": "doi:10.5353/th_991043979532303414",
+          "doi": "https://doi.org/10.5353/th_991043979532303414",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.5353/th_991043979532303414",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.5353/th_991043979532303414",
+              "recordUrl": "https://api.crossref.org/works/10.5353%2Fth_991043979532303414",
+              "title": "Effective and efficient community search over large attributed graphs",
+              "url": "https://doi.org/10.5353/th_991043979532303414"
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.342,
+          "sourceRelevance": 0.342,
+          "fusionScore": 0.879,
+          "lexicalRelevance": 0.970369,
+          "preFusionRelevance": 0.342,
+          "baseRelevance": 0.313,
+          "diversityPenalty": 0.02,
+          "finalScore": 0.293
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.5353/th_991043979532303414",
+        "title": "Effective and efficient community search over large attributed graphs",
+        "rankingFusion": {
+          "calibratedScore": 0.313,
+          "fusionScore": 0.879,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.342,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.970369,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.293
+      },
+      {
+        "abstract": "Via is a forthcoming all-sky spectroscopic survey that will achieve 100 m s$^{-1}$ radial velocity stability for millions of faint ($G \\lesssim 21$) stars while reaching LSST's single-visit depth ($r \\approx 24$) for transient spectroscopy, opening new regimes in near-field cosmology and time-domain astrophysics. Via will deploy identical fiber-fed, multi-object spectrographs on the 6.5m MMT and Magellan/Clay telescopes for a five-year, dual-hemisphere survey of $>2{,}000{,}000$ stars beginning in 2027 - timed to complement LSST. Each instrument has 576 robotically positioned fibers over a $1^\\circ$ field of view, feeding two spectrographs: Viaspec ($R \\approx 15{,}000$; 505-595 nm; 540 fibers) and Boombox ($R \\approx 1{,}000$; 360-1010 nm; 36 fibers). Four key goals drive the survey: (1) a comprehensive survey of velocity perturbations in cold stellar streams, sensitive to $M \\lesssim 10^7$ subhalos below the threshold of galaxy formation, a stringent test of the particle nature of dark matter; (2) a chemodynamical census of Milky Way satellite galaxies to understand the formation of the faintest galaxies; (3) the first 3D tomographic maps of cold gas in the circumgalactic medium via NaI absorption; and (4) the rapid characterization of thousands of transients to the single-epoch survey depth of LSST. Ancillary science - including the Ly$α$ forest at $z \\approx 3$-$4$, polluted white dwarfs, exoplanet host characterization, fast radio burst host galaxies, and extragalactic dwarf galaxies - will leverage spare fibers in every pointing. The Via Project is a collaboration between the Center for Astrophysics $|$ Harvard & Smithsonian, Carnegie Observatories, Stanford University, and Yale University.",
+        "authors": [
+          "The Via Collaboration"
+        ],
+        "canonicalId": "arxiv:2606.18332",
+        "discoveredAt": "2026-08-05T17:28:52.401Z",
+        "id": "reading-candidate:arxiv:2606.18332",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2606.18332"
+          ],
+          "arxivId": "2606.18332",
+          "canonicalId": "arxiv:2606.18332",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2606.18332",
+              "provider": "arxiv",
+              "arxivId": "2606.18332",
+              "recordUrl": "https://arxiv.org/abs/2606.18332",
+              "title": "The Via Project: Overview of the Science, Instrument, and Survey",
+              "url": "https://arxiv.org/abs/2606.18332",
+              "year": 2026
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2026,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.333,
+          "sourceRelevance": 0.333,
+          "fusionScore": 0.786,
+          "lexicalRelevance": 0.44202,
+          "preFusionRelevance": 0.333,
+          "baseRelevance": 0.283,
+          "diversityPenalty": 0.022,
+          "finalScore": 0.261
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2606.18332",
+        "title": "The Via Project: Overview of the Science, Instrument, and Survey",
+        "rankingFusion": {
+          "calibratedScore": 0.283,
+          "fusionScore": 0.786,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.025,
+              "id": "provider",
+              "rank": 4,
+              "score": 0.333,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.021429,
+              "id": "lexical_bm25",
+              "rank": 4,
+              "score": 0.44202,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.261
+      },
+      {
+        "authors": [
+          "Omar Khattab",
+          "Matei Zaharia"
+        ],
+        "canonicalId": "doi:10.1145/3397271.3401075",
+        "discoveredAt": "2026-08-05T17:28:52.401Z",
+        "id": "reading-candidate:doi:10.1145/3397271.3401075",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1145/3397271.3401075",
+            "arxiv:7271.34010"
+          ],
+          "arxivId": "7271.34010",
+          "canonicalId": "doi:10.1145/3397271.3401075",
+          "doi": "https://doi.org/10.1145/3397271.3401075",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1145/3397271.3401075",
+              "provider": "crossref",
+              "arxivId": "7271.34010",
+              "doi": "https://doi.org/10.1145/3397271.3401075",
+              "recordUrl": "https://api.crossref.org/works/10.1145%2F3397271.3401075",
+              "title": "ColBERT",
+              "url": "https://doi.org/10.1145/3397271.3401075",
+              "year": 2020
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2020,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.496,
+          "sourceRelevance": 0.496,
+          "fusionScore": 0.832,
+          "lexicalRelevance": 0.121385,
+          "preFusionRelevance": 0.496,
+          "baseRelevance": 0.438,
+          "diversityPenalty": 0.18,
+          "finalScore": 0.258
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1145/3397271.3401075",
+        "title": "ColBERT",
+        "rankingFusion": {
+          "calibratedScore": 0.438,
+          "fusionScore": 0.832,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.496,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.02,
+              "id": "lexical_bm25",
+              "rank": 5,
+              "score": 0.121385,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.258
+      },
+      {
+        "abstract": "Recent progress in neural information retrieval has demonstrated large gains in effectiveness, while often sacrificing the efficiency and interpretability of the neural model compared to classical approaches. This paper proposes ColBERTer, a neural retrieval model using contextualized late interaction (ColBERT) with enhanced reduction. Along the effectiveness Pareto frontier, ColBERTer's reductions dramatically lower ColBERT's storage requirements while simultaneously improving the interpretability of its token-matching scores. To this end, ColBERTer fuses single-vector retrieval, multi-vector refinement, and optional lexical matching components into one model. For its multi-vector component, ColBERTer reduces the number of stored vectors per document by learning unique whole-word representations for the terms in each document and learning to identify and remove word representations that are not essential to effective scoring. We employ an explicit multi-task, multi-stage training to facilitate using very small vector dimensions. Results on the MS MARCO and TREC-DL collection show that ColBERTer can reduce the storage footprint by up to 2.5x, while maintaining effectiveness. With just one dimension per token in its smallest setting, ColBERTer achieves index storage parity with the plaintext size, with very strong effectiveness results. Finally, we demonstrate ColBERTer's robustness on seven high-quality out-of-domain collections, yielding statistically significant gains over traditional retrieval baselines.",
+        "authors": [
+          "Sebastian Hofstätter",
+          "Omar Khattab",
+          "Sophia Althammer",
+          "Mete Sertkan",
+          "Allan Hanbury"
+        ],
+        "canonicalId": "arxiv:2203.13088",
+        "discoveredAt": "2026-08-05T17:28:52.401Z",
+        "id": "reading-candidate:arxiv:2203.13088",
+        "identityResolution": {
+          "aliases": [
+            "arxiv:2203.13088"
+          ],
+          "arxivId": "2203.13088",
+          "canonicalId": "arxiv:2203.13088",
+          "lineageStatus": "single_record",
+          "providers": [
+            "arxiv"
+          ],
+          "records": [
+            {
+              "id": "arxiv:2203.13088",
+              "provider": "arxiv",
+              "arxivId": "2203.13088",
+              "recordUrl": "https://arxiv.org/abs/2203.13088",
+              "title": "Introducing Neural Bag of Whole-Words with ColBERTer: Contextualized Late Interactions using Enhanced Reduction",
+              "url": "https://arxiv.org/abs/2203.13088",
+              "year": 2022
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2022,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        "relatedDocumentTitles": [
+          "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.292,
+          "sourceRelevance": 0.292,
+          "fusionScore": 0.785,
+          "lexicalRelevance": 0.618166,
+          "preFusionRelevance": 0.292,
+          "baseRelevance": 0.248,
+          "diversityPenalty": 0.04,
+          "finalScore": 0.208
+        },
+        "primaryProvider": "arxiv",
+        "source": "arXiv",
+        "sourceKind": "live",
+        "sourceUrl": "https://arxiv.org/abs/2203.13088",
+        "title": "Introducing Neural Bag of Whole-Words with ColBERTer: Contextualized Late Interactions using Enhanced Reduction",
+        "rankingFusion": {
+          "calibratedScore": 0.248,
+          "fusionScore": 0.785,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.023333,
+              "id": "provider",
+              "rank": 5,
+              "score": 0.292,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.023077,
+              "id": "lexical_bm25",
+              "rank": 3,
+              "score": 0.618166,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.208
+      }
+    ]
+  },
+  "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785313732256434307-0::relevance::0": {
+    "cachedAt": "2026-08-02T12:58:40.346Z",
+    "recommendations": []
   }
 }
