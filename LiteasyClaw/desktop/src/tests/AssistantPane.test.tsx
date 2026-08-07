@@ -1,10 +1,36 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentProps } from "react";
 import { afterEach, vi } from "vitest";
-import { AssistantPane } from "../app/features/assistant/AssistantPane";
+import { AssistantPane as RuntimeAssistantPane } from "../app/features/assistant/AssistantPane";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { FrontendAgentClient } from "../app/features/agent-api/frontendAgentClient";
 import type { AgentEvent } from "../app/features/agent-api/agentApi.types";
+import type { ModelTransport } from "../app/features/models/modelHttpClient";
+
+const testQuestions = [
+  "总结这篇论文的核心方法",
+  "这篇论文讲了什么？",
+  "这篇综述如何定义向量数据库系统？",
+  "这篇论文的实验结论是什么？"
+];
+
+const testModelTransport: ModelTransport = async ({ body }) => {
+  const serialized = String(body ?? "");
+  const question = testQuestions.find((candidate) => serialized.includes(candidate)) ?? "测试请求";
+  return {
+    json: async () => ({
+      answer: `云端回答：${question}`,
+      execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+    }),
+    ok: true,
+    status: 200
+  };
+};
+
+function AssistantPane(props: ComponentProps<typeof RuntimeAssistantPane>) {
+  return <RuntimeAssistantPane modelTransport={testModelTransport} {...props} />;
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,7 +70,99 @@ test("shows the unified composer before a conversation starts", async () => {
   await waitFor(() => {
     expect(screen.queryByLabelText("AI助手初始消息区")).not.toBeInTheDocument();
   });
-  expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
+  expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
+});
+
+test("opens and updates the initial thin-reading generation session", async () => {
+  const baseProps = {
+    onGenerateArtifact: () => "unused",
+    selectedSetStatus: {
+      importedCount: 1,
+      selectedCount: 1,
+      selectionLocked: true
+    }
+  };
+  const { rerender } = render(
+    <AssistantPane
+      {...baseProps}
+      artifactTasks={[{
+        id: "artifact-task-thin-root",
+        message: "正在规划薄读路径与证据范围",
+        progress: 43,
+        stage: "thin_reading_planning",
+        status: "running",
+        type: "thin_reading"
+      }]}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("当前会话")).toHaveTextContent("产物生成生成：薄读");
+  });
+  expect(screen.getByText(/正在规划薄读路径与证据范围/)).toBeInTheDocument();
+
+  rerender(
+    <AssistantPane
+      {...baseProps}
+      artifactTasks={[{
+        id: "artifact-task-thin-root",
+        message: "正在核验薄读证据",
+        progress: 73,
+        stage: "thin_reading_validating",
+        status: "running",
+        type: "thin_reading"
+      }]}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText(/正在核验薄读证据/)).toBeInTheDocument();
+  });
+
+  rerender(
+    <AssistantPane
+      {...baseProps}
+      artifactTasks={[{
+        artifactId: "artifact-thin-root",
+        id: "artifact-task-thin-root",
+        message: "分析结果已保存",
+        progress: 100,
+        stage: "completed",
+        status: "completed",
+        type: "thin_reading"
+      }]}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "打开产物" })).toBeInTheDocument();
+  });
+});
+
+test("keeps thin-reading branch progress on the active reading page", async () => {
+  render(
+    <AssistantPane
+      artifactTasks={[{
+        artifactId: "artifact-thin-existing",
+        id: "artifact-task-thin-branch",
+        message: "正在生成薄读下一层",
+        progress: 58,
+        stage: "thin_reading_generating_branch",
+        status: "running",
+        type: "thin_reading"
+      }]}
+      onGenerateArtifact={() => "unused"}
+      selectedSetStatus={{
+        importedCount: 1,
+        selectedCount: 1,
+        selectionLocked: true
+      }}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
+  });
 });
 
 test("shows public workflow audit summaries after a public Agent run when enabled", async () => {
@@ -249,7 +367,7 @@ test("renders command result DSL after a theme command while keeping the empty l
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.queryByLabelText("AI助手初始消息区")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
+  expect(await screen.findByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument();
   expect(screen.getByText("执行审计：已回放 5 条 journal 事实。")).toBeInTheDocument();
 });
@@ -439,7 +557,7 @@ test("answers qa mode while surfacing selection readiness in runtime context", a
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getAllByText("这篇论文讲了什么？").length).toBeGreaterThan(0);
-  expect(screen.getByText(/云端回答：这篇论文讲了什么？/)).toBeInTheDocument();
+  expect(await screen.findByText(/云端回答：这篇论文讲了什么？/)).toBeInTheDocument();
   expect(screen.getByText(/已导入 0\/1/)).toBeInTheDocument();
   expect(screen.getByPlaceholderText("输入你的问题或命令")).toHaveAttribute(
     "title",
@@ -452,7 +570,18 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
 
   render(
     <AssistantPane
+      importedChunksByPaperId={{
+        "demo-1": [{
+          page: 2,
+          paperId: "demo-1",
+          paperTitle: "ColBERT",
+          snippet: "ColBERT uses contextualized late interaction for efficient retrieval.",
+          summary: "ColBERT 使用上下文化后期交互完成高效检索。",
+          tags: ["retrieval", "late interaction"]
+        }]
+      }}
       onGenerateArtifact={() => "unused"}
+      selectedPapers={[{ id: "demo-1", title: "ColBERT" }]}
       selectedSetStatus={{
         importedCount: 1,
         selectedCount: 1,
@@ -466,7 +595,7 @@ test("adds grounded user and assistant messages in qa mode when selected set is 
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getAllByText("总结这篇论文的核心方法").length).toBeGreaterThan(0);
-  expect(screen.getByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
+  expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
   expect(screen.getAllByText(/demo-1 p\.2/).length).toBeGreaterThan(0);
   expect(screen.getByText("审计模型 gpt-5-mini-auditor")).toBeInTheDocument();
   expect(screen.getByText("审计评分 0.84 · 通过")).toBeInTheDocument();
@@ -488,6 +617,8 @@ test("archives the current assistant session when starting a new one", async () 
 
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/关闭联网推荐");
   await user.click(screen.getByRole("button", { name: "发送" }));
+
+  await screen.findByText(/已更新 联网推荐：false/);
 
   await user.click(screen.getByRole("button", { name: "新建" }));
 
@@ -524,7 +655,7 @@ test("restores an archived assistant session from history", async () => {
   expect(screen.queryByLabelText("历史会话面板")).not.toBeInTheDocument();
   expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话");
   expect(screen.getAllByText("/关闭联网推荐").length).toBeGreaterThan(0);
-  expect(screen.getByText(/已更新 联网推荐：false/)).toBeInTheDocument();
+  expect(await screen.findByText(/已更新 联网推荐：false/)).toBeInTheDocument();
 });
 
 test("starts a separate session from the session toolbar", async () => {
@@ -602,7 +733,7 @@ test("executes natural language command aliases through safe actions", async () 
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   expect(screen.getAllByText("/别再联网推荐了").length).toBeGreaterThan(0);
-  expect(screen.getByText(/已更新 联网推荐：false/)).toBeInTheDocument();
+  expect(await screen.findByText(/已更新 联网推荐：false/)).toBeInTheDocument();
 });
 
 test("records command execution feedback in message history", async () => {
@@ -631,6 +762,16 @@ test("uses the user question to retrieve a different cited chunk", async () => {
 
   render(
     <AssistantPane
+      importedChunksByPaperId={{
+        "demo-2": [{
+          page: 4,
+          paperId: "demo-2",
+          paperTitle: "Survey of Vector Database Management Systems",
+          snippet: "vector database management systems organize vector indexes and query processing",
+          summary: "向量数据库管理系统组织向量索引与查询处理。",
+          tags: ["vector database management systems"]
+        }]
+      }}
       onGenerateArtifact={() => "unused"}
       selectedPapers={[
         {
@@ -650,7 +791,7 @@ test("uses the user question to retrieve a different cited chunk", async () => {
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇综述如何定义向量数据库系统？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
+  expect(await screen.findByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
   expect(screen.getAllByText(/demo-2 · 第 4 页/).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/vector database management systems/).length).toBeGreaterThan(0);
 });
@@ -691,8 +832,8 @@ test("routes qa generation through the cloud-governed model gateway by default",
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "这篇综述如何定义向量数据库系统？");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
-  expect(screen.getByText("模型链路：云端模型能力 -> 桌面内置 Mock")).toBeInTheDocument();
+  expect(await screen.findByText(/云端回答：这篇综述如何定义向量数据库系统？/)).toBeInTheDocument();
+  expect(screen.getByText(/模型链路：云端模型能力 -> 云端服务/)).toBeInTheDocument();
 });
 
 test("lets users edit a previous prompt and replaces the following answer", async () => {
@@ -718,6 +859,7 @@ test("lets users edit a previous prompt and replaces the following answer", asyn
   await selectInitialAssistantMode(user, "问答");
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "总结这篇论文的核心方法");
   await user.click(screen.getByRole("button", { name: "发送" }));
+  expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "编辑：总结这篇论文的核心方法" }));
 
@@ -730,7 +872,7 @@ test("lets users edit a previous prompt and replaces the following answer", asyn
   expect(screen.queryByText("总结这篇论文的核心方法")).not.toBeInTheDocument();
   expect(screen.queryByText(/云端回答：总结这篇论文的核心方法/)).not.toBeInTheDocument();
   expect(screen.getAllByText("这篇论文的实验结论是什么？").length).toBeGreaterThan(0);
-  expect(screen.getByText(/云端回答：这篇论文的实验结论是什么？/)).toBeInTheDocument();
+  expect(await screen.findByText(/云端回答：这篇论文的实验结论是什么？/)).toBeInTheDocument();
 });
 
 test("regenerates the latest model answer from the previous user prompt", async () => {
@@ -902,6 +1044,9 @@ test("shows a readable assistant error when the model backend is unavailable", a
 
   render(
     <AssistantPane
+      modelTransport={async () => {
+        throw new Error("network down");
+      }}
       onGenerateArtifact={() => "unused"}
       selectedPapers={[
         {
@@ -923,8 +1068,10 @@ test("shows a readable assistant error when the model backend is unavailable", a
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => {
-    expect(screen.getByText(/模型服务暂时不可用/)).toBeInTheDocument();
+    expect(screen.getByText(/AI 服务暂时不可用/)).toBeInTheDocument();
   });
+  expect(screen.getByText(/错误编号：assistant_service_unavailable/)).toBeInTheDocument();
+  expect(screen.queryByText(/network down/)).not.toBeInTheDocument();
 });
 
 test("shows current command examples including organization and recommendation actions", async () => {
@@ -1090,7 +1237,7 @@ test("uses runtime context readiness before starting a mind map from the assista
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/生成思维导图");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("请先导入当前选中文献集，再生成思维导图。")).toBeInTheDocument();
+  expect(await screen.findByText("请先导入当前选中文献集，再生成思维导图。")).toBeInTheDocument();
   expect(onGenerateArtifact).not.toHaveBeenCalled();
 });
 
@@ -1113,8 +1260,8 @@ test("shows semantic command plan previews in command mode", async () => {
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/把窗口切分成两个");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("计划：切换为双栏布局")).toBeInTheDocument();
-  expect(screen.getByText("已切换为双栏布局。")).toBeInTheDocument();
+  expect(await screen.findByText("计划：切换为双栏布局")).toBeInTheDocument();
+  expect(await screen.findByText("已切换为双栏布局。")).toBeInTheDocument();
   expect(onApplyLayoutPreset).toHaveBeenCalledWith({
     preset: "two_column"
   });
@@ -1175,8 +1322,8 @@ test("uses the model semantic planner for command mode when it returns valid JSO
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/让界面像儿童科普书");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("计划：应用卡通风格")).toBeInTheDocument();
-  expect(screen.getByText("已应用卡通风格。")).toBeInTheDocument();
+  expect(await screen.findByText("计划：应用卡通风格")).toBeInTheDocument();
+  expect(await screen.findByText("已应用卡通风格。")).toBeInTheDocument();
   expect(onApplyThemePreset).toHaveBeenCalledWith({
     preset: "playful",
     tone: "cartoon"
@@ -1221,8 +1368,8 @@ test("falls back to the local semantic planner when model command planning fails
   await user.type(screen.getByPlaceholderText("输入你的问题或命令"), "/把窗口切分成两个");
   await user.click(screen.getByRole("button", { name: "发送" }));
 
-  expect(screen.getByText("计划：切换为双栏布局")).toBeInTheDocument();
-  expect(screen.getByText("已切换为双栏布局。")).toBeInTheDocument();
+  expect(await screen.findByText("计划：切换为双栏布局")).toBeInTheDocument();
+  expect(await screen.findByText("已切换为双栏布局。")).toBeInTheDocument();
   expect(onApplyLayoutPreset).toHaveBeenCalledWith({
     preset: "two_column"
   });

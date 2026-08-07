@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { starterPapers } from "../app/layout/starterPapers";
+import { starterPapers } from "./fixtures/starterPapers";
 import { cloneWorkspaceState } from "../app/features/workspace/workspaceStateHelpers";
 import { cloneSettingsState, createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 

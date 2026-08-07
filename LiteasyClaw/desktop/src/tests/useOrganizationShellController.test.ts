@@ -4,7 +4,6 @@ import { useRef } from "react";
 import { useOrganizationShellController } from "../app/controllers/useOrganizationShellController";
 import { createWorkspaceStore } from "../app/features/workspace/workspace.store";
 import type { AccountSession } from "../app/features/account/account.types";
-import type { Paper } from "../app/features/workspace/workspace.types";
 
 const accountSession: AccountSession = {
   email: "researcher@liteasy.dev",
@@ -13,14 +12,6 @@ const accountSession: AccountSession = {
   name: "Liteasy Researcher",
   sessionId: "demo-session-1"
 };
-
-const starterPapers: Paper[] = [
-  {
-    id: "demo-1",
-    sourcePath: "fixtures/attention-is-all-you-need.pdf",
-    title: "Attention Is All You Need"
-  }
-];
 
 function createJsonResponse(payload: unknown) {
   return {
@@ -84,22 +75,6 @@ describe("useOrganizationShellController", () => {
         }
       })
     );
-    const organizationGovernanceTransport = vi.fn(async () =>
-      createJsonResponse({
-        summary: {
-          auditQueue: { highRisk: 0, pendingReview: 1 },
-          quota: {
-            modelCallsLimit: 5000,
-            modelCallsUsed: 900,
-            storageLimitGb: 50,
-            storageUsedGb: 12
-          },
-          recentAuditEvents: [],
-          runningTasks: []
-        }
-      })
-    );
-
     const { result } = renderHook(() => {
       const workspaceStoreRef = useRef(createWorkspaceStore());
       return useOrganizationShellController({
@@ -107,19 +82,16 @@ describe("useOrganizationShellController", () => {
         controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
         organizationListTransport,
         organizationTransport,
-        organizationGovernanceTransport,
         onAnalysisHint,
         onLeftRailView,
         onWorkspaceLabel,
         onWorkspaceSync,
-        starterPapers,
         workspaceStoreRef
       });
     });
 
     await waitFor(() => {
       expect(result.current.model.organizationSummary?.organizationId).toBe("org-demo-1");
-      expect(result.current.model.organizationGovernanceSummary?.auditQueue.pendingReview).toBe(1);
     });
 
     let message = "";

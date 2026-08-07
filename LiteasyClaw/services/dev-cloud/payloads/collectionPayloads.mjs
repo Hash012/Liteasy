@@ -1,5 +1,3 @@
-import { listCollection, saveCollectionItem } from "../db/collectionRepository.mjs";
-
 function isCollectionItemPayload(item) {
   return (
     typeof item === "object" &&
@@ -12,25 +10,17 @@ function isCollectionItemPayload(item) {
   );
 }
 
-export function buildCollectionListPayload(body = {}) {
-  const sessionId = typeof body.sessionId === "string" ? body.sessionId : "anonymous";
-
+export function buildCollectionListPayload(body, repository) {
   return {
-    items: listCollection(sessionId)
+    items: repository.list(body.sessionId, body.status)
   };
 }
 
-export function buildCollectionSavePayload(body = {}) {
-  const item = body.item;
-  const sessionId = typeof body.sessionId === "string" ? body.sessionId : "anonymous";
-
-  if (!isCollectionItemPayload(item)) {
-    return {
-      error: "invalid_collection_item"
-    };
+export function buildCollectionSavePayload(body, repository) {
+  if (!isCollectionItemPayload(body.item)) {
+    return { error: "invalid_collection_item" };
   }
-
   return {
-    items: saveCollectionItem(sessionId, item)
+    items: repository.save(body.sessionId, body.item)
   };
 }

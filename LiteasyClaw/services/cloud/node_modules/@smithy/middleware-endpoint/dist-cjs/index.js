@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveEndpointRequiredConfig = exports.resolveEndpointConfig = exports.getEndpointPlugin = exports.endpointMiddlewareOptions = exports.endpointMiddleware = exports.toEndpointV1 = exports.resolveParams = exports.getEndpointFromInstructions = void 0;
+var endpoints_1 = require("@smithy/core/endpoints");
+Object.defineProperty(exports, "getEndpointFromInstructions", { enumerable: true, get: function () { return endpoints_1.getEndpointFromInstructions; } });
+Object.defineProperty(exports, "resolveParams", { enumerable: true, get: function () { return endpoints_1.resolveParams; } });
+Object.defineProperty(exports, "toEndpointV1", { enumerable: true, get: function () { return endpoints_1.toEndpointV1; } });
+Object.defineProperty(exports, "endpointMiddleware", { enumerable: true, get: function () { return endpoints_1.endpointMiddleware; } });
+Object.defineProperty(exports, "endpointMiddlewareOptions", { enumerable: true, get: function () { return endpoints_1.endpointMiddlewareOptions; } });
+Object.defineProperty(exports, "getEndpointPlugin", { enumerable: true, get: function () { return endpoints_1.getEndpointPlugin; } });
+Object.defineProperty(exports, "resolveEndpointConfig", { enumerable: true, get: function () { return endpoints_1.resolveEndpointConfig; } });
+Object.defineProperty(exports, "resolveEndpointRequiredConfig", { enumerable: true, get: function () { return endpoints_1.resolveEndpointRequiredConfig; } });

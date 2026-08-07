@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import {
   addThinReadingAnnotation,
   applyThinReadingAnnotationSyncResults,

@@ -102,7 +102,7 @@ describe("ArtifactTabs", () => {
     expect(screen.getByLabelText("实时生成内容")).toHaveTextContent("第一段实时内容");
   });
 
-  test("shows provider, model, endpoint and recovery guidance after generation fails", () => {
+  test("shows safe recovery guidance without internal model diagnostics", () => {
     render(
       <ArtifactTabs
         analysisHint=""
@@ -120,7 +120,7 @@ describe("ArtifactTabs", () => {
               model: "gpt-5.5",
               occurredAt: "2026-07-21T03:00:00.000Z",
               provider: "openai",
-              recovery: ["确认上游地址支持 /responses 路由。"]
+              recovery: ["请联系管理员并提供失败时间。"]
             },
             id: "artifact-task-2",
             message: "Agent 分析失败：OpenAI Responses API 流式请求失败（404）",
@@ -133,11 +133,50 @@ describe("ArtifactTabs", () => {
       />
     );
 
-    expect(screen.getByText("查看失败详情与恢复建议")).toBeInTheDocument();
+    expect(screen.getByText("查看错误信息与恢复建议")).toBeInTheDocument();
+    expect(screen.getByText("model_route_unavailable")).toBeInTheDocument();
+    expect(screen.getAllByText("模型服务暂不支持该请求，请稍后重试。")).toHaveLength(2);
+    expect(screen.queryByText("OpenAI Responses API 流式请求失败（404）")).not.toBeInTheDocument();
+    expect(screen.queryByText("http://127.0.0.1:8787")).not.toBeInTheDocument();
+    expect(screen.queryByText("openai")).not.toBeInTheDocument();
+    expect(screen.queryByText("gpt-5.5")).not.toBeInTheDocument();
+    expect(screen.getByText("请联系管理员并提供失败时间。")).toBeInTheDocument();
+  });
+
+  test("shows internal artifact diagnostics only when server-authorized", () => {
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        developerDiagnostics
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[]}
+        tasks={[{
+          failure: {
+            endpoint: "http://127.0.0.1:8787",
+            failedStage: "generating_answer",
+            message: "OpenAI Responses API 流式请求失败（404）",
+            model: "gpt-5.5",
+            occurredAt: "2026-07-21T03:00:00.000Z",
+            provider: "openai",
+            recovery: ["请联系管理员并提供失败时间。"]
+          },
+          id: "artifact-task-diagnostics",
+          message: "Agent 分析失败",
+          progress: 55,
+          stage: "failed",
+          status: "failed",
+          type: "tree"
+        }]}
+      />
+    );
+
+    expect(screen.getByText("OpenAI Responses API 流式请求失败（404）")).toBeInTheDocument();
     expect(screen.getByText("http://127.0.0.1:8787")).toBeInTheDocument();
     expect(screen.getByText("openai")).toBeInTheDocument();
     expect(screen.getByText("gpt-5.5")).toBeInTheDocument();
-    expect(screen.getByText("确认上游地址支持 /responses 路由。")).toBeInTheDocument();
   });
 
   test("renders center artifact ui dsl when a tab provides one", () => {
@@ -271,12 +310,11 @@ describe("ArtifactTabs", () => {
     });
   });
 
-  test("offers document export for editable Skill documents", () => {
+  test("offers document export for read-only built-in Skill documents", () => {
     render(
       <ArtifactTabs
         analysisHint=""
         canStartAnalysis
-        onSaveMarkdownTab={vi.fn()}
         onStartAnalysis={vi.fn()}
         selectedCount={1}
         selectionLocked
@@ -291,7 +329,8 @@ describe("ArtifactTabs", () => {
     );
 
     expect(screen.getByRole("button", { name: "导出为文档" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存文档" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Skill 文档内容：论文解读 Skill")).toHaveTextContent("# Skill 文档");
+    expect(screen.queryByRole("button", { name: "保存文档" })).not.toBeInTheDocument();
   });
 
   test("surfaces live thin-reading Agent phase progress in the reading page", () => {

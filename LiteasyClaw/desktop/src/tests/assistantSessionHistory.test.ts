@@ -147,7 +147,7 @@ test("keeps all pages of one thin-reading artifact in its paper-bound session", 
   })).toBe("artifact:thin-reading:artifact-paper-attention");
 });
 
-test("projects detailed artifact failures into the AI generation session", () => {
+test("projects safe artifact failures into the AI generation session", () => {
   const failed = createArtifactTaskSession({
     failure: {
       endpoint: "http://127.0.0.1:8787",
@@ -156,7 +156,7 @@ test("projects detailed artifact failures into the AI generation session", () =>
       model: "gpt-5.5",
       occurredAt: "2026-07-21T03:00:00.000Z",
       provider: "openai",
-      recovery: ["重新配置并重启 dev-cloud。"]
+      recovery: ["请联系管理员并提供失败时间。"]
     },
     id: "task-failed",
     message: "Agent 分析失败：OpenAI Responses API 请求失败（401）",
@@ -167,9 +167,37 @@ test("projects detailed artifact failures into the AI generation session", () =>
   }, undefined, () => 0);
 
   expect(failed.status).toBe("failed");
-  expect(failed.messages[1].content).toContain("失败诊断");
-  expect(failed.messages[1].content).toContain("http://127.0.0.1:8787");
+  expect(failed.messages[1].content).toContain("错误信息");
+  expect(failed.messages[1].content).toContain("错误编号：model_authentication_failed");
+  expect(failed.messages[1].content).toContain("模型服务授权已失效，请重新登录后重试。");
+  expect(failed.messages[1].content).not.toContain("OpenAI Responses API");
+  expect(failed.messages[1].content).not.toContain("http://127.0.0.1:8787");
+  expect(failed.messages[1].content).not.toContain("Provider：openai");
+  expect(failed.messages[1].content).not.toContain("Model：gpt-5.5");
+  expect(failed.messages[1].content).toContain("请联系管理员并提供失败时间");
+});
+
+test("includes artifact internals in a server-authorized diagnostic session", () => {
+  const failed = createArtifactTaskSession({
+    failure: {
+      endpoint: "http://127.0.0.1:8787",
+      failedStage: "generating_answer",
+      message: "OpenAI Responses API 请求失败（401）",
+      model: "gpt-5.5",
+      occurredAt: "2026-07-21T03:00:00.000Z",
+      provider: "openai",
+      recovery: []
+    },
+    id: "task-diagnostic",
+    message: "Agent 分析失败",
+    progress: 55,
+    stage: "failed",
+    status: "failed",
+    type: "tree"
+  }, undefined, () => 0, { developerDiagnostics: true });
+
+  expect(failed.messages[1].content).toContain("内部异常：OpenAI Responses API 请求失败（401）");
+  expect(failed.messages[1].content).toContain("服务端点：http://127.0.0.1:8787");
   expect(failed.messages[1].content).toContain("Provider：openai");
   expect(failed.messages[1].content).toContain("Model：gpt-5.5");
-  expect(failed.messages[1].content).toContain("重新配置并重启 dev-cloud");
 });

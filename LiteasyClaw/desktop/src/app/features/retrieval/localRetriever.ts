@@ -1,14 +1,11 @@
 import type { Paper } from "../workspace/workspace.types";
 import type { AnswerPayload, RetrievalChunk } from "./retrieval.types";
-import { demoKnowledgeBase } from "./demoKnowledgeBase";
 
 type RetrievalRequest = {
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
   question: string;
   selectedPapers: Paper[];
 };
-
-const fixtureKnowledgeBase: Record<string, RetrievalChunk[]> = demoKnowledgeBase;
 
 function scoreChunk(question: string, chunk: RetrievalChunk) {
   const normalizedQuestion = question.toLowerCase();
@@ -18,28 +15,14 @@ function scoreChunk(question: string, chunk: RetrievalChunk) {
   }, chunk.paperTitle.toLowerCase().includes(normalizedQuestion) ? 1 : 0);
 }
 
-function getFallbackAnswer(): AnswerPayload {
-  return {
-    answer: "当前示例回答基于本地文献片段整理，后续会接入真实检索链路。",
-    citations: [
-      {
-        paperId: "demo-1",
-        page: 2,
-        snippet: "late interaction independently encodes query and document tokens"
-      }
-    ],
-    confidence: 0.84
-  };
-}
-
 export function retrieveAnswer(request: RetrievalRequest): AnswerPayload {
   const candidateChunks = request.selectedPapers.flatMap((paper) => {
     const importedChunks = request.importedChunksByPaperId?.[paper.id];
-    return importedChunks?.length ? importedChunks : (fixtureKnowledgeBase[paper.id] ?? []);
+    return importedChunks ?? [];
   });
 
   if (candidateChunks.length === 0) {
-    return getFallbackAnswer();
+    throw new Error("选中文献没有可检索的真实文本索引。");
   }
 
   const scoredChunks = candidateChunks
@@ -60,6 +43,6 @@ export function retrieveAnswer(request: RetrievalRequest): AnswerPayload {
         snippet: bestChunk.snippet
       }
     ],
-    confidence: bestChunk.paperId === "demo-2" ? 0.86 : 0.85
+    confidence: Math.min(0.95, 0.65 + Math.max(0, scoredChunks[0]?.score ?? 0) * 0.05)
   };
 }

@@ -1,11 +1,12 @@
 import { createControlPlaneClient } from "../app/features/models/controlPlaneClient";
 
-test("requests model policy snapshot from the control plane endpoint", async () => {
-  const requests: Array<{ method: string; url: string }> = [];
+test("requests model policy snapshot with the desktop session", async () => {
+  const requests: Array<{ headers: Record<string, string>; method: string; url: string }> = [];
   const client = createControlPlaneClient({
     endpoint: "https://liteasy.example.com/control-plane",
+    sessionId: "desktop-session",
     transport: async (request) => {
-      requests.push({ method: request.method, url: request.url });
+      requests.push(request);
 
       return {
         json: async () => ({
@@ -32,23 +33,35 @@ test("requests model policy snapshot from the control plane endpoint", async () 
   });
   expect(requests).toEqual([
     {
+      headers: {
+        Accept: "application/json",
+        Authorization: "Bearer desktop-session"
+      },
       method: "GET",
-      url: "https://liteasy.example.com/control-plane/v1/admin/model-policy"
+      url: "https://liteasy.example.com/control-plane/v1/model-policy"
     }
   ]);
 });
 
-test("throws a readable error when control plane sync fails", async () => {
+test("preserves the stable cloud error when control plane sync fails", async () => {
   const client = createControlPlaneClient({
     endpoint: "https://liteasy.example.com/control-plane",
+    sessionId: "desktop-session",
     transport: async () => ({
       json: async () => ({
-        error: "forbidden"
+        code: "model_policy_forbidden",
+        message: "当前账号不能读取模型策略。",
+        traceId: "trace_policy_1"
       }),
       ok: false,
       status: 403
     })
   });
 
-  await expect(client()).rejects.toThrow(/云端策略同步失败.*403/);
+  await expect(client()).rejects.toMatchObject({
+    code: "model_policy_forbidden",
+    message: "当前账号不能读取模型策略。",
+    status: 403,
+    traceId: "trace_policy_1"
+  });
 });

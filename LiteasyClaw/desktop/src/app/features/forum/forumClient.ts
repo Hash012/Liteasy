@@ -3,7 +3,8 @@ import type { ForumContext, ForumDraftUpdate, ForumFeedQuery, ForumPost } from "
 type ForumClientOptions = {
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
-  userId?: string;
+  getSessionId?: () => string | undefined;
+  sessionId?: string;
 };
 
 function joinUrl(baseUrl: string, path: string) {
@@ -13,11 +14,20 @@ function joinUrl(baseUrl: string, path: string) {
 export function createForumClient({
   apiBaseUrl = import.meta.env.VITE_FORUM_API_URL ?? "http://127.0.0.1:4040",
   fetchImpl = fetch,
-  userId = import.meta.env.VITE_FORUM_USER_ID ?? "demo-user"
+  getSessionId,
+  sessionId
 }: ForumClientOptions = {}) {
+  function authenticationHeaders(required: boolean): Record<string, string> {
+    const currentSessionId = getSessionId?.() ?? sessionId;
+    if (!currentSessionId && required) {
+      throw new Error("请先登录 Liteasy 再打开论坛发布页。");
+    }
+    return required && currentSessionId ? { Authorization: `Bearer ${currentSessionId}` } : {};
+  }
+
   async function request<T>(path: string): Promise<T> {
     const response = await fetchImpl(joinUrl(apiBaseUrl, path), {
-      headers: { "x-intuecho-user": userId }
+      headers: authenticationHeaders(false)
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -27,59 +37,59 @@ export function createForumClient({
   }
 
   return {
-    async createContextualDraft(context: ForumContext) {
-      const response = await fetchImpl(joinUrl(apiBaseUrl, "/v1/drafts/contextual"), {
-        body: JSON.stringify(context),
-        headers: { "Content-Type": "application/json", "x-intuecho-user": userId },
+    async createDraftHandoff(context: ForumContext, update?: ForumDraftUpdate) {
+      const response = await fetchImpl(joinUrl(apiBaseUrl, "/v1/integrations/desktop/annotation-handoffs"), {
+        body: JSON.stringify({
+          ...context,
+          body: update?.body ?? context.body ?? "",
+          tags: update?.tags ?? context.tags ?? [],
+          shareToPlaza: context.shareToPlaza ?? true,
+          visibility: context.visibility ?? "public"
+        }),
+        headers: { "Content-Type": "application/json", ...authenticationHeaders(true) },
         method: "POST"
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(body.message ?? body.error ?? "论坛草稿创建失败");
+        throw new Error(body.message ?? body.error ?? "论坛交接创建失败");
       }
-      return body as { draftId: string };
-    },
-    async updateDraft(draftId: string, update: ForumDraftUpdate) {
-      const response = await fetchImpl(joinUrl(apiBaseUrl, `/v1/drafts/${encodeURIComponent(draftId)}`), {
-        body: JSON.stringify({
-          body: update.body,
-          citationEnabled: update.citationEnabled,
-          tags: update.tags ?? [],
-          ...(update.title ? { title: update.title } : {})
-        }),
-        headers: { "Content-Type": "application/json", "x-intuecho-user": userId },
-        method: "PUT"
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(body.message ?? body.error ?? "论坛草稿保存失败");
-      }
-      return body as { draftId: string; ok: true; updatedAt: string };
-    },
-    async discardDraft(draftId: string) {
-      const response = await fetchImpl(joinUrl(apiBaseUrl, `/v1/drafts/${encodeURIComponent(draftId)}`), {
-        headers: { "x-intuecho-user": userId },
-        method: "DELETE"
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(body.message ?? body.error ?? "论坛草稿删除失败");
-      }
-      return body as { draftId: string; ok: true };
+      return body as { expiresAt: string; handoffId: string };
     },
     feed(query: ForumFeedQuery) {
-      const params = new URLSearchParams({ workId: query.workId });
-      if (query.anchorHash) {
-        params.set("anchorHash", query.anchorHash);
-      }
-      return request<{ posts: ForumPost[] }>(`/v1/contextual-feed?${params.toString()}`);
+      const params = new URLSearchParams({
+        limit: "3",
+        literatureIdentityKind: query.paperIdentity.kind,
+        literatureIdentityValue: query.paperIdentity.value,
+        sort: "recommended"
+      });
+      return request<{ annotations: Array<{
+        author: { name: string };
+        body: string;
+        createdAt: string;
+        helpful: number;
+        id: string;
+        tags: Array<{ name: string }>;
+        viewerSaved: boolean;
+      }> }>(`/v1/plaza?${params.toString()}`).then(({ annotations }) => ({
+        posts: annotations.map((annotation) => ({
+          author_name: annotation.author.name,
+          body: annotation.body,
+          created_at: annotation.createdAt,
+          helpful: annotation.helpful,
+          id: annotation.id,
+          tags: annotation.tags.map((tag) => tag.name),
+          title: null,
+          viewer_saved: annotation.viewerSaved,
+          work_id: null
+        }))
+      }));
     }
   };
 }
 
 export type ForumClient = ReturnType<typeof createForumClient>;
 
-export function openForumDraft(draftId: string, webBaseUrl = import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174") {
-  const url = `${webBaseUrl.replace(/\/$/, "")}/?draft=${encodeURIComponent(draftId)}`;
+export function openForumHandoff(handoffId: string, webBaseUrl = import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174") {
+  const url = `${webBaseUrl.replace(/\/$/, "")}/?handoff=${encodeURIComponent(handoffId)}`;
   window.location.assign(url);
 }

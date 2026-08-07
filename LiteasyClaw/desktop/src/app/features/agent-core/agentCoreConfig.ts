@@ -127,7 +127,6 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 不直接修改原始 PDF。",
         "- 涉及组织资料写入时需要确认。"
       ].join("\n"),
-      docPath: "project-docs/agent-dev/skills/artifact-generate.md",
       description: "基于选中文献生成摘要、脑图、卡片或结构化笔记。",
       id: "artifact-generate",
       label: "生成学术产物",
@@ -148,7 +147,6 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 不跨组织读取资料。",
         "- 不把组织资料发送到未声明的外部 API。"
       ].join("\n"),
-      docPath: "project-docs/agent-dev/skills/organization-library-open.md",
       description: "打开组织资料区，并把云端资料作为受控上下文。",
       id: "organization-library-open",
       label: "组织资料区",
@@ -169,7 +167,6 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 高风险策略、模型密钥、API endpoint 不通过自然语言静默修改。",
         "- 修改后必须给出明确反馈。"
       ].join("\n"),
-      docPath: "project-docs/agent-dev/skills/settings-adjust.md",
       description: "调整低风险用户设置，例如回答语言和默认输出模式。",
       id: "settings-adjust",
       label: "设置调整",
@@ -190,7 +187,6 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 不访问任意本地文件。",
         "- 不执行写操作。"
       ].join("\n"),
-      docPath: "project-docs/agent-dev/skills/literature-summarize.md",
       description: "基于 PDF 选区或选中文献片段回答问题、解释概念并生成摘要。",
       id: "literature-summarize",
       label: "文献摘要",
@@ -211,7 +207,6 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 不自动上传文献内容。",
         "- 不把缺失信息编造成事实。"
       ].join("\n"),
-      docPath: "project-docs/agent-dev/skills/literature-compare.md",
       description: "比较多篇文献的问题、方法、数据和结论。",
       id: "literature-compare",
       label: "文献对比",
@@ -232,7 +227,6 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 不直接操作 DOM。",
         "- 不执行任意脚本或 CSS 注入。"
       ].join("\n"),
-      docPath: "project-docs/agent-dev/skills/workspace-organize.md",
       description: "通过受控动作调整布局、面板、dock 和主题。",
       id: "workspace-organize",
       label: "工作区整理",
@@ -253,7 +247,6 @@ export const defaultAgentCoreConfig: AgentCoreConfig = {
         "- 不保存密钥、token、隐私文件内容。",
         "- 必须按 namespace 隔离。"
       ].join("\n"),
-      docPath: "project-docs/agent-dev/skills/memory-curate.md",
       description: "基于学术档案和聚合信号改善推荐与助手回答。",
       id: "memory-curate",
       label: "记忆整理",

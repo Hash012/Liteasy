@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { ThinReadingTab } from "../app/features/thin-reading/ThinReadingTab";
-import { createThinReadingAnchorGraphFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingAnchorGraphFixture } from "./fixtures/thinReadingFixtures";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 
 /*

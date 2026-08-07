@@ -38,7 +38,7 @@ export function useWorkspaceSelectionController({
   const localLibrarySnapshotKey = localLibrarySnapshot
     ? [
         localLibrarySnapshot.rootPath,
-        ...localLibrarySnapshot.entries.map((entry) => `${entry.id}:${entry.path}:${entry.title}`)
+        ...localLibrarySnapshot.entries.map((entry) => `${entry.id}:${entry.contentHash}:${entry.path}:${entry.title}`)
       ].join("\n")
     : "";
   const selectedDocumentSet = useMemo(
@@ -52,6 +52,7 @@ export function useWorkspaceSelectionController({
     }
 
     workspaceStore.openWorkspace((localLibraryEntries ?? []).map((entry) => ({
+      contentHash: entry.contentHash ?? undefined,
       id: entry.id,
       // A bodyless entry has no path to load, so the reader shows "entry only" instead
       // of failing to open a file that was never there.

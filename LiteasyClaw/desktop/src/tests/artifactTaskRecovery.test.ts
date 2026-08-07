@@ -74,6 +74,32 @@ describe("artifactTaskRecovery", () => {
     expect(takeInterruptedArtifactTasks()).toEqual([]);
   });
 
+  test("isolates interrupted tasks by account and leaves legacy tasks device-local", () => {
+    const task = {
+      id: "artifact-task-account-a",
+      message: "正在准备账号 A 的产物",
+      progress: 15,
+      stage: "preparing_context" as const,
+      status: "running" as const,
+      type: "mindmap" as const
+    };
+    persistInterruptedArtifactTasks([task], "https://cloud.example:user-a");
+
+    expect(takeInterruptedArtifactTasks("https://cloud.example:user-b")).toEqual([]);
+    expect(takeInterruptedArtifactTasks("https://cloud.example:user-a")).toEqual([
+      expect.objectContaining({ id: "artifact-task-account-a" })
+    ]);
+
+    window.localStorage.setItem(
+      "liteasy.artifact-task-recovery/v1",
+      JSON.stringify([{ ...task, id: "artifact-task-legacy" }])
+    );
+    expect(takeInterruptedArtifactTasks("https://cloud.example:user-a")).toEqual([]);
+    expect(takeInterruptedArtifactTasks()).toEqual([
+      expect.objectContaining({ id: "artifact-task-legacy" })
+    ]);
+  });
+
   test("does not block generation when task recovery exceeds browser storage quota", () => {
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
       throw new DOMException("quota exceeded", "QuotaExceededError");
@@ -88,7 +114,7 @@ describe("artifactTaskRecovery", () => {
       type: "mindmap"
     }])).not.toThrow();
 
-    expect(window.localStorage.getItem("liteasy.artifact-task-recovery/v1")).toBeNull();
+    expect(window.localStorage.getItem("liteasy.artifact-task-recovery/v1:device")).toBeNull();
     setItem.mockRestore();
   });
 

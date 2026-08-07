@@ -1,11 +1,11 @@
 import { useCallback, useRef } from "react";
-import { createForumClient, openForumDraft, type ForumClient } from "./forumClient";
+import { createForumClient, openForumHandoff, type ForumClient } from "./forumClient";
 import type { ForumContext, ForumDraftUpdate, ForumFeedQuery } from "./forum.types";
 
-export function useForumController() {
+export function useForumController(input: { getSessionId?: () => string | undefined } = {}) {
   const clientRef = useRef<ForumClient | null>(null);
   if (!clientRef.current) {
-    clientRef.current = createForumClient();
+    clientRef.current = createForumClient({ getSessionId: input.getSessionId });
   }
 
   const createDraftAndOpen = useCallback(async (context: ForumContext) => {
@@ -22,12 +22,12 @@ export function useForumController() {
       // Tauri or a strict browser may reject window creation; the URL fallback below still runs.
     }
     try {
-      const { draftId } = await clientRef.current!.createContextualDraft(context);
+      const { handoffId } = await clientRef.current!.createDraftHandoff(context);
       if (pendingWindow) {
         const webBaseUrl = import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174";
-        pendingWindow.location.href = `${webBaseUrl.replace(/\/$/, "")}/?draft=${encodeURIComponent(draftId)}`;
+        pendingWindow.location.href = `${webBaseUrl.replace(/\/$/, "")}/?handoff=${encodeURIComponent(handoffId)}`;
       } else {
-        openForumDraft(draftId);
+        openForumHandoff(handoffId);
       }
     } catch (error) {
       if (pendingWindow && !pendingWindow.closed) {
@@ -37,20 +37,9 @@ export function useForumController() {
       throw error;
     }
   }, []);
-  const createDraft = useCallback(async (context: ForumContext, update?: ForumDraftUpdate) => {
-    const { draftId } = await clientRef.current!.createContextualDraft(context);
-    if (!update?.body.trim()) {
-      return { draftId };
-    }
-    try {
-      await clientRef.current!.updateDraft(draftId, update);
-      return { draftId };
-    } catch (error) {
-      await clientRef.current!.discardDraft(draftId).catch(() => undefined);
-      throw error;
-    }
-  }, []);
+  const createDraftHandoff = useCallback(async (context: ForumContext, update?: ForumDraftUpdate) =>
+    clientRef.current!.createDraftHandoff(context, update), []);
   const loadFeed = useCallback(async (query: ForumFeedQuery) => (await clientRef.current!.feed(query)).posts, []);
 
-  return { createDraft, createDraftAndOpen, loadFeed };
+  return { createDraftAndOpen, createDraftHandoff, loadFeed };
 }

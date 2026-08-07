@@ -43,6 +43,7 @@ type UseArtifactWorkflowControllerInput = {
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
+  getIntuechoSessionId?: () => string | undefined;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
   getModelDiagnosticContext?: () => {
@@ -94,10 +95,8 @@ type ArtifactWorkflowActions = {
   renameArtifact: (artifactId: string, requestedName: string) => Promise<string>;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
-  saveSkillDocument: (artifactId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
-  updateSkillDocument: (artifactId: string, markdown: string) => void;
   updateThinReadingDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   syncThinReadingAnnotations: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
 };
@@ -113,6 +112,7 @@ export function useArtifactWorkflowController({
   getImportedChunksForPaperId,
   getMineruFiguresForPaperId,
   getIntuechoEndpoint,
+  getIntuechoSessionId,
   getAssistantLanguage,
   getActiveReaderPaper,
   getModelDiagnosticContext,
@@ -129,17 +129,18 @@ export function useArtifactWorkflowController({
   const [artifactTasks, setArtifactTasks] = useState<ArtifactTask[]>([]);
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
   const [artifactCatalog, setArtifactCatalog] = useState<ArtifactTab[]>([]);
+  const artifactResultClientRef = useRef(artifactResultClient);
   const localRepositoryRef = useRef<ArtifactLocalRepository | null>(null);
-  const localHydratedRef = useRef(false);
   const persistenceReadyRef = useRef(false);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
   if (!localRepositoryRef.current) {
     localRepositoryRef.current = artifactLocalRepository ?? createArtifactLocalRepository();
   }
+  artifactResultClientRef.current = artifactResultClient;
 
   function persistCatalog(catalog: ArtifactTab[]) {
     const repository = localRepositoryRef.current;
-    if (!repository || !persistenceReadyRef.current) {
+    if (artifactResultScopeKey || !repository || !persistenceReadyRef.current) {
       return;
     }
     persistenceQueueRef.current = persistenceQueueRef.current
@@ -157,7 +158,7 @@ export function useArtifactWorkflowController({
   }
 
   function handleArtifactTasksChanged(tasks: ArtifactTask[]) {
-    persistInterruptedArtifactTasks(tasks);
+    persistInterruptedArtifactTasks(tasks, artifactResultScopeKey);
     setArtifactTasks(tasks);
   }
 
@@ -170,6 +171,7 @@ export function useArtifactWorkflowController({
     getImportedChunksForPaperId,
     getMineruFiguresForPaperId,
     getIntuechoEndpoint,
+    getIntuechoSessionId,
     getAssistantLanguage,
     getActiveReaderPaper,
     getModelDiagnosticContext,
@@ -188,8 +190,11 @@ export function useArtifactWorkflowController({
     let active = true;
 
     async function restoreArtifacts() {
+      persistenceReadyRef.current = false;
+      artifactStore.clearAccountArtifacts();
+      artifactActions.syncArtifacts();
       let hydratedThisRun = false;
-      if (!localHydratedRef.current) {
+      if (!artifactResultScopeKey) {
         try {
           const cachedArtifacts = await localRepositoryRef.current?.list();
           if (!active) {
@@ -203,29 +208,30 @@ export function useArtifactWorkflowController({
             );
           }
         }
-        localHydratedRef.current = true;
         persistenceReadyRef.current = true;
         hydratedThisRun = true;
       }
 
-      try {
-        const results = await artifactResultClient.list();
-        if (!active) {
-          return;
-        }
-        results.forEach(artifactActions.restoreArtifactResult);
-      } catch (error) {
-        if (active) {
-          onAnalysisHint(
-            `同步 Agent 产物服务失败，已保留本地记录：${error instanceof Error ? error.message : String(error)}`
-          );
+      if (artifactResultScopeKey) {
+        try {
+          const results = await artifactResultClientRef.current.list();
+          if (!active) {
+            return;
+          }
+          results.forEach(artifactActions.restoreArtifactResult);
+        } catch (error) {
+          if (active) {
+            onAnalysisHint(
+              `同步 Agent 产物服务失败：${error instanceof Error ? error.message : String(error)}`
+            );
+          }
         }
       }
 
       if (!active) {
         return;
       }
-      const interruptedTasks = takeInterruptedArtifactTasks();
+      const interruptedTasks = takeInterruptedArtifactTasks(artifactResultScopeKey);
       let recoverableBranchCount = 0;
       interruptedTasks.forEach((task) => {
         const tab = task.artifactId
@@ -261,7 +267,7 @@ export function useArtifactWorkflowController({
     return () => {
       active = false;
     };
-  }, [artifactResultClient, artifactResultScopeKey]);
+  }, [artifactResultScopeKey]);
 
   return {
     actions: {
@@ -294,10 +300,8 @@ export function useArtifactWorkflowController({
       openSkillDocument: artifactActions.openSkillDocument,
       regenerateArtifact: artifactActions.regenerateArtifact,
       retryInterruptedThinReadingBranch: artifactActions.retryInterruptedThinReadingBranch,
-      saveSkillDocument: artifactActions.saveSkillDocument,
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,
-      updateSkillDocument: artifactActions.updateSkillDocument,
       updateThinReadingDocument: artifactActions.updateThinReadingDocument,
       syncThinReadingAnnotations: artifactActions.syncThinReadingAnnotations
     },

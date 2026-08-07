@@ -74,6 +74,7 @@ describe("pdf annotation Intuecho sync", () => {
     await expect(syncPdfAnnotationPendingItems({
       endpoint: "https://intuecho.example.com/community/?preview=true#annotations",
       items: [item],
+      sessionId: "desktop-token",
       transport
     })).resolves.toEqual([{
       annotationId: item.annotationId,

@@ -98,6 +98,7 @@ export type ThinReadingExternalSource = {
   doi?: string;
   evidenceBasis?: "abstract" | "full_text";
   fullTextEvidence?: readonly ThinReadingExternalEvidence[];
+  fullTextGrantId?: string;
   fullTextUrl?: string;
   id: string;
   isRetracted?: boolean;

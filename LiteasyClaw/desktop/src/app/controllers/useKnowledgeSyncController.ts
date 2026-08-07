@@ -1,5 +1,3 @@
-import { useCollectionItems } from "../features/collection/useCollectionItems";
-import type { CollectionTransport } from "../features/collection/collectionClient";
 import { useDocumentMetadataSync } from "../features/metadata/useDocumentMetadataSync";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
 import { useRecommendations } from "../features/recommendations/useRecommendations";
@@ -17,7 +15,6 @@ import type { RecommendationFeedbackTransport } from "../features/recommendation
 
 type UseKnowledgeSyncControllerInput = {
   accountSession: AccountSession | null;
-  collectionTransport?: CollectionTransport;
   controlPlaneEndpoint: string;
   documentMetadataTransport?: DocumentMetadataTransport;
   documents: Paper[];
@@ -47,6 +44,7 @@ type UseKnowledgeSyncControllerInput = {
   recommendationsEnabled: boolean;
   recommendationSortMode: SettingsState["network.recommendation.sort_mode"];
   personalizationVersion?: number;
+  personalizationEnabled: boolean;
   researchProfile?: RecommendationResearchProfile;
   selectedPapers: Paper[];
   workspaceRevision: number;
@@ -55,7 +53,6 @@ type UseKnowledgeSyncControllerInput = {
 
 export function useKnowledgeSyncController({
   accountSession,
-  collectionTransport,
   controlPlaneEndpoint,
   documentMetadataTransport,
   documents,
@@ -67,16 +64,12 @@ export function useKnowledgeSyncController({
   recommendationsEnabled,
   recommendationSortMode,
   personalizationVersion,
+  personalizationEnabled,
   researchProfile,
   selectedPapers,
   workspaceRevision,
   workspaceSourceKey
 }: UseKnowledgeSyncControllerInput) {
-  const collection = useCollectionItems({
-    accountSession,
-    controlPlaneEndpoint,
-    transport: collectionTransport
-  });
   const recommendations = useRecommendations({
     accountSession,
     controlPlaneEndpoint,
@@ -97,6 +90,7 @@ export function useKnowledgeSyncController({
     accountSession,
     controlPlaneEndpoint,
     documents,
+    enabled: personalizationEnabled && workspaceSourceKey.startsWith("local_library:"),
     transport: documentMetadataTransport,
     workspaceRevision
   });
@@ -104,19 +98,13 @@ export function useKnowledgeSyncController({
   return {
     actions: {
       clearRecommendationCache: recommendations.clearRecommendationCache,
-      collectRecommendation: async (recommendation: RecommendationItem) => {
-        await collection.collectRecommendation(recommendation);
-        await recommendations.recordRecommendationFeedback(recommendation, "saved");
-      },
+      recordRecommendationSaved: (recommendation: RecommendationItem) =>
+        recommendations.recordRecommendationFeedback(recommendation, "saved"),
       dismissRecommendation: (recommendation: RecommendationItem) =>
         recommendations.recordRecommendationFeedback(recommendation, "dismissed"),
-      retryCollectionSync: collection.retry,
       retryDocumentMetadataSync: documentMetadataSync.retrySync
     },
     model: {
-      collectionItems: collection.collectionItems,
-      collectionMessage: collection.message,
-      collectionStatus: collection.status,
       documentMetadataSyncMessage: documentMetadataSync.message,
       documentMetadataSyncResult: documentMetadataSync.lastResult,
       documentMetadataSyncStatus: documentMetadataSync.status,

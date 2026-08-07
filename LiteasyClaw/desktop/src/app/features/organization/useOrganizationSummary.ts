@@ -11,6 +11,7 @@ type UseOrganizationSummaryInput = {
   accountSession: AccountSession | null;
   controlPlaneEndpoint: string;
   organizationId?: string;
+  refreshRevision?: number;
   transport?: OrganizationSummaryTransport;
 };
 
@@ -18,6 +19,7 @@ export function useOrganizationSummary({
   accountSession,
   controlPlaneEndpoint,
   organizationId,
+  refreshRevision = 0,
   transport
 }: UseOrganizationSummaryInput) {
   const [message, setMessage] = useState("当前已退化为本地阅读器，组织空间不可用。联网并登录后，将自动恢复云端能力。");
@@ -28,6 +30,13 @@ export function useOrganizationSummary({
     if (!accountSession) {
       setMessage("当前已退化为本地阅读器，组织空间不可用。联网并登录后，将自动恢复云端能力。");
       setStatus("unauthenticated");
+      setSummary(null);
+      return;
+    }
+
+    if (!organizationId) {
+      setMessage("尚未加入组织。");
+      setStatus("idle");
       setSummary(null);
       return;
     }
@@ -68,7 +77,7 @@ export function useOrganizationSummary({
     return () => {
       active = false;
     };
-  }, [accountSession?.sessionId, controlPlaneEndpoint, organizationId, transport]);
+  }, [accountSession?.sessionId, controlPlaneEndpoint, organizationId, refreshRevision, transport]);
 
   return {
     message,

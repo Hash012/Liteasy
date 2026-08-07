@@ -1,8 +1,13 @@
-import type { Paper } from "../workspace/workspace.types";
-
 export type DocumentMetadataSyncStatus = "idle" | "unauthenticated" | "syncing" | "success" | "error";
 
-export type DocumentMetadataSyncDocument = Pick<Paper, "id" | "sourcePath" | "title">;
+export type DocumentMetadataSyncDocument = {
+  authors?: string[];
+  contentHash?: string;
+  doi?: string;
+  publicationYear?: number;
+  syncDocumentId: string;
+  title: string;
+};
 
 export type DocumentMetadataSyncInput = {
   documents: DocumentMetadataSyncDocument[];

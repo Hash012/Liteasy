@@ -32,7 +32,8 @@ import {
   useThinReadingCommunityRecommendations,
   type ThinReadingCommunityRecommendationState
 } from "./useThinReadingCommunityRecommendations";
-import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
+import type { ForumFeedQuery, ForumPaperIdentity, ForumPost } from "../forum/forum.types";
+import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 import type {
   ThinReadingAnnotationTarget,
   ThinReadingAnchor,
@@ -73,6 +74,7 @@ export type ThinReadingTabProps = {
   };
   communityRecommendationState?: ThinReadingCommunityRecommendationState;
   intuechoEndpoint?: string;
+  intuechoSessionId?: string;
   figures?: readonly MineruFigure[];
   headerAction?: ReactNode;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
@@ -89,7 +91,15 @@ export type ThinReadingTabProps = {
   onRetryInterruptedBranch?: () => Promise<void>;
   onSyncIntuecho?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onUpdateDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
-  papers: Array<{ forumWorkId?: string; id: string; title: string }>;
+  papers: Array<{
+    arxivId?: string;
+    authors?: readonly string[] | string;
+    doi?: string;
+    id: string;
+    semanticScholarId?: string;
+    title: string;
+    year?: number | string;
+  }>;
 };
 
 type ThinReadingSelection = {
@@ -303,6 +313,7 @@ export function ThinReadingTab({
   figures = [],
   headerAction,
   intuechoEndpoint,
+  intuechoSessionId,
   onLoadForumFeed,
   taskFailureMessage,
   onGenerateBranch,
@@ -318,6 +329,7 @@ export function ThinReadingTab({
   const activeNode = document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId];
   const fetchedCommunityRecommendationState = useThinReadingCommunityRecommendations({
     endpoint: intuechoEndpoint,
+    sessionId: intuechoSessionId,
     scope: activeNode.recommendationScope
   });
   const resolvedCommunityRecommendationState = communityRecommendationState ?? fetchedCommunityRecommendationState;
@@ -345,6 +357,7 @@ export function ThinReadingTab({
   const [forumPosts, setForumPosts] = useState<ForumPost[]>([]);
   const [forumState, setForumState] = useState<"idle" | "loading" | "ready" | "error" | "unmapped">("idle");
   const [forumRefresh, setForumRefresh] = useState(0);
+  const [expandedRecommendationId, setExpandedRecommendationId] = useState<string | null>(null);
   const labels = getThinReadingUiCopy(document.targetLanguage);
   const generationInProgress = generating || Boolean(generationProgress);
   const paperTitle = useMemo(
@@ -352,18 +365,26 @@ export function ThinReadingTab({
     [document.paperIds, labels.untitledPaper, papers]
   );
   const linkedPaper = papers.find((paper) => document.paperIds.includes(paper.id));
-  const forumWorkId = linkedPaper?.forumWorkId;
+  const forumPaperIdentity = linkedPaper ? resolvePaperIdentity(linkedPaper).primary : null;
+  const stableForumPaperIdentity = forumPaperIdentity?.kind === "local_paper_id" ? null : forumPaperIdentity;
 
   useEffect(() => {
     let active = true;
     if (!onLoadForumFeed) return undefined;
-    if (!forumWorkId) {
+    if (!stableForumPaperIdentity) {
       setForumPosts([]);
       setForumState("unmapped");
       return undefined;
     }
     setForumState("loading");
-    void onLoadForumFeed({ workId: forumWorkId }).then((posts) => {
+    void onLoadForumFeed({
+      paperIdentity: {
+        id: stableForumPaperIdentity.id,
+        kind: stableForumPaperIdentity.kind as ForumPaperIdentity["kind"],
+        source: stableForumPaperIdentity.source === "metadata" ? "metadata" : "inferred",
+        value: stableForumPaperIdentity.value
+      }
+    }).then((posts) => {
       if (active) {
         setForumPosts(posts);
         setForumState("ready");
@@ -372,7 +393,7 @@ export function ThinReadingTab({
     return () => {
       active = false;
     };
-  }, [activeNode.id, forumRefresh, forumWorkId, onLoadForumFeed]);
+  }, [activeNode.id, forumRefresh, onLoadForumFeed, stableForumPaperIdentity?.id]);
 
   useEffect(() => {
     function refreshForumFeed() {
@@ -477,6 +498,15 @@ export function ThinReadingTab({
 
   function update(nextDocument: ThinReadingDocument) {
     onUpdateDocument(artifactId, nextDocument);
+  }
+
+  function updateAndSyncPublic(nextDocument: ThinReadingDocument) {
+    update(nextDocument);
+    if (!onSyncIntuecho || listThinReadingPendingPublicAnnotations(nextDocument).length === 0) return;
+    setSyncingIntuecho(true);
+    void onSyncIntuecho({ artifactId, document: nextDocument })
+      .catch((error) => setGenerationError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setSyncingIntuecho(false));
   }
 
   function goToNode(nodeId: string) {
@@ -614,13 +644,14 @@ export function ThinReadingTab({
 
   function saveSelectionAnnotation() {
     if (!selection || !annotationBody.trim()) return;
-    update(addThinReadingAnnotation(document, {
+    const nextDocument = addThinReadingAnnotation(document, {
       body: annotationBody,
       excerpt: selection.excerpt,
       nodeId: activeNode.id,
       target: selection.target,
       ...(annotationPublic ? { visibility: "pending_public" as const } : {})
-    }));
+    });
+    updateAndSyncPublic(nextDocument);
     setAnnotationBody("");
     setSelection(null);
   }
@@ -1226,7 +1257,7 @@ export function ThinReadingTab({
                     />
                     <div className="thin-reading__annotation-actions">
                       <button disabled={syncingIntuecho} onClick={() => {
-                        update(updateThinReadingAnnotation(document, annotation.id, editingAnnotationBody));
+                        updateAndSyncPublic(updateThinReadingAnnotation(document, annotation.id, editingAnnotationBody));
                         setEditingAnnotationId(null);
                       }} type="button">{labels.save}</button>
                       <button disabled={syncingIntuecho} onClick={() => setEditingAnnotationId(null)} type="button">{labels.cancel}</button>
@@ -1243,7 +1274,7 @@ export function ThinReadingTab({
                         <input
                           checked={annotation.visibility === "pending_public"}
                           disabled={syncingIntuecho}
-                          onChange={(event) => update(setThinReadingAnnotationPublic(document, annotation.id, event.currentTarget.checked))}
+                          onChange={(event) => updateAndSyncPublic(setThinReadingAnnotationPublic(document, annotation.id, event.currentTarget.checked))}
                           type="checkbox"
                         />
                         {labels.public}
@@ -1295,19 +1326,19 @@ export function ThinReadingTab({
             <p className="thin-reading__intuecho-caption">{labels.communityRecommendationCaption}</p>
             {onLoadForumFeed ? (
               <div className="thin-reading__forum-feed">
-                {forumState === "loading" ? <span>正在读取论坛帖子…</span> : null}
+                {forumState === "loading" ? <span>正在读取共享批注…</span> : null}
                 {forumState === "error" ? <span>论坛暂时无法连接。</span> : null}
-                {forumState === "unmapped" ? <span>该论文尚未接入论坛。</span> : null}
-                {forumState === "ready" && forumPosts.length === 0 ? <span>暂无相关帖子。</span> : null}
+                {forumState === "unmapped" ? <span>补全文献身份后可读取共享批注。</span> : null}
+                {forumState === "ready" && forumPosts.length === 0 ? <span>暂无相关批注。</span> : null}
                 {forumPosts.map((post) => (
                   <a
                     className="thin-reading__forum-post"
-                    href={`${import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174"}/works/${post.work_id ?? ""}`}
+                    href={`${import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174"}/?literatureIdentityKind=${encodeURIComponent(stableForumPaperIdentity?.kind ?? "")}&literatureIdentityValue=${encodeURIComponent(stableForumPaperIdentity?.value ?? "")}`}
                     key={post.id}
                     rel="noreferrer"
                     target="_blank"
                   >
-                    <strong>{post.title ?? "用户帖子"}</strong>
+                    <strong>{post.title ?? "共享批注"}</strong>
                     <span>{post.body}</span>
                     <small>{post.author_name} · 有帮助 {post.helpful}</small>
                   </a>
@@ -1335,19 +1366,21 @@ export function ThinReadingTab({
                     <div className="thin-reading__recommendations">
                       {resolvedCommunityRecommendationState.recommendations.map((recommendation) => (
                         <div
-                          className="thin-reading__recommendation"
+                          className={`thin-reading__recommendation${expandedRecommendationId === recommendation.id ? " is-expanded" : ""}`}
                           data-thin-reading-annotation-target="recommendation"
                           data-thin-reading-recommendation-id={recommendation.id}
                           key={recommendation.id}
+                          onClick={() => setExpandedRecommendationId((current) => current === recommendation.id ? null : recommendation.id)}
                         >
                           <strong>{recommendation.relationship}</strong>
                           <small className="thin-reading__recommendation-source">{labels.communityRecommendation}</small>
                           <span>{recommendation.note}</span>
                           <div className="thin-reading__recommendation-actions">
-                            <button onClick={() => annotateBlock({
+                            <button onClick={(event) => { event.stopPropagation(); annotateBlock({
                               excerpt: recommendation.note,
                               target: { kind: "recommendation", nodeId: activeNode.id, recommendationId: recommendation.id }
-                            })} type="button">{labels.annotate}</button>
+                            }); }} type="button">{labels.annotate}</button>
+                            <a href={`${import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174"}/annotations/${encodeURIComponent(recommendation.id)}`} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">Web</a>
                           </div>
                         </div>
                       ))}

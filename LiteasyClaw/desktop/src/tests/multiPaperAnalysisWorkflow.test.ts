@@ -375,10 +375,23 @@ test("runs section-analysis model calls before the final artifact synthesis", as
 test("a single selected paper still creates AnalysisRun metadata for modal output", async () => {
   const result = await generateAssistantAnswer({
     artifactType: "mindmap",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { rationale: "grounded", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
     importedChunksByPaperId: {
       "paper-a": [chunk("paper-a", "Paper A", 2, "method A evidence", ["method"])]
     },
     mode: "qa",
+    modelTransport: async () => ({
+      json: async () => ({
+        answer: "- Paper A\n  - Method A [evidence-1]",
+        execution: { backend: "test_cloud", mode: "live", provider: "openai" }
+      }),
+      ok: true,
+      status: 200
+    }),
     question: "generate a mind map",
     selectedPapers: [{ id: "paper-a", title: "Paper A" }],
     settings: createSettingsStore().getState()

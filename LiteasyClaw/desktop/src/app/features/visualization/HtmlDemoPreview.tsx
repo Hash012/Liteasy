@@ -7,27 +7,80 @@ type HtmlDemoPreviewProps = {
   title: string;
 };
 
+const maxPreviewBytes = 512 * 1024;
+const blockedElements = [
+  "base",
+  "embed",
+  "form",
+  "iframe",
+  "link",
+  "object",
+  "portal",
+  "script",
+  "template"
+].join(",");
+
 const sandboxedDocumentCsp = [
-  "default-src data: blob: https: http:",
-  "style-src 'unsafe-inline' data: https: http:",
-  "script-src 'unsafe-inline' 'unsafe-eval' data: blob: https: http:",
-  "img-src data: blob: https: http:",
-  "font-src data: https: http:",
-  "connect-src https: http:",
-  "media-src data: blob: https: http:",
-  "frame-src https: http:",
-  "worker-src data: blob: https: http:",
+  "default-src 'none'",
+  "style-src 'unsafe-inline'",
+  "script-src 'none'",
+  "img-src data:",
+  "font-src data:",
+  "connect-src 'none'",
+  "media-src data:",
+  "frame-src 'none'",
+  "worker-src 'none'",
   "object-src 'none'",
   "navigate-to 'none'",
   "base-uri 'none'",
   "form-action 'none'"
 ].join("; ");
 
+function sanitizeGeneratedDocument(source: string) {
+  const inert = document.createElement("template");
+  inert.innerHTML = source;
+  inert.content.querySelectorAll(blockedElements).forEach((element) => element.remove());
+  inert.content.querySelectorAll("meta").forEach((element) => element.remove());
+  inert.content.querySelectorAll("*").forEach((element) => {
+    for (const attribute of [...element.attributes]) {
+      const name = attribute.name.toLowerCase();
+      if (
+        name.startsWith("on") ||
+        new Set(["action", "formaction", "ping", "srcdoc", "target"]).has(name)
+      ) {
+        element.removeAttribute(attribute.name);
+        continue;
+      }
+      if (name === "href" || name === "xlink:href") {
+        if (element.tagName.toLowerCase() === "a" || !attribute.value.trim().startsWith("#")) {
+          element.removeAttribute(attribute.name);
+        }
+        continue;
+      }
+      if (
+        new Set(["poster", "src", "srcset"]).has(name) &&
+        !attribute.value.trim().toLowerCase().startsWith("data:")
+      ) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  });
+  const head = [...inert.content.querySelectorAll("style, title")]
+    .map((element) => {
+      const serialized = element.outerHTML;
+      element.remove();
+      return serialized;
+    })
+    .join("");
+  return { body: inert.innerHTML, head };
+}
+
 export function buildSandboxedHtmlDocument(html: string) {
-  // TODO(security): before production release, restore a reviewed HTML policy and
-  // resource/time limits. During product testing we keep scripts and resources so
-  // animation failures are observable. The unique-origin iframe still cannot read
-  // the host page, submit forms, open popups or navigate the top-level application.
+  const source = html.trim();
+  const oversized = new TextEncoder().encode(source).byteLength > maxPreviewBytes;
+  const sanitized = sanitizeGeneratedDocument(oversized
+    ? "<main><p>HTML 预览内容过大，无法安全显示。</p></main>"
+    : source);
   const injectedHead = [
     "<meta charset=\"utf-8\" />",
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
@@ -37,14 +90,7 @@ export function buildSandboxedHtmlDocument(html: string) {
     "body { margin: 0; background: #ffffff; color: #172b3a; }",
     "</style>"
   ].join("");
-  const source = html.trim();
-  if (/<html(?:\s|>)/i.test(source)) {
-    const withHead = /<head(?:\s[^>]*)?>/i.test(source)
-      ? source.replace(/<head(?:\s[^>]*)?>/i, (head) => `${head}${injectedHead}`)
-      : source.replace(/<html(?:\s[^>]*)?>/i, (root) => `${root}<head>${injectedHead}</head>`);
-    return /^\s*<!doctype/i.test(withHead) ? withHead : `<!DOCTYPE html>${withHead}`;
-  }
-  return `<!DOCTYPE html><html lang="zh-CN"><head>${injectedHead}</head><body>${source}</body></html>`;
+  return `<!DOCTYPE html><html lang="zh-CN"><head>${injectedHead}${sanitized.head}</head><body>${sanitized.body}</body></html>`;
 }
 
 export function HtmlDemoPreview({
@@ -58,7 +104,7 @@ export function HtmlDemoPreview({
       <div className="html-demo-preview__toolbar">
         <div className="html-demo-preview__meta">
           <strong>{title}</strong>
-          <span>{description ?? "Agent 生成的交互式示意会在隔离沙箱内预览。"}</span>
+          <span>{description ?? "Agent 生成的动态示意会在隔离沙箱内预览。"}</span>
         </div>
         {onOpenInTab ? (
           <Tooltip content="在独立标签页打开 HTML Demo" relationship="label">
@@ -75,7 +121,7 @@ export function HtmlDemoPreview({
         className="html-demo-preview__frame"
         loading="lazy"
         referrerPolicy="no-referrer"
-        sandbox="allow-scripts"
+        sandbox=""
         srcDoc={buildSandboxedHtmlDocument(html)}
         title={title}
       />

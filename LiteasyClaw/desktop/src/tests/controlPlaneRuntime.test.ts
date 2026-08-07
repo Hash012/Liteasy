@@ -19,6 +19,7 @@ test("trusts the remote model proxy only after a successful control-plane snapsh
 
   expect(isTrustedRemoteModelProxyEndpoint(cloudProxyEndpoint)).toBe(false);
   await fetchModelPolicySnapshot(store.getState(), {
+    sessionId: "desktop-session",
     transport: async () => ({
       json: async () => ({
         cloudProxyEndpoint,
@@ -42,6 +43,7 @@ test("does not trust a remote model proxy when control-plane sync fails", async 
   const cloudProxyEndpoint = "https://attacker.example/model";
 
   await expect(fetchModelPolicySnapshot(store.getState(), {
+    sessionId: "desktop-session",
     transport: async () => ({
       json: async () => ({ cloudProxyEndpoint }),
       ok: false,
@@ -64,6 +66,7 @@ test("replaces the trusted remote proxy when the control-plane policy rotates", 
 
   for (const cloudProxyEndpoint of [firstEndpoint, nextEndpoint]) {
     await fetchModelPolicySnapshot(store.getState(), {
+      sessionId: "desktop-session",
       transport: async () => ({
         json: async () => ({
           cloudProxyEndpoint,

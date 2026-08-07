@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { AgentCoreCatalogEntry } from "../agent-core/agentCoreConfig";
 import type { Paper, SelectedDocumentSet } from "../workspace/workspace.types";
@@ -43,6 +42,11 @@ import {
   createThinReadingBranchRecoverySnapshot,
   validateThinReadingBranchRecoverySnapshot
 } from "./artifactTaskRecovery";
+import {
+  extractArtifactTraceId,
+  presentArtifactFailure,
+  resolveArtifactFailureCode
+} from "./artifactFailurePresentation";
 import { resolveThinReadingTargetLanguage } from "../thin-reading/thinReadingAgent";
 import type {
   ThinReadingBranchSource,
@@ -97,6 +101,7 @@ type UseArtifactActionsInput = {
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
   getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
+  getIntuechoSessionId?: () => string | undefined;
   getAssistantLanguage?: () => string;
   getActiveReaderPaper?: () => Paper | null;
   getModelDiagnosticContext?: () => {
@@ -175,10 +180,20 @@ function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
       "重新生成以检索更直接的来源，或明确要求只使用目标论文内证据。"
     ];
   }
+  if (
+    normalized.includes("审计未通过") ||
+    normalized.includes("verification failed") ||
+    normalized.includes("artifact workflow")
+  ) {
+    return [
+      "检查当前文献是否包含足够的可引用证据后重新生成。",
+      "若问题持续，请调整选中文献或联系管理员并提供失败时间。"
+    ];
+  }
   if (normalized.includes("401") || normalized.includes("unauthorized") || normalized.includes("api key")) {
     return [
-      "确认 project-docs/test-api.md 中的 API key 已同步到 dev-cloud/.env.local。",
-      "修改密钥后重启 dev-cloud，旧进程不会自动重新读取环境文件。"
+      "重新登录后再次执行；若仍失败，请联系管理员检查模型服务授权。",
+      "向管理员提供失败时间和页面显示的错误编号，不要发送账号密码或密钥。"
     ];
   }
   if (
@@ -192,13 +207,13 @@ function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
       normalized.includes("external-knowledge")
     ) {
       return [
-        "确认当前 dev-cloud 已提供 POST /v1/research/external-knowledge 路由。",
-        "完全停止并重新启动 dev-cloud；仅重启 Tauri 不会更新独立运行的 Node 服务。"
+        "外部文献检索服务当前不可用，请稍后重试。",
+        "若问题持续，请联系管理员并提供失败时间和当前任务阶段。"
       ];
     }
     return [
-      "确认上游地址支持 OpenAI Responses API 的 /responses 路由。",
-      "确认 OPENAI_BASE_URL 只包含 API 根路径，例如以 /v1 结尾。"
+      "模型服务当前不支持该请求，请稍后重试。",
+      "若问题持续，请联系管理员并提供失败时间和当前任务阶段。"
     ];
   }
   if (normalized.includes("429") || normalized.includes("rate limit")) {
@@ -210,13 +225,13 @@ function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
     normalized.includes("连接失败")
   ) {
     return [
-      "确认 Liteasy dev-cloud 已启动，且桌面端配置的本地端口与实际端口一致。",
-      "检查 dev-cloud 到上游模型地址的网络与代理配置。"
+      "检查网络连接后重试。",
+      "若问题持续，请联系管理员并提供失败时间。"
     ];
   }
   return [
-    "检查下方 endpoint、provider 与 model 是否和当前 dev-cloud 配置一致。",
-    "查看 dev-cloud 终端日志中的同一时间请求；修正配置后重启服务再重试。"
+    "稍后重新执行当前任务。",
+    "若问题持续，请联系管理员并提供失败时间和当前任务阶段。"
   ];
 }
 
@@ -443,6 +458,7 @@ export function useArtifactActions({
   getImportedChunksForPaperId,
   getMineruFiguresForPaperId,
   getIntuechoEndpoint,
+  getIntuechoSessionId,
   getAssistantLanguage,
   getActiveReaderPaper,
   getModelDiagnosticContext,
@@ -666,7 +682,7 @@ export function useArtifactActions({
           type: "thin_reading"
         });
         syncArtifacts(taskId);
-        onAnalysisHint(`薄读 Agent 生成完成并已保存：${resultPath}`);
+        onAnalysisHint("薄读 Agent 生成完成并已保存到当前账号。");
         return;
       }
       const evidenceOutlineNodes = buildArtifactOutline({
@@ -718,7 +734,15 @@ export function useArtifactActions({
           : {}),
         outlineMarkdown,
         outlineNodes,
-        papers: selectedPapers.map((paper) => ({ id: paper.id, title: paper.title, forumTopicId: paper.forumTopicId, forumWorkId: paper.forumWorkId })),
+        papers: selectedPapers.map((paper) => ({
+          arxivId: paper.arxivId,
+          authors: paper.authors,
+          doi: paper.doi,
+          id: paper.id,
+          semanticScholarId: paper.semanticScholarId,
+          title: paper.title,
+          year: paper.year
+        })),
         regeneratedFromArtifactId: generationOptions?.regeneratedFromArtifactId,
         supplementalContext: generationOptions?.supplementalContext,
         title,
@@ -758,7 +782,7 @@ export function useArtifactActions({
         uiDsl
       });
       syncArtifacts(taskId);
-      onAnalysisHint(`Agent 分析完成并已保存：${resultPath}`);
+      onAnalysisHint("Agent 分析完成并已保存到当前账号。");
     } catch (error) {
       if (artifactStore.getTask(taskId)?.status === "cancelled") {
         syncArtifacts(taskId);
@@ -768,15 +792,19 @@ export function useArtifactActions({
       const message = error instanceof Error ? error.message : String(error);
       const modelContext = getModelDiagnosticContext?.() ?? {};
       const failedStage = currentTask?.stage ?? "generating_answer";
-      artifactStore.failTask(taskId, {
+      const traceId = extractArtifactTraceId(message);
+      const failure = {
         ...modelContext,
+        code: resolveArtifactFailureCode(message, failedStage),
         failedStage,
         message,
         occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message, failedStage)
-      });
+        recovery: buildFailureRecovery(message, failedStage),
+        ...(traceId ? { traceId } : {})
+      };
+      artifactStore.failTask(taskId, failure);
       syncArtifacts(taskId);
-      onAnalysisHint(`Agent 分析失败：${message}`);
+      onAnalysisHint(`Agent 分析失败：${presentArtifactFailure(failure).message}`);
     }
   }
 
@@ -847,11 +875,14 @@ export function useArtifactActions({
       },
       ({ error, paper }) => {
         const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
+        const failedStage = artifactType === "thin_reading"
+          ? "thin_reading_parsing_document"
+          : "waiting_for_import";
+        const message = `《${paper.title}》PDF 导入失败：${error.message}`;
         artifactStore.failTask(taskId, {
-          failedStage: artifactType === "thin_reading"
-            ? "thin_reading_parsing_document"
-            : "waiting_for_import",
-          message: `《${paper.title}》PDF 导入失败：${error.message}`,
+          code: resolveArtifactFailureCode(message, failedStage),
+          failedStage,
+          message,
           occurredAt: new Date().toISOString(),
           recovery: [
             "完全重启 Tauri 以加载最新的本地 PDF 读取命令",
@@ -1045,7 +1076,7 @@ export function useArtifactActions({
       outlineNodes,
       papers: result.papers,
       regeneratedFromArtifactId: result.regeneratedFromArtifactId,
-      resultPath: `project-docs/agent-results/${result.artifactId}.json`,
+      resultPath: `liteasy://agent-artifacts/${encodeURIComponent(result.artifactId)}`,
       thinReadingDocument: result.thinReadingDocument,
       title: result.title,
       type: result.artifactType,
@@ -1061,22 +1092,8 @@ export function useArtifactActions({
     artifactStore.upsertTab({
       artifactId,
       markdown: entry.docMarkdown ?? `# ${entry.id}\n\n${entry.description}`,
-      sourcePath: entry.docPath,
       title: `${entry.id}.md`,
       type: "skill_doc"
-    });
-    syncArtifacts();
-  }
-
-  function updateSkillDocument(artifactId: string, markdown: string) {
-    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId);
-    if (!existing || existing.type !== "skill_doc") {
-      return;
-    }
-
-    artifactStore.upsertTab({
-      ...existing,
-      markdown
     });
     syncArtifacts();
   }
@@ -1165,8 +1182,10 @@ export function useArtifactActions({
       await ensureThinReadingPaperImported(primaryPaper);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const failedStage = "thin_reading_parsing_document";
       artifactStore.failTask(taskId, {
-        failedStage: "thin_reading_parsing_document",
+        code: resolveArtifactFailureCode(message, failedStage),
+        failedStage,
         message,
         occurredAt: new Date().toISOString(),
         recovery: buildFailureRecovery(message, "thin_reading_parsing_document")
@@ -1273,21 +1292,25 @@ export function useArtifactActions({
         thinReadingDocument: nextDocument
       });
       syncArtifacts(taskId);
-      onAnalysisHint(`薄读下一层已由 Agent 生成并保存：${resultPath}`);
+      onAnalysisHint("薄读下一层已由 Agent 生成并已保存到当前账号。");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const modelContext = getModelDiagnosticContext?.() ?? {};
       const failedStage = artifactStore.getTask(taskId)?.stage ?? "generating_answer";
-      artifactStore.failTask(taskId, {
+      const traceId = extractArtifactTraceId(message);
+      const failure = {
         ...modelContext,
+        code: resolveArtifactFailureCode(message, failedStage),
         failedStage,
         message,
         occurredAt: new Date().toISOString(),
-        recovery: buildFailureRecovery(message, failedStage)
-      });
+        recovery: buildFailureRecovery(message, failedStage),
+        ...(traceId ? { traceId } : {})
+      };
+      artifactStore.failTask(taskId, failure);
       syncArtifacts(taskId);
-      onAnalysisHint(`薄读下一层生成失败：${message}`);
-      throw error;
+      onAnalysisHint(`薄读下一层生成失败：${presentArtifactFailure(failure).message}`);
+      throw new Error(presentArtifactFailure(failure).message);
     }
   }
 
@@ -1355,7 +1378,10 @@ export function useArtifactActions({
     if (pending.length === 0) {
       return;
     }
-    const results = await createHttpIntuechoSyncAdapter({ endpoint }).syncPendingAnnotations(pending);
+    const results = await createHttpIntuechoSyncAdapter({
+      endpoint,
+      sessionId: getIntuechoSessionId?.()
+    }).syncPendingAnnotations(pending);
     const current = artifactStore.getOpenTabs().find((tab) => tab.artifactId === input.artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === input.artifactId);
     if (!current || current.type !== "thin_reading" || !current.thinReadingDocument) {
@@ -1378,29 +1404,6 @@ export function useArtifactActions({
     );
   }
 
-  async function saveSkillDocument(artifactId: string) {
-    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId);
-    if (!existing || existing.type !== "skill_doc") {
-      return;
-    }
-
-    if (!existing.sourcePath) {
-      onAnalysisHint("当前 skill 文档缺少源路径，无法写回文件。");
-      return;
-    }
-
-    try {
-      // 写文件动作收敛到 Tauri 端做路径白名单校验，前端只传逻辑源路径和正文。
-      await invoke("save_skill_document", {
-        markdown: existing.markdown ?? "",
-        sourcePath: existing.sourcePath
-      });
-      onAnalysisHint(`已保存 skill 文档：${existing.title}`);
-    } catch (error) {
-      onAnalysisHint(`保存 skill 文档失败：${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
   return {
     cancelArtifactTask,
     closeArtifactTab,
@@ -1412,13 +1415,11 @@ export function useArtifactActions({
     retryInterruptedThinReadingBranch,
     generateThinReadingBranch,
     restoreArtifactResult,
-    saveSkillDocument,
     startAnalysis,
     startAnalysisForPapers,
     startArtifactTask,
     syncThinReadingAnnotations,
     syncArtifacts,
-    updateSkillDocument,
     updateThinReadingDocument
   };
 }

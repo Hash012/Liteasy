@@ -1,0 +1,157 @@
+name: liteasy-local-foundation
+
+services:
+  liteasy-postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16}
+    environment:
+      APP_PASSWORD: ${LITEASY_DB_APP_PASSWORD:?run node prepare.mjs first}
+      APP_ROLE: liteasy_app
+      DATABASE_NAME: liteasy
+      MIGRATOR_PASSWORD: ${LITEASY_DB_MIGRATOR_PASSWORD:?run node prepare.mjs first}
+      MIGRATOR_ROLE: liteasy_migrator
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${LITEASY_DB_ADMIN_PASSWORD:?run node prepare.mjs first}
+      POSTGRES_USER: postgres
+      TEST_DATABASE_NAME: liteasy_test
+    entrypoint: ["bash", "/usr/local/bin/liteasy-postgres-entrypoint.sh"]
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/var/lib/postgresql/tls/server.crt", "-c", "ssl_key_file=/var/lib/postgresql/tls/server.key"]
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${LITEASY_DB_HOST_PORT:-55432}:5432"
+    volumes:
+      - liteasy-postgres-data:/var/lib/postgresql/data
+      - liteasy-postgres-tls:/var/lib/postgresql/tls
+      - ./postgres/postgres-entrypoint.sh:/usr/local/bin/liteasy-postgres-entrypoint.sh:ro
+      - ./postgres/init-product-database.sh:/docker-entrypoint-initdb.d/10-product-database.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  intuecho-postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16}
+    environment:
+      APP_PASSWORD: ${INTUECHO_DB_APP_PASSWORD:?run node prepare.mjs first}
+      APP_ROLE: intuecho_app
+      DATABASE_NAME: intuecho
+      MIGRATOR_PASSWORD: ${INTUECHO_DB_MIGRATOR_PASSWORD:?run node prepare.mjs first}
+      MIGRATOR_ROLE: intuecho_migrator
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${INTUECHO_DB_ADMIN_PASSWORD:?run node prepare.mjs first}
+      POSTGRES_USER: postgres
+      TEST_DATABASE_NAME: intuecho_test
+    entrypoint: ["bash", "/usr/local/bin/liteasy-postgres-entrypoint.sh"]
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/var/lib/postgresql/tls/server.crt", "-c", "ssl_key_file=/var/lib/postgresql/tls/server.key"]
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${INTUECHO_DB_HOST_PORT:-55433}:5432"
+    volumes:
+      - intuecho-postgres-data:/var/lib/postgresql/data
+      - intuecho-postgres-tls:/var/lib/postgresql/tls
+      - ./postgres/postgres-entrypoint.sh:/usr/local/bin/liteasy-postgres-entrypoint.sh:ro
+      - ./postgres/init-product-database.sh:/docker-entrypoint-initdb.d/10-product-database.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  keycloak-postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16}
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?run node prepare.mjs first}
+      POSTGRES_USER: keycloak
+    volumes:
+      - keycloak-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.3.2}
+    entrypoint: ["bash", "/opt/liteasy/start-keycloak.sh"]
+    depends_on:
+      keycloak-postgres:
+        condition: service_healthy
+    environment:
+      INTUECHO_API_CLIENT_SECRET: ${INTUECHO_API_CLIENT_SECRET:?run node prepare.mjs first}
+      INTUECHO_ORGANIZATION_SERVICE_SECRET: ${INTUECHO_ORGANIZATION_SERVICE_SECRET:?run node prepare.mjs first}
+      INTUECHO_WEB_LOOPBACK_ORIGIN: ${INTUECHO_WEB_LOOPBACK_ORIGIN:-http://127.0.0.1:*}
+      INTUECHO_WEB_LOOPBACK_REDIRECT_URI: ${INTUECHO_WEB_LOOPBACK_REDIRECT_URI:-http://127.0.0.1:*/*}
+      INTUECHO_WEB_ORIGIN: ${INTUECHO_WEB_ORIGIN:-http://localhost:*}
+      INTUECHO_WEB_REDIRECT_URI: ${INTUECHO_WEB_REDIRECT_URI:-http://localhost:*/*}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:?run node prepare.mjs first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:?run node prepare.mjs first}
+      KC_DB: postgres
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?run node prepare.mjs first}
+      KC_DB_SCHEMA: public
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:18081}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      LITEASY_CLOUD_CLIENT_SECRET: ${LITEASY_CLOUD_CLIENT_SECRET:?run node prepare.mjs first}
+      LITEASY_ADMIN_LOOPBACK_ORIGIN: ${LITEASY_ADMIN_LOOPBACK_ORIGIN:-http://127.0.0.1:*}
+      LITEASY_ADMIN_LOOPBACK_REDIRECT_URI: ${LITEASY_ADMIN_LOOPBACK_REDIRECT_URI:-http://127.0.0.1:*/*}
+      LITEASY_ADMIN_REDIRECT_URI: ${LITEASY_ADMIN_REDIRECT_URI:-http://localhost:*/*}
+      LITEASY_ADMIN_WEB_ORIGIN: ${LITEASY_ADMIN_WEB_ORIGIN:-http://localhost:*}
+      LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI: ${LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI:-http://localhost:*/*}
+      LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI: ${LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI:-http://127.0.0.1:*/*}
+      LITEASY_DESKTOP_WEB_ORIGIN: ${LITEASY_DESKTOP_WEB_ORIGIN:-http://tauri.localhost}
+      LITEASY_IDENTITY_ADMIN_CLIENT_SECRET: ${LITEASY_IDENTITY_ADMIN_CLIENT_SECRET:?run node prepare.mjs first}
+      LITEASY_IDENTITY_INTROSPECTION_CLIENT_SECRET: ${LITEASY_IDENTITY_INTROSPECTION_CLIENT_SECRET:?run node prepare.mjs first}
+      LITEASY_IDENTITY_MANAGEMENT_CLIENT_SECRET: ${LITEASY_IDENTITY_MANAGEMENT_CLIENT_SECRET:?run node prepare.mjs first}
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${KEYCLOAK_HOST_PORT:-18081}:8080"
+    volumes:
+      - ./keycloak/liteasy-realm.json:/opt/keycloak/data/import/liteasy-realm.json:ro
+      - ./keycloak/configure-keycloak.sh:/opt/liteasy/configure-keycloak.sh:ro
+      - ./keycloak/start-keycloak.sh:/opt/liteasy/start-keycloak.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/liteasy-keycloak-configured && exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  identity-management:
+    image: ${IDENTITY_MANAGEMENT_IMAGE:-liteasy/identity-management:local}
+    build:
+      context: ../../LiteasyClaw/services/identity-management
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      IDENTITY_MANAGEMENT_ADMIN_API_URL: ${KEYCLOAK_INTERNAL_URL:-http://keycloak:8080}/admin/realms/liteasy
+      IDENTITY_MANAGEMENT_ADMIN_CLIENT_ID: liteasy-keycloak-admin
+      IDENTITY_MANAGEMENT_ADMIN_CLIENT_SECRET: ${LITEASY_IDENTITY_ADMIN_CLIENT_SECRET:?run node prepare.mjs first}
+      IDENTITY_MANAGEMENT_ADMIN_TOKEN_URL: ${KEYCLOAK_INTERNAL_URL:-http://keycloak:8080}/realms/liteasy/protocol/openid-connect/token
+      IDENTITY_MANAGEMENT_AUDIENCE: liteasy-identity-management
+      IDENTITY_MANAGEMENT_CALLER_CLIENT_ID: liteasy-account-lifecycle
+      IDENTITY_MANAGEMENT_HOST: 0.0.0.0
+      IDENTITY_MANAGEMENT_INTROSPECTION_CLIENT_ID: liteasy-identity-introspection
+      IDENTITY_MANAGEMENT_INTROSPECTION_CLIENT_SECRET: ${LITEASY_IDENTITY_INTROSPECTION_CLIENT_SECRET:?run node prepare.mjs first}
+      IDENTITY_MANAGEMENT_INTROSPECTION_URL: ${KEYCLOAK_INTERNAL_URL:-http://keycloak:8080}/realms/liteasy/protocol/openid-connect/token/introspect
+      IDENTITY_MANAGEMENT_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:18081/realms/liteasy}
+      IDENTITY_MANAGEMENT_PORT: 9090
+      NODE_ENV: test
+    ports:
+      - "${LOCAL_BIND_ADDRESS:-127.0.0.1}:${IDENTITY_MANAGEMENT_HOST_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9090/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  intuecho-postgres-data:
+  intuecho-postgres-tls:
+  keycloak-postgres-data:
+  liteasy-postgres-data:
+  liteasy-postgres-tls:

@@ -58,7 +58,18 @@ export type ArtifactTask = {
   status: ArtifactTaskStatus;
 };
 
+export type ArtifactFailureCode =
+  | "artifact_generation_failed"
+  | "artifact_verification_failed"
+  | "document_processing_failed"
+  | "external_retrieval_failed"
+  | "model_authentication_failed"
+  | "model_rate_limited"
+  | "model_route_unavailable"
+  | "service_unavailable";
+
 export type ArtifactTaskFailure = {
+  code?: ArtifactFailureCode;
   endpoint?: string;
   failedStage: ArtifactTaskStage;
   message: string;
@@ -66,6 +77,7 @@ export type ArtifactTaskFailure = {
   occurredAt: string;
   provider?: string;
   recovery: string[];
+  traceId?: string;
 };
 
 export type ArtifactPreview = {
@@ -74,10 +86,13 @@ export type ArtifactPreview = {
 };
 
 export type ArtifactPaperRef = {
-  forumTopicId?: string;
-  forumWorkId?: string;
+  arxivId?: string;
+  authors?: readonly string[] | string;
+  doi?: string;
   id: string;
+  semanticScholarId?: string;
   title: string;
+  year?: number | string;
 };
 
 export type ArtifactRegenerationRequest = {

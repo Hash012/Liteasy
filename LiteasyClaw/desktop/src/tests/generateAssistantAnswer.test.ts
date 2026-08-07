@@ -8,6 +8,32 @@ import {
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 
+const liveModelTransport = async () => ({
+  json: async () => ({
+    answer: "云端回答：这篇综述如何定义向量数据库系统？ [demo-2 p.4]",
+    execution: {
+      backend: "test_cloud",
+      mode: "live",
+      provider: "openai"
+    }
+  }),
+  ok: true,
+  status: 200
+});
+
+const liveAuditTransport = async () => ({
+  json: async () => ({
+    audit: {
+      model: "gpt-5-mini-auditor",
+      rationale: "回答包含可追溯引用，且引用片段覆盖问题关键词。",
+      score: 0.86,
+      verdict: "pass"
+    }
+  }),
+  ok: true,
+  status: 200
+});
+
 test("prioritizes verified citation edges while retaining bounded topic-search context", () => {
   const sources = [
     {
@@ -90,10 +116,11 @@ test("builds bounded support, challenge, and context queries for external eviden
   expect(plan.find((item) => item.intent === "challenge")?.query).toContain("conflicting results");
 });
 
-test("generates cloud-proxy answers by default", async () => {
+test("generates cloud-proxy answers through an injected live transport", async () => {
   const settings = createSettingsStore().getState();
 
   const result = await generateAssistantAnswer({
+    auditTransport: liveAuditTransport,
     importedChunksByPaperId: {
       "demo-2": [
         {
@@ -107,6 +134,7 @@ test("generates cloud-proxy answers by default", async () => {
       ]
     },
     mode: "qa",
+    modelTransport: liveModelTransport,
     question: "这篇综述如何定义向量数据库系统？",
     selectedPapers: [
       {
@@ -126,9 +154,9 @@ test("generates cloud-proxy answers by default", async () => {
     verdict: "pass"
   });
   expect(result.executionTrace).toEqual({
-    backend: "desktop_mock",
-    endpoint: "mock://cloud-proxy",
-    mode: "mock",
+    backend: "http_service",
+    endpoint: "http://127.0.0.1:8787",
+    mode: "live",
     provider: "openai",
     source: "cloud_proxy"
   });
@@ -138,6 +166,7 @@ test("qa answers include evidence ui dsl without state-changing actions", async 
   const settings = createSettingsStore().getState();
 
   const result = await generateAssistantAnswer({
+    auditTransport: liveAuditTransport,
     importedChunksByPaperId: {
       "demo-2": [
         {
@@ -151,6 +180,7 @@ test("qa answers include evidence ui dsl without state-changing actions", async 
       ]
     },
     mode: "qa",
+    modelTransport: liveModelTransport,
     question: "这篇综述如何定义向量数据库系统？",
     selectedPapers: [
       {
@@ -184,8 +214,10 @@ test("keeps generation on the unified cloud model path when stale local-direct s
   };
 
   const result = await generateAssistantAnswer({
+    auditTransport: liveAuditTransport,
     importedChunksByPaperId: {},
     mode: "qa",
+    modelTransport: liveModelTransport,
     question: "总结这篇论文的核心方法",
     selectedPapers: [
       {
@@ -196,13 +228,13 @@ test("keeps generation on the unified cloud model path when stale local-direct s
     settings: settingsWithStaleLocalDirectKeys
   });
 
-  expect(result.content).toContain("云端回答：总结这篇论文的核心方法");
+  expect(result.content).toContain("云端回答：");
   expect(result.audit.model).toBe("gpt-5-mini-auditor");
   expect(result.audit.score).toBeGreaterThanOrEqual(0.8);
   expect(result.executionTrace).toEqual({
-    backend: "desktop_mock",
-    endpoint: "mock://cloud-proxy",
-    mode: "mock",
+    backend: "http_service",
+    endpoint: "http://127.0.0.1:8787",
+    mode: "live",
     provider: "openai",
     source: "cloud_proxy"
   });
@@ -400,17 +432,31 @@ test("injects agent core context into qa generation prompts", async () => {
   expect(prompt).toContain("Skills");
 });
 
-test("stops thin-reading generation on mock endpoints", async () => {
-  const settings = createSettingsStore().getState();
+test("rejects non-http model endpoints before thin-reading generation", async () => {
+  const store = createSettingsStore();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "mock://cloud-proxy"
+  });
 
   await expect(generateAssistantAnswer({
     artifactType: "thin_reading",
-    importedChunksByPaperId: {},
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses late interaction for efficient retrieval.",
+        summary: "ColBERT 使用后期交互进行高效检索。",
+        tags: ["late interaction"]
+      }]
+    },
     mode: "qa",
     question: "生成薄读",
     selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
-    settings
-  })).rejects.toThrow("真实模型链路");
+    settings: store.getState()
+  })).rejects.toThrow("模型云代理必须使用 HTTPS");
 });
 
 test("stops live thin-reading before the model call when PDF text evidence is unavailable", async () => {

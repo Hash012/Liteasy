@@ -28,6 +28,21 @@ test("keeps import status attached to the selected document row", () => {
   expect(store.getLatestJobByDocumentId("paper-a")?.id).toBe(firstJobId);
 });
 
+test("retains the parse failure reason on the import job", () => {
+  const store = createImportStore();
+  const jobId = store.startImport({
+    documentId: "paper-a",
+    sourcePath: "blob:http://localhost/paper-a"
+  });
+
+  store.markFailed(jobId, "无法读取浏览器中的 PDF");
+
+  expect(store.getJob(jobId)).toMatchObject({
+    error: "无法读取浏览器中的 PDF",
+    status: "failed"
+  });
+});
+
 test("stores parsed retrieval chunks on the imported document", () => {
   const store = createImportStore();
   const jobId = store.startImport({

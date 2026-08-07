@@ -135,8 +135,9 @@ export function createThinReadingExternalFullTextClient(input: {
 }) {
   return async (source: ThinReadingExternalSource, signal?: AbortSignal): Promise<ThinReadingExternalSource> => {
     if (!source.fullTextUrl) return source;
+    if (!source.fullTextGrantId) throw new Error("外部 PDF 授权已失效，请重新检索该文献");
     const response = await (input.transport ?? defaultTransport)({
-      body: JSON.stringify({ sourceId: source.id, url: source.fullTextUrl }),
+      body: JSON.stringify({ grantId: source.fullTextGrantId, sourceId: source.id }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
       signal,

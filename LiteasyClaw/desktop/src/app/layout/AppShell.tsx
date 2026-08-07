@@ -1,11 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceActions } from "../features/workspace/useWorkspaceActions";
 import { useRegisteredWorkspaceActions } from "../features/workspace/useRegisteredWorkspaceActions";
 import type { ImportJob, MineruFigure } from "../features/import/import.types";
-import { extractMineruPdfResources } from "../features/import/mineruPdfClient";
-import { extractImportedChunksForPaper } from "../features/import/importFixtures";
+import { extractPdfResourcesWithMineruFallback } from "../features/import/mineruPdfClient";
+import { extractImportedChunksForPaper } from "../features/import/importedPaperExtraction";
+import { loadPdfBytesForImport } from "../features/import/pdfSourceClient";
 import { PaperResourceTab } from "../features/import/PaperResourceTab";
 import type { PaperResourceKind } from "../features/import/paperResource.types";
 import { VisualizationTab } from "../features/visualization/VisualizationTab";
@@ -21,7 +21,10 @@ import {
 } from "../features/profile/profileExport";
 import { toRecommendationResearchProfile } from "../features/profile/profile.types";
 import type { ControlPlaneTransport } from "../features/models/controlPlaneClient";
-import type { ModelTransport } from "../features/models/modelHttpClient";
+import {
+  createBearerModelTransport,
+  type ModelTransport
+} from "../features/models/modelHttpClient";
 import { usePolicySync } from "../features/models/usePolicySync";
 import { useModelSettingsActions } from "../features/models/useModelSettingsActions";
 import {
@@ -39,10 +42,11 @@ import { createArtifactResultClient } from "../features/artifacts/artifactResult
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { AccountTransport } from "../features/account/accountSessionClient";
+import type { AccountCapabilitiesTransport } from "../features/account/accountCapabilitiesClient";
+import { loadStoredAccountSession } from "../features/account/accountSessionStorage";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
 import { useLeftRailNavigation, type LeftRailView } from "./useLeftRailNavigation";
-import type { OrganizationGovernanceTransport } from "../features/organization/organizationGovernanceClient";
 import type { OrganizationListTransport } from "../features/organization/organizationListClient";
 import type { OrganizationSummaryTransport } from "../features/organization/organizationSummaryClient";
 import type { OrganizationSharedLibraryManifestTransport } from "../features/organization/organizationSharedLibraryManifestClient";
@@ -52,7 +56,6 @@ import { AppDialogs } from "./AppDialogs";
 import { ReaderPane } from "./ReaderPane";
 import { AssistantSidebar } from "./AssistantSidebar";
 import { useAppShellStores } from "./useAppShellStores";
-import { starterPapers } from "./starterPapers";
 import { useConnectivity } from "../features/network/useConnectivity";
 import { PaneResizer } from "./PaneResizer";
 import { usePaneLayout } from "./usePaneLayout";
@@ -60,10 +63,14 @@ import { useLocalLibrary } from "../features/library/useLocalLibrary";
 import type { LibraryPaperChildItem } from "../features/library/LibraryPane";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
 import {
+  backupLocalLibrary,
   moveLocalLibraryResource,
+  listLegacyLocalLibraryRoots,
   openLocalLibraryInFileManager,
   persistDroppedPdfFiles,
+  persistZoteroPdfDirectory,
   readLocalLibraryPdf,
+  selectLegacyLocalLibraryRoot,
   setLocalLibraryRoot
 } from "../features/library/libraryFileSystemClient";
 import { isPaperCacheAvailable } from "../features/library/paperCacheClient";
@@ -75,6 +82,8 @@ import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflo
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
 import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
 import { useExternalPaperController } from "../controllers/useExternalPaperController";
+import { useLibraryResourceTransferController } from "../controllers/useLibraryResourceTransferController";
+import { useTeamAnnotationController } from "../controllers/useTeamAnnotationController";
 import type {
   ActionContext,
   DockMoveItemId,
@@ -85,7 +94,12 @@ import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionEx
 import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
 import type { PdfEvidenceTarget, PdfForumSelection } from "../features/pdf/PdfReader";
 import type { PdfAnnotation } from "../features/pdf/pdfAnnotationStorage";
+import {
+  listPdfAnnotationPendingPublicItems,
+  syncPdfAnnotationPendingItems
+} from "../features/pdf/pdfAnnotationIntuechoSync";
 import type { Paper } from "../features/workspace/workspace.types";
+import { resolvePaperIdentity } from "../features/paper-identity/paperIdentity";
 import { useForumController } from "../features/forum/useForumController";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
 import { generateWorkbenchOverlayUIDslDocument } from "../features/generative-ui/uiDslGenerator";
@@ -105,13 +119,14 @@ import { getDefaultModelForProvider } from "../features/models/modelPolicy";
 import type { AcademicProfileTransport } from "../features/profile/academicProfileClient";
 
 type AppShellProps = {
+  accountCapabilitiesTransport?: AccountCapabilitiesTransport;
   accountTransport?: AccountTransport;
   academicProfileTransport?: AcademicProfileTransport;
   controlPlaneTransport?: ControlPlaneTransport;
   documentMetadataTransport?: DocumentMetadataTransport;
   initialSettings?: Partial<SettingsState>;
+  initialPapers?: Paper[];
   localDevCloudEnv?: DevCloudEnvLike;
-  organizationGovernanceTransport?: OrganizationGovernanceTransport;
   organizationListTransport?: OrganizationListTransport;
   organizationSharedLibraryManifestTransport?: OrganizationSharedLibraryManifestTransport;
   organizationTransport?: OrganizationSummaryTransport;
@@ -140,13 +155,14 @@ function paperResourceTabId(resource: OpenPaperResource) {
 }
 
 export function AppShell({
+  accountCapabilitiesTransport,
   accountTransport,
   academicProfileTransport,
   controlPlaneTransport,
   documentMetadataTransport,
+  initialPapers,
   initialSettings,
   localDevCloudEnv,
-  organizationGovernanceTransport,
   organizationListTransport,
   organizationSharedLibraryManifestTransport,
   organizationTransport,
@@ -154,7 +170,10 @@ export function AppShell({
   modelTransport,
   recommendationTransport
 }: AppShellProps = {}) {
-  const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(initialSettings);
+  const { artifactStore, importStoreRef, settingsStoreRef, workspaceStoreRef } = useAppShellStores(
+    initialSettings,
+    initialPapers
+  );
   const agentArtifactRunnerRef = useRef<(
     artifactType: ArtifactType,
     onProgress: (input: {
@@ -188,13 +207,13 @@ export function AppShell({
     });
   }
   const {
+    notice: localLibraryNotice,
     refresh: refreshLocalLibrary,
     snapshot: localLibrarySnapshot
   } = useLocalLibrary(localLibraryLoader);
   const paneLayout = usePaneLayout();
   const dock = useDockLayout();
   const { isOnline } = useConnectivity();
-  const forum = useForumController();
   const [runtimeTheme, setRuntimeTheme] = useState<RuntimeTheme>({ kind: "default" });
   const [workbenchOverlay, setWorkbenchOverlay] = useState<UIDslDocument | null>(null);
   const [activeCenterArtifactId, setActiveCenterArtifactId] = useState<string | null>(null);
@@ -214,6 +233,14 @@ export function AppShell({
     useState<ReaderConversationContext | null>(null);
   const latestArtifactIdRef = useRef<string | null>(null);
   const latestArtifactTaskIdRef = useRef<string | null>(null);
+  const cloudAccessTokenRef = useRef<string | undefined>(undefined);
+  const forum = useForumController({ getSessionId: () => cloudAccessTokenRef.current });
+  const effectiveModelTransport = useMemo(() => modelTransport ?? createBearerModelTransport({
+    getAccessToken: () => cloudAccessTokenRef.current
+  }), [modelTransport]);
+  const resolveIntuechoEndpoint = () =>
+    settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"].trim() ||
+    (import.meta.env.VITE_FORUM_API_URL ?? "http://127.0.0.1:4040");
 
   const workspaceSelection = useWorkspaceSelectionController({
     localLibrarySnapshot,
@@ -233,53 +260,32 @@ export function AppShell({
       ? settingsState["models.cloud_proxy_endpoint"]
       : resolveLocalDevCloudEndpoint();
   const [importJobsByDocumentId, setImportJobsByDocumentId] = useState<Record<string, ImportJob>>({});
+  const [cloudTreeRevision, setCloudTreeRevision] = useState(0);
   const savedMineruResourcesRef = useRef<Record<string, PaperMineruResources>>({});
   const [analysisHint, setAnalysisHint] = useState(
     "先勾选并锁定文献形成选中文献集，再用中栏 AI 按钮启动分析。"
   );
+  useEffect(() => {
+    if (localLibraryNotice) setAnalysisHint(localLibraryNotice);
+  }, [localLibraryNotice]);
   const modelSettings = useModelSettingsActions({
     localDevCloudEnv,
     onSettingsChanged: (nextSettings) => setSettingsState(cloneSettingsState(nextSettings)),
     settingsStore: settingsStoreRef.current
   });
-  const paperTranslation = usePaperTranslationController({
-    modelTransport,
-    settingsStore: settingsStoreRef.current
-  });
   const loadPaperPdfBytes = useCallback(async (sourcePath: string) => {
     const hasTauriInvoke = typeof window !== "undefined" &&
       typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === "function";
-    if (hasTauriInvoke) {
-      return readLocalLibraryPdf(sourcePath);
-    }
-
-    // Built-in browser fixtures stay on Vite. User-library PDFs go through the
-    // loopback service, which enforces the same LiteasyLibrary boundary as Tauri.
-    if (/^\/(?:papers|fixtures)\//.test(sourcePath)) {
-      const response = await fetch(sourcePath);
-      if (!response.ok) {
-        throw new Error(`无法读取内置 PDF：HTTP ${response.status}`);
-      }
-      return new Uint8Array(await response.arrayBuffer());
-    }
     const configuredEndpoint = settingsState["models.cloud_proxy_endpoint"];
     const endpoint = configuredEndpoint.startsWith("http")
       ? configuredEndpoint
       : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv);
-    const response = await fetch(
-      `${endpoint.replace(/\/$/, "")}/v1/local-library/pdf?path=${encodeURIComponent(sourcePath)}`
-    );
-    if (!response.ok) {
-      let message = `无法读取本地 PDF：HTTP ${response.status}`;
-      try {
-        const payload = await response.json() as { message?: string };
-        message = payload.message ?? message;
-      } catch {
-        // Keep the transport-level error when the response cannot be decoded.
-      }
-      throw new Error(message);
-    }
-    return new Uint8Array(await response.arrayBuffer());
+    return loadPdfBytesForImport({
+      devCloudEndpoint: endpoint,
+      readTauriPdf: readLocalLibraryPdf,
+      sourcePath,
+      tauriAvailable: hasTauriInvoke
+    });
   }, [localDevCloudEnv, settingsState]);
   const leftRail = useLeftRailNavigation();
   function openDockedLeftRailView(view: LeftRailView) {
@@ -299,24 +305,18 @@ export function AppShell({
           figures: savedMaterial.figures
         });
       }
-      // Built-in samples retain the local PDF.js path that keeps the offline/demo
-      // workspace instant. Managed library files use MinerU for exact text and
-      // high-resolution figures.
-      if (/^\/(?:papers|fixtures)\//.test(paper.sourcePath ?? "")) {
-        return extractImportedChunksForPaper(paper, {
-          loadPdfSource: loadPaperPdfBytes,
-          ocrLanguage: settingsState["import.ocr_language"]
-        }).then((chunks) => ({ chunks, figures: [] }));
-      }
-      return extractMineruPdfResources({
+      return extractPdfResourcesWithMineruFallback({
         endpoint: settingsState["models.cloud_proxy_endpoint"].startsWith("http")
           ? settingsState["models.cloud_proxy_endpoint"]
           : resolveLocalDevCloudEndpoint(undefined, localDevCloudEnv),
+        extractFallback: () => extractImportedChunksForPaper(paper, {
+          loadPdfSource: loadPaperPdfBytes,
+          ocrLanguage: settingsState["import.ocr_language"]
+        }),
         loadPdfSource: loadPaperPdfBytes,
         paper
       });
     },
-    importDocument: (sourcePath) => invoke("mock_import", { sourcePath }),
     importStore: importStoreRef.current,
     loadPdfSource: loadPaperPdfBytes,
     moveLocalLibraryResource,
@@ -339,14 +339,18 @@ export function AppShell({
     refreshLocalLibrary,
     setActiveCenterArtifactId,
     setActiveReaderPaperId,
-    setOpenReaderPaperIds
+    setOpenReaderPaperIds,
+    transport: effectiveModelTransport
   });
   const { cachedReaderPapers } = externalPapers;
+  const artifactAccountId = loadStoredAccountSession()?.userId;
 
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
     artifactResultClient: artifactResultClientRef.current,
-    artifactResultScopeKey: settingsState["models.cloud_proxy_endpoint"],
+    artifactResultScopeKey: artifactAccountId
+      ? `${settingsState["models.cloud_proxy_endpoint"]}:${artifactAccountId}`
+      : undefined,
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
     getAssistantLanguage: () => settingsStoreRef.current.getState()["assistant.language"],
     getActiveReaderPaper: () => {
@@ -359,7 +363,8 @@ export function AppShell({
     getImportedChunksForPaperId: (paperId) =>
       importStoreRef.current.getParsedChunksByDocumentId(paperId),
     getMineruFiguresForPaperId: (paperId) => mineruFiguresByPaperId[paperId] ?? [],
-    getIntuechoEndpoint: () => settingsStoreRef.current.getState()["thin_reading.intuecho_endpoint"],
+    getIntuechoEndpoint: resolveIntuechoEndpoint,
+    getIntuechoSessionId: () => cloudAccessTokenRef.current,
     getModelDiagnosticContext: () => {
       const provider = settingsStoreRef.current.getState()["models.default_provider"];
       return {
@@ -378,6 +383,10 @@ export function AppShell({
       agentArtifactRunnerRef.current(artifactType, onProgress, options)
   });
   const { artifactCatalog, artifactTabs, artifactTasks } = artifactWorkflow.model;
+  const activeThinReadingTask = artifactTasks.find((task) => (
+    task.type === "thin_reading" &&
+    (task.status === "queued" || task.status === "running")
+  ));
   const savedMineruResourcesByPaperId = workspaceState.papers.reduce<Record<string, PaperMineruResources>>(
     (resources, paper) => {
       const artifact = artifactCatalog.find((candidate) => {
@@ -435,7 +444,7 @@ export function AppShell({
     for (const paper of workspaceState.papers) {
       const material = savedMineruResourcesByPaperId[paper.id];
       const latestJob = importStoreRef.current.getLatestJobByDocumentId(paper.id);
-      if (!material || latestJob?.status === "parsed") {
+      if (!material || latestJob?.status === "parsed" || !paper.sourcePath) {
         continue;
       }
       // A persisted artifact is an authoritative MinerU result. Rehydrate it into
@@ -443,7 +452,7 @@ export function AppShell({
       // the same PDF to MinerU again.
       const jobId = importStoreRef.current.startImport({
         documentId: paper.id,
-        sourcePath: paper.sourcePath ?? `fixtures/${paper.id}.pdf`
+        sourcePath: paper.sourcePath
       });
       importStoreRef.current.markParsed(jobId, {
         chunks: material.textChunks,
@@ -578,12 +587,8 @@ export function AppShell({
     modelSettings.applyInjectedLocalDevCloudDefaults();
   }, []);
 
-  usePolicySync({
-    applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
-    controlPlaneTransport,
-    getSettings: () => settingsStoreRef.current.getState()
-  });
   const cloudAccount = useCloudAccountController({
+    accountCapabilitiesTransport,
     accountTransport,
     getSettings: () => settingsStoreRef.current.getState(),
     applyLocalDevCloudDefaults: modelSettings.applyLocalDevCloudDefaults,
@@ -597,6 +602,17 @@ export function AppShell({
     accountSession,
     loginDialogOpen
   } = cloudAccount.model;
+  cloudAccessTokenRef.current = accountSession?.sessionId;
+  usePolicySync({
+    applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
+    controlPlaneTransport,
+    getSettings: () => settingsStoreRef.current.getState(),
+    sessionId: accountSession?.sessionId
+  });
+  const paperTranslation = usePaperTranslationController({
+    modelTransport: effectiveModelTransport,
+    settingsStore: settingsStoreRef.current
+  });
   const profileActions = useProfileActions({
     accountSession,
     controlPlaneEndpoint: settingsState["models.control_plane_endpoint"],
@@ -624,11 +640,9 @@ export function AppShell({
     onLeftRailView: openDockedLeftRailView,
     onWorkspaceLabel: setWorkspaceLabel,
     onWorkspaceSync: workspaceActions.syncWorkspace,
-    organizationGovernanceTransport,
     organizationListTransport,
     organizationSharedLibraryManifestTransport,
     organizationTransport,
-    starterPapers,
     workspaceStoreRef
   });
   function logoutAndClearOrganizationState() {
@@ -866,7 +880,9 @@ export function AppShell({
     getUserStateSummary: () => agentRecentState,
     importedChunksByPaperId,
     importedSelectedCount,
-    modelTransport,
+    modelTransport: effectiveModelTransport,
+    thinReadingExternalKnowledgeTransport: effectiveModelTransport,
+    thinReadingExternalPdfTransport: effectiveModelTransport,
     onApplyGeneratedTheme: runtimeActionContext.applyGeneratedTheme,
     onApplyLayoutPreset: runtimeActionContext.applyLayoutPreset,
     onApplyPanelAction: runtimeActionContext.applyPanelAction,
@@ -917,6 +933,7 @@ export function AppShell({
     recommendationTransport,
     recommendationsEnabled: settingsState["network.recommendation.enabled"],
     recommendationSortMode: settingsState["network.recommendation.sort_mode"],
+    personalizationEnabled: settingsState["profile.enabled"],
     personalizationVersion: profileActions.personalizationVersion,
     researchProfile: settingsState["profile.enabled"]
       ? toRecommendationResearchProfile(profileActions.academicProfile)
@@ -926,9 +943,6 @@ export function AppShell({
     workspaceSourceKey: `${workspaceState.workspaceSource.type}:${workspaceState.workspaceSource.rootPath}`
   });
   const {
-    collectionItems,
-    collectionMessage,
-    collectionStatus,
     documentMetadataSyncMessage,
     documentMetadataSyncResult,
     documentMetadataSyncStatus,
@@ -937,16 +951,32 @@ export function AppShell({
     recommendationPending,
     recommendationStatus
   } = knowledgeSync.model;
+  const transferLibraryResource = useLibraryResourceTransferController({
+    endpoint: externalKnowledgeEndpoint,
+    onRecommendationSaved: async (recommendation) => {
+      const results = await Promise.allSettled([
+        knowledgeSync.actions.recordRecommendationSaved(recommendation),
+        profileActions.recordPersonalizationSignal({
+          kind: "recommendation_saved",
+          title: recommendation.title
+        })
+      ]);
+      if (results.some((result) => result.status === "rejected")) {
+        setAnalysisHint("文献已保存到收藏；偏好反馈暂未同步，可稍后继续使用。");
+      }
+    },
+    refreshCloudTrees: () => setCloudTreeRevision((current) => current + 1),
+    refreshLocalLibrary,
+    transport: modelTransport
+  });
   const {
     actionMessage: organizationActionMessage,
+    actionPending: organizationActionPending,
     createOpen: createOrganizationOpen,
     inviteSummary,
     joinOpen: joinOrganizationOpen,
     leaveSummary,
     organizationDialogOpen,
-    organizationGovernanceMessage,
-    organizationGovernanceStatus,
-    organizationGovernanceSummary,
     organizationList,
     organizationListMessage,
     organizationListStatus,
@@ -955,6 +985,11 @@ export function AppShell({
     organizationSummaryStatus,
     readNotificationIds
   } = organizationShell.model;
+  const teamAnnotations = useTeamAnnotationController({
+    accountSession,
+    endpoint: externalKnowledgeEndpoint,
+    organizationSummary
+  });
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
@@ -1187,23 +1222,27 @@ export function AppShell({
   }
 
   const leftPaneProps: Omit<LeftPaneProps, "leftRailView"> = {
+    accountScopeId: accountSession?.userId,
     activePaperId: activeReaderPaper?.id ?? null,
     academicProfile: profileActions.academicProfile,
     agentMemories: profileActions.agentMemories,
     agentRecentState,
     accountSession,
-    collectionItems,
-    collectionMessage,
-    collectionStatus,
+    cloudEndpoint: externalKnowledgeEndpoint,
+    cloudTreeRevision,
     documentMetadataSyncMessage,
     documentMetadataSyncResult: documentMetadataSyncResult ?? null,
     documentMetadataSyncStatus,
-    governanceMessage: organizationGovernanceMessage,
-    governanceStatus: organizationGovernanceStatus,
-    governanceSummary: organizationGovernanceSummary,
     importJobs: importJobsByDocumentId,
     libraryPaperChildren,
+    localLibrarySnapshot,
     libraryRootPath: localLibrarySnapshot?.rootPath ?? null,
+    loadLegacyLibraryRoots: isPaperCacheAvailable()
+      ? listLegacyLocalLibraryRoots
+      : undefined,
+    onBackupLibrary: isPaperCacheAvailable()
+      ? backupLocalLibrary
+      : undefined,
     onChangeLibraryRoot: isPaperCacheAvailable()
       ? async (nextRootPath: string) => {
           await setLocalLibraryRoot(nextRootPath);
@@ -1212,6 +1251,12 @@ export function AppShell({
       : undefined,
     onOpenLibraryInFileManager: isPaperCacheAvailable()
       ? openLocalLibraryInFileManager
+      : undefined,
+    onSelectLegacyLibraryRoot: isPaperCacheAvailable()
+      ? async (legacyRootPath: string) => {
+          await selectLegacyLocalLibraryRoot(legacyRootPath);
+          await refreshLocalLibrary();
+        }
       : undefined,
     list: organizationList,
     listMessage: organizationListMessage,
@@ -1225,6 +1270,11 @@ export function AppShell({
         return;
       }
       const cloudLibrary = createCloudLibraryStorageClient({ endpoint: externalKnowledgeEndpoint });
+      const organizationTree = await cloudLibrary.getTree({
+        scopeId: organizationId,
+        scopeType: "organization"
+      });
+      let expectedRevision = organizationTree.tree.revision;
       const organizationRoot = `org://${organizationId}/shared-library/`;
       const relativeTarget = targetFolderPath?.startsWith(organizationRoot)
         ? targetFolderPath.slice(organizationRoot.length)
@@ -1234,6 +1284,7 @@ export function AppShell({
         : undefined;
       for (const file of files) {
         const result = await cloudLibrary.uploadDocument({
+          expectedRevision,
           file,
           folderId,
           onDuplicate: () => window.confirm(
@@ -1241,6 +1292,7 @@ export function AppShell({
           ),
           scope: { scopeId: organizationId, scopeType: "organization" }
         });
+        expectedRevision = result.revision ?? expectedRevision;
         if (result.document) {
           workspaceStoreRef.current.addPaper({
             id: result.document.documentId,
@@ -1254,17 +1306,22 @@ export function AppShell({
       workspaceActions.syncWorkspace();
       setAnalysisHint("组织文献已上传并同步到共享文献库。");
     },
+    onImportZoteroDirectory: async (files) => {
+      if (!localLibrarySnapshot) {
+        throw new Error("本地文献库尚未准备完成。");
+      }
+      const result = await persistZoteroPdfDirectory({
+        files,
+        snapshot: localLibrarySnapshot
+      });
+      await refreshLocalLibrary();
+      return result.status === "cancelled"
+        ? "已取消 Zotero PDF 导入，本地文献库未更改。"
+        : `已从 Zotero 导出目录导入 ${result.importedCount} 个 PDF，保留原有目录层级。`;
+    },
     onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
-    onAddExternalPaper: workspaceActions.addExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
-    onCollectRecommendation: async (recommendation) => {
-      await knowledgeSync.actions.collectRecommendation(recommendation);
-      await profileActions.recordPersonalizationSignal({
-        kind: "recommendation_saved",
-        title: recommendation.title
-      });
-    },
     onDismissRecommendation: async (recommendation) => {
       await knowledgeSync.actions.dismissRecommendation(recommendation);
       await profileActions.recordPersonalizationSignal({
@@ -1282,8 +1339,22 @@ export function AppShell({
     onLoginRequired: cloudAccount.actions.openLoginDialog,
     onLogout: logoutAndClearOrganizationState,
     onMarkNotificationsRead: organizationShell.actions.markOrganizationNotificationsRead,
+    onOrganizationChanged: organizationShell.actions.refreshOrganizationData,
     onOpenAcademicArchive: profileActions.openAcademicArchive,
     onOpenOrganizationDialog: organizationShell.actions.openOrganizationDialog,
+    onOpenCloudEntry: async (scope, entry) => {
+      if (entry.entryKind !== "pdf") return;
+      await externalPapers.openCloudDocumentInReader({
+        documentId: entry.documentId,
+        scopeId: scope.scopeId,
+        scopeType: scope.scopeType,
+        title: entry.title
+      });
+      await profileActions.recordPersonalizationSignal({
+        kind: "paper_opened",
+        title: entry.title
+      });
+    },
     onOpenPaper: openPaperInReader,
     onRefreshLocalLibrary: async () => {
       await refreshLocalLibrary();
@@ -1314,9 +1385,9 @@ export function AppShell({
       artifactWorkflow.actions.openSkillDocument(entry);
       activateArtifactSurface(`skill-doc-${entry.id}`);
     },
-    onRetryCollectionSync: knowledgeSync.actions.retryCollectionSync,
     onRenameLibraryFolder: workspaceActions.renameFolder,
     onRenameLibraryPaper: workspaceActions.renamePaper,
+    onResourceTransfer: transferLibraryResource,
     onRetryDocumentMetadataSync: knowledgeSync.actions.retryDocumentMetadataSync,
     onReturnToLocalWorkspace: organizationShell.actions.openLocalLibraryWorkspace,
     onSelectOrganization: organizationShell.actions.selectOrganization,
@@ -1334,6 +1405,7 @@ export function AppShell({
     organizationSummary,
     organizationSummaryMessage,
     organizationSummaryStatus,
+    organizationId: organizationSummary?.organizationId,
     papers: workspaceState.papers,
     profileClearMessage: profileActions.profileClearMessage,
     profileReadPaperCount: workspaceState.papers.length,
@@ -1418,29 +1490,60 @@ export function AppShell({
     ];
   }
 
-  function resolveForumPaperMapping(paper: Paper) {
-    const paperSearchText = `${paper.id} ${paper.title} ${paper.sourcePath ?? ""}`.toLowerCase();
-    const starterPaper = starterPapers.find((candidate) => {
-      const starterFile = candidate.sourcePath?.split(/[\\/]/).pop()?.replace(/\.pdf$/i, "").toLowerCase();
-      return candidate.id === paper.id || candidate.title === paper.title || Boolean(starterFile && paperSearchText.includes(starterFile));
-    });
-    return {
-      forumTopicId: paper.forumTopicId ?? starterPaper?.forumTopicId,
-      forumWorkId: paper.forumWorkId ?? starterPaper?.forumWorkId
-    };
+  function forumAuthors(paper: Paper) {
+    if (Array.isArray(paper.authors)) {
+      return [...paper.authors];
+    }
+    return typeof paper.authors === "string"
+      ? paper.authors.split(/\s*(?:;|,|、)\s*/u).filter(Boolean)
+      : [];
   }
 
-  function postSelectionToForum(selection: PdfForumSelection) {
+  async function forumAnchorHash(value: string) {
+    if (globalThis.crypto?.subtle) {
+      const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(value.normalize("NFKC")));
+      return `sha256:${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    }
+    let hash = 2166136261;
+    for (const character of value) {
+      hash ^= character.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  }
+
+  async function postSelectionToForum(selection: PdfForumSelection) {
     const excerpt = selection.excerpt.trim();
-    const { forumTopicId, forumWorkId } = resolveForumPaperMapping(selection.paper);
+    const identity = resolvePaperIdentity(selection.paper).primary;
+    if (identity.kind === "local_paper_id") {
+      throw new Error("公开批注前需要补全 DOI、arXiv、Semantic Scholar 标识，或完整的标题、作者和年份。");
+    }
+    const year = typeof selection.paper.year === "number"
+      ? selection.paper.year
+      : Number.parseInt(selection.paper.year ?? "", 10);
+    const literature = {
+      identity: {
+        id: identity.id,
+        kind: identity.kind,
+        source: identity.source === "metadata" ? "metadata" as const : "inferred" as const,
+        value: identity.value
+      },
+      metadata: {
+        authors: forumAuthors(selection.paper),
+        title: selection.paper.title,
+        ...(Number.isInteger(year) ? { year } : {})
+      }
+    };
     return forum.createDraftAndOpen({
-      anchorHash: `${selection.paper.id}:${selection.page}:${excerpt}`,
-      citationEnabled: Boolean(forumWorkId && excerpt.length >= 8),
-      excerpt,
-      language: "zh-CN",
-      page: selection.page,
-      topicId: forumTopicId ?? "rag-reliability",
-      ...(forumWorkId ? { workId: forumWorkId } : {})
+      targets: [{
+        anchorHash: await forumAnchorHash(`${identity.kind}:${identity.value}:${selection.page}:${excerpt}`),
+        excerpt,
+        kind: "source_passage",
+        literature,
+        page: selection.page,
+        rects: []
+      }],
+      visibility: "public"
     });
   }
 
@@ -1449,26 +1552,16 @@ export function AppShell({
     if (excerpt.length < 8) {
       throw new Error("引用文段至少需要 8 个字符，才能同步到论坛草稿。");
     }
-    const { forumTopicId, forumWorkId } = resolveForumPaperMapping(input.paper);
-    if (!forumTopicId) {
-      throw new Error("该论文尚未关联研究主题，暂时无法创建论坛草稿。");
+    const endpoint = resolveIntuechoEndpoint();
+    const [result] = await syncPdfAnnotationPendingItems({
+      endpoint,
+      items: listPdfAnnotationPendingPublicItems([input.annotation]),
+      sessionId: cloudAccessTokenRef.current
+    });
+    if (!result || result.status !== "synced") {
+      throw new Error(result?.status === "failed" ? result.error : "Intuecho 未确认该批注。");
     }
-    return forum.createDraft(
-      {
-        anchorHash: `pdf:${input.annotation.paperIdentity.paperId}:${input.annotation.id}`,
-        citationEnabled: Boolean(forumWorkId),
-        excerpt,
-        language: "zh-CN",
-        page: input.annotation.page,
-        topicId: forumTopicId,
-        ...(forumWorkId ? { workId: forumWorkId } : {})
-      },
-      {
-        body: input.annotation.note?.trim() ?? "",
-        citationEnabled: Boolean(forumWorkId),
-        tags: []
-      }
-    );
+    return { intuechoAnnotationId: result.intuechoAnnotationId };
   }
 
   function renderArtifactSurface(
@@ -1483,7 +1576,9 @@ export function AppShell({
           canStartAnalysis={
             workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
           }
-          intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
+          developerDiagnostics={cloudAccount.model.developerDiagnostics}
+          intuechoEndpoint={resolveIntuechoEndpoint()}
+          intuechoSessionId={accountSession?.sessionId}
           onLoadForumFeed={forum.loadFeed}
           onDynamicAction={(action) => {
             void handleArtifactCanvasAction(action);
@@ -1505,13 +1600,9 @@ export function AppShell({
           onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
           onRetryInterruptedThinReadingBranch={artifactWorkflow.actions.retryInterruptedThinReadingBranch}
           onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
-          onSaveMarkdownTab={(artifactId) => {
-            void artifactWorkflow.actions.saveSkillDocument(artifactId);
-          }}
           onStartAnalysis={(artifactType) => {
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
-          onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
           onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
           selectedCount={workspaceState.selectedPaperIds.length}
           selectionLocked={workspaceState.selectionLocked}
@@ -1542,10 +1633,11 @@ export function AppShell({
           agentClient={assistantAgent.agentClient}
           academicProfile={profileActions.academicProfile}
           artifactTasks={artifactTasks}
+          developerDiagnostics={cloudAccount.model.developerDiagnostics}
           executionJournal={assistantAgent.executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}
           importedSelectedCount={importedSelectedCount}
-          modelTransport={modelTransport}
+          modelTransport={effectiveModelTransport}
           readerConversationContext={readerConversationContext}
           onApplyLayoutPreset={runtimeActionContext.applyLayoutPreset}
           onApplyGeneratedTheme={runtimeActionContext.applyGeneratedTheme}
@@ -1613,10 +1705,12 @@ export function AppShell({
     ];
     return (
       <ReaderPane
+        {...teamAnnotations.readerBindings(paper)}
         allowServerPdfParsing={false}
         analysisHint={analysisHint}
         artifactTabs={artifactTabs}
         artifactTasks={artifactTasks}
+        developerDiagnostics={cloudAccount.model.developerDiagnostics}
         externalKnowledgeEndpoint={externalKnowledgeEndpoint}
         layoutCollapsed={paneLayout.collapsed}
         loadPdfSource={externalPapers.loadPdfSource}
@@ -1633,16 +1727,13 @@ export function AppShell({
         onOpenVisualization={openVisualization}
         onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
         onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
-        intuechoEndpoint={settingsState["thin_reading.intuecho_endpoint"]}
+        intuechoEndpoint={resolveIntuechoEndpoint()}
+        intuechoSessionId={accountSession?.sessionId}
         onLoadForumFeed={forum.loadFeed}
         onPostToForum={postSelectionToForum}
         onSyncAnnotationToForum={syncAnnotationToForum}
         onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
-        onSaveMarkdownTab={(artifactId) => {
-          void artifactWorkflow.actions.saveSkillDocument(artifactId);
-        }}
-        onUpdateMarkdownTab={artifactWorkflow.actions.updateSkillDocument}
         onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
         onToggleBottomPane={() =>
           paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
@@ -1759,6 +1850,7 @@ export function AppShell({
               canStartAnalysis={
                 workspaceState.selectedPaperIds.length > 0 && workspaceState.selectionLocked
               }
+              generationProgress={activeThinReadingTask?.progress}
               onStartAnalysis={(artifactType) => {
                 startReaderScopedAnalysis(artifactType, getActiveReaderAnalysisPapers());
               }}
@@ -1856,6 +1948,7 @@ export function AppShell({
           accountMessage={cloudAccount.model.accountMessage}
           accountPending={cloudAccount.model.accountPending}
           accountSession={accountSession}
+          controlPlaneEndpoint={cloudAccount.model.controlPlaneEndpoint}
           academicArchiveOpen={profileActions.academicArchiveOpen}
           clearProfileConfirmOpen={profileActions.clearProfileConfirmOpen}
           createOrganizationOpen={createOrganizationOpen}
@@ -1864,6 +1957,8 @@ export function AppShell({
           leaveSummary={leaveSummary}
           list={organizationList}
           listMessage={organizationListMessage}
+          organizationActionMessage={organizationActionMessage}
+          organizationActionPending={organizationActionPending}
           onCancelClearProfile={profileActions.closeClearProfileConfirm}
           onClearProfile={profileActions.clearUserProfile}
           onCloseAcademicArchive={profileActions.closeAcademicArchive}
@@ -1872,10 +1967,18 @@ export function AppShell({
           onCloseJoinOrganization={organizationShell.actions.closeJoinOrganizationDialog}
           onCloseLeaveOrganization={organizationShell.actions.closeLeaveDialog}
           onCloseOrganizationDialog={organizationShell.actions.closeOrganizationDialog}
-          onCreateOrganization={organizationShell.actions.createDemoOrganizationRequest}
-          onInviteMember={organizationShell.actions.sendDemoOrganizationInvite}
-          onJoinOrganization={organizationShell.actions.createDemoOrganizationJoinRequest}
-          onLeaveOrganization={organizationShell.actions.createDemoOrganizationLeaveRequest}
+          onCreateOrganization={(name) => {
+            void organizationShell.actions.createOrganizationRequest(name);
+          }}
+          onInviteMember={(input) => {
+            void organizationShell.actions.inviteOrganizationMember(input);
+          }}
+          onJoinOrganization={(invitationToken) => {
+            void organizationShell.actions.joinOrganizationRequest(invitationToken);
+          }}
+          onLeaveOrganization={() => {
+            void organizationShell.actions.leaveOrganizationRequest();
+          }}
           onExportProfile={handleProfileExport}
           onSkipLogin={cloudAccount.actions.skipLogin}
           onSubmitAccountLogin={(login) => {
@@ -1884,8 +1987,8 @@ export function AppShell({
           onSubmitAccountRegistration={(registration) => {
             void cloudAccount.actions.submitAccountRegistration(registration);
           }}
-          onSubmitDemoLogin={() => {
-            void cloudAccount.actions.submitDemoLogin();
+          onSubmitSystemBrowserLogin={() => {
+            void cloudAccount.actions.submitSystemBrowserLogin();
           }}
           onToggleSuppressLoginReminder={cloudAccount.actions.setSuppressLoginReminder}
           onOpenSharedLibrary={(summary) => {

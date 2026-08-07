@@ -8,7 +8,64 @@ beforeEach(() => {
 });
 
 describe("useProfileActions", () => {
-  test("tracks academic archive state and requests profile sampling changes", () => {
+  test("updates the cloud personalization switch before changing local state", async () => {
+    const onProfileSamplingChanged = vi.fn();
+    let finishUpdate: ((response: { json: () => Promise<unknown>; ok: boolean; status: number }) => void) | undefined;
+    const updateResponse = new Promise<{ json: () => Promise<unknown>; ok: boolean; status: number }>((resolve) => {
+      finishUpdate = resolve;
+    });
+    const snapshot = {
+      enabled: false,
+      personalizationVersion: 1,
+      profile: { disciplines: [], profileVersion: 0, stage: "未设置" }
+    };
+    const transport = vi.fn(async ({ url }: { url: string }) => {
+      if (url.endsWith("/v1/personalization/settings/update")) {
+        return updateResponse;
+      }
+      return { json: async () => snapshot, ok: true, status: 200 };
+    });
+    const { result } = renderHook(() => useProfileActions({
+      accountSession: {
+        email: "reader@example.com",
+        expiresAt: "2027-01-01T00:00:00Z",
+        name: "Reader",
+        sessionId: "reader-session",
+        userId: "reader"
+      },
+      controlPlaneEndpoint: "http://control-plane.test",
+      onProfileSamplingChanged,
+      profileSamplingEnabled: false,
+      transport
+    }));
+    await waitFor(() => expect(transport).toHaveBeenCalledTimes(1));
+
+    let togglePromise: Promise<void>;
+    act(() => {
+      togglePromise = result.current.toggleProfileSampling();
+    });
+    await waitFor(() => expect(result.current.profileSamplingPending).toBe(true));
+    expect(onProfileSamplingChanged).not.toHaveBeenCalled();
+
+    finishUpdate?.({
+      json: async () => ({ ...snapshot, enabled: true, personalizationVersion: 2 }),
+      ok: true,
+      status: 200
+    });
+    await act(async () => togglePromise!);
+    expect(onProfileSamplingChanged).toHaveBeenCalledWith(true);
+    expect(result.current.profileSamplingPending).toBe(false);
+    const updateRequest = transport.mock.calls.find(([request]) => request.url.endsWith("/settings/update"))?.[0];
+    const updateBody = JSON.parse(updateRequest.body);
+    expect(updateBody).toMatchObject({
+      enabled: true,
+      expectedVersion: 1,
+      sessionId: "reader-session"
+    });
+    expect(updateBody.idempotencyKey).toMatch(/^personalization:/);
+  });
+
+  test("tracks academic archive state and requests profile sampling changes", async () => {
     const onProfileSamplingChanged = vi.fn();
     const { result, rerender } = renderHook(
       ({ enabled }) =>
@@ -29,13 +86,13 @@ describe("useProfileActions", () => {
     act(() => result.current.closeAcademicArchive());
     expect(result.current.academicArchiveOpen).toBe(false);
 
-    act(() => result.current.toggleProfileSampling());
+    await act(() => result.current.toggleProfileSampling());
     expect(onProfileSamplingChanged).toHaveBeenLastCalledWith(true);
 
     rerender({ enabled: true });
     expect(result.current.profileSamplingEnabled).toBe(true);
 
-    act(() => result.current.toggleProfileSampling());
+    await act(() => result.current.toggleProfileSampling());
     expect(onProfileSamplingChanged).toHaveBeenLastCalledWith(false);
   });
 

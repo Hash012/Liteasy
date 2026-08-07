@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 const stages = new Set([
   "未设置",
   "本科生",
@@ -128,6 +130,7 @@ function mapProfile(row) {
 function toPublicSnapshot(state) {
   return {
     assistantSummary: state.assistantSummary,
+    enabled: state.enabled,
     personalizationVersion: state.personalizationVersion,
     profile: state.profile,
     tags: state.tags
@@ -135,6 +138,9 @@ function toPublicSnapshot(state) {
 }
 
 export function createPersonalizationRepository(database) {
+  const findSetting = database.prepare(`
+    SELECT enabled FROM personalization_settings WHERE owner_key = ?
+  `);
   const findProfile = database.prepare(`
     SELECT stage, disciplines_json, profile_version
     FROM academic_profiles
@@ -171,6 +177,21 @@ export function createPersonalizationRepository(database) {
   const deleteSuppressions = database.prepare(`
     DELETE FROM recommendation_suppressions WHERE owner_key = ?
   `);
+  const deleteCandidates = database.prepare(
+    "DELETE FROM recommendation_candidates WHERE owner_key = ?"
+  );
+  const deleteFeedback = database.prepare(
+    "DELETE FROM recommendation_feedback WHERE owner_key = ?"
+  );
+  const deleteRecommendationCache = database.prepare(
+    "DELETE FROM recommendation_cache_entries WHERE owner_key = ?"
+  );
+  const deleteExternalPdfGrants = database.prepare(
+    "DELETE FROM external_pdf_grants WHERE owner_key = ?"
+  );
+  const deleteManifest = database.prepare(
+    "DELETE FROM local_library_manifest_entries WHERE owner_key = ?"
+  );
   const listTerms = database.prepare(`
     SELECT term, weight
     FROM personalization_terms
@@ -227,6 +248,7 @@ export function createPersonalizationRepository(database) {
     }));
     return {
       assistantSummary: buildAssistantSummary(terms),
+      enabled: findSetting.get(ownerKey)?.enabled !== 0,
       personalizationVersion: state?.version ?? 0,
       profile,
       suppressedRecommendationIds: listSuppressions
@@ -251,11 +273,32 @@ export function createPersonalizationRepository(database) {
 
   const clearProfileAndPersonalization = database.transaction((ownerKey) => {
     const updatedAt = new Date().toISOString();
+    database.prepare(`
+      INSERT INTO personalization_settings (owner_key, enabled, updated_at)
+      VALUES (?, 0, ?)
+      ON CONFLICT(owner_key) DO UPDATE SET
+        enabled = 0,
+        updated_at = excluded.updated_at
+    `).run(ownerKey, updatedAt);
     deleteProfile.run(ownerKey);
     deleteTerms.run(ownerKey);
     deleteSuppressions.run(ownerKey);
+    const deletedCandidates = deleteCandidates.run(ownerKey).changes;
+    const deletedFeedback = deleteFeedback.run(ownerKey).changes;
+    const deletedCacheEntries = deleteRecommendationCache.run(ownerKey).changes;
+    const deletedExternalPdfGrants = deleteExternalPdfGrants.run(ownerKey).changes;
+    const deletedManifestEntries = deleteManifest.run(ownerKey).changes;
     insertState.run({ ownerKey, updatedAt });
-    return readState(ownerKey);
+    return {
+      deletion: {
+        cacheEntries: deletedCacheEntries,
+        candidates: deletedCandidates,
+        externalPdfGrants: deletedExternalPdfGrants,
+        localManifestEntries: deletedManifestEntries,
+        recommendationFeedback: deletedFeedback
+      },
+      state: readState(ownerKey)
+    };
   });
 
   const recordSignal = database.transaction((ownerKey, signal) => {
@@ -297,7 +340,31 @@ export function createPersonalizationRepository(database) {
 
   return {
     clear(ownerKey) {
-      return toPublicSnapshot(clearProfileAndPersonalization(ownerKey));
+      const cleared = clearProfileAndPersonalization(ownerKey);
+      return {
+        ...toPublicSnapshot(cleared.state),
+        cleared: true,
+        deletion: cleared.deletion
+      };
+    },
+
+    deleteForAccount(ownerKey) {
+      const deletion = database.transaction(() => {
+        const cleared = {
+          cacheEntries: deleteRecommendationCache.run(ownerKey).changes,
+          candidates: deleteCandidates.run(ownerKey).changes,
+          externalPdfGrants: deleteExternalPdfGrants.run(ownerKey).changes,
+          feedback: deleteFeedback.run(ownerKey).changes,
+          localManifestEntries: deleteManifest.run(ownerKey).changes,
+          profile: deleteProfile.run(ownerKey).changes,
+          suppressions: deleteSuppressions.run(ownerKey).changes,
+          terms: deleteTerms.run(ownerKey).changes
+        };
+        database.prepare("DELETE FROM personalization_settings WHERE owner_key = ?").run(ownerKey);
+        database.prepare("DELETE FROM personalization_states WHERE owner_key = ?").run(ownerKey);
+        return cleared;
+      })();
+      return deletion;
     },
 
     get(ownerKey) {
@@ -306,7 +373,16 @@ export function createPersonalizationRepository(database) {
 
     getRecommendationPreferences(ownerKey) {
       const state = readState(ownerKey);
+      if (!state.enabled) {
+        return {
+          enabled: false,
+          profile: defaultProfile(),
+          suppressedRecommendationIds: [],
+          terms: []
+        };
+      }
       return {
+        enabled: true,
         profile: state.profile,
         suppressedRecommendationIds: state.suppressedRecommendationIds,
         terms: state.terms
@@ -314,6 +390,9 @@ export function createPersonalizationRepository(database) {
     },
 
     recordSignal(ownerKey, signal) {
+      if (!readState(ownerKey).enabled) {
+        return toPublicSnapshot(readState(ownerKey));
+      }
       if (
         !signal ||
         typeof signal !== "object" ||
@@ -350,6 +429,116 @@ export function createPersonalizationRepository(database) {
 
     save(ownerKey, profile) {
       return toPublicSnapshot(saveProfile(ownerKey, normalizeProfile(profile)));
+    },
+
+    setEnabled(ownerKey, enabledInput) {
+      if (typeof enabledInput !== "boolean") {
+        throw new PersonalizationValidationError("个性化开关无效。");
+      }
+      const timestamp = new Date().toISOString();
+      database.transaction(() => {
+        database.prepare(`
+          INSERT INTO personalization_settings (owner_key, enabled, updated_at)
+          VALUES (?, ?, ?)
+          ON CONFLICT(owner_key) DO UPDATE SET
+            enabled = excluded.enabled,
+            updated_at = excluded.updated_at
+        `).run(ownerKey, enabledInput ? 1 : 0, timestamp);
+        insertState.run({ ownerKey, updatedAt: timestamp });
+        if (!enabledInput) deleteRecommendationCache.run(ownerKey);
+      })();
+      return toPublicSnapshot(readState(ownerKey));
+    },
+
+    syncLocalManifest(ownerKey, documentsInput) {
+      if (!readState(ownerKey).enabled) {
+        return {
+          acceptedCount: 0,
+          disabled: true,
+          rejectedCount: 0,
+          syncId: randomUUID(),
+          syncedAt: new Date().toISOString()
+        };
+      }
+      const documents = Array.isArray(documentsInput) ? documentsInput : [];
+      const accepted = [];
+      let rejectedCount = 0;
+      for (const document of documents.slice(0, 20_000)) {
+        const syncDocumentId = normalizeText(document?.syncDocumentId ?? document?.id);
+        const title = normalizeText(document?.title);
+        const contentHash = normalizeText(document?.contentHash).toLowerCase();
+        const authors = Array.isArray(document?.authors)
+          ? document.authors.filter((author) => typeof author === "string").slice(0, 100)
+          : [];
+        const isValid =
+          /^[A-Za-z0-9._:-]{1,180}$/.test(syncDocumentId) &&
+          title.length > 0 &&
+          title.length <= 500 &&
+          (!contentHash || /^[a-f0-9]{64}$/.test(contentHash)) &&
+          typeof document?.sourcePath === "undefined";
+        if (!isValid) {
+          rejectedCount += 1;
+          continue;
+        }
+        accepted.push({
+          authors,
+          contentHash: contentHash || null,
+          doi: normalizeText(document.doi).slice(0, 300) || null,
+          publicationYear: Number.isInteger(document.publicationYear)
+            ? document.publicationYear
+            : null,
+          syncDocumentId,
+          title
+        });
+      }
+      const timestamp = new Date().toISOString();
+      database.transaction(() => {
+        const keepIds = new Set();
+        const upsert = database.prepare(`
+          INSERT INTO local_library_manifest_entries (
+            owner_key, sync_document_id, content_hash, title, authors_json,
+            doi, publication_year, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(owner_key, sync_document_id) DO UPDATE SET
+            content_hash = excluded.content_hash,
+            title = excluded.title,
+            authors_json = excluded.authors_json,
+            doi = excluded.doi,
+            publication_year = excluded.publication_year,
+            updated_at = excluded.updated_at
+        `);
+        for (const document of accepted) {
+          keepIds.add(document.syncDocumentId);
+          upsert.run(
+            ownerKey,
+            document.syncDocumentId,
+            document.contentHash,
+            document.title,
+            JSON.stringify(document.authors),
+            document.doi,
+            document.publicationYear,
+            timestamp
+          );
+        }
+        const existing = database.prepare(`
+          SELECT sync_document_id FROM local_library_manifest_entries WHERE owner_key = ?
+        `).all(ownerKey);
+        const remove = database.prepare(`
+          DELETE FROM local_library_manifest_entries
+          WHERE owner_key = ? AND sync_document_id = ?
+        `);
+        for (const row of existing) {
+          if (!keepIds.has(row.sync_document_id)) remove.run(ownerKey, row.sync_document_id);
+        }
+        insertState.run({ ownerKey, updatedAt: timestamp });
+      })();
+      return {
+        acceptedCount: accepted.length,
+        disabled: false,
+        rejectedCount,
+        syncId: randomUUID(),
+        syncedAt: timestamp
+      };
     }
   };
 }

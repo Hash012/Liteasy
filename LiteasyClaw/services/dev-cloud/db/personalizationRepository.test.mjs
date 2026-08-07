@@ -92,6 +92,71 @@ test("clear profile removes user tags and terms", () => {
   assert.equal(cleared.assistantSummary, undefined);
 });
 
+test("clear removes every personalization surface, disables collection, and invalidates old versions", () => {
+  const { database, personalization } = setup();
+  const ownerKey = "user:privacy-clear";
+  const timestamp = "2026-08-06T00:00:00.000Z";
+  personalization.save(ownerKey, { disciplines: [], stage: "博士研究生" });
+  personalization.recordSignal(ownerKey, {
+    kind: "paper_opened",
+    title: "Private Retrieval Topic"
+  });
+  personalization.recordSignal(ownerKey, {
+    kind: "recommendation_dismissed",
+    recommendationId: "recommendation-1"
+  });
+  personalization.syncLocalManifest(ownerKey, [{
+    contentHash: "a".repeat(64),
+    syncDocumentId: "local-private-paper",
+    title: "Private Paper"
+  }]);
+  database.prepare(`
+    INSERT INTO recommendation_candidates (
+      owner_key, canonical_id, status, last_discovered_at, document_json
+    ) VALUES (?, 'candidate-1', 'candidate', ?, '{}')
+  `).run(ownerKey, timestamp);
+  database.prepare(`
+    INSERT INTO recommendation_feedback (
+      owner_key, feedback_key, canonical_id, action, created_at
+    ) VALUES (?, 'feedback-1', 'candidate-1', 'saved', ?)
+  `).run(ownerKey, timestamp);
+  database.prepare(`
+    INSERT INTO recommendation_cache_entries (
+      owner_key, scope_key, recommendations_json, cached_at, expires_at
+    ) VALUES (?, 'old-scope', '[]', ?, '2027-01-01T00:00:00.000Z')
+  `).run(ownerKey, timestamp);
+
+  const oldVersion = personalization.get(ownerKey).personalizationVersion;
+  const cleared = personalization.clear(ownerKey);
+  const tables = [
+    "academic_profiles",
+    "local_library_manifest_entries",
+    "personalization_terms",
+    "recommendation_cache_entries",
+    "recommendation_candidates",
+    "recommendation_feedback",
+    "recommendation_suppressions"
+  ];
+  for (const table of tables) {
+    assert.equal(
+      database.prepare(`SELECT count(*) AS count FROM ${table} WHERE owner_key = ?`).get(ownerKey).count,
+      0,
+      `${table} should be empty after clear`
+    );
+  }
+  assert.equal(cleared.enabled, false);
+  assert.ok(cleared.personalizationVersion > oldVersion);
+  assert.equal(personalization.getRecommendationPreferences(ownerKey).enabled, false);
+  assert.deepEqual(personalization.syncLocalManifest(ownerKey, [{
+    syncDocumentId: "should-not-write",
+    title: "Should not write"
+  }]).disabled, true);
+
+  const clearedAgain = personalization.clear(ownerKey);
+  assert.equal(clearedAgain.cleared, true);
+  assert.ok(clearedAgain.personalizationVersion > cleared.personalizationVersion);
+});
+
 test("signal without workId still extracts tags from title (backward compatible)", () => {
   const { personalization } = setup();
   const snapshot = personalization.recordSignal("user:u5", {

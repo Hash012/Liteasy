@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ArtifactTab, ArtifactType } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
-import { resolveLocalAccountKey } from "../library/localAccountKey";
 
 const browserStorageKey = "liteasy.artifact-catalog.v1";
 const databaseName = "liteasy-artifact-cache";
@@ -655,19 +654,16 @@ function normalizeSnapshot(value: unknown): ArtifactTab[] {
 
 function createTauriTransport(): ArtifactCatalogTransport {
   return {
-    load: () => invoke<unknown>("load_artifact_catalog_state", {
-      accountKey: resolveLocalAccountKey()
-    }),
+    load: () => invoke<unknown>("load_artifact_catalog_state"),
     save: (snapshot) => invoke<void>("save_artifact_catalog_state", {
-      accountKey: resolveLocalAccountKey(),
       snapshot
     })
   };
 }
 
-function openDatabase() {
+function openDatabase(name = databaseName) {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = window.indexedDB.open(`${databaseName}-${resolveLocalAccountKey()}`, 1);
+    const request = window.indexedDB.open(name, 1);
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(objectStoreName)) {
@@ -680,35 +676,66 @@ function openDatabase() {
 }
 
 function createIndexedDbTransport(): ArtifactCatalogTransport {
+  async function readSnapshot(name = databaseName) {
+    const database = await openDatabase(name);
+    try {
+      return await new Promise<unknown>((resolve, reject) => {
+        const request = database
+          .transaction(objectStoreName, "readonly")
+          .objectStore(objectStoreName)
+          .get(snapshotKey);
+        request.onsuccess = () => resolve(request.result ?? null);
+        request.onerror = () => reject(request.error ?? new Error("无法读取本地产物数据库"));
+      });
+    } finally {
+      database.close();
+    }
+  }
+
+  async function writeSnapshot(snapshot: ArtifactCatalogSnapshot) {
+    const database = await openDatabase();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction(objectStoreName, "readwrite");
+        transaction.objectStore(objectStoreName).put(snapshot, snapshotKey);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error ?? new Error("无法保存本地产物数据库"));
+        transaction.onabort = () => reject(transaction.error ?? new Error("本地产物数据库写入已中止"));
+      });
+    } finally {
+      database.close();
+    }
+  }
+
+  async function legacyDatabaseNames() {
+    const listDatabases = window.indexedDB.databases?.bind(window.indexedDB);
+    if (!listDatabases) {
+      return [];
+    }
+    const databases = await listDatabases();
+    return databases
+      .map(({ name }) => name)
+      .filter((name): name is string => Boolean(name?.startsWith(`${databaseName}-`)))
+      .sort();
+  }
+
   return {
     async load() {
-      const database = await openDatabase();
-      try {
-        return await new Promise<unknown>((resolve, reject) => {
-          const request = database
-            .transaction(objectStoreName, "readonly")
-            .objectStore(objectStoreName)
-            .get(snapshotKey);
-          request.onsuccess = () => resolve(request.result ?? null);
-          request.onerror = () => reject(request.error ?? new Error("无法读取本地产物数据库"));
-        });
-      } finally {
-        database.close();
+      const current = await readSnapshot();
+      if (current !== null) return current;
+      const legacyNames = await legacyDatabaseNames();
+      if (legacyNames.length > 1) {
+        throw new Error("检测到多个旧账号产物目录，请先选择并备份需要迁移的数据");
       }
+      if (legacyNames.length === 0) return null;
+      const legacy = await readSnapshot(legacyNames[0]);
+      if (legacy && typeof legacy === "object") {
+        await writeSnapshot(legacy as ArtifactCatalogSnapshot);
+      }
+      return legacy;
     },
     async save(snapshot) {
-      const database = await openDatabase();
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const transaction = database.transaction(objectStoreName, "readwrite");
-          transaction.objectStore(objectStoreName).put(snapshot, snapshotKey);
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error ?? new Error("无法保存本地产物数据库"));
-          transaction.onabort = () => reject(transaction.error ?? new Error("本地产物数据库写入已中止"));
-        });
-      } finally {
-        database.close();
-      }
+      await writeSnapshot(snapshot);
     }
   };
 }
@@ -716,22 +743,25 @@ function createIndexedDbTransport(): ArtifactCatalogTransport {
 function createLocalStorageTransport(): ArtifactCatalogTransport {
   return {
     async load() {
-      const scopedKey = `${browserStorageKey}:${resolveLocalAccountKey()}`;
-      let serialized = window.localStorage.getItem(scopedKey);
+      let serialized = window.localStorage.getItem(browserStorageKey);
       if (serialized === null) {
-        serialized = window.localStorage.getItem(browserStorageKey);
+        const legacyScopedKeys = Array.from({ length: window.localStorage.length }, (_, index) =>
+          window.localStorage.key(index)
+        ).filter((key): key is string => Boolean(key?.startsWith(`${browserStorageKey}:`))).sort();
+        if (legacyScopedKeys.length > 1) {
+          throw new Error("检测到多个旧账号产物目录，请先选择并备份需要迁移的数据");
+        }
+        const legacyScopedKey = legacyScopedKeys[0];
+        serialized = legacyScopedKey ? window.localStorage.getItem(legacyScopedKey) : null;
         if (serialized !== null) {
-          window.localStorage.setItem(scopedKey, serialized);
-          window.localStorage.removeItem(browserStorageKey);
+          window.localStorage.setItem(browserStorageKey, serialized);
+          window.localStorage.removeItem(legacyScopedKey!);
         }
       }
       return serialized ? JSON.parse(serialized) : null;
     },
     async save(snapshot) {
-      window.localStorage.setItem(
-        `${browserStorageKey}:${resolveLocalAccountKey()}`,
-        JSON.stringify(snapshot)
-      );
+      window.localStorage.setItem(browserStorageKey, JSON.stringify(snapshot));
     }
   };
 }

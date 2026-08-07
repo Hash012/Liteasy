@@ -1,15 +1,13 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
 import { createAgentArtifactRepository } from "./agentArtifactRepository.mjs";
+import { createDatabase } from "./db/database.mjs";
 
 function document(artifactId = "artifact-1") {
   return {
     agent: {
       apiVersion: "liteasy.agent/v1",
-      runId: "run-1",
+      runId: `run-${artifactId}`,
       sessionId: "session-1",
       status: "completed"
     },
@@ -25,48 +23,57 @@ function document(artifactId = "artifact-1") {
   };
 }
 
-test("atomically saves and lists Agent artifacts", (context) => {
-  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-artifacts-"));
-  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
-  const repository = createAgentArtifactRepository({ resultDirectory });
+function fixture() {
+  const database = createDatabase({ databasePath: ":memory:" });
+  const now = new Date().toISOString();
+  for (const userId of ["user-a", "user-b"]) {
+    database.prepare(`
+      INSERT INTO users (id, email, display_name, status, created_at, updated_at)
+      VALUES (?, ?, ?, 'active', ?, ?)
+    `).run(userId, `${userId}@test.invalid`, userId, now, now);
+  }
+  return { database, repository: createAgentArtifactRepository(database) };
+}
 
-  const saved = repository.save(document());
+test("stores versioned Agent artifacts in the transaction database", (context) => {
+  const { database, repository } = fixture();
+  context.after(() => database.close());
 
-  assert.equal(saved.path, "project-docs/agent-results/artifact-1.json");
-  assert.deepEqual(repository.list(), [document()]);
-  assert.equal(fs.existsSync(path.join(resultDirectory, "artifact-1.json")), true);
+  const saved = repository.save("user-a", document());
+  repository.save("user-a", { ...document(), answer: "updated analysis" });
+
+  assert.equal(saved.path, "liteasy://agent-artifacts/artifact-1");
+  assert.equal(repository.list("user-a")[0].answer, "updated analysis");
+  assert.equal(database.prepare("SELECT count(*) AS count FROM artifacts").get().count, 1);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM artifact_versions").get().count, 2);
+  assert.equal(database.prepare("SELECT count(*) AS count FROM generation_runs").get().count, 1);
+});
+
+test("isolates identical client artifact ids by account", (context) => {
+  const { database, repository } = fixture();
+  context.after(() => database.close());
+
+  repository.save("user-a", document());
+  repository.save("user-b", { ...document(), title: "User B map" });
+
+  assert.equal(repository.list("user-a")[0].title, "Mind Map");
+  assert.equal(repository.list("user-b")[0].title, "User B map");
+  assert.equal(repository.rename("user-b", "artifact-1", "Renamed B").artifact.title, "Renamed B");
+  assert.equal(repository.remove("user-a", "artifact-1").deleted, true);
+  assert.deepEqual(repository.list("user-a"), []);
+  assert.equal(repository.list("user-b")[0].title, "Renamed B");
 });
 
 test("rejects unsafe artifact ids", (context) => {
-  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-artifacts-"));
-  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
-  const repository = createAgentArtifactRepository({ resultDirectory });
-
-  assert.throws(() => repository.save(document("../escape")), /invalid_agent_artifact/);
+  const { database, repository } = fixture();
+  context.after(() => database.close());
+  assert.throws(() => repository.save("user-a", document("../escape")), /invalid_agent_artifact/);
+  assert.throws(() => repository.remove("user-a", "../escape"), /invalid_agent_artifact_id/);
 });
 
-test("deletes only the validated artifact file", (context) => {
-  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-artifacts-"));
-  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
-  const repository = createAgentArtifactRepository({ resultDirectory });
-  repository.save(document("artifact-delete"));
-  repository.save(document("artifact-keep"));
-
-  assert.deepEqual(repository.remove("artifact-delete"), {
-    artifactId: "artifact-delete",
-    deleted: true,
-    path: "project-docs/agent-results/artifact-delete.json"
-  });
-  assert.equal(fs.existsSync(path.join(resultDirectory, "artifact-delete.json")), false);
-  assert.equal(fs.existsSync(path.join(resultDirectory, "artifact-keep.json")), true);
-  assert.equal(repository.remove("artifact-delete"), null);
-  assert.throws(() => repository.remove("../escape"), /invalid_agent_artifact_id/);
-});
-
-test("accepts persisted thin-reading Agent artifacts", (context) => {
-  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-artifacts-"));
-  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
-  const repository = createAgentArtifactRepository({ resultDirectory });
+test("accepts persisted thin-reading Agent artifacts and purges an account", (context) => {
+  const { database, repository } = fixture();
+  context.after(() => database.close());
   const thinReading = {
     ...document("artifact-thin"),
     artifactType: "thin_reading",
@@ -86,7 +93,8 @@ test("accepts persisted thin-reading Agent artifacts", (context) => {
     title: "Paper 1"
   };
 
-  repository.save(thinReading);
-
-  assert.equal(repository.list()[0].artifactType, "thin_reading");
+  repository.save("user-a", thinReading);
+  assert.equal(repository.list("user-a")[0].artifactType, "thin_reading");
+  assert.deepEqual(repository.purgeOwner("user-a"), { artifacts: 1, generationRuns: 1 });
+  assert.deepEqual(repository.list("user-a"), []);
 });

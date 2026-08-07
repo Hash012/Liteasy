@@ -41,7 +41,7 @@ function makeRect({ height, left, top, width }: { height: number; left: number; 
 test("distinguishes managed desktop paths from browser PDF sources", () => {
   expect(shouldLoadPdfFromLocalBytes("/home/octopus/LiteasyLibrary/paper.pdf")).toBe(true);
   expect(shouldLoadPdfFromLocalBytes("C:\\Users\\reader\\LiteasyLibrary\\paper.pdf")).toBe(true);
-  expect(shouldLoadPdfFromLocalBytes("/papers/fixture.pdf")).toBe(false);
+  expect(shouldLoadPdfFromLocalBytes("/papers/fixture.pdf")).toBe(true);
   expect(shouldLoadPdfFromLocalBytes("blob:http://localhost/paper")).toBe(false);
 });
 
@@ -54,12 +54,14 @@ function makeRectList(rects: DOMRect[]) {
 }
 
 function getPdfTextNode() {
-  const textNode = document.querySelector(".pdf-text-layer span")?.firstChild;
-  if (!textNode) {
-    throw new Error("Expected PDF text layer fallback text to exist");
+  const textLayer = document.querySelector(".pdf-text-layer");
+  if (!textLayer) {
+    throw new Error("Expected PDF text layer to exist");
   }
-
-  return textNode;
+  const testText = document.createElement("span");
+  testText.textContent = "Test-only PDF text layer content";
+  textLayer.append(testText);
+  return testText.firstChild!;
 }
 
 function mockPdfSelection({
@@ -376,7 +378,7 @@ describe("ReaderPane", () => {
     expect(screen.getByLabelText("PDF.js 页面 1")).toBeInTheDocument();
     expect(screen.getByLabelText("PDF 阅读器")).toHaveAttribute(
       "data-pdf-source",
-      "/papers/colbert-late-interaction.pdf"
+      ""
     );
   });
 
@@ -538,9 +540,9 @@ describe("ReaderPane", () => {
     expect(window.localStorage.getItem(pdfAnnotationAutoPublicStorageKey(readerTestPaper)!)).toBe("true");
   });
 
-  test("creates a forum draft for each pending PDF annotation", async () => {
+  test("syncs each pending PDF annotation with a verified Intuecho receipt", async () => {
     const user = userEvent.setup();
-    const onSyncAnnotationToForum = vi.fn(async () => ({ draftId: "draft-1" }));
+    const onSyncAnnotationToForum = vi.fn(async () => ({ intuechoAnnotationId: "annotation-1" }));
     render(
       <ReaderPane
         analysisHint="可以启动中栏分析。"
@@ -565,8 +567,8 @@ describe("ReaderPane", () => {
     await user.click(screen.getByRole("button", { name: "立即同步" }));
 
     expect(onSyncAnnotationToForum).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("已同步 1 条批注到论坛草稿。")).toBeInTheDocument();
-    expect(screen.getByText("已同步到论坛草稿")).toBeInTheDocument();
+    expect(await screen.findByText("已同步 1 条公开批注到 Intuecho。")).toBeInTheDocument();
+    expect(screen.getByText("已同步到 Intuecho")).toBeInTheDocument();
   });
 
   test("sends the selected PDF text to the forum callback", async () => {
@@ -796,7 +798,7 @@ describe("ReaderPane", () => {
     expect(screen.getByText("补充：这里要联系实验设置。")).toBeInTheDocument();
   });
 
-  test("maps bundled fixture PDFs to PDF.js public URLs instead of recursive app-relative paths", () => {
+  test("does not expose bundled fixture paths as readable production PDF URLs", () => {
     render(
       <ReaderPane
         analysisHint="可以启动中栏分析。"
@@ -817,9 +819,9 @@ describe("ReaderPane", () => {
 
     expect(screen.getByLabelText("PDF 阅读器")).toHaveAttribute(
       "data-pdf-source",
-      "/papers/colbert-late-interaction.pdf"
+      ""
     );
-    expect(screen.queryByText("浏览器不能直接打开此 PDF 路径。")).not.toBeInTheDocument();
+    expect(screen.getAllByText("浏览器不能直接打开此 PDF 路径。").length).toBeGreaterThan(0);
   });
 
   test("uses a Zotero-style PDF workspace with a left annotation sidebar and central page area", () => {

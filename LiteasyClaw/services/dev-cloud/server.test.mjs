@@ -1,12 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { createDevCloudRequestHandler } from "./server.mjs";
 import { createDatabase } from "./db/database.mjs";
+import { hashSessionToken } from "./auth/sessionTokens.mjs";
+import { hashPassword } from "./auth/passwords.mjs";
+import { createAccountRepository } from "./db/accountRepository.mjs";
+import { createPlatformAdminRepository } from "./db/platformAdminRepository.mjs";
 import {
+  createRecommendationCacheRepository,
   getRecommendationCache,
   putRecommendationCache
 } from "./db/recommendationCacheRepository.mjs";
@@ -34,10 +40,104 @@ test.beforeEach(() => {
   __resetRecommendationFeedbackRepository();
 });
 
+const authenticatedJsonPaths = new Set([
+  "/v1/collection/items",
+  "/v1/collection/list",
+  "/v1/documents/metadata-sync",
+  "/v1/org/create",
+  "/v1/org/governance-summary",
+  "/v1/org/invite",
+  "/v1/org/join",
+  "/v1/org/leave",
+  "/v1/org/list",
+  "/v1/org/shared-library/manifest",
+  "/v1/org/summary",
+  "/v1/personalization/signal",
+  "/v1/profile/clear",
+  "/v1/profile/get",
+  "/v1/profile/save",
+  "/v1/recommendation-cache/clear",
+  "/v1/recommendation-cache/get",
+  "/v1/recommendation-cache/put",
+  "/v1/recommendations",
+  "/v1/recommendations/feedback",
+  "/v1/recommendations/pdf-grant",
+  "/v1/research/external-knowledge",
+  "/v1/research/external-pdf",
+  "/v1/works/resolve"
+]);
+
+function isTestSessionAlias(value) {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    !value.startsWith("ltsy_") &&
+    !value.startsWith("user:")
+  );
+}
+
+const testOwnerKey = (alias) => `user:${alias}`;
+
+function ensureTestSession(alias = "test-session-1") {
+  const token = `ltsy_${createHash("sha256").update(alias).digest("base64url")}`;
+  const database = createDatabase();
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  database.prepare(`
+    INSERT OR IGNORE INTO users (
+      id, email, display_name, membership_tier, status, created_at, updated_at
+    ) VALUES (?, ?, ?, 'pro', 'active', ?, ?)
+  `).run(alias, `${alias}@test.liteasy.invalid`, alias, now, now);
+  database.prepare(`
+    INSERT OR IGNORE INTO auth_sessions (
+      id, user_id, token_hash, created_at, expires_at, last_seen_at, client_label,
+      audience, mfa_verified_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'server.test.mjs', 'liteasy-desktop', NULL)
+  `).run(`session-${alias}`, alias, hashSessionToken(token), now, expiresAt, now);
+  database.close();
+  return token;
+}
+
+function authenticatedTestRequest({ body, headers, method, url }) {
+  const nextHeaders = { ...headers };
+  const bearerAlias = typeof nextHeaders.authorization === "string" &&
+    nextHeaders.authorization.startsWith("Bearer ")
+    ? nextHeaders.authorization.slice("Bearer ".length).trim()
+    : "";
+  if (isTestSessionAlias(bearerAlias)) {
+    nextHeaders.authorization = `Bearer ${ensureTestSession(bearerAlias)}`;
+  }
+  if (isTestSessionAlias(nextHeaders["x-liteasy-session-id"])) {
+    nextHeaders["x-liteasy-session-id"] = ensureTestSession(nextHeaders["x-liteasy-session-id"]);
+  }
+  if (
+    method !== "POST" ||
+    typeof body !== "string"
+  ) {
+    return { body, headers: nextHeaders };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return { body, headers: nextHeaders };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { body, headers: nextHeaders };
+  }
+  if (isTestSessionAlias(parsed.sessionId)) {
+    parsed.sessionId = ensureTestSession(parsed.sessionId);
+  } else if (!("sessionId" in parsed) && authenticatedJsonPaths.has(new URL(url, "http://localhost").pathname)) {
+    parsed.sessionId = ensureTestSession();
+  }
+  return { body: JSON.stringify(parsed), headers: nextHeaders };
+}
+
 async function invokeHandler({ body, handler, handlerOptions, headers = {}, method, url }) {
-  const chunks = body ? [Buffer.from(body)] : [];
+  const authenticated = authenticatedTestRequest({ body, headers, method, url });
+  const chunks = authenticated.body ? [Buffer.from(authenticated.body)] : [];
   const request = Readable.from(chunks);
-  request.headers = headers;
+  request.headers = authenticated.headers;
   request.method = method;
   request.url = url;
 
@@ -63,9 +163,10 @@ async function invokeHandler({ body, handler, handlerOptions, headers = {}, meth
     crossrefEnabled: false,
     deepseekApiKey: undefined,
     defaultProvider: "openai",
+    expandedSourcesEnabled: false,
     openAlexApiKey: "test-openalex-api-key",
     openaiApiKey: undefined,
-    recommendationMode: "demo",
+    recommendationMode: "live",
     ...handlerOptions
   };
 
@@ -94,24 +195,123 @@ test("allows browser CORS preflight from the desktop dev server", async () => {
 
   assert.equal(response.statusCode, 204);
   assert.equal(response.headers["Access-Control-Allow-Origin"], "http://127.0.0.1:1420");
-  assert.equal(response.headers["Access-Control-Allow-Methods"], "DELETE,GET,POST,OPTIONS");
-  assert.match(response.headers["Access-Control-Allow-Headers"], /^Content-Type,/);
+  assert.equal(response.headers["Access-Control-Allow-Methods"], "DELETE,GET,PATCH,POST,OPTIONS");
+  assert.match(response.headers["Access-Control-Allow-Headers"], /^Authorization, Content-Type,/);
   assert.match(response.headers["Access-Control-Allow-Headers"], /X-Liteasy-Session-Id/);
 });
 
-test("allows CORS preflight from the Tauri desktop origin", async () => {
+test("allows CORS preflight from packaged and legacy Tauri desktop origins", async () => {
+  for (const origin of ["http://tauri.localhost", "tauri://localhost"]) {
+    const response = await invokeHandler({
+      method: "OPTIONS",
+      headers: {
+        "access-control-request-headers": "content-type",
+        "access-control-request-method": "POST",
+        origin
+      },
+      url: "/v1/research/external-knowledge"
+    });
+
+    assert.equal(response.statusCode, 204);
+    assert.equal(response.headers["Access-Control-Allow-Origin"], origin);
+  }
+});
+
+test("streams library PDFs through private staging and applies the security scanner", async () => {
+  const objectDirectory = path.join(process.env.LITEASY_DEV_CLOUD_DATA_DIR, "streamed-objects");
+  let scanned;
   const response = await invokeHandler({
-    method: "OPTIONS",
-    headers: {
-      "access-control-request-headers": "content-type",
-      "access-control-request-method": "POST",
-      origin: "tauri://localhost"
+    body: Buffer.from("%PDF-1.7\nStreamed library body\n%%EOF"),
+    handlerOptions: {
+      libraryStorageObjectDirectory: objectDirectory,
+      scanLibraryPdf: async (input) => {
+        scanned = input;
+        assert.equal(fs.readFileSync(input.stagedPath, "utf8").startsWith("%PDF-"), true);
+        return { clean: true };
+      }
     },
-    url: "/v1/research/external-knowledge"
+    headers: {
+      "content-type": "application/pdf",
+      "x-idempotency-key": "streamed-upload-1",
+      "x-liteasy-expected-revision": "0",
+      "x-liteasy-file-name": encodeURIComponent("Streamed.pdf"),
+      "x-liteasy-scope-id": "user:stream-upload-user",
+      "x-liteasy-scope-type": "user",
+      "x-liteasy-session-id": "stream-upload-user"
+    },
+    method: "POST",
+    url: "/v1/library/documents/upload"
   });
 
-  assert.equal(response.statusCode, 204);
-  assert.equal(response.headers["Access-Control-Allow-Origin"], "tauri://localhost");
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(scanned.mediaType, "application/pdf");
+  assert.equal(scanned.byteLength, Buffer.byteLength("%PDF-1.7\nStreamed library body\n%%EOF"));
+  assert.match(scanned.contentHash, /^[a-f0-9]{64}$/);
+  assert.deepEqual(fs.readdirSync(path.join(objectDirectory, ".staging")), []);
+});
+
+test("rejects unsafe PDF markers before committing a library object", async () => {
+  const objectDirectory = path.join(process.env.LITEASY_DEV_CLOUD_DATA_DIR, "unsafe-objects");
+  const response = await invokeHandler({
+    body: Buffer.from("%PDF-1.7\n1 0 obj << /JavaScript 2 0 R >>\n%%EOF"),
+    handlerOptions: { libraryStorageObjectDirectory: objectDirectory },
+    headers: {
+      "content-type": "application/pdf",
+      "x-idempotency-key": "unsafe-upload-1",
+      "x-liteasy-expected-revision": "0",
+      "x-liteasy-file-name": encodeURIComponent("Unsafe.pdf"),
+      "x-liteasy-scope-id": "user:unsafe-upload-user",
+      "x-liteasy-scope-type": "user",
+      "x-liteasy-session-id": "unsafe-upload-user"
+    },
+    method: "POST",
+    url: "/v1/library/documents/upload"
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json.code, "unsafe_pdf_content");
+  assert.deepEqual(fs.readdirSync(path.join(objectDirectory, ".staging")), []);
+});
+
+test("renames a metadata-only library entry through the versioned mutation API", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "metadata-route-user";
+  const scope = { scopeId: "user:metadata-route-user", scopeType: "user", sessionId };
+  const created = await invokeHandler({
+    body: JSON.stringify({
+      ...scope,
+      expectedRevision: 0,
+      idempotencyKey: "metadata-create-1",
+      title: "Before rename"
+    }),
+    handler,
+    headers: {
+      authorization: `Bearer ${sessionId}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/library/entries/metadata"
+  });
+  assert.equal(created.statusCode, 200, JSON.stringify(created.json));
+
+  const updated = await invokeHandler({
+    body: JSON.stringify({
+      ...scope,
+      documentId: created.json.entry.documentId,
+      expectedRevision: created.json.revision,
+      idempotencyKey: "metadata-rename-1",
+      title: "After rename"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/update"
+  });
+
+  assert.equal(updated.statusCode, 200, JSON.stringify(updated.json));
+  assert.equal(updated.json.document.entryKind, "metadata_only");
+  assert.equal(updated.json.document.title, "After rename");
+  assert.ok(updated.json.revision > created.json.revision);
 });
 
 test("never accepts a browser-owned OpenAlex key at the cloud boundary", async () => {
@@ -220,8 +420,69 @@ test("rejects a non-PDF before contacting GROBID", async () => {
   });
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.json.error, "invalid_pdf");
+  assert.equal(response.json.code, "invalid_pdf");
   assert.equal(grobidCalls, 0);
+});
+
+test("accepts a bounded local PDF for MinerU extraction", async (context) => {
+  let extractionCalls = 0;
+  const cacheDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-mineru-route-"));
+  context.after(() => fs.rmSync(cacheDirectory, { force: true, recursive: true }));
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      bytesBase64: Buffer.from("%PDF-1.7\nmineru fixture").toString("base64"),
+      filename: "paper.pdf"
+    }),
+    handler: createDevCloudRequestHandler({
+      extractPdfWithMineru: async ({ bytes, filename }) => {
+        extractionCalls += 1;
+        assert.equal(bytes.toString("ascii"), "%PDF-1.7\nmineru fixture");
+        assert.equal(filename, "paper.pdf");
+        return {
+          figureAnalysis: { status: "skipped" },
+          figures: [],
+          markdown: "# Parsed paper",
+          pages: [{ page: 1, text: "Parsed paper", textExtraction: "mineru" }]
+        };
+      },
+      mineruExtractionCacheDirectory: cacheDirectory
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/pdf/mineru-extract"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(response.json.cache, "miss");
+  assert.equal(response.json.markdown, "# Parsed paper");
+  assert.equal(extractionCalls, 1);
+});
+
+test("does not expose MinerU exception details in an ordinary response", async (context) => {
+  const cacheDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-mineru-error-"));
+  context.after(() => fs.rmSync(cacheDirectory, { force: true, recursive: true }));
+  context.mock.method(console, "error", () => {});
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      bytesBase64: Buffer.from("%PDF-1.7\nmineru failure").toString("base64"),
+      filename: "paper.pdf"
+    }),
+    handler: createDevCloudRequestHandler({
+      extractPdfWithMineru: async () => {
+        throw new Error("scanner key sk-secret at /srv/private/parser.sql");
+      },
+      mineruExtractionCacheDirectory: cacheDirectory
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/pdf/mineru-extract"
+  });
+
+  assert.equal(response.statusCode, 502);
+  assert.equal(response.json.code, "mineru_extraction_failed");
+  assert.equal(response.json.message, "PDF 解析服务暂时不可用，请稍后重试。");
+  assert.match(response.json.traceId, /^trace_/);
+  assert.doesNotMatch(JSON.stringify(response.json), /sk-secret|\/srv\/private|parser\.sql/);
 });
 
 test("reports unavailable only when the unified retrieval service has no enabled source", async () => {
@@ -243,7 +504,7 @@ test("reports unavailable only when the unified retrieval service has no enabled
   });
 
   assert.equal(response.statusCode, 503);
-  assert.equal(response.json.error, "external_knowledge_unavailable");
+  assert.equal(response.json.code, "external_knowledge_unavailable");
   assert.match(response.json.message, /统一联网服务/);
   assert.equal(calls, 0);
 });
@@ -288,6 +549,7 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     abstract: "ColBERT retrieval replication.",
     authors: ["Casey Researcher"],
     doi: "https://doi.org/10.1000/crossref-only",
+    fullTextGrantId: response.json.sources[0].fullTextGrantId,
     fullTextUrl: "https://example.org/crossref-only.pdf",
     id: "crossref:10.1000/crossref-only",
     openAccessAvailable: true,
@@ -302,6 +564,7 @@ test("uses traceable Crossref topic results when OpenAlex is not configured", as
     title: "ColBERT retrieval replication",
     url: "https://doi.org/10.1000/crossref-only"
   });
+  assert.match(response.json.sources[0].fullTextGrantId, /^pdfgrant_[A-Za-z0-9-]+$/);
   assert.equal(response.json.retrieval.status, "completed");
 });
 
@@ -374,30 +637,156 @@ test("allows secondary thin-reading retrievals to opt out of the rate-limited ar
   assert.equal(arxivCalls, 0);
 });
 
-test("returns only a validated external PDF with content-addressed provenance", async () => {
-  const response = await invokeHandler({
-    body: JSON.stringify({
-      sourceId: "openalex:W42",
-      url: "https://papers.example.test/paper.pdf"
+test("returns only a server-granted validated external PDF with content-addressed provenance", async () => {
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: true,
+    expandedSourcesEnabled: false,
+    openAlexEnabled: false,
+    openAlexApiKey: undefined,
+    crossrefTransport: async () => ({
+      json: async () => ({
+        message: {
+          items: [{
+            DOI: "10.1000/granted-pdf",
+            abstract: "A server-granted PDF candidate.",
+            link: [{
+              "content-type": "application/pdf",
+              URL: "https://papers.example.test/paper.pdf"
+            }],
+            title: ["Server granted PDF candidate"]
+          }]
+        }
+      }),
+      ok: true,
+      status: 200
     }),
-    handler: createDevCloudRequestHandler({
       externalPdfResolver: async () => [{ address: "93.184.216.34", family: 4 }],
       externalPdfTransport: async () => new Response(Buffer.from("%PDF-1.7\nverified"), {
         headers: { "content-type": "application/pdf" },
         status: 200
       })
+  });
+  const recommendation = await invokeHandler({
+    body: JSON.stringify({
+      selectedDocuments: [{ id: "paper-1", title: "Server granted PDF" }],
+      sessionId: "pdf-owner"
     }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+  assert.equal(recommendation.statusCode, 200, JSON.stringify(recommendation.json));
+  assert.equal(recommendation.json.recommendations.length, 1);
+  assert.equal(recommendation.json.recommendations[0].openAccessAvailable, true);
+  assert.equal("fullTextUrl" in recommendation.json.recommendations[0], false);
+
+  const candidateId = recommendation.json.recommendations[0].id;
+  const granted = await invokeHandler({
+    body: JSON.stringify({ candidateId, sessionId: "pdf-owner" }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/recommendations/pdf-grant"
+  });
+  assert.equal(granted.statusCode, 200, JSON.stringify(granted.json));
+  assert.equal(granted.json.sourceId, candidateId);
+  assert.equal(granted.json.fullTextUrl, "https://papers.example.test/paper.pdf");
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      grantId: granted.json.fullTextGrantId,
+      sessionId: "pdf-owner",
+      sourceId: candidateId
+    }),
+    handler,
     headers: { "content-type": "application/json" },
     method: "POST",
     url: "/v1/research/external-pdf"
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json.sourceId, "openalex:W42");
+  assert.equal(response.json.sourceId, candidateId);
   assert.equal(response.json.finalUrl, "https://papers.example.test/paper.pdf");
   assert.equal(response.json.byteLength, 17);
   assert.equal(response.json.contentHash.length, 64);
   assert.equal(Buffer.from(response.json.bytesBase64, "base64").toString("ascii"), "%PDF-1.7\nverified");
+});
+
+test("rejects client PDF URLs and grants owned by another account", async () => {
+  const handler = createDevCloudRequestHandler();
+  const injected = await invokeHandler({
+    body: JSON.stringify({
+      sessionId: "alice",
+      sourceId: "crossref:10.1000/injected",
+      url: "https://papers.example.test/injected.pdf"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-pdf"
+  });
+  assert.equal(injected.statusCode, 400);
+  assert.equal(injected.json.code, "invalid_external_pdf_request");
+
+  const aliceDatabase = createDatabase();
+  const grantId = `pdfgrant_${randomUUID()}`;
+  const now = new Date();
+  aliceDatabase.prepare(`
+    INSERT INTO external_pdf_grants(
+      grant_id, owner_key, source_id, source_url, created_at, expires_at
+    ) VALUES (?, 'user:alice', 'source-1', 'https://papers.example.test/paper.pdf', ?, ?)
+  `).run(grantId, now.toISOString(), new Date(now.getTime() + 60_000).toISOString());
+  aliceDatabase.close();
+  const foreign = await invokeHandler({
+    body: JSON.stringify({ grantId, sessionId: "bob", sourceId: "source-1" }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/external-pdf"
+  });
+  assert.equal(foreign.statusCode, 404);
+  assert.equal(foreign.json.code, "external_pdf_grant_not_found");
+});
+
+test("returns a stable not-found response when a recommendation has no PDF", async () => {
+  const handler = createDevCloudRequestHandler({
+    crossrefEnabled: true,
+    expandedSourcesEnabled: false,
+    openAlexEnabled: false,
+    openAlexApiKey: undefined,
+    crossrefTransport: async () => ({
+      json: async () => ({
+        message: { items: [{ DOI: "10.1000/metadata-only", title: ["Metadata only candidate"] }] }
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+  const recommendation = await invokeHandler({
+    body: JSON.stringify({
+      selectedDocuments: [{ id: "paper-1", title: "Metadata only" }],
+      sessionId: "metadata-owner"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/recommendations"
+  });
+  assert.equal(recommendation.statusCode, 200, JSON.stringify(recommendation.json));
+  assert.equal(recommendation.json.recommendations.length, 1);
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      candidateId: recommendation.json.recommendations[0].id,
+      sessionId: "metadata-owner"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/recommendations/pdf-grant"
+  });
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json.code, "recommendation_pdf_unavailable");
 });
 
 test("continues with verified fallback sources when the service's graph connector is unavailable", async () => {
@@ -459,78 +848,17 @@ test("returns a helpful service index from the root path", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.name, "LiteasyClaw dev cloud");
-  assert.deepEqual(response.json.endpoints, [
-    "GET /",
-    "GET /healthz",
-    "GET /admin",
-    "GET /admin/",
-    "GET /v1/admin/demo-state",
-    "GET /v1/admin/model-policy",
-    "POST /v1/admin/demo-reset",
-    "POST /v1/admin/demo-reseed",
-    "POST /v1/admin/recommendation-cache/clear",
-    "POST /v1/admin/model-policy",
-    "GET /v1/admin/governance-dashboard",
-    "POST /v1/account/demo-login",
-    "POST /v1/account/login",
-    "POST /v1/account/logout",
-    "POST /v1/account/register",
-    "POST /v1/account/session",
-    "POST /v1/model/generate",
-    "POST /v1/model/generate-stream",
-    "POST /v1/model/audit",
-    "GET /v1/agent-artifacts",
-    "POST /v1/agent-artifacts",
-    "PATCH /v1/agent-artifacts/:artifactId",
-    "DELETE /v1/agent-artifacts/:artifactId",
-    "POST /v1/recommendations",
-    "POST /v1/recommendations/feedback",
-    "POST /v1/research/external-knowledge",
-    "POST /v1/research/external-pdf",
-    "POST /v1/works/resolve",
-    "GET /v1/concepts",
-    "GET /v1/concepts/:code",
-    "POST /v1/works/:workId/index",
-    "GET /v1/tags",
-    "GET /v1/tags/:id",
-    "GET /v1/tags/:id/works",
-    "POST /v1/research/parse-pdf",
-    "POST /v1/profile/get",
-    "POST /v1/profile/save",
-    "POST /v1/profile/clear",
-    "POST /v1/personalization/signal",
-    "POST /v1/recommendation-cache/get",
-    "POST /v1/recommendation-cache/put",
-    "POST /v1/recommendation-cache/clear",
-    "POST /v1/documents/metadata-sync",
-    "POST /v1/org/create",
-    "POST /v1/org/join",
-    "POST /v1/org/invite",
-    "POST /v1/org/leave",
-    "POST /v1/org/list",
-    "POST /v1/org/summary",
-    "POST /v1/org/shared-library/manifest",
-    "POST /v1/org/governance-summary",
-    "POST /v1/library/documents/upload",
-    "POST /v1/library/documents/list",
-    "POST /v1/library/documents/trash",
-    "POST /v1/library/documents/restore",
-    "POST /v1/library/documents/update",
-    "POST /v1/library/documents/authorize",
-    "POST /v1/library/documents/download",
-    "POST /v1/library/folders/create",
-    "POST /v1/library/folders/update",
-    "POST /v1/library/quota",
-    "POST /v1/org/team-annotations/list",
-    "POST /v1/org/team-annotations/upload",
-    "POST /v1/org/team-annotations/withdraw",
-    "POST /v1/admin/storage-quota"
-  ]);
+  assert.ok(response.json.endpoints.includes("POST /v1/library/tree"));
+  assert.ok(response.json.endpoints.includes("POST /v1/library/entries/metadata"));
+  assert.ok(response.json.endpoints.includes("POST /v1/personalization/settings/update"));
+  assert.equal(response.json.endpoints.some((endpoint) => endpoint.includes("demo")), false);
+  assert.equal(response.json.endpoints.includes("GET /v1/local-library/pdf"), false);
 });
 
 test("persists profile signals and clears every account personalization artifact", async () => {
   const handler = createDevCloudRequestHandler();
-  const sessionId = "demo-session-1";
+  const sessionId = "test-session-1";
+  const ownerKey = testOwnerKey(sessionId);
   const discipline = {
     categoryCode: "08",
     categoryName: "工学",
@@ -569,17 +897,17 @@ test("persists profile signals and clears every account personalization artifact
   putRecommendationCache({
     personalizationVersion: signalResponse.json.personalizationVersion,
     selectionKey: "selection-1",
-    sessionId,
+    sessionId: ownerKey,
     sortMode: "relevance",
     workspaceKey: "workspace-1"
   }, [{ id: "cached-rec" }]);
-  saveRecommendationFeedback(sessionId, {
+  saveRecommendationFeedback(ownerKey, {
     action: "saved",
     candidateId: "candidate-1",
     source: "OpenAlex",
     title: "Cached paper"
   });
-  upsertRecommendationCandidates(sessionId, [{
+  upsertRecommendationCandidates(ownerKey, [{
     canonicalId: "https://doi.org/10.1000/profile-clear",
     id: "candidate-1",
     qualityGate: { passed: true },
@@ -596,23 +924,23 @@ test("persists profile signals and clears every account personalization artifact
   assert.equal(clearResponse.statusCode, 200);
   assert.deepEqual(clearResponse.json.profile.disciplines, []);
   assert.equal(clearResponse.json.assistantSummary, undefined);
-  assert.deepEqual(listRecommendationFeedback(sessionId), []);
-  assert.deepEqual(listRecommendationCandidates(sessionId), []);
+  assert.deepEqual(listRecommendationFeedback(ownerKey), []);
+  assert.deepEqual(listRecommendationCandidates(ownerKey), []);
   assert.equal(getRecommendationCache({
     personalizationVersion: signalResponse.json.personalizationVersion,
     selectionKey: "selection-1",
-    sessionId,
+    sessionId: ownerKey,
     sortMode: "relevance",
     workspaceKey: "workspace-1"
   }).cacheHit, false);
 
   const database = createDatabase();
   assert.equal(database.prepare("SELECT COUNT(*) AS count FROM academic_profiles WHERE owner_key = ?")
-    .get(sessionId).count, 0);
+    .get(ownerKey).count, 0);
   assert.equal(database.prepare("SELECT COUNT(*) AS count FROM personalization_terms WHERE owner_key = ?")
-    .get(sessionId).count, 0);
+    .get(ownerKey).count, 0);
   assert.equal(database.prepare("SELECT COUNT(*) AS count FROM recommendation_suppressions WHERE owner_key = ?")
-    .get(sessionId).count, 0);
+    .get(ownerKey).count, 0);
   database.close();
 });
 
@@ -667,6 +995,7 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
       abstract: "Multi-vector dense retrieval",
       authors: ["Jane Researcher"],
       doi: "https://doi.org/10.1000/example",
+      fullTextGrantId: response.json.sources[0].fullTextGrantId,
       fullTextUrl: "https://example.org/paper.pdf",
       id: "openalex:W123456789",
       openAccessAvailable: true,
@@ -683,6 +1012,7 @@ test("normalizes traceable OpenAlex works for external thin-reading research", a
       year: 2025
     }
   ]);
+  assert.match(response.json.sources[0].fullTextGrantId, /^pdfgrant_[A-Za-z0-9-]+$/);
   assert.ok(response.json.sources[0].relevance > 0);
   assert.ok(response.json.sources[0].relevance <= 1);
 });
@@ -1139,11 +1469,10 @@ test("recovers an artifact-scoped external retrieval after failure and reuses th
 
 function expectExternalRetrievalFailure(response) {
   assert.equal(response.statusCode, 502);
-  assert.equal(response.json.error, "openalex_unavailable");
-  assert.equal(response.json.retrieval.attempts, 1);
-  assert.equal(response.json.retrieval.reused, false);
-  assert.equal(response.json.retrieval.status, "failed");
-  assert.ok(Date.parse(response.json.retrieval.expiresAt) > Date.parse(response.json.retrieval.serverNow));
+  assert.equal(response.json.code, "openalex_unavailable");
+  assert.equal(typeof response.json.message, "string");
+  assert.match(response.json.traceId, /^trace_/);
+  assert.equal("retrieval" in response.json, false);
 }
 
 test("rejects an unsafe artifact boundary before external retrieval", async () => {
@@ -1162,7 +1491,7 @@ test("rejects an unsafe artifact boundary before external retrieval", async () =
   });
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.json.error, "invalid_external_knowledge_artifact_id");
+  assert.equal(response.json.code, "invalid_external_knowledge_artifact_id");
   assert.equal(calls, 0);
 });
 
@@ -1225,7 +1554,7 @@ test("reports an OpenAlex upstream failure instead of falling back to static kno
   });
 
   assert.equal(response.statusCode, 502);
-  assert.equal(response.json.error, "openalex_upstream_error");
+  assert.equal(response.json.code, "openalex_upstream_error");
 });
 
 test("reports an explicit timeout when OpenAlex does not respond", async () => {
@@ -1247,7 +1576,7 @@ test("reports an explicit timeout when OpenAlex does not respond", async () => {
   });
 
   assert.equal(response.statusCode, 504);
-  assert.equal(response.json.error, "openalex_timeout");
+  assert.equal(response.json.code, "openalex_timeout");
 });
 
 test("streams model deltas as NDJSON", async () => {
@@ -1312,10 +1641,8 @@ test("returns a healthy status from the health endpoint", async () => {
   assert.doesNotMatch(response.body, /password|secret|sk-health-secret/);
 });
 
-test("deletes a persisted Agent artifact by validated id", async (context) => {
-  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-agent-artifacts-"));
-  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
-  const handlerOptions = { agentArtifactResultDirectory: resultDirectory };
+test("stores and deletes an Agent artifact only for its authenticated owner", async () => {
+  const handler = createDevCloudRequestHandler();
   const artifact = {
     agent: {
       apiVersion: "liteasy.agent/v1",
@@ -1335,15 +1662,34 @@ test("deletes a persisted Agent artifact by validated id", async (context) => {
   };
   const created = await invokeHandler({
     body: JSON.stringify(artifact),
-    handlerOptions,
-    headers: { "content-type": "application/json" },
+    handler,
+    headers: { authorization: "Bearer artifact-owner", "content-type": "application/json" },
     method: "POST",
     url: "/v1/agent-artifacts"
   });
   assert.equal(created.statusCode, 201);
+  assert.equal(created.json.path, "liteasy://agent-artifacts/artifact-delete");
+
+  const otherOwnerList = await invokeHandler({
+    handler,
+    headers: { authorization: "Bearer artifact-other" },
+    method: "GET",
+    url: "/v1/agent-artifacts"
+  });
+  assert.equal(otherOwnerList.statusCode, 200);
+  assert.deepEqual(otherOwnerList.json.artifacts, []);
+
+  const otherOwnerDelete = await invokeHandler({
+    handler,
+    headers: { authorization: "Bearer artifact-other" },
+    method: "DELETE",
+    url: "/v1/agent-artifacts/artifact-delete"
+  });
+  assert.equal(otherOwnerDelete.statusCode, 404);
 
   const deleted = await invokeHandler({
-    handlerOptions,
+    handler,
+    headers: { authorization: "Bearer artifact-owner" },
     method: "DELETE",
     url: "/v1/agent-artifacts/artifact-delete"
   });
@@ -1351,30 +1697,29 @@ test("deletes a persisted Agent artifact by validated id", async (context) => {
   assert.deepEqual(deleted.json, {
     artifactId: "artifact-delete",
     deleted: true,
-    path: "project-docs/agent-results/artifact-delete.json"
+    path: "liteasy://agent-artifacts/artifact-delete"
   });
-  assert.equal(fs.existsSync(path.join(resultDirectory, "artifact-delete.json")), false);
 
   const missing = await invokeHandler({
-    handlerOptions,
+    handler,
+    headers: { authorization: "Bearer artifact-owner" },
     method: "DELETE",
     url: "/v1/agent-artifacts/artifact-delete"
   });
   assert.equal(missing.statusCode, 404);
 
   const unsafe = await invokeHandler({
-    handlerOptions,
+    handler,
+    headers: { authorization: "Bearer artifact-owner" },
     method: "DELETE",
     url: "/v1/agent-artifacts/%2E%2E%2Fescape"
   });
   assert.equal(unsafe.statusCode, 400);
-  assert.equal(unsafe.json.error, "invalid_agent_artifact_id");
+  assert.equal(unsafe.json.code, "invalid_agent_artifact_id");
 });
 
-test("renames a persisted Agent artifact without changing its id", async (context) => {
-  const resultDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "liteasy-agent-artifacts-"));
-  context.after(() => fs.rmSync(resultDirectory, { force: true, recursive: true }));
-  const handlerOptions = { agentArtifactResultDirectory: resultDirectory };
+test("renames a persisted Agent artifact without changing its id", async () => {
+  const handler = createDevCloudRequestHandler();
   const artifact = {
     agent: { apiVersion: "liteasy.agent/v1", runId: "run-1", sessionId: "session-1", status: "completed" },
     answer: "analysis",
@@ -1389,200 +1734,432 @@ test("renames a persisted Agent artifact without changing its id", async (contex
   };
   await invokeHandler({
     body: JSON.stringify(artifact),
-    handlerOptions,
-    headers: { "content-type": "application/json" },
+    handler,
+    headers: { authorization: "Bearer artifact-rename-owner", "content-type": "application/json" },
     method: "POST",
     url: "/v1/agent-artifacts"
   });
 
   const renamed = await invokeHandler({
     body: JSON.stringify({ title: "  After   rename " }),
-    handlerOptions,
-    headers: { "content-type": "application/json" },
+    handler,
+    headers: { authorization: "Bearer artifact-rename-owner", "content-type": "application/json" },
     method: "PATCH",
     url: "/v1/agent-artifacts/artifact-rename"
   });
   assert.equal(renamed.statusCode, 200);
   assert.equal(renamed.json.artifact.artifactId, "artifact-rename");
   assert.equal(renamed.json.artifact.title, "After rename");
-  assert.equal(
-    JSON.parse(fs.readFileSync(path.join(resultDirectory, "artifact-rename.json"), "utf8")).title,
-    "After rename"
-  );
 });
 
-test("prefers a configured public origin for deploy-facing links and policy payloads", async () => {
-  const handlerOptions = {
-    publicOrigin: "https://demo.liteasy.example"
-  };
-
-  const rootResponse = await invokeHandler({
-    handlerOptions,
+test("rejects unauthenticated Agent artifact access", async () => {
+  const response = await invokeHandler({
+    handler: createDevCloudRequestHandler(),
     method: "GET",
-    headers: {
-      host: "10.0.0.5:8787"
-    },
-    url: "/"
+    url: "/v1/agent-artifacts"
   });
-
-  assert.equal(rootResponse.statusCode, 200);
-  assert.equal(rootResponse.json.publicOrigin, "https://demo.liteasy.example");
-
-  const policyResponse = await invokeHandler({
-    handlerOptions,
-    method: "GET",
-    headers: {
-      host: "10.0.0.5:8787"
-    },
-    url: "/v1/admin/model-policy"
-  });
-
-  assert.equal(policyResponse.statusCode, 200);
-  assert.equal(policyResponse.json.cloudProxyEndpoint, "https://demo.liteasy.example");
-
-  const adminResponse = await invokeHandler({
-    handlerOptions,
-    method: "GET",
-    headers: {
-      host: "10.0.0.5:8787"
-    },
-    url: "/admin/"
-  });
-
-  assert.equal(adminResponse.statusCode, 200);
-  assert.match(adminResponse.body, /https:\/\/demo\.liteasy\.example\/admin\//);
-  assert.doesNotMatch(adminResponse.body, /http:\/\/127\.0\.0\.1:8787\/admin\//);
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json.code, "invalid_session");
 });
 
+test("serves the RBAC and MFA admin console without demo controls", async () => {
+  for (const url of ["/admin", "/admin/"]) {
+    const response = await invokeHandler({
+      method: "GET",
+      headers: { host: "127.0.0.1:8787" },
+      url
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
+    assert.match(response.body, /Liteasy 管理后台/);
+    assert.match(response.body, /动态验证码/);
+    assert.match(response.body, /audience: "liteasy-admin"/);
+    assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
+    assert.doesNotMatch(response.body, /demo|fixture|重新播种|重置数据/i);
+    const script = response.body.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+    assert.ok(script);
+    assert.doesNotThrow(() => new Function(script));
+  }
+});
 
-
-test("returns the demo admin console html", async () => {
+test("rejects anonymous access to the governance dashboard", async () => {
   const response = await invokeHandler({
     method: "GET",
-    headers: {
-      host: "127.0.0.1:8787"
-    },
-    url: "/admin/"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
-  assert.match(response.body, /LiteasyClaw Operations Console/);
-  assert.match(response.body, /内部运营与运维后台/);
-  assert.match(response.body, /客户桌面软件端/);
-  assert.match(response.body, /客户组织资源/);
-  assert.match(response.body, /API 策略/);
-  assert.match(response.body, /默认 Provider/);
-  assert.match(response.body, /运维下发 API 策略/);
-  assert.match(response.body, /保存 API 策略/);
-  assert.match(response.body, /fetch\("\/v1\/admin\/model-policy"/);
-  assert.match(response.body, /用户与账号/);
-  assert.match(response.body, /活跃客户用户/);
-  assert.match(response.body, /活跃会话数/);
-  assert.match(response.body, /收藏总数/);
-  assert.match(response.body, /推荐缓存条目数/);
-  assert.match(response.body, /Liteasy AI Reading Lab/);
-  assert.match(response.body, /组织共享文献库索引刷新/);
-  assert.match(response.body, /Admin 更新共享文献库上传权限/);
-  assert.match(response.body, /重置 Demo 数据/);
-  assert.match(response.body, /重新播种 Demo 数据/);
-  assert.match(response.body, /\/v1\/admin\/demo-state/);
-  assert.match(response.body, /42%/);
-  assert.match(response.body, /38 GB \/ 100 GB/);
-  assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
-});
-
-test("returns the demo admin console html without a trailing slash", async () => {
-  const response = await invokeHandler({
-    method: "GET",
-    headers: {
-      host: "127.0.0.1:8787"
-    },
-    url: "/admin"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.headers["Content-Type"], "text/html; charset=utf-8");
-  assert.match(response.body, /LiteasyClaw Operations Console/);
-  assert.match(response.body, /\/v1\/admin\/governance-dashboard/);
-});
-
-
-test("returns the demo admin governance dashboard payload", async () => {
-  const response = await invokeHandler({
-    method: "GET",
-    headers: {
-      host: "127.0.0.1:8787"
-    },
+    headers: { host: "127.0.0.1:8787" },
     url: "/v1/admin/governance-dashboard"
   });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json.dashboard.name, "LiteasyClaw Operations Governance Dashboard");
-  assert.equal(response.json.dashboard.environment, "local-demo");
-  assert.equal(response.json.dashboard.threeEndStatus.desktop.label, "客户桌面软件端");
-  assert.equal(response.json.dashboard.threeEndStatus.desktop.url, "http://127.0.0.1:1420/");
-  assert.equal(response.json.dashboard.threeEndStatus.devCloud.url, "http://127.0.0.1:8787/");
-  assert.equal(response.json.dashboard.threeEndStatus.adminConsole.label, "内部运营与运维后台");
-  assert.equal(response.json.dashboard.threeEndStatus.adminConsole.url, "http://127.0.0.1:8787/admin/");
-  assert.equal(response.json.dashboard.organizations.length, 2);
-  assert.equal(response.json.dashboard.apiPolicy.defaultProvider, "openai");
-  assert.equal(response.json.dashboard.apiPolicy.modelAccessMode, "cloud_proxy");
-  assert.equal(response.json.dashboard.users.activeUsers, 16);
-  assert.equal(response.json.dashboard.users.desktopCustomers, 2);
-  assert.equal(response.json.dashboard.auditQueue.pendingReview, 3);
-  assert.equal(response.json.dashboard.quota.storageUsedGb, 38);
-  assert.equal(typeof response.json.dashboard.demoState.summary.activeSessionCount, "number");
-  assert.equal(typeof response.json.dashboard.demoState.summary.collectionItemCount, "number");
-  assert.equal(typeof response.json.dashboard.demoState.summary.recommendationCacheEntryCount, "number");
-  assert.ok(Array.isArray(response.json.dashboard.demoState.activities));
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json.code, "invalid_session");
+  assert.match(response.json.traceId, /^trace_/);
 });
 
-test("returns a non-empty admin demo state summary", async () => {
-  const response = await invokeHandler({
+test("returns developer diagnostics only for an authenticated desktop role grant", async () => {
+  const database = createDatabase();
+  const accounts = createAccountRepository(database);
+  const diagnosticAccount = accounts.create({
+    displayName: "Diagnostic Developer",
+    email: "diagnostic-developer@example.com",
+    passwordHash: await hashPassword("diagnostic-password-1")
+  });
+  const regularAccount = accounts.create({
+    displayName: "Regular Researcher",
+    email: "regular-researcher@example.com",
+    passwordHash: await hashPassword("regular-password-1")
+  });
+  createPlatformAdminRepository(database, { environment: "development" }).grantRole(
+    `user:${diagnosticAccount.id}`,
+    "developer_diagnostics",
+    "test-bootstrap"
+  );
+  const handler = createDevCloudRequestHandler({ database, environment: "development" });
+  const login = (email, password, audience = "liteasy-desktop") => invokeHandler({
+    body: JSON.stringify({ audience, email, password }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/account/login"
+  });
+  const diagnosticLogin = await login(
+    diagnosticAccount.email,
+    "diagnostic-password-1"
+  );
+  const regularLogin = await login(regularAccount.email, "regular-password-1");
+  const forumLogin = await login(
+    diagnosticAccount.email,
+    "diagnostic-password-1",
+    "intuecho-web"
+  );
+  const capabilities = (token) => invokeHandler({
+    handler,
+    headers: { authorization: `Bearer ${token}` },
     method: "GET",
-    headers: {
-      host: "127.0.0.1:8787"
-    },
-    url: "/v1/admin/demo-state"
+    url: "/v1/account/capabilities"
   });
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(typeof response.json.summary.organizationCount, "number");
-  assert.equal(typeof response.json.summary.collectionItemCount, "number");
-  assert.equal(typeof response.json.summary.recommendationCacheEntryCount, "number");
-  assert.equal(typeof response.json.summary.activeSessionCount, "number");
+  assert.deepEqual(
+    (await capabilities(diagnosticLogin.json.session.sessionId)).json,
+    { developerDiagnostics: true }
+  );
+  assert.deepEqual(
+    (await capabilities(regularLogin.json.session.sessionId)).json,
+    { developerDiagnostics: false }
+  );
+  const wrongAudience = await capabilities(forumLogin.json.session.sessionId);
+  assert.equal(wrongAudience.statusCode, 403);
+  assert.equal(wrongAudience.json.code, "invalid_session_audience");
+  const anonymous = await capabilities("");
+  assert.equal(anonymous.statusCode, 401);
+  assert.equal(anonymous.json.code, "invalid_session");
 });
 
-test("resets demo state through the admin reset endpoint", async () => {
-  const response = await invokeHandler({
-    body: JSON.stringify({}),
+test("enforces admin audience, MFA, RBAC, support grants, and all-audience revocation", async () => {
+  const database = createDatabase();
+  const accounts = createAccountRepository(database);
+  const adminAccount = accounts.create({
+    displayName: "Platform Admin",
+    email: "platform-admin@example.com",
+    passwordHash: await hashPassword("admin-password-1")
+  });
+  const targetAccount = accounts.create({
+    displayName: "Target User",
+    email: "target-user@example.com",
+    passwordHash: await hashPassword("target-password-1")
+  });
+  const platform = createPlatformAdminRepository(database, { environment: "development" });
+  platform.grantRole(`user:${adminAccount.id}`, "platform_admin", "test-bootstrap");
+  const handler = createDevCloudRequestHandler({
+    database,
+    environment: "development",
+    mfaService: {
+      isEnabled: () => true,
+      verify: (_userId, code) => code === "123456"
+    }
+  });
+  const login = (email, password, audience, mfaCode) => invokeHandler({
+    body: JSON.stringify({ audience, email, mfaCode, password }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/account/login"
+  });
+  const adminLogin = await login(
+    adminAccount.email,
+    "admin-password-1",
+    "liteasy-admin",
+    "123456"
+  );
+  assert.equal(adminLogin.statusCode, 200);
+  const adminToken = adminLogin.json.session.sessionId;
+  for (const request of [
+    {
+      body: { defaultProvider: "openai" },
+      url: "/v1/admin/model-policy"
+    },
+    {
+      body: { limitBytes: 1024, scopeId: `user:${targetAccount.id}`, scopeType: "user" },
+      url: "/v1/admin/storage-quota"
+    },
+    {
+      body: { status: "disabled", userId: targetAccount.id },
+      url: "/v1/admin/accounts/status"
+    }
+  ]) {
+    const response = await invokeHandler({
+      body: JSON.stringify(request.body),
+      handler,
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+        "content-type": "application/json"
+      },
+      method: "POST",
+      url: request.url
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json.code, "admin_reason_required");
+  }
+  const desktopAdmin = await login(
+    adminAccount.email,
+    "admin-password-1",
+    "liteasy-desktop"
+  );
+  const desktopPolicy = await invokeHandler({
+    handler,
     headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
+      authorization: `Bearer ${desktopAdmin.json.session.sessionId}`
+    },
+    method: "GET",
+    url: "/v1/model-policy"
+  });
+  assert.equal(desktopPolicy.statusCode, 200);
+  assert.equal(typeof desktopPolicy.json.defaultProvider, "string");
+  const wrongAudience = await invokeHandler({
+    body: JSON.stringify({
+      reason: "Must not accept a desktop token",
+      status: "disabled",
+      userId: targetAccount.id
+    }),
+    handler,
+    headers: {
+      authorization: `Bearer ${desktopAdmin.json.session.sessionId}`,
+      "content-type": "application/json"
     },
     method: "POST",
-    url: "/v1/admin/demo-reset"
+    url: "/v1/admin/accounts/status"
   });
+  assert.equal(wrongAudience.statusCode, 403);
+  assert.equal(wrongAudience.json.code, "invalid_session_audience");
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json.reset, true);
-});
-
-test("explains that demo login must be called with POST", async () => {
-  const response = await invokeHandler({
-    method: "GET",
+  const targetDesktop = await login(
+    targetAccount.email,
+    "target-password-1",
+    "liteasy-desktop"
+  );
+  const targetForum = await login(
+    targetAccount.email,
+    "target-password-1",
+    "intuecho-web"
+  );
+  const targetAdminAudience = await login(
+    targetAccount.email,
+    "target-password-1",
+    "liteasy-admin",
+    "123456"
+  );
+  const targetArtifact = await invokeHandler({
+    body: JSON.stringify({
+      agent: {
+        apiVersion: "liteasy.agent/v1",
+        runId: "target-account-run",
+        sessionId: "target-account-session",
+        status: "completed"
+      },
+      answer: "Private account analysis",
+      artifactId: "target-account-artifact",
+      artifactType: "tree",
+      citations: [],
+      createdAt: "2026-08-07T00:00:00.000Z",
+      papers: [],
+      title: "Target account artifact",
+      uiDsl: { version: "liteasy.ui/v1" },
+      version: "liteasy.agent-artifact/v1"
+    }),
+    handler,
     headers: {
-      host: "127.0.0.1:8787"
+      authorization: `Bearer ${targetDesktop.json.session.sessionId}`,
+      "content-type": "application/json"
     },
-    url: "/v1/account/demo-login"
+    method: "POST",
+    url: "/v1/agent-artifacts"
   });
+  assert.equal(targetArtifact.statusCode, 201, JSON.stringify(targetArtifact.json));
+  const targetScopeId = `user:${targetAccount.id}`;
+  const uploaded = await invokeHandler({
+    body: Buffer.from("%PDF-1.7\nPrivate support document\n%%EOF"),
+    handler,
+    headers: {
+      "content-type": "application/pdf",
+      "x-idempotency-key": "support-document-upload",
+      "x-liteasy-expected-revision": "0",
+      "x-liteasy-file-name": encodeURIComponent("Private.pdf"),
+      "x-liteasy-scope-id": targetScopeId,
+      "x-liteasy-scope-type": "user",
+      "x-liteasy-session-id": targetDesktop.json.session.sessionId
+    },
+    method: "POST",
+    url: "/v1/library/documents/upload"
+  });
+  assert.equal(uploaded.statusCode, 200, JSON.stringify(uploaded.json));
+  const supportBody = {
+    documentId: uploaded.json.document.documentId,
+    scopeId: targetScopeId,
+    scopeType: "user"
+  };
+  const supportRequest = (body) => invokeHandler({
+    body: JSON.stringify(body),
+    handler,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/admin/support-access/document"
+  });
+  const beforeGrant = await supportRequest(supportBody);
+  assert.equal(beforeGrant.statusCode, 403);
+  assert.equal(beforeGrant.json.code, "support_access_required");
 
-  assert.equal(response.statusCode, 405);
-  assert.equal(response.json.error, "method_not_allowed");
-  assert.equal(response.json.method, "POST");
-  assert.equal(response.json.endpoint, "/v1/account/demo-login");
-  assert.match(response.json.message, /浏览器直接打开/);
+  const grant = await invokeHandler({
+    body: JSON.stringify({
+      durationMinutes: 15,
+      reason: "Investigate a user-reported corrupt PDF",
+      scopeId: targetScopeId,
+      scopeType: "user"
+    }),
+    handler,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/admin/support-access/grant"
+  });
+  assert.equal(grant.statusCode, 201, JSON.stringify(grant.json));
+  const afterGrant = await supportRequest(supportBody);
+  assert.equal(afterGrant.statusCode, 200);
+  assert.match(afterGrant.body, /^%PDF-/);
+  const revokeWithoutReason = await invokeHandler({
+    body: JSON.stringify({ grantId: grant.json.grant.grantId }),
+    handler,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/admin/support-access/revoke"
+  });
+  assert.equal(revokeWithoutReason.statusCode, 400);
+  assert.equal(revokeWithoutReason.json.code, "admin_reason_required");
+  const revoke = await invokeHandler({
+    body: JSON.stringify({
+      grantId: grant.json.grant.grantId,
+      reason: "Support investigation complete"
+    }),
+    handler,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/admin/support-access/revoke"
+  });
+  assert.equal(revoke.statusCode, 200);
+  assert.equal((await supportRequest(supportBody)).statusCode, 403);
+
+  const disabled = await invokeHandler({
+    body: JSON.stringify({
+      reason: "Security response",
+      status: "disabled",
+      userId: targetAccount.id
+    }),
+    handler,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/admin/accounts/status"
+  });
+  assert.equal(disabled.statusCode, 200, JSON.stringify(disabled.json));
+  for (const session of [targetDesktop, targetForum, targetAdminAudience]) {
+    const validation = await invokeHandler({
+      body: JSON.stringify({
+        audience: session.json.session.audience,
+        sessionId: session.json.session.sessionId
+      }),
+      handler,
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      url: "/v1/account/session"
+    });
+    assert.equal(validation.statusCode, 401);
+    assert.equal(validation.json.code, "invalid_session");
+  }
+  const adminAccountStatus = (status, reason) => invokeHandler({
+    body: JSON.stringify({ reason, status, userId: targetAccount.id }),
+    handler,
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/admin/accounts/status"
+  });
+  assert.equal((await adminAccountStatus("active", "Deletion lifecycle test")).statusCode, 200);
+  database.prepare(`
+    INSERT INTO local_library_manifest_entries (
+      owner_key, sync_document_id, title, updated_at
+    ) VALUES (?, 'local-1', 'Private paper', ?)
+  `).run(targetScopeId, new Date().toISOString());
+  const deleted = await adminAccountStatus("deleted", "Approved account deletion request");
+  assert.equal(deleted.statusCode, 200, JSON.stringify(deleted.json));
+  assert.equal(deleted.json.account.status, "deleted");
+  assert.deepEqual(deleted.json.deletion.agentArtifacts, { artifacts: 1, generationRuns: 1 });
+  assert.equal(deleted.json.deletion.library.documents, 1);
+  assert.equal(database.prepare(
+    "SELECT count(*) AS count FROM artifacts WHERE owner_user_id = ?"
+  ).get(targetAccount.id).count, 0);
+  assert.equal(database.prepare(
+    "SELECT count(*) AS count FROM generation_runs WHERE owner_user_id = ?"
+  ).get(targetAccount.id).count, 0);
+  assert.equal(database.prepare(
+    "SELECT count(*) AS count FROM artifact_versions"
+  ).get().count, 0);
+  assert.equal(database.prepare(
+    "SELECT count(*) AS count FROM library_documents WHERE scope_type = 'user' AND scope_id = ?"
+  ).get(targetScopeId).count, 0);
+  assert.equal(database.prepare(
+    "SELECT count(*) AS count FROM storage_objects"
+  ).get().count, 0);
+  assert.equal(database.prepare(
+    "SELECT count(*) AS count FROM local_library_manifest_entries WHERE owner_key = ?"
+  ).get(targetScopeId).count, 0);
+  assert.equal(database.prepare(
+    "SELECT count(*) AS count FROM password_credentials WHERE user_id = ?"
+  ).get(targetAccount.id).count, 0);
+  assert.match(accounts.findPublicById(targetAccount.id).email, /^deleted\+/);
+  assert.deepEqual(
+    database.prepare(`
+      SELECT status, error_code, completed_at IS NOT NULL AS completed
+      FROM account_deletion_jobs WHERE user_id = ?
+    `).get(targetAccount.id),
+    { completed: 1, error_code: null, status: "completed" }
+  );
+  const auditActions = database.prepare(
+    "SELECT action FROM platform_audit_events ORDER BY occurred_at, event_id"
+  ).all().map((row) => row.action);
+  assert.equal(auditActions.includes("support_document_accessed"), true);
+  assert.equal(auditActions.includes("account_status_updated"), true);
+  database.close();
 });
 
 test("registers a personal account and rejects duplicate email addresses", async () => {
@@ -1623,7 +2200,7 @@ test("registers a personal account and rejects duplicate email addresses", async
   });
 
   assert.equal(duplicateResponse.statusCode, 409);
-  assert.equal(duplicateResponse.json.error, "account_exists");
+  assert.equal(duplicateResponse.json.code, "account_exists");
   assert.match(duplicateResponse.json.message, /已经注册/);
 });
 
@@ -1768,7 +2345,7 @@ test("validates and revokes an opaque account session", async () => {
     url: "/v1/account/session"
   });
   assert.equal(revokedResponse.statusCode, 401);
-  assert.equal(revokedResponse.json.error, "invalid_session");
+  assert.equal(revokedResponse.json.code, "invalid_session");
 });
 
 test("scopes private account data to the stable user identity behind session tokens", async () => {
@@ -1838,7 +2415,7 @@ test("scopes private account data to the stable user identity behind session tok
     method: "POST",
     url: "/v1/collection/list"
   });
-  assert.deepEqual(listResponse.json.items, [collectionItem]);
+  assert.deepEqual(listResponse.json.items, [{ ...collectionItem, status: "active" }]);
 
   const bypassResponse = await invokeHandler({
     body: JSON.stringify({
@@ -1853,7 +2430,7 @@ test("scopes private account data to the stable user identity behind session tok
     url: "/v1/collection/list"
   });
   assert.equal(bypassResponse.statusCode, 401);
-  assert.equal(bypassResponse.json.error, "invalid_session");
+  assert.equal(bypassResponse.json.code, "invalid_session");
 });
 
 test("returns a generic error for an incorrect account password", async () => {
@@ -1888,10 +2465,9 @@ test("returns a generic error for an incorrect account password", async () => {
   });
 
   assert.equal(response.statusCode, 401);
-  assert.deepEqual(response.json, {
-    error: "invalid_credentials",
-    message: "邮箱或密码不正确。"
-  });
+  assert.equal(response.json.code, "invalid_credentials");
+  assert.equal(response.json.message, "邮箱或密码不正确。");
+  assert.match(response.json.traceId, /^trace_/);
 });
 
 test("accepts deep-analysis prompts and rejects oversized JSON bodies", async () => {
@@ -1909,7 +2485,7 @@ test("accepts deep-analysis prompts and rejects oversized JSON bodies", async ()
     url: "/v1/account/register"
   });
   assert.equal(shortPasswordResponse.statusCode, 400);
-  assert.equal(shortPasswordResponse.json.error, "invalid_account_registration");
+  assert.equal(shortPasswordResponse.json.code, "invalid_account_registration");
 
   const deepAnalysisResponse = await invokeHandler({
     body: JSON.stringify({
@@ -1942,10 +2518,10 @@ test("accepts deep-analysis prompts and rejects oversized JSON bodies", async ()
     url: "/v1/model/generate"
   });
   assert.equal(oversizedResponse.statusCode, 413);
-  assert.equal(oversizedResponse.json.error, "request_body_too_large");
+  assert.equal(oversizedResponse.json.code, "request_body_too_large");
 });
 
-test("stores and returns private cloud collection items for a demo session", async () => {
+test("stores and returns private cloud collection items for an authenticated test session", async () => {
   const handler = createDevCloudRequestHandler();
 
   const saveResponse = await invokeHandler({
@@ -1957,7 +2533,7 @@ test("stores and returns private cloud collection items for a demo session", asy
         source: "Semantic Scholar",
         title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
       },
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: {
@@ -1974,7 +2550,7 @@ test("stores and returns private cloud collection items for a demo session", asy
 
   const getResponse = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: {
@@ -2009,7 +2585,7 @@ test("stores and reads recommendation cache separately from collection data", as
         }
       ],
       selectionKey: "demo-2",
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       sortMode: "relevance",
       workspaceKey: "local:/tmp/LiteasyLibrary"
     }),
@@ -2028,7 +2604,7 @@ test("stores and reads recommendation cache separately from collection data", as
   const getResponse = await invokeHandler({
     body: JSON.stringify({
       selectionKey: "demo-2",
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       sortMode: "relevance",
       workspaceKey: "local:/tmp/LiteasyLibrary"
     }),
@@ -2065,7 +2641,7 @@ test("rejects recommendation cache writes without explicit source provenance", a
         }
       ],
       selectionKey: "demo-2",
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       sortMode: "relevance",
       workspaceKey: "local:/tmp/LiteasyLibrary"
     }),
@@ -2079,24 +2655,25 @@ test("rejects recommendation cache writes without explicit source provenance", a
   });
 
   assert.equal(putResponse.statusCode, 400);
-  assert.equal(putResponse.json.error, "invalid_recommendation_cache_payload");
+  assert.equal(putResponse.json.code, "invalid_recommendation_cache_payload");
 });
 
 test("expires stale recommendation cache entries before a new online refresh", () => {
+  const database = createDatabase();
+  let now = new Date("2026-08-06T00:00:00.000Z");
+  const repository = createRecommendationCacheRepository(database, { now: () => now });
   const scope = {
     selectionKey: "paper-1",
-    sessionId: "demo-session-1",
+    sessionId: "test-session-1",
     sortMode: "relevance",
     workspaceKey: "local:/tmp/LiteasyLibrary"
   };
-  putRecommendationCache(scope, [{ id: "rec-old" }]);
-
-  const result = getRecommendationCache(scope, {
-    maxAgeMs: 10,
-    now: new Date(Date.now() + 11)
-  });
+  repository.put(scope, [{ id: "rec-old" }]);
+  now = new Date("2026-08-07T00:00:00.001Z");
+  const result = repository.get(scope);
 
   assert.deepEqual(result, { cacheHit: false, recommendations: [] });
+  database.close();
 });
 
 test("clearing recommendation cache does not remove private cloud collection data", async () => {
@@ -2111,7 +2688,7 @@ test("clearing recommendation cache does not remove private cloud collection dat
         source: "Semantic Scholar",
         title: "RoBERTa: A Robustly Optimized BERT Pretraining Approach"
       },
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: {
@@ -2137,7 +2714,7 @@ test("clearing recommendation cache does not remove private cloud collection dat
         }
       ],
       selectionKey: "demo-2",
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       sortMode: "relevance",
       workspaceKey: "local:/tmp/LiteasyLibrary"
     }),
@@ -2153,7 +2730,7 @@ test("clearing recommendation cache does not remove private cloud collection dat
   const clearResponse = await invokeHandler({
     body: JSON.stringify({
       selectionKey: "demo-2",
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       sortMode: "relevance",
       workspaceKey: "local:/tmp/LiteasyLibrary"
     }),
@@ -2171,7 +2748,7 @@ test("clearing recommendation cache does not remove private cloud collection dat
 
   const collectionResponse = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: {
@@ -2200,123 +2777,25 @@ test("returns available endpoints for unknown paths", async () => {
   });
 
   assert.equal(response.statusCode, 404);
-  assert.equal(response.json.error, "not_found");
-  assert.equal(response.json.path, "/missing");
-  assert.ok(response.json.availableEndpoints.includes("POST /v1/account/demo-login"));
+  assert.equal(response.json.code, "not_found");
   assert.match(response.json.message, /LiteasyClaw dev cloud/);
+  assert.match(response.json.traceId, /^trace_/);
+  assert.equal("path" in response.json, false);
+  assert.equal("availableEndpoints" in response.json, false);
 });
 
 
-test("lets internal operations update the demo model policy", async () => {
-  const handler = createDevCloudRequestHandler();
-  const updateResponse = await invokeHandler({
-    handler,
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      defaultProvider: "mock",
-      localDirectEnabled: true,
-      modelAccessMode: "local_direct"
-    }),
-    url: "/v1/admin/model-policy"
-  });
-
-  assert.equal(updateResponse.statusCode, 200);
-  assert.equal(updateResponse.json.policy.defaultProvider, "mock");
-  assert.equal(updateResponse.json.policy.localDirectEnabled, true);
-  assert.equal(updateResponse.json.policy.modelAccessMode, "local_direct");
-  assert.equal(updateResponse.json.policy.policyVersion, "ops-policy-v2");
-  assert.equal(updateResponse.json.updatedBy, "internal-ops-demo");
-
-  const getResponse = await invokeHandler({
-    handler,
-    method: "GET",
-    headers: {
-      host: "127.0.0.1:8787"
-    },
-    url: "/v1/admin/model-policy"
-  });
-
-  assert.equal(getResponse.statusCode, 200);
-  assert.equal(getResponse.json.defaultProvider, "mock");
-  assert.equal(getResponse.json.localDirectEnabled, true);
-  assert.equal(getResponse.json.modelAccessMode, "local_direct");
-  assert.equal(getResponse.json.policyVersion, "ops-policy-v2");
-});
-
-test("returns a policy snapshot from the control plane endpoint", async () => {
-  const response = await invokeHandler({
-    method: "GET",
-    headers: {
-      host: "127.0.0.1:8787"
-    },
-    url: "/v1/admin/model-policy"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.headers["Content-Type"], "application/json; charset=utf-8");
-  assert.equal(response.json.modelAccessMode, "cloud_proxy");
-  assert.equal(response.json.defaultProvider, "openai");
-  assert.equal(response.json.cloudProxyEndpoint, "http://127.0.0.1:8787");
-  assert.equal(response.json.policyVersion, "dev-policy-v1");
-  assert.equal(response.json.syncedAt, "2026-05-14T09:30:00Z");
-});
-
-test("returns a deterministic generated answer from the model endpoint", async () => {
+test("reports model unavailability when no provider credential is configured", async () => {
   const response = await invokeHandler({
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      model: "gpt-5-mini",
-      prompt: "问题：BERT 的核心方法是什么？",
-      provider: "openai",
-      source: "cloud_proxy"
-    }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt: "Generate a summary.", provider: "openai" }),
     url: "/v1/model/generate"
   });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    answer: "开发云回答：BERT 的核心方法是什么？",
-    execution: {
-      backend: "dev_cloud",
-      mode: "mock_fallback",
-      provider: "mock"
-    }
-  });
-});
-
-test("does not synthesize generated theme planner actions without an api key", async () => {
-  const response = await invokeHandler({
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      model: "gpt-5-mini",
-      prompt: [
-        "你是 LiteasyClaw Command Mode V2 的语义动作规划器。",
-        "只输出 JSON，不要输出 Markdown。",
-        "用户输入：颜色变为粉色",
-        "已注册动作：[]"
-      ].join("\n"),
-      provider: "openai",
-      source: "cloud_proxy"
-    }),
-    url: "/v1/model/generate"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.throws(() => JSON.parse(response.json.answer));
-  assert.match(response.json.answer, /^开发云回答：/);
-  assert.equal(response.json.execution.mode, "mock_fallback");
+  assert.equal(response.statusCode, 502);
+  assert.equal(typeof response.json.code, "string");
+  assert.match(response.json.traceId, /^trace_/);
+  assert.equal("answer" in response.json, false);
 });
 
 test("uses the configured openai provider when an api key is available", async () => {
@@ -2390,77 +2869,15 @@ test("supplies the configured OpenAI model when a browser request omits it", asy
   assert.equal(response.json.answer, "已生成");
 });
 
-test("returns a demo account session from the account login endpoint", async () => {
+test("does not expose a demo login route", async () => {
   const response = await invokeHandler({
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      mode: "demo_login"
-    }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mode: "demo_login" }),
     url: "/v1/account/demo-login"
   });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    session: {
-      email: "researcher@liteasy.dev",
-      expiresAt: "2026-05-15T09:30:00Z",
-      membershipTier: "pro",
-      name: "Liteasy Researcher",
-      sessionId: "demo-session-1"
-    }
-  });
-});
-
-test("returns related recommendations for the selected document set", async () => {
-  const response = await invokeHandler({
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      selectedDocuments: [
-        {
-          id: "demo-2",
-          title: "Survey of Vector Database Management Systems"
-        }
-      ],
-      sessionId: "demo-session-1"
-    }),
-    url: "/v1/recommendations"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    recommendations: [
-      {
-        discoveredAt: "2026-05-14T08:15:00Z",
-        id: "rec-vdbms-1",
-        relatedDocumentTitle: "Survey of Vector Database Management Systems",
-        relevanceBand: "high",
-        relevanceScore: 0.92,
-        reason: "同样关注向量数据库系统架构与相似度检索能力。",
-        source: "Semantic Scholar",
-        sourceKind: "mock",
-        title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
-      },
-      {
-        discoveredAt: "2026-05-14T09:10:00Z",
-        id: "rec-vdbms-2",
-        relatedDocumentTitle: "Survey of Vector Database Management Systems",
-        relevanceBand: "medium",
-        relevanceScore: 0.78,
-        reason: "补充开源向量数据库系统实现，便于和综述框架对照。",
-        source: "arXiv Watch",
-        sourceKind: "mock",
-        title: "Milvus: A Purpose-Built Vector Data Management System"
-      }
-    ]
-  });
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.json.code, "not_found");
 });
 
 test("rejects malformed recommendation research profiles before retrieval", async () => {
@@ -2478,13 +2895,13 @@ test("rejects malformed recommendation research profiles before retrieval", asyn
         topics: Array.from({ length: 13 }, (_, index) => `topic-${index}`)
       },
       selectedDocuments: [{ id: "paper-1", title: "Target Retrieval Paper" }],
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     url: "/v1/recommendations"
   });
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.json.error, "research_profile_topics_invalid");
+  assert.equal(response.json.code, "research_profile_topics_invalid");
 });
 
 test("completes an implicit recommendation profile after behavior personalization", async () => {
@@ -2500,7 +2917,7 @@ test("completes an implicit recommendation profile after behavior personalizatio
   });
   const signalResponse = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       signal: { kind: "paper_opened", title: "Neural information retrieval" }
     }),
     handler,
@@ -2513,7 +2930,7 @@ test("completes an implicit recommendation profile after behavior personalizatio
   const response = await invokeHandler({
     body: JSON.stringify({
       selectedDocuments: [{ id: "paper-1", title: "Target Retrieval Paper" }],
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
@@ -2529,7 +2946,7 @@ test("returns provenance-bearing live reading candidates instead of demo recomme
   const response = await invokeHandler({
     body: JSON.stringify({
       selectedDocuments: [{ id: "paper-1", title: "Target Retrieval Paper" }],
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler: createDevCloudRequestHandler({
       // These predate the DOAJ/OpenAIRE/OAPEN/Semantic Scholar sources and stub only
@@ -2668,7 +3085,7 @@ test("returns provenance-bearing live reading candidates instead of demo recomme
     title: "Candidate Retrieval Methods"
   });
   assert.match(response.json.recommendations[0].discoveredAt, /^\d{4}-\d{2}-\d{2}T/);
-  const candidatePool = listRecommendationCandidates("demo-session-1");
+  const candidatePool = listRecommendationCandidates(testOwnerKey("test-session-1"));
   assert.equal(candidatePool.length, 1);
   assert.equal(candidatePool[0].canonicalId, "openalex:W200");
   assert.equal(candidatePool[0].discoveryCount, 1);
@@ -2849,7 +3266,7 @@ test("applies a configured external reranker only to the quality-gated shortlist
     weight: 0.65
   });
   assert.equal(
-    listRecommendationCandidates("external-reranker-user")[0].externalReranker.version,
+    listRecommendationCandidates(testOwnerKey("external-reranker-user"))[0].externalReranker.version,
     "recommendation-external-reranker/v1"
   );
   assert.equal(JSON.stringify(response.json).includes("reranker-secret"), false);
@@ -3041,7 +3458,7 @@ test("preserves an arXiv-declared DOI as bounded publication-link evidence", asy
   });
   assert.match(candidate.reason, /记录级出版关联/);
   assert.match(candidate.reason, /尚未核验两版全文内容等价/);
-  const persisted = listRecommendationCandidates("publication-link-user");
+  const persisted = listRecommendationCandidates(testOwnerKey("publication-link-user"));
   assert.equal(persisted.length, 1);
   assert.deepEqual(
     persisted[0].identityResolution.lineageEvidence,
@@ -3234,14 +3651,14 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
   });
   const scope = {
     selectionKey: "paper-1",
-    sessionId: "demo-session-1",
+    sessionId: testOwnerKey("test-session-1"),
     sortMode: "relevance",
     workspaceKey: "local:/tmp/LiteasyLibrary"
   };
   const initialRecommendationResponse = await invokeHandler({
     body: JSON.stringify({
       selectedDocuments: [{ id: "paper-1", title: "Target Retrieval Paper" }],
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: { "content-type": "application/json", "x-openalex-api-key": "test-openalex-api-key" },
@@ -3250,7 +3667,7 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
   });
   assert.equal(initialRecommendationResponse.statusCode, 200);
   assert.equal(
-    listRecommendationCandidates("demo-session-1")
+    listRecommendationCandidates(testOwnerKey("test-session-1"))
       .find((candidate) => candidate.canonicalId === "openalex:W200")?.status,
     "candidate"
   );
@@ -3265,7 +3682,7 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
         source: "OpenAlex",
         title: "Candidate Retrieval Methods"
       },
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: { "content-type": "application/json" },
@@ -3278,7 +3695,7 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
   assert.equal(feedbackResponse.json.invalidatedCacheEntries, 1);
   assert.deepEqual(getRecommendationCache(scope), { cacheHit: false, recommendations: [] });
   assert.equal(
-    listRecommendationCandidates("demo-session-1")
+    listRecommendationCandidates(testOwnerKey("test-session-1"))
       .find((candidate) => candidate.canonicalId === "openalex:W200")?.status,
     "dismissed"
   );
@@ -3286,7 +3703,7 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
   const recommendationResponse = await invokeHandler({
     body: JSON.stringify({
       selectedDocuments: [{ id: "paper-1", title: "Target Retrieval Paper" }],
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: { "content-type": "application/json", "x-openalex-api-key": "test-openalex-api-key" },
@@ -3301,7 +3718,7 @@ test("persists negative recommendation feedback, invalidates cache, and lowers s
   assert.ok(similar.scoreComponents.preference < 0);
   assert.match(similar.reason, /曾忽略的主题相近/);
   assert.ok(
-    listRecommendationCandidates("demo-session-1")
+    listRecommendationCandidates(testOwnerKey("test-session-1"))
       .find((candidate) => candidate.canonicalId === "openalex:W201")?.discoveryCount >= 2
   );
 });
@@ -3346,7 +3763,7 @@ test("reuses a recent persistent candidate without presenting it as a new live d
   const request = () => invokeHandler({
     body: JSON.stringify({
       selectedDocuments: [{ id: "paper-1", title: "Persistent Pool Target" }],
-      sessionId: "demo-session-1"
+      sessionId: "test-session-1"
     }),
     handler,
     headers: { "content-type": "application/json", "x-openalex-api-key": "test-openalex-api-key" },
@@ -3365,13 +3782,13 @@ test("reuses a recent persistent candidate without presenting it as a new live d
   assert.equal(second.json.recommendations[0].discoveredAt, originalDiscoveredAt);
   assert.match(second.json.recommendations[0].reason, /持久候选池/);
   assert.equal(
-    listRecommendationCandidates("demo-session-1")
+    listRecommendationCandidates(testOwnerKey("test-session-1"))
       .find((candidate) => candidate.canonicalId === "openalex:W700")?.discoveryCount,
     1
   );
 });
 
-test("accepts document metadata sync snapshots", async () => {
+test("accepts privacy-safe metadata sync and rejects local paths", async () => {
   const response = await invokeHandler({
     method: "POST",
     headers: {
@@ -3381,487 +3798,258 @@ test("accepts document metadata sync snapshots", async () => {
     body: JSON.stringify({
       documents: [
         {
-          id: "demo-1",
-          sourcePath: "/papers/colbert-late-interaction.pdf",
+          contentHash: "a".repeat(64),
+          id: "local-1",
           title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
         },
         {
-          id: "demo-2",
-          sourcePath: "/papers/survey-vector-database-management-systems.pdf",
+          id: "local-2",
           title: "Survey of Vector Database Management Systems"
         },
         {
-          id: "demo-3",
-          sourcePath: "/papers/acorn-vector-search.pdf",
+          id: "local-3",
+          sourcePath: "C:/Users/researcher/private/acorn.pdf",
           title: "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
         }
       ],
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       workspaceRevision: 0
     }),
     url: "/v1/documents/metadata-sync"
   });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    result: {
-      acceptedCount: 3,
-      rejectedCount: 0,
-      syncId: "metadata-demo-session-1-r0",
-      syncedAt: "2026-05-14T10:20:00Z"
-    }
-  });
+  assert.equal(response.json.result.acceptedCount, 2);
+  assert.equal(response.json.result.rejectedCount, 1);
+  assert.equal(response.json.result.disabled, false);
+  assert.match(response.json.result.syncId, /^[a-f0-9-]{36}$/);
+  assert.ok(Date.parse(response.json.result.syncedAt) <= Date.now());
 });
 
 
-test("returns the demo organization list", async () => {
-  const response = await invokeHandler({
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      sessionId: "demo-session-1"
-    }),
-    url: "/v1/org/list"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    activeOrganizationId: "org-demo-1",
-    organizations: [
-      {
-        canCreateOrganization: true,
-        memberCount: 12,
-        myRole: "member",
-        name: "Liteasy AI Reading Lab",
-        organizationId: "org-demo-1",
-        ownerUserId: "demo-session-owner",
-        sharedLibraryName: "组织共享文献库"
-      },
-      {
-        canCreateOrganization: true,
-        memberCount: 4,
-        myRole: "member",
-        name: "Liteasy Literature Ops",
-        organizationId: "org-demo-2",
-        ownerUserId: "member-ops-1",
-        sharedLibraryName: "文献运营共享库"
-      }
-    ]
-  });
-});
-
-test("creates an organization and assigns the creator as owner", async () => {
+test("runs an organization lifecycle through authenticated RBAC endpoints", async () => {
   const handler = createDevCloudRequestHandler();
-
-  const response = await invokeHandler({
-    body: JSON.stringify({
-      name: "Liteasy F3 Lab",
-      sessionId: "demo-session-1"
-    }),
+  const invokeAs = (sessionId, url, body = {}) => invokeHandler({
+    body: JSON.stringify({ ...body, sessionId }),
     handler,
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
+    headers: { "content-type": "application/json" },
     method: "POST",
-    url: "/v1/org/create"
+    url
   });
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json.organization.ownerUserId, "demo-session-1");
-  assert.equal(response.json.organization.myRole, "owner");
-});
-
-test("joins an organization as member", async () => {
-  const handler = createDevCloudRequestHandler();
-
-  const response = await invokeHandler({
-    body: JSON.stringify({
-      organizationId: "org-demo-1",
-      sessionId: "demo-session-joiner"
-    }),
-    handler,
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    method: "POST",
-    url: "/v1/org/join"
+  const created = await invokeAs("organization-owner", "/v1/org/create", {
+    displayName: "Owner",
+    name: "Research Lab"
   });
+  assert.equal(created.statusCode, 200);
+  const organizationId = created.json.organization.organizationId;
+  assert.equal(created.json.organization.ownerUserId, testOwnerKey("organization-owner"));
+  assert.equal(created.json.organization.myRole, "owner");
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json.membership.role, "member");
-});
+  const listed = await invokeAs("organization-owner", "/v1/org/list");
+  assert.equal(listed.statusCode, 200);
+  assert.equal(listed.json.activeOrganizationId, organizationId);
+  assert.equal(listed.json.organizations[0].memberCount, 1);
 
-test("rejects organization invites from members", async () => {
-  const handler = createDevCloudRequestHandler();
-
-  const response = await invokeHandler({
-    body: JSON.stringify({
-      organizationId: "org-demo-1",
-      role: "member",
-      sessionId: "demo-session-1",
-      targetUserId: "demo-invitee-1"
-    }),
-    handler,
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    method: "POST",
-    url: "/v1/org/invite"
+  const invited = await invokeAs("organization-owner", "/v1/org/invite", {
+    organizationId,
+    role: "member",
+    targetSubject: testOwnerKey("organization-member")
   });
+  assert.equal(invited.statusCode, 200);
+  assert.equal(invited.json.invite.role, "member");
+  assert.match(invited.json.invitation.invitationToken, /^[a-f0-9-]{36}$/);
 
-  assert.equal(response.statusCode, 403);
-  assert.equal(response.json.error, "organization_role_forbidden");
-});
-
-test("allows organization invites from admins", async () => {
-  const handler = createDevCloudRequestHandler();
-
-  const response = await invokeHandler({
-    body: JSON.stringify({
-      organizationId: "org-demo-1",
-      role: "admin",
-      sessionId: "demo-session-admin",
-      targetUserId: "demo-invitee-1"
-    }),
-    handler,
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    method: "POST",
-    url: "/v1/org/invite"
+  const joined = await invokeAs("organization-member", "/v1/org/join", {
+    displayName: "Member",
+    expectedInvitationRevision: 0,
+    invitationToken: invited.json.invitation.invitationToken
   });
+  assert.equal(joined.statusCode, 200);
+  assert.equal(joined.json.membership.role, "member");
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json.invite.role, "admin");
-});
-
-test("blocks owner leave when owner transfer is not available", async () => {
-  const handler = createDevCloudRequestHandler();
-
-  const response = await invokeHandler({
-    body: JSON.stringify({
-      organizationId: "org-demo-1",
-      role: "owner",
-      sessionId: "demo-session-owner"
-    }),
-    handler,
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    method: "POST",
-    url: "/v1/org/leave"
+  const promoted = await invokeAs("organization-owner", "/v1/org/members/role", {
+    organizationId,
+    role: "admin",
+    targetSubject: testOwnerKey("organization-member")
   });
-
-  assert.equal(response.statusCode, 403);
-  assert.equal(response.json.error, "organization_owner_leave_blocked");
-});
-
-test("returns a demo organization summary", async () => {
-  const response = await invokeHandler({
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      sessionId: "demo-session-1"
-    }),
-    url: "/v1/org/summary"
+  assert.equal(promoted.statusCode, 200);
+  assert.equal(promoted.json.member.role, "admin");
+  const demoted = await invokeAs("organization-owner", "/v1/org/members/role", {
+    organizationId,
+    role: "member",
+    targetSubject: testOwnerKey("organization-member")
   });
+  assert.equal(demoted.statusCode, 200);
+  assert.equal(demoted.json.member.role, "member");
 
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    summary: {
-      auditEvents: [
-        {
-          actor: "Admin",
-          description: "更新共享文献库上传权限",
-          id: "audit-1",
-          occurredAt: "2026-05-14T10:30:00Z"
-        }
-      ],
-      canCreateOrganization: true,
-      memberCount: 12,
-      members: [
-        {
-          id: "demo-session-owner",
-          name: "Owner",
-          role: "owner"
-        },
-        {
-          id: "demo-session-1",
-          name: "Liteasy Researcher",
-          role: "member"
-        },
-        {
-          id: "member-2",
-          name: "Admin",
-          role: "admin"
-        }
-      ],
-      myRole: "member",
-      name: "Liteasy AI Reading Lab",
-      notifications: [
-        {
-          id: "notice-1",
-          message: "管理员发布了本周阅读主题。",
-          type: "announcement"
-        },
-        {
-          id: "notice-2",
-          message: "成员上传了 Graph Neural Networks 综述。",
-          type: "document_upload"
-        },
-        {
-          id: "notice-3",
-          message: "共享文献库结构新增 RAG 目录。",
-          type: "library_change"
-        }
-      ],
-      organizationId: "org-demo-1",
-      ownerUserId: "demo-session-owner",
-      quota: {
-        periodEndsAt: "2026-06-01T00:00:00Z",
-        storageLimitGb: 100,
-        storageUsedGb: 38
-      },
-      sharedLibrary: {
-        documentCount: 48,
-        documents: [
-          {
-            id: "org-doc-1",
-            sourcePath: "org://org-demo-1/shared-library/org-doc-1.pdf",
-            title: "Organization Reading List: Retrieval-Augmented Generation"
-          },
-          {
-            id: "org-doc-2",
-            sourcePath: "org://org-demo-1/shared-library/org-doc-2.pdf",
-            title: "Team Notes on Long-Context Evaluation"
-          }
-        ],
-        name: "组织共享文献库",
-        ownerUserId: "demo-session-owner",
-        status: "available"
-      },
-      taskSummary: {
-        failed: 1,
-        running: 2
-      }
-    }
+  const forbiddenGovernance = await invokeAs(
+    "organization-member",
+    "/v1/org/governance-summary",
+    { organizationId }
+  );
+  assert.equal(forbiddenGovernance.statusCode, 403);
+  assert.equal(forbiddenGovernance.json.code, "organization_role_forbidden");
+
+  const governance = await invokeAs(
+    "organization-owner",
+    "/v1/org/governance-summary",
+    { organizationId }
+  );
+  assert.equal(governance.statusCode, 200);
+  assert.equal(governance.json.summary.policy.uploadPolicy, "owner_admins");
+  assert.equal(governance.json.summary.policy.exportPolicy, "disabled");
+
+  const summary = await invokeAs("organization-member", "/v1/org/summary", {
+    organizationId
   });
-});
-
-test("returns a demo organization shared library manifest", async () => {
-  const response = await invokeHandler({
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      organizationId: "org-demo-1",
-      sessionId: "demo-session-1"
-    }),
-    url: "/v1/org/shared-library/manifest"
+  assert.deepEqual(summary.json.summary.policy, {
+    exportPolicy: "disabled",
+    uploadPolicy: "owner_admins"
   });
+  const memberPolicy = await invokeAs("organization-member", "/v1/org/storage-policy", {
+    organizationId
+  });
+  assert.equal(memberPolicy.json.role, "member");
 
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json.manifest.organizationId, "org-demo-1");
-  assert.equal(response.json.manifest.name, "组织共享文献库");
-  assert.equal(response.json.manifest.status, "available");
-  assert.equal(response.json.manifest.rootFolderId, "org-demo-1-root");
-  assert.deepEqual(response.json.manifest.folders, [
-    {
-      id: "org-demo-1-root",
-      name: "组织共享文献库",
-      parentId: null,
-      path: "org://org-demo-1/shared-library"
-    },
-    {
-      id: "org-demo-1-rag",
-      name: "RAG",
-      parentId: "org-demo-1-root",
-      path: "org://org-demo-1/shared-library/RAG"
-    },
-    {
-      id: "org-demo-1-eval",
-      name: "Evaluation",
-      parentId: "org-demo-1-root",
-      path: "org://org-demo-1/shared-library/Evaluation"
-    }
-  ]);
-  assert.deepEqual(response.json.manifest.documents, [
-    {
-      folderId: "org-demo-1-rag",
-      id: "org-doc-1",
-      sourcePath: "org://org-demo-1/shared-library/RAG/org-doc-1.pdf",
-      title: "Organization Reading List: Retrieval-Augmented Generation"
-    },
-    {
-      folderId: "org-demo-1-eval",
-      id: "org-doc-2",
-      sourcePath: "org://org-demo-1/shared-library/Evaluation/org-doc-2.pdf",
-      title: "Team Notes on Long-Context Evaluation"
-    }
-  ]);
-});
-
-test("enforces organization upload, duplicate, and administrator recycle-bin rules", async () => {
-  const handler = createDevCloudRequestHandler({ databasePath: ":memory:" });
-  const pdf = Buffer.from("%PDF-1.7\norganization fixture\n%%EOF");
-  const upload = (duplicateAction) => invokeHandler({
-    body: pdf,
+  const uploaded = await invokeHandler({
+    body: Buffer.from("%PDF-1.7\nOrganization export policy\n%%EOF"),
     handler,
     headers: {
       "content-type": "application/pdf",
-      "x-liteasy-duplicate-action": duplicateAction,
-      "x-liteasy-file-name": encodeURIComponent("Shared.pdf"),
-      "x-liteasy-scope-id": "org-demo-1",
+      "x-idempotency-key": "organization-export-upload",
+      "x-liteasy-expected-revision": "0",
+      "x-liteasy-file-name": encodeURIComponent("Policy.pdf"),
+      "x-liteasy-scope-id": organizationId,
       "x-liteasy-scope-type": "organization",
-      "x-liteasy-session-id": "demo-session-1"
+      "x-liteasy-session-id": "organization-owner"
     },
     method: "POST",
     url: "/v1/library/documents/upload"
   });
-
-  const first = await upload(undefined);
-  assert.equal(first.statusCode, 200);
-  assert.equal(first.json.status, "imported");
-  const duplicate = await upload(undefined);
-  assert.equal(duplicate.json.status, "duplicate");
-  const copy = await upload("save_copy");
-  assert.equal(copy.json.document.fileName, "Shared (2).pdf");
-  assert.notEqual(copy.json.document.documentId, first.json.document.documentId);
-  assert.equal(copy.json.document.contentHash, first.json.document.contentHash);
-
-  const memberTrash = await invokeHandler({
-    body: JSON.stringify({
-      documentId: first.json.document.documentId,
-      scopeId: "org-demo-1",
-      scopeType: "organization",
-      sessionId: "demo-session-1"
-    }),
-    handler,
-    headers: { "content-type": "application/json" },
-    method: "POST",
-    url: "/v1/library/documents/trash"
-  });
-  assert.equal(memberTrash.statusCode, 403);
-
-  const ownerTrash = await invokeHandler({
-    body: JSON.stringify({
-      documentId: first.json.document.documentId,
-      scopeId: "org-demo-1",
-      scopeType: "organization",
-      sessionId: "demo-session-owner"
-    }),
-    handler,
-    headers: { "content-type": "application/json" },
-    method: "POST",
-    url: "/v1/library/documents/trash"
-  });
-  assert.equal(ownerTrash.statusCode, 200);
-  assert.equal(ownerTrash.json.document.status, "trashed");
-});
-
-
-test("returns a demo organization governance summary", async () => {
-  const response = await invokeHandler({
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      organizationId: "org-demo-1",
-      sessionId: "demo-session-1"
-    }),
-    url: "/v1/org/governance-summary"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    summary: {
-      auditQueue: {
-        highRisk: 1,
-        pendingReview: 3
+  assert.equal(uploaded.statusCode, 200, JSON.stringify(uploaded.json));
+  const documentId = uploaded.json.document.documentId;
+  const createdAnnotation = await invokeAs(
+    "organization-owner",
+    "/v1/org/annotations/create",
+    {
+      body: {
+        clientAnnotationId: "local-annotation-1",
+        excerpt: "Organization evidence",
+        kind: "note",
+        note: "Initial note",
+        page: 1,
+        rects: [],
+        text: "批注",
+        updatedAt: "2026-08-06T00:00:00.000Z"
       },
-      quota: {
-        modelCallsLimit: 10000,
-        modelCallsUsed: 4200,
-        storageLimitGb: 100,
-        storageUsedGb: 38
-      },
-      recentAuditEvents: [
-        {
-          id: "audit-1",
-          label: "Admin 更新共享文献库上传权限",
-          risk: "medium"
-        }
-      ],
-      runningTasks: [
-        {
-          id: "task-1",
-          label: "组织共享文献库索引刷新",
-          status: "running"
-        }
-      ]
+      documentId,
+      idempotencyKey: "team-annotation-create-1",
+      organizationId
     }
-  });
-});
-
-
-test("returns organization-specific governance summary", async () => {
-  const response = await invokeHandler({
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      host: "127.0.0.1:8787"
-    },
-    body: JSON.stringify({
-      organizationId: "org-demo-2",
-      sessionId: "demo-session-1"
-    }),
-    url: "/v1/org/governance-summary"
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json, {
-    summary: {
-      auditQueue: {
-        highRisk: 0,
-        pendingReview: 1
+  );
+  assert.equal(createdAnnotation.statusCode, 200, JSON.stringify(createdAnnotation.json));
+  assert.equal(createdAnnotation.json.revision, 1);
+  assert.equal(createdAnnotation.json.uploadedBy, testOwnerKey("organization-owner"));
+  const annotationId = createdAnnotation.json.annotationId;
+  const listedAnnotations = await invokeAs(
+    "organization-member",
+    "/v1/org/annotations/list",
+    { documentId, organizationId }
+  );
+  assert.equal(listedAnnotations.statusCode, 200);
+  assert.equal(listedAnnotations.json.annotations[0].annotationId, annotationId);
+  const updatedAnnotation = await invokeAs(
+    "organization-owner",
+    "/v1/org/annotations/update",
+    {
+      annotationId,
+      body: {
+        ...createdAnnotation.json.body,
+        note: "Revised note",
+        updatedAt: "2026-08-06T00:01:00.000Z"
       },
-      quota: {
-        modelCallsLimit: 5000,
-        modelCallsUsed: 900,
-        storageLimitGb: 50,
-        storageUsedGb: 12
-      },
-      recentAuditEvents: [
-        {
-          id: "audit-ops-1",
-          label: "Ops Admin 新增 QA 目录",
-          risk: "low"
-        }
-      ],
-      runningTasks: [
-        {
-          id: "task-ops-1",
-          label: "文献运营共享库目录同步",
-          status: "running"
-        }
-      ]
+      expectedRevision: 1,
+      idempotencyKey: "team-annotation-update-1",
+      organizationId
     }
+  );
+  assert.equal(updatedAnnotation.statusCode, 200);
+  assert.equal(updatedAnnotation.json.revision, 2);
+  assert.equal(updatedAnnotation.json.body.note, "Revised note");
+  const forbiddenAnnotationDelete = await invokeAs(
+    "organization-member",
+    "/v1/org/annotations/delete",
+    {
+      annotationId,
+      expectedRevision: 2,
+      idempotencyKey: "team-annotation-delete-member",
+      organizationId
+    }
+  );
+  assert.equal(forbiddenAnnotationDelete.statusCode, 403);
+  assert.equal(forbiddenAnnotationDelete.json.code, "annotation_delete_forbidden");
+  const deletedAnnotation = await invokeAs(
+    "organization-owner",
+    "/v1/org/annotations/delete",
+    {
+      annotationId,
+      expectedRevision: 2,
+      idempotencyKey: "team-annotation-delete-owner",
+      organizationId
+    }
+  );
+  assert.equal(deletedAnnotation.statusCode, 200);
+  assert.equal(deletedAnnotation.json.deleted, true);
+  const forbiddenExport = await invokeAs(
+    "organization-member",
+    "/v1/library/documents/export",
+    { documentId, scopeId: organizationId, scopeType: "organization" }
+  );
+  assert.equal(forbiddenExport.statusCode, 403);
+  assert.equal(forbiddenExport.json.code, "organization_export_forbidden");
+
+  const updatedPolicy = await invokeAs(
+    "organization-owner",
+    "/v1/org/storage-policy/update",
+    { exportPolicy: "all_members", organizationId, uploadPolicy: "all_members" }
+  );
+  assert.equal(updatedPolicy.statusCode, 200);
+  assert.equal(updatedPolicy.json.exportPolicy, "all_members");
+  assert.equal(updatedPolicy.json.uploadPolicy, "all_members");
+
+  const allowedExport = await invokeAs(
+    "organization-member",
+    "/v1/library/documents/export",
+    { documentId, scopeId: organizationId, scopeType: "organization" }
+  );
+  assert.equal(allowedExport.statusCode, 200);
+  assert.match(allowedExport.body, /^%PDF-/);
+
+  const ownerLeave = await invokeAs("organization-owner", "/v1/org/leave", { organizationId });
+  assert.equal(ownerLeave.statusCode, 403);
+  assert.equal(ownerLeave.json.code, "organization_owner_leave_blocked");
+
+  const suspended = await invokeAs("organization-owner", "/v1/org/members/status", {
+    organizationId,
+    status: "suspended",
+    targetSubject: testOwnerKey("organization-member")
   });
+  assert.equal(suspended.statusCode, 200);
+  assert.equal(suspended.json.member.status, "suspended");
+  const resumed = await invokeAs("organization-owner", "/v1/org/members/status", {
+    organizationId,
+    status: "active",
+    targetSubject: testOwnerKey("organization-member")
+  });
+  assert.equal(resumed.statusCode, 200);
+  assert.equal(resumed.json.member.status, "active");
+  const transferred = await invokeAs("organization-owner", "/v1/org/owner/transfer", {
+    organizationId,
+    targetSubject: testOwnerKey("organization-member")
+  });
+  assert.equal(transferred.statusCode, 200);
+  assert.equal(transferred.json.newOwnerSubject, testOwnerKey("organization-member"));
 });
 
 test("returns an audit score from the model audit endpoint", async () => {
@@ -3892,8 +4080,8 @@ test("returns an audit score from the model audit endpoint", async () => {
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json, {
     audit: {
-      model: "gpt-5-mini-auditor",
-      rationale: "开发云审计确认回答包含可追溯引用。",
+      model: "deterministic-citation-check/v1",
+      rationale: "确定性检查发现回答包含可追溯引用。",
       score: 0.86,
       verdict: "pass"
     }
@@ -3902,7 +4090,7 @@ test("returns an audit score from the model audit endpoint", async () => {
 
 test("POST /v1/works/resolve resolves a paper identity and is idempotent", async () => {
   const body = JSON.stringify({
-    sessionId: "demo-session-1",
+    sessionId: "test-session-1",
     identities: [
       { kind: "doi", value: "10.1145/3459615", sourceProvider: "crossref" },
       { kind: "arxiv", value: "2106.04561", relation: "is_preprint_of", sourceProvider: "arxiv" }
@@ -3937,7 +4125,7 @@ test("POST /v1/works/resolve resolves a paper identity and is idempotent", async
 test("POST /v1/works/resolve rejects invalid identity kind with 400", async () => {
   const response = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       identities: [{ kind: "bogus", value: "x" }]
     }),
     handlerOptions: { recommendationMode: "demo" },
@@ -3945,18 +4133,18 @@ test("POST /v1/works/resolve rejects invalid identity kind with 400", async () =
     url: "/v1/works/resolve"
   });
   assert.equal(response.statusCode, 400);
-  assert.equal(response.json.error, "invalid_work_identity_kind");
+  assert.equal(response.json.code, "invalid_work_identity_kind");
 });
 
 test("POST /v1/works/resolve rejects empty identities with 400", async () => {
   const response = await invokeHandler({
-    body: JSON.stringify({ sessionId: "demo-session-1", identities: [] }),
+    body: JSON.stringify({ sessionId: "test-session-1", identities: [] }),
     handlerOptions: { recommendationMode: "demo" },
     method: "POST",
     url: "/v1/works/resolve"
   });
   assert.equal(response.statusCode, 400);
-  assert.equal(response.json.error, "invalid_work_identity_count");
+  assert.equal(response.json.code, "invalid_work_identity_count");
 });
 
 test("GET /v1/works/resolve reports method not allowed", async () => {
@@ -3966,7 +4154,7 @@ test("GET /v1/works/resolve reports method not allowed", async () => {
     url: "/v1/works/resolve"
   });
   assert.equal(response.statusCode, 405);
-  assert.equal(response.json.error, "method_not_allowed");
+  assert.equal(response.json.code, "method_not_allowed");
 });
 
 test("service index advertises POST /v1/works/resolve", async () => {
@@ -4019,7 +4207,7 @@ test("GET /v1/concepts/:code returns 404 for unknown code", async () => {
     url: "/v1/concepts/9999"
   });
   assert.equal(response.statusCode, 404);
-  assert.equal(response.json.error, "concept_not_found");
+  assert.equal(response.json.code, "concept_not_found");
 });
 
 test("POST /v1/concepts reports method not allowed", async () => {
@@ -4029,7 +4217,7 @@ test("POST /v1/concepts reports method not allowed", async () => {
     url: "/v1/concepts"
   });
   assert.equal(response.statusCode, 405);
-  assert.equal(response.json.error, "method_not_allowed");
+  assert.equal(response.json.code, "method_not_allowed");
 });
 
 test("service index advertises concept endpoints", async () => {
@@ -4045,7 +4233,7 @@ test("service index advertises concept endpoints", async () => {
 test("POST /v1/works/:workId/index auto-tags a resolved work", async () => {
   const resolve = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       identities: [{ kind: "doi", value: "10.1/indextest" }],
       title: "ColBERT Efficient Passage Representation",
       year: 2021
@@ -4081,14 +4269,14 @@ test("POST /v1/works/:workId/index rejects missing text with 400", async () => {
     url: "/v1/works/w_dummy/index"
   });
   assert.equal(response.statusCode, 400);
-  assert.equal(response.json.error, "missing_index_text");
+  assert.equal(response.json.code, "missing_index_text");
 });
 
 test("GET /v1/tags/:id/works returns works sharing a tag", async () => {
   for (const doi of ["10.1/tagwork1", "10.1/tagwork2"]) {
     const resolve = await invokeHandler({
       body: JSON.stringify({
-        sessionId: "demo-session-1",
+        sessionId: "test-session-1",
         identities: [{ kind: "doi", value: doi }],
         title: "ColBERT Dense Retrieval"
       }),
@@ -4127,7 +4315,7 @@ test("GET /v1/tags/:id returns 404 for unknown tag", async () => {
     url: "/v1/tags/t_doesnotexist1234"
   });
   assert.equal(response.statusCode, 404);
-  assert.equal(response.json.error, "tag_not_found");
+  assert.equal(response.json.code, "tag_not_found");
 });
 
 test("service index advertises tag endpoints", async () => {
@@ -4147,7 +4335,7 @@ test("profile/get exposes reading-derived tags and signal with workId links them
   // Resolve + index a paper so it has canonical tags.
   const resolve = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       identities: [{ kind: "doi", value: "10.1/profile-tag-endpoint" }],
       title: "ColBERT Dense Retrieval"
     }),
@@ -4166,7 +4354,7 @@ test("profile/get exposes reading-derived tags and signal with workId links them
   // Open the paper: signal carries workId so the work's tags land in the profile.
   const signal = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       signal: { kind: "paper_opened", title: "ColBERT Dense Retrieval", workId }
     }),
     handler,
@@ -4180,7 +4368,7 @@ test("profile/get exposes reading-derived tags and signal with workId links them
 
   // profile/get also exposes the tags.
   const profile = await invokeHandler({
-    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    body: JSON.stringify({ sessionId: "test-session-1" }),
     handler,
     method: "POST",
     url: "/v1/profile/get"
@@ -4192,7 +4380,7 @@ test("signal with invalid workId still records title-derived tags", async () => 
   const handler = createDevCloudRequestHandler();
   const signal = await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       signal: { kind: "paper_opened", title: "神经信息检索方法", workId: "bad id" }
     }),
     handler,
@@ -4227,7 +4415,7 @@ test("tag-driven recommendation surfaces candidates with surfacing tag provenanc
   // Give the user reading-derived tags.
   await invokeHandler({
     body: JSON.stringify({
-      sessionId: "demo-session-1",
+      sessionId: "test-session-1",
       signal: { kind: "paper_opened", title: "ColBERT Retrieval" }
     }),
     handler,
@@ -4237,7 +4425,7 @@ test("tag-driven recommendation surfaces candidates with surfacing tag provenanc
 
   // No selectedDocuments: recommendation is driven purely by user top tags.
   const response = await invokeHandler({
-    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    body: JSON.stringify({ sessionId: "test-session-1" }),
     handler,
     method: "POST",
     url: "/v1/recommendations"
@@ -4256,7 +4444,7 @@ test("recommendations returns empty when no selected documents and no user tags"
     searchExternalKnowledge: async () => ({ sources: [] })
   });
   const response = await invokeHandler({
-    body: JSON.stringify({ sessionId: "demo-session-1" }),
+    body: JSON.stringify({ sessionId: "test-session-1" }),
     handler,
     method: "POST",
     url: "/v1/recommendations"

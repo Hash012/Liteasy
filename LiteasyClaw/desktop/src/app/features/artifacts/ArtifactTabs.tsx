@@ -22,12 +22,15 @@ import type { MineruFigure } from "../import/import.types";
 import type { VisualizationTabData } from "../visualization/visualization.types";
 import { AgentLiveWorkPanel } from "../agent-work/AgentLiveWorkPanel";
 import { ArtifactExportMenu } from "./ArtifactExportMenu";
+import { presentArtifactFailure } from "./artifactFailurePresentation";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
   analysisHint: string;
   canStartAnalysis: boolean;
+  developerDiagnostics?: boolean;
   intuechoEndpoint?: string;
+  intuechoSessionId?: string;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
   onActivateArtifact?: (artifactId: string) => void;
@@ -47,8 +50,6 @@ type ArtifactTabsProps = {
     request: ArtifactRegenerationRequest
   ) => string | void | Promise<string | void>;
   onRetryInterruptedThinReadingBranch?: (taskId: string) => Promise<void>;
-  onSaveMarkdownTab?: (artifactId: string) => void;
-  onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
   onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   selectedCount: number;
@@ -162,7 +163,9 @@ export function ArtifactTabs({
   activeArtifactId,
   analysisHint,
   canStartAnalysis,
+  developerDiagnostics = false,
   intuechoEndpoint,
+  intuechoSessionId,
   mineruFiguresByPaperId,
   onLoadForumFeed,
   onActivateArtifact,
@@ -176,8 +179,6 @@ export function ArtifactTabs({
   onSyncThinReadingAnnotations,
   onRegenerateArtifact,
   onRetryInterruptedThinReadingBranch,
-  onSaveMarkdownTab,
-  onUpdateMarkdownTab,
   onUpdateThinReadingDocument,
   onStartAnalysis,
   selectedCount,
@@ -200,6 +201,9 @@ export function ArtifactTabs({
   ));
   const activeVerification = activeTab?.verification ?? activeTab?.mindmapArtifact?.verification;
   const activeMindmapSources = activeTab?.mindmapArtifact?.sources;
+  const activeFailure = activeTask?.failure
+    ? presentArtifactFailure(activeTask.failure, developerDiagnostics)
+    : undefined;
 
   useEffect(() => {
     setRegenerationOpen(false);
@@ -261,6 +265,7 @@ export function ArtifactTabs({
         document={document}
         headerAction={<ArtifactExportMenu tab={{ ...activeTab, thinReadingDocument: document }} />}
         intuechoEndpoint={intuechoEndpoint}
+        intuechoSessionId={intuechoSessionId}
         generationProgress={activeThinReadingTask?.status === "running" ? {
           message: activeThinReadingTask.message,
           partialAnswer: activeThinReadingTask.partialAnswer,
@@ -269,7 +274,9 @@ export function ArtifactTabs({
           stageLabel: taskStageLabels[activeThinReadingTask.stage]
         } : undefined}
         taskFailureMessage={activeThinReadingTask?.status === "failed"
-          ? activeThinReadingTask.failure?.message ?? activeThinReadingTask.message
+          ? activeThinReadingTask.failure
+            ? presentArtifactFailure(activeThinReadingTask.failure, developerDiagnostics).message
+            : "生成任务未完成，请稍后重试。"
           : undefined}
         onRetryInterruptedBranch={activeThinReadingTask?.status === "failed" &&
           activeThinReadingTask.recoveredAfterRestart &&
@@ -339,7 +346,7 @@ export function ArtifactTabs({
         <section className={`artifact-progress-panel ${activeTask.status}`} aria-live="polite">
           <div className="artifact-progress-copy">
             <div>
-              <strong>{activeTask.message}</strong>
+              <strong>{activeFailure?.message ?? activeTask.message}</strong>
               <small>当前阶段：{taskStageLabels[activeTask.stage]}</small>
             </div>
             <span>{activeTask.progress}%</span>
@@ -371,22 +378,31 @@ export function ArtifactTabs({
               </div>
             ) : null}
           </div>
-          {activeTask.failure ? (
+          {activeTask.failure && activeFailure ? (
             <details className="artifact-failure-diagnostic" open>
-              <summary>查看失败详情与恢复建议</summary>
+              <summary>查看错误信息与恢复建议</summary>
               <dl>
-                <div><dt>原因</dt><dd>{activeTask.failure.message}</dd></div>
+                <div><dt>错误编号</dt><dd>{activeFailure.code}</dd></div>
+                <div><dt>原因</dt><dd>{activeFailure.message}</dd></div>
                 <div><dt>失败阶段</dt><dd>{taskStageLabels[activeTask.failure.failedStage]}</dd></div>
-                {activeTask.failure.endpoint ? (
-                  <div><dt>Agent 服务端点</dt><dd>{activeTask.failure.endpoint}</dd></div>
-                ) : null}
-                {activeTask.failure.provider ? (
-                  <div><dt>Provider</dt><dd>{activeTask.failure.provider}</dd></div>
-                ) : null}
-                {activeTask.failure.model ? (
-                  <div><dt>Model</dt><dd>{activeTask.failure.model}</dd></div>
-                ) : null}
                 <div><dt>时间</dt><dd>{activeTask.failure.occurredAt}</dd></div>
+                {activeFailure.traceId ? (
+                  <div><dt>追踪编号</dt><dd>{activeFailure.traceId}</dd></div>
+                ) : null}
+                {activeFailure.diagnostics ? (
+                  <>
+                    <div><dt>内部异常</dt><dd>{activeFailure.diagnostics.message}</dd></div>
+                    {activeFailure.diagnostics.endpoint ? (
+                      <div><dt>服务端点</dt><dd>{activeFailure.diagnostics.endpoint}</dd></div>
+                    ) : null}
+                    {activeFailure.diagnostics.provider ? (
+                      <div><dt>Provider</dt><dd>{activeFailure.diagnostics.provider}</dd></div>
+                    ) : null}
+                    {activeFailure.diagnostics.model ? (
+                      <div><dt>Model</dt><dd>{activeFailure.diagnostics.model}</dd></div>
+                    ) : null}
+                  </>
+                ) : null}
               </dl>
               <ul>
                 {activeTask.failure.recovery.map((item) => <li key={item}>{item}</li>)}
@@ -420,22 +436,11 @@ export function ArtifactTabs({
                 <div className="skill-doc-path">{activeTab.sourcePath}</div>
               ) : null}
             </div>
-            <div className="skill-doc-actions">
-              <button
-                className="skill-doc-save-button"
-                onClick={() => onSaveMarkdownTab?.(activeTab.artifactId)}
-                type="button"
-              >
-                保存文档
-              </button>
-            </div>
           </div>
-          <textarea
-            aria-label={`编辑 Skill 文档：${activeTab.title}`}
+          <pre
+            aria-label={`Skill 文档内容：${activeTab.title}`}
             className="skill-doc-editor"
-            onChange={(event) => onUpdateMarkdownTab?.(activeTab.artifactId, event.target.value)}
-            value={activeTab.markdown ?? ""}
-          />
+          >{activeTab.markdown ?? ""}</pre>
         </div>
       ) : (
         <div className="artifact-card">
@@ -489,7 +494,7 @@ export function ArtifactTabs({
           </div>
           {activeTab.resultPath ? (
             <div className="artifact-result-meta">
-              已由 Agent 生成并保存 · {activeTab.resultPath}
+              已由 Agent 生成并保存到当前账号
             </div>
           ) : null}
           {activeTab.regeneratedFromArtifactId ? (

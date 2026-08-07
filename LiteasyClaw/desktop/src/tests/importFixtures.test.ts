@@ -1,4 +1,4 @@
-import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
+import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 
 test("builds vector database survey fixture chunks for an imported paper", () => {
   const chunks = buildImportedChunksForPaper({

@@ -1,5 +1,6 @@
 import type { AgentArtifactResult } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
+import { loadStoredAccountSession } from "../account/accountSessionStorage";
 
 type ArtifactResultTransport = (
   url: string,
@@ -12,6 +13,12 @@ type ArtifactResultTransport = (
 
 function endpoint(baseEndpoint: string) {
   return `${baseEndpoint.replace(/\/$/, "")}/v1/agent-artifacts`;
+}
+
+function requireAccessToken(getAccessToken: () => string | undefined) {
+  const token = getAccessToken()?.trim();
+  if (!token) throw new Error("请先登录，再访问 Agent 产物。");
+  return token;
 }
 
 function isArtifactResult(value: unknown): value is AgentArtifactResult {
@@ -36,28 +43,37 @@ function isArtifactResult(value: unknown): value is AgentArtifactResult {
 }
 
 export function createArtifactResultClient(input: {
+  getAccessToken?: () => string | undefined;
   getBaseEndpoint: () => string;
   transport?: ArtifactResultTransport;
 }) {
   const transport = input.transport ?? fetch;
+  const getAccessToken = input.getAccessToken ?? (() => loadStoredAccountSession()?.sessionId);
+  const authorizationHeaders = () => ({
+    Authorization: `Bearer ${requireAccessToken(getAccessToken)}`
+  });
   return {
     async delete(artifactId: string) {
       const response = await transport(
         `${endpoint(input.getBaseEndpoint())}/${encodeURIComponent(artifactId)}`,
-        { method: "DELETE" }
+        { headers: authorizationHeaders(), method: "DELETE" }
       );
       const payload = await response.json() as {
         artifactId?: string;
+        code?: string;
         deleted?: boolean;
         error?: string;
+        message?: string;
       };
       if (!response.ok || payload.deleted !== true || payload.artifactId !== artifactId) {
-        throw new Error(payload.error ?? `删除 Agent 产物失败：HTTP ${response.status}`);
+        throw new Error(payload.message ?? payload.code ?? payload.error ?? `删除 Agent 产物失败：HTTP ${response.status}`);
       }
     },
 
     async list() {
-      const response = await transport(endpoint(input.getBaseEndpoint()));
+      const response = await transport(endpoint(input.getBaseEndpoint()), {
+        headers: authorizationHeaders()
+      });
       if (!response.ok) {
         throw new Error(`加载 Agent 产物失败：HTTP ${response.status}`);
       }
@@ -70,7 +86,7 @@ export function createArtifactResultClient(input: {
         `${endpoint(input.getBaseEndpoint())}/${encodeURIComponent(artifactId)}`,
         {
           body: JSON.stringify({ title }),
-          headers: { "Content-Type": "application/json" },
+          headers: { ...authorizationHeaders(), "Content-Type": "application/json" },
           method: "PATCH"
         }
       );
@@ -84,7 +100,7 @@ export function createArtifactResultClient(input: {
     async save(document: AgentArtifactResult) {
       const response = await transport(endpoint(input.getBaseEndpoint()), {
         body: JSON.stringify(document),
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authorizationHeaders(), "Content-Type": "application/json" },
         method: "POST"
       });
       const payload = await response.json() as { error?: string; path?: string };

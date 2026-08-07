@@ -2,7 +2,6 @@ import { formatCloudConnectionError } from "../network/cloudErrorMessage";
 import { useEffect, useRef, useState } from "react";
 import {
   createAuthenticatedCloudAccountSession,
-  createCloudAccountSession,
   createRegisteredCloudAccountSession,
   revokeCloudAccountSession,
   validateStoredCloudAccountSession
@@ -21,19 +20,37 @@ import type {
 } from "./accountSessionClient";
 import type { AccountSession } from "./account.types";
 import type { SettingsState } from "../settings/settings.types";
+import {
+  isDesktopIdentityHostAvailable,
+  loginWithSystemBrowser,
+  restoreSystemBrowserSession,
+  revokeSystemBrowserSession,
+  type DesktopIdentityInvoke
+} from "./desktopIdentityClient";
 
 type UseAccountSessionInput = {
   accountTransport?: AccountTransport;
+  desktopIdentityInvoke?: DesktopIdentityInvoke;
+  desktopIdentityHostAvailable?: boolean;
+  desktopIdentityFetch?: typeof fetch;
   getSettings: () => SettingsState;
   onSessionRestored?: () => void;
 };
 
-export function useAccountSession({ accountTransport, getSettings, onSessionRestored }: UseAccountSessionInput) {
+export function useAccountSession({
+  accountTransport,
+  desktopIdentityHostAvailable = isDesktopIdentityHostAvailable(),
+  desktopIdentityFetch,
+  desktopIdentityInvoke,
+  getSettings,
+  onSessionRestored
+}: UseAccountSessionInput) {
   const onSessionRestoredRef = useRef(onSessionRestored);
   onSessionRestoredRef.current = onSessionRestored;
   const [accountSession, setAccountSession] = useState<AccountSession | null>(null);
   const [accountPending, setAccountPending] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | undefined>();
+  const [authenticationMode, setAuthenticationMode] = useState<"development" | "oauth" | null>(null);
   const [shouldShowLoginReminder, setShouldShowLoginReminder] = useState(
     !loadSuppressLoginReminderPreference()
   );
@@ -50,8 +67,7 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
           transport: accountTransport
         })
           .then((validatedSession) => {
-            setAccountSession(validatedSession);
-            storeAccountSession(validatedSession);
+            setAccountSession(storeAccountSession(validatedSession));
             setAccountMessage("云账号会话有效。");
           })
           .catch(() => {
@@ -60,26 +76,49 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
             setAccountMessage("登录会话已过期，请重新登录。");
           });
       }
+      return;
+    }
+    if (desktopIdentityHostAvailable) {
+      setAccountPending(true);
+      void restoreSystemBrowserSession({
+        endpoint: getSettings()["models.control_plane_endpoint"],
+        fetchImpl: desktopIdentityFetch,
+        invoke: desktopIdentityInvoke
+      })
+        .then((restoredSession) => {
+          setAccountSession(storeAccountSession(restoredSession));
+          setAuthenticationMode("oauth");
+          setAccountMessage("登录会话已从操作系统安全存储恢复。");
+          onSessionRestoredRef.current?.();
+        })
+        .catch((error) => {
+          const code = error instanceof Error ? error.message : String(error);
+          if (!code.includes("oauth_session_not_found") && !code.includes("oauth_configuration_unavailable")) {
+            setAccountMessage("无法恢复登录会话，请重新登录。");
+          }
+        })
+        .finally(() => setAccountPending(false));
     }
   }, []);
 
-  async function loginToCloudAccount() {
+  async function loginPersonalAccountWithSystemBrowser() {
     setAccountPending(true);
-    setAccountMessage("正在登录云账号...");
-
+    setAccountMessage("正在打开系统浏览器进行安全登录...");
     try {
-      const session = await createCloudAccountSession(getSettings(), {
-        transport: accountTransport
+      const session = await loginWithSystemBrowser({
+        endpoint: getSettings()["models.control_plane_endpoint"],
+        fetchImpl: desktopIdentityFetch,
+        invoke: desktopIdentityInvoke
       });
-      setAccountSession(session);
-      storeAccountSession(session);
-      setAccountMessage("已登录云账号，会话已保存在本地。");
+      setAccountSession(storeAccountSession(session));
+      setAuthenticationMode("oauth");
+      setAccountMessage("登录成功；刷新凭据已保存在操作系统安全存储中。");
       return session;
     } catch (error) {
-      const detail = formatCloudConnectionError(error, {
-        controlPlaneEndpoint: getSettings()["models.control_plane_endpoint"]
-      });
-      setAccountMessage(`云账号登录失败。详细信息：${detail}`);
+      const code = error instanceof Error ? error.message : String(error);
+      setAccountMessage(code.includes("oauth_authorization_denied")
+        ? "登录已取消。"
+        : "系统浏览器登录失败，请检查身份服务配置后重试。");
       return null;
     } finally {
       setAccountPending(false);
@@ -94,9 +133,9 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
       const session = await createAuthenticatedCloudAccountSession(getSettings(), login, {
         transport: accountTransport
       });
-      setAccountSession(session);
-      storeAccountSession(session);
-      setAccountMessage("登录成功，会话已安全保存在本地。");
+      setAccountSession(storeAccountSession(session));
+      setAuthenticationMode("development");
+      setAccountMessage("本地开发登录成功；会话仅在本次运行期间保留。");
       return session;
     } catch (error) {
       const detail = formatCloudConnectionError(error, {
@@ -117,9 +156,9 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
       const session = await createRegisteredCloudAccountSession(getSettings(), registration, {
         transport: accountTransport
       });
-      setAccountSession(session);
-      storeAccountSession(session);
-      setAccountMessage("已注册并登录云账号，会话已保存在本地。");
+      setAccountSession(storeAccountSession(session));
+      setAuthenticationMode("development");
+      setAccountMessage("本地开发账号已创建；会话仅在本次运行期间保留。");
       return session;
     } catch (error) {
       const detail = formatCloudConnectionError(error, {
@@ -138,7 +177,15 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
     clearStoredAccountSession();
     setAccountMessage("已断开当前云账号会话。");
 
-    if (sessionId?.startsWith("ltsy_")) {
+    if (authenticationMode === "oauth") {
+      void revokeSystemBrowserSession({
+        endpoint: getSettings()["models.control_plane_endpoint"],
+        fetchImpl: desktopIdentityFetch,
+        invoke: desktopIdentityInvoke
+      }).catch(() => {
+        // The local credential is removed by the host before remote revocation.
+      });
+    } else if (sessionId?.startsWith("ltsy_")) {
       void revokeCloudAccountSession(getSettings(), sessionId, {
         transport: accountTransport
       }).catch(() => {
@@ -157,8 +204,8 @@ export function useAccountSession({ accountTransport, getSettings, onSessionRest
     accountMessage,
     accountPending,
     accountSession,
+    loginPersonalAccountWithSystemBrowser,
     loginPersonalAccount,
-    loginToCloudAccount,
     logoutFromCloudAccount,
     registerPersonalAccount,
     setSuppressLoginReminder,

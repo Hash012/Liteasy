@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { createDeterministicExternalKnowledgeProvider } from "../app/features/artifact-workflow/externalKnowledgeProvider";
+import { createTestExternalKnowledgeProvider } from "./fixtures/externalKnowledgeProvider";
 
 describe("externalKnowledgeProvider", () => {
   test("returns authoritative concept references for recognized evidence terms", async () => {
-    const provider = createDeterministicExternalKnowledgeProvider();
+    const provider = createTestExternalKnowledgeProvider();
 
     const references = await provider.lookup({
       question: "解释 ColBERT 的 Late Interaction",
@@ -21,7 +21,7 @@ describe("externalKnowledgeProvider", () => {
   });
 
   test("returns no external references for unknown terms instead of inventing sources", async () => {
-    const provider = createDeterministicExternalKnowledgeProvider();
+    const provider = createTestExternalKnowledgeProvider();
 
     await expect(
       provider.lookup({

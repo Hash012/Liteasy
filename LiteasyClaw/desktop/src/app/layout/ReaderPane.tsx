@@ -11,6 +11,7 @@ import type { ReaderConversationContext } from "../features/assistant/assistantC
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
 import type { MineruFigure } from "../features/import/import.types";
+import type { TeamAnnotation } from "../features/organization/teamAnnotationClient";
 import type { VisualizationTabData } from "../features/visualization/visualization.types";
 import type {
   ThinReadingBranchSource,
@@ -25,9 +26,13 @@ type ReaderPaneProps = {
   analysisHint: string;
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
+  developerDiagnostics?: boolean;
   externalKnowledgeEndpoint?: string;
   layoutCollapsed?: PaneCollapseState;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  loadOrganizationAnnotations?: (paper: Paper) => Promise<TeamAnnotation[]>;
+  organizationAnnotationActorId?: string;
+  canModerateOrganizationAnnotations?: boolean;
   onAddExternalPdfToLibrary?: (input: { bytes: Uint8Array; fileName: string; title: string }) => Promise<void>;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
@@ -37,7 +42,17 @@ type ReaderPaneProps = {
   onOpenVisualization?: (data: VisualizationTabData) => void;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
   onPostToForum?: (selection: PdfForumSelection) => Promise<void>;
-  onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ draftId: string }>;
+  onDeleteOrganizationAnnotation?: (input: { annotation: TeamAnnotation; paper: Paper }) => Promise<void>;
+  onShareAnnotationToOrganization?: (input: {
+    annotation: PdfAnnotation;
+    paper: Paper;
+  }) => Promise<TeamAnnotation>;
+  onUpdateOrganizationAnnotation?: (input: {
+    annotation: TeamAnnotation;
+    note: string;
+    paper: Paper;
+  }) => Promise<TeamAnnotation>;
+  onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ intuechoAnnotationId: string }>;
   onGenerateThinReadingBranch?: (input: {
     artifactId: string;
     document: ThinReadingDocument;
@@ -46,14 +61,13 @@ type ReaderPaneProps = {
   onSyncThinReadingAnnotations?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
   onAddReaderContextToConversation?: (context: ReaderConversationContext) => void;
   intuechoEndpoint?: string;
+  intuechoSessionId?: string;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   pdfBackground?: string;
-  onSaveMarkdownTab?: (artifactId: string) => void;
   onStartAnalysis: (artifactType: ArtifactType, selectedPapers?: Paper[]) => void;
   onToggleBottomPane?: () => void;
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
-  onUpdateMarkdownTab?: (artifactId: string, markdown: string) => void;
   onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   showArtifactRegion?: boolean;
   selectedPapers?: Paper[];
@@ -73,9 +87,13 @@ export function ReaderPane({
   analysisHint,
   artifactTabs,
   artifactTasks,
+  developerDiagnostics = false,
   externalKnowledgeEndpoint,
   layoutCollapsed = defaultLayoutCollapsed,
   loadPdfSource,
+  loadOrganizationAnnotations,
+  organizationAnnotationActorId,
+  canModerateOrganizationAnnotations,
   onAddExternalPdfToLibrary,
   onOpenExternalFullText,
   onPaperAnnotated,
@@ -85,19 +103,21 @@ export function ReaderPane({
   onOpenVisualization,
   onLoadForumFeed,
   onPostToForum,
+  onDeleteOrganizationAnnotation,
+  onShareAnnotationToOrganization,
+  onUpdateOrganizationAnnotation,
   onSyncAnnotationToForum,
   onGenerateThinReadingBranch,
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
   intuechoEndpoint,
+  intuechoSessionId,
   mineruFiguresByPaperId,
   pdfBackground,
-  onSaveMarkdownTab,
   onStartAnalysis,
   onToggleBottomPane,
   onToggleLeftPane,
   onToggleRightPane,
-  onUpdateMarkdownTab,
   onUpdateThinReadingDocument,
   selectedPapers = [],
   selectedPaperIds,
@@ -163,10 +183,16 @@ export function ReaderPane({
             allowServerPdfParsing={allowServerPdfParsing}
             externalKnowledgeEndpoint={externalKnowledgeEndpoint}
             loadPdfSource={loadPdfSource}
+            loadOrganizationAnnotations={loadOrganizationAnnotations}
+            organizationAnnotationActorId={organizationAnnotationActorId}
+            canModerateOrganizationAnnotations={canModerateOrganizationAnnotations}
             pdfBackground={pdfBackground}
             onPaperAnnotated={onPaperAnnotated}
             onAddSelectionToConversation={onAddReaderContextToConversation}
             onPostToForum={onPostToForum}
+            onDeleteOrganizationAnnotation={onDeleteOrganizationAnnotation}
+            onShareAnnotationToOrganization={onShareAnnotationToOrganization}
+            onUpdateOrganizationAnnotation={onUpdateOrganizationAnnotation}
             onSyncAnnotationToForum={onSyncAnnotationToForum}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
@@ -177,7 +203,9 @@ export function ReaderPane({
               <ArtifactTabs
                 analysisHint={analysisHint}
                 canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
+                developerDiagnostics={developerDiagnostics}
                 intuechoEndpoint={intuechoEndpoint}
+                intuechoSessionId={intuechoSessionId}
                 mineruFiguresByPaperId={mineruFiguresByPaperId}
                 onDynamicAction={onArtifactDynamicAction}
                 onGenerateThinReadingBranch={onGenerateThinReadingBranch}
@@ -187,9 +215,7 @@ export function ReaderPane({
                 onOpenVisualization={onOpenVisualization}
                 onLoadForumFeed={onLoadForumFeed}
                 onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
-                onSaveMarkdownTab={onSaveMarkdownTab}
                 onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}
-                onUpdateMarkdownTab={onUpdateMarkdownTab}
                 onUpdateThinReadingDocument={onUpdateThinReadingDocument}
                 selectedCount={selectedPaperIds.length}
                 selectionLocked={selectionLocked}

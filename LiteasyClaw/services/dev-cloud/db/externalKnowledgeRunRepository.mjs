@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 const externalKnowledgeCacheMaxAgeMs = 24 * 60 * 60 * 1000;
+const maximumExternalKnowledgeRunsPerOwner = 100;
 
 function normalizeText(value) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
@@ -128,6 +129,18 @@ export function createExternalKnowledgeRunRepository(database) {
     begin(input) {
       const { artifactId, key, ownerScope } = scope(input);
       const now = new Date().toISOString();
+      const expiryCutoff = new Date(Date.now() - externalKnowledgeCacheMaxAgeMs).toISOString();
+      database.prepare(
+        "DELETE FROM external_knowledge_runs WHERE updated_at < ?"
+      ).run(expiryCutoff);
+      database.prepare(`
+        DELETE FROM external_knowledge_runs
+        WHERE owner_scope = ? AND rowid IN (
+          SELECT rowid FROM external_knowledge_runs
+          WHERE owner_scope = ? ORDER BY updated_at DESC, rowid DESC
+          LIMIT -1 OFFSET ?
+        )
+      `).run(ownerScope, ownerScope, maximumExternalKnowledgeRunsPerOwner - 1);
       let row = find.get(ownerScope, artifactId, key);
       if (!row) {
         const identity = normalizeIdentity(input.targetPaperIdentity);

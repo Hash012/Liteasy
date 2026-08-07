@@ -1,13 +1,34 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createImportStore } from "../app/features/import/import.store";
-import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
 import type { ExtractedPdfPage } from "../app/features/import/pdfTextExtractor";
+import type { RetrievalChunk } from "../app/features/retrieval/retrieval.types";
 import { createWorkspaceStore } from "../app/features/workspace/workspace.store";
 import type { Paper, WorkspaceState } from "../app/features/workspace/workspace.types";
 import { useWorkspaceActions } from "../app/features/workspace/useWorkspaceActions";
 import type { MoveLocalLibraryResource } from "../app/features/library/libraryFileSystemClient";
 import type { PersistDroppedPdfFiles } from "../app/features/library/libraryFileSystemClient";
+
+function buildTestChunks(paper: Paper): RetrievalChunk[] {
+  return [
+    {
+      page: 1,
+      paperId: paper.id,
+      paperTitle: paper.title,
+      snippet: "The first extracted passage.",
+      summary: "First passage",
+      tags: ["test"]
+    },
+    {
+      page: 2,
+      paperId: paper.id,
+      paperTitle: paper.title,
+      snippet: "The second extracted passage.",
+      summary: "Second passage",
+      tags: ["test"]
+    }
+  ];
+}
 
 function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
   return {
@@ -22,9 +43,9 @@ function cloneWorkspaceState(state: WorkspaceState): WorkspaceState {
 function renderWorkspaceActions(
   papers: Paper[] = [],
   options: {
-    extractPaperChunks?: (paper: Paper) => Promise<ReturnType<typeof buildImportedChunksForPaper>>;
+    extractPaperChunks?: (paper: Paper) => Promise<RetrievalChunk[]>;
     extractPaperIndex?: (paper: Paper) => Promise<{
-      chunks: ReturnType<typeof buildImportedChunksForPaper>;
+      chunks: RetrievalChunk[];
       pages: ExtractedPdfPage[];
     }>;
     moveLocalLibraryResource?: MoveLocalLibraryResource;
@@ -55,7 +76,7 @@ function renderWorkspaceActions(
       extractPaperChunks: options.extractPaperIndex
         ? undefined
         : options.extractPaperChunks ?? ((paper) => new Promise((resolve) => {
-            window.setTimeout(() => resolve(buildImportedChunksForPaper(paper)), 800);
+            window.setTimeout(() => resolve(buildTestChunks(paper)), 800);
           })),
       extractPaperIndex: options.extractPaperIndex,
       importDocument: vi.fn(() => Promise.resolve()),
@@ -104,36 +125,6 @@ describe("useWorkspaceActions", () => {
     act(() => result.current.toggleSelectionLock());
     expect(workspaceStore.getState().selectionLocked).toBe(false);
     expect(onAnalysisHint).toHaveBeenLastCalledWith("已解除锁定。请调整选中文献集后，再选择 AI 按钮启动分析。");
-  });
-
-  test("adds external papers once and reports duplicate drops", () => {
-    const { onAnalysisHint, result, workspaceStore } = renderWorkspaceActions();
-
-    act(() =>
-      result.current.addExternalPaperToLibrary({
-        id: "rec-1",
-        source: "recommendation",
-        title: "Recommended Paper"
-      })
-    );
-    expect(workspaceStore.getState().papers).toEqual([
-      {
-        id: "rec-1",
-        sourcePath: "external://recommendation/rec-1",
-        title: "Recommended Paper"
-      }
-    ]);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("已将《Recommended Paper》加入我的文献库。");
-
-    act(() =>
-      result.current.addExternalPaperToLibrary({
-        id: "rec-1",
-        source: "recommendation",
-        title: "Recommended Paper"
-      })
-    );
-    expect(workspaceStore.getState().papers).toHaveLength(1);
-    expect(onAnalysisHint).toHaveBeenLastCalledWith("《Recommended Paper》已经在我的文献库中。");
   });
 
   test("persists dropped PDFs in the selected local library folder instead of using a localhost blob URL", async () => {
@@ -262,6 +253,45 @@ describe("useWorkspaceActions", () => {
     ]);
   });
 
+  test("moves an empty directory through the local file system", async () => {
+    const moveLocalLibraryResource = vi.fn(() => Promise.resolve());
+    const { result, workspaceStore } = renderWorkspaceActions([], {
+      moveLocalLibraryResource,
+      workspaceRootPath: "/tmp/LiteasyLibrary"
+    });
+
+    await act(async () => {
+      await result.current.moveFolder(
+        "/tmp/LiteasyLibrary/empty",
+        "/tmp/LiteasyLibrary/archive"
+      );
+    });
+
+    expect(moveLocalLibraryResource).toHaveBeenCalledWith({
+      sourcePath: "/tmp/LiteasyLibrary/empty",
+      targetPath: "/tmp/LiteasyLibrary/archive/empty"
+    });
+    expect(workspaceStore.getState().papers).toEqual([]);
+  });
+
+  test("renames an empty directory through the local file system", async () => {
+    const moveLocalLibraryResource = vi.fn(() => Promise.resolve());
+    const { result, workspaceStore } = renderWorkspaceActions([], {
+      moveLocalLibraryResource,
+      workspaceRootPath: "/tmp/LiteasyLibrary"
+    });
+
+    await act(async () => {
+      await result.current.renameFolder("/tmp/LiteasyLibrary/empty", "renamed");
+    });
+
+    expect(moveLocalLibraryResource).toHaveBeenCalledWith({
+      sourcePath: "/tmp/LiteasyLibrary/empty",
+      targetPath: "/tmp/LiteasyLibrary/renamed"
+    });
+    expect(workspaceStore.getState().papers).toEqual([]);
+  });
+
   test("keeps workspace paths unchanged when the disk operation fails", async () => {
     const moveLocalLibraryResource = vi.fn(() => Promise.reject(new Error("permission denied")));
     const paper = {
@@ -343,6 +373,9 @@ describe("useWorkspaceActions", () => {
       paper
     }));
     expect(importStore.getLatestJobByDocumentId(paper.id)?.status).toBe("failed");
+    expect(importStore.getLatestJobByDocumentId(paper.id)?.error).toBe(
+      "read_local_library_pdf command not found"
+    );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
       "《Broken PDF》解析失败：read_local_library_pdf command not found"
     );
@@ -369,7 +402,7 @@ describe("useWorkspaceActions", () => {
     const savePaperArtifact = vi.fn(async () => undefined);
     const { importStore, result } = renderWorkspaceActions([paper], {
       extractPaperIndex: async (input) => ({
-        chunks: buildImportedChunksForPaper(input),
+        chunks: buildTestChunks(input),
         pages
       }),
       savePaperArtifact

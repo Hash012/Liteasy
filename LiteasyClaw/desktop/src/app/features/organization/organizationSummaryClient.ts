@@ -1,5 +1,13 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
-import type { OrganizationRole, OrganizationSummary, OrganizationSummaryInput } from "./organization.types";
+import { readCloudServiceError } from "../network/cloudErrorMessage";
+import type {
+  OrganizationAuditEvent,
+  OrganizationMember,
+  OrganizationNotification,
+  OrganizationRole,
+  OrganizationSummary,
+  OrganizationSummaryInput
+} from "./organization.types";
 
 export type OrganizationSummaryTransportRequest = {
   body: string;
@@ -17,124 +25,142 @@ type CreateOrganizationSummaryClientInput = {
   transport?: OrganizationSummaryTransport;
 };
 
-type OrganizationSummaryPayload = {
-  summary: OrganizationSummary;
-};
-
-function buildOrganizationSummaryUrl(endpoint: string) {
-  return `${endpoint.replace(/\/+$/, "")}/v1/org/summary`;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isNotificationType(value: unknown) {
-  return value === "announcement" || value === "document_upload" || value === "library_change";
+function string(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function isSharedLibraryStatus(value: unknown) {
-  return value === "available" || value === "syncing" || value === "unavailable";
+function number(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function isOrganizationRole(value: unknown): value is OrganizationRole {
-  return value === "owner" || value === "admin" || value === "member";
-}
-
-function normalizeOrganizationRole(value: unknown): OrganizationRole | null {
-  if (value === "owner" || value === "admin" || value === "member") {
-    return value;
-  }
-
-  if (value === "管理员") {
-    return "admin";
-  }
-
-  if (value === "研究员" || value === "审核员" || value === "访客") {
-    return "member";
-  }
-
+function role(value: unknown): OrganizationRole | null {
+  if (value === "owner" || value === "admin" || value === "member") return value;
+  if (value === "管理员") return "admin";
+  if (value === "研究员" || value === "审核员" || value === "访客") return "member";
   return null;
 }
 
-function isCompatibleOrganizationRole(value: unknown) {
-  return normalizeOrganizationRole(value) !== null;
+function members(value: unknown): OrganizationMember[] {
+  if (!Array.isArray(value)) throw new Error("组织空间返回格式无效");
+  return value.map((item) => {
+    if (!isRecord(item)) throw new Error("组织空间返回格式无效");
+    const memberRole = role(item.role);
+    const subject = string(item.subject) ?? string(item.id);
+    if (!memberRole || !subject) throw new Error("组织空间返回格式无效");
+    return {
+      id: string(item.id) ?? subject,
+      name: string(item.name) ?? subject,
+      revision: number(item.revision),
+      role: memberRole,
+      status: item.status === "suspended" ? "suspended" : "active",
+      subject
+    };
+  });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function auditEvents(value: unknown): OrganizationAuditEvent[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = string(item.id) ?? string(item.auditId);
+    const actor = string(item.actor) ?? string(item.actorSubject);
+    const description = string(item.description) ?? string(item.action);
+    const occurredAt = string(item.occurredAt);
+    return id && actor && description && occurredAt ? [{ actor, description, id, occurredAt }] : [];
+  });
 }
 
-function hasStringField(record: Record<string, unknown>, field: string) {
-  return typeof record[field] === "string";
+function notifications(value: unknown): OrganizationNotification[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = string(item.id);
+    const message = string(item.message);
+    const type = item.type;
+    return id && message && (type === "announcement" || type === "document_upload" || type === "library_change")
+      ? [{ id, message, type }]
+      : [];
+  });
 }
 
-function hasNumberField(record: Record<string, unknown>, field: string) {
-  return typeof record[field] === "number";
-}
-
-function isOrganizationSummaryPayload(payload: unknown): payload is OrganizationSummaryPayload {
-  if (!isRecord(payload) || !isRecord(payload.summary)) {
-    return false;
+function normalizeSummary(value: unknown): OrganizationSummary {
+  if (!isRecord(value) || !isRecord(value.quota) || !isRecord(value.sharedLibrary)) {
+    throw new Error("组织空间返回格式无效");
   }
-
-  const summary = payload.summary;
-  if (!isRecord(summary.quota) || !isRecord(summary.sharedLibrary) || !isRecord(summary.taskSummary)) {
-    return false;
+  const myRole = role(value.myRole);
+  const name = string(value.name);
+  const organizationId = string(value.organizationId);
+  const sharedLibraryName = string(value.sharedLibrary.name);
+  if (!myRole || !name || !organizationId || !sharedLibraryName ||
+    !Array.isArray(value.sharedLibrary.documents)) {
+    throw new Error("组织空间返回格式无效");
   }
-
-  return (
-    Array.isArray(summary.auditEvents) &&
-    summary.auditEvents.every(
-      (event) =>
-        isRecord(event) &&
-        hasStringField(event, "actor") &&
-        hasStringField(event, "description") &&
-        hasStringField(event, "id") &&
-        hasStringField(event, "occurredAt")
-    ) &&
-    hasNumberField(summary, "memberCount") &&
-    Array.isArray(summary.members) &&
-    summary.members.every(
-      (member) =>
-        isRecord(member) &&
-        hasStringField(member, "id") &&
-        hasStringField(member, "name") &&
-        isCompatibleOrganizationRole(member.role)
-    ) &&
-    isCompatibleOrganizationRole(summary.myRole) &&
-    hasStringField(summary, "name") &&
-    Array.isArray(summary.notifications) &&
-    summary.notifications.every(
-      (notification) =>
-        isRecord(notification) &&
-        hasStringField(notification, "id") &&
-        hasStringField(notification, "message") &&
-        isNotificationType(notification.type)
-    ) &&
-    hasStringField(summary, "organizationId") &&
-    (typeof summary.canCreateOrganization === "boolean" || typeof summary.canCreateOrganization === "undefined") &&
-    (typeof summary.ownerUserId === "string" || typeof summary.ownerUserId === "undefined") &&
-    hasStringField(summary.quota, "periodEndsAt") &&
-    hasNumberField(summary.quota, "storageLimitGb") &&
-    hasNumberField(summary.quota, "storageUsedGb") &&
-    hasNumberField(summary.sharedLibrary, "documentCount") &&
-    Array.isArray(summary.sharedLibrary.documents) &&
-    summary.sharedLibrary.documents.every(
-      (document) =>
-        isRecord(document) &&
-        hasStringField(document, "id") &&
-        hasStringField(document, "sourcePath") &&
-        hasStringField(document, "title")
-    ) &&
-    hasStringField(summary.sharedLibrary, "name") &&
-    (typeof summary.sharedLibrary.ownerUserId === "string" ||
-      typeof summary.sharedLibrary.ownerUserId === "undefined") &&
-    isSharedLibraryStatus(summary.sharedLibrary.status) &&
-    hasNumberField(summary.taskSummary, "failed") &&
-    hasNumberField(summary.taskSummary, "running")
-  );
+  const sharedDocuments = value.sharedLibrary.documents.map((document) => {
+    if (!isRecord(document)) throw new Error("组织空间返回格式无效");
+    const id = string(document.id);
+    const sourcePath = string(document.sourcePath);
+    const title = string(document.title);
+    if (!id || !sourcePath || !title) throw new Error("组织空间返回格式无效");
+    return { id, sourcePath, title };
+  });
+  const formalQuota = "usedBytes" in value.quota || "limitBytes" in value.quota;
+  const configured = formalQuota ? value.quota.configured === true : true;
+  const storageLimitGb = formalQuota
+    ? number(value.quota.limitBytes) / (1024 ** 3)
+    : number(value.quota.storageLimitGb);
+  const storageUsedGb = formalQuota
+    ? number(value.quota.usedBytes) / (1024 ** 3)
+    : number(value.quota.storageUsedGb);
+  const taskSummary = isRecord(value.taskSummary)
+    ? { failed: number(value.taskSummary.failed), running: number(value.taskSummary.running) }
+    : undefined;
+  const policy: OrganizationSummary["policy"] = isRecord(value.policy) &&
+    (value.policy.uploadPolicy === "owner_admins" || value.policy.uploadPolicy === "all_members") &&
+    (value.policy.exportPolicy === "disabled" || value.policy.exportPolicy === "admins_only" ||
+      value.policy.exportPolicy === "all_members")
+    ? {
+      exportPolicy: value.policy.exportPolicy,
+      uploadPolicy: value.policy.uploadPolicy
+    }
+    : undefined;
+  return {
+    auditEvents: auditEvents(value.auditEvents),
+    ...(typeof value.canCreateOrganization === "boolean"
+      ? { canCreateOrganization: value.canCreateOrganization }
+      : {}),
+    memberCount: number(value.memberCount),
+    members: members(value.members),
+    myMemberRevision: typeof value.myMemberRevision === "number" ? value.myMemberRevision : null,
+    myRole,
+    name,
+    notifications: notifications(value.notifications),
+    ...(string(value.ownerUserId) ? { ownerUserId: string(value.ownerUserId) } : {}),
+    organizationId,
+    ...(policy ? { policy } : {}),
+    quota: {
+      configured,
+      ...(string(value.quota.periodEndsAt) ? { periodEndsAt: string(value.quota.periodEndsAt) } : {}),
+      storageLimitGb,
+      storageUsedGb
+    },
+    revision: number(value.revision),
+    sharedLibrary: {
+      documentCount: number(value.sharedLibrary.documentCount, sharedDocuments.length),
+      documents: sharedDocuments,
+      name: sharedLibraryName,
+      status: value.sharedLibrary.status === "syncing" || value.sharedLibrary.status === "unavailable"
+        ? value.sharedLibrary.status
+        : "available"
+    },
+    ...(taskSummary ? { taskSummary } : {})
+  };
 }
 
-async function defaultTransport(
-  request: OrganizationSummaryTransportRequest
-): Promise<ModelTransportResponse> {
+async function defaultTransport(request: OrganizationSummaryTransportRequest): Promise<ModelTransportResponse> {
   return fetch(request.url, {
     body: request.body,
     headers: request.headers,
@@ -153,28 +179,20 @@ export function createOrganizationSummaryClient({
         sessionId: input.sessionId
       }),
       headers: {
+        Authorization: `Bearer ${input.sessionId}`,
         "Content-Type": "application/json"
       },
       method: "POST",
-      url: buildOrganizationSummaryUrl(endpoint)
+      url: `${endpoint.replace(/\/+$/, "")}/v1/org/summary`
     });
-
     if (!response.ok) {
-      throw new Error(`组织空间加载失败（${response.status}）`);
+      throw await readCloudServiceError(response, {
+        code: "organization_summary_failed",
+        message: "组织空间加载失败，请稍后重试。"
+      });
     }
-
     const payload = await response.json();
-    if (!isOrganizationSummaryPayload(payload)) {
-      throw new Error("组织空间返回格式无效");
-    }
-
-    return {
-      ...payload.summary,
-      members: payload.summary.members.map((member) => ({
-        ...member,
-        role: normalizeOrganizationRole(member.role) ?? "member"
-      })),
-      myRole: normalizeOrganizationRole(payload.summary.myRole) ?? "member"
-    };
+    if (!isRecord(payload) || !("summary" in payload)) throw new Error("组织空间返回格式无效");
+    return normalizeSummary(payload.summary);
   };
 }

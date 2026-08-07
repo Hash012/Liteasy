@@ -27,8 +27,13 @@ describe("useCloudAccountController", () => {
     expect(result.current.model.cloudAvailabilityStatus).toBe("unavailable");
   });
 
-  test("submits demo login through cloud account actions and closes the dialog", async () => {
+  test("submits real account login through cloud account actions and closes the dialog", async () => {
     const input = createControllerInput();
+    const accountCapabilitiesTransport = vi.fn(async () => ({
+      json: async () => ({ developerDiagnostics: true }),
+      ok: true,
+      status: 200
+    }));
     const accountTransport = vi.fn(async () => ({
       json: async () => ({
         session: {
@@ -36,7 +41,7 @@ describe("useCloudAccountController", () => {
           expiresAt: "2026-05-15T09:30:00Z",
           membershipTier: "pro" as const,
           name: "Liteasy Researcher",
-          sessionId: "demo-session-1"
+          sessionId: "ltsy_session_1"
         }
       }),
       ok: true,
@@ -46,6 +51,7 @@ describe("useCloudAccountController", () => {
     const { result } = renderHook(() =>
       useCloudAccountController({
         ...input,
+        accountCapabilitiesTransport,
         accountTransport
       })
     );
@@ -55,12 +61,22 @@ describe("useCloudAccountController", () => {
     });
 
     await act(async () => {
-      await result.current.actions.submitDemoLogin();
+      await result.current.actions.submitAccountLogin({
+        email: "researcher@liteasy.dev",
+        password: "a-secure-password"
+      });
     });
 
     expect(input.applyLocalDevCloudDefaults).toHaveBeenCalledTimes(1);
     expect(accountTransport).toHaveBeenCalledTimes(1);
-    expect(result.current.model.accountSession?.sessionId).toBe("demo-session-1");
+    expect(result.current.model.accountSession?.sessionId).toBe("ltsy_session_1");
+    await waitFor(() => {
+      expect(result.current.model.developerDiagnostics).toBe(true);
+    });
+    expect(accountCapabilitiesTransport).toHaveBeenCalledWith(expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer ltsy_session_1" }),
+      method: "GET"
+    }));
     expect(result.current.model.loginDialogOpen).toBe(false);
   });
 

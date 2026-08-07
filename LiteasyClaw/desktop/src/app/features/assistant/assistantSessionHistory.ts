@@ -1,6 +1,7 @@
 import type { createAssistantStore } from "./assistant.store";
 import type { AssistantMessage, AssistantMode, AssistantState } from "./assistant.types";
 import type { ArtifactTask, ArtifactType } from "../artifacts/artifact.types";
+import { presentArtifactFailure } from "../artifacts/artifactFailurePresentation";
 
 export type AssistantSessionKind = "conversation" | "artifact_generation";
 export type AssistantSessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
@@ -178,24 +179,43 @@ export function getArtifactTaskSessionId(
 export function createArtifactTaskSession(
   task: ArtifactTask,
   previous?: AssistantSessionHistoryItem,
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  options: { developerDiagnostics?: boolean } = {}
 ): AssistantSessionHistoryItem {
   const sessionId = getArtifactTaskSessionId(task.id, task);
   const title = `生成：${artifactTypeLabels[task.type]}`;
   const progress = Math.max(0, Math.min(100, Math.round(task.progress)));
+  const failurePresentation = task.failure
+    ? presentArtifactFailure(task.failure, options.developerDiagnostics)
+    : undefined;
   const progressMessage = [
-    task.message,
+    failurePresentation?.message ?? task.message,
     `阶段：${artifactStageLabels[task.stage]}`,
     `进度：${progress}%`,
     task.failure
       ? [
-          "\n失败诊断：",
-          `- 原因：${task.failure.message}`,
+          "\n错误信息：",
+          `- 错误编号：${failurePresentation?.code}`,
+          `- 原因：${failurePresentation?.message}`,
           `- 失败阶段：${artifactStageLabels[task.failure.failedStage]}`,
-          task.failure.endpoint ? `- Agent 服务端点：${task.failure.endpoint}` : "",
-          task.failure.provider ? `- Provider：${task.failure.provider}` : "",
-          task.failure.model ? `- Model：${task.failure.model}` : "",
           `- 时间：${task.failure.occurredAt}`,
+          ...(failurePresentation?.traceId
+            ? [`- 追踪编号：${failurePresentation.traceId}`]
+            : []),
+          ...(failurePresentation?.diagnostics
+            ? [
+                `- 内部异常：${failurePresentation.diagnostics.message}`,
+                ...(failurePresentation.diagnostics.endpoint
+                  ? [`- 服务端点：${failurePresentation.diagnostics.endpoint}`]
+                  : []),
+                ...(failurePresentation.diagnostics.provider
+                  ? [`- Provider：${failurePresentation.diagnostics.provider}`]
+                  : []),
+                ...(failurePresentation.diagnostics.model
+                  ? [`- Model：${failurePresentation.diagnostics.model}`]
+                  : [])
+              ]
+            : []),
           ...task.failure.recovery.map((item) => `- 建议：${item}`)
         ].filter(Boolean).join("\n")
       : "",

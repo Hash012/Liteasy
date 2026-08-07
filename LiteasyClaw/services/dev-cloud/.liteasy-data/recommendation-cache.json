@@ -2537,5 +2537,300 @@
   "demo-session-1::local_library:/home/octopus/LiteasyLibrary::local-1785313732256434307-0::relevance::0": {
     "cachedAt": "2026-08-02T12:58:40.346Z",
     "recommendations": []
+  },
+  "demo-session-1::local_library:本地文献库::dropped-2025-emnlp-main-1433-pdf-2271242::relevance::0": {
+    "cachedAt": "2026-08-06T00:27:38.747Z",
+    "recommendations": [
+      {
+        "authors": [],
+        "canonicalId": "doi:10.18653/v1/2025.findings-emnlp",
+        "discoveredAt": "2026-08-06T00:27:38.730Z",
+        "id": "reading-candidate:doi:10.18653/v1/2025.findings-emnlp",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.18653/v1/2025.findings-emnlp"
+          ],
+          "canonicalId": "doi:10.18653/v1/2025.findings-emnlp",
+          "doi": "https://doi.org/10.18653/v1/2025.findings-emnlp",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.18653/v1/2025.findings-emnlp",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.18653/v1/2025.findings-emnlp",
+              "recordUrl": "https://api.crossref.org/works/10.18653%2Fv1%2F2025.findings-emnlp",
+              "title": "Findings of the Association for Computational Linguistics: EMNLP 2025",
+              "url": "https://doi.org/10.18653/v1/2025.findings-emnlp",
+              "year": 2025
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2025,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "2025.emnlp-main.1433",
+        "relatedDocumentTitles": [
+          "2025.emnlp-main.1433"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.725,
+          "sourceRelevance": 0.725,
+          "fusionScore": 1,
+          "lexicalRelevance": 1,
+          "preFusionRelevance": 0.725,
+          "baseRelevance": 0.725,
+          "diversityPenalty": 0,
+          "finalScore": 0.725
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.18653/v1/2025.findings-emnlp",
+        "title": "Findings of the Association for Computational Linguistics: EMNLP 2025",
+        "rankingFusion": {
+          "calibratedScore": 0.725,
+          "fusionScore": 1,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.031818,
+              "id": "provider",
+              "rank": 1,
+              "score": 0.725,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.027273,
+              "id": "lexical_bm25",
+              "rank": 1,
+              "score": 1,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "medium",
+        "relevanceScore": 0.725
+      },
+      {
+        "authors": [
+          "ZhaoXin Li",
+          "HongGuang Qi",
+          "Long Zhang",
+          "YunFei Huang"
+        ],
+        "canonicalId": "doi:10.7754/clin.lab.2024.240812",
+        "discoveredAt": "2026-08-06T00:27:38.730Z",
+        "id": "reading-candidate:doi:10.7754/clin.lab.2024.240812",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.7754/clin.lab.2024.240812",
+            "arxiv:2024.24081"
+          ],
+          "arxivId": "2024.24081",
+          "canonicalId": "doi:10.7754/clin.lab.2024.240812",
+          "doi": "https://doi.org/10.7754/clin.lab.2024.240812",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.7754/clin.lab.2024.240812",
+              "provider": "crossref",
+              "arxivId": "2024.24081",
+              "doi": "https://doi.org/10.7754/clin.lab.2024.240812",
+              "recordUrl": "https://api.crossref.org/works/10.7754%2Fclin.lab.2024.240812",
+              "title": "The Correlation between Serum Procalcitonin and C-Reactive Protein and Main Complications After Endoscopic Retrograde Cholangiopancreatography",
+              "url": "https://doi.org/10.7754/clin.lab.2024.240812",
+              "year": 2025
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2025,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "2025.emnlp-main.1433",
+        "relatedDocumentTitles": [
+          "2025.emnlp-main.1433"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.363,
+          "sourceRelevance": 0.363,
+          "fusionScore": 0.884,
+          "lexicalRelevance": 0.159305,
+          "preFusionRelevance": 0.363,
+          "baseRelevance": 0.334,
+          "diversityPenalty": 0.022,
+          "finalScore": 0.312
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.7754/clin.lab.2024.240812",
+        "title": "The Correlation between Serum Procalcitonin and C-Reactive Protein and Main Complications After Endoscopic Retrograde Cholangiopancreatography",
+        "rankingFusion": {
+          "calibratedScore": 0.334,
+          "fusionScore": 0.884,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.029167,
+              "id": "provider",
+              "rank": 2,
+              "score": 0.363,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.023077,
+              "id": "lexical_bm25",
+              "rank": 3,
+              "score": 0.159305,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.312
+      },
+      {
+        "authors": [
+          "Dieter Hogrefe"
+        ],
+        "canonicalId": "doi:10.1007/s10009-003-0109-6",
+        "discoveredAt": "2026-08-06T00:27:38.730Z",
+        "id": "reading-candidate:doi:10.1007/s10009-003-0109-6",
+        "identityResolution": {
+          "aliases": [
+            "crossref:10.1007/s10009-003-0109-6"
+          ],
+          "canonicalId": "doi:10.1007/s10009-003-0109-6",
+          "doi": "https://doi.org/10.1007/s10009-003-0109-6",
+          "lineageStatus": "single_record",
+          "providers": [
+            "crossref"
+          ],
+          "records": [
+            {
+              "id": "crossref:10.1007/s10009-003-0109-6",
+              "provider": "crossref",
+              "doi": "https://doi.org/10.1007/s10009-003-0109-6",
+              "recordUrl": "https://api.crossref.org/works/10.1007%2Fs10009-003-0109-6",
+              "title": "Main issues in protocol testing",
+              "url": "https://doi.org/10.1007/s10009-003-0109-6",
+              "year": 2003
+            }
+          ],
+          "consistent": true,
+          "version": "recommendation-identity/v2"
+        },
+        "publishedYear": 2003,
+        "openAccessAvailable": true,
+        "qualityGate": {
+          "checks": {
+            "canonicalIdentity": true,
+            "crossProviderConsistent": true,
+            "notKnownRetracted": true,
+            "plausiblePublicationYear": true,
+            "supportedProvider": true,
+            "traceableHttpsSource": true,
+            "usableTitle": true
+          },
+          "passed": true,
+          "reasons": [],
+          "version": "recommendation-quality/v1"
+        },
+        "relatedDocumentTitle": "2025.emnlp-main.1433",
+        "relatedDocumentTitles": [
+          "2025.emnlp-main.1433"
+        ],
+        "surfacingTags": [],
+        "relation": "topic_search",
+        "reason": "该条目来自主题检索，建议作为候选阅读线索而非论文结论的证据。 已通过 provider / lexical_bm25 多路排名的 RRF 融合校准顺序。 为避免相近主题重复占满列表，已施加可审计的多样性降权。",
+        "scoreComponents": {
+          "preference": 0,
+          "profileRelevance": 0,
+          "providerRelevance": 0.228,
+          "sourceRelevance": 0.228,
+          "fusionScore": 0.879,
+          "lexicalRelevance": 0.258184,
+          "preFusionRelevance": 0.228,
+          "baseRelevance": 0.209,
+          "diversityPenalty": 0.045,
+          "finalScore": 0.164
+        },
+        "primaryProvider": "crossref",
+        "source": "Crossref",
+        "sourceKind": "live",
+        "sourceUrl": "https://doi.org/10.1007/s10009-003-0109-6",
+        "title": "Main issues in protocol testing",
+        "rankingFusion": {
+          "calibratedScore": 0.209,
+          "fusionScore": 0.879,
+          "k": 10,
+          "routes": [
+            {
+              "contribution": 0.026923,
+              "id": "provider",
+              "rank": 3,
+              "score": 0.228,
+              "weight": 0.35
+            },
+            {
+              "contribution": 0.025,
+              "id": "lexical_bm25",
+              "rank": 2,
+              "score": 0.258184,
+              "weight": 0.3
+            }
+          ],
+          "version": "recommendation-ranking-fusion/v1"
+        },
+        "relevanceBand": "low",
+        "relevanceScore": 0.164
+      }
+    ]
   }
 }

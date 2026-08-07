@@ -1,11 +1,9 @@
-import { buildAdminConsoleHtml, buildAdminGovernanceDashboardPayload } from "./adminConsole.mjs";
+import { buildAdminConsoleHtml } from "./adminConsole.mjs";
+import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs";
 import { AuthError, createAuthService } from "./auth/authService.mjs";
+import { createMfaService } from "./auth/mfa.mjs";
 import { createRateLimiter } from "./auth/rateLimiter.mjs";
-import {
-  buildAdminDemoResetPayload,
-  buildAdminDemoReseedPayload
-} from "./payloads/adminDemoActionPayloads.mjs";
-import { buildAdminDemoStatePayload } from "./payloads/adminDemoStatePayloads.mjs";
 import {
   buildPublicRuntimeSummary,
   defaultConfig,
@@ -38,7 +36,12 @@ import {
   buildOrganizationJoinPayload,
   buildOrganizationLeavePayload,
   buildOrganizationListPayload,
+  buildOrganizationMemberRolePayload,
+  buildOrganizationMemberStatusPayload,
+  buildOrganizationOwnershipTransferPayload,
   buildOrganizationSharedLibraryManifestPayload,
+  buildOrganizationStoragePolicyPayload,
+  buildOrganizationStoragePolicyUpdatePayload,
   buildOrganizationSummaryPayload
 } from "./payloads/organizationPayloads.mjs";
 import {
@@ -46,9 +49,7 @@ import {
   buildPolicyUpdatePayload
 } from "./payloads/policyPayloads.mjs";
 import {
-  buildDocumentMetadataSyncPayload,
   buildLiveRecommendationPayload,
-  buildRecommendationPayload,
   normalizeRecommendationResearchProfile
 } from "./payloads/recommendationPayloads.mjs";
 import { applyRecommendationEmbeddingScores } from "./payloads/recommendationEmbeddingPayloads.mjs";
@@ -56,27 +57,37 @@ import { applyRecommendationExternalReranker } from "./payloads/recommendationRe
 import { createAccountRepository } from "./db/accountRepository.mjs";
 import { createAuthSessionRepository } from "./db/authSessionRepository.mjs";
 import { createDatabase } from "./db/database.mjs";
+import { createCollectionRepository } from "./db/collectionRepository.mjs";
+import {
+  createPlatformAdminRepository,
+  PlatformAuthorizationError
+} from "./db/platformAdminRepository.mjs";
 import { createExternalKnowledgeRunRepository } from "./db/externalKnowledgeRunRepository.mjs";
 import { createGrobidParseCacheRepository } from "./db/grobidParseCacheRepository.mjs";
 import {
   createLibraryStorageRepository,
   LibraryStorageError
 } from "./db/libraryStorageRepository.mjs";
+import { assertDevCloudDeploymentBoundary } from "./deploymentBoundary.mjs";
 import {
-  getOrganizationMemberRole,
-  setOrganizationLibraryDocumentVisibility
+  createOrganizationRepository,
+  OrganizationRepositoryError
 } from "./db/organizationRepository.mjs";
 import {
-  clearRecommendationCandidatesForUser,
   createRecommendationCandidateRepository,
   listRecommendationCandidateSources,
+  loadRecommendationCandidate,
   setRecommendationCandidateRepository,
   updateRecommendationCandidateStatus,
   upsertRecommendationCandidates
 } from "./db/recommendationCandidateRepository.mjs";
-import { clearRecommendationCacheForSession } from "./db/recommendationCacheRepository.mjs";
+import { createExternalPdfGrantRepository } from "./db/externalPdfGrantRepository.mjs";
 import {
-  clearRecommendationFeedbackForUser,
+  clearRecommendationCacheForSession,
+  createRecommendationCacheRepository,
+  setRecommendationCacheRepository
+} from "./db/recommendationCacheRepository.mjs";
+import {
   createRecommendationFeedbackRepository,
   setRecommendationFeedbackRepository
 } from "./db/recommendationFeedbackRepository.mjs";
@@ -136,7 +147,11 @@ import {
 // 深度论文分析会携带多篇论文的分层证据和 SubAgent 区段报告。
 // 仍保留明确上限以防止本地开发服务被无界请求占满内存。
 const maximumJsonBodyBytes = 512 * 1024;
-const maximumAgentArtifactBodyBytes = 1024 * 1024;
+// MinerU figures are persisted with generated artifacts and can contain several
+// megabytes of base64 image data.
+const maximumAgentArtifactBodyBytes = 12 * 1024 * 1024;
+const maximumMineruPdfBytes = 24 * 1024 * 1024;
+const maximumMineruRequestBytes = Math.ceil(maximumMineruPdfBytes * 1.38);
 const maximumPdfParseBodyBytes = 40 * 1024 * 1024;
 const maximumLibraryPdfBytes = 256 * 1024 * 1024;
 
@@ -145,18 +160,22 @@ const availableEndpoints = [
   "GET /healthz",
   "GET /admin",
   "GET /admin/",
-  "GET /v1/admin/demo-state",
+  "GET /v1/model-policy",
   "GET /v1/admin/model-policy",
-  "POST /v1/admin/demo-reset",
-  "POST /v1/admin/demo-reseed",
-  "POST /v1/admin/recommendation-cache/clear",
   "POST /v1/admin/model-policy",
   "GET /v1/admin/governance-dashboard",
-  "POST /v1/account/demo-login",
+  "POST /v1/admin/session",
+  "GET /v1/admin/retrieval-sources",
+  "POST /v1/admin/retrieval-sources",
+  "POST /v1/admin/retrieval-sources/remove",
+  "GET /v1/admin/forum/posts",
+  "POST /v1/admin/forum/posts/moderate",
   "POST /v1/account/login",
   "POST /v1/account/logout",
+  "POST /v1/account/change-bootstrap-password",
   "POST /v1/account/register",
   "POST /v1/account/session",
+  "GET /v1/account/capabilities",
   "POST /v1/model/generate",
   "POST /v1/model/generate-stream",
   "POST /v1/model/audit",
@@ -166,8 +185,10 @@ const availableEndpoints = [
   "DELETE /v1/agent-artifacts/:artifactId",
   "POST /v1/recommendations",
   "POST /v1/recommendations/feedback",
+  "POST /v1/recommendations/pdf-grant",
   "POST /v1/research/external-knowledge",
   "POST /v1/research/external-pdf",
+  "POST /v1/pdf/mineru-extract",
   "POST /v1/works/resolve",
   "GET /v1/concepts",
   "GET /v1/concepts/:code",
@@ -179,6 +200,8 @@ const availableEndpoints = [
   "POST /v1/profile/get",
   "POST /v1/profile/save",
   "POST /v1/profile/clear",
+  "POST /v1/personalization/settings",
+  "POST /v1/personalization/settings/update",
   "POST /v1/personalization/signal",
   "POST /v1/recommendation-cache/get",
   "POST /v1/recommendation-cache/put",
@@ -189,23 +212,46 @@ const availableEndpoints = [
   "POST /v1/org/invite",
   "POST /v1/org/leave",
   "POST /v1/org/list",
+  "POST /v1/org/members/role",
+  "POST /v1/org/members/status",
+  "POST /v1/org/owner/transfer",
   "POST /v1/org/summary",
   "POST /v1/org/shared-library/manifest",
   "POST /v1/org/governance-summary",
+  "POST /v1/org/storage-policy",
+  "POST /v1/org/storage-policy/update",
+  "POST /v1/library/tree",
   "POST /v1/library/documents/upload",
   "POST /v1/library/documents/list",
+  "POST /v1/library/entries/metadata",
+  "POST /v1/library/entries/attach-pdf",
+  "POST /v1/library/entries/copy",
+  "POST /v1/library/entries/purge",
   "POST /v1/library/documents/trash",
   "POST /v1/library/documents/restore",
   "POST /v1/library/documents/update",
   "POST /v1/library/documents/authorize",
   "POST /v1/library/documents/download",
+  "POST /v1/library/documents/export",
   "POST /v1/library/folders/create",
   "POST /v1/library/folders/update",
+  "POST /v1/library/folders/trash",
+  "POST /v1/library/folders/restore",
+  "POST /v1/library/folders/purge",
+  "POST /v1/library/trash/empty",
   "POST /v1/library/quota",
   "POST /v1/org/team-annotations/list",
   "POST /v1/org/team-annotations/upload",
   "POST /v1/org/team-annotations/withdraw",
-  "POST /v1/admin/storage-quota"
+  "POST /v1/org/annotations/list",
+  "POST /v1/org/annotations/create",
+  "POST /v1/org/annotations/update",
+  "POST /v1/org/annotations/delete",
+  "POST /v1/admin/storage-quota",
+  "POST /v1/admin/accounts/status",
+  "POST /v1/admin/support-access/grant",
+  "POST /v1/admin/support-access/revoke",
+  "POST /v1/admin/support-access/document"
 ];
 
 const endpointMethods = new Map(
@@ -237,7 +283,7 @@ function buildCorsHeaders(request) {
     configuredOrigins instanceof Set &&
     typeof origin === "string" &&
     configuredOrigins.has(origin);
-  const isDesktopOrigin = origin === "tauri://localhost";
+  const isDesktopOrigin = new Set(["http://tauri.localhost", "tauri://localhost"]).has(origin);
   const allowOrigin =
     typeof origin !== "string"
       ? "*"
@@ -247,6 +293,7 @@ function buildCorsHeaders(request) {
 
   const headers = {
     "Access-Control-Allow-Headers": [
+      "Authorization",
       "Content-Type",
       "X-Liteasy-Duplicate-Action",
       "X-Liteasy-File-Name",
@@ -255,7 +302,7 @@ function buildCorsHeaders(request) {
       "X-Liteasy-Scope-Type",
       "X-Liteasy-Session-Id"
     ].join(", "),
-    "Access-Control-Allow-Methods": "DELETE,GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "DELETE,GET,PATCH,POST,OPTIONS",
     Vary: "Origin"
   };
 
@@ -294,6 +341,21 @@ function configuredOpenAlexServiceKey(config, customConfig) {
 }
 
 function writeJson(request, response, statusCode, payload) {
+  const traceId = request.liteasyTraceId ?? `trace_${randomUUID()}`;
+  request.liteasyTraceId = traceId;
+  const responsePayload = statusCode >= 400
+    ? {
+        code: typeof payload?.code === "string"
+          ? payload.code
+          : typeof payload?.error === "string"
+            ? payload.error
+            : "request_failed",
+        message: typeof payload?.message === "string"
+          ? payload.message
+          : "请求未完成，请稍后重试。",
+        traceId
+      }
+    : payload;
   response.writeHead(statusCode, {
     ...buildCorsHeaders(request),
     "Cache-Control": "no-store",
@@ -302,7 +364,7 @@ function writeJson(request, response, statusCode, payload) {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY"
   });
-  response.end(JSON.stringify(payload));
+  response.end(JSON.stringify(responsePayload));
 }
 
 function writePdf(request, response, bytes) {
@@ -319,6 +381,8 @@ function writePdf(request, response, bytes) {
 }
 
 async function writeNdjsonStream(request, response, stream) {
+  const traceId = request.liteasyTraceId ?? `trace_${randomUUID()}`;
+  request.liteasyTraceId = traceId;
   response.writeHead(200, {
     ...buildCorsHeaders(request),
     "Cache-Control": "no-store, no-transform",
@@ -331,8 +395,11 @@ async function writeNdjsonStream(request, response, stream) {
       response.write(`${JSON.stringify(event)}\n`);
     }
   } catch (error) {
+    console.error(`Model stream failed (${traceId})`, error);
     response.write(`${JSON.stringify({
-      error: error instanceof Error ? error.message : "unknown_stream_error",
+      code: "model_stream_failed",
+      message: "模型流式响应中断，请重试。",
+      traceId,
       type: "error"
     })}\n`);
   } finally {
@@ -370,15 +437,27 @@ async function readJsonBody(request, maximumBytes = maximumJsonBodyBytes) {
   return JSON.parse(rawBody);
 }
 
-function writeLibraryPdf(request, response, fileName, bytes) {
+async function writeLibraryPdf(request, response, stored) {
   response.writeHead(200, {
     ...buildCorsHeaders(request),
     "Cache-Control": "private, no-store",
-    "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-    "Content-Length": bytes.length,
+    "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(stored.document.fileName)}`,
+    "Content-Length": stored.byteLength,
     "Content-Type": "application/pdf"
   });
-  response.end(bytes);
+  const stream = fs.createReadStream(stored.filePath);
+  try {
+    for await (const chunk of stream) {
+      response.write(chunk);
+    }
+    response.end();
+  } catch (error) {
+    const traceId = request.liteasyTraceId ?? `trace_${randomUUID()}`;
+    request.liteasyTraceId = traceId;
+    console.error(`Library PDF stream failed (${traceId})`, error);
+    if (typeof response.destroy === "function") response.destroy();
+    else response.end();
+  }
 }
 
 async function readBinaryBody(request, maximumBytes) {
@@ -394,6 +473,127 @@ async function readBinaryBody(request, maximumBytes) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
+}
+
+const suspiciousPdfMarkers = [
+  Buffer.from("/JavaScript"),
+  Buffer.from("/Launch"),
+  Buffer.from("/EmbeddedFile"),
+  Buffer.from("/RichMedia")
+];
+
+async function stageBinaryBody(request, maximumBytes, libraryStorageRepository) {
+  const declaredLength = Number(request.headers["content-length"]);
+  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
+    const error = new Error("request_body_too_large");
+    error.code = "REQUEST_BODY_TOO_LARGE";
+    throw error;
+  }
+  const stagedPath = libraryStorageRepository.createUploadStagingPath();
+  let descriptor;
+  try {
+    descriptor = fs.openSync(stagedPath, "r+");
+  } catch (error) {
+    libraryStorageRepository.discardStagedUpload(stagedPath);
+    throw error;
+  }
+  const hasher = createHash("sha256");
+  const maximumMarkerLength = Math.max(...suspiciousPdfMarkers.map((marker) => marker.length));
+  let byteLength = 0;
+  let header = Buffer.alloc(0);
+  let suspicious = false;
+  let tail = Buffer.alloc(0);
+  let descriptorClosed = false;
+  try {
+    for await (const value of request) {
+      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+      byteLength += chunk.length;
+      if (byteLength > maximumBytes) {
+        const error = new Error("request_body_too_large");
+        error.code = "REQUEST_BODY_TOO_LARGE";
+        throw error;
+      }
+      if (header.length < 5) {
+        header = Buffer.concat([header, chunk]).subarray(0, 5);
+      }
+      const scanWindow = Buffer.concat([tail, chunk]);
+      suspicious ||= suspiciousPdfMarkers.some((marker) => scanWindow.includes(marker));
+      tail = scanWindow.subarray(Math.max(0, scanWindow.length - maximumMarkerLength + 1));
+      hasher.update(chunk);
+      fs.writeSync(descriptor, chunk);
+    }
+    fs.fsyncSync(descriptor);
+    return {
+      byteLength,
+      contentHash: hasher.digest("hex"),
+      header,
+      stagedPath,
+      suspicious
+    };
+  } catch (error) {
+    fs.closeSync(descriptor);
+    descriptorClosed = true;
+    libraryStorageRepository.discardStagedUpload(stagedPath);
+    throw error;
+  } finally {
+    if (!descriptorClosed) fs.closeSync(descriptor);
+  }
+}
+
+function requirePdfUploadHeaders(request, response) {
+  const contentType = String(request.headers["content-type"] ?? "").toLowerCase();
+  if (!contentType.startsWith("application/pdf")) {
+    writeJson(request, response, 415, {
+      error: "invalid_pdf_content_type",
+      message: "文献正文只接受 application/pdf。"
+    });
+    return false;
+  }
+  const rawName = request.headers["x-liteasy-file-name"];
+  let fileName;
+  try {
+    fileName = decodeURIComponent(typeof rawName === "string" ? rawName : "");
+  } catch {
+    fileName = "";
+  }
+  if (!fileName.toLowerCase().endsWith(".pdf")) {
+    writeJson(request, response, 400, {
+      error: "invalid_pdf_file_name",
+      message: "文献正文必须使用 PDF 文件名。"
+    });
+    return false;
+  }
+  return fileName;
+}
+
+async function validateLibraryPdfSecurity(staged, customConfig) {
+  if (staged.byteLength === 0 || !staged.header.equals(Buffer.from("%PDF-"))) {
+    const error = new Error("invalid_pdf");
+    error.code = "invalid_pdf";
+    throw error;
+  }
+  if (staged.suspicious) {
+    const error = new Error("unsafe_pdf_content");
+    error.code = "unsafe_pdf_content";
+    throw error;
+  }
+  if (typeof customConfig.scanLibraryPdf === "function") {
+    const result = await customConfig.scanLibraryPdf({
+      byteLength: staged.byteLength,
+      contentHash: staged.contentHash,
+      mediaType: "application/pdf",
+      stagedPath: staged.stagedPath
+    });
+    if (result !== true && result?.clean !== true) {
+      const error = new Error("unsafe_pdf_content");
+      error.code = "unsafe_pdf_content";
+      throw error;
+    }
+  } else if (customConfig.environment === "production") {
+    const error = new Error("pdf_security_scanner_unavailable");
+    error.code = "pdf_security_scanner_unavailable";
+    throw error;
+  }
 }
 
 async function readJsonOrWriteError(
@@ -442,21 +642,20 @@ function writeAuthError(request, response, error) {
 }
 
 function authorizeAccountScopedBody(request, response, body, authService) {
-  const sessionId =
+  const authorization = request.headers.authorization;
+  const bearerSession = typeof authorization === "string" && authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+  const sessionId = bearerSession || (
     typeof body === "object" && body !== null && typeof body.sessionId === "string"
       ? body.sessionId
-      : "";
-
-  if (!sessionId.startsWith("ltsy_") && !sessionId.startsWith("user:")) {
-    // Preserve named demo identities used by the roadshow fixtures. Real account
-    // storage keys always use the protected user: namespace below.
-    return true;
-  }
+      : ""
+  );
 
   try {
     const session = authService.validateSession(sessionId);
     body.sessionId = `user:${session.userId}`;
-    return true;
+    return session;
   } catch (error) {
     if (!writeAuthError(request, response, error)) {
       writeJson(request, response, 401, {
@@ -468,7 +667,7 @@ function authorizeAccountScopedBody(request, response, body, authService) {
   }
 }
 
-function authorizeLibraryScope(request, response, body, authService) {
+function authorizeLibraryScope(request, response, body, authService, organizationRepository) {
   if (!authorizeAccountScopedBody(request, response, body, authService)) return null;
   const actorId = body.sessionId;
   const scopeType = body.scopeType === "organization" ? "organization" : "user";
@@ -480,12 +679,23 @@ function authorizeLibraryScope(request, response, body, authService) {
     }
     return { actorId, role: "owner", scopeId, scopeType };
   }
-  const role = getOrganizationMemberRole(scopeId, actorId);
+  const role = organizationRepository.getMemberRole(scopeId, actorId);
   if (!role) {
     writeJson(request, response, 403, { error: "organization_membership_required" });
     return null;
   }
-  return { actorId, role, scopeId, scopeType };
+  return {
+    actorId,
+    recordLibraryAudit: (operationKind, metadata) => organizationRepository.recordLibraryAudit(
+      scopeId,
+      actorId,
+      operationKind,
+      metadata
+    ),
+    role,
+    scopeId,
+    scopeType
+  };
 }
 
 function canManageOrganizationLibrary(scope) {
@@ -499,8 +709,117 @@ function writeLibraryStorageError(request, response, error) {
   }
   writeJson(request, response, 500, {
     error: "library_storage_failed",
-    message: error instanceof Error ? error.message : "Library storage failed."
+    message: "文献库操作未完成，请使用错误编号联系支持。"
   });
+}
+
+function libraryMutationKey(request, body = {}) {
+  const header = request.headers["x-idempotency-key"];
+  return typeof header === "string" && header.trim()
+    ? header.trim()
+    : typeof body.idempotencyKey === "string"
+      ? body.idempotencyKey.trim()
+      : "";
+}
+
+function executeLibraryMutation(
+  request,
+  repository,
+  scope,
+  body,
+  operationKind,
+  operation
+) {
+  const expectedRevision = Number(body.expectedRevision);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new LibraryStorageError(
+      "invalid_library_revision",
+      "A valid expected library revision is required."
+    );
+  }
+  const result = repository.runIdempotent(
+    scope.actorId,
+    libraryMutationKey(request, body),
+    operationKind,
+    () => {
+      const value = operation();
+      if (typeof scope.recordLibraryAudit === "function") {
+        const resultNode = value?.entry ?? value?.document ?? value?.folder ?? value?.result;
+        scope.recordLibraryAudit(operationKind, {
+          resourceId: resultNode?.documentId ?? resultNode?.folderId ?? body.documentId ?? body.folderId ?? null
+        });
+      }
+      return value;
+    }
+  );
+  return {
+    ...result.value,
+    replayed: result.replayed,
+    revision: repository.getRevision(scope.scopeType, scope.scopeId)
+  };
+}
+
+function writeOrganizationError(request, response, error) {
+  if (error instanceof OrganizationRepositoryError) {
+    writeJson(request, response, error.statusCode, {
+      error: error.code,
+      message: error.code
+    });
+    return;
+  }
+  throw error;
+}
+
+function authorizePlatformAdmin(
+  request,
+  response,
+  authService,
+  platformAdminRepository,
+  { requireFreshMfa = false } = {}
+) {
+  const authorization = request.headers.authorization;
+  const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+  try {
+    const session = authService.validateSession(token, "liteasy-admin");
+    const ownerKey = `user:${session.userId}`;
+    platformAdminRepository.requirePlatformAdmin(ownerKey);
+    if (requireFreshMfa) {
+      const verifiedAt = Date.parse(session.mfaVerifiedAt ?? "");
+      if (!Number.isFinite(verifiedAt) || Date.now() - verifiedAt > 15 * 60 * 1000) {
+        throw new PlatformAuthorizationError("fresh_mfa_required", 403);
+      }
+    }
+    return { ownerKey, session };
+  } catch (error) {
+    if (error instanceof AuthError) {
+      writeAuthError(request, response, error);
+    } else if (error instanceof PlatformAuthorizationError) {
+      writeJson(request, response, error.statusCode, {
+        error: error.code,
+        message: error.code
+      });
+    } else {
+      writeJson(request, response, 401, {
+        error: "admin_authentication_required",
+        message: "需要管理员登录。"
+      });
+    }
+    return null;
+  }
+}
+
+function requireAdminReason(request, response, body, message = "高风险管理操作必须填写原因。") {
+  const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+  if (!reason) {
+    writeJson(request, response, 400, {
+      error: "admin_reason_required",
+      message
+    });
+    return null;
+  }
+  return reason;
 }
 
 function personalizedRecommendationBody(body, preferences) {
@@ -552,6 +871,15 @@ function withoutSuppressedRecommendations(payload, preferences) {
   };
 }
 
+function withoutRecommendationPrivateFields(payload) {
+  return {
+    ...payload,
+    recommendations: Array.isArray(payload.recommendations)
+      ? payload.recommendations.map(({ fullTextUrl: _fullTextUrl, ...recommendation }) => recommendation)
+      : []
+  };
+}
+
 function withConfiguredOpenAIModel(body, config) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return body;
@@ -564,6 +892,7 @@ function withConfiguredOpenAIModel(body, config) {
 }
 
 export function createDevCloudRequestHandler(customConfig = {}) {
+  assertDevCloudDeploymentBoundary({ requestedEnvironment: customConfig.environment });
   const config = {
     ...defaultConfig,
     ...customConfig
@@ -585,6 +914,11 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   });
   const externalKnowledgeRunRepository =
     customConfig.externalKnowledgeRunRepository ?? createExternalKnowledgeRunRepository(database);
+  const externalPdfGrantRepository =
+    customConfig.externalPdfGrantRepository ?? createExternalPdfGrantRepository(database, {
+      grantLifetimeMs: customConfig.externalPdfGrantLifetimeMs,
+      now: customConfig.now
+    });
   const grobidParseCacheRepository =
     customConfig.grobidParseCacheRepository ?? createGrobidParseCacheRepository(database);
   const personalizationRepository =
@@ -607,24 +941,46 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   setRecommendationFeedbackRepository(
     customConfig.recommendationFeedbackRepository ?? createRecommendationFeedbackRepository(database)
   );
+  setRecommendationCacheRepository(
+    customConfig.recommendationCacheRepository ?? createRecommendationCacheRepository(database, {
+      now: customConfig.now
+    })
+  );
   const libraryStorageRepository =
     customConfig.libraryStorageRepository ?? createLibraryStorageRepository(database, {
       objectDirectory: customConfig.libraryStorageObjectDirectory,
       now: customConfig.now
   });
   libraryStorageRepository.purgeExpired?.();
+  libraryStorageRepository.reconcileObjects?.();
+  const collectionRepository =
+    customConfig.collectionRepository ?? createCollectionRepository(database, { now: customConfig.now });
+  const organizationRepository =
+    customConfig.organizationRepository ?? createOrganizationRepository(database, { now: customConfig.now });
   const accountRepository = createAccountRepository(database);
   const sessionRepository = createAuthSessionRepository(database);
+  const mfaService = customConfig.mfaService ?? createMfaService(database, {
+    masterKey: customConfig.mfaMasterKey,
+    now: customConfig.now
+  });
+  const platformAdminRepository =
+    customConfig.platformAdminRepository ?? createPlatformAdminRepository(database, {
+      environment: customConfig.environment,
+      now: customConfig.now
+    });
+  const storedModelPolicy = platformAdminRepository.loadModelPolicy?.();
+  if (storedModelPolicy) {
+    Object.assign(config, storedModelPolicy);
+  }
   const authService = customConfig.authService ?? createAuthService({
     accountRepository,
+    mfaService,
     sessionDurationMs: config.accountSessionDurationMs,
     sessionRepository
   });
   const authRateLimiter = createRateLimiter(config.authRateLimit);
   const agentArtifactRepository =
-    customConfig.agentArtifactRepository ?? createAgentArtifactRepository({
-      resultDirectory: customConfig.agentArtifactResultDirectory
-    });
+    customConfig.agentArtifactRepository ?? createAgentArtifactRepository(database);
   const mineruExtractionRepository =
     customConfig.mineruExtractionRepository ?? createMineruExtractionRepository({
       cacheDirectory: customConfig.mineruExtractionCacheDirectory
@@ -638,7 +994,28 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   );
   let activeExternalPdfFetches = 0;
 
-  return async (request, response) => {
+  function withExternalPdfGrants(ownerKey, payload) {
+    const sources = Array.isArray(payload?.sources) ? payload.sources : [];
+    return {
+      ...payload,
+      sources: sources.map(({ fullTextGrantId: _priorGrant, ...source }) => {
+        if (source.openAccessAvailable !== true || typeof source.fullTextUrl !== "string") {
+          return source;
+        }
+        try {
+          const grant = externalPdfGrantRepository.issue(ownerKey, {
+            sourceId: source.id,
+            sourceUrl: source.fullTextUrl
+          });
+          return { ...source, fullTextGrantId: grant.grantId };
+        } catch {
+          return { ...source, openAccessAvailable: false };
+        }
+      })
+    };
+  }
+
+  const handleRequest = async (request, response) => {
     const method = request.method ?? "GET";
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     request.liteasyAllowedOrigins = new Set(
@@ -671,9 +1048,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     }
 
     if (method === "GET" && url.pathname === "/v1/agent-artifacts") {
+      const session = authorizeAccountScopedBody(request, response, {}, authService);
+      if (!session) return;
       writeJson(request, response, 200, {
-        artifacts: agentArtifactRepository.list(),
-        resultDirectory: "project-docs/agent-results"
+        artifacts: agentArtifactRepository.list(session.userId)
       });
       return;
     }
@@ -687,11 +1065,15 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      const session = authorizeAccountScopedBody(request, response, body, authService);
+      if (!session) return;
       try {
-        writeJson(request, response, 201, agentArtifactRepository.save(body));
+        delete body.sessionId;
+        writeJson(request, response, 201, agentArtifactRepository.save(session.userId, body));
       } catch (error) {
         writeJson(request, response, 400, {
-          error: error instanceof Error ? error.message : "invalid_agent_artifact"
+          error: error instanceof Error ? error.message : "invalid_agent_artifact",
+          message: "Agent 产物格式无效，未保存。"
         });
       }
       return;
@@ -707,10 +1089,15 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) {
         return;
       }
+      const session = authorizeAccountScopedBody(request, response, body, authService);
+      if (!session) return;
       try {
-        const renamed = agentArtifactRepository.rename(artifactId, body.title);
+        const renamed = agentArtifactRepository.rename(session.userId, artifactId, body.title);
         if (!renamed) {
-          writeJson(request, response, 404, { error: "agent_artifact_not_found" });
+          writeJson(request, response, 404, {
+            error: "agent_artifact_not_found",
+            message: "找不到要重命名的 Agent 产物。"
+          });
           return;
         }
         writeJson(request, response, 200, renamed);
@@ -724,10 +1111,15 @@ export function createDevCloudRequestHandler(customConfig = {}) {
 
     if (method === "DELETE" && url.pathname.startsWith("/v1/agent-artifacts/")) {
       const artifactId = url.pathname.slice("/v1/agent-artifacts/".length);
+      const session = authorizeAccountScopedBody(request, response, {}, authService);
+      if (!session) return;
       try {
-        const deleted = agentArtifactRepository.remove(artifactId);
+        const deleted = agentArtifactRepository.remove(session.userId, artifactId);
         if (!deleted) {
-          writeJson(request, response, 404, { error: "agent_artifact_not_found" });
+          writeJson(request, response, 404, {
+            error: "agent_artifact_not_found",
+            message: "找不到要删除的 Agent 产物。"
+          });
           return;
         }
         writeJson(request, response, 200, deleted);
@@ -740,60 +1132,206 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     }
 
     if (method === "GET" && (url.pathname === "/admin/" || url.pathname === "/admin")) {
-      writeHtml(
-        request,
-        response,
-        200,
-        buildAdminConsoleHtml(request, config, {
-          buildAdminDemoStatePayload,
-          buildOrganizationGovernancePayload,
-          buildOrganizationListPayload
-        })
-      );
+      writeHtml(request, response, 200, buildAdminConsoleHtml());
       return;
     }
 
-    if (method === "GET" && url.pathname === "/v1/admin/demo-state") {
-      writeJson(request, response, 200, buildAdminDemoStatePayload());
+    if (method === "GET" && url.pathname === "/v1/model-policy") {
+      try {
+        const authorization = request.headers.authorization;
+        const token = typeof authorization === "string" && authorization.startsWith("Bearer ")
+          ? authorization.slice("Bearer ".length).trim()
+          : "";
+        authService.validateSession(token, "liteasy-desktop");
+        writeJson(request, response, 200, buildPolicyPayload(request, config));
+      } catch (error) {
+        if (!writeAuthError(request, response, error)) {
+          writeJson(request, response, 401, {
+            error: "invalid_session",
+            message: "登录会话无效或已过期。"
+          });
+        }
+      }
       return;
     }
 
     if (method === "GET" && url.pathname === "/v1/admin/model-policy") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository
+      );
+      if (!admin) return;
       writeJson(request, response, 200, buildPolicyPayload(request, config));
       return;
     }
 
-    if (method === "POST" && url.pathname === "/v1/admin/demo-reset") {
-      writeJson(request, response, 200, buildAdminDemoResetPayload());
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/v1/admin/demo-reseed") {
-      writeJson(request, response, 200, buildAdminDemoReseedPayload());
-      return;
-    }
-
     if (method === "POST" && url.pathname === "/v1/admin/model-policy") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
         return;
       }
-
-      writeJson(request, response, 200, buildPolicyUpdatePayload(request, config, body));
+      const reason = requireAdminReason(request, response, body);
+      if (!reason) return;
+      const payload = buildPolicyUpdatePayload(request, config, body, admin.ownerKey);
+      platformAdminRepository.saveModelPolicy?.(payload.policy, admin.ownerKey);
+      platformAdminRepository.recordAudit({
+        action: "model_policy_updated",
+        actorId: admin.ownerKey,
+        metadata: { policyVersion: payload.policy?.policyVersion },
+        reason,
+        risk: "high",
+        targetType: "model_policy"
+      });
+      writeJson(request, response, 200, payload);
       return;
     }
 
     if (method === "GET" && url.pathname === "/v1/admin/governance-dashboard") {
-      writeJson(
+      const admin = authorizePlatformAdmin(
         request,
         response,
-        200,
-        buildAdminGovernanceDashboardPayload(request, config, {
-          buildAdminDemoStatePayload,
-          buildOrganizationGovernancePayload,
-          buildOrganizationListPayload
-        })
+        authService,
+        platformAdminRepository
       );
+      if (!admin) return;
+      writeJson(request, response, 200, platformAdminRepository.dashboard());
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/session") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
+      writeJson(request, response, 200, {
+        session: {
+          audience: admin.session.audience,
+          expiresAt: admin.session.expiresAt,
+          name: admin.session.name,
+          userId: admin.session.userId
+        }
+      });
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/v1/admin/retrieval-sources") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository
+      );
+      if (!admin) return;
+      writeJson(request, response, 200, {
+        sources: platformAdminRepository.listRetrievalSources()
+      });
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      ["/v1/admin/retrieval-sources", "/v1/admin/retrieval-sources/remove"].includes(url.pathname)
+    ) {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const reason = requireAdminReason(request, response, body);
+      if (!reason) return;
+      try {
+        const result = url.pathname.endsWith("/remove")
+          ? platformAdminRepository.removeRetrievalSource(body.sourceId, admin.ownerKey, reason)
+          : platformAdminRepository.saveRetrievalSource({ ...body, reason }, admin.ownerKey);
+        writeJson(request, response, url.pathname.endsWith("/remove") ? 200 : 201, result);
+      } catch (error) {
+        const statusCode = error instanceof PlatformAuthorizationError ? error.statusCode : 500;
+        writeJson(request, response, statusCode, {
+          error: error instanceof PlatformAuthorizationError
+            ? error.code
+            : "retrieval_source_update_failed",
+          message: "检索源配置更新失败。"
+        });
+      }
+      return;
+    }
+
+    if (
+      (method === "GET" && url.pathname === "/v1/admin/forum/posts") ||
+      (method === "POST" && url.pathname === "/v1/admin/forum/posts/moderate")
+    ) {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
+      const endpoint = typeof config.intuechoApiEndpoint === "string"
+        ? config.intuechoApiEndpoint.replace(/\/$/, "")
+        : "";
+      if (!endpoint) {
+        writeJson(request, response, 503, {
+          error: "intuecho_admin_unavailable",
+          message: "Intuecho 管理接口尚未配置。"
+        });
+        return;
+      }
+      const body = method === "POST" ? await readJsonOrWriteError(request, response) : null;
+      if (method === "POST" && body === null) return;
+      const reason = method === "POST" ? requireAdminReason(request, response, body) : null;
+      if (method === "POST" && !reason) return;
+      if (method === "POST" && (typeof body.postId !== "string" || !body.postId.trim())) {
+        writeJson(request, response, 400, {
+          error: "invalid_forum_post_id",
+          message: "帖子标识无效。"
+        });
+        return;
+      }
+      const authorization = request.headers.authorization;
+      const target = method === "GET"
+        ? `${endpoint}/v1/admin/posts`
+        : `${endpoint}/v1/admin/posts/${encodeURIComponent(body.postId.trim())}/moderate`;
+      try {
+        const forumResponse = await fetch(target, {
+          method,
+          headers: {
+            Authorization: authorization,
+            ...(method === "POST" ? { "Content-Type": "application/json" } : {})
+          },
+          ...(method === "POST" ? {
+            body: JSON.stringify({ action: body.action, reason })
+          } : {}),
+          signal: AbortSignal.timeout(5_000)
+        });
+        const payload = await forumResponse.json().catch(() => ({}));
+        writeJson(request, response, forumResponse.status, payload);
+      } catch {
+        writeJson(request, response, 503, {
+          error: "intuecho_admin_unavailable",
+          message: "Intuecho 管理接口暂时不可用。"
+        });
+      }
       return;
     }
 
@@ -837,19 +1375,6 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
 
       writeJson(request, response, 200, buildModelAuditPayload(body));
-      return;
-    }
-
-    if (method === "POST" && url.pathname === "/v1/account/demo-login") {
-      writeJson(request, response, 200, {
-        session: {
-          email: "researcher@liteasy.dev",
-          expiresAt: "2026-05-15T09:30:00Z",
-          membershipTier: "pro",
-          name: "Liteasy Researcher",
-          sessionId: "demo-session-1"
-        }
-      });
       return;
     }
 
@@ -922,6 +1447,34 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       return;
     }
 
+    if (method === "POST" && url.pathname === "/v1/account/change-bootstrap-password") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const rateLimitKey = getClientKey(request, "bootstrap-password-change");
+      const rateLimit = authRateLimiter.consume(rateLimitKey);
+      if (!rateLimit.allowed) {
+        response.setHeader?.("Retry-After", String(rateLimit.retryAfterSeconds));
+        writeJson(request, response, 429, {
+          error: "too_many_auth_attempts",
+          message: "尝试次数过多，请稍后再试。"
+        });
+        return;
+      }
+      try {
+        const result = await authService.changeBootstrapPassword(body);
+        authRateLimiter.reset(rateLimitKey);
+        writeJson(request, response, 200, result);
+      } catch (error) {
+        if (!writeAuthError(request, response, error)) {
+          writeJson(request, response, 500, {
+            error: "password_change_failed",
+            message: "密码更换失败，请稍后重试。"
+          });
+        }
+      }
+      return;
+    }
+
     if (method === "POST" && url.pathname === "/v1/account/session") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) {
@@ -930,13 +1483,37 @@ export function createDevCloudRequestHandler(customConfig = {}) {
 
       try {
         writeJson(request, response, 200, {
-          session: authService.validateSession(body.sessionId)
+          session: authService.validateSession(body.sessionId, body.audience ?? "liteasy-desktop")
         });
       } catch (error) {
         if (!writeAuthError(request, response, error)) {
           writeJson(request, response, 500, {
             error: "session_validation_failed",
             message: "会话校验失败，请稍后重试。"
+          });
+        }
+      }
+      return;
+    }
+
+    if (method === "GET" && url.pathname === "/v1/account/capabilities") {
+      const authorization = request.headers.authorization;
+      const sessionToken = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length).trim()
+        : "";
+      try {
+        const session = authService.validateSession(sessionToken, "liteasy-desktop");
+        writeJson(request, response, 200, {
+          developerDiagnostics: platformAdminRepository.hasRole(
+            `user:${session.userId}`,
+            "developer_diagnostics"
+          )
+        });
+      } catch (error) {
+        if (!writeAuthError(request, response, error)) {
+          writeJson(request, response, 401, {
+            error: "invalid_session",
+            message: "登录会话无效或已过期。"
           });
         }
       }
@@ -991,18 +1568,6 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       const recommendationBody = profileResult.value
         ? { ...personalizedBody, researchProfile: profileResult.value }
         : personalizedBody;
-      if (customConfig.recommendationMode === "demo") {
-        writeJson(
-          request,
-          response,
-          200,
-          withoutSuppressedRecommendations(
-            buildRecommendationPayload(recommendationBody),
-            personalizationPreferences
-          )
-        );
-        return;
-      }
       const selectedDocuments = Array.isArray(body.selectedDocuments)
         ? body.selectedDocuments
             .filter((document) => typeof document?.title === "string" && document.title.trim().length > 0)
@@ -1134,12 +1699,12 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           body.sessionId,
           externalReranker.recommendations.filter((candidate) => candidate.sourceKind === "live")
         );
-        writeJson(request, response, 200, withoutSuppressedRecommendations({
+        writeJson(request, response, 200, withoutRecommendationPrivateFields(withoutSuppressedRecommendations({
           ...payload,
           externalReranker: externalReranker.audit,
           recommendations: externalReranker.recommendations,
           semanticRetrieval: semanticRetrieval.audit
-        }, personalizationPreferences));
+        }, personalizationPreferences)));
       } catch (error) {
         if (error instanceof ExternalKnowledgeError) {
           writeJson(request, response, error.statusCode, { error: error.code, message: error.message });
@@ -1148,6 +1713,54 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         writeJson(request, response, 502, {
           error: "recommendation_retrieval_failed",
           message: "联网推荐来源当前不可用。"
+        });
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/recommendations/pdf-grant") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      if (Object.keys(body).some((key) => !["candidateId", "sessionId"].includes(key)) ||
+        typeof body.candidateId !== "string" ||
+        !/^[A-Za-z0-9._:/-]{1,300}$/.test(body.candidateId)) {
+        writeJson(request, response, 400, {
+          error: "recommendation_candidate_invalid",
+          message: "推荐候选标识无效。"
+        });
+        return;
+      }
+      const candidate = loadRecommendationCandidate(body.sessionId, body.candidateId);
+      if (!candidate) {
+        writeJson(request, response, 404, {
+          error: "recommendation_candidate_not_found",
+          message: "推荐候选不存在或已过期。"
+        });
+        return;
+      }
+      if (candidate.openAccessAvailable !== true || typeof candidate.fullTextUrl !== "string") {
+        writeJson(request, response, 404, {
+          error: "recommendation_pdf_unavailable",
+          message: "该推荐候选当前没有可验证的开放 PDF。"
+        });
+        return;
+      }
+      try {
+        const grant = externalPdfGrantRepository.issue(body.sessionId, {
+          sourceId: body.candidateId,
+          sourceUrl: candidate.fullTextUrl
+        });
+        writeJson(request, response, 200, {
+          fullTextGrantId: grant.grantId,
+          fullTextUrl: grant.sourceUrl,
+          sourceId: grant.sourceId
+        });
+      } catch {
+        writeJson(request, response, 404, {
+          error: "recommendation_pdf_unavailable",
+          message: "该推荐候选当前没有可验证的开放 PDF。"
         });
       }
       return;
@@ -1482,7 +2095,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         if (typeof body.artifactId === "string") {
           const resumed = externalKnowledgeRunRepository.begin(cacheKeyInput);
           if (resumed.payload) {
-            writeJson(request, response, 200, { ...resumed.payload, retrieval: resumed.run });
+            writeJson(request, response, 200, withExternalPdfGrants(body.sessionId, {
+              ...resumed.payload,
+              retrieval: resumed.run
+            }));
             return;
           }
           retrievalRun = resumed.run;
@@ -1522,7 +2138,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         const completedRun = typeof body.artifactId === "string"
           ? externalKnowledgeRunRepository.complete(cacheKeyInput, payload)
           : undefined;
-        writeJson(request, response, 200, completedRun ? { ...payload, retrieval: completedRun } : payload);
+        writeJson(request, response, 200, withExternalPdfGrants(
+          body.sessionId,
+          completedRun ? { ...payload, retrieval: completedRun } : payload
+        ));
       } catch (error) {
         const statusCode = error instanceof ExternalKnowledgeError
           ? error.statusCode
@@ -1547,14 +2166,28 @@ export function createDevCloudRequestHandler(customConfig = {}) {
 
     if (method === "POST" && url.pathname === "/v1/research/external-pdf") {
       const body = await readJsonOrWriteError(request, response);
-      if (body === null) {
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
         return;
       }
-      if (typeof body.url !== "string" || body.url.length > 2_048 ||
-        typeof body.sourceId !== "string" || !/^[^\s\u0000-\u001f\u007f]{1,180}$/.test(body.sourceId)) {
+      if (Object.keys(body).some((key) => !["grantId", "sessionId", "sourceId"].includes(key)) ||
+        typeof body.grantId !== "string" || !/^pdfgrant_[A-Za-z0-9-]{1,100}$/.test(body.grantId) ||
+        typeof body.sourceId !== "string" || !/^[^\s\u0000-\u001f\u007f]{1,300}$/.test(body.sourceId)) {
         writeJson(request, response, 400, {
           error: "invalid_external_pdf_request",
-          message: "外部 PDF 请求缺少有效的来源 ID 或 URL。"
+          message: "外部 PDF 请求缺少有效的来源 ID 或短期授权。"
+        });
+        return;
+      }
+      let grant;
+      try {
+        grant = externalPdfGrantRepository.load(body.sessionId, body);
+      } catch {
+        grant = null;
+      }
+      if (!grant) {
+        writeJson(request, response, 404, {
+          error: "external_pdf_grant_not_found",
+          message: "外部 PDF 授权已失效，请重新检索后再试。"
         });
         return;
       }
@@ -1567,7 +2200,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
       activeExternalPdfFetches += 1;
       try {
-        const pdf = await fetchSecurePdf(body.url, {
+        const pdf = await fetchSecurePdf(grant.sourceUrl, {
           maximumBytes: customConfig.externalPdfMaximumBytes,
           maximumRedirects: customConfig.externalPdfMaximumRedirects,
           resolver: customConfig.externalPdfResolver,
@@ -1589,21 +2222,6 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         });
       } finally {
         activeExternalPdfFetches -= 1;
-      }
-      return;
-    }
-
-    if (method === "GET" && url.pathname === "/v1/local-library/pdf") {
-      try {
-        const bytes = await readLocalLibraryPdfForBrowser(url.searchParams.get("path") ?? "", {
-          rootPath: customConfig.localLibraryRootPath
-        });
-        writePdf(request, response, bytes);
-      } catch (error) {
-        writeJson(request, response, error instanceof LocalLibraryPdfError ? error.statusCode : 500, {
-          error: "local_library_pdf_unavailable",
-          message: error instanceof Error ? error.message : "本地 PDF 当前不可用。"
-        });
       }
       return;
     }
@@ -1667,9 +2285,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           mineruExtractionsInFlight.delete(cacheKey);
         }
       } catch (error) {
+        console.error(`MinerU extraction failed (${request.liteasyTraceId})`, error);
         writeJson(request, response, 502, {
           error: "mineru_extraction_failed",
-          message: error instanceof Error ? error.message : "MinerU PDF 解析失败。"
+          message: "PDF 解析服务暂时不可用，请稍后重试。"
         });
       }
       return;
@@ -1710,10 +2329,34 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
       const snapshot = personalizationRepository.clear(body.sessionId);
-      clearRecommendationCacheForSession(body.sessionId);
-      clearRecommendationFeedbackForUser(body.sessionId);
-      clearRecommendationCandidatesForUser(body.sessionId);
       writeJson(request, response, 200, snapshot);
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (url.pathname === "/v1/personalization/settings" ||
+        url.pathname === "/v1/personalization/settings/update")
+    ) {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      try {
+        const snapshot = url.pathname.endsWith("/update")
+          ? personalizationRepository.setEnabled(body.sessionId, body.enabled)
+          : personalizationRepository.get(body.sessionId);
+        writeJson(request, response, 200, snapshot);
+      } catch (error) {
+        if (error instanceof PersonalizationValidationError) {
+          writeJson(request, response, 400, {
+            error: "invalid_personalization_setting",
+            message: error.message
+          });
+        } else {
+          throw error;
+        }
+      }
       return;
     }
 
@@ -1805,7 +2448,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      writeJson(request, response, 200, buildCollectionListPayload(body));
+      writeJson(request, response, 200, buildCollectionListPayload(body, collectionRepository));
       return;
     }
 
@@ -1818,7 +2461,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      const payload = buildCollectionSavePayload(body);
+      const payload = buildCollectionSavePayload(body, collectionRepository);
       if ("error" in payload) {
         writeJson(request, response, 400, payload);
         return;
@@ -1837,7 +2480,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      writeJson(request, response, 200, buildDocumentMetadataSyncPayload(body));
+      writeJson(request, response, 200, {
+        result: personalizationRepository.syncLocalManifest(body.sessionId, body.documents)
+      });
       return;
     }
 
@@ -1850,7 +2495,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      writeJson(request, response, 200, buildOrganizationListPayload(body));
+      writeJson(request, response, 200, buildOrganizationListPayload(body, organizationRepository));
       return;
     }
 
@@ -1863,18 +2508,16 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      const payload = buildOrganizationCreatePayload(body);
-      if ("error" in payload) {
+      try {
         writeJson(
           request,
           response,
-          payload.error === "organization_create_forbidden" ? 403 : 400,
-          payload
+          200,
+          buildOrganizationCreatePayload(body, organizationRepository)
         );
-        return;
+      } catch (error) {
+        writeOrganizationError(request, response, error);
       }
-
-      writeJson(request, response, 200, payload);
       return;
     }
 
@@ -1887,13 +2530,16 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      const payload = buildOrganizationJoinPayload(body);
-      if ("error" in payload) {
-        writeJson(request, response, 400, payload);
-        return;
+      try {
+        writeJson(
+          request,
+          response,
+          200,
+          buildOrganizationJoinPayload(body, organizationRepository)
+        );
+      } catch (error) {
+        writeOrganizationError(request, response, error);
       }
-
-      writeJson(request, response, 200, payload);
       return;
     }
 
@@ -1906,18 +2552,16 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      const payload = buildOrganizationInvitePayload(body);
-      if ("error" in payload) {
+      try {
         writeJson(
           request,
           response,
-          payload.error === "organization_role_forbidden" ? 403 : 400,
-          payload
+          200,
+          buildOrganizationInvitePayload(body, organizationRepository)
         );
-        return;
+      } catch (error) {
+        writeOrganizationError(request, response, error);
       }
-
-      writeJson(request, response, 200, payload);
       return;
     }
 
@@ -1930,18 +2574,38 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      const payload = buildOrganizationLeavePayload(body);
-      if ("error" in payload) {
+      try {
         writeJson(
           request,
           response,
-          payload.error === "organization_owner_leave_blocked" ? 403 : 400,
-          payload
+          200,
+          buildOrganizationLeavePayload(body, organizationRepository)
         );
-        return;
+      } catch (error) {
+        writeOrganizationError(request, response, error);
       }
+      return;
+    }
 
-      writeJson(request, response, 200, payload);
+    const organizationMemberMutationPayloads = new Map([
+      ["/v1/org/members/role", buildOrganizationMemberRolePayload],
+      ["/v1/org/members/status", buildOrganizationMemberStatusPayload],
+      ["/v1/org/owner/transfer", buildOrganizationOwnershipTransferPayload]
+    ]);
+    if (method === "POST" && organizationMemberMutationPayloads.has(url.pathname)) {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      if (!authorizeAccountScopedBody(request, response, body, authService)) return;
+      try {
+        writeJson(
+          request,
+          response,
+          200,
+          organizationMemberMutationPayloads.get(url.pathname)(body, organizationRepository)
+        );
+      } catch (error) {
+        writeOrganizationError(request, response, error);
+      }
       return;
     }
 
@@ -1954,7 +2618,20 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      writeJson(request, response, 200, buildOrganizationSummaryPayload(body));
+      try {
+        writeJson(
+          request,
+          response,
+          200,
+          buildOrganizationSummaryPayload(
+            body,
+            organizationRepository,
+            libraryStorageRepository
+          )
+        );
+      } catch (error) {
+        writeOrganizationError(request, response, error);
+      }
       return;
     }
 
@@ -1965,38 +2642,260 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
       body.scopeId = body.organizationId;
       body.scopeType = "organization";
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
-      const payload = buildOrganizationSharedLibraryManifestPayload(body);
-      const persistedDocuments = libraryStorageRepository.listDocuments(
-        "organization",
-        scope.scopeId,
-        "active"
+      try {
+        writeJson(
+          request,
+          response,
+          200,
+          buildOrganizationSharedLibraryManifestPayload(
+            body,
+            organizationRepository,
+            libraryStorageRepository
+          )
+        );
+      } catch (error) {
+        writeOrganizationError(request, response, error);
+      }
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (url.pathname === "/v1/org/storage-policy" ||
+        url.pathname === "/v1/org/storage-policy/update")
+    ) {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      try {
+        const payload = url.pathname.endsWith("/update")
+          ? buildOrganizationStoragePolicyUpdatePayload(body, organizationRepository)
+          : buildOrganizationStoragePolicyPayload(body, organizationRepository);
+        writeJson(request, response, 200, payload);
+      } catch (error) {
+        writeOrganizationError(request, response, error);
+      }
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      [
+        "/v1/org/annotations/list",
+        "/v1/org/annotations/create",
+        "/v1/org/annotations/update",
+        "/v1/org/annotations/delete"
+      ].includes(url.pathname)
+    ) {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      body.scopeId = body.organizationId;
+      body.scopeType = "organization";
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
+      if (!scope) return;
+      try {
+        if (url.pathname.endsWith("/list")) {
+          writeJson(request, response, 200, {
+            annotations: libraryStorageRepository.listTeamAnnotations(
+              scope.scopeId,
+              body.documentId
+            )
+          });
+          return;
+        }
+        const operation = url.pathname.endsWith("/create")
+          ? "create_team_annotation"
+          : url.pathname.endsWith("/update")
+            ? "update_team_annotation"
+            : "delete_team_annotation";
+        const result = libraryStorageRepository.runIdempotent(
+          scope.actorId,
+          libraryMutationKey(request, body),
+          operation,
+          () => url.pathname.endsWith("/create")
+            ? libraryStorageRepository.createTeamAnnotation({
+                body: body.body,
+                documentId: body.documentId,
+                organizationId: scope.scopeId,
+                uploadedBy: scope.actorId
+              })
+            : url.pathname.endsWith("/update")
+              ? libraryStorageRepository.updateTeamAnnotation({
+                  actorId: scope.actorId,
+                  annotationId: body.annotationId,
+                  body: body.body,
+                  expectedRevision: body.expectedRevision,
+                  organizationId: scope.scopeId
+                })
+              : libraryStorageRepository.deleteTeamAnnotation({
+                  actorId: scope.actorId,
+                  annotationId: body.annotationId,
+                  canModerate: canManageOrganizationLibrary(scope),
+                  expectedRevision: body.expectedRevision,
+                  organizationId: scope.scopeId
+                })
+        );
+        writeJson(request, response, 200, { ...result.value, replayed: result.replayed });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/tree") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(
+        request,
+        response,
+        body,
+        authService,
+        organizationRepository
       );
-      const rootFolderId = payload.manifest.rootFolderId;
-      const persistedFolders = libraryStorageRepository.listFolders("organization", scope.scopeId);
-      payload.manifest.folders.push(...persistedFolders.map((folder) => ({
-        id: folder.folderId,
-        name: folder.name,
-        parentId: folder.parentFolderId ?? rootFolderId,
-        path: `org://${scope.scopeId}/shared-library/${folder.folderId}`
-      })));
-      payload.manifest.documents.push(...persistedDocuments.map((document) => ({
-        folderId: document.folderId ?? rootFolderId,
-        id: document.documentId,
-        sourcePath: `org://${scope.scopeId}/shared-library/${
-          document.folderId ? `${document.folderId}/` : ""
-        }${document.documentId}.pdf`,
-        title: document.fileName.replace(/\.pdf$/i, "")
-      })));
-      writeJson(request, response, 200, payload);
+      if (!scope) return;
+      try {
+        libraryStorageRepository.purgeExpired();
+        writeJson(request, response, 200, {
+          quota: libraryStorageRepository.getQuota(scope.scopeType, scope.scopeId),
+          serverNow: new Date().toISOString(),
+          tree: libraryStorageRepository.getTree(
+            scope.scopeType,
+            scope.scopeId,
+            body.status
+          )
+        });
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/entries/metadata") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(
+        request,
+        response,
+        body,
+        authService,
+        organizationRepository
+      );
+      if (!scope) return;
+      if (
+        scope.scopeType === "organization" &&
+        !organizationRepository.canUpload(scope.scopeId, scope.actorId)
+      ) {
+        writeJson(request, response, 403, { error: "organization_upload_forbidden" });
+        return;
+      }
+      try {
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          "create_metadata_entry",
+          () => ({
+            entry: libraryStorageRepository.createMetadataEntry({
+              createdBy: scope.actorId,
+              doi: body.doi,
+              expectedRevision: body.expectedRevision,
+              externalUrl: body.externalUrl,
+              folderId: body.folderId,
+              metadata: body.metadata,
+              scopeId: scope.scopeId,
+              scopeType: scope.scopeType,
+              sourceId: body.sourceId,
+              title: body.title
+            })
+          })
+        ));
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/entries/copy") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      const actorId = body.sessionId;
+      const resolveScope = (value) => {
+        const scopeType = value?.scopeType === "organization" ? "organization" : "user";
+        const scopeId = scopeType === "user"
+          ? actorId
+          : typeof value?.scopeId === "string"
+            ? value.scopeId.trim()
+            : "";
+        if (scopeType === "user") return { actorId, role: "owner", scopeId, scopeType };
+        const role = organizationRepository.getMemberRole(scopeId, actorId);
+        if (!role) throw new OrganizationRepositoryError("organization_membership_required", 403);
+        return {
+          actorId,
+          recordLibraryAudit: (operationKind, metadata) => organizationRepository.recordLibraryAudit(
+            scopeId,
+            actorId,
+            operationKind,
+            metadata
+          ),
+          role,
+          scopeId,
+          scopeType
+        };
+      };
+      try {
+        const source = resolveScope(body.source);
+        const target = resolveScope(body.target);
+        if (
+          source.scopeType === "organization" &&
+          !organizationRepository.canExport(source.scopeId, actorId)
+        ) {
+          throw new OrganizationRepositoryError("organization_export_forbidden", 403);
+        }
+        if (
+          target.scopeType === "organization" &&
+          !organizationRepository.canUpload(target.scopeId, actorId)
+        ) {
+          throw new OrganizationRepositoryError("organization_upload_forbidden", 403);
+        }
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          target,
+          body,
+          "copy_library_entry",
+          () => ({
+            entry: libraryStorageRepository.copyEntry(
+              body.documentId,
+              source,
+              target,
+              {
+                createdBy: actorId,
+                expectedRevision: body.expectedRevision,
+                folderId: body.target?.folderId
+              }
+            )
+          })
+        ));
+      } catch (error) {
+        if (error instanceof OrganizationRepositoryError) {
+          writeOrganizationError(request, response, error);
+        } else {
+          writeLibraryStorageError(request, response, error);
+        }
+      }
       return;
     }
 
     if (method === "POST" && url.pathname === "/v1/library/documents/update") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       if (!canManageOrganizationLibrary(scope)) {
         writeJson(request, response, 403, { error: "organization_library_manage_forbidden" });
@@ -2006,9 +2905,18 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         const changes = {};
         if (Object.prototype.hasOwnProperty.call(body, "fileName")) changes.fileName = body.fileName;
         if (Object.prototype.hasOwnProperty.call(body, "folderId")) changes.folderId = body.folderId;
-        writeJson(request, response, 200, {
-          document: libraryStorageRepository.updateDocument(body.documentId, scope, changes)
-        });
+        if (Object.prototype.hasOwnProperty.call(body, "title")) changes.title = body.title;
+        changes.expectedRevision = body.expectedRevision;
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          "update_library_entry",
+          () => ({
+            document: libraryStorageRepository.updateEntry(body.documentId, scope, changes)
+          })
+        ));
       } catch (error) {
         writeLibraryStorageError(request, response, error);
       }
@@ -2017,37 +2925,145 @@ export function createDevCloudRequestHandler(customConfig = {}) {
 
     if (method === "POST" && url.pathname === "/v1/library/documents/upload") {
       const authBody = {
+        expectedRevision: request.headers["x-liteasy-expected-revision"],
+        idempotencyKey: request.headers["x-idempotency-key"],
         scopeId: request.headers["x-liteasy-scope-id"],
         scopeType: request.headers["x-liteasy-scope-type"],
         sessionId: request.headers["x-liteasy-session-id"]
       };
-      const scope = authorizeLibraryScope(request, response, authBody, authService);
+      const scope = authorizeLibraryScope(request, response, authBody, authService, organizationRepository);
       if (!scope) return;
-      let bytes;
+      if (
+        scope.scopeType === "organization" &&
+        !organizationRepository.canUpload(scope.scopeId, scope.actorId)
+      ) {
+        writeJson(request, response, 403, { error: "organization_upload_forbidden" });
+        return;
+      }
+      const fileName = requirePdfUploadHeaders(request, response);
+      if (!fileName) return;
+      let staged;
       try {
-        bytes = await readBinaryBody(request, maximumLibraryPdfBytes);
+        staged = await stageBinaryBody(request, maximumLibraryPdfBytes, libraryStorageRepository);
       } catch (error) {
-        writeJson(request, response, 413, { error: "request_body_too_large" });
+        writeJson(request, response, error?.code === "REQUEST_BODY_TOO_LARGE" ? 413 : 500, {
+          error: error?.code === "REQUEST_BODY_TOO_LARGE"
+            ? "request_body_too_large"
+            : "library_upload_staging_failed"
+        });
         return;
       }
       try {
-        const rawName = request.headers["x-liteasy-file-name"];
-        const fileName = decodeURIComponent(typeof rawName === "string" ? rawName : "Untitled paper.pdf");
-        const payload = libraryStorageRepository.uploadDocument({
-          bytes,
-          duplicateAction: request.headers["x-liteasy-duplicate-action"],
-          fileName,
-          folderId: request.headers["x-liteasy-folder-id"],
-          scopeId: scope.scopeId,
-          scopeType: scope.scopeType,
-          uploadedBy: scope.actorId
-        });
-        if (scope.scopeType === "organization" && payload.document) {
-          setOrganizationLibraryDocumentVisibility(scope.scopeId, payload.document, true);
-        }
+        await validateLibraryPdfSecurity(staged, customConfig);
+        const payload = executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          authBody,
+          "upload_library_document",
+          () => libraryStorageRepository.uploadStagedDocument({
+            byteLength: staged.byteLength,
+            contentHash: staged.contentHash,
+            duplicateAction: request.headers["x-liteasy-duplicate-action"],
+            expectedRevision: authBody.expectedRevision,
+            fileName,
+            folderId: request.headers["x-liteasy-folder-id"],
+            scopeId: scope.scopeId,
+            scopeType: scope.scopeType,
+            stagedPath: staged.stagedPath,
+            uploadedBy: scope.actorId
+          })
+        );
         writeJson(request, response, 200, payload);
       } catch (error) {
-        writeLibraryStorageError(request, response, error);
+        if (["invalid_pdf", "unsafe_pdf_content", "pdf_security_scanner_unavailable"].includes(error?.code)) {
+          writeJson(request, response, error.code === "pdf_security_scanner_unavailable" ? 503 : 400, {
+            error: error.code,
+            message: error.code === "pdf_security_scanner_unavailable"
+              ? "PDF 安全扫描服务暂时不可用。"
+              : "PDF 未通过安全校验。"
+          });
+        } else {
+          writeLibraryStorageError(request, response, error);
+        }
+      } finally {
+        libraryStorageRepository.discardStagedUpload(staged.stagedPath);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/entries/attach-pdf") {
+      const authBody = {
+        documentId: request.headers["x-liteasy-document-id"],
+        expectedRevision: request.headers["x-liteasy-expected-revision"],
+        idempotencyKey: request.headers["x-idempotency-key"],
+        scopeId: request.headers["x-liteasy-scope-id"],
+        scopeType: request.headers["x-liteasy-scope-type"],
+        sessionId: request.headers["x-liteasy-session-id"]
+      };
+      const scope = authorizeLibraryScope(
+        request,
+        response,
+        authBody,
+        authService,
+        organizationRepository
+      );
+      if (!scope) return;
+      if (
+        scope.scopeType === "organization" &&
+        !organizationRepository.canUpload(scope.scopeId, scope.actorId)
+      ) {
+        writeJson(request, response, 403, { error: "organization_upload_forbidden" });
+        return;
+      }
+      const fileName = requirePdfUploadHeaders(request, response);
+      if (!fileName) return;
+      let staged;
+      try {
+        staged = await stageBinaryBody(request, maximumLibraryPdfBytes, libraryStorageRepository);
+      } catch (error) {
+        writeJson(request, response, error?.code === "REQUEST_BODY_TOO_LARGE" ? 413 : 500, {
+          error: error?.code === "REQUEST_BODY_TOO_LARGE"
+            ? "request_body_too_large"
+            : "library_upload_staging_failed"
+        });
+        return;
+      }
+      try {
+        await validateLibraryPdfSecurity(staged, customConfig);
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          authBody,
+          "attach_library_entry_pdf",
+          () => ({
+            entry: libraryStorageRepository.attachMetadataEntryStagedPdf({
+              byteLength: staged.byteLength,
+              contentHash: staged.contentHash,
+              documentId: authBody.documentId,
+              expectedRevision: authBody.expectedRevision,
+              fileName,
+              scopeId: scope.scopeId,
+              scopeType: scope.scopeType,
+              stagedPath: staged.stagedPath,
+              uploadedBy: scope.actorId
+            })
+          })
+        ));
+      } catch (error) {
+        if (["invalid_pdf", "unsafe_pdf_content", "pdf_security_scanner_unavailable"].includes(error?.code)) {
+          writeJson(request, response, error.code === "pdf_security_scanner_unavailable" ? 503 : 400, {
+            error: error.code,
+            message: error.code === "pdf_security_scanner_unavailable"
+              ? "PDF 安全扫描服务暂时不可用。"
+              : "PDF 未通过安全校验。"
+          });
+        } else {
+          writeLibraryStorageError(request, response, error);
+        }
+      } finally {
+        libraryStorageRepository.discardStagedUpload(staged.stagedPath);
       }
       return;
     }
@@ -2055,7 +3071,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/library/documents/list") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       try {
         libraryStorageRepository.purgeExpired();
@@ -2076,24 +3092,55 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     ) {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       if (!canManageOrganizationLibrary(scope)) {
         writeJson(request, response, 403, { error: "organization_library_manage_forbidden" });
         return;
       }
       try {
-        const document = url.pathname.endsWith("/trash")
-          ? libraryStorageRepository.trashDocument(body.documentId, scope)
-          : libraryStorageRepository.restoreDocument(body.documentId, scope);
-        if (scope.scopeType === "organization") {
-          setOrganizationLibraryDocumentVisibility(
-            scope.scopeId,
-            document,
-            document.status === "active"
-          );
-        }
-        writeJson(request, response, 200, { document });
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          url.pathname.endsWith("/trash") ? "trash_library_entry" : "restore_library_entry",
+          () => ({
+            document: url.pathname.endsWith("/trash")
+              ? libraryStorageRepository.trashEntry(body.documentId, scope, body)
+              : libraryStorageRepository.restoreEntry(body.documentId, scope, body)
+          })
+        ));
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/entries/purge") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(
+        request,
+        response,
+        body,
+        authService,
+        organizationRepository
+      );
+      if (!scope) return;
+      if (!canManageOrganizationLibrary(scope)) {
+        writeJson(request, response, 403, { error: "organization_library_manage_forbidden" });
+        return;
+      }
+      try {
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          "purge_library_entry",
+          () => ({ result: libraryStorageRepository.purgeEntry(body.documentId, scope, body) })
+        ));
       } catch (error) {
         writeLibraryStorageError(request, response, error);
       }
@@ -2103,7 +3150,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/library/documents/authorize") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       try {
         const document = libraryStorageRepository.authorizeDocument(body.documentId, scope);
@@ -2122,11 +3169,41 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/library/documents/download") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       try {
-        const stored = libraryStorageRepository.readDocument(body.documentId, scope);
-        writeLibraryPdf(request, response, stored.document.fileName, stored.bytes);
+        const stored = libraryStorageRepository.locateDocument(body.documentId, scope);
+        await writeLibraryPdf(request, response, stored);
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/documents/export") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(
+        request,
+        response,
+        body,
+        authService,
+        organizationRepository
+      );
+      if (!scope) return;
+      if (
+        scope.scopeType === "organization" &&
+        !organizationRepository.canExport(scope.scopeId, scope.actorId)
+      ) {
+        writeJson(request, response, 403, {
+          error: "organization_export_forbidden",
+          message: "当前组织策略不允许将文献复制出组织库。"
+        });
+        return;
+      }
+      try {
+        const stored = libraryStorageRepository.locateDocument(body.documentId, scope);
+        await writeLibraryPdf(request, response, stored);
       } catch (error) {
         writeLibraryStorageError(request, response, error);
       }
@@ -2136,21 +3213,33 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/library/folders/create") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
-      if (!canManageOrganizationLibrary(scope)) {
+      if (
+        scope.scopeType === "organization" &&
+        !organizationRepository.canUpload(scope.scopeId, scope.actorId)
+      ) {
         writeJson(request, response, 403, { error: "organization_folder_manage_forbidden" });
         return;
       }
       try {
-        const folder = libraryStorageRepository.createFolder({
-          createdBy: scope.actorId,
-          name: body.name,
-          parentFolderId: body.parentFolderId,
-          scopeId: scope.scopeId,
-          scopeType: scope.scopeType
-        });
-        writeJson(request, response, 200, { folder });
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          "create_library_folder",
+          () => ({
+            folder: libraryStorageRepository.createFolder({
+              createdBy: scope.actorId,
+              expectedRevision: body.expectedRevision,
+              name: body.name,
+              parentFolderId: body.parentFolderId,
+              scopeId: scope.scopeId,
+              scopeType: scope.scopeType
+            })
+          })
+        ));
       } catch (error) {
         writeLibraryStorageError(request, response, error);
       }
@@ -2160,7 +3249,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/library/folders/update") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       if (!canManageOrganizationLibrary(scope)) {
         writeJson(request, response, 403, { error: "organization_folder_manage_forbidden" });
@@ -2172,9 +3261,97 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         if (Object.prototype.hasOwnProperty.call(body, "parentFolderId")) {
           changes.parentFolderId = body.parentFolderId;
         }
-        writeJson(request, response, 200, {
-          folder: libraryStorageRepository.updateFolder(body.folderId, scope, changes)
-        });
+        changes.expectedRevision = body.expectedRevision;
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          "update_library_folder",
+          () => ({ folder: libraryStorageRepository.updateFolder(body.folderId, scope, changes) })
+        ));
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      [
+        "/v1/library/folders/trash",
+        "/v1/library/folders/restore",
+        "/v1/library/folders/purge"
+      ].includes(url.pathname)
+    ) {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(
+        request,
+        response,
+        body,
+        authService,
+        organizationRepository
+      );
+      if (!scope) return;
+      if (!canManageOrganizationLibrary(scope)) {
+        writeJson(request, response, 403, { error: "organization_library_manage_forbidden" });
+        return;
+      }
+      try {
+        const operationKind = url.pathname.endsWith("/trash")
+          ? "trash_library_folder"
+          : url.pathname.endsWith("/restore")
+            ? "restore_library_folder"
+            : "purge_library_folder";
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          operationKind,
+          () => ({
+            folder: url.pathname.endsWith("/trash")
+              ? libraryStorageRepository.trashFolder(body.folderId, scope, body)
+              : url.pathname.endsWith("/restore")
+                ? libraryStorageRepository.restoreFolder(body.folderId, scope, body)
+                : libraryStorageRepository.purgeFolder(body.folderId, scope, body)
+          })
+        ));
+      } catch (error) {
+        writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/library/trash/empty") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const scope = authorizeLibraryScope(
+        request,
+        response,
+        body,
+        authService,
+        organizationRepository
+      );
+      if (!scope) return;
+      if (!canManageOrganizationLibrary(scope)) {
+        writeJson(request, response, 403, { error: "organization_library_manage_forbidden" });
+        return;
+      }
+      try {
+        writeJson(request, response, 200, executeLibraryMutation(
+          request,
+          libraryStorageRepository,
+          scope,
+          body,
+          "empty_library_trash",
+          () => libraryStorageRepository.emptyTrash(
+            scope.scopeType,
+            scope.scopeId,
+            body
+          )
+        ));
       } catch (error) {
         writeLibraryStorageError(request, response, error);
       }
@@ -2184,7 +3361,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     if (method === "POST" && url.pathname === "/v1/library/quota") {
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       try {
         writeJson(request, response, 200, libraryStorageRepository.getQuota(scope.scopeType, scope.scopeId));
@@ -2195,17 +3372,291 @@ export function createDevCloudRequestHandler(customConfig = {}) {
     }
 
     if (method === "POST" && url.pathname === "/v1/admin/storage-quota") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
       const body = await readJsonOrWriteError(request, response);
       if (body === null) return;
+      const reason = requireAdminReason(request, response, body);
+      if (!reason) return;
       try {
+        const quota = libraryStorageRepository.setQuota(
+          body.scopeType,
+          body.scopeId,
+          body.limitBytes
+        );
+        platformAdminRepository.recordAudit({
+          action: "storage_quota_updated",
+          actorId: admin.ownerKey,
+          metadata: { limitBytes: quota.limitBytes },
+          reason,
+          risk: "high",
+          targetId: quota.scopeId,
+          targetType: quota.scopeType
+        });
         writeJson(
           request,
           response,
           200,
-          libraryStorageRepository.setQuota(body.scopeType, body.scopeId, body.limitBytes)
+          quota
         );
       } catch (error) {
         writeLibraryStorageError(request, response, error);
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/accounts/status") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const reason = requireAdminReason(
+        request,
+        response,
+        body,
+        "修改账号状态必须填写原因。"
+      );
+      if (!reason) return;
+      if (body.userId === admin.session.userId && body.status !== "active") {
+        writeJson(request, response, 409, {
+          error: "admin_self_disable_forbidden",
+          message: "不能通过当前会话禁用或删除自己的管理员账号。"
+        });
+        return;
+      }
+      try {
+        const ownerKey = `user:${body.userId}`;
+        if (body.status === "deleted") {
+          const ownedOrganization = database.prepare(`
+            SELECT organization_id FROM organizations
+            WHERE owner_key = ? AND status != 'deleted' LIMIT 1
+          `).get(ownerKey);
+          if (ownedOrganization) {
+            writeJson(request, response, 409, {
+              error: "account_owns_organization",
+              message: "删除账号前必须转移或删除其负责的组织。"
+            });
+            return;
+          }
+        }
+        let account = body.status === "deleted"
+          ? accountRepository.findPublicById(body.userId)
+          : accountRepository.setStatus(body.userId, body.status);
+        if (!account) {
+          writeJson(request, response, 404, {
+            error: "account_not_found",
+            message: "找不到目标账号。"
+          });
+          return;
+        }
+        let deletion;
+        if (body.status === "deleted" && account.status !== "deleted") {
+          account = accountRepository.setStatus(body.userId, "disabled");
+          const startedAt = new Date().toISOString();
+          database.prepare(`
+            INSERT INTO account_deletion_jobs (
+              user_id, status, requested_by, reason, created_at, updated_at
+            ) VALUES (?, 'running', ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              status = 'running', requested_by = excluded.requested_by,
+              reason = excluded.reason, error_code = NULL,
+              updated_at = excluded.updated_at, completed_at = NULL
+          `).run(account.id, admin.ownerKey, reason, startedAt, startedAt);
+          try {
+            deletion = {
+              agentArtifacts: agentArtifactRepository.purgeOwner(account.id),
+              library: libraryStorageRepository.purgeUserScope(ownerKey),
+              personalization: personalizationRepository.deleteForAccount(ownerKey)
+            };
+            database.transaction(() => {
+              database.prepare("DELETE FROM external_knowledge_runs WHERE owner_scope = ?").run(ownerKey);
+              database.prepare("DELETE FROM external_pdf_grants WHERE owner_key = ?").run(ownerKey);
+              database.prepare("DELETE FROM organization_active_selections WHERE owner_key = ?").run(ownerKey);
+              database.prepare("DELETE FROM organization_invitations WHERE target_owner_key = ?").run(ownerKey);
+              database.prepare("DELETE FROM organization_members WHERE owner_key = ?").run(ownerKey);
+              database.prepare("DELETE FROM user_mfa_settings WHERE user_id = ?").run(account.id);
+              database.prepare(`
+                UPDATE platform_role_assignments SET revoked_at = COALESCE(revoked_at, ?)
+                WHERE owner_key = ? AND revoked_at IS NULL
+              `).run(new Date().toISOString(), ownerKey);
+              database.prepare(`
+                UPDATE platform_support_access_grants SET revoked_at = COALESCE(revoked_at, ?)
+                WHERE grantee_user_id = ? AND revoked_at IS NULL
+              `).run(new Date().toISOString(), account.id);
+            })();
+            account = accountRepository.setStatus(body.userId, "deleted");
+            const completedAt = new Date().toISOString();
+            database.prepare(`
+              UPDATE account_deletion_jobs
+              SET status = 'completed', result_json = ?, error_code = NULL,
+                updated_at = ?, completed_at = ?
+              WHERE user_id = ?
+            `).run(JSON.stringify(deletion), completedAt, completedAt, account.id);
+          } catch (error) {
+            const errorCode = typeof error?.code === "string"
+              ? error.code
+              : "account_deletion_cleanup_failed";
+            database.prepare(`
+              UPDATE account_deletion_jobs
+              SET status = 'failed', error_code = ?, updated_at = ?
+              WHERE user_id = ?
+            `).run(errorCode, new Date().toISOString(), account.id);
+            platformAdminRepository.recordAudit({
+              action: "account_deletion_failed",
+              actorId: admin.ownerKey,
+              metadata: { errorCode },
+              reason,
+              risk: "high",
+              targetId: account.id,
+              targetType: "user"
+            });
+            writeJson(request, response, 503, {
+              error: "account_deletion_pending_retry",
+              message: "账号已禁用，但数据清理未完成；请稍后重试删除。"
+            });
+            return;
+          }
+        }
+        platformAdminRepository.recordAudit({
+          action: "account_status_updated",
+          actorId: admin.ownerKey,
+          metadata: { deletion, status: account.status },
+          reason,
+          risk: "high",
+          targetId: account.id,
+          targetType: "user"
+        });
+        writeJson(request, response, 200, { account, ...(deletion ? { deletion } : {}) });
+      } catch (error) {
+        const code = typeof error?.code === "string" ? error.code : "account_status_update_failed";
+        writeJson(request, response, code === "invalid_account_status" ? 400 : 409, {
+          error: code,
+          message: "账号状态更新失败。"
+        });
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/support-access/grant") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      try {
+        const grant = platformAdminRepository.grantSupportAccess({
+          durationMinutes: body.durationMinutes,
+          grantedBy: admin.ownerKey,
+          granteeUserId: body.granteeUserId || admin.session.userId,
+          reason: body.reason,
+          scopeId: body.scopeId,
+          scopeType: body.scopeType
+        });
+        writeJson(request, response, 201, { grant });
+      } catch (error) {
+        if (error instanceof PlatformAuthorizationError) {
+          writeJson(request, response, error.statusCode, {
+            error: error.code,
+            message: "支持访问授权参数无效。"
+          });
+        } else {
+          writeJson(request, response, 500, {
+            error: "support_access_grant_failed",
+            message: "支持访问授权失败。"
+          });
+        }
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/support-access/revoke") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      const reason = requireAdminReason(request, response, body);
+      if (!reason) return;
+      try {
+        writeJson(request, response, 200, platformAdminRepository.revokeSupportAccess(
+          body.grantId,
+          admin.ownerKey,
+          reason
+        ));
+      } catch (error) {
+        const statusCode = error instanceof PlatformAuthorizationError ? error.statusCode : 500;
+        writeJson(request, response, statusCode, {
+          error: error instanceof PlatformAuthorizationError
+            ? error.code
+            : "support_access_revoke_failed",
+          message: "支持访问撤销失败。"
+        });
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/admin/support-access/document") {
+      const admin = authorizePlatformAdmin(
+        request,
+        response,
+        authService,
+        platformAdminRepository,
+        { requireFreshMfa: true }
+      );
+      if (!admin) return;
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null) return;
+      try {
+        const grant = platformAdminRepository.requireSupportAccess(
+          admin.session.userId,
+          body.scopeType,
+          body.scopeId
+        );
+        const stored = libraryStorageRepository.locateDocument(body.documentId, {
+          scopeId: body.scopeId,
+          scopeType: body.scopeType
+        });
+        platformAdminRepository.recordAudit({
+          action: "support_document_accessed",
+          actorId: admin.ownerKey,
+          metadata: { documentId: body.documentId, grantId: grant.grantId },
+          reason: grant.reason,
+          risk: "high",
+          targetId: body.scopeId,
+          targetType: body.scopeType
+        });
+        await writeLibraryPdf(request, response, stored);
+      } catch (error) {
+        if (error instanceof PlatformAuthorizationError) {
+          writeJson(request, response, error.statusCode, {
+            error: error.code,
+            message: "没有有效的限时支持访问授权。"
+          });
+        } else {
+          writeLibraryStorageError(request, response, error);
+        }
       }
       return;
     }
@@ -2222,7 +3673,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       if (body === null) return;
       body.scopeId = body.organizationId;
       body.scopeType = "organization";
-      const scope = authorizeLibraryScope(request, response, body, authService);
+      const scope = authorizeLibraryScope(request, response, body, authService, organizationRepository);
       if (!scope) return;
       try {
         if (url.pathname.endsWith("/list")) {
@@ -2233,19 +3684,36 @@ export function createDevCloudRequestHandler(customConfig = {}) {
             )
           });
         } else if (url.pathname.endsWith("/upload")) {
-          writeJson(request, response, 200, {
-            annotation: libraryStorageRepository.uploadTeamAnnotation({
-              body: body.annotation,
-              documentId: body.documentId,
-              organizationId: scope.scopeId,
-              uploadedBy: scope.actorId
+          writeJson(request, response, 200, executeLibraryMutation(
+            request,
+            libraryStorageRepository,
+            scope,
+            body,
+            "upload_team_annotation",
+            () => ({
+              annotation: libraryStorageRepository.uploadTeamAnnotation({
+                body: body.annotation,
+                documentId: body.documentId,
+                expectedRevision: body.expectedRevision,
+                organizationId: scope.scopeId,
+                uploadedBy: scope.actorId
+              })
             })
-          });
+          ));
         } else {
-          writeJson(request, response, 200, libraryStorageRepository.withdrawTeamAnnotation(
-            body.annotationId,
-            scope.actorId,
-            canManageOrganizationLibrary(scope)
+          writeJson(request, response, 200, executeLibraryMutation(
+            request,
+            libraryStorageRepository,
+            scope,
+            body,
+            "withdraw_team_annotation",
+            () => libraryStorageRepository.withdrawTeamAnnotation({
+              actorId: scope.actorId,
+              annotationId: body.annotationId,
+              canModerate: canManageOrganizationLibrary(scope),
+              expectedRevision: body.expectedRevision,
+              organizationId: scope.scopeId
+            })
           ));
         }
       } catch (error) {
@@ -2263,7 +3731,20 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         return;
       }
 
-      writeJson(request, response, 200, buildOrganizationGovernancePayload(body));
+      try {
+        writeJson(
+          request,
+          response,
+          200,
+          buildOrganizationGovernancePayload(
+            body,
+            organizationRepository,
+            libraryStorageRepository
+          )
+        );
+      } catch (error) {
+        writeOrganizationError(request, response, error);
+      }
       return;
     }
 
@@ -2284,5 +3765,22 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       message: "LiteasyClaw dev cloud 未找到该路径。请访问根路径查看服务索引，或确认桌面端控制平面地址。",
       path: url.pathname
     });
+  };
+
+  return async (request, response) => {
+    request.liteasyTraceId = `trace_${randomUUID()}`;
+    try {
+      await handleRequest(request, response);
+    } catch (error) {
+      console.error(`[dev-cloud] ${request.liteasyTraceId}`, error);
+      if (!response.headersSent) {
+        writeJson(request, response, 500, {
+          code: "internal_error",
+          message: "服务暂时无法完成请求，请稍后重试。"
+        });
+      } else if (!response.writableEnded) {
+        response.end();
+      }
+    }
   };
 }

@@ -8,16 +8,21 @@ import { defaultAcademicProfile } from "../app/features/profile/profile.types";
 const summary: OrganizationSummary = {
   auditEvents: [],
   memberCount: 1,
-  members: [{ id: "member-1", name: "Ada", role: "owner" }],
+  members: [{
+    id: "member-1", name: "Ada", revision: 0, role: "owner", status: "active", subject: "member-1"
+  }],
+  myMemberRevision: null,
   myRole: "owner",
   name: "Liteasy AI Reading Lab",
   notifications: [],
   organizationId: "org-demo-1",
   quota: {
+    configured: true,
     periodEndsAt: "2026-06-01T00:00:00.000Z",
     storageLimitGb: 100,
     storageUsedGb: 12
   },
+  revision: 0,
   sharedLibrary: {
     documentCount: 1,
     documents: [{ id: "shared-1", sourcePath: "/tmp/shared.pdf", title: "Shared Paper" }],
@@ -31,6 +36,7 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
   return {
     academicProfile: defaultAcademicProfile,
     accountSession: null,
+    controlPlaneEndpoint: "http://127.0.0.1:8787",
     clearProfileConfirmOpen: false,
     academicArchiveOpen: false,
     createOrganizationOpen: false,
@@ -49,7 +55,7 @@ function createProps(overrides: Partial<AppDialogsProps> = {}): AppDialogsProps 
     onCloseLeaveOrganization: vi.fn(),
     onSkipLogin: vi.fn(),
     onSubmitAccountRegistration: vi.fn(),
-    onSubmitDemoLogin: vi.fn(),
+    onSubmitSystemBrowserLogin: vi.fn(),
     onToggleSuppressLoginReminder: vi.fn(),
     onCloseOrganizationDialog: vi.fn(),
     onCreateOrganization: vi.fn(),
@@ -69,7 +75,6 @@ describe("AppDialogs", () => {
   test("shows the lightweight login dialog for logged-out startup", async () => {
     const user = userEvent.setup();
     const onSkipLogin = vi.fn();
-    const onSubmitDemoLogin = vi.fn();
     const onToggleSuppressLoginReminder = vi.fn();
 
     render(
@@ -77,19 +82,34 @@ describe("AppDialogs", () => {
         {...createProps({
           loginDialogOpen: true,
           onSkipLogin,
-          onSubmitDemoLogin,
           onToggleSuppressLoginReminder
         })}
       />
     );
 
     const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
-    expect(within(dialog).getByRole("button", { name: "一键 Demo 登录" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "登录" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "跳过，进入本地阅读器" })).toBeInTheDocument();
     expect(within(dialog).getByRole("checkbox", { name: "不再提醒" })).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole("button", { name: "跳过，进入本地阅读器" }));
     expect(onSkipLogin).toHaveBeenCalledTimes(1);
+  });
+
+  test("uses system-browser login without exposing password fields for a production endpoint", async () => {
+    const user = userEvent.setup();
+    const onSubmitSystemBrowserLogin = vi.fn();
+    render(<AppDialogs {...createProps({
+      controlPlaneEndpoint: "https://api.liteasy.example",
+      loginDialogOpen: true,
+      onSubmitSystemBrowserLogin
+    })} />);
+
+    const dialog = screen.getByRole("dialog", { name: "轻量登录面板" });
+    await user.click(within(dialog).getByRole("button", { name: "使用系统浏览器登录" }));
+    expect(onSubmitSystemBrowserLogin).toHaveBeenCalledTimes(1);
+    expect(within(dialog).queryByLabelText("邮箱")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("密码")).not.toBeInTheDocument();
   });
 
   test("submits a personal account registration from the lightweight login dialog", async () => {
@@ -209,21 +229,24 @@ describe("AppDialogs", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "提交创建组织申请" }));
-    expect(onCreateOrganization).toHaveBeenCalledWith("Liteasy Demo Organization");
+    await user.type(screen.getByLabelText("组织名称"), "Liteasy Research Lab");
+    await user.click(screen.getByRole("button", { name: "创建组织" }));
+    expect(onCreateOrganization).toHaveBeenCalledWith("Liteasy Research Lab");
 
     rerender(<AppDialogs {...createProps({ joinOrganizationOpen: true, onJoinOrganization })} />);
-    await user.click(screen.getByRole("button", { name: "提交加入组织请求" }));
-    expect(onJoinOrganization).toHaveBeenCalledWith("LITEASY-DEMO-JOIN");
+    await user.type(screen.getByLabelText("邀请令牌"), `orginv_${"a".repeat(43)}`);
+    await user.click(screen.getByRole("button", { name: "加入组织" }));
+    expect(onJoinOrganization).toHaveBeenCalledWith(`orginv_${"a".repeat(43)}`);
 
     rerender(<AppDialogs {...createProps({ inviteSummary: summary, onInviteMember })} />);
     expect(screen.getByRole("dialog", { name: "邀请成员确认" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "发送邀请" }));
-    expect(onInviteMember).toHaveBeenCalledTimes(1);
+    await user.type(screen.getByLabelText("账号主体 ID"), "user-researcher-1");
+    await user.click(screen.getByRole("button", { name: "创建邀请" }));
+    expect(onInviteMember).toHaveBeenCalledWith({ role: "member", targetSubject: "user-researcher-1" });
 
     rerender(<AppDialogs {...createProps({ leaveSummary: summary, onLeaveOrganization })} />);
     expect(screen.getByRole("dialog", { name: "退出组织确认" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "提交退出组织请求" }));
+    await user.click(screen.getByRole("button", { name: "退出组织" }));
     expect(onLeaveOrganization).toHaveBeenCalledTimes(1);
   });
 

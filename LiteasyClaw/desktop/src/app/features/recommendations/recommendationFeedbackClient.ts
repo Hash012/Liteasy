@@ -40,9 +40,13 @@ export function createRecommendationFeedbackClient(input: {
           source: request.candidate.source,
           title: request.candidate.title
         },
+        idempotencyKey: `recommendation-feedback-${globalThis.crypto.randomUUID()}`,
         sessionId: request.sessionId
       }),
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${request.sessionId}`,
+        "Content-Type": "application/json"
+      },
       method: "POST",
       url: `${input.endpoint.replace(/\/+$/, "")}/v1/recommendations/feedback`
     });

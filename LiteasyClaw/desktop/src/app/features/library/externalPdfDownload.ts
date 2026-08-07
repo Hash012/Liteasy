@@ -1,4 +1,5 @@
 import type { ThinReadingExternalSource } from "../thin-reading/thinReading.types";
+import type { ModelTransport } from "../models/modelHttpClient";
 
 export const externalPdfDragMimeType = "application/liteasy-external-pdf";
 
@@ -61,17 +62,23 @@ function isPdfBytes(bytes: Uint8Array) {
 export async function downloadExternalPdf(input: {
   endpoint: string;
   signal?: AbortSignal;
-  source: Pick<ThinReadingExternalSource, "fullTextUrl" | "id">;
+  source: Pick<ThinReadingExternalSource, "fullTextGrantId" | "fullTextUrl" | "id">;
+  transport?: ModelTransport;
 }): Promise<DownloadedExternalPdf> {
   if (!input.source.fullTextUrl) {
     throw new Error("该关联论文没有可下载的开放全文。");
   }
-  const response = await fetch(`${input.endpoint.replace(/\/+$/, "")}/v1/research/external-pdf`, {
-    body: JSON.stringify({ sourceId: input.source.id, url: input.source.fullTextUrl }),
+  if (!input.source.fullTextGrantId) {
+    throw new Error("开放全文授权已失效，请重新检索该文献。");
+  }
+  const request = {
+    body: JSON.stringify({ grantId: input.source.fullTextGrantId, sourceId: input.source.id }),
     headers: { "Content-Type": "application/json" },
-    method: "POST",
-    signal: input.signal
-  });
+    method: "POST" as const,
+    signal: input.signal,
+    url: `${input.endpoint.replace(/\/+$/, "")}/v1/research/external-pdf`
+  };
+  const response = input.transport ? await input.transport(request) : await fetch(request.url, request);
   if (!response.ok) {
     throw new Error(`全文下载失败（${response.status}）。`);
   }
@@ -99,6 +106,7 @@ export async function downloadExternalPdf(input: {
 export async function openExternalPdfInBrowser(input: {
   endpoint: string;
   source: ThinReadingExternalSource;
+  transport?: ModelTransport;
 }) {
   const readerWindow = window.open("about:blank", "_blank");
   if (!readerWindow) {

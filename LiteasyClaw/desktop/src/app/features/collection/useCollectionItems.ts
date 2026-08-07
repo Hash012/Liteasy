@@ -21,7 +21,7 @@ type CollectionStatus = "idle" | "loading" | "ready" | "error";
 
 export function useCollectionItems({
   accountSession = null,
-  controlPlaneEndpoint = "mock://control-plane",
+  controlPlaneEndpoint = "http://127.0.0.1:8787",
   transport
 }: UseCollectionItemsInput = {}) {
   const [collectionItems, setCollectionItems] = useState<CollectionItem[]>([]);
@@ -100,37 +100,28 @@ export function useCollectionItems({
   }, [accountSession?.sessionId, controlPlaneEndpoint, transport]);
 
   async function collectRecommendation(recommendation: RecommendationCollectionInput) {
+    if (!accountSession) {
+      setStatus("idle");
+      setMessage("登录后才能收藏关联推荐。");
+      throw new Error("登录后才能收藏关联推荐。");
+    }
     const nextItem = {
       ...recommendation,
       savedAt: new Date().toISOString()
     };
-    const nextItems = [
+    const cloudItems = await saveCloudCollectionItem(
       {
-        ...nextItem
+        controlPlaneEndpoint,
+        item: nextItem,
+        session: accountSession
       },
-      ...collectionItems.filter((item) => item.id !== recommendation.id)
-    ];
-
-    if (accountSession) {
-      const cloudItems = await saveCloudCollectionItem(
-        {
-          controlPlaneEndpoint,
-          item: nextItem,
-          session: accountSession
-        },
-        {
-          transport
-        }
-      );
-      setCollectionItems(cloudItems);
-      setStatus("ready");
-      setMessage("已同步云端收藏。");
-      return;
-    }
-
-    setCollectionItems(nextItems);
+      {
+        transport
+      }
+    );
+    setCollectionItems(cloudItems);
     setStatus("ready");
-    setMessage("已更新本地收藏。");
+    setMessage("已同步云端收藏。");
   }
 
   return {

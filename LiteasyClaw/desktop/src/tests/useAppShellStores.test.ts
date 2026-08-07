@@ -1,10 +1,11 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import { useAppShellStores } from "../app/layout/useAppShellStores";
+import { starterPapers } from "./fixtures/starterPapers";
 
 describe("useAppShellStores", () => {
-  test("seeds the workspace once and keeps stable store refs", () => {
-    const { result, rerender } = renderHook(() => useAppShellStores());
+  test("accepts test-injected papers once and keeps stable store refs", () => {
+    const { result, rerender } = renderHook(() => useAppShellStores(undefined, starterPapers));
 
     expect(result.current.workspaceStoreRef.current.getState().papers.map((paper) => paper.id)).toEqual([
       "demo-1",

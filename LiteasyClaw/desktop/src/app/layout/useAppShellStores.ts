@@ -4,19 +4,13 @@ import { createImportStore } from "../features/import/import.store";
 import { createSeededSettingsStore } from "../features/settings/settingsStateHelpers";
 import type { SettingsState } from "../features/settings/settings.types";
 import { createWorkspaceStore } from "../features/workspace/workspace.store";
-import { starterPapers } from "./starterPapers";
+import type { Paper } from "../features/workspace/workspace.types";
 
-export function useAppShellStores(initialSettings?: Partial<SettingsState>) {
-  const workspaceStoreRef = useRef(createWorkspaceStore());
-  const workspaceSeededRef = useRef(false);
+export function useAppShellStores(initialSettings?: Partial<SettingsState>, initialPapers: Paper[] = []) {
+  const workspaceStoreRef = useRef(createWorkspaceStore(initialPapers));
   const importStoreRef = useRef(createImportStore());
   const settingsStoreRef = useRef(createSeededSettingsStore(initialSettings));
   const artifactStore = useMemo(() => createArtifactStore(), []);
-
-  if (!workspaceSeededRef.current) {
-    starterPapers.forEach((paper) => workspaceStoreRef.current.addPaper(paper));
-    workspaceSeededRef.current = true;
-  }
 
   return {
     artifactStore,

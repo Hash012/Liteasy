@@ -17,6 +17,8 @@ function mapSession(row) {
     expiresAt: row.expires_at,
     id: row.id,
     lastSeenAt: row.last_seen_at,
+    audience: row.audience,
+    mfaVerifiedAt: row.mfa_verified_at,
     revokedAt: row.revoked_at
   };
 }
@@ -24,9 +26,11 @@ function mapSession(row) {
 export function createAuthSessionRepository(database) {
   const insertSession = database.prepare(`
     INSERT INTO auth_sessions (
-      id, user_id, token_hash, created_at, expires_at, last_seen_at, client_label
+      id, user_id, token_hash, created_at, expires_at, last_seen_at, client_label,
+      audience, mfa_verified_at
     ) VALUES (
-      @id, @userId, @tokenHash, @createdAt, @expiresAt, @createdAt, @clientLabel
+      @id, @userId, @tokenHash, @createdAt, @expiresAt, @createdAt, @clientLabel,
+      @audience, @mfaVerifiedAt
     )
   `);
   const findSession = database.prepare(`
@@ -37,6 +41,8 @@ export function createAuthSessionRepository(database) {
       auth_sessions.expires_at,
       auth_sessions.last_seen_at,
       auth_sessions.revoked_at,
+      auth_sessions.audience,
+      auth_sessions.mfa_verified_at,
       users.email,
       users.display_name,
       users.membership_tier,
@@ -53,27 +59,43 @@ export function createAuthSessionRepository(database) {
     SET revoked_at = COALESCE(revoked_at, ?)
     WHERE token_hash = ?
   `);
+  const revokeUserSessions = database.prepare(`
+    UPDATE auth_sessions
+    SET revoked_at = COALESCE(revoked_at, ?)
+    WHERE user_id = ?
+  `);
   const deleteExpiredSessions = database.prepare(`
     DELETE FROM auth_sessions
     WHERE expires_at <= ? OR (revoked_at IS NOT NULL AND revoked_at <= ?)
   `);
 
   return {
-    create({ clientLabel = null, expiresAt, tokenHash, userId }) {
+    create({
+      audience = "liteasy-desktop",
+      clientLabel = null,
+      expiresAt,
+      mfaVerifiedAt = null,
+      tokenHash,
+      userId
+    }) {
       const createdAt = new Date().toISOString();
       const id = randomUUID();
       insertSession.run({
+        audience,
         clientLabel,
         createdAt,
         expiresAt,
         id,
+        mfaVerifiedAt,
         tokenHash,
         userId
       });
       return {
+        audience,
         createdAt,
         expiresAt,
-        id
+        id,
+        mfaVerifiedAt
       };
     },
 
@@ -90,6 +112,10 @@ export function createAuthSessionRepository(database) {
 
     revokeByTokenHash(tokenHash) {
       return revokeSession.run(new Date().toISOString(), tokenHash).changes > 0;
+    },
+
+    revokeAllForUser(userId) {
+      return revokeUserSessions.run(new Date().toISOString(), userId).changes;
     },
 
     touch(sessionId) {

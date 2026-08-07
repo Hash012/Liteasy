@@ -1,0 +1,3 @@
+/** @deprecated Use @smithy/core/endpoints instead. */
+export { BinaryDecisionDiagram, EndpointCache, decideEndpoint, isIpAddress, isValidHostLabel, customEndpointFunctions, resolveEndpoint, EndpointError, } from "@smithy/core/endpoints";
+export type { ConditionObject, DeprecatedObject, EndpointFunctions, EndpointObject, EndpointObjectHeaders, EndpointObjectProperties, EndpointParams, EndpointResolverOptions, EndpointRuleObject, ErrorRuleObject, EvaluateOptions, Expression, FunctionArgv, FunctionObject, FunctionReturn, ParameterObject, ReferenceObject, ReferenceRecord, RuleSetObject, RuleSetRules, TreeRuleObject, } from "@smithy/core/endpoints";

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { getMineruCacheDir } from "./db/dataPaths.mjs";
 
-const repositoryDir = dirname(fileURLToPath(import.meta.url));
-const defaultCacheDirectory = resolve(repositoryDir, ".liteasy-data/mineru-cache");
+const cacheSchemaVersion = 1;
+const defaultParserVersion = "mineru-v1";
+const defaultTtlMs = 7 * 24 * 60 * 60 * 1000;
+const defaultMaximumBytes = 512 * 1024 * 1024;
 
 function validateCacheKey(cacheKey) {
   if (typeof cacheKey !== "string" || !/^[a-f0-9]{64}$/.test(cacheKey)) {
@@ -27,20 +28,57 @@ function validateExtraction(extraction) {
   return extraction;
 }
 
-function readCacheEntry(filePath, cacheKey) {
+function readCacheEntry(filePath, cacheKey, now) {
   const entry = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  if (!entry || entry.cacheKey !== cacheKey) {
+  if (
+    !entry ||
+    entry.cacheKey !== cacheKey ||
+    entry.schemaVersion !== cacheSchemaVersion ||
+    typeof entry.expiresAt !== "string" ||
+    Date.parse(entry.expiresAt) <= now
+  ) {
     throw new Error("invalid_mineru_extraction_cache_entry");
   }
   return validateExtraction(entry.extraction);
 }
 
-export function createMineruExtractionCacheKey(bytes) {
-  return createHash("sha256").update(bytes).digest("hex");
+export function createMineruExtractionCacheKey(bytes, parserVersion = defaultParserVersion) {
+  return createHash("sha256").update(parserVersion).update("\0").update(bytes).digest("hex");
 }
 
 export function createMineruExtractionRepository(options = {}) {
-  const cacheDirectory = options.cacheDirectory ?? defaultCacheDirectory;
+  const cacheDirectory = options.cacheDirectory ?? getMineruCacheDir();
+  const maximumBytes = options.maximumBytes ?? defaultMaximumBytes;
+  const now = options.now ?? (() => Date.now());
+  const ttlMs = options.ttlMs ?? defaultTtlMs;
+
+  function prune() {
+    if (!fs.existsSync(cacheDirectory)) return { bytes: 0, entries: 0 };
+    const candidates = fs.readdirSync(cacheDirectory, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && /^[a-f0-9]{64}\.json$/.test(entry.name))
+      .flatMap((entry) => {
+        const filePath = path.join(cacheDirectory, entry.name);
+        try {
+          const stat = fs.statSync(filePath);
+          const cacheKey = entry.name.slice(0, -".json".length);
+          readCacheEntry(filePath, cacheKey, now());
+          return [{ filePath, lastAccessedAt: stat.mtimeMs, size: stat.size }];
+        } catch {
+          fs.rmSync(filePath, { force: true });
+          return [];
+        }
+      })
+      .sort((left, right) => left.lastAccessedAt - right.lastAccessedAt);
+    let bytes = candidates.reduce((total, entry) => total + entry.size, 0);
+    let entries = candidates.length;
+    for (const candidate of candidates) {
+      if (bytes <= maximumBytes) break;
+      fs.rmSync(candidate.filePath, { force: true });
+      bytes -= candidate.size;
+      entries -= 1;
+    }
+    return { bytes, entries };
+  }
 
   return {
     get(cacheKey) {
@@ -49,12 +87,17 @@ export function createMineruExtractionRepository(options = {}) {
         return null;
       }
       try {
-        return readCacheEntry(destination, cacheKey);
+        const extraction = readCacheEntry(destination, cacheKey, now());
+        const accessedAt = new Date(now());
+        fs.utimesSync(destination, accessedAt, accessedAt);
+        return extraction;
       } catch {
-        // Corrupt or obsolete cache entries must never block a fresh extraction.
+        fs.rmSync(destination, { force: true });
         return null;
       }
     },
+
+    prune,
 
     save(cacheKey, extraction) {
       const validatedKey = validateCacheKey(cacheKey);
@@ -65,8 +108,10 @@ export function createMineruExtractionRepository(options = {}) {
       try {
         fs.writeFileSync(temporary, `${JSON.stringify({
           cacheKey: validatedKey,
+          expiresAt: new Date(now() + ttlMs).toISOString(),
           extraction: validatedExtraction,
-          savedAt: new Date().toISOString()
+          savedAt: new Date(now()).toISOString(),
+          schemaVersion: cacheSchemaVersion
         })}\n`, {
           encoding: "utf8",
           flag: "wx",
@@ -79,6 +124,7 @@ export function createMineruExtractionRepository(options = {}) {
         }
         throw error;
       }
+      prune();
       return validatedExtraction;
     }
   };

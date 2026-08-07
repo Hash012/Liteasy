@@ -949,7 +949,7 @@ export function generateGoldenIntentUIDslDocuments(): UIDslDocument[] {
     citations: [
       {
         page: 4,
-        paperId: "demo-2",
+        paperId: "golden-paper-vector-database",
         snippet: "vector database management systems manage unstructured data embeddings"
       }
     ],

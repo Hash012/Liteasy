@@ -28,23 +28,12 @@ fn looks_like_pdf(bytes: &[u8]) -> bool {
     bytes.len() > 5 && bytes.starts_with(b"%PDF-")
 }
 
-fn cache_namespace(account_key: Option<&str>) -> String {
-    let value = account_key.unwrap_or("guest").trim();
-    let mut hash = 0xcbf29ce484222325u64;
-    for byte in value.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("{hash:016x}")
-}
-
-fn cache_root(app: &AppHandle, account_key: Option<&str>) -> Result<PathBuf, String> {
+fn cache_root(app: &AppHandle) -> Result<PathBuf, String> {
     let root = app
         .path()
         .app_cache_dir()
         .map_err(|error| format!("无法确定论文缓存目录：{error}"))?
-        .join(CACHE_DIRECTORY_NAME)
-        .join(cache_namespace(account_key));
+        .join(CACHE_DIRECTORY_NAME);
     fs::create_dir_all(&root).map_err(|error| format!("无法创建论文缓存目录：{error}"))?;
     root.canonicalize()
         .map_err(|error| format!("无法访问论文缓存目录：{error}"))
@@ -85,7 +74,6 @@ pub fn cache_external_pdf(
     app: AppHandle,
     content_hash: String,
     bytes: Vec<u8>,
-    account_key: Option<String>,
 ) -> Result<String, String> {
     if !looks_like_pdf(&bytes) {
         return Err("下载的文件不是 PDF。".to_string());
@@ -93,7 +81,7 @@ pub fn cache_external_pdf(
     if bytes.len() as u64 > MAX_PDF_BYTES {
         return Err("PDF 文件超过 256 MB，无法缓存。".to_string());
     }
-    let root = cache_root(&app, account_key.as_deref())?;
+    let root = cache_root(&app)?;
     let target = root.join(content_hash_file_name(&content_hash)?);
     if target.is_file() {
         // Already cached under the same fingerprint; reuse it rather than rewriting.
@@ -104,12 +92,8 @@ pub fn cache_external_pdf(
 }
 
 #[tauri::command]
-pub fn read_cached_pdf(
-    app: AppHandle,
-    cache_path: String,
-    account_key: Option<String>,
-) -> Result<Vec<u8>, String> {
-    let root = cache_root(&app, account_key.as_deref())?;
+pub fn read_cached_pdf(app: AppHandle, cache_path: String) -> Result<Vec<u8>, String> {
+    let root = cache_root(&app)?;
     let source = resolve_cached_pdf(&root, &cache_path)?;
     let size = fs::metadata(&source)
         .map_err(|error| format!("无法读取缓存 PDF 信息：{error}"))?
@@ -130,22 +114,18 @@ pub fn promote_cached_pdf_to_library(
     app: AppHandle,
     cache_path: String,
     file_name: String,
-    account_key: Option<String>,
 ) -> Result<String, String> {
-    let root = cache_root(&app, account_key.as_deref())?;
+    let root = cache_root(&app)?;
     let source = resolve_cached_pdf(&root, &cache_path)?;
-    let papers = library_papers_directory(&app, account_key.as_deref())?;
+    let papers = library_papers_directory(&app)?;
     let target = unique_pdf_target(&papers, &file_name)?;
     move_file_across_volumes(&source, &target)?;
     Ok(target.to_string_lossy().to_string())
 }
 
 #[tauri::command]
-pub fn paper_cache_usage(
-    app: AppHandle,
-    account_key: Option<String>,
-) -> Result<PaperCacheUsage, String> {
-    let root = cache_root(&app, account_key.as_deref())?;
+pub fn paper_cache_usage(app: AppHandle) -> Result<PaperCacheUsage, String> {
+    let root = cache_root(&app)?;
     let mut usage = PaperCacheUsage {
         byte_length: 0,
         file_count: 0,
@@ -166,11 +146,8 @@ pub fn paper_cache_usage(
 }
 
 #[tauri::command]
-pub fn clear_paper_cache(
-    app: AppHandle,
-    account_key: Option<String>,
-) -> Result<PaperCacheUsage, String> {
-    let root = cache_root(&app, account_key.as_deref())?;
+pub fn clear_paper_cache(app: AppHandle) -> Result<PaperCacheUsage, String> {
+    let root = cache_root(&app)?;
     let mut removed = PaperCacheUsage {
         byte_length: 0,
         file_count: 0,

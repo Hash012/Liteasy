@@ -809,6 +809,17 @@
   color: #9b4250;
 }
 
+.job-error-message {
+  color: #9b4250;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  max-width: calc(100% - 58px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .collection-list {
   list-style: none;
   margin: 0;
@@ -939,12 +950,6 @@
   line-height: 1;
   padding: 3px 6px;
   text-transform: none;
-}
-
-.recommendation-source-kind.mock {
-  background: #fff4cf;
-  border-color: #ead58b;
-  color: #7d6200;
 }
 
 .recommendation-source-kind.cache {

@@ -91,6 +91,7 @@ type AssistantPaneProps = {
   agentClient?: FrontendAgentClient;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
+  developerDiagnostics?: boolean;
   executionJournal?: ExecutionJournal;
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
   modelTransport?: ModelTransport;
@@ -238,6 +239,7 @@ export function AssistantPane({
   agentClient,
   academicProfile,
   artifactTasks = [],
+  developerDiagnostics = false,
   executionJournal,
   importedChunksByPaperId = {},
   modelTransport,
@@ -392,19 +394,30 @@ export function AssistantPane({
     }
 
     const newRunningTasks: ArtifactTask[] = [];
+    let migratedActiveSessionId: string | undefined;
     artifactTasks.forEach((task) => {
       const sessionId = getArtifactTaskSessionId(task.id, task);
-      const previousSession = nextSessions.find((session) => session.id === sessionId);
+      const previousSession = nextSessions.find((session) => session.id === sessionId) ??
+        nextSessions.find((session) => session.artifactTaskId === task.id);
+      const nextSession = createArtifactTaskSession(task, previousSession, Date.now, {
+        developerDiagnostics
+      });
+      if (previousSession && previousSession.id !== nextSession.id) {
+        nextSessions = nextSessions.filter((session) => session.id !== previousSession.id);
+        if (activeSessionIdRef.current === previousSession.id) {
+          migratedActiveSessionId = nextSession.id;
+        }
+      }
       nextSessions = upsertAssistantSession(
         nextSessions,
-        createArtifactTaskSession(task, previousSession)
+        nextSession
       );
       if (
         !knownArtifactTaskIdsRef.current.has(task.id) &&
         (task.status === "queued" || task.status === "running") &&
         // Thin-reading pages update their paper-bound session quietly. Generating a
         // lower level must never steal focus from the reader's active conversation.
-        task.type !== "thin_reading"
+        (task.type !== "thin_reading" || !task.artifactId)
       ) {
         newRunningTasks.push(task);
       }
@@ -414,7 +427,7 @@ export function AssistantPane({
     const taskToOpen = newRunningTasks[newRunningTasks.length - 1];
     const nextActiveSessionId = taskToOpen
       ? getArtifactTaskSessionId(taskToOpen.id, taskToOpen)
-      : activeSessionIdRef.current;
+      : migratedActiveSessionId ?? activeSessionIdRef.current;
     const activeArtifactSession = nextSessions.find(
       (session) => session.id === nextActiveSessionId && session.kind === "artifact_generation"
     );
@@ -435,7 +448,7 @@ export function AssistantPane({
         setEditingMessageId(null);
       }
     }
-  }, [artifactTasks]);
+  }, [artifactTasks, developerDiagnostics]);
 
   useEffect(() => {
     const activeSession = sessionRegistryRef.current.find(
@@ -1027,14 +1040,18 @@ export function AssistantPane({
         trackedRun.cancelSent = false;
         setCancellingSession(false);
         assistantStoreRef.current.addMessage(
-          createMessage("assistant", `终止失败：${cancelled.error.message}`)
+          createMessage("assistant", `终止失败：${getAssistantErrorMessage(cancelled.error, {
+            developerDiagnostics
+          })}`)
         );
         syncAssistant();
       } catch (error) {
         trackedRun.cancelSent = false;
         setCancellingSession(false);
         assistantStoreRef.current.addMessage(
-          createMessage("assistant", `终止失败：${getAssistantErrorMessage(error)}`)
+          createMessage("assistant", `终止失败：${getAssistantErrorMessage(error, {
+            developerDiagnostics
+          })}`)
         );
         syncAssistant();
       }
@@ -1065,7 +1082,10 @@ export function AssistantPane({
       const result = await sessionAgentClient.send({ message, mode }, { idempotencyKey });
       if (!result.ok) {
         updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
-        assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
+        assistantStoreRef.current.addMessage(createMessage(
+          "assistant",
+          getAssistantErrorMessage(result.error, { developerDiagnostics })
+        ));
         return;
       }
       agentActivityMessageIdsByRunRef.current.set(result.data.runId, activityMessageId);
@@ -1095,7 +1115,7 @@ export function AssistantPane({
     } catch (error) {
       updateAgentActivity(activityMessageId, (activity) => completeAgentActivity(activity, "failed"));
       assistantStoreRef.current.addMessage(
-        createMessage("assistant", getAssistantErrorMessage(error))
+        createMessage("assistant", getAssistantErrorMessage(error, { developerDiagnostics }))
       );
     } finally {
       unsubscribe();
@@ -1137,7 +1157,9 @@ export function AssistantPane({
           modelTransport,
           question: message,
           selectedPapers,
-          settings: settingsStoreRef.current.getState()
+          settings: settingsStoreRef.current.getState(),
+          thinReadingExternalKnowledgeTransport: modelTransport,
+          thinReadingExternalPdfTransport: modelTransport
         });
         const assistantMessage = createMessage("assistant", answer.content);
         assistantMessage.audit = answer.audit;
@@ -1151,7 +1173,7 @@ export function AssistantPane({
       setEditingMessageId(null);
     } catch (error) {
       assistantStoreRef.current.addMessage(
-        createMessage("assistant", getAssistantErrorMessage(error))
+        createMessage("assistant", getAssistantErrorMessage(error, { developerDiagnostics }))
       );
     } finally {
       assistantStoreRef.current.setPending(false);
@@ -1194,14 +1216,18 @@ export function AssistantPane({
       trackedRun.cancelSent = false;
       setCancellingSession(false);
       assistantStoreRef.current.addMessage(
-        createMessage("assistant", `终止失败：${result.error.message}`)
+        createMessage("assistant", `终止失败：${getAssistantErrorMessage(result.error, {
+          developerDiagnostics
+        })}`)
       );
       syncAssistant();
     } catch (error) {
       trackedRun.cancelSent = false;
       setCancellingSession(false);
       assistantStoreRef.current.addMessage(
-        createMessage("assistant", `终止失败：${getAssistantErrorMessage(error)}`)
+        createMessage("assistant", `终止失败：${getAssistantErrorMessage(error, {
+          developerDiagnostics
+        })}`)
       );
       syncAssistant();
     }
@@ -1265,7 +1291,7 @@ export function AssistantPane({
         }
         const result = await sessionAgentClient.confirm(confirmation.confirmationId, "approve");
         if (!result.ok) {
-          throw new Error(result.error.message);
+          throw result.error;
         }
         consumePublicAgentRun(result.data);
         await appendJournalAudit(confirmation.traceId);
@@ -1281,7 +1307,10 @@ export function AssistantPane({
         onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
       }
     } catch (error) {
-      assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error)));
+      assistantStoreRef.current.addMessage(createMessage(
+        "assistant",
+        getAssistantErrorMessage(error, { developerDiagnostics })
+      ));
     } finally {
       assistantStoreRef.current.setPending(false);
       syncAssistant();
@@ -1303,7 +1332,10 @@ export function AssistantPane({
       }
       const result = await sessionAgentClient.confirm(confirmation.confirmationId, "reject");
       if (!result.ok) {
-        assistantStoreRef.current.addMessage(createMessage("assistant", result.error.message));
+        assistantStoreRef.current.addMessage(createMessage(
+          "assistant",
+          getAssistantErrorMessage(result.error, { developerDiagnostics })
+        ));
       } else {
         consumePublicAgentRun(result.data);
         await appendJournalAudit(confirmation.traceId);
@@ -1350,7 +1382,10 @@ export function AssistantPane({
         onSettingsChanged?.({ ...settingsStoreRef.current.getState() });
       }
     } catch (error) {
-      assistantStoreRef.current.addMessage(createMessage("assistant", getAssistantErrorMessage(error)));
+      assistantStoreRef.current.addMessage(createMessage(
+        "assistant",
+        getAssistantErrorMessage(error, { developerDiagnostics })
+      ));
     } finally {
       assistantStoreRef.current.setPending(false);
       syncAssistant();

@@ -11,10 +11,6 @@ type RecommendationCacheRuntimeDeps = {
   transport?: RecommendationCacheTransport;
 };
 
-function isMockEndpoint(endpoint: string) {
-  return endpoint.startsWith("mock://");
-}
-
 export async function getCloudRecommendationCache(
   input: {
     controlPlaneEndpoint: string;
@@ -22,13 +18,6 @@ export async function getCloudRecommendationCache(
   },
   deps: RecommendationCacheRuntimeDeps = {}
 ): Promise<RecommendationCacheLookupResult> {
-  if (isMockEndpoint(input.controlPlaneEndpoint)) {
-    return {
-      cacheHit: false,
-      recommendations: []
-    };
-  }
-
   const client = createRecommendationCacheClient({
     endpoint: input.controlPlaneEndpoint,
     transport: deps.transport
@@ -45,13 +34,6 @@ export async function putCloudRecommendationCache(
   },
   deps: RecommendationCacheRuntimeDeps = {}
 ): Promise<RecommendationCachePutResult> {
-  if (isMockEndpoint(input.controlPlaneEndpoint)) {
-    return {
-      cachedAt: new Date().toISOString(),
-      ok: true
-    };
-  }
-
   const client = createRecommendationCacheClient({
     endpoint: input.controlPlaneEndpoint,
     transport: deps.transport
@@ -67,12 +49,6 @@ export async function clearCloudRecommendationCache(
   },
   deps: RecommendationCacheRuntimeDeps = {}
 ): Promise<RecommendationCacheClearResult> {
-  if (isMockEndpoint(input.controlPlaneEndpoint)) {
-    return {
-      cleared: true
-    };
-  }
-
   const client = createRecommendationCacheClient({
     endpoint: input.controlPlaneEndpoint,
     transport: deps.transport

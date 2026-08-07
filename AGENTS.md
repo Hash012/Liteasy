@@ -4,7 +4,7 @@
 
 核心产品代码位于 `LiteasyClaw/`。桌面端为 Tauri + React + TypeScript，位于 `LiteasyClaw/desktop/`：界面壳层在 `src/app/layout/`，跨功能编排在 `src/app/controllers/`，领域模块在 `src/app/features/`，全局样式在 `src/app/styles/`，测试在 `src/tests/`；Rust 桌面宿主在 `src-tauri/`。
 
-`LiteasyClaw/services/dev-cloud/` 是本地 Node.js 演示 API，`LiteasyClaw/scripts/` 存放演示数据重置和 smoke 检查脚本。工程、产品和 QA 文档放在 `project-docs/`，历史或生成材料放在 `archive/`。
+`LiteasyClaw/services/dev-cloud/` 是本地 Node.js 开发 API，使用真实注册、会话和持久化链路，不得提供演示账号或 mock 业务结果。`LiteasyClaw/services/cloud/` 是 PostgreSQL/S3 正式服务边界；当前业务 API 仍在迁移，不得把仅有 readiness 的状态描述为生产就绪。`LiteasyClaw/scripts/` 存放只读 smoke 检查和工具脚本。工程、产品和 QA 文档放在 `project-docs/`，历史或生成材料放在 `archive/`。
 
 保持依赖方向：`layout -> controllers -> features -> shared types / clients`。`AppShell` 只负责组合；跨模块行为应进入 controller，而非继续堆入壳层或 feature。
 
@@ -19,6 +19,7 @@ cd LiteasyClaw/desktop && npm run tauri dev     # 启动完整桌面应用
 cd LiteasyClaw/desktop && npm run build         # 类型检查并构建生产包
 cd LiteasyClaw/desktop && npm test              # 运行 Vitest
 cd LiteasyClaw/services/dev-cloud && npm test   # 运行 Node 内置测试
+cd LiteasyClaw/services/cloud && npm test       # 运行正式存储适配器契约测试
 ```
 
 `dev-cloud` 需要 Node 20+。本地模型密钥写入 `LiteasyClaw/services/dev-cloud/.env.local`，不得提交密钥或其他敏感配置。

@@ -21,12 +21,33 @@ const selectedPapers: Paper[] = [
 ];
 
 describe("useKnowledgeSyncController", () => {
-  test("exposes cloud knowledge sync model for shell panes", async () => {
-    const collectionTransport = vi.fn(async () => ({
-      json: async () => ({ items: [] }),
-      ok: true,
-      status: 200
+  test("does not upload a local manifest while personalization is disabled", async () => {
+    const documentMetadataTransport = vi.fn();
+    const { result } = renderHook(() => useKnowledgeSyncController({
+      accountSession,
+      controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
+      documentMetadataTransport,
+      documents: selectedPapers,
+      personalizationEnabled: false,
+      recommendationCacheDeps: {
+        clear: vi.fn(),
+        get: vi.fn(async () => ({ cacheHit: true, recommendations: [] })),
+        put: vi.fn()
+      },
+      recommendationGeneratorDeps: { fetch: vi.fn(async () => []) },
+      recommendationsEnabled: true,
+      recommendationSortMode: "relevance",
+      selectedPapers,
+      workspaceRevision: 0,
+      workspaceSourceKey: "local_library:/tmp/LiteasyLibrary"
     }));
+
+    await waitFor(() => expect(result.current.model.documentMetadataSyncStatus).toBe("idle"));
+    expect(result.current.model.documentMetadataSyncMessage).toContain("个性化已关闭");
+    expect(documentMetadataTransport).not.toHaveBeenCalled();
+  });
+
+  test("exposes cloud knowledge sync model for shell panes", async () => {
     const documentMetadataTransport = vi.fn(async () => ({
       json: async () => ({
         result: {
@@ -43,7 +64,6 @@ describe("useKnowledgeSyncController", () => {
     const { result } = renderHook(() =>
       useKnowledgeSyncController({
         accountSession,
-        collectionTransport,
         controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
         documentMetadataTransport,
         documents: selectedPapers,
@@ -60,32 +80,32 @@ describe("useKnowledgeSyncController", () => {
         },
         recommendationsEnabled: true,
         recommendationSortMode: "relevance",
+        personalizationEnabled: true,
         selectedPapers,
         workspaceRevision: 3,
-        workspaceSourceKey: "local:/tmp/LiteasyLibrary"
+        workspaceSourceKey: "local_library:/tmp/LiteasyLibrary"
       })
     );
 
     await waitFor(() => {
       expect(result.current.model.recommendationStatus).toBe("ready");
-      expect(result.current.model.collectionStatus).toBe("ready");
       expect(result.current.model.documentMetadataSyncStatus).toBe("success");
     });
 
     expect(result.current.model.documentMetadataSyncResult).toEqual(
       expect.objectContaining({ acceptedCount: 1 })
     );
+    const manifestBody = JSON.parse(documentMetadataTransport.mock.calls[0][0].body);
+    expect(manifestBody.documents[0]).toEqual(expect.objectContaining({
+      syncDocumentId: expect.stringMatching(/^local-[a-f0-9]{64}$/),
+      title: "Attention Is All You Need"
+    }));
+    expect(JSON.stringify(manifestBody.documents)).not.toContain("sourcePath");
+    expect(JSON.stringify(manifestBody.documents)).not.toContain("fixtures/");
   });
 
   test("records a saved preference after a recommendation is collected", async () => {
     const feedbackRequests: string[] = [];
-    const collectionTransport = vi.fn(async (request: { body: string; url: string }) => ({
-      json: async () => request.url.endsWith("/items")
-        ? { items: [{ ...JSON.parse(request.body).item }] }
-        : { items: [] },
-      ok: true,
-      status: 200
-    }));
     const documentMetadataTransport = vi.fn(async () => ({
       json: async () => ({ result: { acceptedCount: 1, rejectedCount: 0, syncId: "sync", syncedAt: "2026-07-29T00:00:00Z" } }),
       ok: true,
@@ -97,7 +117,6 @@ describe("useKnowledgeSyncController", () => {
     });
     const { result } = renderHook(() => useKnowledgeSyncController({
       accountSession,
-      collectionTransport,
       controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
       documentMetadataTransport,
       documents: selectedPapers,
@@ -110,14 +129,13 @@ describe("useKnowledgeSyncController", () => {
       recommendationGeneratorDeps: { fetch: vi.fn(async () => []) },
       recommendationsEnabled: true,
       recommendationSortMode: "relevance",
+      personalizationEnabled: true,
       selectedPapers,
       workspaceRevision: 0,
-      workspaceSourceKey: "local:/tmp/LiteasyLibrary"
+      workspaceSourceKey: "local_library:/tmp/LiteasyLibrary"
     }));
-    await waitFor(() => expect(result.current.model.collectionStatus).toBe("ready"));
-
     await act(async () => {
-      await result.current.actions.collectRecommendation({
+      await result.current.actions.recordRecommendationSaved({
         canonicalId: "openalex:W200",
         discoveredAt: "2026-07-29T00:00:00Z",
         id: "reading-candidate:openalex:W200",

@@ -23,6 +23,7 @@ export type MineruFigure = {
 export type ImportJob = {
   id: string;
   documentId: string;
+  error?: string;
   sourcePath: string;
   status: ImportJobStatus;
   paperId?: string;

@@ -1,4 +1,5 @@
 import type { SettingsState } from "../settings/settings.types";
+import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { ModelTransportResponse } from "./modelHttpClient";
 
 export type ModelPolicySnapshot = Pick<
@@ -25,6 +26,7 @@ export type ControlPlanePolicySnapshotResult = {
 
 type CreateControlPlaneClientInput = {
   endpoint: string;
+  sessionId: string;
   transport?: ControlPlaneTransport;
 };
 
@@ -36,7 +38,7 @@ type ControlPlanePayload = {
 };
 
 function buildControlPlaneUrl(endpoint: string) {
-  return `${endpoint.replace(/\/+$/, "")}/v1/admin/model-policy`;
+  return `${endpoint.replace(/\/+$/, "")}/v1/model-policy`;
 }
 
 function isControlPlanePayload(payload: unknown): payload is ControlPlanePayload {
@@ -61,19 +63,24 @@ async function defaultTransport(
 
 export function createControlPlaneClient({
   endpoint,
+  sessionId,
   transport = defaultTransport
 }: CreateControlPlaneClientInput) {
   return async (): Promise<ControlPlanePolicySnapshotResult> => {
     const response = await transport({
       headers: {
-        Accept: "application/json"
+        Accept: "application/json",
+        Authorization: `Bearer ${sessionId}`
       },
       method: "GET",
       url: buildControlPlaneUrl(endpoint)
     });
 
     if (!response.ok) {
-      throw new Error(`云端策略同步失败（${response.status}）`);
+      throw await readCloudServiceError(response, {
+        code: "model_policy_sync_failed",
+        message: "云端策略同步失败，请稍后重试。"
+      });
     }
 
     const payload = await response.json();

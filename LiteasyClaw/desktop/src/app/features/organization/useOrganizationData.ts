@@ -1,8 +1,6 @@
 import type { AccountSession } from "../account/account.types";
-import type { OrganizationGovernanceTransport } from "./organizationGovernanceClient";
 import type { OrganizationListTransport } from "./organizationListClient";
 import type { OrganizationSummaryTransport } from "./organizationSummaryClient";
-import { useOrganizationGovernance } from "./useOrganizationGovernance";
 import { useOrganizationList } from "./useOrganizationList";
 import { useOrganizationSummary } from "./useOrganizationSummary";
 
@@ -10,18 +8,18 @@ type UseOrganizationDataInput = {
   accountSession: AccountSession | null;
   controlPlaneEndpoint: string;
   getActiveOrganizationId: (fallbackOrganizationId?: string) => string | undefined;
-  organizationGovernanceTransport?: OrganizationGovernanceTransport;
   organizationListTransport?: OrganizationListTransport;
   organizationTransport?: OrganizationSummaryTransport;
+  refreshRevision?: number;
 };
 
 export function useOrganizationData({
   accountSession,
   controlPlaneEndpoint,
   getActiveOrganizationId,
-  organizationGovernanceTransport,
   organizationListTransport,
-  organizationTransport
+  organizationTransport,
+  refreshRevision = 0
 }: UseOrganizationDataInput) {
   const {
     list: organizationList,
@@ -30,6 +28,7 @@ export function useOrganizationData({
   } = useOrganizationList({
     accountSession,
     controlPlaneEndpoint,
+    refreshRevision,
     transport: organizationListTransport
   });
   const activeOrganizationId = getActiveOrganizationId(organizationList?.activeOrganizationId);
@@ -41,24 +40,11 @@ export function useOrganizationData({
     accountSession,
     controlPlaneEndpoint,
     organizationId: activeOrganizationId,
+    refreshRevision,
     transport: organizationTransport
   });
-  const {
-    message: organizationGovernanceMessage,
-    status: organizationGovernanceStatus,
-    summary: organizationGovernanceSummary
-  } = useOrganizationGovernance({
-    accountSession,
-    controlPlaneEndpoint,
-    organizationSummary,
-    transport: organizationGovernanceTransport
-  });
-
   return {
     activeOrganizationId,
-    organizationGovernanceMessage,
-    organizationGovernanceStatus,
-    organizationGovernanceSummary,
     organizationList,
     organizationListMessage,
     organizationListStatus,

@@ -18,8 +18,7 @@ function isScope(body = {}) {
 function isRecommendationItem(item) {
   const hasValidSourceKind =
     item?.sourceKind === "cache" ||
-    item?.sourceKind === "live" ||
-    item?.sourceKind === "mock";
+    item?.sourceKind === "live";
   const hasValidSourceUrl =
     item?.sourceKind === "live"
       ? typeof item?.sourceUrl === "string" && item.sourceUrl.trim().length > 0

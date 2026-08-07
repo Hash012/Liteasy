@@ -107,7 +107,9 @@ export function OrganizationEntryDialog({
                   </div>
                 ))}
                 <div className="organization-detail-row">
-                  配额：{summary.quota.storageUsedGb} / {summary.quota.storageLimitGb} GB，到期 {summary.quota.periodEndsAt}
+                  {summary.quota.configured
+                    ? `配额：${summary.quota.storageUsedGb} / ${summary.quota.storageLimitGb} GB${summary.quota.periodEndsAt ? `，到期 ${summary.quota.periodEndsAt}` : ""}`
+                    : `存储已用：${summary.quota.storageUsedGb} GB · 尚未分配组织配额`}
                 </div>
                 <button
                   className="policy-button sync"

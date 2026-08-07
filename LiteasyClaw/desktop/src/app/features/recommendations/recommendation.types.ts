@@ -79,7 +79,7 @@ export type RecommendationItem = {
     sourceRelevance: number;
   };
   source: string;
-  sourceKind: "cache" | "live" | "mock";
+  sourceKind: "cache" | "live";
   sourceUrl?: string;
   surfacingTags?: string[];
   title: string;

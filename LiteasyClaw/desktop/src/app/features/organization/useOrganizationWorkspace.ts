@@ -25,7 +25,6 @@ type UseOrganizationWorkspaceOptions = {
   onWorkspaceLabel: (label: string) => void;
   onWorkspaceSync: () => void;
   sessionId?: string;
-  starterPapers: Paper[];
   workspaceStoreRef: MutableRefObject<WorkspaceStore>;
 };
 
@@ -66,7 +65,6 @@ export function useOrganizationWorkspace({
   onWorkspaceLabel,
   onWorkspaceSync,
   sessionId = "anonymous",
-  starterPapers,
   workspaceStoreRef
 }: UseOrganizationWorkspaceOptions) {
   const localWorkspaceSnapshotRef = useRef<LocalWorkspaceSnapshot | null>(null);
@@ -138,7 +136,7 @@ export function useOrganizationWorkspace({
 
   function openLocalLibraryWorkspace() {
     const snapshot = localWorkspaceSnapshotRef.current;
-    const papers = snapshot ? snapshot.papers : starterPapers;
+    const papers = snapshot ? snapshot.papers : [];
     const workspaceSource = snapshot
       ? snapshot.workspaceSource
       : {

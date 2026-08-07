@@ -30,7 +30,7 @@ const document = {
   version: "liteasy.agent-artifact/v1" as const
 };
 
-test("saves and lists Git-visible Agent artifact documents", async () => {
+test("saves and lists account-scoped Agent artifact documents", async () => {
   const transport = vi
     .fn()
     .mockResolvedValueOnce({
@@ -54,6 +54,7 @@ test("saves and lists Git-visible Agent artifact documents", async () => {
       status: 200
     });
   const client = createArtifactResultClient({
+    getAccessToken: () => "session-token",
     getBaseEndpoint: () => "http://127.0.0.1:8787/",
     transport
   });
@@ -68,19 +69,26 @@ test("saves and lists Git-visible Agent artifact documents", async () => {
   });
   await expect(client.delete("artifact-1")).resolves.toBeUndefined();
   expect(transport.mock.calls[0][0]).toBe("http://127.0.0.1:8787/v1/agent-artifacts");
-  expect(transport.mock.calls[0][1]).toMatchObject({ method: "POST" });
+  expect(transport.mock.calls[0][1]).toMatchObject({
+    headers: expect.objectContaining({ Authorization: "Bearer session-token" }),
+    method: "POST"
+  });
   expect(transport.mock.calls[2]).toEqual([
     "http://127.0.0.1:8787/v1/agent-artifacts/artifact-1",
     expect.objectContaining({ method: "PATCH" })
   ]);
   expect(transport.mock.calls[3]).toEqual([
     "http://127.0.0.1:8787/v1/agent-artifacts/artifact-1",
-    { method: "DELETE" }
+    {
+      headers: { Authorization: "Bearer session-token" },
+      method: "DELETE"
+    }
   ]);
 });
 
 test("reports a failed artifact deletion", async () => {
   const client = createArtifactResultClient({
+    getAccessToken: () => "session-token",
     getBaseEndpoint: () => "http://127.0.0.1:8787",
     transport: vi.fn(async () => ({
       json: async () => ({ error: "agent_artifact_not_found" }),
@@ -116,6 +124,7 @@ test("lists thin-reading artifacts without requiring a UI DSL", async () => {
     uiDsl: undefined
   };
   const client = createArtifactResultClient({
+    getAccessToken: () => "session-token",
     getBaseEndpoint: () => "http://127.0.0.1:8787",
     transport: vi.fn(async () => ({
       json: async () => ({ artifacts: [thinReadingDocument] }),
@@ -125,4 +134,16 @@ test("lists thin-reading artifacts without requiring a UI DSL", async () => {
   });
 
   await expect(client.list()).resolves.toEqual([thinReadingDocument]);
+});
+
+test("fails closed before transport when no account session is available", async () => {
+  const transport = vi.fn();
+  const client = createArtifactResultClient({
+    getAccessToken: () => undefined,
+    getBaseEndpoint: () => "http://127.0.0.1:8787",
+    transport
+  });
+
+  await expect(client.list()).rejects.toThrow("请先登录");
+  expect(transport).not.toHaveBeenCalled();
 });

@@ -4,15 +4,20 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.mjs",
-    "start": "node src/server.mjs",
-    "check": "node --check src/server.mjs",
-    "test": "node --test src/*.test.mjs"
+    "migrate": "node src/migrate.mjs",
+    "start": "node src/productionServer.mjs",
+    "start:development": "node src/server.mjs",
+    "check": "node --check src/server.mjs && node --check src/productionServer.mjs",
+    "test": "node --test src/*.test.mjs",
+    "test:postgres:integration": "node scripts/verify-postgres-integration.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
     "@intuecho/contracts": "*",
     "better-sqlite3": "^11.8.1",
     "fastify": "^5.2.1",
+    "jose": "^6.2.8",
+    "pg": "^8.16.3",
     "zod": "^3.24.2"
   }
 }

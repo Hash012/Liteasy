@@ -7,32 +7,52 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-test("opens multiple PDFs as independent document tabs while the selection remains locked", async () => {
+test("opens local PDFs as independent tabs while the selected set remains locked", async () => {
   const user = userEvent.setup();
-  const colbertTitle =
-    "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT";
-  const acornTitle =
-    "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data";
+  const firstTitle = "Local Retrieval Paper";
+  const secondTitle = "Local Storage Paper";
 
-  render(<AppShell />);
+  render(
+    <AppShell
+      initialPapers={[]}
+      localLibraryLoader={async () => ({
+        entries: [
+          {
+            contentHash: "a".repeat(64),
+            id: "local-paper-1",
+            path: "/library/Research/Retrieval.pdf",
+            relativePath: "Research/Retrieval.pdf",
+            title: firstTitle
+          },
+          {
+            contentHash: "b".repeat(64),
+            id: "local-paper-2",
+            path: "/library/Research/Storage.pdf",
+            relativePath: "Research/Storage.pdf",
+            title: secondTitle
+          }
+        ],
+        folders: [{ name: "Research", parentPath: null, path: "/library/Research" }],
+        libraryId: "library-integration",
+        revision: 1,
+        rootPath: "/library",
+        trashEntries: []
+      })}
+    />
+  );
 
-  const library = screen.getByLabelText("我的文献库投放区");
-  await user.click(within(library).getByLabelText(colbertTitle));
-  await user.click(within(library).getByLabelText(acornTitle));
-  await user.click(screen.getByRole("button", { name: "锁定选择" }));
+  await user.click(screen.getByRole("button", { name: "跳过，进入本地阅读器" }));
+  const library = await screen.findByRole("region", { name: "本地文献库" });
+  await user.click(within(library).getByRole("button", { name: "展开Research" }));
+  await user.click(within(library).getByRole("checkbox", { name: `选择 ${firstTitle}` }));
+  await user.click(within(library).getByRole("checkbox", { name: `选择 ${secondTitle}` }));
+  await user.click(screen.getByRole("button", { name: "锁定选中文献集" }));
 
-  await user.click(within(library).getByRole("button", { name: acornTitle }));
-  await user.click(within(library).getByRole("button", { name: colbertTitle }));
+  await user.click(within(library).getByRole("button", { name: secondTitle }));
+  await user.click(within(library).getByRole("button", { name: firstTitle }));
 
-  const acornTab = screen.getByRole("tab", { name: acornTitle });
-  expect(acornTab).toHaveClass("dock-document-tab");
-  expect(screen.getByRole("tab", { name: colbertTitle })).toBeInTheDocument();
-  expect(acornTab).toHaveAttribute("aria-selected", "false");
-  expect(screen.getByRole("tab", { name: colbertTitle })).toHaveAttribute("aria-selected", "true");
-  await user.click(acornTab);
-  expect(within(screen.getByLabelText("PDF 标题栏")).getByText(acornTitle)).toBeInTheDocument();
-  expect(within(library).getByLabelText(colbertTitle)).toBeChecked();
-  expect(within(library).getByLabelText(acornTitle)).toBeChecked();
-  expect(within(library).getByLabelText(colbertTitle)).toBeDisabled();
-  expect(within(library).getByLabelText(acornTitle)).toBeDisabled();
+  expect(screen.getByRole("tab", { name: firstTitle })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: secondTitle })).toBeInTheDocument();
+  expect(within(library).getByRole("checkbox", { name: `选择 ${firstTitle}` })).toBeDisabled();
+  expect(within(library).getByRole("checkbox", { name: `选择 ${secondTitle}` })).toBeDisabled();
 });

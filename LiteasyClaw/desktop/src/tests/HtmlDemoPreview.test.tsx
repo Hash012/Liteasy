@@ -11,22 +11,31 @@ describe("HtmlDemoPreview", () => {
 
     expect(documentHtml).toContain("<!DOCTYPE html>");
     expect(documentHtml).toContain("Content-Security-Policy");
-    expect(documentHtml).toContain("default-src data: blob: https: http:; style-src 'unsafe-inline' data: https: http:");
-    expect(documentHtml).toContain("script-src 'unsafe-inline' 'unsafe-eval' data: blob: https: http:");
+    expect(documentHtml).toContain("default-src 'none'; style-src 'unsafe-inline'; script-src 'none'");
+    expect(documentHtml).toContain("connect-src 'none'; media-src data:; frame-src 'none'; worker-src 'none'");
     expect(documentHtml).toContain("object-src 'none'; navigate-to 'none'; base-uri 'none'; form-action 'none'");
     expect(documentHtml).toContain("<main><h1>Demo</h1></main>");
   });
 
-  test("keeps test-stage animation markup intact inside the isolated document", () => {
+  test("keeps CSS animation markup but removes executable and navigable content", () => {
     const markup = [
       "<style>.step{animation:pulse 1s infinite}</style>",
       "<script>document.body.dataset.ready='yes'</script>",
-      "<button onclick='this.textContent=\"next\"'>步骤</button>"
+      "<button onclick='this.textContent=\"next\"'>步骤</button>",
+      "<a href='https://attacker.example/leak'>外部链接</a>",
+      "<img src='https://attacker.example/pixel.png'>",
+      "<img srcset='https://attacker.example/large.png 2x'>",
+      "<form action='https://attacker.example'><input name='secret'></form>",
+      "<template shadowrootmode='open'><a href='https://attacker.example/shadow'>影子链接</a></template>"
     ].join("");
     const documentHtml = buildSandboxedHtmlDocument(markup);
 
-    expect(documentHtml).toContain(markup);
-    expect(documentHtml).toContain("connect-src https: http:");
+    expect(documentHtml).toContain("animation:pulse 1s infinite");
+    expect(documentHtml).not.toContain("<script");
+    expect(documentHtml).not.toContain("onclick");
+    expect(documentHtml).not.toContain("attacker.example");
+    expect(documentHtml).not.toContain("<form");
+    expect(documentHtml).toContain("connect-src 'none'");
     expect(documentHtml).toContain("navigate-to 'none'");
   });
 
@@ -55,11 +64,11 @@ describe("HtmlDemoPreview", () => {
 
     expect(screen.getByText("把算法步骤做成可交互动画。")).toBeInTheDocument();
     const iframe = screen.getByTitle("算法动画 Demo");
-    expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
+    expect(iframe).toHaveAttribute("sandbox", "");
     expect(iframe).toHaveAttribute("referrerpolicy", "no-referrer");
     expect(iframe).toHaveAttribute("loading", "lazy");
-    expect(iframe).toHaveAttribute("srcdoc", expect.stringContaining("<div id='demo'>hello</div>"));
-    expect(iframe).toHaveAttribute("srcdoc", expect.stringContaining("default-src data: blob: https: http:"));
+    expect(iframe).toHaveAttribute("srcdoc", expect.stringContaining('<div id="demo">hello</div>'));
+    expect(iframe).toHaveAttribute("srcdoc", expect.stringContaining("default-src 'none'"));
 
     fireEvent.click(screen.getByRole("button", { name: "在独立标签页打开 HTML Demo：算法动画 Demo" }));
     expect(onOpenInTab).toHaveBeenCalledTimes(1);
@@ -69,6 +78,13 @@ describe("HtmlDemoPreview", () => {
     render(<HtmlDemoPreview html="<section>demo</section>" title="结构示意" />);
 
     expect(screen.queryByRole("button", { name: "在独立标签页打开 HTML Demo：结构示意" })).not.toBeInTheDocument();
-    expect(screen.getByText("Agent 生成的交互式示意会在隔离沙箱内预览。")).toBeInTheDocument();
+    expect(screen.getByText("Agent 生成的动态示意会在隔离沙箱内预览。")).toBeInTheDocument();
+  });
+
+  test("replaces oversized generated documents before parsing", () => {
+    const documentHtml = buildSandboxedHtmlDocument(`<main>${"x".repeat(512 * 1024)}</main>`);
+
+    expect(documentHtml).toContain("HTML 预览内容过大，无法安全显示。");
+    expect(documentHtml).not.toContain("x".repeat(1024));
   });
 });

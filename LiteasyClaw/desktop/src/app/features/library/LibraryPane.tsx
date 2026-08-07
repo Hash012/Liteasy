@@ -1,49 +1,97 @@
 import {
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type DragEvent as ReactDragEvent,
-  type FormEvent,
-  type MouseEvent as ReactMouseEvent,
+  type ReactElement,
   type ReactNode
 } from "react";
-import { Button, Input, Tooltip } from "@fluentui/react-components";
 import {
-  ArrowSyncRegular,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Input,
+  Menu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  Tooltip
+} from "@fluentui/react-components";
+import {
+  AddRegular,
+  ArrowClockwiseRegular,
+  ArrowImportRegular,
+  ArrowResetRegular,
   BookmarkRegular,
   ChevronDownRegular,
   ChevronRightRegular,
+  DeleteDismissRegular,
+  DeleteRegular,
   DocumentPdfRegular,
   DocumentTextRegular,
-  DismissRegular,
+  EditRegular,
+  FolderAddRegular,
+  FolderOpenRegular,
   FolderRegular,
+  LightbulbRegular,
   LockClosedRegular,
   LockOpenRegular,
-  LibraryRegular,
-  ImageMultipleRegular,
-  LightbulbRegular,
-  NoteRegular,
-  SearchRegular,
-  SparkleRegular
+  OrganizationRegular,
+  DocumentArrowUpRegular,
+  SearchRegular
 } from "@fluentui/react-icons";
-import type { CollectionItem } from "../collection/collection.types";
-import "./library.css";
 import type { ImportJob } from "../import/import.types";
 import type { PaperResourceKind } from "../import/paperResource.types";
-import type { RecommendationItem, RecommendationStatus } from "../recommendations/recommendation.types";
+import type {
+  RecommendationItem,
+  RecommendationStatus
+} from "../recommendations/recommendation.types";
 import type { Paper, WorkspaceSourceType } from "../workspace/workspace.types";
 import {
-  externalPdfDragMimeType,
-  type ExternalPdfDragPayload
-} from "./externalPdfDownload";
-import { parseLibraryDragPayload } from "./libraryDragPayload";
+  createCloudLibraryStorageClient,
+  type CloudLibraryEntry,
+  type CloudLibraryFolder,
+  type CloudLibraryScope,
+  type CloudLibraryTree
+} from "./cloudLibraryStorageClient";
+import type { ExternalPdfDragPayload } from "./externalPdfDownload";
 import {
-  buildWorkspaceFolderTree,
-  type WorkspaceFolderNode
-} from "../workspace/workspaceFolderTree";
+  createLocalLibraryFolder,
+  emptyLocalLibraryTrash,
+  purgeLocalLibraryTrashItem,
+  restoreLocalLibraryTrashItem,
+  trashLocalLibraryResource,
+  trashLocalMetadataEntry
+} from "./libraryFileSystemClient";
+import type {
+  LibraryResourceArea,
+  LibraryResourceEntrySource,
+  LibraryResourceFolderOrigin,
+  LibraryResourceFolderSource,
+  LibraryResourceFolderTree,
+  LibraryResourceTransferSource,
+  LibraryResourceTransferTarget
+} from "./libraryResourceTransfer.types";
+import type {
+  LocalLibraryEntry,
+  LocalLibraryFolder,
+  LocalLibrarySnapshot,
+  LocalLibraryTrashEntry
+} from "./localLibrary.types";
 import {
-  getWorkspaceParentPath,
-  normalizeWorkspacePath
-} from "../workspace/workspacePathOperations";
+  canExportFromOrganization,
+  canManageOrganizationLibrary,
+  canUploadToOrganization,
+  type OrganizationStorageAccess
+} from "../organization/organizationStoragePolicy";
+import { useCloudLibraryTree } from "./useCloudLibraryTree";
+import "./library.css";
 
 export type LibraryPaperChildItem = {
   id: string;
@@ -53,1306 +101,1282 @@ export type LibraryPaperChildItem = {
 };
 
 type LibraryPaneProps = {
+  accountScopeId?: string;
   accountSessionAvailable?: boolean;
-  papers: Paper[];
-  selectedPaperIds: string[];
-  selectionLocked: boolean;
-  collectionItems: CollectionItem[];
-  collectionMessage: string;
-  collectionStatus: "idle" | "loading" | "ready" | "error";
-  importJobs: Record<string, ImportJob>;
   activePaperId?: string | null;
+  canOpenOrganizationWorkspace: boolean;
+  cloudEndpoint: string;
+  cloudTreeRevision?: number;
+  importJobs: Record<string, ImportJob>;
+  localLibrarySnapshot: LocalLibrarySnapshot | null;
+  organizationId?: string;
+  organizationStorageAccess?: OrganizationStorageAccess;
+  organizationWorkspaceLabel?: string;
   paperChildren?: Record<string, LibraryPaperChildItem[]>;
+  papers: Paper[];
   recommendationItems: RecommendationItem[];
   recommendationMessage: string;
   recommendationPending: boolean;
   recommendationStatus: RecommendationStatus;
-  canOpenOrganizationWorkspace: boolean;
-  organizationWorkspaceLabel?: string;
-  onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
-  onAddExternalPaper: (item: CollectionItem | RecommendationItem) => void;
+  selectedPaperIds: string[];
+  selectionLocked: boolean;
+  workspaceLabel: string;
+  workspaceSourceType: WorkspaceSourceType;
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
+  onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
-  onCollectRecommendation: (recommendation: RecommendationItem) => void;
   onDismissRecommendation: (recommendation: RecommendationItem) => void;
   onImportSelectedSet: () => void;
+  onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onLoginRequired?: () => void;
+  onMoveFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
+  onMovePaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
+  onOpenCloudEntry?: (scope: CloudLibraryScope, entry: CloudLibraryEntry) => void | Promise<void>;
   onOpenOrganizationWorkspace: () => void;
   onOpenPaper?: (paperId: string) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
-  onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
   onRefreshLocalLibrary?: () => Promise<void>;
-  onMoveFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
-  onMovePaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
-  onRetryCollectionSync?: () => void;
   onRenameFolder?: (folderPath: string, requestedName: string) => Promise<string>;
   onRenamePaper?: (paperId: string, requestedName: string) => Promise<string>;
+  onResourceTransfer?: (
+    source: LibraryResourceTransferSource,
+    target: LibraryResourceTransferTarget
+  ) => void | Promise<void>;
   onReturnToLocalWorkspace: () => void;
   onToggleLock: () => void;
   onToggleSelection: (paperId: string) => void;
-  workspaceLabel: string;
-  workspaceSourceType: WorkspaceSourceType;
 };
 
-type LibraryCollectionId =
-  | "my-library"
-  | "courses"
-  | "vector-search"
-  | "late-interaction"
-  | "vector-database";
-
-type LibrarySectionId = "library" | "collections" | "recommendations";
-
-type LibraryCollection = {
-  children: LibraryCollection[];
-  id: LibraryCollectionId;
+type ExplorerEntry = {
+  bodyAvailable: boolean;
+  id: string;
   label: string;
+  source: LibraryResourceEntrySource;
 };
 
-type ResourceContextMenu = {
-  left: number;
-  target:
-    | { item: LibraryPaperChildItem; kind: "artifact"; paper: Paper }
-    | { folder: WorkspaceFolderNode; kind: "folder" }
-    | { kind: "paper"; paper: Paper };
-  top: number;
+type ExplorerFolder = {
+  children: ExplorerFolder[];
+  entries: ExplorerEntry[];
+  id: string;
+  label: string;
+  localPath?: string;
+  sourceFolder?: LibraryResourceFolderOrigin;
+  virtual?: boolean;
 };
 
-type ResourceOperationDialog = {
-  action: "move" | "rename";
-  target:
-    | { item: LibraryPaperChildItem; kind: "artifact"; paper: Paper }
-    | { folder: WorkspaceFolderNode; kind: "folder" }
-    | { kind: "paper"; paper: Paper };
-  value: string;
+type ExplorerTree = {
+  entries: ExplorerEntry[];
+  folders: ExplorerFolder[];
 };
 
-const workspaceResourceMimeType = "application/x-liteasy-workspace-resource";
+type CreateFolderTarget = {
+  area: "local" | "collection" | "organization";
+  parent?: ExplorerFolder;
+};
 
-function flattenFolderPaths(nodes: WorkspaceFolderNode[]): string[] {
-  return nodes.flatMap((node) => [node.path, ...flattenFolderPaths(node.children)]);
+const resourceTransferMimeType = "application/x-liteasy-library-resource-v2";
+const sectionIds: LibraryResourceArea[] = ["local", "collection", "recommendation", "organization"];
+
+export function personalLibraryScopeId(accountScopeId?: string) {
+  if (!accountScopeId) return "";
+  return accountScopeId.startsWith("user:") ? accountScopeId : `user:${accountScopeId}`;
 }
 
-const importStatusLabels: Record<ImportJob["status"], string> = {
-  failed: "PDF 解析失败",
-  parsed: "PDF 已就绪",
-  parsing: "正在解析 PDF",
-  queued: "等待解析 PDF"
-};
+function dirname(value: string) {
+  const normalized = value.replace(/\\/g, "/").replace(/\/+$/, "");
+  const separator = normalized.lastIndexOf("/");
+  return separator <= 0 ? "" : normalized.slice(0, separator);
+}
 
-const libraryCollections: LibraryCollection[] = [
-  {
-    children: [
-      {
-        children: [
-          {
-            children: [
-              { children: [], id: "late-interaction", label: "Late Interaction" }
-            ],
-            id: "vector-search",
-            label: "Vector Search"
-          },
-          { children: [], id: "vector-database", label: "Vector Database" }
-        ],
-        id: "courses",
-        label: "Courses"
-      }
-    ],
-    id: "my-library",
-    label: "My Library"
+function localExplorerTree(snapshot: LocalLibrarySnapshot | null): ExplorerTree {
+  if (!snapshot) return { entries: [], folders: [] };
+  const byPath = new Map<string, ExplorerFolder>();
+  for (const folder of snapshot.folders) {
+    byPath.set(folder.path, {
+      children: [],
+      entries: [],
+      id: folder.path,
+      label: folder.name,
+      localPath: folder.path,
+      sourceFolder: { area: "local", folder }
+    });
   }
-];
-
-function findLibraryCollection(
-  collections: LibraryCollection[],
-  collectionId: LibraryCollectionId
-): LibraryCollection | undefined {
-  for (const collection of collections) {
-    if (collection.id === collectionId) {
-      return collection;
+  const roots: ExplorerFolder[] = [];
+  for (const folder of snapshot.folders) {
+    const node = byPath.get(folder.path)!;
+    const parent = folder.parentPath ? byPath.get(folder.parentPath) : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  const rootEntries: ExplorerEntry[] = [];
+  const metadataEntries: ExplorerEntry[] = [];
+  for (const entry of snapshot.entries) {
+    const explorerEntry: ExplorerEntry = {
+      bodyAvailable: entry.path !== null,
+      id: entry.id,
+      label: entry.title,
+      source: { area: "local", entry }
+    };
+    if (!entry.path) {
+      metadataEntries.push(explorerEntry);
+      continue;
     }
+    const parent = byPath.get(dirname(entry.path));
+    if (parent) parent.entries.push(explorerEntry);
+    else rootEntries.push(explorerEntry);
+  }
+  if (metadataEntries.length > 0) {
+    roots.unshift({
+      children: [],
+      entries: metadataEntries,
+      id: "local-metadata-only",
+      label: "仅元数据",
+      virtual: true
+    });
+  }
+  return sortTree({ entries: rootEntries, folders: roots });
+}
 
-    const child = findLibraryCollection(collection.children, collectionId);
-    if (child) {
-      return child;
+function cloudExplorerTree(
+  area: "collection" | "organization",
+  scope: CloudLibraryScope,
+  tree: CloudLibraryTree | null
+): ExplorerTree {
+  if (!tree) return { entries: [], folders: [] };
+  const byId = new Map<string, ExplorerFolder>(tree.folders.map((folder) => [
+    folder.folderId,
+    {
+      children: [],
+      entries: [],
+      id: folder.folderId,
+      label: folder.name,
+      sourceFolder: { area, folder, scope }
     }
+  ]));
+  const roots: ExplorerFolder[] = [];
+  for (const folder of tree.folders) {
+    const node = byId.get(folder.folderId)!;
+    const parent = folder.parentFolderId ? byId.get(folder.parentFolderId) : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
   }
-
-  return undefined;
+  const rootEntries: ExplorerEntry[] = [];
+  for (const entry of tree.entries) {
+    const explorerEntry: ExplorerEntry = {
+      bodyAvailable: entry.entryKind === "pdf",
+      id: entry.documentId,
+      label: entry.title,
+      source: { area, entry, scope }
+    };
+    const parent = entry.folderId ? byId.get(entry.folderId) : undefined;
+    if (parent) parent.entries.push(explorerEntry);
+    else rootEntries.push(explorerEntry);
+  }
+  return sortTree({ entries: rootEntries, folders: roots });
 }
 
-function getRelevanceLabel(band: RecommendationItem["relevanceBand"]) {
-  if (band === "high") {
-    return "高关联";
-  }
-
-  if (band === "medium") {
-    return "中关联";
-  }
-
-  return "低关联";
+function sortTree(tree: ExplorerTree): ExplorerTree {
+  const sortFolders = (folders: ExplorerFolder[]): ExplorerFolder[] => folders
+    .map((folder) => ({
+      ...folder,
+      children: sortFolders(folder.children),
+      entries: [...folder.entries].sort((left, right) => left.label.localeCompare(right.label))
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+  return {
+    entries: [...tree.entries].sort((left, right) => left.label.localeCompare(right.label)),
+    folders: sortFolders(tree.folders)
+  };
 }
 
-function getRecommendationSourceKindLabel(sourceKind: RecommendationItem["sourceKind"]) {
-  if (sourceKind === "mock") {
-    return "演示数据";
-  }
-
-  if (sourceKind === "cache") {
-    return "缓存";
-  }
-
-  return "联网来源";
+function filterTree(tree: ExplorerTree, query: string): ExplorerTree {
+  if (!query) return tree;
+  const filterFolders = (folders: ExplorerFolder[]): ExplorerFolder[] => folders.flatMap((folder) => {
+    const children = filterFolders(folder.children);
+    const entries = folder.entries.filter((entry) => entry.label.toLocaleLowerCase().includes(query));
+    return folder.label.toLocaleLowerCase().includes(query) || children.length > 0 || entries.length > 0
+      ? [{ ...folder, children, entries }]
+      : [];
+  });
+  return {
+    entries: tree.entries.filter((entry) => entry.label.toLocaleLowerCase().includes(query)),
+    folders: filterFolders(tree.folders)
+  };
 }
 
-function getRecommendationRelationLabel(relation: RecommendationItem["relation"]) {
-  if (relation === "cited_by_target") return "目标论文引用";
-  if (relation === "cites_target") return "后续引用目标论文";
-  if (relation === "related") return "相关工作";
-  if (relation === "topic_search") return "主题检索线索";
-  return undefined;
+function readTransfer(event: ReactDragEvent): LibraryResourceTransferSource | null {
+  const serialized = event.dataTransfer.getData(resourceTransferMimeType);
+  if (!serialized) return null;
+  try {
+    return JSON.parse(serialized) as LibraryResourceTransferSource;
+  } catch {
+    return null;
+  }
 }
 
-function getDataTransferTypes(dataTransfer: Pick<DataTransfer, "types">) {
-  return Array.from(dataTransfer.types ?? []);
+function folderTransferTree(folder: ExplorerFolder): LibraryResourceFolderTree {
+  return {
+    children: folder.children.map(folderTransferTree),
+    entries: folder.entries.map((entry) => entry.source),
+    name: folder.label
+  };
 }
 
-function paperMatchesCollection(paper: Paper, collectionId: LibraryCollectionId) {
-  const searchableText = `${paper.title} ${paper.sourcePath ?? ""}`.toLowerCase();
+function folderTransferSource(folder: ExplorerFolder): LibraryResourceFolderSource | null {
+  return folder.sourceFolder
+    ? { ...folder.sourceFolder, tree: folderTransferTree(folder) } as LibraryResourceFolderSource
+    : null;
+}
 
-  if (collectionId === "my-library" || collectionId === "courses") {
-    return true;
-  }
-
-  if (collectionId === "late-interaction") {
-    return searchableText.includes("colbert") || searchableText.includes("late-interaction");
-  }
-
-  if (collectionId === "vector-database") {
-    return searchableText.includes("vector database");
-  }
-
+function SectionHeader(props: {
+  actions?: ReactNode;
+  count: number;
+  expanded: boolean;
+  icon: ReactNode;
+  onToggle: () => void;
+  title: string;
+}) {
   return (
-    searchableText.includes("vector") ||
-    searchableText.includes("colbert") ||
-    searchableText.includes("acorn")
+    <div className="library-section-header-row">
+      <button
+        aria-label={`${props.expanded ? "收起" : "展开"}${props.title}`}
+        aria-expanded={props.expanded}
+        className="library-section-header"
+        onClick={props.onToggle}
+        type="button"
+      >
+        <span aria-hidden="true" className="library-section-disclosure">
+          {props.expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        </span>
+        <span aria-hidden="true" className="library-section-icon">{props.icon}</span>
+        <span className="library-section-title">{props.title}</span>
+        <span className="library-section-count">{props.count}</span>
+      </button>
+      {props.actions ? <div className="library-section-actions">{props.actions}</div> : null}
+    </div>
   );
 }
 
-function matchesSearch(value: string | undefined, searchQuery: string) {
-  return Boolean(value?.toLocaleLowerCase().includes(searchQuery));
-}
-
 export function LibraryPane({
+  accountScopeId,
   accountSessionAvailable = false,
   activePaperId,
-  papers,
-  paperChildren = {},
-  selectedPaperIds,
-  selectionLocked,
-  collectionItems,
-  collectionMessage,
-  collectionStatus,
-  importJobs,
+  cloudEndpoint,
+  cloudTreeRevision,
+  localLibrarySnapshot,
+  onAddDroppedPdfFiles,
+  onClearRecommendations,
+  onDismissRecommendation,
+  onImportSelectedSet,
+  onImportZoteroDirectory,
+  onLoginRequired,
+  onMoveFolder,
+  onMovePaper,
+  onOpenCloudEntry,
+  onOpenPaper,
+  onRefreshLocalLibrary,
+  onRenameFolder,
+  onRenamePaper,
+  onResourceTransfer,
+  onToggleLock,
+  onToggleSelection,
+  organizationId,
+  organizationStorageAccess,
+  organizationWorkspaceLabel = "组织文献库",
   recommendationItems,
   recommendationMessage,
   recommendationPending,
   recommendationStatus,
-  canOpenOrganizationWorkspace,
-  organizationWorkspaceLabel = "组织共享文献库",
-  onAddExternalPaper,
-  onAddExternalPdf,
-  onAddDroppedPdfFiles,
-  onClearRecommendations,
-  onCollectRecommendation,
-  onDismissRecommendation,
-  onLoginRequired,
-  onOpenOrganizationWorkspace,
-  onOpenPaper,
-  onOpenPaperChild,
-  onRenamePaperChild,
-  onRefreshLocalLibrary,
-  onMoveFolder,
-  onMovePaper,
-  onRetryCollectionSync,
-  onRenameFolder,
-  onRenamePaper,
-  onReturnToLocalWorkspace,
-  onToggleLock,
-  onToggleSelection,
-  workspaceLabel,
-  workspaceSourceType
+  selectedPaperIds,
+  selectionLocked
 }: LibraryPaneProps) {
-  const selectedCount = selectedPaperIds.length;
-  const [activeCollectionId, setActiveCollectionId] = useState<LibraryCollectionId>("my-library");
-  const [collapsedSectionIds, setCollapsedSectionIds] = useState<LibrarySectionId[]>([
-    "collections",
-    "recommendations"
-  ]);
-  const activeCollection =
-    findLibraryCollection(libraryCollections, activeCollectionId) ??
-    libraryCollections[0];
-  const [searchQuery, setSearchQuery] = useState("");
-  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
-  const visiblePapers = papers.filter((paper) => {
-    if (!paperMatchesCollection(paper, activeCollection.id)) {
-      return false;
-    }
-    if (!normalizedSearchQuery) {
-      return true;
-    }
-    return matchesSearch(paper.title, normalizedSearchQuery) ||
-      matchesSearch(paper.sourcePath, normalizedSearchQuery) ||
-      (paperChildren[paper.id] ?? []).some((item) =>
-        matchesSearch(item.label, normalizedSearchQuery) || matchesSearch(item.meta, normalizedSearchQuery)
-      );
+  const collectionScope = useMemo<CloudLibraryScope>(() => ({
+    scopeId: personalLibraryScopeId(accountScopeId),
+    scopeType: "user"
+  }), [accountScopeId]);
+  const organizationScope = useMemo<CloudLibraryScope | undefined>(() => organizationId
+    ? { scopeId: organizationId, scopeType: "organization" }
+    : undefined, [organizationId]);
+  const collection = useCloudLibraryTree({
+    enabled: accountSessionAvailable && Boolean(collectionScope.scopeId),
+    endpoint: cloudEndpoint,
+    refreshKey: cloudTreeRevision,
+    scopeId: collectionScope.scopeId,
+    scopeType: "user"
   });
-  const folderTree = buildWorkspaceFolderTree(
-    visiblePapers,
-    workspaceSourceType === "local_library" ? workspaceLabel : undefined
+  const organization = useCloudLibraryTree({
+    enabled: accountSessionAvailable && Boolean(organizationScope),
+    endpoint: cloudEndpoint,
+    refreshKey: cloudTreeRevision,
+    scopeId: organizationScope?.scopeId,
+    scopeType: "organization"
+  });
+  const [collapsedSections, setCollapsedSections] = useState<LibraryResourceArea[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Record<LibraryResourceArea, string[]>>({
+    collection: [],
+    local: [],
+    organization: [],
+    recommendation: []
+  });
+  const [search, setSearch] = useState("");
+  const [message, setMessage] = useState("");
+  const [createFolderTarget, setCreateFolderTarget] = useState<CreateFolderTarget | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const [folderDialogError, setFolderDialogError] = useState("");
+  const [folderDialogPending, setFolderDialogPending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const zoteroDirectoryInputRef = useRef<HTMLInputElement | null>(null);
+  const attachPdfInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachTarget, setAttachTarget] = useState<{
+    area: "collection" | "organization";
+    entry: CloudLibraryEntry;
+    scope: CloudLibraryScope;
+  } | null>(null);
+  const [pendingNodeIds, setPendingNodeIds] = useState<string[]>([]);
+  const query = search.trim().toLocaleLowerCase();
+  const localTree = useMemo(
+    () => filterTree(localExplorerTree(localLibrarySnapshot), query),
+    [localLibrarySnapshot, query]
   );
-  const folderPaths = flattenFolderPaths(folderTree);
-  const [collapsedCollectionIds, setCollapsedCollectionIds] = useState<LibraryCollectionId[]>([]);
-  const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<string[]>([]);
-  const [expandedPaperIds, setExpandedPaperIds] = useState<string[]>([]);
-  const [contextMenu, setContextMenu] = useState<ResourceContextMenu | null>(null);
-  const [operationDialog, setOperationDialog] = useState<ResourceOperationDialog | null>(null);
-  const [resourceActionMessage, setResourceActionMessage] = useState("");
-  const [failedExternalPaper, setFailedExternalPaper] = useState<ExternalPdfDragPayload | null>(null);
-  const [dropTargetFolderPath, setDropTargetFolderPath] = useState<string | null>(null);
-  const [fileDropActive, setFileDropActive] = useState(false);
-  const [importFolderPath, setImportFolderPath] = useState(() => {
-    if (typeof window === "undefined") {
-      return workspaceLabel;
-    }
-    return window.localStorage.getItem("liteasy.library.import-folder.v1") ?? workspaceLabel;
-  });
-  const [fileInputKey, setFileInputKey] = useState(0);
-  const resourceEditingEnabled = workspaceSourceType === "local_library";
-  const normalizedWorkspaceRoot = normalizeWorkspacePath(workspaceLabel);
-
-  function importExternalPdf(item: ExternalPdfDragPayload) {
-    if (!onAddExternalPdf) {
-      setResourceActionMessage("当前环境无法把关联论文写入本地文献库。");
-      return;
-    }
-    setFailedExternalPaper(null);
-    setResourceActionMessage(item.fullTextUrl
-      ? `下载中：正在取得《${item.title}》的开放全文…`
-      : `正在保存《${item.title}》的无本体条目…`);
-    void Promise.resolve(onAddExternalPdf(item)).then(() => {
-      setResourceActionMessage(item.fullTextUrl
-        ? `已保存《${item.title}》的 PDF，正在后台抽取全文并建立搜索索引。`
-        : `已保存《${item.title}》的无本体条目；未发现可合法下载的开放全文。`);
-    }).catch((error) => {
-      setFailedExternalPaper(item);
-      setResourceActionMessage(`加入文献库失败：${error instanceof Error ? error.message : String(error)}`);
-    });
-  }
+  const collectionTree = useMemo(
+    () => filterTree(cloudExplorerTree("collection", collectionScope, collection.tree), query),
+    [collection.tree, collectionScope, query]
+  );
+  const organizationTree = useMemo(
+    () => filterTree(organizationScope
+      ? cloudExplorerTree("organization", organizationScope, organization.tree)
+      : { entries: [], folders: [] }, query),
+    [organization.tree, organizationScope, query]
+  );
 
   useEffect(() => {
-    if (!resourceEditingEnabled) {
-      return;
-    }
-    const validFolder = folderPaths.includes(importFolderPath) ? importFolderPath : workspaceLabel;
-    if (validFolder !== importFolderPath) {
-      setImportFolderPath(validFolder);
-      return;
-    }
-    window.localStorage.setItem("liteasy.library.import-folder.v1", validFolder);
-  }, [folderPaths, importFolderPath, resourceEditingEnabled, workspaceLabel]);
+    const read = (key: string) => {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+        return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === "string") : [];
+      } catch {
+        return [];
+      }
+    };
+    setExpandedFolders((current) => ({
+      ...current,
+      collection: read(`liteasy.library.expanded.collection.v1:${accountScopeId ?? "guest"}`),
+      local: read(`liteasy.library.expanded.local.v1:${localLibrarySnapshot?.libraryId ?? "none"}`),
+      organization: read(`liteasy.library.expanded.organization.v1:${accountScopeId ?? "guest"}:${organizationId ?? "none"}`)
+    }));
+  }, [accountScopeId, localLibrarySnapshot?.libraryId, organizationId]);
 
-  function importPdfFiles(files: File[], targetFolderPath = importFolderPath) {
-    const pdfFiles = files.filter((file) => file.name.toLowerCase().endsWith(".pdf"));
-    if (pdfFiles.length === 0) {
-      setResourceActionMessage("请拖入 PDF 文件。");
-      return;
+  function expandedStorageKey(area: LibraryResourceArea) {
+    if (area === "local") {
+      return `liteasy.library.expanded.local.v1:${localLibrarySnapshot?.libraryId ?? "none"}`;
     }
-    setResourceActionMessage(`正在将 ${pdfFiles.length} 个 PDF 保存到 ${targetFolderPath}…`);
-    void Promise.resolve(onAddDroppedPdfFiles?.(pdfFiles, targetFolderPath)).then(() => {
-      setResourceActionMessage(`已将 ${pdfFiles.length} 个 PDF 保存到 ${targetFolderPath}。`);
-    }).catch((error) => {
-      setResourceActionMessage(`导入失败：${error instanceof Error ? error.message : String(error)}`);
-    });
+    if (area === "collection") {
+      return `liteasy.library.expanded.collection.v1:${accountScopeId ?? "guest"}`;
+    }
+    if (area === "organization") {
+      return `liteasy.library.expanded.organization.v1:${accountScopeId ?? "guest"}:${organizationId ?? "none"}`;
+    }
+    return null;
   }
 
-  useEffect(() => {
-    if (!contextMenu) {
-      return undefined;
+  function toggleFolder(area: LibraryResourceArea, id: string) {
+    const current = expandedFolders[area];
+    const next = current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id];
+    setExpandedFolders((state) => ({ ...state, [area]: next }));
+    const storageKey = expandedStorageKey(area);
+    if (storageKey) window.localStorage.setItem(storageKey, JSON.stringify(next));
+  }
+
+  function toggleSection(area: LibraryResourceArea) {
+    setCollapsedSections((current) => current.includes(area)
+      ? current.filter((item) => item !== area)
+      : [...current, area]);
+  }
+
+  async function transfer(source: LibraryResourceTransferSource, target: LibraryResourceTransferTarget) {
+    try {
+      await onResourceTransfer?.(source, target);
+      setMessage("资源已复制到目标位置。");
+      await Promise.all([collection.refresh(), organization.refresh()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "资源操作失败。");
     }
-    function closeContextMenu(event: KeyboardEvent | Event) {
-      if (event instanceof KeyboardEvent && event.key !== "Escape") {
+  }
+
+  async function saveRecommendation(recommendation: RecommendationItem) {
+    if (pendingNodeIds.includes(recommendation.id)) return;
+    setPendingNodeIds((current) => [...current, recommendation.id]);
+    try {
+      await transfer({ area: "recommendation", recommendation }, targetFor("collection"));
+    } finally {
+      setPendingNodeIds((current) => current.filter((id) => id !== recommendation.id));
+    }
+  }
+
+  async function runNodeAction(nodeId: string, pendingMessage: string, action: () => Promise<void>) {
+    if (pendingNodeIds.includes(nodeId)) return;
+    setPendingNodeIds((current) => [...current, nodeId]);
+    setMessage(pendingMessage);
+    try {
+      await action();
+      setMessage("操作已完成。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "资源操作失败，原有内容未改变。");
+    } finally {
+      setPendingNodeIds((current) => current.filter((id) => id !== nodeId));
+    }
+  }
+
+  function cloudRevision(area: "collection" | "organization") {
+    return area === "collection" ? collection.tree?.revision ?? 0 : organization.tree?.revision ?? 0;
+  }
+
+  async function trashEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry) {
+    if (entry.source.area === "local") {
+      if (entry.source.entry.path) await trashLocalLibraryResource(entry.source.entry.path);
+      else await trashLocalMetadataEntry(entry.source.entry.id);
+      await onRefreshLocalLibrary?.();
+      return;
+    }
+    const client = createCloudLibraryStorageClient({ endpoint: cloudEndpoint });
+    await client.trashDocument(
+      entry.source.scope,
+      entry.source.entry.documentId,
+      cloudRevision(entry.source.area)
+    );
+    await (entry.source.area === "collection" ? collection.refresh() : organization.refresh());
+  }
+
+  async function renameEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry) {
+    const requested = window.prompt("文献名称", entry.label)?.trim();
+    if (!requested || requested === entry.label) return;
+    if (entry.source.area === "local") {
+      if (!onRenamePaper) throw new Error("当前本地文献无法重命名。");
+      setMessage(await onRenamePaper(entry.source.entry.id, requested));
+      await onRefreshLocalLibrary?.();
+      return;
+    }
+    const client = createCloudLibraryStorageClient({ endpoint: cloudEndpoint });
+    await client.updateDocument(entry.source.scope, entry.source.entry.documentId, {
+      expectedRevision: cloudRevision(entry.source.area),
+      ...(entry.source.entry.entryKind === "pdf" ? { fileName: `${requested}.pdf` } : {}),
+      title: requested
+    });
+    await (entry.source.area === "collection" ? collection.refresh() : organization.refresh());
+  }
+
+  async function renameFolder(area: "local" | "collection" | "organization", folder: ExplorerFolder) {
+    if (folder.virtual) return;
+    const requested = window.prompt("目录名称", folder.label)?.trim();
+    if (!requested || requested === folder.label) return;
+    if (area === "local") {
+      if (!folder.localPath || !onRenameFolder) throw new Error("当前本地目录无法重命名。");
+      setMessage(await onRenameFolder(folder.localPath, requested));
+      await onRefreshLocalLibrary?.();
+      return;
+    }
+    if (!folder.sourceFolder || folder.sourceFolder.area === "local") return;
+    const client = createCloudLibraryStorageClient({ endpoint: cloudEndpoint });
+    await client.updateFolder(folder.sourceFolder.scope, folder.sourceFolder.folder.folderId, {
+      expectedRevision: cloudRevision(area),
+      name: requested
+    });
+    await (area === "collection" ? collection.refresh() : organization.refresh());
+  }
+
+  async function trashFolder(area: "local" | "collection" | "organization", folder: ExplorerFolder) {
+    if (folder.virtual) return;
+    if (area === "local") {
+      if (!folder.localPath) return;
+      await trashLocalLibraryResource(folder.localPath);
+      await onRefreshLocalLibrary?.();
+      return;
+    }
+    if (!folder.sourceFolder || folder.sourceFolder.area === "local") return;
+    const client = createCloudLibraryStorageClient({ endpoint: cloudEndpoint });
+    await client.trashFolder(folder.sourceFolder.scope, folder.sourceFolder.folder.folderId, cloudRevision(area));
+    await (area === "collection" ? collection.refresh() : organization.refresh());
+  }
+
+  function targetFor(area: Exclude<LibraryResourceArea, "recommendation">, folder?: ExplorerFolder) {
+    if (area === "local") {
+      return {
+        area,
+        localFolderPath: folder?.localPath ?? localLibrarySnapshot?.rootPath
+      } satisfies LibraryResourceTransferTarget;
+    }
+    return {
+      area,
+      expectedRevision: area === "collection"
+        ? collection.tree?.revision
+        : organization.tree?.revision,
+      folderId: folder?.id,
+      scope: area === "collection" ? collectionScope : organizationScope
+    } satisfies LibraryResourceTransferTarget;
+  }
+
+  function transferPermissionMessage(
+    source: LibraryResourceTransferSource,
+    target: LibraryResourceTransferTarget
+  ) {
+    const sourceOrganizationId = source.area === "organization"
+      ? source.scope.scopeId
+      : undefined;
+    const targetOrganizationId = target.area === "organization"
+      ? target.scope?.scopeId
+      : undefined;
+    const sameOrganization = Boolean(
+      sourceOrganizationId && sourceOrganizationId === targetOrganizationId
+    );
+    if (sourceOrganizationId) {
+      if (!organizationStorageAccess || organizationId !== sourceOrganizationId) {
+        return "组织权限状态不可用，请刷新组织空间后重试。";
+      }
+      if (sameOrganization && !canManageOrganizationLibrary(organizationStorageAccess.role)) {
+        return "当前组织角色不能移动组织文献库内容。";
+      }
+      if (!sameOrganization && !canExportFromOrganization(organizationStorageAccess)) {
+        return "当前组织策略不允许将文献复制出组织库。";
+      }
+    }
+    if (targetOrganizationId && !sameOrganization) {
+      if (!organizationStorageAccess || organizationId !== targetOrganizationId) {
+        return "组织权限状态不可用，请刷新组织空间后重试。";
+      }
+      if (!canUploadToOrganization(organizationStorageAccess)) {
+        return "当前组织策略不允许向组织文献库新增内容。";
+      }
+    }
+    return "";
+  }
+
+  function canStartResourceDrag(source: LibraryResourceTransferSource) {
+    if (source.area !== "organization") return true;
+    return Boolean(
+      organizationStorageAccess &&
+      organizationId === source.scope.scopeId &&
+      (
+        canManageOrganizationLibrary(organizationStorageAccess.role) ||
+        canExportFromOrganization(organizationStorageAccess)
+      )
+    );
+  }
+
+  function dropOnTarget(
+    event: ReactDragEvent,
+    area: Exclude<LibraryResourceArea, "recommendation">,
+    folder?: ExplorerFolder
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    const source = readTransfer(event);
+    if (source) {
+      const target = targetFor(area, folder);
+      const permissionMessage = transferPermissionMessage(source, target);
+      if (permissionMessage) {
+        setMessage(permissionMessage);
         return;
       }
-      setContextMenu(null);
-    }
-    window.addEventListener("click", closeContextMenu);
-    window.addEventListener("blur", closeContextMenu);
-    window.addEventListener("keydown", closeContextMenu);
-    return () => {
-      window.removeEventListener("click", closeContextMenu);
-      window.removeEventListener("blur", closeContextMenu);
-      window.removeEventListener("keydown", closeContextMenu);
-    };
-  }, [contextMenu]);
-
-  function openContextMenu(
-    event: ReactMouseEvent,
-    target: ResourceContextMenu["target"]
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    setContextMenu({
-      left: Math.min(event.clientX, Math.max(8, window.innerWidth - 230)),
-      target,
-      top: Math.min(event.clientY, Math.max(8, window.innerHeight - 330))
-    });
-  }
-
-  function openOperationDialog(
-    action: ResourceOperationDialog["action"],
-    target: ResourceOperationDialog["target"]
-  ) {
-    const value = action === "rename"
-      ? target.kind === "paper"
-        ? target.paper.title
-        : target.kind === "artifact"
-          ? target.item.label
-          : target.folder.name
-      : target.kind === "paper"
-        ? getWorkspaceParentPath(target.paper.sourcePath ?? "")
-        : target.kind === "folder"
-          ? getWorkspaceParentPath(target.folder.path)
-          : "";
-    setContextMenu(null);
-    setOperationDialog({ action, target, value });
-  }
-
-  async function submitResourceOperation(event: FormEvent) {
-    event.preventDefault();
-    const dialog = operationDialog;
-    if (!dialog || !dialog.value.trim()) {
+      if ("folder" in source) {
+        if (source.area === "local" && area === "local") {
+          const targetPath = folder?.localPath ?? localLibrarySnapshot?.rootPath;
+          if (targetPath && source.folder.path !== targetPath) {
+            void onMoveFolder?.(source.folder.path, targetPath).then(setMessage);
+          }
+          return;
+        }
+        void transfer(source, target);
+        return;
+      }
+      if (source.area === "local" && area === "local" && source.entry.path) {
+        const targetPath = folder?.localPath ?? localLibrarySnapshot?.rootPath;
+        if (targetPath) {
+          void onMovePaper?.(source.entry.id, targetPath).then(setMessage);
+        }
+        return;
+      }
+      void transfer(source, target);
       return;
     }
-    let message = "";
-    if (dialog.target.kind === "artifact") {
-      message = await onRenamePaperChild?.(
-        dialog.target.item,
-        dialog.target.paper,
-        dialog.value
-      ) ?? "";
-    } else if (dialog.target.kind === "paper") {
-      message = dialog.action === "rename"
-        ? await onRenamePaper?.(dialog.target.paper.id, dialog.value) ?? ""
-        : await onMovePaper?.(dialog.target.paper.id, dialog.value) ?? "";
-    } else {
-      message = dialog.action === "rename"
-        ? await onRenameFolder?.(dialog.target.folder.path, dialog.value) ?? ""
-        : await onMoveFolder?.(dialog.target.folder.path, dialog.value) ?? "";
-    }
-    setResourceActionMessage(message);
-    setOperationDialog(null);
-  }
-
-  async function copyResourceText(value: string, label: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setResourceActionMessage(`已复制${label}。`);
-    } catch {
-      setResourceActionMessage(`无法访问剪贴板；${label}为：${value}`);
-    }
-    setContextMenu(null);
-  }
-
-  function readDraggedResource(event: ReactDragEvent) {
-    const serialized = event.dataTransfer.getData(workspaceResourceMimeType);
-    if (!serialized) {
-      return null;
-    }
-    try {
-      return JSON.parse(serialized) as { id?: string; kind?: string; path?: string };
-    } catch {
-      return null;
-    }
-  }
-
-  async function dropResourceIntoFolder(event: ReactDragEvent, folderPath: string) {
-    if (!resourceEditingEnabled) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    setDropTargetFolderPath(null);
-    const resource = readDraggedResource(event);
-    if (resource?.kind === "paper" && resource.id) {
-      setResourceActionMessage(await onMovePaper?.(resource.id, folderPath) ?? "");
-    } else if (resource?.kind === "folder" && resource.path) {
-      setResourceActionMessage(await onMoveFolder?.(resource.path, folderPath) ?? "");
-    } else {
-      const droppedPdfFiles = Array.from(event.dataTransfer.files ?? []).filter((file) =>
-        file.name.toLowerCase().endsWith(".pdf")
+    if (area === "local") {
+      const files = Array.from(event.dataTransfer.files ?? []).filter((file) =>
+        file.name.toLocaleLowerCase().endsWith(".pdf")
       );
-      if (droppedPdfFiles.length > 0) {
-        importPdfFiles(droppedPdfFiles, folderPath);
+      if (files.length > 0) {
+        void Promise.resolve(onAddDroppedPdfFiles?.(
+          files,
+          folder?.localPath ?? localLibrarySnapshot?.rootPath
+        )).then(() => onRefreshLocalLibrary?.());
       }
     }
   }
 
-  function toggleFolder(path: string) {
-    setCollapsedFolderPaths((current) =>
-      current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
+  function renderEntry(area: "local" | "collection" | "organization", entry: ExplorerEntry, depth: number) {
+    const selected = area === "local" && selectedPaperIds.includes(entry.id);
+    const pending = pendingNodeIds.includes(entry.id);
+    const canAttachPdf = entry.source.area !== "local" &&
+      entry.source.entry.entryKind === "metadata_only" &&
+      (entry.source.area !== "organization" || Boolean(
+        organizationStorageAccess && canUploadToOrganization(organizationStorageAccess)
+      ));
+    const canManageEntry = area !== "organization" || Boolean(
+      organizationStorageAccess && canManageOrganizationLibrary(organizationStorageAccess.role)
     );
-  }
-
-  function toggleCollection(collectionId: LibraryCollectionId) {
-    setCollapsedCollectionIds((current) =>
-      current.includes(collectionId)
-        ? current.filter((item) => item !== collectionId)
-        : [...current, collectionId]
-    );
-  }
-
-  function toggleSection(sectionId: LibrarySectionId) {
-    setCollapsedSectionIds((current) =>
-      current.includes(sectionId)
-        ? current.filter((item) => item !== sectionId)
-        : [...current, sectionId]
-    );
-  }
-
-  function renderSectionHeader(
-    sectionId: LibrarySectionId,
-    title: string,
-    icon: ReactNode,
-    count?: number
-  ) {
-    const expanded = !collapsedSectionIds.includes(sectionId);
-    return (
-      <button
-        aria-expanded={expanded}
-        aria-label={`${expanded ? "收起" : "展开"}${title}`}
-        className="library-section-header"
-        onClick={() => toggleSection(sectionId)}
-        type="button"
+    const row = (
+      <div
+        aria-busy={pending}
+        className="library-paper-row"
+        draggable={!pending && canStartResourceDrag(entry.source)}
+        onDragStart={(event) => {
+          if (!canStartResourceDrag(entry.source)) {
+            event.preventDefault();
+            setMessage("当前组织策略不允许移动或复制该内容。");
+            return;
+          }
+          event.dataTransfer.effectAllowed = "copyMove";
+          event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify(entry.source));
+        }}
+        style={{ paddingLeft: `${depth * 12 + 6}px` }}
       >
-        <span aria-hidden="true" className="library-section-disclosure">
-          {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        {area === "local" ? (
+          <input
+            aria-label={`选择 ${entry.label}`}
+            checked={selected}
+            disabled={selectionLocked}
+            onChange={() => onToggleSelection(entry.id)}
+            type="checkbox"
+          />
+        ) : <span className="library-disclosure-spacer" />}
+        <span aria-hidden="true" className="library-paper-icon">
+          {entry.bodyAvailable ? <DocumentPdfRegular /> : <DocumentTextRegular />}
         </span>
-        <span aria-hidden="true" className="library-section-icon">{icon}</span>
-        <span className="library-section-title">{title}</span>
-        {count !== undefined ? <span className="library-section-count">{count}</span> : null}
-      </button>
-    );
-  }
-
-  function togglePaper(paperId: string) {
-    setExpandedPaperIds((current) =>
-      current.includes(paperId)
-        ? current.filter((item) => item !== paperId)
-        : [...current, paperId]
-    );
-  }
-
-  function renderPaper(paper: Paper, depth: number) {
-    const children = paperChildren[paper.id] ?? [];
-    const matchingChildren = normalizedSearchQuery
-      ? children.filter((item) =>
-        matchesSearch(item.label, normalizedSearchQuery) || matchesSearch(item.meta, normalizedSearchQuery)
-      )
-      : children;
-    const expanded = expandedPaperIds.includes(paper.id) ||
-      (Boolean(normalizedSearchQuery) && matchingChildren.length > 0);
-    const selected = selectedPaperIds.includes(paper.id);
-    const active = activePaperId === paper.id;
-
-    return (
-      <li
-        className={`library-item${selected ? " selected" : ""}${active ? " active" : ""}`}
-        data-selected={selected}
-        key={paper.id}
-      >
-        <div
-          className="paper-row"
-          draggable={resourceEditingEnabled}
-          onContextMenu={(event) => openContextMenu(event, { kind: "paper", paper })}
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData(
-              workspaceResourceMimeType,
-              JSON.stringify({ id: paper.id, kind: "paper" })
-            );
+        <button
+          className="library-paper-title"
+          disabled={!entry.bodyAvailable || pending}
+          onClick={() => {
+            if (entry.source.area === "local") onOpenPaper?.(entry.id);
+            else {
+              void onOpenCloudEntry?.(entry.source.scope, entry.source.entry);
+            }
           }}
-          style={{ paddingLeft: `${depth * 10}px` }}
-          title="右键查看更多文件操作；也可拖动到其他目录"
+          title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
+          type="button"
         >
-          <button
-            aria-expanded={expanded}
-            aria-label={`${expanded ? "收起" : "展开"}${paper.title}的关联条目`}
-            className="library-disclosure"
-            onClick={() => togglePaper(paper.id)}
-            title={`${expanded ? "收起" : "展开"}相关产物和笔记`}
-            type="button"
-          >
-            <span aria-hidden="true">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          </button>
-          <label className="library-paper-selector" title={selectionLocked ? "选中文献集已锁定" : "加入或移出选中文献集"}>
-            <input
-              aria-label={paper.title}
-              checked={selected}
-              disabled={selectionLocked}
-              onChange={() => onToggleSelection(paper.id)}
-              type="checkbox"
-            />
-          </label>
-          <button
-            className="library-paper-title"
-            onClick={() => onOpenPaper?.(paper.id)}
-            title={`打开 PDF：${paper.title}`}
-            type="button"
-          >
-            <span aria-hidden="true" className="library-file-icon"><DocumentPdfRegular /></span>
-            <span>{paper.title}</span>
-          </button>
-          {importJobs[paper.id] ? (
-            <span className={`job-badge ${importJobs[paper.id].status}`}>
-              {importStatusLabels[importJobs[paper.id].status]}
-            </span>
-          ) : null}
-        </div>
-        {expanded ? (
-          <ul aria-label={`${paper.title}的关联条目`} className="library-paper-children">
-            {matchingChildren.length > 0 ? matchingChildren.map((item) => (
-              <li key={`${item.kind}-${item.id}`}>
-                <button
-                  className="library-paper-child"
-                  onClick={() => onOpenPaperChild?.(item, paper)}
-                  onContextMenu={(event) => {
-                    if (item.kind === "artifact") {
-                      openContextMenu(event, { item, kind: "artifact", paper });
+          {entry.label}
+        </button>
+        {!entry.bodyAvailable ? <span className="library-entry-status">仅元数据</span> : null}
+        <Tooltip content="移到回收站" relationship="label">
+          <Button
+            appearance="subtle"
+            aria-label={`删除 ${entry.label}`}
+            className="library-row-action"
+            disabled={pending || !canManageEntry}
+            icon={<DeleteRegular />}
+            onClick={() => void runNodeAction(
+              entry.id,
+              `正在将《${entry.label}》移到回收站...`,
+              () => trashEntry(area, entry)
+            )}
+            size="small"
+          />
+        </Tooltip>
+      </div>
+    );
+    return (
+      <li className={`library-paper-node${activePaperId === entry.id ? " active" : ""}`} key={entry.id}>
+        <Menu openOnContext>
+          <MenuTrigger disableButtonEnhancement>{row}</MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              <MenuItem
+                disabled={pending || !canManageEntry}
+                icon={<EditRegular />}
+                onClick={() => void runNodeAction(entry.id, "正在重命名文献...", () => renameEntry(area, entry))}
+              >重命名</MenuItem>
+              {canAttachPdf ? (
+                <MenuItem
+                  disabled={pending}
+                  icon={<DocumentArrowUpRegular />}
+                  onClick={() => {
+                    if (entry.source.area === "collection" || entry.source.area === "organization") {
+                      setAttachTarget({ area: entry.source.area, entry: entry.source.entry, scope: entry.source.scope });
+                      attachPdfInputRef.current?.click();
                     }
                   }}
-                  title={item.meta ?? item.label}
-                  type="button"
-                >
-                  <span aria-hidden="true" className={`library-child-icon ${item.kind}`}>
-                    {item.kind === "artifact"
-                      ? <SparkleRegular />
-                      : item.kind === "extracted_text"
-                        ? <DocumentTextRegular />
-                      : item.kind === "figures"
-                        ? <ImageMultipleRegular />
-                        : item.kind === "multimodal"
-                          ? <ImageMultipleRegular />
-                        : <NoteRegular />}
-                  </span>
-                  <span className="library-child-label">{item.label}</span>
-                  {item.meta ? <span className="library-child-meta">{item.meta}</span> : null}
-                </button>
-              </li>
-            )) : (
-              <li className="library-paper-child-empty">暂无已保存的多模态产物或用户笔记</li>
-            )}
-          </ul>
-        ) : null}
+                >补充正文</MenuItem>
+              ) : null}
+              <MenuItem
+                disabled={pending || !canManageEntry}
+                icon={<DeleteRegular />}
+                onClick={() => void runNodeAction(entry.id, "正在移到回收站...", () => trashEntry(area, entry))}
+              >移到回收站</MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
       </li>
     );
   }
 
-  function renderFolder(node: WorkspaceFolderNode, depth = 0, rootFolder = true) {
-    const expanded = !collapsedFolderPaths.includes(node.path);
-    const folderLabel = rootFolder ? workspaceLabel : node.name;
-    const workspaceRootFolder = normalizeWorkspacePath(node.path) === normalizedWorkspaceRoot;
-
-    return (
-      <li className="library-folder-node" key={node.path}>
-        <div
-          className={`library-folder-row${dropTargetFolderPath === node.path ? " drop-target" : ""}`}
-          draggable={resourceEditingEnabled && node.path !== "未归档文献" && !workspaceRootFolder}
-          onContextMenu={(event) => openContextMenu(event, { folder: node, kind: "folder" })}
-          onDragOver={(event) => {
-            const dataTransferTypes = getDataTransferTypes(event.dataTransfer);
-            const carriesWorkspaceResource = dataTransferTypes.includes(workspaceResourceMimeType);
-            const carriesPdfFiles = dataTransferTypes.includes("Files");
-            if (resourceEditingEnabled && (carriesWorkspaceResource || carriesPdfFiles)) {
-              event.preventDefault();
-              event.dataTransfer.dropEffect = carriesWorkspaceResource ? "move" : "copy";
-              setDropTargetFolderPath(node.path);
-            }
-          }}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-              setDropTargetFolderPath((current) => current === node.path ? null : current);
-            }
-          }}
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData(
-              workspaceResourceMimeType,
-              JSON.stringify({ kind: "folder", path: node.path })
-            );
-          }}
-          onDrop={(event) => void dropResourceIntoFolder(event, node.path)}
-          style={{ paddingLeft: `${depth * 10}px` }}
-          title="右键查看更多目录操作；可把文件或目录拖到这里"
+  function renderFolder(
+    area: "local" | "collection" | "organization",
+    folder: ExplorerFolder,
+    depth: number
+  ) {
+    const expanded = query.length > 0 || expandedFolders[area].includes(folder.id);
+    const pending = pendingNodeIds.includes(folder.id);
+    const canManageFolder = area !== "organization" || Boolean(
+      organizationStorageAccess && canManageOrganizationLibrary(organizationStorageAccess.role)
+    );
+    const folderSource = folder.sourceFolder ? folderTransferSource(folder) : null;
+    const row = (
+      <div
+        aria-busy={pending}
+        className="library-folder-row"
+        draggable={Boolean(
+          !pending && !folder.virtual && folderSource && canStartResourceDrag(folderSource)
+        )}
+        onDragStart={folder.sourceFolder ? (event) => {
+          const source = folderSource;
+          if (!source) return;
+          if (!canStartResourceDrag(source)) {
+            event.preventDefault();
+            setMessage("当前组织策略不允许移动或复制该目录。");
+            return;
+          }
+          event.dataTransfer.effectAllowed = "copyMove";
+          event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify(source));
+        } : undefined}
+        onDragOver={folder.virtual ? undefined : (event) => event.preventDefault()}
+        onDrop={folder.virtual ? undefined : (event) => dropOnTarget(event, area, folder)}
+        style={{ paddingLeft: `${depth * 12}px` }}
+      >
+        <button
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "收起" : "展开"}${folder.label}`}
+          className="library-disclosure"
+          onClick={() => toggleFolder(area, folder.id)}
+          type="button"
         >
-          <button
-            aria-expanded={expanded}
-            aria-label={`${expanded ? "收起" : "展开"}目录 ${node.path}`}
-            className="library-disclosure"
-            onClick={() => toggleFolder(node.path)}
-            type="button"
-          >
-            <span aria-hidden="true">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-          </button>
-          <button
-            className="library-folder-name"
-            onClick={() => toggleFolder(node.path)}
-            title={node.path}
-            type="button"
-          >
-            <span aria-hidden="true" className="library-folder-icon"><FolderRegular /></span>
-            <span>{folderLabel}</span>
-          </button>
-          <span className="library-folder-count">{node.paperCount} 篇文献</span>
-        </div>
+          {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+        </button>
+        <button className="library-folder-name" onClick={() => toggleFolder(area, folder.id)} type="button">
+          <FolderRegular aria-hidden="true" />
+          <span>{folder.label}</span>
+        </button>
+      </div>
+    );
+    return (
+      <li className="library-folder-node" key={folder.id}>
+        {folder.virtual ? row : (
+          <Menu openOnContext>
+            <MenuTrigger disableButtonEnhancement>{row}</MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem
+                  disabled={pending || !canManageFolder}
+                  icon={<FolderAddRegular />}
+                  onClick={() => openCreateFolderDialog(area, folder)}
+                >新建子目录</MenuItem>
+                <MenuItem
+                  disabled={pending || !canManageFolder}
+                  icon={<EditRegular />}
+                  onClick={() => void runNodeAction(folder.id, "正在重命名目录...", () => renameFolder(area, folder))}
+                >重命名</MenuItem>
+                <MenuItem
+                  disabled={pending || !canManageFolder}
+                  icon={<DeleteRegular />}
+                  onClick={() => void runNodeAction(folder.id, "正在将目录移到回收站...", () => trashFolder(area, folder))}
+                >移到回收站</MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+        )}
         {expanded ? (
           <ul className="library-tree-children">
-            {node.children.map((child) => renderFolder(child, depth + 1, false))}
-            {node.papers.map((paper) => renderPaper(paper, depth + 1))}
+            {folder.children.map((child) => renderFolder(area, child, depth + 1))}
+            {folder.entries.map((entry) => renderEntry(area, entry, depth + 1))}
           </ul>
         ) : null}
       </li>
     );
   }
 
-  function renderCollection(collection: LibraryCollection, depth = 0) {
-    const active = activeCollection.id === collection.id;
-    const expanded = !collapsedCollectionIds.includes(collection.id);
-    const hasChildren = collection.children.length > 0;
-
+  function renderTree(
+    area: "local" | "collection" | "organization",
+    tree: ExplorerTree,
+    empty: string
+  ) {
     return (
-      <li className="library-collection-node" key={collection.id}>
-        <div
-          className={`library-collection-row${active ? " active" : ""}`}
-          style={{ paddingLeft: `${depth * 10}px` }}
-        >
-          {hasChildren ? (
-            <button
-              aria-expanded={expanded}
-              aria-label={`${expanded ? "收起" : "展开"} Collection ${collection.label}`}
-              className="library-disclosure"
-              onClick={() => toggleCollection(collection.id)}
-              type="button"
-            >
-              <span aria-hidden="true">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</span>
-            </button>
-          ) : (
-            <span aria-hidden="true" className="library-disclosure-spacer" />
-          )}
-          <button
-            aria-pressed={active}
-            className="library-collection-name"
-            onClick={() => {
-              setActiveCollectionId(collection.id);
-              if (!expanded) {
-                toggleCollection(collection.id);
-              }
-            }}
-            title={`打开 Collection：${collection.label}`}
-            type="button"
-          >
-            <span aria-hidden="true" className="library-folder-icon"><FolderRegular /></span>
-            <span>{collection.label}</span>
-          </button>
-        </div>
-        {expanded ? (
-          <ul className="library-tree-children">
-            {collection.children.map((child) => renderCollection(child, depth + 1))}
-            {active ? (
-              <li className="library-collection-content">
-                <div className="library-folder-tree" aria-label="工作区目录树">
-                  {folderTree.length > 0 ? (
-                    <ul className="library-resource-tree">
-                      {folderTree.map((node) => renderFolder(node, depth + 1))}
-                    </ul>
-                  ) : (
-                    <div className="library-empty-collection">
-                      {normalizedSearchQuery ? "未找到匹配的文件或产物" : "当前 Collection 暂无文献"}
-                    </div>
-                  )}
-                </div>
-              </li>
-            ) : null}
+      <div
+        className="library-tree-drop-root"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => dropOnTarget(event, area)}
+      >
+        {tree.folders.length > 0 || tree.entries.length > 0 ? (
+          <ul className="library-resource-tree">
+            {tree.folders.map((folder) => renderFolder(area, folder, 0))}
+            {tree.entries.map((entry) => renderEntry(area, entry, 0))}
           </ul>
-        ) : null}
-      </li>
+        ) : <div className="library-empty-collection">{empty}</div>}
+      </div>
     );
   }
+
+  function openCreateFolderDialog(
+    area: "local" | "collection" | "organization",
+    parent?: ExplorerFolder
+  ) {
+    setFolderName("");
+    setFolderDialogError("");
+    setCreateFolderTarget({ area, parent });
+  }
+
+  async function createFolder(target: CreateFolderTarget, name: string) {
+    const { area, parent } = target;
+    try {
+      if (area === "local") {
+        await createLocalLibraryFolder(name, parent?.localPath);
+        await onRefreshLocalLibrary?.();
+      } else {
+        const scope = area === "collection" ? collectionScope : organizationScope;
+        if (!scope) throw new Error("当前文献库尚未准备完成。");
+        const client = createCloudLibraryStorageClient({ endpoint: cloudEndpoint });
+        const parentFolderId = parent?.sourceFolder && parent.sourceFolder.area !== "local"
+          ? parent.sourceFolder.folder.folderId
+          : undefined;
+        await client.createFolder(
+          scope,
+          name,
+          parentFolderId,
+          area === "collection"
+            ? collection.tree?.revision ?? 0
+            : organization.tree?.revision ?? 0
+        );
+        await (area === "collection" ? collection.refresh() : organization.refresh());
+      }
+      if (parent) {
+        setExpandedFolders((current) => ({
+          ...current,
+          [area]: current[area].includes(parent.id)
+            ? current[area]
+            : [...current[area], parent.id]
+        }));
+      }
+      setMessage(parent ? `已在“${parent.label}”中新建目录“${name}”。` : `已新建目录“${name}”。`);
+    } catch (error) {
+      throw error instanceof Error ? error : new Error("目录创建失败。");
+    }
+  }
+
+  async function submitCreateFolder() {
+    const target = createFolderTarget;
+    const name = folderName.trim();
+    if (!target || !name || folderDialogPending) return;
+    setFolderDialogPending(true);
+    setFolderDialogError("");
+    try {
+      await createFolder(target, name);
+      setCreateFolderTarget(null);
+      setFolderName("");
+    } catch (error) {
+      setFolderDialogError(error instanceof Error ? error.message : "目录创建失败。");
+    } finally {
+      setFolderDialogPending(false);
+    }
+  }
+
+  function iconAction(label: string, icon: ReactElement, action: () => void, disabled = false) {
+    return (
+      <Tooltip content={label} relationship="label">
+        <Button
+          appearance="subtle"
+          aria-label={label}
+          disabled={disabled}
+          icon={icon}
+          onClick={action}
+          size="small"
+        />
+      </Tooltip>
+    );
+  }
+
+  const localCount = localLibrarySnapshot?.entries.length ?? 0;
+  const collectionCount = collection.tree?.entries.length ?? 0;
+  const organizationCount = organization.tree?.entries.length ?? 0;
 
   return (
     <div className="library-pane">
       <div className="library-toolbar">
         <Input
-          aria-label="搜索文件与产物"
+          aria-label="搜索文献资源"
           className="library-search-input"
           contentBefore={<SearchRegular aria-hidden="true" />}
-          onChange={(_, data) => setSearchQuery(data.value)}
-          placeholder="搜索文件与产物"
+          onChange={(_, data) => setSearch(data.value)}
+          placeholder="搜索文献"
           size="small"
-          value={searchQuery}
+          value={search}
         />
-        <Tooltip
-          content={selectionLocked ? "解除选中文献集锁定" : "锁定选中文献集"}
-          positioning="below"
-          relationship="description"
-        >
-          <button
-            aria-label={selectionLocked ? "解除锁定" : "锁定选择"}
-            className="library-button ghost library-icon-button"
-            onClick={onToggleLock}
-            title={selectionLocked ? "解除锁定" : "锁定选择"}
-            type="button"
-          >
-            {selectionLocked ? <LockOpenRegular /> : <LockClosedRegular />}
-          </button>
-        </Tooltip>
-        <Tooltip content="刷新本地文献库" positioning="below" relationship="description">
-          <button
-            aria-label="刷新本地文献库"
-            className="library-button ghost library-icon-button"
-            onClick={() => {
-              setResourceActionMessage("正在刷新本地文献库…");
-              void onRefreshLocalLibrary?.().then(() => {
-                setResourceActionMessage("本地文献库已刷新。");
-              }).catch((error) => {
-                setResourceActionMessage(
-                  `刷新失败：${error instanceof Error ? error.message : String(error)}`
-                );
-              });
-            }}
-            title="刷新本地文献库"
-            type="button"
-          >
-            <ArrowSyncRegular />
-          </button>
-        </Tooltip>
-      </div>
-
-      <section
-        aria-label="我的文献库投放区"
-        className="library-section library-drop-zone"
-        onDragOver={(event) => {
-          event.preventDefault();
-          const dataTransferTypes = getDataTransferTypes(event.dataTransfer);
-          if (dataTransferTypes.includes("Files") || dataTransferTypes.includes(externalPdfDragMimeType)) {
-            event.dataTransfer.dropEffect = "copy";
-            setFileDropActive(true);
-          }
-        }}
-        onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            setFileDropActive(false);
-          }
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          const droppedPdfFiles = Array.from(event.dataTransfer.files ?? []).filter((file) =>
-            file.name.toLowerCase().endsWith(".pdf")
-          );
-          if (droppedPdfFiles.length > 0) {
-            importPdfFiles(droppedPdfFiles);
-            setFileDropActive(false);
-            return;
-          }
-
-          const externalPdf = parseLibraryDragPayload<ExternalPdfDragPayload>(
-            event.dataTransfer,
-            externalPdfDragMimeType
-          );
-          if (externalPdf) {
-            importExternalPdf(externalPdf);
-            setFileDropActive(false);
-            return;
-          }
-
-          const payload = parseLibraryDragPayload<CollectionItem | RecommendationItem>(
-            event.dataTransfer,
-            "application/liteasy-library-item"
-          );
-          if (payload) {
-            onAddExternalPaper(payload);
-          }
-        }}
-      >
-        {renderSectionHeader("library", "我的文献库", <LibraryRegular />, papers.length)}
-        {!collapsedSectionIds.includes("library") ? <div className="library-section-content">
-        <div className="library-workspace-overview">
-          <div>
-            <div className="library-workspace-label">{workspaceLabel}</div>
-          </div>
-          <div aria-label="文献视图切换" className="library-workspace-switcher" role="group">
-            <button
-              aria-pressed={workspaceSourceType === "local_library"}
-              className={workspaceSourceType === "local_library" ? "active" : ""}
-              onClick={() => {
-                if (workspaceSourceType !== "local_library") {
-                  onReturnToLocalWorkspace();
-                }
-              }}
-              title="查看本地文献库，不会退出当前组织"
-              type="button"
-            >
-              本地
-            </button>
-            <button
-              aria-pressed={workspaceSourceType === "organization_shared"}
-              className={workspaceSourceType === "organization_shared" ? "active" : ""}
-              disabled={workspaceSourceType !== "organization_shared" && !canOpenOrganizationWorkspace}
-              onClick={() => {
-                if (workspaceSourceType !== "organization_shared" && canOpenOrganizationWorkspace) {
-                  onOpenOrganizationWorkspace();
-                }
-              }}
-              title={
-                canOpenOrganizationWorkspace || workspaceSourceType === "organization_shared"
-                  ? `查看${organizationWorkspaceLabel}`
-                  : "登录并加载组织空间后可切换到组织共享文献库"
-              }
-              type="button"
-            >
-              组织
-            </button>
-          </div>
-        </div>
-        <div className="library-selection-summary">
-          已选 {selectedCount} 篇{selectionLocked ? " · 已锁定" : ""}
-        </div>
-        <div
-          aria-label="PDF 文件拖拽导入区"
-          className={`library-file-drop-target${fileDropActive ? " drop-active" : ""}`}
-          onDragEnter={() => setFileDropActive(true)}
-          onDragLeave={() => setFileDropActive(false)}
-          onClick={() => document.getElementById('pdf-file-input')?.click()}
-        >
-          <input
-            key={fileInputKey}
-            id="pdf-file-input"
-            type="file"
-            accept=".pdf"
-            multiple
-            style={{ display: 'none' }}
-            onChange={(event) => {
-              const files = Array.from(event.target.files ?? []);
-              const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
-              if (pdfFiles.length > 0) {
-                importPdfFiles(pdfFiles);
-                setFileInputKey(prev => prev + 1);
-              }
-            }}
-          />
-          <span>{fileDropActive ? `松开以保存到 ${importFolderPath}` : "拖入 PDF 添加到文献库"}</span>
-          <span className="library-file-drop-hint">或点击上传；也可直接拖到目录</span>
-        </div>
-        {resourceEditingEnabled ? (
-          <label className="library-import-target">
-            <span>导入位置</span>
-            <select aria-label="PDF 导入位置" onChange={(event) => setImportFolderPath(event.target.value)} value={importFolderPath}>
-              <option value={workspaceLabel}>{workspaceLabel}</option>
-              {folderPaths.filter((path) => path !== workspaceLabel).map((path) => (
-                <option key={path} value={path}>{path.replace(`${workspaceLabel}/`, "")}</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {resourceActionMessage ? (
-          <div aria-live="polite" className="library-resource-action-message">
-            <span>{resourceActionMessage}</span>
-            {failedExternalPaper ? (
-              <Button
-                appearance="subtle"
-                icon={<ArrowSyncRegular />}
-                onClick={() => importExternalPdf(failedExternalPaper)}
-                size="small"
-              >
-                重试
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="library-collection-browser">
-          <nav aria-label="文献库 collections" className="library-collection-tree">
-            <ul className="library-resource-tree">
-              {libraryCollections.map((collection) => renderCollection(collection))}
-            </ul>
-          </nav>
-        </div>
-        </div> : null}
-      </section>
-
-      <section
-        aria-label="收藏投放区"
-        className={`library-section muted ${collectionItems.length > 0 ? "has-collection" : ""} ${!accountSessionAvailable ? "locked" : ""}`}
-        onDragOver={(event) => {
-          if (!accountSessionAvailable) {
-            return;
-          }
-          event.preventDefault();
-        }}
-        onDrop={(event) => {
-          if (!accountSessionAvailable) {
-            return;
-          }
-          event.preventDefault();
-          const payload = parseLibraryDragPayload<RecommendationItem>(
-            event.dataTransfer,
-            "application/liteasy-recommendation"
-          );
-          if (payload) {
-            onCollectRecommendation(payload);
-          }
-        }}
-      >
-        {renderSectionHeader("collections", "收藏", <BookmarkRegular />, collectionItems.length)}
-        {!collapsedSectionIds.includes("collections") ? <div className="library-section-content">
-        {!accountSessionAvailable ? (
-          <button
-            className="library-inline-button"
-            onClick={onLoginRequired}
-            title="登录后可用的云端收藏会显示在这里。"
-            type="button"
-          >
-            登录后可用
-          </button>
-        ) : collectionStatus === "loading" ? (
-          <p className="collection-status-message loading">{collectionMessage}</p>
-        ) : collectionStatus === "error" ? (
-          <>
-            <p className="collection-status-message error">{collectionMessage}</p>
-            <button className="library-inline-button" onClick={onRetryCollectionSync} type="button">
-              重试同步
-            </button>
-          </>
-        ) : collectionItems.length === 0 ? (
-          <p className="collection-status-message ready">
-            {collectionStatus === "ready" ? "拖入推荐以收藏" : collectionMessage}
-          </p>
-        ) : (
-          <ul className="collection-list">
-            {collectionItems.map((item) => (
-              <li
-                className="collection-item"
-                draggable
-                key={item.id}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData(
-                    "application/liteasy-library-item",
-                    JSON.stringify(item)
-                  );
-                }}
-              >
-                <div className="collection-title">{item.title}</div>
-                <div className="collection-meta">来源：{item.source}</div>
-                <div className="collection-reason">{item.reason}</div>
-              </li>
-            ))}
-          </ul>
+        {iconAction(
+          selectionLocked ? "解除选中文献集锁定" : "锁定选中文献集",
+          selectionLocked ? <LockClosedRegular /> : <LockOpenRegular />,
+          onToggleLock
         )}
-        </div> : null}
-      </section>
+        {iconAction("导入选中文献", <ArrowImportRegular />, onImportSelectedSet)}
+      </div>
+      {message ? <div aria-live="polite" className="library-resource-action-message">{message}</div> : null}
 
-      <section className={`library-section muted ${!accountSessionAvailable ? "locked" : ""}`}>
-        {renderSectionHeader("recommendations", "关联推荐", <LightbulbRegular />, recommendationItems.length)}
-        {!collapsedSectionIds.includes("recommendations") ? <div className="library-section-content">
-        <div className="library-section-heading">
-          <button
-            className="library-inline-button"
-            disabled={!accountSessionAvailable || (recommendationItems.length === 0 && recommendationStatus !== "ready")}
-            onClick={onClearRecommendations}
-            title={recommendationMessage}
-            type="button"
-          >
-            清理关联推荐
-          </button>
-        </div>
-        {accountSessionAvailable && (recommendationPending || recommendationStatus === "error" || recommendationItems.length > 0) ? (
-          <p className={`library-recommendation-message ${recommendationStatus}`}>
-            {recommendationPending ? "正在获取推荐..." : recommendationMessage}
-          </p>
-        ) : null}
-        {!accountSessionAvailable ? (
-          <button
-            className="library-inline-button"
-            onClick={onLoginRequired}
-            title={recommendationMessage}
-            type="button"
-          >
-            登录后可用
-          </button>
-        ) : null}
-        {accountSessionAvailable || recommendationPending || recommendationStatus === "error" ? null : null}
-        {recommendationItems.length > 0 ? (
-          <ul aria-label="关联推荐列表" className="recommendation-list">
-            {recommendationItems.map((item) => (
-              <li
-                className={`recommendation-item ${item.relevanceBand}`}
-                draggable
-                key={item.id}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData(
-                    "application/liteasy-recommendation",
-                    JSON.stringify(item)
-                  );
-                  event.dataTransfer.setData("application/liteasy-library-item", JSON.stringify(item));
-                }}
-              >
-                <div className="recommendation-title">{item.title}</div>
-                <div className="recommendation-source">
-                  {item.sourceUrl ? (
-                    <a href={item.sourceUrl} rel="noreferrer" target="_blank">
-                      {item.source}
-                    </a>
-                  ) : (
-                    <span>{item.source}</span>
-                  )}
-                  <span className={`recommendation-source-kind ${item.sourceKind}`}>
-                    {getRecommendationSourceKindLabel(item.sourceKind)}
-                  </span>
-                </div>
-                <div className="recommendation-related">关联：{item.relatedDocumentTitle}</div>
-                {item.surfacingTags && item.surfacingTags.length > 0 ? (
-                  <div className="recommendation-related recommendation-surfacing-tags">
-                    标签：{item.surfacingTags.join("、")}
-                  </div>
-                ) : null}
-                {item.relation ? (
-                  <div className="recommendation-related">关系：{getRecommendationRelationLabel(item.relation)}</div>
-                ) : null}
-                {item.publishedYear ? (
-                  <div className="recommendation-related">发表：{item.publishedYear}</div>
-                ) : null}
-                <div className={`recommendation-band ${item.relevanceBand}`}>
-                  {getRelevanceLabel(item.relevanceBand)}
-                </div>
-                <div className="recommendation-reason">{item.reason}</div>
-                <div className="recommendation-actions">
-                  <Tooltip content="不感兴趣" relationship="label">
-                    <button
-                      aria-label={`不感兴趣：${item.title}`}
-                      className="library-button ghost library-icon-button"
-                      onClick={() => void onDismissRecommendation(item)}
-                      type="button"
-                    >
-                      <DismissRegular />
-                    </button>
-                  </Tooltip>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        </div> : null}
-      </section>
-
-      {contextMenu ? (
-        <div
-          aria-label="文献资源操作"
-          className="library-resource-context-menu"
-          onClick={(event) => event.stopPropagation()}
-          role="menu"
-          style={{ left: contextMenu.left, top: contextMenu.top }}
-        >
-          <div className="library-resource-context-heading">
-            {contextMenu.target.kind === "paper"
-              ? contextMenu.target.paper.title
-              : contextMenu.target.kind === "artifact"
-                ? contextMenu.target.item.label
-                : contextMenu.target.folder.name}
+      <section aria-label="本地文献库" className="library-section">
+        <SectionHeader
+          actions={<>
+            {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"))}
+            {iconAction("导入 PDF", <AddRegular />, () => fileInputRef.current?.click())}
+            {iconAction("从 Zotero 导出目录导入 PDF", <FolderOpenRegular />, () => zoteroDirectoryInputRef.current?.click())}
+            {iconAction("刷新本地文献库", <ArrowClockwiseRegular />, () => void onRefreshLocalLibrary?.())}
+          </>}
+          count={localCount}
+          expanded={!collapsedSections.includes("local")}
+          icon={<FolderRegular />}
+          onToggle={() => toggleSection("local")}
+          title="本地文献库"
+        />
+        <input
+          accept=".pdf,application/pdf"
+          hidden
+          multiple
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            event.target.value = "";
+            if (files.length === 0) return;
+            setMessage(`正在导入 ${files.length} 个 PDF...`);
+            void Promise.resolve(onAddDroppedPdfFiles?.(files, localLibrarySnapshot?.rootPath))
+              .then(async () => {
+                await onRefreshLocalLibrary?.();
+                setMessage(`已导入 ${files.length} 个 PDF。`);
+              })
+              .catch((error) => {
+                setMessage(error instanceof Error
+                  ? error.message
+                  : typeof error === "string" ? error : "PDF 导入失败，本地文献库未更改。");
+              });
+          }}
+          ref={fileInputRef}
+          type="file"
+        />
+        <input
+          accept=".pdf,application/pdf"
+          hidden
+          multiple
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            setMessage("正在检查 Zotero 导出目录...");
+            void Promise.resolve(onImportZoteroDirectory?.(files))
+              .then((nextMessage) => {
+                setMessage(nextMessage ?? "Zotero PDF 导入已完成。");
+                return onRefreshLocalLibrary?.();
+              })
+              .catch((error) => setMessage(error instanceof Error ? error.message : "Zotero PDF 导入失败。"));
+            event.target.value = "";
+          }}
+          ref={(node) => {
+            zoteroDirectoryInputRef.current = node;
+            node?.setAttribute("webkitdirectory", "");
+          }}
+          type="file"
+        />
+        <input
+          accept=".pdf,application/pdf"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            const target = attachTarget;
+            event.target.value = "";
+            if (!file || !target) return;
+            setAttachTarget(null);
+            void runNodeAction(target.entry.documentId, "正在校验并上传 PDF 正文...", async () => {
+              const client = createCloudLibraryStorageClient({ endpoint: cloudEndpoint });
+              await client.attachMetadataEntryPdf({
+                documentId: target.entry.documentId,
+                expectedRevision: cloudRevision(target.area),
+                file,
+                scope: target.scope
+              });
+              await (target.area === "collection" ? collection.refresh() : organization.refresh());
+            });
+          }}
+          ref={attachPdfInputRef}
+          type="file"
+        />
+        {!collapsedSections.includes("local") ? (
+          <div className="library-section-content">
+            {renderTree("local", localTree, query ? "没有匹配的本地文献" : "本地文献库为空")}
+            <TrashGroup
+              entries={localLibrarySnapshot?.trashEntries ?? []}
+              onEmpty={async () => {
+                await emptyLocalLibraryTrash();
+                await onRefreshLocalLibrary?.();
+              }}
+              onPurge={async (entry) => {
+                await purgeLocalLibraryTrashItem(entry.trashId);
+                await onRefreshLocalLibrary?.();
+              }}
+              onRestore={async (entry) => {
+                await restoreLocalLibraryTrashItem(entry.trashId);
+                await onRefreshLocalLibrary?.();
+              }}
+            />
           </div>
-          {contextMenu.target.kind === "paper" ? (
-            <>
-              <button onClick={() => {
-                onOpenPaper?.(contextMenu.target.kind === "paper" ? contextMenu.target.paper.id : "");
-                setContextMenu(null);
-              }} role="menuitem" type="button">
-                打开 PDF
-              </button>
-              <button
-                disabled={selectionLocked}
-                onClick={() => {
-                  if (contextMenu.target.kind === "paper") {
-                    onToggleSelection(contextMenu.target.paper.id);
-                  }
-                  setContextMenu(null);
-                }}
-                role="menuitem"
-                type="button"
-              >
-                {selectedPaperIds.includes(contextMenu.target.paper.id) ? "移出选中文献集" : "加入选中文献集"}
-              </button>
-              <button onClick={() => {
-                if (contextMenu.target.kind === "paper") {
-                  togglePaper(contextMenu.target.paper.id);
-                }
-                setContextMenu(null);
-              }} role="menuitem" type="button">
-                {expandedPaperIds.includes(contextMenu.target.paper.id) ? "收起关联条目" : "展开关联条目"}
-              </button>
-              <div className="library-resource-context-separator" />
-              <button
-                disabled={!resourceEditingEnabled || !onRenamePaper}
-                onClick={() => openOperationDialog("rename", contextMenu.target)}
-                role="menuitem"
-                type="button"
-              >
-                重命名…
-              </button>
-              <button
-                disabled={!resourceEditingEnabled || !onMovePaper}
-                onClick={() => openOperationDialog("move", contextMenu.target)}
-                role="menuitem"
-                type="button"
-              >
-                移动到目录…
-              </button>
-              <button
-                onClick={() => void copyResourceText(
-                  contextMenu.target.kind === "paper" ? contextMenu.target.paper.sourcePath ?? "" : "",
-                  "文件路径"
-                )}
-                role="menuitem"
-                type="button"
-              >
-                复制文件路径
-              </button>
-              <button
-                onClick={() => void copyResourceText(
-                  contextMenu.target.kind === "paper" ? contextMenu.target.paper.title : "",
-                  "文献标题"
-                )}
-                role="menuitem"
-                type="button"
-              >
-                复制文献标题
-              </button>
-            </>
-          ) : contextMenu.target.kind === "artifact" ? (
-            <>
-              <button onClick={() => {
-                const target = contextMenu.target;
-                if (target.kind === "artifact") {
-                  onOpenPaperChild?.(target.item, target.paper);
-                }
-                setContextMenu(null);
-              }} role="menuitem" type="button">
-                打开产物
-              </button>
-              <div className="library-resource-context-separator" />
-              <button
-                disabled={!onRenamePaperChild}
-                onClick={() => openOperationDialog("rename", contextMenu.target)}
-                role="menuitem"
-                type="button"
-              >
-                重命名产物…
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => {
-                if (contextMenu.target.kind === "folder") {
-                  toggleFolder(contextMenu.target.folder.path);
-                }
-                setContextMenu(null);
-              }} role="menuitem" type="button">
-                {collapsedFolderPaths.includes(contextMenu.target.folder.path) ? "展开目录" : "收起目录"}
-              </button>
-              <div className="library-resource-context-separator" />
-              <button
-                disabled={
-                  !resourceEditingEnabled ||
-                  !onRenameFolder ||
-                  contextMenu.target.folder.path === "未归档文献" ||
-                  normalizeWorkspacePath(contextMenu.target.folder.path) === normalizedWorkspaceRoot
-                }
-                onClick={() => openOperationDialog("rename", contextMenu.target)}
-                role="menuitem"
-                type="button"
-              >
-                重命名目录…
-              </button>
-              <button
-                disabled={
-                  !resourceEditingEnabled ||
-                  !onMoveFolder ||
-                  contextMenu.target.folder.path === "未归档文献" ||
-                  normalizeWorkspacePath(contextMenu.target.folder.path) === normalizedWorkspaceRoot
-                }
-                onClick={() => openOperationDialog("move", contextMenu.target)}
-                role="menuitem"
-                type="button"
-              >
-                移动目录…
-              </button>
-              <button
-                onClick={() => void copyResourceText(
-                  contextMenu.target.kind === "folder" ? contextMenu.target.folder.path : "",
-                  "目录路径"
-                )}
-                role="menuitem"
-                type="button"
-              >
-                复制目录路径
-              </button>
-            </>
-          )}
-        </div>
-      ) : null}
+        ) : null}
+      </section>
 
-      {operationDialog ? (
-        <div className="library-resource-dialog-backdrop" role="presentation">
-          <form
-            aria-label={operationDialog.action === "rename" ? "重命名资源" : "移动资源"}
-            aria-modal="true"
-            className="library-resource-dialog"
-            onSubmit={(event) => void submitResourceOperation(event)}
-            role="dialog"
-          >
-            <strong>
-              {operationDialog.action === "rename"
-                ? `重命名${operationDialog.target.kind === "folder" ? "目录" : operationDialog.target.kind === "artifact" ? "产物" : "文献"}`
-                : `移动${operationDialog.target.kind === "folder" ? "目录" : "文献"}`}
-            </strong>
-            <label>
-              {operationDialog.action === "rename" ? "新名称" : "目标目录"}
-              <input
-                autoFocus
-                list={operationDialog.action === "move" ? "library-folder-path-options" : undefined}
-                onChange={(event) => setOperationDialog({
-                  ...operationDialog,
-                  value: event.target.value
-                })}
-                value={operationDialog.value}
+      <section aria-label="收藏" className="library-section">
+        <SectionHeader
+          actions={<>
+            {iconAction("新建收藏目录", <FolderAddRegular />, () => openCreateFolderDialog("collection"), !accountSessionAvailable)}
+            {iconAction("刷新收藏", <ArrowClockwiseRegular />, () => void collection.refresh(), !accountSessionAvailable)}
+          </>}
+          count={collectionCount}
+          expanded={!collapsedSections.includes("collection")}
+          icon={<BookmarkRegular />}
+          onToggle={() => toggleSection("collection")}
+          title="收藏"
+        />
+        {!collapsedSections.includes("collection") ? (
+          <div className="library-section-content">
+            {!accountSessionAvailable ? (
+              <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
+            ) : collection.status === "error" ? (
+              <ErrorState message={collection.message} onRetry={() => void collection.refresh()} />
+            ) : collection.status === "loading" ? (
+              <div className="library-empty-collection">加载中…</div>
+            ) : renderTree("collection", collectionTree, query ? "没有匹配的收藏" : "收藏为空")}
+            {accountSessionAvailable && collection.trashTree ? (
+              <CloudTrashGroup
+                endpoint={cloudEndpoint}
+                onRefresh={collection.refresh}
+                scope={collectionScope}
+                tree={collection.trashTree}
               />
-            </label>
-            {operationDialog.action === "move" ? (
-              <datalist id="library-folder-path-options">
-                {folderPaths.map((path) => <option key={path} value={path} />)}
-              </datalist>
             ) : null}
-            <small>
-              当前：{operationDialog.target.kind === "paper"
-                ? operationDialog.target.paper.sourcePath ?? operationDialog.target.paper.title
-                : operationDialog.target.kind === "artifact"
-                  ? operationDialog.target.item.label
-                  : operationDialog.target.folder.path}
-            </small>
-            <div className="library-resource-dialog-actions">
-              <button onClick={() => setOperationDialog(null)} type="button">取消</button>
-              <button className="primary" type="submit">确认</button>
-            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section aria-label="关联推荐" className="library-section">
+        <SectionHeader
+          actions={iconAction("清除推荐缓存", <DeleteDismissRegular />, onClearRecommendations, !accountSessionAvailable)}
+          count={recommendationItems.length}
+          expanded={!collapsedSections.includes("recommendation")}
+          icon={<LightbulbRegular />}
+          onToggle={() => toggleSection("recommendation")}
+          title="关联推荐"
+        />
+        {!collapsedSections.includes("recommendation") ? (
+          <div className="library-section-content">
+            {!accountSessionAvailable ? (
+              <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
+            ) : recommendationPending ? (
+              <div className="library-empty-collection">加载中…</div>
+            ) : recommendationItems.length === 0 ? (
+              <div className="library-empty-collection">{recommendationMessage || "暂无关联推荐"}</div>
+            ) : (
+              <ul className="library-resource-tree">
+                {recommendationItems.map((recommendation) => (
+                  <li className="library-recommendation-item" draggable key={recommendation.id} onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "copy";
+                    event.dataTransfer.setData(resourceTransferMimeType, JSON.stringify({
+                      area: "recommendation",
+                      recommendation
+                    } satisfies LibraryResourceTransferSource));
+                  }}>
+                    <div className="library-paper-row">
+                      <LightbulbRegular aria-hidden="true" />
+                      <span className="library-paper-title">{recommendation.title}</span>
+                      <Tooltip content="收藏" relationship="label"><Button appearance="subtle" aria-label={`收藏 ${recommendation.title}`} disabled={!collection.tree || pendingNodeIds.includes(recommendation.id)} icon={<BookmarkRegular />} onClick={() => void saveRecommendation(recommendation)} size="small" /></Tooltip>
+                      <Tooltip content="不感兴趣" relationship="label"><Button appearance="subtle" aria-label={`忽略 ${recommendation.title}`} icon={<DeleteRegular />} onClick={() => onDismissRecommendation(recommendation)} size="small" /></Tooltip>
+                    </div>
+                    <div className="library-recommendation-reason">{recommendation.reason}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {recommendationStatus === "error" ? <ErrorState message={recommendationMessage} /> : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section aria-label="组织文献库" className="library-section">
+        <SectionHeader
+          actions={<>
+            {iconAction(
+              "新建组织目录",
+              <FolderAddRegular />,
+              () => openCreateFolderDialog("organization"),
+              !organizationScope || !organizationStorageAccess ||
+                !canUploadToOrganization(organizationStorageAccess)
+            )}
+            {iconAction("刷新组织文献库", <ArrowClockwiseRegular />, () => void organization.refresh(), !organizationScope)}
+          </>}
+          count={organizationCount}
+          expanded={!collapsedSections.includes("organization")}
+          icon={<OrganizationRegular />}
+          onToggle={() => toggleSection("organization")}
+          title={organizationWorkspaceLabel}
+        />
+        {!collapsedSections.includes("organization") ? (
+          <div className="library-section-content">
+            {!accountSessionAvailable ? (
+              <button className="library-inline-button" onClick={onLoginRequired} type="button">登录</button>
+            ) : !organizationScope ? (
+              <div className="library-empty-collection">尚未加入组织</div>
+            ) : organization.status === "error" ? (
+              <ErrorState message={organization.message} onRetry={() => void organization.refresh()} />
+            ) : organization.status === "loading" ? (
+              <div className="library-empty-collection">加载中…</div>
+            ) : renderTree("organization", organizationTree, query ? "没有匹配的组织文献" : "组织文献库为空")}
+            {organizationScope && organization.trashTree && organizationStorageAccess &&
+              canManageOrganizationLibrary(organizationStorageAccess.role) ? (
+              <CloudTrashGroup
+                endpoint={cloudEndpoint}
+                onRefresh={organization.refresh}
+                scope={organizationScope}
+                tree={organization.trashTree}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+      <Dialog
+        modalType="modal"
+        onOpenChange={(_, data) => {
+          if (!data.open && !folderDialogPending) setCreateFolderTarget(null);
+        }}
+        open={createFolderTarget !== null}
+      >
+        <DialogSurface aria-label="新建目录">
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            void submitCreateFolder();
+          }}>
+            <DialogBody>
+              <DialogTitle>{createFolderTarget?.parent ? "新建子目录" : "新建目录"}</DialogTitle>
+              <DialogContent>
+                <Input
+                  aria-label="目录名称"
+                  autoFocus
+                  disabled={folderDialogPending}
+                  onChange={(_, data) => setFolderName(data.value)}
+                  placeholder="输入目录名称"
+                  value={folderName}
+                />
+                {folderDialogError ? <div className="library-error-state" role="alert">{folderDialogError}</div> : null}
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  appearance="secondary"
+                  disabled={folderDialogPending}
+                  onClick={() => setCreateFolderTarget(null)}
+                  type="button"
+                >取消</Button>
+                <Button
+                  appearance="primary"
+                  disabled={folderDialogPending || folderName.trim().length === 0}
+                  type="submit"
+                >创建</Button>
+              </DialogActions>
+            </DialogBody>
           </form>
-        </div>
-      ) : null}
+        </DialogSurface>
+      </Dialog>
+    </div>
+  );
+}
+
+function ErrorState(props: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="library-error-state" role="alert">
+      <span>{props.message}</span>
+      {props.onRetry ? <Button appearance="subtle" icon={<ArrowClockwiseRegular />} onClick={props.onRetry} size="small">重试</Button> : null}
+    </div>
+  );
+}
+
+function TrashGroup(props: {
+  entries: LocalLibraryTrashEntry[];
+  onEmpty: () => Promise<void>;
+  onPurge: (entry: LocalLibraryTrashEntry) => Promise<void>;
+  onRestore: (entry: LocalLibraryTrashEntry) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (props.entries.length === 0) return null;
+  return (
+    <div className="library-trash-group">
+      <div className="library-folder-row">
+        <button aria-expanded={expanded} className="library-disclosure" onClick={() => setExpanded(!expanded)} type="button">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</button>
+        <button className="library-folder-name" onClick={() => setExpanded(!expanded)} type="button"><DeleteRegular /><span>回收站</span></button>
+        <Tooltip content="清空回收站" relationship="label"><Button appearance="subtle" aria-label="清空本地回收站" icon={<DeleteDismissRegular />} onClick={() => void props.onEmpty()} size="small" /></Tooltip>
+      </div>
+      {expanded ? <ul className="library-resource-tree">{props.entries.map((entry) => (
+        <li className="library-paper-row" key={entry.trashId}>
+          <DocumentTextRegular aria-hidden="true" />
+          <span className="library-paper-title">{entry.name}</span>
+          <span className="library-entry-status">
+            {formatByteLength(entry.byteLength)} · {formatPurgeTime(entry.purgeAfter)}到期
+          </span>
+          <Tooltip content="恢复" relationship="label"><Button appearance="subtle" aria-label={`恢复 ${entry.name}`} icon={<ArrowResetRegular />} onClick={() => void props.onRestore(entry)} size="small" /></Tooltip>
+          <Tooltip content="永久删除" relationship="label"><Button appearance="subtle" aria-label={`永久删除 ${entry.name}`} icon={<DeleteDismissRegular />} onClick={() => void props.onPurge(entry)} size="small" /></Tooltip>
+        </li>
+      ))}</ul> : null}
+    </div>
+  );
+}
+
+function formatByteLength(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function formatPurgeTime(timestamp: number) {
+  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium" })
+    .format(new Date(timestamp * 1000));
+}
+
+function CloudTrashGroup(props: {
+  endpoint: string;
+  onRefresh: () => Promise<void>;
+  scope: CloudLibraryScope;
+  tree: CloudLibraryTree;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const count = props.tree.entries.length + props.tree.folders.length;
+  if (count === 0) return null;
+  const client = createCloudLibraryStorageClient({ endpoint: props.endpoint });
+  const restoreFolder = async (folder: CloudLibraryFolder) => {
+    await client.restoreFolder(props.scope, folder.folderId, props.tree.revision);
+    await props.onRefresh();
+  };
+  const purgeFolder = async (folder: CloudLibraryFolder) => {
+    await client.purgeFolder(props.scope, folder.folderId, props.tree.revision);
+    await props.onRefresh();
+  };
+  return (
+    <div className="library-trash-group">
+      <div className="library-folder-row">
+        <button aria-expanded={expanded} className="library-disclosure" onClick={() => setExpanded(!expanded)} type="button">{expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}</button>
+        <button className="library-folder-name" onClick={() => setExpanded(!expanded)} type="button"><DeleteRegular /><span>回收站</span></button>
+        <Tooltip content="清空回收站" relationship="label"><Button appearance="subtle" aria-label="清空云端回收站" icon={<DeleteDismissRegular />} onClick={() => void client.emptyTrash(props.scope, props.tree.revision).then(props.onRefresh)} size="small" /></Tooltip>
+      </div>
+      {expanded ? <ul className="library-resource-tree">
+        {props.tree.folders.filter((folder) => !folder.parentFolderId).map((folder) => (
+          <li className="library-paper-row" key={folder.folderId}><FolderRegular /><span className="library-paper-title">{folder.name}</span><Button appearance="subtle" aria-label={`恢复 ${folder.name}`} icon={<ArrowResetRegular />} onClick={() => void restoreFolder(folder)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${folder.name}`} icon={<DeleteDismissRegular />} onClick={() => void purgeFolder(folder)} size="small" /></li>
+        ))}
+        {props.tree.entries.map((entry) => (
+          <li className="library-paper-row" key={entry.documentId}><DocumentTextRegular /><span className="library-paper-title">{entry.title}</span><Button appearance="subtle" aria-label={`恢复 ${entry.title}`} icon={<ArrowResetRegular />} onClick={() => void client.restoreDocument(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh)} size="small" /><Button appearance="subtle" aria-label={`永久删除 ${entry.title}`} icon={<DeleteDismissRegular />} onClick={() => void client.purgeEntry(props.scope, entry.documentId, props.tree.revision).then(props.onRefresh)} size="small" /></li>
+        ))}
+      </ul> : null}
     </div>
   );
 }

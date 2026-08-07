@@ -1,0 +1,229 @@
+{
+  "realm": "liteasy",
+  "enabled": true,
+  "displayName": "Liteasy local development",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "verifyEmail": false,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 2592000,
+  "clientScopes": [
+    {
+      "name": "accounts:write",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    },
+    {
+      "name": "sessions:revoke",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    },
+    {
+      "name": "organization:authorize",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "liteasy-desktop-public",
+      "name": "Liteasy Windows desktop",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI}", "${LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI}"],
+      "webOrigins": ["${LITEASY_DESKTOP_WEB_ORIGIN}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${LITEASY_DESKTOP_LOOPBACK_REDIRECT_URI}##${LITEASY_DESKTOP_LOCALHOST_REDIRECT_URI}"
+      },
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "liteasy-desktop-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "included.custom.audience": "liteasy-desktop",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "intuecho-web",
+      "name": "Intuecho Web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${INTUECHO_WEB_LOOPBACK_REDIRECT_URI}", "${INTUECHO_WEB_REDIRECT_URI}"],
+      "webOrigins": ["${INTUECHO_WEB_LOOPBACK_ORIGIN}", "${INTUECHO_WEB_ORIGIN}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${INTUECHO_WEB_LOOPBACK_REDIRECT_URI}##${INTUECHO_WEB_REDIRECT_URI}"
+      },
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "intuecho-web-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "included.custom.audience": "intuecho-web",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "liteasy-admin-public",
+      "name": "Liteasy administration Web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${LITEASY_ADMIN_LOOPBACK_REDIRECT_URI}", "${LITEASY_ADMIN_REDIRECT_URI}"],
+      "webOrigins": ["${LITEASY_ADMIN_LOOPBACK_ORIGIN}", "${LITEASY_ADMIN_WEB_ORIGIN}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${LITEASY_ADMIN_LOOPBACK_REDIRECT_URI}##${LITEASY_ADMIN_REDIRECT_URI}"
+      },
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "liteasy-admin-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "included.custom.audience": "liteasy-admin",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "liteasy-cloud",
+      "name": "Liteasy token introspection",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${LITEASY_CLOUD_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "intuecho-api",
+      "name": "Intuecho token introspection",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${INTUECHO_API_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "liteasy-account-lifecycle",
+      "name": "Liteasy account lifecycle caller",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${LITEASY_IDENTITY_MANAGEMENT_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": ["accounts:write", "sessions:revoke"],
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "identity-management-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "included.custom.audience": "liteasy-identity-management",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "liteasy-identity-introspection",
+      "name": "Liteasy identity-management token introspection",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${LITEASY_IDENTITY_INTROSPECTION_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "intuecho-organization-service",
+      "name": "Intuecho organization authorization service",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${INTUECHO_ORGANIZATION_SERVICE_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": ["organization:authorize"],
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "liteasy-internal-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "included.custom.audience": "liteasy-internal",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "liteasy-keycloak-admin",
+      "name": "Liteasy Keycloak management adapter",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${LITEASY_IDENTITY_ADMIN_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
+    }
+  ]
+}

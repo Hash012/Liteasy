@@ -7,7 +7,8 @@ const organizationSummary: OrganizationSummary = {
   auditEvents: [],
   memberCount: 12,
   members: [],
-  myRole: "研究员",
+  myMemberRevision: 0,
+  myRole: "member",
   name: "Liteasy AI Reading Lab",
   notifications: [
     {
@@ -25,10 +26,12 @@ const organizationSummary: OrganizationSummary = {
   ],
   organizationId: "org-demo-1",
   quota: {
+    configured: true,
     periodEndsAt: "2026-06-01T00:00:00Z",
     storageLimitGb: 100,
     storageUsedGb: 38
   },
+  revision: 0,
   sharedLibrary: {
     documentCount: 48,
     documents: [],

@@ -1,11 +1,11 @@
 import { createOrganizationListClient } from "../app/features/organization/organizationListClient";
 
-test("posts a session id to the organization list endpoint", async () => {
-  const requests: Array<{ body: string; url: string }> = [];
+test("authenticates organization list requests with a bearer token", async () => {
+  const requests: Array<{ body: string; headers: Record<string, string>; url: string }> = [];
   const client = createOrganizationListClient({
     endpoint: "https://liteasy.example.com/control-plane",
     transport: async (request) => {
-      requests.push({ body: request.body, url: request.url });
+      requests.push({ body: request.body, headers: request.headers, url: request.url });
 
       return {
         json: async () => ({
@@ -42,8 +42,40 @@ test("posts a session id to the organization list endpoint", async () => {
   ]);
   expect(requests[0]).toEqual({
     body: JSON.stringify({ sessionId: "demo-session-1" }),
+    headers: {
+      Authorization: "Bearer demo-session-1",
+      "Content-Type": "application/json"
+    },
     url: "https://liteasy.example.com/control-plane/v1/org/list"
   });
+});
+
+test("normalizes the formal PostgreSQL organization list contract", async () => {
+  const client = createOrganizationListClient({
+    endpoint: "https://liteasy.example.com/control-plane",
+    transport: async () => ({
+      json: async () => ({
+        activeOrganizationId: "org-formal-1",
+        organizations: [{
+          memberCount: 3,
+          myRole: "owner",
+          name: "Formal Research Group",
+          organizationId: "org-formal-1",
+          ownerSubject: "oidc-owner",
+          revision: 9,
+          sharedLibraryName: "Formal Research Group 共享文献库"
+        }]
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  const list = await client({ sessionId: "access-token" });
+  expect(list.organizations[0]).toEqual(expect.objectContaining({
+    ownerSubject: "oidc-owner",
+    revision: 9
+  }));
 });
 
 test("normalizes legacy organization list roles into the formal role model", async () => {

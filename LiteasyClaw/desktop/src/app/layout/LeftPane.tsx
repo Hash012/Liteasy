@@ -10,9 +10,17 @@ import type { AgentCoreCatalogEntry, AgentMemoryEntry } from "../features/agent-
 import type { AccountSession } from "../features/account/account.types";
 import type { ImportJob } from "../features/import/import.types";
 import type { DocumentMetadataSyncResult, DocumentMetadataSyncStatus } from "../features/metadata/metadata.types";
-import type { OrganizationGovernanceStatus, OrganizationGovernanceSummary, OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "../features/organization/organization.types";
-import type { CollectionItem } from "../features/collection/collection.types";
+import type { OrganizationList, OrganizationListStatus, OrganizationSummary, OrganizationSummaryStatus } from "../features/organization/organization.types";
+import type {
+  CloudLibraryEntry,
+  CloudLibraryScope
+} from "../features/library/cloudLibraryStorageClient";
 import type { ExternalPdfDragPayload } from "../features/library/externalPdfDownload";
+import type {
+  LibraryResourceTransferSource,
+  LibraryResourceTransferTarget
+} from "../features/library/libraryResourceTransfer.types";
+import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
 import type { RecommendationItem, RecommendationStatus } from "../features/recommendations/recommendation.types";
 import type { UserTag } from "../features/profile/academicProfileClient";
 import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
@@ -20,48 +28,49 @@ import type { SettingsState, UpdateSettingCommand } from "../features/settings/s
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 export type LeftPaneProps = {
+  accountScopeId?: string;
   activePaperId?: string | null;
   academicProfile: AcademicProfile;
   agentMemories: AgentMemoryEntry[];
   agentRecentState: string;
   accountSession: AccountSession | null;
-  collectionItems: CollectionItem[];
-  collectionMessage: string;
-  collectionStatus: "idle" | "loading" | "ready" | "error";
+  cloudEndpoint: string;
+  cloudTreeRevision?: number;
   documentMetadataSyncMessage?: string;
   documentMetadataSyncResult: DocumentMetadataSyncResult | null;
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
   libraryRootPath?: string | null;
+  loadLegacyLibraryRoots?: () => Promise<string[]>;
+  localLibrarySnapshot: LocalLibrarySnapshot | null;
+  onBackupLibrary?: (destinationDirectory: string) => Promise<string>;
   onChangeLibraryRoot?: (nextRootPath: string) => Promise<void>;
   onOpenLibraryInFileManager?: () => Promise<void>;
-  governanceMessage: string;
+  onSelectLegacyLibraryRoot?: (legacyRootPath: string) => Promise<void>;
   importJobs: Record<string, ImportJob>;
   libraryPaperChildren?: Record<string, LibraryPaperChildItem[]>;
-  governanceStatus: OrganizationGovernanceStatus;
-  governanceSummary: OrganizationGovernanceSummary | null;
   leftRailView: LeftRailView;
   list: OrganizationList | null;
   listMessage: string;
   organizationActionMessage?: string;
   listStatus: OrganizationListStatus;
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
-  onAddExternalPaper: (item: { id: string; source: string; title: string }) => void;
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
-  onCollectRecommendation: (item: RecommendationItem) => void;
   onDismissRecommendation: (item: RecommendationItem) => void;
-  onRetryCollectionSync?: () => void;
   onCreateOrganization?: () => void;
   onImportSelectedSet: () => void;
+  onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onInviteMember?: (summary: OrganizationSummary) => void;
   onJoinOrganization?: () => void;
   onLoginRequired?: () => void;
   onLeaveOrganization?: (summary: OrganizationSummary) => void;
   onLogout: () => void;
   onMarkNotificationsRead?: (summary: OrganizationSummary) => void;
+  onOrganizationChanged?: () => void | Promise<void>;
   onOpenAcademicArchive: () => void;
   onOpenOrganizationDialog: () => void;
+  onOpenCloudEntry?: (scope: CloudLibraryScope, entry: CloudLibraryEntry) => void | Promise<void>;
   onOpenPaper?: (paperId: string) => void;
   onOpenPaperChild?: (item: LibraryPaperChildItem, paper: Paper) => void;
   onRenamePaperChild?: (item: LibraryPaperChildItem, paper: Paper, requestedName: string) => Promise<string>;
@@ -73,6 +82,10 @@ export type LeftPaneProps = {
   onReturnToLocalWorkspace: () => void;
   onRenameLibraryFolder?: (folderPath: string, requestedName: string) => Promise<string>;
   onRenameLibraryPaper?: (paperId: string, requestedName: string) => Promise<string>;
+  onResourceTransfer?: (
+    source: LibraryResourceTransferSource,
+    target: LibraryResourceTransferTarget
+  ) => void | Promise<void>;
   onRetryDocumentMetadataSync?: () => void;
   onSelectOrganization?: (organizationId: string) => void;
   onToggleProfileSampling: () => void;
@@ -85,6 +98,7 @@ export type LeftPaneProps = {
   organizationSummary: OrganizationSummary | null;
   organizationSummaryMessage: string;
   organizationSummaryStatus: OrganizationSummaryStatus;
+  organizationId?: string;
   papers: Paper[];
   profileClearMessage?: string;
   profileReadPaperCount: number;
@@ -120,46 +134,47 @@ function getPaneHeader(leftRailView: LeftRailView) {
 }
 
 export function LeftPane({
+  accountScopeId,
   activePaperId,
   academicProfile,
   agentMemories,
   agentRecentState,
   accountSession,
-  collectionItems,
-  collectionMessage,
-  collectionStatus,
+  cloudEndpoint,
+  cloudTreeRevision,
   documentMetadataSyncMessage,
   documentMetadataSyncResult,
   documentMetadataSyncStatus,
   libraryRootPath,
+  loadLegacyLibraryRoots,
+  localLibrarySnapshot,
+  onBackupLibrary,
   onChangeLibraryRoot,
   onOpenLibraryInFileManager,
-  governanceMessage,
+  onSelectLegacyLibraryRoot,
   importJobs,
   libraryPaperChildren,
-  governanceStatus,
-  governanceSummary,
   leftRailView,
   list,
   listMessage,
   listStatus,
   onAddExternalPdf,
-  onAddExternalPaper,
   onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
-  onCollectRecommendation,
   onDismissRecommendation,
-  onRetryCollectionSync,
   onCreateOrganization,
   onImportSelectedSet,
+  onImportZoteroDirectory,
   onInviteMember,
   onJoinOrganization,
   onLoginRequired,
   onLeaveOrganization,
   onLogout,
   onMarkNotificationsRead,
+  onOrganizationChanged,
   onOpenAcademicArchive,
+  onOpenCloudEntry,
   onOpenOrganizationDialog,
   onOpenPaper,
   onOpenPaperChild,
@@ -172,6 +187,7 @@ export function LeftPane({
   onReturnToLocalWorkspace,
   onRenameLibraryFolder,
   onRenameLibraryPaper,
+  onResourceTransfer,
   onRetryDocumentMetadataSync,
   onSelectOrganization,
   onToggleProfileSampling,
@@ -185,6 +201,7 @@ export function LeftPane({
   organizationSummary,
   organizationSummaryMessage,
   organizationSummaryStatus,
+  organizationId,
   papers,
   profileClearMessage,
   profileReadPaperCount,
@@ -219,9 +236,7 @@ export function LeftPane({
           <OrganizationSidebarPanel
             accountSession={accountSession}
             actionMessage={organizationActionMessage}
-            governanceMessage={governanceMessage}
-            governanceStatus={governanceStatus}
-            governanceSummary={governanceSummary}
+            cloudEndpoint={cloudEndpoint}
             list={list}
             listMessage={listMessage}
             listStatus={listStatus}
@@ -231,6 +246,7 @@ export function LeftPane({
             onLoginRequired={onLoginRequired}
             onLeaveOrganization={onLeaveOrganization}
             onMarkNotificationsRead={onMarkNotificationsRead}
+            onOrganizationChanged={onOrganizationChanged}
             onOpenSharedLibrary={onOpenSharedLibrary}
             onOpenWindow={onOpenOrganizationDialog}
             onSelectOrganization={onSelectOrganization}
@@ -288,8 +304,11 @@ export function LeftPane({
             documentMetadataSyncResult={documentMetadataSyncResult}
             documentMetadataSyncStatus={documentMetadataSyncStatus}
             libraryRootPath={libraryRootPath}
+            loadLegacyLibraryRoots={loadLegacyLibraryRoots}
+            onBackupLibrary={onBackupLibrary}
             onChangeLibraryRoot={onChangeLibraryRoot}
             onOpenLibraryInFileManager={onOpenLibraryInFileManager}
+            onSelectLegacyLibraryRoot={onSelectLegacyLibraryRoot}
             onOpenSkillDocument={onOpenSkillDocument}
             onRetryDocumentMetadataSync={onRetryDocumentMetadataSync}
             onUpdateSetting={onUpdateSetting}
@@ -297,40 +316,45 @@ export function LeftPane({
           />
         ) : (
           <LibraryPane
+            accountScopeId={accountScopeId}
             accountSessionAvailable={accountSession !== null}
             activePaperId={activePaperId}
             canOpenOrganizationWorkspace={canOpenOrganizationWorkspace}
-            collectionItems={collectionItems}
-            collectionMessage={collectionMessage}
-            collectionStatus={collectionStatus}
+            cloudEndpoint={cloudEndpoint}
+            cloudTreeRevision={cloudTreeRevision}
             importJobs={importJobs}
+            localLibrarySnapshot={localLibrarySnapshot}
             paperChildren={libraryPaperChildren}
             onAddExternalPdf={onAddExternalPdf}
-            onAddExternalPaper={onAddExternalPaper}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
-            onCollectRecommendation={onCollectRecommendation}
             onDismissRecommendation={onDismissRecommendation}
             onImportSelectedSet={onImportSelectedSet}
+            onImportZoteroDirectory={onImportZoteroDirectory}
             onLoginRequired={onLoginRequired}
             onOpenOrganizationWorkspace={() => {
               if (organizationSummary) {
                 onOpenSharedLibrary?.(organizationSummary);
               }
             }}
+            onOpenCloudEntry={onOpenCloudEntry}
             onOpenPaper={onOpenPaper}
             onOpenPaperChild={onOpenPaperChild}
-            onRenamePaperChild={onRenamePaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}
             onMoveFolder={onMoveLibraryFolder}
             onMovePaper={onMoveLibraryPaper}
-            onRetryCollectionSync={onRetryCollectionSync}
             onReturnToLocalWorkspace={onReturnToLocalWorkspace}
             onRenameFolder={onRenameLibraryFolder}
             onRenamePaper={onRenameLibraryPaper}
+            onResourceTransfer={onResourceTransfer}
             onToggleLock={onToggleLock}
             onToggleSelection={onToggleSelection}
             organizationWorkspaceLabel={organizationWorkspaceLabel}
+            organizationId={organizationId}
+            organizationStorageAccess={organizationSummary?.policy ? {
+              ...organizationSummary.policy,
+              role: organizationSummary.myRole
+            } : undefined}
             papers={papers}
             recommendationItems={recommendationItems}
             recommendationMessage={recommendationMessage}

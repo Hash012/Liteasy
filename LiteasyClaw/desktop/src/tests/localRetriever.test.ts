@@ -1,14 +1,17 @@
 import { retrieveAnswer } from "../app/features/retrieval/localRetriever";
+import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 
 test("retrieves a vector-database-grounded answer for a core-method question", () => {
+  const paper = {
+    id: "demo-2",
+    title: "Survey of Vector Database Management Systems"
+  };
   const result = retrieveAnswer({
+    importedChunksByPaperId: {
+      [paper.id]: buildImportedChunksForPaper(paper)
+    },
     question: "向量数据库管理系统的核心组件是什么？",
-    selectedPapers: [
-      {
-        id: "demo-2",
-        title: "Survey of Vector Database Management Systems"
-      }
-    ]
+    selectedPapers: [paper]
   });
 
   expect(result.answer).toContain("向量数据库管理系统");

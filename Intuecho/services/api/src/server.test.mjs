@@ -1,199 +1,941 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import Database from "better-sqlite3";
 import { createIntuechoApp } from "./server.mjs";
+import { IdentityVerificationError } from "./identityVerifier.mjs";
 
-const userHeader = { "x-intuecho-user": "demo-user" };
+const identities = new Map([
+  ["user-token", { id: "user-1", name: "林立", initials: "LL" }],
+  ["same-name-token", { id: "user-2", name: "林立", initials: "LL" }]
+]);
+const userHeader = { authorization: "Bearer user-token" };
+const sameNameHeader = { authorization: "Bearer same-name-token" };
+const adminHeader = { authorization: "Bearer admin-token" };
+const desktopHeader = { authorization: "Bearer desktop-token" };
+const otherDesktopHeader = { authorization: "Bearer other-desktop-token" };
 
-async function withApp(callback) {
-  const directory = mkdtempSync(join(tmpdir(), "intuecho-api-"));
-  const { app, db } = await createIntuechoApp({ databasePath: join(directory, "test.db") });
+async function identityVerifier(token) {
+  const identity = identities.get(token);
+  if (!identity) throw new IdentityVerificationError("INVALID_SESSION", "登录会话无效或已过期。", 401);
+  return identity;
+}
+
+async function adminIdentityVerifier(token) {
+  if (token !== "admin-token") {
+    throw new IdentityVerificationError("ADMIN_AUTH_REQUIRED", "需要平台管理员登录。", 401);
+  }
+  return { id: "admin-1", name: "平台管理员", initials: "平台" };
+}
+
+async function desktopIdentityVerifier(token) {
+  if (token === "desktop-token") return identities.get("user-token");
+  if (token === "other-desktop-token") return identities.get("same-name-token");
+  throw new IdentityVerificationError("INVALID_SESSION_AUDIENCE", "当前会话不适用于 Intuecho。", 403);
+}
+
+function insertFixture(db) {
+  db.prepare("INSERT INTO topics (id, name, description, guide, follower_count) VALUES (?, ?, ?, ?, ?)")
+    .run("topic-1", "可靠性", "讨论证据边界。", "由社区共同维护。", 0);
+  db.prepare("INSERT INTO works (id, topic_id, title, authors, year, venue, identifier, abstract) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("work-1", "topic-1", "A Reliable Paper", "Author", 2025, "Venue", "doi:1", "Abstract");
+  db.prepare("INSERT INTO posts (id, topic_id, work_id, title, body, author_id, author_name, author_initials, page, excerpt, anchor_hash, helpful, misleading, created_at, withdrawn_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)")
+    .run("post-1", "topic-1", "work-1", "证据边界", "一条真实测试帖子。", "author-1", "作者甲", "A", 2, "source", "sha256:source", 1, 0, "2026-01-01T00:00:00.000Z");
+  db.prepare("INSERT INTO comments (id, post_id, body, author_id, author_name, author_initials, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run("comment-1", "post-1", "一条测试讨论。", "author-2", "作者乙", "B", "2026-01-01T01:00:00.000Z");
+}
+
+async function withApp(run, {
+  adminIdentityVerifier: selectedAdminIdentityVerifier = adminIdentityVerifier,
+  authorizeOrganizationAccess,
+  authorizeOrganizationInvitation,
+  authorizeOrganizationVisibility,
+  listOrganizations,
+  desktopIdentityVerifier: selectedDesktopIdentityVerifier = desktopIdentityVerifier,
+  fixture = true,
+  identityVerifier: selectedIdentityVerifier = identityVerifier
+} = {}) {
+  const directory = await mkdtemp(join(tmpdir(), "intuecho-test-"));
+  const databasePath = join(directory, "test.db");
+  const { app, db } = await createIntuechoApp({
+    adminIdentityVerifier: selectedAdminIdentityVerifier,
+    authorizeOrganizationAccess,
+    authorizeOrganizationInvitation,
+    authorizeOrganizationVisibility,
+    listOrganizations,
+    databasePath,
+    desktopIdentityVerifier: selectedDesktopIdentityVerifier,
+    identityVerifier: selectedIdentityVerifier
+  });
+  if (fixture) insertFixture(db);
   try {
-    return await callback(app, db);
+    await run(app, db, databasePath);
   } finally {
     await app.close();
     db.close();
-    rmSync(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true });
   }
 }
 
-test("signals toggle once per user and keep misleading totals server-side", async () => {
-  await withApp(async (app, db) => {
-    const first = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/signals", headers: userHeader, payload: { signal: "helpful" } });
-    assert.equal(first.statusCode, 200);
-    assert.deepEqual(first.json(), { ok: true, helpful: 30, selectedSignal: "helpful" });
+function annotationPayload(overrides = {}) {
+  const identity = {
+    id: "doi:10.1000/reliable",
+    kind: "doi",
+    source: "metadata",
+    value: "10.1000/reliable"
+  };
+  return {
+    annotationId: "annotation-1",
+    body: "这条批注解释了证据边界。",
+    createdAt: "2026-08-07T01:00:00.000Z",
+    excerpt: "source evidence",
+    paperIdentity: { primary: identity },
+    queueKey: "paper-1:annotation-1",
+    scope: { kind: "pdf_passage", page: 2, rects: [] },
+    status: "pending_public",
+    targets: [{
+      anchorHash: "sha256:source",
+      excerpt: "source evidence",
+      kind: "source_passage",
+      literature: {
+        identity,
+        metadata: { authors: ["Author"], documentType: "journal_article", title: "A Reliable Paper", year: 2025 }
+      },
+      page: 2,
+      rects: []
+    }],
+    updatedAt: "2026-08-07T01:00:00.000Z",
+    ...overrides
+  };
+}
 
-    const disagree = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/signals", headers: userHeader, payload: { signal: "misleading" } });
-    assert.deepEqual(disagree.json(), { ok: true, helpful: 29, selectedSignal: "misleading" });
-    assert.equal(db.prepare("SELECT misleading FROM posts WHERE id = ?").get("post-faithfulness").misleading, 2);
+function annotationV2Payload(overrides = {}) {
+  const literature = {
+    identity: {
+      id: "doi:10.1000/reliable",
+      kind: "doi",
+      source: "metadata",
+      value: "10.1000/reliable"
+    },
+    metadata: {
+      authors: ["Author"],
+      documentType: "journal_article",
+      title: "A Reliable Paper",
+      year: 2025
+    }
+  };
+  return {
+    body: "这条批注解释了证据边界。",
+    shareToPlaza: true,
+    tags: ["证据"],
+    targets: [{ kind: "whole_document", literature }],
+    visibility: "public",
+    ...overrides
+  };
+}
 
-    const cancelDisagree = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/signals", headers: userHeader, payload: { signal: "misleading" } });
-    assert.deepEqual(cancelDisagree.json(), { ok: true, helpful: 29, selectedSignal: null });
-    assert.equal(db.prepare("SELECT misleading FROM posts WHERE id = ?").get("post-faithfulness").misleading, 1);
+test("a new runtime database contains no demo or fixture content", async () => {
+  await withApp(async (app) => {
+    const topics = await app.inject({ method: "GET", url: "/v1/topics" });
+    assert.equal(topics.statusCode, 200);
+    assert.deepEqual(topics.json(), []);
+  }, { fixture: false });
+});
 
-    const helpfulAgain = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/signals", headers: userHeader, payload: { signal: "helpful" } });
-    assert.deepEqual(helpfulAgain.json(), { ok: true, helpful: 30, selectedSignal: "helpful" });
-    const cancelHelpful = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/signals", headers: userHeader, payload: { signal: "helpful" } });
-    assert.deepEqual(cancelHelpful.json(), { ok: true, helpful: 29, selectedSignal: null });
+test("public reads are anonymous while writes require a Bearer session", async () => {
+  await withApp(async (app) => {
+    const topic = await app.inject({ method: "GET", url: "/v1/topics/topic-1" });
+    assert.equal(topic.statusCode, 200);
+    assert.equal(topic.json().posts[0].viewer_is_author, false);
+
+    const missing = await app.inject({ method: "POST", url: "/v1/topics/topic-1/follow" });
+    assert.equal(missing.statusCode, 401);
+    assert.equal(missing.json().error, "AUTH_REQUIRED");
+    assert.ok(missing.json().traceId);
+
+    const legacyHeader = await app.inject({ method: "POST", url: "/v1/topics/topic-1/follow", headers: { "x-intuecho-user": "demo-user" } });
+    assert.equal(legacyHeader.statusCode, 401);
   });
 });
 
-test("a contextual draft is owner-bound, expires, and publishes only once", async () => {
+test("development CORS allows only the configured Web and desktop origins", async () => {
+  await withApp(async (app) => {
+    const desktop = await app.inject({
+      headers: {
+        "access-control-request-headers": "authorization,content-type,idempotency-key",
+        "access-control-request-method": "POST",
+        origin: "http://127.0.0.1:1420"
+      },
+      method: "OPTIONS",
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(desktop.statusCode, 204);
+    assert.equal(desktop.headers["access-control-allow-origin"], "http://127.0.0.1:1420");
+
+    const untrusted = await app.inject({
+      headers: {
+        "access-control-request-method": "POST",
+        origin: "https://untrusted.example"
+      },
+      method: "OPTIONS",
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.notEqual(untrusted.headers["access-control-allow-origin"], "https://untrusted.example");
+  });
+});
+
+test("invalid authorization and invalid sessions return stable errors", async () => {
+  await withApp(async (app) => {
+    const malformed = await app.inject({ method: "GET", url: "/v1/topics", headers: { authorization: "Basic abc" } });
+    assert.equal(malformed.statusCode, 401);
+    assert.equal(malformed.json().error, "INVALID_AUTHORIZATION");
+    assert.ok(malformed.json().traceId);
+
+    const invalid = await app.inject({ method: "GET", url: "/v1/topics", headers: { authorization: "Bearer invalid" } });
+    assert.equal(invalid.statusCode, 401);
+    assert.equal(invalid.json().error, "INVALID_SESSION");
+    assert.ok(invalid.json().traceId);
+  });
+});
+
+test("unknown identity failures cannot expose internal details through statusCode", async (context) => {
+  context.mock.method(console, "error", () => {});
+  await withApp(async (app) => {
+    const response = await app.inject({
+      headers: { authorization: "Bearer opaque-token" },
+      method: "GET",
+      url: "/v1/topics"
+    });
+    const payload = response.json();
+
+    assert.equal(response.statusCode, 503);
+    assert.equal(payload.error, "IDENTITY_SERVICE_UNAVAILABLE");
+    assert.equal(payload.message, "身份服务暂时不可用，请稍后重试。");
+    assert.ok(payload.traceId);
+    assert.doesNotMatch(JSON.stringify(payload), /SELECT users|\/srv\/identity|sk-secret/);
+  }, {
+    identityVerifier: async () => {
+      throw Object.assign(
+        new Error("SELECT users failed at /srv/identity with sk-secret"),
+        { statusCode: 418 }
+      );
+    }
+  });
+});
+
+test("contextual drafts publish with a stable author id", async () => {
   await withApp(async (app, db) => {
-    const create = await app.inject({ method: "POST", url: "/v1/drafts/contextual", headers: userHeader, payload: { workId: "rag-neurips-2020", topicId: "rag-reliability", page: 7, excerpt: "A sufficiently long source excerpt.", anchorHash: "sha256:test-anchor", language: "zh-CN" } });
+    const create = await app.inject({
+      method: "POST",
+      url: "/v1/drafts/contextual",
+      headers: userHeader,
+      payload: { topicId: "topic-1", workId: "work-1", page: 2, excerpt: "source evidence", anchorHash: "sha256:source", language: "zh-CN", citationEnabled: true }
+    });
     assert.equal(create.statusCode, 201);
     const { draftId } = create.json();
 
-    const save = await app.inject({ method: "PUT", url: `/v1/drafts/${draftId}`, headers: userHeader, payload: { body: "这是一条足够长的测试批注。", tags: ["可靠性"], citationEnabled: true } });
+    const save = await app.inject({ method: "PUT", url: `/v1/drafts/${draftId}`, headers: userHeader, payload: { body: "发布后的正文内容。", tags: ["证据"], citationEnabled: true } });
     assert.equal(save.statusCode, 200);
-    const firstPublish = await app.inject({ method: "POST", url: "/v1/posts", headers: userHeader, payload: { draftId } });
-    assert.equal(firstPublish.statusCode, 201);
+    const publish = await app.inject({ method: "POST", url: "/v1/posts", headers: userHeader, payload: { draftId } });
+    assert.equal(publish.statusCode, 201);
+
+    const row = db.prepare("SELECT author_id, author_name FROM posts WHERE id = ?").get(publish.json().postId);
+    assert.deepEqual(row, { author_id: "user-1", author_name: "林立" });
     const mine = await app.inject({ method: "GET", url: "/v1/me/posts", headers: userHeader });
-    assert.equal(mine.statusCode, 200);
-    assert.equal(mine.json().posts.length, 2);
-    const secondPublish = await app.inject({ method: "POST", url: "/v1/posts", headers: userHeader, payload: { draftId } });
-    assert.equal(secondPublish.statusCode, 200);
-    assert.equal(secondPublish.json().postId, firstPublish.json().postId);
-    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM posts WHERE work_id = ?").get("rag-neurips-2020").count, 3);
-
-    db.prepare("UPDATE drafts SET expires_at = ? WHERE id = ?").run("2020-01-01T00:00:00.000Z", draftId);
-    const reopened = await app.inject({ method: "GET", url: `/v1/drafts/${draftId}`, headers: userHeader });
-    assert.equal(reopened.statusCode, 200);
+    assert.equal(mine.json().posts.length, 1);
+    assert.equal(mine.json().posts[0].viewer_is_author, true);
   });
 });
 
-test("editing turns a contextual draft into a persistent personal draft", async () => {
+test("desktop draft handoffs require the desktop audience and remain bound to one subject", async () => {
   await withApp(async (app, db) => {
-    const create = await app.inject({ method: "POST", url: "/v1/drafts/contextual", headers: userHeader, payload: { workId: "rag-neurips-2020", topicId: "rag-reliability", page: 7, excerpt: "A sufficiently long source excerpt.", anchorHash: "sha256:saved-anchor", language: "zh-CN" } });
-    const { draftId } = create.json();
-    const topic = await app.inject({ method: "POST", url: "/v1/topics", headers: userHeader, payload: { name: "草稿选择主题", description: "用于验证上下文草稿可以改选研究主题。" } });
-    const topicId = topic.json().topic.id;
-    const save = await app.inject({ method: "PUT", url: `/v1/drafts/${draftId}`, headers: userHeader, payload: { body: "这份内容稍后再继续整理。", tags: [], citationEnabled: false, topicId } });
-    assert.equal(save.statusCode, 200);
+    const rejectedWebAudience = await app.inject({
+      method: "POST",
+      url: "/v1/integrations/desktop/draft-handoffs",
+      headers: userHeader,
+      payload: { context: { topicId: "topic-1", language: "zh-CN" } }
+    });
+    assert.equal(rejectedWebAudience.statusCode, 403);
+    assert.equal(rejectedWebAudience.json().error, "INVALID_SESSION_AUDIENCE");
 
-    db.prepare("UPDATE drafts SET expires_at = ? WHERE id = ?").run("2020-01-01T00:00:00.000Z", draftId);
-    const reopened = await app.inject({ method: "GET", url: `/v1/drafts/${draftId}`, headers: userHeader });
-    assert.equal(reopened.statusCode, 200);
-    assert.equal(reopened.json().draft.body, "这份内容稍后再继续整理。");
-    assert.equal(reopened.json().draft.topic_id, topicId);
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/integrations/desktop/draft-handoffs",
+      headers: desktopHeader,
+      payload: {
+        context: {
+          anchorHash: "sha256:source",
+          citationEnabled: true,
+          excerpt: "source evidence",
+          language: "zh-CN",
+          page: 2,
+          topicId: "topic-1",
+          workId: "work-1"
+        },
+        update: { body: "来自桌面选中文段的草稿。", citationEnabled: true, tags: ["证据"] }
+      }
+    });
+    assert.equal(created.statusCode, 201);
+    const { handoffId } = created.json();
 
-    const list = await app.inject({ method: "GET", url: "/v1/me/drafts", headers: userHeader });
-    assert.equal(list.json().drafts.length, 1);
-    assert.equal(list.json().drafts[0].draft.id, draftId);
+    const forbidden = await app.inject({
+      method: "POST",
+      url: `/v1/draft-handoffs/${handoffId}/consume`,
+      headers: sameNameHeader
+    });
+    assert.equal(forbidden.statusCode, 403);
+    assert.equal(forbidden.json().error, "HANDOFF_FORBIDDEN");
 
-    const discard = await app.inject({ method: "DELETE", url: `/v1/drafts/${draftId}`, headers: userHeader });
-    assert.equal(discard.statusCode, 200);
-    const afterDiscard = await app.inject({ method: "GET", url: "/v1/me/drafts", headers: userHeader });
-    assert.equal(afterDiscard.json().drafts.length, 0);
+    const consumed = await app.inject({
+      method: "POST",
+      url: `/v1/draft-handoffs/${handoffId}/consume`,
+      headers: userHeader
+    });
+    assert.equal(consumed.statusCode, 200);
+    assert.equal(consumed.json().replayed, false);
+    const draft = db.prepare("SELECT owner_id, body, citation_enabled FROM drafts WHERE id = ?")
+      .get(consumed.json().draftId);
+    assert.deepEqual(draft, { owner_id: "user-1", body: "来自桌面选中文段的草稿。", citation_enabled: 1 });
+
+    const replay = await app.inject({
+      method: "POST",
+      url: `/v1/draft-handoffs/${handoffId}/consume`,
+      headers: userHeader
+    });
+    assert.deepEqual(replay.json(), { draftId: consumed.json().draftId, replayed: true });
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM drafts").get().count, 1);
   });
 });
 
-test("a topic post can omit a citation and is searchable by up to five tags", async () => {
-  await withApp(async (app) => {
-    const topicResponse = await app.inject({ method: "POST", url: "/v1/topics", headers: userHeader, payload: { name: "新研究主题", description: "用于验证用户帖子与标签搜索的主题。" } });
-    assert.equal(topicResponse.statusCode, 201);
-    const topicId = topicResponse.json().topic.id;
-    const create = await app.inject({ method: "POST", url: "/v1/drafts/contextual", headers: userHeader, payload: { topicId, language: "zh-CN" } });
-    const { draftId } = create.json();
-    const tooManyTags = await app.inject({ method: "PUT", url: `/v1/drafts/${draftId}`, headers: userHeader, payload: { body: "标签数量限制测试内容。", tags: ["一", "二", "三", "四", "五", "六"], citationEnabled: false } });
-    assert.equal(tooManyTags.statusCode, 400);
-    const save = await app.inject({ method: "PUT", url: `/v1/drafts/${draftId}`, headers: userHeader, payload: { body: "这是一条不附带原文引用的用户帖子。", tags: ["主题验证", "标签搜索"], citationEnabled: false } });
-    assert.equal(save.statusCode, 200);
-    const publish = await app.inject({ method: "POST", url: "/v1/posts", headers: userHeader, payload: { draftId } });
-    assert.equal(publish.statusCode, 201);
-    assert.notEqual(publish.json().postId, "demo-user");
-    const topic = await app.inject({ method: "GET", url: `/v1/topics/${topicId}` });
-    assert.equal(topic.json().posts[0].has_citation, false);
-    assert.deepEqual(topic.json().posts[0].tags, ["主题验证", "标签搜索"]);
-    const search = await app.inject({ method: "GET", url: "/v1/search?tag=标签搜索" });
-    assert.equal(search.json().posts.length, 1);
+test("desktop draft handoffs return stable missing-context and expiry errors", async () => {
+  await withApp(async (app, db) => {
+    const missingTopic = await app.inject({
+      method: "POST",
+      url: "/v1/integrations/desktop/draft-handoffs",
+      headers: desktopHeader,
+      payload: { context: { topicId: "missing", language: "zh-CN" } }
+    });
+    assert.equal(missingTopic.statusCode, 404);
+    assert.equal(missingTopic.json().error, "TOPIC_NOT_FOUND");
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/integrations/desktop/draft-handoffs",
+      headers: desktopHeader,
+      payload: { context: { topicId: "topic-1", language: "zh-CN" } }
+    });
+    const { handoffId } = created.json();
+    db.prepare("UPDATE desktop_draft_handoffs SET expires_at = ? WHERE id = ?")
+      .run("2020-01-01T00:00:00.000Z", handoffId);
+
+    const expired = await app.inject({
+      method: "POST",
+      url: `/v1/draft-handoffs/${handoffId}/consume`,
+      headers: userHeader
+    });
+    assert.equal(expired.statusCode, 410);
+    assert.equal(expired.json().error, "HANDOFF_EXPIRED");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM drafts").get().count, 0);
   });
 });
 
-test("following a topic toggles and is listed for the current user", async () => {
+test("desktop annotation handoffs carry stable literature targets without a topic or work mapping", async () => {
   await withApp(async (app) => {
-    const follow = await app.inject({ method: "POST", url: "/v1/topics/rag-reliability/follow", headers: userHeader });
-    assert.deepEqual(follow.json(), { following: true, followerCount: 129 });
+    const payload = annotationV2Payload({ body: "", tags: [] });
+    const created = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload,
+      url: "/v1/integrations/desktop/annotation-handoffs"
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const handoffId = created.json().handoffId;
 
-    const following = await app.inject({ method: "GET", url: "/v1/me/following", headers: userHeader });
-    assert.equal(following.statusCode, 200);
-    assert.equal(following.json().topics.length, 1);
-    assert.equal(following.json().topics[0].id, "rag-reliability");
-    assert.equal(following.json().topics[0].is_following, true);
+    const forbidden = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: {},
+      url: `/v1/annotation-handoffs/${handoffId}/consume`
+    });
+    assert.equal(forbidden.statusCode, 403);
+    assert.equal(forbidden.json().error, "HANDOFF_FORBIDDEN");
 
-    const unfollow = await app.inject({ method: "POST", url: "/v1/topics/rag-reliability/follow", headers: userHeader });
-    assert.deepEqual(unfollow.json(), { following: false, followerCount: 128 });
-    const afterUnfollow = await app.inject({ method: "GET", url: "/v1/me/following", headers: userHeader });
-    assert.deepEqual(afterUnfollow.json().topics, []);
+    const consumed = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: {},
+      url: `/v1/annotation-handoffs/${handoffId}/consume`
+    });
+    assert.equal(consumed.statusCode, 200, consumed.body);
+    assert.equal(consumed.json().draft.targets[0].literature.identity.value, "10.1000/reliable");
+    assert.equal(consumed.json().draft.topicId, undefined);
+    assert.equal(consumed.json().replayed, false);
+
+    const replayed = await app.inject({ headers: userHeader, method: "POST", payload: {}, url: `/v1/annotation-handoffs/${handoffId}/consume` });
+    assert.equal(replayed.json().replayed, true);
   });
 });
 
-test("saved topics and posts are returned with viewer save state and can be removed", async () => {
-  await withApp(async (app) => {
-    const saveTopic = await app.inject({ method: "POST", url: "/v1/topics/rag-reliability/save", headers: userHeader });
-    assert.deepEqual(saveTopic.json(), { saved: true });
-    const savePost = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/save", headers: userHeader });
-    assert.deepEqual(savePost.json(), { saved: true });
+test("community annotation sync is idempotent per user and recommendations use exact paper identity", async () => {
+  await withApp(async (app, db) => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/pdf-annotations:sync",
+      headers: desktopHeader,
+      payload: { annotations: [annotationPayload()] }
+    });
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.json().results[0].status, "synced");
+    const remoteId = first.json().results[0].intuechoAnnotationId;
 
-    const topic = await app.inject({ method: "GET", url: "/v1/topics/rag-reliability", headers: userHeader });
-    assert.equal(topic.json().topic.is_saved, true);
-    assert.equal(topic.json().posts.find((post) => post.id === "post-faithfulness").viewer_saved, true);
+    const updated = await app.inject({
+      method: "POST",
+      url: "/v1/pdf-annotations:sync",
+      headers: desktopHeader,
+      payload: { annotations: [annotationPayload({ body: "更新后的公开批注。", updatedAt: "2026-08-07T02:00:00.000Z" })] }
+    });
+    assert.equal(updated.json().results[0].intuechoAnnotationId, remoteId);
+    assert.equal(db.prepare("SELECT body FROM annotations_v2 WHERE id = ?").get(remoteId).body, "更新后的公开批注。");
 
-    const saved = await app.inject({ method: "GET", url: "/v1/me/saved", headers: userHeader });
-    assert.equal(saved.statusCode, 200);
-    assert.equal(saved.json().topics[0].id, "rag-reliability");
-    assert.equal(saved.json().posts[0].id, "post-faithfulness");
-    assert.equal(saved.json().posts[0].viewer_saved, true);
+    const otherUser = await app.inject({
+      method: "POST",
+      url: "/v1/thin-reading/annotations:sync",
+      headers: otherDesktopHeader,
+      payload: { annotations: [annotationPayload({ body: "另一位用户的批注。" })] }
+    });
+    assert.equal(otherUser.statusCode, 200);
+    assert.notEqual(otherUser.json().results[0].intuechoAnnotationId, remoteId);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM desktop_annotation_syncs_v2 WHERE queue_key = ?").get("paper-1:annotation-1").count, 2);
 
-    const unsaveTopic = await app.inject({ method: "POST", url: "/v1/topics/rag-reliability/save", headers: userHeader });
-    const unsavePost = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/save", headers: userHeader });
-    assert.deepEqual(unsaveTopic.json(), { saved: false });
-    assert.deepEqual(unsavePost.json(), { saved: false });
-    const afterUnsave = await app.inject({ method: "GET", url: "/v1/me/saved", headers: userHeader });
-    assert.deepEqual(afterUnsave.json().topics, []);
-    assert.deepEqual(afterUnsave.json().posts, []);
+    const recommendations = await app.inject({
+      method: "POST",
+      url: "/v1/thin-reading/recommendations:query",
+      headers: desktopHeader,
+      payload: {
+        scope: {
+          kind: "document",
+          paperIdentity: {
+            id: "doi:10.1000/reliable",
+            kind: "doi",
+            source: "metadata",
+            value: "10.1000/reliable"
+          }
+        }
+      }
+    });
+    assert.equal(recommendations.statusCode, 200);
+    assert.equal(recommendations.json().recommendations.length, 2);
+    assert.ok(recommendations.json().recommendations.every((item) => item.paperIdentity.id === "doi:10.1000/reliable"));
+
+    const unrelated = await app.inject({
+      method: "POST",
+      url: "/v1/thin-reading/recommendations:query",
+      headers: desktopHeader,
+      payload: {
+        scope: {
+          kind: "document",
+          paperIdentity: {
+            id: "doi:10.1000/other",
+            kind: "doi",
+            source: "metadata",
+            value: "10.1000/other"
+          }
+        }
+      }
+    });
+    assert.deepEqual(unrelated.json(), { recommendations: [] });
   });
 });
 
-test("post discussions can be created, listed, and saved", async () => {
+test("annotation community publishes multi-target annotations, derived passages, replies and plaza filters", async () => {
   await withApp(async (app) => {
-    const initial = await app.inject({ method: "GET", url: "/v1/posts/post-faithfulness/comments", headers: userHeader });
-    assert.equal(initial.statusCode, 200);
-    assert.equal(initial.json().comments.length, 1);
+    const profile = await app.inject({
+      headers: userHeader,
+      method: "PUT",
+      payload: {
+        educationStage: "博士研究生",
+        institutions: [{ name: "证据研究院" }]
+      },
+      url: "/v1/me/academic-profile"
+    });
+    assert.equal(profile.statusCode, 200, profile.body);
 
-    const create = await app.inject({ method: "POST", url: "/v1/posts/post-faithfulness/comments", headers: userHeader, payload: { body: "这条讨论补充了证据链可见性的实际含义。" } });
-    assert.equal(create.statusCode, 201);
-    const { comment } = create.json();
-    assert.equal(comment.author_name, "林·Li");
+    const base = annotationV2Payload();
+    const derived = {
+      derivedContent: {
+        artifactId: "artifact-1",
+        excerpt: "薄读生成的证据边界说明",
+        nodeId: "node-1",
+        version: "projection-v1"
+      },
+      evidence: [{
+        anchorHash: "sha256:source-evidence",
+        excerpt: "source evidence",
+        literature: base.targets[0].literature,
+        page: 2,
+        rects: []
+      }],
+      kind: "derived_passage",
+      literature: base.targets[0].literature
+    };
+    const created = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ tags: ["观点", "证据"], targets: [base.targets[0], derived] }),
+      url: "/v1/annotations"
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const annotation = created.json().annotation;
+    assert.equal(annotation.targets.length, 2);
+    assert.equal(annotation.targets.find((target) => target.kind === "derived_passage").evidence.length, 1);
+    assert.deepEqual(annotation.author.profile, {
+      educationStage: "博士研究生",
+      institutions: [{ name: "证据研究院" }]
+    });
 
-    const listed = await app.inject({ method: "GET", url: "/v1/posts/post-faithfulness/comments", headers: userHeader });
-    assert.equal(listed.json().comments.length, 2);
-    const save = await app.inject({ method: "POST", url: `/v1/comments/${comment.id}/save`, headers: userHeader, payload: {} });
+    const reply = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: {
+        body: "这是针对原批注的回复。",
+        shareToPlaza: false,
+        tags: [],
+        targets: [],
+        visibility: "public"
+      },
+      url: `/v1/annotations/${annotation.id}/replies`
+    });
+    assert.equal(reply.statusCode, 201, reply.body);
+    assert.equal(reply.json().reply.parentAnnotationId, annotation.id);
+    assert.equal(reply.json().annotation, null);
+
+    await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { educationStage: "博士研究生", institutions: [{ name: "证据研究院" }] },
+      url: "/v1/me/academic-profile"
+    });
+
+    const promotedReply = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: {
+        body: "观点：带原文证据的回复也成为独立批注。",
+        shareToPlaza: true,
+        tags: ["证据"],
+        targets: [base.targets[0]]
+      },
+      url: `/v1/annotations/${annotation.id}/replies`
+    });
+    assert.equal(promotedReply.statusCode, 201, promotedReply.body);
+    assert.equal(promotedReply.json().reply.derivedAnnotationId, promotedReply.json().annotation.id);
+    assert.equal(promotedReply.json().annotation.originalReply.status, "available");
+
+    const replies = await app.inject({ method: "GET", url: `/v1/annotations/${annotation.id}/replies` });
+    assert.equal(replies.statusCode, 200);
+    assert.equal(replies.json().replies.length, 2);
+
+    const rated = await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { rating: 5 },
+      url: `/v1/annotations/${annotation.id}/rating`
+    });
+    assert.deepEqual(rated.json(), { ratingAverage: 5, ratingCount: 1, viewerRating: 5 });
+    const selfRating = await app.inject({ headers: userHeader, method: "PUT", payload: { rating: 4 }, url: `/v1/annotations/${annotation.id}/rating` });
+    assert.equal(selfRating.statusCode, 403);
+    assert.equal(selfRating.json().error, "SELF_RATING_FORBIDDEN");
+
+    const withdrawn = await app.inject({ headers: userHeader, method: "DELETE", url: `/v1/annotations/${annotation.id}` });
+    assert.equal(withdrawn.statusCode, 200);
+    const retained = await app.inject({ method: "GET", url: `/v1/annotations/${promotedReply.json().annotation.id}` });
+    assert.equal(retained.statusCode, 200, retained.body);
+    assert.equal(retained.json().annotation.originalReply.status, "parent_deleted");
+
+    const filtered = await app.inject({
+      method: "GET",
+      url: "/v1/plaza?institution=%E8%AF%81%E6%8D%AE%E7%A0%94%E7%A9%B6%E9%99%A2&documentType=journal_article&educationStage=%E5%8D%9A%E5%A3%AB%E7%A0%94%E7%A9%B6%E7%94%9F&query=%2F%E8%A7%82%E7%82%B9"
+    });
+    assert.equal(filtered.statusCode, 200, filtered.body);
+    assert.deepEqual(filtered.json().annotations.map((item) => item.id), [promotedReply.json().annotation.id]);
+  });
+});
+
+test("annotation authors appeal platform tags and administrators resolve them with append-only evidence", async () => {
+  await withApp(async (app, db) => {
+    const created = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload(),
+      url: "/v1/annotations"
+    });
+    const annotationId = created.json().annotation.id;
+    const now = "2026-08-07T02:00:00.000Z";
+    db.prepare("INSERT INTO annotation_tags_v2(annotation_id, tag_slug, tag_name, origin, state, confidence, classifier_version, assigned_at, updated_at) VALUES (?, ?, ?, 'platform', 'active', 0.81, 'local-semantic-v1', ?, ?)")
+      .run(annotationId, "观点", "观点", now, now);
+
+    const appealed = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { reason: "这个标签把方法说明错误分类为观点。" },
+      url: `/v1/annotations/${annotationId}/tags/${encodeURIComponent("观点")}/appeals`
+    });
+    assert.equal(appealed.statusCode, 201, appealed.body);
+    assert.equal(db.prepare("SELECT state FROM annotation_tags_v2 WHERE annotation_id = ? AND tag_slug = '观点'").get(annotationId).state, "appealed");
+
+    const listed = await app.inject({ headers: adminHeader, method: "GET", url: "/v1/admin/annotation-tag-appeals" });
+    assert.equal(listed.statusCode, 200, listed.body);
+    assert.equal(listed.json().appeals[0].annotationId, annotationId);
+    assert.equal(listed.json().appeals[0].tag, "观点");
+
+    const resolved = await app.inject({
+      headers: adminHeader,
+      method: "POST",
+      payload: { decision: "accepted", reason: "复核原文后确认平台分类不准确。" },
+      url: `/v1/admin/annotation-tag-appeals/${appealed.json().appealId}/resolve`
+    });
+    assert.equal(resolved.statusCode, 200, resolved.body);
+    assert.equal(db.prepare("SELECT state FROM annotation_tags_v2 WHERE annotation_id = ? AND tag_slug = '观点'").get(annotationId).state, "removed");
+    assert.deepEqual(
+      db.prepare("SELECT decision, admin_user_id FROM annotation_tag_appeal_audit_v2").get(),
+      { admin_user_id: "admin-1", decision: "accepted" }
+    );
+    assert.match(db.prepare("SELECT trace_id FROM annotation_tag_appeal_audit_v2").get().trace_id, /^req-/);
+    const replay = await app.inject({
+      headers: adminHeader,
+      method: "POST",
+      payload: { decision: "accepted", reason: "再次尝试不应重复写入审核记录。" },
+      url: `/v1/admin/annotation-tag-appeals/${appealed.json().appealId}/resolve`
+    });
+    assert.equal(replay.statusCode, 409);
+  });
+});
+
+test("administrators govern the annotation entity instead of the legacy post model", async () => {
+  await withApp(async (app, db) => {
+    const created = await app.inject({ headers: userHeader, method: "POST", payload: annotationV2Payload(), url: "/v1/annotations" });
+    const annotationId = created.json().annotation.id;
+    const listed = await app.inject({ headers: adminHeader, method: "GET", url: "/v1/admin/annotations" });
+    assert.equal(listed.statusCode, 200, listed.body);
+    assert.equal(listed.json().annotations[0].id, annotationId);
+    const withdrawn = await app.inject({
+      headers: adminHeader,
+      method: "POST",
+      payload: { action: "withdraw", reason: "批注违反已经确认的社区治理规则。" },
+      url: `/v1/admin/annotations/${annotationId}/moderate`
+    });
+    assert.equal(withdrawn.statusCode, 200, withdrawn.body);
+    assert.ok(db.prepare("SELECT withdrawn_at FROM annotations_v2 WHERE id = ?").get(annotationId).withdrawn_at);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_moderation_audit_v2 WHERE annotation_id = ?").get(annotationId).count, 1);
+  });
+});
+
+test("annotation visibility is enforced and organization access fails closed", async () => {
+  await withApp(async (app) => {
+    const privateAnnotation = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ shareToPlaza: false, visibility: "private" }),
+      url: "/v1/annotations"
+    });
+    assert.equal(privateAnnotation.statusCode, 201, privateAnnotation.body);
+    const id = privateAnnotation.json().annotation.id;
+    assert.equal((await app.inject({ method: "GET", url: `/v1/annotations/${id}` })).statusCode, 404);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${id}` })).statusCode, 200);
+    const unauthorizedReply = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: {
+        body: "无权查看原批注的用户不能挂接回复。",
+        shareToPlaza: false,
+        tags: [],
+        targets: [],
+        visibility: "private"
+      },
+      url: `/v1/annotations/${id}/replies`
+    });
+    assert.equal(unauthorizedReply.statusCode, 404, unauthorizedReply.body);
+    assert.equal(unauthorizedReply.json().error, "PARENT_ANNOTATION_NOT_FOUND");
+
+    const organization = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ organizationId: "org-1", shareToPlaza: false, visibility: "organization" }),
+      url: "/v1/annotations"
+    });
+    assert.equal(organization.statusCode, 403);
+    assert.equal(organization.json().error, "ORGANIZATION_ACCESS_DENIED");
+  });
+
+  await withApp(async (app) => {
+    const organization = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ organizationId: "org-1", shareToPlaza: false, visibility: "organization" }),
+      url: "/v1/annotations"
+    });
+    assert.equal(organization.statusCode, 201, organization.body);
+    const id = organization.json().annotation.id;
+    assert.equal((await app.inject({ headers: sameNameHeader, method: "GET", url: `/v1/annotations/${id}` })).statusCode, 200);
+  }, {
+    authorizeOrganizationVisibility: async ({ organizationId, userId }) =>
+      organizationId === "org-1" && new Set(["user-1", "user-2"]).has(userId)
+  });
+});
+
+test("current organization owners and admins govern organization annotations with audit evidence", async () => {
+  await withApp(async (app, db) => {
+    const created = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ organizationId: "org-1", shareToPlaza: false, visibility: "organization" }),
+      url: "/v1/annotations"
+    });
+    const annotationId = created.json().annotation.id;
+    const moderate = (action) => app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { action, reason: "组织管理员根据当前社区规则执行内容治理。" },
+      url: `/v1/annotations/${annotationId}/organization-moderation`
+    });
+    assert.equal((await moderate("withdraw")).statusCode, 200);
+    const organizationFeed = await app.inject({ headers: sameNameHeader, method: "GET", url: "/v1/me/organization-annotations" });
+    assert.equal(organizationFeed.statusCode, 200, organizationFeed.body);
+    assert.equal(organizationFeed.json().organizations[0].annotations[0].withdrawnAt !== null, true);
+    assert.equal(organizationFeed.json().organizations[0].annotations[0].viewerCanModerate, true);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${annotationId}` })).statusCode, 404);
+    assert.equal((await moderate("restore")).statusCode, 200);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${annotationId}` })).statusCode, 200);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_moderation_audit_v2 WHERE annotation_id = ? AND admin_user_id = 'user-2'").get(annotationId).count, 2);
+  }, {
+    authorizeOrganizationAccess: async ({ organizationId, userId }) => ({
+      allowed: organizationId === "org-1" && new Set(["user-1", "user-2"]).has(userId),
+      role: userId === "user-2" ? "admin" : "member"
+    }),
+    authorizeOrganizationVisibility: async ({ organizationId, userId }) => organizationId === "org-1" && new Set(["user-1", "user-2"]).has(userId),
+    listOrganizations: async (userId) => userId === "user-2" ? [{ name: "证据研究组织", organizationId: "org-1", role: "admin" }] : []
+  });
+});
+
+test("direct messages require a current mutual follow and organization invitations are authoritative", async () => {
+  const invitations = [];
+  await withApp(async (app) => {
+    const published = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "关注动态中的公开研究批注" }),
+      url: "/v1/annotations"
+    });
+    assert.equal(published.statusCode, 201, published.body);
+    const privateAnnotation = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "不应进入关注动态的私人批注", shareToPlaza: false, visibility: "private" }),
+      url: "/v1/annotations"
+    });
+    const mutualAnnotation = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "只对互关用户展示的研究批注", shareToPlaza: false, visibility: "mutual_followers" }),
+      url: "/v1/annotations"
+    });
+    assert.equal(privateAnnotation.statusCode, 201, privateAnnotation.body);
+    assert.equal(mutualAnnotation.statusCode, 201, mutualAnnotation.body);
+    const follow = (headers, targetUserId) => app.inject({
+      headers,
+      method: "POST",
+      payload: { targetUserId },
+      url: "/v1/follows"
+    });
+    assert.equal((await follow(userHeader, "user-2")).statusCode, 200);
+    const followingFeed = await app.inject({ headers: userHeader, method: "GET", url: "/v1/me/following-annotations" });
+    assert.equal(followingFeed.statusCode, 200, followingFeed.body);
+    assert.deepEqual(followingFeed.json().annotations.map((annotation) => annotation.id), [published.json().annotation.id]);
+    assert.equal((await follow(sameNameHeader, "user-1")).json().mutual, true);
+    const mutualFeed = await app.inject({ headers: userHeader, method: "GET", url: "/v1/me/following-annotations" });
+    assert.deepEqual(new Set(mutualFeed.json().annotations.map((annotation) => annotation.id)), new Set([
+      published.json().annotation.id,
+      mutualAnnotation.json().annotation.id
+    ]));
+    const conversation = await app.inject({ headers: userHeader, method: "POST", payload: { participantId: "user-2" }, url: "/v1/conversations" });
+    assert.equal(conversation.statusCode, 201, conversation.body);
+    const conversationId = conversation.json().id;
+
+    const invitation = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { body: "加入研究组", invitation: { organizationId: "org-1", role: "member" }, kind: "organization_invitation" },
+      url: `/v1/conversations/${conversationId}/messages`
+    });
+    assert.equal(invitation.statusCode, 201, invitation.body);
+    assert.equal(invitation.json().message.invitation.invitationId, "invite-1");
+    assert.equal(invitations.length, 1);
+
+    const conversations = await app.inject({ headers: userHeader, method: "GET", url: "/v1/conversations" });
+    assert.equal(conversations.statusCode, 200, conversations.body);
+    assert.equal(conversations.json().conversations.length, 1);
+    assert.equal(conversations.json().conversations[0].participant.id, "user-2");
+    assert.equal(conversations.json().conversations[0].lastMessage.kind, "organization_invitation");
+    assert.equal(conversations.json().conversations[0].canSend, true);
+    assert.equal(conversations.json().conversations[0].unreadCount, 0);
+
+    const recipientHistory = await app.inject({ headers: sameNameHeader, method: "GET", url: `/v1/conversations/${conversationId}/messages` });
+    assert.equal(recipientHistory.statusCode, 200, recipientHistory.body);
+    const recipientInbox = await app.inject({ headers: sameNameHeader, method: "GET", url: "/v1/conversations" });
+    assert.equal(recipientInbox.json().conversations[0].unreadCount, 1, "reading message history must not implicitly advance read state");
+    const markedRead = await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { messageId: invitation.json().message.id },
+      url: `/v1/conversations/${conversationId}/read`
+    });
+    assert.equal(markedRead.statusCode, 200, markedRead.body);
+    assert.deepEqual(markedRead.json(), { lastReadMessageId: invitation.json().message.id, unreadCount: 0 });
+    assert.equal((await app.inject({ headers: sameNameHeader, method: "GET", url: "/v1/conversations" })).json().conversations[0].unreadCount, 0);
+
+    const reply = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "我会核对这份邀请", kind: "text" },
+      url: `/v1/conversations/${conversationId}/messages`
+    });
+    assert.equal(reply.statusCode, 201, reply.body);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: "/v1/conversations" })).json().conversations[0].unreadCount, 1);
+    const invalidRead = await app.inject({
+      headers: userHeader,
+      method: "PUT",
+      payload: { messageId: "message_from_another_conversation" },
+      url: `/v1/conversations/${conversationId}/read`
+    });
+    assert.equal(invalidRead.statusCode, 400);
+    assert.equal(invalidRead.json().error, "INVALID_READ_STATE");
+
+    await follow(sameNameHeader, "user-1");
+    const blocked = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { body: "这条消息不应发送", kind: "text" },
+      url: `/v1/conversations/${conversationId}/messages`
+    });
+    assert.equal(blocked.statusCode, 403);
+    assert.equal(blocked.json().error, "MUTUAL_FOLLOW_REQUIRED");
+    const history = await app.inject({ headers: userHeader, method: "GET", url: `/v1/conversations/${conversationId}/messages` });
+    assert.equal(history.statusCode, 200);
+    assert.equal(history.json().messages.length, 2);
+    const readonlyConversations = await app.inject({ headers: userHeader, method: "GET", url: "/v1/conversations" });
+    assert.equal(readonlyConversations.json().conversations[0].canSend, false);
+  }, {
+    authorizeOrganizationInvitation: async (input) => {
+      invitations.push(input);
+      return { invitationId: "invite-1" };
+    }
+  });
+});
+
+test("users with the same display name cannot withdraw each other's posts", async () => {
+  await withApp(async (app, db) => {
+    db.prepare("INSERT INTO posts (id, topic_id, body, author_id, author_name, author_initials, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run("owned-post", "topic-1", "owned", "user-1", "林立", "LL", "2026-01-02T00:00:00.000Z");
+
+    const forbidden = await app.inject({ method: "DELETE", url: "/v1/posts/owned-post", headers: sameNameHeader });
+    assert.equal(forbidden.statusCode, 403);
+    assert.equal(forbidden.json().error, "NOT_POST_AUTHOR");
+
+    const withdrawn = await app.inject({ method: "DELETE", url: "/v1/posts/owned-post", headers: userHeader });
+    assert.equal(withdrawn.statusCode, 200);
+  });
+});
+
+test("platform admins moderate posts through an isolated audience and audit every action", async () => {
+  await withApp(async (app, db) => {
+    const ordinarySession = await app.inject({
+      method: "GET",
+      url: "/v1/admin/posts",
+      headers: userHeader
+    });
+    assert.equal(ordinarySession.statusCode, 401);
+
+    const listed = await app.inject({
+      method: "GET",
+      url: "/v1/admin/posts",
+      headers: adminHeader
+    });
+    assert.equal(listed.statusCode, 200);
+    assert.equal(listed.json().posts[0].id, "post-1");
+
+    const withdrawn = await app.inject({
+      method: "POST",
+      url: "/v1/admin/posts/post-1/moderate",
+      headers: adminHeader,
+      payload: { action: "withdraw", reason: "Confirmed policy violation" }
+    });
+    assert.equal(withdrawn.statusCode, 200);
+    assert.ok(db.prepare("SELECT withdrawn_at FROM posts WHERE id = 'post-1'").get().withdrawn_at);
+
+    const restored = await app.inject({
+      method: "POST",
+      url: "/v1/admin/posts/post-1/moderate",
+      headers: adminHeader,
+      payload: { action: "restore", reason: "Appeal accepted after review" }
+    });
+    assert.equal(restored.statusCode, 200);
+    assert.equal(db.prepare("SELECT withdrawn_at FROM posts WHERE id = 'post-1'").get().withdrawn_at, null);
+    assert.deepEqual(
+      db.prepare("SELECT action, admin_user_id FROM moderation_audit ORDER BY rowid").all(),
+      [
+        { action: "withdraw", admin_user_id: "admin-1" },
+        { action: "restore", admin_user_id: "admin-1" }
+      ]
+    );
+  });
+});
+
+test("following, saving, signals, and comments are scoped to the verified user", async () => {
+  await withApp(async (app) => {
+    const follow = await app.inject({ method: "POST", url: "/v1/topics/topic-1/follow", headers: userHeader });
+    assert.deepEqual(follow.json(), { following: true, followerCount: 1 });
+    const save = await app.inject({ method: "POST", url: "/v1/posts/post-1/save", headers: userHeader });
     assert.deepEqual(save.json(), { saved: true });
+    const signal = await app.inject({ method: "POST", url: "/v1/posts/post-1/signals", headers: userHeader, payload: { signal: "helpful" } });
+    assert.equal(signal.statusCode, 200);
+    assert.equal(signal.json().selectedSignal, "helpful");
+
+    const createComment = await app.inject({ method: "POST", url: "/v1/posts/post-1/comments", headers: userHeader, payload: { body: "补充证据链。" } });
+    assert.equal(createComment.statusCode, 201);
+    assert.equal(createComment.json().comment.author_id, "user-1");
 
     const saved = await app.inject({ method: "GET", url: "/v1/me/saved", headers: userHeader });
-    assert.equal(saved.json().comments.length, 1);
-    assert.equal(saved.json().comments[0].id, comment.id);
-    assert.equal(saved.json().comments[0].viewer_saved, true);
-
-    const unsave = await app.inject({ method: "POST", url: `/v1/comments/${comment.id}/save`, headers: userHeader, payload: {} });
-    assert.deepEqual(unsave.json(), { saved: false });
+    assert.equal(saved.json().posts[0].id, "post-1");
+    const otherSaved = await app.inject({ method: "GET", url: "/v1/me/saved", headers: sameNameHeader });
+    assert.deepEqual(otherSaved.json().posts, []);
   });
 });
 
-test("the demo paper mapping supports the contextual publish and feed loop", async () => {
-  await withApp(async (app) => {
-    const create = await app.inject({ method: "POST", url: "/v1/drafts/contextual", headers: userHeader, payload: { topicId: "rag-reliability", workId: "colbert-demo", page: 2, excerpt: "ColBERT uses contextualized late interaction", anchorHash: "sha256:colbert-late-interaction-2", language: "zh-CN" } });
-    assert.equal(create.statusCode, 201);
-    const { draftId } = create.json();
-    const save = await app.inject({ method: "PUT", url: `/v1/drafts/${draftId}`, headers: userHeader, payload: { body: "回流链路测试帖子内容。", tags: [], citationEnabled: true } });
-    assert.equal(save.statusCode, 200);
-    const publish = await app.inject({ method: "POST", url: "/v1/posts", headers: userHeader, payload: { draftId } });
-    assert.equal(publish.statusCode, 201);
-    const feed = await app.inject({ method: "GET", url: "/v1/contextual-feed?workId=colbert-demo&anchorHash=sha256:colbert-late-interaction-2" });
-    assert.equal(feed.statusCode, 200);
-    assert.equal(feed.json().posts.some((post) => post.id === publish.json().postId), true);
+test("old forum databases gain nullable author id columns without losing rows", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "intuecho-migration-"));
+  const databasePath = join(directory, "old.db");
+  const oldDb = new Database(databasePath);
+  oldDb.exec(`
+    CREATE TABLE posts (id TEXT PRIMARY KEY, topic_id TEXT NOT NULL, work_id TEXT, title TEXT, body TEXT NOT NULL, author_name TEXT NOT NULL, author_initials TEXT NOT NULL, page INTEGER, excerpt TEXT, anchor_hash TEXT, helpful INTEGER NOT NULL DEFAULT 0, misleading INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, withdrawn_at TEXT);
+    CREATE TABLE comments (id TEXT PRIMARY KEY, post_id TEXT NOT NULL, body TEXT NOT NULL, author_name TEXT NOT NULL, author_initials TEXT NOT NULL, created_at TEXT NOT NULL);
+    INSERT INTO posts (id, topic_id, body, author_name, author_initials, created_at) VALUES ('legacy', 'topic', 'body', 'name', 'N', '2026-01-01');
+  `);
+  oldDb.close();
+
+  const { app, db } = await createIntuechoApp({
+    adminIdentityVerifier,
+    databasePath,
+    identityVerifier
   });
+  try {
+    assert.ok(db.prepare("PRAGMA table_info(posts)").all().some((column) => column.name === "author_id"));
+    assert.ok(db.prepare("PRAGMA table_info(comments)").all().some((column) => column.name === "author_id"));
+    assert.equal(db.prepare("SELECT body FROM posts WHERE id = 'legacy'").get().body, "body");
+  } finally {
+    await app.close();
+    db.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });

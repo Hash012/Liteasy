@@ -1,17 +1,12 @@
 import type { SettingsState } from "../settings/settings.types";
-import { createModelGateway, type GenerateAnswerInput, type ModelGenerationResult } from "./modelGateway";
+import { createModelGateway } from "./modelGateway";
 import { createHttpModelClient, type ModelTransport } from "./modelHttpClient";
 import { getModelPolicyFromSettings } from "./modelPolicy";
 import { isTrustedRemoteModelProxyEndpoint } from "./modelProxyTrust";
-import { generateCloudProxyAnswer } from "./mockProviders";
 
 type ModelRuntimeDeps = {
   cloudTransport?: ModelTransport;
 };
-
-function isMockEndpoint(endpoint: string) {
-  return endpoint.startsWith("mock://");
-}
 
 const directModelUpstreamHosts = [
   "api.mosshubs.com",
@@ -55,49 +50,19 @@ export function validateModelProxyEndpoint(
   return endpoint;
 }
 
-function createDesktopMockClient(
-  endpoint: string,
-  source: "cloud_proxy",
-  generator: (input: GenerateAnswerInput) => Promise<string>
-) {
-  return async (input: GenerateAnswerInput): Promise<ModelGenerationResult> => {
-    if (input.requireLive) {
-      throw new Error("该任务必须使用真实模型链路；当前 endpoint 是 mock，本次生成已停止。");
-    }
-    const answer = await generator(input);
-
-    return {
-      answer,
-      trace: {
-        backend: "desktop_mock",
-        endpoint,
-        mode: "mock",
-        provider: input.provider,
-        source
-      }
-    };
-  };
-}
-
 export function createModelGatewayFromSettings(
   settings: SettingsState,
   deps: ModelRuntimeDeps = {}
 ) {
   const endpoint = settings["models.cloud_proxy_endpoint"];
   return createModelGateway({
-    cloudModel: isMockEndpoint(endpoint)
-      ? createDesktopMockClient(
-          endpoint,
-          "cloud_proxy",
-          generateCloudProxyAnswer
-        )
-      : createHttpModelClient({
-          endpoint: validateModelProxyEndpoint(endpoint, {
-            hasTrustedTransport: deps.cloudTransport !== undefined
-          }),
-          source: "cloud_proxy",
-          transport: deps.cloudTransport
-        }),
+    cloudModel: createHttpModelClient({
+      endpoint: validateModelProxyEndpoint(endpoint, {
+        hasTrustedTransport: deps.cloudTransport !== undefined
+      }),
+      source: "cloud_proxy",
+      transport: deps.cloudTransport
+    }),
     policy: getModelPolicyFromSettings(settings)
   });
 }

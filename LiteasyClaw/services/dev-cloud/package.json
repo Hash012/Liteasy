@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
+    "archive:audit": "node scripts/archive-audit-log.mjs",
+    "verify:audit": "node scripts/archive-audit-log.mjs --verify",
+    "maintain:storage": "node scripts/maintain-library-storage.mjs",
     "start": "node server.mjs",
-    "start:hardcoded": "LITEASY_USE_HARDCODED_DEV_SECRETS=1 LITEASY_DEV_CLOUD_PORT=8790 node server.mjs",
     "test": "node --test"
   },
   "dependencies": {

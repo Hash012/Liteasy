@@ -25,7 +25,8 @@ test("posts the selected document set to the cloud recommendation endpoint", asy
                 sourceRelevance: 0.95
               },
               source: "Semantic Scholar",
-              sourceKind: "mock",
+              sourceKind: "live",
+              sourceUrl: "https://www.semanticscholar.org/paper/rec-vdbms-1",
               title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
             }
           ]
@@ -62,7 +63,8 @@ test("posts the selected document set to the cloud recommendation endpoint", asy
         sourceRelevance: 0.95
       },
       source: "Semantic Scholar",
-      sourceKind: "mock",
+      sourceKind: "live",
+      sourceUrl: "https://www.semanticscholar.org/paper/rec-vdbms-1",
       title: "VBASE: Unifying Online Vector Similarity Search and Relational Queries"
     }
   ]);
@@ -100,6 +102,7 @@ test("does not expose source-provider credentials in a recommendation request", 
 
   expect(requests).toEqual([{
     headers: {
+        "Authorization": "Bearer demo-session-1",
         "Content-Type": "application/json"
     }
   }]);
@@ -110,8 +113,9 @@ test("preserves a unified retrieval-service error for the recommendation surface
     endpoint: "https://liteasy.example.com/control-plane",
     transport: async () => ({
       json: async () => ({
-        error: "external_knowledge_unavailable",
-        message: "统一联网服务当前无法连接外部学术来源，请检查服务端网络连接后重试。"
+        code: "external_knowledge_unavailable",
+        message: "统一联网服务当前无法连接外部学术来源，请检查服务端网络连接后重试。",
+        traceId: "trace_recommendation_1"
       }),
       ok: false,
       status: 502

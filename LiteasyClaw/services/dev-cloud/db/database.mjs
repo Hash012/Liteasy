@@ -2,7 +2,8 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getDataDir } from "./jsonFileStore.mjs";
+import { getDatabasePath } from "./dataPaths.mjs";
+import { assertDevCloudDeploymentBoundary } from "../deploymentBoundary.mjs";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.join(currentDir, "migrations");
@@ -10,8 +11,7 @@ const migrationsDir = path.join(currentDir, "migrations");
 function resolveDatabasePath(customPath) {
   return (
     customPath ||
-    process.env.LITEASY_DEV_CLOUD_DATABASE_PATH ||
-    path.join(getDataDir(), "liteasy.sqlite")
+    getDatabasePath()
   );
 }
 
@@ -54,6 +54,7 @@ function migrate(database) {
 }
 
 export function createDatabase({ databasePath } = {}) {
+  assertDevCloudDeploymentBoundary();
   const resolvedPath = resolveDatabasePath(databasePath);
   const isMemoryDatabase = resolvedPath === ":memory:";
 

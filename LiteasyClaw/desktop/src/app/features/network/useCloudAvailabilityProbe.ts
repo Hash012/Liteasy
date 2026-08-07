@@ -5,10 +5,6 @@ type UseCloudAvailabilityProbeInput = {
   endpoint: string;
 };
 
-function isMockEndpoint(endpoint: string) {
-  return endpoint.startsWith("mock://");
-}
-
 export function useCloudAvailabilityProbe({
   enabled,
   endpoint
@@ -18,11 +14,6 @@ export function useCloudAvailabilityProbe({
   useEffect(() => {
     if (!enabled) {
       setIsCloudReachable(false);
-      return;
-    }
-
-    if (isMockEndpoint(endpoint)) {
-      setIsCloudReachable(true);
       return;
     }
 

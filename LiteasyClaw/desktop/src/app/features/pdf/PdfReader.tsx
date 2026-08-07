@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Button } from "@fluentui/react-components";
 import {
   CommentRegular,
+  DeleteRegular,
   DocumentRegular,
+  EditRegular,
   PanelLeftContractRegular,
-  PanelLeftExpandRegular
+  PanelLeftExpandRegular,
+  ShareRegular
 } from "@fluentui/react-icons";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
@@ -15,6 +18,8 @@ import { ensureReadableStreamAsyncIterator } from "./pdfStreamCompatibility";
 import type { Paper } from "../workspace/workspace.types";
 import type { ReaderConversationContext } from "../assistant/assistantContext.types";
 import {
+  clearMigratedPdfAnnotationBrowserCache,
+  loadPdfAnnotationBrowserMigrationState,
   loadPdfAnnotationAutoPublic,
   loadPdfAnnotations,
   normalizePdfAnnotationPrivateState,
@@ -37,6 +42,7 @@ import type { PdfPageText } from "./citationAttribution";
 import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
+import type { TeamAnnotation } from "../organization/teamAnnotationClient";
 
 ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -74,7 +80,23 @@ type PdfReaderProps = {
   zoom: number;
   onAddSelectionToConversation?: (context: ReaderConversationContext) => void;
   onPostToForum?: (selection: PdfForumSelection) => Promise<void>;
-  onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ draftId: string }>;
+  loadOrganizationAnnotations?: (paper: Paper) => Promise<TeamAnnotation[]>;
+  organizationAnnotationActorId?: string;
+  canModerateOrganizationAnnotations?: boolean;
+  onDeleteOrganizationAnnotation?: (input: {
+    annotation: TeamAnnotation;
+    paper: Paper;
+  }) => Promise<void>;
+  onShareAnnotationToOrganization?: (input: {
+    annotation: PdfAnnotation;
+    paper: Paper;
+  }) => Promise<TeamAnnotation>;
+  onUpdateOrganizationAnnotation?: (input: {
+    annotation: TeamAnnotation;
+    note: string;
+    paper: Paper;
+  }) => Promise<TeamAnnotation>;
+  onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ intuechoAnnotationId: string }>;
 };
 
 export type PdfForumSelection = {
@@ -95,8 +117,6 @@ export type PdfEvidenceTarget = {
   requestId: number;
 };
 
-const fallbackExcerpt = "Liteasy 将在这里显示清晰 PDF 页面，并把文本选区绑定到批注与 AI 问答。";
-
 function resolvePdfDisplaySource(sourcePath: string | undefined) {
   if (!sourcePath) {
     return undefined;
@@ -105,26 +125,14 @@ function resolvePdfDisplaySource(sourcePath: string | undefined) {
   const trimmed = sourcePath.trim();
   const lower = trimmed.toLowerCase();
 
-  if (lower.startsWith("fixtures/") && lower.split("?")[0].endsWith(".pdf")) {
-    return `/${trimmed}`;
-  }
-
-  if (lower.startsWith("./fixtures/") && lower.split("?")[0].endsWith(".pdf")) {
-    return trimmed.slice(1);
-  }
-
   if (lower.startsWith("blob:") || lower.startsWith("data:application/pdf")) {
-    return trimmed;
-  }
-
-  if (lower.startsWith("/") && lower.split("?")[0].endsWith(".pdf")) {
     return trimmed;
   }
 
   try {
     const url = new URL(trimmed);
     const canDisplay =
-      ["http:", "https:", "file:"].includes(url.protocol) &&
+      ["http:", "https:"].includes(url.protocol) &&
       url.pathname.toLowerCase().endsWith(".pdf");
     return canDisplay ? trimmed : undefined;
   } catch {
@@ -140,11 +148,7 @@ export function shouldLoadPdfFromLocalBytes(sourcePath: string | undefined) {
     lower.startsWith("blob:") ||
     lower.startsWith("data:") ||
     lower.startsWith("http:") ||
-    lower.startsWith("https:") ||
-    lower.startsWith("fixtures/") ||
-    lower.startsWith("./fixtures/") ||
-    lower.startsWith("/papers/") ||
-    lower.startsWith("/fixtures/")
+    lower.startsWith("https:")
   ) {
     return false;
   }
@@ -641,19 +645,6 @@ export function buildTargetEvidenceRects(
   return buildAnnotationRects(range, getElementContentRect(pageElement)).slice(0, 8);
 }
 
-function getInitialSelection(activePaper: Paper | null): PdfSelection {
-  return {
-    excerpt: activePaper
-      ? `当前选中文段来自《${activePaper.title}》第 1 页，后续会接入真实 PDF 文本选区。`
-      : fallbackExcerpt,
-    menuLeft: 120,
-    menuPlacement: "below",
-    menuTop: 120,
-    page: 1,
-    rects: [{ height: 2.4, left: 16, top: 22, width: 58 }]
-  };
-}
-
 function getPageNumbers(pageCount: number) {
   return Array.from({ length: Math.max(1, pageCount) }, (_, index) => index + 1);
 }
@@ -675,34 +666,12 @@ function getCanvasContext(canvas: HTMLCanvasElement) {
   return canvas.getContext("2d");
 }
 
-function drawCanvasFallback(canvas: HTMLCanvasElement | null, title: string, pageNumber: number, compact = false) {
+function clearPdfCanvas(canvas: HTMLCanvasElement | null) {
   if (!canvas) {
     return;
   }
-
-  const width = compact ? 108 : 760;
-  const height = compact ? 146 : 980;
-  canvas.width = width;
-  canvas.height = height;
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
-
-  const context = getCanvasContext(canvas);
-  if (!context) {
-    return;
-  }
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-  context.fillStyle = "#d9e5ef";
-  context.fillRect(compact ? 14 : 72, compact ? 22 : 110, compact ? 80 : 500, compact ? 6 : 16);
-  context.fillRect(compact ? 14 : 72, compact ? 38 : 150, compact ? 58 : 430, compact ? 5 : 12);
-  context.fillStyle = "#1b66b3";
-  context.font = compact ? "700 18px sans-serif" : "700 28px sans-serif";
-  context.fillText(String(pageNumber), compact ? 12 : 72, compact ? 128 : 900);
-  context.fillStyle = "#5d6978";
-  context.font = compact ? "700 8px sans-serif" : "700 18px sans-serif";
-  context.fillText(title.slice(0, compact ? 18 : 52), compact ? 14 : 72, compact ? 18 : 78);
+  canvas.width = 0;
+  canvas.height = 0;
 }
 
 function getOverlayStyle(kind: AnnotationKind, rect: PdfAnnotationRect, color?: HighlightColor): CSSProperties {
@@ -772,7 +741,6 @@ function PdfPageView({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageShellRef = useRef<HTMLElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
-  const pageTitle = activePaper?.title ?? "选择文献后开始阅读";
   const [pageSize, setPageSize] = useState({ height: 980, width: 760 });
   const [targetHighlightRects, setTargetHighlightRects] = useState<PdfAnnotationRect[]>([]);
 
@@ -814,7 +782,10 @@ function PdfPageView({
 
     async function renderPage() {
       if (!pdfDocument) {
-        drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
+        clearPdfCanvas(canvasRef.current);
+        if (textLayerRef.current) {
+          textLayerRef.current.replaceChildren();
+        }
         setTargetHighlightRects([]);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
           onEvidenceHighlightResolved?.(false);
@@ -881,7 +852,8 @@ function PdfPageView({
         if (!cancelled) {
           console.error(`PDF 第 ${pageNumber} 页渲染失败`, error);
         }
-        drawCanvasFallback(canvasRef.current, pageTitle, pageNumber);
+        clearPdfCanvas(canvasRef.current);
+        textLayerRef.current?.replaceChildren();
         setTargetHighlightRects([]);
         if (focused && targetEvidence?.paperId === activePaper?.id) {
           onEvidenceHighlightResolved?.(false);
@@ -895,7 +867,7 @@ function PdfPageView({
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageTextRendered, pageNumber, pageTitle, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
+  }, [activePaper?.id, focused, onEvidenceHighlightResolved, onPageTextRendered, pageNumber, pdfDocument, stageWidth, targetEvidence?.pageTextStart, targetEvidence?.quote, targetEvidence?.requestId, zoom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateTargetHighlightRects);
@@ -922,13 +894,7 @@ function PdfPageView({
         </p>
       ) : null}
       <div aria-hidden="true" className="pdf-page-shadow" />
-      {/* The placeholder lives inside the pdf.js-owned container because a text selection only
-          opens the annotation menu when it falls within the text layer, and in jsdom this span
-          is the only text node there is. Mixing owners here is fragile — `textLayer.innerHTML`
-          is cleared on every render — so leave it alone unless the selection path moves too. */}
-      <div className="textLayer pdf-text-layer" ref={textLayerRef}>
-        <span className="pdf-text-layer-fallback">{fallbackExcerpt}</span>
-      </div>
+      <div className="textLayer pdf-text-layer" ref={textLayerRef} />
       <div aria-label={pageNumber === 1 ? "PDF 批注覆盖层" : undefined} className="pdf-annotation-overlay">
         {pageAnnotations.map((annotation) =>
           annotation.rects.map((rect, index) => (
@@ -968,15 +934,13 @@ type PdfThumbnailProps = {
 
 function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const title = activePaper?.title ?? "PDF";
-
   useEffect(() => {
     let cancelled = false;
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
 
     async function renderThumbnail() {
       if (!pdfDocument) {
-        drawCanvasFallback(canvasRef.current, title, pageNumber, true);
+        clearPdfCanvas(canvasRef.current);
         return;
       }
 
@@ -1003,7 +967,7 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
           await renderTask.promise;
         }
       } catch {
-        drawCanvasFallback(canvasRef.current, title, pageNumber, true);
+        clearPdfCanvas(canvasRef.current);
       }
     }
 
@@ -1013,7 +977,7 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [pageNumber, pdfDocument, title]);
+  }, [pageNumber, pdfDocument]);
 
   return (
     <li className={active ? "active" : ""}>
@@ -1033,7 +997,13 @@ export function PdfReader({
   targetEvidence,
   zoom,
   onAddSelectionToConversation,
+  canModerateOrganizationAnnotations = false,
+  loadOrganizationAnnotations,
+  organizationAnnotationActorId,
+  onDeleteOrganizationAnnotation,
   onPostToForum,
+  onShareAnnotationToOrganization,
+  onUpdateOrganizationAnnotation,
   onSyncAnnotationToForum
 }: PdfReaderProps) {
   const activePaper = selectedPapers[0] ?? null;
@@ -1054,6 +1024,12 @@ export function PdfReader({
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const [syncingAnnotations, setSyncingAnnotations] = useState(false);
+  const [sharingAnnotationId, setSharingAnnotationId] = useState<string | null>(null);
+  const [teamAnnotations, setTeamAnnotations] = useState<TeamAnnotation[]>([]);
+  const [teamAnnotationMessage, setTeamAnnotationMessage] = useState("");
+  const [editingTeamAnnotationId, setEditingTeamAnnotationId] = useState<string | null>(null);
+  const [teamAnnotationNoteDraft, setTeamAnnotationNoteDraft] = useState("");
+  const [mutatingTeamAnnotationId, setMutatingTeamAnnotationId] = useState<string | null>(null);
   const pdfDisplaySource = resolvePdfDisplaySource(activePaper?.sourcePath);
   const annotationStorageKey = pdfAnnotationStorageKey(activePaper);
   const autoPublicStorageKey = pdfAnnotationAutoPublicStorageKey(activePaper);
@@ -1095,6 +1071,29 @@ export function PdfReader({
   const handlePageTextRendered = fulltext.onPageTextRendered;
 
   useEffect(() => {
+    setTeamAnnotations([]);
+    setTeamAnnotationMessage("");
+    setEditingTeamAnnotationId(null);
+    if (!activePaper || !loadOrganizationAnnotations) return;
+    let active = true;
+    setTeamAnnotationMessage("正在加载团队批注...");
+    void loadOrganizationAnnotations(activePaper)
+      .then((items) => {
+        if (!active) return;
+        setTeamAnnotations(items);
+        setTeamAnnotationMessage(items.length === 0 ? "暂无团队批注。" : "");
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setTeamAnnotationMessage(error instanceof Error ? error.message : "团队批注加载失败。");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [activePaper?.id, loadOrganizationAnnotations]);
+
+  useEffect(() => {
     const stageElement = stageRef.current;
     if (!stageElement) {
       return undefined;
@@ -1122,9 +1121,14 @@ export function PdfReader({
 
   useEffect(() => {
     const fallbackPaperIdentity = activePaper ? resolvePaperIdentity(activePaper) : undefined;
+    const browserMigration = loadPdfAnnotationBrowserMigrationState(
+      annotationStorageKey,
+      autoPublicStorageKey,
+      fallbackPaperIdentity
+    );
     setHydratedAnnotationStorageKey(null);
-    setAnnotations(loadPdfAnnotations(annotationStorageKey, fallbackPaperIdentity));
-    setAutoPublicAnnotations(loadPdfAnnotationAutoPublic(autoPublicStorageKey));
+    setAnnotations(browserMigration?.annotations ?? loadPdfAnnotations(annotationStorageKey, fallbackPaperIdentity));
+    setAutoPublicAnnotations(browserMigration?.autoPublic ?? loadPdfAnnotationAutoPublic(autoPublicStorageKey));
     let cancelled = false;
 
     if (!activePaper?.id) {
@@ -1236,9 +1240,14 @@ export function PdfReader({
             autoPublic: autoPublicAnnotations,
             version: 1
           }
-        }).catch(() => {
-          // The local browser copy remains available if the desktop user store cannot be written.
-        });
+        })
+          .then(() => {
+            clearMigratedPdfAnnotationBrowserCache(annotationStorageKey, autoPublicStorageKey);
+          })
+          .catch((error: unknown) => {
+            const detail = error instanceof Error ? error.message : "未知错误";
+            setStatus(`批注尚未写入本地文献库：${detail}。请检查库目录后重试。`);
+          });
         if (annotations.length > 0 && onPaperAnnotated) {
           // Annotating a paper whose body is still in the disposable cache promotes it
           // into the library, so clearing the cache cannot strip the body out from under
@@ -1254,6 +1263,7 @@ export function PdfReader({
     activePaper?.id,
     annotationStorageKey,
     annotations,
+    autoPublicStorageKey,
     autoPublicAnnotations,
     hydratedAnnotationStorageKey,
     onPaperAnnotated
@@ -1352,7 +1362,11 @@ export function PdfReader({
   }
 
   function addAnnotation(kind: AnnotationKind) {
-    const activeSelection = selection ?? getInitialSelection(activePaper);
+    if (!selection || !activePaper) {
+      setStatus("请先在真实 PDF 文本层中选择文段。");
+      return;
+    }
+    const activeSelection = selection;
     const now = new Date().toISOString();
     const annotation: PdfAnnotation = {
       color: kind === "highlight" ? selectedColor : undefined,
@@ -1361,10 +1375,7 @@ export function PdfReader({
       id: `${kind}-${Date.now()}-${annotations.length}`,
       kind,
       page: activeSelection.page,
-      paperIdentity: resolvePaperIdentity(activePaper ?? {
-        id: "local-pdf-selection",
-        title: "未命名 PDF"
-      }),
+      paperIdentity: resolvePaperIdentity(activePaper),
       rects: activeSelection.rects,
       text: getAnnotationText(kind),
       updatedAt: now,
@@ -1483,11 +1494,69 @@ export function PdfReader({
     savePdfAnnotationAutoPublic(autoPublicStorageKey, value);
   }
 
+  async function shareAnnotationToOrganization(annotation: PdfAnnotation) {
+    if (!activePaper || !onShareAnnotationToOrganization || sharingAnnotationId) return;
+    setSharingAnnotationId(annotation.id);
+    setTeamAnnotationMessage("");
+    try {
+      const shared = await onShareAnnotationToOrganization({ annotation, paper: activePaper });
+      setTeamAnnotations((current) => current.some((item) => item.annotationId === shared.annotationId)
+        ? current
+        : [...current, shared]);
+      setTeamAnnotationMessage("批注已共享到组织。");
+    } catch (error) {
+      setTeamAnnotationMessage(error instanceof Error ? error.message : "批注共享失败。");
+    } finally {
+      setSharingAnnotationId(null);
+    }
+  }
+
+  async function updateOrganizationAnnotation(annotation: TeamAnnotation) {
+    if (!activePaper || !onUpdateOrganizationAnnotation || mutatingTeamAnnotationId) return;
+    setMutatingTeamAnnotationId(annotation.annotationId);
+    setTeamAnnotationMessage("");
+    try {
+      const updated = await onUpdateOrganizationAnnotation({
+        annotation,
+        note: teamAnnotationNoteDraft,
+        paper: activePaper
+      });
+      setTeamAnnotations((current) => current.map((item) =>
+        item.annotationId === updated.annotationId ? updated : item
+      ));
+      setEditingTeamAnnotationId(null);
+      setTeamAnnotationMessage("组织批注已更新。");
+    } catch (error) {
+      setTeamAnnotationMessage(error instanceof Error ? error.message : "组织批注更新失败。");
+    } finally {
+      setMutatingTeamAnnotationId(null);
+    }
+  }
+
+  async function deleteOrganizationAnnotation(annotation: TeamAnnotation) {
+    if (!activePaper || !onDeleteOrganizationAnnotation || mutatingTeamAnnotationId) return;
+    if (!window.confirm("确定删除这条组织批注吗？删除后无法恢复。")) return;
+    setMutatingTeamAnnotationId(annotation.annotationId);
+    setTeamAnnotationMessage("");
+    try {
+      await onDeleteOrganizationAnnotation({ annotation, paper: activePaper });
+      setTeamAnnotations((current) => current.filter((item) =>
+        item.annotationId !== annotation.annotationId
+      ));
+      setEditingTeamAnnotationId(null);
+      setTeamAnnotationMessage("组织批注已删除。");
+    } catch (error) {
+      setTeamAnnotationMessage(error instanceof Error ? error.message : "组织批注删除失败。");
+    } finally {
+      setMutatingTeamAnnotationId(null);
+    }
+  }
+
   async function syncPublicAnnotations() {
     if (syncingAnnotations || pendingPublicAnnotations.length === 0) return;
     setSyncingAnnotations(true);
     const attemptedAt = new Date().toISOString();
-    const results: Array<{ annotationId: string; draftId?: string; error?: string }> = [];
+    const results: Array<{ annotationId: string; intuechoAnnotationId?: string; error?: string }> = [];
     try {
       if (!activePaper || !onSyncAnnotationToForum) {
         setStatus("论坛同步功能暂不可用，请确认当前阅读器已连接论坛。");
@@ -1500,8 +1569,8 @@ export function PdfReader({
           continue;
         }
         try {
-          const { draftId } = await onSyncAnnotationToForum({ annotation, paper: activePaper });
-          results.push({ annotationId: item.annotationId, draftId });
+          const { intuechoAnnotationId } = await onSyncAnnotationToForum({ annotation, paper: activePaper });
+          results.push({ annotationId: item.annotationId, intuechoAnnotationId });
         } catch (error) {
           results.push({
             annotationId: item.annotationId,
@@ -1512,12 +1581,12 @@ export function PdfReader({
       setAnnotations((current) => current.map((annotation) => {
         const result = results.find((item) => item.annotationId === annotation.id);
         if (!result) return annotation;
-        return result.draftId
-          ? { ...annotation, syncState: { forumDraftId: result.draftId, status: "synced", syncedAt: attemptedAt } }
-          : { ...annotation, syncState: { error: result.error ?? "论坛草稿创建失败。", lastAttemptAt: attemptedAt, status: "failed" } };
+        return result.intuechoAnnotationId
+          ? { ...annotation, syncState: { intuechoAnnotationId: result.intuechoAnnotationId, status: "synced", syncedAt: attemptedAt } }
+          : { ...annotation, syncState: { error: result.error ?? "论坛批注同步失败。", lastAttemptAt: attemptedAt, status: "failed" } };
       }));
-      const syncedCount = results.filter((result) => result.draftId).length;
-      setStatus(syncedCount > 0 ? `已同步 ${syncedCount} 条批注到论坛草稿。` : "批注仍在本地等待论坛同步。");
+      const syncedCount = results.filter((result) => result.intuechoAnnotationId).length;
+      setStatus(syncedCount > 0 ? `已同步 ${syncedCount} 条公开批注到 Intuecho。` : "批注仍在本地等待论坛同步。");
     } finally {
       setSyncingAnnotations(false);
     }
@@ -1704,14 +1773,117 @@ export function PdfReader({
                             同步到论坛
                           </label>
                           {annotation.visibility === "pending_public" ? <small>{PDF_ANNOTATION_PENDING_LABEL}</small> : null}
-                          {annotation.syncState?.status === "synced" ? <small>已同步到论坛草稿</small> : null}
+                          {annotation.syncState?.status === "synced" ? (
+                            <small>{"intuechoAnnotationId" in annotation.syncState ? "已同步到 Intuecho" : "已同步到论坛草稿"}</small>
+                          ) : null}
                           {annotation.syncState?.status === "failed" ? <small>论坛同步失败：{annotation.syncState.error}</small> : null}
+                          {onShareAnnotationToOrganization ? (
+                            <Button
+                              appearance="subtle"
+                              aria-label={`共享批注到组织：${annotation.excerpt}`}
+                              disabled={sharingAnnotationId !== null}
+                              icon={<ShareRegular />}
+                              onClick={() => void shareAnnotationToOrganization(annotation)}
+                              size="small"
+                              type="button"
+                            >
+                              {sharingAnnotationId === annotation.id ? "共享中" : "共享到组织"}
+                            </Button>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <div className="pdf-empty-note">暂无批注</div>
                   )}
+                  {loadOrganizationAnnotations ? (
+                    <section aria-label="团队批注" className="pdf-team-annotations">
+                      <div className="pdf-sidebar-section-title">团队批注</div>
+                      {teamAnnotations.length > 0 ? (
+                        <ul className="pdf-annotation-list">
+                          {teamAnnotations.map((annotation) => (
+                            <li className="pdf-annotation-item note" key={annotation.annotationId}>
+                              <span className="pdf-annotation-kind">
+                                {annotation.uploadedBy} · 第 {annotation.body.page} 页
+                              </span>
+                              <span className="pdf-annotation-excerpt">{annotation.body.excerpt}</span>
+                              {annotation.body.note ? (
+                                <div className="annotation-note-preview">{annotation.body.note}</div>
+                              ) : null}
+                              {editingTeamAnnotationId === annotation.annotationId ? (
+                                <div className="annotation-note-editor">
+                                  <textarea
+                                    aria-label="编辑组织批注备注"
+                                    maxLength={10_000}
+                                    onChange={(event) => setTeamAnnotationNoteDraft(event.currentTarget.value)}
+                                    rows={3}
+                                    value={teamAnnotationNoteDraft}
+                                  />
+                                  <div className="editor-actions">
+                                    <Button
+                                      disabled={mutatingTeamAnnotationId !== null}
+                                      onClick={() => void updateOrganizationAnnotation(annotation)}
+                                      size="small"
+                                      type="button"
+                                    >
+                                      保存
+                                    </Button>
+                                    <Button
+                                      appearance="subtle"
+                                      disabled={mutatingTeamAnnotationId !== null}
+                                      onClick={() => setEditingTeamAnnotationId(null)}
+                                      size="small"
+                                      type="button"
+                                    >
+                                      取消
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : null}
+                              <div className="editor-actions">
+                                {onUpdateOrganizationAnnotation &&
+                                organizationAnnotationActorId === annotation.uploadedBy ? (
+                                  <Button
+                                    appearance="subtle"
+                                    aria-label={`编辑组织批注：${annotation.body.excerpt}`}
+                                    disabled={mutatingTeamAnnotationId !== null}
+                                    icon={<EditRegular />}
+                                    onClick={() => {
+                                      setEditingTeamAnnotationId(annotation.annotationId);
+                                      setTeamAnnotationNoteDraft(annotation.body.note ?? "");
+                                    }}
+                                    size="small"
+                                    type="button"
+                                  >
+                                    编辑
+                                  </Button>
+                                ) : null}
+                                {onDeleteOrganizationAnnotation && (
+                                  canModerateOrganizationAnnotations ||
+                                  organizationAnnotationActorId === annotation.uploadedBy
+                                ) ? (
+                                  <Button
+                                    appearance="subtle"
+                                    aria-label={`删除组织批注：${annotation.body.excerpt}`}
+                                    disabled={mutatingTeamAnnotationId !== null}
+                                    icon={<DeleteRegular />}
+                                    onClick={() => void deleteOrganizationAnnotation(annotation)}
+                                    size="small"
+                                    type="button"
+                                  >
+                                    删除
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {teamAnnotationMessage ? (
+                        <small aria-live="polite">{teamAnnotationMessage}</small>
+                      ) : null}
+                    </section>
+                  ) : null}
                 </div>
               )}
             </>

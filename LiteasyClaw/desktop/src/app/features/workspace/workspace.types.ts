@@ -1,4 +1,5 @@
 export type Paper = {
+  contentHash?: string;
   forumTopicId?: string;
   forumWorkId?: string;
   arxivId?: string;

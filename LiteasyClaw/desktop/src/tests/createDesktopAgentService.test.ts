@@ -1,5 +1,5 @@
 import { createDesktopAgentService } from "../app/controllers/agent/createDesktopAgentService";
-import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
+import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import { createSettingsStore } from "../app/features/settings/settings.store";
 import type { Paper } from "../app/features/workspace/workspace.types";
 
@@ -18,8 +18,33 @@ test("preserves mindmap artifact workflow metadata on assistant messages", async
     },
     getEnvironment: () => ({
       knowledge: {
+        auditTransport: async () => ({
+          json: async () => ({ audit: { rationale: "grounded", score: 0.9, verdict: "pass" } }),
+          ok: true,
+          status: 200
+        }),
         importedChunksByPaperId: {
           [paper.id]: buildImportedChunksForPaper(paper)
+        },
+        modelTransport: async () => {
+          const answer = "- ColBERT\n  - Late interaction [evidence-1]";
+          const encoder = new TextEncoder();
+          return {
+            body: new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(encoder.encode(`${JSON.stringify({ delta: answer, type: "delta" })}\n`));
+                controller.enqueue(encoder.encode(`${JSON.stringify({
+                  answer,
+                  execution: { backend: "test_cloud", mode: "live", provider: "openai" },
+                  type: "completed"
+                })}\n`));
+                controller.close();
+              }
+            }),
+            json: async () => ({}),
+            ok: true,
+            status: 200
+          };
         },
         selectedPapers: [paper],
         settings: createSettingsStore().getState()
@@ -57,10 +82,10 @@ test("preserves mindmap artifact workflow metadata on assistant messages", async
     sessionId: session.data.sessionId
   });
 
-  expect(run).toMatchObject({ data: { status: "completed" }, ok: true });
   if (!run.ok) {
     throw new Error(run.error.message);
   }
+  expect(run).toMatchObject({ data: { status: "completed" }, ok: true });
   const assistantMessage = run.data.events.find((event) => event.type === "assistant.message");
   expect(assistantMessage).toMatchObject({
     metadata: {

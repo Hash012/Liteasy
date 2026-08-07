@@ -1,4 +1,5 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
+import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { AccountSession } from "./account.types";
 
 export type AccountTransportRequest = {
@@ -11,11 +12,6 @@ export type AccountTransportRequest = {
 export type AccountTransport = (
   request: AccountTransportRequest
 ) => Promise<ModelTransportResponse>;
-
-type CreateAccountSessionClientInput = {
-  endpoint: string;
-  transport?: AccountTransport;
-};
 
 export type AccountRegistrationInput = {
   displayName: string;
@@ -41,10 +37,6 @@ type AccountLoginClientInput = AccountLoginInput & {
 type AccountSessionPayload = {
   session: AccountSession;
 };
-
-function buildAccountUrl(endpoint: string) {
-  return `${endpoint.replace(/\/+$/, "")}/v1/account/demo-login`;
-}
 
 function buildAccountRegistrationUrl(endpoint: string) {
   return `${endpoint.replace(/\/+$/, "")}/v1/account/register`;
@@ -83,7 +75,7 @@ function isAccountSessionPayload(payload: unknown): payload is AccountSessionPay
 function normalizeAccountSession(payload: AccountSessionPayload): AccountSession {
   return {
     ...payload.session,
-    membershipTier: payload.session.membershipTier === "basic" ? "basic" : "pro"
+    membershipTier: payload.session.membershipTier === "pro" ? "pro" : "basic"
   };
 }
 
@@ -93,49 +85,6 @@ async function defaultTransport(request: AccountTransportRequest): Promise<Model
     headers: request.headers,
     method: request.method
   });
-}
-
-export function createAccountSessionClient({
-  endpoint,
-  transport = defaultTransport
-}: CreateAccountSessionClientInput) {
-  return async (): Promise<AccountSession> => {
-    const response = await transport({
-      body: JSON.stringify({
-        mode: "demo_login"
-      }),
-      headers: {
-        "Content-Type": "application/json"
-      },
-      method: "POST",
-      url: buildAccountUrl(endpoint)
-    });
-
-    if (!response.ok) {
-      throw new Error(`云账号登录失败（${response.status}）`);
-    }
-
-    const payload = await response.json();
-    if (!isAccountSessionPayload(payload)) {
-      throw new Error("云账号登录返回格式无效");
-    }
-
-    return normalizeAccountSession(payload);
-  };
-}
-
-function getErrorMessage(payload: unknown, fallback: string) {
-  if (
-    typeof payload === "object" &&
-    payload !== null &&
-    "message" in payload &&
-    typeof payload.message === "string" &&
-    payload.message.length > 0
-  ) {
-    return payload.message;
-  }
-
-  return fallback;
 }
 
 export async function registerCloudAccount({
@@ -158,11 +107,14 @@ export async function registerCloudAccount({
     url: buildAccountRegistrationUrl(endpoint)
   });
 
-  const payload = await response.json();
   if (!response.ok) {
-    throw new Error(getErrorMessage(payload, `云账号注册失败（${response.status}）`));
+    throw await readCloudServiceError(response, {
+      code: "account_registration_failed",
+      message: "云账号注册失败，请检查输入后重试。"
+    });
   }
 
+  const payload = await response.json();
   if (!isAccountSessionPayload(payload)) {
     throw new Error("云账号注册返回格式无效");
   }
@@ -184,11 +136,13 @@ export async function loginCloudAccount({
     method: "POST",
     url: buildAccountLoginUrl(endpoint)
   });
-  const payload = await response.json();
-
   if (!response.ok) {
-    throw new Error(getErrorMessage(payload, `云账号登录失败（${response.status}）`));
+    throw await readCloudServiceError(response, {
+      code: "account_login_failed",
+      message: "云账号登录失败，请检查账号信息后重试。"
+    });
   }
+  const payload = await response.json();
   if (!isAccountSessionPayload(payload)) {
     throw new Error("云账号登录返回格式无效");
   }
@@ -212,11 +166,13 @@ export async function validateCloudAccountSession({
     method: "POST",
     url: buildAccountSessionUrl(endpoint)
   });
-  const payload = await response.json();
-
   if (!response.ok) {
-    throw new Error(getErrorMessage(payload, `云账号会话已失效（${response.status}）`));
+    throw await readCloudServiceError(response, {
+      code: "account_session_invalid",
+      message: "云账号会话已失效，请重新登录。"
+    });
   }
+  const payload = await response.json();
   if (!isAccountSessionPayload(payload)) {
     throw new Error("云账号会话返回格式无效");
   }
@@ -242,6 +198,9 @@ export async function logoutCloudAccount({
   });
 
   if (!response.ok) {
-    throw new Error(`云账号退出失败（${response.status}）`);
+    throw await readCloudServiceError(response, {
+      code: "account_logout_failed",
+      message: "云账号退出未完成，请重试。"
+    });
   }
 }

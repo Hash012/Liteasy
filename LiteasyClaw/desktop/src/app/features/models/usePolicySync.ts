@@ -9,12 +9,14 @@ type UsePolicySyncInput = {
   applyModelPolicySnapshot: (snapshot: ModelPolicySnapshot) => void;
   controlPlaneTransport?: ControlPlaneTransport;
   getSettings: () => SettingsState;
+  sessionId?: string;
 };
 
 export function usePolicySync({
   applyModelPolicySnapshot,
   controlPlaneTransport,
-  getSettings
+  getSettings,
+  sessionId
 }: UsePolicySyncInput) {
   const hasAutoSyncedRef = useRef(false);
   const mountedRef = useRef(true);
@@ -31,6 +33,9 @@ export function usePolicySync({
   }
 
   async function syncCloudPolicy() {
+    if (!sessionId) {
+      return "登录后才能同步云端模型策略。";
+    }
     updatePolicySyncState(() => {
       setPolicySyncPending(true);
       setPolicySyncStatus("syncing");
@@ -39,6 +44,7 @@ export function usePolicySync({
 
     try {
       const result = await fetchModelPolicySnapshot(getSettings(), {
+        sessionId,
         transport: controlPlaneTransport
       });
       updatePolicySyncState(() => {
@@ -70,7 +76,9 @@ export function usePolicySync({
   useEffect(() => {
     mountedRef.current = true;
 
-    if (!hasAutoSyncedRef.current) {
+    if (!sessionId) {
+      hasAutoSyncedRef.current = false;
+    } else if (!hasAutoSyncedRef.current) {
       hasAutoSyncedRef.current = true;
       void syncCloudPolicy();
     }
@@ -78,7 +86,7 @@ export function usePolicySync({
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+  }, [sessionId]);
 
   return {
     lastSyncedAt,

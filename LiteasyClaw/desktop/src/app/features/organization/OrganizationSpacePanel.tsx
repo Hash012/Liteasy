@@ -81,6 +81,10 @@ function getStatusLabel(status: OrganizationSummaryStatus, summary: Organization
     return "组织空间：加载失败";
   }
 
+  if (status === "idle") {
+    return "组织空间：尚未加入组织";
+  }
+
   return "组织空间：未连接云账号";
 }
 
@@ -186,11 +190,15 @@ export function OrganizationSpacePanel({
             </div>
           ))}
           <div className="model-policy-summary">
-            配额：{summary.quota.storageUsedGb} / {summary.quota.storageLimitGb} GB，到期 {summary.quota.periodEndsAt}
+            {summary.quota.configured
+              ? `配额：${summary.quota.storageUsedGb} / ${summary.quota.storageLimitGb} GB${summary.quota.periodEndsAt ? `，到期 ${summary.quota.periodEndsAt}` : ""}`
+              : `存储已用：${summary.quota.storageUsedGb} GB · 尚未分配组织配额`}
           </div>
-          <div className="model-policy-summary">
-            治理：运行任务 {summary.taskSummary.running} 个，失败任务 {summary.taskSummary.failed} 个
-          </div>
+          {summary.taskSummary ? (
+            <div className="model-policy-summary">
+              治理：运行任务 {summary.taskSummary.running} 个，失败任务 {summary.taskSummary.failed} 个
+            </div>
+          ) : null}
           {latestAuditEvent ? (
             <div className="model-policy-summary">
               最近审计：{latestAuditEvent.actor} {latestAuditEvent.description}

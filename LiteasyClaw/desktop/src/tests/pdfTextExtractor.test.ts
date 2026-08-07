@@ -64,7 +64,7 @@ test("records offsets in the whitespace-folded coordinate system used by the PDF
 });
 
 test("loads a managed local PDF as bytes before handing it to PDF.js", async () => {
-  const fixturePath = resolve(process.cwd(), "public/papers/colbert-late-interaction.pdf");
+  const fixturePath = resolve(process.cwd(), "src/tests/assets/papers/colbert-late-interaction.pdf");
   const loadPdfSource = vi.fn(async () => new Uint8Array(readFileSync(fixturePath)));
 
   const chunks = await extractPdfChunksForPaper({
@@ -121,7 +121,7 @@ test("marks OCR-derived chunks so evidence navigation can remain page-level", ()
 });
 
 test("extracts a no-text PDF through the real OCR fallback and preserves its provenance", async () => {
-  const fixturePath = resolve(process.cwd(), "public/papers/liteasy-ocr-scanned-fixture.pdf");
+  const fixturePath = resolve(process.cwd(), "src/tests/assets/papers/liteasy-ocr-scanned-fixture.pdf");
   const originalCreateElement = document.createElement.bind(document);
   const ownDescriptor = Object.getOwnPropertyDescriptor(document, "createElement");
   Object.defineProperty(document, "createElement", {
@@ -163,7 +163,7 @@ test("extracts a no-text PDF through the real OCR fallback and preserves its pro
 }, 120_000);
 
 test("passes the selected OCR language to a scanned PDF worker", async () => {
-  const fixturePath = resolve(process.cwd(), "public/papers/liteasy-ocr-scanned-fixture.pdf");
+  const fixturePath = resolve(process.cwd(), "src/tests/assets/papers/liteasy-ocr-scanned-fixture.pdf");
   const originalCreateElement = document.createElement.bind(document);
   const ownDescriptor = Object.getOwnPropertyDescriptor(document, "createElement");
   Object.defineProperty(document, "createElement", {

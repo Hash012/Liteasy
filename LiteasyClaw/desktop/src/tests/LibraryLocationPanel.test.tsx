@@ -35,6 +35,31 @@ test("moves the library to a typed root and reports success", async () => {
   });
 });
 
+test("exports a complete local-library backup and reports its verified path", async () => {
+  const onBackup = vi.fn(async () => "E:/Liteasy-Backup-verified");
+  render(
+    <LibraryLocationPanel
+      onBackup={onBackup}
+      rootPath="C:/current-library"
+    />
+  );
+
+  expect(screen.getByText(/本地文献库不会自动云备份/)).toBeTruthy();
+  const backupButton = screen.getByRole("button", { name: "导出完整备份" });
+  expect(backupButton).toBeDisabled();
+
+  await userEvent.type(
+    screen.getByLabelText("文献库备份保存目录完整路径"),
+    "E:/Backups"
+  );
+  await userEvent.click(backupButton);
+
+  expect(onBackup).toHaveBeenCalledWith("E:/Backups");
+  await waitFor(() => {
+    expect(screen.getByText("完整备份已保存到 E:/Liteasy-Backup-verified。")).toBeTruthy();
+  });
+});
+
 test("surfaces the reason a move failed instead of failing silently", async () => {
   const onChangeRoot = vi.fn(async () => {
     throw new Error("目标目录中已存在 papers，请先清空该目录或另选位置。");
@@ -49,6 +74,33 @@ test("surfaces the reason a move failed instead of failing silently", async () =
       screen.getByText("目标目录中已存在 papers，请先清空该目录或另选位置。")
     ).toBeTruthy();
   });
+});
+
+test("requires the user to choose among old account roots without merging the others", async () => {
+  const onChangeRoot = vi.fn(async () => {});
+  const onSelectLegacyRoot = vi.fn(async () => {});
+  render(
+    <LibraryLocationPanel
+      loadLegacyRoots={async () => ["D:/alice-library", "E:/bob-library"]}
+      onChangeRoot={onChangeRoot}
+      onSelectLegacyRoot={onSelectLegacyRoot}
+      rootPath="C:/current-library"
+    />
+  );
+
+  const candidates = await screen.findByLabelText("检测到的旧文献库");
+  expect(candidates).toHaveTextContent("D:/alice-library");
+  expect(candidates).toHaveTextContent("E:/bob-library");
+  const chooseButtons = screen.getAllByRole("button", { name: "设为当前库" });
+  await userEvent.click(chooseButtons[1]);
+
+  expect(onSelectLegacyRoot).toHaveBeenCalledWith("E:/bob-library");
+  expect(onChangeRoot).not.toHaveBeenCalled();
+  await waitFor(() => {
+    expect(screen.queryByText("E:/bob-library")).toBeNull();
+  });
+  expect(screen.queryByText("D:/alice-library")).toBeNull();
+  expect(screen.getByText("旧文献库已设为当前库；其他旧目录保持原样。")).toBeTruthy();
 });
 
 test("says so plainly when the runtime cannot manage the library directory", () => {

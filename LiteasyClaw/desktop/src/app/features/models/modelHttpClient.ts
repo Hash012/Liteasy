@@ -22,6 +22,11 @@ export type ModelTransport = (
   request: ModelTransportRequest
 ) => Promise<ModelTransportResponse>;
 
+type BearerModelTransportInput = {
+  fetchImpl?: typeof fetch;
+  getAccessToken: () => string | null | undefined;
+};
+
 type CreateHttpModelClientInput = {
   endpoint: string;
   source: ModelClientSource;
@@ -53,13 +58,19 @@ function isAnswerPayload(payload: unknown): payload is AnswerPayload {
 async function readBackendError(response: ModelTransportResponse) {
   try {
     const payload = await response.json();
-    if (
-      payload &&
-      typeof payload === "object" &&
-      "error" in payload &&
-      typeof payload.error === "string"
-    ) {
-      return payload.error;
+    if (payload && typeof payload === "object") {
+      if ("message" in payload && typeof payload.message === "string") {
+        const trace = "traceId" in payload && typeof payload.traceId === "string"
+          ? `（${payload.traceId}）`
+          : "";
+        return `${payload.message}${trace}`;
+      }
+      if ("error" in payload && typeof payload.error === "string") {
+        return payload.error;
+      }
+      if ("code" in payload && typeof payload.code === "string") {
+        return payload.code;
+      }
     }
   } catch {
     return null;
@@ -74,10 +85,8 @@ function buildExecutionTrace(
 ): ModelExecutionTrace {
   const backend = payload.execution?.backend === "dev_cloud" ? "dev_cloud" : "http_service";
   const mode =
-    payload.execution?.mode === "live" ||
-    payload.execution?.mode === "mock" ||
-    payload.execution?.mode === "mock_fallback"
-      ? payload.execution.mode
+    payload.execution?.mode === "live"
+      ? "live"
       : "unknown";
 
   return {
@@ -96,6 +105,27 @@ async function defaultTransport(request: ModelTransportRequest): Promise<ModelTr
     method: request.method,
     signal: request.signal
   });
+}
+
+export function createBearerModelTransport({
+  fetchImpl = fetch,
+  getAccessToken
+}: BearerModelTransportInput): ModelTransport {
+  return async (request) => {
+    const accessToken = getAccessToken()?.trim();
+    if (!accessToken) {
+      throw new Error("请先登录 Liteasy 账号，再使用云端模型服务。");
+    }
+    return fetchImpl(request.url, {
+      body: request.body,
+      headers: {
+        ...request.headers,
+        Authorization: `Bearer ${accessToken}`
+      },
+      method: request.method,
+      signal: request.signal
+    });
+  };
 }
 
 async function readStreamingAnswer(input: {
@@ -132,10 +162,17 @@ async function readStreamingAnswer(input: {
         continue;
       }
       if ("type" in event && event.type === "error") {
-        const detail = "error" in event && typeof event.error === "string"
-          ? event.error
-          : "unknown_stream_error";
-        throw new Error(`模型流式请求失败（${input.source}）：${detail}`);
+        const detail = "message" in event && typeof event.message === "string"
+          ? event.message
+          : "code" in event && typeof event.code === "string"
+            ? event.code
+            : "error" in event && typeof event.error === "string"
+              ? event.error
+              : "unknown_stream_error";
+        const trace = "traceId" in event && typeof event.traceId === "string"
+          ? `（${event.traceId}）`
+          : "";
+        throw new Error(`模型流式请求失败（${input.source}）：${detail}${trace}`);
       }
       if (
         "type" in event &&

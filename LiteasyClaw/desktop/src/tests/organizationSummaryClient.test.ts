@@ -1,11 +1,11 @@
 import { createOrganizationSummaryClient } from "../app/features/organization/organizationSummaryClient";
 
-test("posts a session id to the organization summary endpoint", async () => {
-  const requests: Array<{ body: string; url: string }> = [];
+test("authenticates organization summary requests with a bearer token", async () => {
+  const requests: Array<{ body: string; headers: Record<string, string>; url: string }> = [];
   const client = createOrganizationSummaryClient({
     endpoint: "https://liteasy.example.com/control-plane",
     transport: async (request) => {
-      requests.push({ body: request.body, url: request.url });
+      requests.push({ body: request.body, headers: request.headers, url: request.url });
 
       return {
         json: async () => ({
@@ -84,9 +84,69 @@ test("posts a session id to the organization summary endpoint", async () => {
   expect(requests).toEqual([
     {
       body: JSON.stringify({ sessionId: "demo-session-1" }),
+      headers: {
+        Authorization: "Bearer demo-session-1",
+        "Content-Type": "application/json"
+      },
       url: "https://liteasy.example.com/control-plane/v1/org/summary"
     }
   ]);
+});
+
+test("normalizes formal organization revisions, member state, bytes, and shared documents", async () => {
+  const client = createOrganizationSummaryClient({
+    endpoint: "https://liteasy.example.com/control-plane",
+    transport: async () => ({
+      json: async () => ({
+        summary: {
+          auditEvents: [{
+            action: "transfer_organization_ownership",
+            actorSubject: "owner-1",
+            auditId: "audit-1",
+            occurredAt: "2026-08-06T00:00:00.000Z"
+          }],
+          memberCount: 2,
+          members: [{ revision: 4, role: "member", status: "suspended", subject: "member-1" }],
+          myMemberRevision: 4,
+          myRole: "member",
+          name: "Formal Organization",
+          organizationId: "org-formal-1",
+          quota: { configured: true, limitBytes: 2147483648, usedBytes: 1073741824 },
+          revision: 11,
+          sharedLibrary: {
+            documentCount: 1,
+            documents: [{
+              entryKind: "pdf",
+              id: "document-1",
+              sourcePath: "org://org-formal-1/shared-library/document-1.pdf",
+              title: "Formal paper"
+            }],
+            name: "Formal Organization 共享文献库",
+            status: "available"
+          }
+        }
+      }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  const summary = await client({ organizationId: "org-formal-1", sessionId: "access-token" });
+  expect(summary.revision).toBe(11);
+  expect(summary.myMemberRevision).toBe(4);
+  expect(summary.members[0]).toEqual(expect.objectContaining({
+    name: "member-1",
+    revision: 4,
+    status: "suspended",
+    subject: "member-1"
+  }));
+  expect(summary.quota).toEqual(expect.objectContaining({
+    configured: true,
+    storageLimitGb: 2,
+    storageUsedGb: 1
+  }));
+  expect(summary.sharedLibrary.documents[0].id).toBe("document-1");
+  expect(summary.taskSummary).toBeUndefined();
 });
 
 test("posts a selected organization id when loading organization summary", async () => {

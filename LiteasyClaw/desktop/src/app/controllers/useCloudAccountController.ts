@@ -9,8 +9,11 @@ import type { AccountSession } from "../features/account/account.types";
 import { useCloudAvailabilityProbe } from "../features/network/useCloudAvailabilityProbe";
 import type { SettingsState } from "../features/settings/settings.types";
 import { getCloudAvailabilityStatus, type CloudAvailabilityStatus } from "../features/network/cloudAvailability";
+import type { AccountCapabilitiesTransport } from "../features/account/accountCapabilitiesClient";
+import { useAccountCapabilities } from "../features/account/useAccountCapabilities";
 
 type UseCloudAccountControllerInput = {
+  accountCapabilitiesTransport?: AccountCapabilitiesTransport;
   accountTransport?: AccountTransport;
   applyLocalDevCloudDefaults: () => void;
   getSettings: () => SettingsState;
@@ -23,7 +26,9 @@ type CloudAccountModel = {
   accountPending: boolean;
   accountSession: AccountSession | null;
   cloudAvailabilityStatus: CloudAvailabilityStatus;
+  developerDiagnostics: boolean;
   loginDialogOpen: boolean;
+  controlPlaneEndpoint: string;
 };
 
 type CloudAccountActions = {
@@ -31,12 +36,13 @@ type CloudAccountActions = {
   openLoginDialog: () => void;
   setSuppressLoginReminder: (checked: boolean) => void;
   skipLogin: () => void;
+  submitSystemBrowserLogin: () => Promise<void>;
   submitAccountLogin: (login: AccountLoginInput) => Promise<void>;
   submitAccountRegistration: (registration: AccountRegistrationInput) => Promise<void>;
-  submitDemoLogin: () => Promise<void>;
 };
 
 export function useCloudAccountController({
+  accountCapabilitiesTransport,
   accountTransport,
   applyLocalDevCloudDefaults,
   getSettings,
@@ -53,7 +59,7 @@ export function useCloudAccountController({
     accountPending,
     accountSession,
     loginPersonalAccount,
-    loginToCloudAccount,
+    loginPersonalAccountWithSystemBrowser,
     logoutFromCloudAccount,
     registerPersonalAccount,
     setSuppressLoginReminder,
@@ -71,6 +77,11 @@ export function useCloudAccountController({
     accountSession,
     isCloudReachable,
     isOnline
+  });
+  const accountCapabilities = useAccountCapabilities({
+    accountSession,
+    endpoint: getSettings()["models.control_plane_endpoint"],
+    transport: accountCapabilitiesTransport
   });
 
   useEffect(() => {
@@ -90,13 +101,6 @@ export function useCloudAccountController({
     }
   }, [accountSession]);
 
-  async function submitDemoLogin() {
-    setLoginDialogDismissedThisSession(true);
-    setLoginDialogOpen(false);
-    applyLocalDevCloudDefaults();
-    await loginToCloudAccount();
-  }
-
   async function submitAccountRegistration(registration: AccountRegistrationInput) {
     applyLocalDevCloudDefaults();
     const session = await registerPersonalAccount(registration);
@@ -110,6 +114,14 @@ export function useCloudAccountController({
   async function submitAccountLogin(login: AccountLoginInput) {
     applyLocalDevCloudDefaults();
     const session = await loginPersonalAccount(login);
+    if (session) {
+      setLoginDialogDismissedThisSession(true);
+      setLoginDialogOpen(false);
+    }
+  }
+
+  async function submitSystemBrowserLogin() {
+    const session = await loginPersonalAccountWithSystemBrowser();
     if (session) {
       setLoginDialogDismissedThisSession(true);
       setLoginDialogOpen(false);
@@ -132,13 +144,15 @@ export function useCloudAccountController({
       skipLogin,
       submitAccountLogin,
       submitAccountRegistration,
-      submitDemoLogin
+      submitSystemBrowserLogin
     },
     model: {
       accountMessage,
       accountPending,
       accountSession,
       cloudAvailabilityStatus,
+      controlPlaneEndpoint: getSettings()["models.control_plane_endpoint"],
+      developerDiagnostics: accountCapabilities.developerDiagnostics,
       loginDialogOpen
     }
   };

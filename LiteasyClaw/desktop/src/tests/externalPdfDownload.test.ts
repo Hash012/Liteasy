@@ -42,6 +42,7 @@ test("opens server-verified PDF bytes in a browser tab", async () => {
       id: "paper-1",
       title: "Verified paper",
       url: "https://papers.example.test/record",
+      fullTextGrantId: "pdfgrant_12345678-abcd",
       fullTextUrl: "https://papers.example.test/paper.pdf"
     }
   });
@@ -50,7 +51,10 @@ test("opens server-verified PDF bytes in a browser tab", async () => {
   expect(readerWindow.document.title).toBe("正在获取《Verified paper》");
   expect(fetch).toHaveBeenCalledWith(
     "http://127.0.0.1:8787/v1/research/external-pdf",
-    expect.objectContaining({ method: "POST" })
+    expect.objectContaining({
+      body: JSON.stringify({ grantId: "pdfgrant_12345678-abcd", sourceId: "paper-1" }),
+      method: "POST"
+    })
   );
   expect(createObjectURL).toHaveBeenCalledOnce();
   expect(replace).toHaveBeenCalledWith("blob:verified-paper");
@@ -75,6 +79,7 @@ test("closes the pending browser tab when PDF retrieval fails", async () => {
       id: "paper-2",
       title: "Unavailable paper",
       url: "https://papers.example.test/record",
+      fullTextGrantId: "pdfgrant_12345678-def0",
       fullTextUrl: "https://papers.example.test/paper.pdf"
     }
   })).rejects.toThrow("502");

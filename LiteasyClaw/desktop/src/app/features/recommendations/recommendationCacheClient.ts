@@ -38,11 +38,14 @@ function isRecommendationItem(item: unknown): item is RecommendationItem {
     "sourceUrl" in item
       ? item.sourceUrl
       : undefined;
-  const hasValidSourceKind = sourceKind === "cache" || sourceKind === "live" || sourceKind === "mock";
+  const hasValidSourceKind = sourceKind === "cache" || sourceKind === "live";
   const hasValidSourceUrl =
     sourceKind === "live"
       ? typeof sourceUrl === "string" && sourceUrl.trim().length > 0
       : sourceUrl === undefined || typeof sourceUrl === "string";
+  const openAccessAvailable = item && typeof item === "object" && "openAccessAvailable" in item
+    ? item.openAccessAvailable
+    : undefined;
   return (
     typeof item === "object" &&
     item !== null &&
@@ -64,6 +67,7 @@ function isRecommendationItem(item: unknown): item is RecommendationItem {
     typeof item.source === "string" &&
     hasValidSourceKind &&
     hasValidSourceUrl &&
+    (openAccessAvailable === undefined || typeof openAccessAvailable === "boolean") &&
     "title" in item &&
     typeof item.title === "string"
   );
@@ -120,6 +124,7 @@ export function createRecommendationCacheClient({
       const response = await transport({
         body: JSON.stringify(scope),
         headers: {
+          Authorization: `Bearer ${scope.sessionId}`,
           "Content-Type": "application/json"
         },
         method: "POST",
@@ -147,6 +152,7 @@ export function createRecommendationCacheClient({
           recommendations
         }),
         headers: {
+          Authorization: `Bearer ${scope.sessionId}`,
           "Content-Type": "application/json"
         },
         method: "POST",
@@ -168,6 +174,7 @@ export function createRecommendationCacheClient({
       const response = await transport({
         body: JSON.stringify(scope),
         headers: {
+          Authorization: `Bearer ${scope.sessionId}`,
           "Content-Type": "application/json"
         },
         method: "POST",

@@ -139,12 +139,12 @@ function safeDetail(error: unknown) {
     .slice(0, 500);
 }
 
-function legacyEndpointError(detail: string) {
+function legacyEndpointError(_detail: string) {
   return new PaperTranslationError({
-    action: "请停止并重启正在监听本地端口的 dev-cloud 进程，确认 .env.local 中的 OPENAI_BASE_URL 已生效。",
+    action: "请从账号配置重新加载 Liteasy 服务地址后重试。",
     code: "legacy_mosshub",
-    detail,
-    title: "本地翻译服务仍在使用旧的 Mosshub 配置"
+    detail: "当前服务地址已经停用。",
+    title: "翻译服务地址已失效"
   });
 }
 
@@ -154,7 +154,7 @@ function parseTranslationEndpoint(endpoint: string) {
     parsed = new URL(endpoint);
   } catch {
     throw new PaperTranslationError({
-      action: "请将云代理端点设置为正在运行的本地服务，例如 http://127.0.0.1:8791。",
+      action: "请重新加载账号下发的 Liteasy 服务配置。",
       code: "invalid_endpoint",
       detail: "云代理端点不是有效 URL。",
       title: "翻译服务地址无效"
@@ -164,19 +164,20 @@ function parseTranslationEndpoint(endpoint: string) {
     throw legacyEndpointError("前端当前仍指向 api.mosshubs.com，而不是本地代理。");
   }
   const isLoopback = parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "[::1]";
-  if (parsed.protocol !== "http:" || !isLoopback) {
+  const isSecureCloud = parsed.protocol === "https:";
+  if (!isSecureCloud && !(parsed.protocol === "http:" && isLoopback)) {
     throw new PaperTranslationError({
-      action: "请把上游 API 密钥留在 dev-cloud，并将前端端点改为 http://127.0.0.1:8791。",
+      action: "请使用账号下发的 Liteasy 服务地址；模型凭据只应由服务端管理。",
       code: "direct_upstream_endpoint",
-      detail: `翻译只连接本机代理；当前地址为 ${safeUrl(endpoint)}。`,
-      title: "已阻止前端直连上游模型服务"
+      detail: "翻译服务必须使用 HTTPS，只有本机开发服务可以使用 HTTP。",
+      title: "已阻止不安全的模型服务地址"
     });
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.pathname !== "/" && parsed.pathname !== "")) {
     throw new PaperTranslationError({
-      action: "请填写本地服务根地址，例如 http://127.0.0.1:8791，不要附加 /v1、密钥或查询参数。",
+      action: "请重新加载不含凭据、路径或查询参数的 Liteasy 服务根地址。",
       code: "invalid_endpoint",
-      detail: "云代理端点必须是无凭据、无路径的本机服务根地址。",
+      detail: "云代理端点必须是无凭据、无路径的服务根地址。",
       title: "翻译服务地址无效"
     });
   }
@@ -220,19 +221,19 @@ export async function preflightTranslationService(input: {
   } catch (error) {
     if (isAbortError(error, input.signal)) throw abortReason(input.signal);
     throw new PaperTranslationError({
-      action: "请启动或重启该端口上的 dev-cloud 服务，然后重试翻译。",
+      action: "请检查网络后重试；若问题持续，请联系管理员并提供错误时间。",
       code: "service_unavailable",
-      detail: `无法连接 ${origin} 的健康检查。`,
-      title: "本地翻译服务不可用"
+      detail: "无法连接翻译服务。",
+      title: "翻译服务不可用"
     });
   }
   throwIfAborted(input.signal);
   if (!response.ok) {
     throw new PaperTranslationError({
-      action: "请确认端口对应的是 LiteasyClaw dev-cloud，并重启实际监听进程。",
+      action: "请稍后重试；若问题持续，请联系管理员。",
       code: "service_unavailable",
       detail: `健康检查返回 HTTP ${response.status}。`,
-      title: "本地翻译服务未就绪"
+      title: "翻译服务未就绪"
     });
   }
   let payload: Record<string, unknown> | undefined;
@@ -243,9 +244,9 @@ export async function preflightTranslationService(input: {
     payload = undefined;
   }
   throwIfAborted(input.signal);
-  if (!payload || payload.ok !== true) {
+  if (!payload || (payload.ok !== true && payload.status !== "ok")) {
     throw new PaperTranslationError({
-      action: "请确认本地端口没有被其他程序占用，并重启 dev-cloud。",
+      action: "请重新加载账号服务配置后重试。",
       code: "invalid_health_response",
       detail: "健康检查未返回有效的 LiteasyClaw 状态。",
       title: "翻译服务身份校验失败"
@@ -257,10 +258,10 @@ export async function preflightTranslationService(input: {
     (runtime.provider === "openai" || runtime.provider === undefined)
   ) {
     throw new PaperTranslationError({
-      action: "请在 dev-cloud/.env.local 中配置 OPENAI_API_KEY，并重启当前本地服务。",
+      action: "请联系管理员完成模型服务配置后重试。",
       code: "model_authentication",
-      detail: "健康检查显示当前 OpenAI 模型密钥尚未生效。",
-      title: "本地模型服务缺少密钥"
+      detail: "翻译服务尚未获得可用的模型授权。",
+      title: "模型服务尚未配置"
     });
   }
   const upstream = healthUpstreamBaseUrl(payload);
@@ -351,9 +352,9 @@ export function classifyPaperTranslationError(error: unknown): PaperTranslationE
   }
   if (/\b(?:401|403)\b|unauthori[sz]ed|api[_ -]?key/i.test(detail)) {
     return new PaperTranslationError({
-      action: "请检查 dev-cloud/.env.local 中的 OPENAI_API_KEY，并重启本地服务。",
+      action: "请重新登录后重试；若问题持续，请联系管理员。",
       code: "model_authentication",
-      detail,
+      detail: "翻译服务未接受当前请求。",
       title: "模型服务认证失败"
     });
   }
@@ -361,7 +362,7 @@ export function classifyPaperTranslationError(error: unknown): PaperTranslationE
     return new PaperTranslationError({
       action: "请稍后重试；已完成的翻译批次保留在本次会话缓存中。",
       code: "model_rate_limited",
-      detail,
+      detail: "翻译请求暂时受到服务限流。",
       title: "模型服务请求过于频繁"
     });
   }
@@ -369,22 +370,22 @@ export function classifyPaperTranslationError(error: unknown): PaperTranslationE
     return new PaperTranslationError({
       action: "请重试；系统会复用本次会话中已完成的批次。若持续失败，请检查上游服务状态。",
       code: "model_timeout",
-      detail,
+      detail: "翻译服务未在限定时间内完成请求。",
       title: "翻译请求超时"
     });
   }
   if (/\b(?:500|502|503|504|520|522)\b|fetch failed|network|连接失败/i.test(detail)) {
     return new PaperTranslationError({
-      action: "请确认本地代理仍在运行并重试；已完成批次不会重复请求。",
+      action: "请检查网络后重试；已完成批次不会重复请求。",
       code: "model_unavailable",
-      detail,
+      detail: "翻译服务当前无法完成请求。",
       title: "模型服务暂时不可用"
     });
   }
   return new PaperTranslationError({
-    action: "请重试；若问题持续，请检查本地服务日志。",
+    action: "请重试；若问题持续，请联系管理员并提供错误时间。",
     code: "model_unavailable",
-    detail: detail || "模型请求未成功完成。",
+    detail: "模型请求未成功完成。",
     title: "论文翻译失败"
   });
 }
@@ -411,7 +412,7 @@ export function createPaperTranslationController(
       options.onProgress?.({
         cachedBatches: 0,
         completedBatches: 0,
-        message: "正在检查本地翻译服务…",
+        message: "正在检查翻译服务…",
         phase: "preflight",
         totalBatches: batches.length
       });

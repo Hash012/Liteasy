@@ -106,7 +106,7 @@ test("uses @ papers as the locked task context for a slash artifact command", as
   expect(screen.getByText("已开始生成分层关系图。")).toBeInTheDocument();
 });
 
-test("keeps the central modality menu collapsed until the user opens it", async () => {
+test("starts thin reading directly from the central button", async () => {
   const user = userEvent.setup();
   const onStartAnalysis = vi.fn();
 
@@ -118,27 +118,42 @@ test("keeps the central modality menu collapsed until the user opens it", async 
     />
   );
 
+  expect(screen.getByRole("button", { name: "薄读" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "打开 AI 选择" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "树形展开" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "思维导图" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "分层关系图" })).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "打开 AI 选择" }));
-  await user.click(screen.getByRole("button", { name: "分层关系图" }));
+  expect(screen.queryByRole("button", { name: "PPT" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "对比表" })).not.toBeInTheDocument();
 
-  expect(onStartAnalysis).toHaveBeenCalledWith("layered_graph");
-});
-
-test("exposes thin reading from the central modality menu", async () => {
-  const user = userEvent.setup();
-  const onStartAnalysis = vi.fn();
-
-  render(
-    <FloatingModalityButton
-      analysisHint="选择一种产物"
-      canStartAnalysis={true}
-      onStartAnalysis={onStartAnalysis}
-    />
-  );
-
-  await user.click(screen.getByRole("button", { name: "打开 AI 选择" }));
   await user.click(screen.getByRole("button", { name: "薄读" }));
 
   expect(onStartAnalysis).toHaveBeenCalledWith("thin_reading");
+  expect(screen.getByRole("button", { name: "薄读" })).toBeInTheDocument();
+});
+
+test("shows thin-reading progress around the central thin-reading button only while generating", () => {
+  const { rerender } = render(
+    <FloatingModalityButton
+      analysisHint="选择一种产物"
+      canStartAnalysis={true}
+      generationProgress={32}
+      onStartAnalysis={() => undefined}
+    />
+  );
+
+  expect(screen.getByRole("progressbar", { name: "薄读生成进度" })).toHaveAttribute(
+    "aria-valuenow",
+    "32"
+  );
+
+  rerender(
+    <FloatingModalityButton
+      analysisHint="选择一种产物"
+      canStartAnalysis={true}
+      onStartAnalysis={() => undefined}
+    />
+  );
+
+  expect(screen.queryByRole("progressbar", { name: "薄读生成进度" })).not.toBeInTheDocument();
 });

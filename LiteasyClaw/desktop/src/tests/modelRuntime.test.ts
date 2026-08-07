@@ -8,9 +8,18 @@ import { beforeEach } from "vitest";
 
 beforeEach(() => clearTrustedModelProxyEndpointsForTests());
 
-test("uses the mock cloud endpoint by default for the current desktop runtime", async () => {
+test("uses the real local cloud endpoint by default with an injected test transport", async () => {
   const settings = createSettingsStore().getState();
-  const gateway = createModelGatewayFromSettings(settings);
+  const gateway = createModelGatewayFromSettings(settings, {
+    cloudTransport: async () => ({
+      json: async () => ({
+        answer: "test transport answer",
+        execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+      }),
+      ok: true,
+      status: 200
+    })
+  });
 
   const result = await gateway.generateAnswer({
     model: "gpt-5-mini",
@@ -18,11 +27,11 @@ test("uses the mock cloud endpoint by default for the current desktop runtime", 
     provider: "openai"
   });
 
-  expect(result.answer).toBe("云端回答：这篇论文讲了什么？");
+  expect(result.answer).toBe("test transport answer");
   expect(result.trace).toEqual({
-    backend: "desktop_mock",
-    endpoint: "mock://cloud-proxy",
-    mode: "mock",
+    backend: "dev_cloud",
+    endpoint: "http://127.0.0.1:8787",
+    mode: "live",
     provider: "openai",
     source: "cloud_proxy"
   });

@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { runMindmapArtifactWorkflow } from "../app/features/artifact-workflow/mindmapWorkflowHarness";
 import type { ExternalKnowledgeProvider } from "../app/features/artifact-workflow/externalKnowledgeProvider";
-import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
+import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import { prepareMultiPaperAnalysis } from "../app/features/paper-analysis/multiPaperAnalysisWorkflow";
 import type { Paper } from "../app/features/workspace/workspace.types";
 
@@ -122,7 +122,6 @@ describe("mindmapWorkflowHarness", () => {
 
     const result = await runMindmapArtifactWorkflow({
       artifactId: "artifact-mindmap-2",
-      externalKnowledgeProvider: { lookup: vi.fn(async () => []) },
       generatedAnswer: "只有 ColBERT 有证据。",
       now: () => new Date("2026-07-26T00:01:00.000Z"),
       prepared,
@@ -146,6 +145,11 @@ describe("mindmapWorkflowHarness", () => {
     expect(result.workflowTrace).toMatchObject({
       internalOnly: true,
       steps: expect.arrayContaining([
+        expect.objectContaining({
+          kind: "external_lookup",
+          status: "completed",
+          summary: "外部知识服务未配置，仅使用选中文献证据"
+        }),
         expect.objectContaining({
           kind: "verification",
           status: "blocked",

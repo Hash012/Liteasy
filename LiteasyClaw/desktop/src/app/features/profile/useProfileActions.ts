@@ -27,17 +27,13 @@ type UseProfileActionsInput = {
   transport?: AcademicProfileTransport;
 };
 
-function isMockEndpoint(endpoint: string) {
-  return endpoint.startsWith("mock://");
-}
-
 function localOnlyProfile(profile: AcademicProfile): AcademicProfile {
   return { ...profile, disciplines: [] };
 }
 
 export function useProfileActions({
   accountSession = null,
-  controlPlaneEndpoint = "mock://control-plane",
+  controlPlaneEndpoint = "http://127.0.0.1:8787",
   onProfileSamplingChanged,
   profileSamplingEnabled = false,
   transport
@@ -48,6 +44,7 @@ export function useProfileActions({
   );
   const [clearProfileConfirmOpen, setClearProfileConfirmOpen] = useState(false);
   const [profileClearMessage, setProfileClearMessage] = useState<string | undefined>();
+  const [profileSamplingPending, setProfileSamplingPending] = useState(false);
   const [agentPersonalization, setAgentPersonalization] = useState<AgentPersonalization>(
     loadAgentPersonalization
   );
@@ -69,12 +66,14 @@ export function useProfileActions({
   }
   const [personalizationSummary, setPersonalizationSummary] = useState<string | undefined>();
   const [personalizationVersion, setPersonalizationVersion] = useState(0);
+  const personalizationVersionRef = useRef(0);
+  personalizationVersionRef.current = personalizationVersion;
   const [profileTags, setProfileTags] = useState<UserTag[]>([]);
   const currentSessionIdRef = useRef(accountSession?.sessionId);
   currentSessionIdRef.current = accountSession?.sessionId;
   const client = useMemo(
     () =>
-      accountSession && !isMockEndpoint(controlPlaneEndpoint)
+      accountSession
         ? createAcademicProfileClient({ endpoint: controlPlaneEndpoint, transport })
         : null,
     [accountSession?.sessionId, controlPlaneEndpoint, transport]
@@ -108,6 +107,12 @@ export function useProfileActions({
         setPersonalizationSummary(snapshot.assistantSummary);
         setPersonalizationVersion(snapshot.personalizationVersion);
         setProfileTags(snapshot.tags ?? []);
+        if (
+          typeof snapshot.enabled === "boolean" &&
+          snapshot.enabled !== profileSamplingEnabled
+        ) {
+          onProfileSamplingChanged?.(snapshot.enabled);
+        }
       })
       .catch(() => {
         if (active && currentSessionIdRef.current === sessionId) {
@@ -136,9 +141,34 @@ export function useProfileActions({
     setClearProfileConfirmOpen(false);
   }
 
-  function toggleProfileSampling() {
+  async function toggleProfileSampling() {
     setProfileClearMessage(undefined);
-    onProfileSamplingChanged?.(!profileSamplingEnabled);
+    const enabled = !profileSamplingEnabled;
+    if (!accountSession || !client) {
+      onProfileSamplingChanged?.(enabled);
+      return;
+    }
+    const sessionId = accountSession.sessionId;
+    setProfileSamplingPending(true);
+    try {
+      const snapshot = await client.setEnabled(accountSession, enabled, personalizationVersionRef.current);
+      if (currentSessionIdRef.current !== sessionId) {
+        return;
+      }
+      setPersonalizationSummary(snapshot.assistantSummary);
+      setPersonalizationVersion(snapshot.personalizationVersion);
+      setProfileTags(snapshot.tags ?? []);
+      onProfileSamplingChanged?.(snapshot.enabled ?? enabled);
+      setProfileClearMessage(enabled ? "个性化已开启。" : "个性化已关闭，新的清单与行为信号将不再上传。");
+    } catch {
+      if (currentSessionIdRef.current === sessionId) {
+        setProfileClearMessage("个性化设置更新失败，请检查云端连接后重试。");
+      }
+    } finally {
+      if (currentSessionIdRef.current === sessionId) {
+        setProfileSamplingPending(false);
+      }
+    }
   }
 
   async function updateAcademicProfile(nextProfile: AcademicProfile) {
@@ -154,7 +184,7 @@ export function useProfileActions({
       const snapshot = await client.save(accountSession, {
         disciplines: nextProfile.disciplines,
         stage: nextProfile.stage
-      });
+      }, personalizationVersionRef.current);
       if (currentSessionIdRef.current !== sessionId) {
         return;
       }
@@ -183,7 +213,7 @@ export function useProfileActions({
     if (accountSession && client) {
       const sessionId = accountSession.sessionId;
       try {
-        const snapshot = await client.clear(accountSession);
+        const snapshot = await client.clear(accountSession, personalizationVersionRef.current);
         if (currentSessionIdRef.current !== sessionId) {
           return;
         }
@@ -194,7 +224,7 @@ export function useProfileActions({
         setProfileTags(snapshot.tags ?? []);
         setClearProfileConfirmOpen(false);
         setProfileClearMessage("已清空学术档案和个性化数据。");
-        onProfileSamplingChanged?.(false);
+        onProfileSamplingChanged?.(snapshot.enabled ?? false);
       } catch {
         if (currentSessionIdRef.current === sessionId) {
           setProfileClearMessage("学术档案清空失败，请检查云端连接后重试。");
@@ -252,6 +282,7 @@ export function useProfileActions({
     personalizationVersion,
     profileClearMessage,
     profileSamplingEnabled,
+    profileSamplingPending,
     profileTags,
     recordPersonalizationSignal,
     toggleProfileSampling,

@@ -1,0 +1,24 @@
+{
+  "name": "@liteasy/cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bootstrap:admin": "node src/bootstrapAdmin.mjs",
+    "maintain:storage": "node src/maintainStorage.mjs",
+    "migrate": "node src/migrate.mjs",
+    "start": "node src/server.mjs",
+    "test": "node --test",
+    "test:postgres:integration": "node scripts/verify-postgres-integration.mjs",
+    "test:s3:integration": "node scripts/verify-s3-integration.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.883.0",
+    "@aws-sdk/lib-storage": "3.883.0",
+    "jose": "^6.2.8",
+    "pg": "^8.16.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

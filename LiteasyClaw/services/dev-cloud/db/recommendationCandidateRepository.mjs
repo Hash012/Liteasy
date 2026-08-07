@@ -36,6 +36,8 @@ function candidateRecord(candidate, existing, now) {
     ...(candidate.externalReranker ? { externalReranker: candidate.externalReranker } : {}),
     ...(candidate.identityResolution ? { identityResolution: candidate.identityResolution } : {}),
     lastDiscoveredAt: discoveredAt,
+    ...(candidate.openAccessAvailable === true && typeof candidate.fullTextUrl === "string" &&
+      candidate.fullTextUrl.startsWith("https://") ? { fullTextUrl: candidate.fullTextUrl } : {}),
     ...(candidate.openAccessAvailable === true ? { openAccessAvailable: true } : {}),
     ...(Number.isInteger(candidate.publishedYear) ? { publishedYear: candidate.publishedYear } : {}),
     qualityGate: candidate.qualityGate,
@@ -113,6 +115,21 @@ export function createRecommendationCandidateRepository(database) {
       return loadAll(userId);
     },
 
+    loadCandidate(userId, candidateId, options = {}) {
+      if (typeof candidateId !== "string" || !/^[A-Za-z0-9._:/-]{1,300}$/.test(candidateId)) {
+        return null;
+      }
+      const now = options.now instanceof Date ? options.now.getTime() : Date.now();
+      const maxAgeMs = Number.isFinite(options.maxAgeMs)
+        ? Math.max(0, options.maxAgeMs)
+        : defaultCandidateMaxAgeMs;
+      return loadAll(userId).find((candidate) => {
+        const lastDiscoveredAt = Date.parse(candidate.lastDiscoveredAt);
+        return candidate.candidateId === candidateId &&
+          Number.isFinite(lastDiscoveredAt) && now - lastDiscoveredAt <= maxAgeMs;
+      }) ?? null;
+    },
+
     listSources(userId, relatedDocumentTitle, options = {}) {
       const normalizedRelatedTitle = String(relatedDocumentTitle ?? "").trim().toLowerCase();
       const now = options.now instanceof Date ? options.now.getTime() : Date.now();
@@ -141,6 +158,7 @@ export function createRecommendationCandidateRepository(database) {
           discoveredAt: candidate.lastDiscoveredAt,
           ...(candidate.identityResolution?.doi ? { doi: candidate.identityResolution.doi } : {}),
           id: candidate.canonicalId,
+          ...(typeof candidate.fullTextUrl === "string" ? { fullTextUrl: candidate.fullTextUrl } : {}),
           ...(candidate.openAccessAvailable === true ? { openAccessAvailable: true } : {}),
           provider: candidate.primaryProvider ?? candidate.identityResolution?.providers?.[0] ??
             candidate.source.toLowerCase(),
@@ -220,6 +238,10 @@ export function listRecommendationCandidates(userId) {
 
 export function listRecommendationCandidateSources(userId, relatedDocumentTitle, options) {
   return requireSingleton().listSources(userId, relatedDocumentTitle, options);
+}
+
+export function loadRecommendationCandidate(userId, candidateId, options) {
+  return requireSingleton().loadCandidate(userId, candidateId, options);
 }
 
 export function upsertRecommendationCandidates(userId, candidates, now) {

@@ -1,9 +1,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { useAccountSession } from "../app/features/account/useAccountSession";
+import { clearStoredAccountSession } from "../app/features/account/accountSessionStorage";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 
 describe("useAccountSession", () => {
+  beforeEach(() => {
+    clearStoredAccountSession();
+    window.localStorage.clear();
+  });
   test("defaults to showing the lightweight login prompt when logged out", () => {
     const settingsStore = createSeededSettingsStore();
 
@@ -42,7 +47,7 @@ describe("useAccountSession", () => {
     });
   });
 
-  test("shows a dev-cloud startup hint when demo login cannot reach the service", async () => {
+  test("does not expose the configured cloud endpoint when account login cannot reach the service", async () => {
     const settingsStore = createSeededSettingsStore({
       "models.control_plane_endpoint": "http://127.0.0.1:8787"
     });
@@ -56,17 +61,21 @@ describe("useAccountSession", () => {
     );
 
     await act(async () => {
-      await result.current.loginToCloudAccount();
+      await result.current.loginPersonalAccount({
+        email: "researcher@example.com",
+        password: "a-secure-password"
+      });
     });
 
     await waitFor(() => {
       expect(result.current.accountPending).toBe(false);
     });
     expect(result.current.accountSession).toBeNull();
-    expect(result.current.accountMessage).toContain("请确认服务已启动，并检查当前云端地址：http://127.0.0.1:8787");
+    expect(result.current.accountMessage).toContain("云端服务当前不可用，请检查网络连接后重试");
+    expect(result.current.accountMessage).not.toContain("http://127.0.0.1:8787");
   });
 
-  test("registers a personal account and persists the returned session", async () => {
+  test("registers a local development account without persisting its token in browser storage", async () => {
     const settingsStore = createSeededSettingsStore({
       "models.control_plane_endpoint": "http://127.0.0.1:8787"
     });
@@ -116,11 +125,11 @@ describe("useAccountSession", () => {
       name: "Tian",
       sessionId: "account-session-tian-example-com"
     });
-    expect(result.current.accountMessage).toBe("已注册并登录云账号，会话已保存在本地。");
-    expect(window.localStorage.getItem("liteasy.account.session.v1")).toContain("tian@example.com");
+    expect(result.current.accountMessage).toBe("本地开发账号已创建；会话仅在本次运行期间保留。");
+    expect(window.localStorage.getItem("liteasy.account.session.v1")).toBeNull();
   });
 
-  test("notifies the shell when a stored session is restored", async () => {
+  test("removes a legacy browser-stored token instead of restoring it", async () => {
     window.localStorage.setItem(
       "liteasy.account.session.v1",
       JSON.stringify({
@@ -131,68 +140,67 @@ describe("useAccountSession", () => {
         sessionId: "demo-session-1"
       })
     );
-    const onSessionRestored = vi.fn();
     const settingsStore = createSeededSettingsStore();
 
     const { result } = renderHook(() =>
       useAccountSession({
+        getSettings: () => settingsStore.getState()
+      })
+    );
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("liteasy.account.session.v1")).toBeNull();
+    });
+    expect(result.current.accountSession).toBeNull();
+  });
+
+  test("restores a formal session only through the Tauri secure-credential command", async () => {
+    const accessToken = `eyJ.${"a".repeat(40)}.sig`;
+    const onSessionRestored = vi.fn();
+    const invoke = vi.fn(async (command: string) => {
+      expect(command).toBe("restore_desktop_oauth_session");
+      return {
+        email: "tian@example.com",
+        expiresAt: "2026-07-10T09:30:00Z",
+        name: "Tian",
+        sessionId: accessToken,
+        userId: "user-1"
+      };
+    });
+    const identityConfig = {
+      audience: "liteasy-desktop",
+      authorizationFlow: "authorization_code_pkce",
+      clientId: "liteasy-desktop-public",
+      issuer: "https://identity.example.com",
+      revocationUrl: "https://identity.example.com/oauth2/revoke"
+    };
+    const settingsStore = createSeededSettingsStore({
+      "models.control_plane_endpoint": "https://api.liteasy.example"
+    });
+
+    const { result } = renderHook(() =>
+      useAccountSession({
+        desktopIdentityFetch: vi.fn(async () => new Response(JSON.stringify(identityConfig), {
+          headers: { "Content-Type": "application/json" },
+          status: 200
+        })) as typeof fetch,
+        desktopIdentityHostAvailable: true,
+        desktopIdentityInvoke: invoke,
         getSettings: () => settingsStore.getState(),
         onSessionRestored
       })
     );
 
     await waitFor(() => {
-      expect(result.current.accountSession?.sessionId).toBe("demo-session-1");
+      expect(result.current.accountMessage).toBe("登录会话已从操作系统安全存储恢复。");
     });
-    expect(onSessionRestored).toHaveBeenCalledTimes(1);
-  });
-
-  test("revalidates a persisted secure session with the server", async () => {
-    const sessionId = `ltsy_${"a".repeat(43)}`;
-    window.localStorage.setItem(
-      "liteasy.account.session.v1",
-      JSON.stringify({
-        email: "tian@example.com",
-        expiresAt: "2026-07-10T09:30:00Z",
-        membershipTier: "pro",
-        name: "Tian",
-        sessionId,
-        userId: "user-1"
-      })
-    );
-    const requestedUrls: string[] = [];
-    const settingsStore = createSeededSettingsStore({
-      "models.control_plane_endpoint": "http://127.0.0.1:8787"
+    expect(invoke).toHaveBeenCalledWith("restore_desktop_oauth_session", {
+      configuration: identityConfig
     });
-
-    const { result } = renderHook(() =>
-      useAccountSession({
-        accountTransport: async (request) => {
-          requestedUrls.push(request.url);
-          return {
-            json: async () => ({
-              session: {
-                email: "tian@example.com",
-                expiresAt: "2026-07-10T09:30:00Z",
-                membershipTier: "pro",
-                name: "Tian",
-                sessionId,
-                userId: "user-1"
-              }
-            }),
-            ok: true,
-            status: 200
-          };
-        },
-        getSettings: () => settingsStore.getState()
-      })
-    );
-
-    await waitFor(() => {
-      expect(result.current.accountMessage).toBe("云账号会话有效。");
-    });
-    expect(requestedUrls).toEqual(["http://127.0.0.1:8787/v1/account/session"]);
     expect(result.current.accountSession?.userId).toBe("user-1");
+    expect(result.current.accountSession?.membershipTier).toBe("basic");
+    expect(window.localStorage.getItem("liteasy.account.session.v1")).toBeNull();
+    expect(onSessionRestored).toHaveBeenCalledTimes(1);
   });
 
 });

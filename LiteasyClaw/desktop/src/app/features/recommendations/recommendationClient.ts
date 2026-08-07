@@ -1,4 +1,5 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
+import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type {
   RecommendationItem,
   RecommendationRequestDocument,
@@ -46,11 +47,14 @@ function isRecommendationItem(item: unknown): item is RecommendationItem {
     "sourceUrl" in item
       ? item.sourceUrl
       : undefined;
-  const hasValidSourceKind = sourceKind === "cache" || sourceKind === "live" || sourceKind === "mock";
+  const hasValidSourceKind = sourceKind === "cache" || sourceKind === "live";
   const hasValidSourceUrl =
     sourceKind === "live"
       ? typeof sourceUrl === "string" && sourceUrl.trim().length > 0
       : sourceUrl === undefined || typeof sourceUrl === "string";
+  const openAccessAvailable = item && typeof item === "object" && "openAccessAvailable" in item
+    ? item.openAccessAvailable
+    : undefined;
   return (
     typeof item === "object" &&
     item !== null &&
@@ -70,6 +74,7 @@ function isRecommendationItem(item: unknown): item is RecommendationItem {
     typeof item.source === "string" &&
     hasValidSourceKind &&
     hasValidSourceUrl &&
+    (openAccessAvailable === undefined || typeof openAccessAvailable === "boolean") &&
     "title" in item &&
     typeof item.title === "string"
   );
@@ -111,6 +116,7 @@ export function createRecommendationClient({
         sessionId
       }),
       headers: {
+        Authorization: `Bearer ${sessionId}`,
         "Content-Type": "application/json"
       },
       method: "POST",
@@ -118,17 +124,10 @@ export function createRecommendationClient({
     });
 
     if (!response.ok) {
-      try {
-        const payload = await response.json();
-        if (payload && typeof payload === "object" && typeof (payload as { message?: unknown }).message === "string") {
-          throw new Error((payload as { message: string }).message);
-        }
-      } catch (error) {
-        if (error instanceof Error && error.message.length > 0) {
-          throw error;
-        }
-      }
-      throw new Error(`关联推荐获取失败（${response.status}）`);
+      throw await readCloudServiceError(response, {
+        code: "recommendation_request_failed",
+        message: "关联推荐获取失败，请稍后重试。"
+      });
     }
 
     const payload = await response.json();

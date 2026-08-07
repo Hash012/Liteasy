@@ -73,16 +73,23 @@ function buildSelectionCacheKey(
     .map((paper) => paper.id)
     .sort()
     .join("|");
-  if (!researchProfile) {
-    return paperKey;
-  }
-  const serializedProfile = JSON.stringify(researchProfile);
+  const serializedProfile = researchProfile ? JSON.stringify(researchProfile) : "";
+  const rawKey = `${paperKey}::${serializedProfile}`;
   let hash = 2166136261;
-  for (let index = 0; index < serializedProfile.length; index += 1) {
-    hash ^= serializedProfile.charCodeAt(index);
+  for (let index = 0; index < rawKey.length; index += 1) {
+    hash ^= rawKey.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `${paperKey}::profile:${(hash >>> 0).toString(16)}`;
+  return `selection:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function buildWorkspaceCacheKey(workspaceSourceKey: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < workspaceSourceKey.length; index += 1) {
+    hash ^= workspaceSourceKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `workspace:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 function sortRecommendationItems(
@@ -119,10 +126,11 @@ export function useRecommendations({
   const selectionKey = buildSelectionCacheKey(selectedPapers, researchProfile);
   const currentScope = accountSession
       ? {
+        personalizationVersion,
         selectionKey,
         sessionId: accountSession.sessionId,
         sortMode: recommendationSortMode,
-        workspaceKey: workspaceSourceKey
+        workspaceKey: buildWorkspaceCacheKey(workspaceSourceKey)
       }
     : null;
   const [recommendationItems, setRecommendationItems] = useState<RecommendationItem[]>([]);

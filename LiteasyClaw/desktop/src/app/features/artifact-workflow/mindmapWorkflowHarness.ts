@@ -8,10 +8,7 @@ import type {
   MindmapWorkflowResult
 } from "./mindmapArtifact.types";
 import { createArtifactWorkflowHarness } from "./artifactWorkflowHarness";
-import {
-  createDeterministicExternalKnowledgeProvider,
-  type ExternalKnowledgeProvider
-} from "./externalKnowledgeProvider";
+import type { ExternalKnowledgeProvider } from "./externalKnowledgeProvider";
 import { repairMindmapArtifact } from "./mindmapArtifactRepairer";
 import { verifyMindmapArtifact } from "./mindmapArtifactVerifier";
 import type { AnalysisEvidence, PreparedMultiPaperAnalysis } from "../paper-analysis/analysis.types";
@@ -51,20 +48,23 @@ export async function runMindmapArtifactWorkflow(
     run: () => undefined,
     summary: "固定思维导图任务范围"
   });
-  const externalKnowledgeProvider =
-    input.externalKnowledgeProvider ?? createDeterministicExternalKnowledgeProvider();
   const selectedPaperSources = buildSelectedPaperSources(input.prepared.evidence);
   const externalReferences = await harness.step({
     details: {
+      providerStatus: input.externalKnowledgeProvider ? "available" : "unconfigured",
       selectedEvidenceCount: selectedPaperSources.length
     },
     kind: "external_lookup",
-    run: () => externalKnowledgeProvider.lookup({
-      question: input.question,
-      terms: collectEvidenceTerms(input.prepared.evidence),
-      timeoutMs: 1200
-    }),
-    summary: "补充外部知识来源"
+    run: () => input.externalKnowledgeProvider
+      ? input.externalKnowledgeProvider.lookup({
+          question: input.question,
+          terms: collectEvidenceTerms(input.prepared.evidence),
+          timeoutMs: 1200
+        })
+      : Promise.resolve([]),
+    summary: input.externalKnowledgeProvider
+      ? "补充外部知识来源"
+      : "外部知识服务未配置，仅使用选中文献证据"
   });
   const lastExternalStep = harness.trace().steps[harness.trace().steps.length - 1];
   if (lastExternalStep?.details) {

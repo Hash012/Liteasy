@@ -15,7 +15,7 @@ function hasHttpProtocol(protocol: string) {
 }
 
 function normalizeHostname(hostname: string) {
-  if (hostname === "::1" || hostname === "localhost") {
+  if (hostname === "::1" || hostname === "localhost" || hostname === "tauri.localhost") {
     return "127.0.0.1";
   }
 

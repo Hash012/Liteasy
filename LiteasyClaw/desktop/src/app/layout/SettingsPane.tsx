@@ -11,8 +11,11 @@ import type { SettingsState, UpdateSettingCommand } from "../features/settings/s
 type SettingsPaneProps = {
   documentMetadataSyncMessage?: string;
   libraryRootPath?: string | null;
+  loadLegacyLibraryRoots?: () => Promise<string[]>;
+  onBackupLibrary?: (destinationDirectory: string) => Promise<string>;
   onChangeLibraryRoot?: (nextRootPath: string) => Promise<void>;
   onOpenLibraryInFileManager?: () => Promise<void>;
+  onSelectLegacyLibraryRoot?: (legacyRootPath: string) => Promise<void>;
   documentMetadataSyncResult: DocumentMetadataSyncResult | null;
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
   onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
@@ -24,8 +27,11 @@ type SettingsPaneProps = {
 export function SettingsPane({
   documentMetadataSyncMessage,
   libraryRootPath,
+  loadLegacyLibraryRoots,
+  onBackupLibrary,
   onChangeLibraryRoot,
   onOpenLibraryInFileManager,
+  onSelectLegacyLibraryRoot,
   documentMetadataSyncResult,
   documentMetadataSyncStatus,
   onOpenSkillDocument,
@@ -87,8 +93,11 @@ export function SettingsPane({
         </button>
         {libraryExpanded ? <div className="sidebar-section-content">
           <LibraryLocationPanel
+            loadLegacyRoots={loadLegacyLibraryRoots}
+            onBackup={onBackupLibrary}
             onChangeRoot={onChangeLibraryRoot}
             onOpenInFileManager={onOpenLibraryInFileManager}
+            onSelectLegacyRoot={onSelectLegacyLibraryRoot}
             rootPath={libraryRootPath}
           />
         </div> : null}

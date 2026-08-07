@@ -94,6 +94,16 @@ export function createArtifactStore() {
         tabs.splice(tabIndex, 1);
       }
     },
+    clearAccountArtifacts() {
+      tasks.clear();
+      for (const [artifactId, entry] of catalog) {
+        if (entry.type !== "skill_doc") {
+          catalog.delete(artifactId);
+        }
+      }
+      const retainedTabs = tabs.filter((tab) => tab.type === "skill_doc");
+      tabs.splice(0, tabs.length, ...retainedTabs);
+    },
     failTask(id: string, failure?: ArtifactTaskFailure) {
       const task = tasks.get(id);
       if (!task || task.status === "cancelled") return;

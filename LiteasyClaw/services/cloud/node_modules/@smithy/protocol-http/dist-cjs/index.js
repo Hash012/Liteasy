@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.resolveHttpHandlerRuntimeConfig = exports.getHttpHandlerExtensionConfiguration = exports.isValidHostname = exports.HttpResponse = exports.HttpRequest = exports.Fields = exports.Field = void 0;
+var protocols_1 = require("@smithy/core/protocols");
+Object.defineProperty(exports, "Field", { enumerable: true, get: function () { return protocols_1.Field; } });
+Object.defineProperty(exports, "Fields", { enumerable: true, get: function () { return protocols_1.Fields; } });
+Object.defineProperty(exports, "HttpRequest", { enumerable: true, get: function () { return protocols_1.HttpRequest; } });
+Object.defineProperty(exports, "HttpResponse", { enumerable: true, get: function () { return protocols_1.HttpResponse; } });
+Object.defineProperty(exports, "isValidHostname", { enumerable: true, get: function () { return protocols_1.isValidHostname; } });
+Object.defineProperty(exports, "getHttpHandlerExtensionConfiguration", { enumerable: true, get: function () { return protocols_1.getHttpHandlerExtensionConfiguration; } });
+Object.defineProperty(exports, "resolveHttpHandlerRuntimeConfig", { enumerable: true, get: function () { return protocols_1.resolveHttpHandlerRuntimeConfig; } });

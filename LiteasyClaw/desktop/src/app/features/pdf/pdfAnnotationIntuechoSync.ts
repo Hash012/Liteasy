@@ -16,6 +16,22 @@ export type PdfAnnotationIntuechoQueueItem = {
   };
   status: "pending_public";
   statusLabel: typeof PDF_ANNOTATION_PENDING_LABEL;
+  targets: Array<{
+    anchorHash: string;
+    excerpt: string;
+    kind: "source_passage";
+    literature: {
+      identity: {
+        id: string;
+        kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "title_authors_year_hash" | "local_paper_id";
+        source: "inferred" | "metadata";
+        value: string;
+      };
+      metadata: { authors: string[]; title: string };
+    };
+    page: number;
+    rects: PdfAnnotation["rects"];
+  }>;
   updatedAt: string;
 };
 
@@ -36,10 +52,11 @@ function stableHash(value: string) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function isHttpsEndpoint(value: string) {
+function isAllowedEndpoint(value: string) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password;
+    const loopback = url.protocol === "http:" && new Set(["127.0.0.1", "localhost", "[::1]"]).has(url.hostname);
+    return (url.protocol === "https:" || loopback) && !url.username && !url.password;
   } catch {
     return false;
   }
@@ -95,7 +112,9 @@ export function listPdfAnnotationPendingPublicItems(
 ): readonly PdfAnnotationIntuechoQueueItem[] {
   return annotations
     .filter((annotation) => annotation.visibility === "pending_public" && annotation.syncState?.status !== "synced")
-    .map((annotation) => ({
+    .map((annotation) => {
+      const identity = annotation.paperIdentity.primary;
+      return {
       annotationId: annotation.id,
       body: annotation.note?.trim() || annotation.excerpt,
       createdAt: annotation.createdAt,
@@ -105,13 +124,31 @@ export function listPdfAnnotationPendingPublicItems(
       scope: { kind: "pdf_passage" as const, page: annotation.page, rects: annotation.rects.map((rect) => ({ ...rect })) },
       status: "pending_public" as const,
       statusLabel: PDF_ANNOTATION_PENDING_LABEL as typeof PDF_ANNOTATION_PENDING_LABEL,
+      targets: [{
+        anchorHash: `pdf:${annotation.paperIdentity.paperId}:${annotation.page}:${stableHash(annotation.excerpt)}`,
+        excerpt: annotation.excerpt,
+        kind: "source_passage" as const,
+        literature: {
+          identity: {
+            id: identity.id,
+            kind: identity.kind,
+            source: identity.source === "metadata" ? "metadata" as const : "inferred" as const,
+            value: identity.value
+          },
+          metadata: { authors: [], title: annotation.paperIdentity.title }
+        },
+        page: annotation.page,
+        rects: annotation.rects.map((rect) => ({ ...rect }))
+      }],
       updatedAt: annotation.updatedAt
-    }));
+    };
+    });
 }
 
 export async function syncPdfAnnotationPendingItems(input: {
   endpoint: string;
   items: readonly PdfAnnotationIntuechoQueueItem[];
+  sessionId?: string;
   transport?: PdfAnnotationIntuechoSyncTransport;
 }) {
   const syncable = input.items.filter(isSyncable);
@@ -120,8 +157,11 @@ export async function syncPdfAnnotationPendingItems(input: {
     ...failed(localOnly, "该批注仍为仅本地文献身份，补全 DOI、arXiv、Semantic Scholar 或题名作者年份信息后才能同步到 Intuecho。")
   ];
   if (syncable.length === 0) return mergeResults(input.items, results);
-  if (!isHttpsEndpoint(input.endpoint)) {
+  if (!isAllowedEndpoint(input.endpoint)) {
     return mergeResults(input.items, [...results, ...failed(syncable, "Intuecho 同步端点必须是 HTTPS 地址。")]);
+  }
+  if (!input.sessionId) {
+    return mergeResults(input.items, [...results, ...failed(syncable, "请先登录 Liteasy 再同步公开批注。")]);
   }
   const transport = input.transport ?? (async (request) => {
     const response = await fetch(request.url, { body: request.body, headers: request.headers, method: request.method });
@@ -130,7 +170,11 @@ export async function syncPdfAnnotationPendingItems(input: {
   try {
     const response = await transport({
       body: JSON.stringify({ annotations: syncable }),
-      headers: { "content-type": "application/json", "idempotency-key": `pdf-annotation-sync-${stableHash(syncable.map((item) => `${item.queueKey}\u0000${item.updatedAt}`).join("\u0001"))}` },
+      headers: {
+        Authorization: `Bearer ${input.sessionId}`,
+        "content-type": "application/json",
+        "idempotency-key": `pdf-annotation-sync-${stableHash(syncable.map((item) => `${item.queueKey}\u0000${item.updatedAt}`).join("\u0001"))}`
+      },
       method: "POST",
       url: syncEndpoint(input.endpoint)
     });

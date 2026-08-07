@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { resolveLocalAccountKey } from "./localAccountKey";
 
 export type UserPaperArtifactKind =
   | "anchor-graph"
@@ -23,8 +22,7 @@ export async function loadUserPaperArtifact<T>(input: {
     return undefined;
   }
   const snapshot = await invoke<T | null>("load_user_paper_artifact", {
-    ...input,
-    accountKey: resolveLocalAccountKey()
+    ...input
   });
   return snapshot ?? undefined;
 }
@@ -38,7 +36,6 @@ export async function saveUserPaperArtifact(input: {
     return;
   }
   await invoke("save_user_paper_artifact", {
-    ...input,
-    accountKey: resolveLocalAccountKey()
+    ...input
   });
 }

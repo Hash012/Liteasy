@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hardcodedDevSecrets } from "./devHardcodedSecrets.mjs";
 
 const configDir = dirname(fileURLToPath(import.meta.url));
 function stripMatchingQuotes(value) {
@@ -71,8 +70,6 @@ export function loadSecretEnvFile(
 
 loadSecretEnvFile();
 
-const useHardcodedDevSecrets = process.env.LITEASY_USE_HARDCODED_DEV_SECRETS === "1";
-
 export const defaultConfig = {
   accountSessionDurationMs: 7 * 24 * 60 * 60 * 1000,
   authRateLimit: {
@@ -81,14 +78,13 @@ export const defaultConfig = {
   },
   deepseekApiBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
   deepseekApiKey: process.env.DEEPSEEK_API_KEY,
-  defaultProvider:
-    process.env.LITEASY_MODEL_PROVIDER ??
-    (useHardcodedDevSecrets ? hardcodedDevSecrets.defaultProvider : "openai"),
+  defaultProvider: process.env.LITEASY_MODEL_PROVIDER ?? "openai",
   localDirectEnabled: false,
   localDirectEndpoint: "http://127.0.0.1:8788",
   modelAccessMode: "cloud_proxy",
   mineruToken: process.env.MINERU_TOKEN,
   grobidEndpoint: process.env.GROBID_ENDPOINT ?? "http://127.0.0.1:8070",
+  intuechoApiEndpoint: process.env.INTUECHO_API_ENDPOINT,
   // Deployment-owned secret. It is never returned to or accepted from a desktop client.
   // OpenAlex requires a key for every API request as of 2026-02-13.
   openAlexApiKey: process.env.OPENALEX_API_KEY,
@@ -104,18 +100,8 @@ export const defaultConfig = {
     const mode = (process.env.LITEASY_ANCHOR_REFERENCE_MODE ?? "").trim().toLowerCase();
     return mode === "off" || mode === "additive" ? mode : "exclusive";
   })(),
-  hardcodedDevFakeAnswerPrefix: useHardcodedDevSecrets
-    ? hardcodedDevSecrets.fakeAnswerPrefix
-    : undefined,
-  hardcodedDevForceLocalFakeModel: useHardcodedDevSecrets
-    ? hardcodedDevSecrets.forceLocalFakeModel
-    : false,
-  openaiApiBaseUrl:
-    process.env.OPENAI_BASE_URL ??
-    (useHardcodedDevSecrets ? hardcodedDevSecrets.openaiApiBaseUrl : "https://api.openai.com/v1"),
-  openaiApiKey:
-    process.env.OPENAI_API_KEY ??
-    (useHardcodedDevSecrets ? hardcodedDevSecrets.openaiApiKey : undefined),
+  openaiApiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
+  openaiApiKey: process.env.OPENAI_API_KEY,
   openaiModel: process.env.OPENAI_MODEL ?? process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini",
   openaiReasoningEffort: process.env.OPENAI_REASONING_EFFORT,
   policyVersion: "dev-policy-v1",

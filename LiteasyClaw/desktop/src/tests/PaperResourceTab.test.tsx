@@ -155,7 +155,7 @@ test("resolves relative MinerU images in the multimodal source and restores them
 
   expect(screen.getByAltText("Architecture diagram")).toHaveAttribute("src", figure.dataUrl);
   await user.click(screen.getByRole("button", { name: "翻译文本" }));
-  await user.click(screen.getByRole("button", { name: "确认翻译为 中文" }));
+  await user.click(await screen.findByRole("button", { name: "确认翻译为 中文" }));
 
   expect(await screen.findByText("中文解释。")).toBeInTheDocument();
   expect(screen.getAllByAltText("Architecture diagram")).toHaveLength(2);

@@ -25,6 +25,7 @@ import {
 } from "../features/library/paperCacheClient";
 import { createCloudLibraryStorageClient } from "../features/library/cloudLibraryStorageClient";
 import type { ThinReadingExternalSource } from "../features/thin-reading/thinReading.types";
+import type { ModelTransport } from "../features/models/modelHttpClient";
 
 type UseExternalPaperControllerInput = {
   addExternalPdfToLibrary: (input: {
@@ -32,12 +33,36 @@ type UseExternalPaperControllerInput = {
     fileName: string;
     title: string;
   }) => Promise<void>;
+  cloudLibraryClientFactory?: (endpoint: string) => Pick<
+    ReturnType<typeof createCloudLibraryStorageClient>,
+    "exportDocument" | "openDocument"
+  >;
   endpoint: string;
+  promoteCachedPdf?: typeof promoteCachedPdfToLibrary;
+  transport: ModelTransport;
   refreshLocalLibrary: () => Promise<unknown>;
   setActiveCenterArtifactId: Dispatch<SetStateAction<string | null>>;
   setActiveReaderPaperId: Dispatch<SetStateAction<string | null>>;
   setOpenReaderPaperIds: Dispatch<SetStateAction<string[]>>;
 };
+
+type CloudCachedSource = {
+  documentId: string;
+  scopeId: string;
+  scopeType: "organization" | "user";
+};
+
+function cloudCachedSource(sourceId: string | undefined): CloudCachedSource | null {
+  const match = sourceId?.match(/^cloud:(organization|user):([^:]+):([^:]+)$/);
+  return match ? {
+    documentId: match[3],
+    scopeId: match[2],
+    scopeType: match[1] as CloudCachedSource["scopeType"]
+  } : null;
+}
+
+const defaultCloudLibraryClientFactory = (endpoint: string) =>
+  createCloudLibraryStorageClient({ endpoint });
 
 /**
  * Owns the cache-to-library lifecycle for papers reached through an association.
@@ -45,11 +70,14 @@ type UseExternalPaperControllerInput = {
  */
 export function useExternalPaperController({
   addExternalPdfToLibrary,
+  cloudLibraryClientFactory = defaultCloudLibraryClientFactory,
   endpoint,
+  promoteCachedPdf = promoteCachedPdfToLibrary,
   refreshLocalLibrary,
   setActiveCenterArtifactId,
   setActiveReaderPaperId,
-  setOpenReaderPaperIds
+  setOpenReaderPaperIds,
+  transport
 }: UseExternalPaperControllerInput) {
   const [cachedReaderPapers, setCachedReaderPapers] = useState<ReturnType<
     typeof buildCachedReaderPaper
@@ -74,7 +102,7 @@ export function useExternalPaperController({
         // The cache may have been cleared since the thin-reading artifact was generated.
       }
     }
-    const download = await downloadExternalPdf({ endpoint, source });
+    const download = await downloadExternalPdf({ endpoint, source, transport });
     const cachePath = await cacheExternalPdf({
       bytes: download.bytes,
       contentHash: download.contentHash
@@ -85,13 +113,13 @@ export function useExternalPaperController({
       sourceId: source.id,
       title: source.title
     });
-  }, [cachedReaderPapers, endpoint]);
+  }, [cachedReaderPapers, endpoint, transport]);
 
   const openExternalFullTextInReader = useCallback(async (
     source: ThinReadingExternalSource
   ) => {
     if (!isPaperCacheAvailable()) {
-      await openExternalPdfInBrowser({ endpoint, source });
+      await openExternalPdfInBrowser({ endpoint, source, transport });
       return;
     }
     const paper = await resolveExternalCachedPaper(source);
@@ -101,7 +129,7 @@ export function useExternalPaperController({
     );
     setActiveReaderPaperId(paper.id);
     setActiveCenterArtifactId(null);
-  }, [endpoint, resolveExternalCachedPaper, setActiveCenterArtifactId, setActiveReaderPaperId, setOpenReaderPaperIds]);
+  }, [endpoint, resolveExternalCachedPaper, setActiveCenterArtifactId, setActiveReaderPaperId, setOpenReaderPaperIds, transport]);
 
   const openCloudDocumentInReader = useCallback(async (input: {
     documentId: string;
@@ -109,7 +137,7 @@ export function useExternalPaperController({
     scopeType: "organization" | "user";
     title: string;
   }) => {
-    const opened = await createCloudLibraryStorageClient({ endpoint }).openDocument(
+    const opened = await cloudLibraryClientFactory(endpoint).openDocument(
       { scopeId: input.scopeId, scopeType: input.scopeType },
       input.documentId
     );
@@ -126,23 +154,38 @@ export function useExternalPaperController({
     setActiveReaderPaperId(paper.id);
     setActiveCenterArtifactId(null);
     return paper;
-  }, [endpoint, setActiveCenterArtifactId, setActiveReaderPaperId, setOpenReaderPaperIds]);
+  }, [cloudLibraryClientFactory, endpoint, setActiveCenterArtifactId, setActiveReaderPaperId, setOpenReaderPaperIds]);
 
   const promoteCachedPaperToLibrary = useCallback(async (paperId: string) => {
     const cached = findCachedReaderPaper(cachedReaderPapers, paperId);
     if (!cached || promotingPaperIdsRef.current.has(paperId)) return;
     promotingPaperIdsRef.current.add(paperId);
     try {
-      await promoteCachedPdfToLibrary({
-        cachePath: cached.cachePath,
-        fileName: sanitizeExternalPdfFileName(cached.title)
-      });
+      const cloudSource = cloudCachedSource(cached.sourceId);
+      if (cloudSource) {
+        // Online reading is authorized separately from export. Never promote an
+        // organization cache file directly because that would bypass export_policy.
+        const exported = await cloudLibraryClientFactory(endpoint).exportDocument(
+          { scopeId: cloudSource.scopeId, scopeType: cloudSource.scopeType },
+          cloudSource.documentId
+        );
+        await addExternalPdfToLibrary({
+          bytes: exported.bytes,
+          fileName: sanitizeExternalPdfFileName(cached.title),
+          title: cached.title
+        });
+      } else {
+        await promoteCachedPdf({
+          cachePath: cached.cachePath,
+          fileName: sanitizeExternalPdfFileName(cached.title)
+        });
+      }
       await refreshLocalLibrary();
       setCachedReaderPapers((current) => removeCachedReaderPaper(current, cached.id));
     } finally {
       promotingPaperIdsRef.current.delete(paperId);
     }
-  }, [cachedReaderPapers, refreshLocalLibrary]);
+  }, [addExternalPdfToLibrary, cachedReaderPapers, cloudLibraryClientFactory, endpoint, promoteCachedPdf, refreshLocalLibrary]);
 
   const promoteExternalPaperToLibrary = useCallback(async (
     source: ThinReadingExternalSource
@@ -151,7 +194,7 @@ export function useExternalPaperController({
       if (!source.fullTextUrl) {
         throw new Error("该关联论文暂时没有可下载的开放全文。");
       }
-      const download = await downloadExternalPdf({ endpoint, source });
+      const download = await downloadExternalPdf({ endpoint, source, transport });
       await addExternalPdfToLibrary({
         bytes: download.bytes,
         fileName: sanitizeExternalPdfFileName(source.title),
@@ -170,13 +213,13 @@ export function useExternalPaperController({
       return;
     }
     const cached = await resolveExternalCachedPaper(source);
-    await promoteCachedPdfToLibrary({
+    await promoteCachedPdf({
       cachePath: cached.cachePath,
       fileName: sanitizeExternalPdfFileName(source.title)
     });
     setCachedReaderPapers((current) => removeCachedReaderPaper(current, cached.id));
     await refreshLocalLibrary();
-  }, [addExternalPdfToLibrary, endpoint, refreshLocalLibrary, resolveExternalCachedPaper]);
+  }, [addExternalPdfToLibrary, endpoint, promoteCachedPdf, refreshLocalLibrary, resolveExternalCachedPaper, transport]);
 
   const loadPdfSource = useCallback((sourcePath: string) =>
     isCachedSourcePath(cachedReaderPapers, sourcePath)

@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EndpointError = exports.resolveEndpoint = exports.customEndpointFunctions = exports.isValidHostLabel = exports.isIpAddress = exports.decideEndpoint = exports.EndpointCache = exports.BinaryDecisionDiagram = void 0;
+var endpoints_1 = require("@smithy/core/endpoints");
+Object.defineProperty(exports, "BinaryDecisionDiagram", { enumerable: true, get: function () { return endpoints_1.BinaryDecisionDiagram; } });
+Object.defineProperty(exports, "EndpointCache", { enumerable: true, get: function () { return endpoints_1.EndpointCache; } });
+Object.defineProperty(exports, "decideEndpoint", { enumerable: true, get: function () { return endpoints_1.decideEndpoint; } });
+Object.defineProperty(exports, "isIpAddress", { enumerable: true, get: function () { return endpoints_1.isIpAddress; } });
+Object.defineProperty(exports, "isValidHostLabel", { enumerable: true, get: function () { return endpoints_1.isValidHostLabel; } });
+Object.defineProperty(exports, "customEndpointFunctions", { enumerable: true, get: function () { return endpoints_1.customEndpointFunctions; } });
+Object.defineProperty(exports, "resolveEndpoint", { enumerable: true, get: function () { return endpoints_1.resolveEndpoint; } });
+Object.defineProperty(exports, "EndpointError", { enumerable: true, get: function () { return endpoints_1.EndpointError; } });

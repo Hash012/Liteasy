@@ -143,6 +143,18 @@ describe("translation service preflight", () => {
     })).resolves.toMatchObject({ origin: "http://127.0.0.1:8791" });
   });
 
+  test("accepts the formal HTTPS cloud health contract", async () => {
+    await expect(preflightTranslationService({
+      endpoint: "https://cloud.liteasy.example/",
+      healthTransport: vi.fn(async () => ({
+        json: async () => ({ status: "ok" }),
+        ok: true,
+        status: 200
+      })),
+      signal: new AbortController().signal
+    })).resolves.toMatchObject({ origin: "https://cloud.liteasy.example" });
+  });
+
   test("detects a running process that still reports the Mosshub upstream", async () => {
     await expect(preflightTranslationService({
       endpoint: "http://127.0.0.1:8791",
@@ -157,7 +169,7 @@ describe("translation service preflight", () => {
       signal: new AbortController().signal
     })).rejects.toMatchObject({
       code: "legacy_mosshub",
-      title: "本地翻译服务仍在使用旧的 Mosshub 配置"
+      title: "翻译服务地址已失效"
     });
   });
 
@@ -175,11 +187,11 @@ describe("translation service preflight", () => {
       signal: new AbortController().signal
     })).rejects.toMatchObject({
       code: "model_authentication",
-      title: "本地模型服务缺少密钥"
+      title: "模型服务尚未配置"
     });
   });
 
-  test("rejects legacy and direct upstream browser endpoints before fetching", async () => {
+  test("rejects legacy and credential-bearing upstream endpoints before fetching", async () => {
     const healthTransport = healthyOldService();
     await expect(preflightTranslationService({
       endpoint: "https://api.mosshubs.com/v1",
@@ -190,7 +202,7 @@ describe("translation service preflight", () => {
       endpoint: "https://nowcoding.ai/v1?api_key=secret",
       healthTransport,
       signal: new AbortController().signal
-    })).rejects.toMatchObject({ code: "direct_upstream_endpoint" });
+    })).rejects.toMatchObject({ code: "invalid_endpoint" });
     expect(healthTransport).not.toHaveBeenCalled();
   });
 });

@@ -43,6 +43,12 @@ const autoPublicStoragePrefix = "liteasy.pdf-annotations-auto-public/v1";
 const annotationKinds = new Set<PdfAnnotationKind>(["highlight", "underline", "note"]);
 const highlightColors = new Set<PdfHighlightColor>(["yellow", "red", "blue", "green", "pink"]);
 
+function canUseTauriArtifactStore() {
+  return typeof window !== "undefined" &&
+    typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } })
+      .__TAURI_INTERNALS__?.invoke === "function";
+}
+
 function stableHash(value: string) {
   let hash = 2166136261;
   for (const character of value) {
@@ -100,7 +106,8 @@ function isAnnotation(value: unknown): value is PdfAnnotation {
     (candidate.note === undefined || typeof candidate.note === "string") &&
     (candidate.color === undefined || highlightColors.has(candidate.color as PdfHighlightColor)) &&
     (candidate.visibility === "private" || candidate.visibility === "pending_public") &&
-    typeof candidate.createdAt === "string" && typeof candidate.updatedAt === "string" &&
+    typeof candidate.createdAt === "string" && Number.isFinite(Date.parse(candidate.createdAt)) &&
+    typeof candidate.updatedAt === "string" && Number.isFinite(Date.parse(candidate.updatedAt)) &&
     isPaperIdentity(candidate.paperIdentity) &&
     (candidate.syncState === undefined || isSyncState(candidate.syncState));
 }
@@ -136,6 +143,14 @@ function legacyAnnotationStorageKey(storageKey: string) {
     : storageKey;
 }
 
+function matchingArtifactStorageKeys(storageKey: string, prefix: string) {
+  const unscopedKey = legacyAnnotationStorageKey(storageKey);
+  const suffix = unscopedKey.slice(prefix.length);
+  return Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index))
+    .filter((key): key is string => typeof key === "string" &&
+      key.startsWith(`${prefix}:`) && key.endsWith(suffix));
+}
+
 function loadScopedAnnotationValue(storageKey: string) {
   const scopedValue = window.localStorage.getItem(storageKey);
   if (scopedValue !== null) return scopedValue;
@@ -155,7 +170,7 @@ export function loadPdfAnnotationAutoPublic(storageKey: string | null) {
 }
 
 export function savePdfAnnotationAutoPublic(storageKey: string | null, enabled: boolean) {
-  if (!storageKey || typeof window === "undefined") return;
+  if (!storageKey || typeof window === "undefined" || canUseTauriArtifactStore()) return;
   try {
     window.localStorage.setItem(storageKey, String(enabled));
   } catch {
@@ -202,6 +217,47 @@ export function normalizePdfAnnotationPrivateState(
   };
 }
 
+export function loadPdfAnnotationBrowserMigrationState(
+  annotationStorageKey: string | null,
+  autoPublicStorageKey: string | null,
+  fallbackPaperIdentity?: PaperIdentity
+): PdfAnnotationPrivateState | undefined {
+  if (!annotationStorageKey || !autoPublicStorageKey || typeof window === "undefined" ||
+    !canUseTauriArtifactStore()) {
+    return undefined;
+  }
+  const annotationsById = new Map<string, PdfAnnotation>();
+  let found = false;
+  try {
+    for (const key of matchingArtifactStorageKeys(annotationStorageKey, storagePrefix)) {
+      const serialized = window.localStorage.getItem(key);
+      if (serialized === null) continue;
+      found = true;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(serialized);
+      } catch {
+        continue;
+      }
+      for (const annotation of normalizePdfAnnotations(parsed, fallbackPaperIdentity)) {
+        const current = annotationsById.get(annotation.id);
+        if (!current || Date.parse(annotation.updatedAt) >= Date.parse(current.updatedAt)) {
+          annotationsById.set(annotation.id, annotation);
+        }
+      }
+    }
+    const autoPublic = matchingArtifactStorageKeys(autoPublicStorageKey, autoPublicStoragePrefix)
+      .some((key) => {
+        const value = window.localStorage.getItem(key);
+        found ||= value !== null;
+        return value === "true";
+      });
+    return found ? { annotations: [...annotationsById.values()], autoPublic, version: 1 } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function loadPdfAnnotations(storageKey: string | null, fallbackPaperIdentity?: PaperIdentity): PdfAnnotation[] {
   if (!storageKey || typeof window === "undefined") {
     return [];
@@ -217,12 +273,32 @@ export function loadPdfAnnotations(storageKey: string | null, fallbackPaperIdent
 }
 
 export function savePdfAnnotations(storageKey: string | null, annotations: readonly PdfAnnotation[]) {
-  if (!storageKey || typeof window === "undefined") {
+  if (!storageKey || typeof window === "undefined" || canUseTauriArtifactStore()) {
     return;
   }
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(annotations));
   } catch {
     // Storage can be unavailable in private or quota-constrained webviews.
+  }
+}
+
+export function clearMigratedPdfAnnotationBrowserCache(
+  annotationStorageKey: string | null,
+  autoPublicStorageKey: string | null
+) {
+  if (typeof window === "undefined" || !canUseTauriArtifactStore()) return;
+  try {
+    for (const [storageKey, prefix] of [
+      [annotationStorageKey, storagePrefix],
+      [autoPublicStorageKey, autoPublicStoragePrefix]
+    ] as const) {
+      if (!storageKey) continue;
+      for (const key of matchingArtifactStorageKeys(storageKey, prefix)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // A successful disk migration remains authoritative even if WebView cache cleanup fails.
   }
 }

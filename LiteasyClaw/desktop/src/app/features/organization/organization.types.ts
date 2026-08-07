@@ -1,3 +1,5 @@
+import type { OrganizationStoragePolicy } from "./organizationStoragePolicy";
+
 export type OrganizationNotificationType = "announcement" | "document_upload" | "library_change";
 
 export type OrganizationNotification = {
@@ -18,11 +20,15 @@ export type OrganizationRole = "owner" | "admin" | "member";
 export type OrganizationMember = {
   id: string;
   name: string;
+  revision: number;
   role: OrganizationRole;
+  status: "active" | "suspended";
+  subject: string;
 };
 
 export type OrganizationQuota = {
-  periodEndsAt: string;
+  configured: boolean;
+  periodEndsAt?: string;
   storageLimitGb: number;
   storageUsedGb: number;
 };
@@ -78,14 +84,17 @@ export type OrganizationSummary = {
   canCreateOrganization?: boolean;
   memberCount: number;
   members: OrganizationMember[];
+  myMemberRevision: number | null;
   myRole: OrganizationRole;
   name: string;
   notifications: OrganizationNotification[];
   ownerUserId?: string;
   organizationId: string;
+  policy?: OrganizationStoragePolicy;
   quota: OrganizationQuota;
+  revision: number;
   sharedLibrary: OrganizationSharedLibrary;
-  taskSummary: OrganizationTaskSummary;
+  taskSummary?: OrganizationTaskSummary;
 };
 
 export type OrganizationListItem = {
@@ -94,7 +103,9 @@ export type OrganizationListItem = {
   myRole: OrganizationRole;
   name: string;
   ownerUserId?: string;
+  ownerSubject?: string;
   organizationId: string;
+  revision: number;
   sharedLibraryName: string;
 };
 
@@ -114,7 +125,7 @@ export type OrganizationSummaryInput = {
   sessionId: string;
 };
 
-export type OrganizationSummaryStatus = "unauthenticated" | "loading" | "success" | "error";
+export type OrganizationSummaryStatus = "unauthenticated" | "idle" | "loading" | "success" | "error";
 
 export type OrganizationGovernanceAuditQueue = {
   highRisk: number;

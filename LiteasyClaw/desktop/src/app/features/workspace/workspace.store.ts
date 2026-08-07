@@ -5,9 +5,9 @@ import type {
   WorkspaceState
 } from "./workspace.types";
 
-export function createWorkspaceStore() {
+export function createWorkspaceStore(initialPapers: Paper[] = []) {
   const state: WorkspaceState = {
-    papers: [],
+    papers: [...initialPapers],
     selectedPaperIds: [],
     selectionLocked: false,
     workspaceSource: {

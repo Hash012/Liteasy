@@ -29,6 +29,7 @@ function scopeKey(scope: ThinReadingRecommendationScope) {
 
 export function useThinReadingCommunityRecommendations(input: {
   endpoint?: string;
+  sessionId?: string;
   scope: ThinReadingRecommendationScope;
 }): ThinReadingCommunityRecommendationState {
   const endpoint = input.endpoint?.trim() ?? "";
@@ -47,7 +48,7 @@ export function useThinReadingCommunityRecommendations(input: {
 
     let active = true;
     setState(Object.freeze({ recommendations: Object.freeze([]), status: "loading" }));
-    void createThinReadingCommunityRecommendationClient({ endpoint })(input.scope)
+    void createThinReadingCommunityRecommendationClient({ endpoint, sessionId: input.sessionId })(input.scope)
       .then((recommendations) => {
         if (active) {
           setState(Object.freeze({ recommendations, status: "ready" }));
@@ -65,7 +66,7 @@ export function useThinReadingCommunityRecommendations(input: {
     return () => {
       active = false;
     };
-  }, [endpoint, input.scope, requestKey]);
+  }, [endpoint, input.scope, input.sessionId, requestKey]);
 
   return state;
 }

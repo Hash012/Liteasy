@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { resolveLocalAccountKey } from "./localAccountKey";
 
 export type PaperCacheUsage = {
   byteLength: number;
@@ -44,7 +43,6 @@ export type CacheExternalPdf = (input: CacheExternalPdfInput) => Promise<string>
 
 export const cacheExternalPdf: CacheExternalPdf = async ({ bytes, contentHash, invoke: override }) =>
   resolveInvoke(override)<string>("cache_external_pdf", {
-    accountKey: resolveLocalAccountKey(),
     bytes: Array.from(bytes),
     contentHash
   });
@@ -58,7 +56,6 @@ export type ReadCachedPdf = (input: ReadCachedPdfInput) => Promise<Uint8Array>;
 
 export const readCachedPdf: ReadCachedPdf = async ({ cachePath, invoke: override }) => {
   const bytes = await resolveInvoke(override)<number[]>("read_cached_pdf", {
-    accountKey: resolveLocalAccountKey(),
     cachePath
   });
   return new Uint8Array(bytes);
@@ -82,7 +79,6 @@ export const promoteCachedPdfToLibrary: PromoteCachedPdfToLibrary = async ({
   invoke: override
 }) =>
   resolveInvoke(override)<string>("promote_cached_pdf_to_library", {
-    accountKey: resolveLocalAccountKey(),
     cachePath,
     fileName
   });
@@ -90,11 +86,7 @@ export const promoteCachedPdfToLibrary: PromoteCachedPdfToLibrary = async ({
 export type PaperCacheUsageInput = { invoke?: PaperCacheInvoke };
 
 export const paperCacheUsage = async ({ invoke: override }: PaperCacheUsageInput = {}) =>
-  resolveInvoke(override)<PaperCacheUsage>("paper_cache_usage", {
-    accountKey: resolveLocalAccountKey()
-  });
+  resolveInvoke(override)<PaperCacheUsage>("paper_cache_usage");
 
 export const clearPaperCache = async ({ invoke: override }: PaperCacheUsageInput = {}) =>
-  resolveInvoke(override)<PaperCacheUsage>("clear_paper_cache", {
-    accountKey: resolveLocalAccountKey()
-  });
+  resolveInvoke(override)<PaperCacheUsage>("clear_paper_cache");

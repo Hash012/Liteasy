@@ -43,6 +43,7 @@ describe("thinReadingCommunityRecommendationClient", () => {
     }));
     const client = createThinReadingCommunityRecommendationClient({
       endpoint: "https://intuecho.example.com/base/",
+      sessionId: "desktop-token",
       transport
     });
 
@@ -62,7 +63,9 @@ describe("thinReadingCommunityRecommendationClient", () => {
         externalSourceIds: [],
         kind: "selected_passage",
         paperIdentity: {
+          id: "doi:10.48550/arxiv.1706.03762",
           kind: "doi",
+          source: "metadata",
           value: "10.48550/arxiv.1706.03762"
         }
       }
@@ -82,6 +85,7 @@ describe("thinReadingCommunityRecommendationClient", () => {
     };
     const client = createThinReadingCommunityRecommendationClient({
       endpoint: "https://intuecho.example.com",
+      sessionId: "desktop-token",
       transport: vi.fn(async () => ({
         json: async () => ({
           recommendations: [{

@@ -101,10 +101,14 @@ describe("useRecommendations", () => {
     expect(cacheGet).toHaveBeenCalledTimes(1);
     expect(recommendationFetch).toHaveBeenCalledTimes(1);
     expect(result.current.recommendationPending).toBe(true);
-    // personalizationVersion is intentionally excluded from the cache scope so that
-    // a profile-load / signal that bumps the version does not invalidate the cache or
-    // drop an in-flight fetch (which previously made recommendations vanish on reload).
-    expect(cacheGet.mock.calls[0][0].personalizationVersion).toBeUndefined();
+    expect(cacheGet.mock.calls[0][0]).toEqual({
+      personalizationVersion: 7,
+      selectionKey: expect.stringMatching(/^selection:[a-f0-9]{8}$/),
+      sessionId: "demo-session-1",
+      sortMode: "relevance",
+      workspaceKey: expect.stringMatching(/^workspace:[a-f0-9]{8}$/)
+    });
+    expect(JSON.stringify(cacheGet.mock.calls[0][0])).not.toContain("/tmp/LiteasyLibrary");
     expect(result.current.recommendationMessage).toBe("已显示缓存推荐，正在联网刷新。");
     resolveRefresh([liveRecommendation]);
     await waitFor(() => {

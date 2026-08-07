@@ -1,0 +1,1 @@
+export { getEndpointFromInstructions, resolveParams, toEndpointV1, endpointMiddleware, endpointMiddlewareOptions, getEndpointPlugin, resolveEndpointConfig, resolveEndpointRequiredConfig, } from "@smithy/core/endpoints";

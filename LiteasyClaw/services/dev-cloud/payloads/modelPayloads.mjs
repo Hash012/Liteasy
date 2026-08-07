@@ -4,7 +4,6 @@ import {
   createOpenAIResponsesStreamProvider,
   isRetryableOpenAIResponsesError
 } from "../providers/openaiResponses.mjs";
-import { generateMockAnswer } from "../providers/mockProvider.mjs";
 
 // This compatible gateway currently exposes these three GPT-5.6 variants.
 // Keep the order explicit: it is the product's reliability policy, rather
@@ -91,9 +90,7 @@ function getAuditVerdict(score) {
 
 export function buildProviderRegistry(config) {
   const openaiProvider =
-    config.hardcodedDevForceLocalFakeModel
-      ? async (input) => `${config.hardcodedDevFakeAnswerPrefix ?? "实验默认回复"}：${input.prompt}`
-      : config.openaiApiKey && config.openaiApiKey.length > 0
+    config.openaiApiKey && config.openaiApiKey.length > 0
       ? createOpenAIModelFailoverProvider(createOpenAIResponsesProvider({
           apiBaseUrl: config.openaiApiBaseUrl,
           apiKey: config.openaiApiKey,
@@ -110,7 +107,6 @@ export function buildProviderRegistry(config) {
 
   return {
     deepseek: deepseekProvider,
-    mock: generateMockAnswer,
     openai: openaiProvider
   };
 }
@@ -142,11 +138,11 @@ export function buildModelAuditPayload(body) {
 
   return {
     audit: {
-      model: "gpt-5-mini-auditor",
+      model: "deterministic-citation-check/v1",
       rationale:
         hasTraceableCitation && answer.length >= 12
-          ? "开发云审计确认回答包含可追溯引用。"
-          : "开发云审计发现回答依据不足，需要人工复核。",
+          ? "确定性检查发现回答包含可追溯引用。"
+          : "确定性检查发现回答依据不足，需要人工复核。",
       score,
       verdict: getAuditVerdict(score)
     }
@@ -168,22 +164,7 @@ export async function generateAnswer(body, providers) {
     };
   }
 
-  if (body.requireLive === true) {
-    throw new Error(`当前开发云未配置真实 provider：${providerId}`);
-  }
-
-  if (providerId !== "openai") {
-    throw new Error(`当前开发云未注册 provider：${providerId}`);
-  }
-
-  return {
-    answer: await providers.mock(body),
-    execution: {
-      backend: "dev_cloud",
-      mode: "mock_fallback",
-      provider: "mock"
-    }
-  };
+  throw new Error(`当前开发云未配置真实 provider：${providerId}`);
 }
 
 export async function* generateAnswerStream(body, providers, streamingProviders) {

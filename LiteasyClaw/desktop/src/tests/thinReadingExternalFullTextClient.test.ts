@@ -14,6 +14,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(
 const source: ThinReadingExternalSource = {
   abstract: "A method abstract with measurable results.",
   authors: ["A. Author"],
+  fullTextGrantId: "pdfgrant_12345678-abcd",
   fullTextUrl: "https://papers.example.test/paper.pdf",
   id: "openalex:W42",
   provider: "openalex",
@@ -28,7 +29,7 @@ const source: ThinReadingExternalSource = {
 
 describe("thinReadingExternalFullTextClient", () => {
   test("extracts page evidence with content-addressed stable IDs", async () => {
-    const bytes = readFileSync(resolve(process.cwd(), "public/papers/colbert-late-interaction.pdf"));
+    const bytes = readFileSync(resolve(process.cwd(), "src/tests/assets/papers/colbert-late-interaction.pdf"));
     const contentHash = createHash("sha256").update(bytes).digest("hex");
     const transport = async () => ({
       json: async () => ({
@@ -95,7 +96,7 @@ describe("thinReadingExternalFullTextClient", () => {
 
     await expect(client(source)).rejects.toThrow("完整性校验失败");
     expect(transport).toHaveBeenCalledWith(expect.objectContaining({
-      body: JSON.stringify({ sourceId: source.id, url: source.fullTextUrl }),
+      body: JSON.stringify({ grantId: source.fullTextGrantId, sourceId: source.id }),
       url: "https://liteasy.example.test/v1/research/external-pdf"
     }));
   });

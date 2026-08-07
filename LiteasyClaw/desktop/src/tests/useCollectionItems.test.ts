@@ -36,54 +36,21 @@ describe("useCollectionItems", () => {
     expect(result.current.message).toBe("登录后可用的云端收藏会显示在这里。");
   });
 
-  test("collects recommendations in-memory while logged out without persisting them locally", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-14T10:30:00.000Z"));
+  test("requires login instead of reporting a local collection success", async () => {
     const { result } = renderHook(() => useCollectionItems());
 
-    act(() => {
-      result.current.collectRecommendation({
+    await act(async () => {
+      await expect(result.current.collectRecommendation({
         id: "paper-1",
         reason: "RAG baseline",
         source: "semantic-scholar",
         title: "Retrieval-Augmented Generation"
-      });
-    });
-    act(() => {
-      result.current.collectRecommendation({
-        id: "paper-2",
-        reason: "Long context evaluation",
-        source: "arxiv",
-        title: "Long-Context Evaluation"
-      });
-    });
-    act(() => {
-      result.current.collectRecommendation({
-        id: "paper-1",
-        reason: "Updated RAG baseline",
-        source: "semantic-scholar",
-        title: "Retrieval-Augmented Generation"
-      });
+      })).rejects.toThrow("登录后才能收藏关联推荐");
     });
 
-    expect(result.current.collectionItems).toEqual([
-      {
-        id: "paper-1",
-        reason: "Updated RAG baseline",
-        savedAt: "2026-05-14T10:30:00.000Z",
-        source: "semantic-scholar",
-        title: "Retrieval-Augmented Generation"
-      },
-      {
-        id: "paper-2",
-        reason: "Long context evaluation",
-        savedAt: "2026-05-14T10:30:00.000Z",
-        source: "arxiv",
-        title: "Long-Context Evaluation"
-      }
-    ]);
+    expect(result.current.collectionItems).toEqual([]);
     expect(window.localStorage.getItem("liteasy.collection.online.v1")).toBeNull();
-    expect(result.current.message).toBe("已更新本地收藏。");
+    expect(result.current.message).toBe("登录后才能收藏关联推荐。");
   });
 
   test("uses a cloud transport when account session is available", async () => {

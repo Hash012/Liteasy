@@ -7,6 +7,7 @@ import {
   resolveHost,
   resolvePort
 } from "./config.mjs";
+import { assertDevCloudDeploymentBoundary } from "./deploymentBoundary.mjs";
 import { createDevCloudRequestHandler } from "./requestHandler.mjs";
 
 export { createDevCloudRequestHandler } from "./requestHandler.mjs";
@@ -16,6 +17,7 @@ export function createDevCloudServer(customConfig = {}) {
 }
 
 async function startFromCli() {
+  assertDevCloudDeploymentBoundary();
   const port = resolvePort();
   const host = resolveHost();
   const startedAt = new Date().toISOString();

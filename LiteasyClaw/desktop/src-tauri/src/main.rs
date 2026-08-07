@@ -3,10 +3,9 @@
 mod agent_host;
 mod agent_state;
 mod artifact_catalog_state;
-mod import;
+mod desktop_identity;
 mod local_library;
 mod paper_cache;
-mod skill_documents;
 mod user_paper_store;
 
 fn main() {
@@ -16,10 +15,12 @@ fn main() {
 
     tauri::Builder::default()
         .manage(agent_host::AgentHostState::default())
+        .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
             if let Err(error) = agent_host::start(app.handle().clone()) {
                 eprintln!("Liteasy Agent host is unavailable: {error}");
             }
+            local_library::start_local_library_watcher(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -28,13 +29,30 @@ fn main() {
             agent_state::save_agent_state,
             artifact_catalog_state::load_artifact_catalog_state,
             artifact_catalog_state::save_artifact_catalog_state,
-            import::mock_import,
+            desktop_identity::begin_desktop_oauth_login,
+            desktop_identity::restore_desktop_oauth_session,
+            desktop_identity::revoke_desktop_oauth_session,
             local_library::add_metadata_only_library_entry,
+            local_library::backup_local_library,
+            local_library::create_local_library_folder,
+            local_library::empty_local_library_trash,
+            local_library::ensure_local_library_relative_folder,
+            local_library::list_legacy_local_library_roots,
             local_library::load_local_library_snapshot,
-            local_library::import_local_library_pdfs,
+            local_library::begin_local_library_pdf_import,
+            local_library::append_local_library_pdf_import,
+            local_library::finish_local_library_pdf_import,
+            local_library::cancel_local_library_pdf_import,
             local_library::read_local_library_pdf,
+            local_library::local_library_pdf_info,
+            local_library::read_local_library_pdf_chunk,
             local_library::move_local_library_resource,
+            local_library::purge_local_library_trash_item,
+            local_library::restore_local_library_trash_item,
+            local_library::select_legacy_local_library_root,
             local_library::set_local_library_root,
+            local_library::trash_local_library_resource,
+            local_library::trash_local_metadata_entry,
             local_library::open_local_library_in_file_manager,
             paper_cache::cache_external_pdf,
             paper_cache::read_cached_pdf,
@@ -42,8 +60,7 @@ fn main() {
             paper_cache::paper_cache_usage,
             paper_cache::clear_paper_cache,
             user_paper_store::load_user_paper_artifact,
-            user_paper_store::save_user_paper_artifact,
-            skill_documents::save_skill_document
+            user_paper_store::save_user_paper_artifact
         ])
         .run(tauri::generate_context!())
         .expect("error while running Liteasy desktop");

@@ -1,15 +1,19 @@
 import { useState } from "react";
 
 type OrganizationJoinDialogProps = {
+  message?: string;
   onCancel: () => void;
-  onConfirm: (inviteCode: string) => void;
+  onConfirm: (invitationToken: string) => void;
+  pending?: boolean;
 };
 
 export function OrganizationJoinDialog({
+  message,
   onCancel,
-  onConfirm
+  onConfirm,
+  pending = false
 }: OrganizationJoinDialogProps) {
-  const [inviteCode, setInviteCode] = useState("LITEASY-DEMO-JOIN");
+  const [invitationToken, setInvitationToken] = useState("");
 
   return (
     <div className="workspace-dialog-backdrop profile-dialog-backdrop" data-testid="workspace-dialog-backdrop">
@@ -19,33 +23,34 @@ export function OrganizationJoinDialog({
             <div className="profile-dialog-kicker">Organization Join</div>
             <div className="profile-dialog-title">加入组织</div>
           </div>
-          <button className="organization-dialog-close" onClick={onCancel} type="button">
+          <button className="organization-dialog-close" disabled={pending} onClick={onCancel} type="button">
             关闭
           </button>
         </div>
         <div className="profile-archive-card">
           <label className="organization-form-field">
-            <span>组织邀请码</span>
+            <span>邀请令牌</span>
             <input
-              aria-label="组织邀请码"
+              aria-label="邀请令牌"
               className="organization-form-input"
-              onChange={(event) => setInviteCode(event.target.value)}
-              value={inviteCode}
+              onChange={(event) => setInvitationToken(event.target.value)}
+              placeholder="orginv_..."
+              value={invitationToken}
             />
           </label>
         </div>
+        {message ? <div aria-live="polite" className="organization-action-message">{message}</div> : null}
         <div className="profile-dialog-actions">
-          <button className="left-rail-button subtle" onClick={onCancel} type="button">
+          <button className="left-rail-button subtle" disabled={pending} onClick={onCancel} type="button">
             取消
           </button>
           <button
             className="left-rail-button"
-            disabled={inviteCode.trim().length === 0}
-            onClick={() => onConfirm(inviteCode.trim())}
-            title="当前演示环境会记录加入组织请求，但不会真正变更成员关系。正式版本将在此接入邀请码校验、组织审批与成员权限。"
+            disabled={pending || invitationToken.trim().length === 0}
+            onClick={() => onConfirm(invitationToken.trim())}
             type="button"
           >
-            提交加入组织请求
+            {pending ? "正在加入" : "加入组织"}
           </button>
         </div>
       </div>

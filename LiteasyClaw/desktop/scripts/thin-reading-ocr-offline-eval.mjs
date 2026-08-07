@@ -5,8 +5,8 @@ import { createCanvas } from "@napi-rs/canvas";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createWorker } from "tesseract.js";
 
-const fixturePath = resolve(process.cwd(), "public/papers/liteasy-ocr-scanned-fixture.pdf");
-const bilingualFixturePath = resolve(process.cwd(), "public/papers/liteasy-ocr-bilingual-fixture.png");
+const fixturePath = resolve(process.cwd(), "src/tests/assets/papers/liteasy-ocr-scanned-fixture.pdf");
+const bilingualFixturePath = resolve(process.cwd(), "src/tests/assets/papers/liteasy-ocr-bilingual-fixture.png");
 const languageDataPath = resolve(process.cwd(), "public/ocr");
 const expectedText = "Liteasy scanned evidence OCR must preserve this sentence.";
 

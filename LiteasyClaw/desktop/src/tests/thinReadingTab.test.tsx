@@ -5,7 +5,7 @@ import {
   splitThinReadingSummaryTextByAnchors,
   ThinReadingTab
 } from "../app/features/thin-reading/ThinReadingTab";
-import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import {
   addThinReadingAnnotation,
   advanceThinReadingDocument,
@@ -804,10 +804,11 @@ describe("ThinReadingTab", () => {
     expect(screen.queryByRole("button", { name: "深入" })).not.toBeInTheDocument();
   });
 
-  test("honors automatic publication when saving an annotation from selected text", () => {
+  test("automatically sends a newly saved public annotation while retaining its retry queue", async () => {
     const document = setThinReadingAutoPublic(makeDocument(), true);
     const onUpdateDocument = vi.fn();
-    renderTab(document, onUpdateDocument);
+    const onSyncIntuecho = vi.fn(async () => undefined);
+    renderTab(document, onUpdateDocument, undefined, onSyncIntuecho);
     const paragraph = screen.getByTestId("thin-reading-summary");
 
     vi.spyOn(window, "getSelection").mockReturnValue({
@@ -830,6 +831,10 @@ describe("ThinReadingTab", () => {
       visibility: "pending_public"
     });
     expect(updatedDocument.pendingPublicAnnotationIds).toEqual([updatedDocument.annotations[0].id]);
+    await waitFor(() => expect(onSyncIntuecho).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document: updatedDocument
+    }));
   });
 
   test("does not offer selection deepening for a community recommendation", () => {

@@ -1,15 +1,19 @@
 import { useState } from "react";
 
 type OrganizationCreateDialogProps = {
+  message?: string;
   onCancel: () => void;
   onConfirm: (organizationName: string) => void;
+  pending?: boolean;
 };
 
 export function OrganizationCreateDialog({
+  message,
   onCancel,
-  onConfirm
+  onConfirm,
+  pending = false
 }: OrganizationCreateDialogProps) {
-  const [organizationName, setOrganizationName] = useState("Liteasy Demo Organization");
+  const [organizationName, setOrganizationName] = useState("");
 
   return (
     <div className="workspace-dialog-backdrop profile-dialog-backdrop" data-testid="workspace-dialog-backdrop">
@@ -19,7 +23,7 @@ export function OrganizationCreateDialog({
             <div className="profile-dialog-kicker">Organization Creation</div>
             <div className="profile-dialog-title">创建组织</div>
           </div>
-          <button className="organization-dialog-close" onClick={onCancel} type="button">
+          <button className="organization-dialog-close" disabled={pending} onClick={onCancel} type="button">
             关闭
           </button>
         </div>
@@ -34,18 +38,18 @@ export function OrganizationCreateDialog({
             />
           </label>
         </div>
+        {message ? <div aria-live="polite" className="organization-action-message">{message}</div> : null}
         <div className="profile-dialog-actions">
-          <button className="left-rail-button subtle" onClick={onCancel} type="button">
+          <button className="left-rail-button subtle" disabled={pending} onClick={onCancel} type="button">
             取消
           </button>
           <button
             className="left-rail-button"
-            disabled={organizationName.trim().length === 0}
+            disabled={pending || organizationName.trim().length === 0}
             onClick={() => onConfirm(organizationName.trim())}
-            title="当前演示环境会记录创建组织请求，但不会真正开通组织空间。正式版本将在此接入会员权限、套餐与组织开通流程。"
             type="button"
           >
-            提交创建组织申请
+            {pending ? "正在创建" : "创建组织"}
           </button>
         </div>
       </div>

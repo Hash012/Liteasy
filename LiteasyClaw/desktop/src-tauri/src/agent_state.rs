@@ -20,16 +20,16 @@ pub fn load_agent_state(app: AppHandle) -> Result<Option<Value>, String> {
     if !path.exists() {
         return Ok(None);
     }
-    let metadata = fs::metadata(&path)
-        .map_err(|error| format!("Could not inspect Agent state: {error}"))?;
+    let metadata =
+        fs::metadata(&path).map_err(|error| format!("Could not inspect Agent state: {error}"))?;
     if metadata.len() > MAX_AGENT_STATE_BYTES {
         return Err(format!(
             "Agent state exceeds the {} byte limit",
             MAX_AGENT_STATE_BYTES
         ));
     }
-    let serialized = fs::read(&path)
-        .map_err(|error| format!("Could not read Agent state: {error}"))?;
+    let serialized =
+        fs::read(&path).map_err(|error| format!("Could not read Agent state: {error}"))?;
     serde_json::from_slice(&serialized)
         .map(Some)
         .map_err(|error| format!("Stored Agent state is invalid JSON: {error}"))

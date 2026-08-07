@@ -1,11 +1,9 @@
-import { readJsonFile, writeJsonFile } from "./jsonFileStore.mjs";
-
-const recommendationCacheFilename = "recommendation-cache.json";
 const defaultRecommendationCacheMaxAgeMs = 24 * 60 * 60 * 1000;
+const maximumRecommendationCacheEntriesPerOwner = 100;
+let singleton;
 
-function buildScopeKey(scope) {
+function scopeKey(scope) {
   return [
-    scope.sessionId,
     scope.workspaceKey,
     scope.selectionKey,
     scope.sortMode,
@@ -13,91 +11,110 @@ function buildScopeKey(scope) {
   ].join("::");
 }
 
-function readRecommendationCacheState() {
-  return readJsonFile(recommendationCacheFilename, {});
+export function createRecommendationCacheRepository(database, options = {}) {
+  const now = () => options.now?.() ?? new Date();
+  return {
+    get(scope) {
+      const current = now();
+      const key = scopeKey(scope);
+      const row = database.prepare(`
+        SELECT * FROM recommendation_cache_entries
+        WHERE owner_key = ? AND scope_key = ?
+      `).get(scope.sessionId, key);
+      if (!row || Date.parse(row.expires_at) <= current.getTime()) {
+        if (row) {
+          database.prepare(`
+            DELETE FROM recommendation_cache_entries WHERE owner_key = ? AND scope_key = ?
+          `).run(scope.sessionId, key);
+        }
+        return { cacheHit: false, recommendations: [] };
+      }
+      return {
+        cacheHit: true,
+        cachedAt: row.cached_at,
+        expiresAt: row.expires_at,
+        recommendations: JSON.parse(row.recommendations_json),
+        serverNow: current.toISOString()
+      };
+    },
+
+    put(scope, recommendations) {
+      const cachedAt = now();
+      const expiresAt = new Date(cachedAt.getTime() + defaultRecommendationCacheMaxAgeMs);
+      database.prepare(`
+        INSERT INTO recommendation_cache_entries (
+          owner_key, scope_key, recommendations_json, cached_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(owner_key, scope_key) DO UPDATE SET
+          recommendations_json = excluded.recommendations_json,
+          cached_at = excluded.cached_at,
+          expires_at = excluded.expires_at
+      `).run(
+        scope.sessionId,
+        scopeKey(scope),
+        JSON.stringify(recommendations),
+        cachedAt.toISOString(),
+        expiresAt.toISOString()
+      );
+      database.prepare(
+        "DELETE FROM recommendation_cache_entries WHERE expires_at <= ?"
+      ).run(cachedAt.toISOString());
+      database.prepare(`
+        DELETE FROM recommendation_cache_entries
+        WHERE owner_key = ? AND scope_key IN (
+          SELECT scope_key FROM recommendation_cache_entries
+          WHERE owner_key = ? ORDER BY cached_at DESC, scope_key
+          LIMIT -1 OFFSET ?
+        )
+      `).run(
+        scope.sessionId,
+        scope.sessionId,
+        maximumRecommendationCacheEntriesPerOwner
+      );
+      return {
+        cachedAt: cachedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        ok: true,
+        serverNow: cachedAt.toISOString()
+      };
+    },
+
+    clear(scope) {
+      database.prepare(`
+        DELETE FROM recommendation_cache_entries WHERE owner_key = ? AND scope_key = ?
+      `).run(scope.sessionId, scopeKey(scope));
+      return { cleared: true };
+    },
+
+    clearForUser(ownerKey) {
+      return database.prepare(
+        "DELETE FROM recommendation_cache_entries WHERE owner_key = ?"
+      ).run(ownerKey).changes;
+    }
+  };
 }
 
-export function getRecommendationCache(scope, options = {}) {
-  const state = readRecommendationCacheState();
-  const entry = state[buildScopeKey(scope)];
+export function setRecommendationCacheRepository(repository) {
+  singleton = repository;
+}
 
-  if (!entry) {
-    return {
-      cacheHit: false,
-      recommendations: []
-    };
-  }
+function requireRepository() {
+  if (!singleton) throw new Error("recommendation_cache_repository_not_initialized");
+  return singleton;
+}
 
-  const cachedAt = typeof entry.cachedAt === "string" ? Date.parse(entry.cachedAt) : Number.NaN;
-  const now = options.now instanceof Date ? options.now.getTime() : Date.now();
-  const maxAgeMs = Number.isFinite(options.maxAgeMs)
-    ? Math.max(0, options.maxAgeMs)
-    : defaultRecommendationCacheMaxAgeMs;
-  if (!Number.isFinite(cachedAt) || now - cachedAt > maxAgeMs) {
-    delete state[buildScopeKey(scope)];
-    writeJsonFile(recommendationCacheFilename, state);
-    return {
-      cacheHit: false,
-      recommendations: []
-    };
-  }
-
-  return {
-    cacheHit: true,
-    cachedAt: entry.cachedAt,
-    expiresAt: new Date(cachedAt + maxAgeMs).toISOString(),
-    serverNow: new Date(now).toISOString(),
-    recommendations: Array.isArray(entry.recommendations) ? entry.recommendations : []
-  };
+export function getRecommendationCache(scope) {
+  return requireRepository().get(scope);
 }
 
 export function putRecommendationCache(scope, recommendations) {
-  const state = readRecommendationCacheState();
-  const cachedAt = new Date().toISOString();
-
-  state[buildScopeKey(scope)] = {
-    cachedAt,
-    recommendations
-  };
-  writeJsonFile(recommendationCacheFilename, state);
-
-  return {
-    cachedAt,
-    expiresAt: new Date(Date.parse(cachedAt) + defaultRecommendationCacheMaxAgeMs).toISOString(),
-    serverNow: cachedAt,
-    ok: true
-  };
+  return requireRepository().put(scope, recommendations);
 }
 
 export function clearRecommendationCache(scope) {
-  const state = readRecommendationCacheState();
-  delete state[buildScopeKey(scope)];
-  writeJsonFile(recommendationCacheFilename, state);
-
-  return {
-    cleared: true
-  };
+  return requireRepository().clear(scope);
 }
 
-export function clearRecommendationCacheForSession(sessionId) {
-  const state = readRecommendationCacheState();
-  const prefix = `${sessionId}::`;
-  let clearedCount = 0;
-  for (const key of Object.keys(state)) {
-    if (key.startsWith(prefix)) {
-      delete state[key];
-      clearedCount += 1;
-    }
-  }
-  if (clearedCount > 0) {
-    writeJsonFile(recommendationCacheFilename, state);
-  }
-  return clearedCount;
-}
-
-export function resetRecommendationCacheData() {
-  writeJsonFile(recommendationCacheFilename, {});
-  return {
-    reset: true
-  };
+export function clearRecommendationCacheForSession(ownerKey) {
+  return requireRepository().clearForUser(ownerKey);
 }

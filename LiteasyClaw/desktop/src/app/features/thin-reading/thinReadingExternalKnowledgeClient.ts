@@ -68,6 +68,7 @@ function isExternalSource(value: unknown): value is ThinReadingExternalSource {
     recordUrl === providerContract!.recordUrl(sourceId) &&
     validRelation &&
     typeof source.relevance === "number" && Number.isFinite(source.relevance) &&
+    (source.fullTextGrantId === undefined || (typeof source.fullTextGrantId === "string" && /^pdfgrant_[A-Za-z0-9-]+$/.test(source.fullTextGrantId))) &&
     (source.fullTextUrl === undefined || (typeof source.fullTextUrl === "string" && /^https:\/\//i.test(source.fullTextUrl))) &&
     (source.isRetracted === undefined || typeof source.isRetracted === "boolean") &&
     typeof source.retrievalQuery === "string";

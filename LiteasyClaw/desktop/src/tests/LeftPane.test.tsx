@@ -1,63 +1,70 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test, vi } from "vitest";
-import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
-import { externalPdfDragMimeType } from "../app/features/library/externalPdfDownload";
-import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
+import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
+import type { CloudLibraryTree } from "../app/features/library/cloudLibraryStorageClient";
+import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
+
+const cloudTrees = vi.hoisted(() => ({
+  organization: {
+    message: "",
+    refresh: vi.fn(async () => undefined),
+    status: "ready" as "error" | "idle" | "loading" | "ready",
+    trashTree: null,
+    tree: null as CloudLibraryTree | null
+  },
+  user: {
+    message: "",
+    refresh: vi.fn(async () => undefined),
+    status: "ready" as "error" | "idle" | "loading" | "ready",
+    trashTree: null,
+    tree: null as CloudLibraryTree | null
+  }
+}));
+
+vi.mock("../app/features/library/useCloudLibraryTree", () => ({
+  useCloudLibraryTree: (input: { scopeType: "organization" | "user" }) =>
+    cloudTrees[input.scopeType]
+}));
+
+function organizationSummary(overrides: Partial<OrganizationSummary> = {}): OrganizationSummary {
+  return {
+    auditEvents: [],
+    memberCount: 1,
+    members: [],
+    myRole: "member",
+    name: "研究组织",
+    notifications: [],
+    organizationId: "org-1",
+    policy: { exportPolicy: "all_members", uploadPolicy: "all_members" },
+    quota: {
+      periodEndsAt: "2026-09-01T00:00:00.000Z",
+      storageLimitGb: 100,
+      storageUsedGb: 12
+    },
+    sharedLibrary: {
+      documentCount: 0,
+      documents: [],
+      name: "组织文献库",
+      status: "available"
+    },
+    taskSummary: { failed: 0, running: 0 },
+    ...overrides
+  };
+}
 
 function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
   return {
+    accountScopeId: "user-1",
     accountSession: {
       email: "researcher@liteasy.dev",
-      expiresAt: "2026-05-15T09:30:00Z",
+      expiresAt: "2026-09-01T00:00:00.000Z",
       membershipTier: "pro",
-      name: "Liteasy Researcher",
-      sessionId: "demo-session-1"
+      name: "Researcher",
+      sessionId: "session-1",
+      userId: "user-1"
     },
-    collectionItems: [],
-    collectionMessage: "已同步云端收藏。",
-    collectionStatus: "ready",
-    documentMetadataSyncMessage: "等待云端账号连接后同步。",
-    documentMetadataSyncResult: null,
-    documentMetadataSyncStatus: "unauthenticated",
-    governanceMessage: "治理状态",
-    governanceStatus: "idle",
-    governanceSummary: null,
-    importJobs: {},
-    leftRailView: "settings",
-    list: null,
-    listMessage: "组织列表",
-    listStatus: "idle",
-    onAddExternalPaper: vi.fn(),
-    onClearProfile: vi.fn(),
-    onClearRecommendations: vi.fn(),
-    onCollectRecommendation: vi.fn(),
-    onDismissRecommendation: vi.fn(),
-    onRetryCollectionSync: vi.fn(),
-    onCreateOrganization: vi.fn(),
-    onImportSelectedSet: vi.fn(),
-    onInviteMember: vi.fn(),
-    onJoinOrganization: vi.fn(),
-    onLoginRequired: vi.fn(),
-    onLeaveOrganization: vi.fn(),
-    onLogout: vi.fn(),
-    onMarkNotificationsRead: vi.fn(),
-    onOpenAcademicArchive: vi.fn(),
-    onOpenOrganizationDialog: vi.fn(),
-    onUpdateAcademicProfile: vi.fn(),
-    onOpenSharedLibrary: vi.fn(),
-    onReturnToLocalWorkspace: vi.fn(),
-    onSelectOrganization: vi.fn(),
-    onToggleLock: vi.fn(),
-    onToggleProfileSampling: vi.fn(),
-    onToggleSelection: vi.fn(),
-    organizationSummary: null,
-    organizationSummaryMessage: "组织摘要",
-    organizationSummaryStatus: "idle",
-    papers: [],
-    profileClearMessage: undefined,
-    profileReadPaperCount: 0,
     academicProfile: {
       age: "未设置",
       disciplines: [],
@@ -68,13 +75,55 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
       researchTopics: "",
       stage: "未设置"
     },
+    agentMemories: [],
+    agentRecentState: "",
+    cloudEndpoint: "http://127.0.0.1:8787",
+    documentMetadataSyncMessage: "等待同步。",
+    documentMetadataSyncResult: null,
+    documentMetadataSyncStatus: "unauthenticated",
+    governanceMessage: "等待组织空间。",
+    governanceStatus: "waiting",
+    governanceSummary: null,
+    importJobs: {},
+    leftRailView: "settings",
+    list: null,
+    listMessage: "",
+    listStatus: "idle",
+    localLibrarySnapshot: {
+      entries: [],
+      folders: [],
+      libraryId: "library-1",
+      revision: 1,
+      rootPath: "/home/test/LiteasyLibrary",
+      trashEntries: []
+    },
+    onClearProfile: vi.fn(),
+    onClearRecommendations: vi.fn(),
+    onDismissRecommendation: vi.fn(),
+    onImportSelectedSet: vi.fn(),
+    onLoginRequired: vi.fn(),
+    onLogout: vi.fn(),
+    onOpenAcademicArchive: vi.fn(),
+    onOpenOrganizationDialog: vi.fn(),
+    onReturnToLocalWorkspace: vi.fn(),
+    onToggleLock: vi.fn(),
+    onToggleProfileSampling: vi.fn(),
+    onToggleSelection: vi.fn(),
+    onUpdateAcademicProfile: vi.fn(),
+    onUpdateAgentMemories: vi.fn(),
+    onUpdateAgentRecentState: vi.fn(),
+    organizationSummary: null,
+    organizationSummaryMessage: "",
+    organizationSummaryStatus: "idle",
+    papers: [],
+    profileReadPaperCount: 0,
     profileSamplingEnabled: false,
     profileTags: [],
+    readNotificationIds: [],
     recommendationItems: [],
-    recommendationMessage: "推荐",
+    recommendationMessage: "暂无关联推荐",
     recommendationPending: false,
     recommendationStatus: "idle",
-    readNotificationIds: [],
     selectedPaperIds: [],
     selectionLocked: false,
     settings: createSeededSettingsStore().getState(),
@@ -85,1080 +134,245 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
   };
 }
 
+beforeEach(() => {
+  window.localStorage.clear();
+  cloudTrees.user.message = "";
+  cloudTrees.user.status = "ready";
+  cloudTrees.user.tree = null;
+  cloudTrees.organization.message = "";
+  cloudTrees.organization.status = "ready";
+  cloudTrees.organization.tree = null;
+  cloudTrees.user.refresh.mockClear();
+  cloudTrees.organization.refresh.mockClear();
+});
+
 describe("LeftPane", () => {
-  test("uses Chinese academic pane headers for activity views", () => {
+  test("uses task-specific pane headers", () => {
     const { rerender } = render(<LeftPane {...createProps({ leftRailView: "library" })} />);
-
     expect(screen.getByText("文献库", { selector: ".pane-header" })).toBeInTheDocument();
-
     rerender(<LeftPane {...createProps({ leftRailView: "organization" })} />);
     expect(screen.getByText("组织", { selector: ".pane-header" })).toBeInTheDocument();
-
     rerender(<LeftPane {...createProps({ leftRailView: "profile" })} />);
     expect(screen.getByText("个人中心", { selector: ".pane-header" })).toBeInTheDocument();
-
     rerender(<LeftPane {...createProps({ leftRailView: "settings" })} />);
     expect(screen.getByText("设置", { selector: ".pane-header" })).toBeInTheDocument();
   });
 
-  test("renders the settings view when selected", () => {
-    render(<LeftPane {...createProps({ leftRailView: "settings" })} />);
-
-    expect(screen.getByLabelText("左边栏设置")).toBeInTheDocument();
-    expect(screen.getByLabelText("文献元数据同步")).toBeInTheDocument();
-  });
-
-  test("shows the local library root and refreshes it on demand", async () => {
-    const user = userEvent.setup();
-    const onRefreshLocalLibrary = vi.fn(() => Promise.resolve());
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          onRefreshLocalLibrary,
-          workspaceLabel: "/home/test/LiteasyLibrary"
-        })}
-      />
-    );
-
-    expect(screen.getByText("/home/test/LiteasyLibrary", { selector: ".library-workspace-label" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "刷新本地文献库" }));
-    expect(onRefreshLocalLibrary).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("本地文献库已刷新。")).toBeInTheDocument();
-  });
-
-  test("renders the library view with analysis started from the shared AI entry points", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          papers: [{ id: "demo-1", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" }],
-          selectedPaperIds: ["demo-1"],
-          selectionLocked: true
-        })}
-      />
-    );
-
-    expect(screen.getByText("我的文献库")).toBeInTheDocument();
-    expect(screen.getByText("本地文献库", { selector: ".library-workspace-label" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "交给AI流程" })).not.toBeInTheDocument();
-  });
-
-  test("uses independently collapsible VS Code-style library sections", async () => {
+  test("renders four independent resource regions in the designed order", async () => {
     const user = userEvent.setup();
     render(<LeftPane {...createProps({ leftRailView: "library" })} />);
+    const regions = screen.getAllByRole("region");
+    expect(regions.map((region) => region.getAttribute("aria-label"))).toEqual([
+      "本地文献库",
+      "收藏",
+      "关联推荐",
+      "组织文献库"
+    ]);
 
-    const librarySection = screen.getByRole("button", { name: "收起我的文献库" });
-    expect(librarySection.querySelector("svg")).toBeInTheDocument();
-    await user.click(librarySection);
-    expect(screen.getByRole("button", { name: "展开我的文献库" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("PDF 文件拖拽导入区")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "展开我的文献库" }));
-    expect(screen.getByLabelText("PDF 文件拖拽导入区")).toBeInTheDocument();
-    const collectionSection = screen.getByRole("button", { name: "展开收藏" });
-    const recommendationSection = screen.getByRole("button", { name: "展开关联推荐" });
-    expect(collectionSection.querySelector("svg")).toBeInTheDocument();
-    expect(recommendationSection.querySelector("svg")).toBeInTheDocument();
-    await user.click(collectionSection);
-    await user.click(recommendationSection);
-    expect(screen.getByRole("button", { name: "收起收藏" })).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("button", { name: "收起关联推荐" })).toHaveAttribute("aria-expanded", "true");
+    await user.click(screen.getByRole("button", { name: "收起本地文献库" }));
+    expect(screen.getByRole("button", { name: "展开本地文献库" })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: "收起收藏" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
   });
 
-  test("switches between local and organization library views from the literature list", async () => {
+  test("renders the real local folder hierarchy, PDFs, and metadata-only entries", async () => {
     const user = userEvent.setup();
-    const onReturnToLocalWorkspace = vi.fn();
-    const onOpenSharedLibrary = vi.fn();
-    const organizationSummary: OrganizationSummary = {
-      auditEvents: [],
-      memberCount: 12,
-      members: [],
-      myRole: "member",
-      name: "Liteasy AI Reading Lab",
-      notifications: [],
-      organizationId: "org-demo-1",
-      quota: {
-        periodEndsAt: "2026-06-01T00:00:00Z",
-        storageLimitGb: 100,
-        storageUsedGb: 38
-      },
-      sharedLibrary: {
-        documentCount: 2,
-        documents: [],
-        name: "组织共享文献库",
-        status: "available"
-      },
-      taskSummary: { failed: 0, running: 1 }
-    };
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [
+          {
+            contentHash: "a".repeat(64),
+            id: "paper-1",
+            path: "/library/课程/Paper.pdf",
+            relativePath: "课程/Paper.pdf",
+            title: "Paper"
+          },
+          {
+            contentHash: null,
+            id: "metadata-1",
+            path: null,
+            relativePath: null,
+            title: "Metadata Paper"
+          }
+        ],
+        folders: [{ name: "课程", parentPath: null, path: "/library/课程" }],
+        libraryId: "library-1",
+        revision: 2,
+        rootPath: "/library",
+        trashEntries: []
+      }
+    })} />);
 
-    const { rerender } = render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          onOpenSharedLibrary,
-          onReturnToLocalWorkspace,
-          organizationSummary,
-          workspaceLabel: "本地文献库",
-          workspaceSourceType: "local_library"
-        })}
-      />
-    );
-
-    const localSwitcher = within(screen.getByLabelText("我的文献库投放区")).getByRole("group", {
-      name: "文献视图切换"
-    });
-    expect(within(localSwitcher).getByRole("button", { name: "本地" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(within(localSwitcher).getByRole("button", { name: "组织" }));
-    expect(onOpenSharedLibrary).toHaveBeenCalledWith(organizationSummary);
-
-    rerender(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          onOpenSharedLibrary,
-          onReturnToLocalWorkspace,
-          organizationSummary,
-          workspaceLabel: "组织共享文献库（Liteasy AI Reading Lab）",
-          workspaceSourceType: "organization_shared"
-        })}
-      />
-    );
-
-    const organizationSwitcher = within(screen.getByLabelText("我的文献库投放区")).getByRole("group", {
-      name: "文献视图切换"
-    });
-    expect(within(organizationSwitcher).getByRole("button", { name: "组织" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(within(organizationSwitcher).getByRole("button", { name: "本地" }));
-    expect(onReturnToLocalWorkspace).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "展开课程" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开课程" }));
+    expect(screen.getByRole("button", { name: "Paper" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "展开仅元数据" }));
+    expect(screen.getByRole("button", { name: "Metadata Paper" })).toBeDisabled();
+    expect(screen.getByText("仅元数据", { selector: ".library-entry-status" })).toBeInTheDocument();
   });
 
-  test("renders a Zotero-style collection tree and PDF file drop target", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          papers: [
-            {
-              id: "demo-1",
-              sourcePath: "/papers/search/colbert-late-interaction.pdf",
-              title:
-                "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
-            },
-            {
-              id: "demo-2",
-              sourcePath: "/papers/vector-database/survey-vector-database-management-systems.pdf",
-              title: "Survey of Vector Database Management Systems"
-            },
-            {
-              id: "demo-3",
-              sourcePath: "/papers/vector-search/acorn-vector-search.pdf",
-              title:
-                "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
-            }
-          ]
-        })}
-      />
-    );
-
-    const libraryZone = screen.getByLabelText("我的文献库投放区");
-    expect(within(libraryZone).getByLabelText("文献库 collections")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("My Library")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("Courses")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("Vector Search")).toBeInTheDocument();
-    expect(within(libraryZone).getByLabelText("PDF 文件拖拽导入区")).toHaveTextContent(
-      "拖入 PDF 添加到文献库"
-    );
-    expect(within(libraryZone).getByText(/ColBERT/)).toBeInTheDocument();
-    expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
-    expect(within(libraryZone).getByText(/ACORN/)).toBeInTheDocument();
-    expect(within(libraryZone).getByText(/ColBERT/).closest(".library-item")).toHaveClass(
-      "library-item"
-    );
-  });
-
-  test("does not crash when dragover dataTransfer types are missing", () => {
+  test("does not inject fixture nodes into an empty local library", () => {
     render(<LeftPane {...createProps({ leftRailView: "library" })} />);
-
-    const libraryZone = screen.getByLabelText("我的文献库投放区");
-
-    expect(() => {
-      fireEvent.dragOver(libraryZone, {
-        dataTransfer: {
-          dropEffect: "none"
-        }
-      });
-    }).not.toThrow();
+    expect(screen.getByText("本地文献库为空")).toBeInTheDocument();
+    expect(screen.queryByText("My Library")).not.toBeInTheDocument();
+    expect(screen.queryByText("Courses")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vector Search")).not.toBeInTheDocument();
   });
 
-  test("saves a metadata-only association dropped into the library", async () => {
-    const onAddExternalPdf = vi.fn(() => Promise.resolve());
-    const source = {
-      abstract: "A metadata-only result without a legal open-access PDF.",
-      accessStatus: "metadata_only" as const,
-      authors: ["Ada Researcher"],
-      confidence: 0.6,
-      confidenceBasis: "citation_graph" as const,
-      doi: "10.1000/metadata-only",
-      id: "crossref:metadata-only",
-      provider: "crossref" as const,
-      relation: "cites_target" as const,
-      relevance: 0.82,
-      retrievalQuery: "metadata only paper",
-      sourceId: "metadata-only",
-      sourceRecordUrl: "https://api.crossref.org/works/10.1000/metadata-only",
-      title: "Metadata Only Paper",
-      url: "https://doi.org/10.1000/metadata-only",
-      year: 2024
-    };
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          onAddExternalPdf
-        })}
-      />
-    );
-
-    fireEvent.drop(screen.getByLabelText("我的文献库投放区"), {
-      dataTransfer: {
-        files: [],
-        getData: (type: string) => type === externalPdfDragMimeType ? JSON.stringify(source) : "",
-        types: [externalPdfDragMimeType]
-      }
-    });
-
-    await waitFor(() => expect(onAddExternalPdf).toHaveBeenCalledWith(source));
-    expect(await screen.findByText(/已保存《Metadata Only Paper》的无本体条目/)).toBeInTheDocument();
-  });
-
-  test("offers retry when an external association cannot be added", async () => {
-    const user = userEvent.setup();
-    const onAddExternalPdf = vi.fn()
-      .mockRejectedValueOnce(new Error("network unavailable"))
-      .mockResolvedValueOnce(undefined);
-    const source = {
-      abstract: "An open-access paper.",
-      accessStatus: "open_access" as const,
-      authors: ["Grace Author"],
-      fullTextUrl: "https://example.org/paper.pdf",
-      id: "openalex:oa-paper",
-      provider: "openalex" as const,
-      relation: "related" as const,
-      relevance: 0.75,
-      retrievalQuery: "open access paper",
-      sourceId: "oa-paper",
-      sourceRecordUrl: "https://openalex.org/W123",
-      title: "Open Access Paper",
-      url: "https://openalex.org/W123"
-    };
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          onAddExternalPdf
-        })}
-      />
-    );
-
-    fireEvent.drop(screen.getByLabelText("我的文献库投放区"), {
-      dataTransfer: {
-        files: [],
-        getData: (type: string) => type === externalPdfDragMimeType ? JSON.stringify(source) : "",
-        types: [externalPdfDragMimeType]
-      }
-    });
-
-    expect(await screen.findByText("加入文献库失败：network unavailable")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "重试" }));
-
-    await waitFor(() => expect(onAddExternalPdf).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(/已保存《Open Access Paper》的 PDF，正在后台抽取全文/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument();
-  });
-
-  test("renders collections and source folders as one collapsible hierarchy", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          papers: [
-            {
-              id: "paper-1",
-              sourcePath: "/papers/search/late-interaction/colbert.pdf",
-              title: "ColBERT"
-            }
-          ]
-        })}
-      />
-    );
-
-    const collectionTree = screen.getByLabelText("文献库 collections");
-    const myLibraryNode = within(collectionTree).getByRole("button", { name: "My Library" })
-      .closest(".library-collection-node");
-
-    expect(myLibraryNode).not.toBeNull();
-    expect(within(myLibraryNode as HTMLElement).getByRole("button", { name: "Courses" }))
-      .toBeInTheDocument();
-    expect(within(myLibraryNode as HTMLElement).getByTitle("/papers")).toBeInTheDocument();
-    expect(within(myLibraryNode as HTMLElement).getByText("search")).toBeInTheDocument();
-    expect(within(myLibraryNode as HTMLElement).getByText("late-interaction"))
-      .toBeInTheDocument();
-
-    await user.click(
-      within(collectionTree).getByRole("button", { name: "收起 Collection My Library" })
-    );
-
-    expect(within(collectionTree).queryByRole("button", { name: "Courses" }))
-      .not.toBeInTheDocument();
-    expect(within(collectionTree).queryByText("ColBERT")).not.toBeInTheDocument();
-
-    await user.click(
-      within(collectionTree).getByRole("button", { name: "展开 Collection My Library" })
-    );
-    expect(within(collectionTree).getByText("ColBERT")).toBeInTheDocument();
-  });
-
-  test("renames a paper from its resource context menu", async () => {
-    const user = userEvent.setup();
-    const onRenameLibraryPaper = vi.fn(() => Promise.resolve("重命名成功"));
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          onRenameLibraryPaper,
-          papers: [
-            {
-              id: "paper-1",
-              sourcePath: "/home/test/LiteasyLibrary/papers/colbert.pdf",
-              title: "ColBERT"
-            }
-          ],
-          workspaceLabel: "/home/test/LiteasyLibrary"
-        })}
-      />
-    );
-
-    fireEvent.contextMenu(screen.getByText("ColBERT").closest(".paper-row")!);
-    await user.click(screen.getByRole("menuitem", { name: "重命名…" }));
-    const input = screen.getByRole("textbox", { name: "新名称" });
-    await user.clear(input);
-    await user.type(input, "ColBERT Revised");
-    await user.click(screen.getByRole("button", { name: "确认" }));
-
-    expect(onRenameLibraryPaper).toHaveBeenCalledWith("paper-1", "ColBERT Revised");
-    expect(await screen.findByText("重命名成功")).toBeInTheDocument();
-  });
-
-  test("switches visible papers when clicking My Library collections", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          papers: [
-            {
-              id: "demo-1",
-              sourcePath: "/papers/colbert-late-interaction.pdf",
-              title:
-                "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT"
-            },
-            {
-              id: "demo-2",
-              sourcePath: "/papers/survey-vector-database-management-systems.pdf",
-              title: "Survey of Vector Database Management Systems"
-            },
-            {
-              id: "demo-3",
-              sourcePath: "/papers/acorn-vector-search.pdf",
-              title:
-                "ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data"
-            }
-          ]
-        })}
-      />
-    );
-
-    const libraryZone = screen.getByLabelText("我的文献库投放区");
-    expect(within(libraryZone).getByRole("button", { name: "My Library" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(within(libraryZone).getByRole("button", { name: "Vector Database" }));
-
-    expect(within(libraryZone).getByRole("button", { name: "Vector Database" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
-    expect(within(libraryZone).queryByText(/ColBERT/)).not.toBeInTheDocument();
-    expect(within(libraryZone).queryByText(/ACORN/)).not.toBeInTheDocument();
-
-    await user.click(within(libraryZone).getByRole("button", { name: "My Library" }));
-
-    expect(within(libraryZone).getByRole("button", { name: "My Library" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(libraryZone).getByText(/ColBERT/)).toBeInTheDocument();
-    expect(within(libraryZone).getByText("Survey of Vector Database Management Systems")).toBeInTheDocument();
-    expect(within(libraryZone).getByText(/ACORN/)).toBeInTheDocument();
-  });
-
-  test("shows collection loading state for logged-in cloud sync", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          accountSession: {
-            email: "researcher@liteasy.dev",
-            expiresAt: "2026-05-15T09:30:00Z",
-            name: "Liteasy Researcher",
-            sessionId: "demo-session-1"
-          },
-          collectionMessage: "正在同步云端收藏...",
-          collectionStatus: "loading",
-          leftRailView: "library"
-        })}
-      />
-    );
-
-    const collectionZone = screen.getByLabelText("收藏投放区");
-    fireEvent.click(within(collectionZone).getByRole("button", { name: "展开收藏" }));
-    expect(within(collectionZone).getByText("正在同步云端收藏...")).toBeInTheDocument();
-  });
-
-  test("shows collection retry action when cloud sync fails", async () => {
-    const user = userEvent.setup();
-    const onRetryCollectionSync = vi.fn();
-
-    render(
-      <LeftPane
-        {...createProps({
-          accountSession: {
-            email: "researcher@liteasy.dev",
-            expiresAt: "2026-05-15T09:30:00Z",
-            name: "Liteasy Researcher",
-            sessionId: "demo-session-1"
-          },
-          collectionMessage: "云端收藏暂时不可用。",
-          collectionStatus: "error",
-          leftRailView: "library",
-          onRetryCollectionSync
-        })}
-      />
-    );
-
-    const collectionZone = screen.getByLabelText("收藏投放区");
-    await user.click(within(collectionZone).getByRole("button", { name: "展开收藏" }));
-    expect(within(collectionZone).getByText("云端收藏暂时不可用。")).toBeInTheDocument();
-    await user.click(within(collectionZone).getByRole("button", { name: "重试同步" }));
-    expect(onRetryCollectionSync).toHaveBeenCalledTimes(1);
-  });
-
-
-  test("groups library papers by workspace folders", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          papers: [
-            { id: "demo-1", sourcePath: "/papers/colbert-late-interaction.pdf", title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT" },
-            { id: "demo-2", sourcePath: "/papers/survey-vector-database-management-systems.pdf", title: "Survey of Vector Database Management Systems" },
-            { id: "demo-3", title: "Untitled Local Note" }
-          ]
-        })}
-      />
-    );
-
-    const libraryZone = screen.getByLabelText("我的文献库投放区");
-    await user.click(within(libraryZone).getByRole("button", { name: "My Library" }));
-
-    expect(within(libraryZone).getByText("本地文献库", { selector: ".library-workspace-label" })).toBeInTheDocument();
-    expect(within(libraryZone).getByTitle("/papers")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("2 篇文献")).toBeInTheDocument();
-    expect(within(libraryZone).getByText("1 篇文献")).toBeInTheDocument();
-  });
-
-  test("opens a paper in Reader without changing a locked selection", async () => {
+  test("opens a local PDF without changing a locked selection", async () => {
     const user = userEvent.setup();
     const onOpenPaper = vi.fn();
     const onToggleSelection = vi.fn();
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [{
+          contentHash: "b".repeat(64),
+          id: "paper-1",
+          path: "/library/Paper.pdf",
+          relativePath: "Paper.pdf",
+          title: "Paper"
+        }],
+        folders: [],
+        libraryId: "library-1",
+        revision: 2,
+        rootPath: "/library",
+        trashEntries: []
+      },
+      onOpenPaper,
+      onToggleSelection,
+      selectedPaperIds: ["paper-1"],
+      selectionLocked: true
+    })} />);
 
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          onOpenPaper,
-          onToggleSelection,
-          papers: [
-            {
-              id: "demo-1",
-              sourcePath: "/papers/colbert.pdf",
-              title: "ColBERT"
-            },
-            {
-              id: "demo-3",
-              sourcePath: "/papers/acorn.pdf",
-              title: "ACORN"
-            }
-          ],
-          selectedPaperIds: ["demo-1", "demo-3"],
-          selectionLocked: true
-        })}
-      />
-    );
-
-    expect(screen.getByLabelText("ACORN")).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "ACORN" }));
-
-    expect(onOpenPaper).toHaveBeenCalledWith("demo-3");
+    expect(screen.getByRole("checkbox", { name: "选择 Paper" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Paper" }));
+    expect(onOpenPaper).toHaveBeenCalledWith("paper-1");
     expect(onToggleSelection).not.toHaveBeenCalled();
   });
 
-  test("expands paper rows to expose saved artifacts and notes", async () => {
+  test("shows local trash size and expiry without exposing internal paths", async () => {
     const user = userEvent.setup();
-    const onOpenPaperChild = vi.fn();
+    const purgeAfter = Math.floor(new Date("2026-09-05T00:00:00.000Z").getTime() / 1000);
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [],
+        folders: [],
+        libraryId: "library-1",
+        revision: 3,
+        rootPath: "/library",
+        trashEntries: [{
+          byteLength: 2048,
+          name: "Removed.pdf",
+          nodeType: "document",
+          originalRelativePath: "Removed.pdf",
+          purgeAfter,
+          trashId: "trash-1",
+          trashedAt: purgeAfter - 100
+        }]
+      }
+    })} />);
 
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          libraryPaperChildren: {
-            "demo-1": [
-              {
-                id: "artifact-1",
-                kind: "artifact",
-                label: "ColBERT 文献树"
-              },
-              {
-                id: "note-1",
-                kind: "note",
-                label: "MaxSim 阅读笔记"
-              }
-            ]
-          },
-          onOpenPaperChild,
-          papers: [
-            {
-              id: "demo-1",
-              sourcePath: "/papers/search/colbert.pdf",
-              title: "ColBERT"
-            }
-          ]
-        })}
-      />
-    );
-
-    await user.click(screen.getByRole("button", { name: "展开ColBERT的关联条目" }));
-    await user.click(screen.getByRole("button", { name: "ColBERT 文献树" }));
-
-    expect(screen.getByText("MaxSim 阅读笔记")).toBeInTheDocument();
-    expect(onOpenPaperChild).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "artifact-1", kind: "artifact" }),
-      expect.objectContaining({ id: "demo-1" })
-    );
+    await user.click(screen.getByRole("button", { name: "回收站" }));
+    expect(screen.getByText(/2\.0 KB/)).toBeInTheDocument();
+    expect(screen.getByText(/到期/)).toBeInTheDocument();
+    expect(screen.queryByText("/library/.liteasy/trash")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "恢复 Removed.pdf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "永久删除 Removed.pdf" })).toBeInTheDocument();
   });
 
-  test("finds an artifact by name and renames it from its resource menu", async () => {
+  test("keeps the local region usable while cloud regions require login", async () => {
     const user = userEvent.setup();
-    const onRenamePaperChild = vi.fn(async (_item, _paper, title) => `已重命名多模态产物：${title}`);
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "library",
-          libraryPaperChildren: {
-            "demo-1": [{ id: "artifact-1", kind: "artifact", label: "QVLA 薄读" }]
-          },
-          onRenamePaperChild,
-          papers: [{ id: "demo-1", sourcePath: "/papers/QVLA.pdf", title: "QVLA" }]
-        })}
-      />
-    );
-
-    await user.type(screen.getByLabelText("搜索文件与产物"), "薄读");
-    const artifact = screen.getByRole("button", { name: "QVLA 薄读" });
-    expect(artifact).toBeInTheDocument();
-    fireEvent.contextMenu(artifact);
-    await user.click(screen.getByRole("menuitem", { name: "重命名产物…" }));
-    await user.clear(screen.getByLabelText("新名称"));
-    await user.type(screen.getByLabelText("新名称"), "QVLA 精读");
-    await user.click(screen.getByRole("button", { name: "确认" }));
-
-    expect(onRenamePaperChild).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "artifact-1" }),
-      expect.objectContaining({ id: "demo-1" }),
-      "QVLA 精读"
-    );
-  });
-
-
-  test("renders organization action feedback in the organization view", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "organization",
-          organizationActionMessage: "已提交创建组织“Liteasy Demo Organization”的申请，当前为演示环境记录。"
-        })}
-      />
-    );
-
-    const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).getByRole("status", { name: "组织操作反馈" })).toHaveTextContent(
-      "已提交创建组织“Liteasy Demo Organization”的申请，当前为演示环境记录。"
-    );
-  });
-
-
-  test("keeps an available shared library openable when only a manifest count is present", () => {
-    const summary = {
-      auditEvents: [],
-      memberCount: 1,
-      members: [],
-      myRole: "owner",
-      name: "Liteasy AI Reading Lab",
-      notifications: [],
-      organizationId: "org-demo-1",
-      quota: {
-        periodEndsAt: "2026-06-01T00:00:00.000Z",
-        storageLimitGb: 100,
-        storageUsedGb: 12
-      },
-      sharedLibrary: {
-        documentCount: 48,
-        documents: [],
-        name: "组织共享文献库",
-        status: "available" as const
-      },
-      taskSummary: { failed: 0, running: 1 }
-    };
-
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "organization",
-          organizationSummaryMessage: "已加载组织空间。",
-          organizationSummaryStatus: "success",
-          summary
-        })}
-      />
-    );
-
-    const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toBeEnabled();
-    expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toHaveAttribute(
-      "title",
-      "共享文献库状态：可打开，会像 VSCode 打开文件夹一样切换当前工作区。"
-    );
-  });
-
-  test("explains why an organization shared library cannot be opened", () => {
-    const summary = {
-      auditEvents: [],
-      memberCount: 1,
-      members: [],
-      myRole: "owner",
-      name: "Liteasy AI Reading Lab",
-      notifications: [],
-      organizationId: "org-demo-1",
-      quota: {
-        periodEndsAt: "2026-06-01T00:00:00.000Z",
-        storageLimitGb: 100,
-        storageUsedGb: 12
-      },
-      sharedLibrary: {
-        documentCount: 0,
-        documents: [],
-        name: "组织共享文献库",
-        status: "syncing" as const
-      },
-      taskSummary: { failed: 0, running: 1 }
-    };
-
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "organization",
-          organizationSummaryMessage: "已加载组织空间。",
-          organizationSummaryStatus: "success",
-          summary
-        })}
-      />
-    );
-
-    const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toBeDisabled();
-    expect(within(organizationPane).getByRole("button", { name: "打开共享文献库" })).toHaveAttribute(
-      "title",
-      "共享文献库状态：同步中，暂时不能打开。请稍后重试。"
-    );
-  });
-
-  test("renders organization and profile views", () => {
-    const summary = {
-      auditEvents: [],
-      memberCount: 1,
-      members: [{ id: "member-1", name: "Ada", role: "owner" }],
-      myRole: "owner",
-      name: "Liteasy AI Reading Lab",
-      notifications: [],
-      organizationId: "org-demo-1",
-      quota: {
-        periodEndsAt: "2026-06-01T00:00:00.000Z",
-        storageLimitGb: 100,
-        storageUsedGb: 12
-      },
-      sharedLibrary: {
-        documentCount: 0,
-        documents: [],
-        name: "组织共享文献库",
-        status: "available" as const
-      },
-      taskSummary: { failed: 0, running: 0 }
-    };
-
-    const { rerender } = render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "organization",
-          organizationSummaryMessage: "已加载组织空间。",
-          organizationSummaryStatus: "success",
-          summary
-        })}
-      />
-    );
-    expect(screen.getByLabelText("左边栏组织")).toBeInTheDocument();
-    expect(screen.getByText("组织空间：Liteasy AI Reading Lab")).toBeInTheDocument();
-
-    rerender(
-      <LeftPane
-        {...createProps({
-          accountSession: { avatarUrl: "", name: "Ada", sessionId: "session-1", userId: "user-1" },
-          leftRailView: "profile",
-          organizationSummary: summary,
-          profileSamplingEnabled: true
-        })}
-      />
-    );
-    expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "关闭个性化行为信号" })).toBeInTheDocument();
-  });
-
-  test("hides organization creation for basic members and keeps join available", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          accountSession: {
-            email: "reader@liteasy.dev",
-            expiresAt: "2026-05-15T09:30:00Z",
-            membershipTier: "basic",
-            name: "Liteasy Reader",
-            sessionId: "session-basic"
-          },
-          leftRailView: "organization",
-          list: {
-            activeOrganizationId: "org-demo-1",
-            organizations: [
-              {
-                memberCount: 12,
-                myRole: "member",
-                name: "Liteasy AI Reading Lab",
-                organizationId: "org-demo-1",
-                sharedLibraryName: "组织共享文献库"
-              }
-            ]
-          },
-          listStatus: "success",
-          organizationSummaryMessage: "已加载组织空间。",
-          organizationSummaryStatus: "success",
-          summary: {
-            auditEvents: [],
-            memberCount: 12,
-            members: [],
-            myRole: "member",
-            name: "Liteasy AI Reading Lab",
-            notifications: [],
-            organizationId: "org-demo-1",
-            quota: {
-              periodEndsAt: "2026-06-01T00:00:00.000Z",
-              storageLimitGb: 100,
-              storageUsedGb: 12
-            },
-            sharedLibrary: {
-              documentCount: 48,
-              documents: [],
-              name: "组织共享文献库",
-              status: "available"
-            },
-            taskSummary: { failed: 0, running: 1 }
-          }
-        })}
-      />
-    );
-
-    const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).getByRole("button", { name: "创建组织" })).toBeDisabled();
-    expect(within(organizationPane).getByRole("button", { name: "加入组织" })).toBeInTheDocument();
-    expect(within(organizationPane).getByRole("button", { name: "加入组织" })).toHaveAttribute(
-      "title",
-      expect.stringContaining("当前账号权限：可加入组织，暂不可创建组织。")
-    );
-  });
-
-  test("shows organization creation for pro members", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          accountSession: {
-            email: "researcher@liteasy.dev",
-            expiresAt: "2026-05-15T09:30:00Z",
-            membershipTier: "pro",
-            name: "Liteasy Researcher",
-            sessionId: "session-pro"
-          },
-          leftRailView: "organization",
-          list: {
-            activeOrganizationId: "org-demo-1",
-            organizations: [
-              {
-                memberCount: 12,
-                myRole: "member",
-                name: "Liteasy AI Reading Lab",
-                organizationId: "org-demo-1",
-                sharedLibraryName: "组织共享文献库"
-              }
-            ]
-          },
-          listStatus: "success",
-          organizationSummaryMessage: "已加载组织空间。",
-          organizationSummaryStatus: "success",
-          summary: {
-            auditEvents: [],
-            memberCount: 12,
-            members: [],
-            myRole: "member",
-            name: "Liteasy AI Reading Lab",
-            notifications: [],
-            organizationId: "org-demo-1",
-            quota: {
-              periodEndsAt: "2026-06-01T00:00:00.000Z",
-              storageLimitGb: 100,
-              storageUsedGb: 12
-            },
-            sharedLibrary: {
-              documentCount: 48,
-              documents: [],
-              name: "组织共享文献库",
-              status: "available"
-            },
-            taskSummary: { failed: 0, running: 1 }
-          }
-        })}
-      />
-    );
-
-    const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).getByRole("button", { name: "创建组织" })).toBeInTheDocument();
-    expect(within(organizationPane).getByRole("button", { name: "创建组织" })).toHaveAttribute(
-      "title",
-      expect.stringContaining("当前账号权限：可创建组织，也可加入已有组织。")
-    );
-  });
-
-  test("hides invite-member action when current role lacks invitation permission", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          accountSession: {
-            email: "reader@liteasy.dev",
-            expiresAt: "2026-05-15T09:30:00Z",
-            membershipTier: "pro",
-            name: "Liteasy Reader",
-            sessionId: "session-pro-reader"
-          },
-          leftRailView: "organization",
-          list: {
-            activeOrganizationId: "org-demo-1",
-            organizations: [
-              {
-                memberCount: 12,
-                myRole: "member",
-                name: "Liteasy AI Reading Lab",
-                organizationId: "org-demo-1",
-                sharedLibraryName: "组织共享文献库"
-              }
-            ]
-          },
-          listStatus: "success",
-          organizationSummaryMessage: "已加载组织空间。",
-          organizationSummaryStatus: "success",
-          summary: {
-            auditEvents: [],
-            memberCount: 12,
-            members: [],
-            myRole: "member",
-            name: "Liteasy AI Reading Lab",
-            notifications: [],
-            organizationId: "org-demo-1",
-            quota: {
-              periodEndsAt: "2026-06-01T00:00:00.000Z",
-              storageLimitGb: 100,
-              storageUsedGb: 12
-            },
-            sharedLibrary: {
-              documentCount: 48,
-              documents: [],
-              name: "组织共享文献库",
-              status: "available"
-            },
-            taskSummary: { failed: 0, running: 1 }
-          }
-        })}
-      />
-    );
-
-    const organizationPane = screen.getByLabelText("左边栏组织");
-    expect(within(organizationPane).queryByRole("button", { name: "邀请成员" })).not.toBeInTheDocument();
-  });
-
-  test("shows locked cloud sections in the library view while logged out", () => {
     const onLoginRequired = vi.fn();
+    render(<LeftPane {...createProps({
+      accountSession: null,
+      leftRailView: "library",
+      onLoginRequired
+    })} />);
 
-    render(
-      <LeftPane
-        {...createProps({
-          accountSession: null,
-          leftRailView: "library",
-          onLoginRequired,
-          recommendationMessage: "当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。"
-        })}
-      />
-    );
-
-    expect(screen.getByText("收藏")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "展开收藏" }));
-    fireEvent.click(screen.getByRole("button", { name: "展开关联推荐" }));
-    const loginButtons = screen.getAllByRole("button", { name: "登录后可用" });
-    expect(loginButtons.length).toBeGreaterThan(0);
-    expect(loginButtons[0]).toHaveAttribute("title", "登录后可用的云端收藏会显示在这里。");
-    expect(loginButtons[1]).toHaveAttribute(
-      "title",
-      "当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。"
-    );
-    expect(screen.queryByText("当前已退化为本地阅读器，云端推荐不可用。联网并登录后，将自动恢复云端能力。"))
-      .not.toBeInTheDocument();
+    expect(screen.getByText("本地文献库为空")).toBeInTheDocument();
+    const collection = screen.getByRole("region", { name: "收藏" });
+    const recommendation = screen.getByRole("region", { name: "关联推荐" });
+    const organization = screen.getByRole("region", { name: "组织文献库" });
+    expect(within(collection).getByRole("button", { name: "登录" })).toBeInTheDocument();
+    expect(within(recommendation).getByRole("button", { name: "登录" })).toBeInTheDocument();
+    expect(within(organization).getByRole("button", { name: "登录" })).toBeInTheDocument();
+    await user.click(within(collection).getByRole("button", { name: "登录" }));
+    expect(onLoginRequired).toHaveBeenCalledOnce();
   });
 
-
-  test("renders editable academic profile configuration in personal center", async () => {
+  test("shows cloud loading and retry states from the real tree boundary", async () => {
     const user = userEvent.setup();
-    const onUpdateAcademicProfile = vi.fn();
-
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "profile",
-          onUpdateAcademicProfile
-        })}
-      />
-    );
-
-    const personalCenter = screen.getByLabelText("左边栏个人中心");
-    expect(within(personalCenter).getByText("性别 未设置 · 年龄 未设置 · 学段 未设置")).toBeInTheDocument();
-
-    await user.selectOptions(within(personalCenter).getByLabelText("性别"), "女");
-    await user.clear(within(personalCenter).getByLabelText("年龄"));
-    await user.type(within(personalCenter).getByLabelText("年龄"), "28");
-    await user.selectOptions(within(personalCenter).getByLabelText("研究阶段"), "博士研究生");
-    await user.type(within(personalCenter).getByLabelText("研究主题"), "神经检索, 向量数据库");
-    await user.type(within(personalCenter).getByLabelText("常用方法"), "混合检索");
-    await user.type(within(personalCenter).getByLabelText("关注数据集"), "BEIR");
-    await user.type(within(personalCenter).getByLabelText("阅读语言"), "中文, English");
-    await user.click(within(personalCenter).getByRole("button", { name: "保存学术档案" }));
-
-    expect(onUpdateAcademicProfile).toHaveBeenCalledWith({
-      age: "28",
-      disciplines: [],
-      gender: "女",
-      preferredLanguages: "中文、English",
-      researchDatasets: "BEIR",
-      researchMethods: "混合检索",
-      researchTopics: "神经检索、向量数据库",
-      stage: "博士研究生"
-    });
+    cloudTrees.user.status = "error";
+    cloudTrees.user.message = "收藏加载失败";
+    render(<LeftPane {...createProps({ leftRailView: "library" })} />);
+    const collection = screen.getByRole("region", { name: "收藏" });
+    expect(within(collection).getByRole("alert")).toHaveTextContent("收藏加载失败");
+    await user.click(within(collection).getByRole("button", { name: "重试" }));
+    expect(cloudTrees.user.refresh).toHaveBeenCalledOnce();
   });
 
-  test("does not render the editable personal center while logged out", () => {
-    render(
-      <LeftPane
-        {...createProps({
-          accountSession: null,
-          leftRailView: "profile"
-        })}
-      />
-    );
-
-    expect(screen.queryByLabelText("左边栏个人中心")).not.toBeInTheDocument();
-    expect(screen.getByText("未登录")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "登录后查看个人能力" })).toBeInTheDocument();
-  });
-
-  test("forwards logout from the logged-in personal center", async () => {
+  test("routes the recommendation bookmark command into the real collection tree", async () => {
     const user = userEvent.setup();
-    const onLogout = vi.fn();
+    const onResourceTransfer = vi.fn(async () => undefined);
+    cloudTrees.user.tree = {
+      entries: [],
+      folders: [],
+      revision: 3,
+          scopeId: "user-1",
+      scopeType: "user"
+    };
+    const recommendation = {
+      discoveredAt: "2026-08-07T00:00:00.000Z",
+      id: "recommendation-1",
+      reason: "Related work",
+      relatedDocumentTitle: "Target paper",
+      relevanceBand: "high" as const,
+      relevanceScore: 0.9,
+      source: "Crossref",
+      sourceKind: "live" as const,
+      sourceUrl: "https://doi.org/10.1000/test",
+      title: "Recommended paper"
+    };
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      onResourceTransfer,
+      recommendationItems: [recommendation]
+    })} />);
 
-    render(
-      <LeftPane
-        {...createProps({
-          leftRailView: "profile",
-          onLogout
-        })}
-      />
+    await user.click(screen.getByRole("button", { name: "收藏 Recommended paper" }));
+
+    expect(onResourceTransfer).toHaveBeenCalledWith(
+      { area: "recommendation", recommendation },
+      {
+        area: "collection",
+        expectedRevision: 3,
+        folderId: undefined,
+        scope: { scopeId: "user:user-1", scopeType: "user" }
+      }
     );
-
-    await user.click(screen.getByRole("button", { name: "退出登录" }));
-
-    expect(onLogout).toHaveBeenCalledTimes(1);
-  });
-
-  test("shows governance as waiting instead of disconnected while organization loads", async () => {
-    const user = userEvent.setup();
-    render(
-      <LeftPane
-        {...createProps({
-          governanceMessage: "组织空间加载完成后会同步组织治理摘要。",
-          governanceStatus: "waiting",
-          leftRailView: "organization"
-        })}
-      />
-    );
-
-    await user.click(screen.getByRole("button", { name: "展开组织治理" }));
-    expect(screen.getByText("组织治理：等待组织空间")).toBeInTheDocument();
-    expect(screen.getByText("组织空间加载完成后会同步组织治理摘要。")).toBeInTheDocument();
-  });
-
-  test("does not render extra return-to-library buttons inside non-library panes", () => {
-    const { rerender } = render(<LeftPane {...createProps({ leftRailView: "organization" })} />);
-
-    expect(screen.getByLabelText("左边栏组织")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "返回文献库" })).not.toBeInTheDocument();
-
-    rerender(<LeftPane {...createProps({ leftRailView: "profile" })} />);
-    expect(screen.getByLabelText("左边栏个人中心")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "返回文献库" })).not.toBeInTheDocument();
   });
 
   test("forwards explicit negative feedback from a live recommendation", async () => {
     const user = userEvent.setup();
     const onDismissRecommendation = vi.fn();
     const recommendation = {
-      canonicalId: "openalex:W200",
-      discoveredAt: "2026-07-29T00:00:00Z",
-      id: "reading-candidate:openalex:W200",
-      relatedDocumentTitle: "Target Paper",
+      discoveredAt: "2026-08-06T00:00:00.000Z",
+      id: "recommendation-1",
+      reason: "主题相关",
+      relatedDocumentTitle: "Source",
       relevanceBand: "high" as const,
       relevanceScore: 0.9,
-      reason: "主题检索线索",
       source: "OpenAlex",
       sourceKind: "live" as const,
-      sourceUrl: "https://openalex.org/W200",
+      sourceUrl: "https://openalex.org/W1",
       title: "Candidate Paper"
     };
     render(<LeftPane {...createProps({
@@ -1168,9 +382,50 @@ describe("LeftPane", () => {
       recommendationStatus: "ready"
     })} />);
 
-    await user.click(screen.getByRole("button", { name: "展开关联推荐" }));
-    await user.click(screen.getByRole("button", { name: "不感兴趣：Candidate Paper" }));
-
+    await user.click(screen.getByRole("button", { name: "忽略 Candidate Paper" }));
     expect(onDismissRecommendation).toHaveBeenCalledWith(recommendation);
+  });
+
+  test("disables organization writes when policy state is unavailable", () => {
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      organizationId: "org-1",
+      organizationSummary: organizationSummary({ policy: undefined })
+    })} />);
+    expect(screen.getByRole("button", { name: "新建组织目录" })).toBeDisabled();
+  });
+
+  test("renders the settings storage boundary", () => {
+    render(<LeftPane {...createProps({
+      leftRailView: "settings",
+      libraryRootPath: "/library"
+    })} />);
+    expect(screen.getByLabelText("左边栏设置")).toBeInTheDocument();
+    expect(screen.getByLabelText("文献元数据同步")).toBeInTheDocument();
+  });
+
+  test("does not expose the personal center while logged out", () => {
+    render(<LeftPane {...createProps({ accountSession: null, leftRailView: "profile" })} />);
+    expect(screen.queryByLabelText("左边栏个人中心")).not.toBeInTheDocument();
+    expect(screen.getByText("未登录")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "登录后查看个人能力" })).toBeInTheDocument();
+  });
+
+  test("forwards logout from the authenticated personal center", async () => {
+    const user = userEvent.setup();
+    const onLogout = vi.fn();
+    render(<LeftPane {...createProps({ leftRailView: "profile", onLogout })} />);
+    await user.click(screen.getByRole("button", { name: "退出登录" }));
+    expect(onLogout).toHaveBeenCalledOnce();
+  });
+
+  test("keeps organization management in its dedicated pane", () => {
+    render(<LeftPane {...createProps({
+      leftRailView: "organization",
+      organizationSummary: organizationSummary(),
+      summary: organizationSummary()
+    })} />);
+    expect(screen.getByLabelText("左边栏组织")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "返回文献库" })).not.toBeInTheDocument();
   });
 });

@@ -4,30 +4,36 @@ import type {
   AccountLoginInput,
   AccountRegistrationInput
 } from "./accountSessionClient";
+import { isLoopbackAccountEndpoint } from "./desktopIdentityClient";
+import { OpenRegular } from "@fluentui/react-icons";
+import { Button } from "@fluentui/react-components";
 
 type LightweightLoginDialogProps = {
   accountMessage?: string;
   accountPending?: boolean;
+  controlPlaneEndpoint: string;
   onSkip: () => void;
   onSubmitAccountLogin: (login: AccountLoginInput) => void;
   onSubmitAccountRegistration: (registration: AccountRegistrationInput) => void;
-  onSubmitDemoLogin: () => void;
+  onSubmitSystemBrowserLogin: () => void;
   onToggleSuppressReminder: (checked: boolean) => void;
 };
 
 export function LightweightLoginDialog({
   accountMessage,
   accountPending = false,
+  controlPlaneEndpoint,
   onSkip,
   onSubmitAccountLogin,
   onSubmitAccountRegistration,
-  onSubmitDemoLogin,
+  onSubmitSystemBrowserLogin,
   onToggleSuppressReminder
 }: LightweightLoginDialogProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const showDevelopmentLogin = isLoopbackAccountEndpoint(controlPlaneEndpoint);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,9 +62,22 @@ export function LightweightLoginDialog({
         <div className="organization-dialog-kicker">账号</div>
         <div className="organization-dialog-title">登录 LiteasyClaw</div>
         <div className="organization-dialog-empty">
-          账号与内容保存在当前开发服务器；密码仅以安全哈希保存。
+          {showDevelopmentLogin
+            ? "当前连接本机开发账号服务。"
+            : "登录在系统浏览器中完成，Liteasy 不会接触你的密码。"}
         </div>
-        <div aria-label="账号操作" className="account-auth-mode-tabs" role="group">
+        {!showDevelopmentLogin ? <Button
+          appearance="primary"
+          disabled={accountPending}
+          icon={<OpenRegular />}
+          onClick={onSubmitSystemBrowserLogin}
+          type="button"
+        >
+          使用系统浏览器登录
+        </Button> : null}
+        {showDevelopmentLogin ? <>
+        <div className="organization-dialog-empty">本地开发服务</div>
+        <div aria-label="开发账号操作" className="account-auth-mode-tabs" role="group">
           <button
             aria-pressed={mode === "login"}
             className={`left-rail-button ${mode === "login" ? "active" : "muted"}`}
@@ -119,22 +138,12 @@ export function LightweightLoginDialog({
             {accountPending ? "请稍候…" : mode === "register" ? "注册并登录" : "登录"}
           </button>
         </form>
+        </> : null}
         {accountMessage ? (
           <div aria-live="polite" className="organization-dialog-empty">
             {accountMessage}
           </div>
         ) : null}
-        <div className="organization-form-field">
-          <span>仅用于路演兼容</span>
-          <button
-            className="left-rail-button muted"
-            disabled={accountPending}
-            onClick={onSubmitDemoLogin}
-            type="button"
-          >
-            一键 Demo 登录
-          </button>
-        </div>
         <label className="organization-form-field">
           <span>
             <input

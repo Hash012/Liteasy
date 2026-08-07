@@ -91,7 +91,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/colbert-late-interaction.pdf",
+      relativePath: "src/tests/assets/papers/colbert-late-interaction.pdf",
       sha256: "2e487d9b96e3c2e5e286d843e98a066adc0442faa3a6e8ddbd1771221bf9ae14"
     }
   },
@@ -118,7 +118,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "zh-CN"
     },
     source: {
-      relativePath: "public/papers/colbert-late-interaction.pdf",
+      relativePath: "src/tests/assets/papers/colbert-late-interaction.pdf",
       sha256: "2e487d9b96e3c2e5e286d843e98a066adc0442faa3a6e8ddbd1771221bf9ae14"
     }
   },
@@ -144,7 +144,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/acorn-vector-search.pdf",
+      relativePath: "src/tests/assets/papers/acorn-vector-search.pdf",
       sha256: "bb438a891f1e4e522215c0d40d079ad72eb97eaa162b925db542cd5538a40f1d"
     }
   },
@@ -170,7 +170,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/survey-vector-database-management-systems.pdf",
+      relativePath: "src/tests/assets/papers/survey-vector-database-management-systems.pdf",
       sha256: "4c768b9b3be95ab9433cc4c19801d5c75150e2a2b5c031f40031d10bd55760cf"
     }
   },
@@ -196,7 +196,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/attention-is-all-you-need-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/attention-is-all-you-need-arxiv.pdf",
       sha256: "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697"
     }
   },
@@ -222,7 +222,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/bert-pretraining-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/bert-pretraining-arxiv.pdf",
       sha256: "5692a5514787a8c6727b4ff3b726a3385798bc68e12138d1d4af83947e2acf6e"
     }
   },
@@ -248,7 +248,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/ancient-languages-semantic-corpus-analysis-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/ancient-languages-semantic-corpus-analysis-arxiv.pdf",
       sha256: "382c20f690b74a9d19745fff6487edf74aef992e17de98099aeff35b15392cc2"
     }
   },
@@ -274,7 +274,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/glue-benchmark-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/glue-benchmark-arxiv.pdf",
       sha256: "4c1aaf622c6ee3166bb4af2999b866e05019e5a35ac5f832018a887e7b44508a"
     }
   },
@@ -302,7 +302,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/glue-benchmark-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/glue-benchmark-arxiv.pdf",
       sha256: "4c1aaf622c6ee3166bb4af2999b866e05019e5a35ac5f832018a887e7b44508a"
     }
   },
@@ -328,7 +328,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/squad-100k-questions-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/squad-100k-questions-arxiv.pdf",
       sha256: "5169f9424ad6078815b99f5aa83724f42fa6826cedfb8ae303a8091d15c8450c"
     }
   },
@@ -356,7 +356,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "en-US"
     },
     source: {
-      relativePath: "public/papers/bert-pretraining-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/bert-pretraining-arxiv.pdf",
       sha256: "5692a5514787a8c6727b4ff3b726a3385798bc68e12138d1d4af83947e2acf6e"
     }
   },
@@ -385,7 +385,7 @@ export const thinReadingRealPdfGoldFixtures: readonly ThinReadingRealPdfGoldCase
       targetLanguage: "zh-CN"
     },
     source: {
-      relativePath: "public/papers/bert-pretraining-arxiv.pdf",
+      relativePath: "src/tests/assets/papers/bert-pretraining-arxiv.pdf",
       sha256: "5692a5514787a8c6727b4ff3b726a3385798bc68e12138d1d4af83947e2acf6e"
     }
   }

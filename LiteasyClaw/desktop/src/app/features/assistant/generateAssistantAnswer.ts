@@ -4,7 +4,6 @@ import { getDefaultModelForProvider } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
 import type { ModelTransport } from "../models/modelHttpClient";
-import { getMockAnswer } from "../retrieval/mockRetriever";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
 import type { Paper } from "../workspace/workspace.types";
@@ -85,10 +84,6 @@ type GenerateAssistantAnswerInput = {
   thinReadingExternalKnowledgeTransport?: ThinReadingExternalKnowledgeTransport;
   thinReadingExternalPdfTransport?: ThinReadingExternalPdfTransport;
 };
-
-function isMockEndpoint(endpoint: string) {
-  return endpoint.startsWith("mock://");
-}
 
 function getActiveModelEndpoint(settings: SettingsState) {
   return settings["models.cloud_proxy_endpoint"];
@@ -1766,7 +1761,7 @@ export async function generateAssistantAnswer({
     progress: 32,
     summary: "正在检索并整理选中文献证据"
   });
-  const preparedAnalysis = artifactType || selectedPapers.length > 1
+  const preparedAnalysis = analysisInputPapers.length > 0
     ? prepareMultiPaperAnalysis({
         importedChunksByPaperId: analysisInputChunks,
         query: question,
@@ -1780,19 +1775,20 @@ export async function generateAssistantAnswer({
         citations: preparedAnalysis.citations,
         confidence: preparedAnalysis.retrievalConfidence
       }
-    : getMockAnswer(selectedPapers, importedChunksByPaperId, question);
+    : {
+        answer: "",
+        citations: [],
+        confidence: 0
+      };
   const gateway = createModelGatewayFromSettings(settings, {
     cloudTransport: modelTransport
   });
+  const activeEndpoint = getActiveModelEndpoint(settings);
   const provider = settings["models.default_provider"];
   const model = getDefaultModelForProvider(provider);
   if (artifactType === "thin_reading") {
     if (analysisInputPapers.length === 0 || !preparedAnalysis) {
       throw new Error("薄读需要至少一篇已选论文。");
-    }
-    const activeEndpoint = getActiveModelEndpoint(settings);
-    if (isMockEndpoint(activeEndpoint)) {
-      throw new Error("薄读必须使用真实模型链路；当前模型 endpoint 是 mock，本次生成已停止。");
     }
     if (preparedAnalysis.evidence.length === 0) {
       const paperTitles = analysisInputPapers.map((paper) => paper.title || paper.id);
@@ -2068,7 +2064,7 @@ export async function generateAssistantAnswer({
     };
   }
   let parallelAnalysis = "";
-  if (artifactType && preparedAnalysis && !isMockEndpoint(getActiveModelEndpoint(settings))) {
+  if (artifactType && preparedAnalysis) {
     onProgress?.({
       phase: "analyzing_sections",
       progress: 44,
@@ -2136,21 +2132,18 @@ export async function generateAssistantAnswer({
     citations: groundedAnswer.citations,
     retrievalConfidence: groundedAnswer.confidence
   });
-  const activeEndpoint = getActiveModelEndpoint(settings);
-  const audit = isMockEndpoint(activeEndpoint)
-    ? localAudit
-    : await createHttpModelAuditClient({
-        endpoint: activeEndpoint,
-        source: "cloud_proxy",
-        transport: auditTransport
-      })({
-        answer: generatedAnswerText,
-        citations: groundedAnswer.citations,
-        model: "gpt-5-mini-auditor",
-        provider: settings["models.default_provider"],
-        question,
-        retrievalConfidence: groundedAnswer.confidence
-      }).catch(() => localAudit);
+  const audit = await createHttpModelAuditClient({
+    endpoint: activeEndpoint,
+    source: "cloud_proxy",
+    transport: auditTransport
+  })({
+    answer: generatedAnswerText,
+    citations: groundedAnswer.citations,
+    model: "gpt-5-mini-auditor",
+    provider: settings["models.default_provider"],
+    question,
+    retrievalConfidence: groundedAnswer.confidence
+  }).catch(() => localAudit);
   if (signal?.aborted) {
     throw new Error("Assistant answer generation was cancelled");
   }

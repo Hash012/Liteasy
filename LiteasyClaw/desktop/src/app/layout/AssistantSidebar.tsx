@@ -19,6 +19,7 @@ type AssistantSidebarProps = {
   agentClient: FrontendAgentClient;
   academicProfile?: AcademicProfile;
   artifactTasks?: ArtifactTask[];
+  developerDiagnostics?: boolean;
   executionJournal?: ExecutionJournal;
   /** @deprecated Agent context is supplied by the AppShell controller. */
   importedChunksByPaperId?: Record<string, RetrievalChunk[]>;
@@ -56,6 +57,7 @@ export function AssistantSidebar({
   agentClient,
   academicProfile,
   artifactTasks = [],
+  developerDiagnostics = false,
   executionJournal,
   importedChunksByPaperId,
   importedSelectedCount,
@@ -98,6 +100,7 @@ export function AssistantSidebar({
           agentClient={agentClient}
           academicProfile={academicProfile}
           artifactTasks={artifactTasks}
+          developerDiagnostics={developerDiagnostics}
           executionJournal={executionJournal}
           importedChunksByPaperId={importedChunksByPaperId}
           modelTransport={modelTransport}

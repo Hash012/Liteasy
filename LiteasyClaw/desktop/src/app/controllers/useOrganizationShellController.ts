@@ -1,17 +1,16 @@
-import type { MutableRefObject } from "react";
+import { useState, type MutableRefObject } from "react";
 import type { AccountSession } from "../features/account/account.types";
 import { createOrganizationSharedLibraryManifestClient } from "../features/organization/organizationSharedLibraryManifestClient";
-import type { OrganizationGovernanceTransport } from "../features/organization/organizationGovernanceClient";
 import type { OrganizationListTransport } from "../features/organization/organizationListClient";
 import type { OrganizationSharedLibraryManifestTransport } from "../features/organization/organizationSharedLibraryManifestClient";
 import type { OrganizationSummaryTransport } from "../features/organization/organizationSummaryClient";
+import type { OrganizationActionTransport } from "../features/organization/organizationActionsClient";
 import { useOrganizationActions } from "../features/organization/useOrganizationActions";
 import { useOrganizationData } from "../features/organization/useOrganizationData";
 import { useOrganizationNotifications } from "../features/organization/useOrganizationNotifications";
 import { useOrganizationUiState } from "../features/organization/useOrganizationUiState";
 import { useOrganizationWorkspace } from "../features/organization/useOrganizationWorkspace";
 import type { createWorkspaceStore } from "../features/workspace/workspace.store";
-import type { Paper } from "../features/workspace/workspace.types";
 
 type WorkspaceStore = ReturnType<typeof createWorkspaceStore>;
 
@@ -22,11 +21,10 @@ type UseOrganizationShellControllerInput = {
   onLeftRailView: (view: "library") => void;
   onWorkspaceLabel: (label: string) => void;
   onWorkspaceSync: () => void;
-  organizationGovernanceTransport?: OrganizationGovernanceTransport;
+  organizationActionTransport?: OrganizationActionTransport;
   organizationListTransport?: OrganizationListTransport;
   organizationSharedLibraryManifestTransport?: OrganizationSharedLibraryManifestTransport;
   organizationTransport?: OrganizationSummaryTransport;
-  starterPapers: Paper[];
   workspaceStoreRef: MutableRefObject<WorkspaceStore>;
 };
 
@@ -37,26 +35,37 @@ export function useOrganizationShellController({
   onLeftRailView,
   onWorkspaceLabel,
   onWorkspaceSync,
-  organizationGovernanceTransport,
+  organizationActionTransport,
   organizationListTransport,
   organizationSharedLibraryManifestTransport,
   organizationTransport,
-  starterPapers,
   workspaceStoreRef
 }: UseOrganizationShellControllerInput) {
   const organizationUi = useOrganizationUiState();
+  const [organizationDataRevision, setOrganizationDataRevision] = useState(0);
   const organizationActions = useOrganizationActions({
-    canCreateOrganization: (accountSession?.membershipTier ?? "pro") !== "basic",
-    onAnalysisHint
+    accountSession,
+    canCreateOrganization: Boolean(accountSession && accountSession.membershipTier !== "basic"),
+    controlPlaneEndpoint,
+    onAnalysisHint,
+    onOrganizationChanged: (organizationId) => {
+      if (organizationId) {
+        organizationUi.selectOrganization(organizationId);
+      } else {
+        organizationUi.resetOrganizationSelection();
+      }
+      setOrganizationDataRevision((current) => current + 1);
+    },
+    transport: organizationActionTransport
   });
   const organizationNotifications = useOrganizationNotifications({ onAnalysisHint });
   const organizationData = useOrganizationData({
     accountSession,
     controlPlaneEndpoint,
     getActiveOrganizationId: organizationUi.getActiveOrganizationId,
-    organizationGovernanceTransport,
     organizationListTransport,
-    organizationTransport
+    organizationTransport,
+    refreshRevision: organizationDataRevision
   });
   const organizationWorkspace = useOrganizationWorkspace({
     controlPlaneEndpoint,
@@ -74,7 +83,6 @@ export function useOrganizationShellController({
     onWorkspaceLabel,
     onWorkspaceSync,
     sessionId: accountSession?.sessionId,
-    starterPapers,
     workspaceStoreRef
   });
 
@@ -91,9 +99,10 @@ export function useOrganizationShellController({
       closeJoinOrganizationDialog: organizationActions.closeJoinDialog,
       closeLeaveDialog: organizationActions.closeLeaveDialog,
       closeOrganizationDialog: organizationUi.closeOrganizationDialog,
-      createDemoOrganizationJoinRequest: organizationActions.createDemoOrganizationJoinRequest,
-      createDemoOrganizationLeaveRequest: organizationActions.createDemoOrganizationLeaveRequest,
-      createDemoOrganizationRequest: organizationActions.createDemoOrganizationRequest,
+      createOrganizationRequest: organizationActions.createOrganizationRequest,
+      inviteOrganizationMember: organizationActions.inviteOrganizationMember,
+      joinOrganizationRequest: organizationActions.joinOrganizationRequest,
+      leaveOrganizationRequest: organizationActions.leaveOrganizationRequest,
       markOrganizationNotificationsRead: organizationNotifications.markOrganizationNotificationsRead,
       openCreateDialog: organizationActions.openCreateDialog,
       openInviteDialog: organizationActions.openInviteDialog,
@@ -102,20 +111,18 @@ export function useOrganizationShellController({
       openOrganizationDialog: organizationUi.openOrganizationDialog,
       openOrganizationSharedLibrary: organizationWorkspace.openOrganizationSharedLibrary,
       openLeaveDialog: organizationActions.openLeaveDialog,
+      refreshOrganizationData: () => setOrganizationDataRevision((current) => current + 1),
       resetOrganizationState,
-      selectOrganization: organizationUi.selectOrganization,
-      sendDemoOrganizationInvite: organizationActions.sendDemoOrganizationInvite
+      selectOrganization: organizationUi.selectOrganization
     },
     model: {
       actionMessage: organizationActions.actionMessage,
+      actionPending: organizationActions.actionPending,
       createOpen: organizationActions.createOpen,
       inviteSummary: organizationActions.inviteSummary,
       joinOpen: organizationActions.joinOpen,
       leaveSummary: organizationActions.leaveSummary,
       organizationDialogOpen: organizationUi.organizationDialogOpen,
-      organizationGovernanceMessage: organizationData.organizationGovernanceMessage,
-      organizationGovernanceStatus: organizationData.organizationGovernanceStatus,
-      organizationGovernanceSummary: organizationData.organizationGovernanceSummary,
       organizationList: organizationData.organizationList,
       organizationListMessage: organizationData.organizationListMessage,
       organizationListStatus: organizationData.organizationListStatus,

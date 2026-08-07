@@ -23,6 +23,15 @@ describe("resolveLocalDevCloudEndpoint", () => {
     ).toBe("http://127.0.0.1:8787");
   });
 
+  test("normalizes the packaged Tauri origin to the Windows loopback endpoint", () => {
+    expect(
+      resolveLocalDevCloudEndpoint({
+        hostname: "tauri.localhost",
+        protocol: "http:"
+      })
+    ).toBe("http://127.0.0.1:8787");
+  });
+
   test("uses the Vite-injected dev cloud port when the dev script selects a fallback", () => {
     expect(
       resolveLocalDevCloudEndpoint(

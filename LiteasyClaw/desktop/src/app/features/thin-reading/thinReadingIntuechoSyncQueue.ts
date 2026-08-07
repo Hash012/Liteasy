@@ -1,4 +1,6 @@
 import { freezePaperIdentity } from "../paper-identity/paperIdentity";
+import type { PaperIdentity } from "../paper-identity/paperIdentity";
+import type { ForumAnnotationTarget, ForumLiteratureReference } from "../forum/forum.types";
 import type {
   ThinReadingAnnotation,
   ThinReadingAnnotationTarget,
@@ -23,6 +25,7 @@ export type ThinReadingIntuechoAnnotationQueueItem = {
   status: ThinReadingIntuechoQueueStatus;
   statusLabel: typeof THIN_READING_INTUECHO_PENDING_LABEL;
   target: ThinReadingAnnotationTarget;
+  targets: ForumAnnotationTarget[];
   updatedAt: string;
 };
 
@@ -79,7 +82,8 @@ const LOCAL_IDENTITY_SYNC_ERROR = "该批注仍为仅本地文献身份，补全
 
 function isCommunitySyncableItem(item: ThinReadingIntuechoAnnotationQueueItem) {
   return item.scope.paperIdentity?.primary.kind !== undefined &&
-    item.scope.paperIdentity.primary.kind !== "local_paper_id";
+    item.scope.paperIdentity.primary.kind !== "local_paper_id" &&
+    item.targets.length > 0;
 }
 
 function mergeResultsInInputOrder(input: {
@@ -95,10 +99,11 @@ function mergeResultsInInputOrder(input: {
   })));
 }
 
-function isHttpsEndpoint(value: string) {
+function isAllowedEndpoint(value: string) {
   try {
     const endpoint = new URL(value);
-    return endpoint.protocol === "https:" && !endpoint.username && !endpoint.password;
+    const loopback = endpoint.protocol === "http:" && new Set(["127.0.0.1", "localhost", "[::1]"]).has(endpoint.hostname);
+    return (endpoint.protocol === "https:" || loopback) && !endpoint.username && !endpoint.password;
   } catch {
     return false;
   }
@@ -161,6 +166,7 @@ function normalizeRemoteResults(input: {
 
 export function createHttpIntuechoSyncAdapter(input: {
   endpoint: string;
+  sessionId?: string;
   transport?: ThinReadingIntuechoSyncTransport;
 }): ThinReadingIntuechoSyncAdapter {
   return Object.freeze({
@@ -169,15 +175,24 @@ export function createHttpIntuechoSyncAdapter(input: {
         return Object.freeze([]);
       }
       const syncableItems = items.filter(isCommunitySyncableItem);
-      const localOnlyItems = items.filter((item) => !isCommunitySyncableItem(item));
+      const localOnlyItems = items.filter((item) => item.scope.paperIdentity?.primary.kind === undefined || item.scope.paperIdentity.primary.kind === "local_paper_id");
+      const missingEvidenceItems = items.filter((item) => !localOnlyItems.includes(item) && item.targets.length === 0);
       const localOnlyResults = failedResults(localOnlyItems, LOCAL_IDENTITY_SYNC_ERROR);
+      const missingEvidenceResults = failedResults(missingEvidenceItems, "薄读生成内容缺少可核验的原文证据映射，不能公开同步到 Intuecho。");
+      const rejectedResults = [...localOnlyResults, ...missingEvidenceResults];
       if (syncableItems.length === 0) {
-        return mergeResultsInInputOrder({ items, results: localOnlyResults });
+        return mergeResultsInInputOrder({ items, results: rejectedResults });
       }
-      if (!isHttpsEndpoint(input.endpoint)) {
+      if (!isAllowedEndpoint(input.endpoint)) {
         return mergeResultsInInputOrder({
           items,
-          results: [...localOnlyResults, ...failedResults(syncableItems, "Intuecho 同步端点必须是 HTTPS 地址。")]
+          results: [...rejectedResults, ...failedResults(syncableItems, "Intuecho 同步端点必须是 HTTPS 地址。")]
+        });
+      }
+      if (!input.sessionId) {
+        return mergeResultsInInputOrder({
+          items,
+          results: [...rejectedResults, ...failedResults(syncableItems, "请先登录 Liteasy 再同步公开批注。")]
         });
       }
       const idempotencyKey = `thin-reading-sync-${stableHash(
@@ -195,6 +210,7 @@ export function createHttpIntuechoSyncAdapter(input: {
         const response = await transport({
           body: JSON.stringify({ annotations: syncableItems }),
           headers: {
+            Authorization: `Bearer ${input.sessionId}`,
             "content-type": "application/json",
             "idempotency-key": idempotencyKey
           },
@@ -204,18 +220,18 @@ export function createHttpIntuechoSyncAdapter(input: {
         if (!response.ok) {
           return mergeResultsInInputOrder({
             items,
-            results: [...localOnlyResults, ...failedResults(syncableItems, `Intuecho 同步请求失败（HTTP ${response.status}）。`)]
+            results: [...rejectedResults, ...failedResults(syncableItems, `Intuecho 同步请求失败（HTTP ${response.status}）。`)]
           });
         }
         return mergeResultsInInputOrder({
           items,
-          results: [...localOnlyResults, ...normalizeRemoteResults({ items: syncableItems, value: await response.json() })]
+          results: [...rejectedResults, ...normalizeRemoteResults({ items: syncableItems, value: await response.json() })]
         });
       } catch (error) {
         return mergeResultsInInputOrder({
           items,
           results: [
-            ...localOnlyResults,
+              ...rejectedResults,
             ...failedResults(
               syncableItems,
               `Intuecho 同步请求未完成：${error instanceof Error ? error.message : String(error)}`
@@ -250,6 +266,7 @@ function queueItemForAnnotation(
     return null;
   }
   const scope = freezeScope(node.recommendationScope);
+  const targets = communityTargets(document, annotation, scope);
   return Object.freeze({
     annotationId: annotation.id,
     artifactId: document.artifactId,
@@ -263,8 +280,58 @@ function queueItemForAnnotation(
     status: "pending_public" as const,
     statusLabel: THIN_READING_INTUECHO_PENDING_LABEL,
     target: freezeTarget(annotation.target),
+    targets,
     updatedAt: annotation.updatedAt
   });
+}
+
+function forumLiterature(identity: PaperIdentity | undefined): ForumLiteratureReference | null {
+  const primary = identity?.primary;
+  if (!identity || !primary || primary.kind === "local_paper_id") return null;
+  return {
+    identity: {
+      id: primary.id,
+      kind: primary.kind,
+      source: primary.source === "metadata" ? "metadata" : "inferred",
+      value: primary.value
+    },
+    metadata: { authors: [], title: identity.title }
+  };
+}
+
+function communityTargets(
+  document: ThinReadingDocument,
+  annotation: ThinReadingAnnotation,
+  scope: ThinReadingRecommendationScope
+): ForumAnnotationTarget[] {
+  const literature = forumLiterature(scope.paperIdentity);
+  if (!literature) return [];
+  if (scope.kind === "whole_paper") return [{ kind: "whole_document", literature }];
+  const node = document.nodes[annotation.nodeId];
+  const selectedIds = scope.kind === "selected_passage" ? new Set(scope.evidenceIds ?? []) : null;
+  const spans = (node?.evidence.paperEvidenceSpans ?? []).filter((span) => !selectedIds || selectedIds.size === 0 || selectedIds.has(span.id));
+  const evidence = spans.flatMap((span) => {
+    const evidenceLiterature = forumLiterature(document.paperIdentities?.[span.paperId]);
+    return evidenceLiterature ? [{
+      anchorHash: `evidence:${span.id}`,
+      excerpt: span.quote,
+      literature: evidenceLiterature,
+      ...(span.page ? { page: span.page } : {}),
+      rects: []
+    }] : [];
+  });
+  if (evidence.length === 0) return [];
+  return [{
+    derivedContent: {
+      artifactId: document.artifactId,
+      excerpt: annotation.excerpt,
+      nodeId: annotation.nodeId,
+      version: `${document.version}:${annotation.nodeId}`
+    },
+    evidence,
+    kind: "derived_passage",
+    literature
+  }];
 }
 
 export function listThinReadingPendingPublicAnnotations(

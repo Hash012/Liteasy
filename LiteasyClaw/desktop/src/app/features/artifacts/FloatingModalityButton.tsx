@@ -1,24 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import type { ArtifactType } from "./artifact.types";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 type FloatingModalityButtonProps = {
   analysisHint: string;
   canStartAnalysis: boolean;
-  onStartAnalysis: (artifactType: ArtifactType) => void;
+  generationProgress?: number;
+  onStartAnalysis: (artifactType: "thin_reading") => void;
 };
-
-const modalityOptions: Array<{
-  className: string;
-  label: string;
-  type: ArtifactType;
-}> = [
-  { className: "tree", label: "树形展开", type: "tree" },
-  { className: "mindmap", label: "思维导图", type: "mindmap" },
-  { className: "layered-graph-option", label: "分层关系图", type: "layered_graph" },
-  { className: "ppt", label: "PPT", type: "ppt" },
-  { className: "comparison", label: "对比表", type: "comparison_table" },
-  { className: "thin-reading", label: "薄读", type: "thin_reading" }
-];
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -27,14 +14,17 @@ function clamp(value: number, min: number, max: number) {
 export function FloatingModalityButton({
   analysisHint,
   canStartAnalysis,
+  generationProgress,
   onStartAnalysis
 }: FloatingModalityButtonProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const movedRef = useRef(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const normalizedProgress = generationProgress === undefined
+    ? undefined
+    : clamp(generationProgress, 0, 100);
 
   useEffect(() => {
     if (!dragging) {
@@ -76,7 +66,7 @@ export function FloatingModalityButton({
 
   return (
     <div
-      aria-label="中间栏悬浮 AI 选择"
+      aria-label="中间栏悬浮薄读"
       className={`floating-modality-launcher${dragging ? " dragging" : ""}`}
       ref={rootRef}
       style={
@@ -88,21 +78,22 @@ export function FloatingModalityButton({
           : undefined
       }
     >
-      {expanded ? modalityOptions.map((option) => (
-        <button
-          className={`floating-modality-option ${option.className}`}
-          disabled={!canStartAnalysis}
-          key={option.type}
-          onClick={() => onStartAnalysis(option.type)}
-          title={analysisHint}
-          type="button"
-        >
-          <span>{option.label}</span>
-        </button>
-      )) : null}
+      {normalizedProgress !== undefined ? (
+        <span
+          aria-label="薄读生成进度"
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={Math.round(normalizedProgress)}
+          className="floating-modality-progress-ring"
+          role="progressbar"
+          style={{
+            "--floating-modality-progress": `${normalizedProgress}%`
+          } as CSSProperties}
+        />
+      ) : null}
       <button
-        aria-expanded={expanded}
-        aria-label={expanded ? "关闭 AI 选择" : "打开 AI 选择"}
+        aria-disabled={!canStartAnalysis}
+        aria-label="薄读"
         className="floating-modality-main"
         onPointerDown={(event) => {
           const root = rootRef.current;
@@ -118,14 +109,14 @@ export function FloatingModalityButton({
           setDragging(true);
         }}
         onClick={() => {
-          if (!movedRef.current) {
-            setExpanded((current) => !current);
+          if (!movedRef.current && canStartAnalysis) {
+            onStartAnalysis("thin_reading");
           }
         }}
         title={analysisHint}
         type="button"
       >
-        AI
+        薄读
       </button>
     </div>
   );

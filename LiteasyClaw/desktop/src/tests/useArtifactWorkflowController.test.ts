@@ -4,7 +4,7 @@ import { useArtifactWorkflowController } from "../app/controllers/useArtifactWor
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import { createThinReadingBranchRecoverySnapshot } from "../app/features/artifacts/artifactTaskRecovery";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
-import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
+import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 
@@ -349,7 +349,7 @@ describe("useArtifactWorkflowController", () => {
     ]);
   });
 
-  test("marks a mindmap task failed when artifact workflow audit blocks persistence", async () => {
+  test("projects a stable failure when artifact workflow audit blocks persistence", async () => {
     const artifactStore = createArtifactStore();
     const onAnalysisHint = vi.fn();
     const client = artifactResultClient();
@@ -380,10 +380,16 @@ describe("useArtifactWorkflowController", () => {
 
     expect(client.save).not.toHaveBeenCalled();
     expect(result.current.model.artifactTasks[0]).toEqual(expect.objectContaining({
+      failure: expect.objectContaining({
+        code: "artifact_verification_failed",
+        message: expect.stringContaining("审计未通过")
+      }),
       stage: "failed",
       status: "failed"
     }));
-    expect(onAnalysisHint).toHaveBeenLastCalledWith(expect.stringContaining("审计未通过"));
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(
+      "Agent 分析失败：生成结果未通过证据校验，请调整资料或稍后重试。"
+    );
   });
 
   test("restores saved artifacts into the catalog and opens them on demand", async () => {
@@ -426,6 +432,7 @@ describe("useArtifactWorkflowController", () => {
     const { result } = renderHook(() =>
       useArtifactWorkflowController({
         artifactResultClient: client,
+        artifactResultScopeKey: "https://cloud.example:user-a",
         artifactStore,
         getImportedChunksByPaperId: () => ({}),
         getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
@@ -447,7 +454,7 @@ describe("useArtifactWorkflowController", () => {
         mindmapArtifact: expect.objectContaining({
           verification: expect.objectContaining({ status: "pass" })
         }),
-        resultPath: "project-docs/agent-results/artifact-saved.json"
+        resultPath: "liteasy://agent-artifacts/artifact-saved"
       })
     ]);
     expect(result.current.model.artifactTabs).toEqual([]);
@@ -468,7 +475,7 @@ describe("useArtifactWorkflowController", () => {
     ]);
   });
 
-  test("restores the local artifact catalog when the service is unavailable", async () => {
+  test("does not reveal the device artifact catalog when an account service is unavailable", async () => {
     const artifactStore = createArtifactStore();
     const localRepository = {
       list: vi.fn(async () => [{
@@ -504,14 +511,11 @@ describe("useArtifactWorkflowController", () => {
       await Promise.resolve();
     });
 
-    expect(result.current.model.artifactCatalog).toEqual([
-      expect.objectContaining({ artifactId: "artifact-local" })
-    ]);
-    expect(localRepository.replace).toHaveBeenCalledWith([
-      expect.objectContaining({ artifactId: "artifact-local" })
-    ]);
+    expect(result.current.model.artifactCatalog).toEqual([]);
+    expect(localRepository.list).not.toHaveBeenCalled();
+    expect(localRepository.replace).not.toHaveBeenCalled();
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      "同步 Agent 产物服务失败，已保留本地记录：endpoint changed after login"
+      "同步 Agent 产物服务失败：endpoint changed after login"
     );
   });
 
@@ -624,7 +628,7 @@ describe("useArtifactWorkflowController", () => {
     ]);
   });
 
-  test("refreshes server artifacts when login changes the result endpoint", async () => {
+  test("isolates server artifacts across login, account switch, and logout", async () => {
     const artifactStore = createArtifactStore();
     const persisted = {
       agent: {
@@ -654,10 +658,22 @@ describe("useArtifactWorkflowController", () => {
       },
       version: "liteasy.agent-artifact/v1" as const
     };
+    const accountBArtifact = {
+      ...persisted,
+      agent: { ...persisted.agent, runId: "run-account-b" },
+      artifactId: "artifact-account-b",
+      title: "Account B artifact"
+    };
+    const deviceArtifact = {
+      ...persisted,
+      agent: { ...persisted.agent, runId: "run-device" },
+      artifactId: "artifact-device",
+      title: "Device artifact"
+    };
     const client = artifactResultClient();
-    client.list.mockResolvedValueOnce([]).mockResolvedValueOnce([persisted]);
+    client.list.mockResolvedValueOnce([persisted]).mockResolvedValueOnce([accountBArtifact]);
     const localRepository = {
-      list: vi.fn(async () => []),
+      list: vi.fn(async () => [deviceArtifact]),
       replace: vi.fn(async () => undefined)
     };
 
@@ -674,23 +690,50 @@ describe("useArtifactWorkflowController", () => {
         queueImportForPapers: vi.fn(() => "idle"),
         runAgentAnalysis: vi.fn(async () => completedRun())
       }),
-      { initialProps: { scopeKey: "mock://before-login" } }
+      { initialProps: { scopeKey: undefined as string | undefined } }
     );
 
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    rerender({ scopeKey: "http://127.0.0.1:8791" });
+    expect(client.list).not.toHaveBeenCalled();
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-device" })
+    ]);
+
+    rerender({ scopeKey: "http://127.0.0.1:8791:user-a" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-after-login" })
+    ]);
+
+    rerender({ scopeKey: "http://127.0.0.1:8791:user-b" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-account-b" })
+    ]);
+
+    rerender({ scopeKey: undefined });
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(client.list).toHaveBeenCalledTimes(2);
-    expect(localRepository.list).toHaveBeenCalledTimes(1);
+    expect(localRepository.list).toHaveBeenCalledTimes(2);
     expect(result.current.model.artifactCatalog).toEqual([
-      expect.objectContaining({ artifactId: "artifact-after-login" })
+      expect.objectContaining({ artifactId: "artifact-device" })
     ]);
+    expect(localRepository.replace).not.toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ artifactId: "artifact-after-login" }),
+      expect.objectContaining({ artifactId: "artifact-account-b" })
+    ]));
   });
 });

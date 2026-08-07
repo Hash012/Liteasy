@@ -20,28 +20,11 @@ function createJsonResponse(payload: unknown) {
 }
 
 describe("useOrganizationData", () => {
-  test("loads list, selected summary, and selected governance data", async () => {
+  test("loads the organization list and selected organization summary", async () => {
     const organizationListRequests: string[] = [];
     const organizationSummaryRequests: string[] = [];
-    const governanceRequests: string[] = [];
 
     const getActiveOrganizationId = () => "org-demo-2";
-    const organizationGovernanceTransport = async (request: { body?: string }) => {
-      governanceRequests.push(request.body ?? "");
-      return createJsonResponse({
-        summary: {
-          auditQueue: { highRisk: 0, pendingReview: 1 },
-          quota: {
-            modelCallsLimit: 5000,
-            modelCallsUsed: 900,
-            storageLimitGb: 50,
-            storageUsedGb: 12
-          },
-          recentAuditEvents: [],
-          runningTasks: []
-        }
-      });
-    };
     const organizationListTransport = async (request: { body?: string }) => {
       organizationListRequests.push(request.body ?? "");
       return createJsonResponse({
@@ -99,7 +82,6 @@ describe("useOrganizationData", () => {
         accountSession,
         controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
         getActiveOrganizationId,
-        organizationGovernanceTransport,
         organizationListTransport,
         organizationTransport
       })
@@ -107,7 +89,6 @@ describe("useOrganizationData", () => {
 
     await waitFor(() => {
       expect(result.current.organizationSummary?.organizationId).toBe("org-demo-2");
-      expect(result.current.organizationGovernanceSummary?.auditQueue.pendingReview).toBe(1);
     });
 
     expect(result.current.organizationList?.activeOrganizationId).toBe("org-demo-1");
@@ -119,49 +100,39 @@ describe("useOrganizationData", () => {
       organizationId: "org-demo-2",
       sessionId: "demo-session-1"
     });
-    expect(governanceRequests.map((body) => JSON.parse(body))).toContainEqual({
-      organizationId: "org-demo-2",
-      sessionId: "demo-session-1"
-    });
   });
-  test("keeps governance waiting while organization summary is still loading", async () => {
-    const neverResolveSummary = async () => new Promise<Response>(() => undefined);
+  test("does not request an organization summary when the account has no organization", async () => {
+    const organizationSummaryRequests: string[] = [];
+    const organizationTransport = async (request: { body: string }) => {
+      organizationSummaryRequests.push(request.body);
+      return new Promise<Response>(() => undefined);
+    };
+    const organizationListTransport = async () => createJsonResponse({
+      activeOrganizationId: "org-demo-1",
+      organizations: []
+    });
 
     const { result } = renderHook(() =>
       useOrganizationData({
         accountSession,
         controlPlaneEndpoint: "https://liteasy.example.com/control-plane",
         getActiveOrganizationId: () => undefined,
-        organizationGovernanceTransport: async () => createJsonResponse({
-          summary: {
-            auditQueue: { highRisk: 0, pendingReview: 0 },
-            quota: {
-              modelCallsLimit: 10000,
-              modelCallsUsed: 0,
-              storageLimitGb: 100,
-              storageUsedGb: 0
-            },
-            recentAuditEvents: [],
-            runningTasks: []
-          }
-        }),
-        organizationListTransport: async () => createJsonResponse({
-          activeOrganizationId: "org-demo-1",
-          organizations: []
-        }),
-        organizationTransport: neverResolveSummary
+        organizationListTransport,
+        organizationTransport
       })
     );
 
     await waitFor(() => {
-      expect(result.current.organizationSummaryStatus).toBe("loading");
+      expect(result.current.organizationListStatus).toBe("success");
     });
 
-    expect(result.current.organizationGovernanceStatus).toBe("waiting");
-    expect(result.current.organizationGovernanceMessage).toBe("组织空间加载完成后会同步组织治理摘要。");
+    expect(result.current.organizationSummaryStatus).toBe("idle");
+    expect(result.current.organizationSummary).toBeNull();
+    expect(result.current.organizationSummaryMessage).toBe("尚未加入组织。");
+    expect(organizationSummaryRequests).toEqual([]);
   });
 
-  test("shows an actionable dev-cloud hint when organization requests cannot reach the service", async () => {
+  test("shows a stable error without exposing the endpoint when organization requests fail", async () => {
     const networkFailure = async () => {
       throw new TypeError("Failed to fetch");
     };
@@ -171,7 +142,6 @@ describe("useOrganizationData", () => {
         accountSession,
         controlPlaneEndpoint: "http://127.0.0.1:8787",
         getActiveOrganizationId: () => undefined,
-        organizationGovernanceTransport: networkFailure,
         organizationListTransport: networkFailure,
         organizationTransport: networkFailure
       })
@@ -179,11 +149,12 @@ describe("useOrganizationData", () => {
 
     await waitFor(() => {
       expect(result.current.organizationListStatus).toBe("error");
-      expect(result.current.organizationSummaryStatus).toBe("error");
+      expect(result.current.organizationSummaryStatus).toBe("idle");
     });
 
-    expect(result.current.organizationListMessage).toContain("请确认服务已启动，并检查当前云端地址：http://127.0.0.1:8787");
-    expect(result.current.organizationSummaryMessage).toContain("请确认服务已启动，并检查当前云端地址：http://127.0.0.1:8787");
+    expect(result.current.organizationListMessage).toContain("云端服务当前不可用，请检查网络连接后重试");
+    expect(result.current.organizationSummaryMessage).toBe("尚未加入组织。");
+    expect(result.current.organizationListMessage).not.toContain("http://127.0.0.1:8787");
   });
 
   test("keeps organization space in local-reader guidance mode when logged out", async () => {

@@ -1,5 +1,4 @@
 import type { ImportJob, MineruFigure } from "../import/import.types";
-import { buildImportedChunksForPaper } from "../import/importFixtures";
 import {
   extractPdfIndexForPaper,
   type ExtractedPdfPage,
@@ -29,12 +28,6 @@ import {
 type WorkspaceStore = ReturnType<typeof createWorkspaceStore>;
 type ImportStore = ReturnType<typeof createImportStore>;
 export type ImportQueueStatus = "already_imported" | "idle" | "importing" | "started";
-
-type ExternalLibraryItem = {
-  id: string;
-  source: string;
-  title: string;
-};
 
 type ExternalPdfLibraryItem = {
   bytes: Uint8Array;
@@ -119,16 +112,7 @@ export function useWorkspaceActions({
 }: UseWorkspaceActionsInput) {
   const resolvePaperIndex = extractPaperIndex ?? (extractPaperChunks
     ? async (paper: Paper) => ({ chunks: await extractPaperChunks(paper), pages: undefined })
-    : async (paper: Paper) => {
-        try {
-          return await extractPdfIndexForPaper(paper, { loadPdfSource, ocrLanguage });
-        } catch (error) {
-          if (["demo-1", "demo-2", "demo-3"].includes(paper.id)) {
-            return { chunks: buildImportedChunksForPaper(paper), pages: undefined };
-          }
-          throw error;
-        }
-      });
+    : async (paper: Paper) => extractPdfIndexForPaper(paper, { loadPdfSource, ocrLanguage }));
   const resolvePaperResources = extractPaperResources
     ? async (paper: Paper) => ({
         ...(await extractPaperResources(paper)),
@@ -271,9 +255,6 @@ export function useWorkspaceActions({
           ? normalizeWorkspacePath(paper.sourcePath).startsWith(`${normalizeWorkspacePath(folderPath)}/`)
           : false
       );
-      if (affectedPapers.length === 0) {
-        throw new Error("目录中没有可更新的文献条目。");
-      }
       const updatedPapers = affectedPapers.map((paper) => ({
         ...paper,
         sourcePath: replaceWorkspacePathPrefix(
@@ -312,9 +293,6 @@ export function useWorkspaceActions({
           ? normalizeWorkspacePath(paper.sourcePath).startsWith(`${normalizeWorkspacePath(folderPath)}/`)
           : false
       );
-      if (affectedPapers.length === 0) {
-        throw new Error("目录中没有可移动的文献条目。");
-      }
       const updatedPapers = affectedPapers.map((paper) => ({
         ...paper,
         sourcePath: replaceWorkspacePathPrefix(paper.sourcePath!, folderPath, destinationPath)
@@ -332,22 +310,6 @@ export function useWorkspaceActions({
       onAnalysisHint(message);
       return message;
     }
-  }
-
-  function addExternalPaperToLibrary(item: ExternalLibraryItem) {
-    const added = workspaceStore.addPaper({
-      id: item.id,
-      sourcePath: `external://${item.source}/${item.id}`,
-      title: item.title
-    });
-
-    if (added) {
-      syncWorkspace();
-      onAnalysisHint(`已将《${item.title}》加入我的文献库。`);
-      return;
-    }
-
-    onAnalysisHint(`《${item.title}》已经在我的文献库中。`);
   }
 
   async function addDroppedPdfFiles(files: File[], targetFolderPath?: string) {
@@ -500,7 +462,12 @@ export function useWorkspaceActions({
       }
 
       pending += 1;
-      const sourcePath = paper.sourcePath ?? `fixtures/${paper.id}.pdf`;
+      const sourcePath = paper.sourcePath;
+      if (!sourcePath) {
+        failed = true;
+        onFailure?.({ error: new Error("文献没有可读取的 PDF 正文。"), paper });
+        return;
+      }
       const jobId = importStore.startImport({
         documentId: paper.id,
         sourcePath
@@ -544,9 +511,9 @@ export function useWorkspaceActions({
           })
           .catch((error) => {
             failed = true;
-            importStore.markFailed(jobId);
             const normalizedError = error instanceof Error ? error : new Error(String(error));
             const reason = normalizedError.message;
+            importStore.markFailed(jobId, reason);
             onAnalysisHint(`《${paper.title}》解析失败：${reason}`);
             onFailure?.({ error: normalizedError, paper });
           })
@@ -608,7 +575,6 @@ export function useWorkspaceActions({
   return {
     addDroppedPdfFiles,
     addExternalPdfToLibrary,
-    addExternalPaperToLibrary,
     getImportedChunksByPaperId,
     getImportedSelectedCount,
     getSelectedPapers,

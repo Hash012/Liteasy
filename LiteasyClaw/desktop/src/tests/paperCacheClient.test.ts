@@ -32,7 +32,6 @@ test("caches an external PDF under its content fingerprint", async () => {
   expect(calls[0].command).toBe("cache_external_pdf");
   // Tauri maps camelCase arguments onto the Rust command's snake_case parameters.
   expect(calls[0].args).toEqual({
-    accountKey: "guest",
     bytes: [37, 80, 68, 70, 45, 49],
     contentHash: "a".repeat(64)
   });
@@ -46,7 +45,7 @@ test("reads a cached PDF back as bytes", async () => {
   expect(bytes).toBeInstanceOf(Uint8Array);
   expect(Array.from(bytes)).toEqual([37, 80, 68, 70, 45]);
   expect(calls[0]).toEqual({
-    args: { accountKey: "guest", cachePath: "C:/cache/paper-cache/abc.pdf" },
+    args: { cachePath: "C:/cache/paper-cache/abc.pdf" },
     command: "read_cached_pdf"
   });
 });
@@ -64,7 +63,6 @@ test("promotes a cached paper into the library and reports its new path", async 
   expect(promoted).toBe(libraryPath);
   expect(calls[0]).toEqual({
     args: {
-      accountKey: "guest",
       cachePath: "C:/cache/paper-cache/abc.pdf",
       fileName: "Attention is all you need.pdf"
     },

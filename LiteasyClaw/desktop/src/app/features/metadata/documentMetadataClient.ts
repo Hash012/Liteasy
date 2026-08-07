@@ -1,4 +1,5 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
+import { readCloudServiceError } from "../network/cloudErrorMessage";
 import type { DocumentMetadataSyncInput, DocumentMetadataSyncResult } from "./metadata.types";
 
 export type DocumentMetadataTransportRequest = {
@@ -23,6 +24,12 @@ type DocumentMetadataPayload = {
 
 function buildDocumentMetadataUrl(endpoint: string) {
   return `${endpoint.replace(/\/+$/, "")}/v1/documents/metadata-sync`;
+}
+
+function createIdempotencyKey() {
+  return typeof globalThis.crypto?.randomUUID === "function"
+    ? `manifest:${globalThis.crypto.randomUUID()}`
+    : `manifest:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
 function isDocumentMetadataPayload(payload: unknown): payload is DocumentMetadataPayload {
@@ -59,8 +66,9 @@ export function createDocumentMetadataClient({
 }: CreateDocumentMetadataClientInput) {
   return async (input: DocumentMetadataSyncInput): Promise<DocumentMetadataSyncResult> => {
     const response = await transport({
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, idempotencyKey: createIdempotencyKey() }),
       headers: {
+        Authorization: `Bearer ${input.sessionId}`,
         "Content-Type": "application/json"
       },
       method: "POST",
@@ -68,7 +76,10 @@ export function createDocumentMetadataClient({
     });
 
     if (!response.ok) {
-      throw new Error(`文献元数据同步失败（${response.status}）`);
+      throw await readCloudServiceError(response, {
+        code: "document_metadata_sync_failed",
+        message: "文献元数据同步失败，请稍后重试。"
+      });
     }
 
     const payload = await response.json();

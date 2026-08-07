@@ -155,11 +155,19 @@ function getStorage() {
   }
 }
 
-export function persistInterruptedArtifactTasks(tasks: readonly ArtifactTask[]) {
+function scopedStorageKey(scopeKey?: string) {
+  return `${storageKey}:${encodeURIComponent(scopeKey ?? "device")}`;
+}
+
+export function persistInterruptedArtifactTasks(
+  tasks: readonly ArtifactTask[],
+  scopeKey?: string
+) {
   const storage = getStorage();
   if (!storage) {
     return;
   }
+  const targetStorageKey = scopedStorageKey(scopeKey);
   const pending = tasks
     .filter((task) => task.status === "queued" || task.status === "running")
     .slice(0, maxPersistedTaskCount)
@@ -175,29 +183,34 @@ export function persistInterruptedArtifactTasks(tasks: readonly ArtifactTask[]) 
       type
     }));
   if (pending.length === 0) {
-    storage.removeItem(storageKey);
+    storage.removeItem(targetStorageKey);
     return;
   }
   try {
-    storage.setItem(storageKey, JSON.stringify(pending));
+    storage.setItem(targetStorageKey, JSON.stringify(pending));
   } catch {
     // Task recovery is optional. Browsers can reject writes once their local quota is
     // full; leaving the exception uncaught would prevent the actual Agent task from starting.
     try {
-      storage.removeItem(storageKey);
+      storage.removeItem(targetStorageKey);
     } catch {
       // Storage may be unavailable altogether; generation still remains usable.
     }
   }
 }
 
-export function takeInterruptedArtifactTasks(): PersistedTask[] {
+export function takeInterruptedArtifactTasks(scopeKey?: string): PersistedTask[] {
   const storage = getStorage();
   if (!storage) {
     return [];
   }
-  const raw = storage.getItem(storageKey);
-  storage.removeItem(storageKey);
+  const targetStorageKey = scopedStorageKey(scopeKey);
+  let raw = storage.getItem(targetStorageKey);
+  storage.removeItem(targetStorageKey);
+  if (!scopeKey && !raw) {
+    raw = storage.getItem(storageKey);
+    storage.removeItem(storageKey);
+  }
   if (!raw) {
     return [];
   }

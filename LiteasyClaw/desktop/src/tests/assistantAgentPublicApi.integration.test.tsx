@@ -5,6 +5,17 @@ import { createSeededSettingsStore } from "../app/features/settings/settingsStat
 import { AssistantSidebar } from "../app/layout/AssistantSidebar";
 import { useAssistantAgentController } from "../app/controllers/agent/useAssistantAgentController";
 
+const modelTransport = async ({ body }: { body?: string }) => ({
+  json: async () => ({
+    answer: String(body).includes("总结这篇论文的检索方法")
+      ? "云端回答：总结这篇论文的检索方法"
+      : "云端模型测试响应",
+    execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+  }),
+  ok: true,
+  status: 200
+});
+
 test("product AssistantSidebar executes chat commands through the injected public Agent client", async () => {
   const user = userEvent.setup();
   const applyTheme = vi.fn(() => "已应用卡通风格。");
@@ -25,6 +36,7 @@ test("product AssistantSidebar executes chat commands through the injected publi
         ]
       },
       importedSelectedCount: 1,
+      modelTransport,
       onApplyThemePreset: applyTheme,
       onGenerateArtifact: () => "unused",
       profileUnlocked: false,
@@ -39,6 +51,7 @@ test("product AssistantSidebar executes chat commands through the injected publi
         agentClient={agent.agentClient}
         executionJournal={agent.executionJournal}
         importedSelectedCount={1}
+        modelTransport={modelTransport}
         onApplyThemePreset={applyTheme}
         onGenerateArtifact={() => "unused"}
         selectedPaperCount={1}
@@ -58,8 +71,8 @@ test("product AssistantSidebar executes chat commands through the injected publi
   await user.click(screen.getByRole("button", { name: "发送" }));
 
   await waitFor(() => expect(applyTheme).toHaveBeenCalledTimes(1));
-  expect(screen.getByText("计划：应用卡通风格")).toBeInTheDocument();
-  expect(screen.getByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
+  expect(await screen.findByText("计划：应用卡通风格")).toBeInTheDocument();
+  expect(await screen.findByLabelText("动态界面：已应用卡通风格。")).toBeInTheDocument();
 
   await user.type(
     screen.getByPlaceholderText("输入你的问题或命令"),

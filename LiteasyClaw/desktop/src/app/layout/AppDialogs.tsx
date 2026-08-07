@@ -10,6 +10,7 @@ import { OrganizationInviteConfirmDialog } from "../features/organization/Organi
 import { OrganizationJoinDialog } from "../features/organization/OrganizationJoinDialog";
 import { OrganizationLeaveConfirmDialog } from "../features/organization/OrganizationLeaveConfirmDialog";
 import type { OrganizationList, OrganizationSummary } from "../features/organization/organization.types";
+import type { OrganizationRole } from "../features/organization/organization.types";
 import { AcademicArchiveDialog } from "../features/profile/AcademicArchiveDialog";
 import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfirmDialog";
 import type { AcademicProfile } from "../features/profile/profile.types";
@@ -19,6 +20,7 @@ export type AppDialogsProps = {
   accountSession: AccountSession | null;
   accountMessage?: string;
   accountPending?: boolean;
+  controlPlaneEndpoint?: string;
   academicArchiveOpen: boolean;
   clearProfileConfirmOpen: boolean;
   createOrganizationOpen: boolean;
@@ -27,6 +29,8 @@ export type AppDialogsProps = {
   leaveSummary: OrganizationSummary | null;
   list: OrganizationList | null;
   listMessage: string;
+  organizationActionMessage?: string;
+  organizationActionPending?: boolean;
   loginDialogOpen?: boolean;
   onCancelClearProfile: () => void;
   onClearProfile: () => void;
@@ -38,12 +42,15 @@ export type AppDialogsProps = {
   onSkipLogin?: () => void;
   onSubmitAccountLogin?: (login: AccountLoginInput) => void;
   onSubmitAccountRegistration?: (registration: AccountRegistrationInput) => void;
-  onSubmitDemoLogin?: () => void;
+  onSubmitSystemBrowserLogin?: () => void;
   onToggleSuppressLoginReminder?: (checked: boolean) => void;
   onCloseOrganizationDialog: () => void;
   onCreateOrganization: (organizationName: string) => void;
-  onInviteMember: () => void;
-  onJoinOrganization: (inviteCode: string) => void;
+  onInviteMember: (input: {
+    role: Extract<OrganizationRole, "admin" | "member">;
+    targetSubject: string;
+  }) => void;
+  onJoinOrganization: (invitationToken: string) => void;
   onLeaveOrganization: () => void;
   onExportProfile: () => void;
   onOpenSharedLibrary: (summary: OrganizationSummary) => void;
@@ -57,6 +64,7 @@ export function AppDialogs({
   accountMessage,
   accountPending,
   accountSession,
+  controlPlaneEndpoint = "",
   academicArchiveOpen,
   clearProfileConfirmOpen,
   createOrganizationOpen,
@@ -65,6 +73,8 @@ export function AppDialogs({
   leaveSummary,
   list,
   listMessage,
+  organizationActionMessage,
+  organizationActionPending,
   loginDialogOpen = false,
   onCancelClearProfile,
   onClearProfile,
@@ -76,7 +86,7 @@ export function AppDialogs({
   onSkipLogin,
   onSubmitAccountLogin,
   onSubmitAccountRegistration,
-  onSubmitDemoLogin,
+  onSubmitSystemBrowserLogin,
   onToggleSuppressLoginReminder,
   onCloseOrganizationDialog,
   onCreateOrganization,
@@ -95,10 +105,11 @@ export function AppDialogs({
         <LightweightLoginDialog
           accountMessage={accountMessage}
           accountPending={accountPending}
+          controlPlaneEndpoint={controlPlaneEndpoint}
           onSkip={onSkipLogin ?? (() => undefined)}
           onSubmitAccountLogin={onSubmitAccountLogin ?? (() => undefined)}
           onSubmitAccountRegistration={onSubmitAccountRegistration ?? (() => undefined)}
-          onSubmitDemoLogin={onSubmitDemoLogin ?? (() => undefined)}
+          onSubmitSystemBrowserLogin={onSubmitSystemBrowserLogin ?? (() => undefined)}
           onToggleSuppressReminder={onToggleSuppressLoginReminder ?? (() => undefined)}
         />
       ) : null}
@@ -115,17 +126,26 @@ export function AppDialogs({
       ) : null}
       {createOrganizationOpen ? (
         <OrganizationCreateDialog
+          message={organizationActionMessage}
           onCancel={onCloseCreateOrganization}
           onConfirm={onCreateOrganization}
+          pending={organizationActionPending}
         />
       ) : null}
       {joinOrganizationOpen ? (
-        <OrganizationJoinDialog onCancel={onCloseJoinOrganization} onConfirm={onJoinOrganization} />
+        <OrganizationJoinDialog
+          message={organizationActionMessage}
+          onCancel={onCloseJoinOrganization}
+          onConfirm={onJoinOrganization}
+          pending={organizationActionPending}
+        />
       ) : null}
       {inviteSummary ? (
         <OrganizationInviteConfirmDialog
           onCancel={onCloseInviteMember}
           onConfirm={onInviteMember}
+          message={organizationActionMessage}
+          pending={organizationActionPending}
           summary={inviteSummary}
         />
       ) : null}
@@ -133,6 +153,8 @@ export function AppDialogs({
         <OrganizationLeaveConfirmDialog
           onCancel={onCloseLeaveOrganization}
           onConfirm={onLeaveOrganization}
+          message={organizationActionMessage}
+          pending={organizationActionPending}
           summary={leaveSummary}
         />
       ) : null}

@@ -10,12 +10,14 @@ import type { OrganizationList, OrganizationListStatus } from "./organization.ty
 type UseOrganizationListInput = {
   accountSession: AccountSession | null;
   controlPlaneEndpoint: string;
+  refreshRevision?: number;
   transport?: OrganizationListTransport;
 };
 
 export function useOrganizationList({
   accountSession,
   controlPlaneEndpoint,
+  refreshRevision = 0,
   transport
 }: UseOrganizationListInput) {
   const [list, setList] = useState<OrganizationList | null>(null);
@@ -66,7 +68,7 @@ export function useOrganizationList({
     return () => {
       active = false;
     };
-  }, [accountSession?.sessionId, controlPlaneEndpoint, transport]);
+  }, [accountSession?.sessionId, controlPlaneEndpoint, refreshRevision, transport]);
 
   return {
     list,

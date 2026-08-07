@@ -5,7 +5,7 @@ import {
   createArtifactMarkdown
 } from "../app/features/artifacts/artifactDocumentExport";
 import type { ArtifactTab, ArtifactType } from "../app/features/artifacts/artifact.types";
-import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 
 const artifactTypes: ArtifactType[] = [

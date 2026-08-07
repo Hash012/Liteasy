@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import {
   addThinReadingAnnotation,
   advanceThinReadingDocument,
@@ -97,16 +97,19 @@ describe("thinReadingIntuechoSyncQueue", () => {
   });
 
   test("retains selected-passage evidence scope for pending public annotations", () => {
+    const fixture = createSyncableFixture();
+    const evidenceIds = (fixture.rootSeed.evidence.paperEvidenceSpans ?? []).slice(0, 2).map((span) => span.id);
+    expect(evidenceIds.length).toBeGreaterThan(0);
     const root = createThinReadingDocument({
-      ...createThinReadingFixture(),
+      ...fixture,
       artifactId: "artifact-sync-selected-passage"
     });
     const branched = advanceThinReadingDocument(root, {
       parentNodeId: root.rootNodeId,
-      seed: createThinReadingFixture().rootSeed,
+      seed: fixture.rootSeed,
       source: {
         kind: "selected_text",
-        evidenceIds: ["evidence-root-1", "evidence-root-2"],
+        evidenceIds,
         excerpt: "MaxSim retains the strongest token-level match.",
         prompt: "解释这一匹配信号为何重要"
       },
@@ -124,10 +127,20 @@ describe("thinReadingIntuechoSyncQueue", () => {
         artifactId: "artifact-sync-selected-passage",
         scope: expect.objectContaining({
           kind: "selected_passage",
-          evidenceIds: ["evidence-root-1", "evidence-root-2"],
+          evidenceIds,
           excerpt: "MaxSim retains the strongest token-level match."
         }),
-        status: "pending_public"
+        status: "pending_public",
+        targets: [expect.objectContaining({
+          derivedContent: expect.objectContaining({
+            artifactId: "artifact-sync-selected-passage",
+            excerpt: "MaxSim retains the strongest token-level match."
+          }),
+          evidence: expect.arrayContaining([
+            expect.objectContaining({ excerpt: expect.any(String), literature: expect.any(Object) })
+          ]),
+          kind: "derived_passage"
+        })]
       })
     ]);
   });
@@ -159,6 +172,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
     }));
     const adapter = createHttpIntuechoSyncAdapter({
       endpoint: "https://intuecho.example.com/",
+      sessionId: "desktop-token",
       transport
     });
 
@@ -172,6 +186,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
     expect(transport).toHaveBeenCalledWith(expect.objectContaining({
       headers: expect.objectContaining({
         "content-type": "application/json",
+        Authorization: "Bearer desktop-token",
         "idempotency-key": expect.stringMatching(/^thin-reading-sync-/)
       }),
       method: "POST",
@@ -191,6 +206,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
     const transport = vi.fn();
     const results = await createHttpIntuechoSyncAdapter({
       endpoint: "https://intuecho.example.com",
+      sessionId: "desktop-token",
       transport
     }).syncPendingAnnotations(listThinReadingPendingPublicAnnotations(document));
 
@@ -231,6 +247,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
 
     const results = await createHttpIntuechoSyncAdapter({
       endpoint: "https://intuecho.example.com",
+      sessionId: "desktop-token",
       transport
     }).syncPendingAnnotations([localItem, stableItem]);
 
@@ -250,9 +267,10 @@ describe("thinReadingIntuechoSyncQueue", () => {
       visibility: "pending_public"
     });
     const queue = listThinReadingPendingPublicAnnotations(document);
-    const insecureAdapter = createHttpIntuechoSyncAdapter({ endpoint: "http://intuecho.example.com" });
+    const insecureAdapter = createHttpIntuechoSyncAdapter({ endpoint: "http://intuecho.example.com", sessionId: "desktop-token" });
     const incompleteAdapter = createHttpIntuechoSyncAdapter({
       endpoint: "https://intuecho.example.com",
+      sessionId: "desktop-token",
       transport: async () => ({ json: async () => ({ results: [] }), ok: true, status: 200 })
     });
 
@@ -281,6 +299,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
 
     await createHttpIntuechoSyncAdapter({
       endpoint: "https://intuecho.example.com/community/?preview=true#annotations",
+      sessionId: "desktop-token",
       transport
     }).syncPendingAnnotations(listThinReadingPendingPublicAnnotations(document));
 

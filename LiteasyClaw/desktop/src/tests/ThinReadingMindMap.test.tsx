@@ -4,7 +4,7 @@ import {
   normalizeMindMapMarkdown,
   ThinReadingMindMap
 } from "../app/features/thin-reading/ThinReadingMindMap";
-import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import {
   advanceThinReadingDocument,
   createThinReadingDocument

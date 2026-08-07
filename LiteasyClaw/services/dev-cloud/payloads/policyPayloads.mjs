@@ -18,9 +18,9 @@ function isModelAccessMode(value) {
   return value === "cloud_proxy" || value === "local_direct";
 }
 
-export function buildPolicyUpdatePayload(request, config, body = {}) {
+export function buildPolicyUpdatePayload(request, config, body = {}, actorId = "platform_admin") {
   const defaultProvider =
-    typeof body.defaultProvider === "string" && body.defaultProvider.length > 0
+    ["openai", "deepseek"].includes(body.defaultProvider)
       ? body.defaultProvider
       : config.defaultProvider;
   const localDirectEnabled =
@@ -37,11 +37,11 @@ export function buildPolicyUpdatePayload(request, config, body = {}) {
   config.policyVersion = `ops-policy-v${
     Number(String(config.policyVersion).match(/(\d+)$/)?.[1] ?? 1) + 1
   }`;
-  config.syncedAt = "2026-05-15T00:15:00Z";
+  config.syncedAt = new Date().toISOString();
 
   return {
     policy: buildPolicyPayload(request, config),
     updatedAt: config.syncedAt,
-    updatedBy: "internal-ops-demo"
+    updatedBy: actorId
   };
 }

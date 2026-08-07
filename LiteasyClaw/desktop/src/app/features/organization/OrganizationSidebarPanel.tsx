@@ -6,11 +6,10 @@ import {
   PeopleAddRegular,
   SignOutRegular
 } from "@fluentui/react-icons";
-import { OrganizationGovernancePanel } from "./OrganizationGovernancePanel";
+import { OrganizationMemberGovernancePanel } from "./OrganizationMemberGovernancePanel";
 import { OrganizationSpacePanel } from "./OrganizationSpacePanel";
+import { OrganizationStoragePolicyPanel } from "./OrganizationStoragePolicyPanel";
 import type {
-  OrganizationGovernanceStatus,
-  OrganizationGovernanceSummary,
   OrganizationList,
   OrganizationListStatus,
   OrganizationSummary,
@@ -20,9 +19,7 @@ import type {
 type OrganizationSidebarPanelProps = {
   accountSession: AccountSession | null;
   actionMessage?: string;
-  governanceMessage: string;
-  governanceStatus: OrganizationGovernanceStatus;
-  governanceSummary: OrganizationGovernanceSummary | null;
+  cloudEndpoint: string;
   list: OrganizationList | null;
   listMessage: string;
   listStatus: OrganizationListStatus;
@@ -32,6 +29,7 @@ type OrganizationSidebarPanelProps = {
   onLoginRequired?: () => void;
   onLeaveOrganization?: (summary: OrganizationSummary) => void;
   onMarkNotificationsRead?: (summary: OrganizationSummary) => void;
+  onOrganizationChanged?: () => void | Promise<void>;
   onOpenSharedLibrary?: (summary: OrganizationSummary) => void;
   onOpenWindow: () => void;
   onSelectOrganization?: (organizationId: string) => void;
@@ -44,9 +42,7 @@ type OrganizationSidebarPanelProps = {
 export function OrganizationSidebarPanel({
   accountSession,
   actionMessage,
-  governanceMessage,
-  governanceStatus,
-  governanceSummary,
+  cloudEndpoint,
   list,
   listMessage,
   listStatus,
@@ -56,6 +52,7 @@ export function OrganizationSidebarPanel({
   onLoginRequired,
   onLeaveOrganization,
   onMarkNotificationsRead,
+  onOrganizationChanged,
   onOpenSharedLibrary,
   onOpenWindow,
   onSelectOrganization,
@@ -151,11 +148,17 @@ export function OrganizationSidebarPanel({
         status={summaryStatus}
         summary={summary}
       />
-      <OrganizationGovernancePanel
-        message={governanceMessage}
-        status={governanceStatus}
-        summary={governanceSummary}
-      />
+      {summary ? (
+        <OrganizationStoragePolicyPanel endpoint={cloudEndpoint} summary={summary} />
+      ) : null}
+      {accountSession && summary && (summary.myRole === "owner" || summary.myRole === "admin") ? (
+        <OrganizationMemberGovernancePanel
+          accountSession={accountSession}
+          endpoint={cloudEndpoint}
+          onChanged={onOrganizationChanged ?? (() => undefined)}
+          summary={summary}
+        />
+      ) : null}
     </section>
   );
 }

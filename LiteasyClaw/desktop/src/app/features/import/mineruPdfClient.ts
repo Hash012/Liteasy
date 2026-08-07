@@ -59,3 +59,19 @@ export async function extractMineruPdfResources(input: {
   }
   return { chunks, figures: payload.figures };
 }
+
+export async function extractPdfResourcesWithMineruFallback(input: {
+  endpoint: string;
+  extractFallback: () => Promise<RetrievalChunk[]>;
+  loadPdfSource: (sourcePath: string) => Promise<Uint8Array>;
+  paper: Paper;
+}): Promise<{ chunks: RetrievalChunk[]; figures: MineruFigure[] }> {
+  try {
+    return await extractMineruPdfResources(input);
+  } catch {
+    return {
+      chunks: await input.extractFallback(),
+      figures: []
+    };
+  }
+}

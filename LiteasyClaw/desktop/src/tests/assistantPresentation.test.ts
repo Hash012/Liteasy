@@ -32,8 +32,22 @@ describe("assistant presentation helpers", () => {
   });
 
   test("formats assistant errors and audit verdict labels", () => {
-    expect(getAssistantErrorMessage(new Error("upstream 502"))).toContain("详细信息：upstream 502");
-    expect(getAssistantErrorMessage("offline")).toBe("模型服务暂时不可用，请检查当前模型端点配置或稍后重试。");
+    const ordinary = getAssistantErrorMessage(new Error("upstream 502 trace_request_1"));
+    expect(ordinary).toContain("AI 服务暂时不可用，请检查网络后重试。");
+    expect(ordinary).toContain("错误编号：assistant_service_unavailable");
+    expect(ordinary).toContain("追踪编号：trace_request_1");
+    expect(ordinary).not.toContain("upstream 502");
+    expect(getAssistantErrorMessage({
+      code: "session_not_found",
+      message: "Unable to create an Agent session",
+      retryable: true
+    })).toBe([
+      "AI 会话已失效，请重新登录或重新打开对话。",
+      "错误编号：session_not_found"
+    ].join("\n"));
+    expect(getAssistantErrorMessage(new Error("upstream 502"), {
+      developerDiagnostics: true
+    })).toContain("内部信息：upstream 502");
     expect(getAuditVerdictLabel("pass")).toBe("通过");
     expect(getAuditVerdictLabel("review")).toBe("需复核");
     expect(getAuditVerdictLabel("fail")).toBe("未通过");

@@ -81,10 +81,7 @@ fn request_id() -> String {
 }
 
 #[cfg(unix)]
-fn handle_connection(
-    app: AppHandle,
-    stream: std::os::unix::net::UnixStream,
-) -> Result<(), String> {
+fn handle_connection(app: AppHandle, stream: std::os::unix::net::UnixStream) -> Result<(), String> {
     let reader_stream = stream
         .try_clone()
         .map_err(|error| format!("Could not clone Agent socket: {error}"))?;
@@ -274,10 +271,7 @@ fn run_cli(args: Vec<String>) -> i32 {
                     println!("{line}");
                 }
             }
-            value
-                .get("exitCode")
-                .and_then(Value::as_i64)
-                .unwrap_or(1) as i32
+            value.get("exitCode").and_then(Value::as_i64).unwrap_or(1) as i32
         }
         Err(error) => {
             eprintln!("{error}");

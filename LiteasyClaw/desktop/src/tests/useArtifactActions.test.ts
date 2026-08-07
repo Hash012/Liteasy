@@ -1,8 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createArtifactStore } from "../app/features/artifacts/artifact.store";
-import { buildImportedChunksForPaper } from "../app/features/import/importFixtures";
-import { createThinReadingFixture } from "../app/features/thin-reading/thinReadingFixtures";
+import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import {
   advanceThinReadingDocument,
   createThinReadingDocument
@@ -411,7 +411,7 @@ describe("useArtifactActions", () => {
       })
     );
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      expect.stringContaining("project-docs/agent-results/")
+      "Agent 分析完成并已保存到当前账号。"
     );
   });
 
@@ -939,7 +939,16 @@ describe("useArtifactActions", () => {
       stage: "failed",
       status: "failed"
     }));
-    expect(onAnalysisHint).toHaveBeenLastCalledWith(expect.stringContaining("审计未通过"));
+    expect(artifactStore.getTasks()[0]?.failure).toMatchObject({
+      code: "artifact_verification_failed",
+      recovery: [
+        "检查当前文献是否包含足够的可引用证据后重新生成。",
+        "若问题持续，请调整选中文献或联系管理员并提供失败时间。"
+      ]
+    });
+    expect(onAnalysisHint).toHaveBeenLastCalledWith(
+      "Agent 分析失败：生成结果未通过证据校验，请调整资料或稍后重试。"
+    );
   });
 
   test("persists verified mindmap artifact metadata with the saved result", async () => {
@@ -976,7 +985,7 @@ describe("useArtifactActions", () => {
     ]);
   });
 
-  test("keeps provider diagnostics when Agent generation rejects", async () => {
+  test("keeps internal diagnostics but gives users implementation-neutral recovery", async () => {
     const { artifactStore, onAnalysisHint, result, runAgentAnalysis } = renderArtifactActions({
       diagnosticContext: {
         endpoint: "http://127.0.0.1:8791",
@@ -1000,22 +1009,25 @@ describe("useArtifactActions", () => {
     expect(artifactStore.getTasks()[0]).toMatchObject({
       failure: {
         endpoint: "http://127.0.0.1:8791",
+        code: "model_route_unavailable",
         failedStage: "preparing_context",
         message: expect.stringContaining("route missing"),
         model: "gpt-5.5",
         provider: "openai",
-        recovery: expect.arrayContaining([
-          expect.stringContaining("/responses")
-        ])
+        recovery: [
+          "模型服务当前不支持该请求，请稍后重试。",
+          "若问题持续，请联系管理员并提供失败时间和当前任务阶段。"
+        ]
       },
       status: "failed"
     });
     expect(onAnalysisHint).toHaveBeenLastCalledWith(
-      expect.stringContaining("route missing")
+      "Agent 分析失败：模型服务暂不支持该请求，请稍后重试。"
     );
+    expect(onAnalysisHint.mock.calls.at(-1)?.[0]).not.toContain("route missing");
   });
 
-  test("diagnoses an external literature route 404 as a stale dev-cloud service", async () => {
+  test("reports an external literature route failure without implementation details", async () => {
     const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
       imported: true
     });
@@ -1040,8 +1052,8 @@ describe("useArtifactActions", () => {
       failure: {
         failedStage: "thin_reading_retrieving_external_knowledge",
         recovery: [
-          expect.stringContaining("/v1/research/external-knowledge"),
-          expect.stringContaining("仅重启 Tauri 不会更新")
+          "外部文献检索服务当前不可用，请稍后重试。",
+          "若问题持续，请联系管理员并提供失败时间和当前任务阶段。"
         ]
       },
       status: "failed"

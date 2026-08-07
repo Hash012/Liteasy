@@ -16,6 +16,7 @@ export type UserTag = {
 
 export type AcademicProfileSnapshot = {
   assistantSummary?: string;
+  enabled?: boolean;
   personalizationVersion: number;
   profile: Pick<AcademicProfile, "disciplines" | "stage"> & { profileVersion: number };
   tags?: UserTag[];
@@ -86,6 +87,7 @@ function isSnapshot(value: unknown): value is AcademicProfileSnapshot {
     "profileVersion" in value.profile &&
     typeof value.profile.profileVersion === "number" &&
     (!("assistantSummary" in value) || typeof value.assistantSummary === "string") &&
+    (!("enabled" in value) || typeof value.enabled === "boolean") &&
     (!("tags" in value) ||
       value.tags === undefined ||
       (Array.isArray(value.tags) && value.tags.every(isUserTag)))
@@ -102,10 +104,20 @@ async function defaultTransport(
   });
 }
 
-function buildUrl(endpoint: string, action: "get" | "save" | "clear" | "signal") {
+function buildUrl(endpoint: string, action: "get" | "save" | "clear" | "signal" | "settings") {
   return `${endpoint.replace(/\/+$/, "")}/v1/${
-    action === "signal" ? "personalization/signal" : `profile/${action}`
+    action === "signal"
+      ? "personalization/signal"
+      : action === "settings"
+        ? "personalization/settings/update"
+        : `profile/${action}`
   }`;
+}
+
+function createIdempotencyKey() {
+  return typeof globalThis.crypto?.randomUUID === "function"
+    ? `personalization:${globalThis.crypto.randomUUID()}`
+    : `personalization:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
 export function createAcademicProfileClient({
@@ -113,12 +125,14 @@ export function createAcademicProfileClient({
   transport = defaultTransport
 }: CreateAcademicProfileClientInput) {
   async function request(
-    action: "get" | "save" | "clear" | "signal",
+    action: "get" | "save" | "clear" | "signal" | "settings",
+    session: AccountSession,
     body: Record<string, unknown>
   ): Promise<AcademicProfileSnapshot> {
     const response = await transport({
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, sessionId: session.sessionId }),
       headers: {
+        Authorization: `Bearer ${session.sessionId}`,
         "Content-Type": "application/json"
       },
       method: "POST",
@@ -136,17 +150,35 @@ export function createAcademicProfileClient({
   }
 
   return {
-    clear(session: AccountSession) {
-      return request("clear", { sessionId: session.sessionId });
+    clear(session: AccountSession, expectedVersion: number) {
+      return request("clear", session, {
+        expectedVersion,
+        idempotencyKey: createIdempotencyKey()
+      });
     },
     get(session: AccountSession) {
-      return request("get", { sessionId: session.sessionId });
+      return request("get", session, {});
     },
     recordSignal(session: AccountSession, signal: PersonalizationSignal) {
-      return request("signal", { sessionId: session.sessionId, signal });
+      return request("signal", session, { idempotencyKey: createIdempotencyKey(), signal });
     },
-    save(session: AccountSession, profile: Pick<AcademicProfile, "disciplines" | "stage">) {
-      return request("save", { profile, sessionId: session.sessionId });
+    save(
+      session: AccountSession,
+      profile: Pick<AcademicProfile, "disciplines" | "stage">,
+      expectedVersion: number
+    ) {
+      return request("save", session, {
+        expectedVersion,
+        idempotencyKey: createIdempotencyKey(),
+        profile
+      });
+    },
+    setEnabled(session: AccountSession, enabled: boolean, expectedVersion: number) {
+      return request("settings", session, {
+        enabled,
+        expectedVersion,
+        idempotencyKey: createIdempotencyKey()
+      });
     }
   };
 }

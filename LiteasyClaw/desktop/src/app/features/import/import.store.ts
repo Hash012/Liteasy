@@ -23,19 +23,22 @@ export function createImportStore() {
       const job = jobs.get(id);
       if (!job) return;
       job.status = "parsing";
+      job.error = undefined;
     },
     markParsed(id: string, payload: { paperId: string; chunks?: RetrievalChunk[]; mineruFigures?: MineruFigure[] }) {
       const job = jobs.get(id);
       if (!job) return;
       job.status = "parsed";
+      job.error = undefined;
       job.paperId = payload.paperId;
       job.parsedChunks = payload.chunks ?? [];
       job.mineruFigures = payload.mineruFigures ?? [];
     },
-    markFailed(id: string) {
+    markFailed(id: string, error?: string) {
       const job = jobs.get(id);
       if (!job) return;
       job.status = "failed";
+      job.error = error;
     },
     getJob(id: string) {
       return jobs.get(id);

@@ -11,6 +11,8 @@ import { createModelSemanticPlanner } from "../../features/agent-runtime/modelSe
 import { createExecutionJournal } from "../../features/generative-ui/executionJournal";
 import { createModelAssistedUIDslGenerator } from "../../features/generative-ui/uiDslGenerator";
 import type { ModelTransport } from "../../features/models/modelHttpClient";
+import type { ThinReadingExternalKnowledgeTransport } from "../../features/thin-reading/thinReadingExternalKnowledgeClient";
+import type { ThinReadingExternalPdfTransport } from "../../features/thin-reading/thinReadingExternalFullTextClient";
 import type { AcademicProfile } from "../../features/profile/profile.types";
 import type { RetrievalChunk } from "../../features/retrieval/retrieval.types";
 import type { SettingsState } from "../../features/settings/settings.types";
@@ -38,6 +40,8 @@ export type AssistantAgentControllerInput = {
   importedChunksByPaperId: Record<string, RetrievalChunk[]>;
   importedSelectedCount: number;
   modelTransport?: ModelTransport;
+  thinReadingExternalKnowledgeTransport?: ThinReadingExternalKnowledgeTransport;
+  thinReadingExternalPdfTransport?: ThinReadingExternalPdfTransport;
   onApplyGeneratedTheme?: ActionContext["applyGeneratedTheme"];
   onApplyLayoutPreset?: ActionContext["applyLayoutPreset"];
   onApplyPanelAction?: ActionContext["applyPanelAction"];
@@ -103,7 +107,9 @@ export function useAssistantAgentController(input: AssistantAgentControllerInput
             modelTransport: current.modelTransport,
             selectedPapers: knowledgeScope.selectedPapers,
             settings: current.settingsStore.getState(),
-            thinReadingContext: getAgentRequestThinReadingContext(request)
+            thinReadingContext: getAgentRequestThinReadingContext(request),
+            thinReadingExternalKnowledgeTransport: current.thinReadingExternalKnowledgeTransport,
+            thinReadingExternalPdfTransport: current.thinReadingExternalPdfTransport
           },
           runtime: {
             applyGeneratedTheme: current.onApplyGeneratedTheme,
