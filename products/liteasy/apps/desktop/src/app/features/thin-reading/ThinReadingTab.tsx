@@ -340,6 +340,8 @@ export function ThinReadingTab({
   });
   const resolvedCommunityRecommendationState = communityRecommendationState ?? fetchedCommunityRecommendationState;
   const contentRef = useRef<HTMLDivElement>(null);
+  const recommendationButtonRef = useRef<HTMLButtonElement>(null);
+  const associationReturnFocusRef = useRef<HTMLElement | null>(null);
   const generationLockRef = useRef(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [selection, setSelection] = useState<ThinReadingSelection | null>(null);
@@ -481,6 +483,7 @@ export function ThinReadingTab({
     setPrompt("");
     setActiveAnchorId(null);
     setActiveSourceId(null);
+    associationReturnFocusRef.current = null;
     setRecommendationStage("article");
   }, [activeNode.id]);
 
@@ -490,16 +493,29 @@ export function ThinReadingTab({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      setActiveSourceId((currentSource) => {
-        if (currentSource) return null;
+      if (activeSourceId) {
+        setActiveSourceId(null);
+        const returnTarget = associationReturnFocusRef.current;
+        if (returnTarget?.isConnected) {
+          returnTarget.focus();
+        } else {
+          recommendationButtonRef.current?.focus();
+        }
+        return;
+      }
+      if (recommendationStage === "graph") {
         setActiveAnchorId(null);
-        setRecommendationStage((currentStage) => currentStage === "graph" ? "marks" : "article");
-        return null;
-      });
+        setRecommendationStage("marks");
+        recommendationButtonRef.current?.focus();
+        return;
+      }
+      setActiveAnchorId(null);
+      setRecommendationStage("article");
+      recommendationButtonRef.current?.focus();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [recommendationStage]);
+  }, [activeSourceId, recommendationStage]);
 
   function update(nextDocument: ThinReadingDocument) {
     onUpdateDocument(artifactId, nextDocument);
@@ -755,30 +771,50 @@ export function ThinReadingTab({
       return;
     }
     setActiveSourceId(null);
-    setActiveAnchorId((current) => (
-      recommendationStage === "graph" && current === anchorId ? null : anchorId
-    ));
+    setActiveAnchorId(recommendationStage === "graph" && activeAnchorId === anchorId ? null : anchorId);
     setRecommendationStage("graph");
   }
 
   function advanceRecommendationStage() {
-    setRecommendationStage((current) => {
-      if (current === "graph") {
-        setActiveAnchorId(null);
-        setActiveSourceId(null);
-        return "article";
-      }
-      return current === "article" ? "marks" : "graph";
-    });
+    if (recommendationStage === "graph") {
+      setActiveAnchorId(null);
+      setActiveSourceId(null);
+      setRecommendationStage("article");
+      return;
+    }
+    setRecommendationStage(recommendationStage === "article" ? "marks" : "graph");
+  }
+
+  function restoreAssociationFocus() {
+    const returnTarget = associationReturnFocusRef.current;
+    if (returnTarget?.isConnected) {
+      returnTarget.focus();
+      return;
+    }
+    recommendationButtonRef.current?.focus();
+  }
+
+  function selectAssociationSource(sourceId: string) {
+    if (sourceId) {
+      associationReturnFocusRef.current = globalThis.document.activeElement instanceof HTMLElement
+        ? globalThis.document.activeElement
+        : null;
+      setActiveSourceId(sourceId);
+      return;
+    }
+    setActiveSourceId(null);
+    restoreAssociationFocus();
   }
 
   function popAssociationStage() {
     if (activeSourceId) {
       setActiveSourceId(null);
+      restoreAssociationFocus();
       return;
     }
     setRecommendationStage("marks");
     setActiveAnchorId(null);
+    recommendationButtonRef.current?.focus();
   }
 
   async function runAnchorPaperAction(
@@ -893,17 +929,17 @@ export function ThinReadingTab({
       ? activeAnchor ? "聚焦概念" : "页级关联图"
       : marksVisible ? "概念标记" : "正文";
   const associationStateCopy = activeSource
-    ? "Esc 返回关联图"
+    ? `正在阅读「${activeSource.title}」`
       : associationGraphOpen
       ? activeAnchor
         ? `正在聚焦「${activeAnchor.label}」及其关联文献`
-        : "悬停看判断依据 · 点击进阅读位"
+        : "页级文献关联已展开"
       : anchors.length === 0
         // A disabled control has to say why, or it reads as broken rather than as empty.
-        ? "这一节的正文没有标出可展开的概念"
+        ? "本节无相关推荐"
         : marksVisible
-          ? "概念留在正文原位 · 点击展开它的关联"
-          : "未显示概念标记与关联图层";
+          ? "概念标记已显示"
+          : "相关推荐未展开";
   const recommendationTooltip = recommendationStage === "article"
     ? "显示概念标记"
     : recommendationStage === "marks"
@@ -1048,6 +1084,7 @@ export function ThinReadingTab({
             disabled={anchors.length === 0}
             icon={<LinkRegular />}
             onClick={advanceRecommendationStage}
+            ref={recommendationButtonRef}
             size="small"
             title={recommendationTooltip}
           >
@@ -1100,24 +1137,25 @@ export function ThinReadingTab({
                         {splitThinReadingSummaryTextByAnchors({ anchors, sentence }).map((segment, segmentIndex) => (
                           segment.anchor ? (
                             <mark
-                              aria-label={`查看“${segment.anchor.label}”关联论文`}
-                              aria-hidden={!marksVisible || undefined}
-                              aria-pressed={activeAnchor?.id === segment.anchor.id}
+                              aria-label={marksVisible ? `查看“${segment.anchor.label}”关联论文` : undefined}
+                              aria-pressed={marksVisible ? activeAnchor?.id === segment.anchor.id : undefined}
                               className={`thin-reading__anchor${marksVisible ? "" : " is-hidden"}${activeAnchor?.id === segment.anchor.id ? " is-active" : ""}`}
                               data-anchor-id={segment.anchor.id}
                               data-thin-reading-anchor-id={segment.anchor.id}
                               data-thin-reading-summary-external-source-ids={segment.anchor.externalSourceIds.join(",")}
                               key={segment.anchor.id}
-                              onClick={() => toggleActiveAnchor(segment.anchor!.id)}
-                              onKeyDown={(event) => {
+                              onClick={marksVisible ? () => toggleActiveAnchor(segment.anchor!.id) : undefined}
+                              onKeyDown={marksVisible ? (event) => {
                                 if (event.key === "Enter" || event.key === " ") {
                                   event.preventDefault();
                                   toggleActiveAnchor(segment.anchor!.id);
                                 }
-                              }}
-                              role="button"
+                              } : undefined}
+                              role={marksVisible ? "button" : undefined}
                               tabIndex={marksVisible ? 0 : -1}
-                              title={`${segment.anchor.label} · ${Math.round(segment.anchor.importance * 100)}%`}
+                              title={marksVisible
+                                ? `${segment.anchor.label} · ${Math.round(segment.anchor.importance * 100)}%`
+                                : undefined}
                             >
                               {segment.text}
                             </mark>
@@ -1413,7 +1451,7 @@ export function ThinReadingTab({
             frameWidth={anchorMeasurement.width}
             onClose={popAssociationStage}
             onFocusAnchor={setActiveAnchorId}
-            onSelectSource={(sourceId) => setActiveSourceId(sourceId || null)}
+            onSelectSource={selectAssociationSource}
             sourcesByAnchor={anchorSourcesByAnchorId}
           />
         ) : null}
@@ -1433,7 +1471,7 @@ export function ThinReadingTab({
           onOpenFullText={onOpenExternalFullText
             ? (source) => void runAnchorPaperAction(source, onOpenExternalFullText)
             : undefined}
-          onSelectSource={(sourceId) => setActiveSourceId(sourceId || null)}
+          onSelectSource={selectAssociationSource}
           sourceCount={graphSourceCount}
         />
       ) : null}

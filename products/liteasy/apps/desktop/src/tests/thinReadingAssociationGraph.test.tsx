@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { ThinReadingTab } from "../app/features/thin-reading/ThinReadingTab";
@@ -38,9 +39,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderArtifact() {
+function renderArtifact(options: { strictMode?: boolean } = {}) {
   const fixture = createThinReadingAnchorGraphFixture();
-  return render(
+  const tab = (
     <ThinReadingTab
       artifactId={fixture.artifactId}
       document={createThinReadingDocument(fixture)}
@@ -48,6 +49,7 @@ function renderArtifact() {
       papers={[...fixture.papers]}
     />
   );
+  return render(options.strictMode ? <StrictMode>{tab}</StrictMode> : tab);
 }
 
 test("cycles one related-recommendations button through article, marks, graph, and article", () => {
@@ -59,7 +61,13 @@ test("cycles one related-recommendations button through article, marks, graph, a
   expect(button).toHaveAttribute("aria-pressed", "false");
   expect(button).toHaveAttribute("title", "显示概念标记");
   expect(container.querySelector(".thin-reading__body")).toHaveClass("is-marks-hidden");
-  expect(container.querySelector(".thin-reading__anchor")).toHaveClass("is-hidden");
+  const hiddenAnchor = container.querySelector<HTMLElement>(".thin-reading__anchor");
+  expect(hiddenAnchor).toHaveClass("is-hidden");
+  expect(hiddenAnchor).not.toHaveAttribute("aria-hidden");
+  expect(hiddenAnchor).not.toHaveAttribute("role");
+  expect(hiddenAnchor).toHaveAttribute("tabindex", "-1");
+  expect(screen.getByTestId("thin-reading-summary")).toHaveTextContent("self-attention");
+  fireEvent.click(hiddenAnchor!);
   expect(container.querySelector(".association-layer")).toBeNull();
 
   fireEvent.click(button);
@@ -67,6 +75,7 @@ test("cycles one related-recommendations button through article, marks, graph, a
   expect(button).toHaveAttribute("aria-pressed", "true");
   expect(button).toHaveAttribute("title", "打开页级关联图");
   expect(container.querySelector(".thin-reading__anchor")).not.toHaveClass("is-hidden");
+  expect(screen.getByRole("button", { name: '查看“self-attention”关联论文' })).toHaveAttribute("tabindex", "0");
 
   fireEvent.click(button);
 
@@ -98,6 +107,26 @@ test("a concept in the prose opens the graph focused on itself", () => {
   expect(container.querySelectorAll(".association-anchor.is-dimmed")).toHaveLength(4);
 });
 
+test("Enter and Space open a keyboard-reachable concept directly in its focused graph", () => {
+  const { container } = renderArtifact();
+  const recommendations = screen.getByRole("button", { name: "相关推荐" });
+  fireEvent.click(recommendations);
+  let anchor = screen.getByRole("button", { name: '查看“self-attention”关联论文' });
+  anchor.focus();
+
+  fireEvent.keyDown(anchor, { key: "Enter" });
+  expect(container.querySelector(".association-layer")).not.toBeNull();
+  expect(screen.getByText("聚焦概念")).toBeVisible();
+  expect(screen.getByRole("button", { name: '查看“self-attention”关联论文' })).toHaveAttribute("tabindex", "0");
+
+  fireEvent.keyDown(window, { key: "Escape" });
+  anchor = screen.getByRole("button", { name: '查看“self-attention”关联论文' });
+  anchor.focus();
+  fireEvent.keyDown(anchor, { key: " " });
+  expect(container.querySelector(".association-layer")).not.toBeNull();
+  expect(screen.getByText("正在聚焦「self-attention」及其关联文献")).toBeVisible();
+});
+
 test("the graph replaces the inline source list rather than adding a second copy of it", () => {
   const { container } = renderArtifact();
 
@@ -108,30 +137,37 @@ test("the graph replaces the inline source list rather than adding a second copy
   expect(container.querySelector(".thin-reading__anchor-sources")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /核心方法的原始定义与理论依据/u }));
   expect(container.querySelector(".association-reading-card")).not.toBeNull();
-  expect(screen.getByText("Esc 返回关联图")).toBeVisible();
+  expect(screen.getByText(/正在阅读「核心方法的原始定义与理论依据」/u)).toBeVisible();
 });
 
-test("Escape returns one layer at a time from a paper card to the article", () => {
-  const { container } = renderArtifact();
+test("Escape returns one layer at a time and restores focus in StrictMode", () => {
+  const { container } = renderArtifact({ strictMode: true });
   const button = screen.getByRole("button", { name: "相关推荐" });
 
   fireEvent.click(button);
   fireEvent.click(button);
-  fireEvent.click(screen.getByRole("button", { name: /核心方法的原始定义与理论依据/u }));
+  const paperNode = screen.getByRole("button", { name: /核心方法的原始定义与理论依据/u });
+  act(() => paperNode.focus());
+  fireEvent.click(paperNode);
   expect(container.querySelector(".association-reading-card")).not.toBeNull();
 
   fireEvent.keyDown(window, { key: "Escape" });
   expect(container.querySelector(".association-reading-card")).toBeNull();
   expect(container.querySelector(".association-layer")).not.toBeNull();
+  expect(paperNode).toHaveFocus();
 
   fireEvent.keyDown(window, { key: "Escape" });
   expect(container.querySelector(".association-layer")).toBeNull();
   expect(container.querySelector(".thin-reading__body.is-graph-dimmed")).toBeNull();
-  expect(screen.getByText("概念留在正文原位 · 点击展开它的关联")).toBeVisible();
+  expect(screen.getByText("概念标记已显示")).toBeVisible();
+  expect(button).toHaveFocus();
 
+  const anchor = screen.getByRole("button", { name: '查看“self-attention”关联论文' });
+  act(() => anchor.focus());
   fireEvent.keyDown(window, { key: "Escape" });
   expect(container.querySelector(".thin-reading__body")).toHaveClass("is-marks-hidden");
-  expect(screen.getByText("未显示概念标记与关联图层")).toBeVisible();
+  expect(screen.getByText("相关推荐未展开")).toBeVisible();
+  expect(button).toHaveFocus();
 });
 
 test("changing the active thin-reading node resets related recommendations to article", () => {
