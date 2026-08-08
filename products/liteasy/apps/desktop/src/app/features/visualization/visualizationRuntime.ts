@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseVisualizationArtifact } from "./visualizationArtifact.schema";
 import type { VisualizationArtifactV1, VisualizationModality } from "./visualizationArtifact.types";
-import { getVisualizationRendererRegistration } from "./visualizationRendererRegistry";
+import { getVisualizationKernelRegistration, getVisualizationRendererRegistration } from "./visualizationRendererRegistry";
 import type { VisualizationRevalidationWorkerService } from "./visualizationRevalidationWorker";
 import { getVisualizationValidator } from "./visualizationValidatorRegistry";
 
@@ -30,11 +30,13 @@ export type VisualizationArtifactEnvelope = {
 
 export type VisualizationArtifactLoadOptions = {
   currentValidatorVersions?: Record<string, string>;
+  currentKernelVersions?: Record<string, string>;
   documentAccess?: boolean;
   offline?: boolean;
   revalidationService?: VisualizationRevalidationWorkerService;
   revokedRendererIds?: readonly string[];
   revokedValidatorIds?: readonly string[];
+  revokedKernelIds?: readonly string[];
   signal?: AbortSignal;
 };
 
@@ -50,7 +52,7 @@ export type VisualizationArtifactState = {
 
 const artifactIndexSchema = z.object({
   evidenceHash: z.string().min(1),
-  hardValidatorVersions: z.record(z.string().min(1), z.string().min(1)),
+  hardValidatorVersions: z.record(z.string().min(1), z.string().min(1)).refine((versions) => Object.keys(versions).length > 0, "visualization_hard_validator_set_empty"),
   kernelVersion: z.string().min(1).optional(),
   rendererVersion: z.string().min(1),
   skillVersion: z.string().min(1),
@@ -92,8 +94,12 @@ export async function loadVisualizationArtifact(
   const documentAccess = options.documentAccess ?? true;
   const authoritative = getAuthoritativeValidatorVersions(envelope.artifactIndex);
   const expectedHardValidatorVersions = options.currentValidatorVersions ?? authoritative.versions;
-  const expectedValidatorSetComplete = authoritative.complete
-    && Object.keys(envelope.artifactIndex.hardValidatorVersions).every((id) => id in expectedHardValidatorVersions);
+  const expectedValidatorIds = Object.keys(expectedHardValidatorVersions);
+  const expectedValidatorSetComplete = expectedValidatorIds.length > 0
+    && expectedValidatorIds.every((id) => {
+      const validator = getVisualizationValidator(id);
+      return validator?.gate === "hard";
+    });
   const revoked = hasRevokedDependency(envelope, options);
   const needsRevalidation = artifactNeedsRevalidation(envelope, expectedHardValidatorVersions, authoritative.complete, options);
   const canGenerate = !options.offline && documentAccess && !needsRevalidation;
@@ -120,6 +126,7 @@ export async function loadVisualizationArtifact(
           artifactIndex: {
             ...envelope.artifactIndex,
             hardValidatorVersions: outcome.usedHardValidatorVersions,
+            kernelVersion: currentKernelVersion(envelope, options),
             rendererVersion: getVisualizationRendererRegistration(envelope.artifact.implementation.rendererId)?.version
               ?? envelope.artifactIndex.rendererVersion
           }
@@ -155,9 +162,13 @@ function artifactNeedsRevalidation(
   envelope: VisualizationArtifactEnvelope,
   expectedHardValidatorVersions: Record<string, string>,
   authoritativeComplete: boolean,
-  options: Pick<VisualizationArtifactLoadOptions, "revokedRendererIds" | "revokedValidatorIds">
+  options: Pick<VisualizationArtifactLoadOptions, "currentKernelVersions" | "revokedKernelIds" | "revokedRendererIds" | "revokedValidatorIds">
 ): boolean {
-  const validatorChanged = !authoritativeComplete || Object.entries(envelope.artifactIndex.hardValidatorVersions)
+  const artifactValidatorIds = new Set(Object.keys(envelope.artifactIndex.hardValidatorVersions));
+  const expectedValidatorIds = Object.keys(expectedHardValidatorVersions);
+  const validatorSetChanged = expectedValidatorIds.some((id) => !artifactValidatorIds.has(id))
+    || [...artifactValidatorIds].some((id) => !expectedValidatorIds.includes(id));
+  const validatorChanged = validatorSetChanged || !authoritativeComplete || Object.entries(envelope.artifactIndex.hardValidatorVersions)
     .some(([id, version]) => expectedHardValidatorVersions[id] !== version);
   const validatorRevoked = (options.revokedValidatorIds ?? [])
     .some((id) => id in envelope.artifactIndex.hardValidatorVersions);
@@ -166,7 +177,23 @@ function artifactNeedsRevalidation(
     || rendererRegistration.version !== envelope.artifactIndex.rendererVersion;
   const rendererRevoked = (options.revokedRendererIds ?? [])
     .includes(envelope.artifact.implementation.rendererId);
-  return validatorChanged || validatorRevoked || rendererChanged || rendererRevoked;
+  const kernelId = envelope.artifact.implementation.kernelId;
+  const kernelRegistration = kernelId ? getVisualizationKernelRegistration(kernelId) : undefined;
+  const expectedKernelVersion = kernelId ? options.currentKernelVersions?.[kernelId] ?? kernelRegistration?.version : undefined;
+  const kernelChanged = Boolean(kernelId && (!envelope.artifactIndex.kernelVersion || !kernelRegistration || expectedKernelVersion !== envelope.artifactIndex.kernelVersion));
+  const kernelRevoked = Boolean(kernelId && (options.revokedKernelIds ?? []).includes(kernelId));
+  return validatorChanged || validatorRevoked || rendererChanged || rendererRevoked || kernelChanged || kernelRevoked;
+}
+
+function currentKernelVersion(
+  envelope: VisualizationArtifactEnvelope,
+  options: Pick<VisualizationArtifactLoadOptions, "currentKernelVersions">
+): string | undefined {
+  const kernelId = envelope.artifact.implementation.kernelId;
+  if (!kernelId) return envelope.artifactIndex.kernelVersion;
+  return options.currentKernelVersions?.[kernelId]
+    ?? getVisualizationKernelRegistration(kernelId)?.version
+    ?? envelope.artifactIndex.kernelVersion;
 }
 
 function getAuthoritativeValidatorVersions(index: VisualizationArtifactIndex): {

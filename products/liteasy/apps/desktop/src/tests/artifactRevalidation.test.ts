@@ -4,7 +4,7 @@ import {
   parseVisualizationArtifactEnvelope
 } from "../app/features/visualization/visualizationRuntime";
 import { makeVisualizationArtifactFixture } from "./fixtures/visualizationArtifactFixtures";
-import { registerVisualizationRenderer } from "../app/features/visualization/visualizationRendererRegistry";
+import { registerVisualizationKernel, registerVisualizationRenderer } from "../app/features/visualization/visualizationRendererRegistry";
 import { registerVisualizationValidator } from "../app/features/visualization/visualizationValidatorRegistry";
 
 registerVisualizationRenderer({
@@ -189,4 +189,42 @@ test("parses a strict local envelope without weakening the artifact schema", () 
     ...cachedEnvelope,
     artifact: { ...cachedEnvelope.artifact, unexpected: true }
   })).toThrow("visualization_artifact_envelope_invalid");
+});
+
+test("rejects an artifact envelope with an empty hard-validator set", () => {
+  expect(() => parseVisualizationArtifactEnvelope({
+    ...cachedEnvelope,
+    artifactIndex: { ...cachedEnvelope.artifactIndex, hardValidatorVersions: {} }
+  })).toThrow("visualization_artifact_envelope_invalid");
+});
+
+test("requires revalidation when the current validator set adds an ID", async () => {
+  const state = await loadVisualizationArtifact(cachedEnvelope, {
+    currentValidatorVersions: {
+      "artifact-schema": "1.0.0",
+      "test-current-validator": "2"
+    }
+  });
+  expect(state.status).toBe("needs_revalidation");
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+});
+
+test("requires revalidation when an indexed kernel version changes", async () => {
+  registerVisualizationKernel({ id: "fixture-kernel", version: "2" });
+  const kernelEnvelope = parseVisualizationArtifactEnvelope({
+    ...cachedEnvelope,
+    artifact: {
+      ...cachedEnvelope.artifact,
+      implementation: {
+        ...cachedEnvelope.artifact.implementation,
+        kernelId: "fixture-kernel",
+        kernelVersion: "1"
+      }
+    },
+    artifactIndex: { ...cachedEnvelope.artifactIndex, kernelVersion: "1" }
+  });
+  const state = await loadVisualizationArtifact(kernelEnvelope);
+  expect(state.status).toBe("needs_revalidation");
+  expect(state.canRender).toBe(false);
 });

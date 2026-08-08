@@ -47,7 +47,7 @@ const advisoryFailure: VisualizationValidator = {
 };
 
 describe("visualization validator registry", () => {
-  test("cannot publish when any hard validator fails", async () => {
+test("cannot publish when any hard validator fails", async () => {
     const report = await runVisualizationValidators(context, [hardFailure, advisoryFailure]);
     expect(report.outcome).toBe("fail");
     expect(report.checks.map((check) => check.gate)).toEqual(["hard", "advisory"]);
@@ -78,6 +78,16 @@ describe("visualization validator registry", () => {
   test("exposes base validators to direct registry consumers", () => {
     expect(getVisualizationValidator("evidence-claims")).toBeDefined();
   });
+});
+
+test("cannot publish when a hard validator returns a warning", async () => {
+  const warningHardValidator: VisualizationValidator = {
+    gate: "hard",
+    id: "hard-warning",
+    validate: async () => ({ gate: "hard", validatorId: "hard-warning", validatorVersion: "1.0.0", outcome: "warning" })
+  };
+  const report = await runVisualizationValidators(context, [warningHardValidator]);
+  expect(report.outcome).toBe("fail");
 });
 
 export { context, contextWithUnknownClaim };

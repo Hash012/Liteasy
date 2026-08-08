@@ -207,8 +207,7 @@ const artifactSchema = z.object({
   createdAt: z.string().datetime()
 }).strict().superRefine((artifact, context) => {
   if (artifact.modality !== artifact.spec.modality || artifact.validation.outcome === "fail" || artifact.validation.checks.some((check) =>
-    (check.gate === "hard" && check.outcome !== "pass") ||
-    (check.gate === "advisory" && check.outcome === "fail")
+    check.gate === "hard" && check.outcome !== "pass"
   )) {
     context.addIssue({ code: "custom", message: "visualization_artifact_invalid" });
   }

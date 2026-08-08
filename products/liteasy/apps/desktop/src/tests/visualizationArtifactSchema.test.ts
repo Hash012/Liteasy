@@ -44,7 +44,7 @@ describe("visualization artifact schema", () => {
     expect(() => parseVisualizationArtifact(artifact)).toThrow("visualization_artifact_invalid");
   });
 
-  test("rejects an advisory failure", () => {
+  test("accepts an advisory failure while preserving a degraded artifact", () => {
     const artifact = makeVisualizationArtifactFixture();
     artifact.validation = {
       outcome: "degraded",
@@ -53,10 +53,15 @@ describe("visualization artifact schema", () => {
         validatorId: "artifact-schema",
         validatorVersion: "1.0.0",
         outcome: "fail"
+      }, {
+        gate: "hard",
+        validatorId: "artifact-schema",
+        validatorVersion: "1.0.0",
+        outcome: "pass"
       }],
       repairCount: 0
     };
-    expect(() => parseVisualizationArtifact(artifact)).toThrow("visualization_artifact_invalid");
+    expect(parseVisualizationArtifact(artifact).validation.outcome).toBe("degraded");
   });
 
   test("rejects an artifact without a hard validation check", () => {

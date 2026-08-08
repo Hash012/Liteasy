@@ -62,6 +62,10 @@ export function hasVisualizationKernel(id: string): boolean {
   return kernelRegistrations.has(id);
 }
 
+export function getVisualizationKernelRegistration(id: string): VisualizationKernelRegistration | undefined {
+  return kernelRegistrations.get(id);
+}
+
 export function getAvailableVisualizationModalities(): VisualizationModality[] {
   return [...new Set(getBuiltinSkillSummary()
     .filter((skill) => {

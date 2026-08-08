@@ -39,6 +39,6 @@ export async function runVisualizationValidators(
 ): Promise<ValidationReportV1> {
   const checks: VisualizationValidationCheck[] = [];
   for (const validator of validators) checks.push(await validator.validate(context));
-  const hardFailed = checks.some((check) => check.gate === "hard" && check.outcome === "fail");
+  const hardFailed = checks.some((check) => check.gate === "hard" && check.outcome !== "pass");
   return { checks, outcome: hardFailed ? "fail" : "pass", repairCount: context.repairCount };
 }
