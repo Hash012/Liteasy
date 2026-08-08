@@ -90,7 +90,7 @@ test("places the more relevant paper nearer its anchor", () => {
   expect(distance("Related paper W1")).toBeLessThan(distance("Related paper W2"));
 });
 
-test("shows a paper shared by two anchors once, with an edge to each", () => {
+test("shows a shared paper once with only its stable primary edge at rest", () => {
   const shared = { canonicalPaperId: "openalex:W99", relevance: 0.9 };
   const { container } = renderLayer({
     sourcesByAnchor: {
@@ -101,8 +101,55 @@ test("shows a paper shared by two anchors once, with an edge to each", () => {
 
   expect(container.querySelectorAll(".association-node")).toHaveLength(1);
   expect(container.querySelectorAll(".association-node.is-crossing")).toHaveLength(1);
-  expect(container.querySelectorAll(".association-edge.is-crossing")).toHaveLength(2);
+  expect(container.querySelectorAll(".association-edge:not(.is-secondary)")).toHaveLength(1);
+  expect(container.querySelectorAll(".association-edge.is-secondary")).toHaveLength(0);
   expect(screen.getByText("2 个锚点交叉")).toBeVisible();
+});
+
+test("adds secondary anchor edges only while the shared paper or secondary anchor is focused", () => {
+  const shared = { canonicalPaperId: "openalex:W99", relevance: 0.9 };
+  const sourcesByAnchor = {
+    "anchor-1": [source("W1a", { ...shared, confidenceBasis: "author_citation" })],
+    "anchor-2": [source("W1b", shared)]
+  };
+  const { container, rerender } = renderLayer({ sourcesByAnchor });
+  const positionsBefore = container.querySelector<HTMLElement>(".association-node")?.getAttribute("style");
+
+  rerender(
+    <AssociationGraphLayer
+      activeSourceId={null}
+      anchors={anchors}
+      documentHeight={1200}
+      focusedAnchorId="anchor-2"
+      frameWidth={900}
+      onClose={vi.fn()}
+      onFocusAnchor={vi.fn()}
+      onSelectSource={vi.fn()}
+      sourcesByAnchor={sourcesByAnchor}
+    />
+  );
+
+  const secondary = container.querySelector(".association-edge.is-secondary");
+  expect(secondary).toHaveAttribute("role", "img");
+  expect(secondary).toHaveAccessibleName(/次级关联.*W99.*WMT 2014/u);
+  expect(container.querySelector<HTMLElement>(".association-node")?.getAttribute("style")).toBe(positionsBefore);
+});
+
+test("shows secondary memberships when a shared paper is focused without moving it", () => {
+  const shared = { canonicalPaperId: "openalex:W99", relevance: 0.9 };
+  const { container } = renderLayer({
+    sourcesByAnchor: {
+      "anchor-1": [source("W1a", { ...shared, confidenceBasis: "author_citation" })],
+      "anchor-2": [source("W1b", shared)]
+    }
+  });
+  const node = container.querySelector<HTMLElement>(".association-node")!;
+  const positionBefore = node.getAttribute("style");
+
+  fireEvent.mouseEnter(node);
+
+  expect(container.querySelectorAll(".association-edge.is-secondary")).toHaveLength(1);
+  expect(node.getAttribute("style")).toBe(positionBefore);
 });
 
 test("focusing one anchor dims the other anchor and its papers without unmounting them", () => {

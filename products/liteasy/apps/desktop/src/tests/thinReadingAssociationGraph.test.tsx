@@ -81,9 +81,9 @@ test("cycles one related-recommendations button through article, marks, graph, a
 
   expect(container.querySelector(".association-layer")).not.toBeNull();
   expect(container.querySelectorAll(".association-anchor__chip")).toHaveLength(5);
-  // Ten distinct papers, one of them reached from two anchors: ten nodes and eleven edges.
+  // Ten distinct papers, one reached from two anchors: resting view still has one primary edge each.
   expect(container.querySelectorAll(".association-node")).toHaveLength(10);
-  expect(container.querySelectorAll(".association-edge")).toHaveLength(11);
+  expect(container.querySelectorAll(".association-edge")).toHaveLength(10);
   expect(container.querySelectorAll(".association-node.is-crossing")).toHaveLength(1);
   expect(screen.getByText("2 个锚点交叉")).toBeVisible();
   expect(button).toHaveAttribute("title", "返回正文");

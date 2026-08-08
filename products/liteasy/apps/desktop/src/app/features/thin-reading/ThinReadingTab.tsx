@@ -371,7 +371,7 @@ export function ThinReadingTab({
   const [forumState, setForumState] = useState<"idle" | "loading" | "ready" | "error" | "unmapped">("idle");
   const [forumRefresh, setForumRefresh] = useState(0);
   const [expandedRecommendationId, setExpandedRecommendationId] = useState<string | null>(null);
-  useThinReadingPaperRelations({
+  const paperRelations = useThinReadingPaperRelations({
     artifactId,
     enabled: recommendationStage === "graph",
     endpoint: paperRelationsEndpoint,
@@ -936,7 +936,7 @@ export function ThinReadingTab({
   const graphAnchorViews = useMemo<PageGraphAnchorView[]>(() => anchors.flatMap((anchor) => {
     const rects = anchorMeasurement.rectsByAnchorId[anchor.id];
     return rects && rects.length > 0
-      ? [{ anchorId: anchor.id, kind: anchor.kind, label: anchor.label, rects }]
+      ? [{ anchorId: anchor.id, kind: anchor.kind, label: anchor.label, quality: anchor.quality, rects }]
       : [];
   }), [anchorMeasurement, anchors]);
   const graphSourceCount = useMemo(
@@ -1475,6 +1475,7 @@ export function ThinReadingTab({
             onClose={popAssociationStage}
             onFocusAnchor={setActiveAnchorId}
             onSelectSource={selectAssociationSource}
+            paperEdges={paperRelations.edges}
             sourcesByAnchor={anchorSourcesByAnchorId}
           />
         ) : null}

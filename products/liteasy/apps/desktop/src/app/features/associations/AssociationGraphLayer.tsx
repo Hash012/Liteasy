@@ -2,14 +2,20 @@ import { Button } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, OpenRegular } from "@fluentui/react-icons";
 import { useMemo, useState, type CSSProperties } from "react";
 
-import type { ThinReadingExternalSource } from "../thin-reading/thinReading.types";
+import type {
+  ThinReadingAnchorQuality,
+  ThinReadingExternalSource,
+  ThinReadingRecommendationPaperEdge
+} from "../thin-reading/thinReading.types";
 import { externalPdfDragMimeType, toExternalPdfDragPayload } from "../library/externalPdfDownload";
 import {
   layoutAssociationPageGraph,
+  pageGraphPaperKey,
   pageGraphNodeWidth,
   type AnchorRect,
   type PageGraphNode
 } from "./associationGraphLayout";
+import { projectAssociationPageGraph } from "./associationGraphProjection";
 import {
   associationConfidenceLabel,
   associationRelationLabel,
@@ -36,6 +42,7 @@ export type PageGraphAnchorView = {
   /** Free-form kind, used only to colour the mark. Each host names its own kinds. */
   kind: string;
   label: string;
+  quality?: ThinReadingAnchorQuality;
   /** Every measured rectangle of the anchor's text, so the highlight follows a wrapped line. */
   rects: readonly AnchorRect[];
 };
@@ -49,6 +56,7 @@ type AssociationGraphLayerProps = {
   onClose: () => void;
   onFocusAnchor: (anchorId: string | null) => void;
   onSelectSource: (sourceId: string) => void;
+  paperEdges?: readonly ThinReadingRecommendationPaperEdge[];
   sourcesByAnchor: Readonly<Record<string, readonly ThinReadingExternalSource[]>>;
 };
 
@@ -94,9 +102,27 @@ export function AssociationGraphLayer({
   onClose,
   onFocusAnchor,
   onSelectSource,
+  paperEdges = [],
   sourcesByAnchor
 }: AssociationGraphLayerProps) {
   const [hover, setHover] = useState<HoverState | null>(null);
+
+  const projection = useMemo(() => projectAssociationPageGraph({
+    anchors,
+    paperEdges,
+    sourcesByAnchor
+  }), [anchors, paperEdges, sourcesByAnchor]);
+  const projectedNodeByPaperKey = useMemo(
+    () => new Map(projection.paperNodes.map((node) => [node.paperKey, node] as const)),
+    [projection.paperNodes]
+  );
+  const primarySourcesByAnchor = useMemo(() => {
+    const result: Record<string, ThinReadingExternalSource[]> = {};
+    for (const node of projection.paperNodes) {
+      (result[node.primaryAnchorId] ??= []).push(node.source);
+    }
+    return result;
+  }, [projection.paperNodes]);
 
   const graph = useMemo(() => layoutAssociationPageGraph({
     anchors: anchors
@@ -108,14 +134,35 @@ export function AssociationGraphLayer({
       })),
     documentHeight,
     frameWidth,
-    sourcesByAnchor
-  }), [anchors, documentHeight, frameWidth, sourcesByAnchor]);
+    sourcesByAnchor: primarySourcesByAnchor
+  }), [anchors, documentHeight, frameWidth, primarySourcesByAnchor]);
 
   const dimmed = (anchorIds: readonly string[]) =>
     Boolean(focusedAnchorId) && !anchorIds.includes(focusedAnchorId!);
-  const activePaperKey = activeSourceId
-    ? graph.nodes.find((node) => node.source.id === activeSourceId)?.paperKey ?? null
-    : null;
+  const activeSource = activeSourceId
+    ? Object.values(sourcesByAnchor).flat().find((source) => source.id === activeSourceId)
+    : undefined;
+  const activePaperKey = activeSource ? pageGraphPaperKey(activeSource) : null;
+  const anchorById = new Map(anchors.map((anchor) => [anchor.anchorId, anchor] as const));
+  const secondaryEdges = graph.nodes.flatMap((node) => {
+    const projectedNode = projectedNodeByPaperKey.get(node.paperKey);
+    if (!projectedNode) return [];
+    const paperFocused = activePaperKey === node.paperKey || hover?.node.paperKey === node.paperKey;
+    return projectedNode.secondaryAnchorIds.flatMap((anchorId) => {
+      if (!paperFocused && focusedAnchorId !== anchorId) return [];
+      const anchor = anchorById.get(anchorId);
+      const rect = anchor?.rects[0];
+      if (!anchor || !rect) return [];
+      return [{
+        anchorId,
+        anchorLabel: anchor.label,
+        anchorLeft: rect.left + rect.width / 2,
+        anchorTop: rect.top + rect.height / 2,
+        node,
+        paperKey: projectedNode.paperKey
+      }];
+    });
+  });
 
   return (
     <section
@@ -132,19 +179,21 @@ export function AssociationGraphLayer({
       />
 
       <svg
-        aria-hidden="true"
+        aria-label="页级关联边"
         className="association-layer__edges"
         height={documentHeight}
         viewBox={`0 0 ${Math.max(1, frameWidth)} ${Math.max(1, documentHeight)}`}
         width={frameWidth}
+        role="group"
       >
         {graph.edges.map((edge) => {
+          const crossing = (projectedNodeByPaperKey.get(edge.paperKey)?.anchorIds.length ?? 0) > 1;
           const curveX = edge.anchorLeft + (edge.nodeLeft - edge.anchorLeft) * 0.52;
           const curveY = edge.anchorTop + (edge.nodeTop - edge.anchorTop) * 0.48 +
             (edge.nodeTop < edge.anchorTop ? -10 : 10);
           return (
             <path
-              className={`association-edge${edge.crossing ? " is-crossing" : ""}${
+              className={`association-edge${crossing ? " is-crossing" : ""}${
                 dimmed([edge.anchorId]) ? " is-dimmed" : ""
               }${activePaperKey === edge.paperKey || hover?.node.paperKey === edge.paperKey ? " is-active" : ""}`}
               d={`M ${edge.anchorLeft} ${edge.anchorTop} Q ${curveX} ${curveY} ${edge.nodeLeft} ${edge.nodeTop}`}
@@ -152,6 +201,21 @@ export function AssociationGraphLayer({
               // Provenance, not relatedness: an edge the author actually drew by citing is solid,
               // one an algorithm proposed is faint. Distance already carries relevance.
               style={{ "--edge-opacity": 0.2 + edge.confidence * 0.62 } as CSSProperties}
+            />
+          );
+        })}
+        {secondaryEdges.map((edge) => {
+          const curveX = edge.anchorLeft + (edge.node.left - edge.anchorLeft) * 0.52;
+          const curveY = edge.anchorTop + (edge.node.top - edge.anchorTop) * 0.48 +
+            (edge.node.top < edge.anchorTop ? -10 : 10);
+          return (
+            <path
+              aria-label={`次级关联：${edge.paperKey} 与 ${edge.anchorLabel}`}
+              className="association-edge is-crossing is-secondary"
+              d={`M ${edge.anchorLeft} ${edge.anchorTop} Q ${curveX} ${curveY} ${edge.node.left} ${edge.node.top}`}
+              key={`secondary-${edge.anchorId}-${edge.paperKey}`}
+              role="img"
+              style={{ "--edge-opacity": 0.52 } as CSSProperties}
             />
           );
         })}
@@ -205,16 +269,17 @@ export function AssociationGraphLayer({
 
       {graph.nodes.map((node) => {
         const source = node.source;
-        const crossing = node.anchorIds.length > 1;
+        const anchorIds = projectedNodeByPaperKey.get(node.paperKey)?.anchorIds ?? node.anchorIds;
+        const crossing = anchorIds.length > 1;
         const dragPayload = toExternalPdfDragPayload(source);
         return (
           <button
             aria-label={`${source.title}，${associationRelationLabel(source.relation)}，${
               associationConfidenceLabel(source.confidenceBasis)
-            }${crossing ? `，${node.anchorIds.length} 个锚点交叉` : ""}`}
+            }${crossing ? `，${anchorIds.length} 个锚点交叉` : ""}`}
             className={`association-node${node.isDot ? " is-dot" : ""}${
               crossing ? " is-crossing" : ""
-            }${dimmed(node.anchorIds) ? " is-dimmed" : ""}${
+            }${dimmed(anchorIds) ? " is-dimmed" : ""}${
               activeSourceId === source.id ? " is-active" : ""
             }`}
             /* The provenance of the link, carried as a colour bar so the legend has something to
@@ -238,7 +303,7 @@ export function AssociationGraphLayer({
             } as CSSProperties}
             type="button"
           >
-            {crossing ? <em className="association-node__crossing">{node.anchorIds.length} 个锚点交叉</em> : null}
+            {crossing ? <em className="association-node__crossing">{anchorIds.length} 个锚点交叉</em> : null}
             <small>{source.year ?? ""}</small>
             <strong>{source.title}</strong>
           </button>
