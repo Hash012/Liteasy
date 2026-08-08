@@ -120,7 +120,9 @@ export async function loadVisualizationArtifact(
         artifactIndex: envelope.artifactIndex,
         expectedHardValidatorVersions
       }, options.signal);
-      if (outcome.outcome === "pass" && dependencyVersionsCurrent(envelope, options)) {
+      if (outcome.outcome === "pass"
+        && matchesExpectedHardValidatorVersions(outcome.usedHardValidatorVersions, expectedHardValidatorVersions)
+        && dependencyVersionsCurrent(envelope, options)) {
         return artifactState({
           ...envelope,
           artifactIndex: {
@@ -191,6 +193,7 @@ function dependencyVersionsCurrent(
   const implementation = envelope.artifact.implementation;
   const renderer = getVisualizationRendererRegistration(implementation.rendererId);
   if (!renderer
+    || renderer.modality !== envelope.artifact.modality
     || renderer.version !== implementation.rendererVersion
     || renderer.version !== envelope.artifactIndex.rendererVersion) {
     return false;
@@ -203,6 +206,16 @@ function dependencyVersionsCurrent(
   return kernel.version === currentVersion
     && currentVersion === implementation.kernelVersion
     && currentVersion === envelope.artifactIndex.kernelVersion;
+}
+
+function matchesExpectedHardValidatorVersions(
+  actual: Record<string, string>,
+  expected: Record<string, string>
+): boolean {
+  const expectedIds = Object.keys(expected);
+  return expectedIds.length > 0
+    && Object.keys(actual).length === expectedIds.length
+    && expectedIds.every((id) => actual[id] === expected[id]);
 }
 
 function getAuthoritativeValidatorVersions(index: VisualizationArtifactIndex): {

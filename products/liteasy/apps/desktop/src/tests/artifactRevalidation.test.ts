@@ -249,6 +249,40 @@ test("does not enable a changed kernel from validator-only revalidation", async 
   expect(state.canRenderSafePreview).toBe(true);
 });
 
+test("does not enable a revoked kernel after a passing worker result", async () => {
+  const kernelEnvelope = parseVisualizationArtifactEnvelope({
+    ...cachedEnvelope,
+    artifact: {
+      ...cachedEnvelope.artifact,
+      implementation: { ...cachedEnvelope.artifact.implementation, kernelId: "fixture-kernel", kernelVersion: "2" }
+    },
+    artifactIndex: { ...cachedEnvelope.artifactIndex, kernelVersion: "2" }
+  });
+  const state = await loadVisualizationArtifact(kernelEnvelope, {
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
+    revokedKernelIds: ["fixture-kernel"],
+    revalidationService: {
+      revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } })),
+      terminate: () => undefined
+    }
+  });
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+});
+
+test("rejects a passing revalidation result with an incomplete validator set", async () => {
+  const state = await loadVisualizationArtifact(cachedEnvelope, {
+    currentValidatorVersions: { "artifact-schema": "2.0.0" },
+    revalidationService: {
+      revalidate: async () => ({ outcome: "pass" as const, usedHardValidatorVersions: {} }),
+      terminate: () => undefined
+    }
+  });
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+  expect(state.status).toBe("needs_revalidation");
+});
+
 test("does not enable an artifact whose renderer is missing from the registry", async () => {
   const missingRendererEnvelope = parseVisualizationArtifactEnvelope({
     ...cachedEnvelope,
