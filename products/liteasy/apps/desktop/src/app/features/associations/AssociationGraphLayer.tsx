@@ -156,6 +156,7 @@ export function AssociationGraphLayer({
   paperEdges = [],
   sourcesByAnchor
 }: AssociationGraphLayerProps) {
+  const [activeEdgeId, setActiveEdgeId] = useState<string | null>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
 
   const projection = useMemo(() => projectAssociationPageGraph({
@@ -226,13 +227,16 @@ export function AssociationGraphLayer({
   const nodeByPaperKey = new Map(graph.nodes.map((node) => [node.paperKey, node] as const));
   const primaryInkEdges: RenderedAssociationEdge[] = graph.edges.flatMap((edge) => {
     const node = nodeByPaperKey.get(edge.paperKey);
-    if (!node) return [];
+    const anchor = anchorById.get(edge.anchorId);
+    if (!node || !anchor) return [];
     const edgeId = `primary:${edge.anchorId}:${edge.paperKey}`;
     const exactPath = anchorExactPath(edge.anchorLeft, edge.anchorTop, edge.nodeLeft, edge.nodeTop);
     const distance = Math.hypot(edge.nodeLeft - edge.anchorLeft, edge.nodeTop - edge.anchorTop);
     const presentation = associationAnchorEdgePresentation(node.source.confidenceBasis);
     return [{
-      active: activePaperKey === edge.paperKey || hover?.node.paperKey === edge.paperKey,
+      accessibleLabel: `${anchor.label} 与 ${node.source.title}：${presentation.label}`,
+      active: activeEdgeId === edgeId || activePaperKey === edge.paperKey ||
+        hover?.node.paperKey === edge.paperKey,
       className: `is-primary ${presentation.className}`,
       dimmed: dimmed([edge.anchorId]),
       edgeId,
@@ -254,7 +258,7 @@ export function AssociationGraphLayer({
       accessibleLabel: edge.directed
         ? `${presentation.label}：${source.source.title} 指向 ${target.source.title}`
         : `${presentation.label}：${source.source.title} 与 ${target.source.title}`,
-      active: endpointFocused,
+      active: activeEdgeId === edgeId || endpointFocused,
       className: `is-paper-relation ${presentation.className}`,
       dimmed: dimmed(endpointAnchorIds),
       edgeId,
@@ -346,13 +350,12 @@ export function AssociationGraphLayer({
         ))}
         {paperInkEdges.flatMap((edge) => [
           <path
-            aria-label={edge.accessibleLabel}
+            aria-hidden="true"
             className={edgeClassName(edge, "ink")}
             d={edge.paths.inkPath}
             data-edge-layer="paper-ink"
             key={`${edge.edgeId}:ink`}
             markerEnd={edge.markerEnd}
-            role="img"
             style={edge.style}
           />,
           <path
@@ -402,12 +405,11 @@ export function AssociationGraphLayer({
             style={edge.style}
           />,
           <path
-            aria-label={edge.accessibleLabel}
+            aria-hidden="true"
             className={edgeClassName(edge, "ink")}
             d={edge.paths.inkPath}
             data-edge-layer="secondary-ink"
             key={`${edge.edgeId}:ink`}
-            role="img"
             style={edge.style}
           />,
           <path
@@ -421,11 +423,18 @@ export function AssociationGraphLayer({
         ])}
         {allInkEdges.map((edge) => (
           <path
-            aria-hidden="true"
+            aria-label={edge.accessibleLabel}
             className={edgeClassName(edge, "hit")}
             d={edge.paths.hitPath}
+            data-edge-id={edge.edgeId}
             data-edge-layer="edge-hit"
             key={`${edge.edgeId}:hit`}
+            onBlur={() => setActiveEdgeId((current) => current === edge.edgeId ? null : current)}
+            onFocus={() => setActiveEdgeId(edge.edgeId)}
+            onMouseEnter={() => setActiveEdgeId(edge.edgeId)}
+            onMouseLeave={() => setActiveEdgeId((current) => current === edge.edgeId ? null : current)}
+            role="img"
+            tabIndex={0}
           />
         ))}
       </svg>
@@ -489,6 +498,7 @@ export function AssociationGraphLayer({
 
       {graph.nodes.map((node) => {
         const source = node.source;
+        const sourcePresentation = associationAnchorEdgePresentation(source.confidenceBasis);
         const anchorIds = projectedNodeByPaperKey.get(node.paperKey)?.anchorIds ?? node.anchorIds;
         const crossing = anchorIds.length > 1;
         const dragPayload = toExternalPdfDragPayload(source);
@@ -497,7 +507,7 @@ export function AssociationGraphLayer({
             aria-label={`${source.title}，${associationRelationLabel(source.relation)}，${
               associationConfidenceLabel(source.confidenceBasis)
             }${crossing ? `，${anchorIds.length} 个锚点交叉` : ""}`}
-            className={`association-node${node.isDot ? " is-dot" : ""}${
+            className={`association-node ${sourcePresentation.className}${node.isDot ? " is-dot" : ""}${
               crossing ? " is-crossing" : ""
             }${dimmed(anchorIds) ? " is-dimmed" : ""}${
               activeSourceId === source.id ? " is-active" : ""

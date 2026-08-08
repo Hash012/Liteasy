@@ -133,7 +133,7 @@ test("adds secondary anchor edges only while the shared paper or secondary ancho
     />
   );
 
-  const secondary = container.querySelector(".association-edge.is-secondary.is-ink");
+  const secondary = container.querySelector(".association-edge.is-secondary.is-hit");
   expect(secondary).toHaveAttribute("role", "img");
   expect(secondary).toHaveAccessibleName(/次级关联.*W99.*WMT 2014/u);
   expect(container.querySelector<HTMLElement>(".association-node")?.getAttribute("style")).toBe(positionsBefore);
@@ -184,7 +184,7 @@ test("keeps merged component identity out of the representative source provenanc
   });
   const node = container.querySelector<HTMLElement>(".association-node")!;
 
-  expect(container.querySelector(".association-edge.is-secondary.is-ink"))
+  expect(container.querySelector(".association-edge.is-secondary.is-hit"))
     .toHaveAccessibleName(/openalex:W42/u);
   fireEvent.click(node);
   expect(onSelectSource).toHaveBeenCalledWith("crossref-record");
@@ -263,6 +263,76 @@ test("renders page-wide paper relations beneath anchor ink with an exact final h
     .toHaveAttribute("marker-end", "url(#association-direct-citation-end)");
   expect(screen.getByRole("img", { name: /直接引用.*Related paper W1.*Related paper W3/u }))
     .toBeInTheDocument();
+});
+
+test("exposes one keyboard-reachable logical primary edge and focuses all its visual strokes", () => {
+  const onClose = vi.fn();
+  const { container } = renderLayer({
+    onClose,
+    sourcesByAnchor: {
+      "anchor-1": [source("W1", { confidenceBasis: "author_citation" })],
+      "anchor-2": []
+    }
+  });
+
+  const logicalEdge = screen.getByRole("img", {
+    name: /self-attention.*Related paper W1.*作者亲引/u
+  });
+  expect(logicalEdge).toHaveClass("is-primary", "is-hit");
+  expect(logicalEdge).toHaveAttribute("tabindex", "0");
+  expect(container.querySelectorAll(".association-edge.is-primary:not(.is-hit)")).toHaveLength(3);
+  for (const visualStroke of container.querySelectorAll(".association-edge.is-primary:not(.is-hit)")) {
+    expect(visualStroke).toHaveAttribute("aria-hidden", "true");
+  }
+
+  fireEvent.focus(logicalEdge);
+  expect(container.querySelectorAll(".association-edge.is-primary.is-active")).toHaveLength(4);
+  fireEvent.blur(logicalEdge);
+  expect(container.querySelectorAll(".association-edge.is-primary.is-active")).toHaveLength(0);
+  fireEvent.mouseEnter(logicalEdge);
+  expect(container.querySelectorAll(".association-edge.is-primary.is-active")).toHaveLength(4);
+  fireEvent.mouseLeave(logicalEdge);
+
+  fireEvent.click(container.querySelector(".association-layer__scrim")!);
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test("represents every rendered relation by its hit path instead of an auxiliary ink stroke", () => {
+  const { container } = renderLayer({
+    paperEdges: [{
+      directed: false,
+      evidenceRecordUrls: ["https://api.openalex.org/works/W1"],
+      kind: "co_cited",
+      provider: "openalex",
+      sourcePaperId: "openalex:W1",
+      strength: 0.7,
+      targetPaperId: "openalex:W3"
+    }],
+    sourcesByAnchor: {
+      "anchor-1": [source("W1")],
+      "anchor-2": [source("W3")]
+    }
+  });
+  const logicalEdges = Array.from(container.querySelectorAll('[role="img"].association-edge'));
+
+  expect(logicalEdges).toHaveLength(3);
+  expect(logicalEdges.every((edge) => edge.classList.contains("is-hit"))).toBe(true);
+  expect(container.querySelectorAll(".association-edge.is-ink[role]")).toHaveLength(0);
+});
+
+test("maps canonical registry papers to the same graphite semantic presentation as their edge", () => {
+  const { container } = renderLayer({
+    sourcesByAnchor: {
+      "anchor-1": [source("W1", { confidenceBasis: "canonical_registry" })],
+      "anchor-2": []
+    }
+  });
+
+  expect(container.querySelector(".association-node[data-basis='canonical_registry']"))
+    .toHaveClass("is-semantic-retrieval");
+  expect(container.querySelector(".association-edge.is-primary.is-ink"))
+    .toHaveClass("is-semantic-retrieval");
+  expect(screen.getByLabelText("当前关系图例")).toHaveTextContent("权威词表精确匹配");
 });
 
 test("shows only relation kinds present in the current projection", () => {

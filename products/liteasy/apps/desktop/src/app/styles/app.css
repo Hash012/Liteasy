@@ -3536,8 +3536,7 @@ body {
 }
 
 /* How the link was established, echoed by the dynamic relation legend. */
-.association-node[data-basis="author_citation"],
-.association-node[data-basis="canonical_registry"] {
+.association-node[data-basis="author_citation"] {
   box-shadow: inset 3px 0 0 rgba(49, 95, 82, 0.86), 0 4px 14px rgba(24, 34, 47, 0.09);
 }
 
@@ -3545,6 +3544,7 @@ body {
   box-shadow: inset 3px 0 0 rgba(81, 91, 138, 0.7), 0 4px 14px rgba(24, 34, 47, 0.09);
 }
 
+.association-node[data-basis="canonical_registry"],
 .association-node[data-basis="algorithmic_retrieval"] {
   box-shadow: inset 3px 0 0 rgba(98, 102, 106, 0.46), 0 4px 14px rgba(24, 34, 47, 0.09);
 }
@@ -3575,6 +3575,21 @@ body {
   border-radius: 50%;
   background: rgba(27, 102, 179, 0.34);
   box-shadow: 0 2px 6px rgba(24, 34, 47, 0.16);
+}
+
+.association-node.is-dot.is-author-citation {
+  border-color: rgba(49, 95, 82, 0.52);
+  background: rgba(49, 95, 82, 0.36);
+}
+
+.association-node.is-dot.is-citation-graph {
+  border-color: rgba(81, 91, 138, 0.52);
+  background: rgba(81, 91, 138, 0.34);
+}
+
+.association-node.is-dot.is-semantic-retrieval {
+  border-color: rgba(98, 102, 106, 0.48);
+  background: rgba(98, 102, 106, 0.3);
 }
 
 .association-node.is-dot > * {
@@ -5630,6 +5645,14 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .association-edge,
+  .association-anchor__mark,
+  .association-anchor__chip,
+  .association-node,
+  .association-node.is-dot > * {
+    transition: none !important;
+  }
+
   .layered-graph-canvas .react-flow__node {
     transition: none !important;
   }
