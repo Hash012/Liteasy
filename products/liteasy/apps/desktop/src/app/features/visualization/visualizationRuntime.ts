@@ -3,6 +3,7 @@ import { parseVisualizationArtifact } from "./visualizationArtifact.schema";
 import type { VisualizationArtifactV1, VisualizationModality } from "./visualizationArtifact.types";
 import { getVisualizationRendererRegistration } from "./visualizationRendererRegistry";
 import type { VisualizationRevalidationWorkerService } from "./visualizationRevalidationWorker";
+import { getVisualizationValidator } from "./visualizationValidatorRegistry";
 
 export type VisualizationArtifactStatus = "ready" | "degraded" | "needs_revalidation" | "omitted";
 
@@ -89,13 +90,14 @@ export async function loadVisualizationArtifact(
 ): Promise<VisualizationArtifactState> {
   const envelope = parseVisualizationArtifactEnvelope(value);
   const documentAccess = options.documentAccess ?? true;
-  const needsRevalidation = artifactNeedsRevalidation(envelope, options);
+  const authoritative = getAuthoritativeValidatorVersions(envelope.artifactIndex);
+  const expectedHardValidatorVersions = options.currentValidatorVersions ?? authoritative.versions;
+  const expectedValidatorSetComplete = authoritative.complete
+    && Object.keys(envelope.artifactIndex.hardValidatorVersions).every((id) => id in expectedHardValidatorVersions);
+  const needsRevalidation = artifactNeedsRevalidation(envelope, expectedHardValidatorVersions, authoritative.complete, options);
   const canGenerate = !options.offline && documentAccess && !needsRevalidation;
-  const expectedHardValidatorVersions = options.currentValidatorVersions ?? {};
-  const expectedValidatorSetComplete = Object.keys(envelope.artifactIndex.hardValidatorVersions)
-    .every((id) => id in expectedHardValidatorVersions);
 
-  if (!needsRevalidation) {
+  if (!needsRevalidation && expectedValidatorSetComplete) {
     return artifactState(envelope, {
       canGenerate,
       canRender: documentAccess,
@@ -142,12 +144,12 @@ export async function loadVisualizationArtifact(
 
 function artifactNeedsRevalidation(
   envelope: VisualizationArtifactEnvelope,
-  options: VisualizationArtifactLoadOptions
+  expectedHardValidatorVersions: Record<string, string>,
+  authoritativeComplete: boolean,
+  options: Pick<VisualizationArtifactLoadOptions, "revokedRendererIds" | "revokedValidatorIds">
 ): boolean {
-  const validatorChanged = Object.entries(options.currentValidatorVersions ?? {}).some(([id, version]) =>
-    id in envelope.artifactIndex.hardValidatorVersions
-      && envelope.artifactIndex.hardValidatorVersions[id] !== version
-  );
+  const validatorChanged = !authoritativeComplete || Object.entries(envelope.artifactIndex.hardValidatorVersions)
+    .some(([id, version]) => expectedHardValidatorVersions[id] !== version);
   const validatorRevoked = (options.revokedValidatorIds ?? [])
     .some((id) => id in envelope.artifactIndex.hardValidatorVersions);
   const rendererRegistration = getVisualizationRendererRegistration(envelope.artifact.implementation.rendererId);
@@ -156,6 +158,23 @@ function artifactNeedsRevalidation(
   const rendererRevoked = (options.revokedRendererIds ?? [])
     .includes(envelope.artifact.implementation.rendererId);
   return validatorChanged || validatorRevoked || rendererChanged || rendererRevoked;
+}
+
+function getAuthoritativeValidatorVersions(index: VisualizationArtifactIndex): {
+  complete: boolean;
+  versions: Record<string, string>;
+} {
+  const versions: Record<string, string> = {};
+  let complete = true;
+  for (const id of Object.keys(index.hardValidatorVersions)) {
+    const validator = getVisualizationValidator(id);
+    if (!validator || validator.gate !== "hard") {
+      complete = false;
+      continue;
+    }
+    versions[id] = validator.version;
+  }
+  return { complete, versions };
 }
 
 function artifactState(

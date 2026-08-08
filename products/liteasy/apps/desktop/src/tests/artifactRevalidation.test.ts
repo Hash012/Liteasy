@@ -5,6 +5,7 @@ import {
 } from "../app/features/visualization/visualizationRuntime";
 import { makeVisualizationArtifactFixture } from "./fixtures/visualizationArtifactFixtures";
 import { registerVisualizationRenderer } from "../app/features/visualization/visualizationRendererRegistry";
+import { registerVisualizationValidator } from "../app/features/visualization/visualizationValidatorRegistry";
 
 registerVisualizationRenderer({
   id: "safe-svg",
@@ -13,11 +14,18 @@ registerVisualizationRenderer({
   version: "1.0.0"
 });
 
+registerVisualizationValidator({
+  gate: "hard",
+  id: "test-current-validator",
+  validate: async () => ({ gate: "hard", outcome: "pass", validatorId: "test-current-validator", validatorVersion: "2" }),
+  version: "2"
+});
+
 const cachedArtifact = makeVisualizationArtifactFixture({
   validation: { outcome: "pass" }
 });
 cachedArtifact.validation = {
-  checks: [{ gate: "hard", outcome: "pass", validatorId: "evidence", validatorVersion: "1" }],
+  checks: [{ gate: "hard", outcome: "pass", validatorId: "artifact-schema", validatorVersion: "1.0.0" }],
   outcome: "pass",
   repairCount: 0
 };
@@ -26,7 +34,7 @@ const cachedEnvelope = parseVisualizationArtifactEnvelope({
   artifact: cachedArtifact,
   artifactIndex: {
     evidenceHash: "evidence-1",
-    hardValidatorVersions: { evidence: "1" },
+    hardValidatorVersions: { "artifact-schema": "1.0.0" },
     rendererVersion: "1.0.0",
     skillVersion: "1.0.0",
     specHash: "spec-1"
@@ -37,7 +45,7 @@ const cachedEnvelope = parseVisualizationArtifactEnvelope({
 
 test("requires revalidation after a hard-validator version changes", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
-    currentValidatorVersions: { evidence: "2" },
+    currentValidatorVersions: { "artifact-schema": "2.0.0" },
     offline: true
   });
   expect(state.status).toBe("needs_revalidation");
@@ -49,7 +57,7 @@ test("requires revalidation after a hard-validator version changes", async () =>
 
 test("does not generate while offline when a cached artifact is still valid", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
-    currentValidatorVersions: { evidence: "1" },
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
     offline: true
   });
   expect(state.status).toBe("ready");
@@ -67,23 +75,23 @@ test("enables a renderer only after its changed version passes hard-gate revalid
     artifactIndex: { ...cachedEnvelope.artifactIndex, rendererVersion: "0.9.0" }
   });
   const revalidationService = {
-    revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { evidence: "2" } })),
+    revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "2.0.0" } })),
     terminate: () => undefined
   };
   const state = await loadVisualizationArtifact(outdatedRendererEnvelope, {
-    currentValidatorVersions: { evidence: "2" },
+    currentValidatorVersions: { "artifact-schema": "2.0.0" },
     revalidationService
   });
   expect(state.canRender).toBe(true);
   expect(state.canRenderSafePreview).toBe(false);
   expect(state.status).toBe("ready");
-  expect(state.artifactIndex.hardValidatorVersions).toEqual({ evidence: "2" });
+  expect(state.artifactIndex.hardValidatorVersions).toEqual({ "artifact-schema": "2.0.0" });
   expect(revalidationService.revalidate).toHaveBeenCalledOnce();
 });
 
 test("keeps a stale artifact preview-only when hard-gate revalidation fails", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
-    currentValidatorVersions: { evidence: "2" },
+    currentValidatorVersions: { "artifact-schema": "2.0.0" },
     revalidationService: { revalidate: async () => ({ outcome: "fail" as const, usedHardValidatorVersions: {} }), terminate: () => undefined }
   });
   expect(state.status).toBe("needs_revalidation");
@@ -93,7 +101,7 @@ test("keeps a stale artifact preview-only when hard-gate revalidation fails", as
 
 test("hides a stale artifact when there is no safe preview", async () => {
   const state = await loadVisualizationArtifact({ ...cachedEnvelope, safePreview: undefined }, {
-    currentValidatorVersions: { evidence: "2" }
+    currentValidatorVersions: { "artifact-schema": "2.0.0" }
   });
   expect(state.canRender).toBe(false);
   expect(state.canRenderSafePreview).toBe(false);
@@ -101,7 +109,7 @@ test("hides a stale artifact when there is no safe preview", async () => {
 
 test("blocks artifact and preview rendering when document access is lost", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
-    currentValidatorVersions: { evidence: "1" },
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
     documentAccess: false,
     offline: true
   });
@@ -112,7 +120,7 @@ test("blocks artifact and preview rendering when document access is lost", async
 
 test("marks a revoked renderer for revalidation", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
-    currentValidatorVersions: { evidence: "1" },
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
     revokedRendererIds: ["safe-svg"]
   });
   expect(state.status).toBe("needs_revalidation");
@@ -122,8 +130,22 @@ test("marks a revoked renderer for revalidation", async () => {
 test("marks a revoked hard validator for revalidation", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
     currentValidatorVersions: { evidence: "1" },
-    revokedValidatorIds: ["evidence"]
+    revokedValidatorIds: ["artifact-schema"]
   });
+  expect(state.status).toBe("needs_revalidation");
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+});
+
+test("fails closed when the current validator map is omitted and a registered version changed", async () => {
+  const upgradedEnvelope = parseVisualizationArtifactEnvelope({
+    ...cachedEnvelope,
+    artifactIndex: {
+      ...cachedEnvelope.artifactIndex,
+      hardValidatorVersions: { "test-current-validator": "1" }
+    }
+  });
+  const state = await loadVisualizationArtifact(upgradedEnvelope);
   expect(state.status).toBe("needs_revalidation");
   expect(state.canRender).toBe(false);
   expect(state.canRenderSafePreview).toBe(true);
