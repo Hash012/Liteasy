@@ -6,6 +6,7 @@ import {
   AssociationReadingOverlay,
   type PageGraphAnchorView
 } from "../app/features/associations/AssociationGraphLayer";
+import { externalPdfDragMimeType } from "../app/features/library/externalPdfDownload";
 import type { ThinReadingExternalSource } from "../app/features/thin-reading/thinReading.types";
 
 const anchors: PageGraphAnchorView[] = [
@@ -150,6 +151,52 @@ test("shows secondary memberships when a shared paper is focused without moving 
 
   expect(container.querySelectorAll(".association-edge.is-secondary")).toHaveLength(1);
   expect(node.getAttribute("style")).toBe(positionBefore);
+});
+
+test("keeps merged component identity out of the representative source provenance", () => {
+  const onSelectSource = vi.fn();
+  const setData = vi.fn();
+  const canonical = source("openalex-record", {
+    canonicalPaperId: "openalex:W42",
+    doi: "10.1000/shared",
+    provider: "openalex",
+    sourceId: "W42"
+  });
+  const representative = source("crossref-record", {
+    canonicalPaperId: undefined,
+    confidenceBasis: "author_citation",
+    doi: "10.1000/shared",
+    provider: "crossref",
+    sourceId: "10.1000/shared",
+    sourceRecordUrl: "https://api.crossref.org/works/10.1000/shared",
+    url: "https://doi.org/10.1000/shared"
+  });
+  const { container } = renderLayer({
+    focusedAnchorId: "anchor-1",
+    onSelectSource,
+    sourcesByAnchor: {
+      "anchor-1": [canonical],
+      "anchor-2": [representative]
+    }
+  });
+  const node = container.querySelector<HTMLElement>(".association-node")!;
+
+  expect(container.querySelector(".association-edge.is-secondary"))
+    .toHaveAccessibleName(/openalex:W42/u);
+  fireEvent.click(node);
+  expect(onSelectSource).toHaveBeenCalledWith("crossref-record");
+  fireEvent.dragStart(node, { dataTransfer: { effectAllowed: "", setData } });
+
+  expect(setData).toHaveBeenCalledWith(externalPdfDragMimeType, expect.any(String));
+  const payload = JSON.parse(setData.mock.calls[0]![1] as string);
+  expect(payload).toMatchObject({
+    doi: "10.1000/shared",
+    id: "crossref-record",
+    provider: "crossref",
+    sourceId: "10.1000/shared",
+    sourceRecordUrl: "https://api.crossref.org/works/10.1000/shared"
+  });
+  expect(payload).not.toHaveProperty("canonicalPaperId");
 });
 
 test("focusing one anchor dims the other anchor and its papers without unmounting them", () => {

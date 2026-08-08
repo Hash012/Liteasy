@@ -119,13 +119,14 @@ export function AssociationGraphLayer({
   const primarySourcesByAnchor = useMemo(() => {
     const result: Record<string, ThinReadingExternalSource[]> = {};
     for (const node of projection.paperNodes) {
-      const layoutSource = pageGraphPaperKey(node.source) === node.paperKey
-        ? node.source
-        : { ...node.source, canonicalPaperId: node.paperKey };
-      (result[node.primaryAnchorId] ??= []).push(layoutSource);
+      (result[node.primaryAnchorId] ??= []).push(node.source);
     }
     return result;
   }, [projection.paperNodes]);
+  const paperKeyBySource = useMemo(
+    () => new Map(projection.paperNodes.map((node) => [node.source, node.paperKey] as const)),
+    [projection.paperNodes]
+  );
 
   const graph = useMemo(() => layoutAssociationPageGraph({
     anchors: anchors
@@ -137,8 +138,9 @@ export function AssociationGraphLayer({
       })),
     documentHeight,
     frameWidth,
+    paperKeyBySource,
     sourcesByAnchor: primarySourcesByAnchor
-  }), [anchors, documentHeight, frameWidth, primarySourcesByAnchor]);
+  }), [anchors, documentHeight, frameWidth, paperKeyBySource, primarySourcesByAnchor]);
 
   const dimmed = (anchorIds: readonly string[]) =>
     Boolean(focusedAnchorId) && !anchorIds.includes(focusedAnchorId!);

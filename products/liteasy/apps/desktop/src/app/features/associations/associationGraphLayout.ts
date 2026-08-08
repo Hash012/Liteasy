@@ -34,6 +34,8 @@ export type PageGraphInput = {
   anchors: readonly PageGraphAnchorInput[];
   documentHeight: number;
   frameWidth: number;
+  /** Optional projection identity; source metadata remains untouched for rendering and actions. */
+  paperKeyBySource?: ReadonlyMap<ThinReadingExternalSource, string>;
   sourcesByAnchor: Readonly<Record<string, readonly ThinReadingExternalSource[]>>;
 };
 
@@ -159,6 +161,7 @@ export function layoutAssociationPageGraph({
   anchors,
   documentHeight,
   frameWidth,
+  paperKeyBySource,
   sourcesByAnchor
 }: PageGraphInput): PageGraph {
   const hiddenCountByAnchor: Record<string, number> = {};
@@ -213,7 +216,7 @@ export function layoutAssociationPageGraph({
         confidence: clamp(source.confidence ?? 0.3, 0, 1),
         isDot: normalizedDistance > dotThreshold,
         left: centre.left + Math.cos(angle) * radius,
-        paperKey: pageGraphPaperKey(source),
+        paperKey: paperKeyBySource?.get(source) ?? pageGraphPaperKey(source),
         relevance,
         source,
         top: centre.top + Math.sin(angle) * radius
