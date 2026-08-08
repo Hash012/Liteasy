@@ -3,6 +3,7 @@
 mod agent_host;
 mod agent_state;
 mod artifact_catalog_state;
+mod artifact_export;
 mod desktop_identity;
 mod local_library;
 mod paper_cache;
@@ -29,6 +30,11 @@ fn main() {
             agent_state::save_agent_state,
             artifact_catalog_state::load_artifact_catalog_state,
             artifact_catalog_state::save_artifact_catalog_state,
+            artifact_export::export_artifact_document,
+            artifact_export::list_artifact_exports,
+            artifact_export::open_artifact_export,
+            artifact_export::remove_artifact_export,
+            artifact_export::reveal_artifact_export,
             desktop_identity::begin_desktop_oauth_login,
             desktop_identity::restore_desktop_oauth_session,
             desktop_identity::revoke_desktop_oauth_session,
