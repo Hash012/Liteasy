@@ -193,6 +193,7 @@ function renderArtifactActions(options: {
   diagnosticContext?: { endpoint: string; model: string; provider: string };
   imported?: boolean;
   locked?: boolean;
+  modelAccessAvailable?: boolean;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
   selectedPapers?: Paper[];
 } = {}) {
@@ -243,6 +244,7 @@ function renderArtifactActions(options: {
       getImportedChunksByPaperId: () => importedChunks,
       getImportedChunksForPaperId: (paperId) => importedChunks[paperId] ?? [],
       getMineruFiguresForPaperId: (paperId) => options.mineruFiguresByPaperId?.[paperId] ?? [],
+      isAgentModelAccessAvailable: () => options.modelAccessAvailable ?? true,
       getModelDiagnosticContext: options.diagnosticContext
         ? () => options.diagnosticContext!
         : undefined,
@@ -334,6 +336,24 @@ describe("useArtifactActions", () => {
     });
     expect(message).toBe("请先锁定选中文献集，再启动 AI 分析。");
     expect(unlocked.queueImportForPapers).not.toHaveBeenCalled();
+  });
+
+  test("blocks thin-reading before import or task creation when model access requires login", () => {
+    const unauthenticated = renderArtifactActions({
+      imported: true,
+      modelAccessAvailable: false
+    });
+
+    let message = "";
+    act(() => {
+      message = unauthenticated.result.current.startAnalysis("thin_reading");
+    });
+
+    expect(message).toBe("请先登录 Liteasy 账号，再使用 AI 文献分析。");
+    expect(unauthenticated.onAnalysisHint).toHaveBeenLastCalledWith(message);
+    expect(unauthenticated.queueImportForPapers).not.toHaveBeenCalled();
+    expect(unauthenticated.runAgentAnalysis).not.toHaveBeenCalled();
+    expect(unauthenticated.artifactStore.getTasks()).toEqual([]);
   });
 
   test("queues imports before starting analysis when selected papers are not imported", async () => {

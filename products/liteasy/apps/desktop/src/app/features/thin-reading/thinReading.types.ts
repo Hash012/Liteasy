@@ -148,12 +148,24 @@ export type ThinReadingClaimStatus = "grounded" | "unsupported" | "weak";
 
 export type ThinReadingInterpretationIntent = "how" | "mixed" | "what" | "why";
 
+export type ThinReadingLearningGoal =
+  | "core_idea"
+  | "field_position"
+  | "paper_panorama"
+  | "parent_continuity"
+  | "selected_focus";
+
+export type ThinReadingReadingMode = "exploration" | "orientation";
+
 export type ThinReadingInterpretationPlan = {
   discourseMoves: readonly string[];
   externalKnowledgeNeeded: boolean;
   externalQuery?: string;
   gap?: string;
   intent: ThinReadingInterpretationIntent;
+  // Optional only for artifacts created before reader-oriented planning was introduced.
+  learningGoals?: readonly ThinReadingLearningGoal[];
+  readingMode?: ThinReadingReadingMode;
   requestedDepth: "deep" | "standard";
 };
 

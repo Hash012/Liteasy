@@ -44,6 +44,7 @@ import {
 } from "./artifactTaskRecovery";
 import {
   extractArtifactTraceId,
+  isModelAuthenticationFailure,
   presentArtifactFailure,
   resolveArtifactFailureCode
 } from "./artifactFailurePresentation";
@@ -112,6 +113,7 @@ type UseArtifactActionsInput = {
   getPaperById?: (paperId: string) => Paper | undefined;
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
+  isAgentModelAccessAvailable?: () => boolean;
   onAnalysisHint: (message: string) => void;
   onArtifactCatalogChanged: (catalog: ArtifactTab[]) => void;
   onArtifactTabsChanged: (tabs: ArtifactTab[]) => void;
@@ -190,9 +192,9 @@ function buildFailureRecovery(message: string, failedStage: ArtifactTaskStage) {
       "若问题持续，请调整选中文献或联系管理员并提供失败时间。"
     ];
   }
-  if (normalized.includes("401") || normalized.includes("unauthorized") || normalized.includes("api key")) {
+  if (isModelAuthenticationFailure(message)) {
     return [
-      "重新登录后再次执行；若仍失败，请联系管理员检查模型服务授权。",
+      "登录或重新登录 Liteasy 账号后再次执行。",
       "向管理员提供失败时间和页面显示的错误编号，不要发送账号密码或密钥。"
     ];
   }
@@ -465,6 +467,7 @@ export function useArtifactActions({
   getPaperById,
   getSelectedDocumentSet,
   getSelectedPapers,
+  isAgentModelAccessAvailable,
   onAnalysisHint,
   onArtifactCatalogChanged,
   onArtifactTabsChanged,
@@ -472,6 +475,14 @@ export function useArtifactActions({
   queueImportForPapers,
   runAgentAnalysis
 }: UseArtifactActionsInput) {
+  const modelLoginRequiredMessage = "请先登录 Liteasy 账号，再使用 AI 文献分析。";
+
+  function modelAccessFailureMessage() {
+    return isAgentModelAccessAvailable?.() === false
+      ? modelLoginRequiredMessage
+      : undefined;
+  }
+
   function syncArtifacts(_taskId?: string) {
     onArtifactTasksChanged(artifactStore.getTasks().map((task) => ({ ...task })));
     onArtifactCatalogChanged(artifactStore.getCatalog());
@@ -534,6 +545,24 @@ export function useArtifactActions({
     queuedTaskId?: string,
     generationOptions?: AgentArtifactGenerationOptions
   ) {
+    const accessFailure = modelAccessFailureMessage();
+    if (accessFailure) {
+      if (queuedTaskId) {
+        const failedStage = artifactType === "thin_reading"
+          ? "thin_reading_planning"
+          : "preparing_context";
+        artifactStore.failTask(queuedTaskId, {
+          code: "model_authentication_failed",
+          failedStage,
+          message: accessFailure,
+          occurredAt: new Date().toISOString(),
+          recovery: buildFailureRecovery(accessFailure, failedStage)
+        });
+        syncArtifacts(queuedTaskId);
+      }
+      onAnalysisHint(accessFailure);
+      return;
+    }
     const scopedPapers = papersForArtifactScope(artifactType, selectedPapers, getActiveReaderPaper?.());
     const taskId = queuedTaskId ?? artifactStore.createTask(artifactType);
     if (!queuedTaskId) {
@@ -840,6 +869,11 @@ export function useArtifactActions({
       onAnalysisHint(message);
       return message;
     }
+    const accessFailure = modelAccessFailureMessage();
+    if (accessFailure) {
+      onAnalysisHint(accessFailure);
+      return accessFailure;
+    }
     if (artifactType !== "skill_doc") {
       const existingArtifacts = findDuplicateArtifacts(
         artifactStore.getCatalog(),
@@ -953,6 +987,11 @@ export function useArtifactActions({
       const message = "找不到可重新生成的论文分析产物。";
       onAnalysisHint(message);
       return message;
+    }
+    const accessFailure = modelAccessFailureMessage();
+    if (accessFailure) {
+      onAnalysisHint(accessFailure);
+      return accessFailure;
     }
     if (request.papers.length === 0) {
       const message = "该历史产物没有记录来源论文，无法按原文献集重新生成。";
@@ -1110,6 +1149,11 @@ export function useArtifactActions({
     if (runningTask) {
       onAnalysisHint("薄读生成已经在运行，请等待当前任务完成，系统不会重复提交同一页面的生成请求。");
       throw new Error("该薄读页面已有生成任务正在运行，请勿重复点击。");
+    }
+    const accessFailure = modelAccessFailureMessage();
+    if (accessFailure) {
+      onAnalysisHint(accessFailure);
+      throw new Error(accessFailure);
     }
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);

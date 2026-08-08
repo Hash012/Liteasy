@@ -100,7 +100,6 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     onClearProfile: vi.fn(),
     onClearRecommendations: vi.fn(),
     onDismissRecommendation: vi.fn(),
-    onImportSelectedSet: vi.fn(),
     onLoginRequired: vi.fn(),
     onLogout: vi.fn(),
     onOpenAcademicArchive: vi.fn(),
@@ -178,6 +177,13 @@ describe("LeftPane", () => {
       "aria-expanded",
       "true"
     );
+  });
+
+  test("does not expose a standalone selected-paper import action", () => {
+    render(<LeftPane {...createProps({ leftRailView: "library" })} />);
+
+    expect(screen.queryByRole("button", { name: "导入选中文献" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "锁定选中文献集" })).toBeInTheDocument();
   });
 
   test("renders the real local folder hierarchy, PDFs, and metadata-only entries", async () => {

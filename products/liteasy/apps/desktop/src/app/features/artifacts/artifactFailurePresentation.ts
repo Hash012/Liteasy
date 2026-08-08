@@ -11,11 +11,26 @@ const publicMessages: Record<ArtifactFailureCode, string> = {
   artifact_verification_failed: "生成结果未通过证据校验，请调整资料或稍后重试。",
   document_processing_failed: "PDF 处理未完成，请确认文件可用后重新导入。",
   external_retrieval_failed: "外部文献检索暂时不可用，请稍后重试。",
-  model_authentication_failed: "模型服务授权已失效，请重新登录后重试。",
+  model_authentication_failed: "请登录或重新登录 Liteasy 账号，再使用模型服务。",
   model_rate_limited: "模型服务当前请求较多，请稍后重试。",
   model_route_unavailable: "模型服务暂不支持该请求，请稍后重试。",
   service_unavailable: "相关服务暂时不可用，请检查网络后重试。"
 };
+
+export function isModelAuthenticationFailure(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("401") ||
+    normalized.includes("unauthorized") ||
+    normalized.includes("api key") ||
+    normalized.includes("invalid_session") ||
+    normalized.includes("session_validation_failed") ||
+    normalized.includes("请先登录") ||
+    normalized.includes("重新登录") ||
+    normalized.includes("登录会话无效") ||
+    normalized.includes("登录会话已过期")
+  );
+}
 
 export function resolveArtifactFailureCode(
   message: string,
@@ -37,11 +52,7 @@ export function resolveArtifactFailureCode(
     normalized.includes("外部文献检索") ||
     normalized.includes("external-knowledge")
   ) return "external_retrieval_failed";
-  if (
-    normalized.includes("401") ||
-    normalized.includes("unauthorized") ||
-    normalized.includes("api key")
-  ) return "model_authentication_failed";
+  if (isModelAuthenticationFailure(message)) return "model_authentication_failed";
   if (
     normalized.includes("404") ||
     normalized.includes("not found") ||

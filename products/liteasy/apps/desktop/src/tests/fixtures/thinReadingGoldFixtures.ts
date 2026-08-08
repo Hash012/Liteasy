@@ -61,6 +61,7 @@ function rootFixture(input: {
   id: string;
   omittedSectionKeys: readonly string[];
   paperType: ThinReadingPaperType;
+  requiredRootOrientation: NonNullable<ThinReadingGoldStandard["requiredRootOrientation"]>;
   requiredSummaryConcepts: ThinReadingGoldStandard["requiredSummaryConcepts"];
   summary: string;
   targetLanguage: string;
@@ -79,6 +80,7 @@ function rootFixture(input: {
       id: input.id,
       paperType: input.paperType,
       relevantEvidenceIds: [input.evidenceId],
+      requiredRootOrientation: input.requiredRootOrientation,
       requiredSummaryConcepts: input.requiredSummaryConcepts,
       stage: "root",
       targetLanguage: input.targetLanguage
@@ -92,6 +94,11 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     id: "gold-survey-vector-databases",
     omittedSectionKeys: ["taxonomy_branches", "historical_trajectory"],
     paperType: "survey",
+    requiredRootOrientation: {
+      coreIdea: [["taxonomy", "分类框架"]],
+      fieldPosition: [["开放问题", "未解问题", "open problems"]],
+      paperPanorama: [["知识地图", "knowledge map"], ["比较轴线", "comparison axes"]]
+    },
     requiredSummaryConcepts: [
       ["taxonomy", "分类框架"],
       ["比较轴线", "comparison axes"],
@@ -105,6 +112,11 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     id: "gold-experimental-colbert",
     omittedSectionKeys: ["ablation", "limitations"],
     paperType: "experimental",
+    requiredRootOrientation: {
+      coreIdea: ["MaxSim", ["late interaction", "后期交互"]],
+      fieldPosition: [["单向量基线", "single-vector baseline"]],
+      paperPanorama: [["token-level matching", "词元级匹配"], ["离线编码", "offline encoding"]]
+    },
     requiredSummaryConcepts: [
       "MaxSim",
       ["token-level matching", "词元级匹配"],
@@ -118,6 +130,11 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     id: "gold-systems-acorn",
     omittedSectionKeys: ["reliability", "deployment_constraints"],
     paperType: "systems",
+    requiredRootOrientation: {
+      coreIdea: ["graph architecture", "predicate filtering"],
+      fieldPosition: [["during traversal", "handled during traversal"]],
+      paperPanorama: [["latency", "throughput"], ["tradeoff", "extra graph connectivity"]]
+    },
     requiredSummaryConcepts: [
       "graph architecture",
       "predicate filtering",
@@ -131,6 +148,11 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     id: "gold-dataset-resource",
     omittedSectionKeys: ["evaluation_usage", "bias"],
     paperType: "dataset",
+    requiredRootOrientation: {
+      coreIdea: [["资源", "数据集"]],
+      fieldPosition: [["可复用", "扩大了任务覆盖范围"]],
+      paperPanorama: ["标注协议", ["覆盖范围", "偏差边界"]]
+    },
     requiredSummaryConcepts: [
       ["资源", "数据集"],
       "标注协议",
@@ -144,6 +166,11 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     id: "gold-theoretical-convergence",
     omittedSectionKeys: ["counterexample", "prior_theory"],
     paperType: "theoretical",
+    requiredRootOrientation: {
+      coreIdea: ["convergence bound"],
+      fieldPosition: ["existing theory map"],
+      paperPanorama: ["smoothness assumption", "proof route"]
+    },
     requiredSummaryConcepts: [
       "convergence bound",
       "smoothness assumption",
@@ -157,6 +184,11 @@ export const thinReadingGoldFixtures: readonly GoldFixture[] = Object.freeze([
     id: "gold-humanities-archive",
     omittedSectionKeys: ["counter_reading", "historical_context"],
     paperType: "humanities",
+    requiredRootOrientation: {
+      coreIdea: [["中心论题", "核心论题"]],
+      fieldPosition: [["校正既有叙事", "既有叙事"]],
+      paperPanorama: [["解释路径", "阐释路径"], ["档案证据", "历史材料"], ["解释边界", "局限"]]
+    },
     requiredSummaryConcepts: [
       ["中心论题", "核心论题"],
       ["解释路径", "阐释路径"],

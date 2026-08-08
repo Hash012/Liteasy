@@ -131,6 +131,24 @@ describe("thinReadingEvaluation", () => {
     ]));
   });
 
+  test("fails a root overview that keeps the core idea but loses its field position", () => {
+    const fixture = thinReadingGoldFixtures.find(({ gold }) =>
+      gold.id === "gold-theoretical-convergence"
+    )!;
+    const candidate = {
+      ...fixture.candidate,
+      summary: "The paper proves a tighter convergence bound under a smoothness assumption; its proof route couples a stability lemma with a telescoping argument."
+    };
+
+    const report = evaluateThinReadingGoldCase({ candidate, gold: fixture.gold });
+
+    expect(report.metrics.summaryCoreRecall.score).toBe(1);
+    expect(report.metrics.rootOrientationCoverage.score).toBeLessThan(1);
+    expect(report.issues).toContainEqual(expect.objectContaining({
+      code: "root_orientation_incomplete"
+    }));
+  });
+
   test("rejects sentence evidence mappings that do not cover the displayed summary", () => {
     const fixture = thinReadingGoldFixtures.find(({ gold }) =>
       gold.id === "gold-experimental-colbert"

@@ -34,6 +34,27 @@ const liveAuditTransport = async () => ({
   status: 200
 });
 
+function evidenceReviewPropositions(
+  prompt: string,
+  unsupportedSentenceIds: readonly string[] = []
+) {
+  const unsupported = new Set(unsupportedSentenceIds);
+  return [...prompt.matchAll(/^- id=(thin-reading-sentence-[^;\s]+);[^\n]*?text=(.+)$/gm)]
+    .map((match) => {
+      let proposition = match[2];
+      try {
+        proposition = String(JSON.parse(match[2]));
+      } catch {
+        // The prompt builder normally emits JSON strings; retain the captured text in malformed fixtures.
+      }
+      return {
+        proposition: proposition.slice(0, 300),
+        sentenceId: match[1],
+        verdict: unsupported.has(match[1]) ? "partial" as const : "supported" as const
+      };
+    });
+}
+
 test("prioritizes verified citation edges while retaining bounded topic-search context", () => {
   const sources = [
     {
@@ -549,11 +570,42 @@ test("plans why/how/what explanations from the user prompt and retrieves only fo
   expect(plan).toMatchObject({
     externalKnowledgeNeeded: true,
     intent: "why",
+    learningGoals: ["selected_focus", "parent_continuity"],
+    readingMode: "exploration",
     requestedDepth: "standard"
   });
   expect(plan.gap).toContain("为什么");
   expect(plan.discourseMoves.join(" ")).toContain("因果");
   expect(shouldRetrieveThinReadingExternalKnowledge({ ...baseContext, interpretationPlan: plan })).toBe(true);
+});
+
+test("plans a root overview as reader orientation rather than a generic mixed explanation", () => {
+  const plan = planThinReadingInterpretation({
+    context: {
+      artifactId: "artifact-root-orientation",
+      depth: 0,
+      paperIds: ["paper-1"],
+      primaryPaperTitle: "Target Paper",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    },
+    prepared: {
+      evidence: [{
+        summary: "论文提出核心方法，并与既有路线比较其适用边界。",
+        quote: "We introduce the central method and compare it with prior approaches.",
+        terms: ["method", "prior work", "limitation"]
+      }]
+    }
+  });
+
+  expect(plan).toMatchObject({
+    externalKnowledgeNeeded: false,
+    learningGoals: ["core_idea", "paper_panorama", "field_position"],
+    readingMode: "orientation"
+  });
+  expect(plan.discourseMoves.join(" ")).toContain("核心思想");
+  expect(plan.discourseMoves.join(" ")).toContain("全景");
+  expect(plan.discourseMoves.join(" ")).toContain("领域位置");
 });
 
 test("parses thin-reading structured output from a live model request", async () => {
@@ -1009,11 +1061,17 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
           json: async () => ({
             answer: JSON.stringify(reviewAttempts === 1
               ? {
+                  propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
                   reason: "该句将三段证据共同支撑的范围表述得过强，需要压缩为可直接验证的判断。",
                   unsupportedSentenceIds: [sentenceId],
                   verdict: "fail"
                 }
-              : { reason: "每个句子均由指定证据直接支持。", unsupportedSentenceIds: [], verdict: "pass" }),
+              : {
+                  propositionVerdicts: evidenceReviewPropositions(prompt),
+                  reason: "通过",
+                  unsupportedSentenceIds: [],
+                  verdict: "pass"
+                }),
             execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
           }),
           ok: true,
@@ -1225,6 +1283,7 @@ test("retries a cross-layer evidence ID with the current planning allowlist", as
         return {
           json: async () => ({
             answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt),
               reason: "每个句子均由本轮指定证据直接支持。",
               unsupportedSentenceIds: [],
               verdict: "pass"
@@ -1346,7 +1405,7 @@ test("executes a bounded second evidence-tool round after observing a concrete g
       }
       if (prompt.includes("证据复核 Agent")) {
         return {
-          json: async () => ({ answer: JSON.stringify({ reason: "每句均有直接证据。", unsupportedSentenceIds: [], verdict: "pass" }), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          json: async () => ({ answer: JSON.stringify({ propositionVerdicts: evidenceReviewPropositions(prompt), reason: "每句均有直接证据。", unsupportedSentenceIds: [], verdict: "pass" }), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
           ok: true, status: 200
         };
       }
@@ -1578,6 +1637,125 @@ test("accepts a DeepSeek mechanism anchor without entering structured-output rep
   ]);
 });
 
+test("repairs only invalid anchor spans and quarantines a repeated failure without losing the body", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  store.apply({
+    intent: "update_setting",
+    target: "models.default_provider",
+    value: "deepseek"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "CoreNEURON",
+        snippet: "CoreNEURON removes general data structures such as Node, Section, and Object to reduce memory use.",
+        summary: "CoreNEURON 去除通用数据结构以降低内存使用。",
+        tags: ["CoreNEURON", "data structures"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { prompt: string };
+      prompts.push(body.prompt);
+      const evidenceId = body.prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const summary = "CoreNEURON 是面向神经元仿真的计算库。它支持在线和离线两种执行工作流。测试报告了内存与时间开销下降。内存改进源于去除 NEURON 的通用数据结构，如 Node、Section、Object。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            anchors: [{
+              importance: 0.95,
+              kind: "concept",
+              label: "核心库",
+              searchQuery: "CoreNEURON library design",
+              summarySentenceIndex: 0,
+              text: "CoreNEURON"
+            }, {
+              importance: 0.8,
+              kind: "mechanism",
+              label: "工作流模式",
+              searchQuery: "CoreNEURON online offline mode",
+              summarySentenceIndex: 1,
+              text: "在线和离线两种执行工作流"
+            }, {
+              importance: 0.9,
+              kind: "result",
+              label: "性能提升",
+              searchQuery: "CoreNEURON memory time reduction",
+              summarySentenceIndex: 2,
+              text: "内存与时间开销下降"
+            }, {
+              importance: 0.75,
+              kind: "mechanism",
+              label: "优化机制",
+              searchQuery: "CoreNEURON data structure optimization",
+              summarySentenceIndex: 3,
+              text: "数据结构优化"
+            }],
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: "CoreNEURON 去除通用数据结构以降低内存开销。" }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "systems",
+            summary,
+            summarySentences: summary.match(/[^。]+。/g)?.map((text) => ({
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text
+            })),
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "CoreNEURON" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-anchor-quarantine",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "CoreNEURON",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts).toHaveLength(2);
+  expect(prompts[1]).toContain("本轮只修复 anchors");
+  expect(prompts[1]).toContain("text 是正文高亮 span");
+  expect(prompts[1]).toContain("label 才是概括性名称");
+  expect(result.thinReading?.rootSeed.summary).toContain("通用数据结构");
+  expect(result.thinReading?.rootSeed.evidence.anchors).toHaveLength(3);
+  expect(result.thinReading?.rootSeed.evidence.anchors?.some((anchor) => (
+    anchor.text === "数据结构优化"
+  ))).toBe(false);
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 2, repaired: true });
+  expect(result.thinReading?.qualityGate.repairReasons).toEqual(expect.arrayContaining([
+    expect.stringContaining("薄读锚点必须逐字对应"),
+    expect.stringContaining("已隔离无效薄读锚点")
+  ]));
+});
+
 test("repairs a selected Chinese branch that omits an explicitly requested terminology pair", async () => {
   const store = createSettingsStore();
   const prompts: string[] = [];
@@ -1660,6 +1838,167 @@ test("repairs a selected Chinese branch that omits an explicitly requested termi
     repaired: true,
     repairReasons: [expect.stringContaining("中文选区明确要求保留")]
   });
+});
+
+test("quarantines paper sentences that remain partially supported after targeted repair", async () => {
+  const store = createSettingsStore();
+  let generationAttempts = 0;
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": Array.from({ length: 20 }, (_, index) => ({
+        page: index + 1,
+        paperId: "demo-1",
+        paperTitle: "CoreNEURON",
+        snippet: `CoreNEURON directly accesses models built by NEURON. Tests report four-fold lower memory use. Evidence passage ${index + 1}.`,
+        summary: `CoreNEURON 接收 NEURON 模型，测试报告内存减少 4 倍；证据片段 ${index + 1}。`,
+        tags: ["CoreNEURON", "memory"]
+      }))
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      if (prompt.includes("证据规划 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              focus: ["CoreNEURON 机制与结果"],
+              selectedEvidenceIds: [evidenceId]
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("证据观察 Agent")) {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              decision: "stop",
+              focus: [],
+              pageRequests: [],
+              reason: "当前证据已覆盖机制与结果。",
+              searchQueries: [],
+              selectedEvidenceIds: []
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("你是 Liteasy 薄读的证据复核 Agent")) {
+        reviewAttempts += 1;
+        const unsupportedSentenceIds = [
+          "这种优化提升性能",
+          "重新组织内存布局和代码生成",
+          "显著优于 NEURON"
+        ].map((text) => (
+          prompt.split("\n").find((line) => line.includes(text))
+            ?.match(/id=(thin-reading-sentence-[^;\s]+)/)?.[1] ?? ""
+        ));
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt, unsupportedSentenceIds),
+              reason: "三处命题分别扩张了性能因果、实现细节和统计显著性；其余句子有直接支持。",
+              unsupportedSentenceIds,
+              verdict: "fail"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationAttempts += 1;
+      const sentences = [
+        "CoreNEURON 通过直接内存访问接收 NEURON 构建的模型。",
+        "这种优化提升性能。",
+        "测试报告内存减少 4 倍。",
+        "系统重新组织内存布局和代码生成。",
+        "结果显著优于 NEURON。"
+      ];
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            anchors: [{
+              importance: 0.9,
+              kind: "concept",
+              label: "CoreNEURON",
+              searchQuery: "CoreNEURON",
+              summarySentenceIndex: 0,
+              text: "CoreNEURON"
+            }, {
+              importance: 0.7,
+              kind: "result",
+              label: "性能提升",
+              searchQuery: "CoreNEURON performance",
+              summarySentenceIndex: 1,
+              text: "提升性能"
+            }],
+            claims: sentences.map((text) => ({ evidenceIds: [evidenceId], status: "grounded", text })),
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "systems",
+            summary: sentences.join("").replace("这种优化提升性能。", "这种优化提升性能；"),
+            summarySentences: sentences.map((text) => ({
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text
+            })),
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "CoreNEURON" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-partial-quarantine",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "CoreNEURON",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(generationAttempts).toBe(2);
+  expect(reviewAttempts).toBe(2);
+  expect(result.thinReading?.rootSeed.summary).not.toContain("提升性能");
+  expect(result.thinReading?.rootSeed.summary).not.toContain("代码生成");
+  expect(result.thinReading?.rootSeed.summary).not.toContain("显著优于");
+  expect(result.thinReading?.rootSeed.evidence.summarySentences).toHaveLength(2);
+  expect(result.thinReading?.rootSeed.evidence.claims).toHaveLength(2);
+  expect(result.thinReading?.rootSeed.evidence.anchors).toEqual([
+    expect.objectContaining({ text: "CoreNEURON" })
+  ]);
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 2, repaired: true });
+  expect(result.thinReading?.qualityGate.repairReasons).toEqual(expect.arrayContaining([
+    expect.stringContaining("已隔离证据复核仍未通过的正文句")
+  ]));
 });
 
 test("stops after one failed trace repair without creating a local fallback", async () => {
@@ -1852,6 +2191,7 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
         return {
           json: async () => ({
             answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(modelPrompt),
               reason: "外部句由绑定来源摘要直接支持。",
               unsupportedSentenceIds: [],
               verdict: "pass"
@@ -2003,11 +2343,13 @@ test("drops an unsupported external-only sentence when external expansion was au
           json: async () => ({
             answer: JSON.stringify(reviewAttempts === 1
               ? {
+                  propositionVerdicts: evidenceReviewPropositions(prompt, [unsupportedSentenceId]),
                   reason: "外部来源摘要没有提及可塑性，不能支持该句。",
                   unsupportedSentenceIds: [unsupportedSentenceId],
                   verdict: "fail"
                 }
               : {
+                  propositionVerdicts: evidenceReviewPropositions(prompt),
                   reason: "删除无支持的外部句后，其余句均由论文证据直接支持。",
                   unsupportedSentenceIds: [],
                   verdict: "pass"
@@ -2146,11 +2488,13 @@ test("replaces one unsupported required external source with a focused retrieval
           json: async () => ({
             answer: JSON.stringify(reviewAttempts === 1
               ? {
+                  propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
                   reason: "初始外部来源只涉及相邻主题，不能支持后续研究的具体命题。",
                   unsupportedSentenceIds: [sentenceId],
                   verdict: "fail"
                 }
               : {
+                  propositionVerdicts: evidenceReviewPropositions(prompt),
                   reason: "替代来源摘要直接支持该外部句。",
                   unsupportedSentenceIds: [],
                   verdict: "pass"
@@ -2274,6 +2618,7 @@ test("returns a closure boundary when a required external claim has no replaceme
         return {
           json: async () => ({
             answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
               reason: "该来源只涉及相邻主题，不能直接支持所问外部命题。",
               unsupportedSentenceIds: [sentenceId],
               verdict: "fail"
@@ -2385,6 +2730,7 @@ test("keeps a selected canonical external source available when a follow-up look
         return {
           json: async () => ({
             answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(modelPrompt),
               reason: "外部句由绑定来源摘要直接支持。",
               unsupportedSentenceIds: [],
               verdict: "pass"
@@ -2583,7 +2929,7 @@ test("runs at most two responsibility Subagents for a genuinely large thin-readi
         return {
           json: async () => ({
             answer: JSON.stringify({
-              propositionVerdicts: [],
+              propositionVerdicts: evidenceReviewPropositions(prompt),
               reason: "每个句子都由绑定证据直接支持。",
               unsupportedSentenceIds: [],
               verdict: "pass"

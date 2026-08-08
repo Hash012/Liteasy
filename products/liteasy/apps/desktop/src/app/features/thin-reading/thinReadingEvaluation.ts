@@ -33,6 +33,11 @@ export type ThinReadingGoldStandard = {
   relevantEvidenceIds: readonly string[];
   requiredBranchConcepts?: readonly ThinReadingGoldConcept[];
   requiredParentContinuityConcepts?: readonly ThinReadingGoldConcept[];
+  requiredRootOrientation?: {
+    coreIdea: readonly ThinReadingGoldConcept[];
+    fieldPosition: readonly ThinReadingGoldConcept[];
+    paperPanorama: readonly ThinReadingGoldConcept[];
+  };
   requiredSummaryConcepts: readonly ThinReadingGoldConcept[];
   requiredTerminology?: readonly ThinReadingGoldTerminology[];
   stage: "branch" | "root";
@@ -57,6 +62,7 @@ export type ThinReadingEvaluationIssueCode =
   | "language_inconsistent"
   | "omitted_section_recall_below_threshold"
   | "paper_type_mismatch"
+  | "root_orientation_incomplete"
   | "sentence_boundary_incomplete"
   | "summary_core_recall_below_threshold"
   | "terminology_retention_below_threshold"
@@ -80,6 +86,7 @@ export type ThinReadingEvaluationReport = {
     languageConsistency: ThinReadingEvaluationMetric;
     omittedSectionRecall: ThinReadingEvaluationMetric;
     paperTypeAccuracy: ThinReadingEvaluationMetric;
+    rootOrientationCoverage: ThinReadingEvaluationMetric;
     sentenceBoundaryCoverage: ThinReadingEvaluationMetric;
     summaryCoreRecall: ThinReadingEvaluationMetric;
     terminologyRetention: ThinReadingEvaluationMetric;
@@ -148,6 +155,21 @@ function conceptRecall(text: string, concepts: readonly ThinReadingGoldConcept[]
     expected.filter((concept) => matchesConcept(normalizedText, concept)).length,
     expected.length
   );
+}
+
+function rootOrientationCoverage(summary: string, gold: ThinReadingGoldStandard) {
+  if (gold.stage !== "root" || !gold.requiredRootOrientation) {
+    return metric(0, 0);
+  }
+  const dimensions = [
+    gold.requiredRootOrientation.coreIdea,
+    gold.requiredRootOrientation.paperPanorama,
+    gold.requiredRootOrientation.fieldPosition
+  ];
+  const coveredDimensions = dimensions.filter((concepts) => (
+    conceptRecall(summary, concepts).score >= 0.8
+  )).length;
+  return metric(coveredDimensions, dimensions.length);
 }
 
 function unique(values: readonly string[]) {
@@ -468,6 +490,7 @@ export function evaluateThinReadingGoldCase(input: {
 }): ThinReadingEvaluationReport {
   const { candidate, gold } = input;
   const summaryCoreRecall = conceptRecall(candidate.summary, gold.requiredSummaryConcepts);
+  const rootOrientationCoverageMetric = rootOrientationCoverage(candidate.summary, gold);
   const citationPrecisionMetric = citationPrecision(candidate, gold.relevantEvidenceIds);
   const citationRecallMetric = citationRecall(candidate, gold.requiredEvidence, gold.relevantEvidenceIds);
   const evidenceGroundingMetric = evidenceGrounding(candidate, gold.requiredEvidence);
@@ -508,6 +531,9 @@ export function evaluateThinReadingGoldCase(input: {
 
   if (summaryCoreRecall.score < 0.8) {
     issues.push(issue("summary_core_recall_below_threshold", "总述核心概念命中率低于 0.80。"));
+  }
+  if (rootOrientationCoverageMetric.score < 1) {
+    issues.push(issue("root_orientation_incomplete", "根级总述没有同时建立核心思想、论文全景和有证据的领域位置。"));
   }
   if (citationPrecisionMetric.score < 0.9) {
     issues.push(issue("citation_precision_below_threshold", "引用精度低于 0.90。"));
@@ -564,6 +590,7 @@ export function evaluateThinReadingGoldCase(input: {
     languageConsistency: languageConsistencyMetric,
     omittedSectionRecall: omittedSectionRecallMetric,
     paperTypeAccuracy,
+    rootOrientationCoverage: rootOrientationCoverageMetric,
     sentenceBoundaryCoverage: sentenceBoundaryCoverageMetric,
     summaryCoreRecall,
     terminologyRetention: terminologyRetentionMetric,

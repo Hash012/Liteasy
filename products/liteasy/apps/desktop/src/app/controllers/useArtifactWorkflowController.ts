@@ -54,6 +54,7 @@ type UseArtifactWorkflowControllerInput = {
   getPaperById?: (paperId: string) => Paper | undefined;
   getSelectedDocumentSet: () => SelectedDocumentSet;
   getSelectedPapers: () => Paper[];
+  isAgentModelAccessAvailable?: () => boolean;
   onAnalysisHint: (message: string) => void;
   queueImportForPapers: (
     papers: Paper[],
@@ -119,6 +120,7 @@ export function useArtifactWorkflowController({
   getPaperById,
   getSelectedDocumentSet,
   getSelectedPapers,
+  isAgentModelAccessAvailable,
   onAnalysisHint,
   queueImportForPapers,
   runAgentAnalysis
@@ -178,6 +180,7 @@ export function useArtifactWorkflowController({
     getPaperById,
     getSelectedDocumentSet,
     getSelectedPapers,
+    isAgentModelAccessAvailable,
     onAnalysisHint,
     onArtifactCatalogChanged: handleArtifactCatalogChanged,
     onArtifactTabsChanged: setArtifactTabs,

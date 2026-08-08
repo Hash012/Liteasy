@@ -169,12 +169,34 @@ test("projects safe artifact failures into the AI generation session", () => {
   expect(failed.status).toBe("failed");
   expect(failed.messages[1].content).toContain("错误信息");
   expect(failed.messages[1].content).toContain("错误编号：model_authentication_failed");
-  expect(failed.messages[1].content).toContain("模型服务授权已失效，请重新登录后重试。");
+  expect(failed.messages[1].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
   expect(failed.messages[1].content).not.toContain("OpenAI Responses API");
   expect(failed.messages[1].content).not.toContain("http://127.0.0.1:8787");
   expect(failed.messages[1].content).not.toContain("Provider：openai");
   expect(failed.messages[1].content).not.toContain("Model：gpt-5.5");
   expect(failed.messages[1].content).toContain("请联系管理员并提供失败时间");
+});
+
+test("classifies the desktop login preflight as model authentication failure", () => {
+  const failed = createArtifactTaskSession({
+    failure: {
+      failedStage: "thin_reading_planning",
+      message: "请先登录 Liteasy 账号，再使用云端模型服务。",
+      occurredAt: "2026-08-08T13:36:36.828Z",
+      recovery: ["请先登录后重新生成。"]
+    },
+    id: "task-login-required",
+    message: "Agent 分析失败",
+    progress: 43,
+    stage: "failed",
+    status: "failed",
+    type: "thin_reading"
+  }, undefined, () => 0);
+
+  expect(failed.messages[1].content).toContain("错误编号：model_authentication_failed");
+  expect(failed.messages[1].content).toContain("请登录或重新登录 Liteasy 账号，再使用模型服务。");
+  expect(failed.messages[1].content).not.toContain("生成任务未完成，请稍后重试");
+  expect(failed.messages[1].content).not.toContain("内部异常");
 });
 
 test("includes artifact internals in a server-authorized diagnostic session", () => {

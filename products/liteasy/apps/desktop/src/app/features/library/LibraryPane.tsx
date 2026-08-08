@@ -26,7 +26,6 @@ import {
 import {
   AddRegular,
   ArrowClockwiseRegular,
-  ArrowImportRegular,
   ArrowResetRegular,
   BookmarkRegular,
   ChevronDownRegular,
@@ -130,7 +129,6 @@ type LibraryPaneProps = {
   onAddExternalPdf?: (item: ExternalPdfDragPayload) => void | Promise<void>;
   onClearRecommendations: () => void;
   onDismissRecommendation: (recommendation: RecommendationItem) => void;
-  onImportSelectedSet: () => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onLoginRequired?: () => void;
   onSelectLegacyLibraryRoot?: (legacyRootPath: string) => Promise<void>;
@@ -374,7 +372,6 @@ export function LibraryPane({
   onAddDroppedPdfFiles,
   onClearRecommendations,
   onDismissRecommendation,
-  onImportSelectedSet,
   onImportZoteroDirectory,
   onLoginRequired,
   onSelectLegacyLibraryRoot,
@@ -1064,7 +1061,6 @@ export function LibraryPane({
           selectionLocked ? <LockClosedRegular /> : <LockOpenRegular />,
           onToggleLock
         )}
-        {iconAction("导入选中文献", <ArrowImportRegular />, onImportSelectedSet)}
       </div>
       {message ? <div aria-live="polite" className="library-resource-action-message">{message}</div> : null}
 

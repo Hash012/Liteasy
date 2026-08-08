@@ -353,7 +353,13 @@ export function ArtifactTabs({
       {activeTask && activeTask.status !== "completed" &&
       activeTask.type === "thin_reading" && !developerDiagnostics ? (
         <section aria-live="polite" className={`artifact-progress-panel ${activeTask.status}`}>
-          <strong>正在生成薄读正文，完成后将在当前页面显示。</strong>
+          <strong>
+            {activeTask.status === "failed"
+              ? activeFailure?.message ?? "生成任务未完成，请稍后重试。"
+              : activeTask.status === "cancelled"
+                ? "薄读生成已取消。"
+                : "正在生成薄读正文，完成后将在当前页面显示。"}
+          </strong>
         </section>
       ) : activeTask && activeTask.status !== "completed" ? (
         <section className={`artifact-progress-panel ${activeTask.status}`} aria-live="polite">

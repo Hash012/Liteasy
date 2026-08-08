@@ -254,6 +254,14 @@ describe("thinReadingProjection", () => {
       },
       evidencePlan: { focus: ["核心结论"], selectedEvidenceIds: ["evidence-1"] },
       evidenceReview: { reason: "句子均由限定证据支持。", unsupportedSentenceIds: [], verdict: "pass" as const },
+      interpretationPlan: {
+        discourseMoves: ["建立核心思想", "展开全景", "定位领域位置"],
+        externalKnowledgeNeeded: false,
+        intent: "mixed" as const,
+        learningGoals: ["core_idea", "paper_panorama", "field_position"] as const,
+        readingMode: "orientation" as const,
+        requestedDepth: "standard" as const
+      },
       model: { id: "gpt-5-mini", provider: "openai" },
       qualityGate: { attempts: 2, repaired: true, repairReasons: ["首次句级映射不完整"] },
       version: "liteasy.thin-reading-agent/v2" as const
@@ -277,6 +285,7 @@ describe("thinReadingProjection", () => {
     expect(branchAudit).toEqual(audit);
     expect(Object.isFrozen(branchAudit?.qualityGate.repairReasons)).toBe(true);
     expect(Object.isFrozen(branchAudit?.evidencePlan?.selectedEvidenceIds)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.interpretationPlan?.learningGoals)).toBe(true);
     expect(Object.isFrozen(branchAudit?.evidenceLoop?.rounds)).toBe(true);
     expect(Object.isFrozen(branchAudit?.evidenceLoop?.rounds[0].toolCalls[0].evidenceIds)).toBe(true);
   });

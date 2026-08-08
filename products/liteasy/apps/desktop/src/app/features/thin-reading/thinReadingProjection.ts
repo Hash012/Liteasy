@@ -161,7 +161,10 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
     interpretationPlan: audit.interpretationPlan
       ? Object.freeze({
           ...audit.interpretationPlan,
-          discourseMoves: Object.freeze([...audit.interpretationPlan.discourseMoves])
+          discourseMoves: Object.freeze([...audit.interpretationPlan.discourseMoves]),
+          ...(audit.interpretationPlan.learningGoals ? {
+            learningGoals: Object.freeze([...audit.interpretationPlan.learningGoals])
+          } : {})
         })
       : undefined,
     evidenceLoop: audit.evidenceLoop

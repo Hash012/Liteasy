@@ -60,7 +60,6 @@ export type LeftPaneProps = {
   onClearRecommendations: () => void;
   onDismissRecommendation: (item: RecommendationItem) => void;
   onCreateOrganization?: () => void;
-  onImportSelectedSet: () => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onInviteMember?: (summary: OrganizationSummary) => void;
   onJoinOrganization?: () => void;
@@ -166,7 +165,6 @@ export function LeftPane({
   onClearRecommendations,
   onDismissRecommendation,
   onCreateOrganization,
-  onImportSelectedSet,
   onImportZoteroDirectory,
   onInviteMember,
   onJoinOrganization,
@@ -333,7 +331,6 @@ export function LeftPane({
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}
             onClearRecommendations={onClearRecommendations}
             onDismissRecommendation={onDismissRecommendation}
-            onImportSelectedSet={onImportSelectedSet}
             onImportZoteroDirectory={onImportZoteroDirectory}
             onLoginRequired={onLoginRequired}
             onOpenOrganizationWorkspace={() => {

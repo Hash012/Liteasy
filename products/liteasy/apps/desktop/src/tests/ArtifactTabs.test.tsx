@@ -408,6 +408,44 @@ describe("ArtifactTabs", () => {
     expect(screen.queryByRole("progressbar", { name: "Agent 分析进度" })).not.toBeInTheDocument();
   });
 
+  test("shows only the safe public reason after initial thin-reading generation fails", () => {
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[]}
+        tasks={[{
+          failure: {
+            endpoint: "http://127.0.0.1:8787",
+            failedStage: "thin_reading_planning",
+            message: "请先登录 Liteasy 账号，再使用云端模型服务。",
+            model: "deepseek-v4-flash",
+            occurredAt: "2026-08-08T13:36:36.828Z",
+            provider: "deepseek",
+            recovery: ["登录后重试。"]
+          },
+          id: "thin-reading-login-failure",
+          message: "Agent 分析失败",
+          partialAnswer: "不应展示的模型报文",
+          progress: 43,
+          stage: "failed",
+          status: "failed",
+          type: "thin_reading"
+        }]}
+      />
+    );
+
+    expect(screen.getByText("请登录或重新登录 Liteasy 账号，再使用模型服务。")).toBeInTheDocument();
+    expect(screen.queryByText("正在生成薄读正文，完成后将在当前页面显示。")).not.toBeInTheDocument();
+    expect(screen.queryByText("请先登录 Liteasy 账号，再使用云端模型服务。")).not.toBeInTheDocument();
+    expect(screen.queryByText("不应展示的模型报文")).not.toBeInTheDocument();
+    expect(screen.queryByText("deepseek-v4-flash")).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar", { name: "Agent 分析进度" })).not.toBeInTheDocument();
+  });
+
   test("shows thin-reading generation diagnostics to server-authorized developers", () => {
     const thinReadingDocument = createThinReadingDocument({
       artifactId: "artifact-thin-progress",

@@ -378,6 +378,7 @@ export function AppShell({
       workspaceStoreRef.current.getState().papers.find((paper) => paper.id === paperId),
     getSelectedDocumentSet: () => workspaceStoreRef.current.getSelectedDocumentSet(),
     getSelectedPapers: workspaceActions.getSelectedPapers,
+    isAgentModelAccessAvailable: () => Boolean(modelTransport || cloudAccessTokenRef.current),
     onAnalysisHint: setAnalysisHint,
     queueImportForPapers: workspaceActions.queueImportForPapers,
     runAgentAnalysis: (artifactType, onProgress, options) =>
@@ -1332,9 +1333,6 @@ export function AppShell({
       });
     },
     onCreateOrganization: organizationShell.actions.openCreateDialog,
-    onImportSelectedSet: () => {
-      void registeredWorkspaceActions.handleImportSelectedSet();
-    },
     onInviteMember: organizationShell.actions.openInviteDialog,
     onJoinOrganization: organizationShell.actions.openJoinDialog,
     onLeaveOrganization: organizationShell.actions.openLeaveDialog,
