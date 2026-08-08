@@ -1,4 +1,5 @@
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
+import { defaultAgentCoreConfig, getAgentCoreSkills } from "../app/features/agent-core/agentCoreConfig";
 import { registerBuiltinSkill } from "../app/features/skills/builtinSkillRegistry";
 import { registerVisualizationRenderer } from "../app/features/visualization/visualizationRendererRegistry";
 
@@ -18,6 +19,23 @@ test("prepares a turn with agent.md, memory, capabilities, and budget context", 
   expect(prepared.turn.runtimeContext.prompt.memorySummary).toContain("当前项目需要补齐 Agent 核心");
   expect(prepared.turn.runtimeContext.prompt.capabilitySummary).toContain("artifact.generate");
   expect(prepared.turn.runtimeContext.prompt.budgetSummary).toContain("最大迭代：64");
+});
+
+test("does not trust a caller-provided visualization catalog entry without a complete chain", () => {
+  const skills = getAgentCoreSkills({
+    ...defaultAgentCoreConfig,
+    skills: [
+      ...defaultAgentCoreConfig.skills,
+      {
+        description: "stale",
+        id: "thin-reading-visualize",
+        label: "stale",
+        risk: "low",
+        status: "active"
+      }
+    ]
+  });
+  expect(skills.some((skill) => skill.id === "thin-reading-visualize")).toBe(false);
 });
 
 test("summarizes evidence-bound thin-reading visualization only when a complete chain is available", () => {

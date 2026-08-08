@@ -59,3 +59,24 @@ test("excludes a skill when its validator or renderer chain is incomplete", () =
 
   expect(getAvailableVisualizationModalities()).not.toContain("semantic_graph");
 });
+
+test("retries a renderer load after a transient failure", async () => {
+  const retryRenderer: VisualizationRenderer = {
+    id: "test-retry-renderer",
+    modality: "semantic_graph",
+    version: "1"
+  };
+  const load = vi.fn()
+    .mockRejectedValueOnce(new Error("transient"))
+    .mockResolvedValueOnce(retryRenderer);
+  registerVisualizationRenderer({
+    id: "test-retry-renderer",
+    load,
+    modality: "semantic_graph",
+    version: "1"
+  });
+
+  await expect(loadVisualizationRenderer("test-retry-renderer")).rejects.toThrow("transient");
+  await expect(loadVisualizationRenderer("test-retry-renderer")).resolves.toBe(retryRenderer);
+  expect(load).toHaveBeenCalledTimes(2);
+});

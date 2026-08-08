@@ -45,12 +45,12 @@ export type AgentCoreConfig = {
 };
 
 export function getAgentCoreSkills(config: AgentCoreConfig): AgentCoreCatalogEntry[] {
-  if (config.skills.some((skill) => skill.id === "thin-reading-visualize")) return config.skills;
+  const skills = config.skills.filter((skill) => skill.id !== "thin-reading-visualize");
   const hasGeneratedVisualization = getAvailableVisualizationModalities()
     .some(isGeneratedVisualizationModality);
-  if (!hasGeneratedVisualization) return config.skills;
+  if (!hasGeneratedVisualization) return skills;
   return [
-    ...config.skills,
+    ...skills,
     {
       description: "按证据边界选择适合当前文献的可视化表达。",
       id: "thin-reading-visualize",

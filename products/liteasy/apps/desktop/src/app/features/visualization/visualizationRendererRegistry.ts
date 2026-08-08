@@ -43,6 +43,9 @@ export function loadVisualizationRenderer(id: string): Promise<VisualizationRend
     return renderer;
   });
   rendererLoads.set(id, load);
+  void load.catch(() => {
+    if (rendererLoads.get(id) === load) rendererLoads.delete(id);
+  });
   return load;
 }
 

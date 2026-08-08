@@ -1,89 +1,183 @@
+import { z } from "zod";
+import { parseVisualizationArtifact } from "./visualizationArtifact.schema";
 import type { VisualizationArtifactV1, VisualizationModality } from "./visualizationArtifact.types";
 import { getVisualizationRendererRegistration } from "./visualizationRendererRegistry";
 
 export type VisualizationArtifactStatus = "ready" | "degraded" | "needs_revalidation" | "omitted";
 
 export type VisualizationArtifactIndex = {
-  evidenceHash?: string;
+  evidenceHash: string;
   hardValidatorVersions: Record<string, string>;
-  rendererVersion?: string;
-  skillVersion?: string;
-  specHash?: string;
   kernelVersion?: string;
+  rendererVersion: string;
+  skillVersion: string;
+  specHash: string;
 };
 
-export type VisualizationArtifactRecord = VisualizationArtifactV1 & {
-  artifactIndex?: Partial<VisualizationArtifactIndex>;
-  evidenceHash?: string;
-  hardValidatorSet?: Record<string, string> | Array<{ id: string; version: string }>;
-  safePreview?: unknown;
-  specHash?: string;
-  status?: VisualizationArtifactStatus;
+export type VisualizationSafePreview = {
+  imageRef: string;
+  kind: "static";
 };
+
+export type VisualizationArtifactEnvelope = {
+  artifact: VisualizationArtifactV1;
+  artifactIndex: VisualizationArtifactIndex;
+  safePreview?: VisualizationSafePreview;
+  status: "ready" | "degraded";
+};
+
+export type VisualizationHardGateRevalidation = (input: {
+  artifact: VisualizationArtifactV1;
+  artifactIndex: VisualizationArtifactIndex;
+}) => Promise<"pass" | "fail"> | "pass" | "fail";
 
 export type VisualizationArtifactLoadOptions = {
   currentValidatorVersions?: Record<string, string>;
   documentAccess?: boolean;
   offline?: boolean;
+  revalidateHardGates?: VisualizationHardGateRevalidation;
   revokedRendererIds?: readonly string[];
   revokedValidatorIds?: readonly string[];
 };
 
 export type VisualizationArtifactState = {
-  artifact: VisualizationArtifactRecord;
+  artifact: VisualizationArtifactV1;
+  artifactIndex: VisualizationArtifactIndex;
   canGenerate: boolean;
   canRender: boolean;
-  index: VisualizationArtifactIndex;
-  safePreview?: unknown;
+  canRenderSafePreview: boolean;
+  safePreview?: VisualizationSafePreview;
   status: VisualizationArtifactStatus;
 };
 
+const artifactIndexSchema = z.object({
+  evidenceHash: z.string().min(1),
+  hardValidatorVersions: z.record(z.string().min(1), z.string().min(1)),
+  kernelVersion: z.string().min(1).optional(),
+  rendererVersion: z.string().min(1),
+  skillVersion: z.string().min(1),
+  specHash: z.string().min(1)
+}).strict();
+
+const safePreviewSchema = z.object({
+  imageRef: z.string().min(1),
+  kind: z.literal("static")
+}).strict();
+
+const artifactEnvelopeSchema = z.object({
+  artifact: z.unknown(),
+  artifactIndex: artifactIndexSchema,
+  safePreview: safePreviewSchema.optional(),
+  status: z.enum(["ready", "degraded"])
+}).strict();
+
+export function parseVisualizationArtifactEnvelope(value: unknown): VisualizationArtifactEnvelope {
+  const envelope = artifactEnvelopeSchema.safeParse(value);
+  if (!envelope.success) throw new Error("visualization_artifact_envelope_invalid");
+  try {
+    return {
+      artifact: parseVisualizationArtifact(envelope.data.artifact),
+      artifactIndex: envelope.data.artifactIndex,
+      safePreview: envelope.data.safePreview,
+      status: envelope.data.status
+    };
+  } catch {
+    throw new Error("visualization_artifact_envelope_invalid");
+  }
+}
+
 export async function loadVisualizationArtifact(
-  artifact: VisualizationArtifactRecord,
+  value: VisualizationArtifactEnvelope,
   options: VisualizationArtifactLoadOptions = {}
 ): Promise<VisualizationArtifactState> {
-  const index = createArtifactIndex(artifact);
-  const validatorChanged = Object.entries(options.currentValidatorVersions ?? {}).some(([id, version]) => {
-    const stored = index.hardValidatorVersions[id];
-    return stored !== version;
-  });
-  const validatorRevoked = (options.revokedValidatorIds ?? []).some((id) => id in index.hardValidatorVersions);
-  const rendererRegistration = getVisualizationRendererRegistration(artifact.implementation.rendererId);
-  const rendererChanged = rendererRegistration
-    ? rendererRegistration.version !== artifact.implementation.rendererVersion
-    : true;
-  const rendererRevoked = (options.revokedRendererIds ?? []).includes(artifact.implementation.rendererId);
-  const needsRevalidation = validatorChanged || validatorRevoked || rendererChanged || rendererRevoked;
+  const envelope = parseVisualizationArtifactEnvelope(value);
   const documentAccess = options.documentAccess ?? true;
-  const status = needsRevalidation ? "needs_revalidation" : artifact.status ?? "ready";
+  const needsRevalidation = artifactNeedsRevalidation(envelope, options);
+  const canGenerate = !options.offline && documentAccess && !needsRevalidation;
 
+  if (!needsRevalidation) {
+    return artifactState(envelope, {
+      canGenerate,
+      canRender: documentAccess,
+      canRenderSafePreview: false,
+      status: envelope.status
+    });
+  }
+
+  if (!options.offline && documentAccess && options.revalidateHardGates) {
+    try {
+      const outcome = await options.revalidateHardGates({
+        artifact: envelope.artifact,
+        artifactIndex: envelope.artifactIndex
+      });
+      if (outcome === "pass") {
+        return artifactState({
+          ...envelope,
+          artifactIndex: currentArtifactIndex(envelope, options)
+        }, {
+          canGenerate: !options.offline && documentAccess,
+          canRender: true,
+          canRenderSafePreview: false,
+          status: envelope.status
+        });
+      }
+    } catch {
+      // A failed worker cannot authorize rendering a stale interactive artifact.
+    }
+  }
+
+  return artifactState(envelope, {
+    canGenerate,
+    canRender: false,
+    canRenderSafePreview: documentAccess && Boolean(envelope.safePreview),
+    status: "needs_revalidation"
+  });
+}
+
+function artifactNeedsRevalidation(
+  envelope: VisualizationArtifactEnvelope,
+  options: VisualizationArtifactLoadOptions
+): boolean {
+  const validatorChanged = Object.entries(options.currentValidatorVersions ?? {}).some(([id, version]) =>
+    id in envelope.artifactIndex.hardValidatorVersions
+      && envelope.artifactIndex.hardValidatorVersions[id] !== version
+  );
+  const validatorRevoked = (options.revokedValidatorIds ?? [])
+    .some((id) => id in envelope.artifactIndex.hardValidatorVersions);
+  const rendererRegistration = getVisualizationRendererRegistration(envelope.artifact.implementation.rendererId);
+  const rendererChanged = !rendererRegistration
+    || rendererRegistration.version !== envelope.artifactIndex.rendererVersion;
+  const rendererRevoked = (options.revokedRendererIds ?? [])
+    .includes(envelope.artifact.implementation.rendererId);
+  return validatorChanged || validatorRevoked || rendererChanged || rendererRevoked;
+}
+
+function currentArtifactIndex(
+  envelope: VisualizationArtifactEnvelope,
+  options: VisualizationArtifactLoadOptions
+): VisualizationArtifactIndex {
+  const rendererVersion = getVisualizationRendererRegistration(envelope.artifact.implementation.rendererId)?.version
+    ?? envelope.artifactIndex.rendererVersion;
   return {
-    artifact,
-    canGenerate: !options.offline && documentAccess && !needsRevalidation,
-    canRender: documentAccess && status !== "omitted",
-    index,
-    safePreview: artifact.safePreview,
-    status
+    ...envelope.artifactIndex,
+    hardValidatorVersions: {
+      ...envelope.artifactIndex.hardValidatorVersions,
+      ...Object.fromEntries(Object.entries(options.currentValidatorVersions ?? {})
+        .filter(([id]) => id in envelope.artifactIndex.hardValidatorVersions))
+    },
+    rendererVersion
   };
 }
 
-function createArtifactIndex(artifact: VisualizationArtifactRecord): VisualizationArtifactIndex {
-  const hardValidatorVersions = artifact.hardValidatorSet
-    ? Array.isArray(artifact.hardValidatorSet)
-      ? Object.fromEntries(artifact.hardValidatorSet.map(({ id, version }) => [id, version]))
-      : artifact.hardValidatorSet
-    : Object.fromEntries(
-        artifact.validation.checks
-          .filter((check) => check.gate === "hard")
-          .map((check) => [check.validatorId, check.validatorVersion])
-      );
+function artifactState(
+  envelope: VisualizationArtifactEnvelope,
+  state: Omit<VisualizationArtifactState, "artifact" | "artifactIndex" | "safePreview">
+): VisualizationArtifactState {
   return {
-    evidenceHash: artifact.artifactIndex?.evidenceHash ?? artifact.evidenceHash,
-    hardValidatorVersions: artifact.artifactIndex?.hardValidatorVersions ?? hardValidatorVersions,
-    kernelVersion: artifact.artifactIndex?.kernelVersion ?? artifact.implementation.kernelVersion,
-    rendererVersion: artifact.artifactIndex?.rendererVersion ?? artifact.implementation.rendererVersion,
-    skillVersion: artifact.artifactIndex?.skillVersion ?? artifact.implementation.skillVersion,
-    specHash: artifact.artifactIndex?.specHash ?? artifact.specHash
+    artifact: envelope.artifact,
+    artifactIndex: envelope.artifactIndex,
+    ...state,
+    safePreview: envelope.safePreview
   };
 }
 
