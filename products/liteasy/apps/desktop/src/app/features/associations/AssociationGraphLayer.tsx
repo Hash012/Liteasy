@@ -9,18 +9,22 @@ import type {
 } from "../thin-reading/thinReading.types";
 import { externalPdfDragMimeType, toExternalPdfDragPayload } from "../library/externalPdfDownload";
 import {
-  layoutAssociationPageGraph,
+  layoutConstrainedAssociationPageGraph,
   pageGraphPaperKey,
   pageGraphNodeWidth,
   type AnchorRect,
   type PageGraphNode
 } from "./associationGraphLayout";
+import { createAssociationInkPaths, type AssociationInkPaths } from "./associationHandDrawnPath";
 import { projectAssociationPageGraph } from "./associationGraphProjection";
 import {
+  associationAnchorEdgePresentation,
   associationConfidenceLabel,
+  associationPaperEdgePresentation,
   associationRelationLabel,
   associationSourceMetadata,
-  associationSourceReason
+  associationSourceReason,
+  type AssociationEdgePresentation
 } from "./associationSourcePresentation";
 
 /**
@@ -67,6 +71,53 @@ type HoverState = {
 };
 
 const hoverCardWidth = 248;
+
+type RenderedAssociationEdge = {
+  accessibleLabel?: string;
+  active: boolean;
+  className: string;
+  dimmed: boolean;
+  edgeId: string;
+  markerEnd?: string;
+  paths: AssociationInkPaths;
+  style: CSSProperties;
+};
+
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function associationEdgeStyle(distance: number, strength: number) {
+  const proximity = 1 - clamp((distance - 72) / 520, 0, 1);
+  const opacity = 0.18 + proximity * 0.36 + clamp(strength, 0, 1) * 0.16;
+  return {
+    "--edge-opacity": opacity,
+    "--edge-strength": clamp(strength, 0, 1),
+    "--edge-width": `${0.92 + clamp(strength, 0, 1) * 0.48}px`,
+    "--edge-wash-opacity": opacity * 0.26
+  } as CSSProperties;
+}
+
+function anchorExactPath(
+  anchorLeft: number,
+  anchorTop: number,
+  nodeLeft: number,
+  nodeTop: number
+) {
+  const curveX = anchorLeft + (nodeLeft - anchorLeft) * 0.52;
+  const curveY = anchorTop + (nodeTop - anchorTop) * 0.48 + (nodeTop < anchorTop ? -10 : 10);
+  return `M ${anchorLeft} ${anchorTop} Q ${curveX} ${curveY} ${nodeLeft} ${nodeTop}`;
+}
+
+function paperExactPath(sourceLeft: number, sourceTop: number, targetLeft: number, targetTop: number) {
+  return `M ${sourceLeft} ${sourceTop} Q ${(sourceLeft + targetLeft) / 2} ${(sourceTop + targetTop) / 2} ${targetLeft} ${targetTop}`;
+}
+
+function edgeClassName(edge: RenderedAssociationEdge, stroke: "echo" | "hit" | "ink" | "wash") {
+  return `association-edge ${edge.className} is-${stroke}${edge.active ? " is-active" : ""}${
+    edge.dimmed ? " is-dimmed" : ""
+  }`;
+}
 
 /**
  * How wide the anchor's chip will be, so the layout can keep nodes off it. Measured in the same
@@ -128,7 +179,7 @@ export function AssociationGraphLayer({
     [projection.paperNodes]
   );
 
-  const graph = useMemo(() => layoutAssociationPageGraph({
+  const graph = useMemo(() => layoutConstrainedAssociationPageGraph({
     anchors: anchors
       .filter((anchor) => anchor.rects.length > 0)
       .map((anchor) => ({
@@ -139,8 +190,9 @@ export function AssociationGraphLayer({
     documentHeight,
     frameWidth,
     paperKeyBySource,
+    paperEdges: projection.paperEdges,
     sourcesByAnchor: primarySourcesByAnchor
-  }), [anchors, documentHeight, frameWidth, paperKeyBySource, primarySourcesByAnchor]);
+  }), [anchors, documentHeight, frameWidth, paperKeyBySource, primarySourcesByAnchor, projection.paperEdges]);
 
   const dimmed = (anchorIds: readonly string[]) =>
     Boolean(focusedAnchorId) && !anchorIds.includes(focusedAnchorId!);
@@ -171,6 +223,79 @@ export function AssociationGraphLayer({
       }];
     });
   });
+  const nodeByPaperKey = new Map(graph.nodes.map((node) => [node.paperKey, node] as const));
+  const primaryInkEdges: RenderedAssociationEdge[] = graph.edges.flatMap((edge) => {
+    const node = nodeByPaperKey.get(edge.paperKey);
+    if (!node) return [];
+    const edgeId = `primary:${edge.anchorId}:${edge.paperKey}`;
+    const exactPath = anchorExactPath(edge.anchorLeft, edge.anchorTop, edge.nodeLeft, edge.nodeTop);
+    const distance = Math.hypot(edge.nodeLeft - edge.anchorLeft, edge.nodeTop - edge.anchorTop);
+    const presentation = associationAnchorEdgePresentation(node.source.confidenceBasis);
+    return [{
+      active: activePaperKey === edge.paperKey || hover?.node.paperKey === edge.paperKey,
+      className: `is-primary ${presentation.className}`,
+      dimmed: dimmed([edge.anchorId]),
+      edgeId,
+      paths: createAssociationInkPaths({ edgeId, exactPath }),
+      style: associationEdgeStyle(distance, edge.confidence)
+    }];
+  });
+  const paperInkEdges: RenderedAssociationEdge[] = graph.paperEdges.flatMap((edge) => {
+    const source = nodeByPaperKey.get(edge.sourcePaperKey);
+    const target = nodeByPaperKey.get(edge.targetPaperKey);
+    if (!source || !target) return [];
+    const edgeId = `paper:${edge.kind}:${edge.sourcePaperKey}:${edge.targetPaperKey}`;
+    const exactPath = paperExactPath(edge.sourceLeft, edge.sourceTop, edge.targetLeft, edge.targetTop);
+    const presentation = associationPaperEdgePresentation(edge.kind);
+    const endpointFocused = activePaperKey === edge.sourcePaperKey || activePaperKey === edge.targetPaperKey ||
+      hover?.node.paperKey === edge.sourcePaperKey || hover?.node.paperKey === edge.targetPaperKey;
+    const endpointAnchorIds = [...source.anchorIds, ...target.anchorIds];
+    return [{
+      accessibleLabel: edge.directed
+        ? `${presentation.label}：${source.source.title} 指向 ${target.source.title}`
+        : `${presentation.label}：${source.source.title} 与 ${target.source.title}`,
+      active: endpointFocused,
+      className: `is-paper-relation ${presentation.className}`,
+      dimmed: dimmed(endpointAnchorIds),
+      edgeId,
+      markerEnd: edge.directed ? "url(#association-direct-citation-end)" : undefined,
+      paths: createAssociationInkPaths({ edgeId, exactPath }),
+      style: associationEdgeStyle(
+        Math.hypot(edge.targetLeft - edge.sourceLeft, edge.targetTop - edge.sourceTop),
+        edge.strength
+      )
+    }];
+  });
+  const secondaryInkEdges: RenderedAssociationEdge[] = secondaryEdges.map((edge) => {
+    const edgeId = `secondary:${edge.anchorId}:${edge.paperKey}`;
+    const exactPath = anchorExactPath(
+      edge.anchorLeft,
+      edge.anchorTop,
+      edge.node.left,
+      edge.node.top
+    );
+    const presentation = associationAnchorEdgePresentation(edge.node.source.confidenceBasis);
+    return {
+      accessibleLabel: `次级关联：${edge.paperKey} 与 ${edge.anchorLabel}`,
+      active: true,
+      className: `is-secondary ${presentation.className}`,
+      dimmed: false,
+      edgeId,
+      paths: createAssociationInkPaths({ edgeId, exactPath }),
+      style: associationEdgeStyle(
+        Math.hypot(edge.node.left - edge.anchorLeft, edge.node.top - edge.anchorTop),
+        edge.node.confidence
+      )
+    };
+  });
+  const legendItems = [...new Map<
+    string,
+    AssociationEdgePresentation
+  >([
+    ...graph.nodes.map((node) => associationAnchorEdgePresentation(node.source.confidenceBasis)),
+    ...graph.paperEdges.map((edge) => associationPaperEdgePresentation(edge.kind))
+  ].map((presentation) => [presentation.label, presentation] as const)).values()];
+  const allInkEdges = [...paperInkEdges, ...primaryInkEdges, ...secondaryInkEdges];
 
   return (
     <section
@@ -194,40 +319,127 @@ export function AssociationGraphLayer({
         width={frameWidth}
         role="group"
       >
-        {graph.edges.map((edge) => {
-          const crossing = (projectedNodeByPaperKey.get(edge.paperKey)?.anchorIds.length ?? 0) > 1;
-          const curveX = edge.anchorLeft + (edge.nodeLeft - edge.anchorLeft) * 0.52;
-          const curveY = edge.anchorTop + (edge.nodeTop - edge.anchorTop) * 0.48 +
-            (edge.nodeTop < edge.anchorTop ? -10 : 10);
-          return (
-            <path
-              className={`association-edge${crossing ? " is-crossing" : ""}${
-                dimmed([edge.anchorId]) ? " is-dimmed" : ""
-              }${activePaperKey === edge.paperKey || hover?.node.paperKey === edge.paperKey ? " is-active" : ""}`}
-              d={`M ${edge.anchorLeft} ${edge.anchorTop} Q ${curveX} ${curveY} ${edge.nodeLeft} ${edge.nodeTop}`}
-              key={`${edge.anchorId}-${edge.paperKey}`}
-              // Provenance, not relatedness: an edge the author actually drew by citing is solid,
-              // one an algorithm proposed is faint. Distance already carries relevance.
-              style={{ "--edge-opacity": 0.2 + edge.confidence * 0.62 } as CSSProperties}
-            />
-          );
-        })}
-        {secondaryEdges.map((edge) => {
-          const curveX = edge.anchorLeft + (edge.node.left - edge.anchorLeft) * 0.52;
-          const curveY = edge.anchorTop + (edge.node.top - edge.anchorTop) * 0.48 +
-            (edge.node.top < edge.anchorTop ? -10 : 10);
-          return (
-            <path
-              aria-label={`次级关联：${edge.paperKey} 与 ${edge.anchorLabel}`}
-              className="association-edge is-crossing is-secondary"
-              d={`M ${edge.anchorLeft} ${edge.anchorTop} Q ${curveX} ${curveY} ${edge.node.left} ${edge.node.top}`}
-              key={`secondary-${edge.anchorId}-${edge.paperKey}`}
-              role="img"
-              style={{ "--edge-opacity": 0.52 } as CSSProperties}
-            />
-          );
-        })}
+        <defs>
+          <marker
+            id="association-direct-citation-end"
+            markerHeight="6"
+            markerUnits="strokeWidth"
+            markerWidth="6"
+            orient="auto"
+            refX="5"
+            refY="3"
+            viewBox="0 0 6 6"
+          >
+            <path className="association-edge__direction" d="M 0 0 L 6 3 L 0 6 Z" />
+          </marker>
+        </defs>
+
+        {paperInkEdges.map((edge) => (
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "wash")}
+            d={edge.paths.washPath}
+            data-edge-layer="paper-wash"
+            key={`${edge.edgeId}:wash`}
+            style={edge.style}
+          />
+        ))}
+        {paperInkEdges.flatMap((edge) => [
+          <path
+            aria-label={edge.accessibleLabel}
+            className={edgeClassName(edge, "ink")}
+            d={edge.paths.inkPath}
+            data-edge-layer="paper-ink"
+            key={`${edge.edgeId}:ink`}
+            markerEnd={edge.markerEnd}
+            role="img"
+            style={edge.style}
+          />,
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "echo")}
+            d={edge.paths.echoPath}
+            data-edge-layer="paper-echo"
+            key={`${edge.edgeId}:echo`}
+            style={edge.style}
+          />
+        ])}
+        {primaryInkEdges.map((edge) => (
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "wash")}
+            d={edge.paths.washPath}
+            data-edge-layer="primary-wash"
+            key={`${edge.edgeId}:wash`}
+            style={edge.style}
+          />
+        ))}
+        {primaryInkEdges.flatMap((edge) => [
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "ink")}
+            d={edge.paths.inkPath}
+            data-edge-layer="primary-ink"
+            key={`${edge.edgeId}:ink`}
+            style={edge.style}
+          />,
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "echo")}
+            d={edge.paths.echoPath}
+            data-edge-layer="primary-echo"
+            key={`${edge.edgeId}:echo`}
+            style={edge.style}
+          />
+        ])}
+        {secondaryInkEdges.flatMap((edge) => [
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "wash")}
+            d={edge.paths.washPath}
+            data-edge-layer="secondary-wash"
+            key={`${edge.edgeId}:wash`}
+            style={edge.style}
+          />,
+          <path
+            aria-label={edge.accessibleLabel}
+            className={edgeClassName(edge, "ink")}
+            d={edge.paths.inkPath}
+            data-edge-layer="secondary-ink"
+            key={`${edge.edgeId}:ink`}
+            role="img"
+            style={edge.style}
+          />,
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "echo")}
+            d={edge.paths.echoPath}
+            data-edge-layer="secondary-echo"
+            key={`${edge.edgeId}:echo`}
+            style={edge.style}
+          />
+        ])}
+        {allInkEdges.map((edge) => (
+          <path
+            aria-hidden="true"
+            className={edgeClassName(edge, "hit")}
+            d={edge.paths.hitPath}
+            data-edge-layer="edge-hit"
+            key={`${edge.edgeId}:hit`}
+          />
+        ))}
       </svg>
+
+      {!activeSourceId && legendItems.length > 0 ? (
+        <div aria-label="当前关系图例" className="association-legend">
+          {legendItems.map((presentation) => (
+            <span key={presentation.label}>
+              <i className={`association-legend__line ${presentation.className}`} />
+              {presentation.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {anchors.map((anchor) => {
         const isDimmed = dimmed([anchor.anchorId]);
@@ -306,6 +518,7 @@ export function AssociationGraphLayer({
             onMouseEnter={() => setHover({ left: node.left, node, top: node.top })}
             onMouseLeave={() => setHover(null)}
             style={{
+              "--node-border-opacity": 0.18 + node.relevance * 0.28,
               "--node-left": `${node.left}px`,
               "--node-top": `${node.top}px`
             } as CSSProperties}
@@ -388,15 +601,6 @@ export function AssociationReadingOverlay({
       aria-label="页级关联图状态"
       className={`association-overlay${anchored === "viewport" ? " is-fixed" : ""}`}
     >
-      {!activeSource ? (
-        <div className="association-legend">
-          <span><i className="association-legend__line" />作者亲引</span>
-          <span><i className="association-legend__line is-weak" />算法检索</span>
-          <span><i className="association-legend__line is-crossing" />多锚点交叉</span>
-          <span className="association-legend__note">离锚点越近越相关</span>
-        </div>
-      ) : null}
-
       {loading ? (
         <div className="association-message" role="status">正在整理关联文献…</div>
       ) : error ? (

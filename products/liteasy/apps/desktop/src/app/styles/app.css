@@ -3329,27 +3329,89 @@ body {
 }
 
 .association-edge {
+  --edge-color: #62666a;
+  --edge-active-color: #35383b;
   fill: none;
-  stroke: rgba(27, 102, 179, 0.85);
+  stroke: var(--edge-color);
   stroke-linecap: round;
-  stroke-width: 1.15;
+  stroke-linejoin: round;
+  stroke-width: var(--edge-width, 1.15px);
   opacity: var(--edge-opacity, 0.5);
   transition: opacity 140ms ease, stroke 140ms ease, stroke-width 140ms ease;
 }
 
-.association-edge.is-crossing {
-  stroke: rgba(122, 78, 173, 0.9);
-  stroke-width: 1.4;
+.association-edge.is-author-citation {
+  --edge-color: #315f52;
+  --edge-active-color: #174c3d;
+}
+
+.association-edge.is-citation-graph {
+  --edge-color: #515b8a;
+  --edge-active-color: #354275;
+}
+
+.association-edge.is-semantic-retrieval {
+  --edge-color: #62666a;
+  --edge-active-color: #35383b;
+  stroke-dasharray: 3 4;
+}
+
+.association-edge.is-direct-citation {
+  --edge-color: #ad6256;
+  --edge-active-color: #99483e;
+}
+
+.association-edge.is-co-cited {
+  --edge-color: #756b83;
+  --edge-active-color: #5d526d;
+}
+
+.association-edge.is-bibliographic-coupling {
+  --edge-color: #617659;
+  --edge-active-color: #465f3d;
+  stroke-dasharray: 8 5;
+}
+
+.association-edge.is-wash {
+  stroke-width: 7px;
+  opacity: var(--edge-wash-opacity, 0.1);
+}
+
+.association-edge.is-echo {
+  stroke-width: 0.72px;
+  opacity: calc(var(--edge-opacity, 0.5) * 0.42);
 }
 
 .association-edge.is-active {
-  stroke: var(--accent-1);
-  stroke-width: 2;
+  stroke: var(--edge-active-color);
+  stroke-width: calc(var(--edge-width, 1.15px) + 0.8px);
   opacity: 1;
+}
+
+.association-edge.is-active.is-wash {
+  stroke-width: 8px;
+  opacity: calc(var(--edge-wash-opacity, 0.1) * 1.35);
+}
+
+.association-edge.is-active.is-echo {
+  stroke-width: 0.9px;
+  opacity: 0.48;
 }
 
 .association-edge.is-dimmed {
   opacity: 0.07;
+}
+
+.association-edge.is-hit {
+  stroke: transparent;
+  stroke-dasharray: none;
+  stroke-width: 14px;
+  opacity: 1;
+  pointer-events: stroke;
+}
+
+.association-edge__direction {
+  fill: #ad6256;
 }
 
 /* The anchor stays exactly where the text put it. This is the mark redrawn above the dimmed
@@ -3436,7 +3498,7 @@ body {
   width: var(--association-node-width);
   min-height: var(--association-node-height);
   padding: 7px 9px;
-  border: 1px solid rgba(24, 34, 47, 0.16);
+  border: 1px solid rgba(47, 55, 58, var(--node-border-opacity, 0.16));
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 4px 14px rgba(24, 34, 47, 0.09);
@@ -3473,18 +3535,18 @@ body {
   font-weight: 600;
 }
 
-/* How the link was established, as a bar down the leading edge. The legend names these three. */
+/* How the link was established, echoed by the dynamic relation legend. */
 .association-node[data-basis="author_citation"],
 .association-node[data-basis="canonical_registry"] {
-  box-shadow: inset 3px 0 0 rgba(27, 102, 179, 0.9), 0 4px 14px rgba(24, 34, 47, 0.09);
+  box-shadow: inset 3px 0 0 rgba(49, 95, 82, 0.86), 0 4px 14px rgba(24, 34, 47, 0.09);
 }
 
 .association-node[data-basis="citation_graph"] {
-  box-shadow: inset 3px 0 0 rgba(27, 102, 179, 0.5), 0 4px 14px rgba(24, 34, 47, 0.09);
+  box-shadow: inset 3px 0 0 rgba(81, 91, 138, 0.7), 0 4px 14px rgba(24, 34, 47, 0.09);
 }
 
 .association-node[data-basis="algorithmic_retrieval"] {
-  box-shadow: inset 3px 0 0 rgba(27, 102, 179, 0.22), 0 4px 14px rgba(24, 34, 47, 0.09);
+  box-shadow: inset 3px 0 0 rgba(98, 102, 106, 0.46), 0 4px 14px rgba(24, 34, 47, 0.09);
 }
 
 /* A paper sitting at the crossing of several anchors is the one thing this view can show that a
@@ -3600,11 +3662,14 @@ body {
 
 .association-legend {
   position: absolute;
+  z-index: 7;
   right: 16px;
   bottom: 14px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+  max-width: min(520px, calc(100% - 32px));
   padding: 6px 10px;
   border: 1px solid var(--line-1);
   border-radius: 8px;
@@ -3621,22 +3686,34 @@ body {
 
 .association-legend__line {
   width: 16px;
-  height: 2px;
-  border-radius: 2px;
-  background: rgba(27, 102, 179, 0.85);
+  height: 0;
+  border-top: 2px solid #62666a;
 }
 
-.association-legend__line.is-weak {
-  background: rgba(27, 102, 179, 0.28);
+.association-legend__line.is-author-citation {
+  border-color: #315f52;
 }
 
-.association-legend__line.is-crossing {
-  background: rgba(122, 78, 173, 0.9);
+.association-legend__line.is-citation-graph {
+  border-color: #515b8a;
 }
 
-.association-legend__note {
-  padding-left: 10px;
-  border-left: 1px solid var(--line-1);
+.association-legend__line.is-semantic-retrieval {
+  border-color: #62666a;
+  border-top-style: dashed;
+}
+
+.association-legend__line.is-direct-citation {
+  border-color: #ad6256;
+}
+
+.association-legend__line.is-co-cited {
+  border-color: #756b83;
+}
+
+.association-legend__line.is-bibliographic-coupling {
+  border-color: #617659;
+  border-top-style: dashed;
 }
 
 .association-message {

@@ -1,4 +1,39 @@
-import type { ThinReadingExternalSource } from "../thin-reading/thinReading.types";
+import type {
+  ThinReadingExternalSource,
+  ThinReadingRecommendationPaperEdge
+} from "../thin-reading/thinReading.types";
+
+export type AssociationEdgePresentation = {
+  className: string;
+  label: string;
+};
+
+export function associationAnchorEdgePresentation(
+  basis: ThinReadingExternalSource["confidenceBasis"]
+): AssociationEdgePresentation {
+  if (basis === "author_citation") {
+    return { className: "is-author-citation", label: "作者亲引" };
+  }
+  if (basis === "citation_graph") {
+    return { className: "is-citation-graph", label: "引用图推导" };
+  }
+  if (basis === "canonical_registry") {
+    return { className: "is-semantic-retrieval", label: "权威词表精确匹配" };
+  }
+  return { className: "is-semantic-retrieval", label: "语义相似，无引用关系" };
+}
+
+export function associationPaperEdgePresentation(
+  kind: ThinReadingRecommendationPaperEdge["kind"]
+): AssociationEdgePresentation {
+  if (kind === "direct_citation") {
+    return { className: "is-direct-citation", label: "直接引用" };
+  }
+  if (kind === "co_cited") {
+    return { className: "is-co-cited", label: "共同被引" };
+  }
+  return { className: "is-bibliographic-coupling", label: "共享参考文献" };
+}
 
 export function associationRelationLabel(relation: ThinReadingExternalSource["relation"]) {
   if (relation === "cited_by_target") return "本文直接引用";

@@ -7,7 +7,10 @@ import {
   type PageGraphAnchorView
 } from "../app/features/associations/AssociationGraphLayer";
 import { externalPdfDragMimeType } from "../app/features/library/externalPdfDownload";
-import type { ThinReadingExternalSource } from "../app/features/thin-reading/thinReading.types";
+import type {
+  ThinReadingExternalSource,
+  ThinReadingRecommendationPaperEdge
+} from "../app/features/thin-reading/thinReading.types";
 
 const anchors: PageGraphAnchorView[] = [
   {
@@ -73,7 +76,7 @@ test("keeps every visible anchor in its own place in the text and draws its rela
   expect(chips[0]!.style.left).toBe("180px");
   expect(chips[0]!.style.top).toBe("209px");
   expect(container.querySelectorAll(".association-node")).toHaveLength(3);
-  expect(container.querySelectorAll(".association-edge")).toHaveLength(3);
+  expect(container.querySelectorAll(".association-edge.is-primary.is-ink")).toHaveLength(3);
 });
 
 test("places the more relevant paper nearer its anchor", () => {
@@ -102,8 +105,8 @@ test("shows a shared paper once with only its stable primary edge at rest", () =
 
   expect(container.querySelectorAll(".association-node")).toHaveLength(1);
   expect(container.querySelectorAll(".association-node.is-crossing")).toHaveLength(1);
-  expect(container.querySelectorAll(".association-edge:not(.is-secondary)")).toHaveLength(1);
-  expect(container.querySelectorAll(".association-edge.is-secondary")).toHaveLength(0);
+  expect(container.querySelectorAll(".association-edge.is-primary.is-ink")).toHaveLength(1);
+  expect(container.querySelectorAll(".association-edge.is-secondary.is-ink")).toHaveLength(0);
   expect(screen.getByText("2 个锚点交叉")).toBeVisible();
 });
 
@@ -130,7 +133,7 @@ test("adds secondary anchor edges only while the shared paper or secondary ancho
     />
   );
 
-  const secondary = container.querySelector(".association-edge.is-secondary");
+  const secondary = container.querySelector(".association-edge.is-secondary.is-ink");
   expect(secondary).toHaveAttribute("role", "img");
   expect(secondary).toHaveAccessibleName(/次级关联.*W99.*WMT 2014/u);
   expect(container.querySelector<HTMLElement>(".association-node")?.getAttribute("style")).toBe(positionsBefore);
@@ -149,7 +152,7 @@ test("shows secondary memberships when a shared paper is focused without moving 
 
   fireEvent.mouseEnter(node);
 
-  expect(container.querySelectorAll(".association-edge.is-secondary")).toHaveLength(1);
+  expect(container.querySelectorAll(".association-edge.is-secondary.is-ink")).toHaveLength(1);
   expect(node.getAttribute("style")).toBe(positionBefore);
 });
 
@@ -181,7 +184,7 @@ test("keeps merged component identity out of the representative source provenanc
   });
   const node = container.querySelector<HTMLElement>(".association-node")!;
 
-  expect(container.querySelector(".association-edge.is-secondary"))
+  expect(container.querySelector(".association-edge.is-secondary.is-ink"))
     .toHaveAccessibleName(/openalex:W42/u);
   fireEvent.click(node);
   expect(onSelectSource).toHaveBeenCalledWith("crossref-record");
@@ -236,6 +239,74 @@ test("hovering a node says why the link exists instead of leaving it to a toolti
   fireEvent.mouseEnter(node);
   expect(screen.getByText("语义检索")).toBeVisible();
   expect(screen.getAllByText("语义相似，无引用关系").length).toBeGreaterThan(0);
+});
+
+test("renders page-wide paper relations beneath anchor ink with an exact final hit layer", () => {
+  const paperEdges: ThinReadingRecommendationPaperEdge[] = [{
+    directed: true,
+    evidenceRecordUrls: ["https://api.openalex.org/works/W1"],
+    kind: "direct_citation",
+    provider: "openalex",
+    sourcePaperId: "openalex:W1",
+    strength: 0.88,
+    targetPaperId: "openalex:W3"
+  }];
+  const { container } = renderLayer({ paperEdges });
+  const edgeSvg = container.querySelector(".association-layer__edges")!;
+  const layers = Array.from(edgeSvg.querySelectorAll("[data-edge-layer]"))
+    .map((path) => path.getAttribute("data-edge-layer"));
+
+  expect(layers.slice(0, 2)).toEqual(["paper-wash", "paper-ink"]);
+  expect(layers.indexOf("paper-ink")).toBeLessThan(layers.indexOf("primary-wash"));
+  expect(layers.lastIndexOf("edge-hit")).toBe(layers.length - 1);
+  expect(container.querySelector(".association-edge.is-paper-relation.is-direct-citation.is-ink"))
+    .toHaveAttribute("marker-end", "url(#association-direct-citation-end)");
+  expect(screen.getByRole("img", { name: /直接引用.*Related paper W1.*Related paper W3/u }))
+    .toBeInTheDocument();
+});
+
+test("shows only relation kinds present in the current projection", () => {
+  const { rerender } = renderLayer({
+    sourcesByAnchor: {
+      "anchor-1": [source("W1", { confidenceBasis: "author_citation" })],
+      "anchor-2": []
+    }
+  });
+
+  expect(screen.getByLabelText("当前关系图例")).toHaveTextContent("作者亲引");
+  expect(screen.getByLabelText("当前关系图例")).not.toHaveTextContent("引用图推导");
+  expect(screen.getByLabelText("当前关系图例")).not.toHaveTextContent("直接引用");
+
+  rerender(
+    <AssociationGraphLayer
+      activeSourceId={null}
+      anchors={anchors}
+      documentHeight={1200}
+      focusedAnchorId={null}
+      frameWidth={900}
+      onClose={vi.fn()}
+      onFocusAnchor={vi.fn()}
+      onSelectSource={vi.fn()}
+      paperEdges={[{
+        directed: false,
+        evidenceRecordUrls: ["https://api.openalex.org/works/W1"],
+        kind: "co_cited",
+        provider: "openalex",
+        sourcePaperId: "openalex:W1",
+        strength: 0.7,
+        targetPaperId: "openalex:W3"
+      }]}
+      sourcesByAnchor={{
+        "anchor-1": [source("W1", { confidenceBasis: "citation_graph" })],
+        "anchor-2": [source("W3", { confidenceBasis: "citation_graph" })]
+      }}
+    />
+  );
+
+  expect(screen.getByLabelText("当前关系图例")).toHaveTextContent("引用图推导");
+  expect(screen.getByLabelText("当前关系图例")).toHaveTextContent("共同被引");
+  expect(screen.getByLabelText("当前关系图例")).not.toHaveTextContent("作者亲引");
+  expect(screen.getByLabelText("当前关系图例")).not.toHaveTextContent("共享参考文献");
 });
 
 test("moves the selected non-OA paper into the reading card without a fake full-text action", () => {
