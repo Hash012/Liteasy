@@ -30,12 +30,14 @@ export type ArtifactWorkflowHarness<
     details?: ArtifactWorkflowTraceStep<StepKind>["details"];
     kind: StepKind;
     run: () => Promise<T>;
+    signal?: AbortSignal;
     summary: string;
   }): Promise<T>;
   step<T>(input: {
     details?: ArtifactWorkflowTraceStep<StepKind>["details"];
     kind: StepKind;
     run: () => T;
+    signal?: AbortSignal;
     summary: string;
   }): T;
   trace(): ArtifactWorkflowTrace<StepKind, TraceVersion>;
@@ -77,13 +79,16 @@ export function createArtifactWorkflowHarness<
       details?: ArtifactWorkflowTraceStep<StepKind>["details"];
       kind: StepKind;
       run: () => T | Promise<T>;
+      signal?: AbortSignal;
       summary: string;
     }): T | Promise<T> {
       const startedAt = now().toISOString();
       try {
+        if (stepInput.signal?.aborted) throw new Error("artifact_workflow_cancelled");
         const result = stepInput.run();
         if (result instanceof Promise) {
           return result.then((value) => {
+            if (stepInput.signal?.aborted) throw new Error("artifact_workflow_cancelled");
             appendStep({
               completedAt: now().toISOString(),
               details: stepInput.details,
@@ -99,6 +104,7 @@ export function createArtifactWorkflowHarness<
           });
         }
 
+        if (stepInput.signal?.aborted) throw new Error("artifact_workflow_cancelled");
         appendStep({
           completedAt: now().toISOString(),
           details: stepInput.details,

@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { createArtifactWorkflowHarness } from "../app/features/artifact-workflow/artifactWorkflowHarness";
 
 function createClock() {
@@ -91,4 +91,29 @@ test("records a blocked trace step when an artifact workflow step fails", async 
       summary: "确定性校验"
     }
   ]);
+});
+
+test("checks cancellation before running and after an async step", async () => {
+  const controller = new AbortController();
+  const harness = createArtifactWorkflowHarness({
+    artifactId: "artifact-cancelled",
+    runId: "run-cancelled",
+    tracePrefix: "mindmap-workflow",
+    traceVersion: "liteasy.mindmap-workflow-trace/v1"
+  });
+  const run = vi.fn(() => "never");
+  controller.abort("disabled");
+  expect(() => harness.step({ kind: "scope", run, signal: controller.signal, summary: "scope" })).toThrow("artifact_workflow_cancelled");
+  expect(run).not.toHaveBeenCalled();
+
+  const second = new AbortController();
+  await expect(harness.step({
+    kind: "draft",
+    run: async () => {
+      second.abort("disabled");
+      return "draft";
+    },
+    signal: second.signal,
+    summary: "draft"
+  })).rejects.toThrow("artifact_workflow_cancelled");
 });
