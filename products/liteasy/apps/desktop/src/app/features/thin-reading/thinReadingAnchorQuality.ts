@@ -16,6 +16,7 @@ const maximumAnchors = 8;
 const maximumAnchorsPerSentence = 2;
 const maximumEvidencePerAnchor = 4;
 const maximumAttentionPerEvidence = 4;
+const diversityScoreTolerance = 0.05;
 
 const anchorKindReason: Record<ThinReadingAnchor["kind"], string> = {
   claim: "核心判断",
@@ -27,20 +28,18 @@ const anchorKindReason: Record<ThinReadingAnchor["kind"], string> = {
   result: "关键结果"
 };
 
-const diversityOrder: readonly ThinReadingAnchor["kind"][] = [
-  "method",
-  "contribution",
-  "result",
-  "limitation",
-  "mechanism",
-  "claim",
-  "concept"
-];
-
 function clampUnit(value: number) {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
 }
-function uniqueEvidenceIds(anchor: ThinReadingAnchor, sentence?: ThinReadingSummarySentence) {
+
+function uniquePaperEvidenceIds(anchor: ThinReadingAnchor, sentence?: ThinReadingSummarySentence) {
+  return [...new Set([
+    ...anchor.evidenceIds,
+    ...(sentence?.evidenceIds ?? [])
+  ])];
+}
+
+function uniqueCoverageEvidenceIds(anchor: ThinReadingAnchor, sentence?: ThinReadingSummarySentence) {
   return [...new Set([
     ...anchor.evidenceIds,
     ...anchor.externalSourceIds,
@@ -104,27 +103,33 @@ function qualityReason(anchor: ThinReadingAnchor, evidenceCount: number, hasCita
 }
 
 export function rankThinReadingAnchors(input: RankThinReadingAnchorsInput): ThinReadingAnchor[] {
-  const sentenceById = new Map(input.summarySentences.map((sentence) => [sentence.id, sentence]));
-  const sentencePosition = new Map(input.summarySentences.map((sentence, index) => [sentence.id, index]));
+  const sentenceById = new Map<string, ThinReadingSummarySentence>();
+  const sentencePosition = new Map<string, number>();
+  input.summarySentences.forEach((sentence, index) => {
+    if (sentenceById.has(sentence.id)) return;
+    sentenceById.set(sentence.id, sentence);
+    sentencePosition.set(sentence.id, index);
+  });
   const evidenceAttention = attentionByEvidenceId(input.audit);
   const reviewed = reviewedSentenceIds(input.audit);
   const candidates = input.anchors.map((anchor) => {
     const sentence = sentenceById.get(anchor.summarySentenceId);
-    const evidenceIds = uniqueEvidenceIds(anchor, sentence);
+    const paperEvidenceIds = uniquePaperEvidenceIds(anchor, sentence);
+    const coverageEvidenceIds = uniqueCoverageEvidenceIds(anchor, sentence);
     const reviewAttention = reviewed.has(anchor.summarySentenceId) ? 1 : 0;
-    const rawAttention = evidenceIds.length === 0
-      ? reviewAttention
-      : evidenceIds.reduce((total, evidenceId) => (
-          total + Math.min(
-            maximumAttentionPerEvidence,
-            (evidenceAttention.get(evidenceId) ?? 0) + reviewAttention
-          )
-        ), 0) / evidenceIds.length;
+    const rawAttention = paperEvidenceIds.length === 0
+      ? 0
+      : paperEvidenceIds.reduce((total, evidenceId) => (
+        total + Math.min(
+          maximumAttentionPerEvidence,
+          (evidenceAttention.get(evidenceId) ?? 0) + reviewAttention
+        )
+      ), 0) / paperEvidenceIds.length;
     return {
       anchor,
       citationProvenance: input.referencesByAnchorId.get(anchor.id)?.length ? 1 : 0,
-      coverage: evidenceCoverage(sentence, evidenceIds.length),
-      evidenceCount: evidenceIds.length,
+      coverage: evidenceCoverage(sentence, coverageEvidenceIds.length),
+      evidenceCount: coverageEvidenceIds.length,
       rawAttention
     };
   });
@@ -157,24 +162,30 @@ export function rankThinReadingAnchors(input: RankThinReadingAnchorsInput): Thin
     right.quality.score - left.quality.score ||
     compareDocumentPosition(left, right, sentencePosition)
   );
+  const uniqueQualityOrder = qualityOrder.filter((anchor, index) => (
+    qualityOrder.findIndex((candidate) => candidate.id === anchor.id) === index
+  ));
   const selected: ThinReadingAnchor[] = [];
-  const selectedIds = new Set<string>();
+  const selectedKinds = new Set<ThinReadingAnchor["kind"]>();
   const countBySentence = new Map<string, number>();
-  const trySelect = (anchor: ThinReadingAnchor) => {
-    if (selected.length >= maximumAnchors || selectedIds.has(anchor.id)) return;
-    const sentenceCount = countBySentence.get(anchor.summarySentenceId) ?? 0;
-    if (sentenceCount >= maximumAnchorsPerSentence) return;
-    selected.push(anchor);
-    selectedIds.add(anchor.id);
-    countBySentence.set(anchor.summarySentenceId, sentenceCount + 1);
-  };
-
-  for (const kind of diversityOrder) {
-    const candidate = qualityOrder.find((anchor) => anchor.kind === kind);
-    if (candidate) trySelect(candidate);
-  }
-  for (const anchor of qualityOrder) {
-    trySelect(anchor);
+  const remaining = [...uniqueQualityOrder];
+  while (selected.length < maximumAnchors) {
+    const eligible = remaining.filter((anchor) => (
+      (countBySentence.get(anchor.summarySentenceId) ?? 0) < maximumAnchorsPerSentence
+    ));
+    if (eligible.length === 0) break;
+    const highestQuality = eligible[0];
+    const qualityBand = eligible.filter((anchor) => (
+      anchor.quality!.score >= highestQuality.quality!.score - diversityScoreTolerance
+    ));
+    const candidate = qualityBand.find((anchor) => !selectedKinds.has(anchor.kind)) ?? highestQuality;
+    selected.push(candidate);
+    selectedKinds.add(candidate.kind);
+    countBySentence.set(
+      candidate.summarySentenceId,
+      (countBySentence.get(candidate.summarySentenceId) ?? 0) + 1
+    );
+    remaining.splice(remaining.findIndex((anchor) => anchor.id === candidate.id), 1);
   }
   return selected.sort((left, right) => compareDocumentPosition(left, right, sentencePosition));
 }

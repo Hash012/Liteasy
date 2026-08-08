@@ -92,6 +92,72 @@ test("combines approved score components and caps repeated evidence attention", 
   });
 });
 
+test("normalizes search, read, view, and review attention across page evidence", () => {
+  const summarySentences = [
+    sentence({ evidenceIds: ["evidence-hot"], id: "s1" }),
+    sentence({ evidenceIds: ["evidence-warm"], id: "s2" })
+  ];
+  const ranked = rankThinReadingAnchors({
+    anchors: [
+      anchor({ evidenceIds: ["evidence-hot"], id: "hot", summarySentenceId: "s1" }),
+      anchor({ evidenceIds: ["evidence-warm"], id: "warm", summarySentenceId: "s2" })
+    ],
+    audit: audit({
+      evidenceReview: {
+        propositionVerdicts: [{ proposition: "Supported", sentenceId: "s1", verdict: "supported" }],
+        reason: "All reviewed propositions are supported.",
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      },
+      evidenceToolCalls: [
+        { evidenceIds: ["evidence-hot", "evidence-warm"], kind: "search", query: "method" },
+        { evidenceIds: ["evidence-hot", "evidence-warm"], kind: "read" },
+        { evidenceIds: ["evidence-hot"], kind: "view", pages: [2] }
+      ]
+    }),
+    referencesByAnchorId: new Map(),
+    summarySentences
+  });
+
+  expect(ranked.find((item) => item.id === "hot")?.quality?.evidenceAttention).toBe(1);
+  expect(ranked.find((item) => item.id === "warm")?.quality?.evidenceAttention).toBe(0.5);
+});
+
+test("excludes external source IDs from evidence attention and gives reviewed zero-evidence sentences no attention", () => {
+  const summarySentences = [
+    sentence({ evidenceIds: ["evidence-local"], externalKnowledge: ["openalex:W1"], id: "s1" }),
+    sentence({ evidenceIds: [], externalKnowledge: ["openalex:W2"], id: "s2", status: "weak" })
+  ];
+  const ranked = rankThinReadingAnchors({
+    anchors: [
+      anchor({
+        evidenceIds: ["evidence-local"],
+        externalSourceIds: ["openalex:W1"],
+        id: "local",
+        summarySentenceId: "s1"
+      }),
+      anchor({ evidenceIds: [], externalSourceIds: ["openalex:W2"], id: "external", summarySentenceId: "s2" })
+    ],
+    audit: audit({
+      evidenceReview: {
+        propositionVerdicts: [{ proposition: "External", sentenceId: "s2", verdict: "supported" }],
+        reason: "The external sentence was reviewed.",
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      },
+      evidenceToolCalls: [
+        { evidenceIds: ["evidence-local"], kind: "read" },
+        { evidenceIds: ["evidence-local"], kind: "view", pages: [1] }
+      ]
+    }),
+    referencesByAnchorId: new Map(),
+    summarySentences
+  });
+
+  expect(ranked.find((item) => item.id === "local")?.quality?.evidenceAttention).toBe(1);
+  expect(ranked.find((item) => item.id === "external")?.quality?.evidenceAttention).toBe(0);
+});
+
 test("keeps at most two anchors per sentence, eight per page, and returns stable document order", () => {
   const summarySentences = Array.from({ length: 5 }, (_, index) => sentence({
     evidenceIds: [`evidence-${index + 1}`],
@@ -132,4 +198,84 @@ test("keeps at most two anchors per sentence, eight per page, and returns stable
   )))).toEqual([...first].map((item) => summarySentences.findIndex((sentenceItem) => (
     sentenceItem.id === item.summarySentenceId
   ))).sort((left, right) => left - right));
+});
+
+test("does not let negligible type diversity displace materially stronger anchors", () => {
+  const summarySentences = Array.from({ length: 9 }, (_, index) => sentence({ id: `s${index + 1}` }));
+  const ranked = rankThinReadingAnchors({
+    anchors: [
+      ...Array.from({ length: 8 }, (_, index) => anchor({
+        id: `strong-${index}`,
+        importance: 1 - index * 0.01,
+        kind: "concept",
+        summarySentenceId: `s${index + 1}`
+      })),
+      anchor({ id: "negligible-limitation", importance: 0.05, kind: "limitation", summarySentenceId: "s9" })
+    ],
+    audit: audit(),
+    referencesByAnchorId: new Map(),
+    summarySentences
+  });
+
+  expect(ranked).toHaveLength(8);
+  expect(ranked.some((item) => item.id === "negligible-limitation")).toBe(false);
+});
+
+test("uses the next eligible diverse candidate when the strongest one is sentence-blocked", () => {
+  const summarySentences = Array.from({ length: 8 }, (_, index) => sentence({ id: `s${index + 1}` }));
+  const ranked = rankThinReadingAnchors({
+    anchors: [
+      anchor({ id: "s1-high", importance: 1, kind: "concept", start: 0, summarySentenceId: "s1" }),
+      anchor({ id: "s1-next", importance: 0.99, kind: "concept", start: 8, summarySentenceId: "s1" }),
+      anchor({ id: "blocked-limitation", importance: 0.8, kind: "limitation", start: 16, summarySentenceId: "s1" }),
+      anchor({ id: "eligible-limitation", importance: 0.72, kind: "limitation", summarySentenceId: "s2" }),
+      ...Array.from({ length: 7 }, (_, index) => anchor({
+        id: `other-${index}`,
+        importance: 0.84 - index * 0.01,
+        kind: "concept",
+        summarySentenceId: `s${index + 2}`
+      }))
+    ],
+    audit: audit(),
+    referencesByAnchorId: new Map(),
+    summarySentences
+  });
+
+  expect(ranked.filter((item) => item.summarySentenceId === "s1").map((item) => item.id)).toEqual([
+    "s1-high",
+    "s1-next"
+  ]);
+  expect(ranked.some((item) => item.id === "blocked-limitation")).toBe(false);
+  expect(ranked.some((item) => item.id === "eligible-limitation")).toBe(true);
+});
+
+test("keeps only the strongest candidate for a duplicate anchor ID", () => {
+  const summarySentences = [sentence({ id: "s1" }), sentence({ id: "s2" })];
+  const ranked = rankThinReadingAnchors({
+    anchors: [
+      anchor({ id: "duplicate", importance: 0.2, summarySentenceId: "s1" }),
+      anchor({ id: "duplicate", importance: 0.9, summarySentenceId: "s2" })
+    ],
+    audit: audit(),
+    referencesByAnchorId: new Map(),
+    summarySentences
+  });
+
+  expect(ranked).toHaveLength(1);
+  expect(ranked[0]).toMatchObject({ id: "duplicate", importance: 0.9, summarySentenceId: "s2" });
+});
+
+test("uses the first document occurrence when persisted sentence IDs are duplicated", () => {
+  const ranked = rankThinReadingAnchors({
+    anchors: [anchor({ evidenceIds: [], id: "anchor", summarySentenceId: "duplicate-sentence" })],
+    audit: audit(),
+    referencesByAnchorId: new Map(),
+    summarySentences: [
+      sentence({ evidenceIds: ["evidence-first"], id: "duplicate-sentence", status: "grounded" }),
+      sentence({ evidenceIds: [], id: "duplicate-sentence", status: "unsupported" })
+    ]
+  });
+
+  expect(ranked[0]?.quality?.evidenceCoverage).toBe(0.25);
+  expect(ranked[0]?.quality?.reason).toContain("1 条证据");
 });

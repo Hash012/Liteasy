@@ -731,6 +731,106 @@ test("parses thin-reading structured output from a live model request", async ()
   expect(externalRetrievalCalls).toBe(1);
 });
 
+test("persists ranked anchor quality when every per-anchor search fails", async () => {
+  const store = createSettingsStore();
+  let externalRetrievalCalls = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction for fine-grained retrieval.",
+        summary: "ColBERT 使用 MaxSim late interaction。",
+        tags: ["ColBERT", "MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const summary = "ColBERT 使用 MaxSim late interaction 保留细粒度匹配信号。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            anchors: [{
+              importance: 0.8,
+              kind: "concept",
+              label: "MaxSim",
+              searchQuery: "MaxSim late interaction",
+              summarySentenceIndex: 0,
+              text: "MaxSim late interaction"
+            }],
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: summary }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            summary,
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: summary
+            }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-anchor-search-failure",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRetrievalCalls += 1;
+      return {
+        json: async () => ({ message: "search unavailable" }),
+        ok: false,
+        status: 503
+      };
+    }
+  });
+
+  expect(externalRetrievalCalls).toBe(1);
+  expect(result.thinReading?.rootSeed.evidence.anchors).toEqual([
+    expect.objectContaining({
+      externalSourceIds: [],
+      quality: {
+        citationProvenance: 0,
+        evidenceAttention: 0,
+        evidenceCoverage: 0.25,
+        reason: "核心概念 · 1 条证据",
+        score: expect.any(Number)
+      }
+    })
+  ]);
+  expect(result.thinReading?.rootSeed.evidence.anchors?.[0]?.quality?.score).toBeCloseTo(0.3425, 8);
+});
+
 test("runs thin-reading through the DeepSeek provider without downgrading to mock data", async () => {
   const store = createSettingsStore();
   const requests: Array<{ body: string; url: string }> = [];
