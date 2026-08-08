@@ -1,7 +1,9 @@
 import { expect, test } from "vitest";
 
 import {
+  evaluateAssociationLayout,
   layoutAssociationPageGraph,
+  layoutConstrainedAssociationPageGraph,
   maximumPageGraphSources,
   pageGraphDotSize,
   pageGraphNodeHeight,
@@ -172,4 +174,119 @@ test("is deterministic for identical input", () => {
   }));
 
   expect(build()).toEqual(build());
+});
+
+test("keeps a dense primary fan in one side sector with zero primary crossings", () => {
+  const graph = layoutConstrainedAssociationPageGraph(input({
+    anchors: [{ anchorId: "a1", rect: { height: 18, left: 500, top: 430, width: 120 } }],
+    documentHeight: 1000,
+    frameWidth: 1200,
+    sourcesByAnchor: {
+      a1: Array.from({ length: 8 }, (_, index) => source(`dense-${index}`, 1 - index / 12))
+    }
+  }));
+
+  expect(graph.layoutSource).toBe("constrained");
+  expect(graph.quality.sameSideViolations).toBe(0);
+  expect(graph.quality.primaryEdgeCrossings).toBe(0);
+  expect(graph.quality.nodeOverlaps).toBe(0);
+  expect(
+    graph.nodes.every((node) => node.left < 560) ||
+    graph.nodes.every((node) => node.left > 560)
+  ).toBe(true);
+});
+
+test("assigns adjacent dense anchors deterministically without crossing primary fans", () => {
+  const graph = layoutConstrainedAssociationPageGraph(input({
+    anchors: [
+      { anchorId: "a1", rect: { height: 18, left: 500, top: 280, width: 120 } },
+      { anchorId: "a2", rect: { height: 18, left: 500, top: 680, width: 120 } }
+    ],
+    documentHeight: 1100,
+    frameWidth: 1200,
+    sourcesByAnchor: {
+      a1: Array.from({ length: 6 }, (_, index) => source(`upper-${index}`, 1 - index / 10)),
+      a2: Array.from({ length: 6 }, (_, index) => source(`lower-${index}`, 1 - index / 10))
+    }
+  }));
+
+  expect(graph.layoutSource).toBe("constrained");
+  expect(graph.quality).toMatchObject({
+    anchorObstructions: 0,
+    nodeOverlaps: 0,
+    overflowCount: 0,
+    primaryEdgeCrossings: 0,
+    sameSideViolations: 0
+  });
+});
+
+test("uses all page-wide paper relations as springs across primary owner groups", () => {
+  const relationInput = input({
+    anchors: [
+      { anchorId: "a1", rect: { height: 16, left: 180, top: 350, width: 100 } },
+      { anchorId: "a2", rect: { height: 16, left: 820, top: 650, width: 100 } }
+    ],
+    documentHeight: 1100,
+    frameWidth: 1200,
+    paperEdges: [{
+      directed: false,
+      kind: "co_cited",
+      sourcePaperKey: "A",
+      strength: 1,
+      targetPaperKey: "B"
+    }],
+    sourcesByAnchor: {
+      a1: [source("A", 0.9)],
+      a2: [source("B", 0.9)]
+    }
+  });
+  const graph = layoutConstrainedAssociationPageGraph(relationInput);
+  const withoutRelation = layoutConstrainedAssociationPageGraph({ ...relationInput, paperEdges: [] });
+  const paperDistance = (result: typeof graph) => Math.hypot(
+    result.nodes[0]!.left - result.nodes[1]!.left,
+    result.nodes[0]!.top - result.nodes[1]!.top
+  );
+
+  expect(graph.layoutSource).toBe("constrained");
+  expect(graph.paperEdges).toHaveLength(1);
+  expect(graph.paperEdges[0]).toMatchObject({ sourcePaperKey: "A", targetPaperKey: "B" });
+  expect(paperDistance(graph)).toBeLessThan(paperDistance(withoutRelation));
+  expect(graph.quality.weightedStress).toBeLessThanOrEqual(
+    evaluateAssociationLayout(relationInput, layoutAssociationPageGraph(relationInput)).weightedStress
+  );
+});
+
+test("is deterministic for identical constrained input", () => {
+  const constrainedInput = input({
+    anchors: [
+      { anchorId: "a1", rect: { height: 16, left: 250, top: 300, width: 100 } },
+      { anchorId: "a2", rect: { height: 16, left: 250, top: 700, width: 100 } }
+    ],
+    documentHeight: 1200,
+    frameWidth: 1000,
+    sourcesByAnchor: {
+      a1: Array.from({ length: 4 }, (_, index) => source(`A${index}`, 0.9 - index / 10)),
+      a2: Array.from({ length: 4 }, (_, index) => source(`B${index}`, 0.9 - index / 10))
+    }
+  });
+
+  expect(layoutConstrainedAssociationPageGraph(constrainedInput))
+    .toEqual(layoutConstrainedAssociationPageGraph(constrainedInput));
+});
+
+test("returns exact baseline positions when no candidate can satisfy hard constraints", () => {
+  const impossible = input({
+    anchors: [{ anchorId: "a1", rect: { height: 18, left: 70, top: 60, width: 80 } }],
+    documentHeight: 110,
+    frameWidth: 140,
+    sourcesByAnchor: {
+      a1: [source("too-large", 0.9)]
+    }
+  });
+  const baseline = layoutAssociationPageGraph(impossible);
+  const graph = layoutConstrainedAssociationPageGraph(impossible);
+
+  expect(graph.layoutSource).toBe("baseline");
+  expect(graph.nodes).toEqual(baseline.nodes);
+  expect(graph.edges).toEqual(baseline.edges);
 });
