@@ -104,7 +104,7 @@ export async function loadVisualizationArtifact(
   const needsRevalidation = artifactNeedsRevalidation(envelope, expectedHardValidatorVersions, authoritative.complete, options);
   const canGenerate = !options.offline && documentAccess && !needsRevalidation;
 
-  if (!needsRevalidation && expectedValidatorSetComplete) {
+  if (!needsRevalidation && expectedValidatorSetComplete && dependencyVersionsCurrent(envelope, options)) {
     return artifactState(envelope, {
       canGenerate,
       canRender: documentAccess,

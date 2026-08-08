@@ -13,6 +13,13 @@ registerVisualizationRenderer({
   modality: "semantic_graph",
   version: "1.0.0"
 });
+registerVisualizationRenderer({
+  id: "wrong-modality",
+  load: async () => ({ id: "wrong-modality", modality: "function_plot", version: "1.0.0" }),
+  modality: "function_plot",
+  version: "1.0.0"
+});
+registerVisualizationKernel({ id: "fixture-kernel", version: "2" });
 
 registerVisualizationValidator({
   gate: "hard",
@@ -211,7 +218,6 @@ test("requires revalidation when the current validator set adds an ID", async ()
 });
 
 test("requires revalidation when an indexed kernel version changes", async () => {
-  registerVisualizationKernel({ id: "fixture-kernel", version: "2" });
   const kernelEnvelope = parseVisualizationArtifactEnvelope({
     ...cachedEnvelope,
     artifact: {
@@ -258,14 +264,16 @@ test("does not enable a revoked kernel after a passing worker result", async () 
     },
     artifactIndex: { ...cachedEnvelope.artifactIndex, kernelVersion: "2" }
   });
+  const revalidationService = {
+    revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } })),
+    terminate: () => undefined
+  };
   const state = await loadVisualizationArtifact(kernelEnvelope, {
     currentValidatorVersions: { "artifact-schema": "1.0.0" },
     revokedKernelIds: ["fixture-kernel"],
-    revalidationService: {
-      revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } })),
-      terminate: () => undefined
-    }
+    revalidationService
   });
+  expect(revalidationService.revalidate).not.toHaveBeenCalled();
   expect(state.canRender).toBe(false);
   expect(state.canRenderSafePreview).toBe(true);
 });
@@ -292,6 +300,25 @@ test("does not enable an artifact whose renderer is missing from the registry", 
     }
   });
   const state = await loadVisualizationArtifact(missingRendererEnvelope, {
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
+    revalidationService: {
+      revalidate: async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } }),
+      terminate: () => undefined
+    }
+  });
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+});
+
+test("does not enable an artifact whose renderer modality is wrong", async () => {
+  const wrongModalityEnvelope = parseVisualizationArtifactEnvelope({
+    ...cachedEnvelope,
+    artifact: {
+      ...cachedEnvelope.artifact,
+      implementation: { ...cachedEnvelope.artifact.implementation, rendererId: "wrong-modality" }
+    }
+  });
+  const state = await loadVisualizationArtifact(wrongModalityEnvelope, {
     currentValidatorVersions: { "artifact-schema": "1.0.0" },
     revalidationService: {
       revalidate: async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } }),
