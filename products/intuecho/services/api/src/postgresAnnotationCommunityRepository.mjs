@@ -38,11 +38,7 @@ export class PostgresAnnotationCommunityRepository {
       const value = normalizeIdentity(kind, identifier.value);
       return [`${kind}:${value}`, { kind, value }];
     })).values()];
-    const literatureIds = new Set();
-    for (const identity of normalized) {
-      const result = await client.query("SELECT literature_id FROM literature_identities WHERE identity_kind = $1 AND identity_value = $2", [identity.kind, identity.value]);
-      for (const row of result.rows) literatureIds.add(row.literature_id);
-    }
+    const literatureIds = await this.#matchingLiteratureIds(normalized, client);
     if (literatureIds.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
     const id = [...literatureIds][0];
     return id ? this.#literatureRecord(id, client) : null;
@@ -56,7 +52,8 @@ export class PostgresAnnotationCommunityRepository {
       SELECT DISTINCT literature.id
         FROM literature_records literature
         LEFT JOIN literature_identities identity ON identity.literature_id = literature.id
-       WHERE literature.title ILIKE $1 OR literature.authors::text ILIKE $1 OR identity.identity_value ILIKE $1
+       WHERE literature.record_source <> 'legacy_metadata'
+         AND (literature.title ILIKE $1 OR literature.authors::text ILIKE $1 OR identity.identity_value ILIKE $1)
        ORDER BY literature.id
        LIMIT $2
     `, [`%${value}%`, bounded]);
@@ -69,13 +66,14 @@ export class PostgresAnnotationCommunityRepository {
     const actor = typeof owner === "string" ? owner : owner?.id;
     if (!actor) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_OWNER_REQUIRED");
     let mode = confirmation?.mode;
+    const requestedMode = mode;
     let provider = confirmation?.provider ?? null;
     let record = confirmation?.record;
     if (mode === "candidate") {
-      if (!record) throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+      if (!confirmation?.candidateKey || !confirmation?.refetched || !record) throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
       mode = "public_registry";
     }
-    if (mode !== "manual" && mode !== "public_registry") throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
+    if (mode !== "manual" && !(mode === "public_registry" && requestedMode === "candidate")) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
     if (!record || !Array.isArray(record.identifiers)) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
     if (record.identifiers.some((identifier) => identifier.source !== mode)) {
       throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
@@ -95,15 +93,17 @@ export class PostgresAnnotationCommunityRepository {
       const value = normalizeIdentity(identifier.kind, identifier.value);
       return [`${identifier.kind}:${value}`, { ...identifier, value }];
     })).values()];
+    if (requestedMode === "candidate") {
+      const primary = normalized[0];
+      const expectedKey = `${provider ?? ""}:${primary?.kind ?? ""}:${primary?.value ?? ""}`;
+      if (!provider || confirmation.candidateKey !== expectedKey) throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+    }
     return withTransaction(this.pool, async (client) => {
-      for (const identifier of normalized) {
+      const lockOrder = [...normalized].sort((left, right) => `${left.kind}:${left.value}`.localeCompare(`${right.kind}:${right.value}`));
+      for (const identifier of lockOrder) {
         await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${identifier.kind}:${identifier.value}`]);
       }
-      const matched = new Set();
-      for (const identifier of normalized) {
-        const result = await client.query("SELECT literature_id FROM literature_identities WHERE identity_kind = $1 AND identity_value = $2 FOR UPDATE", [identifier.kind, identifier.value]);
-        for (const row of result.rows) matched.add(row.literature_id);
-      }
+      const matched = await this.#matchingLiteratureIds(normalized, client, true);
       if (matched.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
       const now = new Date();
       const literatureId = [...matched][0] ?? `literature_${randomUUID()}`;
@@ -121,13 +121,15 @@ export class PostgresAnnotationCommunityRepository {
       } else {
         const currentAuthors = JSON.stringify(existing.authors ?? []);
         const nextAuthors = JSON.stringify(input.authors);
-        const changed = existing.title !== input.title || currentAuthors !== nextAuthors || existing.publication_year !== (input.year ?? null) || existing.document_type !== (input.documentType ?? null) || existing.record_source !== source || existing.source_provider !== provider;
+        const identityMismatch = (await client.query("SELECT 1 FROM literature_identities WHERE literature_id = $1 AND identity_source <> $2 LIMIT 1", [literatureId, source])).rows[0];
+        const changed = existing.title !== input.title || currentAuthors !== nextAuthors || existing.publication_year !== (input.year ?? null) || existing.document_type !== (input.documentType ?? null) || existing.record_source !== source || existing.source_provider !== provider || Boolean(identityMismatch);
         if (changed) {
-          const current = await this.#literatureRecord(literatureId, client);
+          const current = await this.#literatureSnapshot(literatureId, client);
           const revision = Number(existing.revision ?? 1);
           await client.query("INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by, created_at) VALUES ($1, $2, $3, $4::jsonb, $5, $6) ON CONFLICT (literature_id, revision) DO NOTHING", [`literature_record_version_${randomUUID()}`, literatureId, revision, JSON.stringify(current), actor, now]);
           await client.query(`UPDATE literature_records SET title = $2, authors = $3::jsonb, publication_year = $4, document_type = $5, record_source = $6, source_provider = $7, confirmed_at = $8, revision = $9, updated_at = $10 WHERE id = $1`, [literatureId, input.title, nextAuthors, input.year ?? null, input.documentType ?? null, source, provider, now, revision + 1, now]);
         }
+        await client.query("UPDATE literature_identities SET identity_source = $1 WHERE literature_id = $2 AND identity_source <> $1", [source, literatureId]);
         for (const identifier of normalized) {
           await client.query("INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING", [literatureId, identifier.kind, identifier.value, source]);
         }
@@ -250,6 +252,13 @@ export class PostgresAnnotationCommunityRepository {
   async #literatureRecord(id, client = this.pool) {
     const result = await client.query("SELECT * FROM literature_records WHERE id = $1", [id]);
     const row = result.rows[0];
+    if (!row || row.record_source === "legacy_metadata") return null;
+    return this.#literatureSnapshot(id, client, row);
+  }
+
+  async #literatureSnapshot(id, client = this.pool, providedRow = null) {
+    const result = providedRow ? { rows: [providedRow] } : await client.query("SELECT * FROM literature_records WHERE id = $1", [id]);
+    const row = result.rows[0];
     if (!row) return null;
     const identities = await client.query("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities WHERE literature_id = $1 ORDER BY identity_kind, identity_value", [id]);
     const mode = row.record_source === "public_registry" ? "public_registry" : "manual";
@@ -270,13 +279,34 @@ export class PostgresAnnotationCommunityRepository {
     };
   }
 
+  async #matchingLiteratureIds(identifiers, client = this.pool, lock = false) {
+    const keys = new Set((identifiers ?? []).map((identifier) => `${identifier.kind}:${normalizeIdentity(identifier.kind, identifier.value)}`));
+    const kinds = [...new Set((identifiers ?? []).map((identifier) => identifier.kind))];
+    if (kinds.length === 0) return new Set();
+    const result = await client.query("SELECT literature_id, identity_kind, identity_value FROM literature_identities WHERE identity_kind = ANY($1::text[])", [kinds]);
+    const literatureIds = new Set();
+    for (const row of result.rows) {
+      if (keys.has(`${row.identity_kind}:${normalizeIdentity(row.identity_kind, row.identity_value)}`)) literatureIds.add(row.literature_id);
+    }
+    if (lock && literatureIds.size > 0) {
+      await client.query("SELECT literature_id FROM literature_identities WHERE literature_id = ANY($1::text[]) FOR UPDATE", [[...literatureIds]]);
+    }
+    if (literatureIds.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
+    return literatureIds;
+  }
+
   async #resolveLiterature(client, reference) {
+    if (reference?.literatureId) {
+      const found = await client.query("SELECT 1 FROM literature_records WHERE id = $1", [reference.literatureId]);
+      if (!found.rows[0]) throw new AnnotationCommunityError("LITERATURE_NOT_FOUND", 404);
+      return reference.literatureId;
+    }
     const kind = reference.identity.kind;
     const value = normalizeIdentity(kind, reference.identity.value);
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${kind}:${value}`]);
-    const found = await client.query("SELECT literature_id FROM literature_identities WHERE identity_kind = $1 AND identity_value = $2", [kind, value]);
-    if (found.rows[0]) {
-      const id = found.rows[0].literature_id;
+    const matching = await this.#matchingLiteratureIds([{ kind, value }], client, true);
+    if (matching.size) {
+      const id = [...matching][0];
       await client.query(`UPDATE literature_records SET title = $2, authors = $3::jsonb, publication_year = $4, document_type = $5, updated_at = now() WHERE id = $1`, [id, reference.metadata.title, JSON.stringify(reference.metadata.authors), reference.metadata.year ?? null, reference.metadata.documentType ?? null]);
       return id;
     }
@@ -556,13 +586,16 @@ export class PostgresAnnotationCommunityRepository {
       clauses.push(`EXISTS(SELECT 1 FROM annotation_targets target JOIN literature_records literature ON literature.id = target.literature_id WHERE target.annotation_id = annotations.id AND literature.document_type = $${values.length})`);
     }
     if (filters.literatureIdentityValue) {
-      values.push(filters.literatureIdentityKind, normalizeIdentity(filters.literatureIdentityKind, filters.literatureIdentityValue));
-      const kindIndex = values.length - 1;
-      const valueIndex = values.length;
+      const literatureIds = await this.#matchingLiteratureIds([{
+        kind: filters.literatureIdentityKind,
+        value: filters.literatureIdentityValue
+      }]);
+      values.push([...literatureIds]);
+      const idsIndex = values.length;
       clauses.push(`EXISTS(
-        SELECT 1 FROM annotation_targets target JOIN literature_identities identity ON identity.literature_id = target.literature_id WHERE target.annotation_id = annotations.id AND identity.identity_kind = $${kindIndex} AND identity.identity_value = $${valueIndex}
+        SELECT 1 FROM annotation_targets target WHERE target.annotation_id = annotations.id AND target.literature_id = ANY($${idsIndex}::text[])
         UNION ALL
-        SELECT 1 FROM annotation_targets target JOIN annotation_target_evidence evidence ON evidence.target_id = target.id JOIN literature_identities identity ON identity.literature_id = evidence.literature_id WHERE target.annotation_id = annotations.id AND identity.identity_kind = $${kindIndex} AND identity.identity_value = $${valueIndex}
+        SELECT 1 FROM annotation_targets target JOIN annotation_target_evidence evidence ON evidence.target_id = target.id WHERE target.annotation_id = annotations.id AND evidence.literature_id = ANY($${idsIndex}::text[])
       )`);
     }
     const result = await this.pool.query(`SELECT annotations.* FROM annotations WHERE ${clauses.join(" AND ")} ORDER BY annotations.created_at DESC, annotations.id DESC LIMIT 500`, values);
@@ -678,7 +711,7 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   #searchText(annotation) {
-    return [annotation.body, ...annotation.tags.map((tag) => tag.name), ...annotation.targets.flatMap((target) => [target.literature.metadata.title, target.excerpt, target.derivedContent?.excerpt])].filter(Boolean).join(" ");
+    return [annotation.body, ...annotation.tags.map((tag) => tag.name), ...annotation.targets.flatMap((target) => [target.literature?.metadata?.title, target.literature?.title, target.excerpt, target.derivedContent?.excerpt])].filter(Boolean).join(" ");
   }
 
   async toggleFollow(userId, targetUserId) {

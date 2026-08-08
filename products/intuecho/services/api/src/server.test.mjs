@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import Database from "better-sqlite3";
+import { literatureRecordSchema } from "@intuecho/contracts";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
+import { PostgresAnnotationCommunityRepository } from "./postgresAnnotationCommunityRepository.mjs";
 import { createIntuechoApp } from "./server.mjs";
 import { IdentityVerificationError } from "./identityVerifier.mjs";
 
@@ -226,8 +228,133 @@ test("persists manual literature provenance, immutable corrections, and identity
     }),
     (error) => error?.code === "LITERATURE_IDENTITY_CONFLICT"
   );
+  const firstAfterConflict = await repository.findLiteratureByIdentifiers(first.identifiers);
+  assert.equal(firstAfterConflict.title, "Corrected Manual Record");
+  assert.equal(firstAfterConflict.provenance.mode, "manual");
+  assert.equal(firstAfterConflict.identifiers.every((identifier) => identifier.source === "manual"), true);
+  assert.equal(literatureRecordSchema.safeParse(firstAfterConflict).success, true);
   assert.equal((await repository.findLiteratureByIdentifiers(second.identifiers)).literatureId, second.literatureId);
   db.close();
+});
+
+test("requires a refetched candidate and resolves canonical literature targets", async () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  const owner = { id: "candidate-owner", name: "Ada Lovelace", initials: "AL" };
+  await assert.rejects(
+    () => repository.confirmLiterature(owner, {
+      mode: "candidate",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/spoof" }],
+        title: "Spoofed Candidate",
+        year: 1843
+      }
+    }),
+    (error) => error?.code === "LITERATURE_CANDIDATE_NOT_FOUND"
+  );
+  await assert.rejects(
+    () => repository.confirmLiterature(owner, {
+      mode: "public_registry",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/spoof" }],
+        title: "Spoofed Candidate",
+        year: 1843
+      }
+    }),
+    (error) => error?.code === "LITERATURE_CONFIRMATION_INVALID"
+  );
+  const confirmed = await repository.confirmLiterature(owner, {
+    candidateKey: "crossref:doi:10.1000/canonical",
+    mode: "candidate",
+    provider: "crossref",
+    refetched: true,
+    record: {
+      authors: ["Ada Lovelace"],
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/canonical" }],
+      title: "Canonical Candidate",
+      year: 1843
+    }
+  });
+  const target = db.prepare("SELECT id FROM literature_records_v2 WHERE id = ?").get(confirmed.literatureId);
+  assert.ok(target);
+  assert.equal((await repository.syncDesktopAnnotations(owner, [{
+    annotationId: "canonical-target-annotation",
+    body: "canonical target",
+    createdAt: "2026-08-09T00:00:00.000Z",
+    queueKey: "canonical-target-queue",
+    targets: [{ kind: "whole_document", literature: { literatureId: confirmed.literatureId } }],
+    updatedAt: "2026-08-09T00:00:00.000Z"
+  }]))[0].status, "synced");
+  db.close();
+});
+
+test("reuses legacy normalized DOI values and preserves untouched legacy provenance", async () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, record_source, revision, created_at, updated_at) VALUES (?, ?, ?, 'legacy_metadata', 1, ?, ?)")
+    .run("legacy-record", "Legacy DOI", JSON.stringify(["A. Author"]), "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z");
+  db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, 'doi', ?, 'metadata', ?)")
+    .run("legacy-record", "https://doi.org/10.1000/legacy", "2026-08-09T00:00:00.000Z");
+  assert.equal(await repository.findLiteratureByIdentifiers([{ kind: "doi", value: "10.1000/legacy" }]), null);
+  const untouched = await repository.searchStoredLiterature("Legacy DOI", 10);
+  assert.deepEqual(untouched, []);
+  assert.equal(db.prepare("SELECT identity_source FROM literature_identities_v2 WHERE literature_id = ?").get("legacy-record").identity_source, "metadata");
+  const confirmed = await repository.confirmLiterature({ id: "legacy-owner" }, {
+    mode: "manual",
+    record: {
+      authors: ["A. Author"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/legacy" }],
+      title: "Corrected Legacy DOI"
+    }
+  });
+  assert.equal(confirmed.provenance.mode, "manual");
+  assert.equal(confirmed.literatureId, "legacy-record");
+  assert.equal(confirmed.identifiers.every((identifier) => identifier.source === "manual"), true);
+  assert.equal(db.prepare("SELECT identity_source FROM literature_identities_v2 WHERE literature_id = ?").get("legacy-record").identity_source, "manual");
+  db.close();
+});
+
+test("acquires PostgreSQL literature identity locks in canonical key order", async () => {
+  const lockKeys = [];
+  const row = {
+    authors: [],
+    confirmed_at: new Date("2026-08-09T00:00:00.000Z"),
+    created_at: new Date("2026-08-09T00:00:00.000Z"),
+    document_type: null,
+    id: "literature_lock_order",
+    record_source: "manual",
+    revision: 1,
+    source_provider: null,
+    title: "Lock order",
+    updated_at: new Date("2026-08-09T00:00:00.000Z"),
+    publication_year: null
+  };
+  const client = {
+    async query(sql, values = []) {
+      if (sql.includes("pg_advisory_xact_lock")) lockKeys.push(values[0]);
+      if (sql.startsWith("SELECT * FROM literature_records")) return { rows: [row] };
+      if (sql.startsWith("SELECT identity_kind AS kind")) return { rows: [] };
+      if (sql.includes("SELECT literature_id FROM literature_identities")) return { rows: [] };
+      return { rows: [] };
+    },
+    release() {}
+  };
+  const pool = { async connect() { return client; } };
+  const repository = new PostgresAnnotationCommunityRepository(pool);
+  await repository.confirmLiterature({ id: "lock-owner" }, {
+    mode: "manual",
+    record: {
+      authors: ["Lock Owner"],
+      identifiers: [
+        { kind: "doi", source: "manual", value: "10.1000/z" },
+        { kind: "arxiv_id", source: "manual", value: "2401.0001" }
+      ],
+      title: "Lock order"
+    }
+  });
+  assert.deepEqual(lockKeys, ["arxiv_id:2401.0001", "doi:10.1000/z"]);
 });
 
 test("public reads are anonymous while writes require a Bearer session", async () => {

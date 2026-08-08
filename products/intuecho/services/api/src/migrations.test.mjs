@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Database from "better-sqlite3";
+import { initializeAnnotationCommunitySqlite } from "./annotationCommunitySqlite.mjs";
 import { readIntuechoMigrations, verifyIntuechoMigrations } from "./migrations.mjs";
 
 test("loads ordered immutable forum migrations", () => {
@@ -69,4 +71,22 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
     }),
     /intuecho_migration_unknown/
   );
+});
+
+test("upgrades SQLite literature provenance schema with snapshots and guarded constraints", () => {
+  const db = new Database(":memory:");
+  db.exec("CREATE TABLE literature_records_v2 (id TEXT PRIMARY KEY, title TEXT NOT NULL, authors_json TEXT NOT NULL, publication_year INTEGER, document_type TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+  db.exec("CREATE TABLE literature_identities_v2 (literature_id TEXT NOT NULL, identity_kind TEXT NOT NULL, identity_value TEXT NOT NULL, identity_source TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(literature_id, identity_kind, identity_value), UNIQUE(identity_kind, identity_value))");
+  db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run("legacy", "Legacy", "[]", "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z");
+  db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("legacy", "doi", "https://doi.org/10.1000/legacy", "metadata", "2026-08-09T00:00:00.000Z");
+  initializeAnnotationCommunitySqlite(db);
+  assert.deepEqual(new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name)), new Set(["id", "title", "authors_json", "publication_year", "document_type", "created_at", "updated_at", "record_source", "source_provider", "confirmed_at", "revision"]));
+  assert.equal(db.prepare("SELECT count(*) AS count FROM literature_record_versions_v2 WHERE literature_id = 'legacy'").get().count, 1);
+  const legacySnapshot = JSON.parse(db.prepare("SELECT snapshot_json FROM literature_record_versions_v2 WHERE literature_id = 'legacy'").get().snapshot_json);
+  assert.equal(legacySnapshot.recordSource, "legacy_metadata");
+  assert.equal(legacySnapshot.identifiers[0].source, "metadata");
+  assert.throws(() => db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, record_source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run("bad-source", "Bad", "[]", "invalid", "now", "now"), /literature_record_source_invalid/);
+  assert.throws(() => db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("legacy", "invalid", "id", "metadata", "now"), /literature_identity_kind_invalid/);
+  assert.throws(() => db.prepare("INSERT OR REPLACE INTO literature_record_versions_v2(id, literature_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)").run("replacement", "legacy", 1, "{}", "replace", "now"), /literature_record_version_is_append_only|UNIQUE/);
+  db.close();
 });

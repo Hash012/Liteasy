@@ -75,6 +75,22 @@ try {
        AND NOT tgisinternal
   `);
   assert.equal(versionTrigger.rowCount, 1);
+  const provenanceConstraints = await migrationPool.query(`
+    SELECT conname, pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint
+     WHERE conrelid IN ('literature_records'::regclass, 'literature_identities'::regclass)
+       AND conname IN (
+         'literature_records_record_source_check',
+         'literature_records_revision_check',
+         'literature_identities_identity_kind_check',
+         'literature_identities_identity_source_check'
+       )
+     ORDER BY conname
+  `);
+  assert.equal(provenanceConstraints.rowCount, 4);
+  assert.match(provenanceConstraints.rows.find((row) => row.conname === "literature_records_record_source_check").definition, /public_registry/);
+  assert.match(provenanceConstraints.rows.find((row) => row.conname === "literature_identities_identity_kind_check").definition, /openalex_id/);
+  assert.match(provenanceConstraints.rows.find((row) => row.conname === "literature_identities_identity_source_check").definition, /manual/);
   await migrationPool.query(`
     INSERT INTO literature_records(id, title, authors, record_source, confirmed_at)
     VALUES ('migration-provenance-record', 'Migration provenance', '[]'::jsonb, 'manual', now())
@@ -83,6 +99,14 @@ try {
     INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by)
     VALUES ('migration-provenance-version', 'migration-provenance-record', 1, '{"title":"Migration provenance"}', 'integration')
   `);
+  await assert.rejects(
+    () => migrationPool.query("UPDATE literature_records SET record_source = 'invalid' WHERE id = 'migration-provenance-record'"),
+    /literature_records_record_source_check/
+  );
+  await assert.rejects(
+    () => migrationPool.query("INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source) VALUES ('migration-provenance-record', 'invalid', 'invalid', 'manual')"),
+    /literature_identities_identity_kind_check/
+  );
   await assert.rejects(
     () => migrationPool.query("UPDATE literature_record_versions SET changed_by = 'tampered' WHERE id = 'migration-provenance-version'"),
     /literature_record_version_is_append_only/
@@ -240,6 +264,74 @@ try {
       return userId === "user-2" ? [{ name: "证据研究组织", organizationId: "org-integration", role: "admin" }] : [];
     }
   });
+  const literatureOwner = { id: "literature-integration-owner", initials: "LO", name: "Literature Owner" };
+  const manualLiterature = await annotations.confirmLiterature(literatureOwner, {
+    mode: "manual",
+    record: {
+      authors: ["Ada Lovelace"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
+      title: "Integration Manual Literature",
+      year: 1843
+    }
+  });
+  assert.equal(manualLiterature.provenance.mode, "manual");
+  const concurrentLiterature = await Promise.all([
+    annotations.confirmLiterature(literatureOwner, {
+      mode: "manual",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
+        title: "Integration Manual Literature",
+        year: 1843
+      }
+    }),
+    annotations.confirmLiterature(literatureOwner, {
+      mode: "manual",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
+        title: "Integration Manual Literature",
+        year: 1843
+      }
+    })
+  ]);
+  assert.deepEqual(concurrentLiterature.map((item) => item.literatureId), [manualLiterature.literatureId, manualLiterature.literatureId]);
+  await annotations.confirmLiterature(literatureOwner, {
+    mode: "manual",
+    record: {
+      authors: ["Ada Lovelace"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
+      title: "Corrected Integration Literature",
+      year: 1843
+    }
+  });
+  const manualVersion = await pool.query("SELECT snapshot ->> 'title' AS title FROM literature_record_versions WHERE literature_id = $1 AND revision = 1", [manualLiterature.literatureId]);
+  assert.equal(manualVersion.rows[0].title, "Integration Manual Literature");
+  const secondLiterature = await annotations.confirmLiterature(literatureOwner, {
+    mode: "manual",
+    record: {
+      authors: ["Grace Hopper"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-other" }],
+      title: "Integration Other Literature",
+      year: 1952
+    }
+  });
+  await assert.rejects(
+    () => annotations.confirmLiterature(literatureOwner, {
+      mode: "manual",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [
+          { kind: "doi", source: "manual", value: "10.1000/integration-manual" },
+          { kind: "doi", source: "manual", value: "10.1000/integration-other" }
+        ],
+        title: "Integration Conflict",
+        year: 1843
+      }
+    }),
+    /LITERATURE_IDENTITY_CONFLICT/
+  );
+  assert.equal((await annotations.findLiteratureByIdentifiers(secondLiterature.identifiers)).literatureId, secondLiterature.literatureId);
   const userOne = { id: "user-1", initials: "同名", name: "同名研究者" };
   const userTwo = { id: "user-2", initials: "证据", name: "证据复核者" };
   assert.deepEqual(await annotations.updateProfile(userOne.id, {
