@@ -115,6 +115,10 @@ function artifactResultClient() {
   return {
     delete: vi.fn(async () => undefined),
     list: vi.fn(async () => []),
+    rename: vi.fn(async (_artifactId: string, title: string) => ({
+      ...persistedArtifact(),
+      title
+    })),
     save: vi.fn(async (document: { artifactId: string }) =>
       `development/test-data/agent-results/${document.artifactId}.json`
     )
@@ -554,6 +558,54 @@ describe("useArtifactWorkflowController", () => {
     expect(result.current.model.artifactCatalogLoadState).toEqual({ status: "ready" });
     expect(result.current.model.artifactCatalog).toEqual([
       expect.objectContaining({ artifactId: "artifact-saved" })
+    ]);
+  });
+
+  test("returns an error outcome when renaming a persisted artifact fails", async () => {
+    const artifactStore = createArtifactStore();
+    let resolveList: (artifacts: AgentArtifactResult[]) => void = () => undefined;
+    const listPromise = new Promise<AgentArtifactResult[]>((resolve) => {
+      resolveList = resolve;
+    });
+    const client = {
+      ...artifactResultClient(),
+      list: vi.fn(() => listPromise),
+      rename: vi.fn(async () => {
+        throw new Error("network unavailable");
+      })
+    };
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactResultClient: client,
+        artifactResultScopeKey: "https://cloud.example:user-a",
+        artifactStore,
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+    await act(async () => {
+      resolveList([persistedArtifact()]);
+      await listPromise;
+    });
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-saved" })
+    ]);
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.actions.renameArtifact("artifact-saved", "New title");
+    });
+
+    expect(outcome).toEqual({
+      message: "重命名多模态产物失败：network unavailable",
+      status: "error"
+    });
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-saved", title: "Saved Mind Map" })
     ]);
   });
 

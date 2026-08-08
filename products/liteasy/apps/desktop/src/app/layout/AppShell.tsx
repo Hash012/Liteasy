@@ -534,12 +534,15 @@ export function AppShell({
   }
 
   async function deleteArtifact(artifactId: string) {
-    const message = await artifactWorkflow.actions.deleteArtifact(artifactId);
+    const outcome = await artifactWorkflow.actions.deleteArtifact(artifactId);
+    if (outcome.status === "error") {
+      return outcome;
+    }
     const remainingTabs = artifactTabs.filter(
       (candidate) => candidate.artifactId !== artifactId
     );
     selectFallbackArtifact(artifactId, remainingTabs);
-    return message;
+    return outcome;
   }
 
   function moveArtifactSurface(artifactId: string, targetRegionId: DockRegionId) {
@@ -1410,7 +1413,8 @@ export function AppShell({
       if (item.kind !== "artifact") {
         return "仅支持重命名已保存的多模态产物。";
       }
-      return artifactWorkflow.actions.renameArtifact(item.id, requestedName);
+      const outcome = await artifactWorkflow.actions.renameArtifact(item.id, requestedName);
+      return outcome.message;
     },
     onOpenSharedLibrary: (summary) => {
       void organizationShell.actions.openOrganizationSharedLibrary(summary);
@@ -1626,7 +1630,8 @@ export function AppShell({
           onOpenEvidence={openEvidenceInReader}
           onOpenVisualization={openVisualization}
           onDeleteArtifact={async (artifactId) => {
-            return deleteArtifact(artifactId);
+            const outcome = await deleteArtifact(artifactId);
+            return outcome.message;
           }}
           onExportArtifact={artifactExports.actions.exportArtifact}
           onActivateArtifact={activateArtifactSurface}

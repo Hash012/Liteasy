@@ -59,6 +59,7 @@ export default function ArtifactLibraryBrowserFixture() {
             exportStatus="ready"
             onDeleteArtifact={(artifactId) => {
               setArtifacts((current) => current.filter((item) => item.artifactId !== artifactId));
+              return { message: "已删除", status: "success" };
             }}
             onOpenArtifact={() => undefined}
             onOpenExport={() => undefined}
@@ -71,6 +72,7 @@ export default function ArtifactLibraryBrowserFixture() {
               setArtifacts((current) => current.map((item) => (
                 item.artifactId === artifactId ? { ...item, title: name } : item
               )));
+              return { message: "已重命名", status: "success" };
             }}
             onRevealExport={() => undefined}
           />

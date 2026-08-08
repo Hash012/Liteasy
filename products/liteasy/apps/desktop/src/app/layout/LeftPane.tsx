@@ -28,6 +28,7 @@ import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 import type {
   ArtifactCatalogLoadState,
+  ArtifactMutationOutcome,
   ArtifactTab
 } from "../features/artifacts/artifact.types";
 import type {
@@ -72,7 +73,9 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
-  onDeleteArtifact: (artifactId: string) => unknown | Promise<unknown>;
+  onDeleteArtifact: (
+    artifactId: string
+  ) => ArtifactMutationOutcome | Promise<ArtifactMutationOutcome>;
   onDismissRecommendation: (item: RecommendationItem) => void;
   onCreateOrganization?: () => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
@@ -99,7 +102,10 @@ export type LeftPaneProps = {
   onReturnToLocalWorkspace: () => void;
   onReloadArtifactCatalog: () => unknown | Promise<unknown>;
   onRemoveExport: (recordId: string) => unknown | Promise<unknown>;
-  onRenameArtifact: (artifactId: string, name: string) => unknown | Promise<unknown>;
+  onRenameArtifact: (
+    artifactId: string,
+    name: string
+  ) => ArtifactMutationOutcome | Promise<ArtifactMutationOutcome>;
   onRefreshExports: () => unknown | Promise<unknown>;
   onRevealExport: (recordId: string) => unknown | Promise<unknown>;
   onRenameLibraryFolder?: (folderPath: string, requestedName: string) => Promise<string>;

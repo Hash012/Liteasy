@@ -34,6 +34,7 @@ import type {
 } from "./artifactExport.types";
 import type {
   ArtifactCatalogLoadState,
+  ArtifactMutationOutcome,
   ArtifactTab,
   ArtifactType
 } from "./artifact.types";
@@ -46,13 +47,18 @@ type ArtifactLibraryPaneProps = {
   exportError?: string;
   exportRecords: ArtifactExportRecord[];
   exportStatus: ArtifactExportHistoryStatus;
-  onDeleteArtifact: (artifactId: string) => unknown | Promise<unknown>;
+  onDeleteArtifact: (
+    artifactId: string
+  ) => ArtifactMutationOutcome | Promise<ArtifactMutationOutcome>;
   onOpenArtifact: (artifactId: string) => unknown;
   onOpenExport: (recordId: string) => unknown | Promise<unknown>;
   onReloadArtifactCatalog: () => unknown | Promise<unknown>;
   onRefreshExports: () => unknown | Promise<unknown>;
   onRemoveExport: (recordId: string) => unknown | Promise<unknown>;
-  onRenameArtifact: (artifactId: string, name: string) => unknown | Promise<unknown>;
+  onRenameArtifact: (
+    artifactId: string,
+    name: string
+  ) => ArtifactMutationOutcome | Promise<ArtifactMutationOutcome>;
   onRevealExport: (recordId: string) => unknown | Promise<unknown>;
 };
 
@@ -142,7 +148,11 @@ export function ArtifactLibraryPane({
     setDialogPending(true);
     setDialogError(undefined);
     try {
-      await onRenameArtifact(renameTarget.artifactId, renameName.trim());
+      const outcome = await onRenameArtifact(renameTarget.artifactId, renameName.trim());
+      if (outcome.status === "error") {
+        setDialogError(outcome.message);
+        return;
+      }
       setRenameTarget(null);
     } catch (error) {
       setDialogError(messageFrom(error));
@@ -156,7 +166,11 @@ export function ArtifactLibraryPane({
     setDialogPending(true);
     setDialogError(undefined);
     try {
-      await onDeleteArtifact(deleteTarget.artifactId);
+      const outcome = await onDeleteArtifact(deleteTarget.artifactId);
+      if (outcome.status === "error") {
+        setDialogError(outcome.message);
+        return;
+      }
       setDeleteTarget(null);
     } catch (error) {
       setDialogError(messageFrom(error));
@@ -170,7 +184,13 @@ export function ArtifactLibraryPane({
       <div className="artifact-library-toolbar">
         <TabList
           aria-label="产物库分类"
-          onTabSelect={(_, data) => setActiveView(data.value as "exported" | "saved")}
+          onTabSelect={(_, data) => {
+            const nextView = data.value as "exported" | "saved";
+            setActiveView(nextView);
+            if (nextView === "exported" && activeView !== "exported") {
+              void onRefreshExports();
+            }
+          }}
           selectedValue={activeView}
           size="small"
         >
@@ -385,6 +405,7 @@ function SavedArtifactList({
             </MenuTrigger>
             <MenuPopover>
               <MenuList>
+                <MenuItem icon={<OpenRegular />} onClick={() => onOpen(artifact.artifactId)}>打开</MenuItem>
                 <MenuItem icon={<EditRegular />} onClick={() => onRename(artifact)}>重命名</MenuItem>
                 <MenuItem icon={<DeleteRegular />} onClick={() => onDelete(artifact)}>删除</MenuItem>
               </MenuList>
@@ -444,9 +465,9 @@ function ExportRecordList({
           return (
             <li className="artifact-library-row artifact-library-export-row" key={record.id}>
               <div className="artifact-library-export-copy">
-                <span className="artifact-library-title">{record.title}</span>
+                <span className="artifact-library-title">{record.fileName}</span>
                 <span className="artifact-library-meta">
-                  {formatLabels[record.format]} · {displayDate(record.exportedAt)}
+                  {record.title} · {formatLabels[record.format]} · {displayDate(record.exportedAt)}
                 </span>
                 <span className={`artifact-library-status${missing ? " is-missing" : ""}`}>
                   {record.location === "browser"

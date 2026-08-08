@@ -39,13 +39,13 @@ function props() {
     exportError: undefined,
     exportRecords: [] as ArtifactExportRecord[],
     exportStatus: "ready" as const,
-    onDeleteArtifact: vi.fn(async () => undefined),
+    onDeleteArtifact: vi.fn(async () => ({ message: "已删除", status: "success" as const })),
     onOpenArtifact: vi.fn(),
     onOpenExport: vi.fn(async () => undefined),
     onReloadArtifactCatalog: vi.fn(async () => undefined),
     onRefreshExports: vi.fn(async () => undefined),
     onRemoveExport: vi.fn(async () => undefined),
-    onRenameArtifact: vi.fn(async () => undefined),
+    onRenameArtifact: vi.fn(async () => ({ message: "已重命名", status: "success" as const })),
     onRevealExport: vi.fn(async () => undefined)
   };
 }
@@ -115,8 +115,15 @@ describe("ArtifactLibraryPane", () => {
     expect(paneProps.onOpenArtifact).toHaveBeenCalledWith("artifact-thin-reading");
 
     await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
-    await user.click(screen.getByRole("menuitem", { name: "重命名" }));
-    const nameInput = screen.getByRole("textbox", { name: "产物名称" });
+    await user.click(screen.getByRole("menuitem", { name: "打开" }));
+    expect(paneProps.onOpenArtifact).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(screen.queryByRole("menuitem", { name: "打开" })).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
+    await user.click(await screen.findByRole("menuitem", { name: "重命名" }));
+    const nameInput = await screen.findByRole("textbox", { name: "产物名称" });
     await user.clear(nameInput);
     await user.type(nameInput, "新的薄读");
     await user.click(screen.getByRole("button", { name: "保存" }));
@@ -135,6 +142,56 @@ describe("ArtifactLibraryPane", () => {
     expect(paneProps.onDeleteArtifact).toHaveBeenCalledWith("artifact-thin-reading");
   });
 
+  test("keeps the rename dialog open when the workflow returns an error", async () => {
+    const user = userEvent.setup();
+    render(
+      <ArtifactLibraryPane
+        {...props()}
+        onRenameArtifact={vi.fn(async () => ({
+          message: "重命名多模态产物失败：network unavailable",
+          status: "error" as const
+        }))}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
+    await user.click(screen.getByRole("menuitem", { name: "重命名" }));
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(screen.getByRole("dialog", { name: "重命名产物" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("network unavailable");
+  });
+
+  test("keeps the delete dialog open when the workflow returns an error", async () => {
+    const user = userEvent.setup();
+    render(
+      <ArtifactLibraryPane
+        {...props()}
+        onDeleteArtifact={vi.fn(async () => ({
+          message: "删除多模态产物失败：network unavailable",
+          status: "error" as const
+        }))}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
+    await user.click(screen.getByRole("menuitem", { name: "删除" }));
+    await user.click(screen.getByRole("button", { name: "确认删除" }));
+
+    expect(screen.getByRole("dialog", { name: "删除产物" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("network unavailable");
+  });
+
+  test("refreshes export availability when entering the exported view", async () => {
+    const user = userEvent.setup();
+    const paneProps = props();
+    render(<ArtifactLibraryPane {...paneProps} exportRecords={[desktopExport]} />);
+
+    await user.click(screen.getByRole("tab", { name: "已导出" }));
+
+    expect(paneProps.onRefreshExports).toHaveBeenCalledTimes(1);
+  });
+
   test("offers open, reveal, and remove actions for available desktop exports", async () => {
     const user = userEvent.setup();
     const paneProps = props();
@@ -148,6 +205,7 @@ describe("ArtifactLibraryPane", () => {
     expect(paneProps.onOpenExport).toHaveBeenCalledWith("export-desktop");
     expect(paneProps.onRevealExport).toHaveBeenCalledWith("export-desktop");
     expect(paneProps.onRemoveExport).toHaveBeenCalledWith("export-desktop");
+    expect(screen.getByText(desktopExport.fileName)).toBeInTheDocument();
     expect(screen.getByText(desktopExport.path)).toBeInTheDocument();
   });
 

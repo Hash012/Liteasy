@@ -5,6 +5,7 @@ import type { ImportQueueStatus } from "../workspace/useWorkspaceActions";
 import { buildArtifactPreview } from "./artifactPreview";
 import type {
   ArtifactRegenerationRequest,
+  ArtifactMutationOutcome,
   ArtifactTab,
   ArtifactTask,
   ArtifactTaskStage,
@@ -1048,14 +1049,14 @@ export function useArtifactActions({
     syncArtifacts();
   }
 
-  async function deleteArtifact(artifactId: string) {
+  async function deleteArtifact(artifactId: string): Promise<ArtifactMutationOutcome> {
     const existing = artifactStore
       .getCatalog()
       .find((tab) => tab.artifactId === artifactId);
     if (!existing || existing.type === "skill_doc") {
       const message = "找不到可删除的已保存多模态产物。";
       onAnalysisHint(message);
-      return message;
+      return { message, status: "error" };
     }
     try {
       await artifactResultClient.delete(artifactId);
@@ -1063,11 +1064,11 @@ export function useArtifactActions({
       syncArtifacts();
       const message = `已删除多模态产物：${existing.title}`;
       onAnalysisHint(message);
-      return message;
+      return { message, status: "success" };
     } catch (error) {
       const message = `删除多模态产物失败：${error instanceof Error ? error.message : String(error)}`;
       onAnalysisHint(message);
-      return message;
+      return { message, status: "error" };
     }
   }
 

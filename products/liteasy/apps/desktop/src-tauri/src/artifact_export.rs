@@ -158,7 +158,52 @@ fn read_snapshot_at(app_data: &Path) -> Result<ArtifactExportSnapshot, String> {
     Ok(parsed)
 }
 
-fn save_snapshot_at(app_data: &Path, snapshot: &ArtifactExportSnapshot) -> Result<(), String> {
+#[cfg(not(windows))]
+fn publish_snapshot(temporary_path: &Path, path: &Path) -> Result<(), String> {
+    fs::rename(temporary_path, path).map_err(|error| format!("无法发布导出历史：{error}"))
+}
+
+#[cfg(windows)]
+fn publish_snapshot(temporary_path: &Path, path: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let temporary: Vec<u16> = temporary_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let target: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let result = unsafe {
+        MoveFileExW(
+            temporary.as_ptr(),
+            target.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        return Err(format!(
+            "无法发布导出历史：{}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    Ok(())
+}
+
+fn save_snapshot_with_publisher_at<F>(
+    app_data: &Path,
+    snapshot: &ArtifactExportSnapshot,
+    publish: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&Path, &Path) -> Result<(), String>,
+{
     let serialized =
         serde_json::to_vec(snapshot).map_err(|error| format!("无法编码导出历史：{error}"))?;
     if serialized.len() as u64 > MAX_EXPORT_HISTORY_BYTES {
@@ -191,17 +236,17 @@ fn save_snapshot_at(app_data: &Path, snapshot: &ArtifactExportSnapshot) -> Resul
             .write_all(&serialized)
             .and_then(|_| temporary.sync_all())
             .map_err(|error| format!("无法写入导出历史：{error}"))?;
-        #[cfg(windows)]
-        if path.exists() {
-            fs::remove_file(&path).map_err(|error| format!("无法替换旧导出历史：{error}"))?;
-        }
-        fs::rename(&temporary_path, &path).map_err(|error| format!("无法发布导出历史：{error}"))?;
+        publish(&temporary_path, &path)?;
         Ok(())
     })();
     if result.is_err() && temporary_path.exists() {
         let _ = fs::remove_file(temporary_path);
     }
     result
+}
+
+fn save_snapshot_at(app_data: &Path, snapshot: &ArtifactExportSnapshot) -> Result<(), String> {
+    save_snapshot_with_publisher_at(app_data, snapshot, publish_snapshot)
 }
 
 fn list_records_at(app_data: &Path) -> Result<Vec<ArtifactExportRecord>, String> {
@@ -429,8 +474,8 @@ pub fn remove_artifact_export(app: AppHandle, record_id: String) -> Result<(), S
 mod tests {
     use super::{
         find_available_record_at, list_records_at, persist_record_after_file_save_at,
-        remove_record_at, save_snapshot_at, snapshot, ArtifactExportFormat, ArtifactExportRecord,
-        ArtifactExportStatus,
+        remove_record_at, save_snapshot_at, save_snapshot_with_publisher_at, snapshot,
+        ArtifactExportFormat, ArtifactExportRecord, ArtifactExportStatus,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -560,6 +605,34 @@ mod tests {
         assert!(error.contains("文件已保存，但未写入导出历史"));
         assert!(error.contains(&export.path.display().to_string()));
         assert!(export.path.is_file());
+        fs::remove_dir_all(root).expect("remove temporary directory");
+    }
+
+    #[test]
+    fn keeps_the_previous_snapshot_when_publish_fails() {
+        let root = temporary_directory("publish-failure");
+        let previous = record(&root, "previous", "2026-08-09T01:00:00.000Z");
+        save_snapshot_at(&root, &snapshot(vec![previous.clone()])).expect("save previous snapshot");
+        let replacement = record(&root, "replacement", "2026-08-09T02:00:00.000Z");
+
+        let error = save_snapshot_with_publisher_at(
+            &root,
+            &snapshot(vec![replacement]),
+            |_temporary_path, target_path| {
+                let serialized =
+                    fs::read(target_path).expect("previous snapshot remains published");
+                let stored: serde_json::Value =
+                    serde_json::from_slice(&serialized).expect("valid previous snapshot");
+                assert_eq!(stored["records"][0]["id"], "previous");
+                Err("simulated publish failure".to_string())
+            },
+        )
+        .expect_err("publish must fail");
+
+        assert!(error.contains("simulated publish failure"));
+        let records = list_records_at(&root).expect("read previous snapshot");
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].id, previous.id);
         fs::remove_dir_all(root).expect("remove temporary directory");
     }
 }
