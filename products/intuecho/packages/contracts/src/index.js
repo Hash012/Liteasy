@@ -103,6 +103,117 @@ export const annotationVisibilitySchema = z.enum([
   "public"
 ]);
 
+export const literatureIdentifierKindSchema = z.enum([
+  "doi",
+  "arxiv_id",
+  "semantic_scholar_id",
+  "openalex_id",
+  "title_authors_year_hash"
+]);
+
+export const literatureSourceSchema = z.enum(["public_registry", "manual", "inferred"]);
+
+export const literatureIdentifierSchema = z.object({
+  kind: literatureIdentifierKindSchema,
+  source: literatureSourceSchema,
+  value: z.string().trim().min(1).max(1000)
+});
+
+const literatureDisplaySchema = z.object({
+  authors: z.array(z.string().trim().min(1).max(300)).max(200),
+  documentType: z.string().trim().min(1).max(100).optional(),
+  identifiers: z.array(literatureIdentifierSchema).max(20),
+  title: z.string().trim().min(1).max(1000),
+  year: z.number().int().min(1000).max(9999).optional()
+});
+
+const literatureProviderSchema = z.enum(["intuecho", "openalex", "crossref", "arxiv", "semantic_scholar"]);
+
+export const literatureCandidateSchema = z.object({
+  candidateKey: z.string().trim().min(1).max(1000),
+  provider: literatureProviderSchema,
+  record: literatureDisplaySchema
+});
+
+const manualLiteratureIdentifierSchema = z.object({
+  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id"]),
+  source: z.literal("manual"),
+  value: z.string().trim().min(1).max(1000)
+}).strict();
+
+export const manualLiteratureInputSchema = z.object({
+  authors: z.array(z.string().trim().min(1).max(300)).max(200),
+  documentType: z.string().trim().min(1).max(100).optional(),
+  identifiers: z.array(manualLiteratureIdentifierSchema).max(20),
+  title: z.string().trim().min(1).max(1000),
+  year: z.number().int().min(1000).max(9999).optional()
+}).strict().superRefine((value, context) => {
+  if (value.identifiers.length === 0 && (value.authors.length === 0 || !value.year)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "手动文献需要稳定标识，或完整的标题、作者和年份。"
+    });
+  }
+});
+
+export const literatureRecordSchema = z.object({
+  ...literatureDisplaySchema.shape,
+  identifiers: z.array(literatureIdentifierSchema).min(1).max(20),
+  literatureId: z.string().trim().min(1).max(200),
+  provenance: z.object({
+    confirmedAt: z.string().datetime(),
+    mode: z.enum(["public_registry", "manual"]),
+    provider: literatureProviderSchema.optional()
+  })
+}).superRefine((value, context) => {
+  if (value.identifiers.some((identifier) => identifier.source !== value.provenance.mode)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["identifiers"],
+      message: "文献标识来源必须与确认来源一致。"
+    });
+  }
+});
+
+const literatureResolveHintsSchema = z.object({
+  authors: z.array(z.string().trim().min(1).max(300)).max(200).optional(),
+  identifiers: z.array(z.object({
+    kind: literatureIdentifierKindSchema,
+    value: z.string().trim().min(1).max(1000)
+  }).strict()).max(20).optional(),
+  title: z.string().trim().min(1).max(1000).optional(),
+  year: z.number().int().min(1000).max(9999).optional()
+}).strict();
+
+export const literatureResolveInputSchema = z.object({
+  hints: literatureResolveHintsSchema.optional(),
+  limit: z.number().int().min(1).max(10).optional(),
+  purpose: z.enum(["forum_compose", "liteasy_pdf_annotation"]),
+  query: z.string().trim().min(1).max(1000).optional()
+}).strict().superRefine((value, context) => {
+  const hints = value.hints;
+  const hasUsableHint = Boolean(
+    hints?.title || hints?.year || hints?.authors?.length || hints?.identifiers?.length
+  );
+  if (!value.query && !hasUsableHint) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "文献检索需要查询文本或至少一个书目提示。"
+    });
+  }
+});
+
+export const literatureConfirmInputSchema = z.discriminatedUnion("mode", [
+  z.object({
+    candidateKey: z.string().trim().min(1).max(1000),
+    mode: z.literal("candidate")
+  }).strict(),
+  z.object({
+    mode: z.literal("manual"),
+    record: manualLiteratureInputSchema
+  }).strict()
+]);
+
 export const literatureMetadataSchema = z.object({
   authors: z.array(z.string().trim().min(1).max(300)).max(200).default([]),
   documentType: z.string().trim().min(1).max(100).optional(),
@@ -110,10 +221,19 @@ export const literatureMetadataSchema = z.object({
   year: z.number().int().min(1000).max(9999).optional()
 });
 
-export const literatureReferenceSchema = z.object({
+const legacyLiteratureReferenceSchema = z.object({
   identity: paperIdentitySchema,
   metadata: literatureMetadataSchema
-});
+}).strict();
+
+export const confirmedLiteratureReferenceSchema = z.object({
+  literatureId: z.string().trim().min(1).max(200)
+}).strict();
+
+export const literatureReferenceSchema = z.union([
+  confirmedLiteratureReferenceSchema,
+  legacyLiteratureReferenceSchema
+]);
 
 const sourceEvidenceSchema = z.object({
   anchorHash: z.string().trim().min(8).max(500),
@@ -270,3 +390,36 @@ export const desktopCommunityAnnotationSchema = z.object({
 export const desktopCommunityAnnotationBatchSchema = z.object({
   annotations: z.array(desktopCommunityAnnotationSchema).min(1).max(100)
 });
+
+const desktopPublicationOperationSchema = z.object({
+  annotationId: z.string().trim().min(1).max(200),
+  queueKey: z.string().trim().min(1).max(500),
+  revision: z.number().int().positive(),
+  updatedAt: z.string().datetime()
+});
+
+const desktopPublicationSourcePassageSchema = z.object({
+  anchorHash: z.string().trim().min(8).max(500),
+  excerpt: z.string().trim().min(1).max(4000),
+  page: z.number().int().positive().optional(),
+  rects: z.array(z.record(z.unknown())).max(200).default([])
+}).strict();
+
+const desktopPublicationUpsertSchema = desktopPublicationOperationSchema.extend({
+  body: z.string().trim().min(1).max(8000),
+  literatureId: z.string().trim().min(1).max(200),
+  operation: z.literal("upsert"),
+  sourcePassage: desktopPublicationSourcePassageSchema
+}).strict();
+
+const desktopPublicationRetractSchema = desktopPublicationOperationSchema.extend({
+  operation: z.literal("retract"),
+  remoteAnnotationId: z.string().trim().min(1).max(200)
+}).strict();
+
+export const desktopAnnotationPublicationBatchSchema = z.object({
+  operations: z.array(z.discriminatedUnion("operation", [
+    desktopPublicationUpsertSchema,
+    desktopPublicationRetractSchema
+  ])).min(1).max(100)
+}).strict();
