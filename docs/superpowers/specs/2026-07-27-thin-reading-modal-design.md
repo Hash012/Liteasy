@@ -130,7 +130,7 @@ type ThinReadingNode = {
 
 ## Architecture
 
-Add a feature folder under `LiteasyClaw/desktop/src/app/features/thin-reading/`.
+Add a feature folder under `products/liteasy/apps/desktop/src/app/features/thin-reading/`.
 
 Primary units:
 

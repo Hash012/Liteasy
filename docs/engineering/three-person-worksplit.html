@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiteasyClaw 三人分工可视化</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #64748b;
+      --line: #d8e0ea;
+      --a: #2563eb;
+      --b: #0f766e;
+      --c: #b45309;
+      --shared: #6d28d9;
+      --risk: #b91c1c;
+      --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    header {
+      padding: 28px clamp(18px, 4vw, 48px);
+      background: #111827;
+      color: #f8fafc;
+      border-bottom: 4px solid #22c55e;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(26px, 4vw, 42px);
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 1080px;
+      margin: 0;
+      color: #cbd5e1;
+    }
+
+    main {
+      padding: 20px clamp(14px, 3vw, 36px) 40px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      background: rgba(246, 247, 251, 0.92);
+      backdrop-filter: blur(10px);
+      padding: 10px 0;
+    }
+
+    input[type="search"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px 13px;
+      font-size: 15px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 11px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button.active {
+      color: #fff;
+      background: #111827;
+      border-color: #111827;
+    }
+
+    .legend, .panel, .person-card, .file-block {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .legend-item {
+      display: grid;
+      gap: 4px;
+    }
+
+    .legend strong {
+      font-size: 18px;
+    }
+
+    .legend span, .muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(320px, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .person-card {
+      overflow: hidden;
+    }
+
+    .person-head {
+      padding: 16px;
+      color: #fff;
+    }
+
+    .person-head.a { background: var(--a); }
+    .person-head.b { background: var(--b); }
+    .person-head.c { background: var(--c); }
+
+    .person-head h2 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .person-head p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 13px;
+    }
+
+    .person-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    h3 {
+      margin: 0 0 7px;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .tag-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .tag {
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #eef2f7;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .file-block {
+      padding: 12px;
+      box-shadow: none;
+    }
+
+    .file-list {
+      display: grid;
+      gap: 5px;
+    }
+
+    code {
+      display: block;
+      padding: 5px 7px;
+      border: 1px solid #dde5ef;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    code.primary {
+      border-left: 4px solid #111827;
+    }
+
+    code.touch {
+      border-left: 4px solid #94a3b8;
+    }
+
+    code.test {
+      border-left: 4px solid #22c55e;
+    }
+
+    code.risk {
+      border-left: 4px solid var(--risk);
+    }
+
+    .panel {
+      padding: 16px;
+    }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    .shared-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+    }
+
+    .impact-wrap {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .impact-svg {
+      min-width: 1180px;
+      width: 100%;
+      height: 720px;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .impact-line {
+      fill: none;
+      stroke-width: 1.7;
+      opacity: 0.8;
+    }
+
+    .impact-line.a { stroke: var(--a); }
+    .impact-line.b { stroke: var(--b); }
+    .impact-line.c { stroke: var(--c); }
+    .impact-line.shared { stroke: var(--shared); stroke-dasharray: 5 4; }
+
+    .impact-node rect {
+      fill: #fff;
+      stroke: #94a3b8;
+      rx: 8;
+    }
+
+    .impact-node.person rect.a { fill: var(--a); stroke: var(--a); }
+    .impact-node.person rect.b { fill: var(--b); stroke: var(--b); }
+    .impact-node.person rect.c { fill: var(--c); stroke: var(--c); }
+    .impact-node.person rect.shared { fill: var(--shared); stroke: var(--shared); }
+
+    .impact-node.person text {
+      fill: #fff;
+      font-weight: 800;
+    }
+
+    .impact-node text {
+      fill: #0f172a;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .impact-node .sub {
+      fill: #64748b;
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    .impact-badge {
+      fill: #111827;
+    }
+
+    .impact-badge-text {
+      fill: #fff;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .rule-list {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .rule-list li {
+      margin: 5px 0;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 1080px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .legend {
+        grid-template-columns: repeat(2, minmax(140px, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+      .tabs {
+        justify-content: start;
+      }
+      .legend {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>LiteasyClaw 三人分工可视化</h1>
+    <p>目标是让三个人分别拥有清晰的主责闭环，同时把可能互相影响的文件明确标出来。主责文件可以直接推进；可能涉及文件要看影响范围；共享高风险文件改动前先同步。</p>
+  </header>
+
+  <main>
+    <section class="toolbar">
+      <input id="search" type="search" placeholder="搜索人、模块、文件路径、职责..." />
+      <div class="tabs" id="tabs"></div>
+    </section>
+
+    <section class="legend">
+      <div class="legend-item">
+        <strong>主责文件</strong>
+        <span>该负责人优先设计、实现、测试和评审。</span>
+      </div>
+      <div class="legend-item">
+        <strong>可能涉及</strong>
+        <span>改动常见但要注意跨模块影响。</span>
+      </div>
+      <div class="legend-item">
+        <strong>测试文件</strong>
+        <span>对应模块的 focused tests，优先补这里。</span>
+      </div>
+      <div class="legend-item">
+        <strong>共享高风险</strong>
+        <span>改前先沟通，避免多人同时抢一个入口。</span>
+      </div>
+    </section>
+
+    <section class="grid" id="people"></section>
+
+    <section class="panel">
+      <h2>文件影响连线图</h2>
+      <p class="muted">左侧是负责人和共享区，右侧是被多人涉及或属于共享高风险的文件。线条表示这个人会碰到这个文件；虚线表示共享高风险。搜索框会同步过滤连线。</p>
+      <div class="impact-wrap" id="impactGraph"></div>
+    </section>
+
+    <section class="panel">
+      <h2>共享高风险文件</h2>
+      <div class="shared-grid" id="shared"></div>
+    </section>
+
+    <section class="panel">
+      <h2>协作规则</h2>
+      <ul class="rule-list">
+        <li>任何人需要改 `AppShell.tsx`，先确认是否能通过 controller 接入。</li>
+        <li>新增跨模块逻辑先建或扩展 controller，不直接从一个 feature 调另一个 feature 的内部 hook。</li>
+        <li>每个人的 PR 尽量围绕自己的主责模块，测试文件跟着模块走。</li>
+        <li>如果一个需求同时碰到两个人的主责文件，先定义接口契约，再分别实现。</li>
+        <li>`docs/engineering/module-boundaries.md` 是最终边界规则；本分工图是执行层建议。</li>
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    const people = [
+      {
+        id: "a",
+        name: "A",
+        title: "AI 原生交互与动作运行时",
+        mission: "把 AI Assistant 推进成真正的 runtime UI，打通 intent -> plan -> confirmation -> action -> event。",
+        modules: ["agent-runtime", "actions", "skills", "assistant", "models"],
+        primary: [
+          "products/liteasy/apps/desktop/src/app/features/agent-runtime/agentRuntime.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/agent-runtime/contextValidation.ts",
+          "products/liteasy/apps/desktop/src/app/features/actions/action.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/actions/actionPolicy.ts",
+          "products/liteasy/apps/desktop/src/app/features/skills/actionRegistry.ts",
+          "products/liteasy/apps/desktop/src/app/features/skills/skillRegistry.ts",
+          "products/liteasy/apps/desktop/src/app/features/resources/resourceActionPolicy.ts",
+          "products/liteasy/apps/desktop/src/app/features/resources/resourceScope.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/AssistantPane.tsx",
+          "products/liteasy/apps/desktop/src/app/features/assistant/AssistantComposer.tsx",
+          "products/liteasy/apps/desktop/src/app/features/assistant/AssistantMessageList.tsx",
+          "products/liteasy/apps/desktop/src/app/features/assistant/AssistantHistoryPanel.tsx",
+          "products/liteasy/apps/desktop/src/app/features/assistant/ModeSwitch.tsx",
+          "products/liteasy/apps/desktop/src/app/features/assistant/assistant.store.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/assistant.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/assistantPresentation.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/assistantSessionHistory.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/commandRouter.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/generateAssistantAnswer.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/answerAuditor.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/answerFormatter.ts"
+        ],
+        touch: [
+          "products/liteasy/apps/desktop/src/app/layout/AssistantSidebar.tsx",
+          "products/liteasy/apps/desktop/src/app/controllers/useArtifactWorkflowController.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/modelGateway.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/modelRuntime.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/modelExecution.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/modelAuditClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/modelPolicy.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/localDevCloudEndpoint.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/useModelSettingsActions.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/usePolicySync.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/controlPlaneClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/controlPlaneRuntime.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/modelHttpClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/models/mockProviders.ts",
+          "products/liteasy/apps/desktop/src/app/features/settings/settings.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/settings/settingsRegistry.ts"
+        ],
+        tests: [
+          "products/liteasy/apps/desktop/src/tests/agentRuntimeContext.test.ts",
+          "products/liteasy/apps/desktop/src/tests/actionPolicyAdapter.test.ts",
+          "products/liteasy/apps/desktop/src/tests/actionRegistry.test.ts",
+          "products/liteasy/apps/desktop/src/tests/skillRegistry.test.ts",
+          "products/liteasy/apps/desktop/src/tests/resourceActionPolicy.test.ts",
+          "products/liteasy/apps/desktop/src/tests/AssistantPane.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/AssistantComposer.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/AssistantMessageList.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/AssistantHistoryPanel.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/assistant.store.test.ts",
+          "products/liteasy/apps/desktop/src/tests/assistantPresentation.test.ts",
+          "products/liteasy/apps/desktop/src/tests/assistantSessionHistory.test.ts",
+          "products/liteasy/apps/desktop/src/tests/commandRouter.test.ts",
+          "products/liteasy/apps/desktop/src/tests/generateAssistantAnswer.test.ts",
+          "products/liteasy/apps/desktop/src/tests/answerAuditor.test.ts",
+          "products/liteasy/apps/desktop/src/tests/answerFormatter.test.ts",
+          "products/liteasy/apps/desktop/src/tests/modelGateway.test.ts",
+          "products/liteasy/apps/desktop/src/tests/modelGatewayAnswer.test.ts",
+          "products/liteasy/apps/desktop/src/tests/modelRuntime.test.ts",
+          "products/liteasy/apps/desktop/src/tests/modelAuditClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/modelPolicy.store.test.ts",
+          "products/liteasy/apps/desktop/src/tests/localDevCloudEndpoint.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useModelSettingsActions.test.ts"
+        ]
+      },
+      {
+        id: "b",
+        name: "B",
+        title: "文献处理、检索与多模态表达",
+        mission: "把选中文献集 -> 导入 -> 检索证据 -> artifact 主链路做准、做快、做可追溯。",
+        modules: ["workspace", "selection", "import", "retrieval", "artifacts", "library"],
+        primary: [
+          "products/liteasy/apps/desktop/src/app/controllers/useWorkspaceSelectionController.ts",
+          "products/liteasy/apps/desktop/src/app/controllers/useArtifactWorkflowController.ts",
+          "products/liteasy/apps/desktop/src/app/features/workspace/workspace.store.ts",
+          "products/liteasy/apps/desktop/src/app/features/workspace/workspace.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/workspace/useWorkspaceActions.ts",
+          "products/liteasy/apps/desktop/src/app/features/workspace/useRegisteredWorkspaceActions.ts",
+          "products/liteasy/apps/desktop/src/app/features/workspace/workspaceFolderTree.ts",
+          "products/liteasy/apps/desktop/src/app/features/workspace/workspaceStateHelpers.ts",
+          "products/liteasy/apps/desktop/src/app/features/selection/selection.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/selection/selectionSnapshot.ts",
+          "products/liteasy/apps/desktop/src/app/features/selection/selectionValidation.ts",
+          "products/liteasy/apps/desktop/src/app/features/import/ImportButton.tsx",
+          "products/liteasy/apps/desktop/src/app/features/import/import.store.ts",
+          "products/liteasy/apps/desktop/src/app/features/import/import.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/import/importFixtures.ts",
+          "products/liteasy/apps/desktop/src/app/features/retrieval/retrieval.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/retrieval/demoKnowledgeBase.ts",
+          "products/liteasy/apps/desktop/src/app/features/retrieval/localRetriever.ts",
+          "products/liteasy/apps/desktop/src/app/features/retrieval/mockRetriever.ts",
+          "products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx",
+          "products/liteasy/apps/desktop/src/app/features/artifacts/artifact.store.ts",
+          "products/liteasy/apps/desktop/src/app/features/artifacts/artifact.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/artifacts/artifactPreview.ts",
+          "products/liteasy/apps/desktop/src/app/features/artifacts/useArtifactActions.ts",
+          "products/liteasy/apps/desktop/src/app/features/pdf/PdfReader.tsx"
+        ],
+        touch: [
+          "products/liteasy/apps/desktop/src/app/layout/ReaderPane.tsx",
+          "products/liteasy/apps/desktop/src/app/layout/LeftPane.tsx",
+          "products/liteasy/apps/desktop/src/app/features/library/LibraryPane.tsx",
+          "products/liteasy/apps/desktop/src/app/features/library/library.css",
+          "products/liteasy/apps/desktop/src/app/features/library/libraryDragPayload.ts",
+          "products/liteasy/apps/desktop/src/app/features/library/localLibrary.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/library/localLibraryClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/library/useLocalLibrary.ts",
+          "products/liteasy/apps/desktop/src/app/layout/starterPapers.ts",
+          "products/liteasy/apps/desktop/src/app/layout/useAppShellStores.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/generateAssistantAnswer.ts",
+          "products/liteasy/apps/desktop/src/app/features/assistant/answerFormatter.ts"
+        ],
+        tests: [
+          "products/liteasy/apps/desktop/src/tests/useWorkspaceSelectionController.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useArtifactWorkflowController.test.ts",
+          "products/liteasy/apps/desktop/src/tests/workspace.store.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useWorkspaceActions.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useRegisteredWorkspaceActions.test.ts",
+          "products/liteasy/apps/desktop/src/tests/workspaceFolderTree.test.ts",
+          "products/liteasy/apps/desktop/src/tests/selectionSnapshot.test.ts",
+          "products/liteasy/apps/desktop/src/tests/selectionValidation.test.ts",
+          "products/liteasy/apps/desktop/src/tests/import.store.test.ts",
+          "products/liteasy/apps/desktop/src/tests/importFixtures.test.ts",
+          "products/liteasy/apps/desktop/src/tests/localRetriever.test.ts",
+          "products/liteasy/apps/desktop/src/tests/artifact.store.test.ts",
+          "products/liteasy/apps/desktop/src/tests/artifactPreview.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useArtifactActions.test.ts",
+          "products/liteasy/apps/desktop/src/tests/ReaderPane.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/LeftPane.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/libraryDragPayload.test.ts",
+          "products/liteasy/apps/desktop/src/tests/localLibraryClient.test.ts"
+        ]
+      },
+      {
+        id: "c",
+        name: "C",
+        title: "云端知识同步、组织协作与产品工程",
+        mission: "稳住账号、推荐、收藏、元数据、组织和 dev-cloud，为 SaaS/cloud 接入打基础。",
+        modules: ["account", "network", "knowledge-sync", "collection", "recommendations", "metadata", "organization", "profile", "dev-cloud"],
+        primary: [
+          "products/liteasy/apps/desktop/src/app/controllers/useCloudAccountController.ts",
+          "products/liteasy/apps/desktop/src/app/controllers/useKnowledgeSyncController.ts",
+          "products/liteasy/apps/desktop/src/app/controllers/useOrganizationShellController.ts",
+          "products/liteasy/apps/desktop/src/app/features/account/LightweightLoginDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/account/account.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/account/accountSessionClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/account/accountSessionRuntime.ts",
+          "products/liteasy/apps/desktop/src/app/features/account/accountSessionStorage.ts",
+          "products/liteasy/apps/desktop/src/app/features/account/useAccountSession.ts",
+          "products/liteasy/apps/desktop/src/app/features/account/useCloudAccountActions.ts",
+          "products/liteasy/apps/desktop/src/app/features/network/cloudAvailability.ts",
+          "products/liteasy/apps/desktop/src/app/features/network/cloudErrorMessage.ts",
+          "products/liteasy/apps/desktop/src/app/features/network/useCloudAvailabilityProbe.ts",
+          "products/liteasy/apps/desktop/src/app/features/network/useConnectivity.ts",
+          "products/liteasy/apps/desktop/src/app/features/collection/collection.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/collection/collectionClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/collection/collectionRuntime.ts",
+          "products/liteasy/apps/desktop/src/app/features/collection/collectionStorage.ts",
+          "products/liteasy/apps/desktop/src/app/features/collection/useCollectionItems.ts",
+          "products/liteasy/apps/desktop/src/app/features/recommendations/recommendation.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/recommendations/recommendationCache.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/recommendations/recommendationCacheClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/recommendations/recommendationCacheRuntime.ts",
+          "products/liteasy/apps/desktop/src/app/features/recommendations/recommendationClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/recommendations/recommendationRuntime.ts",
+          "products/liteasy/apps/desktop/src/app/features/recommendations/useRecommendations.ts",
+          "products/liteasy/apps/desktop/src/app/features/metadata/DocumentMetadataSyncPanel.tsx",
+          "products/liteasy/apps/desktop/src/app/features/metadata/documentMetadataClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/metadata/metadata.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/metadata/useDocumentMetadataSync.ts"
+        ],
+        touch: [
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationCreateDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationEntryDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationGovernancePanel.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationInviteConfirmDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationJoinDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationLeaveConfirmDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationSidebarPanel.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/OrganizationSpacePanel.tsx",
+          "products/liteasy/apps/desktop/src/app/features/organization/organization.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/organizationGovernanceClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/organizationListClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/organizationNotificationStorage.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/organizationSharedLibraryManifestClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/organizationSummaryClient.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationActions.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationData.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationGovernance.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationList.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationNotifications.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationSummary.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationUiState.ts",
+          "products/liteasy/apps/desktop/src/app/features/organization/useOrganizationWorkspace.ts",
+          "products/liteasy/apps/desktop/src/app/features/profile/AcademicArchiveDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/profile/AcademicProfileForm.tsx",
+          "products/liteasy/apps/desktop/src/app/features/profile/ClearProfileConfirmDialog.tsx",
+          "products/liteasy/apps/desktop/src/app/features/profile/PersonalCenterPanel.tsx",
+          "products/liteasy/apps/desktop/src/app/features/profile/profile.types.ts",
+          "products/liteasy/apps/desktop/src/app/features/profile/useAcademicProfileDraft.ts",
+          "products/liteasy/apps/desktop/src/app/features/profile/useProfileActions.ts",
+          "development/dev-cloud/server.mjs",
+          "development/dev-cloud/requestHandler.mjs",
+          "development/dev-cloud/config.mjs",
+          "development/dev-cloud/adminConsole.mjs",
+          "development/dev-cloud/db/sessionRepository.mjs",
+          "development/dev-cloud/db/collectionRepository.mjs",
+          "development/dev-cloud/db/organizationRepository.mjs",
+          "development/dev-cloud/db/recommendationCacheRepository.mjs",
+          "development/dev-cloud/db/adminActivityRepository.mjs",
+          "development/dev-cloud/db/jsonFileStore.mjs",
+          "development/dev-cloud/payloads/modelPayloads.mjs",
+          "development/dev-cloud/payloads/collectionPayloads.mjs",
+          "development/dev-cloud/payloads/organizationPayloads.mjs",
+          "development/dev-cloud/payloads/recommendationPayloads.mjs",
+          "development/dev-cloud/payloads/recommendationCachePayloads.mjs",
+          "development/dev-cloud/payloads/policyPayloads.mjs",
+          "development/dev-cloud/payloads/adminDemoActionPayloads.mjs",
+          "development/dev-cloud/payloads/adminDemoStatePayloads.mjs",
+          "development/dev-cloud/providers/mockProvider.mjs",
+          "development/dev-cloud/providers/openaiResponses.mjs"
+        ],
+        tests: [
+          "products/liteasy/apps/desktop/src/tests/useCloudAccountController.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useKnowledgeSyncController.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useOrganizationShellController.test.ts",
+          "products/liteasy/apps/desktop/src/tests/accountSessionClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useAccountSession.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useCloudAccountActions.test.ts",
+          "products/liteasy/apps/desktop/src/tests/cloudAvailability.test.ts",
+          "products/liteasy/apps/desktop/src/tests/cloudAvailabilityBoundary.test.ts",
+          "products/liteasy/apps/desktop/src/tests/cloudErrorMessage.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useCloudAvailabilityProbe.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useConnectivity.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useCollectionItems.test.ts",
+          "products/liteasy/apps/desktop/src/tests/recommendationClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/recommendationCacheClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useRecommendations.test.ts",
+          "products/liteasy/apps/desktop/src/tests/documentMetadataClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/organizationGovernanceClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/organizationListClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/organizationNotificationStorage.test.ts",
+          "products/liteasy/apps/desktop/src/tests/organizationSharedLibraryManifestClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/organizationSummaryClient.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useOrganizationActions.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useOrganizationData.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useOrganizationNotifications.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useOrganizationUiState.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useOrganizationWorkspace.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useAcademicProfileDraft.test.ts",
+          "products/liteasy/apps/desktop/src/tests/useProfileActions.test.ts",
+          "development/dev-cloud/server.test.mjs",
+          "development/dev-cloud/providers/openaiResponses.test.mjs"
+        ]
+      }
+    ];
+
+    const shared = [
+      {
+        title: "必须协商后修改",
+        files: [
+          "products/liteasy/apps/desktop/src/app/layout/AppShell.tsx",
+          "products/liteasy/apps/desktop/src/app/layout/LeftPane.tsx",
+          "products/liteasy/apps/desktop/src/app/layout/ReaderPane.tsx",
+          "products/liteasy/apps/desktop/src/app/layout/AssistantSidebar.tsx",
+          "products/liteasy/apps/desktop/src/app/layout/AppDialogs.tsx",
+          "products/liteasy/apps/desktop/src/app/styles/app.css",
+          "products/liteasy/apps/desktop/src/tests/AppShell.test.tsx",
+          "products/liteasy/apps/desktop/src/tests/layoutStyleContract.test.ts",
+          "products/liteasy/apps/desktop/src/tests/devScript.test.ts"
+        ]
+      },
+      {
+        title: "配置、入口、构建",
+        files: [
+          "products/liteasy/apps/desktop/package.json",
+          "products/liteasy/apps/desktop/package-lock.json",
+          "products/liteasy/apps/desktop/vite.config.ts",
+          "products/liteasy/apps/desktop/tsconfig.json",
+          "products/liteasy/apps/desktop/src/App.tsx",
+          "products/liteasy/apps/desktop/src/main.tsx",
+          "products/liteasy/apps/desktop/src-tauri/Cargo.toml",
+          "products/liteasy/apps/desktop/src-tauri/tauri.conf.json",
+          "products/liteasy/apps/desktop/src-tauri/build.rs",
+          "products/liteasy/apps/desktop/src-tauri/src/main.rs",
+          "products/liteasy/apps/desktop/src-tauri/src/import.rs",
+          "products/liteasy/apps/desktop/src-tauri/src/local_library.rs"
+        ]
+      },
+      {
+        title: "文档和分工边界",
+        files: [
+          "README.md",
+          "products/liteasy/apps/desktop/README.md",
+          "development/dev-cloud/README.md",
+          "docs/engineering/module-boundaries.md",
+          "docs/engineering/project-structure-overview.html",
+          "docs/engineering/three-person-worksplit.html"
+        ]
+      },
+      {
+        title: "Demo 数据和脚本",
+        files: [
+          "development/scripts/reset-demo-data.mjs",
+          "development/scripts/reseed-demo-data.mjs",
+          "development/scripts/smoke-roadshow.mjs",
+          "development/dev-cloud/.liteasy-data/sessions.json",
+          "development/dev-cloud/.liteasy-data/collections.json",
+          "development/dev-cloud/.liteasy-data/organizations.json",
+          "development/dev-cloud/.liteasy-data/recommendation-cache.json",
+          "development/dev-cloud/.liteasy-data/admin-activity.json"
+        ]
+      }
+    ];
+
+    const tabs = [
+      ["all", "全部"],
+      ["a", "A"],
+      ["b", "B"],
+      ["c", "C"],
+      ["shared", "共享"]
+    ];
+
+    let active = "all";
+    const search = document.getElementById("search");
+    const tabsEl = document.getElementById("tabs");
+    const peopleEl = document.getElementById("people");
+    const sharedEl = document.getElementById("shared");
+    const impactGraphEl = document.getElementById("impactGraph");
+
+    function textOfPerson(person) {
+      return [
+        person.name,
+        person.title,
+        person.mission,
+        ...person.modules,
+        ...person.primary,
+        ...person.touch,
+        ...person.tests
+      ].join(" ").toLowerCase();
+    }
+
+    function textOfShared(block) {
+      return [block.title, ...block.files].join(" ").toLowerCase();
+    }
+
+    function fileList(files, kind) {
+      return `<div class="file-list">${files.map((file) => `<code class="${kind}">${file}</code>`).join("")}</div>`;
+    }
+
+    function shortPath(path) {
+      return path
+        .replace("products/liteasy/apps/desktop/src/app/", "app/")
+        .replace("products/liteasy/apps/desktop/src/tests/", "tests/")
+        .replace("development/dev-cloud/", "dev-cloud/");
+    }
+
+    function fileName(path) {
+      const parts = path.split("/");
+      return parts[parts.length - 1];
+    }
+
+    function collectImpactFiles() {
+      const map = new Map();
+      const add = (file, owner, kind) => {
+        if (!map.has(file)) {
+          map.set(file, { file, refs: [] });
+        }
+        const entry = map.get(file);
+        if (!entry.refs.some((ref) => ref.owner === owner && ref.kind === kind)) {
+          entry.refs.push({ owner, kind });
+        }
+      };
+
+      for (const person of people) {
+        for (const file of person.primary) add(file, person.id, "primary");
+        for (const file of person.touch) add(file, person.id, "touch");
+        for (const file of person.tests) add(file, person.id, "test");
+      }
+
+      for (const block of shared) {
+        for (const file of block.files) add(file, "shared", block.title);
+      }
+
+      return [...map.values()]
+        .filter((entry) => {
+          const owners = new Set(entry.refs.map((ref) => ref.owner));
+          return owners.size > 1 || owners.has("shared");
+        })
+        .sort((left, right) => {
+          const ownerDiff = new Set(right.refs.map((ref) => ref.owner)).size - new Set(left.refs.map((ref) => ref.owner)).size;
+          if (ownerDiff !== 0) return ownerDiff;
+          return left.file.localeCompare(right.file);
+        });
+    }
+
+    function renderImpactGraph() {
+      const q = search.value.trim().toLowerCase();
+      const owners = [
+        { id: "a", label: "A", y: 84, note: "AI 交互/动作" },
+        { id: "b", label: "B", y: 174, note: "文献/检索/产物" },
+        { id: "c", label: "C", y: 264, note: "云端/组织/工程" },
+        { id: "shared", label: "共享", y: 354, note: "改前协商" }
+      ];
+      const files = collectImpactFiles().filter((entry) => {
+        if (q === "") return true;
+        return entry.file.toLowerCase().includes(q) || entry.refs.some((ref) => ref.owner.includes(q) || ref.kind.toLowerCase().includes(q));
+      }).slice(0, 26);
+      const height = Math.max(520, 90 + files.length * 54);
+      const ownerX = 42;
+      const fileX = 690;
+      const fileYStart = 54;
+      const fileGap = 54;
+      const filePositions = new Map(files.map((entry, index) => [entry.file, fileYStart + index * fileGap]));
+
+      const lines = [];
+      for (const entry of files) {
+        const y2 = filePositions.get(entry.file) + 18;
+        const uniqueOwners = [...new Set(entry.refs.map((ref) => ref.owner))];
+        for (const owner of uniqueOwners) {
+          const source = owners.find((item) => item.id === owner);
+          if (!source) continue;
+          lines.push(`<path class="impact-line ${owner}" d="M188 ${source.y + 18} C330 ${source.y + 18}, 500 ${y2}, 690 ${y2}"></path>`);
+        }
+      }
+
+      const ownerNodes = owners.map((owner) => `
+        <g class="impact-node person">
+          <rect class="${owner.id}" x="${ownerX}" y="${owner.y}" width="146" height="48"></rect>
+          <text x="${ownerX + 16}" y="${owner.y + 21}">${owner.label}</text>
+          <text x="${ownerX + 16}" y="${owner.y + 38}">${owner.note}</text>
+        </g>
+      `).join("");
+
+      const fileNodes = files.map((entry) => {
+        const y = filePositions.get(entry.file);
+        const ownersCount = new Set(entry.refs.map((ref) => ref.owner)).size;
+        const kinds = entry.refs.map((ref) => `${ref.owner}:${ref.kind}`).join(" / ");
+        return `
+          <g class="impact-node">
+            <rect x="${fileX}" y="${y}" width="520" height="42"></rect>
+            <text x="${fileX + 12}" y="${y + 17}">${fileName(entry.file)}</text>
+            <text class="sub" x="${fileX + 12}" y="${y + 33}">${shortPath(entry.file)}</text>
+            <circle class="impact-badge" cx="${fileX + 494}" cy="${y + 21}" r="13"></circle>
+            <text class="impact-badge-text" x="${fileX + 489}" y="${y + 25}">${ownersCount}</text>
+            <title>${entry.file}\n${kinds}</title>
+          </g>
+        `;
+      }).join("");
+
+      impactGraphEl.innerHTML = `
+        <svg class="impact-svg" viewBox="0 0 1240 ${height}" role="img" aria-label="文件影响连线图">
+          <text x="42" y="30" fill="#334155" font-size="13" font-weight="800">负责人 / 共享区</text>
+          <text x="690" y="30" fill="#334155" font-size="13" font-weight="800">重复涉及或共享高风险文件</text>
+          ${lines.join("")}
+          ${ownerNodes}
+          ${fileNodes}
+          <text x="42" y="${height - 24}" fill="#64748b" font-size="12">提示：右侧圆点数字表示涉及方数量；共享线为虚线；鼠标悬停文件节点可看完整路径和涉及类型。</text>
+        </svg>
+      `;
+    }
+
+    function renderTabs() {
+      tabsEl.innerHTML = "";
+      for (const [id, label] of tabs) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.className = active === id ? "active" : "";
+        button.addEventListener("click", () => {
+          active = id;
+          render();
+        });
+        tabsEl.appendChild(button);
+      }
+    }
+
+    function renderPeople() {
+      const q = search.value.trim().toLowerCase();
+      peopleEl.innerHTML = people
+        .filter((person) => (active === "all" || active === person.id) && (q === "" || textOfPerson(person).includes(q)))
+        .map((person) => `
+          <article class="person-card">
+            <div class="person-head ${person.id}">
+              <h2>${person.name}：${person.title}</h2>
+              <p>${person.mission}</p>
+              <div class="tag-row">${person.modules.map((module) => `<span class="tag">${module}</span>`).join("")}</div>
+            </div>
+            <div class="person-body">
+              <section class="file-block">
+                <h3>主责文件（${person.primary.length}）</h3>
+                ${fileList(person.primary, "primary")}
+              </section>
+              <section class="file-block">
+                <h3>可能涉及文件（${person.touch.length}）</h3>
+                ${fileList(person.touch, "touch")}
+              </section>
+              <section class="file-block">
+                <h3>测试文件（${person.tests.length}）</h3>
+                ${fileList(person.tests, "test")}
+              </section>
+            </div>
+          </article>
+        `).join("");
+    }
+
+    function renderShared() {
+      const q = search.value.trim().toLowerCase();
+      const show = active === "all" || active === "shared";
+      sharedEl.innerHTML = show
+        ? shared
+            .filter((block) => q === "" || textOfShared(block).includes(q))
+            .map((block) => `
+              <section class="file-block">
+                <h3>${block.title}</h3>
+                ${fileList(block.files, "risk")}
+              </section>
+            `).join("")
+        : "";
+    }
+
+    function render() {
+      renderTabs();
+      renderPeople();
+      renderImpactGraph();
+      renderShared();
+    }
+
+    search.addEventListener("input", render);
+    render();
+  </script>
+</body>
+</html>

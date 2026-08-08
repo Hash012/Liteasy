@@ -14,7 +14,7 @@
 当前路演版本由三部分组成：
 
 1. `desktop` 客户用户端
-2. `LiteasyClaw/services/dev-cloud/server.mjs` 提供的云端 demo 服务
+2. `development/dev-cloud/server.mjs` 提供的云端 demo 服务
 3. `/admin/` 提供的内部运营与运维后台 demo
 
 请注意：
@@ -28,7 +28,7 @@
 建议路演时采用以下形态：
 
 - 云端部署：
-  - `LiteasyClaw/services/dev-cloud/server.mjs`
+  - `development/dev-cloud/server.mjs`
   - 路演所需环境变量
 - 本地运行：
   - `desktop` 桌面端
@@ -66,7 +66,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 在服务器上进入仓库根目录后执行：
 
 ```bash
-node LiteasyClaw/services/dev-cloud/server.mjs
+node development/dev-cloud/server.mjs
 ```
 
 如果环境变量已经设置好，服务会按设定 host 和 port 监听。
@@ -74,14 +74,14 @@ node LiteasyClaw/services/dev-cloud/server.mjs
 如果要在路演前恢复一个稳定起点，建议先执行：
 
 ```bash
-node LiteasyClaw/scripts/reset-demo-data.mjs
-node LiteasyClaw/scripts/reseed-demo-data.mjs
+node development/scripts/reset-demo-data.mjs
+node development/scripts/reseed-demo-data.mjs
 ```
 
 启动成功后，再执行：
 
 ```bash
-node LiteasyClaw/scripts/smoke-roadshow.mjs http://127.0.0.1:8787
+node development/scripts/smoke-roadshow.mjs http://127.0.0.1:8787
 ```
 
 这会统一检查根索引、健康检查、运维端页面和 demo-state 接口。

@@ -1,0 +1,156 @@
+import { readFileSync } from "node:fs";
+import { createServer, type Server } from "node:net";
+import { resolve } from "node:path";
+import { describe, expect, test } from "vitest";
+import {
+  buildChildEnv,
+  buildDesktopViteArgs,
+  findAvailablePort,
+  resolveRequestedDesktopHost,
+  resolveRequestedDesktopPort
+} from "../../scripts/devPorts.mjs";
+
+function listen(server: Server, port: number, host: string) {
+  return new Promise<void>((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => {
+      server.off("error", reject);
+      resolveListen();
+    });
+  });
+}
+
+function close(server: Server) {
+  return new Promise<void>((resolveClose, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolveClose();
+    });
+  });
+}
+
+describe("desktop dev script", () => {
+  test("starts the desktop frontend and Liteasy dev cloud together", () => {
+    const packageJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), "package.json"), "utf8")
+    ) as { scripts: Record<string, string> };
+
+    expect(packageJson.scripts.dev).toContain("dev:cloud");
+    expect(packageJson.scripts.dev).toContain("dev:desktop");
+    expect(packageJson.scripts["dev:cloud"]).toContain("development/dev-cloud/server.mjs");
+    expect(packageJson.scripts["dev:desktop"]).toContain("vite --host 127.0.0.1 --port 1420");
+  });
+
+  test("finds a fallback cloud port and injects it into both child processes", async () => {
+    const blocker = createServer();
+    await listen(blocker, 0, "127.0.0.1");
+
+    try {
+      const address = blocker.address();
+      if (typeof address !== "object" || address === null) {
+        throw new Error("Expected the blocker server to use a TCP address");
+      }
+
+      const port = await findAvailablePort(address.port, "127.0.0.1");
+      const env = buildChildEnv({
+        baseEnv: {},
+        host: "127.0.0.1",
+        port
+      });
+
+      expect(port).toBeGreaterThan(address.port);
+      expect(env.LITEASY_DEV_CLOUD_HOST).toBe("127.0.0.1");
+      expect(env.LITEASY_DEV_CLOUD_PORT).toBe(String(port));
+      expect(env.LITEASY_DEV_CLOUD_PUBLIC_ORIGIN).toBe(`http://127.0.0.1:${port}`);
+      expect(env.VITE_LITEASY_DEV_CLOUD_PORT).toBe(String(port));
+    } finally {
+      await close(blocker);
+    }
+  });
+
+  test("does not override the dev cloud env file path by default", () => {
+    const env = buildChildEnv({
+      baseEnv: {},
+      host: "127.0.0.1",
+      port: 8787
+    });
+    const envWithExplicitSecretFile = buildChildEnv({
+      baseEnv: {
+        LITEASY_DEV_CLOUD_ENV_FILE: "/tmp/liteasy-dev-cloud.env"
+      },
+      host: "127.0.0.1",
+      port: 8787
+    });
+
+    expect(env.LITEASY_DEV_CLOUD_ENV_FILE).toBeUndefined();
+    expect(envWithExplicitSecretFile.LITEASY_DEV_CLOUD_ENV_FILE).toBe(
+      "/tmp/liteasy-dev-cloud.env"
+    );
+  });
+
+  test("loads the service env file before choosing the cloud port", () => {
+    const script = readFileSync(
+      resolve(process.cwd(), "scripts/dev-with-cloud.mjs"),
+      "utf8"
+    );
+
+    const loadIndex = script.indexOf("loadSecretEnvFile();");
+    const portIndex = script.indexOf("resolveRequestedCloudPort();");
+    expect(loadIndex).toBeGreaterThan(-1);
+    expect(portIndex).toBeGreaterThan(loadIndex);
+  });
+
+  test("can expose the frontend and dev cloud for Windows browser access", () => {
+    const desktopHost = resolveRequestedDesktopHost({
+      LITEASY_DESKTOP_HOST: "0.0.0.0"
+    });
+    const desktopPort = resolveRequestedDesktopPort({
+      LITEASY_DESKTOP_PORT: "1425"
+    });
+    const env = buildChildEnv({
+      baseEnv: {},
+      host: "0.0.0.0",
+      port: 8790,
+      publicHost: "10.77.110.167"
+    });
+
+    expect(desktopHost).toBe("0.0.0.0");
+    expect(desktopPort).toBe(1425);
+    expect(buildDesktopViteArgs({ host: desktopHost, port: desktopPort })).toEqual([
+      "vite",
+      "--host",
+      "0.0.0.0",
+      "--port",
+      "1425"
+    ]);
+    expect(env.LITEASY_DEV_CLOUD_HOST).toBe("0.0.0.0");
+    expect(env.LITEASY_DEV_CLOUD_PUBLIC_ORIGIN).toBe("http://10.77.110.167:8790");
+  });
+
+  test("keeps dev:test-api as a compatibility alias for the standard secret loader", () => {
+    const packageJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), "package.json"), "utf8")
+    ) as { scripts: Record<string, string> };
+    const script = readFileSync(
+      resolve(process.cwd(), "scripts/dev-with-cloud.mjs"),
+      "utf8"
+    );
+    const liveEvalScript = readFileSync(
+      resolve(process.cwd(), "scripts/thin-reading-live-model-eval.mjs"),
+      "utf8"
+    );
+
+    expect(packageJson.scripts["dev:test-api"]).toBe(
+      "node scripts/dev-with-cloud.mjs"
+    );
+    expect(script).toContain("loadSecretEnvFile();");
+    expect(script).not.toContain("test-api.md");
+    expect(liveEvalScript).toContain("loadSecretEnvFile();");
+    expect(liveEvalScript).toContain("development/dev-cloud/.env.local");
+    expect(liveEvalScript).not.toContain("test-api.md");
+  });
+});

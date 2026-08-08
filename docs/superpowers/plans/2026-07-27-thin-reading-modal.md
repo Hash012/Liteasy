@@ -12,33 +12,33 @@
 
 ## File Map
 
-- Create: `LiteasyClaw/desktop/src/app/features/thin-reading/thinReading.types.ts`
-- Create: `LiteasyClaw/desktop/src/app/features/thin-reading/thinReadingProjection.ts`
-- Create: `LiteasyClaw/desktop/src/app/features/thin-reading/thinReadingFixtures.ts`
-- Create: `LiteasyClaw/desktop/src/app/features/thin-reading/thinReading.css`
-- Create: `LiteasyClaw/desktop/src/app/features/thin-reading/ThinReadingTab.tsx`
-- Modify: `LiteasyClaw/desktop/src/app/features/artifacts/artifact.types.ts`
-- Modify: `LiteasyClaw/desktop/src/app/features/artifacts/useArtifactActions.ts`
-- Modify: `LiteasyClaw/desktop/src/app/features/artifacts/ArtifactTabs.tsx`
-- Modify: `LiteasyClaw/desktop/src/app/features/artifacts/FloatingModalityButton.tsx`
-- Modify: `LiteasyClaw/desktop/src/app/layout/ReaderPane.tsx`
-- Modify: `LiteasyClaw/desktop/src/app/layout/AppShell.tsx`
-- Modify: `LiteasyClaw/desktop/src/app/controllers/useArtifactWorkflowController.ts`
-- Test: `LiteasyClaw/desktop/src/tests/thinReadingProjection.test.ts`
-- Test: `LiteasyClaw/desktop/src/tests/thinReadingTab.test.tsx`
-- Test: `LiteasyClaw/desktop/src/tests/useArtifactActions.test.ts`
-- Test: `LiteasyClaw/desktop/src/tests/ArtifactTabs.test.tsx`
-- Test: `LiteasyClaw/desktop/src/tests/assistantTaskContext.test.tsx`
-- Test: `LiteasyClaw/desktop/src/tests/AppShell.test.tsx`
+- Create: `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReading.types.ts`
+- Create: `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingProjection.ts`
+- Create: `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingFixtures.ts`
+- Create: `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReading.css`
+- Create: `products/liteasy/apps/desktop/src/app/features/thin-reading/ThinReadingTab.tsx`
+- Modify: `products/liteasy/apps/desktop/src/app/features/artifacts/artifact.types.ts`
+- Modify: `products/liteasy/apps/desktop/src/app/features/artifacts/useArtifactActions.ts`
+- Modify: `products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx`
+- Modify: `products/liteasy/apps/desktop/src/app/features/artifacts/FloatingModalityButton.tsx`
+- Modify: `products/liteasy/apps/desktop/src/app/layout/ReaderPane.tsx`
+- Modify: `products/liteasy/apps/desktop/src/app/layout/AppShell.tsx`
+- Modify: `products/liteasy/apps/desktop/src/app/controllers/useArtifactWorkflowController.ts`
+- Test: `products/liteasy/apps/desktop/src/tests/thinReadingProjection.test.ts`
+- Test: `products/liteasy/apps/desktop/src/tests/thinReadingTab.test.tsx`
+- Test: `products/liteasy/apps/desktop/src/tests/useArtifactActions.test.ts`
+- Test: `products/liteasy/apps/desktop/src/tests/ArtifactTabs.test.tsx`
+- Test: `products/liteasy/apps/desktop/src/tests/assistantTaskContext.test.tsx`
+- Test: `products/liteasy/apps/desktop/src/tests/AppShell.test.tsx`
 
 ### Task 1: Thin-reading data model and pure projection helpers
 
 **Files:**
-- Create `LiteasyClaw/desktop/src/app/features/thin-reading/thinReading.types.ts`
-- Create `LiteasyClaw/desktop/src/app/features/thin-reading/thinReadingProjection.ts`
-- Create `LiteasyClaw/desktop/src/app/features/thin-reading/thinReadingFixtures.ts`
-- Modify `LiteasyClaw/desktop/src/app/features/artifacts/artifact.types.ts`
-- Test `LiteasyClaw/desktop/src/tests/thinReadingProjection.test.ts`
+- Create `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReading.types.ts`
+- Create `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingProjection.ts`
+- Create `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReadingFixtures.ts`
+- Modify `products/liteasy/apps/desktop/src/app/features/artifacts/artifact.types.ts`
+- Test `products/liteasy/apps/desktop/src/tests/thinReadingProjection.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -93,7 +93,7 @@ describe("thinReadingProjection", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/thinReadingProjection.test.ts`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/thinReadingProjection.test.ts`
 Expected: FAIL with missing-module or missing-symbol errors until the thin-reading feature files exist.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -120,25 +120,25 @@ The implementation should keep the document immutable, derive the root overview 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/thinReadingProjection.test.ts`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/thinReadingProjection.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LiteasyClaw/desktop/src/app/features/thin-reading \
-  LiteasyClaw/desktop/src/app/features/artifacts/artifact.types.ts \
-  LiteasyClaw/desktop/src/tests/thinReadingProjection.test.ts
+git add products/liteasy/apps/desktop/src/app/features/thin-reading \
+  products/liteasy/apps/desktop/src/app/features/artifacts/artifact.types.ts \
+  products/liteasy/apps/desktop/src/tests/thinReadingProjection.test.ts
 git commit -m "feat: add thin reading document model"
 ```
 
 ### Task 2: Local thin-reading generation and artifact-action plumbing
 
 **Files:**
-- Modify `LiteasyClaw/desktop/src/app/features/artifacts/useArtifactActions.ts`
-- Modify `LiteasyClaw/desktop/src/app/controllers/useArtifactWorkflowController.ts`
-- Test `LiteasyClaw/desktop/src/tests/useArtifactActions.test.ts`
-- Test `LiteasyClaw/desktop/src/tests/useArtifactWorkflowController.test.ts`
+- Modify `products/liteasy/apps/desktop/src/app/features/artifacts/useArtifactActions.ts`
+- Modify `products/liteasy/apps/desktop/src/app/controllers/useArtifactWorkflowController.ts`
+- Test `products/liteasy/apps/desktop/src/tests/useArtifactActions.test.ts`
+- Test `products/liteasy/apps/desktop/src/tests/useArtifactWorkflowController.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -201,7 +201,7 @@ Add a second regression in `useArtifactWorkflowController.test.ts` that proves a
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/useArtifactActions.test.ts src/tests/useArtifactWorkflowController.test.ts`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/useArtifactActions.test.ts src/tests/useArtifactWorkflowController.test.ts`
 Expected: FAIL because `thin_reading` is not yet handled and `getAssistantLanguage` is not yet threaded through.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -231,25 +231,25 @@ Thread `getAssistantLanguage` through `useArtifactActions` and `useArtifactWorkf
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/useArtifactActions.test.ts src/tests/useArtifactWorkflowController.test.ts`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/useArtifactActions.test.ts src/tests/useArtifactWorkflowController.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LiteasyClaw/desktop/src/app/features/artifacts/useArtifactActions.ts \
-  LiteasyClaw/desktop/src/app/controllers/useArtifactWorkflowController.ts \
-  LiteasyClaw/desktop/src/tests/useArtifactActions.test.ts \
-  LiteasyClaw/desktop/src/tests/useArtifactWorkflowController.test.ts
+git add products/liteasy/apps/desktop/src/app/features/artifacts/useArtifactActions.ts \
+  products/liteasy/apps/desktop/src/app/controllers/useArtifactWorkflowController.ts \
+  products/liteasy/apps/desktop/src/tests/useArtifactActions.test.ts \
+  products/liteasy/apps/desktop/src/tests/useArtifactWorkflowController.test.ts
 git commit -m "feat: wire thin reading generation into artifact workflow"
 ```
 
 ### Task 3: Thin-reading full-page tab UI and styling
 
 **Files:**
-- Create `LiteasyClaw/desktop/src/app/features/thin-reading/ThinReadingTab.tsx`
-- Create `LiteasyClaw/desktop/src/app/features/thin-reading/thinReading.css`
-- Test `LiteasyClaw/desktop/src/tests/thinReadingTab.test.tsx`
+- Create `products/liteasy/apps/desktop/src/app/features/thin-reading/ThinReadingTab.tsx`
+- Create `products/liteasy/apps/desktop/src/app/features/thin-reading/thinReading.css`
+- Test `products/liteasy/apps/desktop/src/tests/thinReadingTab.test.tsx`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -292,7 +292,7 @@ Add a second test that mocks `window.getSelection()` and verifies the "深入" p
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/thinReadingTab.test.tsx`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/thinReadingTab.test.tsx`
 Expected: FAIL because `ThinReadingTab` and `thinReading.css` do not exist yet.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -315,28 +315,28 @@ Import `./thinReading.css` from the component and keep the layout in one full-pa
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/thinReadingTab.test.tsx`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/thinReadingTab.test.tsx`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LiteasyClaw/desktop/src/app/features/thin-reading/ThinReadingTab.tsx \
-  LiteasyClaw/desktop/src/app/features/thin-reading/thinReading.css \
-  LiteasyClaw/desktop/src/tests/thinReadingTab.test.tsx
+git add products/liteasy/apps/desktop/src/app/features/thin-reading/ThinReadingTab.tsx \
+  products/liteasy/apps/desktop/src/app/features/thin-reading/thinReading.css \
+  products/liteasy/apps/desktop/src/tests/thinReadingTab.test.tsx
 git commit -m "feat: add thin reading tab surface"
 ```
 
 ### Task 4: Wire the launcher, artifact tabs, and app shell
 
 **Files:**
-- Modify `LiteasyClaw/desktop/src/app/features/artifacts/FloatingModalityButton.tsx`
-- Modify `LiteasyClaw/desktop/src/app/features/artifacts/ArtifactTabs.tsx`
-- Modify `LiteasyClaw/desktop/src/app/layout/ReaderPane.tsx`
-- Modify `LiteasyClaw/desktop/src/app/layout/AppShell.tsx`
-- Test `LiteasyClaw/desktop/src/tests/assistantTaskContext.test.tsx`
-- Test `LiteasyClaw/desktop/src/tests/ArtifactTabs.test.tsx`
-- Test `LiteasyClaw/desktop/src/tests/AppShell.test.tsx`
+- Modify `products/liteasy/apps/desktop/src/app/features/artifacts/FloatingModalityButton.tsx`
+- Modify `products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx`
+- Modify `products/liteasy/apps/desktop/src/app/layout/ReaderPane.tsx`
+- Modify `products/liteasy/apps/desktop/src/app/layout/AppShell.tsx`
+- Test `products/liteasy/apps/desktop/src/tests/assistantTaskContext.test.tsx`
+- Test `products/liteasy/apps/desktop/src/tests/ArtifactTabs.test.tsx`
+- Test `products/liteasy/apps/desktop/src/tests/AppShell.test.tsx`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -366,7 +366,7 @@ Also add a component-level assertion in `assistantTaskContext.test.tsx` that `Fl
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/assistantTaskContext.test.tsx src/tests/ArtifactTabs.test.tsx src/tests/AppShell.test.tsx`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/assistantTaskContext.test.tsx src/tests/ArtifactTabs.test.tsx src/tests/AppShell.test.tsx`
 Expected: FAIL because the new launcher option and thin-reading rendering path do not exist yet.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -399,19 +399,19 @@ Pass `onUpdateThinReadingTab` through `ReaderPane.tsx` and `AppShell.tsx` just l
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd LiteasyClaw/desktop && npm test -- src/tests/assistantTaskContext.test.tsx src/tests/ArtifactTabs.test.tsx src/tests/AppShell.test.tsx`
+Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/assistantTaskContext.test.tsx src/tests/ArtifactTabs.test.tsx src/tests/AppShell.test.tsx`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LiteasyClaw/desktop/src/app/features/artifacts/FloatingModalityButton.tsx \
-  LiteasyClaw/desktop/src/app/features/artifacts/ArtifactTabs.tsx \
-  LiteasyClaw/desktop/src/app/layout/ReaderPane.tsx \
-  LiteasyClaw/desktop/src/app/layout/AppShell.tsx \
-  LiteasyClaw/desktop/src/tests/assistantTaskContext.test.tsx \
-  LiteasyClaw/desktop/src/tests/ArtifactTabs.test.tsx \
-  LiteasyClaw/desktop/src/tests/AppShell.test.tsx
+git add products/liteasy/apps/desktop/src/app/features/artifacts/FloatingModalityButton.tsx \
+  products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx \
+  products/liteasy/apps/desktop/src/app/layout/ReaderPane.tsx \
+  products/liteasy/apps/desktop/src/app/layout/AppShell.tsx \
+  products/liteasy/apps/desktop/src/tests/assistantTaskContext.test.tsx \
+  products/liteasy/apps/desktop/src/tests/ArtifactTabs.test.tsx \
+  products/liteasy/apps/desktop/src/tests/AppShell.test.tsx
 git commit -m "feat: wire thin reading into the workbench"
 ```
 
@@ -424,13 +424,13 @@ git commit -m "feat: wire thin reading into the workbench"
 - [ ] **Step 1: Run the focused suite**
 
 Run:
-`cd LiteasyClaw/desktop && npm test -- src/tests/thinReadingProjection.test.ts src/tests/thinReadingTab.test.tsx src/tests/useArtifactActions.test.ts src/tests/useArtifactWorkflowController.test.ts src/tests/assistantTaskContext.test.tsx src/tests/ArtifactTabs.test.tsx src/tests/AppShell.test.tsx`
+`cd products/liteasy/apps/desktop && npm test -- src/tests/thinReadingProjection.test.ts src/tests/thinReadingTab.test.tsx src/tests/useArtifactActions.test.ts src/tests/useArtifactWorkflowController.test.ts src/tests/assistantTaskContext.test.tsx src/tests/ArtifactTabs.test.tsx src/tests/AppShell.test.tsx`
 
 Expected: all targeted tests pass with the new thin-reading behavior.
 
 - [ ] **Step 2: Run the desktop build**
 
-Run: `cd LiteasyClaw/desktop && npm run build`
+Run: `cd products/liteasy/apps/desktop && npm run build`
 Expected: TypeScript and Vite build both succeed.
 
 - [ ] **Step 3: Fix only the failures reported by the suite or build**
@@ -445,19 +445,19 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add LiteasyClaw/desktop/src/app/features/thin-reading \
-  LiteasyClaw/desktop/src/app/features/artifacts/artifact.types.ts \
-  LiteasyClaw/desktop/src/app/features/artifacts/useArtifactActions.ts \
-  LiteasyClaw/desktop/src/app/features/artifacts/ArtifactTabs.tsx \
-  LiteasyClaw/desktop/src/app/features/artifacts/FloatingModalityButton.tsx \
-  LiteasyClaw/desktop/src/app/layout/ReaderPane.tsx \
-  LiteasyClaw/desktop/src/app/layout/AppShell.tsx \
-  LiteasyClaw/desktop/src/tests/thinReadingProjection.test.ts \
-  LiteasyClaw/desktop/src/tests/thinReadingTab.test.tsx \
-  LiteasyClaw/desktop/src/tests/useArtifactActions.test.ts \
-  LiteasyClaw/desktop/src/tests/useArtifactWorkflowController.test.ts \
-  LiteasyClaw/desktop/src/tests/assistantTaskContext.test.tsx \
-  LiteasyClaw/desktop/src/tests/ArtifactTabs.test.tsx \
-  LiteasyClaw/desktop/src/tests/AppShell.test.tsx
+git add products/liteasy/apps/desktop/src/app/features/thin-reading \
+  products/liteasy/apps/desktop/src/app/features/artifacts/artifact.types.ts \
+  products/liteasy/apps/desktop/src/app/features/artifacts/useArtifactActions.ts \
+  products/liteasy/apps/desktop/src/app/features/artifacts/ArtifactTabs.tsx \
+  products/liteasy/apps/desktop/src/app/features/artifacts/FloatingModalityButton.tsx \
+  products/liteasy/apps/desktop/src/app/layout/ReaderPane.tsx \
+  products/liteasy/apps/desktop/src/app/layout/AppShell.tsx \
+  products/liteasy/apps/desktop/src/tests/thinReadingProjection.test.ts \
+  products/liteasy/apps/desktop/src/tests/thinReadingTab.test.tsx \
+  products/liteasy/apps/desktop/src/tests/useArtifactActions.test.ts \
+  products/liteasy/apps/desktop/src/tests/useArtifactWorkflowController.test.ts \
+  products/liteasy/apps/desktop/src/tests/assistantTaskContext.test.tsx \
+  products/liteasy/apps/desktop/src/tests/ArtifactTabs.test.tsx \
+  products/liteasy/apps/desktop/src/tests/AppShell.test.tsx
 git commit -m "feat: complete thin reading modal"
 ```

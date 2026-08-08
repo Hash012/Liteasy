@@ -1,3 +1,0 @@
-/** @deprecated Use @smithy/core/retry instead. */
-export { AdaptiveRetryStrategy, ConfiguredRetryStrategy, DefaultRateLimiter, StandardRetryStrategy, DEFAULT_MAX_ATTEMPTS, DEFAULT_RETRY_DELAY_BASE, DEFAULT_RETRY_MODE, INITIAL_RETRY_TOKENS, INVOCATION_ID_HEADER, MAXIMUM_RETRY_DELAY, REQUEST_HEADER, NO_RETRY_INCREMENT, RETRY_COST, RETRY_MODES, Retry, THROTTLING_RETRY_DELAY_BASE, TIMEOUT_RETRY_COST, } from "@smithy/core/retry";
-export type { AdaptiveRetryStrategyOptions, DefaultRateLimiterOptions, RateLimiter, StandardRetryStrategyOptions, } from "@smithy/core/retry";

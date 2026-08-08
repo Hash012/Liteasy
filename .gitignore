@@ -1,43 +1,42 @@
+# Agent and local workspace state
 .superpowers/
+.worktrees/
+.liteasy-run/
+.omx/
+tmp/
 
-# Desktop app dependencies and build outputs
-/desktop/
-LiteasyClaw/desktop/node_modules/
-LiteasyClaw/desktop/dist/
-LiteasyClaw/desktop/.vite/
-LiteasyClaw/desktop/.vite-temp/
-LiteasyClaw/desktop/src-tauri/target/
-LiteasyClaw/admin/node_modules/
-LiteasyClaw/admin/dist/
-LiteasyClaw/admin/.vite/
-LiteasyClaw/admin/*.tsbuildinfo
-LiteasyClaw/tools/md-to-pdf/node_modules/
-LiteasyClaw/services/dev-cloud/node_modules/
-LiteasyClaw/services/dev-cloud/.liteasy-data/
-LiteasyClaw/services/dev-cloud/*.sqlite
-LiteasyClaw/services/dev-cloud/*.sqlite-shm
-LiteasyClaw/services/dev-cloud/*.sqlite-wal
-LiteasyClaw/services/dev-cloud/.env
-LiteasyClaw/services/dev-cloud/.env.*
+# Dependencies and generated build output
+**/node_modules/
+**/dist/
+**/.vite/
+**/.vite-temp/
+**/*.tsbuildinfo
+**/test-results/
+**/playwright-report/
+products/liteasy/apps/desktop/src-tauri/target/
 archive/generated/
+
+# Development-only runtime data
+development/dev-cloud/.liteasy-data/
+development/dev-cloud/*.sqlite
+development/dev-cloud/*.sqlite-shm
+development/dev-cloud/*.sqlite-wal
+development/dev-cloud/.env
+development/dev-cloud/.env.*
+!development/dev-cloud/.env.example
+deployment/local/.env
 
 # Local secrets
 .env
 .env.*
 !.env.example
 !.env.*.example
-project-docs/test-api.md
+docs/test-api.md
 
-# OS/editor noise
+# Generated test worksheets
+products/liteasy/apps/desktop/scripts/retrieval-gate-worksheet.json
+
+# OS and editor noise
 .DS_Store
 Thumbs.db
-
-# One-click start/stop runtime state (.liteasy-run/)
-.liteasy-run/
-.omx/
 ICS2-13-Network-复习讲解.html
-tmp/
-.worktrees/
-
-# 检索验证门的采样产物：每次跑都会重新生成，标注结果按需另存
-LiteasyClaw/desktop/scripts/retrieval-gate-worksheet.json

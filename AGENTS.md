@@ -2,49 +2,52 @@
 
 ## 项目结构与模块组织
 
-核心产品代码位于 `LiteasyClaw/`。桌面端为 Tauri + React + TypeScript，位于 `LiteasyClaw/desktop/`：界面壳层在 `src/app/layout/`，跨功能编排在 `src/app/controllers/`，领域模块在 `src/app/features/`，全局样式在 `src/app/styles/`，测试在 `src/tests/`；Rust 桌面宿主在 `src-tauri/`。
+三个产品主体位于 `products/`：`liteasy/` 是桌面软件与正式业务 API，`intuecho/` 是论坛 Web/API/契约，`marketing/` 是独立营销站。公共账号生命周期适配器位于 `platform/identity-service/`；部署入口位于 `deployment/`；本地开发服务、工具和测试数据位于 `development/`；文档位于 `docs/`；历史材料位于 `archive/`。
 
-`LiteasyClaw/services/dev-cloud/` 是本地 Node.js 开发 API，使用真实注册、会话和持久化链路，不得提供演示账号或 mock 业务结果。`LiteasyClaw/services/cloud/` 是 PostgreSQL/S3 正式服务边界；当前业务 API 仍在迁移，不得把仅有 readiness 的状态描述为生产就绪。`LiteasyClaw/scripts/` 存放只读 smoke 检查和工具脚本。工程、产品和 QA 文档放在 `project-docs/`，历史或生成材料放在 `archive/`。
+桌面端为 Tauri + React + TypeScript，位于 `products/liteasy/apps/desktop/`。界面壳层在 `src/app/layout/`，跨功能编排在 `src/app/controllers/`，领域模块在 `src/app/features/`，全局样式在 `src/app/styles/`，测试在 `src/tests/`；Rust 宿主在 `src-tauri/`。
 
-保持依赖方向：`layout -> controllers -> features -> shared types / clients`。`AppShell` 只负责组合；跨模块行为应进入 controller，而非继续堆入壳层或 feature。
+`development/dev-cloud/` 是仅限本地的真实开发 API，不得提供演示账号或 mock 业务结果。`products/liteasy/services/api/` 是 PostgreSQL/S3 正式服务边界；不得把 readiness 或仓库实现描述为生产环境已验收。`products/intuecho/services/api/` 使用独立业务数据库，不得与 Liteasy API 共享连接池或凭据。
+
+保持桌面依赖方向：`layout -> controllers -> features -> shared types / clients`。`AppShell` 只负责组合；跨模块行为进入 controller。
 
 ## 构建、测试与开发命令
 
-在相应包目录中执行：
-
 ```bash
-cd LiteasyClaw/services/dev-cloud && npm start  # 启动 8787 端口的本地 API
-cd LiteasyClaw/desktop && npm run dev           # 启动 Vite 与开发云
-cd LiteasyClaw/desktop && npm run tauri dev     # 启动完整桌面应用
-cd LiteasyClaw/desktop && npm run build         # 类型检查并构建生产包
-cd LiteasyClaw/desktop && npm test              # 运行 Vitest
-cd LiteasyClaw/services/dev-cloud && npm test   # 运行 Node 内置测试
-cd LiteasyClaw/services/cloud && npm test       # 运行正式存储适配器契约测试
+cd development/dev-cloud && npm start
+cd products/liteasy/apps/desktop && npm run dev
+cd products/liteasy/apps/desktop && npm run tauri dev
+cd products/liteasy/apps/desktop && npm test && npm run build
+cd products/liteasy/apps/admin && npm test && npm run build
+cd products/liteasy/services/api && npm test
+cd products/intuecho && npm test && npm run build
+cd platform/identity-service && npm test
 ```
 
-`dev-cloud` 需要 Node 20+。本地模型密钥写入 `LiteasyClaw/services/dev-cloud/.env.local`，不得提交密钥或其他敏感配置。
+`dev-cloud` 需要 Node.js 20+。本地密钥写入 `development/dev-cloud/.env.local`，不得提交密钥或敏感配置。
 
-## 代码风格与命名
+## 代码与命名
 
-遵循现有 TypeScript 风格：两空格缩进、双引号和分号。React 组件使用 `PascalCase`，Hook 使用 `useThing`，其他 TypeScript 文件与函数使用 `camelCase`。功能代码放入对应 feature 目录；feature 不得导入 `layout` 或 `AppShell`。Rust 改动应放在 `src-tauri/src/` 并遵循 `rustfmt`。
+代码目录使用小写 `kebab-case`，业务域使用稳定产品名；不要新增 `misc`、`temp`、`new`、`final` 等含糊目录。TypeScript 使用两空格缩进、双引号和分号。React 组件使用 `PascalCase`，Hook 使用 `useThing`，其他 TypeScript 文件与函数使用 `camelCase`。Rust 代码遵循 `rustfmt`。
+
+功能代码进入对应 feature；feature 不得导入 layout 或 `AppShell`。开发专用实现不得进入 `products/*/services`；生产服务不得依赖 `development/`。
 
 ## Fluent 2 界面与图标基线
 
-GitHub `main` 的 `7c0da2c` 提交引入的 Fluent 2 图标与布局调整是产品界面基线，后续开发不得回退或以旧的文字/自制图标替代。界面变更遵循以下约束：
+GitHub `main` 的 `7c0da2c` 提交引入的 Fluent 2 图标与布局是产品界面基线：
 
-- 保留图标优先的活动栏、紧凑分层面板、4–8px 圆角、浅边框和低层级阴影；不要恢复渐变背景、重装饰或纵向文字导航。
-- 新建或修改的交互组件优先使用 `@fluentui/react-components`；图标统一使用 `@fluentui/react-icons` 的 Fluent 2 素材，不使用 emoji 或混入其他图标库。
-- 图标按钮必须有可访问名称和悬浮提示；颜色采用中性表面、单一蓝色主操作与语义状态色，不能仅依赖颜色表达状态。
-- 避免把模型、实现方式或开发状态作为常驻界面文案。界面应突出用户任务、内容和下一步操作。
+- 保留图标优先活动栏、紧凑分层面板、4-8px 圆角、浅边框和低层级阴影。
+- 交互组件优先使用 `@fluentui/react-components`；图标使用 `@fluentui/react-icons`，不使用 emoji 或混入其他图标库。
+- 图标按钮必须有可访问名称和悬浮提示；状态不能仅通过颜色表达。
+- 不把模型、实现方式或开发状态作为常驻界面文案。
 
-在合并或迁移涉及界面的远端改动时，应以 `7c0da2c` 的 `FluentProvider`、`@fluentui` 依赖、活动栏和布局 token 为保留项，并先处理与当前工作区的冲突，不能通过覆盖当前用户改动来同步。
+合并 UI 改动时保留现有 `FluentProvider`、Fluent 依赖、活动栏和布局 token，不覆盖当前用户改动。
 
 ## 测试指南
 
-桌面端使用 Vitest 和 Testing Library。新增聚焦测试放入 `LiteasyClaw/desktop/src/tests/`，命名为 `*.test.ts` 或 `*.test.tsx`；`AppShell.test.tsx` 仅保留 smoke 和关键集成路径。云服务测试使用 Node 测试运行器，与服务模块同目录并命名为 `*.test.mjs`。提交前运行受影响测试；修改桌面端时还应运行 `npm run build`。
+桌面测试放在 `products/liteasy/apps/desktop/src/tests/`，命名为 `*.test.ts(x)`；`AppShell.test.tsx` 只保留 smoke 和关键集成路径。服务测试使用 Node test runner，与服务模块同目录并命名为 `*.test.mjs`。稳定测试数据放在 `development/test-data/`，运行生成物不得提交。
+
+提交前运行受影响测试；桌面改动还应运行 `npm run build`。
 
 ## 提交与拉取请求
 
-近期历史以简短祈使式提交为主，常用 `feat:`、`test:`、`docs:` 前缀，例如 `feat: add workspace selection validation`。每个提交只处理一个聚焦主题。
-
-拉取请求应说明用户可见或架构变更，列出已运行的验证命令，并在可用时关联 issue 或设计文档。UI 改动附截图；明确说明 mock/demo 限制和所需本地配置。
+提交使用简短祈使式主题，常用 `feat:`、`test:`、`docs:`。每个提交只处理一个聚焦主题。PR 说明用户可见或架构变更、验证命令和所需配置；UI 改动附截图，明确 mock/demo 限制。

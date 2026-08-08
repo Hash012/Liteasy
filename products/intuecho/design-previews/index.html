@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intuecho 视觉方向稿</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
+      font-synthesis: none;
+      --lab-ink: #171a18;
+      --lab-muted: #6d736f;
+      --lab-line: #d9ddda;
+      --lab-paper: #f7f8f6;
+      --lab-accent: #aa3e2f;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: #e8ebe8; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--lab-ink); background: #e8ebe8; }
+    button, input { font: inherit; letter-spacing: 0; }
+    button { color: inherit; }
+    a { color: inherit; text-decoration: none; }
+
+    .design-lab {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      min-height: 64px;
+      display: grid;
+      grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+      align-items: center;
+      gap: 24px;
+      padding: 10px 24px;
+      border-bottom: 1px solid #cdd2ce;
+      background: rgba(247, 248, 246, 0.96);
+      backdrop-filter: blur(14px);
+    }
+    .lab-title { display: grid; gap: 2px; }
+    .lab-title strong { font-size: 13px; }
+    .lab-title span, .lab-note { color: var(--lab-muted); font-size: 11px; }
+    .lab-note { justify-self: end; text-align: right; }
+    .direction-picker {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      padding: 3px;
+      border: 1px solid #c8ceca;
+      border-radius: 6px;
+      background: #ecefeb;
+    }
+    .direction-picker button {
+      min-width: 116px;
+      height: 30px;
+      border: 0;
+      border-radius: 3px;
+      background: transparent;
+      color: #626965;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease;
+    }
+    .direction-picker button[aria-selected="true"] {
+      background: #ffffff;
+      color: #171a18;
+      box-shadow: 0 1px 3px rgba(20, 28, 23, 0.12);
+      font-weight: 650;
+    }
+    .selected-direction {
+      min-width: 164px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #c8ceca;
+      border-radius: 4px;
+      background: #ffffff;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    button:focus-visible, input:focus-visible, a:focus-visible {
+      outline: 2px solid #1262a3;
+      outline-offset: 2px;
+    }
+
+    .preview-stage { padding: 24px; }
+    .preview-shell {
+      width: min(1480px, 100%);
+      min-height: calc(100vh - 112px);
+      margin: 0 auto;
+      overflow: hidden;
+      background: white;
+      box-shadow: 0 18px 50px rgba(27, 34, 29, 0.13);
+    }
+    .direction { display: none; min-height: calc(100vh - 112px); }
+    .direction.active { display: block; animation: enter 280ms cubic-bezier(.2,.8,.2,1); }
+    @keyframes enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      cursor: pointer;
+    }
+    .icon-button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    /* Direction A: editorial marginalia */
+    .editorial {
+      --ink: #1b201d;
+      --muted: #69716c;
+      --line: #d9deda;
+      --paper: #f7f8f5;
+      --surface: #fcfdfb;
+      --red: #a33a2d;
+      --green: #275f52;
+      grid-template-columns: 148px minmax(0, 1fr);
+      color: var(--ink);
+      background: var(--paper);
+    }
+    .direction.editorial.active { display: grid; }
+    .editorial-sidebar {
+      position: relative;
+      min-height: calc(100vh - 112px);
+      padding: 28px 14px 22px;
+      border-right: 1px solid var(--line);
+      background: #f1f3ef;
+    }
+    .editorial-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 48px; font-family: Georgia, "Source Han Serif SC", "Songti SC", serif; }
+    .editorial-brand i { width: 29px; height: 29px; display: grid; place-items: center; background: var(--ink); color: white; font-size: 20px; font-style: normal; }
+    .editorial-brand strong { font-size: 17px; font-weight: 600; }
+    .editorial-nav { display: grid; gap: 5px; }
+    .editorial-nav button {
+      height: 38px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 6px;
+      padding: 0 9px;
+      border: 0;
+      border-left: 2px solid transparent;
+      background: transparent;
+      color: #5d6560;
+      text-align: left;
+      cursor: pointer;
+    }
+    .editorial-nav button:hover { color: var(--ink); background: #e8ebe6; }
+    .editorial-nav button.active { border-left-color: var(--red); color: var(--ink); font-weight: 650; }
+    .editorial-nav small { color: #929994; }
+    .editorial-publish {
+      position: absolute;
+      right: 14px;
+      bottom: 24px;
+      left: 14px;
+      height: 40px;
+      border: 1px solid var(--ink);
+      border-radius: 4px;
+      background: var(--ink);
+      color: white;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease;
+    }
+    .editorial-publish:hover { transform: translateY(-2px); background: var(--green); }
+    .editorial-workspace { min-width: 0; }
+    .editorial-topbar {
+      height: 64px;
+      display: grid;
+      grid-template-columns: minmax(240px, 580px) 1fr auto;
+      align-items: center;
+      gap: 20px;
+      padding: 0 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(247, 248, 245, 0.96);
+    }
+    .editorial-search { display: flex; align-items: center; gap: 9px; height: 36px; border-bottom: 1px solid #aeb5b0; color: var(--muted); }
+    .editorial-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 13px; }
+    .editorial-account { display: flex; align-items: center; gap: 9px; font-size: 12px; }
+    .editorial-account .avatar { background: #dce8e3; color: var(--green); }
+    .editorial-layout { display: grid; grid-template-columns: minmax(0, 790px) 218px; justify-content: center; gap: 54px; padding: 44px 40px 72px; }
+    .editorial-heading { display: grid; grid-template-columns: 70px 1fr auto; align-items: end; padding-bottom: 20px; border-bottom: 1px solid #aab1ac; }
+    .editorial-heading .issue { color: var(--red); font: 12px/1.2 "Segoe UI", sans-serif; }
+    .editorial-heading h1 { margin: 0; font: 500 42px/1.05 Georgia, "Source Han Serif SC", "Songti SC", serif; }
+    .editorial-heading p { margin: 0 0 4px; color: var(--muted); font-size: 11px; }
+    .editorial-controls { display: flex; gap: 15px; margin: 18px 0 4px 70px; }
+    .editorial-controls button { padding: 4px 0; border: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+    .editorial-controls button.active { border-bottom-color: var(--red); color: var(--ink); }
+    .editorial-note { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 18px; padding: 30px 0 26px; border-bottom: 1px solid var(--line); }
+    .note-index { padding-top: 2px; color: #939a95; font: 12px Georgia, serif; }
+    .note-main { min-width: 0; }
+    .note-author { display: flex; align-items: center; gap: 10px; }
+    .note-author .avatar { background: #e3e8e4; color: #3f5048; }
+    .note-author div { min-width: 0; display: grid; gap: 1px; }
+    .note-author strong { font-size: 13px; }
+    .note-author span, .note-author time { color: var(--muted); font-size: 11px; }
+    .note-author time { margin-left: auto; }
+    .note-body { max-width: 63ch; margin: 17px 0 16px; font: 16px/1.82 Georgia, "Source Han Serif SC", "Songti SC", serif; }
+    .literature-line { display: grid; grid-template-columns: 18px 1fr; gap: 8px; padding: 10px 0 10px 12px; border-left: 2px solid var(--green); color: #3d4742; font-size: 12px; }
+    .literature-line span { display: grid; gap: 2px; }
+    .literature-line small { color: var(--muted); }
+    .note-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 11px; margin-top: 15px; color: var(--muted); font-size: 11px; }
+    .note-meta .tag { color: var(--green); }
+    .note-meta button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+    .note-meta button:hover { color: var(--red); }
+    .editorial-context { position: sticky; top: 108px; align-self: start; border-top: 3px solid var(--ink); padding-top: 13px; }
+    .editorial-context > span { color: var(--red); font-size: 10px; font-weight: 700; }
+    .editorial-context h2 { margin: 9px 0 22px; font: 500 22px/1.2 Georgia, "Source Han Serif SC", "Songti SC", serif; }
+    .editorial-context dl { margin: 0; }
+    .editorial-context dl div { padding: 11px 0; border-top: 1px solid var(--line); }
+    .editorial-context dt { color: var(--muted); font-size: 10px; }
+    .editorial-context dd { margin: 4px 0 0; font-size: 12px; }
+    .editorial-context blockquote { margin: 28px 0 0; padding-left: 13px; border-left: 1px solid var(--red); color: #505853; font: 13px/1.7 Georgia, serif; }
+
+    /* Direction B: Swiss research index */
+    .swiss { --black: #111412; --gray: #6c726e; --line: #cbd0cc; --signal: #e4492e; min-height: calc(100vh - 112px); color: var(--black); background: #fff; }
+    .swiss-header { display: grid; grid-template-columns: 210px 1fr auto; align-items: center; min-height: 72px; padding: 0 30px; border-bottom: 2px solid var(--black); }
+    .swiss-brand { font-size: 21px; font-weight: 800; }
+    .swiss-brand span { color: var(--signal); }
+    .swiss-search { max-width: 600px; height: 38px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--black); padding: 0 11px; }
+    .swiss-search input { width: 100%; border: 0; outline: 0; font-size: 12px; }
+    .swiss-actions { display: flex; gap: 8px; }
+    .swiss-actions button { height: 38px; border: 1px solid var(--black); border-radius: 0; background: white; padding: 0 15px; font-size: 12px; cursor: pointer; }
+    .swiss-actions button:last-child { background: var(--black); color: white; }
+    .swiss-grid { display: grid; grid-template-columns: 210px minmax(0, 1fr); }
+    .swiss-nav { min-height: calc(100vh - 184px); border-right: 1px solid var(--line); padding: 26px 0; }
+    .swiss-nav strong { display: block; padding: 0 26px 13px; color: var(--gray); font-size: 10px; text-transform: uppercase; }
+    .swiss-nav button { width: 100%; min-height: 42px; display: flex; justify-content: space-between; align-items: center; border: 0; border-left: 4px solid transparent; background: white; padding: 0 24px 0 22px; text-align: left; font-size: 12px; cursor: pointer; }
+    .swiss-nav button:hover { background: #f3f5f3; }
+    .swiss-nav button.active { border-left-color: var(--signal); background: #f3f5f3; font-weight: 700; }
+    .swiss-content { min-width: 0; padding: 30px 36px 60px; }
+    .swiss-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px; margin-bottom: 28px; }
+    .swiss-heading small { color: var(--signal); font-weight: 700; }
+    .swiss-heading h1 { margin: 4px 0 0; font-size: 52px; line-height: 1; font-weight: 300; }
+    .swiss-heading aside { display: flex; align-items: center; gap: 18px; font-size: 11px; }
+    .swiss-heading aside button { border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 5px 0; cursor: pointer; }
+    .swiss-heading aside button.active { border-color: var(--signal); font-weight: 700; }
+    .swiss-table-head, .swiss-row { display: grid; grid-template-columns: 48px minmax(150px, .75fr) minmax(320px, 2fr) minmax(180px, 1fr) 96px; gap: 16px; }
+    .swiss-table-head { padding: 9px 10px; border-top: 2px solid var(--black); border-bottom: 1px solid var(--black); color: var(--gray); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+    .swiss-row { position: relative; align-items: start; padding: 19px 10px 22px; border-bottom: 1px solid var(--line); transition: background 140ms ease, transform 140ms ease; }
+    .swiss-row:hover { background: #f4f6f4; transform: translateX(3px); }
+    .swiss-no { color: var(--signal); font: 13px Georgia, serif; }
+    .swiss-person { display: grid; gap: 4px; }
+    .swiss-person strong { font-size: 12px; }
+    .swiss-person span { color: var(--gray); font-size: 10px; line-height: 1.4; }
+    .swiss-copy p { max-width: 65ch; margin: 0 0 12px; font-size: 14px; line-height: 1.7; }
+    .swiss-tags { display: flex; flex-wrap: wrap; gap: 8px; color: var(--signal); font-size: 10px; }
+    .swiss-source { display: grid; gap: 5px; font-size: 11px; line-height: 1.45; }
+    .swiss-source span { color: var(--gray); }
+    .swiss-stats { display: grid; gap: 7px; color: var(--gray); font-size: 10px; }
+    .swiss-stats b { color: var(--black); font-size: 12px; }
+
+    /* Direction C: flowing manuscript */
+    .flow { --ink: #202522; --muted: #727974; --line: #dfe3df; --blue: #225f72; --rose: #b44752; min-height: calc(100vh - 112px); color: var(--ink); background: #fafbf9; }
+    .flow-header { height: 70px; display: grid; grid-template-columns: 160px minmax(250px, 600px) 1fr auto; align-items: center; gap: 24px; padding: 0 36px; border-bottom: 1px solid var(--line); }
+    .flow-brand { font: 600 20px Georgia, "Songti SC", serif; }
+    .flow-brand i { color: var(--rose); font-style: normal; }
+    .flow-search { height: 37px; display: flex; align-items: center; gap: 8px; padding: 0 4px; border-bottom: 1px solid #a9b1ac; }
+    .flow-search input { width: 100%; border: 0; outline: 0; background: transparent; font-size: 12px; }
+    .flow-user { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .flow-user .avatar { background: #e8eaec; color: var(--blue); }
+    .flow-new { height: 37px; border: 0; border-bottom: 1px solid var(--rose); background: transparent; color: var(--rose); cursor: pointer; }
+    .flow-layout { display: grid; grid-template-columns: 140px minmax(0, 750px) 220px; justify-content: center; gap: 40px; padding: 46px 32px 70px; }
+    .flow-rail { position: sticky; top: 108px; align-self: start; display: grid; gap: 7px; }
+    .flow-rail button { min-height: 36px; display: flex; align-items: center; gap: 9px; border: 0; background: transparent; color: var(--muted); text-align: left; cursor: pointer; }
+    .flow-rail button::before { content: ""; width: 12px; height: 1px; background: #b9bfbb; transition: width 180ms ease, background 180ms ease; }
+    .flow-rail button:hover::before, .flow-rail button.active::before { width: 28px; background: var(--rose); }
+    .flow-rail button.active { color: var(--ink); font-weight: 650; }
+    .flow-rail small { margin-top: 20px; color: #9aa19d; line-height: 1.6; }
+    .flow-heading { display: flex; justify-content: space-between; align-items: end; padding-bottom: 20px; }
+    .flow-heading span { color: var(--rose); font-size: 10px; font-weight: 700; }
+    .flow-heading h1 { margin: 5px 0 0; font: 500 38px/1 Georgia, "Source Han Serif SC", "Songti SC", serif; }
+    .flow-switch { display: flex; gap: 16px; }
+    .flow-switch button { border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+    .flow-switch button.active { color: var(--blue); font-weight: 700; }
+    .flow-stream { position: relative; border-top: 1px solid #aeb5b0; }
+    .flow-stream::before { content: ""; position: absolute; top: 0; bottom: 0; left: 17px; width: 1px; background: var(--line); }
+    .flow-entry { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 20px; padding: 28px 0; }
+    .flow-dot { position: relative; z-index: 1; width: 9px; height: 9px; margin: 7px 0 0 13px; border: 2px solid #fafbf9; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+    .flow-entry:nth-child(2) .flow-dot { background: var(--rose); box-shadow: 0 0 0 1px var(--rose); }
+    .flow-entry-main { padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+    .flow-byline { display: flex; align-items: baseline; gap: 8px; }
+    .flow-byline strong { font-size: 13px; }
+    .flow-byline span, .flow-byline time { color: var(--muted); font-size: 10px; }
+    .flow-byline time { margin-left: auto; }
+    .flow-body { max-width: 61ch; margin: 16px 0; font: 16px/1.84 Georgia, "Source Han Serif SC", "Songti SC", serif; }
+    .flow-quote { position: relative; max-width: 64ch; padding: 12px 16px; background: #f0f4f3; color: #44504b; font-size: 12px; line-height: 1.6; }
+    .flow-quote::before { content: "“"; position: absolute; top: -10px; left: -5px; color: var(--rose); font: 34px Georgia, serif; }
+    .flow-footer { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; color: var(--muted); font-size: 10px; }
+    .flow-footer button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+    .flow-footer button:hover { color: var(--blue); }
+    .flow-aside { position: sticky; top: 108px; align-self: start; }
+    .flow-aside-label { display: block; padding-bottom: 10px; border-bottom: 1px solid var(--ink); color: var(--muted); font-size: 10px; }
+    .flow-topic { display: grid; grid-template-columns: 30px 1fr; gap: 10px; padding: 15px 0; border-bottom: 1px solid var(--line); }
+    .flow-topic > span { color: var(--rose); font: 13px Georgia, serif; }
+    .flow-topic strong { display: block; font-size: 12px; line-height: 1.5; }
+    .flow-topic small { color: var(--muted); font-size: 10px; }
+
+    .preview-toast {
+      position: fixed;
+      z-index: 120;
+      right: 24px;
+      bottom: 24px;
+      max-width: calc(100vw - 48px);
+      transform: translateY(18px);
+      opacity: 0;
+      pointer-events: none;
+      padding: 10px 14px;
+      border: 1px solid #2d4f46;
+      border-radius: 4px;
+      background: #18231f;
+      color: white;
+      font-size: 12px;
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+    .preview-toast.show { transform: none; opacity: 1; }
+
+    @media (max-width: 980px) {
+      .design-lab { grid-template-columns: 1fr auto; }
+      .lab-note { display: none; }
+      .preview-stage { padding: 14px; }
+      .editorial { grid-template-columns: 132px minmax(0, 1fr); }
+      .editorial-sidebar { padding-inline: 10px; }
+      .editorial-brand { justify-content: flex-start; }
+      .editorial-nav button { grid-template-columns: 1fr auto; padding-inline: 8px; }
+      .editorial-layout { grid-template-columns: minmax(0, 1fr); padding-inline: 28px; }
+      .editorial-context, .flow-aside { display: none; }
+      .swiss-header { grid-template-columns: 160px minmax(220px, 1fr) auto; }
+      .swiss-grid { grid-template-columns: 160px minmax(0, 1fr); }
+      .swiss-table-head, .swiss-row { grid-template-columns: 38px minmax(120px, .65fr) minmax(280px, 2fr) minmax(150px, 1fr); }
+      .swiss-stats { display: none; }
+      .flow-layout { grid-template-columns: 120px minmax(0, 1fr); }
+    }
+
+    @media (max-width: 700px) {
+      .design-lab { position: relative; grid-template-columns: 1fr; gap: 8px; padding: 10px; }
+      .lab-title { text-align: center; }
+      .direction-picker { width: 100%; height: auto; }
+      .direction-picker button { min-width: 0; flex: 1; height: 34px; }
+      .preview-stage { padding: 0; }
+      .preview-shell { min-height: calc(100vh - 112px); box-shadow: none; }
+      .editorial { grid-template-columns: 1fr; }
+      .editorial-sidebar { min-height: auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .editorial-brand { margin: 0 auto 0 0; }
+      .editorial-brand strong { display: none; }
+      .editorial-nav { display: flex; }
+      .editorial-nav button { width: auto; min-width: 40px; display: flex; gap: 3px; padding-inline: 5px; font-size: 11px; }
+      .editorial-nav small { font-size: 9px; }
+      .editorial-publish { position: static; width: 36px; height: 36px; flex: 0 0 36px; padding: 0; font-size: 0; }
+      .editorial-publish::before { content: "+"; font-size: 20px; font-weight: 300; }
+      .editorial-topbar { height: auto; grid-template-columns: 1fr auto; padding: 10px 14px; }
+      .editorial-search { grid-column: 1 / -1; grid-row: 2; }
+      .editorial-layout { padding: 30px 16px 48px; }
+      .editorial-heading { grid-template-columns: 44px 1fr; }
+      .editorial-heading p { display: none; }
+      .editorial-heading h1 { font-size: 34px; }
+      .editorial-controls { margin-left: 44px; }
+      .editorial-note { grid-template-columns: 32px minmax(0, 1fr); gap: 12px; }
+      .note-author { flex-wrap: wrap; }
+      .note-author time { width: 100%; margin-left: 44px; }
+      .swiss-header { grid-template-columns: 1fr auto; gap: 10px; padding: 12px 14px; }
+      .swiss-search { grid-column: 1 / -1; grid-row: 2; max-width: none; }
+      .swiss-actions button:first-child { display: none; }
+      .swiss-grid { grid-template-columns: 1fr; }
+      .swiss-nav { min-height: auto; display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 0; }
+      .swiss-nav strong { display: none; }
+      .swiss-nav button { min-width: 110px; border-left: 0; border-bottom: 3px solid transparent; padding: 0 14px; }
+      .swiss-nav button.active { border-bottom-color: var(--signal); }
+      .swiss-content { padding: 28px 16px 48px; }
+      .swiss-heading h1 { font-size: 40px; }
+      .swiss-table-head { display: none; }
+      .swiss-row { grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 20px 0; }
+      .swiss-person, .swiss-copy, .swiss-source { grid-column: 2; }
+      .swiss-source { padding-top: 10px; border-top: 1px solid var(--line); }
+      .flow-header { height: auto; grid-template-columns: 1fr auto; gap: 10px; padding: 12px 16px; }
+      .flow-search { grid-column: 1 / -1; grid-row: 2; }
+      .flow-user { display: none; }
+      .flow-layout { grid-template-columns: 1fr; padding: 30px 16px 48px; }
+      .flow-rail { position: static; display: flex; overflow-x: auto; padding-bottom: 10px; }
+      .flow-rail button { min-width: max-content; }
+      .flow-rail small { display: none; }
+      .flow-heading h1 { font-size: 32px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="design-lab">
+    <div class="lab-title"><strong>Intuecho 视觉方向稿</strong><span>论坛广场 · 高保真实时预览</span></div>
+    <div class="selected-direction">A · 边注编辑部</div>
+    <div class="lab-note"><strong>已选定方向</strong><br />点击导航、排序与操作可感受交互</div>
+  </header>
+
+  <main class="preview-stage">
+    <div class="preview-shell">
+      <section class="direction editorial active" data-view="editorial" aria-label="边注编辑部方向">
+        <aside class="editorial-sidebar">
+          <div class="editorial-brand"><i>∿</i><strong>Intuecho</strong></div>
+          <nav class="editorial-nav" aria-label="论坛导航">
+            <button class="active"><span>广场</span></button>
+            <button><span>关注</span><small aria-label="6 条未读">6</small></button>
+            <button><span>信息</span><small aria-label="2 条未读">2</small></button>
+            <button><span>我的批注</span></button>
+            <button><span>组织批注</span></button>
+          </nav>
+          <button class="editorial-publish" data-toast="打开批注编辑器">＋ 新批注</button>
+        </aside>
+        <div class="editorial-workspace">
+          <header class="editorial-topbar">
+            <label class="editorial-search"><span aria-hidden="true">⌕</span><span class="visually-hidden">检索批注</span><input placeholder="检索批注、文献或输入 /分类" /></label>
+            <span></span>
+            <div class="editorial-account"><span class="avatar">LX</span><strong>林夏</strong></div>
+          </header>
+          <div class="editorial-layout">
+            <section>
+              <header class="editorial-heading"><span class="issue">ISSUE<br />028</span><h1>公共边注</h1><p>今日更新 12 条</p></header>
+              <div class="editorial-controls" data-tabs><button class="active">为你推荐</button><button>最新发布</button><button data-toast="展开筛选条件">筛选 2</button></div>
+              <div class="editorial-notes">
+                <article class="editorial-note">
+                  <span class="note-index">01</span>
+                  <div class="note-main">
+                    <header class="note-author"><span class="avatar">CY</span><div><strong>陈屿</strong><span>复旦大学 · 认知科学</span></div><time>8 分钟前</time></header>
+                    <p class="note-body">如果把“理解”看作对预测误差的持续压缩，那么阅读并不是接收文本，而是在句子与经验之间不断改写自己的内部模型。</p>
+                    <div class="literature-line"><span aria-hidden="true">↗</span><span><strong>Surfing Uncertainty</strong><small>Andy Clark · 第 4 章，p. 112</small></span></div>
+                    <footer class="note-meta"><span class="tag">#预测加工</span><span class="tag">#认知科学</span><span>评分 4.8 / 23</span><button data-toggle="已收藏|收藏">收藏</button><button data-toast="打开 6 条回复">回复 6</button></footer>
+                  </div>
+                </article>
+                <article class="editorial-note">
+                  <span class="note-index">02</span>
+                  <div class="note-main">
+                    <header class="note-author"><span class="avatar">SZ</span><div><strong>沈知遥</strong><span>同济大学 · 建筑与城市研究</span></div><time>34 分钟前</time></header>
+                    <p class="note-body">边界不是空间的终点，而是关系开始变得可见的地方。城市中的灰空间之所以重要，恰恰因为它允许多种秩序短暂重叠。</p>
+                    <div class="literature-line"><span aria-hidden="true">↗</span><span><strong>The Production of Space</strong><small>Henri Lefebvre · 空间实践</small></span></div>
+                    <footer class="note-meta"><span class="tag">#城市研究</span><span class="tag">#空间生产</span><span>评分 4.6 / 17</span><button data-toggle="已收藏|收藏">收藏</button><button data-toast="打开 3 条回复">回复 3</button></footer>
+                  </div>
+                </article>
+              </div>
+            </section>
+            <aside class="editorial-context"><span>CURRENT READING</span><h2>思想正在何处汇流</h2><dl><div><dt>热门主题</dt><dd>预测加工与具身认知</dd></div><div><dt>活跃领域</dt><dd>认知科学 · 城市研究</dd></div><div><dt>本周新增</dt><dd>148 条公共批注</dd></div></dl><blockquote>不是把文献放进卡片，而是让批注像真正的页边文字一样自然生长。</blockquote></aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="direction swiss" data-view="swiss" aria-label="瑞士索引方向">
+        <header class="swiss-header"><div class="swiss-brand">INTU<span>ECHO</span></div><label class="swiss-search"><span aria-hidden="true">⌕</span><span class="visually-hidden">检索批注</span><input placeholder="搜索批注 / 文献 / 作者 / 分类" /></label><div class="swiss-actions"><button data-toast="打开账户">林夏</button><button data-toast="打开批注编辑器">新批注 ＋</button></div></header>
+        <div class="swiss-grid">
+          <nav class="swiss-nav"><strong>Community / 2026</strong><button class="active"><span>广场</span><b>28</b></button><button><span>关注</span><b>06</b></button><button><span>私聊</span><b>02</b></button><button><span>我的批注</span><b>14</b></button><button><span>组织批注</span><b>09</b></button></nav>
+          <section class="swiss-content">
+            <header class="swiss-heading"><div><small>OPEN ANNOTATIONS / 028</small><h1>公共批注</h1></div><aside data-tabs><button class="active">推荐</button><button>最新</button><button data-toast="展开筛选条件">筛选 02</button></aside></header>
+            <div class="swiss-table-head"><span>编号</span><span>研究者</span><span>批注</span><span>文献</span><span>响应</span></div>
+            <article class="swiss-row"><span class="swiss-no">001</span><div class="swiss-person"><strong>陈屿</strong><span>复旦大学<br />认知科学</span></div><div class="swiss-copy"><p>如果把“理解”看作对预测误差的持续压缩，那么阅读并不是接收文本，而是在句子与经验之间不断改写自己的内部模型。</p><div class="swiss-tags"><span>#预测加工</span><span>#认知科学</span></div></div><div class="swiss-source"><strong>Surfing Uncertainty</strong><span>Andy Clark<br />Chapter 04 · p.112</span></div><div class="swiss-stats"><span><b>4.8</b> / 5</span><span>23 评价</span><span>06 回复</span></div></article>
+            <article class="swiss-row"><span class="swiss-no">002</span><div class="swiss-person"><strong>沈知遥</strong><span>同济大学<br />建筑与城市研究</span></div><div class="swiss-copy"><p>边界不是空间的终点，而是关系开始变得可见的地方。城市中的灰空间之所以重要，恰恰因为它允许多种秩序短暂重叠。</p><div class="swiss-tags"><span>#城市研究</span><span>#空间生产</span></div></div><div class="swiss-source"><strong>The Production of Space</strong><span>Henri Lefebvre<br />空间实践</span></div><div class="swiss-stats"><span><b>4.6</b> / 5</span><span>17 评价</span><span>03 回复</span></div></article>
+            <article class="swiss-row"><span class="swiss-no">003</span><div class="swiss-person"><strong>周以宁</strong><span>南京大学<br />科学哲学</span></div><div class="swiss-copy"><p>模型的价值并不只由预测精度决定；一个能暴露自身局限的模型，往往比一个看似完美闭合的模型更接近科学实践。</p><div class="swiss-tags"><span>#科学模型</span><span>#可证伪性</span></div></div><div class="swiss-source"><strong>Models as Mediators</strong><span>Morgan & Morrison<br />Introduction</span></div><div class="swiss-stats"><span><b>4.9</b> / 5</span><span>31 评价</span><span>11 回复</span></div></article>
+          </section>
+        </div>
+      </section>
+
+      <section class="direction flow" data-view="flow" aria-label="流动手稿方向">
+        <header class="flow-header"><div class="flow-brand">Intu<i>echo</i></div><label class="flow-search"><span aria-hidden="true">⌕</span><span class="visually-hidden">检索批注</span><input placeholder="沿着文献、观点或作者寻找" /></label><span></span><div class="flow-user"><span class="avatar">LX</span><strong>林夏</strong></div><button class="flow-new" data-toast="打开批注编辑器">＋ 写批注</button></header>
+        <div class="flow-layout">
+          <nav class="flow-rail"><button class="active">广场</button><button>关注</button><button>私聊 2</button><button>我的批注</button><button>组织</button><small>观点沿着阅读<br />相遇、分岔、回响</small></nav>
+          <section>
+            <header class="flow-heading"><div><span>PUBLIC MARGINALIA</span><h1>正在发生的思考</h1></div><div class="flow-switch" data-tabs><button class="active">推荐</button><button>最新</button><button data-toast="展开筛选条件">筛选</button></div></header>
+            <div class="flow-stream">
+              <article class="flow-entry"><span class="flow-dot"></span><div class="flow-entry-main"><header class="flow-byline"><strong>陈屿</strong><span>复旦大学 · 认知科学</span><time>8 分钟前</time></header><p class="flow-body">如果把“理解”看作对预测误差的持续压缩，那么阅读并不是接收文本，而是在句子与经验之间不断改写自己的内部模型。</p><div class="flow-quote">Surfing Uncertainty · Andy Clark · 第 4 章，p. 112</div><footer class="flow-footer"><span>#预测加工</span><span>#认知科学</span><span>4.8 / 23 人</span><button data-toggle="已收藏|收藏">收藏</button><button data-toast="打开 6 条回复">回应 6</button></footer></div></article>
+              <article class="flow-entry"><span class="flow-dot"></span><div class="flow-entry-main"><header class="flow-byline"><strong>沈知遥</strong><span>同济大学 · 建筑与城市研究</span><time>34 分钟前</time></header><p class="flow-body">边界不是空间的终点，而是关系开始变得可见的地方。城市中的灰空间之所以重要，恰恰因为它允许多种秩序短暂重叠。</p><div class="flow-quote">The Production of Space · Henri Lefebvre · 空间实践</div><footer class="flow-footer"><span>#城市研究</span><span>#空间生产</span><span>4.6 / 17 人</span><button data-toggle="已收藏|收藏">收藏</button><button data-toast="打开 3 条回复">回应 3</button></footer></div></article>
+            </div>
+          </section>
+          <aside class="flow-aside"><span class="flow-aside-label">本周思想脉络</span><div class="flow-topic"><span>01</span><div><strong>预测加工与具身认知</strong><small>38 条新批注</small></div></div><div class="flow-topic"><span>02</span><div><strong>空间、边界与公共性</strong><small>26 条新批注</small></div></div><div class="flow-topic"><span>03</span><div><strong>模型如何参与知识生产</strong><small>19 条新批注</small></div></div></aside>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div class="preview-toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const toast = document.querySelector(".preview-toast");
+    let toastTimer;
+
+    function showToast(message) {
+      window.clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add("show");
+      toastTimer = window.setTimeout(() => toast.classList.remove("show"), 1800);
+    }
+
+    document.querySelectorAll("[data-tabs]").forEach((group) => {
+      group.querySelectorAll("button:not([data-toast])").forEach((button) => button.addEventListener("click", () => {
+        group.querySelectorAll("button").forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+      }));
+    });
+
+    document.querySelectorAll("[data-toast]").forEach((button) => button.addEventListener("click", () => showToast(button.dataset.toast)));
+    document.querySelectorAll("[data-toggle]").forEach((button) => button.addEventListener("click", () => {
+      const [active, idle] = button.dataset.toggle.split("|");
+      const selected = button.dataset.selected === "true";
+      button.dataset.selected = String(!selected);
+      button.textContent = selected ? idle : active;
+      showToast(selected ? "已取消收藏" : "已加入收藏");
+    }));
+
+  </script>
+</body>
+</html>

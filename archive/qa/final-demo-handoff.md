@@ -36,23 +36,23 @@
 已完成以下验证：
 
 ```bash
-node --test LiteasyClaw/services/dev-cloud/server.test.mjs LiteasyClaw/services/dev-cloud/providers/openaiResponses.test.mjs
-cd LiteasyClaw/desktop && npm test
-cd LiteasyClaw/desktop && npm run build
+node --test development/dev-cloud/server.test.mjs development/dev-cloud/providers/openaiResponses.test.mjs
+cd products/liteasy/apps/desktop && npm test
+cd products/liteasy/apps/desktop && npm run build
 ```
 
 当前结果：
 
-- `LiteasyClaw/services/dev-cloud` 服务测试通过
+- `development/dev-cloud` 服务测试通过
 - `desktop` 全量测试通过
 - `desktop` 构建通过
 
 如需在演示前恢复稳定状态，可依次执行：
 
 ```bash
-node LiteasyClaw/scripts/reset-demo-data.mjs
-node LiteasyClaw/scripts/reseed-demo-data.mjs
-node LiteasyClaw/scripts/smoke-roadshow.mjs http://127.0.0.1:8787
+node development/scripts/reset-demo-data.mjs
+node development/scripts/reseed-demo-data.mjs
+node development/scripts/smoke-roadshow.mjs http://127.0.0.1:8787
 ```
 
 ## 4. 建议部署顺序
@@ -63,27 +63,27 @@ node LiteasyClaw/scripts/smoke-roadshow.mjs http://127.0.0.1:8787
 
 ```bash
 cd /home/octopus/Liteasy
-node LiteasyClaw/services/dev-cloud/server.mjs
+node development/dev-cloud/server.mjs
 ```
 
 云端部署时，请参考：
 
-- `project-docs/qa/roadshow-demo-guide.md`
-- `project-docs/qa/environment-startup-guide.md`
+- `docs/qa/roadshow-demo-guide.md`
+- `docs/qa/environment-startup-guide.md`
 
 ### 4.2 启动桌面端
 
 前端开发预览：
 
 ```bash
-cd /home/octopus/Liteasy/LiteasyClaw/desktop
+cd /home/octopus/Liteasy/products/liteasy/apps/desktop
 npm run dev
 ```
 
 桌面窗口：
 
 ```bash
-cd /home/octopus/Liteasy/LiteasyClaw/desktop
+cd /home/octopus/Liteasy/products/liteasy/apps/desktop
 source "$HOME/.cargo/env"
 npm run tauri dev
 ```

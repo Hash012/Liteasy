@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intuecho UI 概念方案</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color: #171a19; background: #eceeeb; font-family: "Segoe UI Variable", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    body { margin: 0; min-width: 1180px; min-height: 100vh; }
+    button, input { font: inherit; letter-spacing: 0; }
+    button { cursor: default; }
+    .concept { display: none; width: 100vw; min-height: 100vh; }
+    body[data-concept="a"] .concept-a,
+    body[data-concept="b"] .concept-b,
+    body[data-concept="c"] .concept-c { display: block; }
+    .icon { width: 20px; height: 20px; display: inline-grid; place-items: center; flex: 0 0 20px; font-size: 15px; line-height: 1; }
+    .avatar { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 34px; border-radius: 50%; font-size: 11px; font-weight: 700; }
+    .mock-button { border: 0; background: transparent; }
+    .concept-label { position: fixed; z-index: 99; right: 20px; bottom: 18px; padding: 7px 10px; border: 1px solid rgba(0,0,0,.14); background: rgba(255,255,255,.92); color: #545a57; font-size: 10px; }
+
+    /* A: Marginalia Modernism */
+    .concept-a { --ink:#171a19; --muted:#626a67; --line:#d8dcda; --paper:#fcfcfa; --canvas:#f3f4f1; --brand:#155e63; --accent:#b5472e; background:var(--canvas); color:var(--ink); }
+    .a-rail { position:fixed; inset:0 auto 0 0; width:76px; display:flex; flex-direction:column; align-items:center; border-right:1px solid var(--line); background:var(--paper); }
+    .a-mark { width:42px; height:42px; display:grid; place-items:center; margin:17px 0 30px; border:1px solid var(--ink); color:var(--brand); font:26px/1 Georgia,serif; }
+    .a-rail nav { display:grid; gap:8px; width:100%; padding:0 10px; }
+    .a-rail button { position:relative; width:56px; height:56px; display:grid; place-items:center; gap:2px; border:0; background:transparent; color:#747b78; font-size:10px; }
+    .a-rail button strong { font-size:16px; font-weight:500; }
+    .a-rail button.active { color:var(--brand); }
+    .a-rail button.active::before { content:""; position:absolute; left:-10px; width:3px; height:26px; background:var(--accent); }
+    .a-rail .a-profile { margin-top:auto; margin-bottom:18px; background:#e6efed; color:var(--brand); }
+    .a-top { position:fixed; z-index:4; top:0; left:76px; right:0; height:64px; display:grid; grid-template-columns:minmax(280px,620px) 1fr auto; align-items:center; gap:22px; padding:0 34px; border-bottom:1px solid var(--line); background:rgba(252,252,250,.96); }
+    .a-search { height:38px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #aeb5b2; color:#7a817e; }
+    .a-search input { width:100%; border:0; outline:0; background:transparent; color:var(--ink); font-size:13px; }
+    .a-top-note { color:#7b827f; font-family:"Songti SC","STSong",serif; font-size:12px; }
+    .a-actions { display:flex; align-items:center; gap:10px; }
+    .a-actions .publish { height:36px; padding:0 16px; border:1px solid var(--brand); border-radius:4px; background:var(--brand); color:#fff; font-weight:650; }
+    .a-actions .avatar { background:#e6efed; color:var(--brand); }
+    .a-page { margin-left:76px; padding:112px 44px 72px; }
+    .a-grid { width:min(1128px,calc(100vw - 164px)); margin:0 auto; display:grid; grid-template-columns:minmax(0,820px) 238px; gap:64px; }
+    .a-heading { display:grid; grid-template-columns:126px 1fr auto; align-items:end; min-height:112px; padding-bottom:21px; border-bottom:1px solid #9da5a1; }
+    .a-index { color:var(--accent); font:14px/1.2 Georgia,serif; }
+    .a-title small { display:block; color:var(--brand); font-size:11px; font-weight:700; }
+    .a-title h1 { margin:7px 0 0; font:600 36px/1.08 "Source Han Serif SC","Songti SC",serif; }
+    .a-tools { display:flex; align-items:center; gap:14px; }
+    .a-sort { display:flex; gap:16px; color:#777e7b; font-size:12px; }
+    .a-sort b { padding-bottom:4px; border-bottom:2px solid var(--accent); color:var(--ink); }
+    .a-filter { height:34px; padding:0 12px; border:1px solid #bbc1be; border-radius:4px; background:transparent; color:#4c5552; }
+    .a-feed { background:var(--paper); }
+    .a-card { display:grid; grid-template-columns:126px minmax(0,1fr); padding:30px 0 26px; border-bottom:1px solid var(--line); }
+    .a-card-meta { padding-right:24px; color:#78807d; font-size:11px; line-height:1.55; }
+    .a-card-meta .avatar { margin-bottom:10px; background:#e7ece9; color:var(--brand); }
+    .a-card-meta strong { display:block; color:var(--ink); font-size:12px; }
+    .a-card-meta time { display:block; margin-top:14px; font-family:Georgia,serif; }
+    .a-card-main { padding-left:28px; border-left:1px solid #c3c8c5; }
+    .a-card-main p { max-width:40em; margin:0; color:#202422; font:17px/1.76 "Source Han Serif SC","Noto Serif CJK SC","Songti SC",serif; }
+    .a-citation { display:grid; grid-template-columns:26px 1fr; gap:7px; margin-top:20px; padding-top:12px; border-top:1px solid #e1e4e2; }
+    .a-citation b { color:var(--accent); font:13px Georgia,serif; }
+    .a-citation span { color:#4e5854; font-size:12px; }
+    .a-tags { margin-top:13px; color:var(--brand); font-size:11px; word-spacing:7px; }
+    .a-footer { display:flex; align-items:center; gap:4px; margin-top:16px; }
+    .a-footer button { min-width:36px; height:32px; border:0; background:transparent; color:#59625e; }
+    .a-footer .rating { margin-right:auto; color:#765a18; font-family:Georgia,serif; }
+    .a-aside { position:sticky; top:112px; padding-left:22px; border-left:1px solid #afb6b2; }
+    .a-aside small { color:var(--accent); font-size:10px; font-weight:700; }
+    .a-aside h2 { margin:8px 0 28px; font:600 20px/1.25 "Source Han Serif SC","Songti SC",serif; }
+    .a-aside dl { margin:0; display:grid; gap:18px; }
+    .a-aside dt { color:#8a918e; font-size:10px; }
+    .a-aside dd { margin:4px 0 0; font-size:13px; }
+    .a-issue { margin-top:58px; color:#8c9390; font:12px/1.7 Georgia,serif; }
+
+    /* B: Swiss Research Index */
+    .concept-b { --black:#111312; --red:#d63b2f; --blue:#164e63; --line:#c9cdcb; background:#fff; color:var(--black); }
+    .b-header { height:76px; display:grid; grid-template-columns:230px 1fr auto; align-items:center; border-bottom:2px solid var(--black); padding:0 36px; }
+    .b-brand { display:flex; align-items:baseline; gap:10px; font-size:22px; font-weight:800; }
+    .b-brand span { color:var(--red); font:32px Georgia,serif; }
+    .b-nav { display:flex; justify-content:center; gap:4px; }
+    .b-nav button { height:74px; min-width:92px; border:0; border-left:1px solid #e1e3e2; background:#fff; color:#555b58; font-size:12px; }
+    .b-nav button:last-child { border-right:1px solid #e1e3e2; }
+    .b-nav button.active { background:var(--black); color:#fff; }
+    .b-account { display:flex; align-items:center; gap:12px; }
+    .b-publish { height:38px; padding:0 16px; border:0; background:var(--red); color:#fff; font-weight:700; }
+    .b-page { width:min(1280px,calc(100vw - 64px)); margin:0 auto; padding:42px 0 72px; }
+    .b-search { height:48px; display:grid; grid-template-columns:48px 1fr 120px; align-items:center; border-top:1px solid var(--black); border-bottom:1px solid var(--black); }
+    .b-search .icon { justify-self:center; }
+    .b-search input { width:100%; border:0; outline:0; font-size:14px; }
+    .b-search span:last-child { height:100%; display:grid; place-items:center; border-left:1px solid var(--black); color:#555b58; font-size:11px; }
+    .b-hero { display:grid; grid-template-columns:170px 1fr 300px; min-height:158px; border-bottom:2px solid var(--black); }
+    .b-number { padding-top:27px; color:var(--red); font:56px/.9 Arial,sans-serif; font-weight:800; }
+    .b-hero h1 { align-self:end; margin:0; padding:0 0 25px; font-size:54px; line-height:.95; font-weight:800; }
+    .b-hero-copy { display:flex; align-items:flex-end; padding:0 0 26px 24px; border-left:1px solid var(--line); color:#4c5350; font-size:12px; line-height:1.65; }
+    .b-controls { height:62px; display:flex; align-items:center; border-bottom:1px solid var(--black); }
+    .b-controls button { height:100%; padding:0 22px; border:0; border-right:1px solid var(--line); background:#fff; font-size:12px; }
+    .b-controls button.active { color:var(--red); font-weight:800; }
+    .b-controls .b-filter { margin-left:auto; border-left:1px solid var(--line); }
+    .b-layout { display:grid; grid-template-columns:minmax(0,1fr) 270px; }
+    .b-list { border-right:1px solid var(--black); }
+    .b-card { display:grid; grid-template-columns:168px minmax(0,1fr); border-bottom:1px solid var(--black); }
+    .b-meta { padding:22px 22px 24px 0; color:#646b68; font-size:11px; }
+    .b-meta strong { display:block; margin-bottom:3px; color:var(--black); font-size:13px; }
+    .b-meta time { display:block; margin-top:24px; color:var(--red); font-weight:700; }
+    .b-body { padding:22px 30px 24px; border-left:1px solid var(--line); }
+    .b-body p { max-width:43em; margin:0; font-size:16px; line-height:1.7; }
+    .b-source { margin-top:18px; padding:13px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:#444b48; font-size:12px; }
+    .b-source b { margin-right:12px; color:var(--blue); }
+    .b-card-foot { display:flex; gap:22px; margin-top:15px; color:#565d5a; font-size:11px; }
+    .b-card-foot .score { margin-right:auto; color:#7b5b00; font-weight:700; }
+    .b-sidebar { padding:24px 0 0 28px; }
+    .b-sidebar > span { display:block; color:var(--red); font-size:11px; font-weight:800; }
+    .b-sidebar h2 { margin:8px 0 26px; font-size:18px; }
+    .b-filter-row { display:grid; grid-template-columns:48px 1fr; padding:12px 0; border-top:1px solid var(--line); font-size:12px; }
+    .b-filter-row b { color:#8b918e; }
+    .b-sidebar .b-note { margin-top:42px; padding-top:12px; border-top:2px solid var(--red); color:#5e6562; font-size:11px; line-height:1.7; }
+
+    /* C: Quiet Exhibition Catalogue */
+    .concept-c { --ink:#22231f; --muted:#6e7069; --line:#dedfd9; --paper:#fdfdfb; --canvas:#f1f2ed; --blue:#214b8c; --gold:#a37a24; background:var(--canvas); color:var(--ink); }
+    .c-header { height:86px; display:grid; grid-template-columns:260px 1fr 260px; align-items:center; padding:0 46px; border-bottom:1px solid var(--line); background:var(--paper); }
+    .c-brand { font:500 28px/1 Georgia,"Songti SC",serif; }
+    .c-brand span { color:var(--gold); }
+    .c-nav { display:flex; justify-content:center; gap:30px; color:#6d706a; font-size:12px; }
+    .c-nav b { color:var(--blue); font-weight:650; }
+    .c-account { display:flex; align-items:center; justify-content:flex-end; gap:12px; }
+    .c-account button { height:38px; border:1px solid var(--ink); border-radius:2px; padding:0 15px; background:transparent; color:var(--ink); }
+    .c-account .avatar { background:#e6e8e1; color:var(--blue); }
+    .c-page { width:min(1160px,calc(100vw - 80px)); margin:0 auto; padding:52px 0 86px; }
+    .c-intro { display:grid; grid-template-columns:1fr 350px; gap:100px; align-items:end; padding-bottom:34px; }
+    .c-intro small { color:var(--gold); font-size:10px; font-weight:700; }
+    .c-intro h1 { margin:9px 0 0; font:500 44px/1.08 Georgia,"Source Han Serif SC","Songti SC",serif; }
+    .c-intro p { margin:0; color:#686b65; font:14px/1.8 "Source Han Serif SC","Songti SC",serif; }
+    .c-toolbar { height:56px; display:flex; align-items:center; gap:20px; border-top:1px solid #aaaDa7; border-bottom:1px solid #aaaDa7; }
+    .c-search { flex:1; display:flex; align-items:center; gap:9px; color:#777b74; }
+    .c-search input { width:100%; border:0; outline:0; background:transparent; }
+    .c-tabs { display:flex; gap:20px; font-size:12px; }
+    .c-tabs b { color:var(--blue); }
+    .c-toolbar > button { border:0; padding:8px 0 8px 18px; border-left:1px solid var(--line); background:transparent; color:#555950; }
+    .c-layout { display:grid; grid-template-columns:minmax(0,780px) 250px; gap:70px; padding-top:32px; }
+    .c-card { margin-bottom:22px; padding:26px 28px 22px; border:1px solid #d9dad4; border-radius:2px; background:var(--paper); }
+    .c-card-head { display:flex; align-items:center; gap:11px; }
+    .c-card-head .avatar { background:#eceee8; color:var(--blue); }
+    .c-author { display:grid; gap:2px; font-size:12px; }
+    .c-author span { color:#898b84; font-size:10px; }
+    .c-card-head time { margin-left:auto; color:#8a8c85; font:11px Georgia,serif; }
+    .c-card p { max-width:39em; margin:24px 0; font:17px/1.82 Georgia,"Source Han Serif SC","Songti SC",serif; }
+    .c-source { position:relative; padding:15px 16px 15px 36px; background:#f3f5f7; color:#4f5660; font-size:12px; line-height:1.55; }
+    .c-source::before { content:"01"; position:absolute; left:12px; top:14px; color:var(--blue); font:11px Georgia,serif; }
+    .c-tags { margin-top:14px; color:var(--gold); font-size:11px; }
+    .c-footer { display:flex; align-items:center; gap:6px; margin-top:17px; padding-top:12px; border-top:1px solid #ebece7; }
+    .c-footer button { height:30px; border:0; background:transparent; color:#676a64; font-size:11px; }
+    .c-footer .score { margin-right:auto; color:#7d621d; }
+    .c-aside { padding-top:8px; }
+    .c-aside small { color:var(--blue); font-size:10px; font-weight:700; }
+    .c-aside h2 { margin:8px 0 20px; font:500 22px/1.3 Georgia,"Songti SC",serif; }
+    .c-aside .c-index { display:grid; gap:0; border-top:1px solid #aaaDa7; }
+    .c-index div { display:grid; grid-template-columns:34px 1fr; gap:10px; padding:13px 0; border-bottom:1px solid var(--line); }
+    .c-index b { color:var(--gold); font:12px Georgia,serif; }
+    .c-index span { font-size:12px; line-height:1.5; }
+    .c-publish { width:100%; height:42px; margin-top:28px; border:1px solid var(--blue); border-radius:2px; background:var(--blue); color:#fff; }
+  </style>
+</head>
+<body>
+  <section class="concept concept-a">
+    <aside class="a-rail">
+      <div class="a-mark">∿</div>
+      <nav aria-label="主要导航">
+        <button class="active"><strong>◎</strong><span>广场</span></button>
+        <button><strong>◌</strong><span>关注</span></button>
+        <button><strong>□</strong><span>私聊</span></button>
+        <button><strong>▤</strong><span>批注</span></button>
+        <button><strong>◇</strong><span>组织</span></button>
+      </nav>
+      <div class="avatar a-profile">YL</div>
+    </aside>
+    <header class="a-top">
+      <label class="a-search"><span class="icon">⌕</span><input value="" placeholder="检索批注、文献或输入 /分类" /></label>
+      <span class="a-top-note">Intuecho · 让阅读留下可讨论的痕迹</span>
+      <div class="a-actions"><button class="publish">＋ 发布批注</button><div class="avatar">YL</div></div>
+    </header>
+    <main class="a-page"><div class="a-grid">
+      <section>
+        <header class="a-heading"><span class="a-index">01 / 06</span><div class="a-title"><small>公开批注</small><h1>广场</h1></div><div class="a-tools"><div class="a-sort"><b>推荐</b><span>最新</span></div><button class="a-filter">筛选 2</button></div></header>
+        <div class="a-feed">
+          <article class="a-card"><aside class="a-card-meta"><div class="avatar">YC</div><strong>余晨</strong><span>复旦大学<br />博士研究生</span><time>08 / 08</time></aside><div class="a-card-main"><p>真正值得讨论的，不是模型是否给出了一个流畅答案，而是它在什么证据上完成了推断，以及哪些不确定性被语言的确定感遮蔽了。</p><div class="a-citation"><b>01</b><span>Large Language Models as Optimizers · Yang et al. · 2024</span></div><div class="a-tags">#可解释性　#研究方法　#平台标注</div><footer class="a-footer"><button class="rating">★ 4.8 / 26</button><button>回复 8</button><button>收藏</button><button>打开 ↗</button></footer></div></article>
+          <article class="a-card"><aside class="a-card-meta"><div class="avatar">LW</div><strong>林微</strong><span>浙江大学<br />副教授</span><time>08 / 07</time></aside><div class="a-card-main"><p>作者把“协作”理解为任务拆分，但真实的研究协作还包含问题重述、证据质疑与共同修正。评价系统若只统计完成速度，会遗漏最有价值的部分。</p><div class="a-citation"><b>02</b><span>Human–AI Collaboration in Scientific Workflows · ACM CHI · 2025</span></div><div class="a-tags">#人机协作　#科学工作流</div><footer class="a-footer"><button class="rating">★ 4.6 / 18</button><button>回复 5</button><button>收藏</button><button>打开 ↗</button></footer></div></article>
+        </div>
+      </section>
+      <aside class="a-aside"><small>当前索引</small><h2>为你推荐</h2><dl><div><dt>机构</dt><dd>复旦大学</dd></div><div><dt>文献类型</dt><dd>期刊论文</dd></div><div><dt>学段</dt><dd>研究生</dd></div></dl><div class="a-issue">INTUECHO INDEX<br />VOL. 08 / 2026<br />UPDATED 14:32</div></aside>
+    </div></main><span class="concept-label">概念 A · 墨线边注</span>
+  </section>
+
+  <section class="concept concept-b">
+    <header class="b-header"><div class="b-brand"><span>∿</span> INTUECHO</div><nav class="b-nav"><button class="active">广场</button><button>关注</button><button>私聊</button><button>我的批注</button><button>组织批注</button></nav><div class="b-account"><span>余澜</span><button class="b-publish">＋ 发布批注</button></div></header>
+    <main class="b-page">
+      <label class="b-search"><span class="icon">⌕</span><input placeholder="检索批注、文献或输入 /分类" /><span>高级检索</span></label>
+      <section class="b-hero"><div class="b-number">01</div><h1>公开批注广场</h1><p class="b-hero-copy">从文献原句出发，公开推理过程。<br />所有观点都应当可以回到证据。</p></section>
+      <div class="b-controls"><button class="active">推荐排序</button><button>最新发布</button><button class="b-filter">筛选条件 2</button></div>
+      <div class="b-layout"><section class="b-list">
+        <article class="b-card"><aside class="b-meta"><strong>余晨 / YC</strong><span>复旦大学<br />博士研究生</span><time>08 AUG 2026</time></aside><div class="b-body"><p>真正值得讨论的，不是模型是否给出了一个流畅答案，而是它在什么证据上完成了推断，以及哪些不确定性被语言的确定感遮蔽了。</p><div class="b-source"><b>REF 01</b>Large Language Models as Optimizers · Yang et al. · 2024</div><footer class="b-card-foot"><span class="score">★ 4.8 / 26</span><span># 可解释性</span><span>回复 8</span><span>收藏</span><span>打开 ↗</span></footer></div></article>
+        <article class="b-card"><aside class="b-meta"><strong>林微 / LW</strong><span>浙江大学<br />副教授</span><time>07 AUG 2026</time></aside><div class="b-body"><p>作者把“协作”理解为任务拆分，但真实的研究协作还包含问题重述、证据质疑与共同修正。评价系统若只统计完成速度，会遗漏最有价值的部分。</p><div class="b-source"><b>REF 02</b>Human–AI Collaboration in Scientific Workflows · ACM CHI · 2025</div><footer class="b-card-foot"><span class="score">★ 4.6 / 18</span><span># 人机协作</span><span>回复 5</span><span>收藏</span><span>打开 ↗</span></footer></div></article>
+      </section><aside class="b-sidebar"><span>ACTIVE INDEX</span><h2>当前筛选</h2><div class="b-filter-row"><b>01</b><span>复旦大学</span></div><div class="b-filter-row"><b>02</b><span>期刊论文</span></div><div class="b-filter-row"><b>03</b><span>研究生</span></div><p class="b-note">02 FILTERS ACTIVE<br />126 PUBLIC ANNOTATIONS<br />UPDATED 14:32 CST</p></aside></div>
+    </main><span class="concept-label">概念 B · 瑞士索引</span>
+  </section>
+
+  <section class="concept concept-c">
+    <header class="c-header"><div class="c-brand"><span>∿</span> Intuecho</div><nav class="c-nav"><b>广场</b><span>关注</span><span>私聊</span><span>我的批注</span><span>组织</span></nav><div class="c-account"><div class="avatar">YL</div><button>发布批注</button></div></header>
+    <main class="c-page">
+      <section class="c-intro"><div><small>公开批注 · 第 08 辑</small><h1>思想在阅读的边缘相遇</h1></div><p>广场收录围绕真实文献产生的公开批注。每一条判断都保留它的出处、语境与讨论路径。</p></section>
+      <div class="c-toolbar"><label class="c-search"><span class="icon">⌕</span><input placeholder="检索批注、文献或输入 /分类" /></label><div class="c-tabs"><b>推荐</b><span>最新</span></div><button>筛选 2</button></div>
+      <div class="c-layout"><section>
+        <article class="c-card"><header class="c-card-head"><div class="avatar">YC</div><div class="c-author"><strong>余晨</strong><span>复旦大学 · 博士研究生</span></div><time>08 AUG 2026</time></header><p>真正值得讨论的，不是模型是否给出了一个流畅答案，而是它在什么证据上完成了推断，以及哪些不确定性被语言的确定感遮蔽了。</p><div class="c-source">Large Language Models as Optimizers<br /><small>Yang et al. · 2024 · 期刊论文</small></div><div class="c-tags"># 可解释性　# 研究方法　# 平台标注</div><footer class="c-footer"><button class="score">★ 4.8 / 26</button><button>回复 8</button><button>收藏</button><button>打开全文 ↗</button></footer></article>
+        <article class="c-card"><header class="c-card-head"><div class="avatar">LW</div><div class="c-author"><strong>林微</strong><span>浙江大学 · 副教授</span></div><time>07 AUG 2026</time></header><p>作者把“协作”理解为任务拆分，但真实的研究协作还包含问题重述、证据质疑与共同修正。评价系统若只统计完成速度，会遗漏最有价值的部分。</p><div class="c-source">Human–AI Collaboration in Scientific Workflows<br /><small>ACM CHI · 2025 · 会议论文</small></div><div class="c-tags"># 人机协作　# 科学工作流</div><footer class="c-footer"><button class="score">★ 4.6 / 18</button><button>回复 5</button><button>收藏</button><button>打开全文 ↗</button></footer></article>
+      </section><aside class="c-aside"><small>阅读索引</small><h2>本期讨论线索</h2><div class="c-index"><div><b>01</b><span>模型推断的证据透明度</span></div><div><b>02</b><span>科学工作中的人机协作</span></div><div><b>03</b><span>可复现性与研究方法</span></div><div><b>04</b><span>学术共同体的评价机制</span></div></div><button class="c-publish">写下新的批注</button></aside></div>
+    </main><span class="concept-label">概念 C · 静默展册</span>
+  </section>
+  <script>
+    const concept = new URLSearchParams(window.location.search).get("concept") || "a";
+    document.body.dataset.concept = ["a", "b", "c"].includes(concept) ? concept : "a";
+  </script>
+</body>
+</html>

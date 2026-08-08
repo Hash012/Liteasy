@@ -1,205 +1,119 @@
-# LiteasyClaw
+# Liteasy workspace
 
-LiteasyClaw 是一个桌面优先的科研阅读与学习 agent 工作台。产品目标是具备 AI 原生的用户交互方式，以及准确、高性能、可追溯的多模态表达能力。
-
-当前仓库已经整理为可并行开发的模块化结构。核心工程规则是：
+本仓库包含三个并列产品主体，以及它们依赖的服务、部署和开发支持代码：
 
 ```text
-shell -> controllers -> feature modules -> shared types / clients
+products/
+  liteasy/                 Liteasy 桌面软件、管理端、正式 API 与共享产品数据
+  intuecho/                Intuecho 论坛 Web、论坛 API 与 API 契约
+  marketing/               独立营销站点
+platform/
+  identity-service/        两个产品共用的账号生命周期与 Keycloak 适配器
+development/
+  dev-cloud/               仅限本地开发的真实业务链路
+  scripts/                 smoke、发布证据和文档工具
+  test-data/               可重复使用的测试与评估数据
+  tools/                   开发工具依赖
+deployment/                可重建的基础设施、迁移与部署验证入口
+docs/                      产品、设计、工程、QA 与运维文档
+archive/                   历史材料，不作为当前实现依据
+.github/workflows/         Windows 安装包构建与分发自动化
 ```
 
-`AppShell` 只做组合；跨模块编排进入 `controllers`；具体领域能力放在 `features`；状态改变逐步收敛到 action contract。
+目录按业务域组织，运行边界保持独立。详细约束见 [仓库结构与命名规范](docs/engineering/repository-structure.md)。
 
-## 快速入口
-
-首次运行或需要联调论文 Agent，请先看：
-
-- **[启动与本地联调指南](project-docs/qa/environment-startup-guide.md)**：包含 `test-api.md`、`gpt-5.5`、端口冲突、Tauri、健康检查与 Agent 故障排查。
-
-- 项目结构可视化：`project-docs/engineering/project-structure-overview.html`
-- 三人分工可视化：`project-docs/engineering/three-person-worksplit.html`
-- 模块边界文档：`project-docs/engineering/module-boundaries.md`
-- Dock 工作台与新功能 UI 归位规范：`project-docs/engineering/dock-workbench-ui-placement.md`
-- 产品方案原文：`project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
-- 文件系统与存储实施审计：`project-docs/design/Liteasy-文件系统与存储边界实施审计.md`
-- 桌面端说明：`LiteasyClaw/desktop/README.md`
-- 开发云说明：`LiteasyClaw/services/dev-cloud/README.md`
-- 正式云服务边界：`LiteasyClaw/services/cloud/README.md`
-- 独立管理后台：`LiteasyClaw/admin/README.md`
-
-## 目录结构
+## 核心链路
 
 ```text
-LiteasyClaw/
-  desktop/              当前桌面产品入口：Tauri + React
-  admin/                独立管理后台：React + OIDC/PKCE + Fluent 2
-  services/dev-cloud/   本地开发云服务：真实账号、组织、文献树、推荐和模型代理
-  services/cloud/       PostgreSQL/S3 正式服务与管理 API
-  scripts/              只读 smoke check 与文档工具
-  logos/                Logo 与形象素材
+Liteasy Desktop - local development -> development/dev-cloud
+                - staging/production -> products/liteasy/services/api
 
-project-docs/
-  engineering/          工程边界、模块图、协作规则
-  product/              产品方案原文
-  qa/                   启动与验收说明
-  superpowers/          设计规格与阶段计划
-  Saas/                 SaaS 化、路演、工作台设计文档
-  assets/               文档素材
+Intuecho Web -> products/intuecho/services/api
+                    - OIDC/token verification -> shared identity provider
+                    - organization authorization -> Liteasy API
 
-archive/                历史记录、报告、日志、非核心生成物
+Liteasy Admin -> Liteasy API + Intuecho API
+deployment -> PostgreSQL + Keycloak + identity-service + migrations/verification
 ```
 
-核心源码闭包在 `LiteasyClaw/`。核心文档在 `project-docs/`。历史和非核心材料在 `archive/`。
+`development/dev-cloud` 使用 SQLite 和本地对象目录实现真实注册、会话和持久化，但会拒绝在 staging/production 运行。正式 Liteasy API 使用 PostgreSQL/S3；Intuecho 正式 API 使用独立 PostgreSQL。仓库中存在实现不代表已完成生产环境验收，具体门禁见 [部署与验收计划](docs/operations/Liteasy-后续部署与验收执行计划.md)。
 
-## 当前已具备的能力
+结构调整后的验证覆盖与未完成能力见 [仓库结构与能力审计](docs/qa/2026-08-08-repository-structure-and-capability-audit.md)。
 
-桌面端已经具备：
+## 主体入口
 
-- 三栏工作台：文献库 / Reader / AI Assistant
-- 工作区、选中文献集、锁定选择、导入、分析入口
-- 真实云账号注册/登录、持久会话和云端可用性状态
-- 模型策略同步、真实 provider 模型生成和模型审计
-- 文献元数据同步、关联推荐、推荐缓存、云端收藏
-- 组织空间、组织列表/摘要/治理、通知、共享文献库切换
-- 本地文献库、个人中心、学术档案、画像采样开关
-- 多模态 artifact 工作流雏形：任务、标签页、预览、脑图等入口
-- 模块化 controller 地基，支持多人并行开发
+- [Liteasy 产品](products/liteasy/README.md)
+- [Liteasy Desktop](products/liteasy/apps/desktop/README.md)
+- [Liteasy Admin](products/liteasy/apps/admin/README.md)
+- [Liteasy API](products/liteasy/services/api/README.md)
+- [Intuecho](products/intuecho/README.md)
+- [Marketing](products/marketing/README.md)
+- [公共身份服务](platform/identity-service/README.md)
+- [本地开发支持](development/README.md)
+- [部署](deployment/README.md)
+- [文档索引](docs/README.md)
 
-注意：`dev-cloud` 的 SQLite 和本地对象目录是真实的开发持久化，进程在 staging/production 环境会拒绝启动。`services/cloud` 已提供正式 PostgreSQL/S3、OIDC 和主要业务/管理 API，`admin` 是独立 `liteasy-admin` PKCE 客户端；凭据化供应商、私有连接器和目标环境验收仍未完成，生产门禁见实施审计文档。
+## 构建与分发边界
 
-## 如何启动
+桌面安装包定义与应用版本强相关，因此保留在 `products/liteasy/apps/desktop/src-tauri/`；GitHub 要求自动化入口位于 `.github/workflows/`。标签或手动触发 `windows-installer.yml` 后，Windows runner 会测试前端和 Rust、构建 NSIS，并上传临时安装包 artifact。生成的 `.exe`、`dist/` 和 `target/` 不进入源码仓库。服务器环境编排独立位于 `deployment/`，不得与桌面安装包混用。
 
-开发联调的推荐启动方式：
+## 本地开发
+
+要求 Node.js 20+；完整桌面打包还要求 Rust/Cargo 和 Tauri 的系统依赖。
+
+首次安装依赖后，从桌面目录用一个命令同时启动本地开发 API 和 Vite：
 
 ```bash
-cd LiteasyClaw/services/dev-cloud
+cd development/dev-cloud
 npm install
 
-cd ../../desktop
+cd ../../products/liteasy/apps/desktop
 npm install
 npm run dev
 ```
 
-该命令同时启动开发云与 Vite 前端。模型或检索 provider 未配置时，相应功能返回明确不可用，不会生成静态假结果。
+默认打开 `http://127.0.0.1:1420`，dev-cloud 默认位于 `http://127.0.0.1:8787`。只运行前端或完整 Tauri 壳的命令见 [桌面 README](products/liteasy/apps/desktop/README.md)。
 
-完整 Tauri、分终端调试、健康检查与故障恢复请查看 **[启动与本地联调指南](project-docs/qa/environment-startup-guide.md)**。
-
-## 常用验证命令
-
-桌面端：
+启动论坛时保持 dev-cloud 已运行，并在两个终端分别启动 API 和 Web：
 
 ```bash
-cd LiteasyClaw/desktop
-npm test
-npm run build
+# 终端一
+cd products/intuecho
+npm install
+LITEASY_IDENTITY_ENDPOINT=http://127.0.0.1:8787 npm run dev:api
+
+# 终端二
+cd products/intuecho
+npm run dev:web
 ```
 
-开发云：
+模型和外部服务密钥只写入 `development/dev-cloud/.env.local`，不得提交。不要创建演示账号或用 mock 结果冒充业务成功。
+
+## 开发测试账号
+
+仓库不内置、也不共享固定的普通用户账号和密码。开发或测试人员首次运行后在 Desktop 或 Intuecho 的注册界面创建自己的账号，建议邮箱使用 `qa.<姓名或工号>@liteasy.local`，密码使用个人密码管理器生成的 12–128 位值；账号和密码只保存在本机开发数据中，不写入 README、Git 或群聊。同一账号可分别登录 `liteasy-desktop` 和 `intuecho-web`，但两个客户端会签发各自 audience 的会话，不能互换 token。
+
+需要验证本地治理能力时，由测试人员在 `development/dev-cloud/.env.local` 自行设置 `LITEASY_ADMIN_EMAIL`、`LITEASY_ADMIN_PASSWORD` 和至少 32 字符的 `LITEASY_MFA_MASTER_KEY`，再执行 `npm run bootstrap:admin`。管理员没有仓库级固定账号；具体引导与 MFA 步骤见 [dev-cloud README](development/dev-cloud/README.md)。正式 Keycloak、本地基础设施以及生产 API 同样不预置产品测试用户。
+
+## 验证
 
 ```bash
-cd LiteasyClaw/services/dev-cloud
-npm test
+cd products/liteasy/apps/desktop && npm test && npm run build
+cd products/liteasy/apps/admin && npm test && npm run build
+cd products/liteasy/services/api && npm test
+cd products/intuecho && npm test && npm run build
+cd development/dev-cloud && npm test
+cd platform/identity-service && npm test
 ```
 
-正式存储适配器：
+本地基础设施命令见 [deployment/local/README.md](deployment/local/README.md)。
 
-```bash
-cd LiteasyClaw/services/cloud
-npm test
-```
+## 桌面代码边界
 
-独立管理后台：
-
-```bash
-cd LiteasyClaw/admin
-npm test
-npm run build
-npm run dev
-```
-
-开发云只读 smoke：
-
-```bash
-# 在仓库根目录执行
-node LiteasyClaw/scripts/smoke-dev-cloud.mjs http://127.0.0.1:8787
-```
-
-## 当前模块地基
-
-已收敛出的 shell-facing controllers：
-
-- `LiteasyClaw/desktop/src/app/controllers/useWorkspaceSelectionController.ts`
-- `LiteasyClaw/desktop/src/app/controllers/useCloudAccountController.ts`
-- `LiteasyClaw/desktop/src/app/controllers/useArtifactWorkflowController.ts`
-- `LiteasyClaw/desktop/src/app/controllers/useKnowledgeSyncController.ts`
-- `LiteasyClaw/desktop/src/app/controllers/useOrganizationShellController.ts`
-
-主要 feature 模块：
-
-- `workspace`：工作区、论文、选择状态、workspace source
-- `selection`：选中文献集快照和 ready validation
-- `agent-runtime`：AI 原生交互运行时契约
-- `actions` / `skills`：动作契约、策略、注册执行
-- `assistant`：右侧 AI 对话和 runtime event 展示面
-- `artifacts`：多模态产物任务、标签页、预览和生成流程
-- `import` / `ingestion`：导入、解析、切块、索引生命周期
-- `retrieval`：chunk、引用、source-grounded lookup
-- `knowledge-sync`：收藏、推荐、元数据同步的 shell 协调层
-- `collection`：云端收藏
-- `recommendations`：关联推荐与缓存
-- `metadata`：文献元数据同步
-- `account` / `network`：账号、云端连接、可用性状态
-- `models` / `settings`：模型网关、策略同步、设置状态
-- `organization`：组织空间、治理、通知、共享文献库
-- `library` / `profile`：本地文献库与个人画像
-
-更完整的图请打开：
+桌面端保持以下依赖方向：
 
 ```text
-project-docs/engineering/project-structure-overview.html
+layout -> controllers -> features -> shared types / clients
 ```
 
-## 并行开发规则
-
-1. 新建分支开发，提交 PR 合并。
-2. 新功能先判断归属模块，不要直接堆到 `AppShell`。
-3. 跨模块组合放到 `LiteasyClaw/desktop/src/app/controllers/`。
-4. feature 模块不能导入 `layout/AppShell` 或 shell 组件。
-5. 状态改变优先走 action contract，后续按钮、AI 命令、快捷键都应复用同一动作。
-6. 分析类功能依赖 `SelectedDocumentSetSnapshot`，不要直接耦合 checkbox UI state。
-7. 新增模块逻辑写 focused tests；`AppShell.test.tsx` 只保留 smoke 和关键集成路径。
-8. 不要提交 `node_modules/`、`dist/`、`src-tauri/target/` 等生成产物。
-
-## 新开发者建议阅读顺序
-
-1. `README.md`
-2. `project-docs/engineering/project-structure-overview.html`
-3. `project-docs/engineering/three-person-worksplit.html`
-4. `project-docs/engineering/module-boundaries.md`
-5. `project-docs/engineering/dock-workbench-ui-placement.md`
-6. `LiteasyClaw/desktop/README.md`
-7. `LiteasyClaw/services/dev-cloud/README.md`
-8. `project-docs/product/LiteasyClaw_功能与UI设计文档1.0.md`
-9. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-ai-native-interaction-runtime-design.md`
-10. `project-docs/superpowers/specs/2026-07-01-liteasyclaw-modular-foundation-design.md`
-11. `project-docs/superpowers/plans/2026-07-01-liteasyclaw-modular-foundation-phase1.md`
-
-## 启动失败先检查
-
-```bash
-node -v
-npm -v
-cargo --version
-```
-
-如果 `cargo --version` 失败：
-
-```bash
-source "$HOME/.cargo/env"
-```
-
-如果仍然失败，请把以下信息发给当前开发负责人：
-
-- 执行的命令
-- 报错最后 20 行
-- 操作系统和 Node/npm/Cargo 版本
+`AppShell` 只做组合；跨模块行为进入 `src/app/controllers/`；领域实现进入对应 feature；feature 不得反向导入 layout。Fluent 2 组件、图标、活动栏和布局 token 是当前 UI 基线。
