@@ -53,7 +53,10 @@ export type AssociationGeometryPrimaryEdge = {
 export type AssociationGeometryInput = {
   anchors: readonly AssociationGeometryAnchor[];
   frameHeight: number;
+  frameInsetHorizontal: number;
+  frameInsetVertical: number;
   frameWidth: number;
+  nodeClearance: number;
   nodes: readonly AssociationGeometryNode[];
   paperEdges: readonly AssociationGeometryPaperEdge[];
   primaryEdges: readonly AssociationGeometryPrimaryEdge[];
@@ -80,6 +83,18 @@ export function segmentsCross(left: AssociationSegment, right: AssociationSegmen
 export function rectanglesOverlap(left: AssociationRectangle, right: AssociationRectangle) {
   return left.left < right.right - epsilon && left.right > right.left + epsilon &&
     left.top < right.bottom - epsilon && left.bottom > right.top + epsilon;
+}
+
+export function rectanglesWithinClearance(
+  left: AssociationRectangle,
+  right: AssociationRectangle,
+  clearance: number
+) {
+  const margin = Math.max(0, clearance);
+  return left.left < right.right + margin - epsilon &&
+    left.right > right.left - margin + epsilon &&
+    left.top < right.bottom + margin - epsilon &&
+    left.bottom > right.top - margin + epsilon;
 }
 
 function angularDistance(left: number, right: number) {
@@ -132,19 +147,26 @@ export function evaluateAssociationGeometry(input: AssociationGeometryInput): As
   let sameSideViolations = 0;
 
   nodeRectangles.forEach((rectangle) => {
-    if (rectangle.left < -epsilon || rectangle.right > input.frameWidth + epsilon ||
-        rectangle.top < -epsilon || rectangle.bottom > input.frameHeight + epsilon) {
+    if (rectangle.left < input.frameInsetHorizontal - epsilon ||
+        rectangle.right > input.frameWidth - input.frameInsetHorizontal + epsilon ||
+        rectangle.top < input.frameInsetVertical - epsilon ||
+        rectangle.bottom > input.frameHeight - input.frameInsetVertical + epsilon) {
       overflowCount += 1;
     }
   });
   for (let leftIndex = 0; leftIndex < nodeRectangles.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < nodeRectangles.length; rightIndex += 1) {
-      if (rectanglesOverlap(nodeRectangles[leftIndex]!, nodeRectangles[rightIndex]!)) nodeOverlaps += 1;
+      if (rectanglesWithinClearance(
+        nodeRectangles[leftIndex]!,
+        nodeRectangles[rightIndex]!,
+        input.nodeClearance
+      )) nodeOverlaps += 1;
     }
   }
   for (const rectangle of nodeRectangles) {
     for (const anchor of input.anchors) {
-      if (anchor.obstacles.some((obstacle) => rectanglesOverlap(rectangle, obstacle))) {
+      if (anchor.obstacles.some((obstacle) =>
+        rectanglesWithinClearance(rectangle, obstacle, input.nodeClearance))) {
         anchorObstructions += 1;
       }
     }

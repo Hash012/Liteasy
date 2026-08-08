@@ -218,6 +218,25 @@ test("assigns adjacent dense anchors deterministically without crossing primary 
     primaryEdgeCrossings: 0,
     sameSideViolations: 0
   });
+  for (let leftIndex = 0; leftIndex < graph.nodes.length; leftIndex += 1) {
+    const left = graph.nodes[leftIndex]!;
+    const leftHalfWidth = left.isDot ? pageGraphDotSize / 2 : pageGraphNodeWidth / 2;
+    const leftHalfHeight = left.isDot ? pageGraphDotSize / 2 : pageGraphNodeHeight / 2;
+    if (!left.isDot) {
+      expect(left.left - leftHalfWidth).toBeGreaterThanOrEqual(10);
+      expect(1200 - left.left - leftHalfWidth).toBeGreaterThanOrEqual(10);
+      expect(left.top - leftHalfHeight).toBeGreaterThanOrEqual(8);
+      expect(1100 - left.top - leftHalfHeight).toBeGreaterThanOrEqual(8);
+    }
+    for (let rightIndex = leftIndex + 1; rightIndex < graph.nodes.length; rightIndex += 1) {
+      const right = graph.nodes[rightIndex]!;
+      const rightHalfWidth = right.isDot ? pageGraphDotSize / 2 : pageGraphNodeWidth / 2;
+      const rightHalfHeight = right.isDot ? pageGraphDotSize / 2 : pageGraphNodeHeight / 2;
+      const horizontalGap = Math.abs(left.left - right.left) - leftHalfWidth - rightHalfWidth;
+      const verticalGap = Math.abs(left.top - right.top) - leftHalfHeight - rightHalfHeight;
+      expect(horizontalGap >= 10 || verticalGap >= 10).toBe(true);
+    }
+  }
 });
 
 test("uses all page-wide paper relations as springs across primary owner groups", () => {

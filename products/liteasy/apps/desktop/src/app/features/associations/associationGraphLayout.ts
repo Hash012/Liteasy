@@ -123,6 +123,8 @@ export const pageGraphDotSize = 14;
 export const maximumPageGraphSources = 8;
 
 const nodeGap = 10;
+const frameInsetHorizontal = 10;
+const frameInsetVertical = 8;
 
 const nearRadius = 158;
 const radiusSpread = 152;
@@ -394,7 +396,10 @@ function geometryInput(
       };
     }),
     frameHeight: input.documentHeight,
+    frameInsetHorizontal,
+    frameInsetVertical,
     frameWidth: input.frameWidth,
+    nodeClearance: nodeGap,
     nodes: graph.nodes.map((node) => {
       const box = nodeBox(node.isDot, node.left, node.top);
       return {
@@ -513,14 +518,30 @@ function projectToSector(
   const centreAngle = side === "right" ? 0 : Math.PI;
   const relative = Math.atan2(Math.sin(Math.atan2(dy, dx) - centreAngle), Math.cos(Math.atan2(dy, dx) - centreAngle));
   const angle = centreAngle + clamp(relative, -associationSectorAngle, associationSectorAngle);
-  node.x = clamp(anchor.x! + Math.cos(angle) * radius, halfWidth, input.frameWidth - halfWidth);
-  node.y = clamp(anchor.y! + Math.sin(angle) * radius, halfHeight, input.documentHeight - halfHeight);
+  node.x = clamp(
+    anchor.x! + Math.cos(angle) * radius,
+    halfWidth + frameInsetHorizontal,
+    input.frameWidth - halfWidth - frameInsetHorizontal
+  );
+  node.y = clamp(
+    anchor.y! + Math.sin(angle) * radius,
+    halfHeight + frameInsetVertical,
+    input.documentHeight - halfHeight - frameInsetVertical
+  );
   dx = node.x - anchor.x!;
   dy = node.y - anchor.y!;
   if ((side === "right" && dx <= 0) || (side === "left" && dx >= 0)) {
     radius = Math.max(radius, halfWidth + 24);
-    node.x = clamp(anchor.x! + (side === "right" ? radius : -radius), halfWidth, input.frameWidth - halfWidth);
-    node.y = clamp(anchor.y!, halfHeight, input.documentHeight - halfHeight);
+    node.x = clamp(
+      anchor.x! + (side === "right" ? radius : -radius),
+      halfWidth + frameInsetHorizontal,
+      input.frameWidth - halfWidth - frameInsetHorizontal
+    );
+    node.y = clamp(
+      anchor.y!,
+      halfHeight + frameInsetVertical,
+      input.documentHeight - halfHeight - frameInsetVertical
+    );
   }
 }
 
@@ -625,7 +646,8 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
     top: obstacle.top - obstacle.halfHeight
   }));
   const intersects = (left: ReturnType<typeof rectangleAt>, right: ReturnType<typeof rectangleAt>) =>
-    left.left < right.right && left.right > right.left && left.top < right.bottom && left.bottom > right.top;
+    left.left < right.right + nodeGap && left.right > right.left - nodeGap &&
+    left.top < right.bottom + nodeGap && left.bottom > right.top - nodeGap;
   const relativeAngles = [0, -10, 10, -20, 20, -30, 30, -40, 40, -50, 50, -55, 55]
     .map((degrees) => degrees * Math.PI / 180);
   const relationsByPaperKey = new Map<string, PageGraphPaperRelation[]>();
@@ -675,9 +697,10 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
           score: radialStress * 3 + relationStress + forceDistance * 1e-6,
           top
         };
-      })).filter((candidate) => candidate.rectangle.left >= 0 &&
-        candidate.rectangle.right <= input.frameWidth && candidate.rectangle.top >= 0 &&
-        candidate.rectangle.bottom <= input.documentHeight &&
+      })).filter((candidate) => candidate.rectangle.left >= frameInsetHorizontal &&
+        candidate.rectangle.right <= input.frameWidth - frameInsetHorizontal &&
+        candidate.rectangle.top >= frameInsetVertical &&
+        candidate.rectangle.bottom <= input.documentHeight - frameInsetVertical &&
         !placedRectangles.some((rectangle) => intersects(candidate.rectangle, rectangle)))
       .sort((left, right) => left.score - right.score || left.radialStress - right.radialStress ||
         left.forceDistance - right.forceDistance || left.top - right.top || left.left - right.left);
@@ -728,7 +751,8 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
       const swappedQuality = evaluateAssociationLayout(input, swappedGraph);
       if (swappedQuality.weightedCrossings < quality.weightedCrossings &&
           swappedQuality.primaryEdgeCrossings <= quality.primaryEdgeCrossings &&
-          swappedQuality.sameSideViolations === 0) {
+          swappedQuality.sameSideViolations === 0 && swappedQuality.nodeOverlaps === 0 &&
+          swappedQuality.anchorObstructions === 0 && swappedQuality.overflowCount === 0) {
         nodes = swapped;
         graph = swappedGraph;
         quality = swappedQuality;

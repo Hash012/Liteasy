@@ -4,6 +4,7 @@ import {
   evaluateAssociationGeometry,
   evaluateSameSide,
   rectanglesOverlap,
+  rectanglesWithinClearance,
   segmentsCross
 } from "../app/features/associations/associationGraphGeometry";
 
@@ -56,6 +57,46 @@ test("treats touching rectangles as clear but detects positive-area overlap", ()
   )).toBe(true);
 });
 
+test("treats touching and sub-margin rectangles as readability violations", () => {
+  const left = { bottom: 10, left: 0, right: 10, top: 0 };
+
+  expect(rectanglesWithinClearance(
+    left,
+    { bottom: 10, left: 10, right: 20, top: 0 },
+    10
+  )).toBe(true);
+  expect(rectanglesWithinClearance(
+    left,
+    { bottom: 10, left: 19.999, right: 30, top: 0 },
+    10
+  )).toBe(true);
+  expect(rectanglesWithinClearance(
+    left,
+    { bottom: 10, left: 20, right: 30, top: 0 },
+    10
+  )).toBe(false);
+});
+
+test("counts card clearance and frame inset violations in the quality gate", () => {
+  const quality = evaluateAssociationGeometry({
+    anchors: [],
+    frameHeight: 100,
+    frameInsetHorizontal: 10,
+    frameInsetVertical: 8,
+    frameWidth: 100,
+    nodeClearance: 10,
+    nodes: [
+      { halfHeight: 10, halfWidth: 10, left: 19, paperKey: "flush", relevance: 1, top: 18 },
+      { halfHeight: 10, halfWidth: 10, left: 48, paperKey: "near", relevance: 1, top: 18 }
+    ],
+    paperEdges: [],
+    primaryEdges: []
+  });
+
+  expect(quality.overflowCount).toBe(1);
+  expect(quality.nodeOverlaps).toBe(1);
+});
+
 test("weights primary crossings above paper crossings and reports stress", () => {
   const quality = evaluateAssociationGeometry({
     anchors: [
@@ -63,7 +104,10 @@ test("weights primary crossings above paper crossings and reports stress", () =>
       { anchorId: "a2", left: 0, obstacles: [], top: 20 }
     ],
     frameHeight: 30,
+    frameInsetHorizontal: 0,
+    frameInsetVertical: 0,
     frameWidth: 20,
+    nodeClearance: 0,
     nodes: [
       { halfHeight: 0, halfWidth: 0, left: 10, paperKey: "p1", relevance: 1, top: 20 },
       { halfHeight: 0, halfWidth: 0, left: 10, paperKey: "p2", relevance: 1, top: 10 },
@@ -91,7 +135,10 @@ test("counts overflow, node overlap, and anchor obstruction independently", () =
       top: 5
     }],
     frameHeight: 10,
+    frameInsetHorizontal: 0,
+    frameInsetVertical: 0,
     frameWidth: 10,
+    nodeClearance: 0,
     nodes: [
       { halfHeight: 2, halfWidth: 2, left: 5, paperKey: "inside", relevance: 1, top: 5 },
       { halfHeight: 2, halfWidth: 2, left: 10, paperKey: "outside", relevance: 1, top: 5 },
