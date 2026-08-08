@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 
 import {
@@ -295,6 +295,100 @@ test("exposes one keyboard-reachable logical primary edge and focuses all its vi
 
   fireEvent.click(container.querySelector(".association-layer__scrim")!);
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test("restores keyboard focus emphasis after a different edge stops being hovered", () => {
+  renderLayer({
+    sourcesByAnchor: {
+      "anchor-1": [source("W1"), source("W2")],
+      "anchor-2": []
+    }
+  });
+  const first = screen.getByRole("img", { name: /self-attention.*Related paper W1/u });
+  const second = screen.getByRole("img", { name: /self-attention.*Related paper W2/u });
+
+  fireEvent.focus(first);
+  fireEvent.mouseEnter(second);
+  expect(second).toHaveClass("is-active");
+  expect(first).not.toHaveClass("is-active");
+  fireEvent.mouseLeave(second);
+  expect(first).toHaveClass("is-active");
+
+  fireEvent.mouseLeave(first);
+  expect(first).toHaveClass("is-active");
+  fireEvent.blur(first);
+  expect(first).not.toHaveClass("is-active");
+});
+
+test("does not restore stale edge focus after a relation is removed and added again", () => {
+  const sourcesByAnchor = {
+    "anchor-1": [source("W1")],
+    "anchor-2": []
+  };
+  const props = {
+    activeSourceId: null,
+    anchors,
+    documentHeight: 1200,
+    focusedAnchorId: null,
+    frameWidth: 900,
+    onClose: vi.fn(),
+    onFocusAnchor: vi.fn(),
+    onSelectSource: vi.fn()
+  };
+  const { container, rerender } = render(
+    <AssociationGraphLayer {...props} sourcesByAnchor={sourcesByAnchor} />
+  );
+  const edge = screen.getByRole("img", { name: /self-attention.*Related paper W1/u });
+  fireEvent.focus(edge);
+  fireEvent.mouseEnter(edge);
+
+  rerender(<AssociationGraphLayer {...props} sourcesByAnchor={{ "anchor-1": [], "anchor-2": [] }} />);
+  expect(container.querySelectorAll(".association-edge.is-hit")).toHaveLength(0);
+  rerender(<AssociationGraphLayer {...props} sourcesByAnchor={sourcesByAnchor} />);
+
+  expect(screen.getByRole("img", { name: /self-attention.*Related paper W1/u }))
+    .not.toHaveClass("is-active");
+});
+
+test("uses one roving edge tab stop and arrow navigation across every relation layer", () => {
+  const shared = { canonicalPaperId: "openalex:W99", relevance: 0.9 };
+  const { container } = renderLayer({
+    focusedAnchorId: "anchor-2",
+    paperEdges: [{
+      directed: false,
+      evidenceRecordUrls: ["https://api.openalex.org/works/W99"],
+      kind: "co_cited",
+      provider: "openalex",
+      sourcePaperId: "openalex:W99",
+      strength: 0.8,
+      targetPaperId: "openalex:W2"
+    }],
+    sourcesByAnchor: {
+      "anchor-1": [source("W1a", shared), source("W2")],
+      "anchor-2": [source("W1b", shared)]
+    }
+  });
+  const logicalEdges = Array.from(
+    container.querySelectorAll<SVGPathElement>('[role="img"].association-edge.is-hit')
+  );
+
+  expect(logicalEdges.some((edge) => edge.classList.contains("is-paper-relation"))).toBe(true);
+  expect(logicalEdges.some((edge) => edge.classList.contains("is-primary"))).toBe(true);
+  expect(logicalEdges.some((edge) => edge.classList.contains("is-secondary"))).toBe(true);
+  expect(logicalEdges.filter((edge) => edge.tabIndex === 0)).toHaveLength(1);
+  expect(logicalEdges.filter((edge) => edge.tabIndex === -1)).toHaveLength(logicalEdges.length - 1);
+  expect(container.querySelector(".association-node")).not.toHaveAttribute("tabindex", "-1");
+
+  act(() => logicalEdges[0]!.focus());
+  fireEvent.keyDown(logicalEdges[0]!, { key: "ArrowRight" });
+  expect(document.activeElement).toBe(logicalEdges[1]);
+  expect(logicalEdges[1]).toHaveAttribute("tabindex", "0");
+  fireEvent.keyDown(logicalEdges[1]!, { key: "End" });
+  expect(document.activeElement).toBe(logicalEdges.at(-1));
+  fireEvent.keyDown(logicalEdges.at(-1)!, { key: "Home" });
+  expect(document.activeElement).toBe(logicalEdges[0]);
+  fireEvent.keyDown(logicalEdges[0]!, { key: "ArrowLeft" });
+  expect(document.activeElement).toBe(logicalEdges.at(-1));
 });
 
 test("represents every rendered relation by its hit path instead of an auxiliary ink stroke", () => {

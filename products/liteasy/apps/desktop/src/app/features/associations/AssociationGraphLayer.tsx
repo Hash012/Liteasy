@@ -1,6 +1,12 @@
 import { Button } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, OpenRegular } from "@fluentui/react-icons";
-import { useMemo, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent
+} from "react";
 
 import type {
   ThinReadingAnchorQuality,
@@ -113,8 +119,14 @@ function paperExactPath(sourceLeft: number, sourceTop: number, targetLeft: numbe
   return `M ${sourceLeft} ${sourceTop} Q ${(sourceLeft + targetLeft) / 2} ${(sourceTop + targetTop) / 2} ${targetLeft} ${targetTop}`;
 }
 
-function edgeClassName(edge: RenderedAssociationEdge, stroke: "echo" | "hit" | "ink" | "wash") {
-  return `association-edge ${edge.className} is-${stroke}${edge.active ? " is-active" : ""}${
+function edgeClassName(
+  edge: RenderedAssociationEdge,
+  stroke: "echo" | "hit" | "ink" | "wash",
+  effectiveActiveEdgeId: string | null
+) {
+  return `association-edge ${edge.className} is-${stroke}${
+    edge.active || effectiveActiveEdgeId === edge.edgeId ? " is-active" : ""
+  }${
     edge.dimmed ? " is-dimmed" : ""
   }`;
 }
@@ -156,8 +168,10 @@ export function AssociationGraphLayer({
   paperEdges = [],
   sourcesByAnchor
 }: AssociationGraphLayerProps) {
-  const [activeEdgeId, setActiveEdgeId] = useState<string | null>(null);
+  const [focusedEdgeId, setFocusedEdgeId] = useState<string | null>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+  const [rovingEdgeId, setRovingEdgeId] = useState<string | null>(null);
 
   const projection = useMemo(() => projectAssociationPageGraph({
     anchors,
@@ -235,8 +249,7 @@ export function AssociationGraphLayer({
     const presentation = associationAnchorEdgePresentation(node.source.confidenceBasis);
     return [{
       accessibleLabel: `${anchor.label} 与 ${node.source.title}：${presentation.label}`,
-      active: activeEdgeId === edgeId || activePaperKey === edge.paperKey ||
-        hover?.node.paperKey === edge.paperKey,
+      active: activePaperKey === edge.paperKey || hover?.node.paperKey === edge.paperKey,
       className: `is-primary ${presentation.className}`,
       dimmed: dimmed([edge.anchorId]),
       edgeId,
@@ -258,7 +271,7 @@ export function AssociationGraphLayer({
       accessibleLabel: edge.directed
         ? `${presentation.label}：${source.source.title} 指向 ${target.source.title}`
         : `${presentation.label}：${source.source.title} 与 ${target.source.title}`,
-      active: activeEdgeId === edgeId || endpointFocused,
+      active: endpointFocused,
       className: `is-paper-relation ${presentation.className}`,
       dimmed: dimmed(endpointAnchorIds),
       edgeId,
@@ -300,6 +313,47 @@ export function AssociationGraphLayer({
     ...graph.paperEdges.map((edge) => associationPaperEdgePresentation(edge.kind))
   ].map((presentation) => [presentation.label, presentation] as const)).values()];
   const allInkEdges = [...paperInkEdges, ...primaryInkEdges, ...secondaryInkEdges];
+  const edgeOrder = allInkEdges.map((edge) => edge.edgeId);
+  const edgeOrderKey = JSON.stringify(edgeOrder);
+  const edgeIds = new Set(edgeOrder);
+  const validFocusedEdgeId = focusedEdgeId && edgeIds.has(focusedEdgeId) ? focusedEdgeId : null;
+  const validHoveredEdgeId = hoveredEdgeId && edgeIds.has(hoveredEdgeId) ? hoveredEdgeId : null;
+  const effectiveActiveEdgeId = validHoveredEdgeId ?? validFocusedEdgeId;
+  const effectiveRovingEdgeId = rovingEdgeId && edgeIds.has(rovingEdgeId)
+    ? rovingEdgeId
+    : edgeOrder[0] ?? null;
+
+  useEffect(() => {
+    const currentIds = new Set(edgeOrder);
+    setFocusedEdgeId((current) => current && !currentIds.has(current) ? null : current);
+    setHoveredEdgeId((current) => current && !currentIds.has(current) ? null : current);
+    setRovingEdgeId((current) => current && currentIds.has(current) ? current : edgeOrder[0] ?? null);
+  }, [edgeOrderKey]);
+
+  const moveRovingEdgeFocus = (
+    event: ReactKeyboardEvent<SVGPathElement>,
+    currentIndex: number
+  ) => {
+    if (allInkEdges.length === 0) return;
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % allInkEdges.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + allInkEdges.length) % allInkEdges.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = allInkEdges.length - 1;
+    }
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextEdge = allInkEdges[nextIndex];
+    if (!nextEdge) return;
+    setRovingEdgeId(nextEdge.edgeId);
+    event.currentTarget.ownerSVGElement
+      ?.querySelector<SVGPathElement>(`[data-edge-index="${nextIndex}"]`)
+      ?.focus();
+  };
 
   return (
     <section
@@ -341,7 +395,7 @@ export function AssociationGraphLayer({
         {paperInkEdges.map((edge) => (
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "wash")}
+            className={edgeClassName(edge, "wash", effectiveActiveEdgeId)}
             d={edge.paths.washPath}
             data-edge-layer="paper-wash"
             key={`${edge.edgeId}:wash`}
@@ -351,7 +405,7 @@ export function AssociationGraphLayer({
         {paperInkEdges.flatMap((edge) => [
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "ink")}
+            className={edgeClassName(edge, "ink", effectiveActiveEdgeId)}
             d={edge.paths.inkPath}
             data-edge-layer="paper-ink"
             key={`${edge.edgeId}:ink`}
@@ -360,7 +414,7 @@ export function AssociationGraphLayer({
           />,
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "echo")}
+            className={edgeClassName(edge, "echo", effectiveActiveEdgeId)}
             d={edge.paths.echoPath}
             data-edge-layer="paper-echo"
             key={`${edge.edgeId}:echo`}
@@ -370,7 +424,7 @@ export function AssociationGraphLayer({
         {primaryInkEdges.map((edge) => (
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "wash")}
+            className={edgeClassName(edge, "wash", effectiveActiveEdgeId)}
             d={edge.paths.washPath}
             data-edge-layer="primary-wash"
             key={`${edge.edgeId}:wash`}
@@ -380,7 +434,7 @@ export function AssociationGraphLayer({
         {primaryInkEdges.flatMap((edge) => [
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "ink")}
+            className={edgeClassName(edge, "ink", effectiveActiveEdgeId)}
             d={edge.paths.inkPath}
             data-edge-layer="primary-ink"
             key={`${edge.edgeId}:ink`}
@@ -388,7 +442,7 @@ export function AssociationGraphLayer({
           />,
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "echo")}
+            className={edgeClassName(edge, "echo", effectiveActiveEdgeId)}
             d={edge.paths.echoPath}
             data-edge-layer="primary-echo"
             key={`${edge.edgeId}:echo`}
@@ -398,7 +452,7 @@ export function AssociationGraphLayer({
         {secondaryInkEdges.flatMap((edge) => [
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "wash")}
+            className={edgeClassName(edge, "wash", effectiveActiveEdgeId)}
             d={edge.paths.washPath}
             data-edge-layer="secondary-wash"
             key={`${edge.edgeId}:wash`}
@@ -406,7 +460,7 @@ export function AssociationGraphLayer({
           />,
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "ink")}
+            className={edgeClassName(edge, "ink", effectiveActiveEdgeId)}
             d={edge.paths.inkPath}
             data-edge-layer="secondary-ink"
             key={`${edge.edgeId}:ink`}
@@ -414,27 +468,32 @@ export function AssociationGraphLayer({
           />,
           <path
             aria-hidden="true"
-            className={edgeClassName(edge, "echo")}
+            className={edgeClassName(edge, "echo", effectiveActiveEdgeId)}
             d={edge.paths.echoPath}
             data-edge-layer="secondary-echo"
             key={`${edge.edgeId}:echo`}
             style={edge.style}
           />
         ])}
-        {allInkEdges.map((edge) => (
+        {allInkEdges.map((edge, edgeIndex) => (
           <path
             aria-label={edge.accessibleLabel}
-            className={edgeClassName(edge, "hit")}
+            className={edgeClassName(edge, "hit", effectiveActiveEdgeId)}
             d={edge.paths.hitPath}
             data-edge-id={edge.edgeId}
+            data-edge-index={edgeIndex}
             data-edge-layer="edge-hit"
             key={`${edge.edgeId}:hit`}
-            onBlur={() => setActiveEdgeId((current) => current === edge.edgeId ? null : current)}
-            onFocus={() => setActiveEdgeId(edge.edgeId)}
-            onMouseEnter={() => setActiveEdgeId(edge.edgeId)}
-            onMouseLeave={() => setActiveEdgeId((current) => current === edge.edgeId ? null : current)}
+            onBlur={() => setFocusedEdgeId((current) => current === edge.edgeId ? null : current)}
+            onFocus={() => {
+              setFocusedEdgeId(edge.edgeId);
+              setRovingEdgeId(edge.edgeId);
+            }}
+            onKeyDown={(event) => moveRovingEdgeFocus(event, edgeIndex)}
+            onMouseEnter={() => setHoveredEdgeId(edge.edgeId)}
+            onMouseLeave={() => setHoveredEdgeId((current) => current === edge.edgeId ? null : current)}
             role="img"
-            tabIndex={0}
+            tabIndex={effectiveRovingEdgeId === edge.edgeId ? 0 : -1}
           />
         ))}
       </svg>
