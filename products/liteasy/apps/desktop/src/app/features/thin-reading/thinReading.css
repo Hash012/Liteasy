@@ -45,11 +45,11 @@
 .thin-reading__breadcrumbs button:hover, .thin-reading__breadcrumbs button:focus-visible { color: #3e6d68; outline: none; text-decoration: underline; }
 .thin-reading__breadcrumbs .is-active { color: #3e6d68; font-weight: 650; }
 .thin-reading__modebar { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin: 0 auto; max-width: 1100px; padding: 16px 24px 0; width: 100%; }
-.thin-reading__mode { align-items: center; background: #fffefa; border: 1px solid var(--thin-line); border-radius: 8px; color: #33555a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 650; gap: 7px; height: 34px; padding: 0 13px; }
+.thin-reading__mode { align-items: center; background: #fffefa; border: 1px solid var(--thin-line); border-radius: 8px; color: #33555a; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 650; gap: 7px; height: 34px; justify-content: center; min-width: 118px; padding: 0 13px; }
 .thin-reading__mode:hover:not(:disabled), .thin-reading__mode:focus-visible { border-color: #7fa8a4; outline: none; }
 .thin-reading__mode.is-active { background: #e5efea; border-color: #4d8079; box-shadow: inset 0 0 0 1px #4d8079; color: #22514c; }
 .thin-reading__mode:disabled { cursor: default; opacity: .45; }
-.thin-reading__mode-state { align-items: center; display: inline-flex; gap: 8px; min-width: 0; }
+.thin-reading__mode-state { align-items: center; display: inline-flex; flex: 1 1 320px; gap: 8px; min-height: 24px; min-width: 0; }
 .thin-reading__mode-pill { background: #e5efea; border-radius: 999px; color: #3e6d68; flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 3px 9px; }
 .thin-reading__mode-copy { color: var(--thin-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -61,7 +61,8 @@
    rather than covering keeps the shape of the paragraph the reader was in. */
 .thin-reading__body.is-graph-dimmed > .thin-reading__article,
 .thin-reading__body.is-graph-dimmed > .thin-reading__intuecho { filter: saturate(.7); opacity: .3; transition: opacity 180ms ease, filter 180ms ease; }
-.thin-reading__body.is-marks-hidden .thin-reading__anchor { background: transparent; color: inherit; text-decoration: none; }
+.thin-reading__body.is-marks-hidden .thin-reading__anchor,
+.thin-reading__anchor.is-hidden { background: transparent; color: inherit; cursor: inherit; pointer-events: none; text-decoration: none; }
 .thin-reading.is-intuecho-collapsed .thin-reading__body { grid-template-columns: minmax(0, 780px); justify-content: center; max-width: 900px; padding-left: 18px; padding-right: 18px; }
 .thin-reading__article { min-width: 0; }
 .thin-reading__near-boundary {

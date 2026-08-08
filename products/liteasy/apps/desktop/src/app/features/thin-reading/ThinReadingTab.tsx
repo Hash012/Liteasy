@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { Button, Tooltip } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
   ArrowRightRegular,
   BranchForkRegular,
   ChevronRightRegular,
   LightbulbRegular,
+  LinkRegular,
   TextBulletListTreeRegular
 } from "@fluentui/react-icons";
 import {
@@ -121,6 +123,8 @@ type InlineFigurePresentation = {
   reason: string;
   recommendedBy: "agent" | "fallback";
 };
+
+type RecommendationStage = "article" | "marks" | "graph";
 
 function figurePlacementLabel(placement: NonNullable<MineruFigure["analysis"]>["placement"] | undefined) {
   switch (placement) {
@@ -347,8 +351,7 @@ export function ThinReadingTab({
   const [generationError, setGenerationError] = useState("");
   const [generationNotice, setGenerationNotice] = useState("");
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
-  const [anchorMarksEnabled, setAnchorMarksEnabled] = useState(true);
-  const [associationGraphOpen, setAssociationGraphOpen] = useState(false);
+  const [recommendationStage, setRecommendationStage] = useState<RecommendationStage>("article");
   const [activeSourceId, setActiveSourceId] = useState<string | null>(null);
   const [externalPaperActionId, setExternalPaperActionId] = useState<string | null>(null);
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
@@ -478,25 +481,25 @@ export function ThinReadingTab({
     setPrompt("");
     setActiveAnchorId(null);
     setActiveSourceId(null);
+    setRecommendationStage("article");
   }, [activeNode.id]);
 
-  // One layer off per Escape, the same rule the PDF reader follows: a paper card returns to the
-  // graph, and only closing the graph returns to the quiet article.
+  // Escape removes exactly one layer: paper card, graph, then concept marks.
   useEffect(() => {
-    if (!associationGraphOpen) return undefined;
+    if (recommendationStage === "article") return undefined;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.stopPropagation();
       setActiveSourceId((currentSource) => {
         if (currentSource) return null;
-        setAssociationGraphOpen(false);
         setActiveAnchorId(null);
+        setRecommendationStage((currentStage) => currentStage === "graph" ? "marks" : "article");
         return null;
       });
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [associationGraphOpen]);
+  }, [recommendationStage]);
 
   function update(nextDocument: ThinReadingDocument) {
     onUpdateDocument(artifactId, nextDocument);
@@ -753,18 +756,19 @@ export function ThinReadingTab({
     }
     setActiveSourceId(null);
     setActiveAnchorId((current) => (
-      associationGraphOpen && current === anchorId ? null : anchorId
+      recommendationStage === "graph" && current === anchorId ? null : anchorId
     ));
-    setAssociationGraphOpen(true);
+    setRecommendationStage("graph");
   }
 
-  function toggleAssociationGraph() {
-    setAssociationGraphOpen((current) => {
-      if (current) {
+  function advanceRecommendationStage() {
+    setRecommendationStage((current) => {
+      if (current === "graph") {
         setActiveAnchorId(null);
         setActiveSourceId(null);
+        return "article";
       }
-      return !current;
+      return current === "article" ? "marks" : "graph";
     });
   }
 
@@ -773,7 +777,7 @@ export function ThinReadingTab({
       setActiveSourceId(null);
       return;
     }
-    setAssociationGraphOpen(false);
+    setRecommendationStage("marks");
     setActiveAnchorId(null);
   }
 
@@ -844,6 +848,8 @@ export function ThinReadingTab({
   }, [inlineFigures, summarySentences]);
   const anchors = activeNode.evidence.anchors ?? [];
   const activeAnchor = anchors.find((anchor) => anchor.id === activeAnchorId) ?? null;
+  const marksVisible = recommendationStage !== "article";
+  const associationGraphOpen = recommendationStage === "graph";
 
   /*
    * The association graph over the generated article.
@@ -885,19 +891,24 @@ export function ThinReadingTab({
     ? "阅读位"
     : associationGraphOpen
       ? activeAnchor ? "聚焦概念" : "页级关联图"
-      : anchorMarksEnabled ? "概念标记" : "正文";
+      : marksVisible ? "概念标记" : "正文";
   const associationStateCopy = activeSource
     ? "Esc 返回关联图"
-    : associationGraphOpen
+      : associationGraphOpen
       ? activeAnchor
         ? `正在聚焦「${activeAnchor.label}」及其关联文献`
         : "悬停看判断依据 · 点击进阅读位"
       : anchors.length === 0
-        // A disabled pair of switches has to say why, or it reads as broken rather than as empty.
+        // A disabled control has to say why, or it reads as broken rather than as empty.
         ? "这一节的正文没有标出可展开的概念"
-        : anchorMarksEnabled
+        : marksVisible
           ? "概念留在正文原位 · 点击展开它的关联"
           : "未显示概念标记与关联图层";
+  const recommendationTooltip = recommendationStage === "article"
+    ? "显示概念标记"
+    : recommendationStage === "marks"
+      ? "打开页级关联图"
+      : "返回正文";
   const visibleGenerationProgress = generationProgress ?? (generating
     ? { message: generationNotice || labels.generating, partialAnswer: undefined, progress: null, runKey: "local-thin-reading", stageLabel: "薄读 Agent 已启动" }
     : null);
@@ -1026,31 +1037,23 @@ export function ThinReadingTab({
         />
       )}
 
-      {/* The two switches a reader actually makes here, plus one line saying which state the
-          article is resting in. Kept above the body so the graph never covers its own controls. */}
-      <div aria-label="概念与关联图工具" className="thin-reading__modebar">
-        <button
-          aria-pressed={anchorMarksEnabled}
-          className={`thin-reading__mode ${anchorMarksEnabled ? "is-active" : ""}`}
-          disabled={anchors.length === 0 || associationGraphOpen}
-          onClick={() => setAnchorMarksEnabled((current) => !current)}
-          title={associationGraphOpen
-            ? "关联图打开时，概念由图层直接标出"
-            : "显示或隐藏正文里的概念标记"}
-          type="button"
-        >
-          概念标记
-        </button>
-        <button
-          aria-pressed={associationGraphOpen}
-          className={`thin-reading__mode ${associationGraphOpen ? "is-active" : ""}`}
-          disabled={anchors.length === 0}
-          onClick={toggleAssociationGraph}
-          title="在薄读正文之上铺开这些概念的关联文献"
-          type="button"
-        >
-          页级关联图
-        </button>
+      {/* Kept above the body so the graph never covers its own control. */}
+      <div aria-label="相关推荐工具" className="thin-reading__modebar">
+        <Tooltip content={recommendationTooltip} positioning="below" relationship="description">
+          <Button
+            appearance="subtle"
+            aria-label="相关推荐"
+            aria-pressed={recommendationStage !== "article"}
+            className={`thin-reading__mode ${recommendationStage !== "article" ? "is-active" : ""}`}
+            disabled={anchors.length === 0}
+            icon={<LinkRegular />}
+            onClick={advanceRecommendationStage}
+            size="small"
+            title={recommendationTooltip}
+          >
+            相关推荐
+          </Button>
+        </Tooltip>
         <span className="thin-reading__mode-state">
           <span className="thin-reading__mode-pill">{associationStateLabel}</span>
           <span className="thin-reading__mode-copy">{associationStateCopy}</span>
@@ -1059,7 +1062,7 @@ export function ThinReadingTab({
 
       <div
         className={`thin-reading__body${associationGraphOpen ? " is-graph-dimmed" : ""}${
-          anchorMarksEnabled ? "" : " is-marks-hidden"
+          marksVisible ? "" : " is-marks-hidden"
         }`}
         onKeyUp={inspectSelection}
         onMouseUp={inspectSelection}
@@ -1098,8 +1101,9 @@ export function ThinReadingTab({
                           segment.anchor ? (
                             <mark
                               aria-label={`查看“${segment.anchor.label}”关联论文`}
+                              aria-hidden={!marksVisible || undefined}
                               aria-pressed={activeAnchor?.id === segment.anchor.id}
-                              className={`thin-reading__anchor ${activeAnchor?.id === segment.anchor.id ? "is-active" : ""}`}
+                              className={`thin-reading__anchor${marksVisible ? "" : " is-hidden"}${activeAnchor?.id === segment.anchor.id ? " is-active" : ""}`}
                               data-anchor-id={segment.anchor.id}
                               data-thin-reading-anchor-id={segment.anchor.id}
                               data-thin-reading-summary-external-source-ids={segment.anchor.externalSourceIds.join(",")}
@@ -1112,7 +1116,7 @@ export function ThinReadingTab({
                                 }
                               }}
                               role="button"
-                              tabIndex={0}
+                              tabIndex={marksVisible ? 0 : -1}
                               title={`${segment.anchor.label} · ${Math.round(segment.anchor.importance * 100)}%`}
                             >
                               {segment.text}

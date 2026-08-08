@@ -3,7 +3,10 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { ThinReadingTab } from "../app/features/thin-reading/ThinReadingTab";
 import { createThinReadingAnchorGraphFixture } from "./fixtures/thinReadingFixtures";
-import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
+import {
+  advanceThinReadingDocument,
+  createThinReadingDocument
+} from "../app/features/thin-reading/thinReadingProjection";
 
 /*
  * jsdom lays nothing out, and this view is *about* where laid-out text ended up. The rectangles
@@ -47,11 +50,25 @@ function renderArtifact() {
   );
 }
 
-test("opens the page graph from the mode bar and draws one node per retrieved paper", () => {
+test("cycles one related-recommendations button through article, marks, graph, and article", () => {
   const { container } = renderArtifact();
+  const button = screen.getByRole("button", { name: "相关推荐" });
 
+  expect(screen.queryByRole("button", { name: "概念标记" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "页级关联图" })).not.toBeInTheDocument();
+  expect(button).toHaveAttribute("aria-pressed", "false");
+  expect(button).toHaveAttribute("title", "显示概念标记");
+  expect(container.querySelector(".thin-reading__body")).toHaveClass("is-marks-hidden");
+  expect(container.querySelector(".thin-reading__anchor")).toHaveClass("is-hidden");
   expect(container.querySelector(".association-layer")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "页级关联图" }));
+
+  fireEvent.click(button);
+  expect(screen.getByText("概念标记")).toBeVisible();
+  expect(button).toHaveAttribute("aria-pressed", "true");
+  expect(button).toHaveAttribute("title", "打开页级关联图");
+  expect(container.querySelector(".thin-reading__anchor")).not.toHaveClass("is-hidden");
+
+  fireEvent.click(button);
 
   expect(container.querySelector(".association-layer")).not.toBeNull();
   expect(container.querySelectorAll(".association-anchor__chip")).toHaveLength(5);
@@ -60,11 +77,18 @@ test("opens the page graph from the mode bar and draws one node per retrieved pa
   expect(container.querySelectorAll(".association-edge")).toHaveLength(11);
   expect(container.querySelectorAll(".association-node.is-crossing")).toHaveLength(1);
   expect(screen.getByText("2 个锚点交叉")).toBeVisible();
+  expect(button).toHaveAttribute("title", "返回正文");
+
+  fireEvent.click(button);
+  expect(container.querySelector(".association-layer")).toBeNull();
+  expect(container.querySelector(".thin-reading__body")).toHaveClass("is-marks-hidden");
+  expect(button).toHaveAttribute("aria-pressed", "false");
 });
 
 test("a concept in the prose opens the graph focused on itself", () => {
   const { container } = renderArtifact();
 
+  fireEvent.click(screen.getByRole("button", { name: "相关推荐" }));
   fireEvent.click(screen.getByRole("button", { name: '查看“self-attention”关联论文' }));
 
   expect(container.querySelector(".association-layer")).not.toBeNull();
@@ -77,7 +101,9 @@ test("a concept in the prose opens the graph focused on itself", () => {
 test("the graph replaces the inline source list rather than adding a second copy of it", () => {
   const { container } = renderArtifact();
 
-  fireEvent.click(screen.getByRole("button", { name: "页级关联图" }));
+  const button = screen.getByRole("button", { name: "相关推荐" });
+  fireEvent.click(button);
+  fireEvent.click(button);
 
   expect(container.querySelector(".thin-reading__anchor-sources")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /核心方法的原始定义与理论依据/u }));
@@ -85,15 +111,62 @@ test("the graph replaces the inline source list rather than adding a second copy
   expect(screen.getByText("Esc 返回关联图")).toBeVisible();
 });
 
-test("closing the graph leaves the prose exactly as it was", () => {
+test("Escape returns one layer at a time from a paper card to the article", () => {
   const { container } = renderArtifact();
-  const toggle = screen.getByRole("button", { name: "页级关联图" });
+  const button = screen.getByRole("button", { name: "相关推荐" });
 
-  fireEvent.click(toggle);
-  expect(container.querySelector(".thin-reading__body.is-graph-dimmed")).not.toBeNull();
+  fireEvent.click(button);
+  fireEvent.click(button);
+  fireEvent.click(screen.getByRole("button", { name: /核心方法的原始定义与理论依据/u }));
+  expect(container.querySelector(".association-reading-card")).not.toBeNull();
 
-  fireEvent.click(toggle);
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(container.querySelector(".association-reading-card")).toBeNull();
+  expect(container.querySelector(".association-layer")).not.toBeNull();
+
+  fireEvent.keyDown(window, { key: "Escape" });
   expect(container.querySelector(".association-layer")).toBeNull();
   expect(container.querySelector(".thin-reading__body.is-graph-dimmed")).toBeNull();
   expect(screen.getByText("概念留在正文原位 · 点击展开它的关联")).toBeVisible();
+
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(container.querySelector(".thin-reading__body")).toHaveClass("is-marks-hidden");
+  expect(screen.getByText("未显示概念标记与关联图层")).toBeVisible();
+});
+
+test("changing the active thin-reading node resets related recommendations to article", () => {
+  const fixture = createThinReadingAnchorGraphFixture();
+  const root = createThinReadingDocument(fixture);
+  const withChild = advanceThinReadingDocument(root, {
+    parentNodeId: root.rootNodeId,
+    seed: fixture.rootSeed,
+    source: { kind: "omitted_section", label: "实验", sectionKey: "experiment" },
+    title: "实验"
+  });
+  const rootActive = { ...withChild, activeNodeId: withChild.rootNodeId };
+  const { container, rerender } = render(
+    <ThinReadingTab
+      artifactId={rootActive.artifactId}
+      document={rootActive}
+      onUpdateDocument={vi.fn()}
+      papers={[...fixture.papers]}
+    />
+  );
+  const button = screen.getByRole("button", { name: "相关推荐" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(container.querySelector(".association-layer")).not.toBeNull();
+
+  rerender(
+    <ThinReadingTab
+      artifactId={withChild.artifactId}
+      document={withChild}
+      onUpdateDocument={vi.fn()}
+      papers={[...fixture.papers]}
+    />
+  );
+
+  expect(container.querySelector(".association-layer")).toBeNull();
+  expect(screen.getByRole("button", { name: "相关推荐" })).toHaveAttribute("aria-pressed", "false");
+  expect(container.querySelector(".thin-reading__body")).toHaveClass("is-marks-hidden");
 });
