@@ -192,6 +192,129 @@ test("retains accumulated strong identity claims when detecting transitive confl
   );
 });
 
+test("unions a compatible source-to-DOI bridge independently of request order", async () => {
+  const records = [
+    { id: "paper-a", provider: "openalex", sourceId: "W500" },
+    { doi: "10.1000/bridge", id: "paper-b", provider: "crossref", sourceId: "10.1000/bridge" },
+    { doi: "10.1000/bridge", id: "paper-c", provider: "openalex", sourceId: "w500" }
+  ];
+  const permutations = [
+    [0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]
+  ];
+
+  for (const permutation of permutations) {
+    let providerPapers;
+    const result = await buildPaperRelationPayload({
+      artifactId: `artifact-bridge-${permutation.join("")}`,
+      papers: permutation.map((index) => records[index])
+    }, {
+      fetchGraphRecords: async (papers) => {
+        providerPapers = papers;
+        return [];
+      }
+    });
+
+    assert.deepEqual(providerPapers, [{
+      canonicalPaperId: undefined,
+      doi: "10.1000/bridge",
+      id: "paper-a",
+      provider: "openalex",
+      sourceId: "W500"
+    }]);
+    assert.deepEqual(result, { edges: [], warnings: [] });
+  }
+});
+
+test("normalizes OpenAlex casing and DOI-like Crossref source aliases", async () => {
+  let providerPapers;
+  await buildPaperRelationPayload({
+    artifactId: "artifact-provider-source-normalization",
+    papers: [
+      { id: "openalex-a", provider: "openalex", sourceId: "w601" },
+      { id: "openalex-b", provider: "openalex", sourceId: "https://openalex.org/W601" },
+      { id: "crossref-a", provider: "crossref", sourceId: "HTTPS://DOI.ORG/10.1000/MIXED" },
+      { id: "crossref-b", provider: "crossref", sourceId: "10.1000/mixed" }
+    ]
+  }, {
+    fetchGraphRecords: async (papers) => {
+      providerPapers = papers;
+      return [];
+    }
+  });
+
+  assert.deepEqual(providerPapers, [
+    {
+      canonicalPaperId: undefined,
+      doi: undefined,
+      id: "crossref-a",
+      provider: "crossref",
+      sourceId: "10.1000/mixed"
+    },
+    {
+      canonicalPaperId: undefined,
+      doi: undefined,
+      id: "openalex-a",
+      provider: "openalex",
+      sourceId: "W601"
+    }
+  ]);
+});
+
+test("applies the 24-paper limit after compatible bridge components are fully unioned", async () => {
+  let providerCalls = 0;
+  const independent = Array.from({ length: 23 }, (_, index) => ({
+    id: `independent-${String(index).padStart(2, "0")}`,
+    provider: "openalex",
+    sourceId: `W${700 + index}`
+  }));
+  const bridge = [
+    { id: "bridge-source", provider: "openalex", sourceId: "W900" },
+    { doi: "10.1000/limit-bridge", id: "bridge-doi", provider: "crossref", sourceId: "10.1000/limit-bridge" },
+    { doi: "10.1000/limit-bridge", id: "bridge-link", provider: "openalex", sourceId: "w900" }
+  ];
+
+  await buildPaperRelationPayload({
+    artifactId: "artifact-final-24",
+    papers: [...independent, bridge[0], bridge[1], bridge[2]]
+  }, {
+    fetchGraphRecords: async (papers) => {
+      providerCalls += 1;
+      assert.equal(papers.length, 24);
+      return [];
+    }
+  });
+  assert.equal(providerCalls, 1);
+});
+
+test("rejects more than 24 final identity components before provider retrieval", async () => {
+  let providerCalls = 0;
+  const independent = Array.from({ length: 24 }, (_, index) => ({
+    id: `independent-over-${String(index).padStart(2, "0")}`,
+    provider: "openalex",
+    sourceId: `W${800 + index}`
+  }));
+  const bridge = [
+    { id: "over-source", provider: "openalex", sourceId: "W999" },
+    { doi: "10.1000/over-bridge", id: "over-doi", provider: "crossref", sourceId: "10.1000/over-bridge" },
+    { doi: "10.1000/over-bridge", id: "over-link", provider: "openalex", sourceId: "w999" }
+  ];
+
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-final-25",
+      papers: [...independent, bridge[0], bridge[1], bridge[2]]
+    }, {
+      fetchGraphRecords: async () => {
+        providerCalls += 1;
+        return [];
+      }
+    }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "paper_relation_paper_limit_exceeded"
+  );
+  assert.equal(providerCalls, 0);
+});
+
 test("emits co-citation only from an explicit provider count with a usable denominator", async () => {
   const result = await buildPaperRelationPayload(input, {
     fetchGraphRecords: async () => [

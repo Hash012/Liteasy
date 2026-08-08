@@ -40,49 +40,98 @@ function hasOnlyFields(value, allowed) {
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
+function normalizeProviderSourceId(provider, value) {
+  const sourceId = normalizeText(value);
+  if (provider === "openalex") {
+    const match = normalizeIdentity(sourceId).match(/^openalex:(W\d+)$/);
+    return match ? match[1] : sourceId.toLowerCase();
+  }
+  if (provider === "crossref") {
+    return normalizeDoi(sourceId) || sourceId.toLowerCase();
+  }
+  if (provider === "semantic_scholar") {
+    const direct = normalizeIdentity(sourceId).match(/^semantic_scholar:(.+)$/);
+    if (direct) return direct[1];
+    const prefixed = normalizeIdentity(`semantic_scholar:${sourceId}`)
+      .match(/^semantic_scholar:(.+)$/);
+    return prefixed?.[1] ?? sourceId.toLowerCase();
+  }
+  return sourceId.toLowerCase();
+}
+
+function providerSourceAlias(provider, sourceId) {
+  return `${provider}:${normalizeProviderSourceId(provider, sourceId)}`;
+}
+
 function paperAliases(paper) {
   const aliases = new Set();
   const canonical = normalizeIdentity(paper.canonicalPaperId);
   const doi = normalizeDoi(paper.doi);
-  const provider = normalizeText(paper.provider).toLowerCase();
-  const sourceId = normalizeText(paper.sourceId);
   if (canonical) aliases.add(canonical);
   if (doi) aliases.add(`doi:${doi}`);
-  if (provider && sourceId) aliases.add(normalizeIdentity(`${provider}:${sourceId}`));
+  aliases.add(providerSourceAlias(paper.provider, paper.sourceId));
   return aliases;
 }
 
-function preferredPaperKey(paper) {
-  const canonical = normalizeIdentity(paper.canonicalPaperId);
-  if (canonical) return canonical;
-  const doi = normalizeDoi(paper.doi);
-  if (doi) return `doi:${doi}`;
-  const providerSource = normalizeIdentity(`${paper.provider}:${paper.sourceId}`);
-  return providerSource;
+function stablePaperRank(paper) {
+  return `${paper.id}\u0000${paper.provider}\u0000${paper.sourceId}`;
 }
 
-function createStrongIdentityClaims(paper) {
-  const canonical = normalizeIdentity(paper.canonicalPaperId);
+function compareStableText(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function findComponent(parent, index) {
+  let root = index;
+  while (parent[root] !== root) root = parent[root];
+  while (parent[index] !== index) {
+    const next = parent[index];
+    parent[index] = root;
+    index = next;
+  }
+  return root;
+}
+
+function unionComponents(parent, left, right) {
+  const leftRoot = findComponent(parent, left);
+  const rightRoot = findComponent(parent, right);
+  if (leftRoot === rightRoot) return;
+  const first = Math.min(leftRoot, rightRoot);
+  const second = Math.max(leftRoot, rightRoot);
+  parent[second] = first;
+}
+
+function buildIdentityComponent(records) {
+  const canonicalIds = new Set(records.map((paper) => paper.canonicalPaperId).filter(Boolean));
+  const dois = new Set(records.map((paper) => paper.doi).filter(Boolean));
+  const sourceIdsByProvider = new Map();
+  for (const paper of records) {
+    const providerSourceIds = sourceIdsByProvider.get(paper.provider) ?? new Set();
+    providerSourceIds.add(paper.sourceId);
+    sourceIdsByProvider.set(paper.provider, providerSourceIds);
+  }
+  if (canonicalIds.size > 1 || dois.size > 1 ||
+    [...sourceIdsByProvider.values()].some((sourceIds) => sourceIds.size > 1)) {
+    throw new PaperRelationValidationError(
+      "conflicting_paper_relation_identity",
+      "论文关系请求包含相互冲突的论文标识。"
+    );
+  }
+  const representative = [...records].sort((left, right) =>
+    compareStableText(stablePaperRank(left), stablePaperRank(right)))[0];
+  const aliases = new Set(records.flatMap((paper) => [...paper.aliases]));
+  const canonicalPaperId = [...canonicalIds][0];
+  const doi = [...dois][0];
+  const key = canonicalPaperId || (doi ? `doi:${doi}` : [...aliases].sort()[0]);
   return {
-    canonicalIds: new Set(canonical ? [canonical] : []),
-    dois: new Set(paper.doi ? [paper.doi] : []),
-    sourceIdsByProvider: new Map([[paper.provider, paper.sourceId]])
+    aliases,
+    canonicalPaperId,
+    doi,
+    id: representative.id,
+    key,
+    provider: representative.provider,
+    sourceId: representative.sourceId
   };
-}
-
-function claimsConflictWithPaper(claims, paper) {
-  const canonical = normalizeIdentity(paper.canonicalPaperId);
-  if (canonical && claims.canonicalIds.size > 0 && !claims.canonicalIds.has(canonical)) return true;
-  if (paper.doi && claims.dois.size > 0 && !claims.dois.has(paper.doi)) return true;
-  const providerSourceId = claims.sourceIdsByProvider.get(paper.provider);
-  return providerSourceId !== undefined && providerSourceId !== paper.sourceId;
-}
-
-function addPaperClaims(claims, paper) {
-  const canonical = normalizeIdentity(paper.canonicalPaperId);
-  if (canonical) claims.canonicalIds.add(canonical);
-  if (paper.doi) claims.dois.add(paper.doi);
-  claims.sourceIdsByProvider.set(paper.provider, paper.sourceId);
 }
 
 export class PaperRelationValidationError extends Error {
@@ -109,9 +158,7 @@ function validateAndNormalizeRequest(body) {
     );
   }
 
-  const papersByKey = new Map();
-  const aliasOwners = new Map();
-  for (const rawPaper of body.papers) {
+  const normalizedPapers = body.papers.map((rawPaper) => {
     if (!rawPaper || typeof rawPaper !== "object" || Array.isArray(rawPaper) ||
       !hasOnlyFields(rawPaper, paperFields)) {
       throw new PaperRelationValidationError(
@@ -121,13 +168,13 @@ function validateAndNormalizeRequest(body) {
     }
     const id = normalizeText(rawPaper.id);
     const provider = normalizeText(rawPaper.provider).toLowerCase();
-    const sourceId = normalizeText(rawPaper.sourceId);
+    const rawSourceId = normalizeText(rawPaper.sourceId);
     const canonicalPaperId = rawPaper.canonicalPaperId === undefined
       ? undefined
       : normalizeText(rawPaper.canonicalPaperId);
     const doi = rawPaper.doi === undefined ? undefined : normalizeDoi(rawPaper.doi);
     if (!isSafeIdentifier(id, 512) || !isSafeIdentifier(provider, 64) ||
-      !/^[a-z0-9_-]+$/.test(provider) || !isSafeIdentifier(sourceId, 512) ||
+      !/^[a-z0-9_-]+$/.test(provider) || !isSafeIdentifier(rawSourceId, 512) ||
       (rawPaper.canonicalPaperId !== undefined && !isSafeIdentifier(canonicalPaperId, 512)) ||
       (rawPaper.doi !== undefined && !doi)) {
       throw new PaperRelationValidationError(
@@ -136,60 +183,43 @@ function validateAndNormalizeRequest(body) {
       );
     }
 
-    const normalized = { canonicalPaperId, doi, id, provider, sourceId };
-    const aliases = paperAliases(normalized);
-    const matchingKeys = new Set([...aliases].map((alias) => aliasOwners.get(alias)).filter(Boolean));
-    if (matchingKeys.size > 1) {
-      throw new PaperRelationValidationError(
-        "conflicting_paper_relation_identity",
-        "论文关系请求包含相互冲突的论文标识。"
-      );
-    }
-    const [existingKey] = matchingKeys;
-    const key = existingKey || preferredPaperKey(normalized);
-    const existing = papersByKey.get(key);
-    if (existing) {
-      if (claimsConflictWithPaper(existing.strongIdentityClaims, normalized)) {
-        throw new PaperRelationValidationError(
-          "conflicting_paper_relation_identity",
-          "论文关系请求包含相互冲突的论文标识。"
-        );
-      }
-      for (const alias of aliases) {
-        existing.aliases.add(alias);
-        aliasOwners.set(alias, key);
-      }
-      addPaperClaims(existing.strongIdentityClaims, normalized);
-      const existingRank = `${existing.id}\u0000${existing.provider}\u0000${existing.sourceId}`;
-      const candidateRank = `${normalized.id}\u0000${normalized.provider}\u0000${normalized.sourceId}`;
-      if (candidateRank < existingRank) {
-        existing.id = normalized.id;
-        existing.provider = normalized.provider;
-        existing.sourceId = normalized.sourceId;
-      }
-      existing.canonicalPaperId = [...existing.strongIdentityClaims.canonicalIds][0];
-      existing.doi = [...existing.strongIdentityClaims.dois][0];
-      continue;
-    }
-    const paper = {
-      ...normalized,
-      aliases,
-      key,
-      strongIdentityClaims: createStrongIdentityClaims(normalized)
+    const normalized = {
+      canonicalPaperId: canonicalPaperId ? normalizeIdentity(canonicalPaperId) : undefined,
+      doi,
+      id,
+      provider,
+      sourceId: normalizeProviderSourceId(provider, rawSourceId)
     };
-    papersByKey.set(key, paper);
-    for (const alias of aliases) aliasOwners.set(alias, key);
-    if (papersByKey.size > maximumPapers) {
-      throw new PaperRelationValidationError(
-        "paper_relation_paper_limit_exceeded",
-        `论文关系请求最多包含 ${maximumPapers} 篇去重论文。`
-      );
+    return { ...normalized, aliases: paperAliases(normalized) };
+  });
+
+  const parent = normalizedPapers.map((_, index) => index);
+  const firstPaperByAlias = new Map();
+  normalizedPapers.forEach((paper, index) => {
+    for (const alias of paper.aliases) {
+      const existingIndex = firstPaperByAlias.get(alias);
+      if (existingIndex === undefined) firstPaperByAlias.set(alias, index);
+      else unionComponents(parent, existingIndex, index);
     }
+  });
+  const recordsByComponent = new Map();
+  normalizedPapers.forEach((paper, index) => {
+    const root = findComponent(parent, index);
+    const records = recordsByComponent.get(root) ?? [];
+    records.push(paper);
+    recordsByComponent.set(root, records);
+  });
+  const papers = [...recordsByComponent.values()].map(buildIdentityComponent);
+  if (papers.length > maximumPapers) {
+    throw new PaperRelationValidationError(
+      "paper_relation_paper_limit_exceeded",
+      `论文关系请求最多包含 ${maximumPapers} 篇去重论文。`
+    );
   }
 
   return {
     artifactId,
-    papers: [...papersByKey.values()].sort((left, right) =>
+    papers: papers.sort((left, right) =>
       left.key.localeCompare(right.key) || left.id.localeCompare(right.id))
   };
 }
