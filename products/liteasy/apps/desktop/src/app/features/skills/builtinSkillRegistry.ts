@@ -8,7 +8,6 @@ import type {
   BuiltinSkillSummary
 } from "./builtinSkill.types";
 import { hasVisualizationValidator } from "../visualization/visualizationValidatorRegistry";
-import "../visualization/validators/baseValidators";
 
 const stableId = z.string().min(1).max(120).regex(/^[A-Za-z][A-Za-z0-9_.-]*$/);
 const modality = z.enum([

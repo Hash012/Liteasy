@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 import type { VisualizationValidator } from "../app/features/visualization/visualizationValidator";
 import { runVisualizationValidators } from "../app/features/visualization/visualizationValidator";
-import { evidenceBindingValidator } from "../app/features/visualization/validators/baseValidators";
+import { getVisualizationValidator } from "../app/features/visualization/visualizationValidatorRegistry";
+import { accessibilityReadingOrderValidator, evidenceBindingValidator, interactionAllowlistValidator, resourceLimitsValidator } from "../app/features/visualization/validators/baseValidators";
 import type { VisualizationValidationContext } from "../app/features/visualization/visualizationValidator";
 
 const context: VisualizationValidationContext = {
@@ -54,6 +55,28 @@ describe("visualization validator registry", () => {
 
   test("requires every scientific semantic object to reference a known claim", async () => {
     expect((await evidenceBindingValidator.validate(contextWithUnknownClaim)).outcome).toBe("fail");
+  });
+
+  test("rejects empty or payload-only evidence references", async () => {
+    expect((await evidenceBindingValidator.validate({ ...context, semanticObjects: [{ ...context.semanticObjects[0], evidenceClaimIds: [] }] })).outcome).toBe("fail");
+    expect((await evidenceBindingValidator.validate({ ...context, evidenceBindings: [], semanticObjects: [{ ...context.semanticObjects[0], evidenceClaimIds: ["claim-a"] }] })).outcome).toBe("fail");
+  });
+
+  test("only selectable semantic objects may be exposed through interaction", async () => {
+    expect((await interactionAllowlistValidator.validate({ ...context, semanticObjects: [{ ...context.semanticObjects[0], selectable: false }] })).outcome).toBe("fail");
+  });
+
+  test("requires an exact accessibility reading-order set", async () => {
+    expect((await accessibilityReadingOrderValidator.validate({ ...context, accessibility: { ...context.accessibility, objectReadingOrder: ["node-a", "unknown"] } })).outcome).toBe("fail");
+  });
+
+  test("counts payload resource limits in UTF-8 bytes", async () => {
+    const unicodeContext = { ...context, spec: { ...context.spec, payload: { ...context.spec.payload, nodes: [{ ...context.spec.payload.nodes[0], label: "科学" }] } } };
+    expect((await resourceLimitsValidator.validate({ ...unicodeContext, resourceLimits: { maxPayloadBytes: JSON.stringify(unicodeContext.spec).length + 1 } })).outcome).toBe("fail");
+  });
+
+  test("exposes base validators to direct registry consumers", () => {
+    expect(getVisualizationValidator("evidence-claims")).toBeDefined();
   });
 });
 
