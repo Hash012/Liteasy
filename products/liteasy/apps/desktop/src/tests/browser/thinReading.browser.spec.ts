@@ -1,4 +1,155 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
+
+async function mountPageRecommendationGraphFixture(page: Page) {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="page-recommendation-graph-fixture"></div>';
+    const fixtureModuleUrl = "/src/tests/fixtures/pageRecommendationGraphBrowserFixture.tsx";
+    const fixtureModule = await import(fixtureModuleUrl);
+    await fixtureModule.mountPageRecommendationGraphFixture(
+      document.getElementById("page-recommendation-graph-fixture")
+    );
+  });
+}
+
+async function openPageRecommendationGraph(page: Page) {
+  const recommendations = page.getByRole("button", { name: "相关推荐" });
+  await expect(recommendations).toHaveAttribute("aria-pressed", "false");
+  await recommendations.click();
+  await expect(page.locator(".thin-reading__anchor").first()).toBeVisible();
+  await expect(page.getByText("概念标记已显示", { exact: true })).toBeVisible();
+  await recommendations.click();
+  await expect(page.getByRole("region", { exact: true, name: "页级关联图" })).toBeVisible();
+  return recommendations;
+}
+
+async function graphGeometry(page: Page) {
+  return page.evaluate(() => {
+    type Point = { x: number; y: number };
+    type Rectangle = { bottom: number; left: number; right: number; top: number };
+    const point = (values: string): Point => {
+      const [x = 0, y = 0] = values.trim().split(/[ ,]+/u).map(Number);
+      return { x, y };
+    };
+    const endpoints = (path: SVGPathElement) => {
+      const d = path.getAttribute("d") ?? "";
+      const match = d.match(/^M\s*([\d.+-]+[ ,]+[\d.+-]+).*?([\d.+-]+[ ,]+[\d.+-]+)\s*$/u);
+      if (!match) throw new Error(`Cannot read association edge endpoints: ${d}`);
+      return { end: point(match[2]!), start: point(match[1]!) };
+    };
+    const orientation = (a: Point, b: Point, c: Point) =>
+      (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const intersects = (a: Point, b: Point, c: Point, d: Point) =>
+      orientation(a, b, c) * orientation(a, b, d) < 0 &&
+      orientation(c, d, a) * orientation(c, d, b) < 0;
+    const primary = [...document.querySelectorAll<SVGPathElement>(
+      '.association-edge.is-primary.is-hit[data-edge-layer="edge-hit"]'
+    )].map((path) => ({ id: path.dataset.edgeId ?? "", ...endpoints(path) }));
+    let primaryCrossings = 0;
+    for (let index = 0; index < primary.length; index += 1) {
+      for (let other = index + 1; other < primary.length; other += 1) {
+        const left = primary[index]!;
+        const right = primary[other]!;
+        if (left.id.split(":")[1] === right.id.split(":")[1]) continue;
+        if (intersects(left.start, left.end, right.start, right.end)) primaryCrossings += 1;
+      }
+    }
+    const anchorIds = [...document.querySelectorAll<HTMLElement>("[data-anchor-id]")]
+      .map((anchor) => anchor.dataset.anchorId!)
+      .filter((anchorId, index, all) => all.indexOf(anchorId) === index);
+    const sideByAnchor = new Map<string, Set<number>>();
+    for (const edge of primary) {
+      const anchorId = anchorIds.find((candidate) => edge.id.startsWith(`primary:${candidate}:`));
+      if (!anchorId) throw new Error(`Cannot identify anchor for ${edge.id}`);
+      const side = Math.sign(edge.end.x - edge.start.x);
+      const sides = sideByAnchor.get(anchorId) ?? new Set<number>();
+      if (side !== 0) sides.add(side);
+      sideByAnchor.set(anchorId, sides);
+    }
+    const sameSideViolations = [...sideByAnchor.values()].filter((sides) => sides.size > 1).length;
+    const fullPaperRect = (node: HTMLElement) => {
+      const resting = node.getBoundingClientRect();
+      const centreX = resting.left + resting.width / 2;
+      const centreY = resting.top + resting.height / 2;
+      const width = Math.max(resting.width, 152);
+      const height = Math.max(resting.height, 100);
+      return {
+        bottom: centreY + height / 2,
+        height,
+        left: centreX - width / 2,
+        right: centreX + width / 2,
+        top: centreY - height / 2,
+        width
+      };
+    };
+    const boxNodes = [...document.querySelectorAll<HTMLElement>(".association-node")];
+    const boxes = boxNodes.map(fullPaperRect);
+    const overlap = (a: Rectangle, b: Rectangle) =>
+      a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+    let nodeOverlaps = 0;
+    const overlapPairs: string[] = [];
+    for (let index = 0; index < boxes.length; index += 1) {
+      for (let other = index + 1; other < boxes.length; other += 1) {
+        if (overlap(boxes[index]!, boxes[other]!)) {
+          nodeOverlaps += 1;
+          overlapPairs.push(`${boxNodes[index]!.textContent}:${JSON.stringify(boxes[index])}|${
+            boxNodes[other]!.textContent
+          }:${JSON.stringify(boxes[other])}`);
+        }
+      }
+    }
+    const realAnchors = [...document.querySelectorAll<HTMLElement>(".thin-reading__anchor[data-anchor-id]")];
+    const graphChips = [...document.querySelectorAll<HTMLElement>(".association-anchor__chip")];
+    const anchorObstructions = boxes.reduce((count, box) => count + graphChips.filter((chip) =>
+      overlap(box, chip.getBoundingClientRect())).length, 0);
+    const anchorDrift = Math.max(0, ...graphChips.map((chip, index) => {
+      const original = realAnchors[index]?.getBoundingClientRect();
+      if (!original) return Number.POSITIVE_INFINITY;
+      const chipRect = chip.getBoundingClientRect();
+      return Math.hypot(chipRect.left - original.left,
+        chipRect.top + chipRect.height / 2 - (original.top + original.height / 2));
+    }));
+    const graphElement = document.querySelector<HTMLElement>(".association-layer")!;
+    const graph = graphElement.getBoundingClientRect();
+    const textOverflow = [...document.querySelectorAll<HTMLElement>(
+      ".association-node:not(.is-dot) strong, .association-legend span, .thin-reading__mode-state"
+    )].filter((element) => {
+      const child = element.getBoundingClientRect();
+      const parent = element.parentElement!.getBoundingClientRect();
+      return child.left < parent.left - 1 || child.right > parent.right + 1 ||
+        child.top < parent.top - 1 || child.bottom > parent.bottom + 1;
+    }).length;
+    const outsideGraph = [...document.querySelectorAll<HTMLElement>(".association-node")]
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.left < graph.left - 1 || rect.right > graph.right + 1 ||
+          rect.top < graph.top - 1 || rect.bottom > graph.bottom + 1;
+      }).length;
+    return {
+      anchorDrift,
+      anchorObstructions,
+      candidateHard: [
+        graphElement.dataset.candidateCrossings,
+        graphElement.dataset.candidateSameSide,
+        graphElement.dataset.candidateNodeOverlaps,
+        graphElement.dataset.candidateOverflow,
+        graphElement.dataset.candidateAnchorObstructions
+      ].join("/"),
+      layoutPrimaryCrossings: Number(graphElement.dataset.primaryEdgeCrossings),
+      layoutSameSideViolations: Number(graphElement.dataset.sameSideViolations),
+      layoutSource: graphElement.dataset.layoutSource,
+      nodeOverlaps,
+      overlapPairs,
+      outsideGraph,
+      primaryCrossings,
+      sameSideViolations,
+      stressNoWorse: Number(graphElement.dataset.candidateStress) <=
+        Number(graphElement.dataset.baselineStress) + Number.EPSILON,
+      textOverflow
+    };
+  });
+}
 
 test("keeps thin-reading prose and evidence markers readable on desktop", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
@@ -281,65 +432,166 @@ test("anchors the PDF selection menu to the real selected text", async ({ page }
   }
 });
 
-test("draws the thin-reading page graph around the concepts where the prose put them", async ({ page }, testInfo) => {
-  await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-anchor-graph-fixture");
+test.describe("page recommendation graph", () => {
+  test("cycles through marks and a verified page-wide ink graph with keyboard return", async ({ page }, testInfo) => {
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await mountPageRecommendationGraphFixture(page);
+    const recommendations = await openPageRecommendationGraph(page);
+    const graph = page.getByRole("region", { exact: true, name: "页级关联图" });
 
-  const marks = page.locator(".thin-reading__anchor");
-  await expect(marks).toHaveCount(5);
-  await page.getByRole("button", { name: "页级关联图" }).click();
+    await expect(graph.locator(".association-anchor__chip")).toHaveCount(5);
+    await expect(graph.locator(".association-node")).toHaveCount(10);
+    await expect(graph.locator(".association-node.is-crossing")).toHaveCount(1);
+    await expect(graph.locator(".association-node.is-crossing")).not.toHaveClass(/is-dot/u);
+    await expect(graph.locator(".association-node.is-crossing .association-node__crossing")).toBeVisible();
+    await expect(graph.locator(".association-edge.is-paper-relation.is-ink")).toHaveCount(2);
+    await expect(graph.locator('.association-edge.is-paper-relation.is-hit[role="img"]')).toHaveCount(2);
+    await expect(graph.getByRole("img", { name: /直接引用/u })).toHaveCount(1);
+    await expect(graph.getByRole("img", { name: /共享参考文献/u })).toHaveCount(1);
 
-  const graph = page.getByRole("region", { exact: true, name: "页级关联图" });
-  await expect(graph).toBeVisible();
-  const chips = graph.locator(".association-anchor__chip");
-  await expect(chips).toHaveCount(5);
+    const legend = graph.getByLabel("当前关系图例");
+    await expect(legend).toContainText("作者亲引");
+    await expect(legend).toContainText("引用图推导");
+    await expect(legend).toContainText("语义相似，无引用关系");
+    await expect(legend).toContainText("直接引用");
+    await expect(legend).toContainText("共享参考文献");
 
-  // Each chip stands where its own words are, not at a centre the layer invented.
-  const drift = await page.evaluate(() => {
-    const results: number[] = [];
-    for (const chip of document.querySelectorAll<HTMLElement>(".association-anchor__chip")) {
-      const label = chip.textContent?.trim() ?? "";
-      const mark = [...document.querySelectorAll<HTMLElement>(".thin-reading__anchor")]
-        .find((candidate) => candidate.textContent?.trim() === label);
-      if (!mark) continue;
-      const markRect = mark.getClientRects()[0];
-      const chipRect = chip.getBoundingClientRect();
-      results.push(Math.hypot(chipRect.left - markRect.left, chipRect.top - markRect.top));
+    const geometry = await graphGeometry(page);
+    expect(geometry).toEqual({
+      anchorDrift: expect.any(Number),
+      anchorObstructions: 0,
+      layoutPrimaryCrossings: 0,
+      candidateHard: "0/0/0/0/0",
+      layoutSameSideViolations: 0,
+      layoutSource: "constrained",
+      nodeOverlaps: 0,
+      overlapPairs: [],
+      outsideGraph: 0,
+      primaryCrossings: 0,
+      sameSideViolations: 0,
+      stressNoWorse: true,
+      textOverflow: 0
+    });
+    expect(geometry.anchorDrift).toBeLessThan(14);
+
+    const ink = await graph.locator(".association-layer__edges").screenshot({ omitBackground: true });
+    const decodedInk = await loadImage(ink);
+    const inkCanvas = createCanvas(decodedInk.width, decodedInk.height);
+    const inkContext = inkCanvas.getContext("2d");
+    inkContext.drawImage(decodedInk, 0, 0);
+    let nonTransparentInkPixels = 0;
+    const pixels = inkContext.getImageData(0, 0, decodedInk.width, decodedInk.height).data;
+    for (let index = 3; index < pixels.length; index += 4) {
+      if (pixels[index]! > 8) nonTransparentInkPixels += 1;
     }
-    return results;
+    expect(nonTransparentInkPixels).toBeGreaterThan(100);
+
+    const firstEdge = graph.locator('.association-edge.is-hit[data-edge-layer="edge-hit"]').first();
+    await firstEdge.focus();
+    await expect(firstEdge).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    const secondEdge = graph.locator('.association-edge.is-hit[data-edge-layer="edge-hit"]').nth(1);
+    await expect(secondEdge).toBeFocused();
+    await expect(secondEdge).toHaveAttribute("tabindex", "0");
+
+    const paper = page.getByRole("button", { name: /核心方法的原始定义与理论依据/u });
+    await paper.focus();
+    await paper.click();
+    const readingCard = page.getByLabel("关联论文：核心方法的原始定义与理论依据");
+    await expect(readingCard).toBeVisible();
+    await expect(page.getByRole("button", { name: "返回关联图" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(readingCard).toHaveCount(0);
+    await expect(paper).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(graph).toHaveCount(0);
+    await expect(page.getByText("概念标记已显示", { exact: true })).toBeVisible();
+    await expect(recommendations).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByText("相关推荐未展开", { exact: true })).toBeVisible();
+    await expect(recommendations).toHaveAttribute("aria-pressed", "false");
+
+    await recommendations.click();
+    await recommendations.click();
+    await recommendations.click();
+    await expect(page.getByRole("region", { exact: true, name: "页级关联图" })).toHaveCount(0);
+    await expect(page.locator(".thin-reading__body")).toHaveClass(/is-marks-hidden/u);
+
+    await testInfo.attach("page-recommendation-graph-desktop", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png"
+    });
   });
-  expect(drift).toHaveLength(5);
-  expect(Math.max(...drift)).toBeLessThan(14);
 
-  // Nothing lands on another node or on the concept it belongs to.
-  const collisions = await page.evaluate(() => {
-    const boxes = [...document.querySelectorAll(".association-node")].map((node) => node.getBoundingClientRect());
-    const chipBoxes = [...document.querySelectorAll(".association-anchor__chip")].map((chip) => chip.getBoundingClientRect());
-    const hit = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-    let count = 0;
-    for (let index = 0; index < boxes.length; index += 1) {
-      for (let other = index + 1; other < boxes.length; other += 1) if (hit(boxes[index], boxes[other])) count += 1;
-      for (const chip of chipBoxes) if (hit(boxes[index], chip)) count += 1;
-    }
-    return count;
-  });
-  expect(collisions).toBe(0);
-
-  await expect(graph.locator(".association-node.is-crossing")).toHaveCount(1);
-  await expect(graph.locator(".association-edge.is-crossing")).toHaveCount(2);
-  await testInfo.attach("thin-reading-association-graph", {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: "image/png"
-  });
-
-  await chips.first().click();
-  await expect(graph.locator(".association-anchor.is-dimmed")).toHaveCount(4);
-
-  await page.getByRole("button", { name: /核心方法的原始定义与理论依据/ }).click();
-  await expect(page.getByLabel("关联论文：核心方法的原始定义与理论依据")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByLabel("关联论文：核心方法的原始定义与理论依据")).not.toBeVisible();
-  await expect(graph).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(graph).not.toBeVisible();
+  for (const viewport of [
+    { height: 900, name: "narrow", width: 760 },
+    { height: 844, name: "mobile", width: 390 }
+  ]) {
+    test(`keeps graph geometry and text contained on ${viewport.name}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ height: viewport.height, width: viewport.width });
+      await mountPageRecommendationGraphFixture(page);
+      await openPageRecommendationGraph(page);
+      const geometry = await graphGeometry(page);
+      expect(geometry).toEqual({
+        anchorDrift: expect.any(Number),
+        anchorObstructions: 0,
+        layoutPrimaryCrossings: 0,
+        candidateHard: "0/0/0/0/0",
+        layoutSameSideViolations: 0,
+        layoutSource: "constrained",
+        nodeOverlaps: 0,
+        overlapPairs: [],
+        outsideGraph: 0,
+        primaryCrossings: 0,
+        sameSideViolations: 0,
+        stressNoWorse: true,
+        textOverflow: 0
+      });
+      expect(geometry.anchorDrift).toBeLessThan(14);
+      const sharedPaper = page.locator(".association-node.is-crossing");
+      await expect(sharedPaper).not.toHaveClass(/is-dot/u);
+      await expect(sharedPaper.locator(".association-node__crossing")).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      if (viewport.name === "mobile") {
+        const compactNodes = page.locator(".association-node.is-dot");
+        const compactCount = await compactNodes.count();
+        let compactIndex = 0;
+        let furthestRight = Number.NEGATIVE_INFINITY;
+        for (let index = 0; index < compactCount; index += 1) {
+          const box = await compactNodes.nth(index).boundingBox();
+          if (box && box.x > furthestRight) {
+            compactIndex = index;
+            furthestRight = box.x;
+          }
+        }
+        const compactNode = compactNodes.nth(compactIndex);
+        await expect(compactNode).toBeVisible();
+        const scroller = page.locator(".thin-reading");
+        const scrollLeftBefore = await scroller.evaluate((element) => element.scrollLeft);
+        for (let step = 0; step < 30; step += 1) {
+          await page.keyboard.press("Tab");
+          if (await compactNode.evaluate((node) => document.activeElement === node)) break;
+        }
+        await expect(compactNode).toBeFocused();
+        const scrollLeftAfter = await scroller.evaluate((element) => element.scrollLeft);
+        expect(scrollLeftAfter).toBeGreaterThan(scrollLeftBefore);
+        await expect(compactNode.locator("strong")).toBeVisible();
+        const containment = await compactNode.evaluate((node) => {
+          const title = node.querySelector("strong")!.getBoundingClientRect();
+          const card = node.getBoundingClientRect();
+          const scroller = node.closest(".thin-reading")!.getBoundingClientRect();
+          return card.left >= scroller.left - 1 && card.right <= scroller.right + 1 &&
+            title.left >= card.left - 1 && title.right <= card.right + 1 &&
+            title.top >= card.top - 1 && title.bottom <= card.bottom + 1;
+        });
+        expect(containment).toBe(true);
+        expect(await page.locator(".thin-reading").evaluate((element) =>
+          element.scrollWidth > element.clientWidth)).toBe(true);
+      }
+      await testInfo.attach(`page-recommendation-graph-${viewport.name}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png"
+      });
+    });
+  }
 });

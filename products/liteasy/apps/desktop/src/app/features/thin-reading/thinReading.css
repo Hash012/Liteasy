@@ -11,6 +11,10 @@
 }
 .thin-reading.is-external { background: #f7f1e8; }
 .thin-reading.is-near-boundary { background: #f5f8f1; }
+@media (max-width: 520px) {
+  .thin-reading { overflow-x: auto; }
+  .thin-reading__body.is-graph-dimmed { min-width: 1100px; }
+}
 
 .thin-reading__topbar {
   align-items: center;
@@ -54,6 +58,7 @@
 .thin-reading__mode-copy { color: var(--thin-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .thin-reading__body { --association-scrim: rgba(251, 250, 245, .76); display: grid; gap: clamp(36px, 8vw, 120px); grid-template-columns: minmax(0, 700px) minmax(190px, 260px); margin: 0 auto; max-width: 1100px; padding: clamp(38px, 6vw, 76px) 24px 80px; position: relative; }
+.thin-reading__body.is-graph-dimmed { min-height: clamp(960px, 120vh, 1200px); }
 .thin-reading.is-external .thin-reading__body { --association-scrim: rgba(247, 241, 232, .78); }
 .thin-reading.is-near-boundary .thin-reading__body { --association-scrim: rgba(245, 248, 241, .78); }
 
@@ -332,4 +337,10 @@
   .thin-reading__intuecho-floating { right: 12px; top: 12px; }
   .thin-reading__selection-popover { align-items: stretch; bottom: 12px; flex-direction: column; left: 12px !important; max-width: calc(100vw - 24px); top: auto !important; }
   .thin-reading__selection-quick-commands { min-width: 0; }
+}
+@media (max-width: 520px) {
+  .thin-reading__body.is-graph-dimmed {
+    display: grid;
+    grid-template-columns: minmax(0, 700px) minmax(190px, 260px);
+  }
 }

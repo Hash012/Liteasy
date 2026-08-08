@@ -193,6 +193,11 @@ export function AssociationGraphLayer({
     () => new Map(projection.paperNodes.map((node) => [node.source, node.paperKey] as const)),
     [projection.paperNodes]
   );
+  const multiAnchorPaperKeys = useMemo(
+    () => new Set(projection.paperNodes.filter((node) => node.anchorIds.length > 1)
+      .map((node) => node.paperKey)),
+    [projection.paperNodes]
+  );
 
   const graph = useMemo(() => layoutConstrainedAssociationPageGraph({
     anchors: anchors
@@ -204,10 +209,12 @@ export function AssociationGraphLayer({
       })),
     documentHeight,
     frameWidth,
+    multiAnchorPaperKeys,
     paperKeyBySource,
     paperEdges: projection.paperEdges,
     sourcesByAnchor: primarySourcesByAnchor
-  }), [anchors, documentHeight, frameWidth, paperKeyBySource, primarySourcesByAnchor, projection.paperEdges]);
+  }), [anchors, documentHeight, frameWidth, multiAnchorPaperKeys, paperKeyBySource,
+    primarySourcesByAnchor, projection.paperEdges]);
 
   const dimmed = (anchorIds: readonly string[]) =>
     Boolean(focusedAnchorId) && !anchorIds.includes(focusedAnchorId!);
@@ -359,6 +366,24 @@ export function AssociationGraphLayer({
     <section
       aria-label="页级关联图"
       className="association-layer"
+      data-anchor-obstructions={graph.quality.anchorObstructions}
+      data-baseline-stress={graph.baselineQuality.weightedStress}
+      data-candidate-anchor-obstructions={graph.candidateQuality.anchorObstructions}
+      data-candidate-crossings={graph.candidateQuality.primaryEdgeCrossings}
+      data-candidate-node-overlaps={graph.candidateQuality.nodeOverlaps}
+      data-candidate-overflow={graph.candidateQuality.overflowCount}
+      data-candidate-same-side={graph.candidateQuality.sameSideViolations}
+      data-candidate-stress={graph.candidateQuality.weightedStress}
+      data-layout-source={graph.layoutSource}
+      data-node-overlaps={graph.quality.nodeOverlaps}
+      data-overflow-count={graph.quality.overflowCount}
+      data-primary-edge-crossings={graph.quality.primaryEdgeCrossings}
+      data-repair-candidates={graph.searchDiagnostics.repairCandidateEvaluations}
+      data-repair-nodes={graph.searchDiagnostics.repairNodesVisited}
+      data-repair-rounds={graph.searchDiagnostics.repairRounds}
+      data-same-side-violations={graph.quality.sameSideViolations}
+      data-side-variants={graph.searchDiagnostics.sideVariantsEvaluated}
+      data-soft-variants={graph.searchDiagnostics.softVariantsEvaluated}
       style={{ height: documentHeight }}
     >
       <div

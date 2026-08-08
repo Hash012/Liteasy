@@ -7,6 +7,10 @@ const artifactLibraryCss = readFileSync(
   resolve(process.cwd(), "src/app/features/artifacts/artifactLibrary.css"),
   "utf8"
 );
+const thinReadingCss = readFileSync(
+  resolve(process.cwd(), "src/app/features/thin-reading/thinReading.css"),
+  "utf8"
+);
 
 function extractBlock(startToken: string) {
   const start = css.indexOf(startToken);
@@ -96,5 +100,15 @@ describe("layout style contract", () => {
     expect(artifactLibraryCss).toMatch(
       /@media\s*\(max-width:\s*560px\)[\s\S]*\.artifact-library-export-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/u
     );
+  });
+
+  test("reserves stable vertical room for the expanded page recommendation graph", () => {
+    expect(thinReadingCss).toMatch(
+      /\.thin-reading__body\.is-graph-dimmed\s*\{[^}]*min-height:\s*clamp\(960px, 120vh, 1200px\);/u
+    );
+    expect(thinReadingCss).toMatch(
+      /@media\s*\(max-width:\s*520px\)[\s\S]*\.thin-reading__body\.is-graph-dimmed\s*\{[^}]*min-width:\s*1100px;/u
+    );
+    expect(thinReadingCss).toContain("overflow-x: auto;");
   });
 });

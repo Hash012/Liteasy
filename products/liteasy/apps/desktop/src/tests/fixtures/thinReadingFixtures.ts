@@ -54,15 +54,20 @@ export function createThinReadingFixture(): CreateThinReadingDocumentInput {
   };
 }
 
-function source(id: string, title: string, relevance: number): ThinReadingExternalSource {
+function source(
+  id: string,
+  title: string,
+  relevance: number,
+  confidenceBasis: ThinReadingExternalSource["confidenceBasis"] = "citation_graph"
+): ThinReadingExternalSource {
   return {
     abstract: `${title} 的测试摘要。`,
     authors: ["Researcher"],
     confidence: 0.6,
-    confidenceBasis: "citation_graph",
+    confidenceBasis,
     id,
     provider: "openalex",
-    relation: "topic_search",
+    relation: confidenceBasis === "author_citation" ? "cited_by_target" : "topic_search",
     relevance,
     retrievalQuery: "self-attention",
     sourceId: id,
@@ -91,8 +96,20 @@ export function createThinReadingAnchorGraphFixture(): CreateThinReadingDocument
     "该正则化方法的训练来源",
     "位置编码的替代方案"
   ];
+  const confidenceBases: ThinReadingExternalSource["confidenceBasis"][] = [
+    "author_citation",
+    "citation_graph",
+    "algorithmic_retrieval",
+    "citation_graph",
+    "algorithmic_retrieval",
+    "author_citation",
+    "citation_graph",
+    "canonical_registry",
+    "citation_graph",
+    "algorithmic_retrieval"
+  ];
   const sources = sourceTitles.map((title, index) =>
-    source(`openalex:W${index + 1}`, title, 0.96 - index * 0.03)
+    source(`openalex:W${index + 1}`, title, 0.96 - index * 0.03, confidenceBases[index])
   );
   const anchor = (
     sentenceIndex: number,
@@ -110,6 +127,15 @@ export function createThinReadingAnchorGraphFixture(): CreateThinReadingDocument
       importance,
       kind: text === "self-attention" ? "method" : "concept",
       label: text,
+      quality: {
+        citationProvenance: text === "self-attention" || text === "WMT 2014" ? 1 : 0,
+        evidenceAttention: Math.max(0.35, importance - 0.08),
+        evidenceCoverage: Math.max(0.5, importance - 0.04),
+        reason: text === "self-attention"
+          ? "核心方法 · 1 条证据 · 原文有引用"
+          : `${text} · 1 条证据${text === "WMT 2014" ? " · 原文有引用" : ""}`,
+        score: importance
+      },
       searchQuery: text,
       start,
       summarySentenceId: sentence.id,
@@ -132,6 +158,23 @@ export function createThinReadingAnchorGraphFixture(): CreateThinReadingDocument
         ],
         externalKnowledge: sources.map(({ id }) => id),
         externalSources: sources,
+        recommendationPaperEdges: [{
+          directed: true,
+          evidenceRecordUrls: ["https://openalex.org/W1", "https://openalex.org/W6"],
+          kind: "direct_citation",
+          provider: "openalex",
+          sourcePaperId: "openalex:W1",
+          strength: 0.92,
+          targetPaperId: "openalex:W6"
+        }, {
+          directed: false,
+          evidenceRecordUrls: ["https://openalex.org/W4", "https://openalex.org/W10"],
+          kind: "bibliographic_coupling",
+          provider: "openalex",
+          sourcePaperId: "openalex:W4",
+          strength: 0.71,
+          targetPaperId: "openalex:W10"
+        }],
         summarySentences: sentences.map((sentence) => ({
           evidenceIds: ["evidence-attention-self-attention"],
           externalKnowledge: [],

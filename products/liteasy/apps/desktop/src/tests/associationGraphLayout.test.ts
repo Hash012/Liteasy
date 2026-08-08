@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
 import {
+  createAssociationSideVariants,
   evaluateAssociationLayout,
   layoutAssociationPageGraph,
   layoutConstrainedAssociationPageGraph,
@@ -98,6 +99,121 @@ test("merges a paper shared by two anchors into one node with one edge per ancho
   expect(graph.edges.every((edge) => edge.crossing === (edge.paperKey === "openalex:W42"))).toBe(true);
 });
 
+test("keeps an explicitly shared paper expanded at low relevance on a mobile graph", () => {
+  const graph = layoutAssociationPageGraph(input({
+    documentHeight: 1200,
+    frameWidth: 390,
+    multiAnchorPaperKeys: new Set(["openalex:W42"]),
+    sourcesByAnchor: {
+      a1: [source("W42", 0.1, { canonicalPaperId: "openalex:W42" })]
+    }
+  }));
+
+  expect(graph.nodes).toHaveLength(1);
+  expect(graph.nodes[0]).toMatchObject({ isDot: false, paperKey: "openalex:W42" });
+});
+
+test("bounds and deduplicates deterministic side variants for a dense 24-anchor page", () => {
+  const preferred = new Map(Array.from({ length: 24 }, (_, index) => [
+    `anchor-${String(index).padStart(2, "0")}`,
+    index % 2 === 0 ? "left" as const : "right" as const
+  ]));
+  const priority = [...preferred.keys()].reverse();
+  const variants = createAssociationSideVariants(preferred, priority);
+  const signatures = variants.map((variant) => [...variant].sort(([left], [right]) =>
+    left.localeCompare(right)).map(([anchorId, side]) => `${anchorId}:${side}`).join("|"));
+
+  expect(variants.length).toBeLessThanOrEqual(24);
+  expect(new Set(signatures).size).toBe(variants.length);
+  expect(variants[0]).toEqual(preferred);
+  expect(variants).toContainEqual(new Map([...preferred].map(([anchorId, side]) => [
+    anchorId,
+    side === "left" ? "right" : "left"
+  ])));
+  expect(variants).toContainEqual(new Map([...preferred].map(([anchorId, side]) => [
+    anchorId,
+    anchorId === priority[0] ? side === "left" ? "right" : "left" : side
+  ])));
+  expect(variants).toContainEqual(new Map([...preferred].map(([anchorId, side]) => [
+    anchorId,
+    anchorId === priority[0] || anchorId === priority[1]
+      ? side === "left" ? "right" : "left"
+      : side
+  ])));
+});
+
+test("keeps a dense 24-anchor candidate search deterministic and hard-gated", () => {
+  const denseInput = input({
+    anchors: Array.from({ length: 24 }, (_, index) => ({
+      anchorId: `anchor-${String(index).padStart(2, "0")}`,
+      rect: { height: 16, left: 520, top: 100 + index * 125, width: 100 }
+    })),
+    documentHeight: 3200,
+    frameWidth: 1200,
+    sourcesByAnchor: Object.fromEntries(Array.from({ length: 24 }, (_, index) => [
+      `anchor-${String(index).padStart(2, "0")}`,
+      [source(`paper-${String(index).padStart(2, "0")}`, 0.82)]
+    ]))
+  });
+
+  const first = layoutConstrainedAssociationPageGraph(denseInput);
+
+  expect(first.searchDiagnostics.sideVariantsEvaluated).toBeLessThanOrEqual(24);
+  expect(first.searchDiagnostics.softVariantsEvaluated).toBeLessThanOrEqual(2);
+  expect(first.searchDiagnostics.repairNodesVisited).toBeLessThanOrEqual(48);
+  expect(first.searchDiagnostics.repairCandidateEvaluations).toBeLessThanOrEqual(5_000);
+  expect(first.searchDiagnostics.initialSlotCandidateEvaluations).toBeLessThanOrEqual(35_000);
+  if (first.layoutSource === "constrained") {
+    expect(first.quality).toMatchObject({
+      anchorObstructions: 0,
+      nodeOverlaps: 0,
+      overflowCount: 0,
+      primaryEdgeCrossings: 0,
+      sameSideViolations: 0
+    });
+    expect(first.quality.weightedStress).toBeLessThanOrEqual(first.baselineQuality.weightedStress + 1e-9);
+  } else {
+    expect(first.nodes).toEqual(layoutAssociationPageGraph(denseInput).nodes);
+  }
+});
+
+test("enforces global search budgets on a dense supported 24-paper mobile canvas", {
+  timeout: 15_000
+}, () => {
+  const denseInput = input({
+    anchors: Array.from({ length: 24 }, (_, index) => ({
+      anchorId: `mobile-anchor-${String(index).padStart(2, "0")}`,
+      rect: { height: 16, left: 500, top: 70 + index * 45, width: 100 }
+    })),
+    documentHeight: 1200,
+    frameWidth: 1100,
+    sourcesByAnchor: Object.fromEntries(Array.from({ length: 24 }, (_, index) => [
+      `mobile-anchor-${String(index).padStart(2, "0")}`,
+      [source(`mobile-paper-${String(index).padStart(2, "0")}`, 0.82)]
+    ]))
+  });
+
+  const graph = layoutConstrainedAssociationPageGraph(denseInput);
+
+  expect(graph.nodes).toHaveLength(24);
+  expect(graph.searchDiagnostics.initialSlotCandidateEvaluations).toBeLessThanOrEqual(35_000);
+  expect(graph.searchDiagnostics.repairCandidateEvaluations).toBeLessThanOrEqual(5_000);
+  expect(graph.searchDiagnostics.repairNodesVisited).toBeLessThanOrEqual(48);
+  if (graph.layoutSource === "constrained") {
+    expect(graph.quality).toMatchObject({
+      anchorObstructions: 0,
+      nodeOverlaps: 0,
+      overflowCount: 0,
+      primaryEdgeCrossings: 0,
+      sameSideViolations: 0
+    });
+    expect(graph.quality.weightedCrossings).toBeLessThanOrEqual(graph.baselineQuality.weightedCrossings);
+    expect(graph.quality.weightedStress).toBeLessThanOrEqual(graph.baselineQuality.weightedStress + 1e-9);
+  } else {
+    expect(graph.nodes).toEqual(layoutAssociationPageGraph(denseInput).nodes);
+  }
+});
+
 test("keeps every node inside the frame and clear of the others", () => {
   const graph = layoutAssociationPageGraph(input({
     anchors: [
@@ -186,6 +302,19 @@ test("keeps a dense primary fan in one side sector with zero primary crossings",
     }
   }));
 
+  expect(graph.candidateQuality).toMatchObject({
+    anchorObstructions: 0,
+    nodeOverlaps: 0,
+    overflowCount: 0,
+    primaryEdgeCrossings: 0,
+    sameSideViolations: 0
+  });
+  expect(graph.candidateQuality.weightedCrossings).toBeLessThanOrEqual(
+    graph.baselineQuality.weightedCrossings
+  );
+  expect(graph.candidateQuality.weightedStress).toBeLessThanOrEqual(
+    graph.baselineQuality.weightedStress + 1e-9
+  );
   expect(graph.layoutSource).toBe("constrained");
   expect(graph.quality.sameSideViolations).toBe(0);
   expect(graph.quality.primaryEdgeCrossings).toBe(0);
@@ -235,6 +364,82 @@ test("assigns adjacent dense anchors deterministically without crossing primary 
       expect(horizontalGap >= 10 || verticalGap >= 10).toBe(true);
     }
   }
+});
+
+test("coordinates crossing endpoints without trading away the narrow canvas stress gate", () => {
+  const narrowInput = input({
+    anchors: [
+      {
+        anchorId: "anchor-self-attention",
+        labelWidth: 124,
+        rect: { height: 21, left: 161.75, top: 163.375, width: 100.25 }
+      },
+      {
+        anchorId: "anchor-WMT-2014",
+        labelWidth: 82,
+        rect: { height: 21, left: 66.75, top: 199.84375, width: 88.84375 }
+      },
+      {
+        anchorId: "anchor-BLEU",
+        labelWidth: 54,
+        rect: { height: 21, left: 279.09375, top: 199.84375, width: 49.609375 }
+      },
+      {
+        anchorId: "anchor-label-smoothing",
+        labelWidth: 131,
+        rect: { height: 21, left: 123.75, top: 247.3125, width: 121.90625 }
+      },
+      {
+        anchorId: "anchor-positional-encoding",
+        labelWidth: 159,
+        rect: { height: 21, left: 24, top: 283.78125, width: 149.34375 }
+      }
+    ],
+    documentHeight: 1080,
+    frameWidth: 760,
+    multiAnchorPaperKeys: new Set(["openalex:W3"]),
+    paperEdges: [{
+      directed: true,
+      kind: "direct_citation",
+      sourcePaperKey: "openalex:W1",
+      strength: 0.92,
+      targetPaperKey: "openalex:W6"
+    }, {
+      directed: false,
+      kind: "bibliographic_coupling",
+      sourcePaperKey: "openalex:W4",
+      strength: 0.71,
+      targetPaperKey: "openalex:W10"
+    }],
+    sourcesByAnchor: {
+      "anchor-BLEU": [source("openalex:W8", 0.75)],
+      "anchor-WMT-2014": [source("openalex:W6", 0.81), source("openalex:W7", 0.78)],
+      "anchor-label-smoothing": [source("openalex:W9", 0.72)],
+      "anchor-positional-encoding": [source("openalex:W10", 0.69)],
+      "anchor-self-attention": [
+        source("openalex:W1", 0.96),
+        source("openalex:W2", 0.93),
+        source("openalex:W3", 0.9),
+        source("openalex:W4", 0.87),
+        source("openalex:W5", 0.84)
+      ]
+    }
+  });
+
+  const graph = layoutConstrainedAssociationPageGraph(narrowInput);
+
+  expect(graph.candidateQuality).toMatchObject({
+    anchorObstructions: 0,
+    nodeOverlaps: 0,
+    overflowCount: 0,
+    primaryEdgeCrossings: 0,
+    sameSideViolations: 0
+  });
+  expect(graph.candidateQuality.weightedCrossings)
+    .toBeLessThanOrEqual(graph.baselineQuality.weightedCrossings);
+  expect(graph.candidateQuality.weightedStress)
+    .toBeLessThanOrEqual(graph.baselineQuality.weightedStress + 1e-9);
+  expect(graph.layoutSource).toBe("constrained");
 });
 
 test("uses all page-wide paper relations as springs across primary owner groups", () => {
