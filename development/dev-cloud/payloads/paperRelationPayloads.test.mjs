@@ -122,6 +122,76 @@ test("normalizes DOI identities, deduplicates papers, and avoids self or duplica
   assert.equal(result.edges[0].targetPaperId, "paper-two");
 });
 
+test("never deduplicates distinct strong paper identities by client correlation id", async () => {
+  const result = await buildPaperRelationPayload({
+    artifactId: "artifact-reused-client-id",
+    papers: [
+      { id: "client-row", provider: "openalex", sourceId: "W101" },
+      { id: "client-row", provider: "semantic_scholar", sourceId: "S202" }
+    ]
+  }, {
+    fetchGraphRecords: async (papers) => {
+      assert.equal(papers.length, 2);
+      return [];
+    }
+  });
+
+  assert.deepEqual(result, { edges: [], warnings: [] });
+});
+
+test("rejects two papers that share a DOI but assert conflicting canonical identities", async () => {
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-simple-identity-conflict",
+      papers: [
+        {
+          canonicalPaperId: "openalex:W301",
+          doi: "10.1000/shared",
+          id: "paper-a",
+          provider: "openalex",
+          sourceId: "W301"
+        },
+        {
+          canonicalPaperId: "openalex:W302",
+          doi: "10.1000/shared",
+          id: "paper-b",
+          provider: "semantic_scholar",
+          sourceId: "S302"
+        }
+      ]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+});
+
+test("retains accumulated strong identity claims when detecting transitive conflicts", async () => {
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-transitive-identity-conflict",
+      papers: [
+        { canonicalPaperId: "openalex:W401", id: "paper-a", provider: "openalex", sourceId: "W401" },
+        {
+          canonicalPaperId: "openalex:W401",
+          doi: "10.1000/first",
+          id: "paper-b",
+          provider: "semantic_scholar",
+          sourceId: "S401"
+        },
+        {
+          canonicalPaperId: "openalex:W401",
+          doi: "10.1000/conflict",
+          id: "paper-c",
+          provider: "crossref",
+          sourceId: "10.1000/conflict"
+        }
+      ]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+});
+
 test("emits co-citation only from an explicit provider count with a usable denominator", async () => {
   const result = await buildPaperRelationPayload(input, {
     fetchGraphRecords: async () => [
@@ -190,6 +260,30 @@ test("keeps verified records from a partial retrieval and preserves its provider
   assert.deepEqual(result.warnings, ["semantic_scholar_paper_relations_unavailable"]);
 });
 
+test("keeps a verified direct citation when the requested target provider record is absent", async () => {
+  const result = await buildPaperRelationPayload(input, {
+    fetchGraphRecords: async () => [{
+      evidenceRecordUrl: "https://openalex.org/W1",
+      id: "openalex:W1",
+      provider: "openalex",
+      referencedPaperIds: ["openalex:W2"]
+    }]
+  });
+
+  assert.deepEqual(result, {
+    edges: [{
+      directed: true,
+      evidenceRecordUrls: ["https://openalex.org/W1"],
+      kind: "direct_citation",
+      provider: "openalex",
+      sourcePaperId: "paper-anchor-a",
+      strength: 1,
+      targetPaperId: "paper-anchor-b"
+    }],
+    warnings: []
+  });
+});
+
 test("batches OpenAlex graph records with server-owned configuration", async () => {
   let requestedUrl;
   const result = await buildPaperRelationPayload(input, {
@@ -213,6 +307,115 @@ test("batches OpenAlex graph records with server-owned configuration", async () 
   assert.equal(parsedUrl.searchParams.get("filter"), "openalex_id:W1|W2");
   assert.equal(parsedUrl.searchParams.get("api_key"), "server-key");
   assert.deepEqual(result.edges.map((edge) => edge.kind), ["direct_citation"]);
+});
+
+test("retains a successful OpenAlex identity sub-batch when the DOI sub-batch fails", async () => {
+  const requestedFilters = [];
+  const result = await buildPaperRelationPayload({
+    artifactId: "artifact-openalex-partial",
+    papers: [
+      {
+        canonicalPaperId: "openalex:W1",
+        doi: "10.1000/one",
+        id: "paper-one",
+        provider: "openalex",
+        sourceId: "W1"
+      },
+      {
+        canonicalPaperId: "openalex:W2",
+        id: "paper-two",
+        provider: "openalex",
+        sourceId: "W2"
+      }
+    ]
+  }, {
+    openAlexApiKey: "server-key",
+    openAlexTransport: async (url) => {
+      const filter = new URL(url).searchParams.get("filter");
+      requestedFilters.push(filter);
+      if (filter.startsWith("doi:")) {
+        return { json: async () => ({}), ok: false, status: 503 };
+      }
+      return {
+        json: async () => ({
+          results: [{
+            id: "https://openalex.org/W1",
+            referenced_works: ["https://openalex.org/W2"]
+          }]
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  assert.deepEqual(requestedFilters.sort(), ["doi:10.1000/one", "openalex_id:W1|W2"]);
+  assert.deepEqual(result.edges.map((edge) => edge.kind), ["direct_citation"]);
+  assert.deepEqual(result.warnings, ["openalex_paper_relations_partial"]);
+});
+
+test("coalesces duplicate logical relations across providers with a stable evidence policy", async () => {
+  const result = await buildPaperRelationPayload({
+    artifactId: "artifact-cross-provider-relations",
+    papers: [
+      { doi: "10.1000/a", id: "paper-a", provider: "crossref", sourceId: "10.1000/a" },
+      { doi: "10.1000/b", id: "paper-b", provider: "crossref", sourceId: "10.1000/b" }
+    ]
+  }, {
+    fetchGraphRecords: async () => [
+      {
+        doi: "10.1000/a",
+        evidenceRecordUrl: "https://openalex.org/W1",
+        id: "openalex:W1",
+        provider: "openalex",
+        referencedPaperIds: ["openalex:W2", "openalex:W9", "openalex:W10"]
+      },
+      {
+        doi: "10.1000/b",
+        evidenceRecordUrl: "https://openalex.org/W2",
+        id: "openalex:W2",
+        provider: "openalex",
+        referencedPaperIds: ["openalex:W9", "openalex:W11"]
+      },
+      {
+        doi: "10.1000/a",
+        evidenceRecordUrl: "https://www.semanticscholar.org/paper/S1",
+        id: "semantic_scholar:S1",
+        provider: "semantic_scholar",
+        referencedPaperIds: ["semantic_scholar:S2", "semantic_scholar:S9"]
+      },
+      {
+        doi: "10.1000/b",
+        evidenceRecordUrl: "https://www.semanticscholar.org/paper/S2",
+        id: "semantic_scholar:S2",
+        provider: "semantic_scholar",
+        referencedPaperIds: ["semantic_scholar:S9"]
+      }
+    ]
+  });
+
+  assert.equal(result.edges.length, 2);
+  assert.deepEqual(result.edges.find((edge) => edge.kind === "direct_citation"), {
+    directed: true,
+    evidenceRecordUrls: ["https://openalex.org/W1"],
+    kind: "direct_citation",
+    provider: "openalex",
+    sourcePaperId: "paper-a",
+    strength: 1,
+    targetPaperId: "paper-b"
+  });
+  assert.deepEqual(result.edges.find((edge) => edge.kind === "bibliographic_coupling"), {
+    directed: false,
+    evidenceRecordUrls: [
+      "https://www.semanticscholar.org/paper/S1",
+      "https://www.semanticscholar.org/paper/S2"
+    ],
+    kind: "bibliographic_coupling",
+    provider: "semantic_scholar",
+    sourcePaperId: "paper-a",
+    strength: 1,
+    targetPaperId: "paper-b"
+  });
 });
 
 test("links provider graph identifiers discovered through DOI batch records", async () => {

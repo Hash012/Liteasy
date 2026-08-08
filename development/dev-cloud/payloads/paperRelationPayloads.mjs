@@ -46,11 +46,9 @@ function paperAliases(paper) {
   const doi = normalizeDoi(paper.doi);
   const provider = normalizeText(paper.provider).toLowerCase();
   const sourceId = normalizeText(paper.sourceId);
-  const id = normalizeIdentity(paper.id);
   if (canonical) aliases.add(canonical);
   if (doi) aliases.add(`doi:${doi}`);
   if (provider && sourceId) aliases.add(normalizeIdentity(`${provider}:${sourceId}`));
-  if (id) aliases.add(id);
   return aliases;
 }
 
@@ -60,7 +58,31 @@ function preferredPaperKey(paper) {
   const doi = normalizeDoi(paper.doi);
   if (doi) return `doi:${doi}`;
   const providerSource = normalizeIdentity(`${paper.provider}:${paper.sourceId}`);
-  return providerSource || normalizeIdentity(paper.id);
+  return providerSource;
+}
+
+function createStrongIdentityClaims(paper) {
+  const canonical = normalizeIdentity(paper.canonicalPaperId);
+  return {
+    canonicalIds: new Set(canonical ? [canonical] : []),
+    dois: new Set(paper.doi ? [paper.doi] : []),
+    sourceIdsByProvider: new Map([[paper.provider, paper.sourceId]])
+  };
+}
+
+function claimsConflictWithPaper(claims, paper) {
+  const canonical = normalizeIdentity(paper.canonicalPaperId);
+  if (canonical && claims.canonicalIds.size > 0 && !claims.canonicalIds.has(canonical)) return true;
+  if (paper.doi && claims.dois.size > 0 && !claims.dois.has(paper.doi)) return true;
+  const providerSourceId = claims.sourceIdsByProvider.get(paper.provider);
+  return providerSourceId !== undefined && providerSourceId !== paper.sourceId;
+}
+
+function addPaperClaims(claims, paper) {
+  const canonical = normalizeIdentity(paper.canonicalPaperId);
+  if (canonical) claims.canonicalIds.add(canonical);
+  if (paper.doi) claims.dois.add(paper.doi);
+  claims.sourceIdsByProvider.set(paper.provider, paper.sourceId);
 }
 
 export class PaperRelationValidationError extends Error {
@@ -127,18 +149,34 @@ function validateAndNormalizeRequest(body) {
     const key = existingKey || preferredPaperKey(normalized);
     const existing = papersByKey.get(key);
     if (existing) {
+      if (claimsConflictWithPaper(existing.strongIdentityClaims, normalized)) {
+        throw new PaperRelationValidationError(
+          "conflicting_paper_relation_identity",
+          "论文关系请求包含相互冲突的论文标识。"
+        );
+      }
       for (const alias of aliases) {
         existing.aliases.add(alias);
         aliasOwners.set(alias, key);
       }
+      addPaperClaims(existing.strongIdentityClaims, normalized);
       const existingRank = `${existing.id}\u0000${existing.provider}\u0000${existing.sourceId}`;
       const candidateRank = `${normalized.id}\u0000${normalized.provider}\u0000${normalized.sourceId}`;
       if (candidateRank < existingRank) {
-        Object.assign(existing, normalized);
+        existing.id = normalized.id;
+        existing.provider = normalized.provider;
+        existing.sourceId = normalized.sourceId;
       }
+      existing.canonicalPaperId = [...existing.strongIdentityClaims.canonicalIds][0];
+      existing.doi = [...existing.strongIdentityClaims.dois][0];
       continue;
     }
-    const paper = { ...normalized, aliases, key };
+    const paper = {
+      ...normalized,
+      aliases,
+      key,
+      strongIdentityClaims: createStrongIdentityClaims(normalized)
+    };
     papersByKey.set(key, paper);
     for (const alias of aliases) aliasOwners.set(alias, key);
     if (papersByKey.size > maximumPapers) {
@@ -252,9 +290,15 @@ function mergeRecords(records, aliasOwners) {
 
 function edgeKey(edge) {
   if (edge.directed) {
-    return `${edge.provider}|${edge.kind}|${edge.sourcePaperId}|${edge.targetPaperId}`;
+    return `${edge.kind}|${edge.sourcePaperKey}|${edge.targetPaperKey}`;
   }
-  return `${edge.provider}|${edge.kind}|${[edge.sourcePaperId, edge.targetPaperId].sort().join("|")}`;
+  return `${edge.kind}|${[edge.sourcePaperKey, edge.targetPaperKey].sort().join("|")}`;
+}
+
+function compareEdgeEvidence(left, right) {
+  return right.strength - left.strength ||
+    left.provider.localeCompare(right.provider) ||
+    left.evidenceRecordUrls.join("\u0000").localeCompare(right.evidenceRecordUrls.join("\u0000"));
 }
 
 function deriveEdges(papers, records, aliasOwners) {
@@ -268,10 +312,10 @@ function deriveEdges(papers, records, aliasOwners) {
   const edges = new Map();
 
   const addEdge = (edge) => {
-    if (edge.sourcePaperId === edge.targetPaperId || edge.evidenceRecordUrls.length === 0) return;
+    if (edge.sourcePaperKey === edge.targetPaperKey || edge.evidenceRecordUrls.length === 0) return;
     const key = edgeKey(edge);
     const previous = edges.get(key);
-    if (!previous || edge.strength > previous.strength) edges.set(key, edge);
+    if (!previous || compareEdgeEvidence(edge, previous) < 0) edges.set(key, edge);
   };
 
   for (const [provider, providerRecords] of recordsByProvider) {
@@ -282,12 +326,15 @@ function deriveEdges(papers, records, aliasOwners) {
         const rightPaper = papers[rightIndex];
         const left = recordByPaper.get(leftPaper.key);
         const right = recordByPaper.get(rightPaper.key);
-        if (!left || !right) continue;
 
-        const leftCitesRight = [...left.referencedPaperIds]
-          .some((reference) => aliasOwners.get(reference) === rightPaper.key);
-        const rightCitesLeft = [...right.referencedPaperIds]
-          .some((reference) => aliasOwners.get(reference) === leftPaper.key);
+        const leftCitesRight = left
+          ? [...left.referencedPaperIds]
+              .some((reference) => aliasOwners.get(reference) === rightPaper.key)
+          : false;
+        const rightCitesLeft = right
+          ? [...right.referencedPaperIds]
+              .some((reference) => aliasOwners.get(reference) === leftPaper.key)
+          : false;
         if (leftCitesRight) {
           addEdge({
             directed: true,
@@ -295,8 +342,10 @@ function deriveEdges(papers, records, aliasOwners) {
             kind: "direct_citation",
             provider,
             sourcePaperId: leftPaper.id,
+            sourcePaperKey: leftPaper.key,
             strength: 1,
-            targetPaperId: rightPaper.id
+            targetPaperId: rightPaper.id,
+            targetPaperKey: rightPaper.key
           });
         }
         if (rightCitesLeft) {
@@ -306,10 +355,14 @@ function deriveEdges(papers, records, aliasOwners) {
             kind: "direct_citation",
             provider,
             sourcePaperId: rightPaper.id,
+            sourcePaperKey: rightPaper.key,
             strength: 1,
-            targetPaperId: leftPaper.id
+            targetPaperId: leftPaper.id,
+            targetPaperKey: leftPaper.key
           });
         }
+
+        if (!left || !right) continue;
 
         const sharedReferences = [...left.referencedPaperIds]
           .filter((reference) => right.referencedPaperIds.has(reference));
@@ -321,8 +374,10 @@ function deriveEdges(papers, records, aliasOwners) {
             kind: "bibliographic_coupling",
             provider,
             sourcePaperId: leftPaper.id,
+            sourcePaperKey: leftPaper.key,
             strength: clampStrength(sharedReferences.length / denominator),
-            targetPaperId: rightPaper.id
+            targetPaperId: rightPaper.id,
+            targetPaperKey: rightPaper.key
           });
         }
       }
@@ -341,24 +396,28 @@ function deriveEdges(papers, records, aliasOwners) {
         if (!target || !targetPaper || denominator <= 0 ||
           relation.sharedCitingWorkCount > denominator) continue;
         const [firstPaper, secondPaper] = [sourcePaper, targetPaper]
-          .sort((left, right) => left.id.localeCompare(right.id));
+          .sort((left, right) => left.key.localeCompare(right.key));
         addEdge({
           directed: false,
           evidenceRecordUrls: [source.evidenceRecordUrl, target.evidenceRecordUrl].sort(),
           kind: "co_cited",
           provider,
           sourcePaperId: firstPaper.id,
+          sourcePaperKey: firstPaper.key,
           strength: clampStrength(relation.sharedCitingWorkCount / denominator),
-          targetPaperId: secondPaper.id
+          targetPaperId: secondPaper.id,
+          targetPaperKey: secondPaper.key
         });
       }
     }
   }
 
-  return [...edges.values()].sort((left, right) =>
-    left.sourcePaperId.localeCompare(right.sourcePaperId) ||
-    left.targetPaperId.localeCompare(right.targetPaperId) ||
-    left.kind.localeCompare(right.kind) || left.provider.localeCompare(right.provider));
+  return [...edges.values()]
+    .sort((left, right) =>
+      left.sourcePaperKey.localeCompare(right.sourcePaperKey) ||
+      left.targetPaperKey.localeCompare(right.targetPaperKey) ||
+      left.kind.localeCompare(right.kind) || left.provider.localeCompare(right.provider))
+    .map(({ sourcePaperKey: _sourcePaperKey, targetPaperKey: _targetPaperKey, ...edge }) => edge);
 }
 
 function openAlexIds(papers) {
@@ -396,7 +455,7 @@ async function fetchOpenAlexGraphRecords(papers, options) {
     dois.length > 0 ? `doi:${dois.join("|")}` : ""
   ].filter(Boolean);
   if (filters.length === 0) return [];
-  const payloads = await Promise.all(filters.map(async (filter) => {
+  const settled = await Promise.allSettled(filters.map(async (filter) => {
     const url = new URL("https://api.openalex.org/works");
     url.searchParams.set("filter", filter);
     url.searchParams.set("per-page", String(papers.length));
@@ -410,7 +469,11 @@ async function fetchOpenAlexGraphRecords(papers, options) {
     if (!Array.isArray(payload?.results)) throw new Error("invalid OpenAlex graph response");
     return payload.results;
   }));
-  return payloads.flat().map((work) => ({
+  const successfulPayloads = settled
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+  const failedCount = settled.length - successfulPayloads.length;
+  const records = successfulPayloads.flat().map((work) => ({
     citingPaperCount: work?.cited_by_count,
     doi: work?.doi,
     evidenceRecordUrl: normalizeText(work?.id),
@@ -420,6 +483,14 @@ async function fetchOpenAlexGraphRecords(papers, options) {
       ? work.referenced_works.map(normalizeIdentity).filter(Boolean)
       : []
   }));
+  return {
+    records,
+    warnings: failedCount === 0
+      ? []
+      : successfulPayloads.length > 0
+        ? ["openalex_paper_relations_partial"]
+        : ["openalex_paper_relations_unavailable"]
+  };
 }
 
 async function fetchSemanticScholarGraphRecords(papers, options) {
@@ -468,10 +539,18 @@ async function fetchDefaultGraphRecords(papers, options) {
   }
   const settled = await Promise.allSettled(providers.map((provider) => provider.retrieve()));
   return {
-    records: settled.flatMap((result) => result.status === "fulfilled" ? result.value : []),
-    warnings: settled.flatMap((result, index) => result.status === "rejected"
-      ? [`${providers[index].id}_paper_relations_unavailable`]
-      : [])
+    records: settled.flatMap((result) => {
+      if (result.status === "rejected") return [];
+      return Array.isArray(result.value)
+        ? result.value
+        : Array.isArray(result.value?.records) ? result.value.records : [];
+    }),
+    warnings: settled.flatMap((result, index) => {
+      if (result.status === "rejected") {
+        return [`${providers[index].id}_paper_relations_unavailable`];
+      }
+      return Array.isArray(result.value?.warnings) ? result.value.warnings : [];
+    })
   };
 }
 
