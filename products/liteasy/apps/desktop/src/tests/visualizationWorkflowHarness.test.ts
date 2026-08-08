@@ -32,3 +32,42 @@ test("propagates the signal through provider and fallback callbacks", async () =
   expect(repair).toHaveBeenCalledWith(invalidDraft, expect.anything(), controller.signal);
   expect(fallback).toHaveBeenCalledWith("source_figure", stillInvalidDraft, controller.signal);
 });
+
+test("rejects a fallback whose declared modality does not match", async () => {
+  const result = await runVisualizationWorkflow(makeVisualizationWorkflowFixture({
+    generate: vi.fn().mockResolvedValue(invalidDraft),
+    repair: vi.fn().mockResolvedValue(stillInvalidDraft),
+    fallback: vi.fn().mockResolvedValue(invalidDraft)
+  }));
+  expect(result.status).toBe("omitted");
+  expect(result.trace.steps.filter((step) => step.kind === "publish")).toHaveLength(0);
+  expect(result.trace.steps).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      details: expect.objectContaining({ error: "visualization_fallback_modality_mismatch" }),
+      kind: "fallback",
+      status: "blocked"
+    })
+  ]));
+});
+
+test("omits a schema-invalid draft instead of throwing or publishing it", async () => {
+  const result = await runVisualizationWorkflow(makeVisualizationWorkflowFixture({
+    generate: vi.fn().mockResolvedValue({ malformed: true })
+  }));
+  expect(result.status).toBe("omitted");
+  expect(result.trace.steps.filter((step) => step.kind === "publish")).toHaveLength(0);
+  expect(result).toMatchObject({ report: { outcome: "fail", checks: [expect.objectContaining({ diagnosticCode: "visualization_artifact_invalid" })] } });
+});
+
+test("cancels when an in-flight provider resolves after the signal aborts", async () => {
+  const controller = new AbortController();
+  let resolveGenerate: (value: unknown) => void = () => undefined;
+  const generate = vi.fn(() => new Promise((resolve) => {
+    resolveGenerate = resolve;
+  }));
+  const run = runVisualizationWorkflow(makeVisualizationWorkflowFixture({ generate, signal: controller.signal }));
+  await Promise.resolve();
+  controller.abort("preference_disabled");
+  resolveGenerate(invalidDraft);
+  await expect(run).rejects.toThrow("visualization_cancelled");
+});

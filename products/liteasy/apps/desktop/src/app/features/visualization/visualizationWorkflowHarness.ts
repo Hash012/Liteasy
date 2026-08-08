@@ -57,6 +57,14 @@ function withValidation(value: unknown, report: ValidationReportV1): Visualizati
   return { ...(value as VisualizationArtifactV1), validation: report };
 }
 
+function schemaFailure(repairCount: 0 | 1): ValidationReportV1 {
+  return {
+    checks: [{ diagnosticCode: "visualization_artifact_invalid", gate: "hard", outcome: "fail", validatorId: "artifact-schema", validatorVersion: "1.0.0" }],
+    outcome: "fail",
+    repairCount
+  };
+}
+
 export async function runVisualizationWorkflow(input: VisualizationWorkflowInput): Promise<VisualizationWorkflowResult> {
   const signal = input.signal;
   const now = input.now ?? (() => new Date());
@@ -84,12 +92,23 @@ export async function runVisualizationWorkflow(input: VisualizationWorkflowInput
     });
     let current = first as VisualizationArtifactV1;
 
-    const validate = async (artifact: VisualizationArtifactV1, repairCount: 0 | 1) => runVisualizationValidators(
-      validationContext(artifact, repairCount),
-      validators
-    );
+    const validate = async (artifact: VisualizationArtifactV1, repairCount: 0 | 1): Promise<{ report: ValidationReportV1; schemaValid: boolean }> => {
+      try {
+        parseVisualizationArtifact({
+          ...artifact,
+          validation: {
+            checks: [{ gate: "hard", outcome: "pass", validatorId: "artifact-schema", validatorVersion: "1.0.0" }],
+            outcome: "pass",
+            repairCount
+          }
+        });
+      } catch {
+        return { report: schemaFailure(repairCount), schemaValid: false };
+      }
+      return { report: await runVisualizationValidators(validationContext(artifact, repairCount), validators), schemaValid: true };
+    };
     const verify = async (artifact: VisualizationArtifactV1, repairCount: 0 | 1) => {
-      const report = await harness.step({
+      const result = await harness.step({
         details: { repairCount },
         kind: "verification",
         run: () => validate(artifact, repairCount),
@@ -98,14 +117,16 @@ export async function runVisualizationWorkflow(input: VisualizationWorkflowInput
       });
       const steps = harness.trace().steps;
       const step = steps[steps.length - 1];
-      if (report.outcome !== "pass" && step) {
+      if (result.report.outcome !== "pass" && step) {
         step.status = "blocked";
         step.summary = "确定性校验未通过";
       }
-      return report;
+      return result;
     };
 
-    let report = await verify(current, 0);
+    let verification = await verify(current, 0);
+    let report = verification.report;
+    if (!verification.schemaValid) return { report, status: "omitted", trace: harness.trace() };
     if (report.outcome === "pass") {
       const artifact = await harness.step({
         kind: "publish",
@@ -124,7 +145,9 @@ export async function runVisualizationWorkflow(input: VisualizationWorkflowInput
       summary: "尝试一次安全修复"
     });
     current = repaired as VisualizationArtifactV1;
-    report = await verify(current, 1);
+    verification = await verify(current, 1);
+    report = verification.report;
+    if (!verification.schemaValid) return { report, status: "omitted", trace: harness.trace() };
     if (report.outcome === "pass") {
       const artifact = await harness.step({
         kind: "publish",
@@ -143,14 +166,31 @@ export async function runVisualizationWorkflow(input: VisualizationWorkflowInput
         signal,
         summary: "尝试安全降级"
       });
+      const fallbackStep = harness.trace().steps[harness.trace().steps.length - 1];
+      const candidate = fallbackDraft as VisualizationArtifactV1;
+      if (!candidate || candidate.modality !== modality || candidate.spec?.modality !== modality) {
+        if (fallbackStep) {
+          fallbackStep.status = "blocked";
+          fallbackStep.summary = "降级产物模态不匹配";
+          fallbackStep.details = {
+            ...(fallbackStep.details ?? {}),
+            error: "visualization_fallback_modality_mismatch",
+            actualModality: candidate?.modality ?? "unknown",
+            expectedModality: modality
+          };
+        }
+        continue;
+      }
       const fallbackArtifact = {
-        ...(fallbackDraft as VisualizationArtifactV1),
+        ...candidate,
         fallbackHistory: [
-          ...((fallbackDraft as VisualizationArtifactV1).fallbackHistory ?? []),
+          ...(candidate.fallbackHistory ?? []),
           { from: current.modality, reasonCode: "validation_failed_after_repair", to: modality }
         ]
       } as VisualizationArtifactV1;
-      const fallbackReport = await verify(fallbackArtifact, 1);
+      const fallbackVerification = await verify(fallbackArtifact, 1);
+      const fallbackReport = fallbackVerification.report;
+      if (!fallbackVerification.schemaValid) continue;
       if (fallbackReport.outcome !== "pass") continue;
       const artifact = await harness.step({
         kind: "publish",
