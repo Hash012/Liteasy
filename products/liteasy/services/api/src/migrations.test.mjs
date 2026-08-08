@@ -90,3 +90,8 @@ test("runtime verification requires the exact immutable migration set", async ()
     /postgres_migration_missing/
   );
 });
+
+test("production migration head includes the visualization control plane", () => {
+  const migrations = readMigrations();
+  assert.equal(migrations.at(-1)?.name, "020_visualization_control_plane.sql");
+});
