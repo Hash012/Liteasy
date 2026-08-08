@@ -116,7 +116,7 @@ test("settlement and rollback write user ledger transitions independently from p
   harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "10", monthly_units: "20", max_concurrency: "1", timezone: "UTC", revision: "1" });
   const repository = new PostgresVisualizationRepository(harness.pool);
   const reservation = await repository.reserve(subject, { idempotencyKey: "request-0002", modality: "semantic_graph", routeId: "route-1", units: 4, traceId: "trace-2" });
-  await repository.settle(subject, { reservationId: reservation.reservation.reservationId, settledUnits: 2, traceId: "trace-2" });
+  await repository.settle(subject, { reservationId: reservation.reservation.reservationId, settledUnits: 2, reasonCode: "generation_succeeded", traceId: "trace-2" });
   await repository.recordProviderCost({ invocationId: "invoke-1", routeId: "route-1", providerId: "provider-1", providerRequestId: "provider-request-1", amount: 0.02, currency: "USD", units: 2, reasonCode: "generation" });
   assert.equal(harness.state.usage.length, 2);
   assert.equal(harness.state.costs.length, 1);
@@ -141,4 +141,38 @@ test("validates IANA quota timezone and records zero-unit cache reuse", async ()
   await assert.rejects(() => repository.setQuotaPolicy(subject, { ...policy, timezone: "not/a-zone", idempotencyKey: "quota-0001" }), /quota_timezone_invalid/);
   await repository.recordCacheReuse(subject, { idempotencyKey: "cache-reuse-0001", traceId: "trace-5" });
   assert.ok(harness.calls.some((call) => call.sql.includes("'cache_reuse',0")));
+});
+
+test("uses net ledger deltas and the policy timezone for both quota windows", async () => {
+  const harness = transactionHarness();
+  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: ["semantic_graph"], revision: "1" });
+  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
+  harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "10", monthly_units: "20", max_concurrency: "1", timezone: "Asia/Shanghai", revision: "1" });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await repository.capability(subject);
+  await repository.reserve(subject, { idempotencyKey: "request-0003", modality: "semantic_graph", routeId: "route-1", units: 1, traceId: "trace-6" });
+  const sql = harness.calls.filter((call) => call.sql.includes("visualization_usage_ledger")).map((call) => call.sql).join("\n");
+  assert.doesNotMatch(sql, /GREATEST\s*\(/);
+  assert.match(sql, /date_trunc\('day', now\(\),/);
+  assert.match(sql, /date_trunc\('month', now\(\),/);
+  assert.match(harness.calls.map((call) => call.sql).join("\n"), /state = 'expired'/);
+});
+
+test("fails closed when cache identity or access checks are missing", async () => {
+  const harness = transactionHarness();
+  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: ["semantic_graph"], revision: "1" });
+  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await assert.equal(await repository.findReusableArtifact(subject, {
+    tenantId: "tenant-1", documentId: "doc-1", modality: "semantic_graph", specHash: "a".repeat(64), evidenceHash: "b".repeat(64),
+    locale: "zh-CN", skillVersion: "skill@1", kernelVersion: "kernel@1", rendererVersion: "renderer@1", hardValidatorSet: ["schema@1"], sourceIdentityHash: "c".repeat(64)
+  }), null);
+});
+
+test("rejects incomplete settlement and provider cost records", async () => {
+  const harness = transactionHarness();
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await assert.rejects(() => repository.settle(subject, { reservationId: "reservation-1", reasonCode: "x" }), /visualization_reservation_not_found/);
+  await assert.rejects(() => repository.recordProviderCost({ invocationId: "invoke-1", routeId: "route-1", providerId: "provider-1", providerRequestId: "provider-request-1", amount: -1, currency: "USD", units: 1, reasonCode: "x" }), /visualization_provider_cost_amount_invalid/);
+  await assert.rejects(() => repository.recordProviderCost({ invocationId: "invoke-1", routeId: "route-1", providerId: "provider-1", providerRequestId: "provider-request-1", amount: 1, currency: "usd", units: 1, reasonCode: "x" }), /visualization_provider_cost_currency_invalid/);
 });

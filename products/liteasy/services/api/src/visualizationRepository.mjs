@@ -16,6 +16,37 @@ function requestHash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
+function json(value, code = "visualization_json_invalid") {
+  if (value === undefined || value === null) throw new Error(code);
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) throw new Error(code);
+    return encoded;
+  } catch {
+    throw new Error(code);
+  }
+}
+
+function reasonCode(input) {
+  if (typeof input?.reasonCode !== "string" || !/^[A-Za-z0-9._:-]{1,120}$/.test(input.reasonCode.trim())) {
+    throw new Error("visualization_reason_code_invalid");
+  }
+  return input.reasonCode.trim();
+}
+
+function ianaTimezone(value) {
+  if (typeof value !== "string" || value.trim() === "") throw new Error("quota_timezone_invalid");
+  try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(); } catch { throw new Error("quota_timezone_invalid"); }
+  return value;
+}
+
+function cacheField(input, name) {
+  if (typeof input?.[name] !== "string" || input[name].trim() === "") {
+    throw new Error(`visualization_${name}_invalid`);
+  }
+  return input[name].trim();
+}
+
 function rowPreference(row) {
   return row ? { enabled: row.enabled, revision: Number(row.revision ?? 1), updatedAt: row.updated_at?.toISOString?.() ?? null } : null;
 }
@@ -59,10 +90,10 @@ export class PostgresVisualizationRepository {
     const result = await this.pool.query(`
       SELECT e.*, p.enabled AS preference_enabled, p.revision AS preference_revision,
              q.daily_units, q.monthly_units, q.max_concurrency, q.timezone, q.revision AS policy_revision,
-             COALESCE((SELECT SUM(GREATEST(units_delta, 0)) FROM visualization_usage_ledger u
-                       WHERE u.subject_id = e.subject_id AND u.created_at >= date_trunc('day', now())), 0) AS daily_used,
-             COALESCE((SELECT SUM(GREATEST(units_delta, 0)) FROM visualization_usage_ledger u
-                       WHERE u.subject_id = e.subject_id AND u.created_at >= date_trunc('month', now())), 0) AS monthly_used,
+             COALESCE((SELECT SUM(units_delta) FROM visualization_usage_ledger u
+                       WHERE u.subject_id = e.subject_id AND u.created_at >= date_trunc('day', now(), COALESCE(q.timezone, 'UTC'))), 0) AS daily_used,
+             COALESCE((SELECT SUM(units_delta) FROM visualization_usage_ledger u
+                       WHERE u.subject_id = e.subject_id AND u.created_at >= date_trunc('month', now(), COALESCE(q.timezone, 'UTC'))), 0) AS monthly_used,
              (SELECT COUNT(*) FROM visualization_quota_reservations r
                WHERE r.subject_id = e.subject_id AND r.state = 'reserved' AND r.expires_at > now()) AS active_count
         FROM visualization_entitlements e
@@ -74,19 +105,28 @@ export class PostgresVisualizationRepository {
     if (!row) return { allowed: false, enabled: false, serviceAvailable: false, availableModalities: [], quota: { available: false } };
     const daily = Number(row.daily_units ?? 0);
     const monthly = Number(row.monthly_units ?? 0);
+    const dailyUsed = Number(row.daily_used ?? 0);
+    const monthlyUsed = Number(row.monthly_used ?? 0);
+    const dailyRemaining = Math.max(0, daily - dailyUsed);
+    const monthlyRemaining = Math.max(0, monthly - monthlyUsed);
+    const remaining = Math.min(dailyRemaining, monthlyRemaining);
+    const limit = Math.max(1, Math.min(daily, monthly));
+    const remainingBand = remaining <= 0 ? "none" : remaining / limit <= 0.1 ? "low" : "available";
+    const allowedModalities = Array.isArray(row.allowed_modalities) ? row.allowed_modalities : [];
     return {
       allowed: Boolean(row.allowed),
       enabled: Boolean(row.allowed && row.preference_enabled !== false),
       serviceAvailable: true,
-      availableModalities: row.allowed_modalities ?? [],
+      availableModalities: allowedModalities,
       preference: rowPreference({ enabled: row.preference_enabled ?? true, revision: row.preference_revision ?? 1 }),
       quota: {
         available: true,
         dailyUnits: daily,
         monthlyUnits: monthly,
-        usedUnits: Number(row.daily_used ?? 0),
-        dailyUsedUnits: Number(row.daily_used ?? 0),
-        monthlyUsedUnits: Number(row.monthly_used ?? 0),
+        usedUnits: dailyUsed,
+        dailyUsedUnits: dailyUsed,
+        monthlyUsedUnits: monthlyUsed,
+        remainingBand,
         concurrency: { active: Number(row.active_count ?? 0), limit: Number(row.max_concurrency ?? 0) },
         timezone: row.timezone ?? "UTC"
       }
@@ -157,7 +197,8 @@ export class PostgresVisualizationRepository {
       const prior = await client.query("SELECT * FROM idempotency_records WHERE actor_id = $1 AND operation = $2 AND idempotency_key = $3", [id, "visualization-reserve", input.idempotencyKey]);
       if (prior.rows[0]) {
         if (prior.rows[0].request_hash !== hash) throw new Error("idempotency_key_reused");
-        return { replayed: true, reservation: prior.rows[0].response_body };
+        const response = prior.rows[0].response_body;
+        return { replayed: true, ...(response?.reservation ? response : { reservation: reservationView(response) }) };
       }
       const entitlement = (await client.query("SELECT * FROM visualization_entitlements WHERE subject_id = $1 FOR UPDATE", [id])).rows[0];
       const preference = (await client.query("SELECT * FROM visualization_user_preferences WHERE subject_id = $1", [id])).rows[0];
@@ -165,12 +206,13 @@ export class PostgresVisualizationRepository {
       if (!entitlement?.allowed || preference?.enabled === false) throw new Error("visualization_not_allowed");
       if (Array.isArray(entitlement.allowed_modalities) && entitlement.allowed_modalities.length > 0 && !entitlement.allowed_modalities.includes(input.modality)) throw new Error("visualization_modality_not_allowed");
       if (!policy) throw new Error("visualization_quota_unconfigured");
+      await this.#expireReservations(client, id, input.traceId ?? `trace_${randomUUID()}`);
       const usage = await client.query(`
         SELECT
-          COALESCE(SUM(GREATEST(units_delta, 0)) FILTER (WHERE created_at >= date_trunc('day', now())), 0) AS daily_used,
-          COALESCE(SUM(GREATEST(units_delta, 0)) FILTER (WHERE created_at >= date_trunc('month', now())), 0) AS monthly_used
+          COALESCE(SUM(units_delta) FILTER (WHERE created_at >= date_trunc('day', now(), $2)), 0) AS daily_used,
+          COALESCE(SUM(units_delta) FILTER (WHERE created_at >= date_trunc('month', now(), $2)), 0) AS monthly_used
           FROM visualization_usage_ledger WHERE subject_id = $1
-      `, [id]);
+      `, [id, ianaTimezone(policy.timezone ?? "UTC")]);
       const active = await client.query("SELECT COUNT(*) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > now()", [id]);
       if (Number(usage.rows[0]?.daily_used ?? usage.rows[0]?.used_units ?? 0) + input.units > Number(policy.daily_units)
         || Number(usage.rows[0]?.monthly_used ?? 0) + input.units > Number(policy.monthly_units)
@@ -182,9 +224,37 @@ export class PostgresVisualizationRepository {
       const result = await client.query(`INSERT INTO visualization_quota_reservations(reservation_id, subject_id, idempotency_key, modality, route_id, route_revision, policy_revision, reserved_units, state, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'reserved',$9) RETURNING *`, [reservationId, id, input.idempotencyKey, input.modality, input.routeId, Number(route.revision ?? 1), Number(policy.revision ?? 1), input.units, expiresAt]);
       const reservation = result.rows[0];
       await client.query("INSERT INTO visualization_usage_ledger(event_id, subject_id, reservation_id, idempotency_key, event_type, units_delta, policy_revision, trace_id) VALUES ($1,$2,$3,$4,'reserved',$5,$6,$7)", [`vusage_${randomUUID()}`, id, reservationId, input.idempotencyKey, input.units, Number(policy.revision ?? 1), input.traceId ?? `trace_${randomUUID()}`]);
-      await client.query("INSERT INTO idempotency_records(actor_id,operation,idempotency_key,request_hash,response_status,response_body,expires_at) VALUES ($1,$2,$3,$4,201,$5::jsonb,now()+interval '1 day')", [id, "visualization-reserve", input.idempotencyKey, hash, JSON.stringify(reservation)]);
-      return { replayed: false, reservation: reservationView(reservation) };
+      const response = { reservation: reservationView(reservation) };
+      await client.query("INSERT INTO idempotency_records(actor_id,operation,idempotency_key,request_hash,response_status,response_body,expires_at) VALUES ($1,$2,$3,$4,201,$5::jsonb,now()+interval '1 day')", [id, "visualization-reserve", input.idempotencyKey, hash, JSON.stringify(response)]);
+      return { replayed: false, ...response };
     });
+  }
+
+  async #expireReservations(client, id, traceId) {
+    const expired = await client.query(`
+      UPDATE visualization_quota_reservations
+         SET state = 'expired', settled_units = 0, updated_at = now()
+       WHERE subject_id = $1 AND state = 'reserved' AND expires_at <= now()
+       RETURNING reservation_id, reserved_units, policy_revision
+    `, [id]);
+    for (const row of expired.rows) {
+      await client.query(`
+        INSERT INTO visualization_usage_ledger(
+          event_id, subject_id, reservation_id, idempotency_key, event_type,
+          units_delta, policy_revision, reason_code, trace_id
+        ) VALUES ($1,$2,$3,$4,'expired',$5,$6,'reservation_expired',$7)
+        ON CONFLICT (subject_id, idempotency_key) DO NOTHING
+      `, [
+        `vusage_${randomUUID()}`,
+        id,
+        row.reservation_id,
+        `${row.reservation_id}:expired`,
+        -Number(row.reserved_units),
+        Number(row.policy_revision ?? 1),
+        traceId
+      ]);
+    }
+    return expired.rows.length;
   }
 
   async settle(subject, input) { return this.#transition(subject, input, "settled"); }
@@ -193,20 +263,35 @@ export class PostgresVisualizationRepository {
   async #transition(subject, input, state) {
     const id = subjectId(subject);
     required(input, "reservationId");
+    const code = reasonCode(input);
+    if (state === "settled" && (!Number.isInteger(input.settledUnits) || input.settledUnits < 0)) {
+      throw new Error("visualization_settled_units_invalid");
+    }
     return withPostgresTransaction(this.pool, async (client) => {
       const row = (await client.query("SELECT * FROM visualization_quota_reservations WHERE reservation_id = $1 AND subject_id = $2 FOR UPDATE", [input.reservationId, id])).rows[0];
       if (!row) throw new Error("visualization_reservation_not_found");
       if (row.state !== "reserved") return { reservation: reservationView(row), replayed: true };
-      const settled = state === "settled" ? Number(input.settledUnits ?? row.reserved_units) : 0;
+      const settled = state === "settled" ? input.settledUnits : 0;
+      if (state === "settled" && (!Number.isInteger(settled) || settled < 0 || settled > Number(row.reserved_units))) {
+        throw new Error("visualization_settled_units_invalid");
+      }
       const updated = (await client.query("UPDATE visualization_quota_reservations SET state = $1, settled_units = $2, updated_at = now() WHERE reservation_id = $3 RETURNING *", [state, settled, input.reservationId])).rows[0];
-      await client.query("INSERT INTO visualization_usage_ledger(event_id, subject_id, reservation_id, idempotency_key, event_type, units_delta, trace_id) VALUES ($1,$2,$3,$4,$5,$6,$7)", [`vusage_${randomUUID()}`, id, input.reservationId, `${input.reservationId}:${state}`, state === "settled" ? "settled" : "rollback", state === "settled" ? settled - Number(row.reserved_units) : -Number(row.reserved_units), input.traceId ?? `trace_${randomUUID()}`]);
+      await client.query("INSERT INTO visualization_usage_ledger(event_id, subject_id, reservation_id, idempotency_key, event_type, units_delta, reason_code, trace_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)", [`vusage_${randomUUID()}`, id, input.reservationId, `${input.reservationId}:${state}`, state === "settled" ? "settled" : "rollback", state === "settled" ? settled - Number(row.reserved_units) : -Number(row.reserved_units), code, input.traceId ?? `trace_${randomUUID()}`]);
       return { reservation: reservationView(updated), replayed: false };
     });
   }
 
   async recordProviderCost(input) {
     required(input, "invocationId");
-    const result = await this.pool.query("INSERT INTO visualization_provider_cost_ledger(cost_event_id, invocation_id, route_id, provider_id, provider_request_id, amount, currency, units, reason_code, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) RETURNING *", [`vcost_${randomUUID()}`, input.invocationId, input.routeId, input.providerId, input.providerRequestId, input.amount, input.currency, input.units ?? 0, input.reasonCode ?? "provider_cost", JSON.stringify(input.metadata ?? {})]);
+    const routeId = required(input, "routeId");
+    const providerId = required(input, "providerId");
+    const providerRequestId = required(input, "providerRequestId");
+    const code = reasonCode(input);
+    if (typeof input.amount !== "number" || !Number.isFinite(input.amount) || input.amount < 0) throw new Error("visualization_provider_cost_amount_invalid");
+    if (typeof input.currency !== "string" || !/^[A-Z]{3}$/.test(input.currency)) throw new Error("visualization_provider_cost_currency_invalid");
+    if (!Number.isInteger(input.units) || input.units < 0) throw new Error("visualization_provider_cost_units_invalid");
+    if (input.metadata !== undefined && (!input.metadata || typeof input.metadata !== "object" || Array.isArray(input.metadata))) throw new Error("visualization_provider_cost_metadata_invalid");
+    const result = await this.pool.query("INSERT INTO visualization_provider_cost_ledger(cost_event_id, invocation_id, route_id, provider_id, provider_request_id, amount, currency, units, reason_code, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) ON CONFLICT (invocation_id, provider_request_id) DO NOTHING RETURNING *", [`vcost_${randomUUID()}`, input.invocationId, routeId, providerId, providerRequestId, input.amount, input.currency, input.units, code, json(input.metadata ?? {})]);
     return result.rows[0];
   }
 
@@ -219,7 +304,37 @@ export class PostgresVisualizationRepository {
 
   async findReusableArtifact(subject, input) {
     const id = subjectId(subject);
-    const result = await this.pool.query("SELECT * FROM visualization_artifacts WHERE subject_id = $1 AND document_id = $2 AND modality = $3 AND spec_hash = $4 AND evidence_hash = $5 ORDER BY updated_at DESC LIMIT 1", [id, input.documentId, input.modality, input.specHash, input.evidenceHash]);
-    return result.rows[0] ?? null;
+    const documentId = cacheField(input, "documentId");
+    const modality = cacheField(input, "modality");
+    const specHash = cacheField(input, "specHash");
+    const evidenceHash = cacheField(input, "evidenceHash");
+    const tenantId = cacheField(input, "tenantId");
+    const locale = cacheField(input, "locale");
+    const skillVersion = cacheField(input, "skillVersion");
+    const kernelVersion = cacheField(input, "kernelVersion");
+    const rendererVersion = cacheField(input, "rendererVersion");
+    if (!Array.isArray(input.hardValidatorSet) || input.hardValidatorSet.length === 0) throw new Error("visualization_hard_validator_set_invalid");
+    const sourceIdentityHash = cacheField(input, "sourceIdentityHash");
+    const documentAccess = typeof input.documentAccess === "function" ? await input.documentAccess({ subjectId: id, tenantId, documentId }) : input.documentAccess === true;
+    const sourceIdentity = typeof input.sourceIdentity === "function" ? await input.sourceIdentity({ subjectId: id, documentId, sourceIdentityHash }) : input.sourceIdentity === true;
+    if (!documentAccess || !sourceIdentity) return null;
+    return withPostgresTransaction(this.pool, async (client) => {
+      const entitlementRow = (await client.query("SELECT * FROM visualization_entitlements WHERE subject_id = $1 FOR UPDATE", [id])).rows[0];
+      const preferenceRow = (await client.query("SELECT enabled FROM visualization_user_preferences WHERE subject_id = $1", [id])).rows[0];
+      const entitlement = rowEntitlement(entitlementRow);
+      if (!entitlement.allowed || preferenceRow?.enabled === false || !entitlement.allowedModalities.includes(modality)) return null;
+      const result = await client.query(`SELECT * FROM visualization_artifacts
+        WHERE subject_id = $1 AND document_id = $2 AND modality = $3 AND spec_hash = $4 AND evidence_hash = $5
+          AND body->>'tenantId' = $6 AND body->>'locale' = $7
+          AND body->'versions'->>'skill' = $8 AND body->'versions'->>'kernel' = $9
+          AND body->'versions'->>'renderer' = $10 AND body->'hardValidatorSet' = $11::jsonb
+          AND body->>'sourceIdentityHash' = $12 AND state IN ('ready','degraded')
+        ORDER BY updated_at DESC LIMIT 1`, [id, documentId, modality, specHash, evidenceHash, tenantId, locale, skillVersion, kernelVersion, rendererVersion, JSON.stringify(input.hardValidatorSet), sourceIdentityHash]);
+      const artifact = result.rows[0] ?? null;
+      if (artifact) {
+        await client.query("INSERT INTO visualization_usage_ledger(event_id, subject_id, reservation_id, idempotency_key, event_type, units_delta, reason_code, trace_id) VALUES ($1,$2,NULL,$3,'cache_reuse',0,$4,$5) ON CONFLICT (subject_id, idempotency_key) DO NOTHING", [`vusage_${randomUUID()}`, id, input.idempotencyKey ?? `cache_${requestHash({ tenantId, documentId, modality, specHash, evidenceHash, locale, skillVersion, kernelVersion, rendererVersion, hardValidatorSet: input.hardValidatorSet })}`, "cache_reuse", input.traceId ?? `trace_${randomUUID()}`]);
+      }
+      return artifact;
+    });
   }
 }
