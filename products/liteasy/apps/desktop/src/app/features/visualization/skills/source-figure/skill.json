@@ -1,0 +1,15 @@
+{
+  "costClass": "none",
+  "evidenceRequirements": ["source_figure_identity", "source_figure_evidence"],
+  "fallbackModalities": [],
+  "id": "source-figure",
+  "integrityRules": ["preserve_source_identity", "preserve_source_pixels"],
+  "modality": "source_figure",
+  "outputSchemaId": "liteasy.visualization/source-figure/v1",
+  "remote": false,
+  "rendererId": "source-figure",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["preserve_source_pixels", "no_generated_labels"],
+  "validatorIds": ["evidence-claims", "source-figure-identity"],
+  "version": "1.0.0"
+}

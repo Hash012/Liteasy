@@ -3,6 +3,12 @@ import { executeAction } from "./actionRegistry";
 import type { ActionContext, ActionResult } from "./actionRegistry";
 import type { UpdateSettingCommand } from "../settings/settings.types";
 
+export {
+  getBuiltinSkillSummary,
+  loadBuiltinSkill,
+  registerBuiltinSkill
+} from "./builtinSkillRegistry";
+
 export type SkillInvocation =
   | {
       skillId: "settings.adjust";
