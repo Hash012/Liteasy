@@ -94,6 +94,7 @@ export async function loadVisualizationArtifact(
   const expectedHardValidatorVersions = options.currentValidatorVersions ?? authoritative.versions;
   const expectedValidatorSetComplete = authoritative.complete
     && Object.keys(envelope.artifactIndex.hardValidatorVersions).every((id) => id in expectedHardValidatorVersions);
+  const revoked = hasRevokedDependency(envelope, options);
   const needsRevalidation = artifactNeedsRevalidation(envelope, expectedHardValidatorVersions, authoritative.complete, options);
   const canGenerate = !options.offline && documentAccess && !needsRevalidation;
 
@@ -106,7 +107,7 @@ export async function loadVisualizationArtifact(
     });
   }
 
-  if (!options.offline && documentAccess && expectedValidatorSetComplete && options.revalidationService) {
+  if (!revoked && !options.offline && documentAccess && expectedValidatorSetComplete && options.revalidationService) {
     try {
       const outcome = await options.revalidationService.revalidate({
         artifact: envelope.artifact,
@@ -140,6 +141,14 @@ export async function loadVisualizationArtifact(
     canRenderSafePreview: documentAccess && Boolean(envelope.safePreview),
     status: "needs_revalidation"
   });
+}
+
+function hasRevokedDependency(
+  envelope: VisualizationArtifactEnvelope,
+  options: Pick<VisualizationArtifactLoadOptions, "revokedRendererIds" | "revokedValidatorIds">
+): boolean {
+  return (options.revokedRendererIds ?? []).includes(envelope.artifact.implementation.rendererId)
+    || (options.revokedValidatorIds ?? []).some((id) => id in envelope.artifactIndex.hardValidatorVersions);
 }
 
 function artifactNeedsRevalidation(

@@ -137,6 +137,36 @@ test("marks a revoked hard validator for revalidation", async () => {
   expect(state.canRenderSafePreview).toBe(true);
 });
 
+test("does not re-enable a revoked renderer after a passing worker result", async () => {
+  const revalidationService = {
+    revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } })),
+    terminate: () => undefined
+  };
+  const state = await loadVisualizationArtifact(cachedEnvelope, {
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
+    revokedRendererIds: ["safe-svg"],
+    revalidationService
+  });
+  expect(revalidationService.revalidate).not.toHaveBeenCalled();
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+});
+
+test("does not re-enable a revoked validator after a passing worker result", async () => {
+  const revalidationService = {
+    revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } })),
+    terminate: () => undefined
+  };
+  const state = await loadVisualizationArtifact(cachedEnvelope, {
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
+    revokedValidatorIds: ["artifact-schema"],
+    revalidationService
+  });
+  expect(revalidationService.revalidate).not.toHaveBeenCalled();
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+});
+
 test("fails closed when the current validator map is omitted and a registered version changed", async () => {
   const upgradedEnvelope = parseVisualizationArtifactEnvelope({
     ...cachedEnvelope,
