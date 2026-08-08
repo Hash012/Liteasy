@@ -21,6 +21,8 @@ export type AssociationPageGraphProjection = {
   primaryAnchorEdges: readonly { anchorId: string; paperKey: string }[];
 };
 
+export const maximumAssociationPageGraphPapers = 24;
+
 type ProjectionAnchor = {
   anchorId: string;
   quality?: { score: number };
@@ -85,10 +87,13 @@ function providerSourceAlias(source: ThinReadingExternalSource) {
   const sourceId = normalizedText(source.sourceId);
   if (!sourceId) return "";
   if (provider === "openalex") {
-    return normalizedIdentity(`openalex:${sourceId}`);
+    return normalizedIdentity(sourceId);
   }
   if (provider === "semantic_scholar") {
-    return normalizedIdentity(`semantic_scholar:${sourceId}`);
+    const normalized = normalizedIdentity(sourceId);
+    return normalized.startsWith("semantic_scholar:")
+      ? normalized
+      : normalizedIdentity(`semantic_scholar:${sourceId}`);
   }
   return `${provider}:${sourceId.toLowerCase()}`;
 }
@@ -231,7 +236,9 @@ export function projectAssociationPageGraph({
         secondaryAnchorIds: anchorIds.filter((anchorId) => anchorId !== primary.anchorId),
         source: primary.source
       };
-    });
+    })
+    .slice(0, maximumAssociationPageGraphPapers);
+  const visiblePaperKeys = new Set(paperNodes.map((node) => node.paperKey));
 
   const paperKeysByAlias = new Map<string, Set<string>>();
   for (const [paperKey, component] of componentByPaperKey) {
@@ -253,7 +260,8 @@ export function projectAssociationPageGraph({
   for (const edge of paperEdges) {
     const sourcePaperKey = paperKeyByAlias.get(normalizedIdentity(edge.sourcePaperId));
     const targetPaperKey = paperKeyByAlias.get(normalizedIdentity(edge.targetPaperId));
-    if (!sourcePaperKey || !targetPaperKey || sourcePaperKey === targetPaperKey) continue;
+    if (!sourcePaperKey || !targetPaperKey || sourcePaperKey === targetPaperKey ||
+      !visiblePaperKeys.has(sourcePaperKey) || !visiblePaperKeys.has(targetPaperKey)) continue;
     const endpoints = edge.directed
       ? [sourcePaperKey, targetPaperKey]
       : [sourcePaperKey, targetPaperKey].sort();

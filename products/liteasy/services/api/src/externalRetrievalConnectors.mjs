@@ -22,6 +22,7 @@ const normalizeGraphId = (provider, value) => {
 function normalizeGraphRecord(provider, item) {
   const id = normalizeGraphId(provider, provider === "openalex" ? item?.id : item?.paperId);
   if (!id) return null;
+  const doi = doiKey(provider === "openalex" ? item?.doi : item?.externalIds?.DOI);
   const referencedPaperIds = provider === "openalex"
     ? (Array.isArray(item?.referenced_works) ? item.referenced_works : []).map((value) => normalizeGraphId(provider, value)).filter(Boolean)
     : (Array.isArray(item?.references) ? item.references : []).map((value) => normalizeGraphId(provider, value?.paperId ?? value)).filter(Boolean);
@@ -29,6 +30,7 @@ function normalizeGraphRecord(provider, item) {
     ? (Array.isArray(item?.citations) ? item.citations : []).map((value) => normalizeGraphId(provider, value?.paperId ?? value)).filter(Boolean)
     : [];
   return {
+    ...(doi ? { doi: `doi:${doi}` } : {}),
     id,
     provider,
     referencedPaperIds: [...new Set(referencedPaperIds)],
@@ -270,25 +272,54 @@ export function createExternalRetrievalConnectors(config, { fetchImpl = fetch } 
     async relations(source, input) {
       if (source.connectorType === "openalex") {
         if (source.baseUrl !== retrievalConnectorEndpoints.openalex) throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
-        const ids = input.papers.filter((paper) => paper.provider === "openalex").map((paper) => paper.sourceId);
-        if (ids.length === 0) return [];
-        const url = new URL(source.baseUrl);
-        url.searchParams.set("filter", `openalex_id:${ids.map((id) => `https://openalex.org/${id}`).join("|")}`);
-        url.searchParams.set("per-page", String(ids.length));
-        url.searchParams.set("select", "id,referenced_works");
-        const payload = await request(url, {}, input.signal);
+        const ids = [...new Set(input.papers.flatMap((paper) => (paper.aliases ?? [])
+          .map((alias) => normalizeGraphId("openalex", alias)).filter(Boolean)
+          .map((alias) => alias.slice("openalex:".length))))].sort();
+        const dois = [...new Set(input.papers.flatMap((paper) => {
+          const values = [paper.doi, ...(paper.aliases ?? [])];
+          return values.map(doiKey).filter(Boolean);
+        }))].sort();
+        const filters = [
+          ids.length > 0 ? `openalex_id:${ids.map((id) => `https://openalex.org/${id}`).join("|")}` : "",
+          dois.length > 0 ? `doi:${dois.join("|")}` : ""
+        ].filter(Boolean);
+        if (filters.length === 0) return [];
+        const attempts = await Promise.allSettled(filters.map(async (filter) => {
+          const url = new URL(source.baseUrl);
+          url.searchParams.set("filter", filter);
+          url.searchParams.set("per-page", String(Math.max(1, input.papers.length)));
+          url.searchParams.set("select", "id,doi,referenced_works");
+          return request(url, {}, input.signal);
+        }));
+        const payloads = attempts.filter((attempt) => attempt.status === "fulfilled")
+          .map((attempt) => attempt.value);
+        if (payloads.length === 0) throw attempts[0].reason;
+        const recordById = new Map(payloads.flatMap((payload) =>
+          (Array.isArray(payload?.results) ? payload.results : [])
+            .map((item) => normalizeGraphRecord("openalex", item)).filter(Boolean)
+        ).map((record) => [record.id, record]));
         return {
-          records: (Array.isArray(payload?.results) ? payload.results : [])
-            .map((item) => normalizeGraphRecord("openalex", item)).filter(Boolean),
-          warnings: ["openalex_co_cited_unavailable"]
+          records: [...recordById.values()].sort((left, right) => left.id.localeCompare(right.id)),
+          warnings: [
+            "openalex_co_cited_unavailable",
+            ...(payloads.length < attempts.length ? ["openalex_paper_relations_partial"] : [])
+          ]
         };
       }
       if (source.connectorType === "semantic_scholar") {
         if (source.baseUrl !== retrievalConnectorEndpoints.semantic_scholar) throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
-        const papers = input.papers.filter((paper) => paper.provider === "semantic_scholar");
-        return (await Promise.all(papers.map(async (paper) => {
-          const url = new URL(`${source.baseUrl.replace(/\/search$/, "")}/${encodeURIComponent(paper.sourceId)}`);
-          url.searchParams.set("fields", "paperId,references.paperId,citations.paperId");
+        const candidates = [...new Set(input.papers.flatMap((paper) => {
+          const graphIds = (paper.aliases ?? [])
+            .filter((alias) => /^(?:semantic_scholar:|semanticscholar:)/i.test(alias))
+            .map((alias) => normalizeGraphId("semantic_scholar", alias)).filter(Boolean)
+            .map((alias) => alias.slice("semantic_scholar:".length));
+          if (graphIds.length > 0) return graphIds;
+          const doi = doiKey(paper.doi);
+          return doi ? [`DOI:${doi}`] : [];
+        }))].sort();
+        return (await Promise.all(candidates.map(async (candidate) => {
+          const url = new URL(`${source.baseUrl.replace(/\/search$/, "")}/${encodeURIComponent(candidate)}`);
+          url.searchParams.set("fields", "paperId,externalIds,references.paperId,citations.paperId");
           const headers = config.semanticScholarApiKey ? { "x-api-key": config.semanticScholarApiKey } : {};
           return normalizeGraphRecord("semantic_scholar", await request(url, headers, input.signal));
         }))).filter(Boolean);

@@ -128,12 +128,15 @@ export function normalizeThinReadingPaperRelationEdges(
   return [...edgeByKey.values()].sort((left, right) => edgeKey(left).localeCompare(edgeKey(right)));
 }
 
-export function listThinReadingPageRelationPapers(papers: readonly ThinReadingExternalSource[]) {
+export function listThinReadingPageRelationPapers(
+  papers: readonly ThinReadingExternalSource[],
+  projectedPaperKeys?: readonly string[]
+) {
   const sourceByKey = new Map<string, ThinReadingExternalSource>();
-  for (const source of papers) {
-    const key = pageGraphPaperKey(source);
+  papers.forEach((source, index) => {
+    const key = projectedPaperKeys?.[index] ?? pageGraphPaperKey(source);
     if (key && !sourceByKey.has(key)) sourceByKey.set(key, source);
-  }
+  });
   return [...sourceByKey.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .slice(0, maximumPapers)
@@ -162,9 +165,10 @@ export function createThinReadingPaperRelationsClient(input: {
   return async (request: {
     artifactId: string;
     papers: readonly ThinReadingExternalSource[];
+    paperKeys?: readonly string[];
     signal?: AbortSignal;
   }): Promise<ThinReadingPaperRelationsResult> => {
-    const papers = listThinReadingPageRelationPapers(request.papers);
+    const papers = listThinReadingPageRelationPapers(request.papers, request.paperKeys);
     const response = await (input.transport ?? defaultTransport)({
       body: JSON.stringify({ artifactId: request.artifactId, papers }),
       headers: { "Content-Type": "application/json" },

@@ -45,7 +45,57 @@ function edge(
   };
 }
 
+function densePageInput() {
+  const anchors = Array.from({ length: 8 }, (_, anchorIndex) => ({
+    anchorId: `anchor-${anchorIndex + 1}`
+  }));
+  const sourcesByAnchor = Object.fromEntries(anchors.map((anchor, anchorIndex) => [
+    anchor.anchorId,
+    Array.from({ length: 4 }, (_, sourceIndex) => {
+      const paperIndex = anchorIndex * 4 + sourceIndex + 1;
+      if (paperIndex === 32) {
+        return source("crossref-duplicate", {
+          doi: "10.1000/shared-five",
+          provider: "crossref",
+          sourceId: "10.1000/shared-five"
+        });
+      }
+      const graphId = `W${String(paperIndex).padStart(3, "0")}`;
+      return source(`source-${graphId}`, {
+        canonicalPaperId: `openalex:${graphId}`,
+        ...(paperIndex === 5 ? { doi: "10.1000/shared-five" } : {}),
+        sourceId: graphId
+      });
+    })
+  ]));
+  return { anchors, sourcesByAnchor };
+}
+
 describe("projectAssociationPageGraph", () => {
+  test("selects at most 24 stable visible components after complete alias union", () => {
+    const input = densePageInput();
+    const graph = projectAssociationPageGraph({
+      ...input,
+      paperEdges: [
+        edge("openalex:W001", "openalex:W002"),
+        edge("doi:10.1000/shared-five", "openalex:W006"),
+        edge("openalex:W001", "openalex:W030"),
+        edge("openalex:W030", "openalex:W031")
+      ]
+    });
+
+    expect(graph.paperNodes.map((node) => node.paperKey)).toEqual(
+      Array.from({ length: 24 }, (_, index) => `openalex:W${String(index + 1).padStart(3, "0")}`)
+    );
+    expect(graph.paperNodes.find((node) => node.paperKey === "openalex:W005")?.anchorIds)
+      .toEqual(["anchor-2", "anchor-8"]);
+    expect(graph.paperEdges.map((relation) => [relation.sourcePaperKey, relation.targetPaperKey]))
+      .toEqual([
+        ["openalex:W001", "openalex:W002"],
+        ["openalex:W005", "openalex:W006"]
+      ]);
+  });
+
   test("keeps verified relations across different anchor owners", () => {
     const graph = projectAssociationPageGraph({
       anchors: [{ anchorId: "anchor-a" }, { anchorId: "anchor-b" }],

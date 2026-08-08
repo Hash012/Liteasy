@@ -28,15 +28,14 @@ async function graphGeometry(page: Page) {
   return page.evaluate(() => {
     type Point = { x: number; y: number };
     type Rectangle = { bottom: number; left: number; right: number; top: number };
-    const point = (values: string): Point => {
-      const [x = 0, y = 0] = values.trim().split(/[ ,]+/u).map(Number);
-      return { x, y };
-    };
-    const endpoints = (path: SVGPathElement) => {
-      const d = path.getAttribute("d") ?? "";
-      const match = d.match(/^M\s*([\d.+-]+[ ,]+[\d.+-]+).*?([\d.+-]+[ ,]+[\d.+-]+)\s*$/u);
-      if (!match) throw new Error(`Cannot read association edge endpoints: ${d}`);
-      return { end: point(match[2]!), start: point(match[1]!) };
+    const sampledPath = (path: SVGPathElement) => {
+      const length = path.getTotalLength();
+      const segmentCount = Math.max(8, Math.ceil(length / 8));
+      const points = Array.from({ length: segmentCount + 1 }, (_, index) => {
+        const sampled = path.getPointAtLength(length * index / segmentCount);
+        return { x: sampled.x, y: sampled.y };
+      });
+      return { end: points.at(-1)!, points, start: points[0]! };
     };
     const orientation = (a: Point, b: Point, c: Point) =>
       (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
@@ -45,14 +44,26 @@ async function graphGeometry(page: Page) {
       orientation(c, d, a) * orientation(c, d, b) < 0;
     const primary = [...document.querySelectorAll<SVGPathElement>(
       '.association-edge.is-primary.is-hit[data-edge-layer="edge-hit"]'
-    )].map((path) => ({ id: path.dataset.edgeId ?? "", ...endpoints(path) }));
+    )].map((path) => ({ id: path.dataset.edgeId ?? "", ...sampledPath(path) }));
     let primaryCrossings = 0;
     for (let index = 0; index < primary.length; index += 1) {
       for (let other = index + 1; other < primary.length; other += 1) {
         const left = primary[index]!;
         const right = primary[other]!;
-        if (left.id.split(":")[1] === right.id.split(":")[1]) continue;
-        if (intersects(left.start, left.end, right.start, right.end)) primaryCrossings += 1;
+        if (Math.hypot(left.start.x - right.start.x, left.start.y - right.start.y) < 0.01) continue;
+        let crossed = false;
+        for (let leftIndex = 1; leftIndex < left.points.length && !crossed; leftIndex += 1) {
+          for (let rightIndex = 1; rightIndex < right.points.length; rightIndex += 1) {
+            if (intersects(
+              left.points[leftIndex - 1]!, left.points[leftIndex]!,
+              right.points[rightIndex - 1]!, right.points[rightIndex]!
+            )) {
+              crossed = true;
+              break;
+            }
+          }
+        }
+        if (crossed) primaryCrossings += 1;
       }
     }
     const anchorIds = [...document.querySelectorAll<HTMLElement>("[data-anchor-id]")]

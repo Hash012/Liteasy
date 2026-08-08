@@ -280,6 +280,28 @@ test("renders page-wide paper relations beneath anchor ink with an exact final h
     .toBeInTheDocument();
 });
 
+test("keeps the full primary hit path on the quality-gated endpoint segment", () => {
+  const { container } = renderLayer({
+    sourcesByAnchor: {
+      "anchor-1": [source("W1")],
+      "anchor-2": [source("W3")]
+    }
+  });
+
+  const paths = container.querySelectorAll<SVGPathElement>(
+    '.association-edge.is-primary.is-hit[data-edge-layer="edge-hit"]'
+  );
+  expect(paths.length).toBeGreaterThan(0);
+  for (const path of paths) {
+    const coordinates = path.getAttribute("d")?.match(/-?\d+(?:\.\d+)?/gu)?.map(Number) ?? [];
+    expect(coordinates).toHaveLength(6);
+    const [startX, startY, controlX, controlY, endX, endY] = coordinates;
+    const crossProduct = (controlX! - startX!) * (endY! - startY!) -
+      (controlY! - startY!) * (endX! - startX!);
+    expect(Math.abs(crossProduct)).toBeLessThan(0.000001);
+  }
+});
+
 test("exposes one keyboard-reachable logical primary edge and focuses all its visual strokes", () => {
   const onClose = vi.fn();
   const { container } = renderLayer({

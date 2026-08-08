@@ -111,7 +111,7 @@ function anchorExactPath(
   nodeTop: number
 ) {
   const curveX = anchorLeft + (nodeLeft - anchorLeft) * 0.52;
-  const curveY = anchorTop + (nodeTop - anchorTop) * 0.48 + (nodeTop < anchorTop ? -10 : 10);
+  const curveY = anchorTop + (nodeTop - anchorTop) * 0.52;
   return `M ${anchorLeft} ${anchorTop} Q ${curveX} ${curveY} ${nodeLeft} ${nodeTop}`;
 }
 
