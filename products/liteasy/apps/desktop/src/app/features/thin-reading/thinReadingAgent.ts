@@ -4,6 +4,7 @@ import type {
 } from "../paper-analysis/analysis.types";
 import { z } from "zod";
 import { buildThinReadingPromptGuidance } from "./thinReadingPromptRegistry";
+import { thinReadingAnchorKinds } from "./thinReading.types";
 import type {
   ThinReadingAnchor,
   ThinReadingGenerationContext,
@@ -79,7 +80,7 @@ const maximumOmittedSections = 8;
 const thinReadingModelOutputSchema = z.object({
   anchors: z.array(z.object({
     importance: z.number().finite().min(0).max(1),
-    kind: z.enum(["claim", "concept", "limitation", "method", "result"]),
+    kind: z.enum(thinReadingAnchorKinds),
     label: normalizedStringSchema({ maximumLength: 72, minimumLength: 2 }),
     searchQuery: normalizedStringSchema({ maximumLength: 180, minimumLength: 3 }),
     summarySentenceIndex: z.number().int().min(0),
@@ -132,7 +133,7 @@ export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
         additionalProperties: false,
         properties: {
           importance: { maximum: 1, minimum: 0, type: "number" },
-          kind: { enum: ["claim", "concept", "limitation", "method", "result"], type: "string" },
+          kind: { enum: [...thinReadingAnchorKinds], type: "string" },
           label: jsonString,
           searchQuery: jsonString,
           summarySentenceIndex: { minimum: 0, type: "integer" },
@@ -1698,6 +1699,7 @@ export function buildThinReadingAgentPrompt(input: {
       : "",
     externalRelationSentenceRule(),
     "Reader-facing anchors: after forming summarySentences, return 3–8 non-overlapping high-value anchors for the contribution, mechanism, result, or limitation. Cover every sentence that contains an independent high-value contribution, mechanism, result, or limitation; a dense sentence may have more than one anchor, while background transitions need none. Prefer preserving a distinct valuable concept over stopping at an arbitrary small count. Each anchor.text must be an exact contiguous phrase copied from summarySentences[summarySentenceIndex].text and occur exactly once in that sentence. Use a concise label and a specific academic searchQuery. Anchors belong to the thin-reading output, never to a source-PDF coordinate, and must not contain source IDs or retrieval-process language.",
+    `Anchor kind contract: anchors[].kind must be exactly one of ${thinReadingAnchorKinds.join(" | ")}. Use mechanism for how a process works, method for an approach or procedure, contribution for the paper's distinct addition, and result for an observed outcome. Never invent a new kind.`,
     "内部工作流（只在脑中执行，不要输出这些步骤）：",
     "1. Context assembly：先识别当前层级、目标论文、既定模块/正文选区、完整祖先阅读路径与父节点 claim/evidence。",
     "2. Evidence sieve：从证据矩阵中选出最能改变读者理解的 evidence ID，区分主张、机制、结果、局限和背景。",

@@ -73,8 +73,43 @@ test("shows the unified composer before a conversation starts", async () => {
   expect(await screen.findByText(/云端回答：总结这篇论文的核心方法/)).toBeInTheDocument();
 });
 
-test("opens and updates the initial thin-reading generation session", async () => {
+test("keeps thin-reading generation out of the assistant for regular accounts", async () => {
   const baseProps = {
+    onGenerateArtifact: () => "unused",
+    selectedSetStatus: {
+      importedCount: 1,
+      selectedCount: 1,
+      selectionLocked: true
+    }
+  };
+  render(
+    <AssistantPane
+      {...baseProps}
+      artifactTasks={[{
+        id: "artifact-task-thin-root",
+        message: "正在规划薄读路径与证据范围",
+        partialAnswer: "尚未审计的薄读正文",
+        progress: 43,
+        stage: "thin_reading_planning",
+        status: "running",
+        type: "thin_reading"
+      }]}
+    />
+  );
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
+  });
+  expect(screen.queryByText(/正在规划薄读路径与证据范围/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/尚未审计的薄读正文/)).not.toBeInTheDocument();
+
+  await userEvent.setup().click(screen.getByRole("button", { name: "历史" }));
+  expect(screen.queryByRole("button", { name: "打开会话：生成：薄读" })).not.toBeInTheDocument();
+});
+
+test("shows thin-reading generation sessions to server-authorized developer accounts", async () => {
+  const baseProps = {
+    developerDiagnostics: true,
     onGenerateArtifact: () => "unused",
     selectedSetStatus: {
       importedCount: 1,
@@ -122,21 +157,22 @@ test("opens and updates the initial thin-reading generation session", async () =
   rerender(
     <AssistantPane
       {...baseProps}
+      developerDiagnostics={false}
       artifactTasks={[{
-        artifactId: "artifact-thin-root",
         id: "artifact-task-thin-root",
-        message: "分析结果已保存",
-        progress: 100,
-        stage: "completed",
-        status: "completed",
+        message: "正在核验薄读证据",
+        progress: 73,
+        stage: "thin_reading_validating",
+        status: "running",
         type: "thin_reading"
       }]}
     />
   );
 
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "打开产物" })).toBeInTheDocument();
+    expect(screen.getByLabelText("当前会话")).toHaveTextContent("普通对话新对话");
   });
+  expect(screen.queryByText(/正在核验薄读证据/)).not.toBeInTheDocument();
 });
 
 test("keeps thin-reading branch progress on the active reading page", async () => {

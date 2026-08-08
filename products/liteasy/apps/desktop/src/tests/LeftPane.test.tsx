@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
@@ -213,8 +213,97 @@ describe("LeftPane", () => {
     await user.click(screen.getByRole("button", { name: "展开课程" }));
     expect(screen.getByRole("button", { name: "Paper" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "展开仅元数据" }));
-    expect(screen.getByRole("button", { name: "Metadata Paper" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Metadata Paper" }));
+    expect(await screen.findByRole("menuitem", { name: "打开" })).toHaveAttribute(
+      "aria-disabled",
+      "true"
+    );
     expect(screen.getByText("仅元数据", { selector: ".library-entry-status" })).toBeInTheDocument();
+  });
+
+  test("opens document actions on left click without a persistent trash button", async () => {
+    const onOpenPaper = vi.fn();
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [{
+          contentHash: "c".repeat(64),
+          id: "paper-menu",
+          path: "/library/Paper.pdf",
+          relativePath: "Paper.pdf",
+          title: "Paper menu"
+        }],
+        folders: [],
+        libraryId: "library-1",
+        revision: 2,
+        rootPath: "/library",
+        trashEntries: []
+      },
+      onOpenPaper
+    })} />);
+
+    expect(screen.queryByRole("button", { name: "删除 Paper menu" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Paper menu" }));
+    expect(await screen.findByRole("menuitem", { name: "移到回收站" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "打开" })).toBeInTheDocument();
+    expect(onOpenPaper).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: "打开" }));
+    expect(onOpenPaper).toHaveBeenCalledWith("paper-menu");
+  });
+
+  test("imports PDFs into the local folder selected before opening the picker", async () => {
+    const onAddDroppedPdfFiles = vi.fn(async () => {});
+    const onRefreshLocalLibrary = vi.fn(async () => {});
+    const { container } = render(<LeftPane {...createProps({
+      leftRailView: "library",
+      localLibrarySnapshot: {
+        entries: [],
+        folders: [{ name: "课程", parentPath: null, path: "/library/课程" }],
+        libraryId: "library-1",
+        revision: 2,
+        rootPath: "/library",
+        trashEntries: []
+      },
+      onAddDroppedPdfFiles,
+      onRefreshLocalLibrary
+    })} />);
+
+    const folderButton = screen.getByRole("button", { name: "课程" });
+    await userEvent.click(folderButton);
+    expect(folderButton).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "导入 PDF" }));
+
+    const input = container.querySelector<HTMLInputElement>(
+      'section[aria-label="本地文献库"] input[type="file"][multiple]:not([webkitdirectory])'
+    );
+    expect(input).not.toBeNull();
+    const file = new File(["%PDF-1.7\nbody"], "paper.pdf", { type: "application/pdf" });
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(onAddDroppedPdfFiles).toHaveBeenCalledWith([file], "/library/课程");
+    });
+  });
+
+  test("imports PDFs into the local library root when no folder is selected", async () => {
+    const onAddDroppedPdfFiles = vi.fn(async () => {});
+    const { container } = render(<LeftPane {...createProps({
+      leftRailView: "library",
+      onAddDroppedPdfFiles,
+      onRefreshLocalLibrary: vi.fn(async () => {})
+    })} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "导入 PDF" }));
+    const input = container.querySelector<HTMLInputElement>(
+      'section[aria-label="本地文献库"] input[type="file"][multiple]:not([webkitdirectory])'
+    );
+    const file = new File(["%PDF-1.7\nbody"], "root-paper.pdf", { type: "application/pdf" });
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(onAddDroppedPdfFiles).toHaveBeenCalledWith([file], "/home/test/LiteasyLibrary");
+    });
   });
 
   test("does not inject fixture nodes into an empty local library", () => {
@@ -223,6 +312,27 @@ describe("LeftPane", () => {
     expect(screen.queryByText("My Library")).not.toBeInTheDocument();
     expect(screen.queryByText("Courses")).not.toBeInTheDocument();
     expect(screen.queryByText("Vector Search")).not.toBeInTheDocument();
+  });
+
+  test("lets the user choose among legacy libraries from the library error state", async () => {
+    const onSelectLegacyLibraryRoot = vi.fn(async () => {});
+    render(<LeftPane {...createProps({
+      leftRailView: "library",
+      loadLegacyLibraryRoots: async () => ["/library/account-a", "/library/account-b"],
+      localLibraryError: "检测到多个旧账号本地库，请先选择一个当前库：internal paths",
+      localLibrarySnapshot: null,
+      onSelectLegacyLibraryRoot
+    })} />);
+
+    const candidates = await screen.findByLabelText("检测到的旧文献库");
+    expect(candidates).toHaveTextContent("/library/account-a");
+    expect(candidates).toHaveTextContent("/library/account-b");
+    expect(screen.queryByText(/internal paths/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建本地目录" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "导入 PDF" })).toBeDisabled();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "设为当前库" })[0]);
+    expect(onSelectLegacyLibraryRoot).toHaveBeenCalledWith("/library/account-a");
   });
 
   test("opens a local PDF without changing a locked selection", async () => {
@@ -253,6 +363,7 @@ describe("LeftPane", () => {
 
     expect(screen.getByRole("checkbox", { name: "选择 Paper" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Paper" }));
+    await user.click(await screen.findByRole("menuitem", { name: "打开" }));
     expect(onOpenPaper).toHaveBeenCalledWith("paper-1");
     expect(onToggleSelection).not.toHaveBeenCalled();
   });

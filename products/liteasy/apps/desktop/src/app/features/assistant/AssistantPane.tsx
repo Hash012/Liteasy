@@ -379,11 +379,21 @@ export function AssistantPane({
       return;
     }
 
-    let nextSessions = sessionRegistryRef.current;
+    const activeSessionBeforeVisibilityFilter = sessionRegistryRef.current.find(
+      (session) => session.id === activeSessionIdRef.current
+    );
+    const hidActiveThinReadingSession = !developerDiagnostics &&
+      activeSessionBeforeVisibilityFilter?.kind === "artifact_generation" &&
+      activeSessionBeforeVisibilityFilter.artifactType === "thin_reading";
+    let nextSessions = developerDiagnostics
+      ? sessionRegistryRef.current
+      : sessionRegistryRef.current.filter((session) => (
+          session.kind !== "artifact_generation" || session.artifactType !== "thin_reading"
+        ));
     const currentSession = nextSessions.find(
       (session) => session.id === activeSessionIdRef.current
     );
-    if (currentSession?.kind !== "artifact_generation") {
+    if (!hidActiveThinReadingSession && currentSession?.kind !== "artifact_generation") {
       nextSessions = upsertAssistantSession(
         nextSessions,
         snapshotAssistantSession({
@@ -395,7 +405,10 @@ export function AssistantPane({
 
     const newRunningTasks: ArtifactTask[] = [];
     let migratedActiveSessionId: string | undefined;
-    artifactTasks.forEach((task) => {
+    const visibleArtifactTasks = developerDiagnostics
+      ? artifactTasks
+      : artifactTasks.filter((task) => task.type !== "thin_reading");
+    visibleArtifactTasks.forEach((task) => {
       const sessionId = getArtifactTaskSessionId(task.id, task);
       const previousSession = nextSessions.find((session) => session.id === sessionId) ??
         nextSessions.find((session) => session.artifactTaskId === task.id);
@@ -425,21 +438,23 @@ export function AssistantPane({
     });
 
     const taskToOpen = newRunningTasks[newRunningTasks.length - 1];
+    const fallbackConversation = nextSessions.find((session) => session.kind !== "artifact_generation") ??
+      initialSessionRef.current;
     const nextActiveSessionId = taskToOpen
       ? getArtifactTaskSessionId(taskToOpen.id, taskToOpen)
-      : migratedActiveSessionId ?? activeSessionIdRef.current;
-    const activeArtifactSession = nextSessions.find(
-      (session) => session.id === nextActiveSessionId && session.kind === "artifact_generation"
-    );
+      : hidActiveThinReadingSession
+        ? fallbackConversation.id
+        : migratedActiveSessionId ?? activeSessionIdRef.current;
+    const sessionToRestore = nextSessions.find((session) => session.id === nextActiveSessionId);
 
     sessionRegistryRef.current = nextSessions;
     setSessionHistory([...nextSessions]);
-    if (activeArtifactSession) {
-      activeSessionIdRef.current = activeArtifactSession.id;
-      setActiveSessionId(activeArtifactSession.id);
+    if (sessionToRestore && (sessionToRestore.kind === "artifact_generation" || hidActiveThinReadingSession)) {
+      activeSessionIdRef.current = sessionToRestore.id;
+      setActiveSessionId(sessionToRestore.id);
       assistantStoreRef.current.restoreSession(
-        activeArtifactSession.mode,
-        activeArtifactSession.messages
+        sessionToRestore.mode,
+        sessionToRestore.messages
       );
       setAssistantState(cloneAssistantState(assistantStoreRef.current.getState()));
       if (taskToOpen) {

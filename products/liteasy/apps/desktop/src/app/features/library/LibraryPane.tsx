@@ -43,6 +43,7 @@ import {
   LockClosedRegular,
   LockOpenRegular,
   OrganizationRegular,
+  OpenRegular,
   DocumentArrowUpRegular,
   SearchRegular
 } from "@fluentui/react-icons";
@@ -84,6 +85,7 @@ import type {
   LocalLibrarySnapshot,
   LocalLibraryTrashEntry
 } from "./localLibrary.types";
+import { LibraryLocationPanel } from "./LibraryLocationPanel";
 import {
   canExportFromOrganization,
   canManageOrganizationLibrary,
@@ -109,6 +111,8 @@ type LibraryPaneProps = {
   cloudTreeRevision?: number;
   importJobs: Record<string, ImportJob>;
   localLibrarySnapshot: LocalLibrarySnapshot | null;
+  localLibraryError?: string | null;
+  loadLegacyLibraryRoots?: () => Promise<string[]>;
   organizationId?: string;
   organizationStorageAccess?: OrganizationStorageAccess;
   organizationWorkspaceLabel?: string;
@@ -129,6 +133,7 @@ type LibraryPaneProps = {
   onImportSelectedSet: () => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
   onLoginRequired?: () => void;
+  onSelectLegacyLibraryRoot?: (legacyRootPath: string) => Promise<void>;
   onMoveFolder?: (folderPath: string, targetFolderPath: string) => Promise<string>;
   onMovePaper?: (paperId: string, targetFolderPath: string) => Promise<string>;
   onOpenCloudEntry?: (scope: CloudLibraryScope, entry: CloudLibraryEntry) => void | Promise<void>;
@@ -364,12 +369,15 @@ export function LibraryPane({
   cloudEndpoint,
   cloudTreeRevision,
   localLibrarySnapshot,
+  localLibraryError,
+  loadLegacyLibraryRoots,
   onAddDroppedPdfFiles,
   onClearRecommendations,
   onDismissRecommendation,
   onImportSelectedSet,
   onImportZoteroDirectory,
   onLoginRequired,
+  onSelectLegacyLibraryRoot,
   onMoveFolder,
   onMovePaper,
   onOpenCloudEntry,
@@ -425,6 +433,7 @@ export function LibraryPane({
   const [folderDialogError, setFolderDialogError] = useState("");
   const [folderDialogPending, setFolderDialogPending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const localImportTargetPathRef = useRef<string | undefined>(undefined);
   const zoteroDirectoryInputRef = useRef<HTMLInputElement | null>(null);
   const attachPdfInputRef = useRef<HTMLInputElement | null>(null);
   const [attachTarget, setAttachTarget] = useState<{
@@ -433,6 +442,10 @@ export function LibraryPane({
     scope: CloudLibraryScope;
   } | null>(null);
   const [pendingNodeIds, setPendingNodeIds] = useState<string[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<Record<
+    "local" | "collection" | "organization",
+    string | null
+  >>({ collection: null, local: null, organization: null });
   const query = search.trim().toLocaleLowerCase();
   const localTree = useMemo(
     () => filterTree(localExplorerTree(localLibrarySnapshot), query),
@@ -464,6 +477,7 @@ export function LibraryPane({
       local: read(`liteasy.library.expanded.local.v1:${localLibrarySnapshot?.libraryId ?? "none"}`),
       organization: read(`liteasy.library.expanded.organization.v1:${accountScopeId ?? "guest"}:${organizationId ?? "none"}`)
     }));
+    setSelectedFolderIds({ collection: null, local: null, organization: null });
   }, [accountScopeId, localLibrarySnapshot?.libraryId, organizationId]);
 
   function expandedStorageKey(area: LibraryResourceArea) {
@@ -493,6 +507,26 @@ export function LibraryPane({
     setCollapsedSections((current) => current.includes(area)
       ? current.filter((item) => item !== area)
       : [...current, area]);
+  }
+
+  function selectFolder(
+    area: "local" | "collection" | "organization",
+    folderId: string | null
+  ) {
+    setSelectedFolderIds((current) => ({
+      ...current,
+      [area]: current[area] === folderId ? null : folderId
+    }));
+  }
+
+  function openLocalPdfPicker() {
+    const selectedPath = selectedFolderIds.local;
+    localImportTargetPathRef.current = selectedPath && localLibrarySnapshot?.folders.some(
+      (folder) => folder.path === selectedPath
+    )
+      ? selectedPath
+      : localLibrarySnapshot?.rootPath;
+    fileInputRef.current?.click();
   }
 
   async function transfer(source: LibraryResourceTransferSource, target: LibraryResourceTransferTarget) {
@@ -724,6 +758,10 @@ export function LibraryPane({
     const canManageEntry = area !== "organization" || Boolean(
       organizationStorageAccess && canManageOrganizationLibrary(organizationStorageAccess.role)
     );
+    const openEntry = () => {
+      if (entry.source.area === "local") onOpenPaper?.(entry.id);
+      else void onOpenCloudEntry?.(entry.source.scope, entry.source.entry);
+    };
     const row = (
       <div
         aria-busy={pending}
@@ -752,44 +790,24 @@ export function LibraryPane({
         <span aria-hidden="true" className="library-paper-icon">
           {entry.bodyAvailable ? <DocumentPdfRegular /> : <DocumentTextRegular />}
         </span>
-        <button
-          className="library-paper-title"
-          disabled={!entry.bodyAvailable || pending}
-          onClick={() => {
-            if (entry.source.area === "local") onOpenPaper?.(entry.id);
-            else {
-              void onOpenCloudEntry?.(entry.source.scope, entry.source.entry);
-            }
-          }}
-          title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
-          type="button"
-        >
-          {entry.label}
-        </button>
-        {!entry.bodyAvailable ? <span className="library-entry-status">仅元数据</span> : null}
-        <Tooltip content="移到回收站" relationship="label">
-          <Button
-            appearance="subtle"
-            aria-label={`删除 ${entry.label}`}
-            className="library-row-action"
-            disabled={pending || !canManageEntry}
-            icon={<DeleteRegular />}
-            onClick={() => void runNodeAction(
-              entry.id,
-              `正在将《${entry.label}》移到回收站...`,
-              () => trashEntry(area, entry)
-            )}
-            size="small"
-          />
-        </Tooltip>
-      </div>
-    );
-    return (
-      <li className={`library-paper-node${activePaperId === entry.id ? " active" : ""}`} key={entry.id}>
-        <Menu openOnContext>
-          <MenuTrigger disableButtonEnhancement>{row}</MenuTrigger>
+        <Menu>
+          <MenuTrigger disableButtonEnhancement>
+            <button
+              className="library-paper-title"
+              disabled={pending}
+              title={entry.bodyAvailable ? entry.label : `${entry.label}（仅元数据）`}
+              type="button"
+            >
+              {entry.label}
+            </button>
+          </MenuTrigger>
           <MenuPopover>
             <MenuList>
+              <MenuItem
+                disabled={!entry.bodyAvailable || pending}
+                icon={<OpenRegular />}
+                onClick={openEntry}
+              >打开</MenuItem>
               <MenuItem
                 disabled={pending || !canManageEntry}
                 icon={<EditRegular />}
@@ -815,6 +833,12 @@ export function LibraryPane({
             </MenuList>
           </MenuPopover>
         </Menu>
+        {!entry.bodyAvailable ? <span className="library-entry-status">仅元数据</span> : null}
+      </div>
+    );
+    return (
+      <li className={`library-paper-node${activePaperId === entry.id ? " active" : ""}`} key={entry.id}>
+        {row}
       </li>
     );
   }
@@ -825,6 +849,7 @@ export function LibraryPane({
     depth: number
   ) {
     const expanded = query.length > 0 || expandedFolders[area].includes(folder.id);
+    const selected = !folder.virtual && selectedFolderIds[area] === folder.id;
     const pending = pendingNodeIds.includes(folder.id);
     const canManageFolder = area !== "organization" || Boolean(
       organizationStorageAccess && canManageOrganizationLibrary(organizationStorageAccess.role)
@@ -833,7 +858,7 @@ export function LibraryPane({
     const row = (
       <div
         aria-busy={pending}
-        className="library-folder-row"
+        className={`library-folder-row${selected ? " is-selected" : ""}`}
         draggable={Boolean(
           !pending && !folder.virtual && folderSource && canStartResourceDrag(folderSource)
         )}
@@ -861,7 +886,14 @@ export function LibraryPane({
         >
           {expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
         </button>
-        <button className="library-folder-name" onClick={() => toggleFolder(area, folder.id)} type="button">
+        <button
+          aria-pressed={folder.virtual ? undefined : selected}
+          className="library-folder-name"
+          onClick={() => folder.virtual
+            ? toggleFolder(area, folder.id)
+            : selectFolder(area, folder.id)}
+          type="button"
+        >
           <FolderRegular aria-hidden="true" />
           <span>{folder.label}</span>
         </button>
@@ -938,7 +970,13 @@ export function LibraryPane({
     try {
       if (area === "local") {
         await createLocalLibraryFolder(name, parent?.localPath);
-        await onRefreshLocalLibrary?.();
+        try {
+          await onRefreshLocalLibrary?.();
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          setMessage(`目录已创建，但列表刷新失败：${reason}`);
+          return;
+        }
       } else {
         const scope = area === "collection" ? collectionScope : organizationScope;
         if (!scope) throw new Error("当前文献库尚未准备完成。");
@@ -966,7 +1004,7 @@ export function LibraryPane({
       }
       setMessage(parent ? `已在“${parent.label}”中新建目录“${name}”。` : `已新建目录“${name}”。`);
     } catch (error) {
-      throw error instanceof Error ? error : new Error("目录创建失败。");
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -981,7 +1019,7 @@ export function LibraryPane({
       setCreateFolderTarget(null);
       setFolderName("");
     } catch (error) {
-      setFolderDialogError(error instanceof Error ? error.message : "目录创建失败。");
+      setFolderDialogError(error instanceof Error ? error.message : String(error));
     } finally {
       setFolderDialogPending(false);
     }
@@ -1003,6 +1041,9 @@ export function LibraryPane({
   }
 
   const localCount = localLibrarySnapshot?.entries.length ?? 0;
+  const legacyLibrarySelectionRequired = localLibraryError?.startsWith(
+    "检测到多个旧账号本地库"
+  ) ?? false;
   const collectionCount = collection.tree?.entries.length ?? 0;
   const organizationCount = organization.tree?.entries.length ?? 0;
 
@@ -1030,9 +1071,9 @@ export function LibraryPane({
       <section aria-label="本地文献库" className="library-section">
         <SectionHeader
           actions={<>
-            {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"))}
-            {iconAction("导入 PDF", <AddRegular />, () => fileInputRef.current?.click())}
-            {iconAction("从 Zotero 导出目录导入 PDF", <FolderOpenRegular />, () => zoteroDirectoryInputRef.current?.click())}
+            {iconAction("新建本地目录", <FolderAddRegular />, () => openCreateFolderDialog("local"), !localLibrarySnapshot)}
+            {iconAction("导入 PDF", <AddRegular />, openLocalPdfPicker, !localLibrarySnapshot)}
+            {iconAction("从 Zotero 导出目录导入 PDF", <FolderOpenRegular />, () => zoteroDirectoryInputRef.current?.click(), !localLibrarySnapshot)}
             {iconAction("刷新本地文献库", <ArrowClockwiseRegular />, () => void onRefreshLocalLibrary?.())}
           </>}
           count={localCount}
@@ -1050,7 +1091,9 @@ export function LibraryPane({
             event.target.value = "";
             if (files.length === 0) return;
             setMessage(`正在导入 ${files.length} 个 PDF...`);
-            void Promise.resolve(onAddDroppedPdfFiles?.(files, localLibrarySnapshot?.rootPath))
+            const targetFolderPath = localImportTargetPathRef.current ?? localLibrarySnapshot?.rootPath;
+            localImportTargetPathRef.current = undefined;
+            void Promise.resolve(onAddDroppedPdfFiles?.(files, targetFolderPath))
               .then(async () => {
                 await onRefreshLocalLibrary?.();
                 setMessage(`已导入 ${files.length} 个 PDF。`);
@@ -1110,22 +1153,37 @@ export function LibraryPane({
         />
         {!collapsedSections.includes("local") ? (
           <div className="library-section-content">
-            {renderTree("local", localTree, query ? "没有匹配的本地文献" : "本地文献库为空")}
-            <TrashGroup
-              entries={localLibrarySnapshot?.trashEntries ?? []}
-              onEmpty={async () => {
-                await emptyLocalLibraryTrash();
-                await onRefreshLocalLibrary?.();
-              }}
-              onPurge={async (entry) => {
-                await purgeLocalLibraryTrashItem(entry.trashId);
-                await onRefreshLocalLibrary?.();
-              }}
-              onRestore={async (entry) => {
-                await restoreLocalLibraryTrashItem(entry.trashId);
-                await onRefreshLocalLibrary?.();
-              }}
-            />
+            {legacyLibrarySelectionRequired && loadLegacyLibraryRoots && onSelectLegacyLibraryRoot ? (
+              <LibraryLocationPanel
+                loadLegacyRoots={loadLegacyLibraryRoots}
+                onSelectLegacyRoot={onSelectLegacyLibraryRoot}
+                rootPath={null}
+              />
+            ) : localLibraryError ? (
+              <ErrorState
+                message="本地文献库暂时无法加载。"
+                onRetry={() => void onRefreshLocalLibrary?.()}
+              />
+            ) : (
+              <>
+                {renderTree("local", localTree, query ? "没有匹配的本地文献" : "本地文献库为空")}
+                <TrashGroup
+                  entries={localLibrarySnapshot?.trashEntries ?? []}
+                  onEmpty={async () => {
+                    await emptyLocalLibraryTrash();
+                    await onRefreshLocalLibrary?.();
+                  }}
+                  onPurge={async (entry) => {
+                    await purgeLocalLibraryTrashItem(entry.trashId);
+                    await onRefreshLocalLibrary?.();
+                  }}
+                  onRestore={async (entry) => {
+                    await restoreLocalLibraryTrashItem(entry.trashId);
+                    await onRefreshLocalLibrary?.();
+                  }}
+                />
+              </>
+            )}
           </div>
         ) : null}
       </section>

@@ -903,6 +903,7 @@ function buildThinReadingRepairPrompt(input: {
     input.reason,
     "</quality_gate_reason>",
     "修复要求：",
+    "- anchors[].kind 只能逐字使用 claim、concept、contribution、limitation、mechanism、method、result 之一；机制使用 mechanism，论文的独特增量使用 contribution，不得创造 algorithm、finding 等新类别。",
     "- 将 summary 整理成知识原子化的一段核心总述：每句话只承担一个概念、机制、证据或边界，删去平均章节复述；追求精简但不设字符硬上限，必要信息较多时允许自然变长。",
     "- 中文输出中，关键原文术语首次承担实质含义时必须写成“原文术语（准确中文释义）”，不得只保留中文或把两者拆开，更不得反向写成“中文（原文术语）”；正确：late interaction（后期交互），错误：后期交互（late interaction）。",
     "- summarySentences 必须按顺序完整覆盖 100% 的 summary 原文，每项 text 必须逐字取自 summary。",

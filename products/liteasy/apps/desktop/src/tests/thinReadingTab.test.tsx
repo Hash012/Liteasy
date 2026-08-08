@@ -477,6 +477,12 @@ describe("ThinReadingTab", () => {
       <ThinReadingTab
         artifactId={document.artifactId}
         document={document}
+        generationProgress={{
+          message: "Internal generation stage",
+          partialAnswer: "Unreviewed streamed prose",
+          progress: 42,
+          stageLabel: "Evidence review"
+        }}
         onGenerateBranch={onGenerateBranch}
         onOpenEvidence={vi.fn()}
         onUpdateDocument={vi.fn()}
@@ -494,6 +500,11 @@ describe("ThinReadingTab", () => {
     expect(screen.getByRole("button", { name: "Collapse Intuecho recommendations" })).toBeInTheDocument();
     expect(screen.getByText("Connect Intuecho to view community shared annotations")).toBeInTheDocument();
     expect(screen.getByText("No annotations yet")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Generating the thin-reading text. It will appear on this page when ready."
+    );
+    expect(screen.queryByText("Internal generation stage")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unreviewed streamed prose")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Explore Method" })).toBeInTheDocument();
     expect(screen.queryByText("暂无批注")).not.toBeInTheDocument();
 
@@ -769,12 +780,13 @@ describe("ThinReadingTab", () => {
     fireEvent.click(command);
 
     expect(screen.queryByLabelText("快捷命令列表")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("LLM 实时工作窗口")).toBeInTheDocument();
-    expect(screen.getByText(/请求已提交.*请勿重复点击/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("正在生成薄读正文，完成后将在当前页面显示。");
+    expect(screen.queryByLabelText("LLM 实时工作窗口")).not.toBeInTheDocument();
+    expect(screen.queryByText(/请求已提交.*请勿重复点击/)).not.toBeInTheDocument();
     expect(onGenerateBranch).toHaveBeenCalledTimes(1);
 
     finishGeneration();
-    await waitFor(() => expect(screen.queryByLabelText("LLM 实时工作窗口")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
   test("does not offer selection deepening for a generation error", () => {

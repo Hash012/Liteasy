@@ -6,6 +6,10 @@ import type {
   ZoteroPdfDirectoryImportResult
 } from "./localLibrary.types";
 
+function tauriError(error: unknown) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 export type MoveLocalLibraryResourceInput = {
   sourcePath: string;
   targetPath: string;
@@ -176,6 +180,8 @@ export const selectLegacyLocalLibraryRoot = (
 ): Promise<LocalLibrarySnapshot> =>
   invoke<LocalLibrarySnapshot>("select_legacy_local_library_root", {
     legacyRootPath
+  }).catch((error: unknown) => {
+    throw tauriError(error);
   });
 
 export const openLocalLibraryInFileManager = (): Promise<void> =>
@@ -251,7 +257,10 @@ export const createLocalLibraryFolder = (
   name: string,
   parentPath?: string
 ): Promise<LocalLibrarySnapshot> =>
-  invoke<LocalLibrarySnapshot>("create_local_library_folder", { name, parentPath });
+  invoke<LocalLibrarySnapshot>("create_local_library_folder", { name, parentPath })
+    .catch((error: unknown) => {
+      throw tauriError(error);
+    });
 
 function zoteroRelativeParts(file: File) {
   const relativePath = (file.webkitRelativePath || file.name).replace(/\\/g, "/");

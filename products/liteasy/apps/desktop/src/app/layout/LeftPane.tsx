@@ -41,6 +41,7 @@ export type LeftPaneProps = {
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
   libraryRootPath?: string | null;
   loadLegacyLibraryRoots?: () => Promise<string[]>;
+  localLibraryError?: string | null;
   localLibrarySnapshot: LocalLibrarySnapshot | null;
   onBackupLibrary?: (destinationDirectory: string) => Promise<string>;
   onChangeLibraryRoot?: (nextRootPath: string) => Promise<void>;
@@ -147,6 +148,7 @@ export function LeftPane({
   documentMetadataSyncStatus,
   libraryRootPath,
   loadLegacyLibraryRoots,
+  localLibraryError,
   localLibrarySnapshot,
   onBackupLibrary,
   onChangeLibraryRoot,
@@ -323,6 +325,8 @@ export function LeftPane({
             cloudEndpoint={cloudEndpoint}
             cloudTreeRevision={cloudTreeRevision}
             importJobs={importJobs}
+            loadLegacyLibraryRoots={loadLegacyLibraryRoots}
+            localLibraryError={localLibraryError}
             localLibrarySnapshot={localLibrarySnapshot}
             paperChildren={libraryPaperChildren}
             onAddExternalPdf={onAddExternalPdf}
@@ -341,6 +345,7 @@ export function LeftPane({
             onOpenPaper={onOpenPaper}
             onOpenPaperChild={onOpenPaperChild}
             onRefreshLocalLibrary={onRefreshLocalLibrary}
+            onSelectLegacyLibraryRoot={onSelectLegacyLibraryRoot}
             onMoveFolder={onMoveLibraryFolder}
             onMovePaper={onMoveLibraryPaper}
             onReturnToLocalWorkspace={onReturnToLocalWorkspace}

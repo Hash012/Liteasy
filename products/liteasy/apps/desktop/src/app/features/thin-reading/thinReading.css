@@ -172,12 +172,17 @@
 .thin-reading__omitted button svg { font-size: 15px; }
 .thin-reading__status, .thin-reading__error { border-radius: 6px; font-size: 12px; margin-top: 18px; padding: 10px 12px; }
 .thin-reading__status { background: #e5efea; color: #3e6d68; display: grid; gap: 8px; }
+.thin-reading__generation-status { background: rgba(251, 253, 252, .98); border: 1px solid #cbdcd7; border-radius: 6px; bottom: 18px; box-shadow: 0 6px 18px rgba(38, 66, 63, .1); color: #435c59; font-size: 12px; line-height: 1.5; max-width: min(360px, calc(100vw - 36px)); padding: 10px 12px 10px 30px; position: fixed; right: 18px; z-index: 20; }
+.thin-reading__generation-status::before { animation: thin-reading-generation-pulse 1.2s ease-in-out infinite; background: #2f8177; border-radius: 50%; content: ""; height: 8px; left: 12px; position: absolute; top: 15px; width: 8px; }
 .thin-reading__generation-progress { background: rgba(62, 109, 104, .16); border-radius: 999px; height: 4px; overflow: hidden; width: min(260px, 100%); }
 .thin-reading__generation-progress > span { background: #477b79; display: block; height: 100%; transition: width 180ms ease; }
 .thin-reading__error { background: #f9e7e1; color: #9b4c3f; }
 .thin-reading__recovery { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px; }
 .thin-reading__recovery button { background: #3e6d68; border: 0; border-radius: 4px; color: #fff; font: inherit; padding: 7px 10px; }
 .thin-reading__recovery button:disabled { cursor: wait; opacity: 0.65; }
+@keyframes thin-reading-generation-pulse { 50% { opacity: .45; transform: scale(.82); } }
+@media (max-width: 720px) { .thin-reading__generation-status { bottom: 12px; left: 12px; max-width: none; right: 12px; } }
+@media (prefers-reduced-motion: reduce) { .thin-reading__generation-status::before { animation: none; } }
 .thin-reading__recovery small { color: #5b6f6b; font-size: 12px; }
 .thin-reading__annotations { border-top: 1px solid var(--thin-line); display: grid; gap: 12px; margin-top: 38px; padding-top: 22px; }
 .thin-reading__annotation-toolbar, .thin-reading__annotation-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }

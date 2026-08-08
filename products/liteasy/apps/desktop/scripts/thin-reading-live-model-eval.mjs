@@ -8,7 +8,9 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(scriptDir, "..");
 const repositoryRoot = resolve(desktopDir, "../../../..");
 loadSecretEnvFile();
-const provider = process.env.LITEASY_THIN_READING_LIVE_PROVIDER ?? "openai";
+const provider = process.env.LITEASY_THIN_READING_LIVE_PROVIDER ??
+  process.env.LITEASY_MODEL_PROVIDER ??
+  "openai";
 
 function waitForHealth(endpoint, timeoutMs = 20_000) {
   const startedAt = Date.now();
@@ -55,6 +57,8 @@ if (provider === "openai") {
     env.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
   }
   env.VITE_LITEASY_OPENAI_MODEL = process.env.VITE_LITEASY_OPENAI_MODEL ?? "gpt-5.4-mini";
+} else if (!process.env.DEEPSEEK_API_KEY) {
+  throw new Error("DEEPSEEK_API_KEY must be configured in development/dev-cloud/.env.local");
 }
 console.log(`Starting thin-reading live eval (provider=${provider}, case=${process.env.LITEASY_THIN_READING_LIVE_EVAL_CASE ?? "colbert"}).`);
 const cloud = spawn(process.execPath, [resolve(repositoryRoot, "development/dev-cloud/server.mjs")], {

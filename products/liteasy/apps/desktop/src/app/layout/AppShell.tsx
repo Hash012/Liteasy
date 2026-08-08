@@ -207,6 +207,7 @@ export function AppShell({
     });
   }
   const {
+    error: localLibraryError,
     notice: localLibraryNotice,
     refresh: refreshLocalLibrary,
     snapshot: localLibrarySnapshot
@@ -1235,6 +1236,7 @@ export function AppShell({
     documentMetadataSyncStatus,
     importJobs: importJobsByDocumentId,
     libraryPaperChildren,
+    localLibraryError,
     localLibrarySnapshot,
     libraryRootPath: localLibrarySnapshot?.rootPath ?? null,
     loadLegacyLibraryRoots: isPaperCacheAvailable()

@@ -333,7 +333,7 @@ describe("ArtifactTabs", () => {
     expect(screen.queryByRole("button", { name: "保存文档" })).not.toBeInTheDocument();
   });
 
-  test("surfaces live thin-reading Agent phase progress in the reading page", () => {
+  test("hides thin-reading phase details and live prose from regular accounts", () => {
     const thinReadingDocument = createThinReadingDocument({
       artifactId: "artifact-thin-progress",
       papers: [{ id: "paper-1", title: "ColBERT" }],
@@ -365,6 +365,83 @@ describe("ArtifactTabs", () => {
           artifactId: "artifact-thin-progress",
           id: "thin-reading-task",
           message: "正在核对薄读证据边界",
+          partialAnswer: "尚未审计的薄读正文",
+          progress: 78,
+          stage: "thin_reading_validating",
+          status: "running",
+          type: "thin_reading"
+        }]}
+      />
+    );
+
+    expect(screen.getByText("正在生成薄读正文，完成后将在当前页面显示。")).toBeInTheDocument();
+    expect(screen.queryByText("正在核对薄读证据边界")).not.toBeInTheDocument();
+    expect(screen.queryByText("核验薄读证据")).not.toBeInTheDocument();
+    expect(screen.queryByText("尚未审计的薄读正文")).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar", { name: "薄读 Agent 进度" })).not.toBeInTheDocument();
+  });
+
+  test("keeps initial thin-reading generation details private before the result tab exists", () => {
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[]}
+        tasks={[{
+          id: "thin-reading-root-task",
+          message: "正在规划薄读证据目录",
+          partialAnswer: "未审计的总述正文",
+          progress: 36,
+          stage: "thin_reading_planning",
+          status: "running",
+          type: "thin_reading"
+        }]}
+      />
+    );
+
+    expect(screen.getByText("正在生成薄读正文，完成后将在当前页面显示。")).toBeInTheDocument();
+    expect(screen.queryByText("正在规划薄读证据目录")).not.toBeInTheDocument();
+    expect(screen.queryByText("未审计的总述正文")).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar", { name: "Agent 分析进度" })).not.toBeInTheDocument();
+  });
+
+  test("shows thin-reading generation diagnostics to server-authorized developers", () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-progress",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "ColBERT uses late interaction for retrieval.",
+        withinPaperClosure: true
+      },
+      targetLanguage: "zh-CN"
+    });
+
+    render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        developerDiagnostics
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[{
+          artifactId: "artifact-thin-progress",
+          papers: [{ id: "paper-1", title: "ColBERT" }],
+          thinReadingDocument,
+          title: "薄读",
+          type: "thin_reading"
+        }]}
+        tasks={[{
+          artifactId: "artifact-thin-progress",
+          id: "thin-reading-task",
+          message: "正在核对薄读证据边界",
+          partialAnswer: "开发测试实时正文",
           progress: 78,
           stage: "thin_reading_validating",
           status: "running",
@@ -375,10 +452,8 @@ describe("ArtifactTabs", () => {
 
     expect(screen.getByText("正在核对薄读证据边界")).toBeInTheDocument();
     expect(screen.getByText("核验薄读证据")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "薄读 Agent 进度" })).toHaveAttribute(
-      "aria-valuenow",
-      "78"
-    );
+    expect(screen.getByText("开发测试实时正文")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "薄读 Agent 进度" })).toHaveAttribute("aria-valuenow", "78");
   });
 
   test("renders mindmap verification and source layer metadata", () => {

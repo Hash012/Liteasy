@@ -262,6 +262,7 @@ export function ArtifactTabs({
     return (
       <ThinReadingTab
         artifactId={activeTab.artifactId}
+        developerDiagnostics={developerDiagnostics}
         document={document}
         headerAction={<ArtifactExportMenu tab={{ ...activeTab, thinReadingDocument: document }} />}
         intuechoEndpoint={intuechoEndpoint}
@@ -342,7 +343,12 @@ export function ArtifactTabs({
         </nav>
       ) : null}
 
-      {activeTask && activeTask.status !== "completed" ? (
+      {activeTask && activeTask.status !== "completed" &&
+      activeTask.type === "thin_reading" && !developerDiagnostics ? (
+        <section aria-live="polite" className={`artifact-progress-panel ${activeTask.status}`}>
+          <strong>正在生成薄读正文，完成后将在当前页面显示。</strong>
+        </section>
+      ) : activeTask && activeTask.status !== "completed" ? (
         <section className={`artifact-progress-panel ${activeTask.status}`} aria-live="polite">
           <div className="artifact-progress-copy">
             <div>

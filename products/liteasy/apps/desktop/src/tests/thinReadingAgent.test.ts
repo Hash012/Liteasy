@@ -105,6 +105,7 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("反摘要门控");
     expect(prompt).toContain("Skeptical audit");
     expect(prompt).toContain("Reader-facing anchors");
+    expect(prompt).toContain("claim | concept | contribution | limitation | mechanism | method | result");
     expect(prompt).toContain("3–8 non-overlapping high-value anchors");
     expect(prompt).toContain("Cover every sentence that contains an independent high-value");
     expect(prompt).toContain("读后留存测试");
@@ -118,7 +119,7 @@ describe("thinReadingAgent", () => {
     const seed = parseThinReadingModelSeed(JSON.stringify({
       anchors: [{
         importance: 0.9,
-        kind: "concept",
+        kind: "mechanism",
         label: "分类框架",
         searchQuery: "vector database taxonomy survey",
         summarySentenceIndex: 0,
@@ -146,10 +147,42 @@ describe("thinReadingAgent", () => {
       end: summary.indexOf("taxonomy") + "taxonomy".length,
       evidenceIds: ["evidence-survey-taxonomy"],
       externalSourceIds: [],
+      kind: "mechanism",
       label: "分类框架",
       start: summary.indexOf("taxonomy"),
       text: "taxonomy"
     })]);
+  });
+
+  test("rejects anchor kinds outside the controlled semantic vocabulary", () => {
+    const summary = "这篇综述以 taxonomy 组织 vector database systems。";
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      anchors: [{
+        importance: 0.9,
+        kind: "algorithm",
+        label: "分类算法",
+        searchQuery: "vector database taxonomy survey",
+        summarySentenceIndex: 0,
+        text: "taxonomy"
+      }],
+      claims: [],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "survey",
+      summary,
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysis: prepared,
+      targetLanguage: "zh-CN"
+    })).toThrow("anchors.0.kind: Invalid option");
   });
 
   test("turns the interpretation intent into a discourse plan instead of an evidence list", () => {

@@ -151,6 +151,8 @@ describe("desktop dev script", () => {
     expect(script).not.toContain("test-api.md");
     expect(liveEvalScript).toContain("loadSecretEnvFile();");
     expect(liveEvalScript).toContain("development/dev-cloud/.env.local");
+    expect(liveEvalScript).toContain("process.env.LITEASY_MODEL_PROVIDER");
+    expect(liveEvalScript).toContain("DEEPSEEK_API_KEY must be configured");
     expect(liveEvalScript).not.toContain("test-api.md");
   });
 });

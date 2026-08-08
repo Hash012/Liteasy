@@ -49,7 +49,9 @@ test("opens local PDFs as independent tabs while the selected set remains locked
   await user.click(screen.getByRole("button", { name: "锁定选中文献集" }));
 
   await user.click(within(library).getByRole("button", { name: secondTitle }));
+  await user.click(await screen.findByRole("menuitem", { name: "打开" }));
   await user.click(within(library).getByRole("button", { name: firstTitle }));
+  await user.click(await screen.findByRole("menuitem", { name: "打开" }));
 
   expect(screen.getByRole("tab", { name: firstTitle })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByRole("tab", { name: secondTitle })).toBeInTheDocument();

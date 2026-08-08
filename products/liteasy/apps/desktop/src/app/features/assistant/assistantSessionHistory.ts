@@ -9,6 +9,7 @@ export type AssistantSessionStatus = "idle" | "running" | "completed" | "failed"
 export type AssistantSessionHistoryItem = {
   artifactId?: string;
   artifactTaskId?: string;
+  artifactType?: ArtifactType;
   createdAt?: string;
   id: string;
   kind?: AssistantSessionKind;
@@ -234,6 +235,7 @@ export function createArtifactTaskSession(
   return {
     artifactId: task.artifactId ?? previous?.artifactId,
     artifactTaskId: task.id,
+    artifactType: task.type,
     createdAt: previous?.createdAt ?? timestamp,
     id: sessionId,
     kind: "artifact_generation",

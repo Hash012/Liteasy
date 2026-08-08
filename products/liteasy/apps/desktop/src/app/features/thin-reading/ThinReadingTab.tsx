@@ -64,6 +64,7 @@ export type ThinReadingEvidenceOpenRequest = {
 
 export type ThinReadingTabProps = {
   artifactId: string;
+  developerDiagnostics?: boolean;
   document: ThinReadingDocument;
   generationProgress?: {
     message: string;
@@ -307,6 +308,7 @@ export function splitThinReadingSummaryTextByAnchors(input: {
 
 export function ThinReadingTab({
   artifactId,
+  developerDiagnostics = false,
   communityRecommendationState,
   document,
   generationProgress,
@@ -975,15 +977,21 @@ export function ThinReadingTab({
       </div>
 
       {visibleGenerationProgress ? (
-        <AgentLiveWorkPanel
-          floating
-          markdown={visibleGenerationProgress.partialAnswer}
-          message={generationNotice || visibleGenerationProgress.message}
-          progress={visibleGenerationProgress.progress}
-          progressLabel={labels.generationProgress}
-          runKey={visibleGenerationProgress.runKey}
-          stageLabel={visibleGenerationProgress.stageLabel}
-        />
+        developerDiagnostics ? (
+          <AgentLiveWorkPanel
+            floating
+            markdown={visibleGenerationProgress.partialAnswer}
+            message={generationNotice || visibleGenerationProgress.message}
+            progress={visibleGenerationProgress.progress}
+            progressLabel={labels.generationProgress}
+            runKey={visibleGenerationProgress.runKey}
+            stageLabel={visibleGenerationProgress.stageLabel}
+          />
+        ) : (
+          <div aria-live="polite" className="thin-reading__generation-status" role="status">
+            {labels.generatingPrivately}
+          </div>
+        )
       ) : null}
 
       {graphMode === null ? (

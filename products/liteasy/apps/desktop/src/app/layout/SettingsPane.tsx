@@ -42,7 +42,7 @@ export function SettingsPane({
   const [viewExpanded, setViewExpanded] = useState(true);
   const [agentExpanded, setAgentExpanded] = useState(false);
   const [syncExpanded, setSyncExpanded] = useState(true);
-  const [libraryExpanded, setLibraryExpanded] = useState(false);
+  const [libraryExpanded, setLibraryExpanded] = useState(libraryRootPath == null);
   return (
     <section aria-label="左边栏设置" className="settings-panel">
       <div aria-hidden="true" className="settings-panel-icon"><SettingsRegular /></div>

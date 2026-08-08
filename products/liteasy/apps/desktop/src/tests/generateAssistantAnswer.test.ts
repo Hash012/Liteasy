@@ -1362,6 +1362,115 @@ test("repairs an incomplete live thin-reading trace exactly once", async () => {
   });
 });
 
+test("accepts a DeepSeek mechanism anchor without entering structured-output repair", async () => {
+  const store = createSettingsStore();
+  const prompts: string[] = [];
+  const outputSchemas: Array<Record<string, unknown>> = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  store.apply({
+    intent: "update_setting",
+    target: "models.default_provider",
+    value: "deepseek"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "DeepDendrite",
+        snippet: "Dendritic hierarchical scheduling accelerates parallel Hines solves on GPUs.",
+        summary: "DHS 加速 GPU 上的并行 Hines 求解。",
+        tags: ["DHS", "Hines"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as {
+        model?: string;
+        outputFormat?: { schema?: Record<string, unknown> };
+        prompt: string;
+        provider?: string;
+      };
+      expect(body).toMatchObject({ model: "deepseek-v4-flash", provider: "deepseek" });
+      prompts.push(String(body.prompt));
+      if (body.outputFormat?.schema) {
+        outputSchemas.push(body.outputFormat.schema);
+      }
+      const evidenceId = body.prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const summary = "dendritic hierarchical scheduling（树突分层调度）通过分层组织并行 Hines 求解来提高 GPU 利用率。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            anchors: [{
+              importance: 0.95,
+              kind: "mechanism",
+              label: "核心调度机制",
+              searchQuery: "dendritic hierarchical scheduling parallel Hines solve",
+              summarySentenceIndex: 0,
+              text: "dendritic hierarchical scheduling（树突分层调度）"
+            }],
+            claims: [{
+              evidenceIds: [evidenceId],
+              status: "grounded",
+              text: "DHS 通过分层调度加速并行 Hines 求解。"
+            }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "systems",
+            summary,
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: summary
+            }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "DeepDendrite" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-deepseek-mechanism",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "DeepDendrite",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(prompts).toHaveLength(1);
+  expect(outputSchemas).toHaveLength(1);
+  expect(JSON.stringify(outputSchemas[0])).toContain("mechanism");
+  expect(result.thinReading?.qualityGate).toMatchObject({
+    attempts: 1,
+    repaired: false,
+    repairReasons: []
+  });
+  expect(result.thinReading?.rootSeed.evidence.anchors).toEqual([
+    expect.objectContaining({ kind: "mechanism", label: "核心调度机制" })
+  ]);
+});
+
 test("repairs a selected Chinese branch that omits an explicitly requested terminology pair", async () => {
   const store = createSettingsStore();
   const prompts: string[] = [];

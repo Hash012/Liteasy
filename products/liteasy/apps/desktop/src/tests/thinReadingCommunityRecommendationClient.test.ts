@@ -26,6 +26,36 @@ const communityScope: ThinReadingRecommendationScope = {
 };
 
 describe("thinReadingCommunityRecommendationClient", () => {
+  test("maps the whole-paper discovery scope to the Intuecho document contract", async () => {
+    const transport = vi.fn(async () => ({
+      json: async () => ({ recommendations: [] }),
+      ok: true,
+      status: 200
+    }));
+    const client = createThinReadingCommunityRecommendationClient({
+      endpoint: "https://intuecho.example.com",
+      sessionId: "desktop-token",
+      transport
+    });
+
+    await expect(client({
+      kind: "whole_paper",
+      paperId: "paper-attention",
+      paperIdentity: communityScope.paperIdentity
+    })).resolves.toEqual([]);
+    expect(JSON.parse(transport.mock.calls[0][0].body)).toEqual({
+      scope: {
+        kind: "document",
+        paperIdentity: {
+          id: "doi:10.48550/arxiv.1706.03762",
+          kind: "doi",
+          source: "metadata",
+          value: "10.48550/arxiv.1706.03762"
+        }
+      }
+    });
+  });
+
   test("queries the scoped community endpoint and accepts only matching community results", async () => {
     const transport = vi.fn(async () => ({
       json: async () => ({

@@ -82,7 +82,7 @@ function communityScopePayload(scope: ThinReadingRecommendationScope, paperIdent
       evidenceIds: scope.evidenceIds ?? [],
       externalSourceIds: scope.externalSourceIds ?? []
     } : {}),
-    kind: scope.kind,
+    kind: scope.kind === "whole_paper" ? "document" : scope.kind,
     paperIdentity: {
       id: paperIdentity.id,
       kind: paperIdentity.kind,

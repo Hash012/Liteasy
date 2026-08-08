@@ -218,7 +218,17 @@ export type ThinReadingSummarySentence = {
 // Anchors belong to the reader-facing thin-reading text, rather than to an
 // arbitrary position in the source PDF. Offsets keep the stored mapping exact
 // even when the same phrase occurs more than once in a sentence.
-export type ThinReadingAnchorKind = "claim" | "concept" | "limitation" | "method" | "result";
+export const thinReadingAnchorKinds = [
+  "claim",
+  "concept",
+  "contribution",
+  "limitation",
+  "mechanism",
+  "method",
+  "result"
+] as const;
+
+export type ThinReadingAnchorKind = typeof thinReadingAnchorKinds[number];
 
 export type ThinReadingAnchor = {
   end: number;

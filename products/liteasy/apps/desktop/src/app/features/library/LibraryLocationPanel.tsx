@@ -121,7 +121,7 @@ export function LibraryLocationPanel({
       {legacyRoots.length > 0 && onSelectLegacyRoot ? (
         <div aria-label="检测到的旧文献库" className="library-location-move">
           <p className="library-location-hint">
-            检测到多个旧账号使用过的本地库。请选择一个作为当前库；未选目录不会合并或删除。
+            检测到多个旧版本遗留的本地库。请选择一个作为当前库；未选目录不会合并或删除。
           </p>
           {legacyRoots.map((path) => (
             <div className="library-location-current" key={path}>
