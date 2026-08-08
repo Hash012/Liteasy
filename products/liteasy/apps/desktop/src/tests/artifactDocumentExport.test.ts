@@ -1,8 +1,9 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   artifactMarkdownToHtml,
   createArtifactHtml,
-  createArtifactMarkdown
+  createArtifactMarkdown,
+  createArtifactExportPayload
 } from "../app/features/artifacts/artifactDocumentExport";
 import type { ArtifactTab, ArtifactType } from "../app/features/artifacts/artifact.types";
 import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
@@ -43,6 +44,10 @@ function createTab(type: ArtifactType): ArtifactTab {
 }
 
 describe("artifact document export", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test.each(artifactTypes)("creates portable Markdown and HTML for %s", (type) => {
     const tab = createTab(type);
     const markdown = createArtifactMarkdown(tab);
@@ -90,5 +95,39 @@ describe("artifact document export", () => {
     expect(markdown).toContain("## Agent 分析");
     expect(markdown).toContain("补充 Agent 结论。");
     expect(markdown).not.toContain("evidence-private-123");
+  });
+
+  test("creates a native payload without triggering a browser download", () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+
+    const payload = createArtifactExportPayload(createTab("thin_reading"), "markdown");
+
+    expect(payload).toEqual(expect.objectContaining({
+      artifactId: "artifact-thin_reading",
+      contentEncoding: "utf8",
+      fileName: "thin_reading 导出样例.md",
+      format: "markdown",
+      title: "thin_reading 导出样例"
+    }));
+    expect(payload.content).toContain("Agent 分析");
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  test("encodes generated PDF bytes as base64 in the export payload", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      fillRect: vi.fn(),
+      fillStyle: "#fff",
+      fillText: vi.fn(),
+      font: "",
+      measureText: (value: string) => ({ width: value.length * 10 })
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL")
+      .mockReturnValue("data:image/jpeg;base64,/9j/");
+
+    const payload = createArtifactExportPayload(createTab("mindmap"), "pdf");
+
+    expect(payload.contentEncoding).toBe("base64");
+    expect(payload.fileName).toBe("mindmap 导出样例.pdf");
+    expect(atob(payload.content).slice(0, 8)).toBe("%PDF-1.7");
   });
 });
