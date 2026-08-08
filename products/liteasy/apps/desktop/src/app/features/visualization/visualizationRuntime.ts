@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parseVisualizationArtifact } from "./visualizationArtifact.schema";
 import type { VisualizationArtifactV1, VisualizationModality } from "./visualizationArtifact.types";
 import { getVisualizationRendererRegistration } from "./visualizationRendererRegistry";
+import type { VisualizationRevalidationWorkerService } from "./visualizationRevalidationWorker";
 
 export type VisualizationArtifactStatus = "ready" | "degraded" | "needs_revalidation" | "omitted";
 
@@ -26,18 +27,14 @@ export type VisualizationArtifactEnvelope = {
   status: "ready" | "degraded";
 };
 
-export type VisualizationHardGateRevalidation = (input: {
-  artifact: VisualizationArtifactV1;
-  artifactIndex: VisualizationArtifactIndex;
-}) => Promise<"pass" | "fail"> | "pass" | "fail";
-
 export type VisualizationArtifactLoadOptions = {
   currentValidatorVersions?: Record<string, string>;
   documentAccess?: boolean;
   offline?: boolean;
-  revalidateHardGates?: VisualizationHardGateRevalidation;
+  revalidationService?: VisualizationRevalidationWorkerService;
   revokedRendererIds?: readonly string[];
   revokedValidatorIds?: readonly string[];
+  signal?: AbortSignal;
 };
 
 export type VisualizationArtifactState = {
@@ -104,12 +101,12 @@ export async function loadVisualizationArtifact(
     });
   }
 
-  if (!options.offline && documentAccess && options.revalidateHardGates) {
+  if (!options.offline && documentAccess && options.revalidationService) {
     try {
-      const outcome = await options.revalidateHardGates({
+      const outcome = await options.revalidationService.revalidate({
         artifact: envelope.artifact,
         artifactIndex: envelope.artifactIndex
-      });
+      }, options.signal);
       if (outcome === "pass") {
         return artifactState({
           ...envelope,
