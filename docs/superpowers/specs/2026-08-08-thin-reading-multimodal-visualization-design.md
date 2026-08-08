@@ -57,6 +57,8 @@
 - 用户无权限时显示关闭状态且不可切换。
 - 开启只代表允许自动判断，不代表每个节点都要生成。
 - 该开关只控制生成可视化。论文原图是来源证据，不调用生成 provider；关闭生成或没有生成权限时，原图仍可按图片推荐规则显示并深化。
+- 用户关闭开关时，尚未提交的生成任务立即收到取消信号，提交门再次检查最新偏好并回滚预留；已经完成的历史 artifact 不被隐藏或删除。
+- 撤销权限时保留用户偏好但强制投影为关闭；再次授权时恢复该用户最后一次选择。只有从未保存过选择的首次授权才默认开启。
 
 ### 4.3 交互边界
 
@@ -134,6 +136,8 @@ Server Action Boundary
 
 桌面 controller 可以执行不产生副作用的本地预判，以减少无效请求，但不能据此授予权限或扣减额度。`products/liteasy/services/api/` 必须在每次 provider 调用和 artifact 提交前执行权威授权、预留和策略检查。桌面 renderer 只消费服务端已验证并按客户端契约投影的 artifact。
 
+基于模型或多模态模型的 critique 只能产生 advisory 诊断或受限修复建议，不能覆盖证据、领域、安全和来源身份硬门。硬门必须来自 schema、确定性/受界 kernel、受控参考数据或可复核证据规则。
+
 ### 6.2 运行流程
 
 1. 服务端读取 entitlement、用户开关、剩余额度、允许模态和并发限制。
@@ -148,6 +152,8 @@ Server Action Boundary
 10. 按实际消耗结算，失败、取消或超时则回滚预留。
 
 正文生成不等待可视化。只有决策门通过后才创建固定尺寸的顶部占位并异步生成，从而避免可视化延迟阻塞正文或完成后造成明显布局跳动。
+
+现有 Agent run 的取消信号必须贯穿 `VisualizationWorkflowHarness`、kernel worker 和 provider adapter。provider 不支持远端取消时，系统停止后续修复和渲染，并在响应返回后丢弃未通过提交门的结果。
 
 ## 7. 核心数据契约
 
@@ -195,6 +201,7 @@ type VisualizationArtifactV1 = {
   nodeId: string;
   modality: VisualizationModality;
   artifactVersion: "liteasy.visualization/v1";
+  locale: string;
   implementation: {
     skillId: string;
     skillVersion: string;
@@ -207,6 +214,7 @@ type VisualizationArtifactV1 = {
   evidenceBindings: EvidenceBindingV1[];
   semanticObjects: SemanticObjectV1[];
   interaction: InteractionContractV1;
+  accessibility: AccessibilityProjectionV1;
   validation: ValidationReportV1;
   fallbackHistory: FallbackRecordV1[];
   usage: UsageRecordLinkV1;
@@ -245,9 +253,16 @@ type InteractionContractV1 = {
   selectableObjectIds: string[];
 };
 
+type AccessibilityProjectionV1 = {
+  summary: string;
+  objectReadingOrder: string[];
+  dataTable?: Array<{ label: string; value: string }>;
+};
+
 type ValidationReportV1 = {
   outcome: "pass" | "degraded" | "fail";
   checks: Array<{
+    gate: "hard" | "advisory";
     validatorId: string;
     validatorVersion: string;
     outcome: "pass" | "warning" | "fail";
@@ -273,6 +288,8 @@ type UsageRecordLinkV1 = {
 ```
 
 `UsageRecordLinkV1` 是服务端和管理员投影字段。普通用户客户端只保留不可逆的 artifact 状态，不接收 provider route 或单位值。`fail` 报告不能进入可见 artifact；`degraded` 只表示 fallback 产物自身已经通过全部硬门。
+
+硬门失败时 artifact 不得提交；advisory warning 只影响内部质量报告。可访问摘要和结构化表格从已验证 spec、语义对象和证据标签确定性投影，不得加入额外科学主张；它们不作为常驻可见说明文案，但必须提供给辅助技术和按需查看入口。`SemanticObjectV1.objectId` 与布局坐标无关，同一 spec 和版本重绘后保持稳定。
 
 ### 7.4 证据和语义对象
 
@@ -371,6 +388,8 @@ KCL/KVL 通过只证明电路拓扑和给定量值满足对应约束，不证明
 - 交互：显隐、聚焦、连接高亮、标注查看和对象深化。
 - 回退：证据型结构简图 -> 带区域标注的原论文图。
 
+受控本体和基础结构目录随 Liteasy 内置、版本化并可离线使用。未经实现的 KEGG、UniProt 等在线校验不能作为硬门声明。
+
 ### 8.4 平面几何和函数图像
 
 `Geometry2DSpecV1` 表示点、线、圆、曲线、区域、约束和构造关系。`FunctionPlotSpecV1` 表示表达式 AST、定义域、参数、坐标轴、关键点和辅助曲线。
@@ -380,6 +399,8 @@ KCL/KVL 通过只证明电路拓扑和给定量值满足对应约束，不证明
 - 证据：论文给出的表达式、条件和参数绑定来源；kernel 生成的采样点标记为可复算派生值。
 - 交互：缩放、平移、参数滑块、轨迹、切线、高亮和对象深化。
 - 回退：固定参数静态图 -> 公式和关键点表。
+
+函数表达式只使用 allowlist AST 节点和受界求值器，不调用 `eval`、动态 `Function` 或 provider 生成代码。
 
 ### 8.5 立体几何
 
@@ -402,6 +423,8 @@ KCL/KVL 通过只证明电路拓扑和给定量值满足对应约束，不证明
 - 回退：动画 -> 关键帧序列 -> 静态状态图。
 
 数值积分通过只证明在指定模型和误差阈值内的数值一致性，不证明论文模型本身描述了真实世界的全部因素。
+
+只有证据模型本身包含随机过程时才允许伪随机输入；spec 必须保存算法 ID 和 seed，同一 artifact 重放得到相同轨迹。纯装饰随机性不进入科学状态。
 
 ### 8.7 化学过程动画
 
@@ -598,11 +621,13 @@ Liteasy 只选择性移植许可证允许且质量合格的最小代码片段；
 - 新的深入节点重新经过权限、开关、必要性、额度和校验门。
 - 键盘用户可以聚焦语义对象、整图和已有区域；区域选择提供等价的键盘入口。
 
+用户明确要求生成特定图示时，沿用现有 Agent 输入和“深入”提示入口，不增加常驻说明面板。请求写入 `requestedBy: "explicit_user_request"`；用户同时要求多个模态时最多选择两个，并对每个 artifact 独立执行证据和正确性门。
+
 ## 12. 管理员、权限和额度
 
 ### 12.1 管理角色
 
-V1 中只有 `deployment_admin` 能：
+V1 不新增 `deployment_admin` 近义角色。现有 `platform_admin` 承担部署管理员职责，只有该角色能：
 
 - 配置 provider endpoint、模型路由、能力和 `secretRef`。
 - 启用或停用 provider。
@@ -611,7 +636,7 @@ V1 中只有 `deployment_admin` 能：
 - 配置用户模态白名单、日/月额度和并发数。
 - 查看 usage ledger 和审计。
 
-V1 不引入可委派额度管理员角色。
+V1 不引入可委派额度管理员角色。`developer_diagnostics` 只能查看已有的脱敏开发诊断，不能配置 provider、授权或额度。
 
 ### 12.2 密钥
 
@@ -620,6 +645,7 @@ V1 不引入可委派额度管理员角色。
 - 管理控制面可选择或更新 `secretRef`；Secret Store 支持写入时，凭据设置使用独立的一次性服务端动作。
 - 桌面端、capability 响应、artifact 和普通日志不得包含密钥。
 - provider 调用只在 Liteasy 正式服务边界内发生。
+- 现有通用管理员输入校验会拒绝 secret/credential 字段。可视化 provider repository 必须区分受格式约束的引用句柄与密钥材料：只允许选择服务端已登记的 `secretRef`，继续拒绝 API key、token、password 和任意凭据正文。
 
 ### 12.3 Capability 投影
 
@@ -631,6 +657,8 @@ type MultimodalVisualizationCapability = {
   enabled: boolean;
   explicitRequestsAllowed: boolean;
   allowedModalities: GeneratedVisualizationModality[];
+  availableModalities: GeneratedVisualizationModality[];
+  serviceAvailable: boolean;
   quota: {
     available: boolean;
     remainingBand: "none" | "low" | "available";
@@ -645,20 +673,50 @@ type MultimodalVisualizationCapability = {
 
 普通客户端只收到是否可用和粗粒度额度状态，不收到内部成本明细。管理员 API 返回精确单位和 ledger。
 
+`allowed` 表示用户 entitlement，`enabled` 表示 entitlement 与用户偏好的合成结果。`availableModalities` 是 allowed modalities、已部署 Skill、有效 route 和当前服务策略的交集；`serviceAvailable` 表示至少一个允许模态当前可执行。provider 故障或未配置 route 不改变用户偏好，也不伪装成撤权；界面保持开关状态并仅显示“暂不可用”。
+
 `remainingBand` 由日额度和月额度中更紧张的一项决定：剩余为零时是 `none`，剩余比例大于零且不超过 10% 时是 `low`，其余为 `available`。客户端提示不构成授权，服务端仍以实时 reservation 结果为准。
 
-### 12.4 管理 API
+capability 请求失败、响应无效或缓存过期时，桌面端按无生成权限处理并禁用开关；不能用上一次允许状态继续发起调用。原论文图片仍按本地文档访问权展示。服务端授权检查始终是最终边界。
 
-- `GET/PUT /v1/admin/visualization/providers`
-- `GET/PUT /v1/admin/visualization/entitlements/:userId`
-- `GET/PUT /v1/admin/visualization/quota-policies`
+entitlement、偏好和 quota 由 Liteasy API 持久化，并以身份服务验证后的稳定 user subject 为键。Identity Service 继续只负责身份生命周期和令牌验证，不与 Liteasy API 共享业务连接池。`/v1/account/capabilities` 组合现有 `developerDiagnostics` 和新增的 `multimodalVisualization`。桌面连接旧服务时，缺少新增字段应按 `allowed: false` 处理，而不是使整个账号能力请求失败。
+
+### 12.4 Provider 路由
+
+可视化 provider route 独立于现有文本模型 `model_policy.defaultProvider`。现有模型策略继续服务普通 Agent 文本调用，不因本功能迁移成未经约束的多 provider 列表。
+
+每条可视化 route 声明：
+
+- provider ID、endpoint、模型和 `secretRef`。
+- 支持的操作类型：structured generation、image generation 或 multimodal validation。
+- 允许的 `GeneratedVisualizationModality` 集合。
+- 数据类别和部署区域策略。
+- 优先级、超时、最大并发、启用状态和配置 revision。
+
+服务端按模态、操作类型、数据策略和健康状态选择 route。兼容 fallback route 只有在剩余额度能够覆盖其预留上界时才可调用。provider 超时、限流和连续故障进入带冷却时间的 circuit breaker；半开探测不携带论文内容。`providers/test` 只验证连通、鉴权和声明的能力，不创建用户 artifact 或消耗用户额度。
+
+route 变更只影响新 reservation。已预留任务固定到 route revision，避免运行中切换 provider 造成重复调用或无法解释的账单。管理员响应只显示脱敏 endpoint、模型、能力、健康状态和 `secretRef` 标识，不返回凭据值。
+
+provider adapter 必须把厂商响应归一化为 Liteasy typed contract。Skill、Kernel 和 Renderer 不读取厂商专有响应字段，也不与第三方项目或 provider 进行旁路通信。
+
+### 12.5 管理 API
+
+管理 API 沿用现有查询端点和幂等命令端点模式：
+
+- `GET /v1/admin/visualization/providers`
+- `POST /v1/admin/visualization/providers/save`
+- `POST /v1/admin/visualization/providers/test`
+- `POST /v1/admin/visualization/entitlements/get`
+- `POST /v1/admin/visualization/entitlements/set`
+- `GET /v1/admin/visualization/quota-policies`
+- `POST /v1/admin/visualization/quota-policies/set`
 - `GET /v1/admin/visualization/usage`
 - `GET /v1/admin/visualization/audit`
-- `PUT /v1/account/preferences/multimodal-visualization`
+- `POST /v1/account/preferences/multimodal-visualization/set`
 
-所有变更使用 revision、idempotency key、MFA 和 append-only audit。撤权对新请求即时生效，运行中的请求在提交前再次校验；撤权后未提交产物取消并回滚预留。
+所有变更使用 revision、idempotency key、MFA 和 append-only audit。撤权对新请求即时生效，运行中的请求在提交前再次校验；撤权后未提交产物取消并回滚预留。普通用户偏好更新要求身份令牌和幂等键，但不要求管理员角色。
 
-### 12.5 加权计算单元
+### 12.6 加权计算单元
 
 默认成本表作为可版本化种子：
 
@@ -678,6 +736,10 @@ type MultimodalVisualizationCapability = {
 
 部署管理员可以改变未来请求使用的成本表。历史 ledger 保留成本表版本，不按新表重算。
 
+原论文图片的零单位只表示不消耗本功能的生成额度；PDF 解析、对象存储和既有文档处理成本仍遵循各自的服务策略。
+
+每个 quota policy 明确日额度、月额度、最大并发和 IANA 时区。日窗口按该时区零点重置，月窗口在该时区每月一日重置；默认使用部署配置时区。修改时区或额度只影响下一次 reservation，已存在 reservation 保持原 policy revision。管理员追加或扣减额度必须写独立 adjustment ledger 事件，不能改写历史 usage。
+
 一次调用执行：
 
 ```text
@@ -688,8 +750,10 @@ estimate -> reserve -> generate -> validate -> settle
 - 预留值使用当前模态、provider、最大修复次数和 artifact 数量的上界。
 - 成功后按实际 provider 调用和资源消耗结算，但不能超过未经追加授权的预留上限。
 - 需要追加预留时必须在下一次调用前完成，并写审计。
-- 失败、取消、超时、撤权和未通过校验均释放未使用预留。
-- 同部署、同权限边界内的有效缓存复用不产生 provider 生成单位，但写入 `cache_reuse` ledger 事件。
+- provider 失败、取消、超时、撤权和未通过校验时，用户额度全额回滚；已经发生的外部 provider 成本只进入独立运维成本记录，不能转嫁为用户已结算单位。
+- reservation、日/月计数和并发槽位在同一数据库锁或等价原子边界内检查，防止并发超额。
+- 过期 reservation 由可重入清理任务释放；任务恢复前必须先取得原 reservation 所有权，不能创建第二笔预留。
+- 同部署、同权限和同文档访问边界内的有效缓存复用不产生 provider 生成单位，但仍重新检查 entitlement、模态白名单和文档访问权，并写入 `cache_reuse` ledger 事件。
 
 ## 13. 服务端持久化
 
@@ -701,6 +765,8 @@ estimate -> reserve -> generate -> validate -> settle
 - `visualization_quota_policies`
 - `visualization_quota_reservations`
 - `visualization_usage_ledger`
+- `visualization_provider_invocations`
+- `visualization_provider_cost_ledger`
 - `visualization_artifacts`
 
 关键约束：
@@ -711,6 +777,10 @@ estimate -> reserve -> generate -> validate -> settle
 - artifact 只在 `ready` 或明确的 `degraded` 成功状态下对客户端可见。
 - 图片对象存储键、内容哈希和数据库身份一致。
 - Liteasy 与 Intuecho 继续使用独立业务数据库和凭据。
+- provider invocation 使用 provider request ID、route revision 和幂等键关联 reservation；运维成本 ledger 与用户额度 ledger 分离。
+- 用户偏好在撤权时保留，账号删除时按账号生命周期策略删除；usage 和 audit 只保留法规与部署策略要求的最小字段和期限。
+- artifact schema migration 只转换可证明等价的 typed 数据。不能等价迁移时保留旧版本只读投影，不猜测补字段。
+- Renderer、Kernel 或硬门 Validator 被安全撤销时，关联 artifact 标记为待重验。重验通过后才使用新 renderer；失败时使用先前安全静态预览或隐藏 artifact，不修改原始 spec 和历史 validation。
 
 `development/dev-cloud/` 只提供本地真实开发 API，不提供演示账号或 mock 业务结果。正式实现位于 `products/liteasy/services/api/`；开发适配器不得被生产服务导入。
 
@@ -727,6 +797,8 @@ estimate -> reserve -> generate -> validate -> settle
 
 所有 spec 必须通过 JSON Schema 或 Zod discriminated union，再进入 kernel 和 renderer。
 
+论文中的提示注入式文字只作为论文内容证据，不获得 Skill、Action 或策略指令权限。Skill 系统提示、用户意图和论文证据使用分离字段传递，不能拼成可覆盖系统规则的单段文本。
+
 ### 14.2 SVG、Canvas 和 WebGL
 
 - SVG 由可信 builder 创建，所有文字和属性转义。
@@ -734,6 +806,7 @@ estimate -> reserve -> generate -> validate -> settle
 - Canvas 接收已验证 display list，不执行模型代码。
 - Three.js 只接收 typed geometry、material allowlist 和相机参数，不接收自定义 shader 或任意资源地址。
 - renderer 使用 CSP、资源上限和独立错误边界。
+- 交互控件只能修改 spec 明确声明的参数，且始终限制在 typed min/max、单位和步长内；用户输入不能替换表达式 AST、拓扑或脚本。
 
 ### 14.3 图片
 
@@ -741,10 +814,14 @@ estimate -> reserve -> generate -> validate -> settle
 - 去除不需要的元数据，不信任扩展名。
 - 原图保留 paper/page/figure/caption/content hash 来源链。
 - 生成图具有明确来源类型，不能写入 `SourceFigureRefV1`。
+- 原图和缓存 artifact 的每次读取都重新检查用户对源文档的访问权；对象存储使用短期签名地址，不跨用户或租户暴露稳定公共 URL。
+- 原图只来自用户有权访问的论文副本。缓存复用、导出和分享不能扩大原文档的访问范围，并保留来源归属信息。
 
 ### 14.4 数据最小化
 
 发给外部 provider 的内容限制为完成任务所需的证据片段、结构化输入和脱敏元数据。默认不发送整篇论文。每个 provider route 声明允许的数据类别，Action 在调用前执行策略检查。
+
+管理员配置的 provider endpoint 默认要求 HTTPS，并通过部署 egress policy、DNS/IP 解析和重定向检查，防止配置入口成为 SSRF 通道。允许私有部署 endpoint 时必须由部署策略显式放行目标网段。
 
 ## 15. 性能和资源控制
 
@@ -752,20 +829,27 @@ estimate -> reserve -> generate -> validate -> settle
 - Skill 启动时只加载 manifest；具体 instructions、schema 和模板渐进加载。
 - 3D、动画和重型专业 renderer 独立 code split，并在 artifact 进入视口或用户展开时加载。
 - 折叠或离屏 artifact 使用静态预览，展开后再激活交互 renderer。
-- artifact 缓存键至少包含部署/租户边界、证据哈希、spec、locale、Skill、Kernel 和 Renderer 版本。
+- 布局求解、数值模拟、图片解码和大图 scene 构建运行在 Web Worker、Rust worker 或服务端 worker，不占用 React 主线程；取消信号必须终止可中断阶段。
+- 服务端在 reservation 前执行全局和每用户队列准入。队列满时直接返回暂不可用，不持有额度预留。
+- artifact 缓存键至少包含部署/租户边界、证据哈希、spec、locale、Skill、Kernel、Renderer 以及硬门 Validator 集合和版本。任何硬门版本变化都要求重验或重新生成安全预览。
 - 不跨租户复用包含论文内容的 artifact。
 - spec、图片、对象数、动画帧率、模拟步数、执行时长和内存均设置硬上限。
 - 初始桌面 JavaScript 压缩体积相对基线增加不超过 120 KiB；Three.js 不计入首屏包，只存在于懒加载 chunk。
 - artifact JSON 可用后，静态 renderer 首次呈现目标为 p95 250 ms 内。
 - 交互目标为基准设备稳定 50 FPS，低配置基线不低于 30 FPS。
+- 离线时已缓存且仍有本地文档访问权的 ready artifact 可以只读查看；新生成请求不自动排队，恢复网络后必须由用户再次触发，避免意外调用和扣额。
+
+体积、延迟、帧率和内存预算使用版本化 benchmark manifest 固定参考设备、数据集、viewport 和构建模式。CI 比较同一基线，不能用不同设备或开发构建解释回归。
 
 ## 16. 状态机和失败恢复
 
 ```text
-planned -> reserved -> generating -> validating -> ready
-              |             |            |
-              +-----------> cancelled    +-> degraded
-              +-----------> omitted
+planned -> omitted
+planned -> queued -> reserved -> generating -> validating -> ready
+validating -> repairing -> validating
+validating -> fallback -> validating -> degraded
+queued | reserved | generating | validating -> cancelled
+generating | validating -> failed
 ```
 
 - 每次任务使用稳定 idempotency key。
@@ -776,8 +860,16 @@ planned -> reserved -> generating -> validating -> ready
 - 正文持久化独立于可视化成功，生成失败不得删除已成功正文。
 - 动画必须提供暂停和单步，并尊重 reduced motion。
 - 未知版本或缺少 renderer 时显示静态预览；没有安全预览时隐藏 artifact，正文继续可读。
+- `degraded` 只表示 fallback 结果通过硬门；未通过硬门的终态是 `failed` 或 `omitted`，不能展示半成品。
+- 用户关闭开关、撤权或取消 Agent run 后，提交门拒绝迟到的 provider 响应。已经 ready 的 artifact 保持可读，除非源文档访问权被撤销。
 
 普通用户只看到极短状态。完整错误进入开发诊断、管理员审计和 `ValidationReportV1`。
+
+每次 omitted、fallback 和 failed 都保存稳定 reason code。自动省略不插入解释正文；用户从节点信息入口查看时显示一句本地化原因。fallback artifact 只显示极简“已简化”状态，按需展开原因。明确请求失败时显示“未生成”和一句原因，不展示实现细节。
+
+### 16.1 运行观测
+
+服务端记录按模态聚合的必要性通过率、provider 延迟/错误、fallback、校验失败、队列等待、取消、缓存命中、用户额度和内部 provider 成本。指标和 trace 不包含论文正文、图片像素、密钥或完整 prompt。告警覆盖 reservation 泄漏、重复 provider 调用、连续硬门失败、成本异常和 circuit breaker 打开。
 
 ## 17. 测试与验收
 
@@ -809,19 +901,26 @@ planned -> reserved -> generating -> validating -> ready
 - 图结构、几何、守恒和数值计算的性质测试与黄金样例。
 - SVG 注入、图片炸弹、恶意标签、资源上限和 CSP 测试。
 - 权限、开关、白名单、并发、撤权即时生效和越权测试。
-- 额度 estimate、reservation、追加、settlement、rollback、过期和幂等重试测试。
+- 首次授权默认开启、用户关闭持久化、撤权强制关闭、重新授权恢复选择和在途取消测试。
+- 额度 estimate、reservation、追加、settlement、失败全额 rollback、过期、窗口重置和幂等重试测试。
+- provider route 能力匹配、revision 固定、fallback、测试连接、SSRF 防护和 circuit breaker 测试。
 - 生成图对象、原图整图和原图矩形区域三种深化路径。
 - 正文顺序始终为“生成可视化 -> 正文 -> 原论文图片”。
 - 禁用或无需生成时零 provider 调用、零生成额度、零重型 renderer 加载。
 - `v1` 只读兼容，`v2` 不生成任意 HTML。
-- 浏览器和桌面视觉验收检查像素非空、构图、裁剪、遮挡和响应式布局。
+- artifact schema 迁移、被撤销 Validator/Renderer 的重验和安全静态回退测试。
+- 离线只读和恢复网络后不自动提交旧生成请求测试。
+- 可访问摘要、对象阅读顺序、结构化数据表和所有对象的键盘深化测试。
+- 浏览器和桌面视觉验收检查像素非空、构图、裁剪、遮挡和响应式布局。3D 和动画额外执行 Canvas/WebGL 像素检查、相机 framing、实际运动、交互响应和桌面/移动 viewport 截图。
 
 ### 17.3 评测指标
 
 - 确定性领域校验、安全校验和来源身份校验必须 100% 通过。
 - 未绑定证据的科学标签、连接或机理一律失败。
 - 专家标注路由集上的模态选择准确率目标不低于 90%。
+- 专家标注为“应生成”的样例上，必要性门召回率目标不低于 85%，防止以几乎不生成规避质量责任。
 - 专家标注路由集上的不必要生成率目标不高于 5%。
+- 每个点名模态的必需验收样例覆盖率必须为 100%，不能用总体平均掩盖缺失模态。
 - 性能指标满足第 15 节预算。
 
 自动测试使用确定性 fixtures 和 provider 边界替身，不向 `dev-cloud` 注入 mock 业务结果。真实 provider 最终冒烟测试使用部署管理员临时提供的测试配置，密钥写入本地未提交 Secret Store 或环境配置，不进入仓库、快照和测试输出。
