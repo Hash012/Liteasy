@@ -28,6 +28,9 @@ export type AssociationLayoutQuality = {
 };
 
 export type AssociationGeometryNode = AssociationPoint & {
+  /** Bounds reserved for fixed-centre expansion; defaults to the resting footprint. */
+  frameHalfHeight?: number;
+  frameHalfWidth?: number;
   halfHeight: number;
   halfWidth: number;
   paperKey: string;
@@ -131,6 +134,17 @@ function nodeRectangle(node: AssociationGeometryNode): AssociationRectangle {
   };
 }
 
+function nodeFrameRectangle(node: AssociationGeometryNode): AssociationRectangle {
+  const halfHeight = node.frameHalfHeight ?? node.halfHeight;
+  const halfWidth = node.frameHalfWidth ?? node.halfWidth;
+  return {
+    bottom: node.top + halfHeight,
+    left: node.left - halfWidth,
+    right: node.left + halfWidth,
+    top: node.top - halfHeight
+  };
+}
+
 type WeightedSegment = AssociationSegment & {
   primary: boolean;
   weight: number;
@@ -141,12 +155,13 @@ export function evaluateAssociationGeometry(input: AssociationGeometryInput): As
   const nodeByKey = new Map(input.nodes.map((node) => [node.paperKey, node] as const));
   const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
   const nodeRectangles = input.nodes.map(nodeRectangle);
+  const nodeFrameRectangles = input.nodes.map(nodeFrameRectangle);
   let overflowCount = 0;
   let nodeOverlaps = 0;
   let anchorObstructions = 0;
   let sameSideViolations = 0;
 
-  nodeRectangles.forEach((rectangle) => {
+  nodeFrameRectangles.forEach((rectangle) => {
     if (rectangle.left < input.frameInsetHorizontal - epsilon ||
         rectangle.right > input.frameWidth - input.frameInsetHorizontal + epsilon ||
         rectangle.top < input.frameInsetVertical - epsilon ||

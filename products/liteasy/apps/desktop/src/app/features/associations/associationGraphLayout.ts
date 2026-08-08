@@ -403,6 +403,8 @@ function geometryInput(
     nodes: graph.nodes.map((node) => {
       const box = nodeBox(node.isDot, node.left, node.top);
       return {
+        frameHalfHeight: pageGraphNodeHeight / 2,
+        frameHalfWidth: pageGraphNodeWidth / 2,
         halfHeight: box.halfHeight,
         halfWidth: box.halfWidth,
         left: node.left,
@@ -506,11 +508,10 @@ function projectToSector(
   node: ForceNode,
   anchor: ForceNode,
   side: AssociationSide,
-  input: PageGraphInput,
-  graphNode: PageGraphNode
+  input: PageGraphInput
 ) {
-  const halfWidth = graphNode.isDot ? pageGraphDotSize / 2 : pageGraphNodeWidth / 2;
-  const halfHeight = graphNode.isDot ? pageGraphDotSize / 2 : pageGraphNodeHeight / 2;
+  const halfWidth = pageGraphNodeWidth / 2;
+  const halfHeight = pageGraphNodeHeight / 2;
   let dx = (node.x ?? anchor.x!) - anchor.x!;
   let dy = (node.y ?? anchor.y!) - anchor.y!;
   if (dx === 0 && dy === 0) dx = side === "right" ? 1 : -1;
@@ -621,7 +622,7 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
       const anchor = anchorId ? forceNodeById.get(`anchor:${anchorId}`) : undefined;
       const node = forceNodeByPaperKey.get(graphNode.paperKey);
       const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
-      if (anchor && node && side) projectToSector(node, anchor, side, input, graphNode);
+      if (anchor && node && side) projectToSector(node, anchor, side, input);
     }
   }
 
@@ -697,10 +698,10 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
           score: radialStress * 3 + relationStress + forceDistance * 1e-6,
           top
         };
-      })).filter((candidate) => candidate.rectangle.left >= frameInsetHorizontal &&
-        candidate.rectangle.right <= input.frameWidth - frameInsetHorizontal &&
-        candidate.rectangle.top >= frameInsetVertical &&
-        candidate.rectangle.bottom <= input.documentHeight - frameInsetVertical &&
+      })).filter((candidate) => candidate.left - pageGraphNodeWidth / 2 >= frameInsetHorizontal &&
+        candidate.left + pageGraphNodeWidth / 2 <= input.frameWidth - frameInsetHorizontal &&
+        candidate.top - pageGraphNodeHeight / 2 >= frameInsetVertical &&
+        candidate.top + pageGraphNodeHeight / 2 <= input.documentHeight - frameInsetVertical &&
         !placedRectangles.some((rectangle) => intersects(candidate.rectangle, rectangle)))
       .sort((left, right) => left.score - right.score || left.radialStress - right.radialStress ||
         left.forceDistance - right.forceDistance || left.top - right.top || left.left - right.left);

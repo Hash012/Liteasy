@@ -222,12 +222,10 @@ test("assigns adjacent dense anchors deterministically without crossing primary 
     const left = graph.nodes[leftIndex]!;
     const leftHalfWidth = left.isDot ? pageGraphDotSize / 2 : pageGraphNodeWidth / 2;
     const leftHalfHeight = left.isDot ? pageGraphDotSize / 2 : pageGraphNodeHeight / 2;
-    if (!left.isDot) {
-      expect(left.left - leftHalfWidth).toBeGreaterThanOrEqual(10);
-      expect(1200 - left.left - leftHalfWidth).toBeGreaterThanOrEqual(10);
-      expect(left.top - leftHalfHeight).toBeGreaterThanOrEqual(8);
-      expect(1100 - left.top - leftHalfHeight).toBeGreaterThanOrEqual(8);
-    }
+    expect(left.left - pageGraphNodeWidth / 2).toBeGreaterThanOrEqual(10);
+    expect(1200 - left.left - pageGraphNodeWidth / 2).toBeGreaterThanOrEqual(10);
+    expect(left.top - pageGraphNodeHeight / 2).toBeGreaterThanOrEqual(8);
+    expect(1100 - left.top - pageGraphNodeHeight / 2).toBeGreaterThanOrEqual(8);
     for (let rightIndex = leftIndex + 1; rightIndex < graph.nodes.length; rightIndex += 1) {
       const right = graph.nodes[rightIndex]!;
       const rightHalfWidth = right.isDot ? pageGraphDotSize / 2 : pageGraphNodeWidth / 2;

@@ -97,6 +97,27 @@ test("counts card clearance and frame inset violations in the quality gate", () 
   expect(quality.nodeOverlaps).toBe(1);
 });
 
+test("uses expanded card bounds for resting dots near every frame edge", () => {
+  const quality = evaluateAssociationGeometry({
+    anchors: [],
+    frameHeight: 200,
+    frameInsetHorizontal: 10,
+    frameInsetVertical: 8,
+    frameWidth: 300,
+    nodeClearance: 10,
+    nodes: [
+      { frameHalfHeight: 38, frameHalfWidth: 76, halfHeight: 7, halfWidth: 7, left: 85, paperKey: "left", relevance: 1, top: 100 },
+      { frameHalfHeight: 38, frameHalfWidth: 76, halfHeight: 7, halfWidth: 7, left: 215, paperKey: "right", relevance: 1, top: 100 },
+      { frameHalfHeight: 38, frameHalfWidth: 76, halfHeight: 7, halfWidth: 7, left: 150, paperKey: "top", relevance: 1, top: 45 },
+      { frameHalfHeight: 38, frameHalfWidth: 76, halfHeight: 7, halfWidth: 7, left: 150, paperKey: "bottom", relevance: 1, top: 155 }
+    ],
+    paperEdges: [],
+    primaryEdges: []
+  });
+
+  expect(quality.overflowCount).toBe(4);
+});
+
 test("weights primary crossings above paper crossings and reports stress", () => {
   const quality = evaluateAssociationGeometry({
     anchors: [
