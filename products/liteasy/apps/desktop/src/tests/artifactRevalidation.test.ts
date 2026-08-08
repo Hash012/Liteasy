@@ -65,7 +65,7 @@ test("does not generate while offline when a cached artifact is still valid", as
   expect(state.canRender).toBe(true);
 });
 
-test("enables a renderer only after its changed version passes hard-gate revalidation", async () => {
+test("does not enable a changed renderer from validator-only revalidation", async () => {
   const outdatedRendererEnvelope = parseVisualizationArtifactEnvelope({
     ...cachedEnvelope,
     artifact: {
@@ -82,10 +82,10 @@ test("enables a renderer only after its changed version passes hard-gate revalid
     currentValidatorVersions: { "artifact-schema": "2.0.0" },
     revalidationService
   });
-  expect(state.canRender).toBe(true);
-  expect(state.canRenderSafePreview).toBe(false);
-  expect(state.status).toBe("ready");
-  expect(state.artifactIndex.hardValidatorVersions).toEqual({ "artifact-schema": "2.0.0" });
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+  expect(state.status).toBe("needs_revalidation");
+  expect(state.artifactIndex.hardValidatorVersions).toEqual({ "artifact-schema": "1.0.0" });
   expect(revalidationService.revalidate).toHaveBeenCalledOnce();
 });
 
@@ -129,7 +129,7 @@ test("marks a revoked renderer for revalidation", async () => {
 
 test("marks a revoked hard validator for revalidation", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
-    currentValidatorVersions: { evidence: "1" },
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
     revokedValidatorIds: ["artifact-schema"]
   });
   expect(state.status).toBe("needs_revalidation");
@@ -227,4 +227,43 @@ test("requires revalidation when an indexed kernel version changes", async () =>
   const state = await loadVisualizationArtifact(kernelEnvelope);
   expect(state.status).toBe("needs_revalidation");
   expect(state.canRender).toBe(false);
+});
+
+test("does not enable a changed kernel from validator-only revalidation", async () => {
+  const kernelEnvelope = parseVisualizationArtifactEnvelope({
+    ...cachedEnvelope,
+    artifact: {
+      ...cachedEnvelope.artifact,
+      implementation: { ...cachedEnvelope.artifact.implementation, kernelId: "fixture-kernel", kernelVersion: "1" }
+    },
+    artifactIndex: { ...cachedEnvelope.artifactIndex, kernelVersion: "1" }
+  });
+  const state = await loadVisualizationArtifact(kernelEnvelope, {
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
+    revalidationService: {
+      revalidate: async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } }),
+      terminate: () => undefined
+    }
+  });
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
+});
+
+test("does not enable an artifact whose renderer is missing from the registry", async () => {
+  const missingRendererEnvelope = parseVisualizationArtifactEnvelope({
+    ...cachedEnvelope,
+    artifact: {
+      ...cachedEnvelope.artifact,
+      implementation: { ...cachedEnvelope.artifact.implementation, rendererId: "missing-renderer" }
+    }
+  });
+  const state = await loadVisualizationArtifact(missingRendererEnvelope, {
+    currentValidatorVersions: { "artifact-schema": "1.0.0" },
+    revalidationService: {
+      revalidate: async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { "artifact-schema": "1.0.0" } }),
+      terminate: () => undefined
+    }
+  });
+  expect(state.canRender).toBe(false);
+  expect(state.canRenderSafePreview).toBe(true);
 });

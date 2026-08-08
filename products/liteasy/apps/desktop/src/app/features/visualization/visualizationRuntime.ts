@@ -120,15 +120,12 @@ export async function loadVisualizationArtifact(
         artifactIndex: envelope.artifactIndex,
         expectedHardValidatorVersions
       }, options.signal);
-      if (outcome.outcome === "pass") {
+      if (outcome.outcome === "pass" && dependencyVersionsCurrent(envelope, options)) {
         return artifactState({
           ...envelope,
           artifactIndex: {
             ...envelope.artifactIndex,
-            hardValidatorVersions: outcome.usedHardValidatorVersions,
-            kernelVersion: currentKernelVersion(envelope, options),
-            rendererVersion: getVisualizationRendererRegistration(envelope.artifact.implementation.rendererId)?.version
-              ?? envelope.artifactIndex.rendererVersion
+            hardValidatorVersions: outcome.usedHardValidatorVersions
           }
         }, {
           canGenerate: !options.offline && documentAccess,
@@ -152,10 +149,12 @@ export async function loadVisualizationArtifact(
 
 function hasRevokedDependency(
   envelope: VisualizationArtifactEnvelope,
-  options: Pick<VisualizationArtifactLoadOptions, "revokedRendererIds" | "revokedValidatorIds">
+  options: Pick<VisualizationArtifactLoadOptions, "revokedKernelIds" | "revokedRendererIds" | "revokedValidatorIds">
 ): boolean {
   return (options.revokedRendererIds ?? []).includes(envelope.artifact.implementation.rendererId)
-    || (options.revokedValidatorIds ?? []).some((id) => id in envelope.artifactIndex.hardValidatorVersions);
+    || (options.revokedValidatorIds ?? []).some((id) => id in envelope.artifactIndex.hardValidatorVersions)
+    || (envelope.artifact.implementation.kernelId !== undefined
+      && (options.revokedKernelIds ?? []).includes(envelope.artifact.implementation.kernelId));
 }
 
 function artifactNeedsRevalidation(
@@ -185,15 +184,25 @@ function artifactNeedsRevalidation(
   return validatorChanged || validatorRevoked || rendererChanged || rendererRevoked || kernelChanged || kernelRevoked;
 }
 
-function currentKernelVersion(
+function dependencyVersionsCurrent(
   envelope: VisualizationArtifactEnvelope,
   options: Pick<VisualizationArtifactLoadOptions, "currentKernelVersions">
-): string | undefined {
-  const kernelId = envelope.artifact.implementation.kernelId;
-  if (!kernelId) return envelope.artifactIndex.kernelVersion;
-  return options.currentKernelVersions?.[kernelId]
-    ?? getVisualizationKernelRegistration(kernelId)?.version
-    ?? envelope.artifactIndex.kernelVersion;
+): boolean {
+  const implementation = envelope.artifact.implementation;
+  const renderer = getVisualizationRendererRegistration(implementation.rendererId);
+  if (!renderer
+    || renderer.version !== implementation.rendererVersion
+    || renderer.version !== envelope.artifactIndex.rendererVersion) {
+    return false;
+  }
+
+  if (!implementation.kernelId) return true;
+  const kernel = getVisualizationKernelRegistration(implementation.kernelId);
+  if (!kernel) return false;
+  const currentVersion = options.currentKernelVersions?.[implementation.kernelId] ?? kernel.version;
+  return kernel.version === currentVersion
+    && currentVersion === implementation.kernelVersion
+    && currentVersion === envelope.artifactIndex.kernelVersion;
 }
 
 function getAuthoritativeValidatorVersions(index: VisualizationArtifactIndex): {
