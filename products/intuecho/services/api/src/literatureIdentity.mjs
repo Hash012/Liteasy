@@ -38,7 +38,9 @@ export function normalizeLiteratureIdentifier(kind, value) {
   }
   if (kind === "arxiv_id") {
     return normalized
+      .replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//i, "")
       .replace(/^arxiv:\s*/i, "")
+      .replace(/\.pdf$/i, "")
       .replace(/v\d+$/i, "")
       .toLocaleLowerCase("en-US");
   }

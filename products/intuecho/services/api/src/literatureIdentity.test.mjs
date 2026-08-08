@@ -27,6 +27,11 @@ test("normalizes DOI, arXiv, Semantic Scholar and OpenAlex identifiers", () => {
   assert.equal(normalizeLiteratureIdentifier("openalex_id", "https://openalex.org/W123"), "W123");
 });
 
+test("normalizes arXiv abs and PDF URLs to the versionless identifier", () => {
+  assert.equal(normalizeLiteratureIdentifier("arxiv_id", "https://arxiv.org/abs/2401.01234v2"), "2401.01234");
+  assert.equal(normalizeLiteratureIdentifier("arxiv_id", "https://arxiv.org/pdf/2401.01234v2.pdf"), "2401.01234");
+});
+
 test("fingerprints normalized title, ordered authors, and year", () => {
   assert.equal(
     titleAuthorsYearFingerprint({
