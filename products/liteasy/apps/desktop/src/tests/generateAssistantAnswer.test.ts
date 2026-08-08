@@ -712,6 +712,13 @@ test("parses thin-reading structured output from a live model request", async ()
       anchors: [
         expect.objectContaining({
           externalSourceIds: ["openalex:W123"],
+          quality: {
+            citationProvenance: 0,
+            evidenceAttention: 0,
+            evidenceCoverage: 0.25,
+            reason: "核心方法 · 1 条证据",
+            score: 0.3775
+          },
           text: "MaxSim late interaction"
         })
       ]

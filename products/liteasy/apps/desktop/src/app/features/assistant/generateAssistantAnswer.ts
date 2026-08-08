@@ -64,6 +64,7 @@ import {
 } from "../thin-reading/thinReadingWorkload";
 import type { ThinReadingWorkloadAudit } from "../thin-reading/thinReading.types";
 import { loadThinReadingAnchorReferenceIndex } from "../thin-reading/thinReadingAnchorReferences";
+import { rankThinReadingAnchors } from "../thin-reading/thinReadingAnchorQuality";
 
 type GenerateAssistantAnswerInput = {
   agentCoreContext?: AgentCorePromptContext;
@@ -788,7 +789,20 @@ async function attachThinReadingAnchorSources(input: {
         paperId: input.context.primaryPaperId
       }).catch(() => new Map())
     : new Map();
-  const results = await Promise.allSettled(anchors.map((anchor) => search({
+  const rankedAnchors = rankThinReadingAnchors({
+    anchors,
+    audit: input.seed.evidence.generationAudit,
+    referencesByAnchorId,
+    summarySentences: input.seed.evidence.summarySentences ?? []
+  });
+  const seedWithRankedAnchors: ThinReadingNodeSeed = {
+    ...input.seed,
+    evidence: {
+      ...input.seed.evidence,
+      anchors: rankedAnchors
+    }
+  };
+  const results = await Promise.allSettled(rankedAnchors.map((anchor) => search({
     // Presence keeps this an anchor-aware request. When local citations exist, their
     // bibliography entries seed the graph before the query fills remaining coverage.
     anchorReferences: referencesByAnchorId.get(anchor.id) ?? [],
@@ -811,11 +825,11 @@ async function attachThinReadingAnchorSources(input: {
       return;
     }
     const selected = selectThinReadingAnchorSources(result.value.sources);
-    sourcesByAnchorId.set(anchors[index].id, selected);
+    sourcesByAnchorId.set(rankedAnchors[index].id, selected);
     retrievedSourceGroups.push(selected);
   });
   if (retrievedSourceGroups.length === 0) {
-    return input.seed;
+    return seedWithRankedAnchors;
   }
 
   let externalSources = mergeThinReadingExternalSources(
@@ -834,10 +848,10 @@ async function attachThinReadingAnchorSources(input: {
     externalSources = mergeThinReadingExternalSources(externalSources, enrichedCandidates);
   }
   return {
-    ...input.seed,
+    ...seedWithRankedAnchors,
     evidence: {
-      ...input.seed.evidence,
-      anchors: anchors.map((anchor) => ({
+      ...seedWithRankedAnchors.evidence,
+      anchors: rankedAnchors.map((anchor) => ({
         ...anchor,
         externalSourceIds: sourcesByAnchorId.get(anchor.id)?.map((source) => source.id) ?? []
       })),
