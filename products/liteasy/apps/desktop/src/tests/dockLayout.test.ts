@@ -48,6 +48,23 @@ describe("dock layout", () => {
     expect(layout.regions.left.activeItemId).toBe("organization");
   });
 
+  test("keeps the artifact library in the left rail and artifacts in the center", () => {
+    const libraryLayout = openDockItem(createDefaultDockLayout(), "artifact-library");
+
+    expect(libraryLayout.regions.left).toEqual({
+      activeItemId: "artifact-library",
+      itemIds: ["artifact-library"]
+    });
+    expect(findDockItemRegion(libraryLayout, "artifact-library")).toBe("left");
+
+    const artifactLayout = openDockItem(libraryLayout, "artifacts");
+    expect(artifactLayout.regions.main).toEqual({
+      activeItemId: "artifacts",
+      itemIds: ["artifacts"]
+    });
+    expect(findDockItemRegion(artifactLayout, "artifacts")).toBe("main");
+  });
+
   test("keeps the left region to a single tab when a new item opens there", () => {
     const layout = moveDockItem(createDefaultDockLayout(), "assistant", "left");
 

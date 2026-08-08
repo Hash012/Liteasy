@@ -1,8 +1,17 @@
 import { useState } from "react";
 
-export type LeftRailView = "library" | "organization" | "profile" | "settings";
+export type LeftRailView =
+  | "artifact-library"
+  | "library"
+  | "organization"
+  | "profile"
+  | "settings";
 
 function getPaneHeader(view: LeftRailView) {
+  if (view === "artifact-library") {
+    return "产物库";
+  }
+
   if (view === "settings") {
     return "Settings";
   }
@@ -23,6 +32,7 @@ export function useLeftRailNavigation() {
 
   return {
     leftRailView,
+    openArtifactLibrary: () => setLeftRailView("artifact-library"),
     openLibrary: () => setLeftRailView("library"),
     openOrganization: () => setLeftRailView("organization"),
     openProfile: () => setLeftRailView("profile"),

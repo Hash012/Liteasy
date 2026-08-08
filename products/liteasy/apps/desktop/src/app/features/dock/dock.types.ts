@@ -2,6 +2,7 @@ export type DockRegionId = "left" | "main" | "right" | "bottom";
 
 export type DockItemId =
   | "library"
+  | "artifact-library"
   | "organization"
   | "profile"
   | "settings"

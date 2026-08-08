@@ -39,6 +39,7 @@ import type {
   ArtifactType
 } from "../features/artifacts/artifact.types";
 import { createArtifactResultClient } from "../features/artifacts/artifactResultClient";
+import { createArtifactExportClient } from "../features/artifacts/artifactExportClient";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { AccountTransport } from "../features/account/accountSessionClient";
@@ -79,6 +80,7 @@ import { createCloudLibraryStorageClient } from "../features/library/cloudLibrar
 import { useWorkspaceSelectionController } from "../controllers/useWorkspaceSelectionController";
 import { useCloudAccountController } from "../controllers/useCloudAccountController";
 import { useArtifactWorkflowController } from "../controllers/useArtifactWorkflowController";
+import { useArtifactExportController } from "../controllers/useArtifactExportController";
 import { useKnowledgeSyncController } from "../controllers/useKnowledgeSyncController";
 import { useOrganizationShellController } from "../controllers/useOrganizationShellController";
 import { useExternalPaperController } from "../controllers/useExternalPaperController";
@@ -205,6 +207,10 @@ export function AppShell({
           : resolveLocalDevCloudEndpoint();
       }
     });
+  }
+  const artifactExportClientRef = useRef<ReturnType<typeof createArtifactExportClient> | null>(null);
+  if (!artifactExportClientRef.current) {
+    artifactExportClientRef.current = createArtifactExportClient();
   }
   const {
     error: localLibraryError,
@@ -384,7 +390,15 @@ export function AppShell({
     runAgentAnalysis: (artifactType, onProgress, options) =>
       agentArtifactRunnerRef.current(artifactType, onProgress, options)
   });
-  const { artifactCatalog, artifactTabs, artifactTasks } = artifactWorkflow.model;
+  const artifactExports = useArtifactExportController({
+    client: artifactExportClientRef.current
+  });
+  const {
+    artifactCatalog,
+    artifactCatalogLoadState,
+    artifactTabs,
+    artifactTasks
+  } = artifactWorkflow.model;
   const activeThinReadingTask = artifactTasks.find((task) => (
     task.type === "thin_reading" &&
     (task.status === "queued" || task.status === "running")
@@ -517,6 +531,15 @@ export function AppShell({
       }
       return next;
     });
+  }
+
+  async function deleteArtifact(artifactId: string) {
+    const message = await artifactWorkflow.actions.deleteArtifact(artifactId);
+    const remainingTabs = artifactTabs.filter(
+      (candidate) => candidate.artifactId !== artifactId
+    );
+    selectFallbackArtifact(artifactId, remainingTabs);
+    return message;
   }
 
   function moveArtifactSurface(artifactId: string, targetRegionId: DockRegionId) {
@@ -1229,12 +1252,17 @@ export function AppShell({
     academicProfile: profileActions.academicProfile,
     agentMemories: profileActions.agentMemories,
     agentRecentState,
+    artifactCatalog,
+    artifactCatalogLoadState,
     accountSession,
     cloudEndpoint: externalKnowledgeEndpoint,
     cloudTreeRevision,
     documentMetadataSyncMessage,
     documentMetadataSyncResult: documentMetadataSyncResult ?? null,
     documentMetadataSyncStatus,
+    exportError: artifactExports.model.error,
+    exportRecords: artifactExports.model.records,
+    exportStatus: artifactExports.model.status,
     importJobs: importJobsByDocumentId,
     libraryPaperChildren,
     localLibraryError,
@@ -1325,6 +1353,7 @@ export function AppShell({
     onAddExternalPdf: externalPapers.promoteExternalPaperToLibrary,
     onClearProfile: profileActions.openClearProfileConfirm,
     onClearRecommendations: knowledgeSync.actions.clearRecommendationCache,
+    onDeleteArtifact: deleteArtifact,
     onDismissRecommendation: async (recommendation) => {
       await knowledgeSync.actions.dismissRecommendation(recommendation);
       await profileActions.recordPersonalizationSignal({
@@ -1341,6 +1370,11 @@ export function AppShell({
     onMarkNotificationsRead: organizationShell.actions.markOrganizationNotificationsRead,
     onOrganizationChanged: organizationShell.actions.refreshOrganizationData,
     onOpenAcademicArchive: profileActions.openAcademicArchive,
+    onOpenArtifact: (artifactId) => {
+      artifactWorkflow.actions.openArtifact(artifactId);
+      activateArtifactSurface(artifactId);
+    },
+    onOpenExport: artifactExports.actions.openExport,
     onOpenOrganizationDialog: organizationShell.actions.openOrganizationDialog,
     onOpenCloudEntry: async (scope, entry) => {
       if (entry.entryKind !== "pdf") return;
@@ -1385,6 +1419,11 @@ export function AppShell({
       artifactWorkflow.actions.openSkillDocument(entry);
       activateArtifactSurface(`skill-doc-${entry.id}`);
     },
+    onReloadArtifactCatalog: artifactWorkflow.actions.reloadArtifactCatalog,
+    onRemoveExport: artifactExports.actions.removeExport,
+    onRenameArtifact: artifactWorkflow.actions.renameArtifact,
+    onRefreshExports: artifactExports.actions.refresh,
+    onRevealExport: artifactExports.actions.revealExport,
     onRenameLibraryFolder: workspaceActions.renameFolder,
     onRenameLibraryPaper: workspaceActions.renamePaper,
     onResourceTransfer: transferLibraryResource,
@@ -1426,6 +1465,7 @@ export function AppShell({
 
   function isLeftRailDockItem(itemId: DockItemId): itemId is LeftRailView {
     return (
+      itemId === "artifact-library" ||
       itemId === "library" ||
       itemId === "organization" ||
       itemId === "profile" ||
@@ -1586,13 +1626,9 @@ export function AppShell({
           onOpenEvidence={openEvidenceInReader}
           onOpenVisualization={openVisualization}
           onDeleteArtifact={async (artifactId) => {
-            const message = await artifactWorkflow.actions.deleteArtifact(artifactId);
-            const remainingTabs = artifactTabs.filter(
-              (candidate) => candidate.artifactId !== artifactId
-            );
-            selectFallbackArtifact(artifactId, remainingTabs);
-            return message;
+            return deleteArtifact(artifactId);
           }}
+          onExportArtifact={artifactExports.actions.exportArtifact}
           onActivateArtifact={activateArtifactSurface}
           onRegenerateArtifact={(request) => {
             artifactWorkflow.actions.regenerateArtifact(request);

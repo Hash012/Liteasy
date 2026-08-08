@@ -4,9 +4,96 @@ import { resolve } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import { ArtifactTabs } from "../app/features/artifacts/ArtifactTabs";
 import type { ArtifactTab } from "../app/features/artifacts/artifact.types";
+import type { ArtifactExportOutcome } from "../app/features/artifacts/artifactExport.types";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 
 describe("ArtifactTabs", () => {
+  function renderExportMenu(onExportArtifact: () => Promise<ArtifactExportOutcome>) {
+    const tab: ArtifactTab = {
+      artifactId: "artifact-export",
+      title: "导出测试",
+      type: "mindmap"
+    };
+    const view = render(
+      <ArtifactTabs
+        analysisHint=""
+        canStartAnalysis
+        onExportArtifact={onExportArtifact}
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "导出为文档" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Markdown (.md)" }));
+    return view;
+  }
+
+  test("leaves the export message empty when native Save As is cancelled", async () => {
+    const onExportArtifact = vi.fn(async () => ({ status: "cancelled" as const }));
+
+    const { container } = renderExportMenu(onExportArtifact);
+
+    await waitFor(() => expect(onExportArtifact).toHaveBeenCalled());
+    expect(container.querySelector(".artifact-export-message")).toHaveTextContent("");
+  });
+
+  test("reports the native path after a desktop export", async () => {
+    const onExportArtifact = vi.fn(async () => ({
+      record: {
+        artifactId: "artifact-export",
+        exportedAt: "2026-08-09T03:00:00.000Z",
+        fileName: "导出测试.md",
+        format: "markdown" as const,
+        id: "export-1",
+        location: "desktop" as const,
+        path: "/home/user/Documents/导出测试.md",
+        status: "available" as const,
+        title: "导出测试"
+      },
+      status: "saved" as const
+    }));
+
+    renderExportMenu(onExportArtifact);
+
+    expect(await screen.findByText("已导出到 /home/user/Documents/导出测试.md"))
+      .toBeInTheDocument();
+  });
+
+  test("reports browser-managed downloads without inventing a path", async () => {
+    const onExportArtifact = vi.fn(async () => ({
+      record: {
+        artifactId: "artifact-export",
+        exportedAt: "2026-08-09T03:00:00.000Z",
+        fileName: "导出测试.md",
+        format: "markdown" as const,
+        id: "export-browser",
+        location: "browser" as const,
+        status: "browser_managed" as const,
+        title: "导出测试"
+      },
+      status: "saved" as const
+    }));
+
+    renderExportMenu(onExportArtifact);
+
+    expect(await screen.findByText("文档已导出，由浏览器下载设置管理。"))
+      .toBeInTheDocument();
+  });
+
+  test("shows the provided export error", async () => {
+    const onExportArtifact = vi.fn(async (): Promise<ArtifactExportOutcome> => {
+      throw new Error("文件已保存，但未写入导出历史：/tmp/导出测试.md");
+    });
+
+    renderExportMenu(onExportArtifact);
+
+    expect(await screen.findByText("文件已保存，但未写入导出历史：/tmp/导出测试.md"))
+      .toBeInTheDocument();
+  });
+
   test("renders the persisted ACORN thin-reading preview without taking down the workspace", async () => {
     const result = JSON.parse(readFileSync(
       resolve(process.cwd(), "../../../../development/test-data/agent-results/preview-acorn-thin-reading-20260730.json"),

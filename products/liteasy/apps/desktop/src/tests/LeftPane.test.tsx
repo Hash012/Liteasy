@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { OrganizationSummary } from "../app/features/organization/organization.types";
 import { createSeededSettingsStore } from "../app/features/settings/settingsStateHelpers";
 import type { CloudLibraryTree } from "../app/features/library/cloudLibraryStorageClient";
+import type { ArtifactExportRecord } from "../app/features/artifacts/artifactExport.types";
 import { LeftPane, type LeftPaneProps } from "../app/layout/LeftPane";
 
 const cloudTrees = vi.hoisted(() => ({
@@ -77,10 +78,14 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     },
     agentMemories: [],
     agentRecentState: "",
+    artifactCatalog: [],
+    artifactCatalogLoadState: { status: "ready" },
     cloudEndpoint: "http://127.0.0.1:8787",
     documentMetadataSyncMessage: "等待同步。",
     documentMetadataSyncResult: null,
     documentMetadataSyncStatus: "unauthenticated",
+    exportRecords: [],
+    exportStatus: "ready",
     governanceMessage: "等待组织空间。",
     governanceStatus: "waiting",
     governanceSummary: null,
@@ -99,12 +104,20 @@ function createProps(overrides: Partial<LeftPaneProps> = {}): LeftPaneProps {
     },
     onClearProfile: vi.fn(),
     onClearRecommendations: vi.fn(),
+    onDeleteArtifact: vi.fn(async () => undefined),
     onDismissRecommendation: vi.fn(),
     onLoginRequired: vi.fn(),
     onLogout: vi.fn(),
     onOpenAcademicArchive: vi.fn(),
+    onOpenArtifact: vi.fn(),
+    onOpenExport: vi.fn(async () => undefined),
     onOpenOrganizationDialog: vi.fn(),
     onReturnToLocalWorkspace: vi.fn(),
+    onReloadArtifactCatalog: vi.fn(async () => undefined),
+    onRemoveExport: vi.fn(async () => undefined),
+    onRenameArtifact: vi.fn(async () => undefined),
+    onRefreshExports: vi.fn(async () => undefined),
+    onRevealExport: vi.fn(async () => undefined),
     onToggleLock: vi.fn(),
     onToggleProfileSampling: vi.fn(),
     onToggleSelection: vi.fn(),
@@ -155,6 +168,45 @@ describe("LeftPane", () => {
     expect(screen.getByText("个人中心", { selector: ".pane-header" })).toBeInTheDocument();
     rerender(<LeftPane {...createProps({ leftRailView: "settings" })} />);
     expect(screen.getByText("设置", { selector: ".pane-header" })).toBeInTheDocument();
+    rerender(<LeftPane {...createProps({ leftRailView: "artifact-library" })} />);
+    expect(screen.getByText("产物库", { selector: ".pane-header" })).toBeInTheDocument();
+  });
+
+  test("composes saved and exported artifact models and forwards actions", async () => {
+    const user = userEvent.setup();
+    const onOpenArtifact = vi.fn();
+    const onOpenExport = vi.fn(async () => undefined);
+    const exportRecord: ArtifactExportRecord = {
+      artifactId: "artifact-saved",
+      exportedAt: "2026-08-09T03:00:00.000Z",
+      fileName: "Saved artifact.md",
+      format: "markdown",
+      id: "export-1",
+      location: "desktop",
+      path: "/tmp/Saved artifact.md",
+      status: "available",
+      title: "Saved artifact"
+    };
+    render(<LeftPane {...createProps({
+      artifactCatalog: [{
+        artifactId: "artifact-saved",
+        papers: [{ id: "paper-1", title: "Attention Is All You Need" }],
+        title: "Saved artifact",
+        type: "mindmap"
+      }],
+      exportRecords: [exportRecord],
+      leftRailView: "artifact-library",
+      onOpenArtifact,
+      onOpenExport
+    })} />);
+
+    expect(screen.getByRole("region", { name: "产物库" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "打开产物：Saved artifact" }));
+    expect(onOpenArtifact).toHaveBeenCalledWith("artifact-saved");
+
+    await user.click(screen.getByRole("tab", { name: "已导出" }));
+    await user.click(screen.getByRole("button", { name: "打开文件：Saved artifact.md" }));
+    expect(onOpenExport).toHaveBeenCalledWith("export-1");
   });
 
   test("renders four independent resource regions in the designed order", async () => {

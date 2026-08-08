@@ -9,6 +9,10 @@ describe("useLeftRailNavigation", () => {
     expect(result.current.leftRailView).toBe("library");
     expect(result.current.paneHeader).toBe("Library");
 
+    act(() => result.current.openArtifactLibrary());
+    expect(result.current.leftRailView).toBe("artifact-library");
+    expect(result.current.paneHeader).toBe("产物库");
+
     act(() => result.current.openOrganization());
     expect(result.current.leftRailView).toBe("organization");
     expect(result.current.paneHeader).toBe("Organization");

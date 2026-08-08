@@ -74,6 +74,25 @@ test("composes the four independent resource regions in their designed order", a
   ]);
 });
 
+test("opens the independent artifact library without replacing the center artifact surface", async () => {
+  const user = userEvent.setup();
+  render(
+    <AppShell
+      initialPapers={[]}
+      localLibraryLoader={async () => localLibrarySnapshot}
+    />
+  );
+  await enterLocalWorkbench(user);
+
+  await user.click(screen.getByRole("button", { name: "产物库" }));
+
+  expect(screen.getByRole("region", { name: "产物库" })).toBeInTheDocument();
+  expect(screen.getByText("登录后查看账号中保存的产物")).toBeInTheDocument();
+  await user.click(screen.getByRole("tab", { name: "已导出" }));
+  expect(screen.getByText("暂无导出记录")).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "多模态产物区域" })).not.toBeInTheDocument();
+});
+
 test("hydrates the resource tree only from the disk snapshot", async () => {
   const user = userEvent.setup();
   render(

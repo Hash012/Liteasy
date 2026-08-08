@@ -5,6 +5,7 @@ import {
 import { OrganizationSidebarPanel } from "../features/organization/OrganizationSidebarPanel";
 import { PersonalCenterPanel } from "../features/profile/PersonalCenterPanel";
 import { SettingsPane } from "./SettingsPane";
+import { ArtifactLibraryPane } from "../features/artifacts/ArtifactLibraryPane";
 import type { AcademicProfile } from "../features/profile/profile.types";
 import type { AgentCoreCatalogEntry, AgentMemoryEntry } from "../features/agent-core/agentCoreConfig";
 import type { AccountSession } from "../features/account/account.types";
@@ -25,6 +26,14 @@ import type { RecommendationItem, RecommendationStatus } from "../features/recom
 import type { UserTag } from "../features/profile/academicProfileClient";
 import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
+import type {
+  ArtifactCatalogLoadState,
+  ArtifactTab
+} from "../features/artifacts/artifact.types";
+import type {
+  ArtifactExportHistoryStatus,
+  ArtifactExportRecord
+} from "../features/artifacts/artifactExport.types";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
 export type LeftPaneProps = {
@@ -33,12 +42,17 @@ export type LeftPaneProps = {
   academicProfile: AcademicProfile;
   agentMemories: AgentMemoryEntry[];
   agentRecentState: string;
+  artifactCatalog: ArtifactTab[];
+  artifactCatalogLoadState: ArtifactCatalogLoadState;
   accountSession: AccountSession | null;
   cloudEndpoint: string;
   cloudTreeRevision?: number;
   documentMetadataSyncMessage?: string;
   documentMetadataSyncResult: DocumentMetadataSyncResult | null;
   documentMetadataSyncStatus: DocumentMetadataSyncStatus;
+  exportError?: string;
+  exportRecords: ArtifactExportRecord[];
+  exportStatus: ArtifactExportHistoryStatus;
   libraryRootPath?: string | null;
   loadLegacyLibraryRoots?: () => Promise<string[]>;
   localLibraryError?: string | null;
@@ -58,6 +72,7 @@ export type LeftPaneProps = {
   onAddDroppedPdfFiles?: (files: File[], targetFolderPath?: string) => void | Promise<void>;
   onClearProfile: () => void;
   onClearRecommendations: () => void;
+  onDeleteArtifact: (artifactId: string) => unknown | Promise<unknown>;
   onDismissRecommendation: (item: RecommendationItem) => void;
   onCreateOrganization?: () => void;
   onImportZoteroDirectory?: (files: File[]) => string | Promise<string>;
@@ -69,6 +84,8 @@ export type LeftPaneProps = {
   onMarkNotificationsRead?: (summary: OrganizationSummary) => void;
   onOrganizationChanged?: () => void | Promise<void>;
   onOpenAcademicArchive: () => void;
+  onOpenArtifact: (artifactId: string) => unknown;
+  onOpenExport: (recordId: string) => unknown | Promise<unknown>;
   onOpenOrganizationDialog: () => void;
   onOpenCloudEntry?: (scope: CloudLibraryScope, entry: CloudLibraryEntry) => void | Promise<void>;
   onOpenPaper?: (paperId: string) => void;
@@ -80,6 +97,11 @@ export type LeftPaneProps = {
   onOpenSharedLibrary?: (summary: OrganizationSummary) => void;
   onOpenSkillDocument?: (entry: AgentCoreCatalogEntry) => void;
   onReturnToLocalWorkspace: () => void;
+  onReloadArtifactCatalog: () => unknown | Promise<unknown>;
+  onRemoveExport: (recordId: string) => unknown | Promise<unknown>;
+  onRenameArtifact: (artifactId: string, name: string) => unknown | Promise<unknown>;
+  onRefreshExports: () => unknown | Promise<unknown>;
+  onRevealExport: (recordId: string) => unknown | Promise<unknown>;
   onRenameLibraryFolder?: (folderPath: string, requestedName: string) => Promise<string>;
   onRenameLibraryPaper?: (paperId: string, requestedName: string) => Promise<string>;
   onResourceTransfer?: (
@@ -118,6 +140,10 @@ export type LeftPaneProps = {
 };
 
 function getPaneHeader(leftRailView: LeftRailView) {
+  if (leftRailView === "artifact-library") {
+    return "产物库";
+  }
+
   if (leftRailView === "organization") {
     return "组织";
   }
@@ -139,12 +165,17 @@ export function LeftPane({
   academicProfile,
   agentMemories,
   agentRecentState,
+  artifactCatalog,
+  artifactCatalogLoadState,
   accountSession,
   cloudEndpoint,
   cloudTreeRevision,
   documentMetadataSyncMessage,
   documentMetadataSyncResult,
   documentMetadataSyncStatus,
+  exportError,
+  exportRecords,
+  exportStatus,
   libraryRootPath,
   loadLegacyLibraryRoots,
   localLibraryError,
@@ -163,6 +194,7 @@ export function LeftPane({
   onAddDroppedPdfFiles,
   onClearProfile,
   onClearRecommendations,
+  onDeleteArtifact,
   onDismissRecommendation,
   onCreateOrganization,
   onImportZoteroDirectory,
@@ -174,6 +206,8 @@ export function LeftPane({
   onMarkNotificationsRead,
   onOrganizationChanged,
   onOpenAcademicArchive,
+  onOpenArtifact,
+  onOpenExport,
   onOpenCloudEntry,
   onOpenOrganizationDialog,
   onOpenPaper,
@@ -185,6 +219,11 @@ export function LeftPane({
   onOpenSharedLibrary,
   onOpenSkillDocument,
   onReturnToLocalWorkspace,
+  onReloadArtifactCatalog,
+  onRemoveExport,
+  onRenameArtifact,
+  onRefreshExports,
+  onRevealExport,
   onRenameLibraryFolder,
   onRenameLibraryPaper,
   onResourceTransfer,
@@ -232,7 +271,24 @@ export function LeftPane({
     <aside className="pane left">
       <div className="pane-header">{getPaneHeader(leftRailView)}</div>
       <div className="pane-body">
-        {leftRailView === "organization" ? (
+        {leftRailView === "artifact-library" ? (
+          <ArtifactLibraryPane
+            accountAvailable={accountSession !== null}
+            artifactCatalog={artifactCatalog}
+            artifactCatalogLoadState={artifactCatalogLoadState}
+            exportError={exportError}
+            exportRecords={exportRecords}
+            exportStatus={exportStatus}
+            onDeleteArtifact={onDeleteArtifact}
+            onOpenArtifact={onOpenArtifact}
+            onOpenExport={onOpenExport}
+            onReloadArtifactCatalog={onReloadArtifactCatalog}
+            onRemoveExport={onRemoveExport}
+            onRenameArtifact={onRenameArtifact}
+            onRefreshExports={onRefreshExports}
+            onRevealExport={onRevealExport}
+          />
+        ) : leftRailView === "organization" ? (
           <OrganizationSidebarPanel
             accountSession={accountSession}
             actionMessage={organizationActionMessage}

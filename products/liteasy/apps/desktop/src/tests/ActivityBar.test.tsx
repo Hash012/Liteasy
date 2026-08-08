@@ -20,6 +20,7 @@ describe("ActivityBar", () => {
 
     const activityBar = screen.getByLabelText("左边栏导航");
     expect(within(activityBar).getByRole("button", { name: "文献库" })).toBeInTheDocument();
+    expect(within(activityBar).getByRole("button", { name: "产物库" })).toBeInTheDocument();
     expect(within(activityBar).getByRole("button", { name: "组织" })).toHaveClass("active");
     const profileButton = within(activityBar).getByRole("button", { name: "个人中心" });
     expect(profileButton).toBeInTheDocument();
@@ -28,6 +29,9 @@ describe("ActivityBar", () => {
 
     await user.click(within(activityBar).getByRole("button", { name: "设置" }));
     expect(onSelectView).toHaveBeenCalledWith("settings");
+
+    await user.click(within(activityBar).getByRole("button", { name: "产物库" }));
+    expect(onSelectView).toHaveBeenCalledWith("artifact-library");
 
     await user.click(within(activityBar).getByRole("button", { name: "组织" }));
     expect(onToggleActiveView).toHaveBeenCalledWith("organization");
