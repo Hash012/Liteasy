@@ -7,6 +7,7 @@ import { createArtifactStore } from "../app/features/artifacts/artifact.store";
 import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
+import type { AgentArtifactResult } from "../app/features/artifacts/artifact.types";
 
 function mindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -117,6 +118,39 @@ function artifactResultClient() {
     save: vi.fn(async (document: { artifactId: string }) =>
       `development/test-data/agent-results/${document.artifactId}.json`
     )
+  };
+}
+
+function persistedArtifact(): AgentArtifactResult {
+  return {
+    agent: {
+      apiVersion: "liteasy.agent/v1",
+      runId: "run-saved",
+      sessionId: "session-saved",
+      status: "completed"
+    },
+    answer: "saved analysis",
+    artifactId: "artifact-saved",
+    artifactType: "mindmap",
+    citations: [],
+    createdAt: "2026-07-20T03:00:00.000Z",
+    mindmapArtifact: mindmapArtifact("pass"),
+    papers: [{ id: paper.id, title: paper.title }],
+    title: "Saved Mind Map",
+    uiDsl: {
+      actions: [],
+      audit: {
+        createdAt: "2026-07-20T03:00:00.000Z",
+        generatedBy: "rule",
+        traceId: "trace-saved"
+      },
+      dataSources: [],
+      root: { component: "MindMap", id: "root", props: {} },
+      surface: "center_artifact",
+      version: "liteasy.ui/v1"
+    },
+    verification: mindmapArtifact("pass").verification,
+    version: "liteasy.agent-artifact/v1"
   };
 }
 
@@ -394,36 +428,7 @@ describe("useArtifactWorkflowController", () => {
 
   test("restores saved artifacts into the catalog and opens them on demand", async () => {
     const artifactStore = createArtifactStore();
-    const persisted = {
-      agent: {
-        apiVersion: "liteasy.agent/v1",
-        runId: "run-saved",
-        sessionId: "session-saved",
-        status: "completed" as const
-      },
-      answer: "saved analysis",
-      artifactId: "artifact-saved",
-      artifactType: "mindmap" as const,
-      citations: [],
-      createdAt: "2026-07-20T03:00:00.000Z",
-      mindmapArtifact: mindmapArtifact("pass"),
-      papers: [{ id: paper.id, title: paper.title }],
-      title: "Saved Mind Map",
-      uiDsl: {
-        actions: [],
-        audit: {
-          createdAt: "2026-07-20T03:00:00.000Z",
-          generatedBy: "rule" as const,
-          traceId: "trace-saved"
-        },
-        dataSources: [],
-        root: { component: "MindMap" as const, id: "root", props: {} },
-        surface: "center_artifact" as const,
-        version: "liteasy.ui/v1" as const
-      },
-      verification: mindmapArtifact("pass").verification,
-      version: "liteasy.agent-artifact/v1" as const
-    };
+    const persisted = persistedArtifact();
     const client = {
       delete: vi.fn(async () => undefined),
       list: vi.fn(async () => [persisted]),
@@ -470,6 +475,83 @@ describe("useArtifactWorkflowController", () => {
       result.current.actions.closeArtifactTab("artifact-saved");
     });
     expect(result.current.model.artifactTabs).toEqual([]);
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-saved" })
+    ]);
+  });
+
+  test("reports account artifact catalog loading until saved artifacts are restored", async () => {
+    let resolveList: (artifacts: AgentArtifactResult[]) => void = () => undefined;
+    const listPromise = new Promise<AgentArtifactResult[]>((resolve) => {
+      resolveList = resolve;
+    });
+    const client = {
+      ...artifactResultClient(),
+      list: vi.fn(() => listPromise)
+    };
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactResultClient: client,
+        artifactResultScopeKey: "https://cloud.example:user-a",
+        artifactStore: createArtifactStore(),
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    expect(result.current.model.artifactCatalogLoadState).toEqual({ status: "loading" });
+
+    await act(async () => {
+      resolveList([persistedArtifact()]);
+      await listPromise;
+    });
+
+    expect(result.current.model.artifactCatalogLoadState).toEqual({ status: "ready" });
+    expect(result.current.model.artifactCatalog).toEqual([
+      expect.objectContaining({ artifactId: "artifact-saved" })
+    ]);
+  });
+
+  test("reports account artifact catalog errors and retries without restarting recovery", async () => {
+    const client = {
+      ...artifactResultClient(),
+      list: vi.fn()
+        .mockRejectedValueOnce(new Error("network unavailable"))
+        .mockResolvedValueOnce([persistedArtifact()])
+    };
+    const { result } = renderHook(() =>
+      useArtifactWorkflowController({
+        artifactResultClient: client,
+        artifactResultScopeKey: "https://cloud.example:user-a",
+        artifactStore: createArtifactStore(),
+        getImportedChunksByPaperId: () => ({}),
+        getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+        getSelectedPapers: () => [],
+        onAnalysisHint: vi.fn(),
+        queueImportForPapers: vi.fn(() => "idle"),
+        runAgentAnalysis: vi.fn(async () => completedRun())
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.model.artifactCatalogLoadState).toEqual({
+      message: "network unavailable",
+      status: "error"
+    });
+
+    await act(async () => {
+      await result.current.actions.reloadArtifactCatalog();
+    });
+
+    expect(client.list).toHaveBeenCalledTimes(2);
+    expect(result.current.model.artifactCatalogLoadState).toEqual({ status: "ready" });
     expect(result.current.model.artifactCatalog).toEqual([
       expect.objectContaining({ artifactId: "artifact-saved" })
     ]);

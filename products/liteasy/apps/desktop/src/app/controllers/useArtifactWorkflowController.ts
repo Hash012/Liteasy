@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useArtifactActions } from "../features/artifacts/useArtifactActions";
 import type {
+  ArtifactCatalogLoadState,
   ArtifactRegenerationRequest,
   ArtifactTask,
   ArtifactTab,
@@ -77,6 +78,7 @@ type UseArtifactWorkflowControllerInput = {
 
 type ArtifactWorkflowModel = {
   artifactCatalog: ArtifactTab[];
+  artifactCatalogLoadState: ArtifactCatalogLoadState;
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
 };
@@ -93,6 +95,7 @@ type ArtifactWorkflowActions = {
   handleAssistantArtifact: (artifactType: ArtifactType) => string;
   openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
   openArtifact: (artifactId: string) => string;
+  reloadArtifactCatalog: () => Promise<void>;
   renameArtifact: (artifactId: string, requestedName: string) => Promise<string>;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
@@ -131,7 +134,10 @@ export function useArtifactWorkflowController({
   const [artifactTasks, setArtifactTasks] = useState<ArtifactTask[]>([]);
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
   const [artifactCatalog, setArtifactCatalog] = useState<ArtifactTab[]>([]);
+  const [artifactCatalogLoadState, setArtifactCatalogLoadState] =
+    useState<ArtifactCatalogLoadState>({ status: "idle" });
   const artifactResultClientRef = useRef(artifactResultClient);
+  const catalogRequestRef = useRef(0);
   const localRepositoryRef = useRef<ArtifactLocalRepository | null>(null);
   const persistenceReadyRef = useRef(false);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -189,48 +195,49 @@ export function useArtifactWorkflowController({
     runAgentAnalysis
   });
 
+  async function reloadArtifactCatalog() {
+    const requestId = ++catalogRequestRef.current;
+    setArtifactCatalogLoadState({ status: "loading" });
+    persistenceReadyRef.current = false;
+    artifactStore.clearAccountArtifacts();
+    artifactActions.syncArtifacts();
+
+    try {
+      if (artifactResultScopeKey) {
+        const results = await artifactResultClientRef.current.list();
+        if (requestId !== catalogRequestRef.current) {
+          return;
+        }
+        results.forEach(artifactActions.restoreArtifactResult);
+      } else {
+        const cachedArtifacts = await localRepositoryRef.current?.list() ?? [];
+        if (requestId !== catalogRequestRef.current) {
+          return;
+        }
+        cachedArtifacts.forEach(artifactStore.upsertCatalogEntry);
+        persistenceReadyRef.current = true;
+      }
+      artifactActions.syncArtifacts();
+      setArtifactCatalogLoadState({ status: "ready" });
+    } catch (error) {
+      if (requestId !== catalogRequestRef.current) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      setArtifactCatalogLoadState({ message, status: "error" });
+      onAnalysisHint(
+        artifactResultScopeKey
+          ? `同步 Agent 产物服务失败：${message}`
+          : `加载本地产物记录失败：${message}`
+      );
+    }
+  }
+
   useEffect(() => {
     let active = true;
 
     async function restoreArtifacts() {
-      persistenceReadyRef.current = false;
-      artifactStore.clearAccountArtifacts();
-      artifactActions.syncArtifacts();
-      let hydratedThisRun = false;
-      if (!artifactResultScopeKey) {
-        try {
-          const cachedArtifacts = await localRepositoryRef.current?.list();
-          if (!active) {
-            return;
-          }
-          cachedArtifacts?.forEach(artifactStore.upsertCatalogEntry);
-        } catch (error) {
-          if (active) {
-            onAnalysisHint(
-              `加载本地产物记录失败：${error instanceof Error ? error.message : String(error)}`
-            );
-          }
-        }
-        persistenceReadyRef.current = true;
-        hydratedThisRun = true;
-      }
-
-      if (artifactResultScopeKey) {
-        try {
-          const results = await artifactResultClientRef.current.list();
-          if (!active) {
-            return;
-          }
-          results.forEach(artifactActions.restoreArtifactResult);
-        } catch (error) {
-          if (active) {
-            onAnalysisHint(
-              `同步 Agent 产物服务失败：${error instanceof Error ? error.message : String(error)}`
-            );
-          }
-        }
-      }
-
+      await reloadArtifactCatalog();
       if (!active) {
         return;
       }
@@ -261,7 +268,7 @@ export function useArtifactWorkflowController({
             : "检测到应用重启前未完成的生成任务，已标记为中断；请重新发起生成。"
         );
       }
-      if (hydratedThisRun || interruptedTasks.length > 0) {
+      if (interruptedTasks.length > 0) {
         artifactActions.syncArtifacts();
       }
     }
@@ -269,6 +276,7 @@ export function useArtifactWorkflowController({
     void restoreArtifacts();
     return () => {
       active = false;
+      catalogRequestRef.current += 1;
     };
   }, [artifactResultScopeKey]);
 
@@ -280,6 +288,7 @@ export function useArtifactWorkflowController({
       generateThinReadingBranch: artifactActions.generateThinReadingBranch,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
       openArtifact: artifactActions.openArtifact,
+      reloadArtifactCatalog,
       renameArtifact: async (artifactId, requestedName) => {
         const current = artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
         if (!current || current.type === "skill_doc") {
@@ -310,6 +319,7 @@ export function useArtifactWorkflowController({
     },
     model: {
       artifactCatalog,
+      artifactCatalogLoadState,
       artifactTabs,
       artifactTasks
     }

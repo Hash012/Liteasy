@@ -85,6 +85,11 @@ export type ArtifactPreview = {
   rootLabel: string;
 };
 
+export type ArtifactCatalogLoadState = {
+  message?: string;
+  status: "error" | "idle" | "loading" | "ready";
+};
+
 export type ArtifactPaperRef = {
   arxivId?: string;
   authors?: readonly string[] | string;
