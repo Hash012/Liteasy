@@ -6,6 +6,39 @@ export const retrievalConnectorEndpoints = Object.freeze({
   semantic_scholar: "https://api.semanticscholar.org/graph/v1/paper/search"
 });
 
+const normalizeGraphId = (provider, value) => {
+  const raw = text(value, 300);
+  if (provider === "openalex") {
+    const match = raw.match(/(?:openalex\.org\/|openalex:)?(W\d+)$/i);
+    return match ? `openalex:${match[1].toUpperCase()}` : "";
+  }
+  if (provider === "semantic_scholar") {
+    const match = raw.match(/(?:semantic_scholar:|semanticscholar:)?([^\s/]+)$/i);
+    return match ? `semantic_scholar:${match[1]}` : "";
+  }
+  return raw ? `${provider}:${raw}` : "";
+};
+
+function normalizeGraphRecord(provider, item) {
+  const id = normalizeGraphId(provider, provider === "openalex" ? item?.id : item?.paperId);
+  if (!id) return null;
+  const referencedPaperIds = provider === "openalex"
+    ? (Array.isArray(item?.referenced_works) ? item.referenced_works : []).map((value) => normalizeGraphId(provider, value)).filter(Boolean)
+    : (Array.isArray(item?.references) ? item.references : []).map((value) => normalizeGraphId(provider, value?.paperId ?? value)).filter(Boolean);
+  const citingPaperIds = provider === "semantic_scholar"
+    ? (Array.isArray(item?.citations) ? item.citations : []).map((value) => normalizeGraphId(provider, value?.paperId ?? value)).filter(Boolean)
+    : [];
+  return {
+    id,
+    provider,
+    referencedPaperIds: [...new Set(referencedPaperIds)],
+    ...(citingPaperIds.length ? { citingPaperIds: [...new Set(citingPaperIds)] } : {}),
+    evidenceRecordUrl: provider === "openalex"
+      ? `https://openalex.org/${id.slice("openalex:".length)}`
+      : `https://www.semanticscholar.org/paper/${encodeURIComponent(id.slice("semantic_scholar:".length))}`
+  };
+}
+
 export class ExternalRetrievalError extends Error {
   constructor(code, status = 400) {
     super(code);
@@ -233,6 +266,34 @@ export function createExternalRetrievalConnectors(config, { fetchImpl = fetch } 
       const payload = await request(url, headers, input.signal);
       return (Array.isArray(payload?.data) ? payload.data : [])
         .map((item, rank) => semanticScholarSource(item, input.query, rank)).filter(Boolean);
+    },
+    async relations(source, input) {
+      if (source.connectorType === "openalex") {
+        if (source.baseUrl !== retrievalConnectorEndpoints.openalex) throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
+        const ids = input.papers.filter((paper) => paper.provider === "openalex").map((paper) => paper.sourceId);
+        if (ids.length === 0) return [];
+        const url = new URL(source.baseUrl);
+        url.searchParams.set("filter", `openalex_id:${ids.map((id) => `https://openalex.org/${id}`).join("|")}`);
+        url.searchParams.set("per-page", String(ids.length));
+        url.searchParams.set("select", "id,referenced_works");
+        const payload = await request(url, {}, input.signal);
+        return {
+          records: (Array.isArray(payload?.results) ? payload.results : [])
+            .map((item) => normalizeGraphRecord("openalex", item)).filter(Boolean),
+          warnings: ["openalex_co_cited_unavailable"]
+        };
+      }
+      if (source.connectorType === "semantic_scholar") {
+        if (source.baseUrl !== retrievalConnectorEndpoints.semantic_scholar) throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
+        const papers = input.papers.filter((paper) => paper.provider === "semantic_scholar");
+        return (await Promise.all(papers.map(async (paper) => {
+          const url = new URL(`${source.baseUrl.replace(/\/search$/, "")}/${encodeURIComponent(paper.sourceId)}`);
+          url.searchParams.set("fields", "paperId,references.paperId,citations.paperId");
+          const headers = config.semanticScholarApiKey ? { "x-api-key": config.semanticScholarApiKey } : {};
+          return normalizeGraphRecord("semantic_scholar", await request(url, headers, input.signal));
+        }))).filter(Boolean);
+      }
+      throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
     }
   });
 }

@@ -118,6 +118,10 @@ function runtime() {
       async search(principal, input) {
         calls.push({ externalKnowledge: input, principal });
         return { retrieval: { attempts: 1, id: "retrieval_1", reused: false, status: "completed" }, sources: [] };
+      },
+      async relations(principal, input, signal) {
+        calls.push({ externalRelations: input, principal, signal });
+        return { edges: [], warnings: [] };
       }
     },
     libraryRepository: {
@@ -483,6 +487,31 @@ test("authenticates formal external retrieval and derives PDF grant ownership fr
   assert.equal(instance.calls.find((item) => item.externalKnowledge).principal.subjectId, "user_1");
   assert.equal(instance.calls.find((item) => item.externalPdf).principal.subjectId, "user_1");
   assert.equal(instance.calls.filter((item) => item.audience === "liteasy-desktop").length, 2);
+});
+
+test("authenticates formal paper relations and rejects anonymous access", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, {
+    allowedOrigins: [], database: { sslMode: "verify-full" }, environment: "production", s3: { region: "test" }
+  });
+  const body = {
+    artifactId: "artifact_relations",
+    papers: [{ id: "paper-a", provider: "openalex", sourceId: "W1" }]
+  };
+  const authenticated = response();
+  await handler(request("POST", "/v1/research/paper-relations", body), authenticated);
+  assert.equal(authenticated.status, 200);
+  assert.equal(instance.calls.find((item) => item.externalRelations).principal.subjectId, "user_1");
+
+  const anonymousInstance = runtime();
+  anonymousInstance.identityVerifier.verifyAuthorizationHeader = async () => {
+    throw new IdentityError("authentication_required", 401);
+  };
+  const anonymous = response();
+  await createCloudRequestHandler(anonymousInstance, {
+    allowedOrigins: [], database: { sslMode: "verify-full" }, environment: "production", s3: { region: "test" }
+  })(request("POST", "/v1/research/paper-relations", body), anonymous);
+  assert.equal(anonymous.status, 401);
 });
 
 test("streams the desktop NDJSON contract through the authenticated cloud route", async () => {

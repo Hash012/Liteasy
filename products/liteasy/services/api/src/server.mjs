@@ -126,6 +126,11 @@ function errorMessage(code) {
     external_retrieval_provider_timeout: "A literature provider timed out. Retry later.",
     external_retrieval_provider_unavailable: "A literature provider is temporarily unavailable.",
     external_retrieval_unavailable: "No configured literature source is currently available.",
+    external_retrieval_relation_request_invalid: "The paper relation request is invalid.",
+    external_retrieval_relation_paper_invalid: "The paper relation request contains an invalid paper.",
+    external_retrieval_relation_limit_invalid: "Select no more than 24 papers for relation analysis.",
+    external_retrieval_relation_identity_conflict: "The paper relation request contains conflicting paper identities.",
+    paper_relation_provider_unavailable: "A configured literature provider could not return paper relations.",
     last_platform_admin_required: "At least one active platform administrator must remain.",
     library_name_exists: "An item with this name already exists in the target folder.",
     library_revision_conflict: "The library changed. Refresh it and retry.",
@@ -409,7 +414,8 @@ export function createCloudRequestHandler(runtime, config) {
 
       if (request.method === "POST" && new Set([
         "/v1/research/external-knowledge",
-        "/v1/research/external-pdf"
+        "/v1/research/external-pdf",
+        "/v1/research/paper-relations"
       ]).has(url.pathname)) {
         const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
           request.headers.authorization,
@@ -421,7 +427,9 @@ export function createCloudRequestHandler(runtime, config) {
         request.once("aborted", () => controller.abort());
         const result = url.pathname.endsWith("external-pdf")
           ? await runtime.externalKnowledgeService.download(principal, body, controller.signal)
-          : await runtime.externalKnowledgeService.search(principal, body, controller.signal);
+          : url.pathname.endsWith("paper-relations")
+            ? await runtime.externalKnowledgeService.relations(principal, body, controller.signal)
+            : await runtime.externalKnowledgeService.search(principal, body, controller.signal);
         sendJson(response, 200, result);
         return;
       }
