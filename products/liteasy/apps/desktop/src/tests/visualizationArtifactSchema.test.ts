@@ -29,6 +29,42 @@ describe("visualization artifact schema", () => {
     }))).toThrow("visualization_artifact_invalid");
   });
 
+  test("rejects a hard warning because hard gates must pass", () => {
+    const artifact = makeVisualizationArtifactFixture();
+    artifact.validation = {
+      outcome: "degraded",
+      checks: [{
+        gate: "hard",
+        validatorId: "artifact-schema",
+        validatorVersion: "1.0.0",
+        outcome: "warning"
+      }],
+      repairCount: 0
+    };
+    expect(() => parseVisualizationArtifact(artifact)).toThrow("visualization_artifact_invalid");
+  });
+
+  test("rejects an advisory failure", () => {
+    const artifact = makeVisualizationArtifactFixture();
+    artifact.validation = {
+      outcome: "degraded",
+      checks: [{
+        gate: "advisory",
+        validatorId: "artifact-schema",
+        validatorVersion: "1.0.0",
+        outcome: "fail"
+      }],
+      repairCount: 0
+    };
+    expect(() => parseVisualizationArtifact(artifact)).toThrow("visualization_artifact_invalid");
+  });
+
+  test("rejects an artifact without a hard validation check", () => {
+    const artifact = makeVisualizationArtifactFixture();
+    artifact.validation = { outcome: "pass", checks: [], repairCount: 0 };
+    expect(() => parseVisualizationArtifact(artifact)).toThrow("visualization_artifact_invalid");
+  });
+
   test("accepts the bounded fixture for each declared modality", () => {
     const modalities = [
       "semantic_graph", "circuit", "physics_diagram", "biology_structure", "geometry_2d",

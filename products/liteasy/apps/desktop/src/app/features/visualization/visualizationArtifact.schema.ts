@@ -152,6 +152,22 @@ const sourceFigureSchema = z.object({
   extraction: z.object({ method: boundedText(120), confidence: z.number().min(0).max(1) }).strict()
 }).strict();
 
+const validationReportSchema = z.object({
+  outcome: z.enum(["pass", "degraded", "fail"]),
+  checks: z.array(z.object({
+    gate: z.enum(["hard", "advisory"]),
+    validatorId: stableIdSchema,
+    validatorVersion: boundedText(80),
+    outcome: z.enum(["pass", "warning", "fail"]),
+    diagnosticCode: z.string().max(160).optional()
+  }).strict()).max(256),
+  repairCount: z.union([z.literal(0), z.literal(1)])
+}).strict().superRefine((validation, context) => {
+  if (!validation.checks.some((check) => check.gate === "hard")) {
+    context.addIssue({ code: "custom", message: "visualization_hard_check_missing" });
+  }
+});
+
 const visualizationSpecSchema = z.discriminatedUnion("modality", [
   z.object({ modality: z.literal("semantic_graph"), payload: semanticGraphSchema }).strict(),
   z.object({ modality: z.literal("circuit"), payload: circuitSchema }).strict(),
@@ -185,12 +201,15 @@ const artifactSchema = z.object({
   semanticObjects: z.array(z.object({ objectId: stableIdSchema, kind: boundedText(80), label: boundedText(500), objectPath: z.array(stableIdSchema).min(1).max(32), evidenceClaimIds: evidenceIdsSchema, selectable: z.boolean() }).strict()).max(512),
   interaction: z.object({ pan: z.boolean(), zoom: z.boolean(), rotate: z.boolean(), playback: z.enum(["none", "timeline", "stepwise"]), parameterIds: z.array(stableIdSchema).max(128), selectableObjectIds: z.array(stableIdSchema).max(512) }).strict(),
   accessibility: z.object({ summary: boundedText(4000), objectReadingOrder: z.array(stableIdSchema).max(512), dataTable: z.array(z.object({ label: boundedText(240), value: boundedText(1000) }).strict()).max(512).optional() }).strict(),
-  validation: z.object({ outcome: z.enum(["pass", "degraded", "fail"]), checks: z.array(z.object({ gate: z.enum(["hard", "advisory"]), validatorId: stableIdSchema, validatorVersion: boundedText(80), outcome: z.enum(["pass", "warning", "fail"]), diagnosticCode: z.string().max(160).optional() }).strict()).max(256), repairCount: z.union([z.literal(0), z.literal(1)]) }).strict(),
+  validation: validationReportSchema,
   fallbackHistory: z.array(z.object({ from: modalitySchema, to: modalitySchema.optional(), reasonCode: boundedText(160) }).strict()).max(4),
   usage: z.object({ ledgerId: stableIdSchema, reservationId: stableIdSchema, providerRouteId: stableIdSchema, costPolicyVersion: boundedText(80), reservedUnits: z.number().finite().nonnegative(), settledUnits: z.number().finite().nonnegative() }).strict(),
   createdAt: z.string().datetime()
 }).strict().superRefine((artifact, context) => {
-  if (artifact.modality !== artifact.spec.modality || artifact.validation.outcome === "fail" || artifact.validation.checks.some((check) => check.gate === "hard" && check.outcome === "fail")) {
+  if (artifact.modality !== artifact.spec.modality || artifact.validation.outcome === "fail" || artifact.validation.checks.some((check) =>
+    (check.gate === "hard" && check.outcome !== "pass") ||
+    (check.gate === "advisory" && check.outcome === "fail")
+  )) {
     context.addIssue({ code: "custom", message: "visualization_artifact_invalid" });
   }
 });
