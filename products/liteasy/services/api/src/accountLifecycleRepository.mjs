@@ -263,6 +263,22 @@ export class PostgresAccountLifecycleRepository {
         "DELETE FROM agent_artifacts WHERE subject_id = $1",
         [input.subjectId]
       );
+      const visualizationArtifacts = await client.query(
+        "DELETE FROM visualization_artifacts WHERE subject_id = $1",
+        [input.subjectId]
+      );
+      const visualizationPreferences = await client.query(
+        "DELETE FROM visualization_user_preferences WHERE subject_id = $1",
+        [input.subjectId]
+      );
+      const visualizationEntitlements = await client.query(
+        "DELETE FROM visualization_entitlements WHERE subject_id = $1",
+        [input.subjectId]
+      );
+      const visualizationQuotaPolicies = await client.query(
+        "DELETE FROM visualization_quota_policies WHERE subject_id = $1",
+        [input.subjectId]
+      );
       const accountTables = [
         ["academic_profiles", "deletedAcademicProfiles"],
         ["local_library_manifest_entries", "deletedLocalLibraryManifestEntries"],
@@ -288,6 +304,10 @@ export class PostgresAccountLifecycleRepository {
         ...accountTableCounts,
         deletedEntries: entries.rowCount,
         deletedAgentArtifacts: agentArtifacts.rowCount,
+        deletedVisualizationArtifacts: visualizationArtifacts.rowCount,
+        deletedVisualizationPreferences: visualizationPreferences.rowCount,
+        deletedVisualizationEntitlements: visualizationEntitlements.rowCount,
+        deletedVisualizationQuotaPolicies: visualizationQuotaPolicies.rowCount,
         deletedFolders: folders.rowCount,
         deletedIdempotencyRecords: idempotencyRecords.rowCount,
         deletedInvitations: invitations.rowCount,
