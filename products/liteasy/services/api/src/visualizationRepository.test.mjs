@@ -155,6 +155,7 @@ test("uses net ledger deltas and the policy timezone for both quota windows", as
   assert.doesNotMatch(sql, /GREATEST\s*\(/);
   assert.match(sql, /date_trunc\('day', now\(\),/);
   assert.match(sql, /date_trunc\('month', now\(\),/);
+  assert.match(sql, /COALESCE\(r\.created_at, u\.created_at\)/);
   assert.match(harness.calls.map((call) => call.sql).join("\n"), /state = 'expired'/);
 });
 

@@ -90,10 +90,14 @@ export class PostgresVisualizationRepository {
     const result = await this.pool.query(`
       SELECT e.*, p.enabled AS preference_enabled, p.revision AS preference_revision,
              q.daily_units, q.monthly_units, q.max_concurrency, q.timezone, q.revision AS policy_revision,
-             COALESCE((SELECT SUM(units_delta) FROM visualization_usage_ledger u
-                       WHERE u.subject_id = e.subject_id AND u.created_at >= date_trunc('day', now(), COALESCE(q.timezone, 'UTC'))), 0) AS daily_used,
-             COALESCE((SELECT SUM(units_delta) FROM visualization_usage_ledger u
-                       WHERE u.subject_id = e.subject_id AND u.created_at >= date_trunc('month', now(), COALESCE(q.timezone, 'UTC'))), 0) AS monthly_used,
+             COALESCE((SELECT SUM(u.units_delta) FROM visualization_usage_ledger u
+                       LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
+                       WHERE u.subject_id = e.subject_id
+                         AND COALESCE(r.created_at, u.created_at) >= date_trunc('day', now(), COALESCE(q.timezone, 'UTC'))), 0) AS daily_used,
+             COALESCE((SELECT SUM(u.units_delta) FROM visualization_usage_ledger u
+                       LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
+                       WHERE u.subject_id = e.subject_id
+                         AND COALESCE(r.created_at, u.created_at) >= date_trunc('month', now(), COALESCE(q.timezone, 'UTC'))), 0) AS monthly_used,
              (SELECT COUNT(*) FROM visualization_quota_reservations r
                WHERE r.subject_id = e.subject_id AND r.state = 'reserved' AND r.expires_at > now()) AS active_count
         FROM visualization_entitlements e
@@ -209,9 +213,11 @@ export class PostgresVisualizationRepository {
       await this.#expireReservations(client, id, input.traceId ?? `trace_${randomUUID()}`);
       const usage = await client.query(`
         SELECT
-          COALESCE(SUM(units_delta) FILTER (WHERE created_at >= date_trunc('day', now(), $2)), 0) AS daily_used,
-          COALESCE(SUM(units_delta) FILTER (WHERE created_at >= date_trunc('month', now(), $2)), 0) AS monthly_used
-          FROM visualization_usage_ledger WHERE subject_id = $1
+          COALESCE(SUM(u.units_delta) FILTER (WHERE COALESCE(r.created_at, u.created_at) >= date_trunc('day', now(), $2)), 0) AS daily_used,
+          COALESCE(SUM(u.units_delta) FILTER (WHERE COALESCE(r.created_at, u.created_at) >= date_trunc('month', now(), $2)), 0) AS monthly_used
+          FROM visualization_usage_ledger u
+          LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
+         WHERE u.subject_id = $1
       `, [id, ianaTimezone(policy.timezone ?? "UTC")]);
       const active = await client.query("SELECT COUNT(*) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > now()", [id]);
       if (Number(usage.rows[0]?.daily_used ?? usage.rows[0]?.used_units ?? 0) + input.units > Number(policy.daily_units)
@@ -264,9 +270,6 @@ export class PostgresVisualizationRepository {
     const id = subjectId(subject);
     required(input, "reservationId");
     const code = reasonCode(input);
-    if (state === "settled" && (!Number.isInteger(input.settledUnits) || input.settledUnits < 0)) {
-      throw new Error("visualization_settled_units_invalid");
-    }
     return withPostgresTransaction(this.pool, async (client) => {
       const row = (await client.query("SELECT * FROM visualization_quota_reservations WHERE reservation_id = $1 AND subject_id = $2 FOR UPDATE", [input.reservationId, id])).rows[0];
       if (!row) throw new Error("visualization_reservation_not_found");
@@ -322,7 +325,8 @@ export class PostgresVisualizationRepository {
       const entitlementRow = (await client.query("SELECT * FROM visualization_entitlements WHERE subject_id = $1 FOR UPDATE", [id])).rows[0];
       const preferenceRow = (await client.query("SELECT enabled FROM visualization_user_preferences WHERE subject_id = $1", [id])).rows[0];
       const entitlement = rowEntitlement(entitlementRow);
-      if (!entitlement.allowed || preferenceRow?.enabled === false || !entitlement.allowedModalities.includes(modality)) return null;
+      if (!entitlement.allowed || preferenceRow?.enabled === false
+        || (entitlement.allowedModalities.length > 0 && !entitlement.allowedModalities.includes(modality))) return null;
       const result = await client.query(`SELECT * FROM visualization_artifacts
         WHERE subject_id = $1 AND document_id = $2 AND modality = $3 AND spec_hash = $4 AND evidence_hash = $5
           AND body->>'tenantId' = $6 AND body->>'locale' = $7
