@@ -37,10 +37,12 @@ try {
     "006_distinct_append_only_audit_errors.sql",
     "007_reply_rating_and_profile_names.sql",
     "008_account_deletion_annotation_history.sql",
-    "009_detach_deleted_annotation_audit.sql"
+    "009_detach_deleted_annotation_audit.sql",
+    "010_direct_message_read_state.sql",
+    "011_literature_resolution_provenance.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 9, current: true });
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 11, current: true });
   await migrationPool.query(`
     DO $$
     DECLARE tables text;
@@ -58,6 +60,36 @@ try {
   await assert.rejects(
     () => pool.query("CREATE TABLE application_role_must_not_create(id text)"),
     /permission denied/
+  );
+
+  const provenanceColumns = await migrationPool.query(`
+    SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'literature_records'
+       AND column_name IN ('record_source', 'source_provider', 'confirmed_at', 'revision')
+     ORDER BY column_name
+  `);
+  assert.deepEqual(provenanceColumns.rows.map((row) => row.column_name), ["confirmed_at", "record_source", "revision", "source_provider"]);
+  const versionTrigger = await migrationPool.query(`
+    SELECT 1 FROM pg_trigger
+     WHERE tgname = 'literature_record_versions_append_only'
+       AND NOT tgisinternal
+  `);
+  assert.equal(versionTrigger.rowCount, 1);
+  await migrationPool.query(`
+    INSERT INTO literature_records(id, title, authors, record_source, confirmed_at)
+    VALUES ('migration-provenance-record', 'Migration provenance', '[]'::jsonb, 'manual', now())
+  `);
+  await migrationPool.query(`
+    INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by)
+    VALUES ('migration-provenance-version', 'migration-provenance-record', 1, '{"title":"Migration provenance"}', 'integration')
+  `);
+  await assert.rejects(
+    () => migrationPool.query("UPDATE literature_record_versions SET changed_by = 'tampered' WHERE id = 'migration-provenance-version'"),
+    /literature_record_version_is_append_only/
+  );
+  await assert.rejects(
+    () => migrationPool.query("DELETE FROM literature_record_versions WHERE id = 'migration-provenance-version'"),
+    /literature_record_version_is_append_only/
   );
 
   const empty = await pool.query(`

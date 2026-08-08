@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import Database from "better-sqlite3";
+import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { createIntuechoApp } from "./server.mjs";
 import { IdentityVerificationError } from "./identityVerifier.mjs";
 
@@ -142,6 +143,91 @@ test("a new runtime database contains no demo or fixture content", async () => {
     assert.equal(topics.statusCode, 200);
     assert.deepEqual(topics.json(), []);
   }, { fixture: false });
+});
+
+test("persists manual literature provenance, immutable corrections, and identity conflicts", async () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  const owner = { id: "literature-owner", name: "Ada Lovelace", initials: "AL" };
+  const first = await repository.confirmLiterature(owner, {
+    mode: "manual",
+    record: {
+      authors: ["Ada Lovelace"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
+      title: "Manual Record",
+      year: 1843
+    }
+  });
+  assert.equal(first.provenance.mode, "manual");
+  assert.equal((await repository.findLiteratureByIdentifiers(first.identifiers)).literatureId, first.literatureId);
+  const concurrent = await Promise.all([
+    repository.confirmLiterature(owner, {
+      mode: "manual",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
+        title: "Manual Record",
+        year: 1843
+      }
+    }),
+    repository.confirmLiterature(owner, {
+      mode: "manual",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
+        title: "Manual Record",
+        year: 1843
+      }
+    })
+  ]);
+  assert.deepEqual(concurrent.map((item) => item.literatureId), [first.literatureId, first.literatureId]);
+  await repository.confirmLiterature(owner, {
+    mode: "manual",
+    record: {
+      authors: ["Ada Lovelace"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
+      title: "Corrected Manual Record",
+      year: 1843
+    }
+  });
+  const version = db.prepare("SELECT revision, snapshot_json FROM literature_record_versions_v2 WHERE literature_id = ? AND revision = 1").get(first.literatureId);
+  assert.equal(version.revision, 1);
+  assert.equal(JSON.parse(version.snapshot_json).title, "Manual Record");
+  assert.throws(
+    () => db.prepare("UPDATE literature_record_versions_v2 SET changed_by = ? WHERE literature_id = ? AND revision = 1").run("tampered", first.literatureId),
+    /literature_record_version_is_append_only/
+  );
+  assert.throws(
+    () => db.prepare("DELETE FROM literature_record_versions_v2 WHERE literature_id = ? AND revision = 1").run(first.literatureId),
+    /literature_record_version_is_append_only/
+  );
+
+  const second = await repository.confirmLiterature(owner, {
+    mode: "manual",
+    record: {
+      authors: ["Grace Hopper"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/other" }],
+      title: "Other Record",
+      year: 1952
+    }
+  });
+  await assert.rejects(
+    () => repository.confirmLiterature(owner, {
+      mode: "manual",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [
+          { kind: "doi", source: "manual", value: "10.1000/manual" },
+          { kind: "doi", source: "manual", value: "10.1000/other" }
+        ],
+        title: "Conflict",
+        year: 1843
+      }
+    }),
+    (error) => error?.code === "LITERATURE_IDENTITY_CONFLICT"
+  );
+  assert.equal((await repository.findLiteratureByIdentifiers(second.identifiers)).literatureId, second.literatureId);
+  db.close();
 });
 
 test("public reads are anonymous while writes require a Bearer session", async () => {

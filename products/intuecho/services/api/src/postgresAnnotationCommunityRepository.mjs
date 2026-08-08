@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
 import { AnnotationCommunityError, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
+import {
+  LiteratureIdentityConflictError,
+  normalizeLiteratureIdentifier,
+  titleAuthorsYearFingerprint
+} from "./literatureIdentity.mjs";
 
 function normalizeIdentity(kind, value) {
-  const normalized = String(value).trim();
-  return kind === "doi" || kind === "arxiv_id" ? normalized.toLocaleLowerCase("en-US") : normalized;
+  return normalizeLiteratureIdentifier(kind, value);
 }
 
 function normalizeTag(value) {
@@ -26,6 +30,110 @@ export class PostgresAnnotationCommunityRepository {
     this.authorizeOrganizationInvitation = authorizeOrganizationInvitation;
     this.authorizeOrganizationVisibility = authorizeOrganizationVisibility;
     this.listOrganizations = listOrganizations;
+  }
+
+  async findLiteratureByIdentifiers(identifiers, client = this.pool) {
+    const normalized = [...new Map((identifiers ?? []).map((identifier) => {
+      const kind = identifier.kind;
+      const value = normalizeIdentity(kind, identifier.value);
+      return [`${kind}:${value}`, { kind, value }];
+    })).values()];
+    const literatureIds = new Set();
+    for (const identity of normalized) {
+      const result = await client.query("SELECT literature_id FROM literature_identities WHERE identity_kind = $1 AND identity_value = $2", [identity.kind, identity.value]);
+      for (const row of result.rows) literatureIds.add(row.literature_id);
+    }
+    if (literatureIds.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
+    const id = [...literatureIds][0];
+    return id ? this.#literatureRecord(id, client) : null;
+  }
+
+  async searchStoredLiterature(query, limit = 10, client = this.pool) {
+    const bounded = Math.max(1, Math.min(Number(limit) || 10, 10));
+    const value = String(query ?? "").trim();
+    if (!value) return [];
+    const result = await client.query(`
+      SELECT DISTINCT literature.id
+        FROM literature_records literature
+        LEFT JOIN literature_identities identity ON identity.literature_id = literature.id
+       WHERE literature.title ILIKE $1 OR literature.authors::text ILIKE $1 OR identity.identity_value ILIKE $1
+       ORDER BY literature.id
+       LIMIT $2
+    `, [`%${value}%`, bounded]);
+    const records = [];
+    for (const row of result.rows) records.push(await this.#literatureRecord(row.id, client));
+    return records.filter(Boolean);
+  }
+
+  async confirmLiterature(owner, confirmation) {
+    const actor = typeof owner === "string" ? owner : owner?.id;
+    if (!actor) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_OWNER_REQUIRED");
+    let mode = confirmation?.mode;
+    let provider = confirmation?.provider ?? null;
+    let record = confirmation?.record;
+    if (mode === "candidate") {
+      if (!record) throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+      mode = "public_registry";
+    }
+    if (mode !== "manual" && mode !== "public_registry") throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
+    if (!record || !Array.isArray(record.identifiers)) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
+    if (record.identifiers.some((identifier) => identifier.source !== mode)) {
+      throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
+    }
+    const input = {
+      authors: [...(record.authors ?? [])],
+      documentType: record.documentType,
+      identifiers: record.identifiers.map((identifier) => ({ ...identifier })),
+      title: record.title,
+      year: record.year
+    };
+    if (input.identifiers.length === 0) {
+      if (mode !== "manual") throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
+      input.identifiers.push({ kind: "title_authors_year_hash", source: "manual", value: titleAuthorsYearFingerprint(input) });
+    }
+    const normalized = [...new Map(input.identifiers.map((identifier) => {
+      const value = normalizeIdentity(identifier.kind, identifier.value);
+      return [`${identifier.kind}:${value}`, { ...identifier, value }];
+    })).values()];
+    return withTransaction(this.pool, async (client) => {
+      for (const identifier of normalized) {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${identifier.kind}:${identifier.value}`]);
+      }
+      const matched = new Set();
+      for (const identifier of normalized) {
+        const result = await client.query("SELECT literature_id FROM literature_identities WHERE identity_kind = $1 AND identity_value = $2 FOR UPDATE", [identifier.kind, identifier.value]);
+        for (const row of result.rows) matched.add(row.literature_id);
+      }
+      if (matched.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
+      const now = new Date();
+      const literatureId = [...matched][0] ?? `literature_${randomUUID()}`;
+      const source = mode === "public_registry" ? "public_registry" : "manual";
+      const existingResult = matched.size ? await client.query("SELECT * FROM literature_records WHERE id = $1 FOR UPDATE", [literatureId]) : { rows: [] };
+      const existing = existingResult.rows[0];
+      if (!existing) {
+        await client.query(`INSERT INTO literature_records(id, title, authors, publication_year, document_type, record_source, source_provider, confirmed_at, revision)
+          VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, 1)`, [literatureId, input.title, JSON.stringify(input.authors), input.year ?? null, input.documentType ?? null, source, provider, now]);
+        for (const identifier of normalized) {
+          await client.query("INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source) VALUES ($1, $2, $3, $4)", [literatureId, identifier.kind, identifier.value, source]);
+        }
+        const snapshot = await this.#literatureRecord(literatureId, client);
+        await client.query("INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by, created_at) VALUES ($1, $2, 1, $3::jsonb, $4, $5)", [`literature_record_version_${randomUUID()}`, literatureId, JSON.stringify(snapshot), actor, now]);
+      } else {
+        const currentAuthors = JSON.stringify(existing.authors ?? []);
+        const nextAuthors = JSON.stringify(input.authors);
+        const changed = existing.title !== input.title || currentAuthors !== nextAuthors || existing.publication_year !== (input.year ?? null) || existing.document_type !== (input.documentType ?? null) || existing.record_source !== source || existing.source_provider !== provider;
+        if (changed) {
+          const current = await this.#literatureRecord(literatureId, client);
+          const revision = Number(existing.revision ?? 1);
+          await client.query("INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by, created_at) VALUES ($1, $2, $3, $4::jsonb, $5, $6) ON CONFLICT (literature_id, revision) DO NOTHING", [`literature_record_version_${randomUUID()}`, literatureId, revision, JSON.stringify(current), actor, now]);
+          await client.query(`UPDATE literature_records SET title = $2, authors = $3::jsonb, publication_year = $4, document_type = $5, record_source = $6, source_provider = $7, confirmed_at = $8, revision = $9, updated_at = $10 WHERE id = $1`, [literatureId, input.title, nextAuthors, input.year ?? null, input.documentType ?? null, source, provider, now, revision + 1, now]);
+        }
+        for (const identifier of normalized) {
+          await client.query("INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING", [literatureId, identifier.kind, identifier.value, source]);
+        }
+      }
+      return this.#literatureRecord(literatureId, client);
+    });
   }
 
   async profile(userId, client = this.pool) {
@@ -137,6 +245,29 @@ export class PostgresAnnotationCommunityRepository {
   async #profileSnapshot(userId, client) {
     const profile = await this.profile(userId, client);
     return { educationStage: profile.educationStage, institutions: profile.institutions };
+  }
+
+  async #literatureRecord(id, client = this.pool) {
+    const result = await client.query("SELECT * FROM literature_records WHERE id = $1", [id]);
+    const row = result.rows[0];
+    if (!row) return null;
+    const identities = await client.query("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities WHERE literature_id = $1 ORDER BY identity_kind, identity_value", [id]);
+    const mode = row.record_source === "public_registry" ? "public_registry" : "manual";
+    const confirmedAtValue = row.confirmed_at ?? row.updated_at;
+    const confirmedAt = confirmedAtValue instanceof Date ? confirmedAtValue.toISOString() : new Date(confirmedAtValue).toISOString();
+    return {
+      authors: Array.isArray(row.authors) ? row.authors : [],
+      ...(row.document_type ? { documentType: row.document_type } : {}),
+      identifiers: identities.rows,
+      literatureId: row.id,
+      provenance: {
+        confirmedAt,
+        mode,
+        ...(row.source_provider ? { provider: row.source_provider } : {})
+      },
+      title: row.title,
+      ...(row.publication_year === null || row.publication_year === undefined ? {} : { year: row.publication_year })
+    };
   }
 
   async #resolveLiterature(client, reference) {

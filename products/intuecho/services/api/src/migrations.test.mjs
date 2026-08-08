@@ -14,7 +14,8 @@ test("loads ordered immutable forum migrations", () => {
     "007_reply_rating_and_profile_names.sql",
     "008_account_deletion_annotation_history.sql",
     "009_detach_deleted_annotation_audit.sql",
-    "010_direct_message_read_state.sql"
+    "010_direct_message_read_state.sql",
+    "011_literature_resolution_provenance.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -38,6 +39,7 @@ test("loads ordered immutable forum migrations", () => {
   assert.match(migrations[7].sql, /ON DELETE CASCADE/);
   assert.match(migrations[8].sql, /validate_annotation_moderation_audit_reference/);
   assert.match(migrations[9].sql, /CREATE TABLE direct_conversation_reads/);
+  assert.match(migrations[10].checksum, /^[a-f0-9]{64}$/);
 });
 
 test("readiness rejects missing, changed and unknown migrations", async () => {
@@ -48,7 +50,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 10, current: true });
+  }), { count: 11, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [
