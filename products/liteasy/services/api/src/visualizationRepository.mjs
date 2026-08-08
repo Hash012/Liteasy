@@ -165,9 +165,16 @@ export class PostgresVisualizationRepository {
       if (!entitlement?.allowed || preference?.enabled === false) throw new Error("visualization_not_allowed");
       if (Array.isArray(entitlement.allowed_modalities) && entitlement.allowed_modalities.length > 0 && !entitlement.allowed_modalities.includes(input.modality)) throw new Error("visualization_modality_not_allowed");
       if (!policy) throw new Error("visualization_quota_unconfigured");
-      const usage = await client.query("SELECT COALESCE(SUM(GREATEST(units_delta, 0)), 0) AS used_units FROM visualization_usage_ledger WHERE subject_id = $1", [id]);
+      const usage = await client.query(`
+        SELECT
+          COALESCE(SUM(GREATEST(units_delta, 0)) FILTER (WHERE created_at >= date_trunc('day', now())), 0) AS daily_used,
+          COALESCE(SUM(GREATEST(units_delta, 0)) FILTER (WHERE created_at >= date_trunc('month', now())), 0) AS monthly_used
+          FROM visualization_usage_ledger WHERE subject_id = $1
+      `, [id]);
       const active = await client.query("SELECT COUNT(*) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > now()", [id]);
-      if (Number(usage.rows[0]?.used_units ?? 0) + input.units > Number(policy.daily_units) || Number(active.rows[0]?.active_count ?? 0) >= Number(policy.max_concurrency)) throw new Error("visualization_quota_exceeded");
+      if (Number(usage.rows[0]?.daily_used ?? usage.rows[0]?.used_units ?? 0) + input.units > Number(policy.daily_units)
+        || Number(usage.rows[0]?.monthly_used ?? 0) + input.units > Number(policy.monthly_units)
+        || Number(active.rows[0]?.active_count ?? 0) >= Number(policy.max_concurrency)) throw new Error("visualization_quota_exceeded");
       const route = (await client.query("SELECT * FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE", [input.routeId])).rows[0];
       if (!route?.enabled || route.circuit_state === "open") throw new Error("visualization_route_unavailable");
       const reservationId = input.reservationId ?? `vizres_${randomUUID()}`;
