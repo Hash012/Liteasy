@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const buildDirectory = path.resolve(process.cwd(), "dist");
 const forbiddenDirectories = ["fixtures", "papers"];
+const forbiddenFileNamePatterns = [
+  { label: "bundled browser fixture", pattern: /BrowserFixture/i }
+];
 const forbiddenTextPatterns = [
   { label: "fixture document reference", pattern: /\/(?:fixtures|papers)\/[^\s"'`]+\.(?:pdf|png)\b/i },
   { label: "removed mock provider", pattern: /mockProvider|mockRetriever|demoKnowledgeBase/ },
@@ -31,6 +34,11 @@ export function verifyProductionAssets(directory = buildDirectory) {
     }
   }
   for (const filePath of walk(directory)) {
+    for (const check of forbiddenFileNamePatterns) {
+      if (check.pattern.test(path.basename(filePath))) {
+        violations.push(`${check.label}: ${path.relative(directory, filePath)}`);
+      }
+    }
     if (!/\.(?:css|html|js|json|mjs)$/i.test(filePath)) continue;
     const content = fs.readFileSync(filePath, "utf8");
     for (const check of forbiddenTextPatterns) {

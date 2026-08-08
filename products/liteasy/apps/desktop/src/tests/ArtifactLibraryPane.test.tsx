@@ -128,7 +128,7 @@ describe("ArtifactLibraryPane", () => {
       expect(screen.queryByRole("dialog", { name: "重命名产物" })).not.toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
+    await user.click(await screen.findByRole("button", { name: "产物操作：薄读" }));
     await user.click(screen.getByRole("menuitem", { name: "删除" }));
     expect(await screen.findByRole("dialog", { name: "删除产物" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "确认删除" }));
