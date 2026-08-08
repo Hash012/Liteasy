@@ -3,12 +3,11 @@ import { createArtifactExportPayload } from "../features/artifacts/artifactDocum
 import type { ArtifactExportClient } from "../features/artifacts/artifactExportClient";
 import type {
   ArtifactDocumentFormat,
+  ArtifactExportHistoryStatus,
   ArtifactExportOutcome,
   ArtifactExportRecord
 } from "../features/artifacts/artifactExport.types";
 import type { ArtifactTab } from "../features/artifacts/artifact.types";
-
-export type ArtifactExportControllerStatus = "error" | "idle" | "loading" | "ready";
 
 type UseArtifactExportControllerInput = {
   client: ArtifactExportClient;
@@ -21,7 +20,7 @@ function errorMessage(error: unknown) {
 export function useArtifactExportController({ client }: UseArtifactExportControllerInput) {
   const [error, setError] = useState<string>();
   const [records, setRecords] = useState<ArtifactExportRecord[]>([]);
-  const [status, setStatus] = useState<ArtifactExportControllerStatus>("idle");
+  const [status, setStatus] = useState<ArtifactExportHistoryStatus>("idle");
   const clientRef = useRef(client);
   const requestRef = useRef(0);
   clientRef.current = client;
