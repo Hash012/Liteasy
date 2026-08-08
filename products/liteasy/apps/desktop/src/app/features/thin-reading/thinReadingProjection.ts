@@ -16,6 +16,7 @@ import type {
   ThinReadingNode,
   ThinReadingNodeEvidence,
   ThinReadingNodeSource,
+  ThinReadingRecommendationPaperEdge,
   ThinReadingRecommendationScope,
   ThinReadingSummarySentence
 } from "./thinReading.types";
@@ -138,7 +139,17 @@ function freezeAnchor(anchor: ThinReadingAnchor): ThinReadingAnchor {
   return Object.freeze({
     ...anchor,
     evidenceIds: Object.freeze([...anchor.evidenceIds]),
-    externalSourceIds: Object.freeze([...anchor.externalSourceIds])
+    externalSourceIds: Object.freeze([...anchor.externalSourceIds]),
+    quality: anchor.quality ? Object.freeze({ ...anchor.quality }) : undefined
+  });
+}
+
+function freezeRecommendationPaperEdge(
+  edge: ThinReadingRecommendationPaperEdge
+): ThinReadingRecommendationPaperEdge {
+  return Object.freeze({
+    ...edge,
+    evidenceRecordUrls: Object.freeze([...edge.evidenceRecordUrls])
   });
 }
 
@@ -236,6 +247,9 @@ function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvide
           ...figure,
           evidenceIds: Object.freeze([...figure.evidenceIds])
         })))
+      : undefined,
+    recommendationPaperEdges: evidence.recommendationPaperEdges
+      ? Object.freeze(evidence.recommendationPaperEdges.map(freezeRecommendationPaperEdge))
       : undefined,
     summarySentences: evidence.summarySentences
       ? Object.freeze(evidence.summarySentences.map(freezeSummarySentence))

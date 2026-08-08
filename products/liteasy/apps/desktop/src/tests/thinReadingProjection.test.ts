@@ -141,6 +141,102 @@ describe("thinReadingProjection", () => {
     });
   });
 
+  test("freezes optional anchor quality and page-wide recommendation edges", () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-graph-metadata",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed({
+        evidence: {
+          anchors: [{
+            end: 6,
+            evidenceIds: ["evidence-1"],
+            externalSourceIds: ["openalex:W1"],
+            id: "anchor-1",
+            importance: 0.9,
+            kind: "method",
+            label: "MaxSim",
+            quality: {
+              citationProvenance: 1,
+              evidenceAttention: 0.5,
+              evidenceCoverage: 0.75,
+              reason: "核心方法 · 3 条证据 · 原文有引用",
+              score: 0.81
+            },
+            searchQuery: "MaxSim late interaction",
+            start: 0,
+            summarySentenceId: "sentence-1",
+            text: "MaxSim"
+          }],
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"],
+          recommendationPaperEdges: [{
+            directed: true,
+            evidenceRecordUrls: ["https://openalex.org/W2"],
+            kind: "direct_citation",
+            provider: "openalex",
+            sourcePaperId: "openalex:W1",
+            strength: 0.9,
+            targetPaperId: "openalex:W2"
+          }]
+        }
+      }),
+      targetLanguage: "zh-CN"
+    });
+    const root = document.nodes[document.rootNodeId];
+
+    expect(root.evidence.anchors?.[0]?.quality).toEqual({
+      citationProvenance: 1,
+      evidenceAttention: 0.5,
+      evidenceCoverage: 0.75,
+      reason: "核心方法 · 3 条证据 · 原文有引用",
+      score: 0.81
+    });
+    expect(root.evidence.recommendationPaperEdges).toEqual([{
+      directed: true,
+      evidenceRecordUrls: ["https://openalex.org/W2"],
+      kind: "direct_citation",
+      provider: "openalex",
+      sourcePaperId: "openalex:W1",
+      strength: 0.9,
+      targetPaperId: "openalex:W2"
+    }]);
+    expect(Object.isFrozen(root.evidence.anchors?.[0]?.quality)).toBe(true);
+    expect(Object.isFrozen(root.evidence.recommendationPaperEdges)).toBe(true);
+    expect(Object.isFrozen(root.evidence.recommendationPaperEdges?.[0])).toBe(true);
+    expect(Object.isFrozen(root.evidence.recommendationPaperEdges?.[0]?.evidenceRecordUrls)).toBe(true);
+  });
+
+  test("keeps legacy thin-reading artifacts valid without graph metadata", () => {
+    const document = createThinReadingDocument({
+      artifactId: "artifact-thin-legacy",
+      papers: [{ id: "paper-1", title: "ColBERT" }],
+      rootSeed: seed({
+        evidence: {
+          anchors: [{
+            end: 6,
+            evidenceIds: ["evidence-1"],
+            externalSourceIds: [],
+            id: "anchor-1",
+            importance: 0.9,
+            kind: "method",
+            label: "MaxSim",
+            searchQuery: "MaxSim late interaction",
+            start: 0,
+            summarySentenceId: "sentence-1",
+            text: "MaxSim"
+          }],
+          externalKnowledge: [],
+          paperEvidence: ["evidence-1"]
+        }
+      }),
+      targetLanguage: "zh-CN"
+    });
+    const root = document.nodes[document.rootNodeId];
+
+    expect(root.evidence.anchors?.[0]?.quality).toBeUndefined();
+    expect(root.evidence.recommendationPaperEdges).toBeUndefined();
+  });
+
   test("persists and freezes the evidence-planning quality audit on root and branch nodes", () => {
     const audit = {
       evidenceLoop: {

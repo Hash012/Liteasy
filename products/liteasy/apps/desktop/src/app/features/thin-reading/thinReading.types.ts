@@ -230,6 +230,14 @@ export const thinReadingAnchorKinds = [
 
 export type ThinReadingAnchorKind = typeof thinReadingAnchorKinds[number];
 
+export type ThinReadingAnchorQuality = {
+  citationProvenance: number;
+  evidenceAttention: number;
+  evidenceCoverage: number;
+  reason: string;
+  score: number;
+};
+
 export type ThinReadingAnchor = {
   end: number;
   evidenceIds: readonly string[];
@@ -238,10 +246,21 @@ export type ThinReadingAnchor = {
   importance: number;
   kind: ThinReadingAnchorKind;
   label: string;
+  quality?: ThinReadingAnchorQuality;
   searchQuery: string;
   start: number;
   summarySentenceId: string;
   text: string;
+};
+
+export type ThinReadingRecommendationPaperEdge = {
+  directed: boolean;
+  evidenceRecordUrls: readonly string[];
+  kind: "bibliographic_coupling" | "co_cited" | "direct_citation";
+  provider: "openalex" | "semantic_scholar";
+  sourcePaperId: string;
+  strength: number;
+  targetPaperId: string;
 };
 
 // This is deliberately attached to the generated node rather than the transient Agent run.
@@ -313,6 +332,7 @@ export type ThinReadingNodeEvidence = {
   recommendedFigures?: readonly ThinReadingFigureRecommendation[];
   paperEvidence: readonly string[];
   paperEvidenceSpans?: readonly ThinReadingEvidenceSpan[];
+  recommendationPaperEdges?: readonly ThinReadingRecommendationPaperEdge[];
   summarySentences?: readonly ThinReadingSummarySentence[];
 };
 
