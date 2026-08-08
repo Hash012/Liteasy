@@ -63,6 +63,7 @@ const authenticatedJsonPaths = new Set([
   "/v1/recommendations/feedback",
   "/v1/recommendations/pdf-grant",
   "/v1/research/external-knowledge",
+  "/v1/research/paper-relations",
   "/v1/research/external-pdf",
   "/v1/works/resolve"
 ]);
@@ -215,6 +216,97 @@ test("allows CORS preflight from packaged and legacy Tauri desktop origins", asy
     assert.equal(response.statusCode, 204);
     assert.equal(response.headers["Access-Control-Allow-Origin"], origin);
   }
+});
+
+test("derives page-wide verified paper relations behind the account security boundary", async () => {
+  let receivedPapers;
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "artifact-page-relations",
+      papers: [
+        { id: "paper-a", provider: "openalex", sourceId: "W1" },
+        { id: "paper-b", provider: "openalex", sourceId: "W2" }
+      ]
+    }),
+    handlerOptions: {
+      fetchPaperGraphRecords: async (papers) => {
+        receivedPapers = papers;
+        return [
+          {
+            evidenceRecordUrl: "https://openalex.org/W1",
+            id: "openalex:W1",
+            provider: "openalex",
+            referencedPaperIds: ["openalex:W2"]
+          },
+          {
+            evidenceRecordUrl: "https://openalex.org/W2",
+            id: "openalex:W2",
+            provider: "openalex",
+            referencedPaperIds: []
+          }
+        ];
+      }
+    },
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/paper-relations"
+  });
+
+  assert.equal(response.statusCode, 200, JSON.stringify(response.json));
+  assert.equal(receivedPapers.length, 2);
+  assert.deepEqual(response.json, {
+    edges: [{
+      directed: true,
+      evidenceRecordUrls: ["https://openalex.org/W1"],
+      kind: "direct_citation",
+      provider: "openalex",
+      sourcePaperId: "paper-a",
+      strength: 1,
+      targetPaperId: "paper-b"
+    }],
+    warnings: []
+  });
+});
+
+test("rejects anonymous and over-limit paper relation requests before provider retrieval", async () => {
+  let calls = 0;
+  const handler = createDevCloudRequestHandler({
+    fetchPaperGraphRecords: async () => {
+      calls += 1;
+      return [];
+    }
+  });
+  const anonymous = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "artifact-anonymous-relations",
+      papers: [{ id: "paper-a", provider: "openalex", sourceId: "W1" }],
+      sessionId: "ltsy_invalid"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/paper-relations"
+  });
+  assert.equal(anonymous.statusCode, 401);
+  assert.equal(anonymous.json.code, "invalid_session");
+
+  const overLimit = await invokeHandler({
+    body: JSON.stringify({
+      artifactId: "artifact-over-limit-relations",
+      papers: Array.from({ length: 25 }, (_, index) => ({
+        id: `paper-${index}`,
+        provider: "openalex",
+        sourceId: `W${index}`
+      }))
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/research/paper-relations"
+  });
+  assert.equal(overLimit.statusCode, 400);
+  assert.equal(overLimit.json.code, "paper_relation_paper_limit_exceeded");
+  assert.equal(calls, 0);
 });
 
 test("streams library PDFs through private staging and applies the security scanner", async () => {

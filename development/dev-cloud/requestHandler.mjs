@@ -134,6 +134,10 @@ import {
   ExternalKnowledgeError,
   searchExternalKnowledge
 } from "./payloads/externalKnowledgePayloads.mjs";
+import {
+  buildPaperRelationPayload,
+  PaperRelationValidationError
+} from "./payloads/paperRelationPayloads.mjs";
 import { fetchSecurePdf, SecurePdfFetchError } from "./securePdfFetch.mjs";
 import { extractPdfWithMineru } from "./mineruPdfExtraction.mjs";
 import {
@@ -187,6 +191,7 @@ const availableEndpoints = [
   "POST /v1/recommendations/feedback",
   "POST /v1/recommendations/pdf-grant",
   "POST /v1/research/external-knowledge",
+  "POST /v1/research/paper-relations",
   "POST /v1/research/external-pdf",
   "POST /v1/pdf/mineru-extract",
   "POST /v1/works/resolve",
@@ -2160,6 +2165,38 @@ export function createDevCloudRequestHandler(customConfig = {}) {
           message: error instanceof Error ? error.message : "外部知识检索不可用。",
           ...(failedRun ? { retrieval: failedRun } : {})
         });
+      }
+      return;
+    }
+
+    if (method === "POST" && url.pathname === "/v1/research/paper-relations") {
+      const body = await readJsonOrWriteError(request, response);
+      if (body === null || !authorizeAccountScopedBody(request, response, body, authService)) {
+        return;
+      }
+      try {
+        const payload = await buildPaperRelationPayload(body, {
+          fetchGraphRecords: customConfig.fetchPaperGraphRecords,
+          openAlexApiKey: configuredOpenAlexServiceKey(config, customConfig),
+          openAlexEnabled: customConfig.openAlexEnabled !== false,
+          openAlexMailto: configuredOpenAlexMailto(config, customConfig),
+          openAlexTimeoutMs: customConfig.openAlexTimeoutMs,
+          openAlexTransport: customConfig.openAlexTransport,
+          semanticScholarApiKey: customConfig.semanticScholarApiKey ?? config.semanticScholarApiKey,
+          semanticScholarEnabled: customConfig.semanticScholarEnabled === true,
+          semanticScholarTimeoutMs: customConfig.semanticScholarTimeoutMs,
+          semanticScholarTransport: customConfig.semanticScholarTransport
+        });
+        writeJson(request, response, 200, payload);
+      } catch (error) {
+        if (error instanceof PaperRelationValidationError) {
+          writeJson(request, response, error.statusCode, {
+            error: error.code,
+            message: error.message
+          });
+          return;
+        }
+        throw error;
       }
       return;
     }
