@@ -28,5 +28,5 @@ export type BuiltinSkillLoader = () => Promise<BuiltinSkillPackageV1>;
 
 export type BuiltinSkillSummary = Pick<
   BuiltinSkillManifestV1,
-  "costClass" | "id" | "modality" | "remote" | "rendererId" | "version"
+  "costClass" | "id" | "kernelId" | "modality" | "remote" | "rendererId" | "validatorIds" | "version"
 >;

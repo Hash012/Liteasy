@@ -1,4 +1,6 @@
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
+import { registerBuiltinSkill } from "../app/features/skills/builtinSkillRegistry";
+import { registerVisualizationRenderer } from "../app/features/visualization/visualizationRendererRegistry";
 
 test("prepares a turn with agent.md, memory, capabilities, and budget context", () => {
   const session = createAgentCoreSession();
@@ -16,6 +18,54 @@ test("prepares a turn with agent.md, memory, capabilities, and budget context", 
   expect(prepared.turn.runtimeContext.prompt.memorySummary).toContain("当前项目需要补齐 Agent 核心");
   expect(prepared.turn.runtimeContext.prompt.capabilitySummary).toContain("artifact.generate");
   expect(prepared.turn.runtimeContext.prompt.budgetSummary).toContain("最大迭代：64");
+});
+
+test("summarizes evidence-bound thin-reading visualization only when a complete chain is available", () => {
+  registerBuiltinSkill({
+    costClass: "low",
+    evidenceRequirements: ["source_figure"],
+    fallbackModalities: [],
+    id: "test-thin-reading-visualize",
+    integrityRules: [],
+    modality: "semantic_graph",
+    outputSchemaId: "test",
+    remote: false,
+    rendererId: "test-thin-reading-renderer",
+    runtimeVersion: "liteasy.visualization-runtime/v1",
+    styleLock: [],
+    validatorIds: ["artifact-schema"],
+    version: "1"
+  }, async () => ({
+    instructions: "test",
+    manifest: {
+      costClass: "low",
+      evidenceRequirements: ["source_figure"],
+      fallbackModalities: [],
+      id: "test-thin-reading-visualize",
+      integrityRules: [],
+      modality: "semantic_graph",
+      outputSchemaId: "test",
+      remote: false,
+      rendererId: "test-thin-reading-renderer",
+      runtimeVersion: "liteasy.visualization-runtime/v1",
+      styleLock: [],
+      validatorIds: ["artifact-schema"],
+      version: "1"
+    }
+  }));
+  registerVisualizationRenderer({
+    id: "test-thin-reading-renderer",
+    load: async () => ({ id: "test-thin-reading-renderer", modality: "semantic_graph", version: "1" }),
+    modality: "semantic_graph",
+    version: "1"
+  });
+
+  const prepared = createAgentCoreSession().prepareTurn({ message: "画图", mode: "qa" });
+  expect(prepared.ok).toBe(true);
+  if (!prepared.ok) throw new Error("expected prepared turn");
+  expect(prepared.turn.runtimeContext.prompt.capabilitySummary).toContain("thin-reading-visualize");
+  expect(prepared.turn.runtimeContext.prompt.capabilitySummary).toContain("证据");
+  expect(prepared.turn.runtimeContext.prompt.capabilitySummary).not.toContain("renderer");
 });
 
 test("injects enabled academic profile details into the core prompt context", () => {

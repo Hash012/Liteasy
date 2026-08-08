@@ -1,5 +1,5 @@
 import type { AgentRuntimeContextView } from "../agent-runtime/agentRuntime.types";
-import type { AgentCoreCatalogEntry, AgentCoreConfig, AgentMemoryEntry } from "./agentCoreConfig";
+import { getAgentCoreSkills, type AgentCoreCatalogEntry, type AgentCoreConfig, type AgentMemoryEntry } from "./agentCoreConfig";
 import { buildAgentMd } from "./agentMd";
 
 export type AgentCorePromptContext = {
@@ -89,7 +89,7 @@ export function buildAgentCorePromptContext(input: {
       `- 超过 ${config.budget.staleObservationTurns} 轮的旧观察会被压缩。`
     ].join("\n"),
     capabilitySummary: [
-      summarizeEntries("Skills", config.skills),
+      summarizeEntries("Skills", getAgentCoreSkills(config)),
       summarizeEntries("Plugins", config.plugins),
       summarizeEntries("MCP Servers", config.mcpServers)
     ].join("\n\n"),

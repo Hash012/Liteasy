@@ -1,3 +1,6 @@
+import { getAvailableVisualizationModalities } from "../visualization/visualizationRendererRegistry";
+import { isGeneratedVisualizationModality } from "../visualization/visualizationRuntime";
+
 export type AgentCoreEntryStatus = "active" | "planned" | "review";
 
 export type AgentCoreCatalogEntry = {
@@ -40,6 +43,23 @@ export type AgentCoreConfig = {
   skills: AgentCoreCatalogEntry[];
   status: "design_ready" | "disabled" | "running";
 };
+
+export function getAgentCoreSkills(config: AgentCoreConfig): AgentCoreCatalogEntry[] {
+  if (config.skills.some((skill) => skill.id === "thin-reading-visualize")) return config.skills;
+  const hasGeneratedVisualization = getAvailableVisualizationModalities()
+    .some(isGeneratedVisualizationModality);
+  if (!hasGeneratedVisualization) return config.skills;
+  return [
+    ...config.skills,
+    {
+      description: "按证据边界选择适合当前文献的可视化表达。",
+      id: "thin-reading-visualize",
+      label: "文献可视化",
+      risk: "low",
+      status: "active"
+    }
+  ];
+}
 
 export const defaultAgentCoreConfig: AgentCoreConfig = {
   agentMd: {

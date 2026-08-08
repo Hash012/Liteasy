@@ -94,9 +94,11 @@ export function getBuiltinSkillSummary(): BuiltinSkillSummary[] {
   return [...packages.values()].map(({ manifest }) => ({
     costClass: manifest.costClass,
     id: manifest.id,
+    kernelId: manifest.kernelId,
     modality: manifest.modality,
     remote: false,
     rendererId: manifest.rendererId,
+    validatorIds: [...manifest.validatorIds],
     version: manifest.version
   }));
 }
