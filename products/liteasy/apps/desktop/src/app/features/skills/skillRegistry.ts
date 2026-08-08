@@ -4,9 +4,7 @@ import type { ActionContext, ActionResult } from "./actionRegistry";
 import type { UpdateSettingCommand } from "../settings/settings.types";
 
 export {
-  getBuiltinSkillSummary,
-  loadBuiltinSkill,
-  registerBuiltinSkill
+  getBuiltinSkillSummary
 } from "./builtinSkillRegistry";
 
 export type SkillInvocation =
