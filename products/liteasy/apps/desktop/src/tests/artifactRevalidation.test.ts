@@ -66,21 +66,25 @@ test("enables a renderer only after its changed version passes hard-gate revalid
     },
     artifactIndex: { ...cachedEnvelope.artifactIndex, rendererVersion: "0.9.0" }
   });
-  const revalidationService = { revalidate: vi.fn(async () => "pass" as const) };
+  const revalidationService = {
+    revalidate: vi.fn(async () => ({ outcome: "pass" as const, usedHardValidatorVersions: { evidence: "2" } })),
+    terminate: () => undefined
+  };
   const state = await loadVisualizationArtifact(outdatedRendererEnvelope, {
-    currentValidatorVersions: { evidence: "1" },
+    currentValidatorVersions: { evidence: "2" },
     revalidationService
   });
   expect(state.canRender).toBe(true);
   expect(state.canRenderSafePreview).toBe(false);
   expect(state.status).toBe("ready");
+  expect(state.artifactIndex.hardValidatorVersions).toEqual({ evidence: "2" });
   expect(revalidationService.revalidate).toHaveBeenCalledOnce();
 });
 
 test("keeps a stale artifact preview-only when hard-gate revalidation fails", async () => {
   const state = await loadVisualizationArtifact(cachedEnvelope, {
     currentValidatorVersions: { evidence: "2" },
-    revalidationService: { revalidate: async () => "fail" }
+    revalidationService: { revalidate: async () => ({ outcome: "fail" as const, usedHardValidatorVersions: {} }), terminate: () => undefined }
   });
   expect(state.status).toBe("needs_revalidation");
   expect(state.canRender).toBe(false);

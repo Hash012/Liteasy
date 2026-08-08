@@ -91,6 +91,9 @@ export async function loadVisualizationArtifact(
   const documentAccess = options.documentAccess ?? true;
   const needsRevalidation = artifactNeedsRevalidation(envelope, options);
   const canGenerate = !options.offline && documentAccess && !needsRevalidation;
+  const expectedHardValidatorVersions = options.currentValidatorVersions ?? {};
+  const expectedValidatorSetComplete = Object.keys(envelope.artifactIndex.hardValidatorVersions)
+    .every((id) => id in expectedHardValidatorVersions);
 
   if (!needsRevalidation) {
     return artifactState(envelope, {
@@ -101,16 +104,22 @@ export async function loadVisualizationArtifact(
     });
   }
 
-  if (!options.offline && documentAccess && options.revalidationService) {
+  if (!options.offline && documentAccess && expectedValidatorSetComplete && options.revalidationService) {
     try {
       const outcome = await options.revalidationService.revalidate({
         artifact: envelope.artifact,
-        artifactIndex: envelope.artifactIndex
+        artifactIndex: envelope.artifactIndex,
+        expectedHardValidatorVersions
       }, options.signal);
-      if (outcome === "pass") {
+      if (outcome.outcome === "pass") {
         return artifactState({
           ...envelope,
-          artifactIndex: currentArtifactIndex(envelope, options)
+          artifactIndex: {
+            ...envelope.artifactIndex,
+            hardValidatorVersions: outcome.usedHardValidatorVersions,
+            rendererVersion: getVisualizationRendererRegistration(envelope.artifact.implementation.rendererId)?.version
+              ?? envelope.artifactIndex.rendererVersion
+          }
         }, {
           canGenerate: !options.offline && documentAccess,
           canRender: true,
@@ -147,23 +156,6 @@ function artifactNeedsRevalidation(
   const rendererRevoked = (options.revokedRendererIds ?? [])
     .includes(envelope.artifact.implementation.rendererId);
   return validatorChanged || validatorRevoked || rendererChanged || rendererRevoked;
-}
-
-function currentArtifactIndex(
-  envelope: VisualizationArtifactEnvelope,
-  options: VisualizationArtifactLoadOptions
-): VisualizationArtifactIndex {
-  const rendererVersion = getVisualizationRendererRegistration(envelope.artifact.implementation.rendererId)?.version
-    ?? envelope.artifactIndex.rendererVersion;
-  return {
-    ...envelope.artifactIndex,
-    hardValidatorVersions: {
-      ...envelope.artifactIndex.hardValidatorVersions,
-      ...Object.fromEntries(Object.entries(options.currentValidatorVersions ?? {})
-        .filter(([id]) => id in envelope.artifactIndex.hardValidatorVersions))
-    },
-    rendererVersion
-  };
 }
 
 function artifactState(
