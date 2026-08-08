@@ -2,7 +2,6 @@ import type {
   ThinReadingExternalSource,
   ThinReadingRecommendationPaperEdge
 } from "../thin-reading/thinReading.types";
-import { pageGraphPaperKey } from "./associationGraphLayout";
 
 export type AssociationPageGraphProjection = {
   paperEdges: readonly {
@@ -47,7 +46,99 @@ function compareOwnership(left: OwnershipCandidate, right: OwnershipCandidate) {
     (right.source.relevance - left.source.relevance) ||
     (right.anchorQuality - left.anchorQuality) ||
     left.anchorId.localeCompare(right.anchorId) ||
-    left.source.id.localeCompare(right.source.id);
+    left.source.id.localeCompare(right.source.id) ||
+    left.source.provider.localeCompare(right.source.provider) ||
+    left.source.sourceId.localeCompare(right.source.sourceId) ||
+    (left.source.canonicalPaperId ?? "").localeCompare(right.source.canonicalPaperId ?? "") ||
+    (left.source.doi ?? "").localeCompare(right.source.doi ?? "");
+}
+
+function normalizedText(value: string) {
+  return value.normalize("NFKC").trim();
+}
+
+function doiAlias(value: string | undefined, assumeDoi = false) {
+  if (!value) return "";
+  const raw = normalizedText(value);
+  const hasDoiForm = assumeDoi || /^doi:/iu.test(raw) || /^https?:\/\/(?:dx\.)?doi\.org\//iu.test(raw) || /^10\./u.test(raw);
+  if (!hasDoiForm) return "";
+  const doi = raw.replace(/^doi:\s*/iu, "")
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//iu, "")
+    .toLowerCase();
+  return doi ? `doi:${doi}` : "";
+}
+
+function normalizedIdentity(value: string | undefined) {
+  if (!value) return "";
+  const raw = normalizedText(value);
+  const doi = doiAlias(raw);
+  if (doi) return doi;
+  const openAlex = raw.match(/^(?:https?:\/\/openalex\.org\/|openalex:)?(W\d+)$/iu);
+  if (openAlex) return `openalex:${openAlex[1]!.toUpperCase()}`;
+  const semanticScholar = raw.match(/^(?:https?:\/\/(?:www\.)?semanticscholar\.org\/paper\/|semantic_scholar:|semanticscholar:)([^\s/]+)$/iu);
+  if (semanticScholar) return `semantic_scholar:${semanticScholar[1]!.toLowerCase()}`;
+  return raw.toLowerCase();
+}
+
+function providerSourceAlias(source: ThinReadingExternalSource) {
+  const provider = source.provider.toLowerCase();
+  const sourceId = normalizedText(source.sourceId);
+  if (!sourceId) return "";
+  if (provider === "openalex") {
+    return normalizedIdentity(`openalex:${sourceId}`);
+  }
+  if (provider === "semantic_scholar") {
+    return normalizedIdentity(`semantic_scholar:${sourceId}`);
+  }
+  return `${provider}:${sourceId.toLowerCase()}`;
+}
+
+type IdentityRecord = {
+  candidate: OwnershipCandidate;
+  canonicalAlias: string;
+  doiAlias: string;
+  fallbackAlias: string;
+  providerAlias: string;
+  strongAliases: readonly string[];
+};
+
+function identityRecord(candidate: OwnershipCandidate): IdentityRecord {
+  const source = candidate.source;
+  const canonicalAlias = normalizedIdentity(source.canonicalPaperId);
+  const normalizedDoi = doiAlias(source.doi, true);
+  const providerAlias = providerSourceAlias(source);
+  const canonicalDoiConflict = canonicalAlias.startsWith("doi:") && normalizedDoi &&
+    canonicalAlias !== normalizedDoi;
+  const trusted = !canonicalDoiConflict;
+  return {
+    candidate,
+    canonicalAlias: trusted ? canonicalAlias : "",
+    doiAlias: trusted ? normalizedDoi : "",
+    fallbackAlias: normalizedIdentity(source.id),
+    providerAlias,
+    strongAliases: trusted
+      ? [...new Set([canonicalAlias, normalizedDoi, providerAlias].filter(Boolean))]
+      : [providerAlias].filter(Boolean)
+  };
+}
+
+function componentHasConflicts(records: readonly IdentityRecord[]) {
+  const canonicals = new Set(records.map((record) => record.canonicalAlias).filter(Boolean));
+  const dois = new Set(records.map((record) => record.doiAlias).filter(Boolean));
+  return canonicals.size > 1 || dois.size > 1;
+}
+
+function preferredComponentKey(records: readonly IdentityRecord[]) {
+  const canonical = records.map((record) => record.canonicalAlias)
+    .filter((alias) => alias && !alias.startsWith("doi:"))
+    .sort()[0];
+  if (canonical) return canonical;
+  const doi = records.map((record) => record.doiAlias ||
+    (record.canonicalAlias.startsWith("doi:") ? record.canonicalAlias : ""))
+    .filter(Boolean).sort()[0];
+  if (doi) return doi;
+  return records.map((record) => record.providerAlias).filter(Boolean).sort()[0] ??
+    records.map((record) => record.fallbackAlias).filter(Boolean).sort()[0]!;
 }
 
 function relationKey(edge: AssociationPageGraphProjection["paperEdges"][number]) {
@@ -68,29 +159,68 @@ export function projectAssociationPageGraph({
   const anchorQualityById = new Map(
     anchors.map((anchor) => [anchor.anchorId, anchor.quality?.score ?? 0] as const)
   );
-  const candidatesByPaperKey = new Map<string, Map<string, OwnershipCandidate>>();
-
+  const records: IdentityRecord[] = [];
   for (const anchor of [...anchors].sort((left, right) => left.anchorId.localeCompare(right.anchorId))) {
     for (const source of sourcesByAnchor[anchor.anchorId] ?? []) {
-      const paperKey = pageGraphPaperKey(source);
-      if (!paperKey) continue;
-      const candidatesByAnchor = candidatesByPaperKey.get(paperKey) ?? new Map();
-      const candidate = {
+      const record = identityRecord({
         anchorId: anchor.anchorId,
         anchorQuality: anchorQualityById.get(anchor.anchorId) ?? 0,
         source
-      };
-      const previous = candidatesByAnchor.get(anchor.anchorId);
-      if (!previous || compareOwnership(candidate, previous) < 0) {
-        candidatesByAnchor.set(anchor.anchorId, candidate);
-      }
-      candidatesByPaperKey.set(paperKey, candidatesByAnchor);
+      });
+      if (record.strongAliases.length > 0 || record.fallbackAlias) records.push(record);
     }
   }
 
-  const paperNodes = [...candidatesByPaperKey.entries()]
+  const parents = records.map((_, index) => index);
+  const find = (index: number): number => parents[index] === index
+    ? index
+    : (parents[index] = find(parents[index]!));
+  const union = (leftIndex: number, rightIndex: number) => {
+    const left = find(leftIndex);
+    const right = find(rightIndex);
+    if (left !== right) parents[Math.max(left, right)] = Math.min(left, right);
+  };
+  const firstIndexByAlias = new Map<string, number>();
+  records.forEach((record, index) => record.strongAliases.forEach((alias) => {
+    const first = firstIndexByAlias.get(alias);
+    if (first === undefined) firstIndexByAlias.set(alias, index);
+    else union(first, index);
+  }));
+
+  const recordsByRoot = new Map<number, IdentityRecord[]>();
+  records.forEach((record, index) => {
+    const root = find(index);
+    recordsByRoot.set(root, [...(recordsByRoot.get(root) ?? []), record]);
+  });
+  const components = [...recordsByRoot.values()].flatMap((component) => {
+    if (!componentHasConflicts(component)) return [{ conflicted: false, records: component }];
+    const byProvider = new Map<string, IdentityRecord[]>();
+    for (const record of component) {
+      const key = record.providerAlias || record.fallbackAlias;
+      byProvider.set(key, [...(byProvider.get(key) ?? []), record]);
+    }
+    return [...byProvider.values()].map((componentRecords) => ({
+      conflicted: true,
+      records: componentRecords
+    }));
+  });
+
+  const componentByPaperKey = new Map(components.map((component) => [
+    component.conflicted
+      ? component.records.map((record) => record.providerAlias || record.fallbackAlias).sort()[0]!
+      : preferredComponentKey(component.records),
+    component
+  ] as const));
+  const paperNodes = [...componentByPaperKey.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([paperKey, candidatesByAnchor]) => {
+    .map(([paperKey, component]) => {
+      const candidatesByAnchor = new Map<string, OwnershipCandidate>();
+      for (const { candidate } of component.records) {
+        const previous = candidatesByAnchor.get(candidate.anchorId);
+        if (!previous || compareOwnership(candidate, previous) < 0) {
+          candidatesByAnchor.set(candidate.anchorId, candidate);
+        }
+      }
       const candidates = [...candidatesByAnchor.values()].sort(compareOwnership);
       const primary = candidates[0]!;
       const anchorIds = [...candidatesByAnchor.keys()].sort();
@@ -103,16 +233,30 @@ export function projectAssociationPageGraph({
       };
     });
 
-  const visiblePaperKeys = new Set(paperNodes.map((node) => node.paperKey));
+  const paperKeysByAlias = new Map<string, Set<string>>();
+  for (const [paperKey, component] of componentByPaperKey) {
+    for (const record of component.records) {
+      const aliases = component.conflicted
+        ? [record.providerAlias, record.fallbackAlias]
+        : [...record.strongAliases, record.fallbackAlias];
+      for (const alias of aliases) {
+        if (!alias) continue;
+        const paperKeys = paperKeysByAlias.get(alias) ?? new Set();
+        paperKeys.add(paperKey);
+        paperKeysByAlias.set(alias, paperKeys);
+      }
+    }
+  }
+  const paperKeyByAlias = new Map([...paperKeysByAlias.entries()].flatMap(([alias, paperKeys]) =>
+    paperKeys.size === 1 ? [[alias, [...paperKeys][0]!] as const] : []));
   const paperEdgeByKey = new Map<string, AssociationPageGraphProjection["paperEdges"][number]>();
   for (const edge of paperEdges) {
-    if (!visiblePaperKeys.has(edge.sourcePaperId) || !visiblePaperKeys.has(edge.targetPaperId) ||
-      edge.sourcePaperId === edge.targetPaperId) {
-      continue;
-    }
+    const sourcePaperKey = paperKeyByAlias.get(normalizedIdentity(edge.sourcePaperId));
+    const targetPaperKey = paperKeyByAlias.get(normalizedIdentity(edge.targetPaperId));
+    if (!sourcePaperKey || !targetPaperKey || sourcePaperKey === targetPaperKey) continue;
     const endpoints = edge.directed
-      ? [edge.sourcePaperId, edge.targetPaperId]
-      : [edge.sourcePaperId, edge.targetPaperId].sort();
+      ? [sourcePaperKey, targetPaperKey]
+      : [sourcePaperKey, targetPaperKey].sort();
     const projected = {
       directed: edge.directed,
       kind: edge.kind,

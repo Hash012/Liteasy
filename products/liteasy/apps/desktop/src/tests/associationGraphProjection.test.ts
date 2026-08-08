@@ -152,4 +152,165 @@ describe("projectAssociationPageGraph", () => {
       targetPaperKey: "doi:b"
     }]);
   });
+
+  test("merges canonical and DOI records through every strong identity alias", () => {
+    const graph = projectAssociationPageGraph({
+      anchors: [{ anchorId: "canonical-anchor" }, { anchorId: "doi-anchor" }],
+      paperEdges: [],
+      sourcesByAnchor: {
+        "canonical-anchor": [source("local-canonical", {
+          canonicalPaperId: "https://openalex.org/w42",
+          doi: "https://doi.org/10.1000/Shared",
+          provider: "openalex",
+          sourceId: "w42"
+        })],
+        "doi-anchor": [source("local-doi", {
+          confidenceBasis: "author_citation",
+          doi: "10.1000/shared",
+          provider: "crossref",
+          sourceId: "10.1000/shared"
+        })]
+      }
+    });
+
+    expect(graph.paperNodes).toEqual([expect.objectContaining({
+      anchorIds: ["canonical-anchor", "doi-anchor"],
+      paperKey: "openalex:W42",
+      primaryAnchorId: "doi-anchor",
+      source: expect.objectContaining({ id: "local-doi" })
+    })]);
+  });
+
+  test("unions transitive DOI and provider aliases independent of record order", () => {
+    const anchors = [
+      { anchorId: "anchor-a" },
+      { anchorId: "anchor-b" },
+      { anchorId: "anchor-c" }
+    ];
+    const records = {
+      "anchor-a": [source("a", {
+        canonicalPaperId: "openalex:W7",
+        doi: "10.1000/transitive",
+        provider: "openalex",
+        sourceId: "W7"
+      })],
+      "anchor-b": [source("b", {
+        doi: "doi:10.1000/TRANSITIVE",
+        provider: "semantic_scholar",
+        sourceId: "S2-shared"
+      }), source("b-strong", {
+        confidence: 0.7,
+        provider: "semantic_scholar",
+        sourceId: "s2-shared"
+      })],
+      "anchor-c": [source("c", {
+        provider: "semantic_scholar",
+        sourceId: "s2-SHARED"
+      })]
+    };
+    const forward = projectAssociationPageGraph({ anchors, paperEdges: [], sourcesByAnchor: records });
+    const reversed = projectAssociationPageGraph({
+      anchors: [...anchors].reverse(),
+      paperEdges: [],
+      sourcesByAnchor: Object.fromEntries(Object.entries(records).reverse().map(
+        ([anchorId, sources]) => [anchorId, [...sources].reverse()]
+      ))
+    });
+
+    expect(forward).toEqual(reversed);
+    expect(forward.paperNodes).toEqual([expect.objectContaining({
+      anchorIds: ["anchor-a", "anchor-b", "anchor-c"],
+      paperKey: "openalex:W7"
+    })]);
+  });
+
+  test("maps relation endpoints from non-representative aliases onto component paper keys", () => {
+    const graph = projectAssociationPageGraph({
+      anchors: [{ anchorId: "shared" }, { anchorId: "other" }],
+      paperEdges: [edge("doi:10.1000/shared", "semantic_scholar:target")],
+      sourcesByAnchor: {
+        shared: [source("shared-source", {
+          canonicalPaperId: "openalex:W9",
+          doi: "10.1000/SHARED",
+          provider: "openalex",
+          sourceId: "W9"
+        })],
+        other: [source("target-source", {
+          canonicalPaperId: "semantic_scholar:TARGET",
+          provider: "semantic_scholar",
+          sourceId: "target"
+        })]
+      }
+    });
+
+    expect(graph.paperEdges).toEqual([expect.objectContaining({
+      sourcePaperKey: "openalex:W9",
+      targetPaperKey: "semantic_scholar:target"
+    })]);
+  });
+
+  test("does not merge unrelated provider records that reuse a transient source id", () => {
+    const graph = projectAssociationPageGraph({
+      anchors: [{ anchorId: "a" }, { anchorId: "b" }],
+      paperEdges: [edge("reused-local-id", "openalex:W2")],
+      sourcesByAnchor: {
+        a: [source("reused-local-id", { provider: "openalex", sourceId: "W1" })],
+        b: [source("reused-local-id", { provider: "openalex", sourceId: "W2" })]
+      }
+    });
+
+    expect(graph.paperNodes.map((node) => node.paperKey)).toEqual(["openalex:W1", "openalex:W2"]);
+    expect(graph.paperEdges).toEqual([]);
+  });
+
+  test("rejects conflicting strong alias components instead of merging them", () => {
+    const graph = projectAssociationPageGraph({
+      anchors: [{ anchorId: "a" }, { anchorId: "b" }],
+      paperEdges: [edge("doi:10.1000/conflict", "openalex:W2")],
+      sourcesByAnchor: {
+        a: [source("a", {
+          canonicalPaperId: "openalex:W1",
+          doi: "10.1000/conflict",
+          provider: "openalex",
+          sourceId: "W1"
+        })],
+        b: [source("b", {
+          canonicalPaperId: "openalex:W2",
+          doi: "10.1000/conflict",
+          provider: "openalex",
+          sourceId: "W2"
+        })]
+      }
+    });
+
+    expect(graph.paperNodes.map((node) => node.paperKey)).toEqual(["openalex:W1", "openalex:W2"]);
+    expect(graph.paperEdges).toEqual([]);
+  });
+
+  test("falls back to provider identities when a canonical component claims conflicting DOIs", () => {
+    const graph = projectAssociationPageGraph({
+      anchors: [{ anchorId: "a" }, { anchorId: "b" }],
+      paperEdges: [edge("openalex:W1", "doi:10.1000/other")],
+      sourcesByAnchor: {
+        a: [source("a", {
+          canonicalPaperId: "openalex:W1",
+          doi: "10.1000/first",
+          provider: "openalex",
+          sourceId: "W1"
+        })],
+        b: [source("b", {
+          canonicalPaperId: "openalex:W1",
+          doi: "10.1000/other",
+          provider: "semantic_scholar",
+          sourceId: "S2"
+        })]
+      }
+    });
+
+    expect(graph.paperNodes.map((node) => node.paperKey)).toEqual([
+      "openalex:W1",
+      "semantic_scholar:s2"
+    ]);
+    expect(graph.paperEdges).toEqual([]);
+  });
 });

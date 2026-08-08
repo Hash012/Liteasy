@@ -119,7 +119,10 @@ export function AssociationGraphLayer({
   const primarySourcesByAnchor = useMemo(() => {
     const result: Record<string, ThinReadingExternalSource[]> = {};
     for (const node of projection.paperNodes) {
-      (result[node.primaryAnchorId] ??= []).push(node.source);
+      const layoutSource = pageGraphPaperKey(node.source) === node.paperKey
+        ? node.source
+        : { ...node.source, canonicalPaperId: node.paperKey };
+      (result[node.primaryAnchorId] ??= []).push(layoutSource);
     }
     return result;
   }, [projection.paperNodes]);
@@ -142,7 +145,10 @@ export function AssociationGraphLayer({
   const activeSource = activeSourceId
     ? Object.values(sourcesByAnchor).flat().find((source) => source.id === activeSourceId)
     : undefined;
-  const activePaperKey = activeSource ? pageGraphPaperKey(activeSource) : null;
+  const activePaperKey = activeSource
+    ? projection.paperNodes.find((node) => node.source.id === activeSource.id)?.paperKey ??
+      pageGraphPaperKey(activeSource)
+    : null;
   const anchorById = new Map(anchors.map((anchor) => [anchor.anchorId, anchor] as const));
   const secondaryEdges = graph.nodes.flatMap((node) => {
     const projectedNode = projectedNodeByPaperKey.get(node.paperKey);
