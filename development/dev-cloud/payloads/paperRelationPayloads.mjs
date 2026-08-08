@@ -73,6 +73,44 @@ function paperAliases(paper) {
   return aliases;
 }
 
+function conflictingPaperIdentity() {
+  return new PaperRelationValidationError(
+    "conflicting_paper_relation_identity",
+    "论文关系请求包含相互冲突的论文标识。"
+  );
+}
+
+function validatePaperIdentityNamespaces(paper) {
+  const canonical = paper.canonicalPaperId;
+  if (!canonical) return;
+
+  const doiCanonical = canonical.match(/^doi:(.+)$/);
+  if (doiCanonical) {
+    const canonicalDoi = doiCanonical[1];
+    if (paper.doi && paper.doi !== canonicalDoi ||
+      paper.provider === "crossref" && paper.sourceId !== canonicalDoi) {
+      throw conflictingPaperIdentity();
+    }
+    return;
+  }
+
+  const openAlexCanonical = canonical.match(/^openalex:(W\d+)$/);
+  if (openAlexCanonical) {
+    if (paper.provider !== "openalex" || paper.sourceId !== openAlexCanonical[1]) {
+      throw conflictingPaperIdentity();
+    }
+    return;
+  }
+
+  const semanticScholarCanonical = canonical.match(/^semantic_scholar:(.+)$/);
+  if (semanticScholarCanonical) {
+    if (paper.provider !== "semantic_scholar" ||
+      paper.sourceId !== semanticScholarCanonical[1]) {
+      throw conflictingPaperIdentity();
+    }
+  }
+}
+
 function stablePaperRank(paper) {
   return `${paper.id}\u0000${paper.provider}\u0000${paper.sourceId}`;
 }
@@ -190,6 +228,7 @@ function validateAndNormalizeRequest(body) {
       provider,
       sourceId: normalizeProviderSourceId(provider, rawSourceId)
     };
+    validatePaperIdentityNamespaces(normalized);
     return { ...normalized, aliases: paperAliases(normalized) };
   });
 

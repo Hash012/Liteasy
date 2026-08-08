@@ -165,6 +165,154 @@ test("rejects two papers that share a DOI but assert conflicting canonical ident
   );
 });
 
+test("rejects a canonical DOI that conflicts with explicit DOI", async () => {
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-namespace-doi",
+      papers: [{
+        canonicalPaperId: "doi:10.1000/a",
+        doi: "10.1000/b",
+        id: "paper-a",
+        provider: "crossref",
+        sourceId: "10.1000/b"
+      }]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+});
+
+test("rejects a canonical DOI that conflicts with a Crossref DOI-like source", async () => {
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-namespace-crossref",
+      papers: [{
+        canonicalPaperId: "doi:10.1000/a",
+        id: "paper-a",
+        provider: "crossref",
+        sourceId: "10.1000/b"
+      }]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+});
+
+test("rejects a canonical OpenAlex identity with mismatched provider or source", async () => {
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-namespace-openalex",
+      papers: [{
+        canonicalPaperId: "openalex:W1",
+        id: "paper-a",
+        provider: "openalex",
+        sourceId: "W2"
+      }]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-namespace-openalex-provider",
+      papers: [{
+        canonicalPaperId: "openalex:W1",
+        id: "paper-a",
+        provider: "semantic_scholar",
+        sourceId: "S1"
+      }]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+});
+
+test("rejects a canonical Semantic Scholar identity with mismatched provider or source", async () => {
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-namespace-semantic",
+      papers: [{
+        canonicalPaperId: "semantic_scholar:S1",
+        id: "paper-a",
+        provider: "semantic_scholar",
+        sourceId: "S2"
+      }]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-namespace-semantic-provider",
+      papers: [{
+        canonicalPaperId: "semantic_scholar:S1",
+        id: "paper-a",
+        provider: "openalex",
+        sourceId: "W1"
+      }]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+});
+
+test("accepts matching canonical namespace claims and validates them before alias union", async () => {
+  let providerPapers;
+  const result = await buildPaperRelationPayload({
+    artifactId: "artifact-namespace-matching",
+    papers: [
+      {
+        canonicalPaperId: "doi:10.1000/a",
+        doi: "10.1000/A",
+        id: "paper-a",
+        provider: "crossref",
+        sourceId: "https://doi.org/10.1000/A"
+      },
+      {
+        canonicalPaperId: "openalex:W1",
+        id: "paper-b",
+        provider: "openalex",
+        sourceId: "https://openalex.org/w1"
+      },
+      {
+        canonicalPaperId: "semantic_scholar:S1",
+        id: "paper-c",
+        provider: "semantic_scholar",
+        sourceId: "S1"
+      }
+    ]
+  }, {
+    fetchGraphRecords: async (papers) => {
+      providerPapers = papers;
+      return [];
+    }
+  });
+
+  assert.equal(providerPapers.length, 3);
+  assert.deepEqual(result, { edges: [], warnings: [] });
+  await assert.rejects(
+    buildPaperRelationPayload({
+      artifactId: "artifact-namespace-before-union",
+      papers: [
+        {
+          canonicalPaperId: "doi:10.1000/a",
+          id: "invalid",
+          provider: "crossref",
+          sourceId: "10.1000/b"
+        },
+        {
+          canonicalPaperId: "doi:10.1000/b",
+          id: "valid",
+          provider: "crossref",
+          sourceId: "10.1000/b"
+        }
+      ]
+    }, { fetchGraphRecords: async () => [] }),
+    (error) => error instanceof PaperRelationValidationError &&
+      error.code === "conflicting_paper_relation_identity"
+  );
+});
+
 test("retains accumulated strong identity claims when detecting transitive conflicts", async () => {
   await assert.rejects(
     buildPaperRelationPayload({
