@@ -18,6 +18,7 @@ import type {
   ThinReadingDocument,
   ThinReadingExternalSource
 } from "../features/thin-reading/thinReading.types";
+import type { ThinReadingPaperRelationsTransport } from "../features/thin-reading/thinReadingPaperRelationsClient";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
 
@@ -69,6 +70,7 @@ type ReaderPaneProps = {
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
   onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
+  paperRelationsTransport?: ThinReadingPaperRelationsTransport;
   showArtifactRegion?: boolean;
   selectedPapers?: Paper[];
   selectedPaperIds: string[];
@@ -119,6 +121,7 @@ export function ReaderPane({
   onToggleLeftPane,
   onToggleRightPane,
   onUpdateThinReadingDocument,
+  paperRelationsTransport,
   selectedPapers = [],
   selectedPaperIds,
   selectionLocked,
@@ -204,6 +207,8 @@ export function ReaderPane({
                 analysisHint={analysisHint}
                 canStartAnalysis={selectedPaperIds.length > 0 && selectionLocked}
                 developerDiagnostics={developerDiagnostics}
+                externalKnowledgeEndpoint={externalKnowledgeEndpoint}
+                paperRelationsTransport={paperRelationsTransport}
                 intuechoEndpoint={intuechoEndpoint}
                 intuechoSessionId={intuechoSessionId}
                 mineruFiguresByPaperId={mineruFiguresByPaperId}

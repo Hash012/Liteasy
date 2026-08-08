@@ -1731,6 +1731,7 @@ export function AppShell({
         onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
         intuechoEndpoint={resolveIntuechoEndpoint()}
         intuechoSessionId={accountSession?.sessionId}
+        paperRelationsTransport={effectiveModelTransport}
         onLoadForumFeed={forum.loadFeed}
         onPostToForum={postSelectionToForum}
         onSyncAnnotationToForum={syncAnnotationToForum}

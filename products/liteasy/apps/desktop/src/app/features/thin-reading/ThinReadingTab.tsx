@@ -34,6 +34,8 @@ import {
   useThinReadingCommunityRecommendations,
   type ThinReadingCommunityRecommendationState
 } from "./useThinReadingCommunityRecommendations";
+import { useThinReadingPaperRelations } from "./useThinReadingPaperRelations";
+import type { ThinReadingPaperRelationsTransport } from "./thinReadingPaperRelationsClient";
 import type { ForumFeedQuery, ForumPaperIdentity, ForumPost } from "../forum/forum.types";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 import type {
@@ -78,6 +80,8 @@ export type ThinReadingTabProps = {
   communityRecommendationState?: ThinReadingCommunityRecommendationState;
   intuechoEndpoint?: string;
   intuechoSessionId?: string;
+  paperRelationsEndpoint?: string;
+  paperRelationsTransport?: ThinReadingPaperRelationsTransport;
   figures?: readonly MineruFigure[];
   headerAction?: ReactNode;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
@@ -330,6 +334,8 @@ export function ThinReadingTab({
   onRetryInterruptedBranch,
   onSyncIntuecho,
   onUpdateDocument,
+  paperRelationsEndpoint = "",
+  paperRelationsTransport,
   papers
 }: ThinReadingTabProps) {
   const activeNode = document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId];
@@ -365,6 +371,23 @@ export function ThinReadingTab({
   const [forumState, setForumState] = useState<"idle" | "loading" | "ready" | "error" | "unmapped">("idle");
   const [forumRefresh, setForumRefresh] = useState(0);
   const [expandedRecommendationId, setExpandedRecommendationId] = useState<string | null>(null);
+  useThinReadingPaperRelations({
+    artifactId,
+    enabled: recommendationStage === "graph",
+    endpoint: paperRelationsEndpoint,
+    node: activeNode,
+    onPersist: (recommendationPaperEdges) => onUpdateDocument(artifactId, {
+      ...document,
+      nodes: {
+        ...document.nodes,
+        [activeNode.id]: {
+          ...activeNode,
+          evidence: { ...activeNode.evidence, recommendationPaperEdges }
+        }
+      }
+    }),
+    transport: paperRelationsTransport
+  });
   const labels = getThinReadingUiCopy(document.targetLanguage);
   const generationInProgress = generating || Boolean(generationProgress);
   const paperTitle = useMemo(
