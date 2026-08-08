@@ -342,6 +342,7 @@ export function AssociationReadingOverlay({
           <article aria-label={`关联论文：${activeSource.title}`} className="association-reading-card">
             <button
               aria-label="返回关联图"
+              autoFocus
               className="association-reading-card__dismiss"
               onClick={() => onSelectSource("")}
               title="返回关联图"

@@ -150,6 +150,7 @@ test("Escape returns one layer at a time and restores focus in StrictMode", () =
   act(() => paperNode.focus());
   fireEvent.click(paperNode);
   expect(container.querySelector(".association-reading-card")).not.toBeNull();
+  expect(screen.getByRole("button", { name: "返回关联图" })).toHaveFocus();
 
   fireEvent.keyDown(window, { key: "Escape" });
   expect(container.querySelector(".association-reading-card")).toBeNull();
