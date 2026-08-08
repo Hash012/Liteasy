@@ -7,6 +7,8 @@ import type {
   BuiltinSkillPackageV1,
   BuiltinSkillSummary
 } from "./builtinSkill.types";
+import { hasVisualizationValidator } from "../visualization/visualizationValidatorRegistry";
+import "../visualization/validators/baseValidators";
 
 const stableId = z.string().min(1).max(120).regex(/^[A-Za-z][A-Za-z0-9_.-]*$/);
 const modality = z.enum([
@@ -47,33 +49,6 @@ const packageSchema = z.object({
   validatorIds: z.array(stableId).max(64).optional()
 }).strict();
 
-/* Validator implementations are registered by the visualization validator task. */
-const declaredValidatorIds = new Set([
-  "evidence-claims",
-  "evidence_claims",
-  "evidence-binding",
-  "evidence_binding",
-  "evidence.claims",
-  "evidence.binding",
-  "artifact-schema",
-  "artifact_schema",
-  "schema-identity",
-  "schema_identity",
-  "schema.identity",
-  "stable-object-ids",
-  "stable_object_ids",
-  "interaction-allowlist",
-  "interaction_allowlist",
-  "resource-limits",
-  "resource_limits",
-  "source-figure-identity",
-  "source_figure_identity",
-  "source-figure.identity",
-  "source.figure.identity",
-  "accessibility-reading-order",
-  "accessibility_reading_order"
-]);
-
 type BuiltinSkillRegistration = {
   load: BuiltinSkillLoader;
   manifest: BuiltinSkillManifestV1;
@@ -83,7 +58,7 @@ const packages = new Map<string, BuiltinSkillRegistration>();
 
 function parseManifest(value: unknown): BuiltinSkillManifestV1 {
   const result = manifestSchema.safeParse(value);
-  if (!result.success || result.data.validatorIds.some((id) => !declaredValidatorIds.has(id))) {
+  if (!result.success || result.data.validatorIds.some((id) => !hasVisualizationValidator(id))) {
     throw new Error("builtin_skill_manifest_invalid");
   }
   return result.data as BuiltinSkillManifestV1;
