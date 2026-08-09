@@ -70,6 +70,7 @@ function renderLayer(overrides: Partial<Parameters<typeof AssociationGraphLayer>
 test("keeps every visible anchor in its own place in the text and draws its related work around it", () => {
   const { container } = renderLayer();
 
+  expect(container.querySelector(".association-layer")).toHaveAttribute("data-hidden-papers", "0");
   const chips = Array.from(container.querySelectorAll<HTMLElement>(".association-anchor__chip"));
   expect(chips.map((chip) => chip.textContent)).toEqual(["self-attention", "WMT 2014"]);
   // The chip sits at the anchor's measured rectangle, not at a centre the layer invented.

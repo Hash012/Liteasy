@@ -374,6 +374,7 @@ export function AssociationGraphLayer({
       data-candidate-overflow={graph.candidateQuality.overflowCount}
       data-candidate-same-side={graph.candidateQuality.sameSideViolations}
       data-candidate-stress={graph.candidateQuality.weightedStress}
+      data-hidden-papers={projection.hiddenPaperCount}
       data-layout-source={graph.layoutSource}
       data-node-overlaps={graph.quality.nodeOverlaps}
       data-overflow-count={graph.quality.overflowCount}

@@ -142,9 +142,11 @@ describe("useThinReadingPaperRelations", () => {
     }));
 
     await waitFor(() => expect(relationTransport).toHaveBeenCalledTimes(1));
-    expect(requestedPaperIds).toEqual(
-      Array.from({ length: 24 }, (_, index) => `openalex:W${String(index + 1).padStart(3, "0")}`)
-    );
+    expect(requestedPaperIds).toEqual([
+      ...Array.from({ length: 23 }, (_, index) =>
+        `openalex:W${String(index + 1).padStart(3, "0")}`),
+      "openalex:W025"
+    ]);
   });
 
   test("completes one request for a stable key under React StrictMode", async () => {

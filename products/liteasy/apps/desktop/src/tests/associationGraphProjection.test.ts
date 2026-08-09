@@ -64,6 +64,7 @@ function densePageInput() {
       return source(`source-${graphId}`, {
         canonicalPaperId: `openalex:${graphId}`,
         ...(paperIndex === 5 ? { doi: "10.1000/shared-five" } : {}),
+        ...(paperIndex === 31 ? { relevance: 1 } : {}),
         sourceId: graphId
       });
     })
@@ -72,7 +73,7 @@ function densePageInput() {
 }
 
 describe("projectAssociationPageGraph", () => {
-  test("selects at most 24 stable visible components after complete alias union", () => {
+  test("selects 24 alias-unioned components by anchor coverage and paper value", () => {
     const input = densePageInput();
     const graph = projectAssociationPageGraph({
       ...input,
@@ -84,9 +85,12 @@ describe("projectAssociationPageGraph", () => {
       ]
     });
 
-    expect(graph.paperNodes.map((node) => node.paperKey)).toEqual(
-      Array.from({ length: 24 }, (_, index) => `openalex:W${String(index + 1).padStart(3, "0")}`)
-    );
+    expect(graph.paperNodes).toHaveLength(24);
+    expect(graph.hiddenPaperCount).toBe(7);
+    for (const anchor of input.anchors) {
+      expect(graph.paperNodes.some((paper) => paper.anchorIds.includes(anchor.anchorId))).toBe(true);
+    }
+    expect(graph.paperNodes.map((node) => node.paperKey)).toContain("openalex:W031");
     expect(graph.paperNodes.find((node) => node.paperKey === "openalex:W005")?.anchorIds)
       .toEqual(["anchor-2", "anchor-8"]);
     expect(graph.paperEdges.map((relation) => [relation.sourcePaperKey, relation.targetPaperKey]))
