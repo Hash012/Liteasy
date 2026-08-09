@@ -29,6 +29,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [tags, setTags] = useState(original?.tags.filter((tag) => tag.origin === "user").map((tag) => tag.name) ?? draft?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [publishAsAnnotation, setPublishAsAnnotation] = useState(false);
+  const [publicationCanonicalizing, setPublicationCanonicalizing] = useState(false);
   const [replyTargetsReady, setReplyTargetsReady] = useState(false);
   const [targets, setTargets] = useState<AnnotationTarget[]>(original?.targets ?? draft?.targets ?? []);
   const [visibility, setVisibility] = useState<AnnotationVisibility>(original?.visibility ?? draft?.visibility ?? parent?.visibility ?? "public");
@@ -37,8 +38,10 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
   const publicationAttempt = useRef(0);
+  const publicationCanonicalizingRef = useRef(false);
 
   async function setReplyPublication(enabled: boolean) {
+    if (publicationCanonicalizingRef.current) return;
     const attempt = ++publicationAttempt.current;
     const inheritedTargets = enabled ? structuredClone(parent?.targets ?? []) : [];
     const hasTargets = inheritedTargets.length > 0;
@@ -47,6 +50,8 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
     setReplyTargetsReady(hasTargets && inheritedTargetsAreCanonical(inheritedTargets));
     setStatus("");
     if (!enabled || !hasTargets || inheritedTargetsAreCanonical(inheritedTargets)) return;
+    publicationCanonicalizingRef.current = true;
+    setPublicationCanonicalizing(true);
     try {
       const canonicalTargets = await canonicalizeInheritedTargets(inheritedTargets);
       if (publicationAttempt.current !== attempt) return;
@@ -56,6 +61,9 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
       if (publicationAttempt.current !== attempt) return;
       setReplyTargetsReady(false);
       setStatus("请重新确认关联文献后再发布独立批注");
+    } finally {
+      publicationCanonicalizingRef.current = false;
+      setPublicationCanonicalizing(false);
     }
   }
 
@@ -74,6 +82,11 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
     event.preventDefault();
     setPending(true);
     setStatus("");
+    if (parent && publicationCanonicalizing) {
+      setStatus("正在确认继承的关联文献，请稍候");
+      setPending(false);
+      return;
+    }
     if (parent && publishAsAnnotation && (!replyTargetsReady || !inheritedTargetsAreCanonical(targets))) {
       setStatus("请重新确认关联文献后再发布独立批注");
       setPending(false);
@@ -111,7 +124,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
       <header><div><span>{original ? "编辑" : parent ? "回复" : "新批注"}</span><h2 id="composer-title">{parent ? `回复 ${parent.author.name}` : isReplyEdit ? "编辑回复" : "发布批注"}</h2></div><Tooltip content="关闭" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="关闭" onClick={onClose} /></Tooltip></header>
       <form onSubmit={submit}>
         <label className="field-label">批注内容<Textarea value={body} onChange={(_, data) => setBody(data.value)} resize="vertical" rows={7} required /></label>
-        {!isReplyEdit && parent && <ReplyPublicationFields publishAsAnnotation={publishAsAnnotation} targets={targets} visibility={parent.visibility} onEnabledChange={setReplyPublication} onTargetsChange={updateReplyTargets} />}
+        {!isReplyEdit && parent && <ReplyPublicationFields disabled={publicationCanonicalizing} publishAsAnnotation={publishAsAnnotation} targets={targets} visibility={parent.visibility} onEnabledChange={setReplyPublication} onTargetsChange={updateReplyTargets} />}
         {!isReplyEdit && !parent && <>
           <div className="visibility-row">
             <label>可见范围<select value={visibility} onChange={(event) => { const next = event.target.value as AnnotationVisibility; setVisibility(next); if (next !== "public") setShareToPlaza(false); }}><option value="public">公开</option><option value="private">仅自己</option><option value="organization">指定组织</option><option value="mutual_followers">仅互相关注</option></select></label>
@@ -122,7 +135,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
         </>}
         {!isReplyEdit && (!parent || publishAsAnnotation) && <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>}
         {status && <p className="form-error" role="alert">{status}</p>}
-        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || !body.trim() || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
+        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || publicationCanonicalizing || !body.trim() || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>
   </div>;

@@ -459,7 +459,9 @@ export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: Co
   const [publicationState, setPublicationState] = useState(reply.derivedAnnotationState);
   const [derivedAnnotationId, setDerivedAnnotationId] = useState(reply.derivedAnnotationId);
   const [editing, setEditing] = useState(false);
+  const [publicationPending, setPublicationPending] = useState(false);
   const [status, setStatus] = useState("");
+  const publicationPendingRef = useRef(false);
   async function save() {
     try {
       const result = await communityApi.updateReply(reply.id, { body });
@@ -468,36 +470,46 @@ export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: Co
     } catch (reason) { setStatus(reason instanceof Error ? reason.message : "回复保存失败"); }
   }
   async function updatePublication(published: boolean) {
-    if (!published) {
+    if (publicationPendingRef.current) return;
+    publicationPendingRef.current = true;
+    setPublicationPending(true);
+    setStatus("");
+    try {
+      if (!published) {
+        try {
+          const result = await communityApi.updateReplyPublication(reply.id, { published: false });
+          setPublicationState(result.reply.derivedAnnotationState);
+          setDerivedAnnotationId(result.reply.derivedAnnotationId);
+          setStatus("");
+        } catch {
+          setStatus("撤回失败，独立批注仍公开");
+        }
+        return;
+      }
+      let canonicalTargets: AnnotationTarget[];
       try {
-        const result = await communityApi.updateReplyPublication(reply.id, { published: false });
+        canonicalTargets = await canonicalizeInheritedTargets(parent.targets);
+      } catch {
+        setStatus("恢复失败，父批注文献需重新确认，独立批注仍隐藏");
+        return;
+      }
+      try {
+        const result = await communityApi.updateReplyPublication(reply.id, { published: true, targets: canonicalTargets, tags: [] });
         setPublicationState(result.reply.derivedAnnotationState);
         setDerivedAnnotationId(result.reply.derivedAnnotationId);
         setStatus("");
       } catch {
-        setStatus("撤回失败，独立批注仍公开");
+        setStatus("恢复失败，独立批注仍隐藏");
       }
-      return;
-    }
-    let canonicalTargets: AnnotationTarget[];
-    try {
-      canonicalTargets = await canonicalizeInheritedTargets(parent.targets);
-    } catch {
-      setStatus("恢复失败，父批注文献需重新确认，独立批注仍隐藏");
-      return;
-    }
-    try {
-      const result = await communityApi.updateReplyPublication(reply.id, { published: true, targets: canonicalTargets, tags: [] });
-      setPublicationState(result.reply.derivedAnnotationState);
-      setDerivedAnnotationId(result.reply.derivedAnnotationId);
-      setStatus("");
-    } catch {
-      setStatus("恢复失败，独立批注仍隐藏");
+    } finally {
+      publicationPendingRef.current = false;
+      setPublicationPending(false);
     }
   }
   const publicationLabel = publicationState === "published" ? "停止独立批注" : publicationState === "withdrawn" ? "恢复独立批注" : "发布为独立批注";
+  const publicationCommandLabel = publicationPending ? publicationState === "published" ? "正在撤回" : "正在恢复" : publicationLabel;
   const publicationStateLabel = publicationState === "published" ? "已发布" : publicationState === "withdrawn" ? "已撤回" : "未发布";
-  return <article className="reply-item"><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><Textarea value={body} onChange={(_, data) => setBody(data.value)} /><div className="reply-edit-actions"><Button size="small" onClick={() => setEditing(false)}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}<span className={`reply-publication-state ${publicationState}`}>独立批注：{publicationStateLabel}</span>{publicationState === "published" && derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" onClick={() => void updatePublication(publicationState !== "published")}>{publicationLabel}</Button>}</footer>{status && <p className="inline-status" role="status">{status}</p>}</article>;
+  return <article className="reply-item"><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><Textarea value={body} onChange={(_, data) => setBody(data.value)} /><div className="reply-edit-actions"><Button size="small" onClick={() => setEditing(false)}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}<span className={`reply-publication-state ${publicationState}`}>独立批注：{publicationStateLabel}</span>{publicationState === "published" && derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" disabled={publicationPending} onClick={() => void updatePublication(publicationState !== "published")}>{publicationCommandLabel}</Button>}</footer>{status && <p className="inline-status" role="status">{status}</p>}</article>;
 }
 
 function FollowingAnnotations({ onCompose, onConversation, refresh, session }: {

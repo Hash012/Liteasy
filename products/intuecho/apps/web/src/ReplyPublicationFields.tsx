@@ -10,6 +10,7 @@ const visibilityLabels: Record<AnnotationVisibility, string> = {
 };
 
 type Props = {
+  disabled?: boolean;
   onEnabledChange: (enabled: boolean) => void;
   onTargetsChange: (targets: AnnotationTarget[]) => void;
   publishAsAnnotation: boolean;
@@ -17,10 +18,11 @@ type Props = {
   visibility: AnnotationVisibility;
 };
 
-export function ReplyPublicationFields({ onEnabledChange, onTargetsChange, publishAsAnnotation, targets, visibility }: Props) {
+export function ReplyPublicationFields({ disabled = false, onEnabledChange, onTargetsChange, publishAsAnnotation, targets, visibility }: Props) {
   return <section className="reply-publication-fields">
     <Checkbox
       checked={publishAsAnnotation}
+      disabled={disabled}
       label="同时发布为独立批注"
       onChange={(_, data) => onEnabledChange(Boolean(data.checked))}
     />

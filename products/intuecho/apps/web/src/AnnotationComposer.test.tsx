@@ -96,6 +96,12 @@ const confirmedLiterature = {
   provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const }
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => { resolve = next; });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   createReply.mockResolvedValue({ annotation: null, reply: { ...publishedReply, derivedAnnotationId: null, derivedAnnotationState: "none" } });
@@ -156,6 +162,29 @@ test("canonicalizes inherited legacy targets before publishing a reply", async (
   });
   expect(payload).toEqual({ body: "Published reply", publishAsAnnotation: true, tags: [], targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }] });
   expect(payload.targets[0]).not.toBe(publicParent.targets[0]);
+});
+
+test("starts only one legacy confirmation while reply publication is being enabled", async () => {
+  const user = userEvent.setup();
+  const resolution = deferred<Awaited<ReturnType<typeof communityApi.resolveLiterature>>>();
+  resolveLiterature.mockReturnValue(resolution.promise);
+  render(<AnnotationComposer context={{ replyTo: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);
+  const checkbox = screen.getByRole("checkbox", { name: "同时发布为独立批注" });
+  await user.type(screen.getByLabelText("批注内容"), "Wait for canonicalization");
+
+  await user.click(checkbox);
+  await user.click(checkbox);
+  await user.click(checkbox);
+  await user.click(screen.getByRole("button", { name: "移除关联文献" }));
+  await user.click(checkbox);
+
+  expect(checkbox).toBeDisabled();
+  expect(screen.getByRole("button", { name: "发布" })).toBeDisabled();
+  expect(resolveLiterature).toHaveBeenCalledOnce();
+  resolution.resolve({ candidate: legacyCandidate, status: "exact", unavailableProviders: [] });
+  await waitFor(() => expect(confirmLiterature).toHaveBeenCalledOnce());
+  expect(checkbox).toBeEnabled();
+  expect(screen.getByRole("button", { name: "发布" })).toBeEnabled();
 });
 
 test.each([
@@ -279,6 +308,41 @@ test("canonicalizes legacy parent targets before restoring a projection", async 
     tags: [],
     targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
   }));
+});
+
+test("serializes repeated restore commands and canonicalization", async () => {
+  const user = userEvent.setup();
+  const publication = deferred<Awaited<ReturnType<typeof communityApi.updateReplyPublication>>>();
+  const withdrawnReply = { ...publishedReply, derivedAnnotationState: "withdrawn" as const };
+  updateReplyPublication.mockReturnValue(publication.promise);
+  render(<ReplyItem parent={publicParent} reply={withdrawnReply} session={null} onCompose={vi.fn()} />);
+
+  const restore = screen.getByRole("button", { name: "恢复独立批注" });
+  await user.dblClick(restore);
+
+  expect(resolveLiterature).toHaveBeenCalledOnce();
+  expect(confirmLiterature).toHaveBeenCalledOnce();
+  expect(updateReplyPublication).toHaveBeenCalledOnce();
+  expect(restore).toBeDisabled();
+  expect(screen.getByRole("button", { name: "正在恢复" })).toBeDisabled();
+  publication.resolve({ annotation: null, reply: { ...withdrawnReply, derivedAnnotationState: "published" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "停止独立批注" })).toBeEnabled());
+});
+
+test("serializes repeated withdrawal commands", async () => {
+  const user = userEvent.setup();
+  const publication = deferred<Awaited<ReturnType<typeof communityApi.updateReplyPublication>>>();
+  updateReplyPublication.mockReturnValue(publication.promise);
+  render(<ReplyItem parent={publicParent} reply={publishedReply} session={null} onCompose={vi.fn()} />);
+
+  const withdraw = screen.getByRole("button", { name: "停止独立批注" });
+  await user.dblClick(withdraw);
+
+  expect(updateReplyPublication).toHaveBeenCalledOnce();
+  expect(withdraw).toBeDisabled();
+  expect(screen.getByRole("button", { name: "正在撤回" })).toBeDisabled();
+  publication.resolve({ annotation: null, reply: { ...publishedReply, derivedAnnotationState: "withdrawn" } });
+  await waitFor(() => expect(screen.getByRole("button", { name: "恢复独立批注" })).toBeEnabled());
 });
 
 test("keeps a projection withdrawn when legacy parent targets cannot be canonicalized", async () => {
