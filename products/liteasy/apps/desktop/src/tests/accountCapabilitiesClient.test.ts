@@ -88,6 +88,30 @@ test("fails closed for invalid nested multimodal fields while retaining diagnost
   });
 });
 
+test("fails closed for contradictory multimodal capability combinations", async () => {
+  await expect(loadAccountCapabilities({
+    endpoint: "https://api.liteasy.example",
+    sessionId: "desktop-access-token",
+    transport: async () => ({
+      json: async () => ({
+        developerDiagnostics: true,
+        multimodalVisualization: {
+          allowed: false,
+          enabled: true,
+          serviceAvailable: true,
+          quota: { available: true },
+          availableModalities: ["semantic_graph"]
+        }
+      }),
+      ok: true,
+      status: 200
+    })
+  })).resolves.toMatchObject({
+    developerDiagnostics: true,
+    multimodalVisualization: unavailableMultimodalCapability
+  });
+});
+
 test("rejects missing or non-boolean server authorization results", async () => {
   await expect(loadAccountCapabilities({
     endpoint: "https://api.liteasy.example",

@@ -86,6 +86,13 @@ function parseMultimodalVisualizationCapability(value: unknown): MultimodalVisua
   ) {
     return unavailableMultimodalVisualizationCapability;
   }
+  if (
+    (value.serviceAvailable && !value.allowed) ||
+    (value.enabled && !value.serviceAvailable) ||
+    (value.quota.available && !value.serviceAvailable)
+  ) {
+    return unavailableMultimodalVisualizationCapability;
+  }
   return {
     allowed: value.allowed,
     enabled: value.enabled,
