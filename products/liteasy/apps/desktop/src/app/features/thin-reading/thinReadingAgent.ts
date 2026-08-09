@@ -3,8 +3,12 @@ import type {
   PreparedMultiPaperAnalysis
 } from "../paper-analysis/analysis.types";
 import { z } from "zod";
-import { buildThinReadingPromptGuidance } from "./thinReadingPromptRegistry";
+import {
+  buildThinReadingPromptGuidance,
+  resolveThinReadingVisualizationIntentRequest
+} from "./thinReadingPromptRegistry";
 import { thinReadingAnchorKinds } from "./thinReading.types";
+import { generatedVisualizationModalities } from "../visualization/visualizationArtifact.types";
 import type {
   ThinReadingAnchor,
   ThinReadingGenerationContext,
@@ -76,6 +80,7 @@ const thinReadingPaperTypeSchema = z.enum([
 ] satisfies [ThinReadingPaperType, ...ThinReadingPaperType[]]);
 
 const maximumOmittedSections = 8;
+const generatedModalitySchema = z.enum(generatedVisualizationModalities);
 
 const thinReadingModelOutputSchema = z.object({
   anchors: z.array(z.object({
@@ -92,13 +97,6 @@ const thinReadingModelOutputSchema = z.object({
     text: normalizedStringSchema({ maximumLength: 320, minimumLength: 8 })
   }).strict()).default([]),
   externalKnowledge: z.array(normalizedStringSchema({ maximumLength: 180 })).max(8).default([]),
-  interactiveDemo: z.object({
-    description: normalizedStringSchema({ maximumLength: 320, minimumLength: 8 }),
-    html: z.string().min(80).max(60_000),
-    kind: z.literal("html"),
-    title: normalizedStringSchema({ maximumLength: 96, minimumLength: 2 })
-  }).strict().nullable().default(null),
-  mermaid: z.string().max(8_000).default(""),
   omittedSections: z.array(z.object({
     label: normalizedStringSchema({ maximumLength: 96 }),
     sectionKey: normalizedStringSchema({ maximumLength: 96 })
@@ -117,6 +115,13 @@ const thinReadingModelOutputSchema = z.object({
     status: z.enum(["grounded", "unsupported", "weak"]).default("weak"),
     text: normalizedStringSchema({ maximumLength: 420, minimumLength: 2 })
   }).strict()).default([]),
+  visualizationIntent: z.object({
+    candidateModalities: z.array(generatedModalitySchema).min(1).max(3),
+    evidenceIds: z.array(normalizedStringSchema({ maximumLength: 120 })).min(1).max(32),
+    expectedLearningGain: z.enum(["low", "medium", "high"]),
+    purpose: z.enum(["explain_structure", "compare", "show_process", "show_geometry", "show_evidence"]),
+    requestedBy: z.enum(["automatic", "explicit_user_request"])
+  }).strict().nullable().default(null),
   withinPaperClosure: z.boolean()
 }).strict();
 
@@ -155,20 +160,6 @@ export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
       type: "array"
     },
     externalKnowledge: stringArraySchema,
-    interactiveDemo: {
-      anyOf: [{
-        additionalProperties: false,
-        properties: {
-          description: jsonString,
-          html: jsonString,
-          kind: { const: "html", type: "string" },
-          title: jsonString
-        },
-        required: ["kind", "title", "description", "html"],
-        type: "object"
-      }, { type: "null" }]
-    },
-    mermaid: jsonString,
     omittedSections: {
       items: {
         additionalProperties: false,
@@ -206,6 +197,25 @@ export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
       },
       type: "array"
     },
+    visualizationIntent: {
+      anyOf: [{
+        additionalProperties: false,
+        properties: {
+          candidateModalities: {
+            items: { enum: generatedVisualizationModalities, type: "string" },
+            maxItems: 3,
+            minItems: 1,
+            type: "array"
+          },
+          evidenceIds: { items: jsonString, maxItems: 32, minItems: 1, type: "array" },
+          expectedLearningGain: { enum: ["low", "medium", "high"], type: "string" },
+          purpose: { enum: ["explain_structure", "compare", "show_process", "show_geometry", "show_evidence"], type: "string" },
+          requestedBy: { enum: ["automatic", "explicit_user_request"], type: "string" }
+        },
+        required: ["purpose", "candidateModalities", "evidenceIds", "requestedBy", "expectedLearningGain"],
+        type: "object"
+      }, { type: "null" }]
+    },
     withinPaperClosure: { type: "boolean" }
   },
   required: [
@@ -217,10 +227,9 @@ export const thinReadingModelOutputJsonSchema: Record<string, unknown> = {
     "claims",
     "anchors",
     "externalKnowledge",
-    "interactiveDemo",
-    "mermaid",
     "recommendedFigures",
-    "omittedSections"
+    "omittedSections",
+    "visualizationIntent"
   ],
   type: "object"
 };
@@ -480,7 +489,6 @@ type ParseThinReadingModelSeedOptions = {
   requireExternalKnowledge?: boolean;
   requireExplicitTraceability?: boolean;
   requireNumericFidelity?: boolean;
-  requestedOutput?: "explanation" | "html_demo" | "mermaid";
   requiredChineseTerminology?: readonly RequiredChineseTerminology[];
   targetLanguage?: string;
 };
@@ -489,7 +497,6 @@ function assertVisualOutput(input: {
   allowedEvidenceIds: readonly string[];
   availableFigureIds: readonly string[];
   parsed: ParsedThinReadingModelOutput;
-  requestedOutput?: ParseThinReadingModelSeedOptions["requestedOutput"];
 }) {
   const availableFigureIds = new Set(input.availableFigureIds);
   const invalidFigure = input.parsed.recommendedFigures.find((figure) => (
@@ -503,14 +510,10 @@ function assertVisualOutput(input: {
     fieldName: "recommendedFigures.evidenceIds",
     paperEvidence: input.parsed.recommendedFigures.flatMap((figure) => figure.evidenceIds)
   });
-  if (input.requestedOutput === "mermaid" && !input.parsed.mermaid.trim()) {
-    throw new Error("薄读 Agent 质量门未通过：本轮快捷命令要求 Mermaid，但 mermaid 为空。");
-  }
-  if (input.requestedOutput === "html_demo" && !input.parsed.interactiveDemo) {
-    throw new Error("薄读 Agent 质量门未通过：本轮快捷命令要求 HTML demo，但 interactiveDemo 为空。");
-  }
-  if (input.requestedOutput !== "html_demo" && input.parsed.interactiveDemo) {
-    throw new Error("薄读 Agent 质量门未通过：只有用户明确请求 HTML/SVG demo 时才允许生成 interactiveDemo。");
+  if (input.parsed.visualizationIntent && !input.parsed.visualizationIntent.evidenceIds.every((id) => (
+    input.allowedEvidenceIds.includes(id)
+  ))) {
+    throw new Error("thin_reading_visualization_intent_invalid");
   }
 }
 
@@ -1386,8 +1389,7 @@ export function parseThinReadingModelSeed(
   assertVisualOutput({
     allowedEvidenceIds,
     availableFigureIds: options.availableFigureIds ?? [],
-    parsed,
-    requestedOutput: options.requestedOutput
+    parsed
   });
   assertChineseTerminologyOrder({
     analysisEvidence,
@@ -1479,8 +1481,6 @@ export function parseThinReadingModelSeed(
       anchors,
       claims,
       externalKnowledge: parsed.externalKnowledge,
-      interactiveDemo: parsed.interactiveDemo ?? undefined,
-      mermaid: parsed.mermaid.trim(),
       externalSources,
       paperEvidence,
       paperEvidenceSpans,
@@ -1498,6 +1498,7 @@ export function parseThinReadingModelSeed(
     paperType: parsed.paperType,
     recommendations: [],
     summary: parsed.summary,
+    visualizationIntent: parsed.visualizationIntent ?? undefined,
     withinPaperClosure: parsed.withinPaperClosure === false
       ? false
       : parsed.externalKnowledge.length === 0 && !hasInsufficientRetrieval
@@ -1545,10 +1546,11 @@ function sourceInstruction(context: ThinReadingGenerationContext) {
       "模块名称已经由上一页内容决定。本轮不得改换主题、扩大成全篇摘要，也不得根据本轮生成结果反向重命名该模块。"
     ].join("\n");
   }
+  const requestedVisualization = resolveThinReadingVisualizationIntentRequest(context.source);
   return [
     `任务：针对用户选中的薄读文本继续深入：${truncatePromptText(context.source.excerpt, 1_600)}。`,
-    context.source.quickCommand
-      ? `结构化快捷命令：${context.source.quickCommand}；要求产物：${context.source.requestedOutput ?? "explanation"}。`
+    requestedVisualization
+      ? `用户明确请求可视化：若本轮证据与模态匹配，返回 requestedBy=explicit_user_request、purpose=${requestedVisualization.purpose} 且 candidateModalities 仅取 ${requestedVisualization.candidateModalities.join(", ")} 的可验证意图；否则返回 null。`
       : "",
     context.source.evidenceIds?.length
       ? "选区在上一层具有论文证据映射。它只用于指出本次深入的焦点；不得复用、输出或推断任何上一层 evidence ID，必须在本轮可用证据目录中重新选择能直接支持该讲解的 ID。"
@@ -1581,19 +1583,16 @@ function formatAvailableFigures(context: ThinReadingGenerationContext) {
 }
 
 export function buildThinReadingVisualGuidance(context: ThinReadingGenerationContext) {
-  const requestedOutput = context.source.kind === "selected_text"
-    ? context.source.requestedOutput
-    : "explanation";
+  const requestedVisualization = resolveThinReadingVisualizationIntentRequest(context.source);
   return [
     "图文讲解要求（短而硬）：",
     "- 把正文写成知识原子化笔记：每句话只承担一个可复述的概念、机制、证据或边界；按“对象是什么 → 如何运作 → 证据/限制”串起来。短句优先，不堆术语，不平均复述章节。",
     "- 原文图只在能直接澄清正文机制、结构或结果时选 1-2 张；recommendedFigures 的 figureId 必须来自目录，evidenceIds 必须绑定本轮证据，并告诉读者看图时关注什么；不合适就留空。",
-    "- 出现三个及以上相互作用的对象、组件、阶段或因果环节时，用简洁可渲染的 Mermaid flowchart；图中每条关系都必须由本轮证据支持，否则 mermaid 留空。",
-    requestedOutput === "mermaid"
-      ? "- 本轮明确要求因果 Mermaid：mermaid 必须非空，正文压缩为 3-5 个浅显句子，interactiveDemo 必须为 null。"
-      : requestedOutput === "html_demo"
-        ? "- 本轮明确要求 HTML/SVG demo：interactiveDemo 必须是单文件、离线、响应式的 HTML；可以使用内联 HTML、CSS、SVG 与 JavaScript 实现动画或交互，但不得依赖远程资源；动画只呈现证据支持的步骤或状态，正文仍保持简短。"
-        : "- 未明确要求 HTML demo：interactiveDemo 必须为 null。"
+    "- 仅当一张图能比正文更清楚地解释结构、比较、过程、几何或证据关系时，返回 visualizationIntent；它只列 purpose、候选受控模态、支撑它的本轮 evidence ID、requestedBy 和预期学习收益。",
+    "- 证据不足、图文重复、候选模态与内容不匹配，或没有可靠图形表达时，visualizationIntent 必须为 null。不得生成图形源码、可执行内容或标记语言。",
+    requestedVisualization
+      ? `- 本轮用户明确要求可视化：若证据与模态匹配，visualizationIntent.requestedBy 必须为 explicit_user_request，purpose 必须为 ${requestedVisualization.purpose}，candidateModalities 仅可使用 ${requestedVisualization.candidateModalities.join(", ")}；不匹配时仍返回 null。`
+      : "- 本轮没有明确可视化请求：若确有可靠增益，visualizationIntent.requestedBy 为 automatic；否则为 null。"
   ].join("\n");
 }
 
@@ -1802,8 +1801,7 @@ export function buildThinReadingAgentPrompt(input: {
     '  "summary": "string",',
     '  "summarySentences": [{"text": "summary sentence", "evidenceIds": ["evidence-id"], "externalKnowledge": [], "status": "grounded"}],',
     '  "recommendedFigures": [{"figureId": "figure-id", "evidenceIds": ["evidence-id"], "reason": "what to inspect"}],',
-    '  "mermaid": "flowchart TD\\n  A[short node] --> B[short node]",',
-    '  "interactiveDemo": null,',
+    '  "visualizationIntent": {"purpose": "explain_structure", "candidateModalities": ["semantic_graph"], "evidenceIds": ["evidence-id"], "requestedBy": "automatic", "expectedLearningGain": "medium"},',
     '  "withinPaperClosure": true,',
     '  "paperEvidence": ["evidence-id"],',
     '  "claims": [{"text": "claim text", "evidenceIds": ["evidence-id"], "status": "grounded"}],',

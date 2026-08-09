@@ -2946,14 +2946,19 @@ test("runs at most two responsibility Subagents for a genuinely large thin-readi
           answer: JSON.stringify({
             claims: [{ evidenceIds: [selectedEvidenceIds[0]], status: "grounded", text: "组件按依赖顺序连接。" }],
             externalKnowledge: [],
-            interactiveDemo: null,
-            mermaid: "flowchart LR\n  A[输入组件] --> B[处理组件] --> C[结果组件]",
             omittedSections: [],
             paperEvidence: [selectedEvidenceIds[0]],
             paperType: "systems",
             recommendedFigures: [],
             summary,
             summarySentences: [{ evidenceIds: [selectedEvidenceIds[0]], externalKnowledge: [], status: "grounded", text: summary }],
+            visualizationIntent: {
+              candidateModalities: ["semantic_graph"],
+              evidenceIds: [selectedEvidenceIds[0]],
+              expectedLearningGain: "high",
+              purpose: "show_process",
+              requestedBy: "automatic"
+            },
             withinPaperClosure: true
           }),
           execution: { backend: "dev_cloud", mode: "live", provider: "openai" }

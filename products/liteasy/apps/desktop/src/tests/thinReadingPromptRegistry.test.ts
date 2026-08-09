@@ -3,6 +3,7 @@ import {
   buildThinReadingPromptGuidance,
   classifyThinReadingPaperWithDiagnostics,
   getThinReadingFewShotExamples,
+  resolveThinReadingVisualizationIntentRequest,
   thinReadingPaperTypes
 } from "../app/features/thin-reading/thinReadingPromptRegistry";
 import type { ThinReadingGenerationContext } from "../app/features/thin-reading/thinReading.types";
@@ -18,6 +19,25 @@ const rootContext: ThinReadingGenerationContext = {
 };
 
 describe("thinReadingPromptRegistry", () => {
+  test("maps legacy and current visualization commands to typed intent requests", () => {
+    expect(resolveThinReadingVisualizationIntentRequest({
+      excerpt: "先说明组件如何按依赖顺序执行。",
+      kind: "selected_text",
+      quickCommand: "mermaid_causal"
+    })).toEqual({
+      candidateModalities: ["semantic_graph"],
+      purpose: "show_process"
+    });
+    expect(resolveThinReadingVisualizationIntentRequest({
+      excerpt: "说明结构层次。",
+      kind: "selected_text",
+      quickCommand: "visualize_structure"
+    })).toEqual({
+      candidateModalities: ["semantic_graph"],
+      purpose: "explain_structure"
+    });
+  });
+
   test("provides exactly three original retention examples for every paper type and language", () => {
     for (const paperType of thinReadingPaperTypes) {
       const zhExamples = getThinReadingFewShotExamples(paperType, "zh-CN");

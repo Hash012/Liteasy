@@ -47,13 +47,19 @@ function isRecoverableBranchSource(value: unknown): value is ThinReadingBranchSo
     ? "mermaid"
     : source.quickCommand === "html_algorithm_animation" || source.quickCommand === "html_svg_structure"
       ? "html_demo"
-      : undefined;
+      : source.quickCommand === "visualize_flow" || source.quickCommand === "visualize_process" ||
+          source.quickCommand === "visualize_structure"
+        ? "visualization_intent"
+        : undefined;
   return (source.prompt === undefined ||
       (typeof source.prompt === "string" && source.prompt.length <= maxPromptLength)) &&
     (source.quickCommand === undefined || source.quickCommand === "html_algorithm_animation" ||
-      source.quickCommand === "html_svg_structure" || source.quickCommand === "mermaid_causal") &&
+      source.quickCommand === "html_svg_structure" || source.quickCommand === "mermaid_causal" ||
+      source.quickCommand === "visualize_flow" || source.quickCommand === "visualize_process" ||
+      source.quickCommand === "visualize_structure") &&
     (source.requestedOutput === undefined || source.requestedOutput === "explanation" ||
-      source.requestedOutput === "html_demo" || source.requestedOutput === "mermaid") &&
+      source.requestedOutput === "html_demo" || source.requestedOutput === "mermaid" ||
+      source.requestedOutput === "visualization_intent") &&
     (expectedOutput === undefined || source.requestedOutput === expectedOutput) &&
     (source.evidenceIds === undefined || isUniqueBoundedStringArray(source.evidenceIds)) &&
     (source.externalSourceIds === undefined || isUniqueBoundedStringArray(source.externalSourceIds));

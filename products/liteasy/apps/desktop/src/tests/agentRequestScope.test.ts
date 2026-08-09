@@ -194,6 +194,16 @@ test("normalizes thin-reading visual commands and metadata-only MinerU figures",
   const mismatched = structuredClone(request);
   mismatched.attachments[0].metadata.thinReadingContext.source.requestedOutput = "mermaid";
   expect(getAgentRequestThinReadingContext(mismatched)).toBeNull();
+
+  const typedIntentRequest = structuredClone(request);
+  typedIntentRequest.attachments[0].metadata.thinReadingContext.source.quickCommand = "visualize_structure";
+  typedIntentRequest.attachments[0].metadata.thinReadingContext.source.requestedOutput = "visualization_intent";
+  expect(getAgentRequestThinReadingContext(typedIntentRequest)).toMatchObject({
+    source: {
+      quickCommand: "visualize_structure",
+      requestedOutput: "visualization_intent"
+    }
+  });
 });
 
 test("falls back to the current selected context without a selection attachment", () => {

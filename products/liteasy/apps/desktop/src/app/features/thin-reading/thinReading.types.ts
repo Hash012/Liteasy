@@ -21,9 +21,16 @@ export type ThinReadingPaperType =
 export type ThinReadingQuickCommand =
   | "html_algorithm_animation"
   | "html_svg_structure"
-  | "mermaid_causal";
+  | "mermaid_causal"
+  | "visualize_flow"
+  | "visualize_process"
+  | "visualize_structure";
 
-export type ThinReadingRequestedOutput = "explanation" | "html_demo" | "mermaid";
+export type ThinReadingRequestedOutput =
+  | "explanation"
+  | "html_demo"
+  | "mermaid"
+  | "visualization_intent";
 
 export type ThinReadingNodeSource =
   | { kind: "root_overview" }
@@ -361,6 +368,7 @@ export type ThinReadingNodeSeed = {
   paperType?: ThinReadingPaperType;
   recommendations: readonly ThinReadingIntuechoRecommendation[];
   summary: string;
+  visualizationIntent?: Omit<VisualizationIntentV1, "nodeId">;
   withinPaperClosure: boolean;
 };
 

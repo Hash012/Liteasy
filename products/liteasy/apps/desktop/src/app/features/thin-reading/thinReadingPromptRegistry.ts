@@ -36,6 +36,25 @@ export const thinReadingPaperTypes: readonly ThinReadingPaperType[] = Object.fre
   "unknown"
 ]);
 
+export function resolveThinReadingVisualizationIntentRequest(source: ThinReadingNodeSource) {
+  if (source.kind !== "selected_text") {
+    return undefined;
+  }
+  switch (source.quickCommand) {
+    case "html_svg_structure":
+    case "visualize_structure":
+      return { candidateModalities: ["semantic_graph"] as const, purpose: "explain_structure" as const };
+    case "html_algorithm_animation":
+    case "visualize_process":
+      return { candidateModalities: ["physics_process"] as const, purpose: "show_process" as const };
+    case "mermaid_causal":
+    case "visualize_flow":
+      return { candidateModalities: ["semantic_graph"] as const, purpose: "show_process" as const };
+    default:
+      return undefined;
+  }
+}
+
 const paperTypeProfiles: Record<ThinReadingPaperType, ThinReadingPaperTypeProfile> = {
   benchmark: {
     coverageAuditEn: "task definition, measurement axes, data composition, baselines, result/ranking shifts, and evaluation limits",

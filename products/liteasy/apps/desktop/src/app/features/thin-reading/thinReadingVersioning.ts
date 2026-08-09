@@ -57,14 +57,20 @@ function isPersistedThinReadingNodeSource(value: unknown): value is Record<strin
     ? "mermaid"
     : value.quickCommand === "html_algorithm_animation" || value.quickCommand === "html_svg_structure"
       ? "html_demo"
-      : undefined;
+      : value.quickCommand === "visualize_flow" || value.quickCommand === "visualize_process" ||
+          value.quickCommand === "visualize_structure"
+        ? "visualization_intent"
+        : undefined;
   return value.kind === "selected_text" &&
     typeof value.excerpt === "string" && value.excerpt.trim().length > 0 &&
     (value.prompt === undefined || typeof value.prompt === "string") &&
     (value.quickCommand === undefined || value.quickCommand === "html_algorithm_animation" ||
-      value.quickCommand === "html_svg_structure" || value.quickCommand === "mermaid_causal") &&
+      value.quickCommand === "html_svg_structure" || value.quickCommand === "mermaid_causal" ||
+      value.quickCommand === "visualize_flow" || value.quickCommand === "visualize_process" ||
+      value.quickCommand === "visualize_structure") &&
     (value.requestedOutput === undefined || value.requestedOutput === "explanation" ||
-      value.requestedOutput === "html_demo" || value.requestedOutput === "mermaid") &&
+      value.requestedOutput === "html_demo" || value.requestedOutput === "mermaid" ||
+      value.requestedOutput === "visualization_intent") &&
     (expectedOutput === undefined || value.requestedOutput === expectedOutput) &&
     hasUniqueOptionalStringArray(value, "evidenceIds") &&
     hasUniqueOptionalStringArray(value, "externalSourceIds");

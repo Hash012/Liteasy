@@ -12,8 +12,13 @@ import {
   thinReadingEvidenceReviewJsonSchema
 } from "../app/features/thin-reading/thinReadingAgent";
 import { classifyThinReadingPaper } from "../app/features/thin-reading/thinReadingPromptRegistry";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import type { PreparedMultiPaperAnalysis } from "../app/features/paper-analysis/analysis.types";
 import type { ThinReadingGenerationContext } from "../app/features/thin-reading/thinReading.types";
+import {
+  intentWithUnknownEvidence,
+  v2ModelOutput
+} from "./fixtures/thinReadingAgentFixtures";
 
 const context: ThinReadingGenerationContext = {
   artifactId: "artifact-thin-agent",
@@ -71,6 +76,46 @@ const prepared: PreparedMultiPaperAnalysis = {
 };
 
 describe("thinReadingAgent", () => {
+  test("returns a typed visualization intent without executable visual fields", () => {
+    const seed = parseThinReadingModelSeed(JSON.stringify(v2ModelOutput), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"]
+    }) as typeof v2ModelOutput & { visualizationIntent?: unknown };
+
+    expect(seed.visualizationIntent).toEqual(expect.objectContaining({
+      candidateModalities: ["semantic_graph"],
+      requestedBy: "automatic"
+    }));
+    expect(JSON.stringify(seed)).not.toContain("interactiveDemo");
+    expect(JSON.stringify(seed)).not.toContain("mermaid");
+  });
+
+  test("rejects a visualization intent with evidence outside the reviewed set", () => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify(intentWithUnknownEvidence), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"]
+    })).toThrow("thin_reading_visualization_intent_invalid");
+  });
+
+  test("materializes a validated intent on the v2 node that owns it", () => {
+    const rootSeed = parseThinReadingModelSeed(JSON.stringify(v2ModelOutput), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"]
+    });
+    const document = createThinReadingDocument({
+      artifactId: "artifact-visual-intent",
+      papers: [{ id: "paper-survey", title: "Survey of Vector Database Management Systems" }],
+      rootSeed,
+      targetLanguage: "zh-CN"
+    });
+    const root = document.nodes[document.rootNodeId];
+
+    expect(root.visualizationDecision).toEqual(expect.objectContaining({
+      intent: expect.objectContaining({
+        evidenceIds: ["evidence-survey-taxonomy"],
+        nodeId: document.rootNodeId
+      }),
+      status: "accepted"
+    }));
+  });
+
   test("classifies paper type from title and evidence for prompt guidance", () => {
     expect(classifyThinReadingPaper({
       evidencePrompt: prepared.evidencePrompt,

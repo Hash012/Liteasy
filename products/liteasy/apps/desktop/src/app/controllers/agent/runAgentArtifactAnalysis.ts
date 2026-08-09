@@ -93,6 +93,7 @@ function buildThinReadingMessage(options?: AgentArtifactGenerationOptions) {
     `基于指定论文《${target}》${task}。`,
     "必须走真实模型链路，先检索并组织论文内证据，再按论文类型生成结构化薄读 JSON。",
     "输出必须区分论文内证据与外部知识；证据不足、引用外溢或越过论文闭包时要显式标注。",
+    "视觉辅助只有在证据充分且能提升理解时才返回受控的 typed visualization intent；不得返回图形源码、标记语言或可执行内容。",
     "不要生成本地模板、演示文案或假装已有社区后端。",
     prompt
   ].join("");

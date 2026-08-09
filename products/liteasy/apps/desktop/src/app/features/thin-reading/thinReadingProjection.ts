@@ -378,6 +378,17 @@ export function createThinReadingDocument(
     summary: input.rootSeed.summary,
     title: rootTitle,
     withinPaperClosure: input.rootSeed.withinPaperClosure,
+    ...(input.rootSeed.visualizationIntent ? {
+      visualizationDecision: {
+        intent: {
+          ...input.rootSeed.visualizationIntent,
+          candidateModalities: [...input.rootSeed.visualizationIntent.candidateModalities],
+          evidenceIds: [...input.rootSeed.visualizationIntent.evidenceIds],
+          nodeId: rootNodeId
+        },
+        status: "accepted" as const
+      }
+    } : {}),
     visualizations: []
   };
 
@@ -465,6 +476,17 @@ export function advanceThinReadingDocument(
     summary: input.seed.summary,
     title: input.title,
     withinPaperClosure: input.seed.withinPaperClosure,
+    ...(input.seed.visualizationIntent ? {
+      visualizationDecision: {
+        intent: {
+          ...input.seed.visualizationIntent,
+          candidateModalities: [...input.seed.visualizationIntent.candidateModalities],
+          evidenceIds: [...input.seed.visualizationIntent.evidenceIds],
+          nodeId: childId
+        },
+        status: "accepted" as const
+      }
+    } : {}),
     visualizations: []
   };
   const updatedParent: ThinReadingNodeV2 = {

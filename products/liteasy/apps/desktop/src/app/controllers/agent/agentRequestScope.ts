@@ -57,14 +57,20 @@ function normalizeThinReadingSource(value: unknown): ThinReadingNodeSource | und
       ? "mermaid"
       : source.quickCommand === "html_algorithm_animation" || source.quickCommand === "html_svg_structure"
         ? "html_demo"
-        : undefined;
+        : source.quickCommand === "visualize_flow" || source.quickCommand === "visualize_process" ||
+            source.quickCommand === "visualize_structure"
+          ? "visualization_intent"
+          : undefined;
     if (
       typeof source.excerpt !== "string" || source.excerpt.trim().length === 0 || source.excerpt.length > 1_600 ||
       (source.prompt !== undefined && (typeof source.prompt !== "string" || source.prompt.length > 600)) ||
       (source.quickCommand !== undefined && source.quickCommand !== "html_algorithm_animation" &&
-        source.quickCommand !== "html_svg_structure" && source.quickCommand !== "mermaid_causal") ||
+        source.quickCommand !== "html_svg_structure" && source.quickCommand !== "mermaid_causal" &&
+        source.quickCommand !== "visualize_flow" && source.quickCommand !== "visualize_process" &&
+        source.quickCommand !== "visualize_structure") ||
       (source.requestedOutput !== undefined && source.requestedOutput !== "explanation" &&
-        source.requestedOutput !== "html_demo" && source.requestedOutput !== "mermaid") ||
+        source.requestedOutput !== "html_demo" && source.requestedOutput !== "mermaid" &&
+        source.requestedOutput !== "visualization_intent") ||
       (expectedOutput !== undefined && source.requestedOutput !== expectedOutput) ||
       (evidenceIds !== undefined && (!isStringArray(evidenceIds) || evidenceIds.length > 12 || evidenceIds.some((id) => id.trim().length === 0 || id.length > 160))) ||
       (externalSourceIds !== undefined && (!isStringArray(externalSourceIds) || externalSourceIds.length > 12 || externalSourceIds.some((id) => id.trim().length === 0 || id.length > 180)))

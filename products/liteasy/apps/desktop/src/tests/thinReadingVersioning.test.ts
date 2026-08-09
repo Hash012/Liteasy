@@ -74,6 +74,40 @@ test("creates v2 documents without executable legacy evidence", () => {
   expect(document.nodes[document.rootNodeId].visualizations).toEqual([]);
 });
 
+test("parses v2 nodes with typed visualization requests while retaining v1 command compatibility", () => {
+  const document = createThinReadingDocument({
+    artifactId: "thin-typed-request",
+    papers: [{ id: "paper-1", title: "A paper" }],
+    rootSeed: {
+      evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+      omittedSections: [],
+      recommendations: [],
+      summary: "A safe new document.",
+      withinPaperClosure: true
+    },
+    targetLanguage: "en-US"
+  });
+  const next = advanceThinReadingDocument(document, {
+    parentNodeId: document.rootNodeId,
+    seed: {
+      evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+      omittedSections: [],
+      recommendations: [],
+      summary: "The request asks for a typed structure visualization.",
+      withinPaperClosure: true
+    },
+    source: {
+      excerpt: "A typed structure request.",
+      kind: "selected_text",
+      quickCommand: "visualize_structure",
+      requestedOutput: "visualization_intent"
+    },
+    title: "Structure"
+  });
+
+  expect(parseThinReadingDocument(next).version).toBe("liteasy.thin-reading/v2");
+});
+
 test("reuses the persisted annotation bounds for v1 parsing", () => {
   const publicAnnotation = {
     ...v1Fixture.annotations[0],

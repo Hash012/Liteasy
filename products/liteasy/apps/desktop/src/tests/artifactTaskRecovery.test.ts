@@ -202,6 +202,34 @@ describe("artifactTaskRecovery", () => {
     })).toThrow("薄读分支输入超出可恢复范围");
   });
 
+  test("persists typed visualization requests without weakening legacy command validation", () => {
+    const document = createDocument();
+    const snapshot = createThinReadingBranchRecoverySnapshot({
+      artifactId: document.artifactId,
+      document,
+      parentNodeId: document.rootNodeId,
+      primaryPaperId: "paper-1",
+      source: {
+        excerpt: "bounded evidence chain",
+        kind: "selected_text",
+        quickCommand: "visualize_flow",
+        requestedOutput: "visualization_intent"
+      }
+    });
+
+    expect(snapshot.source).toMatchObject({
+      quickCommand: "visualize_flow",
+      requestedOutput: "visualization_intent"
+    });
+    expect(() => createThinReadingBranchRecoverySnapshot({
+      artifactId: document.artifactId,
+      document,
+      parentNodeId: document.rootNodeId,
+      primaryPaperId: "paper-1",
+      source: { ...snapshot.source, requestedOutput: "mermaid" }
+    })).toThrow("薄读分支输入超出可恢复范围");
+  });
+
   test("rejects a recovery snapshot when its evidence no longer belongs to the parent node", () => {
     const document = createDocument();
     const snapshot = createThinReadingBranchRecoverySnapshot({
