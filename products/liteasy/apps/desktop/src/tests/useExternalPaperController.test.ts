@@ -14,6 +14,7 @@ function createHarness(exportDocument: ReturnType<typeof vi.fn>) {
       authorization: {
         document: { contentHash },
         expiresAt: "2026-08-07T00:05:00.000Z",
+        revision: 7,
         serverNow: "2026-08-07T00:00:00.000Z"
       },
       bytes: new Uint8Array([37, 80, 68, 70, 45]),
@@ -93,4 +94,24 @@ test("does not create a local copy when organization export is denied", async ()
   expect(harness.addExternalPdfToLibrary).not.toHaveBeenCalled();
   expect(harness.promoteCachedPdf).not.toHaveBeenCalled();
   expect(harness.refreshLocalLibrary).not.toHaveBeenCalled();
+});
+
+test("keeps the authorized cloud document reference on the opened reader paper", async () => {
+  const harness = createHarness(vi.fn());
+  let paper;
+  await act(async () => {
+    paper = await harness.result.result.current.openCloudDocumentInReader({
+      documentId: "document-1",
+      scopeId: "organization-1",
+      scopeType: "organization",
+      title: "Organization Paper"
+    });
+  });
+
+  expect(paper!.libraryReference).toEqual({
+    documentId: "document-1",
+    revision: 7,
+    scopeId: "organization-1",
+    scopeType: "organization"
+  });
 });

@@ -3,6 +3,7 @@ import { CloudServiceError, readCloudServiceError } from "../network/cloudErrorM
 import { cacheExternalPdf, readCachedPdf } from "./paperCacheClient";
 import { resolveLocalAccountKey } from "./localAccountKey";
 import type { OrganizationStorageAccess } from "../organization/organizationStoragePolicy";
+import type { LiteratureRecord } from "../paper-identity/literature.types";
 
 export type CloudLibraryScope = {
   scopeId: string;
@@ -17,6 +18,7 @@ export type CloudLibraryDocument = CloudLibraryScope & {
   entryKind: "pdf";
   fileName: string;
   folderId?: string;
+  metadata?: Record<string, unknown>;
   purgeAfter?: string;
   status: "active" | "trashed";
   trashedAt?: string;
@@ -471,6 +473,19 @@ export function createCloudLibraryStorageClient({
       );
     },
 
+    async updateLiterature(
+      scope: CloudLibraryScope,
+      documentId: string,
+      expectedRevision: number,
+      literature: LiteratureRecord
+    ) {
+      return post<{ document: CloudLibraryEntry; revision: number }>(
+        "/v1/library/documents/update",
+        scope,
+        { documentId, expectedRevision, idempotencyKey: createIdempotencyKey(), literature }
+      );
+    },
+
     async createFolder(
       scope: CloudLibraryScope,
       name: string,
@@ -568,6 +583,7 @@ export function createCloudLibraryStorageClient({
       let authorization: {
         document: CloudLibraryDocument;
         expiresAt: string;
+        revision: number;
         serverNow: string;
       };
       try {

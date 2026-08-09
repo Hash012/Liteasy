@@ -30,6 +30,7 @@ export function contentPaperId(contentHash: string) {
 export function buildCachedReaderPaper(input: {
   cachePath: string;
   contentHash: string;
+  libraryReference?: Paper["libraryReference"];
   sourceId?: string;
   title: string;
 }): CachedReaderPaper {
@@ -37,6 +38,7 @@ export function buildCachedReaderPaper(input: {
     cachePath: input.cachePath,
     contentHash: input.contentHash.trim().toLowerCase(),
     id: contentPaperId(input.contentHash),
+    libraryReference: input.libraryReference,
     sourceId: input.sourceId,
     sourcePath: input.cachePath,
     title: input.title.trim() || "未命名论文"

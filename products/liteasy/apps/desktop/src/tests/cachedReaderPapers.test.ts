@@ -109,3 +109,24 @@ test("finds an already-cached body by its retrieval source, so a drag skips re-d
 test("falls back to a readable title when the source has none", () => {
   expect(cachedPaper({ title: "   " }).title).toBe("未命名论文");
 });
+
+test("preserves the explicit cloud library reference on a cached reader paper", () => {
+  const paper = buildCachedReaderPaper({
+    cachePath: "C:/cache/paper-cache/cloud.pdf",
+    contentHash: hash,
+    libraryReference: {
+      documentId: "document-1",
+      revision: 7,
+      scopeId: "organization-1",
+      scopeType: "organization"
+    },
+    title: "Cloud paper"
+  });
+
+  expect(paper.libraryReference).toEqual({
+    documentId: "document-1",
+    revision: 7,
+    scopeId: "organization-1",
+    scopeType: "organization"
+  });
+});

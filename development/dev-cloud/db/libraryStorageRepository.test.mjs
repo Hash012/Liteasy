@@ -33,6 +33,14 @@ function createHarness(start = new Date("2026-08-02T00:00:00.000Z")) {
 }
 
 const pdf = Buffer.from("%PDF-1.7\nLiteasy storage fixture\n%%EOF");
+const manualLiterature = {
+  authors: ["Ada Lovelace"],
+  identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
+  literatureId: "literature:doi:10.1000/liteasy",
+  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+  title: "Cloud Literature Metadata",
+  year: 2026
+};
 
 test("logical copies consume quota twice while the physical object is deduplicated", () => {
   const harness = createHarness();
@@ -494,6 +502,78 @@ test("metadata-only entries can be renamed without becoming PDF documents", () =
     assert.equal(updated.title, "After rename");
     assert.equal(harness.repository.listDocuments("user", "user:alice").length, 0);
     assert.ok(harness.repository.getRevision("user", "user:alice") > revision);
+  } finally {
+    harness.close();
+  }
+});
+
+for (const entryKind of ["pdf", "metadata_only"]) {
+  test(`updates ${entryKind} literature metadata in the same revision transaction`, () => {
+    const harness = createHarness();
+    try {
+      const created = entryKind === "pdf"
+        ? harness.repository.uploadDocument({
+          bytes: pdf,
+          expectedRevision: 0,
+          fileName: "Paper.pdf",
+          scopeId: "user:alice",
+          scopeType: "user",
+          uploadedBy: "user:alice"
+        }).document
+        : harness.repository.createMetadataEntry({
+          expectedRevision: 0,
+          scopeId: "user:alice",
+          scopeType: "user",
+          title: "Paper"
+        });
+      const revision = harness.repository.getRevision("user", "user:alice");
+
+      const updated = harness.repository.updateEntry(created.documentId, {
+        scopeId: "user:alice",
+        scopeType: "user"
+      }, {
+        expectedRevision: revision,
+        literature: manualLiterature
+      });
+
+      assert.deepEqual(updated.metadata.literature, manualLiterature);
+      assert.equal(harness.repository.getRevision("user", "user:alice"), revision + 1);
+      const table = entryKind === "pdf" ? "library_documents" : "library_metadata_entries";
+      const row = harness.database.prepare(
+        `SELECT metadata_json FROM ${table} WHERE document_id = ?`
+      ).get(created.documentId);
+      assert.deepEqual(JSON.parse(row.metadata_json).literature, manualLiterature);
+    } finally {
+      harness.close();
+    }
+  });
+}
+
+test("invalid literature does not change development library metadata or revision", () => {
+  const harness = createHarness();
+  try {
+    const created = harness.repository.createMetadataEntry({
+      expectedRevision: 0,
+      metadata: { retained: true },
+      scopeId: "user:alice",
+      scopeType: "user",
+      title: "Paper"
+    });
+    const revision = harness.repository.getRevision("user", "user:alice");
+
+    assert.throws(() => harness.repository.updateEntry(created.documentId, {
+      scopeId: "user:alice",
+      scopeType: "user"
+    }, {
+      expectedRevision: revision,
+      literature: { ...manualLiterature, identifiers: [] }
+    }), (error) => error?.code === "literature_metadata_invalid");
+
+    assert.equal(harness.repository.getRevision("user", "user:alice"), revision);
+    assert.deepEqual(
+      harness.repository.listMetadataEntries("user", "user:alice")[0].metadata,
+      { retained: true }
+    );
   } finally {
     harness.close();
   }

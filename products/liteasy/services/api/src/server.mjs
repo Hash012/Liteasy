@@ -945,12 +945,14 @@ export function createCloudRequestHandler(runtime, config) {
               documentId: document.documentId,
               entryKind: "pdf",
               fileName: document.fileName,
+              metadata: document.metadata,
               scopeId: scope.scopeId,
               scopeType: scope.scopeType,
               status: "active",
               title: document.title
             },
             expiresAt: new Date(serverNow.getTime() + 5 * 60 * 1000).toISOString(),
+            revision: document.revision,
             serverNow: serverNow.toISOString()
           });
           return;

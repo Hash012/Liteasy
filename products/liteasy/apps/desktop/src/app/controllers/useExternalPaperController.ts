@@ -144,6 +144,12 @@ export function useExternalPaperController({
     const paper = buildCachedReaderPaper({
       cachePath: opened.cachePath,
       contentHash: opened.authorization.document.contentHash,
+      libraryReference: {
+        documentId: input.documentId,
+        revision: opened.authorization.revision,
+        scopeId: input.scopeId,
+        scopeType: input.scopeType
+      },
       sourceId: `cloud:${input.scopeType}:${input.scopeId}:${input.documentId}`,
       title: input.title
     });

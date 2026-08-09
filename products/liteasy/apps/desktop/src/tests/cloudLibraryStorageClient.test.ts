@@ -2,6 +2,15 @@ import { vi } from "vitest";
 import { storeAccountSession } from "../app/features/account/accountSessionStorage";
 import { createCloudLibraryStorageClient } from "../app/features/library/cloudLibraryStorageClient";
 
+const manualLiterature = {
+  authors: ["Ada Lovelace"],
+  identifiers: [{ kind: "doi" as const, source: "manual" as const, value: "10.1000/liteasy" }],
+  literatureId: "literature:doi:10.1000/liteasy",
+  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" as const },
+  title: "Cloud Literature Metadata",
+  year: 2026
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   storeAccountSession({
@@ -225,4 +234,39 @@ test("reads and updates organization storage policy with revision and idempotenc
     uploadPolicy: "all_members"
   });
   expect(updateBody.idempotencyKey).toMatch(/^[A-Za-z0-9._:-]{8,200}$/);
+});
+
+test("updates cloud literature with revision and idempotency metadata", async () => {
+  const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    document: { documentId: "document-1", metadata: { literature: manualLiterature } },
+    revision: 5
+  }), {
+    headers: { "Content-Type": "application/json" },
+    status: 200
+  }));
+  const client = createCloudLibraryStorageClient({
+    endpoint: "https://cloud.example.test",
+    fetchImpl: fetchImpl as unknown as typeof fetch
+  });
+
+  const result = await client.updateLiterature(
+    { scopeId: "user:alice", scopeType: "user" },
+    "document-1",
+    4,
+    manualLiterature
+  );
+
+  expect(result.revision).toBe(5);
+  const [url, init] = fetchImpl.mock.calls[0];
+  expect(url).toBe("https://cloud.example.test/v1/library/documents/update");
+  const body = JSON.parse(init?.body as string);
+  expect(body).toMatchObject({
+    documentId: "document-1",
+    expectedRevision: 4,
+    literature: manualLiterature,
+    scopeId: "user:alice",
+    scopeType: "user",
+    sessionId: "ltsy_session"
+  });
+  expect(body.idempotencyKey).toMatch(/^[A-Za-z0-9._:-]{8,200}$/);
 });

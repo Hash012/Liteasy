@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { withPostgresTransaction } from "./postgres.mjs";
+import { LiteratureMetadataValidationError, normalizeLiteratureMetadata } from "./literatureMetadata.mjs";
 
 export class LibraryRepositoryError extends Error {
   constructor(code, status = 400) {
@@ -217,6 +218,7 @@ function mapEntry(row) {
     byteLength: Number(row.byte_length),
     contentHash: row.content_hash,
     fileName: row.file_name,
+    metadata: row.metadata ?? {},
     uploadedBy: row.created_by
   };
 }
@@ -351,12 +353,31 @@ export class PostgresLibraryRepository {
   async updateEntry(scopeInput, input) {
     const scope = validateScope(scopeInput);
     const documentId = requiredId(input.documentId, "document");
+    let literature;
+    try {
+      literature = Object.hasOwn(input, "literature")
+        ? normalizeLiteratureMetadata(input.literature)
+        : undefined;
+    } catch (error) {
+      if (error instanceof LiteratureMetadataValidationError) {
+        throw new LibraryRepositoryError(error.code);
+      }
+      throw error;
+    }
     return this.#mutation(scope, input, "update_library_entry", async (client) => {
       const current = await requireEntry(client, scope, documentId, "active");
       const folderId = Object.hasOwn(input, "folderId")
         ? optionalText(input.folderId, 200) ?? null
         : current.folder_id;
       await requireActiveTargetFolder(client, scope, folderId);
+      if (literature) {
+        await client.query(`
+          UPDATE library_entries
+             SET metadata = jsonb_set(metadata, '{literature}', $2::jsonb, true),
+                 updated_at = now()
+           WHERE document_id = $1
+        `, [documentId, JSON.stringify(literature)]);
+      }
       if (current.entry_kind === "pdf") {
         const fileName = Object.hasOwn(input, "fileName") ? pdfName(input.fileName) : {
           name: current.file_name, normalizedName: current.normalized_name
@@ -628,8 +649,12 @@ export class PostgresLibraryRepository {
     const scope = validateScope(scopeInput);
     if (typeof documentId !== "string" || !documentId) throw new LibraryRepositoryError("library_document_invalid");
     const result = await this.pool.query(`
-      SELECT entry.document_id, entry.file_name, entry.title, reference.content_hash,
-             object.byte_length, object.media_type, object.storage_key
+      SELECT entry.document_id, entry.file_name, entry.title, entry.metadata,
+             reference.content_hash, object.byte_length, object.media_type, object.storage_key,
+             COALESCE((
+               SELECT revision FROM library_scope_revisions
+                WHERE scope_type = entry.scope_type AND scope_id = entry.scope_id
+             ), 0) AS scope_revision
         FROM library_entries entry
         JOIN storage_object_references reference USING (document_id)
         JOIN storage_objects object ON object.content_hash = reference.content_hash
@@ -647,6 +672,8 @@ export class PostgresLibraryRepository {
       documentId: row.document_id,
       fileName: row.file_name,
       mediaType: row.media_type,
+      metadata: row.metadata ?? {},
+      revision: Number(row.scope_revision),
       storageKey: row.storage_key,
       title: row.title
     };
@@ -1286,6 +1313,9 @@ export class PostgresLibraryRepository {
         response.revision = await bumpScopeRevision(client, scope);
         await this.#recordCompletedMutation(client, {
           actorId: input.actorId,
+          auditDetail: input.documentId
+            ? { documentId: input.documentId, operation }
+            : { operation },
           hash,
           idempotencyKey: key,
           operation,
@@ -1312,11 +1342,11 @@ export class PostgresLibraryRepository {
       INSERT INTO audit_events(
         audit_id, actor_id, actor_audience, action, resource_type,
         resource_id, scope_type, scope_id, trace_id, detail
-      ) VALUES ($1, $2, 'liteasy-desktop', $3, 'library_scope', $4, $5, $6, $7, '{}'::jsonb)
+      ) VALUES ($1, $2, 'liteasy-desktop', $3, 'library_scope', $4, $5, $6, $7, $8::jsonb)
     `, [
       `audit_${randomUUID()}`, input.actorId, input.operation,
       `${input.scope.scopeType}:${input.scope.scopeId}`, input.scope.scopeType, input.scope.scopeId,
-      input.traceId ?? `trace_${randomUUID()}`
+      input.traceId ?? `trace_${randomUUID()}`, JSON.stringify(input.auditDetail ?? {})
     ]);
   }
 }
