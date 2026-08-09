@@ -66,3 +66,26 @@ git diff --check: passed
 ```
 
 Fix commit: ae92decc473a0b6e9c300e34c7c19e68f1ec95f5
+
+## Review Finding Fix
+
+The scoped review found that detached `ReaderPane` surfaces did not receive the
+multimodal capability, ready artifacts, statuses, or toggle callback. `ReaderPane`
+now accepts and forwards all four values to `ArtifactTabs`, and `AppShell`
+passes them for both docked and detached reader paths. Regression coverage proves
+authorized default-on/callback behavior and unauthorized disabled behavior.
+
+The same review identified an empty `ready` status rendering a blank stage. The
+region now uses the stable `未生成` fallback, covered by a dedicated test.
+
+Fix commit: pending
+
+Verification:
+
+```text
+npm test -- src/tests/thinReadingTab.test.tsx src/tests/ArtifactTabs.test.tsx src/tests/ReaderPane.test.tsx
+Test Files  3 passed (3)
+Tests  94 passed (94)
+npm run build: TypeScript, Vite, and 129 production-asset checks passed
+git diff --check: passed
+```

@@ -1767,6 +1767,10 @@ export function AppShell({
         onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
         onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
+        onToggleThinReadingVisualization={artifactWorkflow.actions.setThinReadingVisualizationEnabled}
+        thinReadingVisualizationCapability={cloudAccount.model.multimodalVisualization}
+        thinReadingVisualizationReadyArtifacts={thinReadingVisualizationReadyArtifacts}
+        thinReadingVisualizationStatuses={thinReadingVisualizationStatuses}
         onToggleBottomPane={() =>
           paneLayout.setCollapsed("bottom", !paneLayout.collapsed.bottom)
         }

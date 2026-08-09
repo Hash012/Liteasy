@@ -5,8 +5,68 @@ import { describe, expect, test, vi } from "vitest";
 import { ArtifactTabs } from "../app/features/artifacts/ArtifactTabs";
 import type { ArtifactTab } from "../app/features/artifacts/artifact.types";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
+import { propsWithVisualAndFigure, unauthorizedProps } from "./fixtures/thinReadingVisualProps";
 
 describe("ArtifactTabs", () => {
+  test("keeps the authorized multimodal switch on and forwards toggles", () => {
+    const onToggle = vi.fn();
+    const tab: ArtifactTab = {
+      artifactId: propsWithVisualAndFigure.artifactId,
+      papers: propsWithVisualAndFigure.papers,
+      thinReadingDocument: propsWithVisualAndFigure.document,
+      title: "薄读视觉 fixture",
+      type: "thin_reading"
+    };
+    render(
+      <ArtifactTabs
+        activeArtifactId={tab.artifactId}
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        onToggleThinReadingVisualization={onToggle}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+        thinReadingVisualizationCapability={propsWithVisualAndFigure.visualizationCapability}
+        thinReadingVisualizationReadyArtifacts={propsWithVisualAndFigure.visualizationStatus?.status === "ready"
+          ? propsWithVisualAndFigure.visualizationStatus.artifacts
+          : []}
+        thinReadingVisualizationStatuses={{ [tab.thinReadingDocument!.activeNodeId]: propsWithVisualAndFigure.visualizationStatus! }}
+      />
+    );
+
+    const toggle = screen.getByRole("switch", { name: "多模态" });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(onToggle).toHaveBeenCalledWith(false);
+  });
+
+  test("keeps the unauthorized multimodal switch disabled", () => {
+    const tab: ArtifactTab = {
+      artifactId: unauthorizedProps.artifactId,
+      papers: unauthorizedProps.papers,
+      thinReadingDocument: unauthorizedProps.document,
+      title: "薄读视觉 fixture",
+      type: "thin_reading"
+    };
+    render(
+      <ArtifactTabs
+        activeArtifactId={tab.artifactId}
+        analysisHint=""
+        canStartAnalysis
+        onStartAnalysis={vi.fn()}
+        selectedCount={1}
+        selectionLocked
+        tabs={[tab]}
+        tasks={[]}
+        thinReadingVisualizationCapability={unauthorizedProps.visualizationCapability}
+        thinReadingVisualizationStatuses={{ [tab.thinReadingDocument!.activeNodeId]: unauthorizedProps.visualizationStatus! }}
+      />
+    );
+    expect(screen.getByRole("switch", { name: "多模态" })).toBeDisabled();
+  });
+
   test("renders the persisted ACORN thin-reading preview without taking down the workspace", async () => {
     const result = JSON.parse(readFileSync(
       resolve(process.cwd(), "../../../../development/test-data/agent-results/preview-acorn-thin-reading-20260730.json"),

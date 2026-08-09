@@ -11,7 +11,7 @@ function statusCopy(status: ThinReadingVisualizationStatus | undefined) {
   if (!status || status.status === "idle") return artifactsEmptyCopy;
   if (status.status === "generating") return "生成中";
   if (status.status === "omitted") return "已简化";
-  return undefined;
+  return artifactsEmptyCopy;
 }
 
 const artifactsEmptyCopy = "未生成";

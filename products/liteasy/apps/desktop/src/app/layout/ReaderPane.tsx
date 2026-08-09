@@ -13,6 +13,8 @@ import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
 import type { MineruFigure } from "../features/import/import.types";
 import type { TeamAnnotation } from "../features/organization/teamAnnotationClient";
 import type { VisualizationTabData } from "../features/visualization/visualization.types";
+import type { VisualizationArtifactV1 } from "../features/visualization/visualizationArtifact.types";
+import type { MultimodalVisualizationCapability } from "../features/account/accountCapabilitiesClient";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
@@ -21,6 +23,7 @@ import type {
 import type { ThinReadingPaperRelationsTransport } from "../features/thin-reading/thinReadingPaperRelationsClient";
 import { DockLayoutControls } from "./DockLayoutControls";
 import type { PaneCollapseState } from "./paneLayout.types";
+import type { ThinReadingVisualizationStatus } from "../features/artifacts/artifact.types";
 
 type ReaderPaneProps = {
   allowServerPdfParsing?: boolean;
@@ -70,6 +73,10 @@ type ReaderPaneProps = {
   onToggleLeftPane?: () => void;
   onToggleRightPane?: () => void;
   onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
+  onToggleThinReadingVisualization?: (enabled: boolean) => void;
+  thinReadingVisualizationCapability?: MultimodalVisualizationCapability;
+  thinReadingVisualizationReadyArtifacts?: readonly VisualizationArtifactV1[];
+  thinReadingVisualizationStatuses?: Record<string, ThinReadingVisualizationStatus>;
   paperRelationsTransport?: ThinReadingPaperRelationsTransport;
   showArtifactRegion?: boolean;
   selectedPapers?: Paper[];
@@ -121,6 +128,10 @@ export function ReaderPane({
   onToggleLeftPane,
   onToggleRightPane,
   onUpdateThinReadingDocument,
+  onToggleThinReadingVisualization,
+  thinReadingVisualizationCapability,
+  thinReadingVisualizationReadyArtifacts = [],
+  thinReadingVisualizationStatuses = {},
   paperRelationsTransport,
   selectedPapers = [],
   selectedPaperIds,
@@ -222,6 +233,10 @@ export function ReaderPane({
                 onPromoteExternalPaperToLibrary={onPromoteExternalPaperToLibrary}
                 onStartAnalysis={(artifactType) => onStartAnalysis(artifactType, analysisPapers)}
                 onUpdateThinReadingDocument={onUpdateThinReadingDocument}
+                onToggleThinReadingVisualization={onToggleThinReadingVisualization}
+                thinReadingVisualizationCapability={thinReadingVisualizationCapability}
+                thinReadingVisualizationReadyArtifacts={thinReadingVisualizationReadyArtifacts}
+                thinReadingVisualizationStatuses={thinReadingVisualizationStatuses}
                 selectedCount={selectedPaperIds.length}
                 selectionLocked={selectionLocked}
                 tabs={artifactTabs}

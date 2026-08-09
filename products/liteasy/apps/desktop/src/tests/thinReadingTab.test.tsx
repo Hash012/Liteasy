@@ -18,6 +18,7 @@ import type { ThinReadingCommunityRecommendationState } from "../app/features/th
 import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 import { propsWithVisualAndFigure, unauthorizedProps } from "./fixtures/thinReadingVisualProps";
+import { ThinReadingVisualizationRegion } from "../app/features/thin-reading/ThinReadingVisualizationRegion";
 
 function makeDocument(): ThinReadingDocument {
   return createThinReadingDocument(createThinReadingFixture());
@@ -91,6 +92,16 @@ describe("ThinReadingTab", () => {
     render(<ThinReadingTab {...unauthorizedProps} />);
     expect(screen.getByRole("switch", { name: "多模态" })).toBeDisabled();
     expect(screen.getByText("论文原图")).toBeVisible();
+  });
+
+  test("keeps an empty ready visualization stage stable", () => {
+    render(
+      <ThinReadingVisualizationRegion
+        artifacts={[]}
+        status={{ artifacts: [], status: "ready" }}
+      />
+    );
+    expect(screen.getByTestId("thin-reading-visuals")).toHaveTextContent("未生成");
   });
 
   test("keeps a desktop selection popover inside the visible viewport", () => {
