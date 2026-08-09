@@ -1,5 +1,27 @@
+import {
+  generatedVisualizationModalities,
+  type GeneratedVisualizationModality
+} from "../visualization/visualizationArtifact.types";
+
+export type MultimodalVisualizationCapability = {
+  allowed: boolean;
+  enabled: boolean;
+  serviceAvailable: boolean;
+  quota: { available: boolean };
+  availableModalities: GeneratedVisualizationModality[];
+};
+
 export type AccountCapabilities = {
   developerDiagnostics: boolean;
+  multimodalVisualization: MultimodalVisualizationCapability;
+};
+
+export const unavailableMultimodalVisualizationCapability: MultimodalVisualizationCapability = {
+  allowed: false,
+  enabled: false,
+  serviceAvailable: false,
+  quota: { available: false },
+  availableModalities: []
 };
 
 export type AccountCapabilitiesTransportRequest = {
@@ -22,6 +44,55 @@ async function defaultTransport(request: AccountCapabilitiesTransportRequest) {
     headers: request.headers,
     method: request.method
   });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: string[]) {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function parseMultimodalVisualizationCapability(value: unknown): MultimodalVisualizationCapability {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "allowed",
+    "enabled",
+    "serviceAvailable",
+    "quota",
+    "availableModalities"
+  ])) {
+    return unavailableMultimodalVisualizationCapability;
+  }
+  if (
+    typeof value.allowed !== "boolean" ||
+    typeof value.enabled !== "boolean" ||
+    typeof value.serviceAvailable !== "boolean" ||
+    !isRecord(value.quota) ||
+    !hasOnlyKeys(value.quota, ["available", "remainingBand"]) ||
+    typeof value.quota.available !== "boolean" ||
+    !Array.isArray(value.availableModalities) ||
+    !value.availableModalities.every((modality): modality is GeneratedVisualizationModality =>
+      typeof modality === "string" &&
+      (generatedVisualizationModalities as readonly string[]).includes(modality)
+    )
+  ) {
+    return unavailableMultimodalVisualizationCapability;
+  }
+  if (
+    "remainingBand" in value.quota &&
+    value.quota.remainingBand !== undefined &&
+    !new Set(["none", "low", "available"]).has(value.quota.remainingBand as string)
+  ) {
+    return unavailableMultimodalVisualizationCapability;
+  }
+  return {
+    allowed: value.allowed,
+    enabled: value.enabled,
+    serviceAvailable: value.serviceAvailable,
+    quota: { available: value.quota.available },
+    availableModalities: [...value.availableModalities]
+  };
 }
 
 export async function loadAccountCapabilities({
@@ -54,5 +125,9 @@ export async function loadAccountCapabilities({
   ) {
     throw new Error("account_capabilities_invalid");
   }
-  return { developerDiagnostics: payload.developerDiagnostics };
+  const capabilityPayload = payload as Record<string, unknown>;
+  return {
+    developerDiagnostics: payload.developerDiagnostics,
+    multimodalVisualization: parseMultimodalVisualizationCapability(capabilityPayload.multimodalVisualization)
+  };
 }

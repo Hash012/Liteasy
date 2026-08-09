@@ -1,9 +1,26 @@
 import { expect, test, vi } from "vitest";
 import { loadAccountCapabilities } from "../app/features/account/accountCapabilitiesClient";
 
+const unavailableMultimodalCapability = {
+  allowed: false,
+  enabled: false,
+  serviceAvailable: false,
+  quota: { available: false },
+  availableModalities: []
+};
+
 test("loads capabilities with the authenticated desktop bearer session", async () => {
   const transport = vi.fn(async () => ({
-    json: async () => ({ developerDiagnostics: true }),
+    json: async () => ({
+      developerDiagnostics: true,
+      multimodalVisualization: {
+        allowed: true,
+        enabled: true,
+        serviceAvailable: true,
+        quota: { available: true },
+        availableModalities: ["semantic_graph"]
+      }
+    }),
     ok: true,
     status: 200
   }));
@@ -12,7 +29,16 @@ test("loads capabilities with the authenticated desktop bearer session", async (
     endpoint: "https://api.liteasy.example/",
     sessionId: "desktop-access-token",
     transport
-  })).resolves.toEqual({ developerDiagnostics: true });
+  })).resolves.toEqual({
+    developerDiagnostics: true,
+    multimodalVisualization: {
+      allowed: true,
+      enabled: true,
+      serviceAvailable: true,
+      quota: { available: true },
+      availableModalities: ["semantic_graph"]
+    }
+  });
   expect(transport).toHaveBeenCalledWith({
     headers: {
       Accept: "application/json",
@@ -20,6 +46,45 @@ test("loads capabilities with the authenticated desktop bearer session", async (
     },
     method: "GET",
     url: "https://api.liteasy.example/v1/account/capabilities"
+  });
+});
+
+test("treats an old capability response as generation unavailable", async () => {
+  await expect(loadAccountCapabilities({
+    endpoint: "https://api.liteasy.example",
+    sessionId: "desktop-access-token",
+    transport: async () => ({
+      json: async () => ({ developerDiagnostics: false }),
+      ok: true,
+      status: 200
+    })
+  })).resolves.toEqual({
+    developerDiagnostics: false,
+    multimodalVisualization: unavailableMultimodalCapability
+  });
+});
+
+test("fails closed for invalid nested multimodal fields while retaining diagnostics", async () => {
+  await expect(loadAccountCapabilities({
+    endpoint: "https://api.liteasy.example",
+    sessionId: "desktop-access-token",
+    transport: async () => ({
+      json: async () => ({
+        developerDiagnostics: true,
+        multimodalVisualization: {
+          allowed: true,
+          enabled: true,
+          serviceAvailable: true,
+          quota: { available: true, units: 4 },
+          availableModalities: ["semantic_graph"]
+        }
+      }),
+      ok: true,
+      status: 200
+    })
+  })).resolves.toEqual({
+    developerDiagnostics: true,
+    multimodalVisualization: unavailableMultimodalCapability
   });
 });
 

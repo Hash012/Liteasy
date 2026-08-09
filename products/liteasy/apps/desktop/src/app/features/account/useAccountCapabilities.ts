@@ -3,11 +3,13 @@ import type { AccountSession } from "./account.types";
 import {
   loadAccountCapabilities,
   type AccountCapabilities,
-  type AccountCapabilitiesTransport
+  type AccountCapabilitiesTransport,
+  unavailableMultimodalVisualizationCapability
 } from "./accountCapabilitiesClient";
 
 const unavailableCapabilities: AccountCapabilities = {
-  developerDiagnostics: false
+  developerDiagnostics: false,
+  multimodalVisualization: unavailableMultimodalVisualizationCapability
 };
 
 export function useAccountCapabilities({

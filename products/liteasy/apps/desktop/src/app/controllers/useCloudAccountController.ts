@@ -9,7 +9,10 @@ import type { AccountSession } from "../features/account/account.types";
 import { useCloudAvailabilityProbe } from "../features/network/useCloudAvailabilityProbe";
 import type { SettingsState } from "../features/settings/settings.types";
 import { getCloudAvailabilityStatus, type CloudAvailabilityStatus } from "../features/network/cloudAvailability";
-import type { AccountCapabilitiesTransport } from "../features/account/accountCapabilitiesClient";
+import type {
+  AccountCapabilitiesTransport,
+  MultimodalVisualizationCapability
+} from "../features/account/accountCapabilitiesClient";
 import { useAccountCapabilities } from "../features/account/useAccountCapabilities";
 
 type UseCloudAccountControllerInput = {
@@ -27,6 +30,7 @@ type CloudAccountModel = {
   accountSession: AccountSession | null;
   cloudAvailabilityStatus: CloudAvailabilityStatus;
   developerDiagnostics: boolean;
+  multimodalVisualization: MultimodalVisualizationCapability;
   loginDialogOpen: boolean;
   controlPlaneEndpoint: string;
 };
@@ -153,6 +157,7 @@ export function useCloudAccountController({
       cloudAvailabilityStatus,
       controlPlaneEndpoint: getSettings()["models.control_plane_endpoint"],
       developerDiagnostics: accountCapabilities.developerDiagnostics,
+      multimodalVisualization: accountCapabilities.multimodalVisualization,
       loginDialogOpen
     }
   };
