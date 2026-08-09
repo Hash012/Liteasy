@@ -1239,7 +1239,7 @@ try {
     deletedDesktopDraftHandoffs: 0,
     deletedDrafts: 2,
     deletedDirectConversations: 1,
-    deletedNonPublicAnnotations: 2,
+    deletedNonPublicAnnotations: 3,
     deletedNonPublicReplies: 0,
     deletedPostSaves: 1,
     deletedProfile: 1,
