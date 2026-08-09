@@ -92,45 +92,89 @@ const paperIdentity = {
   source: "metadata",
   value: "10.1145/3397271.3401075"
 };
+const confirmedLiterature = await request(forumBaseUrl, "/v1/literature:confirm", {
+  body: {
+    mode: "manual",
+    record: {
+      authors: ["Omar Khattab", "Matei Zaharia"],
+      documentType: "conference_paper",
+      identifiers: [{ kind: "doi", source: "manual", value: paperIdentity.value }],
+      title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+      year: 2020
+    }
+  },
+  sessionId: desktopSession.sessionId
+});
+assert(confirmedLiterature.literature?.provenance?.mode === "manual", "manual literature record provenance was not persisted");
+assert(
+  confirmedLiterature.literature.identifiers?.every((identifier) => identifier.source === "manual"),
+  "manual literature identifier provenance was not persisted"
+);
+const literatureId = confirmedLiterature.literature.literatureId;
+const firstUpdatedAt = new Date().toISOString();
 const annotation = await request(forumBaseUrl, "/v1/pdf-annotations:sync", {
   body: {
-    annotations: [{
+    operations: [{
       annotationId: `pdf-${suffix}`,
       body: "真实 HTTP 联调批注",
-      createdAt: new Date().toISOString(),
-      excerpt: "contextualized late interaction",
-      paperIdentity: { primary: paperIdentity },
+      literatureId,
+      operation: "upsert",
       queueKey: `colbert-demo:pdf-${suffix}`,
-      scope: { kind: "pdf_passage", page: 1, rects: [] },
-      status: "pending_public",
-      targets: [{
+      revision: 1,
+      sourcePassage: {
         anchorHash: `e2e:${suffix}:colbert`,
         excerpt: "contextualized late interaction",
-        kind: "source_passage",
-        literature: {
-          identity: paperIdentity,
-          metadata: {
-            authors: ["Omar Khattab", "Matei Zaharia"],
-            documentType: "conference_paper",
-            title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-            year: 2020
-          }
-        },
         page: 1,
         rects: []
-      }],
-      updatedAt: new Date().toISOString()
+      },
+      updatedAt: firstUpdatedAt
     }]
   },
   sessionId: desktopSession.sessionId
 });
-const remoteAnnotationId = annotation.results?.[0]?.intuechoAnnotationId;
+const remoteAnnotationId = annotation.results?.[0]?.remoteAnnotationId;
 assert(remoteAnnotationId, "PDF annotation sync did not return a verified receipt");
 
 const parentAnnotation = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(remoteAnnotationId)}`, {
   sessionId: webSession.sessionId
 });
 assert(parentAnnotation.annotation?.targets?.length > 0, "synced parent annotation did not retain a literature target");
+const persistedLiterature = parentAnnotation.annotation.targets[0]?.literature;
+assert(persistedLiterature?.provenance?.mode === "manual", "persisted annotation did not hydrate manual literature provenance");
+assert(
+  persistedLiterature.identifiers?.every((identifier) => identifier.source === "manual"),
+  "persisted annotation did not hydrate manual identifier provenance"
+);
+
+const secondAnnotation = await request(forumBaseUrl, "/v1/pdf-annotations:sync", {
+  body: {
+    operations: [{
+      annotationId: `pdf-second-${suffix}`,
+      body: "复用已确认文献身份的第二条批注",
+      literatureId,
+      operation: "upsert",
+      queueKey: `colbert-demo:pdf-second-${suffix}`,
+      revision: 1,
+      sourcePassage: {
+        anchorHash: `e2e:${suffix}:colbert-second`,
+        excerpt: "late interaction scoring",
+        page: 2,
+        rects: []
+      },
+      updatedAt: new Date(Date.parse(firstUpdatedAt) + 1_000).toISOString()
+    }]
+  },
+  sessionId: desktopSession.sessionId
+});
+const secondRemoteAnnotationId = secondAnnotation.results?.[0]?.remoteAnnotationId;
+assert(secondRemoteAnnotationId, "second annotation did not reuse the confirmed literature record");
+const secondPersisted = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(secondRemoteAnnotationId)}`, {
+  sessionId: webSession.sessionId
+});
+assert(
+  secondPersisted.annotation?.targets?.[0]?.literature?.literatureId === literatureId,
+  "second annotation did not persist the reused literature identity"
+);
 
 const pureReply = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(remoteAnnotationId)}/replies`, {
   body: { body: "仅保留在线程中的回复", publishAsAnnotation: false, tags: [], targets: [] },
@@ -202,6 +246,7 @@ console.log(JSON.stringify({
   postId: published.postId,
   projectedAnnotationId,
   pureReplyId: pureReply.reply.id,
+  secondAnnotationId: secondRemoteAnnotationId,
   subjectId: desktopSession.userId,
   verified: true
 }, null, 2));

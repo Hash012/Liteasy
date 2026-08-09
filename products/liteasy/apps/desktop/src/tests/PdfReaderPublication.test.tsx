@@ -178,6 +178,40 @@ test("publishes one annotation from its visibility checkbox and exposes pending 
   expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();
 });
 
+test.each([
+  ["pending_create", "publish"],
+  ["pending_update", "update"],
+  ["pending_retract", "retract"]
+] as const)("replays %s after restart without changing its revision", async (state, operation) => {
+  const publication: PdfAnnotationPublication = state === "pending_create"
+    ? { desiredVisibility: "public", state }
+    : {
+        desiredVisibility: state === "pending_retract" ? "private" : "public",
+        remoteAnnotationId: "remote-restart",
+        remoteRevision: 4,
+        state
+      };
+  const stored = { ...publicationAnnotation(publication), revision: 8 };
+  const onChange = vi.fn(async () => state === "pending_retract" ? {
+    desiredVisibility: "private" as const,
+    remoteAnnotationId: "remote-restart",
+    remoteRevision: 5,
+    state: "not_published" as const
+  } : {
+    desiredVisibility: "public" as const,
+    remoteAnnotationId: "remote-restart",
+    remoteRevision: 5,
+    state: "published" as const
+  });
+
+  renderStoredAnnotation(stored, onChange);
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+    annotation: expect.objectContaining({ id: stored.id, revision: 8 }),
+    operation
+  })));
+});
+
 test("gives same-excerpt publication checkboxes unique names and announces each status", () => {
   const note = publicationAnnotation();
   const highlight: PdfAnnotationV2 = {

@@ -22,7 +22,7 @@ import {
   loadPdfAnnotationBrowserMigrationState,
   loadPdfAnnotationAutoPublic,
   loadPdfAnnotations,
-  normalizePdfAnnotationPrivateState,
+  recoverPdfAnnotationPrivateState,
   pdfAnnotationAutoPublicStorageKey,
   pdfAnnotationStorageKey,
   savePdfAnnotationAutoPublic,
@@ -37,7 +37,11 @@ import {
 } from "./pdfAnnotationStorage";
 import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
 import { createPdfLiteratureHints } from "../paper-identity/literatureRecord";
-import { loadUserPaperArtifact, saveUserPaperArtifact } from "../library/userPaperArtifactClient";
+import {
+  isUserPaperArtifactStoreAvailable,
+  loadUserPaperArtifact,
+  saveUserPaperArtifact
+} from "../library/userPaperArtifactClient";
 import type { PdfPageText } from "./citationAttribution";
 import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
@@ -78,6 +82,7 @@ export type PdfAnnotationPublicationChange = {
   literatureHints?: ReturnType<typeof createPdfLiteratureHints>;
   operation: "publish" | "update" | "retract";
   paper: Paper;
+  restartReplay?: true;
 };
 
 type PdfReaderProps = {
@@ -1090,6 +1095,7 @@ export function PdfReader({
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const publicationIntentsRef = useRef(new Map<string, "private" | "public">());
   const publicationTransportsRef = useRef(new Map<string, PublicationTransport>());
+  const replayedPublicationKeysRef = useRef(new Set<string>());
   const [sharingAnnotationId, setSharingAnnotationId] = useState<string | null>(null);
   const [teamAnnotations, setTeamAnnotations] = useState<TeamAnnotation[]>([]);
   const [teamAnnotationMessage, setTeamAnnotationMessage] = useState("");
@@ -1188,9 +1194,15 @@ export function PdfReader({
       autoPublicStorageKey,
       fallbackPaperIdentity
     );
+    const browserState = recoverPdfAnnotationPrivateState({
+      annotations: browserMigration?.annotations ?? loadPdfAnnotations(annotationStorageKey, fallbackPaperIdentity),
+      autoPublic: browserMigration?.autoPublic ?? loadPdfAnnotationAutoPublic(autoPublicStorageKey),
+      version: 2
+    }, fallbackPaperIdentity);
     setHydratedAnnotationStorageKey(null);
-    setAnnotations(browserMigration?.annotations ?? loadPdfAnnotations(annotationStorageKey, fallbackPaperIdentity) as PdfAnnotationV2[]);
-    setAutoPublicAnnotations(browserMigration?.autoPublic ?? loadPdfAnnotationAutoPublic(autoPublicStorageKey));
+    setAnnotations(browserState.annotations);
+    annotationsRef.current = browserState.annotations;
+    setAutoPublicAnnotations(browserState.autoPublic);
     let cancelled = false;
 
     if (!activePaper?.id) {
@@ -1203,14 +1215,26 @@ export function PdfReader({
       paperId: activePaper.id
     })
       .then((snapshot) => {
-        const stored = normalizePdfAnnotationPrivateState(snapshot, fallbackPaperIdentity);
-        if (!cancelled && stored) {
-          setAnnotations(stored.annotations);
-          setAutoPublicAnnotations(stored.autoPublic);
+        if (cancelled) return;
+        const stored = snapshot === undefined
+          ? browserState
+          : recoverPdfAnnotationPrivateState(snapshot, fallbackPaperIdentity);
+        setAnnotations(stored.annotations);
+        annotationsRef.current = stored.annotations;
+        setAutoPublicAnnotations(stored.autoPublic);
+        if (stored.issues.length > 0) {
+          setStatus("部分批注的论坛恢复信息损坏；本地批注已保留，可检查后重试。");
         }
+        queueMicrotask(() => replayRecoveredPublications(stored));
       })
       .catch(() => {
         // The browser cache remains a compatibility fallback when the user store is unavailable.
+        if (cancelled) return;
+        if (isUserPaperArtifactStoreAvailable()) {
+          setStatus("批注恢复信息暂时无法读取；本地批注已保留，未发送论坛重放请求。");
+        } else {
+          queueMicrotask(() => replayRecoveredPublications(browserState));
+        }
       })
       .finally(() => {
         if (!cancelled) {
@@ -1431,9 +1455,34 @@ export function PdfReader({
     });
   }
 
+  function replayRecoveredPublications(recovery: ReturnType<typeof recoverPdfAnnotationPrivateState>) {
+    if (!activePaper || !onChangeAnnotationPublication) return;
+    for (const item of recovery.replayItems) {
+      const annotation = recovery.annotations.find((candidate) => candidate.id === item.annotationId);
+      if (!annotation || annotation.revision !== item.revision ||
+        restartOperation(annotation) !== item.operation) continue;
+      const attemptKey = `${item.queueKey}:${item.revision}:${item.operation}`;
+      if (replayedPublicationKeysRef.current.has(attemptKey)) continue;
+      replayedPublicationKeysRef.current.add(attemptKey);
+      publicationIntentsRef.current.set(
+        annotation.id,
+        item.operation === "retract" ? "private" : "public"
+      );
+      void applyPublication(annotation, item.operation, true);
+    }
+  }
+
+  function restartOperation(annotation: PdfAnnotationV2) {
+    if (annotation.publication.state === "pending_create") return "publish" as const;
+    if (annotation.publication.state === "pending_update") return "update" as const;
+    if (annotation.publication.state === "pending_retract") return "retract" as const;
+    return undefined;
+  }
+
   async function applyPublication(
     annotation: PdfAnnotationV2,
-    operation: "publish" | "update" | "retract"
+    operation: "publish" | "update" | "retract",
+    restartReplay = false
   ): Promise<PdfAnnotationPublication | undefined> {
     if (!activePaper || !onChangeAnnotationPublication) {
       const publication: PdfAnnotationPublication = {
@@ -1441,7 +1490,8 @@ export function PdfReader({
         lastError: "论坛发布功能暂不可用。",
         state: "failed"
       };
-      setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id
+      setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id &&
+        item.revision === annotation.revision
         ? { ...item, publication }
         : item));
       return publication;
@@ -1457,13 +1507,15 @@ export function PdfReader({
         annotation,
         ...(hints ? { literatureHints: hints } : {}),
         operation,
-        paper: activePaper
+        paper: activePaper,
+        ...(restartReplay ? { restartReplay: true as const } : {})
       }));
       transport = { operation, promise };
       publicationTransportsRef.current.set(annotation.id, transport);
       const publication = await promise;
       if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
-      setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id
+      setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id &&
+        item.revision === annotation.revision
         ? { ...item, publication }
         : item));
       return publication;

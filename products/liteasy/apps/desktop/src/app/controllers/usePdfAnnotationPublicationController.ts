@@ -28,6 +28,7 @@ export type ChangePdfAnnotationPublicationInput = {
   literatureHints?: NonNullable<ForumLiteratureResolveInput["hints"]>;
   operation: "publish" | "update" | "retract";
   paper: Paper;
+  restartReplay?: true;
 };
 
 type PublicationForumClient = Pick<
@@ -377,7 +378,9 @@ export function usePdfAnnotationPublicationController({
         });
       } else {
         const currentPaper = latestPapersRef.current.get(input.paper.id) ?? input.paper;
-        let confirmedLiterature = currentPaper.literature;
+        let confirmedLiterature = input.restartReplay
+          ? await literatureMetadataRepository.load(currentPaper.id)
+          : currentPaper.literature;
         if (!confirmedLiterature) {
           confirmedLiterature = await literatureMetadataRepository.load(currentPaper.id);
         }

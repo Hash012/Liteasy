@@ -5,11 +5,13 @@ import {
   loadPdfAnnotationBrowserMigrationState,
   normalizePdfAnnotationPrivateState,
   normalizePdfAnnotations,
+  recoverPdfAnnotationPrivateState,
   revisePdfAnnotation,
   savePdfAnnotationAutoPublic,
   savePdfAnnotations,
   type PdfAnnotation
 } from "../app/features/pdf/pdfAnnotationStorage";
+import { createRetractOperation } from "../app/features/pdf/pdfAnnotationIntuechoSync";
 
 const annotationKey = "liteasy.pdf-annotations/v1:test:paper";
 const autoPublicKey = "liteasy.pdf-annotations-auto-public/v1:test:paper";
@@ -229,6 +231,77 @@ test("keeps browser-only annotation persistence for non-Tauri development", () =
 
   expect(window.localStorage.getItem(annotationKey)).toContain("annotation-1");
   expect(window.localStorage.getItem(autoPublicKey)).toBe("true");
+});
+
+test("recovers pending retract with its original revision and stable queue key", () => {
+  const pendingRetract = {
+    ...annotation("annotation-retract"),
+    publication: {
+      desiredVisibility: "private" as const,
+      remoteAnnotationId: "remote-retract",
+      remoteRevision: 7,
+      state: "pending_retract" as const
+    },
+    revision: 9
+  };
+  const originalQueueKey = `${pendingRetract.paperIdentity.paperId}:${pendingRetract.id}`;
+  const recovered = recoverPdfAnnotationPrivateState({
+    annotations: [pendingRetract],
+    autoPublic: false,
+    version: 2
+  });
+
+  expect(recovered.annotations[0].publication.state).toBe("pending_retract");
+  expect(recovered.annotations[0].revision).toBe(9);
+  expect(createRetractOperation(recovered.annotations[0]).queueKey).toBe(originalQueueKey);
+  expect(recovered.replayItems).toEqual([{
+    annotationId: "annotation-retract",
+    operation: "retract",
+    queueKey: originalQueueKey,
+    revision: 9
+  }]);
+});
+
+test("keeps a local annotation when one restart queue item is corrupt and continues valid replay", () => {
+  const corrupt = {
+    ...annotation("annotation-corrupt"),
+    publication: {
+      desiredVisibility: "private",
+      remoteAnnotationId: 42,
+      state: "pending_retract"
+    },
+    revision: 3
+  };
+  const valid = {
+    ...annotation("annotation-valid"),
+    publication: { desiredVisibility: "public" as const, state: "pending_create" as const },
+    revision: 4
+  };
+
+  const recovered = recoverPdfAnnotationPrivateState({
+    annotations: [corrupt, valid],
+    autoPublic: false,
+    version: 2
+  });
+
+  expect(recovered.annotations.map((item) => item.id)).toEqual([
+    "annotation-corrupt",
+    "annotation-valid"
+  ]);
+  expect(recovered.annotations[0].publication).toMatchObject({
+    desiredVisibility: "private",
+    lastError: expect.stringContaining("恢复队列项损坏"),
+    state: "failed"
+  });
+  expect(recovered.issues).toEqual([
+    expect.objectContaining({ annotationId: "annotation-corrupt" })
+  ]);
+  expect(recovered.replayItems).toEqual([{
+    annotationId: "annotation-valid",
+    operation: "publish",
+    queueKey: "paper-1:annotation-valid",
+    revision: 4
+  }]);
 });
 
 test("uses paper-artifacts as the Tauri truth source and clears migrated browser copies", () => {

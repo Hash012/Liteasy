@@ -242,6 +242,31 @@ describe("usePdfAnnotationPublicationController", () => {
     expect(context.workspaceStore.getState().papers[0].literature).toEqual(literature());
   });
 
+  test("reloads authoritative literature before replaying a restart operation", async () => {
+    const staleLiterature = literature({ literatureId: "literature-stale" });
+    const freshLiterature = literature({ literatureId: "literature-fresh" });
+    const currentPaper = paper({ literature: staleLiterature });
+    const context = setup({
+      initialPapers: [currentPaper],
+      loadLiterature: vi.fn().mockResolvedValue(freshLiterature)
+    });
+
+    await act(() => context.result.current.actions.changePublication({
+      annotation: annotation({
+        publication: { desiredVisibility: "public", state: "pending_create" },
+        revision: 8
+      }),
+      operation: "publish",
+      paper: currentPaper,
+      restartReplay: true
+    }));
+
+    expect(context.loadLiterature).toHaveBeenCalledWith("paper-1");
+    expect(context.applyAnnotationPublications).toHaveBeenCalledWith([
+      expect.objectContaining({ literatureId: "literature-fresh", revision: 8 })
+    ]);
+  });
+
   test("loads authoritative stored literature before resolving", async () => {
     const stored = literature({ literatureId: "stored-literature" });
     const context = setup({ loadLiterature: vi.fn().mockResolvedValue(stored) });

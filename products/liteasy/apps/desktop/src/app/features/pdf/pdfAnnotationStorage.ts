@@ -72,6 +72,16 @@ export type PdfAnnotationPrivateState = {
   version: 2;
 };
 
+export type PdfAnnotationRestartRecovery = PdfAnnotationPrivateState & {
+  issues: Array<{ annotationId?: string; message: string }>;
+  replayItems: Array<{
+    annotationId: string;
+    operation: "publish" | "retract" | "update";
+    queueKey: string;
+    revision: number;
+  }>;
+};
+
 type PdfAnnotationEdit = Partial<Pick<
   PdfAnnotation,
   "color" | "excerpt" | "kind" | "note" | "page" | "publication" | "rects" | "text"
@@ -378,6 +388,81 @@ export function normalizePdfAnnotationPrivateState(
   return {
     annotations: normalizePdfAnnotations(candidate.annotations, fallbackPaperIdentity),
     autoPublic: candidate.autoPublic === true,
+    version: 2
+  };
+}
+
+function restartOperation(annotation: PdfAnnotationV2) {
+  if (annotation.publication.state === "pending_create") return "publish" as const;
+  if (annotation.publication.state === "pending_update") return "update" as const;
+  if (annotation.publication.state === "pending_retract") return "retract" as const;
+  return undefined;
+}
+
+export function recoverPdfAnnotationPrivateState(
+  value: unknown,
+  fallbackPaperIdentity?: PaperIdentity
+): PdfAnnotationRestartRecovery {
+  const candidate = value && typeof value === "object" && !Array.isArray(value)
+    ? value as { annotations?: unknown; autoPublic?: unknown }
+    : {};
+  const values = Array.isArray(candidate.annotations) ? candidate.annotations : [];
+  const annotations: PdfAnnotationV2[] = [];
+  const issues: PdfAnnotationRestartRecovery["issues"] = [];
+
+  for (const value of values) {
+    const [normalized] = normalizePdfAnnotations([value], fallbackPaperIdentity);
+    if (normalized) {
+      annotations.push(normalized);
+      continue;
+    }
+    if (!hasAnnotationFields(value) || !value || typeof value !== "object" || Array.isArray(value)) {
+      issues.push({ message: "PDF 批注记录损坏，无法安全恢复。" });
+      continue;
+    }
+    const damaged = value as PdfAnnotation;
+    if (typeof damaged.revision !== "number" || !Number.isInteger(damaged.revision) || damaged.revision <= 0) {
+      issues.push({ annotationId: damaged.id, message: "PDF 批注修订号损坏，无法安全恢复。" });
+      continue;
+    }
+    const publicationCandidate = damaged.publication as Partial<PdfAnnotationPublication> | undefined;
+    const desiredVisibility = publicationCandidate?.desiredVisibility === "public" ? "public" : "private";
+    const remoteAnnotationId = typeof publicationCandidate?.remoteAnnotationId === "string" &&
+      publicationCandidate.remoteAnnotationId.trim()
+      ? publicationCandidate.remoteAnnotationId
+      : undefined;
+    const remoteRevision = remoteAnnotationId && typeof publicationCandidate?.remoteRevision === "number" &&
+      Number.isInteger(publicationCandidate.remoteRevision) && publicationCandidate.remoteRevision > 0
+      ? publicationCandidate.remoteRevision
+      : undefined;
+    const { publication: _publication, syncState: _syncState, visibility: _visibility, ...base } = damaged;
+    annotations.push({
+      ...base,
+      publication: {
+        desiredVisibility,
+        lastError: "重启恢复队列项损坏，请检查后重试。",
+        ...(remoteAnnotationId ? { remoteAnnotationId } : {}),
+        ...(remoteRevision ? { remoteRevision } : {}),
+        state: "failed"
+      },
+      revision: damaged.revision
+    } as PdfAnnotationV2);
+    issues.push({ annotationId: damaged.id, message: "PDF 批注恢复队列项损坏，已保留本地批注。" });
+  }
+
+  return {
+    annotations,
+    autoPublic: candidate.autoPublic === true,
+    issues,
+    replayItems: annotations.flatMap((annotation) => {
+      const operation = restartOperation(annotation);
+      return operation ? [{
+        annotationId: annotation.id,
+        operation,
+        queueKey: `${annotation.paperIdentity.paperId}:${annotation.id}`,
+        revision: annotation.revision
+      }] : [];
+    }),
     version: 2
   };
 }
