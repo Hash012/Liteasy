@@ -14,6 +14,7 @@ function transactionHarness() {
     costs: [],
     artifacts: [],
     routeAvailable: undefined,
+    routeOperations: undefined,
     availableModalities: undefined,
     availableCostPolicy: true
   };
@@ -45,9 +46,13 @@ function transactionHarness() {
         if (normalized.startsWith("SELECT e.*")) {
           const entitlement = state.entitlements.get(values[0]);
           const preference = state.preferences.get(values[0]);
+          const generationOperation = state.routeOperations?.some((operation) => ["structured_generation", "image_generation"].includes(operation));
+          const policyRouteAvailable = state.routeAvailable === undefined
+            ? undefined
+            : state.routeAvailable && state.availableCostPolicy && (generationOperation || normalized.includes("'validation'"));
           return { rows: entitlement ? [{ ...entitlement, preference_enabled: preference?.enabled ?? true,
-            route_available: state.routeAvailable === undefined ? undefined : state.routeAvailable && state.availableCostPolicy,
-            available_modalities: state.availableModalities ?? [],
+            route_available: policyRouteAvailable,
+            available_modalities: policyRouteAvailable ? state.availableModalities ?? [] : [],
             quota_subject_id: state.policies.has(values[0]) ? values[0] : null,
             daily_units: state.policies.get(values[0])?.daily_units,
             monthly_units: state.policies.get(values[0])?.monthly_units,
@@ -370,6 +375,20 @@ test("capability and reserve fail closed when the locked route has no matching c
     idempotencyKey: "request-new-1", modality: "semantic_graph", operation: "structured_generation",
     dataClass: "paper", routeId: "route-1"
   }), /visualization_cost_policy_unconfigured/);
+});
+
+test("validation-only routes do not advertise generation capability", async () => {
+  const harness = transactionHarness();
+  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: ["semantic_graph"], revision: "1" });
+  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
+  harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "4", monthly_units: "8", max_concurrency: "1", timezone: "UTC", revision: "1" });
+  harness.state.routeAvailable = true;
+  harness.state.routeOperations = ["validation"];
+  harness.state.availableModalities = ["semantic_graph"];
+  const capability = await new PostgresVisualizationRepository(harness.pool).capability("user-1");
+  assert.equal(capability.allowed, true);
+  assert.equal(capability.serviceAvailable, false);
+  assert.deepEqual(capability.availableModalities, []);
 });
 
 test("rejects a stale provider route revision before mutation", async () => {

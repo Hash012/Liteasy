@@ -537,7 +537,7 @@ export class PostgresVisualizationRepository {
                        AND cost.operation = operation.value
                        AND cost.data_class = data_class.value
                        AND cost.enabled = true
-                     WHERE operation.value IN ('structured_generation','image_generation','validation')
+                     WHERE operation.value IN ('structured_generation','image_generation')
                   )
                   AND route.modalities ?| ARRAY(
                     SELECT jsonb_array_elements_text(e.allowed_modalities)
@@ -559,7 +559,7 @@ export class PostgresVisualizationRepository {
                       AND cost.operation = operation.value
                       AND cost.data_class = data_class.value
                       AND cost.enabled = true
-                      AND cost.operation IN ('structured_generation','image_generation','validation')
+                      AND cost.operation IN ('structured_generation','image_generation')
                  ) available
              ), '[]'::jsonb) AS available_modalities,
              COALESCE((SELECT SUM(u.units_delta) FROM visualization_usage_ledger u

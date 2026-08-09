@@ -18,3 +18,11 @@ GREEN: `node --test src/visualizationCostPolicyMigration.test.mjs src/visualizat
 Full: `npm test` in `products/liteasy/services/api` (239 passed).
 
 `git diff --check` passed. Temporary desktop `node_modules` symlink removed.
+
+## Fix Round 1
+
+RED: Added a validation-only route capability regression; it initially reported `serviceAvailable: true` and `availableModalities: ["semantic_graph"]`.
+
+GREEN: Capability policy joins now accept only `structured_generation` and `image_generation`; validation remains reservable/accounted but cannot advertise generation availability.
+
+Verification: focused repository/service tests passed, full API `npm test` passed (239 tests), and `git diff --check` passed.
