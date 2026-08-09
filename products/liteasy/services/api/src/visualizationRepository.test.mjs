@@ -421,7 +421,10 @@ test("finalizes a failed provider probe as a redacted replayable error and audit
     }
     if (sql.startsWith("INSERT INTO audit_events")) {
       auditCount += 1;
+      const detail = JSON.parse(values[5]);
       assert.equal(String(values[5]).includes("provider secret"), false);
+      assert.equal(detail.routeId, "route-1");
+      assert.equal(detail.routeRevision, 1);
       return { rows: [] };
     }
     if (sql.startsWith("UPDATE idempotency_records")) {
@@ -451,6 +454,41 @@ test("finalizes a failed provider probe as a redacted replayable error and audit
   const replay = await repository.getProviderProbeReplay(input);
   assert.equal(replay.replayed, true);
   assert.equal(replay.error.code, "visualization_provider_unavailable");
+});
+
+test("finalizes a cancelled provider probe as a replayable 499 error", async () => {
+  let idempotencyRow = null;
+  let responseStatus = null;
+  const harness = adminPool(async (sql, values) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: idempotencyRow ? [idempotencyRow] : [] };
+    if (sql.includes("FROM visualization_provider_configs")) return { rows: [providerRow] };
+    if (sql.startsWith("INSERT INTO idempotency_records")) {
+      idempotencyRow = { request_hash: values[2], response_body: JSON.parse(values[3]) };
+      return { rows: [] };
+    }
+    if (sql.startsWith("INSERT INTO audit_events")) return { rows: [] };
+    if (sql.startsWith("UPDATE idempotency_records")) {
+      responseStatus = values[3];
+      idempotencyRow.response_body = JSON.parse(values[4]);
+      return { rows: [] };
+    }
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const input = {
+    actorId: "admin-1", expectedRevision: 1, idempotencyKey: "probe-cancel-1",
+    reason: "verify provider route", routeId: "route-1", traceId: "trace-1"
+  };
+  await repository.claimProviderProbe(input);
+  const finalized = await repository.recordProviderProbe({
+    ...input,
+    error: Object.assign(new Error("cancelled"), { code: "visualization_request_aborted", status: 499 })
+  });
+  assert.deepEqual(finalized.error, { code: "visualization_request_aborted", status: 499 });
+  assert.equal(responseStatus, 499);
+  const replay = await repository.getProviderProbeReplay(input);
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(replay.error, { code: "visualization_request_aborted", status: 499 });
 });
 
 test("projects bounded visualization usage and administrator audit rows", async () => {

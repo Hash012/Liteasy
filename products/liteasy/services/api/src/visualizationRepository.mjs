@@ -1178,7 +1178,9 @@ export class PostgresVisualizationRepository {
         if (prior.rows[0].request_hash !== hash) throw new VisualizationRepositoryError("idempotency_key_reused", 409);
         if (prior.rows[0].response_body?.state !== "pending") return { ...prior.rows[0].response_body, replayed: true };
       }
-      const failure = input.error ? providerProbeError(input.error) : null;
+      const cancellation = input.result?.cancelled === true || input.probe?.cancelled === true;
+      const failure = input.error ? providerProbeError(input.error)
+        : cancellation ? providerProbeError({ code: "visualization_request_aborted" }) : null;
       const response = failure ? {
         error: failure,
         replayed: false,
@@ -1195,7 +1197,9 @@ export class PostgresVisualizationRepository {
         VALUES ($1,$2,'liteasy-admin','visualization_provider_probe','visualization_provider',$3,$4,$5,$6::jsonb)
       `, [`audit_${randomUUID()}`, actorId, routeIdentifier, reason, traceId, json({
         ...(failure ? { error: failure } : { probe: response.probe }),
-        redacted: true
+        redacted: true,
+        routeId: routeIdentifier,
+        routeRevision: Number(input.expectedRevision)
       })]);
       await client.query(`
         UPDATE idempotency_records

@@ -797,6 +797,28 @@ test("returns a stable provider probe failure through the fresh admin route", as
   assert.match(probe.visualizationProviderProbe.traceId, /^trace_/);
 });
 
+test("returns a replayable cancellation status through the fresh admin route", async () => {
+  const instance = runtime();
+  instance.visualizationService.testProviderRoute = async (principal, input) => {
+    instance.calls.push({ principal, visualizationProviderProbe: input });
+    throw new VisualizationServiceError("visualization_request_aborted", 499);
+  };
+  const result = response();
+  await createCloudRequestHandler(instance, internalConfig())(request(
+    "POST",
+    "/v1/admin/visualization/providers/test",
+    {
+      expectedRevision: 3,
+      idempotencyKey: "probe-cancel-1",
+      reason: "verify provider route",
+      routeId: "route-1",
+      providerRequest: { modality: "semantic_graph", dataClass: "paper" }
+    }
+  ), result);
+  assert.equal(result.status, 499);
+  assert.equal(jsonBody(result).code, "visualization_request_aborted");
+});
+
 test("applies strict platform administrator visualization audit filters", async () => {
   const instance = runtime();
   const handler = createCloudRequestHandler(instance, internalConfig());

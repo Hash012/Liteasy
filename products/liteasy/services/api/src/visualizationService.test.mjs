@@ -421,7 +421,7 @@ test("a failed provider probe finalizes its claim and replays without a second p
   assert.equal(replay.error.code, "visualization_provider_unavailable");
 });
 
-test("a cancelled provider probe finalizes a cancelled result", async () => {
+test("a cancelled provider probe finalizes a replayable 499 error", async () => {
   const records = [];
   const controller = new AbortController();
   const instance = serviceHarness({
@@ -444,7 +444,8 @@ test("a cancelled provider probe finalizes a cancelled result", async () => {
       providerRequest: { modality: "semantic_graph", dataClass: "paper" }
     }, controller.signal
   ), /visualization_request_aborted/);
-  assert.deepEqual(records[0].result, { cancelled: true });
+  assert.equal(records[0].error.code, "visualization_request_aborted");
+  assert.equal(records[0].error.status, 499);
 });
 
 test("generation ignores caller routes and enforces the reserved stored route revision", async () => {

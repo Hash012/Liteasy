@@ -423,11 +423,7 @@ export class VisualizationService {
       } catch (error) {
         const failure = providerProbeFailure(error);
         if (typeof this.repository.recordProviderProbe === "function" && ownsClaim) {
-          if (failure.code === "visualization_request_aborted") {
-            await this.repository.recordProviderProbe({ ...probeInput, result: { cancelled: true } });
-          } else {
-            await this.repository.recordProviderProbe({ ...probeInput, error: failure });
-          }
+          await this.repository.recordProviderProbe({ ...probeInput, error: failure });
         }
         throw failure;
       }

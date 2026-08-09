@@ -18,3 +18,14 @@ Verification:
 Commit: `fix: finalize visualization provider probe claims`
 
 Concerns: no known concerns. PostgreSQL integration behavior is represented by focused SQL-harness tests; no external provider or database credentials were required.
+
+## Fix Round 1
+
+- Added the route ID and expected route revision to the redacted provider-probe audit detail, without recording endpoint, secret, paper content, or raw provider errors.
+- Cancellation finalization now persists and replays `visualization_request_aborted` with status `499`, matching the original response instead of storing a successful result.
+
+Verification:
+
+- `node --test src/visualizationService.test.mjs src/visualizationRepository.test.mjs src/server.test.mjs`
+- `npm test` (246 passing, 0 failing)
+- `git diff --check`
