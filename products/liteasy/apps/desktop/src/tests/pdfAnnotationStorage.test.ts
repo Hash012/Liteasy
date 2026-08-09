@@ -191,13 +191,27 @@ test("rejects a stale or regressing publication receipt without changing pending
   expect(current.publication).toMatchObject({ remoteRevision: 5, state: "pending_retract" });
 });
 
+test("preserves a private-desired failure when the remote create outcome is unknown", () => {
+  const value = {
+    ...legacyAnnotation(),
+    publication: {
+      desiredVisibility: "private",
+      lastError: "撤回未完成，论坛发布状态未知。",
+      state: "failed"
+    },
+    revision: 2
+  };
+  delete value.visibility;
+
+  expect(normalizePdfAnnotations([value], fallbackIdentity)[0].publication).toEqual(value.publication);
+});
+
 test.each([
   [{ desiredVisibility: "public", state: "published" }, "published without remote ID"],
   [{ desiredVisibility: "private", state: "pending_retract" }, "pending retract without remote ID"],
   [{ desiredVisibility: "public", state: "not_published" }, "public not-published state"],
   [{ desiredVisibility: "private", remoteAnnotationId: "remote", state: "published" }, "private published state"],
-  [{ desiredVisibility: "private", state: "pending_create" }, "private pending-create state"],
-  [{ desiredVisibility: "private", state: "failed" }, "failed retract without remote ID"]
+  [{ desiredVisibility: "private", state: "pending_create" }, "private pending-create state"]
 ])("rejects a persisted v2 publication invariant violation: %s", (publication) => {
   const value = {
     ...legacyAnnotation(),

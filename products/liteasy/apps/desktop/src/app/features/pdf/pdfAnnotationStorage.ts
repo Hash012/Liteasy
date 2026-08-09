@@ -158,9 +158,10 @@ function isPublication(value: unknown): value is PdfAnnotationPublication {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PdfAnnotationPublication>;
   const hasRemoteAnnotation = typeof candidate.remoteAnnotationId === "string" && candidate.remoteAnnotationId.trim().length > 0;
+  const hasFailureExplanation = typeof candidate.lastError === "string" && candidate.lastError.trim().length > 0;
   const remoteRequired = candidate.state === "published" || candidate.state === "pending_update" ||
     candidate.state === "pending_retract" ||
-    (candidate.desiredVisibility === "private" && candidate.state === "failed");
+    (candidate.desiredVisibility === "private" && candidate.state === "failed" && !hasFailureExplanation);
   const visibilityCoherent = candidate.state === "failed" ||
     (candidate.desiredVisibility === "private"
       ? candidate.state === "not_published" || candidate.state === "pending_retract"

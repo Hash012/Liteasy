@@ -732,16 +732,25 @@ describe("usePdfAnnotationPublicationController", () => {
     expect(operations[1]).toMatchObject({ operation: "retract", remoteAnnotationId: "created-remotely" });
   });
 
-  test("settles a queued retract privately when create conclusively fails without a remote copy", async () => {
-    const apply = vi.fn().mockImplementation(async ([operation]: ForumAnnotationPublicationOperation[]) => ({
-      results: [{
-        annotationId: operation.annotationId,
-        error: "请求被拒绝。",
-        pendingOperation: operation,
-        queueKey: operation.queueKey,
-        state: "failed"
-      }]
-    }));
+  test("replays the exact create after its response is lost and retracts the recovered remote ID", async () => {
+    const operations: ForumAnnotationPublicationOperation[] = [];
+    let upsertAttempts = 0;
+    const apply = vi.fn().mockImplementation(async ([operation]: ForumAnnotationPublicationOperation[]) => {
+      operations.push(operation);
+      if (operation.operation === "upsert" && upsertAttempts++ === 0) {
+        return { results: [{
+          annotationId: operation.annotationId,
+          error: "论坛发布请求失败，请稍后重试。",
+          pendingOperation: operation,
+          queueKey: operation.queueKey,
+          state: "failed"
+        }] };
+      }
+      return { results: [receipt(operation, {
+        remoteAnnotationId: "created-before-response-loss",
+        remoteRevision: operation.operation === "retract" ? 5 : 4
+      })] };
+    });
     const currentPaper = paper({ literature: literature() });
     const context = setup({ applyAnnotationPublications: apply, initialPapers: [currentPaper] });
 
@@ -758,8 +767,79 @@ describe("usePdfAnnotationPublicationController", () => {
     });
 
     await expect(publishing).resolves.toMatchObject({ state: "failed" });
+    await expect(retracting).resolves.toMatchObject({
+      desiredVisibility: "private",
+      remoteAnnotationId: "created-before-response-loss",
+      remoteRevision: 5,
+      state: "not_published"
+    });
+    expect(apply).toHaveBeenCalledTimes(3);
+    expect(operations[1]).toEqual(operations[0]);
+    expect(operations[2]).toMatchObject({
+      operation: "retract",
+      remoteAnnotationId: "created-before-response-loss"
+    });
+  });
+
+  test("keeps a queued retract failed and private-desired when create recovery is still outcome-unknown", async () => {
+    const operations: ForumAnnotationPublicationOperation[] = [];
+    const apply = vi.fn().mockImplementation(async ([operation]: ForumAnnotationPublicationOperation[]) => {
+      operations.push(operation);
+      return { results: [{
+        annotationId: operation.annotationId,
+        error: "论坛发布请求失败，请稍后重试。",
+        pendingOperation: operation,
+        queueKey: operation.queueKey,
+        state: "failed"
+      }] };
+    });
+    const currentPaper = paper({ literature: literature() });
+    const context = setup({ applyAnnotationPublications: apply, initialPapers: [currentPaper] });
+
+    const publishing = context.result.current.actions.changePublication({
+      annotation: annotation(), operation: "publish", paper: currentPaper
+    });
+    const retracting = context.result.current.actions.changePublication({
+      annotation: annotation({
+        publication: { desiredVisibility: "private", state: "pending_retract" },
+        revision: 2
+      }),
+      operation: "retract",
+      paper: currentPaper
+    });
+
+    await expect(publishing).resolves.toMatchObject({ state: "failed" });
+    await expect(retracting).resolves.toEqual({
+      desiredVisibility: "private",
+      lastError: "撤回未完成，论坛发布状态未知。论坛发布请求失败，请稍后重试。",
+      state: "failed"
+    });
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(operations[1]).toEqual(operations[0]);
+  });
+
+  test("settles queued retract as not published after a definitive preflight failure", async () => {
+    const currentPaper = paper({ literature: literature() });
+    const context = setup({
+      initialPapers: [currentPaper],
+      persistPaperLiterature: vi.fn().mockRejectedValue(new Error("没有组织文献管理权限。"))
+    });
+
+    const publishing = context.result.current.actions.changePublication({
+      annotation: annotation(), operation: "publish", paper: currentPaper
+    });
+    const retracting = context.result.current.actions.changePublication({
+      annotation: annotation({
+        publication: { desiredVisibility: "private", state: "pending_retract" },
+        revision: 2
+      }),
+      operation: "retract",
+      paper: currentPaper
+    });
+
+    await expect(publishing).resolves.toMatchObject({ state: "failed" });
     await expect(retracting).resolves.toEqual({ desiredVisibility: "private", state: "not_published" });
-    expect(apply).toHaveBeenCalledTimes(1);
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
   });
 
   test("writes the returned cloud revision and literature into the workspace before publication", async () => {

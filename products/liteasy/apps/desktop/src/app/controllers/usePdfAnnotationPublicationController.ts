@@ -1,5 +1,8 @@
 import { useRef, useState } from "react";
-import type { ForumLiteratureResolveInput } from "../features/forum/forum.types";
+import type {
+  ForumAnnotationPublicationOperation,
+  ForumLiteratureResolveInput
+} from "../features/forum/forum.types";
 import type { ForumClient } from "../features/forum/forumClient";
 import type { LiteratureDialogModel } from "../features/forum/literatureResolution.types";
 import type {
@@ -68,6 +71,11 @@ type ActiveResolution = {
   unavailableProviders: LiteratureResolveResult["unavailableProviders"];
 };
 
+type PendingCreateRecovery = {
+  annotation: PdfAnnotationV2;
+  operation: Extract<ForumAnnotationPublicationOperation, { operation: "upsert" }>;
+};
+
 const busyPublication: PdfAnnotationPublication = {
   desiredVisibility: "public",
   lastError: "已有文献身份确认正在进行，请完成或取消后重试。",
@@ -131,6 +139,14 @@ function failedPublication(
   };
 }
 
+function unknownCreateOutcome(error: unknown): PdfAnnotationPublication {
+  return {
+    desiredVisibility: "private",
+    lastError: `撤回未完成，论坛发布状态未知。${errorMessage(error, "请稍后重试恢复请求。")}`,
+    state: "failed"
+  };
+}
+
 function boundedHints(
   hints: ChangePdfAnnotationPublicationInput["literatureHints"]
 ): ChangePdfAnnotationPublicationInput["literatureHints"] {
@@ -177,6 +193,7 @@ export function usePdfAnnotationPublicationController({
   const forumClientRef = useRef(forumClient);
   const latestPublicationRef = useRef(new Map<string, PdfAnnotationPublication>());
   const latestPapersRef = useRef(new Map<string, Paper>());
+  const pendingCreateRecoveryRef = useRef(new Map<string, PendingCreateRecovery>());
   const publicationQueuesRef = useRef(new Map<string, Promise<void>>());
   forumClientRef.current = forumClient;
 
@@ -314,14 +331,41 @@ export function usePdfAnnotationPublicationController({
     input: ChangePdfAnnotationPublicationInput
   ): Promise<PdfAnnotationPublication> {
     const queueKey = `${input.annotation.paperIdentity.paperId}:${input.annotation.id}`;
-    const priorPublication = latestPublicationRef.current.get(queueKey) ?? input.annotation.publication;
+    let priorPublication = latestPublicationRef.current.get(queueKey) ?? input.annotation.publication;
+    let operation: ForumAnnotationPublicationOperation | undefined;
     try {
-      let operation;
       if (input.operation === "retract") {
         const latest = latestPublicationRef.current.get(queueKey);
-        const remoteAnnotationId = latest?.remoteAnnotationId ?? input.annotation.publication.remoteAnnotationId;
+        let remoteAnnotationId = latest?.remoteAnnotationId ?? input.annotation.publication.remoteAnnotationId;
         if (!remoteAnnotationId) {
-          return { desiredVisibility: "private", state: "not_published" };
+          const recovery = pendingCreateRecoveryRef.current.get(queueKey);
+          if (!recovery) {
+            return input.annotation.publication.desiredVisibility === "private" &&
+              input.annotation.publication.state === "failed"
+              ? { ...input.annotation.publication }
+              : { desiredVisibility: "private", state: "not_published" };
+          }
+          const replayResponse = await forumClientRef.current.applyAnnotationPublications([recovery.operation]);
+          const replayResult = replayResponse.results[0];
+          if (!replayResult || replayResult.state === "failed") {
+            return unknownCreateOutcome(
+              replayResult?.error ?? "论坛发布响应缺少该批注的可验证结果。"
+            );
+          }
+          try {
+            priorPublication = confirmPdfAnnotationPublication(
+              recovery.annotation,
+              replayResult
+            ).publication;
+          } catch (error) {
+            return unknownCreateOutcome(error);
+          }
+          latestPublicationRef.current.set(queueKey, priorPublication);
+          pendingCreateRecoveryRef.current.delete(queueKey);
+          remoteAnnotationId = priorPublication.remoteAnnotationId;
+          if (!remoteAnnotationId) {
+            return unknownCreateOutcome("恢复回执缺少远端批注 ID。");
+          }
         }
         operation = createRetractOperation({
           ...input.annotation,
@@ -358,6 +402,13 @@ export function usePdfAnnotationPublicationController({
       const response = await forumClientRef.current.applyAnnotationPublications([operation]);
       const result = response.results[0];
       if (!result || result.state === "failed") {
+        if (input.operation === "publish" && operation.operation === "upsert" &&
+          !priorPublication.remoteAnnotationId) {
+          pendingCreateRecoveryRef.current.set(queueKey, {
+            annotation: input.annotation,
+            operation
+          });
+        }
         return failedPublication(
           input.operation,
           result?.error ?? "论坛发布响应缺少该批注的可验证结果。",
@@ -375,8 +426,16 @@ export function usePdfAnnotationPublicationController({
         : input.annotation;
       const publication = confirmPdfAnnotationPublication(currentAnnotation, result).publication;
       latestPublicationRef.current.set(queueKey, publication);
+      pendingCreateRecoveryRef.current.delete(queueKey);
       return publication;
     } catch (error) {
+      if (input.operation === "publish" && operation?.operation === "upsert" &&
+        !priorPublication.remoteAnnotationId) {
+        pendingCreateRecoveryRef.current.set(queueKey, {
+          annotation: input.annotation,
+          operation
+        });
+      }
       return failedPublication(input.operation, error, priorPublication);
     }
   }
