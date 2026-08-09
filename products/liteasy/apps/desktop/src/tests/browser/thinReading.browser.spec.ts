@@ -1,16 +1,20 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 
-async function mountPageRecommendationGraphFixture(page: Page) {
+async function mountPageRecommendationGraphFixture(
+  page: Page,
+  variant: "maximum" | "standard" = "standard"
+) {
   await page.goto("/");
-  await page.evaluate(async () => {
+  await page.evaluate(async (fixtureVariant) => {
     document.body.innerHTML = '<div id="page-recommendation-graph-fixture"></div>';
     const fixtureModuleUrl = "/src/tests/fixtures/pageRecommendationGraphBrowserFixture.tsx";
     const fixtureModule = await import(fixtureModuleUrl);
     await fixtureModule.mountPageRecommendationGraphFixture(
-      document.getElementById("page-recommendation-graph-fixture")
+      document.getElementById("page-recommendation-graph-fixture"),
+      fixtureVariant
     );
-  });
+  }, variant);
 }
 
 async function openPageRecommendationGraph(page: Page) {
@@ -115,7 +119,7 @@ async function graphGeometry(page: Page) {
     const anchorObstructions = boxes.reduce((count, box) => count + graphChips.filter((chip) =>
       overlap(box, chip.getBoundingClientRect())).length, 0);
     const anchorDrift = Math.max(0, ...graphChips.map((chip, index) => {
-      const original = realAnchors[index]?.getBoundingClientRect();
+      const original = realAnchors[index]?.getClientRects()[0];
       if (!original) return Number.POSITIVE_INFINITY;
       const chipRect = chip.getBoundingClientRect();
       return Math.hypot(chipRect.left - original.left,
@@ -148,6 +152,13 @@ async function graphGeometry(page: Page) {
         graphElement.dataset.candidateAnchorObstructions
       ].join("/"),
       layoutPrimaryCrossings: Number(graphElement.dataset.primaryEdgeCrossings),
+      layoutHard: [
+        graphElement.dataset.primaryEdgeCrossings,
+        graphElement.dataset.sameSideViolations,
+        graphElement.dataset.nodeOverlaps,
+        graphElement.dataset.overflowCount,
+        graphElement.dataset.anchorObstructions
+      ].join("/"),
       layoutSameSideViolations: Number(graphElement.dataset.sameSideViolations),
       layoutSource: graphElement.dataset.layoutSource,
       nodeOverlaps,
@@ -160,6 +171,20 @@ async function graphGeometry(page: Page) {
       textOverflow
     };
   });
+}
+
+async function graphInkPixelCount(graph: Locator) {
+  const ink = await graph.locator(".association-layer__edges").screenshot({ omitBackground: true });
+  const decodedInk = await loadImage(ink);
+  const inkCanvas = createCanvas(decodedInk.width, decodedInk.height);
+  const inkContext = inkCanvas.getContext("2d");
+  inkContext.drawImage(decodedInk, 0, 0);
+  let nonTransparentInkPixels = 0;
+  const pixels = inkContext.getImageData(0, 0, decodedInk.width, decodedInk.height).data;
+  for (let index = 3; index < pixels.length; index += 4) {
+    if (pixels[index]! > 8) nonTransparentInkPixels += 1;
+  }
+  return nonTransparentInkPixels;
 }
 
 test("keeps thin-reading prose and evidence markers readable on desktop", async ({ page }) => {
@@ -472,6 +497,7 @@ test.describe("page recommendation graph", () => {
       anchorDrift: expect.any(Number),
       anchorObstructions: 0,
       layoutPrimaryCrossings: 0,
+      layoutHard: "0/0/0/0/0",
       candidateHard: "0/0/0/0/0",
       layoutSameSideViolations: 0,
       layoutSource: "constrained",
@@ -485,17 +511,7 @@ test.describe("page recommendation graph", () => {
     });
     expect(geometry.anchorDrift).toBeLessThan(14);
 
-    const ink = await graph.locator(".association-layer__edges").screenshot({ omitBackground: true });
-    const decodedInk = await loadImage(ink);
-    const inkCanvas = createCanvas(decodedInk.width, decodedInk.height);
-    const inkContext = inkCanvas.getContext("2d");
-    inkContext.drawImage(decodedInk, 0, 0);
-    let nonTransparentInkPixels = 0;
-    const pixels = inkContext.getImageData(0, 0, decodedInk.width, decodedInk.height).data;
-    for (let index = 3; index < pixels.length; index += 4) {
-      if (pixels[index]! > 8) nonTransparentInkPixels += 1;
-    }
-    expect(nonTransparentInkPixels).toBeGreaterThan(100);
+    expect(await graphInkPixelCount(graph)).toBeGreaterThan(100);
 
     const firstEdge = graph.locator('.association-edge.is-hit[data-edge-layer="edge-hit"]').first();
     await firstEdge.focus();
@@ -547,6 +563,7 @@ test.describe("page recommendation graph", () => {
         anchorDrift: expect.any(Number),
         anchorObstructions: 0,
         layoutPrimaryCrossings: 0,
+        layoutHard: "0/0/0/0/0",
         candidateHard: "0/0/0/0/0",
         layoutSameSideViolations: 0,
         layoutSource: "constrained",
@@ -603,6 +620,75 @@ test.describe("page recommendation graph", () => {
         body: await page.screenshot({ fullPage: true }),
         contentType: "image/png"
       });
+    });
+  }
+
+  for (const viewport of [
+    { height: 900, name: "desktop", width: 1440 },
+    { height: 900, name: "narrow", width: 760 },
+    { height: 844, name: "mobile", width: 390 }
+  ]) {
+    test(`keeps the maximum-density page recommendation graph hard-safe on ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize({ height: viewport.height, width: viewport.width });
+      await mountPageRecommendationGraphFixture(page, "maximum");
+      const recommendations = page.getByRole("button", { name: "相关推荐" });
+      await expect(recommendations).toHaveAttribute("aria-pressed", "false");
+      await recommendations.click();
+      await expect(page.locator(".thin-reading__anchor").first()).toBeVisible();
+      const startedAt = await page.evaluate(() => performance.now());
+      await recommendations.click();
+      const graph = page.getByRole("region", { exact: true, name: "页级关联图" });
+      await expect(graph).toBeVisible();
+      const elapsed = await page.evaluate((start) => performance.now() - start, startedAt);
+
+      expect(elapsed).toBeLessThan(1_500);
+      await expect(graph.locator(".association-anchor__chip")).toHaveCount(8);
+      await expect(graph.locator(".association-node")).toHaveCount(24);
+      await expect(graph.locator(".association-node.is-crossing")).toHaveCount(1);
+      await expect(graph.locator('.association-edge.is-paper-relation.is-hit[role="img"]')).toHaveCount(3);
+      const hiddenPaperCount = Number(await graph.getAttribute("data-hidden-papers"));
+      expect(hiddenPaperCount).toBe(7);
+      expect(hiddenPaperCount + await graph.locator(".association-node").count()).toBe(31);
+
+      const geometry = await graphGeometry(page);
+      expect(geometry).toMatchObject({
+        anchorObstructions: 0,
+        layoutHard: "0/0/0/0/0",
+        layoutPrimaryCrossings: 0,
+        layoutSameSideViolations: 0,
+        nodeOverlaps: 0,
+        outsideGraph: 0,
+        primaryCrossings: 0,
+        sameSideViolations: 0,
+        textOverflow: 0
+      });
+      expect(geometry.anchorDrift).toBeLessThan(14);
+
+      const initialCandidates = Number(await graph.getAttribute("data-initial-candidates"));
+      const repairCandidates = Number(await graph.getAttribute("data-repair-candidates"));
+      const repairNodes = Number(await graph.getAttribute("data-repair-nodes"));
+      expect(initialCandidates).toBeGreaterThan(0);
+      expect(initialCandidates).toBeLessThanOrEqual(35_000);
+      expect(repairCandidates).toBeLessThanOrEqual(5_000);
+      expect(repairNodes).toBeLessThanOrEqual(48);
+      expect(await graphInkPixelCount(graph)).toBeGreaterThan(100);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+      const compactNodes = graph.locator(".association-node.is-dot");
+      for (let index = 0; index < await compactNodes.count(); index += 1) {
+        const compactNode = compactNodes.nth(index);
+        await compactNode.hover();
+        await expect(compactNode.locator("strong")).toBeVisible();
+        expect(await compactNode.evaluate((node) => {
+          const title = node.querySelector("strong")!.getBoundingClientRect();
+          const card = node.getBoundingClientRect();
+          const surface = node.closest(".association-layer")!.getBoundingClientRect();
+          return card.left >= surface.left - 1 && card.right <= surface.right + 1 &&
+            card.top >= surface.top - 1 && card.bottom <= surface.bottom + 1 &&
+            title.left >= card.left - 1 && title.right <= card.right + 1 &&
+            title.top >= card.top - 1 && title.bottom <= card.bottom + 1;
+        })).toBe(true);
+      }
     });
   }
 });
