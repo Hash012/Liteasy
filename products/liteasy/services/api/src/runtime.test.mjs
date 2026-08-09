@@ -127,3 +127,48 @@ test("wires visualization dependencies while preserving injection", async () => 
   assert.equal(runtime.visualizationService.repository, visualizationRepository);
   await runtime.close();
 });
+
+test("wires scope-bearing document authorization and an operational visualization validator", async () => {
+  const pool = poolWithReadiness();
+  const runtime = await startCloudRuntime({ recommendation: {
+    endpoint: "https://api.crossref.org/works", mailto: "test@example.com", timeoutMs: 1000
+  } }, {
+    identityReadinessCheck: async () => ({ discovery: true, jwks: true }),
+    identityVerifier: {},
+    libraryRepository: {
+      async getDownloadablePdf() {
+        return { contentHash: "a".repeat(64) };
+      }
+    },
+    objectStore: { async assertSecurityConfiguration() { return { privateAccess: true }; } },
+    pdfUploadService: {
+      async assertNoUnverifiedObjects() { return { unverified: 0 }; },
+      async repairPendingWorkflows() { return { repaired: 0, scanned: 0 }; }
+    },
+    pool,
+    visualizationProviderGateway: { generateStructured() {} },
+    visualizationRepository: { capability() {} }
+  });
+  assert.deepEqual(await runtime.visualizationService.authorizeDocument({
+    document: {
+      documentId: "document-1",
+      scopeType: "user",
+      sourceIdentityHash: "a".repeat(64)
+    },
+    subjectId: "user-1"
+  }), {
+    allowed: true,
+    scopeId: "user-1",
+    scopeType: "user",
+    sourceIdentityHash: "a".repeat(64)
+  });
+  assert.deepEqual(await runtime.visualizationService.validateArtifact({
+    modality: "semantic_graph",
+    phase: "provider_result",
+    providerResult: { text: "{\"artifact\":true}" }
+  }), {
+    outcome: "pass",
+    validatorVersions: { structure: "1" }
+  });
+  await runtime.close();
+});

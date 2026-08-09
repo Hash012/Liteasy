@@ -54,7 +54,7 @@ function transactionHarness() {
         return { rows: row ? [row] : [] };
       }
       if (normalized.includes("FROM visualization_provider_configs")) {
-        return { rows: [{ route_id: "route-1", revision: "1", enabled: true, circuit_state: "closed", circuit_open_until: null, modalities: ["semantic_graph"] }] };
+        return { rows: [{ route_id: "route-1", revision: "1", enabled: true, circuit_state: "closed", circuit_open_until: null, modalities: ["semantic_graph"], route_available: true }] };
       }
       if (normalized.includes("FROM visualization_quota_reservations") && normalized.includes("idempotency_key")) {
         const row = [...state.reservations.values()].find((item) => item.subject_id === values[0] && item.idempotency_key === values[1]);
@@ -380,4 +380,197 @@ test("lists quota policies through the production repository", async () => {
       updatedBy: "admin-1"
     }]
   });
+});
+
+test("capability fails closed without both quota policy and a usable route", async () => {
+  const rows = [
+    { allowed: true, allowed_modalities: ["semantic_graph"], preference_enabled: true, quota_subject_id: null, route_available: true },
+    { allowed: true, allowed_modalities: ["semantic_graph"], preference_enabled: true, quota_subject_id: "user-1", route_available: false }
+  ];
+  const repository = new PostgresVisualizationRepository({
+    async query() { return { rows: [rows.shift()] }; }
+  });
+  for (const expected of ["missing policy", "missing route"]) {
+    const capability = await repository.capability(subject);
+    assert.equal(capability.serviceAvailable, false, expected);
+    assert.equal(capability.quota.available, false, expected);
+    assert.deepEqual(capability.availableModalities, [], expected);
+  }
+});
+
+test("entitlement mutation enforces revision and persists idempotency with audit", async () => {
+  const harness = adminPool(async (sql) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_entitlements") && sql.includes("FOR UPDATE")) return { rows: [] };
+    if (sql.startsWith("INSERT INTO visualization_entitlements")) return { rows: [{
+      allowed: true,
+      allowed_modalities: ["semantic_graph"],
+      explicit_requests_allowed: true,
+      revision: "1",
+      subject_id: "user-1"
+    }] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await repository.setEntitlement("user-1", {
+    allowed: true,
+    allowedModalities: ["semantic_graph"],
+    expectedRevision: 0,
+    explicitRequestsAllowed: true,
+    grantedBy: "admin-1",
+    idempotencyKey: "entitlement-0001",
+    reason: "Approved entitlement",
+    traceId: "trace-entitlement-1"
+  });
+  const audit = harness.calls.find((call) => call.sql.startsWith("INSERT INTO audit_events"));
+  assert.equal(audit.values[2], "visualization_entitlement_updated");
+  assert.equal(harness.calls.some((call) => call.sql.startsWith("INSERT INTO idempotency_records")), true);
+});
+
+test("quota mutation rejects stale revision before writing or auditing", async () => {
+  const harness = adminPool(async (sql) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_quota_policies") && sql.includes("FOR UPDATE")) return { rows: [{ revision: "2" }] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await assert.rejects(() => repository.setQuotaPolicy("user-1", {
+    dailyUnits: 20,
+    expectedRevision: 1,
+    idempotencyKey: "quota-policy-0001",
+    maxConcurrency: 2,
+    monthlyUnits: 100,
+    reason: "Approved quota policy",
+    timezone: "UTC",
+    traceId: "trace-quota-1",
+    updatedBy: "admin-1"
+  }), /visualization_quota_revision_conflict/);
+  assert.equal(harness.calls.some((call) => call.sql.startsWith("INSERT INTO audit_events")), false);
+});
+
+test("governance mutations reject a revision lost during the final write", async () => {
+  const entitlementHarness = adminPool(async (sql) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_entitlements") && sql.includes("FOR UPDATE")) return { rows: [{ revision: "1" }] };
+    if (sql.startsWith("INSERT INTO visualization_entitlements")) return { rows: [] };
+    return { rows: [] };
+  });
+  const entitlementRepository = new PostgresVisualizationRepository(entitlementHarness.pool);
+  await assert.rejects(() => entitlementRepository.setEntitlement("user-1", {
+    allowed: true,
+    allowedModalities: ["semantic_graph"],
+    expectedRevision: 1,
+    explicitRequestsAllowed: true,
+    grantedBy: "admin-1",
+    idempotencyKey: "entitlement-0002",
+    reason: "Approved entitlement",
+    traceId: "trace-entitlement-2"
+  }), /visualization_entitlement_revision_conflict/);
+  assert.equal(entitlementHarness.calls.some((call) => call.sql.startsWith("INSERT INTO audit_events")), false);
+
+  const quotaHarness = adminPool(async (sql) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_quota_policies") && sql.includes("FOR UPDATE")) return { rows: [{ revision: "1" }] };
+    if (sql.startsWith("INSERT INTO visualization_quota_policies")) return { rows: [] };
+    return { rows: [] };
+  });
+  const quotaRepository = new PostgresVisualizationRepository(quotaHarness.pool);
+  await assert.rejects(() => quotaRepository.setQuotaPolicy("user-1", {
+    dailyUnits: 20,
+    expectedRevision: 1,
+    idempotencyKey: "quota-policy-0002",
+    maxConcurrency: 2,
+    monthlyUnits: 100,
+    reason: "Approved quota policy",
+    timezone: "UTC",
+    traceId: "trace-quota-2",
+    updatedBy: "admin-1"
+  }), /visualization_quota_revision_conflict/);
+  assert.equal(quotaHarness.calls.some((call) => call.sql.startsWith("INSERT INTO audit_events")), false);
+
+  const routeHarness = adminPool(async (sql) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [{ revision: "1" }] };
+    if (sql.startsWith("INSERT INTO visualization_provider_configs")) return { rows: [] };
+    return { rows: [] };
+  });
+  const routeRepository = new PostgresVisualizationRepository(routeHarness.pool);
+  await assert.rejects(() => routeRepository.saveProviderRoute({
+    expectedRevision: 1,
+    idempotencyKey: "provider-save-0003",
+    reason: "Approved provider route",
+    route: {
+      circuitFailures: 0,
+      circuitOpenUntil: null,
+      circuitState: "closed",
+      dataClasses: ["paper"],
+      enabled: true,
+      endpoint: "https://visual.example/v1",
+      maxConcurrency: 2,
+      modalities: ["semantic_graph"],
+      model: "visual-1",
+      operations: ["structured_generation", "validation"],
+      priority: 10,
+      providerId: "provider-1",
+      region: "cn-east",
+      revision: 2,
+      routeId: "route-1",
+      secretRef: "viz-secret:provider-1",
+      timeoutMs: 30000
+    },
+    traceId: "trace-provider-3",
+    updatedBy: "admin-1"
+  }), /visualization_route_revision_conflict/);
+  assert.equal(routeHarness.calls.some((call) => call.sql.startsWith("INSERT INTO audit_events")), false);
+});
+
+test("publication locks and rechecks governance before atomically saving and settling", async () => {
+  const calls = [];
+  const reservation = {
+    idempotency_key: "generation-0001",
+    modality: "semantic_graph",
+    policy_revision: "1",
+    reservation_id: "reservation-1",
+    reserved_units: 4,
+    route_id: "route-1",
+    route_revision: "7",
+    settled_units: null,
+    state: "reserved",
+    subject_id: "user-1"
+  };
+  const harness = adminPool(async (sql) => {
+    calls.push(sql);
+    if (sql.includes("FROM visualization_quota_reservations") && sql.includes("FOR UPDATE")) return { rows: [reservation] };
+    if (sql.includes("FROM visualization_entitlements") && sql.includes("FOR UPDATE")) return { rows: [{ allowed: true, allowed_modalities: ["semantic_graph"] }] };
+    if (sql.includes("FROM visualization_user_preferences")) return { rows: [{ enabled: true }] };
+    if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [{ enabled: true, revision: "7" }] };
+    if (sql.includes("FROM library_entries entry")) return { rows: [{ content_hash: "c".repeat(64) }] };
+    if (sql.startsWith("INSERT INTO visualization_artifacts")) return { rows: [{ artifact_id: "artifact-1" }] };
+    if (sql.startsWith("UPDATE visualization_quota_reservations")) return { rows: [{ ...reservation, settled_units: 2, state: "settled" }] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const result = await repository.publish("user-1", {
+    access: { allowed: true, scopeId: "user-1", scopeType: "user", sourceIdentityHash: "c".repeat(64) },
+    artifact: {
+      artifactId: "artifact-1",
+      body: { artifactVersion: "liteasy.visualization/v1" },
+      contentHash: null,
+      evidenceHash: "a".repeat(64),
+      modality: "semantic_graph",
+      nodeId: "node-1",
+      specHash: "b".repeat(64),
+      state: "ready"
+    },
+    document: { documentId: "document-1", sourceIdentityHash: "c".repeat(64) },
+    reservationId: "reservation-1",
+    routeId: "route-1",
+    routeRevision: 7,
+    settledUnits: 2,
+    traceId: "trace-publish-1",
+    validation: { outcome: "pass" }
+  });
+  assert.equal(result.artifact.artifactId, "artifact-1");
+  assert.ok(calls.indexOf(calls.find((sql) => sql.startsWith("INSERT INTO visualization_artifacts"))) <
+    calls.indexOf(calls.find((sql) => sql.startsWith("UPDATE visualization_quota_reservations"))));
 });

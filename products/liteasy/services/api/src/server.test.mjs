@@ -43,7 +43,10 @@ function internalConfig() {
     allowedOrigins: [],
     database: { sslMode: "verify-full" },
     environment: "production",
-    identity: { intuechoServiceClientId: "intuecho-organization-service" },
+    identity: {
+      intuechoServiceClientId: "intuecho-organization-service",
+      visualizationServiceClientId: "liteasy-visualization-service"
+    },
     s3: { region: "test" }
   };
 }
@@ -427,6 +430,10 @@ function runtime() {
       async setPreference(subjectId, input) {
         calls.push({ subjectId, visualizationPreference: input });
         return { allowed: true, availableModalities: [], enabled: input.enabled, quota: { available: true }, serviceAvailable: true };
+      },
+      async generate(subjectId, input, context) {
+        calls.push({ context, subjectId, visualizationGenerate: input });
+        return { reservation: { reservationId: "reservation-1" }, result: { text: "validated" } };
       }
     }
   };
@@ -758,6 +765,22 @@ test("requires fresh platform administrator authorization for visualization enti
   ), staleResult);
   assert.equal(staleResult.status, 403);
   assert.equal(staleInstance.calls.some((item) => item.visualizationEntitlement), false);
+});
+
+test("internal visualization generation requires the dedicated service identity", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+  await handler(request("POST", "/v1/internal/visualization/generate", {
+    input: { providerRequest: {}, reservation: {} },
+    subjectId: "user_1"
+  }), result);
+  assert.equal(result.status, 200, result.body.toString("utf8"));
+  assert.deepEqual(instance.calls.find((item) => item.requirement).requirement, {
+    clientId: "liteasy-visualization-service",
+    requiredScope: "visualization:generate"
+  });
+  assert.equal(instance.calls.find((item) => item.visualizationGenerate).subjectId, "user_1");
 });
 
 test("passes identity-derived actor and server trace into a mutation", async () => {

@@ -28,6 +28,7 @@ import { SecureExternalPdfDownloader } from "./secureExternalPdfDownloader.mjs";
 import { PostgresTeamAnnotationRepository } from "./teamAnnotationRepository.mjs";
 import { authorizeLibraryScope } from "./libraryAuthorization.mjs";
 import { VisualizationProviderGateway } from "./visualizationProviderGateway.mjs";
+import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
 import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
 import { VisualizationService } from "./visualizationService.mjs";
 
@@ -65,13 +66,16 @@ export async function startCloudRuntime(config, dependencies = {}) {
       const current = await libraryRepository.getDownloadablePdf(scope, document?.documentId);
       return {
         allowed: current.contentHash === document?.sourceIdentityHash,
+        scopeId: scope.scopeId,
+        scopeType: scope.scopeType,
         sourceIdentityHash: current.contentHash
       };
     });
   const visualizationService = dependencies.visualizationService ?? new VisualizationService({
     authorizeDocument: visualizationDocumentAuthorizer,
     gateway: visualizationProviderGateway,
-    repository: visualizationRepository
+    repository: visualizationRepository,
+    validateArtifact: dependencies.visualizationArtifactValidator ?? validateVisualizationArtifact
   });
   const organizationGovernanceRepository = dependencies.organizationGovernanceRepository ??
     new PostgresOrganizationGovernanceRepository(pool);

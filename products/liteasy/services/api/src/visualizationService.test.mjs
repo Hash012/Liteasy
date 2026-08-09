@@ -31,11 +31,26 @@ function serviceHarness(overrides = {}) {
       };
     },
     async getProviderRoute(routeId) {
-      return { enabled: true, revision: 7, routeId };
+      return {
+        dataClasses: ["paper"],
+        enabled: true,
+        modalities: ["semantic_graph"],
+        operations: ["structured_generation"],
+        providerId: "provider-1",
+        revision: 7,
+        routeId
+      };
     },
     async reserve(subjectId, input) {
       calls.push(["reserve", subjectId, input]);
-      return { reservation: { reservationId: "reservation_1", reservedUnits: 4, state: "reserved" } };
+      return { reservation: {
+        modality: "semantic_graph",
+        reservationId: "reservation_1",
+        reservedUnits: 4,
+        routeId: "route_1",
+        routeRevision: 7,
+        state: "reserved"
+      } };
     },
     async rollback(subjectId, input) {
       calls.push(["rollback", subjectId, input]);
@@ -49,6 +64,17 @@ function serviceHarness(overrides = {}) {
       calls.push(["settle", subjectId, input]);
       return { reservation: { reservationId: input.reservationId, state: "settled" } };
     },
+    async publish(subjectId, input) {
+      calls.push(["publish", subjectId, input]);
+      return {
+        artifact: input.artifact,
+        reservation: { reservationId: input.reservationId, state: "settled" }
+      };
+    },
+    async recordProviderCost(input) {
+      calls.push(["recordProviderCost", input]);
+      return input;
+    },
     ...overrides.repository
   };
   const gateway = {
@@ -60,11 +86,20 @@ function serviceHarness(overrides = {}) {
   };
   const authorizeDocument = overrides.authorizeDocument ?? (async (input) => {
     calls.push(["authorizeDocument", input]);
-    return { allowed: true, sourceIdentityHash: "source_1" };
+    return {
+      allowed: true,
+      scopeId: "user_1",
+      scopeType: "user",
+      sourceIdentityHash: "source_1"
+    };
+  });
+  const validateArtifact = overrides.validateArtifact ?? (async (input) => {
+    calls.push(["validateArtifact", input]);
+    return { outcome: "pass", validatorVersions: { schema: "1" } };
   });
   return {
     calls,
-    service: new VisualizationService({ authorizeDocument, gateway, repository })
+    service: new VisualizationService({ authorizeDocument, gateway, repository, validateArtifact })
   };
 }
 
@@ -82,6 +117,25 @@ test("account capability exposes only the fail-closed desktop projection", async
     async capability() { throw new Error("private database detail"); }
   } });
   assert.deepEqual(await unavailable.service.accountCapability("user_1"), {
+    allowed: false,
+    availableModalities: [],
+    enabled: false,
+    quota: { available: false },
+    serviceAvailable: false
+  });
+
+  const missingGovernance = serviceHarness({ repository: {
+    async capability() {
+      return {
+        allowed: true,
+        availableModalities: [],
+        enabled: true,
+        quota: { available: false },
+        serviceAvailable: false
+      };
+    }
+  } });
+  assert.deepEqual(await missingGovernance.service.accountCapability("user_1"), {
     allowed: false,
     availableModalities: [],
     enabled: false,
@@ -157,7 +211,16 @@ test("late provider completion after cancellation is discarded and refunded", as
 
 test("submission rechecks all publication gates before settling", async () => {
   const instance = serviceHarness();
-  const artifact = { artifactId: "artifact_1", modality: "semantic_graph" };
+  const artifact = {
+    artifactId: "artifact_1",
+    body: { artifactVersion: "liteasy.visualization/v1" },
+    contentHash: null,
+    evidenceHash: "a".repeat(64),
+    modality: "semantic_graph",
+    nodeId: "node_1",
+    specHash: "b".repeat(64),
+    state: "ready"
+  };
   await instance.service.submit("user_1", {
     artifact,
     document: { documentId: "document_1", sourceIdentityHash: "source_1" },
@@ -167,23 +230,29 @@ test("submission rechecks all publication gates before settling", async () => {
     routeRevision: 7,
     settledUnits: 2
   }, { traceId: "trace_4" });
-  assert.deepEqual(instance.calls.map(([name]) => name), ["authorizeDocument", "settle"]);
-  assert.deepEqual(instance.calls[1][2], {
+  assert.deepEqual(instance.calls.map(([name]) => name), ["validateArtifact", "authorizeDocument", "publish"]);
+  assert.deepEqual(instance.calls[2][2], {
+    access: {
+      allowed: true,
+      scopeId: "user_1",
+      scopeType: "user",
+      sourceIdentityHash: "source_1"
+    },
     artifact,
     document: { documentId: "document_1", sourceIdentityHash: "source_1" },
-    reasonCode: "completed",
     reservationId: "reservation_1",
     routeId: "route_1",
     routeRevision: 7,
     settledUnits: 2,
-    traceId: "trace_4"
+    traceId: "trace_4",
+    validation: { outcome: "pass", validatorVersions: { schema: "1" } }
   });
 });
 
 test("entitlement revocation immediately before submission refunds and blocks publication", async () => {
   const instance = serviceHarness({ repository: {
-    async getEntitlement() {
-      return { allowed: false, allowedModalities: [], explicitRequestsAllowed: false, revision: 4 };
+    async publish() {
+      throw new Error("visualization_entitlement_revoked");
     }
   } });
   await assert.rejects(() => instance.service.submit("user_1", {
@@ -194,9 +263,11 @@ test("entitlement revocation immediately before submission refunds and blocks pu
     routeId: "route_1",
     routeRevision: 7,
     settledUnits: 2
-  }, { traceId: "trace_5" }), /visualization_entitlement_revoked/);
-  assert.deepEqual(instance.calls.map(([name]) => name), ["rollback"]);
-  assert.equal(instance.calls[0][2].reasonCode, "entitlement_revoked");
+  }, { traceId: "trace_5" }), (error) => (
+    error.code === "visualization_entitlement_revoked" && error.status === 403
+  ));
+  assert.deepEqual(instance.calls.map(([name]) => name), ["validateArtifact", "authorizeDocument", "rollback"]);
+  assert.equal(instance.calls.at(-1)[2].reasonCode, "entitlement_revoked");
 });
 
 test("administrator mutations reject short idempotency keys before persistence", async () => {
@@ -247,4 +318,83 @@ test("provider route saves use gateway normalization before repository persisten
   assert.deepEqual(calls.map(([name]) => name), ["validate", "save"]);
   assert.equal(calls[1][1].route.endpoint, "https://visual.example/v1");
   assert.equal(calls[1][1].updatedBy, "admin_1");
+});
+
+test("generation ignores caller routes and enforces the reserved stored route revision", async () => {
+  const instance = serviceHarness();
+  await instance.service.generate("user_1", {
+    providerRequest: {
+      dataClass: "paper",
+      modality: "semantic_graph",
+      routes: [{ routeId: "attacker-route" }]
+    },
+    reservation: {
+      idempotencyKey: "generation-0003",
+      modality: "semantic_graph",
+      routeId: "route_1",
+      traceId: "trace_7",
+      units: 4
+    }
+  }, { traceId: "trace_7" });
+  const providerCall = instance.calls.find(([name]) => name === "generateStructured")[1];
+  assert.equal(providerCall.route.routeId, "route_1");
+  assert.equal(providerCall.routes, undefined);
+  assert.equal(instance.calls.some(([name]) => name === "validateArtifact"), true);
+});
+
+test("generation validation failure refunds before publication", async () => {
+  const instance = serviceHarness({
+    validateArtifact: async () => ({ outcome: "fail", reasonCode: "schema_invalid" })
+  });
+  await assert.rejects(() => instance.service.generate("user_1", {
+    providerRequest: { dataClass: "paper", modality: "semantic_graph" },
+    reservation: {
+      idempotencyKey: "generation-0004",
+      modality: "semantic_graph",
+      routeId: "route_1",
+      traceId: "trace_8",
+      units: 4
+    }
+  }, { traceId: "trace_8" }), /visualization_validation_failed/);
+  assert.equal(instance.calls.at(-1)[0], "rollback");
+  assert.equal(instance.calls.at(-1)[2].reasonCode, "validation_failed");
+});
+
+test("generation records available provider cost metadata outside user usage", async () => {
+  const instance = serviceHarness({ gateway: {
+    async generateStructured(input) {
+      return {
+        cost: {
+          amount: 0.02,
+          currency: "USD",
+          invocationId: "invocation_1",
+          providerRequestId: "provider-request-1",
+          units: 2
+        },
+        text: "{\"artifact\":true}"
+      };
+    }
+  } });
+  await instance.service.generate("user_1", {
+    providerRequest: { dataClass: "paper", modality: "semantic_graph" },
+    reservation: {
+      idempotencyKey: "generation-0005",
+      modality: "semantic_graph",
+      routeId: "route_1",
+      traceId: "trace_9",
+      units: 4
+    }
+  }, { traceId: "trace_9" });
+  const cost = instance.calls.find(([name]) => name === "recordProviderCost")[1];
+  assert.deepEqual(cost, {
+    amount: 0.02,
+    currency: "USD",
+    invocationId: "invocation_1",
+    metadata: { outcome: "succeeded", traceId: "trace_9" },
+    providerId: "provider-1",
+    providerRequestId: "provider-request-1",
+    reasonCode: "provider_succeeded",
+    routeId: "route_1",
+    units: 2
+  });
 });

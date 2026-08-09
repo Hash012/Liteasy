@@ -134,6 +134,43 @@ test("selects the lowest-priority enabled route compatible with the requested op
   assert.deepEqual(observed, ["route-1"]);
 });
 
+test("preserves validated provider cost metadata for the service ledger", async () => {
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured() {
+        return {
+          cost: {
+            amount: 0.02,
+            currency: "USD",
+            invocationId: "invocation-1",
+            providerRequestId: "provider-request-1",
+            units: 2
+          },
+          text: "normalized graph"
+        };
+      }
+    },
+    dnsLookup: async () => [publicAddress],
+    egressPolicy: { allowedHostnames: ["provider.example"] },
+    secretStore: secretStore()
+  });
+
+  assert.deepEqual(await gateway.generateStructured({
+    dataClass: "paper",
+    modality: "semantic_graph",
+    route
+  }), {
+    cost: {
+      amount: 0.02,
+      currency: "USD",
+      invocationId: "invocation-1",
+      providerRequestId: "provider-request-1",
+      units: 2
+    },
+    text: "normalized graph"
+  });
+});
+
 test("rejects routes whose endpoint resolves outside the deployment egress policy", async () => {
   const gateway = new VisualizationProviderGateway({
     adapter: {

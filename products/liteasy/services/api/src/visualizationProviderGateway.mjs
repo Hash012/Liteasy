@@ -275,7 +275,8 @@ function normalizedStructuredResult(result) {
   if (!result || typeof result !== "object" || typeof result.text !== "string" || result.text.trim() === "") {
     throw new VisualizationProviderError("visualization_provider_response_invalid");
   }
-  return Object.freeze({ text: result.text });
+  const cost = normalizedCost(result.cost);
+  return Object.freeze({ ...(cost ? { cost } : {}), text: result.text });
 }
 
 function normalizedImageResult(result) {
@@ -285,9 +286,29 @@ function normalizedImageResult(result) {
   if (typeof result.data !== "string" && !(result.bytes instanceof Uint8Array)) {
     throw new VisualizationProviderError("visualization_provider_response_invalid");
   }
+  const cost = normalizedCost(result.cost);
   return Object.freeze(result.bytes instanceof Uint8Array
-    ? { bytes: result.bytes, mimeType: result.mimeType }
-    : { data: result.data, mimeType: result.mimeType });
+    ? { bytes: result.bytes, ...(cost ? { cost } : {}), mimeType: result.mimeType }
+    : { data: result.data, ...(cost ? { cost } : {}), mimeType: result.mimeType });
+}
+
+function normalizedCost(cost) {
+  if (cost === undefined) return null;
+  if (!cost || typeof cost !== "object" || Array.isArray(cost) ||
+    typeof cost.amount !== "number" || !Number.isFinite(cost.amount) || cost.amount < 0 ||
+    typeof cost.currency !== "string" || !/^[A-Z]{3}$/.test(cost.currency) ||
+    typeof cost.invocationId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(cost.invocationId) ||
+    typeof cost.providerRequestId !== "string" || cost.providerRequestId.trim().length === 0 ||
+    cost.providerRequestId.length > 240 || !Number.isInteger(cost.units) || cost.units < 0) {
+    throw new VisualizationProviderError("visualization_provider_cost_invalid");
+  }
+  return Object.freeze({
+    amount: cost.amount,
+    currency: cost.currency,
+    invocationId: cost.invocationId,
+    providerRequestId: cost.providerRequestId,
+    units: cost.units
+  });
 }
 
 export class VisualizationProviderGateway {

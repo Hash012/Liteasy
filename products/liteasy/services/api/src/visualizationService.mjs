@@ -39,22 +39,22 @@ function mutationInput(input) {
 
 function capabilityProjection(value) {
   if (!value || typeof value !== "object") return unavailableCapability;
-  const allowed = value.allowed === true;
-  const quotaAvailable = allowed && value.quota?.available === true;
+  const serviceAvailable = value.allowed === true && value.serviceAvailable === true;
+  const quotaAvailable = serviceAvailable && value.quota?.available === true;
   const remainingBand = value.quota?.remainingBand;
   return {
-    allowed,
-    availableModalities: allowed && Array.isArray(value.availableModalities)
+    allowed: serviceAvailable,
+    availableModalities: serviceAvailable && Array.isArray(value.availableModalities)
       ? value.availableModalities.filter((item) => typeof item === "string")
       : [],
-    enabled: allowed && value.enabled === true,
+    enabled: serviceAvailable && value.enabled === true,
     quota: {
       available: quotaAvailable,
       ...(quotaAvailable && new Set(["none", "low", "available"]).has(remainingBand)
         ? { remainingBand }
         : {})
     },
-    serviceAvailable: allowed && value.serviceAvailable === true
+    serviceAvailable
   };
 }
 
@@ -80,12 +80,14 @@ function rollbackReason(error) {
 
 function publicError(error) {
   if (error instanceof VisualizationServiceError) return error;
-  const code = error?.code;
+  const code = error?.code ?? error?.message;
   if (typeof code !== "string" || !code.startsWith("visualization_")) return error;
   const status = code === "visualization_provider_timeout" ? 504
     : code === "visualization_request_aborted" ? 499
       : code === "visualization_validation_failed" ? 422
-        : 503;
+        : new Set(["visualization_entitlement_revoked", "visualization_source_access_revoked"]).has(code) ? 403
+          : code === "visualization_route_revision_changed" ? 409
+            : 503;
   return new VisualizationServiceError(code, status);
 }
 
@@ -106,13 +108,15 @@ export class VisualizationServiceError extends Error {
 }
 
 export class VisualizationService {
-  constructor({ authorizeDocument, gateway, repository }) {
-    if (!repository || !gateway || typeof authorizeDocument !== "function") {
+  constructor({ authorizeDocument, gateway, repository, validateArtifact }) {
+    if (!repository || !gateway || typeof authorizeDocument !== "function" ||
+      typeof validateArtifact !== "function") {
       throw new Error("visualization_service_dependencies_invalid");
     }
     this.authorizeDocument = authorizeDocument;
     this.gateway = gateway;
     this.repository = repository;
+    this.validateArtifact = validateArtifact;
   }
 
   async accountCapability(subjectId) {
@@ -134,14 +138,43 @@ export class VisualizationService {
     throwIfAborted(context.signal);
     const reserved = await this.repository.reserve(subjectId, input.reservation);
     const reservationId = reserved.reservation.reservationId;
+    let costRecorded = false;
     try {
-      const providerInput = { ...input.providerRequest, signal: context.signal };
+      const route = await this.repository.getProviderRoute(reserved.reservation.routeId);
+      if (!route?.enabled || route.revision !== reserved.reservation.routeRevision) {
+        throw new VisualizationServiceError("visualization_route_revision_changed", 409);
+      }
+      const { route: _ignoredRoute, routes: _ignoredRoutes, ...request } = input.providerRequest ?? {};
+      const providerInput = {
+        ...request,
+        modality: reserved.reservation.modality,
+        route,
+        signal: context.signal
+      };
       const result = input.providerRequest?.operation === "image_generation"
         ? await this.gateway.generateImage(providerInput)
         : await this.gateway.generateStructured(providerInput);
       throwIfAborted(context.signal);
-      return { reservation: reserved.reservation, result };
+      if (result?.cost) {
+        await this.#recordProviderCost(result.cost, route, "succeeded", context.traceId);
+        costRecorded = true;
+      }
+      const { cost: _cost, ...providerResult } = result;
+      const validation = await this.validateArtifact({
+        modality: reserved.reservation.modality,
+        phase: "provider_result",
+        providerResult,
+        reservation: reserved.reservation
+      });
+      if (validation?.outcome !== "pass") {
+        throw new VisualizationServiceError("visualization_validation_failed", 422);
+      }
+      return { reservation: reserved.reservation, result: providerResult, validation };
     } catch (error) {
+      if (!costRecorded && error?.cost) {
+        const route = await this.repository.getProviderRoute(reserved.reservation.routeId);
+        await this.#recordProviderCost(error.cost, route, "failed", context.traceId);
+      }
       await rollback(this.repository, subjectId, reservationId, error, context.traceId);
       throw publicError(error);
     }
@@ -151,17 +184,13 @@ export class VisualizationService {
     const reservationId = identifier(input?.reservationId, "visualization_reservation_invalid");
     try {
       throwIfAborted(context.signal);
-      const entitlement = await this.repository.getEntitlement(subjectId);
-      if (entitlement.allowed !== true || !entitlement.allowedModalities?.includes(input.modality)) {
-        throw new VisualizationServiceError("visualization_entitlement_revoked", 403);
-      }
-      const currentCapability = await this.repository.capability(subjectId);
-      if (currentCapability.enabled !== true) {
-        throw new VisualizationServiceError("visualization_preference_disabled", 403);
-      }
-      const route = await this.repository.getProviderRoute(input.routeId);
-      if (!route?.enabled || Number(route.revision) !== input.routeRevision) {
-        throw new VisualizationServiceError("visualization_route_revision_changed", 409);
+      const validation = await this.validateArtifact({
+        artifact: input.artifact,
+        modality: input.modality,
+        phase: "publication"
+      });
+      if (validation?.outcome !== "pass") {
+        throw new VisualizationServiceError("visualization_validation_failed", 422);
       }
       const access = await this.authorizeDocument({
         document: input.document,
@@ -171,20 +200,35 @@ export class VisualizationService {
         throw new VisualizationServiceError("visualization_source_access_revoked", 403);
       }
       throwIfAborted(context.signal);
-      return await this.repository.settle(subjectId, {
+      return await this.repository.publish(subjectId, {
+        access,
         artifact: input.artifact,
         document: input.document,
-        reasonCode: "completed",
         reservationId,
         routeId: input.routeId,
         routeRevision: input.routeRevision,
         settledUnits: input.settledUnits,
-        traceId: context.traceId
+        traceId: context.traceId,
+        validation
       });
     } catch (error) {
       await rollback(this.repository, subjectId, reservationId, error, context.traceId);
       throw publicError(error);
     }
+  }
+
+  async #recordProviderCost(cost, route, outcome, traceId) {
+    await this.repository.recordProviderCost({
+      amount: cost.amount,
+      currency: cost.currency,
+      invocationId: cost.invocationId,
+      metadata: { outcome, traceId },
+      providerId: route.providerId,
+      providerRequestId: cost.providerRequestId,
+      reasonCode: `provider_${outcome}`,
+      routeId: route.routeId,
+      units: cost.units
+    });
   }
 
   async listProviderRoutes(principal, input = {}) {

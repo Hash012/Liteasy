@@ -67,11 +67,55 @@ function reservationView(row) {
     idempotencyKey: row.idempotency_key,
     modality: row.modality,
     routeId: row.route_id,
+    routeRevision: Number(row.route_revision),
+    policyRevision: Number(row.policy_revision),
     reservedUnits: Number(row.reserved_units),
     settledUnits: row.settled_units == null ? null : Number(row.settled_units),
     state: row.state,
     expiresAt: row.expires_at?.toISOString?.() ?? row.expires_at ?? null
   } : null;
+}
+
+async function appendVisualizationAudit(client, input) {
+  await client.query(`
+    INSERT INTO audit_events(
+      audit_id, actor_id, actor_audience, action, resource_type, resource_id,
+      scope_type, scope_id, reason, trace_id, detail
+    ) VALUES ($1,$2,'liteasy-admin',$3,$4,$5,'user',$5,$6,$7,$8::jsonb)
+  `, [
+    `audit_${randomUUID()}`,
+    input.actorId,
+    input.action,
+    input.resourceType,
+    input.subjectId,
+    input.reason,
+    input.traceId,
+    json(input.detail)
+  ]);
+}
+
+async function idempotentAdminMutation(client, input, mutate) {
+  const hash = requestHash(input.requestBody);
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `visualization-admin:${input.actorId}:${input.operation}:${input.idempotencyKey}`
+  ]);
+  const prior = await client.query(`
+    SELECT request_hash, response_body FROM idempotency_records
+     WHERE actor_id = $1 AND operation = $2 AND idempotency_key = $3
+       AND expires_at > now()
+  `, [input.actorId, input.operation, input.idempotencyKey]);
+  if (prior.rows[0]) {
+    if (prior.rows[0].request_hash !== hash) throw new Error("idempotency_key_reused");
+    return prior.rows[0].response_body;
+  }
+  const response = await mutate();
+  await client.query(`
+    INSERT INTO idempotency_records(
+      actor_id, operation, idempotency_key, request_hash, response_status,
+      response_body, expires_at
+    ) VALUES ($1,$2,$3,$4,200,$5::jsonb,now()+interval '24 hours')
+  `, [input.actorId, input.operation, input.idempotencyKey, hash, json(response)]);
+  return response;
 }
 
 function providerRouteView(row) {
@@ -220,6 +264,7 @@ export class PostgresVisualizationRepository {
           circuit_open_until = excluded.circuit_open_until,
           revision = visualization_provider_configs.revision + 1,
           updated_by = excluded.updated_by, updated_at = now()
+        WHERE visualization_provider_configs.revision = $19
         RETURNING *
       `, [
         id,
@@ -239,8 +284,10 @@ export class PostgresVisualizationRepository {
         route.circuitFailures,
         route.circuitOpenUntil,
         revision + 1,
-        actorId
+        actorId,
+        input.expectedRevision
       ]);
+      if (!saved.rows[0]) throw new Error("visualization_route_revision_conflict");
       const response = { route: providerRouteView(saved.rows[0]) };
       await client.query(`
         INSERT INTO audit_events(
@@ -329,7 +376,27 @@ export class PostgresVisualizationRepository {
     const id = subjectId(subject);
     const result = await this.pool.query(`
       SELECT e.*, p.enabled AS preference_enabled, p.revision AS preference_revision,
-             q.daily_units, q.monthly_units, q.max_concurrency, q.timezone, q.revision AS policy_revision,
+             q.subject_id AS quota_subject_id, q.daily_units, q.monthly_units,
+             q.max_concurrency, q.timezone, q.revision AS policy_revision,
+             EXISTS(
+               SELECT 1 FROM visualization_provider_configs route
+                WHERE route.enabled = true AND route.circuit_state <> 'open'
+                  AND route.operations ?| ARRAY['structured_generation','image_generation']
+                  AND route.modalities ?| ARRAY(
+                    SELECT jsonb_array_elements_text(e.allowed_modalities)
+                  )
+             ) AS route_available,
+             COALESCE((
+               SELECT jsonb_agg(modality ORDER BY modality)
+                 FROM (
+                   SELECT DISTINCT allowed_modality.value AS modality
+                     FROM jsonb_array_elements_text(e.allowed_modalities) allowed_modality(value)
+                     JOIN visualization_provider_configs route
+                       ON route.enabled = true AND route.circuit_state <> 'open'
+                      AND route.operations ?| ARRAY['structured_generation','image_generation']
+                      AND route.modalities ? allowed_modality.value
+                 ) available
+             ), '[]'::jsonb) AS available_modalities,
              COALESCE((SELECT SUM(u.units_delta) FROM visualization_usage_ledger u
                        LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
                        WHERE u.subject_id = e.subject_id
@@ -356,15 +423,19 @@ export class PostgresVisualizationRepository {
     const remaining = Math.min(dailyRemaining, monthlyRemaining);
     const limit = Math.max(1, Math.min(daily, monthly));
     const remainingBand = remaining <= 0 ? "none" : remaining / limit <= 0.1 ? "low" : "available";
-    const allowedModalities = Array.isArray(row.allowed_modalities) ? row.allowed_modalities : [];
+    const policyAvailable = row.quota_subject_id != null;
+    const routeAvailable = row.route_available === true;
+    const availableModalities = policyAvailable && routeAvailable && Array.isArray(row.available_modalities)
+      ? row.available_modalities
+      : [];
     return {
       allowed: Boolean(row.allowed),
       enabled: Boolean(row.allowed && row.preference_enabled !== false),
-      serviceAvailable: true,
-      availableModalities: allowedModalities,
+      serviceAvailable: Boolean(row.allowed && policyAvailable && routeAvailable && availableModalities.length > 0),
+      availableModalities,
       preference: rowPreference({ enabled: row.preference_enabled ?? true, revision: row.preference_revision ?? 1 }),
       quota: {
-        available: true,
+        available: Boolean(row.allowed && policyAvailable && routeAvailable && remaining > 0),
         dailyUnits: daily,
         monthlyUnits: monthly,
         usedUnits: dailyUsed,
@@ -397,16 +468,73 @@ export class PostgresVisualizationRepository {
     const id = subjectId(subject);
     if (typeof input?.allowed !== "boolean") throw new Error("visualization_entitlement_invalid");
     const modalities = Array.isArray(input.allowedModalities) ? input.allowedModalities : [];
+    const actorId = subjectId(input?.grantedBy);
+    const key = operationKey(input?.idempotencyKey);
+    if (!Number.isSafeInteger(input?.expectedRevision) || input.expectedRevision < 0) {
+      throw new Error("visualization_entitlement_revision_invalid");
+    }
+    const reason = required(input, "reason");
+    const traceId = required(input, "traceId");
     return withPostgresTransaction(this.pool, async (client) => {
-      const result = await client.query(`
-        INSERT INTO visualization_entitlements(subject_id, allowed, explicit_requests_allowed, allowed_modalities, revision, granted_by, reason)
-        VALUES ($1, $2, $3, $4::jsonb, 1, $5, $6)
-        ON CONFLICT(subject_id) DO UPDATE SET allowed = excluded.allowed,
-          explicit_requests_allowed = excluded.explicit_requests_allowed, allowed_modalities = excluded.allowed_modalities,
-          revision = visualization_entitlements.revision + 1, granted_by = excluded.granted_by, reason = excluded.reason, updated_at = now()
-        RETURNING *
-      `, [id, input.allowed, Boolean(input.explicitRequestsAllowed), JSON.stringify(modalities), input.grantedBy ?? null, input.reason ?? null]);
-      return { entitlement: rowEntitlement(result.rows[0]) };
+      return idempotentAdminMutation(client, {
+        actorId,
+        idempotencyKey: key,
+        operation: "visualization-entitlement-set",
+        requestBody: {
+          allowed: input.allowed,
+          allowedModalities: modalities,
+          expectedRevision: input.expectedRevision,
+          explicitRequestsAllowed: Boolean(input.explicitRequestsAllowed),
+          reason,
+          subjectId: id
+        }
+      }, async () => {
+        const current = await client.query(`
+          SELECT * FROM visualization_entitlements WHERE subject_id = $1 FOR UPDATE
+        `, [id]);
+        const revision = Number(current.rows[0]?.revision ?? 0);
+        if (revision !== input.expectedRevision) throw new Error("visualization_entitlement_revision_conflict");
+        const result = await client.query(`
+          INSERT INTO visualization_entitlements(
+            subject_id, allowed, explicit_requests_allowed, allowed_modalities,
+            revision, granted_by, reason
+          ) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)
+          ON CONFLICT(subject_id) DO UPDATE SET allowed = excluded.allowed,
+          explicit_requests_allowed = excluded.explicit_requests_allowed,
+          allowed_modalities = excluded.allowed_modalities,
+          revision = visualization_entitlements.revision + 1,
+          granted_by = excluded.granted_by, reason = excluded.reason, updated_at = now()
+        WHERE visualization_entitlements.revision = $8
+          RETURNING *
+        `, [
+          id,
+          input.allowed,
+          Boolean(input.explicitRequestsAllowed),
+          json(modalities),
+          revision + 1,
+          actorId,
+          reason,
+          input.expectedRevision
+        ]);
+        if (!result.rows[0]) throw new Error("visualization_entitlement_revision_conflict");
+        if (input.allowed) {
+          await client.query(`
+            INSERT INTO visualization_user_preferences(subject_id, enabled)
+            VALUES ($1, true) ON CONFLICT(subject_id) DO NOTHING
+          `, [id]);
+        }
+        const response = { entitlement: rowEntitlement(result.rows[0]) };
+        await appendVisualizationAudit(client, {
+          action: "visualization_entitlement_updated",
+          actorId,
+          detail: { allowed: input.allowed, revision: response.entitlement.revision },
+          reason,
+          resourceType: "visualization_entitlement",
+          subjectId: id,
+          traceId
+        });
+        return response;
+      });
     });
   }
 
@@ -415,17 +543,168 @@ export class PostgresVisualizationRepository {
     if (!Number.isInteger(input?.dailyUnits) || input.dailyUnits < 0 || !Number.isInteger(input?.monthlyUnits) || input.monthlyUnits < 0 || !Number.isInteger(input?.maxConcurrency) || input.maxConcurrency <= 0) throw new Error("quota_policy_invalid");
     if (!input.timezone) throw new Error("quota_timezone_invalid");
     try { new Intl.DateTimeFormat("en-US", { timeZone: input.timezone }).format(); } catch { throw new Error("quota_timezone_invalid"); }
-    required(input, "reason");
+    const reason = required(input, "reason");
+    const actorId = subjectId(input?.updatedBy);
+    const key = operationKey(input?.idempotencyKey);
+    const traceId = required(input, "traceId");
+    if (!Number.isSafeInteger(input?.expectedRevision) || input.expectedRevision < 0) {
+      throw new Error("visualization_quota_revision_invalid");
+    }
     return withPostgresTransaction(this.pool, async (client) => {
-      const result = await client.query(`
-        INSERT INTO visualization_quota_policies(subject_id, daily_units, monthly_units, max_concurrency, timezone, revision, updated_by, reason)
-        VALUES ($1, $2, $3, $4, $5, 1, $6, $7)
-        ON CONFLICT(subject_id) DO UPDATE SET daily_units = excluded.daily_units, monthly_units = excluded.monthly_units,
-          max_concurrency = excluded.max_concurrency, timezone = excluded.timezone, revision = visualization_quota_policies.revision + 1,
+      return idempotentAdminMutation(client, {
+        actorId,
+        idempotencyKey: key,
+        operation: "visualization-quota-set",
+        requestBody: {
+          dailyUnits: input.dailyUnits,
+          expectedRevision: input.expectedRevision,
+          maxConcurrency: input.maxConcurrency,
+          monthlyUnits: input.monthlyUnits,
+          reason,
+          subjectId: id,
+          timezone: input.timezone
+        }
+      }, async () => {
+        const current = await client.query(`
+          SELECT * FROM visualization_quota_policies WHERE subject_id = $1 FOR UPDATE
+        `, [id]);
+        const revision = Number(current.rows[0]?.revision ?? 0);
+        if (revision !== input.expectedRevision) throw new Error("visualization_quota_revision_conflict");
+        const result = await client.query(`
+          INSERT INTO visualization_quota_policies(
+            subject_id, daily_units, monthly_units, max_concurrency, timezone,
+            revision, updated_by, reason
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          ON CONFLICT(subject_id) DO UPDATE SET daily_units = excluded.daily_units,
+            monthly_units = excluded.monthly_units,
+          max_concurrency = excluded.max_concurrency, timezone = excluded.timezone,
+          revision = visualization_quota_policies.revision + 1,
           updated_by = excluded.updated_by, reason = excluded.reason, updated_at = now()
-        RETURNING *
-      `, [id, input.dailyUnits, input.monthlyUnits, input.maxConcurrency, input.timezone, input.updatedBy ?? "system", input.reason]);
-      return { policy: result.rows[0] };
+        WHERE visualization_quota_policies.revision = $9
+          RETURNING *
+        `, [
+          id,
+          input.dailyUnits,
+          input.monthlyUnits,
+          input.maxConcurrency,
+          input.timezone,
+          revision + 1,
+          actorId,
+          reason,
+          input.expectedRevision
+        ]);
+        if (!result.rows[0]) throw new Error("visualization_quota_revision_conflict");
+        const response = { policy: quotaPolicyView(result.rows[0]) };
+        await appendVisualizationAudit(client, {
+          action: "visualization_quota_updated",
+          actorId,
+          detail: { revision: response.policy.revision },
+          reason,
+          resourceType: "visualization_quota_policy",
+          subjectId: id,
+          traceId
+        });
+        return response;
+      });
+    });
+  }
+
+  async publish(subject, input) {
+    const id = subjectId(subject);
+    const reservationId = required(input, "reservationId");
+    const artifact = input?.artifact;
+    const documentId = required(input?.document, "documentId");
+    const access = input?.access;
+    if (!artifact || typeof artifact !== "object" || input?.validation?.outcome !== "pass") {
+      throw new Error("visualization_validation_failed");
+    }
+    if (!access || access.allowed !== true || !new Set(["user", "organization"]).has(access.scopeType)) {
+      throw new Error("visualization_source_access_revoked");
+    }
+    return withPostgresTransaction(this.pool, async (client) => {
+      const reservation = (await client.query(`
+        SELECT * FROM visualization_quota_reservations
+         WHERE reservation_id = $1 AND subject_id = $2 FOR UPDATE
+      `, [reservationId, id])).rows[0];
+      if (!reservation) throw new Error("visualization_reservation_not_found");
+      if (reservation.state !== "reserved") {
+        if (reservation.state === "settled") return { artifact, replayed: true, reservation: reservationView(reservation) };
+        throw new Error("visualization_reservation_not_publishable");
+      }
+      const entitlement = (await client.query(`
+        SELECT * FROM visualization_entitlements WHERE subject_id = $1 FOR UPDATE
+      `, [id])).rows[0];
+      const preference = (await client.query(`
+        SELECT enabled FROM visualization_user_preferences WHERE subject_id = $1 FOR UPDATE
+      `, [id])).rows[0];
+      const route = (await client.query(`
+        SELECT * FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE
+      `, [reservation.route_id])).rows[0];
+      if (!entitlement?.allowed || preference?.enabled === false ||
+        !entitlement.allowed_modalities?.includes(reservation.modality)) {
+        throw new Error("visualization_entitlement_revoked");
+      }
+      if (!route?.enabled || route.circuit_state === "open" ||
+        Number(route.revision) !== Number(reservation.route_revision) ||
+        input.routeId !== reservation.route_id || input.routeRevision !== Number(reservation.route_revision)) {
+        throw new Error("visualization_route_revision_changed");
+      }
+      const source = (await client.query(`
+        SELECT reference.content_hash
+          FROM library_entries entry
+          JOIN storage_object_references reference USING(document_id)
+          JOIN storage_objects object ON object.content_hash = reference.content_hash
+         WHERE entry.document_id = $1 AND entry.scope_type = $2 AND entry.scope_id = $3
+           AND entry.entry_kind = 'pdf' AND entry.status = 'active'
+           AND entry.availability = 'available' AND object.status = 'available'
+           AND object.security_scan_hash = object.content_hash
+           AND ($2 = 'user' AND $3 = $4 OR $2 = 'organization' AND EXISTS(
+             SELECT 1 FROM organizations organization
+             LEFT JOIN organization_members member
+               ON member.organization_id = organization.organization_id
+              AND member.member_subject = $4
+              WHERE organization.organization_id = $3 AND organization.status = 'active'
+                AND (organization.owner_subject = $4 OR member.status = 'active')
+           ))
+         FOR UPDATE OF entry, reference, object
+      `, [documentId, access.scopeType, access.scopeId, id])).rows[0];
+      if (!source || source.content_hash !== access.sourceIdentityHash ||
+        source.content_hash !== input.document.sourceIdentityHash) {
+        throw new Error("visualization_source_access_revoked");
+      }
+      if (!Number.isInteger(input.settledUnits) || input.settledUnits < 0 ||
+        input.settledUnits > Number(reservation.reserved_units)) {
+        throw new Error("visualization_settled_units_invalid");
+      }
+      const insertedArtifact = await client.query(`
+        INSERT INTO visualization_artifacts(
+          subject_id, artifact_id, document_id, node_id, modality, state,
+          spec_hash, evidence_hash, content_hash, body, validation
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb)
+        ON CONFLICT(subject_id, artifact_id) DO NOTHING
+        RETURNING artifact_id
+      `, [
+        id, required(artifact, "artifactId"), documentId, artifact.nodeId ?? null,
+        reservation.modality, artifact.state, artifact.specHash, artifact.evidenceHash,
+        artifact.contentHash ?? null, json(artifact.body), json(input.validation)
+      ]);
+      if (!insertedArtifact.rows[0]) throw new Error("visualization_artifact_conflict");
+      const updated = (await client.query(`
+        UPDATE visualization_quota_reservations
+           SET state = 'settled', settled_units = $2, updated_at = now()
+         WHERE reservation_id = $1 RETURNING *
+      `, [reservationId, input.settledUnits])).rows[0];
+      await client.query(`
+        INSERT INTO visualization_usage_ledger(
+          event_id, subject_id, reservation_id, idempotency_key, event_type,
+          units_delta, policy_revision, reason_code, trace_id
+        ) VALUES ($1,$2,$3,$4,'settled',$5,$6,'completed',$7)
+      `, [
+        `vusage_${randomUUID()}`, id, reservationId, `${reservationId}:settled`,
+        input.settledUnits - Number(reservation.reserved_units),
+        Number(reservation.policy_revision), required(input, "traceId")
+      ]);
+      return { artifact, replayed: false, reservation: reservationView(updated) };
     });
   }
 
