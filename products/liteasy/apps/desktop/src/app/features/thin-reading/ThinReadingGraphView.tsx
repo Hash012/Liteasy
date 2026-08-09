@@ -82,7 +82,7 @@ export function ThinReadingGraphView({
   useEffect(() => {
     if (viewMode === "mindmap") setSelectedLevel(maxLevel);
   }, [maxLevel, viewMode]);
-  const rawEdges = useMemo<Edge[]>(() => nodes.flatMap((node) => node.childIds.flatMap((childId) => (
+  const rawEdges = useMemo<Edge[]>(() => nodes.flatMap((node) => node.childIds.flatMap((childId: string) => (
     document.nodes[childId] ? [{ id: `${node.id}-${childId}`, source: node.id, sourceHandle: "center-source", target: childId, targetHandle: "center-target", type: "straight" }] : []
   ))), [document.nodes, nodes]);
   const positions = useMemo(() => forceLayout(nodes, rawEdges), [nodes, rawEdges]);

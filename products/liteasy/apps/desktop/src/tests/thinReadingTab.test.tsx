@@ -15,6 +15,8 @@ import {
 import type { ThinReadingNodeSeed } from "../app/features/thin-reading/thinReading.types";
 import type { ThinReadingDocument } from "../app/features/thin-reading/thinReading.types";
 import type { ThinReadingCommunityRecommendationState } from "../app/features/thin-reading/useThinReadingCommunityRecommendations";
+import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
+import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 
 function makeDocument(): ThinReadingDocument {
   return createThinReadingDocument(createThinReadingFixture());
@@ -659,6 +661,35 @@ describe("ThinReadingTab", () => {
     );
   });
 
+  test("keeps legacy v1 navigation read-only", () => {
+    const childId = "thin-reading-child-v1";
+    const root = v1Fixture.nodes[v1Fixture.rootNodeId];
+    const document = parseThinReadingDocument({
+      ...v1Fixture,
+      activeNodeId: childId,
+      nodes: {
+        [v1Fixture.rootNodeId]: { ...root, childIds: [childId] },
+        [childId]: {
+          ...root,
+          childIds: [],
+          depth: 1,
+          id: childId,
+          parentId: v1Fixture.rootNodeId,
+          recommendationScope: { kind: "section", paperId: "paper-1", sectionKey: "methods" },
+          source: { kind: "omitted_section", label: "Methods", sectionKey: "methods" },
+          title: "Methods"
+        }
+      }
+    });
+    const onUpdateDocument = vi.fn();
+
+    renderTab(document, onUpdateDocument);
+    fireEvent.click(within(screen.getByLabelText("Thin reading depth"))
+      .getByRole("button", { name: "Overview" }));
+
+    expect(onUpdateDocument).not.toHaveBeenCalled();
+  });
+
   test("shows a selection affordance and requests Agent branch generation from selected text", async () => {
     const document = makeDocument();
     const onUpdateDocument = vi.fn();
@@ -1088,9 +1119,28 @@ describe("ThinReadingTab", () => {
     expect(screen.getByText("模型建议读者先看：再看 token 间对齐细节。")).toBeInTheDocument();
   });
 
-  test("renders an inline HTML demo and forwards it to the visualization tab", () => {
-    const fixture = createThinReadingFixture();
+  test("renders a read-only v1 HTML demo and forwards it to the visualization tab", () => {
     const onOpenVisualization = vi.fn();
+    const document = parseThinReadingDocument(v1Fixture);
+
+    renderTab(document, vi.fn(), undefined, undefined, undefined, onOpenVisualization);
+
+    expect(screen.getByLabelText("HTML Demo：Legacy demo")).toBeInTheDocument();
+    expect(screen.getByTitle("Legacy demo")).toHaveAttribute("srcdoc", expect.stringContaining("<svg"));
+
+    fireEvent.click(screen.getByRole("button", { name: "在独立标签页打开 HTML Demo：Legacy demo" }));
+
+    expect(onOpenVisualization).toHaveBeenCalledWith({
+      description: "Legacy executable content.",
+      html: expect.stringContaining("<svg"),
+      id: `html-demo:${document.artifactId}:${document.activeNodeId}`,
+      kind: "html_demo",
+      title: "Legacy demo"
+    });
+  });
+
+  test("does not render executable legacy evidence from new v2 documents", () => {
+    const fixture = createThinReadingFixture();
     const document = createThinReadingDocument({
       ...fixture,
       rootSeed: {
@@ -1098,29 +1148,20 @@ describe("ThinReadingTab", () => {
         evidence: {
           ...fixture.rootSeed.evidence,
           interactiveDemo: {
-            description: "逐步演示 self-attention 如何聚合上下文。",
+            description: "V2 must drop this HTML demo.",
             html: "<section>demo</section>",
             kind: "html",
-            title: "Self-attention 动画"
-          }
+            title: "Dropped v2 demo"
+          },
+          mermaid: "flowchart LR\nA-->B"
         }
       }
     });
 
-    renderTab(document, vi.fn(), undefined, undefined, undefined, onOpenVisualization);
+    renderTab(document, vi.fn());
 
-    expect(screen.getByLabelText("HTML Demo：Self-attention 动画")).toBeInTheDocument();
-    expect(screen.getByTitle("Self-attention 动画")).toHaveAttribute("srcdoc", expect.stringContaining("<section>demo</section>"));
-
-    fireEvent.click(screen.getByRole("button", { name: "在独立标签页打开 HTML Demo：Self-attention 动画" }));
-
-    expect(onOpenVisualization).toHaveBeenCalledWith({
-      description: "逐步演示 self-attention 如何聚合上下文。",
-      html: "<section>demo</section>",
-      id: `html-demo:${document.artifactId}:${document.activeNodeId}`,
-      kind: "html_demo",
-      title: "Self-attention 动画"
-    });
+    expect(screen.queryByLabelText("HTML Demo：Dropped v2 demo")).not.toBeInTheDocument();
+    expect(screen.queryByText("关系与流程")).not.toBeInTheDocument();
   });
 
   test("saves pending-public annotations locally", () => {

@@ -42,6 +42,7 @@ import {
   createThinReadingBranchRecoverySnapshot,
   validateThinReadingBranchRecoverySnapshot
 } from "./artifactTaskRecovery";
+import { cloneThinReadingV1AsV2 } from "../thin-reading/thinReadingVersioning";
 import {
   extractArtifactTraceId,
   isModelAuthenticationFailure,
@@ -1142,6 +1143,27 @@ export function useArtifactActions({
     document,
     source
   }: GenerateThinReadingBranchInput) {
+    if (document.version === "liteasy.thin-reading/v1") {
+      const cloneArtifactId = `${artifactId}-v2-${Date.now().toString(36)}`;
+      const clone = cloneThinReadingV1AsV2(document, {
+        artifactId: cloneArtifactId,
+        createdAt: new Date().toISOString()
+      });
+      const existingV1 = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+        artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
+      if (!existingV1 || existingV1.type !== "thin_reading") {
+        throw new Error("找不到可继续深入的薄读产物。");
+      }
+      artifactStore.upsertTab({
+        ...existingV1,
+        artifactId: cloneArtifactId,
+        createdAt: new Date().toISOString(),
+        thinReadingDocument: clone,
+        title: `${existingV1.title}（副本）`
+      });
+      syncArtifacts();
+      return generateThinReadingBranch({ artifactId: cloneArtifactId, document: clone, source });
+    }
     const runningTask = artifactStore.getTasks().find((task) => (
       task.type === "thin_reading" && task.artifactId === artifactId &&
       (task.status === "queued" || task.status === "running")
@@ -1383,6 +1405,10 @@ export function useArtifactActions({
   }
 
   function updateThinReadingDocument(artifactId: string, nextDocument: NonNullable<ArtifactTab["thinReadingDocument"]>) {
+    if (nextDocument.version === "liteasy.thin-reading/v1") {
+      onAnalysisHint("旧版薄读仅供查看；请先从深入操作创建新版副本。");
+      return;
+    }
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
     if (!existing || existing.type !== "thin_reading") {
@@ -1414,6 +1440,9 @@ export function useArtifactActions({
     artifactId: string;
     document: ThinReadingDocument;
   }) {
+    if (input.document.version === "liteasy.thin-reading/v1") {
+      throw new Error("旧版薄读仅供查看，不能同步或保存批注。");
+    }
     const endpoint = getIntuechoEndpoint?.().trim() ?? "";
     if (!endpoint) {
       throw new Error("尚未配置 Intuecho HTTPS 同步端点；批注仍保留在本地等待同步队列。");

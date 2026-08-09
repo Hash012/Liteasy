@@ -73,3 +73,50 @@ test("creates v2 documents without executable legacy evidence", () => {
   expect(document.version).toBe("liteasy.thin-reading/v2");
   expect(document.nodes[document.rootNodeId].visualizations).toEqual([]);
 });
+
+test("reuses the persisted annotation bounds for v1 parsing", () => {
+  const publicAnnotation = {
+    ...v1Fixture.annotations[0],
+    id: "annotation-public",
+    visibility: "pending_public" as const
+  };
+
+  expect(parseThinReadingDocument({
+    ...v1Fixture,
+    annotations: [publicAnnotation],
+    pendingPublicAnnotationIds: [publicAnnotation.id]
+  }).version).toBe("liteasy.thin-reading/v1");
+
+  expect(() => parseThinReadingDocument({
+    ...v1Fixture,
+    pendingPublicAnnotationIds: [v1Fixture.annotations[0].id]
+  })).toThrow("thin_reading_document_invalid");
+});
+
+test("rejects malformed persisted node bounds for both document versions", () => {
+  expect(() => parseThinReadingDocument({
+    ...v1Fixture,
+    nodes: {
+      ...v1Fixture.nodes,
+      [v1Fixture.rootNodeId]: { ...v1Fixture.nodes[v1Fixture.rootNodeId], childIds: ["missing"] }
+    }
+  })).toThrow("thin_reading_document_invalid");
+
+  const v2 = cloneThinReadingV1AsV2(v1Fixture, { artifactId: "thin-copy-invalid", createdAt: now });
+  expect(() => parseThinReadingDocument({
+    ...v2,
+    nodes: {
+      ...v2.nodes,
+      [v2.rootNodeId]: { ...v2.nodes[v2.rootNodeId], evidence: { ...v2.nodes[v2.rootNodeId].evidence, paperEvidence: ["duplicate", "duplicate"] } }
+    }
+  })).toThrow("thin_reading_document_invalid");
+});
+
+test("rejects an empty persisted artifact identity", () => {
+  expect(() => parseThinReadingDocument({
+    ...v1Fixture,
+    annotations: v1Fixture.annotations.map((annotation) => ({ ...annotation, artifactId: "" })),
+    artifactId: ""
+  }))
+    .toThrow("thin_reading_document_invalid");
+});

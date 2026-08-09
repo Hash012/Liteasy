@@ -7,11 +7,13 @@ import {
   advanceThinReadingDocument,
   createThinReadingDocument
 } from "../app/features/thin-reading/thinReadingProjection";
+import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
 import type { ArtifactTab, ArtifactTask } from "../app/features/artifacts/artifact.types";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import { useArtifactActions } from "../app/features/artifacts/useArtifactActions";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { MineruFigure } from "../app/features/import/import.types";
+import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 
 function createMindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -603,6 +605,71 @@ describe("useArtifactActions", () => {
     );
     expect(artifactStore.getOpenTabs().find((tab) => tab.artifactId === document.artifactId)).toEqual(
       expect.objectContaining({ papers: [{ id: "paper-attention", title: "Attention Is All You Need" }] })
+    );
+  });
+
+  test("clones a read-only v1 thin-reading artifact before branch generation", async () => {
+    vi.setSystemTime(new Date("2026-08-09T03:04:05.000Z"));
+    const document = parseThinReadingDocument(v1Fixture);
+    const sourcePaper: Paper = {
+      id: "paper-1",
+      sourcePath: "fixtures/paper-1.pdf",
+      title: "Paper one"
+    };
+    const {
+      artifactStore,
+      result,
+      runAgentAnalysis
+    } = renderArtifactActions({
+      imported: true,
+      selectedPapers: [sourcePaper]
+    });
+    runAgentAnalysis.mockResolvedValueOnce(createCompletedThinReadingRun());
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-08-01T00:00:00.000Z",
+      papers: [{ id: sourcePaper.id, title: sourcePaper.title }],
+      thinReadingDocument: document,
+      title: "Legacy thin reading",
+      type: "thin_reading"
+    });
+
+    await act(async () => {
+      await result.current.generateThinReadingBranch({
+        artifactId: document.artifactId,
+        document,
+        source: { kind: "omitted_section", label: "Methods", sectionKey: "methods" }
+      });
+    });
+
+    const catalog = artifactStore.getCatalog();
+    const original = catalog.find((tab) => tab.artifactId === document.artifactId);
+    const clone = catalog.find((tab) => (
+      tab.type === "thin_reading" &&
+      tab.artifactId !== document.artifactId &&
+      tab.thinReadingDocument?.version === "liteasy.thin-reading/v2"
+    ));
+    const cloneDocument = clone?.thinReadingDocument;
+
+    expect(original?.thinReadingDocument).toEqual(document);
+    expect(clone?.artifactId).toMatch(/^thin-v1-original-v2-/);
+    expect(clone?.title).toBe("Legacy thin reading（副本）");
+    expect(cloneDocument?.migrationProvenance).toEqual({
+      migratedAt: "2026-08-09T03:04:05.000Z",
+      sourceArtifactId: document.artifactId
+    });
+    expect(cloneDocument?.nodes[cloneDocument.rootNodeId].childIds).toHaveLength(1);
+    expect(runAgentAnalysis).toHaveBeenCalledWith(
+      "thin_reading",
+      expect.any(Function),
+      expect.objectContaining({
+        sourcePaperIds: ["paper-1"],
+        thinReadingContext: expect.objectContaining({
+          artifactId: clone?.artifactId,
+          parentNodeId: document.rootNodeId,
+          source: { kind: "omitted_section", label: "Methods", sectionKey: "methods" }
+        })
+      })
     );
   });
 

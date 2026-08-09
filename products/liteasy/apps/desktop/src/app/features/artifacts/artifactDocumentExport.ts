@@ -71,11 +71,14 @@ function thinReadingToMarkdown(tab: ArtifactTab) {
     visited.add(nodeId);
     const headingLevel = Math.min(6, node.depth + 2);
     lines.push(`${"#".repeat(headingLevel)} ${node.title}`, "", node.summary.trim(), "");
-    if (node.evidence.mermaid) {
-      lines.push("```mermaid", node.evidence.mermaid.trim(), "```", "");
+    const legacyEvidence = document.version === "liteasy.thin-reading/v1"
+      ? document.nodes[nodeId]?.evidence
+      : undefined;
+    if (legacyEvidence?.mermaid) {
+      lines.push("```mermaid", legacyEvidence.mermaid.trim(), "```", "");
     }
-    if (node.evidence.interactiveDemo) {
-      lines.push(`#### ${node.evidence.interactiveDemo.title}`, "", node.evidence.interactiveDemo.description, "", "```html", node.evidence.interactiveDemo.html.trim(), "```", "");
+    if (legacyEvidence?.interactiveDemo) {
+      lines.push(`#### ${legacyEvidence.interactiveDemo.title}`, "", legacyEvidence.interactiveDemo.description, "", "```html", legacyEvidence.interactiveDemo.html.trim(), "```", "");
     }
     if (node.evidence.paperEvidenceSpans?.length) {
       lines.push("**论文证据**", "");

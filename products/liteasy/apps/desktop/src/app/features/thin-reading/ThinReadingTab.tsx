@@ -339,6 +339,9 @@ export function ThinReadingTab({
   papers
 }: ThinReadingTabProps) {
   const activeNode = document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId];
+  const activeLegacyEvidence = document.version === "liteasy.thin-reading/v1"
+    ? (document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId]).evidence
+    : undefined;
   const fetchedCommunityRecommendationState = useThinReadingCommunityRecommendations({
     endpoint: intuechoEndpoint,
     sessionId: intuechoSessionId,
@@ -376,16 +379,21 @@ export function ThinReadingTab({
     enabled: recommendationStage === "graph",
     endpoint: paperRelationsEndpoint,
     node: activeNode,
-    onPersist: (recommendationPaperEdges) => onUpdateDocument(artifactId, {
-      ...document,
-      nodes: {
-        ...document.nodes,
-        [activeNode.id]: {
-          ...activeNode,
-          evidence: { ...activeNode.evidence, recommendationPaperEdges }
+    onPersist: (recommendationPaperEdges) => {
+      if (document.version === "liteasy.thin-reading/v1") return;
+      const node = document.nodes[activeNode.id];
+      if (!node) return;
+      onUpdateDocument(artifactId, {
+        ...document,
+        nodes: {
+          ...document.nodes,
+          [node.id]: {
+            ...node,
+            evidence: { ...node.evidence, recommendationPaperEdges }
+          }
         }
-      }
-    }),
+      });
+    },
     transport: paperRelationsTransport
   });
   const labels = getThinReadingUiCopy(document.targetLanguage);
@@ -541,6 +549,7 @@ export function ThinReadingTab({
   }, [activeSourceId, recommendationStage]);
 
   function update(nextDocument: ThinReadingDocument) {
+    if (document.version === "liteasy.thin-reading/v1") return;
     onUpdateDocument(artifactId, nextDocument);
   }
 
@@ -1254,23 +1263,23 @@ export function ThinReadingTab({
               })}
             </div>
           </section>
-          {activeNode.evidence.mermaid ? (
-            <MermaidPreview code={activeNode.evidence.mermaid} onOpenInTab={() => onOpenVisualization?.({ code: activeNode.evidence.mermaid!, id: `mermaid:${artifactId}:${activeNode.id}`, kind: "mermaid", title: `${activeNode.title} · 关系与流程` })} title="关系与流程" />
+          {activeLegacyEvidence?.mermaid ? (
+            <MermaidPreview code={activeLegacyEvidence.mermaid} onOpenInTab={() => onOpenVisualization?.({ code: activeLegacyEvidence.mermaid!, id: `mermaid:${artifactId}:${activeNode.id}`, kind: "mermaid", title: `${activeNode.title} · 关系与流程` })} title="关系与流程" />
           ) : null}
-          {activeNode.evidence.interactiveDemo ? (
+          {activeLegacyEvidence?.interactiveDemo ? (
             <HtmlDemoPreview
-              description={activeNode.evidence.interactiveDemo.description}
-              html={activeNode.evidence.interactiveDemo.html}
+              description={activeLegacyEvidence.interactiveDemo.description}
+              html={activeLegacyEvidence.interactiveDemo.html}
               onOpenInTab={onOpenVisualization
                 ? () => onOpenVisualization({
-                    description: activeNode.evidence.interactiveDemo!.description,
-                    html: activeNode.evidence.interactiveDemo!.html,
+                    description: activeLegacyEvidence.interactiveDemo!.description,
+                    html: activeLegacyEvidence.interactiveDemo!.html,
                     id: `html-demo:${artifactId}:${activeNode.id}`,
                     kind: "html_demo",
-                    title: activeNode.evidence.interactiveDemo!.title
+                    title: activeLegacyEvidence.interactiveDemo!.title
                   })
                 : undefined}
-              title={activeNode.evidence.interactiveDemo.title}
+              title={activeLegacyEvidence.interactiveDemo.title}
             />
           ) : null}
           {activeNode.omittedSections.length > 0 ? (
