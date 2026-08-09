@@ -76,7 +76,7 @@ afterEach(() => {
 });
 
 describe("ThinReadingTab", () => {
-  test("renders generated visuals before prose and source figures after prose", () => {
+  test("renders generated visuals before prose and source figures after prose", async () => {
     render(<ThinReadingTab {...propsWithVisualAndFigure} />);
     const order = within(screen.getByTestId("thin-reading-node"))
       .getAllByTestId(/thin-reading-(visuals|prose|source-figures)/)
@@ -84,6 +84,7 @@ describe("ThinReadingTab", () => {
     expect(order).toEqual([
       "thin-reading-visuals", "thin-reading-prose", "thin-reading-source-figures"
     ]);
+    await waitFor(() => expect(screen.getByTestId("visualization-artifact-stage")).toBeInTheDocument());
   });
 
   test("shows a disabled off switch without hiding source figures when unauthorized", () => {

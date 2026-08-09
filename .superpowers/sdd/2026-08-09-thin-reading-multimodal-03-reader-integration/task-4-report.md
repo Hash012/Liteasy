@@ -48,5 +48,21 @@ passed
 - No registered production renderer is present in this checkout, so the host
   intentionally presents the validated accessibility summary until a renderer
   is registered; real-provider smoke still requires deployment-admin setup.
-- React test output reports an `act(...)` warning from the asynchronous lazy
-  renderer load; assertions and production build are green.
+- The host intentionally keeps an accessible fallback when no renderer is
+  registered in this checkout; real-provider smoke still requires deployment-admin setup.
+
+## Fix Round 1
+
+The initial GREEN run exposed an `act(...)` warning when a missing lazy renderer
+rejected after the test assertion. The host now keeps the immediate accessible
+fallback without mutating failure state on a rejected load, and the order test
+waits for the host stage. The re-run is warning-free:
+
+```text
+Test Files  4 passed (4)
+Tests  68 passed (68)
+npm run build: TypeScript, Vite, and 129 production-asset checks passed
+git diff --check: passed
+```
+
+Fix commit: pending
