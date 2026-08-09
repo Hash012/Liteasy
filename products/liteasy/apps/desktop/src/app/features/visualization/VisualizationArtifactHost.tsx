@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
+import { Button } from "@fluentui/react-components";
 import type { VisualizationArtifactV1 } from "./visualizationArtifact.types";
+import { createGeneratedObjectTarget } from "../thin-reading/thinReadingDeepDiveTarget";
+import type { DeepDiveTargetV1 } from "./visualizationArtifact.types";
 import { loadVisualizationRenderer, type VisualizationRenderer } from "./visualizationRendererRegistry";
 
-export function VisualizationArtifactHost({ artifact }: { artifact: VisualizationArtifactV1 }) {
+export function VisualizationArtifactHost({
+  artifact,
+  onDeepDiveTarget
+}: {
+  artifact: VisualizationArtifactV1;
+  onDeepDiveTarget?: (target: DeepDiveTargetV1) => void;
+}) {
   const [renderer, setRenderer] = useState<VisualizationRenderer | null>(null);
 
   useEffect(() => {
@@ -39,6 +48,21 @@ export function VisualizationArtifactHost({ artifact }: { artifact: Visualizatio
         <div className="visualization-artifact-host__fallback">
           <strong>{artifact.accessibility.summary}</strong>
           <span>{artifact.semanticObjects.length > 0 ? `${artifact.semanticObjects.length} 个可深入对象` : "已简化为可访问摘要"}</span>
+        </div>
+      ) : null}
+      {onDeepDiveTarget && artifact.semanticObjects.some((object) => object.selectable) ? (
+        <div aria-label="可深入对象" className="visualization-artifact-host__deep-dive-actions">
+          {artifact.semanticObjects.filter((object) => object.selectable).map((object) => (
+            <Button key={object.objectId} onClick={() => {
+              try {
+                onDeepDiveTarget(createGeneratedObjectTarget(artifact, object));
+              } catch {
+                // Invalid or stale evidence stays non-actionable.
+              }
+            }}>
+              深入 {object.label}
+            </Button>
+          ))}
         </div>
       ) : null}
     </div>

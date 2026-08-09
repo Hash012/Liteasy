@@ -1,4 +1,7 @@
 import type { MineruFigure } from "../import/import.types";
+import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.types";
+import { SourceFigureSelectionOverlay } from "./SourceFigureSelectionOverlay";
+import { sourceFigurePixelSize } from "./thinReadingDeepDiveTarget";
 
 export type ThinReadingSourceFigure = {
   evidenceIds: readonly string[];
@@ -16,7 +19,15 @@ function placementLabel(placement: NonNullable<MineruFigure["analysis"]>["placem
   }
 }
 
-export function ThinReadingSourceFigures({ figures }: { figures: readonly ThinReadingSourceFigure[] }) {
+export function ThinReadingSourceFigures({
+  figures,
+  nodeId,
+  onSelectTarget
+}: {
+  figures: readonly ThinReadingSourceFigure[];
+  nodeId?: string;
+  onSelectTarget?: (target: DeepDiveTargetV1) => void;
+}) {
   return (
     <section aria-label="论文原图" className="thin-reading__source-figures" data-testid="thin-reading-source-figures">
       <h3>论文原图</h3>
@@ -24,10 +35,20 @@ export function ThinReadingSourceFigures({ figures }: { figures: readonly ThinRe
         <p className="thin-reading__source-figures-empty">本节没有可核对的原图。</p>
       ) : (
         <div className="thin-reading__source-figure-grid">
-          {figures.map(({ figure, reason, recommendedBy }) => (
+          {figures.map(({ evidenceIds, figure, reason, recommendedBy }) => (
             <figure className="thin-reading__figure-embed" key={figure.id}>
               <div className="thin-reading__figure-media">
-                <img alt={figure.analysis?.title ?? figure.alt} loading="lazy" src={figure.dataUrl} />
+                {nodeId && onSelectTarget ? (
+                  <SourceFigureSelectionOverlay
+                    evidenceIds={evidenceIds}
+                    figure={figure}
+                    nodeId={nodeId}
+                    onSelect={onSelectTarget}
+                    sourcePixelSize={sourceFigurePixelSize(figure)}
+                  />
+                ) : (
+                  <img alt={figure.analysis?.title ?? figure.alt} loading="lazy" src={figure.dataUrl} />
+                )}
               </div>
               <figcaption>
                 <div className="thin-reading__figure-kicker">

@@ -52,7 +52,7 @@ import type {
 } from "./thinReading.types";
 import type { MineruFigure } from "../import/import.types";
 import type { VisualizationTabData } from "../visualization/visualization.types";
-import type { VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
+import type { DeepDiveTargetV1, VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
 import type { MultimodalVisualizationCapability } from "../account/accountCapabilitiesClient";
 import type { ThinReadingVisualizationStatus } from "../artifacts/artifact.types";
 import { ThinReadingVisualizationRegion } from "./ThinReadingVisualizationRegion";
@@ -1134,7 +1134,11 @@ export function ThinReadingTab({
             </section>
           ) : null}
           <h2>{activeNode.title}</h2>
-          <ThinReadingVisualizationRegion artifacts={activeVisualizations} status={visualizationStatus} />
+          <ThinReadingVisualizationRegion
+            artifacts={activeVisualizations}
+            onDeepDiveTarget={(target) => void generateBranch({ kind: "visualization_target", target })}
+            status={visualizationStatus}
+          />
           <section data-testid="thin-reading-prose">
             <div
               className="thin-reading__summary"
@@ -1273,7 +1277,11 @@ export function ThinReadingTab({
               ) : null}
             </section>
           ) : null}
-          <ThinReadingSourceFigures figures={sourceFigures.slice(0, 2)} />
+          <ThinReadingSourceFigures
+            figures={sourceFigures.slice(0, 2)}
+            nodeId={activeNode.id}
+            onSelectTarget={(target: DeepDiveTargetV1) => void generateBranch({ kind: "visualization_target", target })}
+          />
           {activeNode.omittedSections.length > 0 ? (
             <section className="thin-reading__omitted" aria-label={labels.omittedRegion}>
               <div className="thin-reading__omitted-actions">
