@@ -98,8 +98,9 @@ const confirmedLiterature = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((next) => { resolve = next; });
-  return { promise, resolve };
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((next, fail) => { resolve = next; reject = fail; });
+  return { promise, reject, resolve };
 }
 
 beforeEach(() => {
@@ -281,6 +282,21 @@ test("keeps a published projection visible when withdrawal fails", async () => {
   expect(await screen.findByRole("status")).toHaveTextContent("撤回失败，独立批注仍公开");
   expect(screen.getByRole("link", { name: "查看同步发布的批注" })).toHaveAttribute("href", "/annotations/annotation-derived%2F1");
   expect(screen.getByRole("button", { name: "停止独立批注" })).toBeVisible();
+});
+
+test("labels first publication separately from restoring a withdrawn projection", async () => {
+  const user = userEvent.setup();
+  const publication = deferred<Awaited<ReturnType<typeof communityApi.updateReplyPublication>>>();
+  const pureReply = { ...publishedReply, derivedAnnotationId: null, derivedAnnotationState: "none" as const };
+  updateReplyPublication.mockReturnValue(publication.promise);
+  render(<ReplyItem parent={publicParent} reply={pureReply} session={null} onCompose={vi.fn()} />);
+
+  await user.click(screen.getByRole("button", { name: "发布为独立批注" }));
+
+  expect(screen.getByRole("button", { name: "正在发布" })).toBeDisabled();
+  publication.reject(new Error("network details"));
+  expect(await screen.findByRole("status")).toHaveTextContent("发布失败，回复仍未作为独立批注发布");
+  expect(screen.getByRole("button", { name: "发布为独立批注" })).toBeEnabled();
 });
 
 test("switches a confirmed projection between published and withdrawn commands", async () => {
