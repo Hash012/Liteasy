@@ -17,6 +17,7 @@ import {
   type AssociationLayoutQuality,
   type AssociationSide
 } from "./associationGraphGeometry";
+import { createAssociationExactPath } from "./associationExactPath";
 import type {
   ThinReadingExternalSource,
   ThinReadingRecommendationPaperEdge
@@ -114,7 +115,7 @@ export type PageGraphPaperEdge = PageGraphPaperRelation & {
 export type ConstrainedPageGraph = PageGraph & {
   baselineQuality: AssociationLayoutQuality;
   candidateQuality: AssociationLayoutQuality;
-  layoutSource: "baseline" | "constrained";
+  layoutSource: "baseline" | "constrained" | "degraded";
   paperEdges: readonly PageGraphPaperEdge[];
   quality: AssociationLayoutQuality;
   searchDiagnostics: AssociationLayoutSearchDiagnostics;
@@ -495,7 +496,11 @@ function primaryCrossingPaperKeys(input: PageGraphInput, graph: PageGraph) {
   const segments = graph.nodes.flatMap((node) => {
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
-    return anchor ? [{ end: node, paperKey: node.paperKey, start: anchorCentre(anchor.rect) }] : [];
+    if (!anchor) return [];
+    return createAssociationExactPath(anchorCentre(anchor.rect), node, 0.52).segments.map((segment) => ({
+      ...segment,
+      paperKey: node.paperKey
+    }));
   });
   const result = new Set<string>();
   for (let leftIndex = 0; leftIndex < segments.length; leftIndex += 1) {
@@ -1440,7 +1445,7 @@ function candidateIsAccepted(candidate: AssociationLayoutQuality, baseline: Asso
     candidate.weightedStress <= baseline.weightedStress + 1e-9;
 }
 
-export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): ConstrainedPageGraph {
+function layoutConstrainedAssociationPageGraphAttempt(input: PageGraphInput): ConstrainedPageGraph {
   const searchDiagnostics: AssociationLayoutSearchDiagnostics = {
     initialSlotCandidateEvaluations: 0,
     repairCandidateEvaluations: 0,
@@ -1625,5 +1630,83 @@ export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): Co
     paperEdges: projectedPaperEdges(input, graph),
     quality: accepted ? candidateQuality : baselineQuality,
     searchDiagnostics
+  };
+}
+
+function compareCoverageSources(left: ThinReadingExternalSource, right: ThinReadingExternalSource) {
+  return right.relevance - left.relevance ||
+    (right.confidence ?? 0.3) - (left.confidence ?? 0.3) ||
+    left.id.localeCompare(right.id) ||
+    left.provider.localeCompare(right.provider) ||
+    left.sourceId.localeCompare(right.sourceId);
+}
+
+function graphPaperKey(input: PageGraphInput, source: ThinReadingExternalSource) {
+  return input.paperKeyBySource?.get(source) ?? pageGraphPaperKey(source);
+}
+
+function coveragePageGraphInput(input: PageGraphInput) {
+  const sourcesByAnchor = Object.fromEntries(Object.entries(input.sourcesByAnchor).map(
+    ([anchorId, sources]) => [anchorId, [...sources].sort(compareCoverageSources).slice(0, 1)]
+  ));
+  const selectedSources = Object.values(sourcesByAnchor).flat();
+  const selectedPaperKeys = new Set(selectedSources.map((source) => graphPaperKey(input, source)));
+  const paperKeyBySource = new Map(selectedSources.map((source) => [
+    source,
+    graphPaperKey(input, source)
+  ] as const));
+  return {
+    ...input,
+    multiAnchorPaperKeys: new Set([...(input.multiAnchorPaperKeys ?? [])]
+      .filter((paperKey) => selectedPaperKeys.has(paperKey))),
+    paperEdges: (input.paperEdges ?? []).filter((edge) =>
+      selectedPaperKeys.has(edge.sourcePaperKey) && selectedPaperKeys.has(edge.targetPaperKey)),
+    paperKeyBySource,
+    sourcesByAnchor
+  } satisfies PageGraphInput;
+}
+
+function hiddenCountByAnchor(input: PageGraphInput, graph: PageGraph) {
+  const visiblePaperKeys = new Set(graph.nodes.map((node) => node.paperKey));
+  return Object.fromEntries(Object.entries(input.sourcesByAnchor).flatMap(([anchorId, sources]) => {
+    const hidden = sources.filter((source) =>
+      !visiblePaperKeys.has(graphPaperKey(input, source))).length;
+    return hidden > 0 ? [[anchorId, hidden]] : [];
+  }));
+}
+
+export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): ConstrainedPageGraph {
+  const full = layoutConstrainedAssociationPageGraphAttempt(input);
+  if (hardViolationCount(full.quality) === 0) return full;
+
+  const coverageInput = coveragePageGraphInput(input);
+  const fullSourceCount = Object.values(input.sourcesByAnchor)
+    .reduce((count, sources) => count + sources.length, 0);
+  const coverageSourceCount = Object.values(coverageInput.sourcesByAnchor)
+    .reduce((count, sources) => count + sources.length, 0);
+  if (coverageSourceCount < fullSourceCount) {
+    const coverage = layoutConstrainedAssociationPageGraphAttempt(coverageInput);
+    if (hardViolationCount(coverage.quality) === 0) {
+      return {
+        ...coverage,
+        hiddenCountByAnchor: hiddenCountByAnchor(input, coverage),
+        layoutSource: "degraded"
+      };
+    }
+  }
+
+  const graph: PageGraph = {
+    edges: [],
+    hiddenCountByAnchor: hiddenCountByAnchor(input, { edges: [], hiddenCountByAnchor: {}, nodes: [] }),
+    nodes: []
+  };
+  return {
+    ...graph,
+    baselineQuality: full.baselineQuality,
+    candidateQuality: full.candidateQuality,
+    layoutSource: "degraded",
+    paperEdges: [],
+    quality: evaluateAssociationLayout(input, graph),
+    searchDiagnostics: full.searchDiagnostics
   };
 }

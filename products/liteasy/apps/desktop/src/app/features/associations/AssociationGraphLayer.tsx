@@ -22,6 +22,7 @@ import {
   type PageGraphNode
 } from "./associationGraphLayout";
 import { createAssociationInkPaths, type AssociationInkPaths } from "./associationHandDrawnPath";
+import { createAssociationExactPath } from "./associationExactPath";
 import { projectAssociationPageGraph } from "./associationGraphProjection";
 import {
   associationAnchorEdgePresentation,
@@ -102,21 +103,6 @@ function associationEdgeStyle(distance: number, strength: number) {
     "--edge-width": `${0.92 + clamp(strength, 0, 1) * 0.48}px`,
     "--edge-wash-opacity": opacity * 0.26
   } as CSSProperties;
-}
-
-function anchorExactPath(
-  anchorLeft: number,
-  anchorTop: number,
-  nodeLeft: number,
-  nodeTop: number
-) {
-  const curveX = anchorLeft + (nodeLeft - anchorLeft) * 0.52;
-  const curveY = anchorTop + (nodeTop - anchorTop) * 0.52;
-  return `M ${anchorLeft} ${anchorTop} Q ${curveX} ${curveY} ${nodeLeft} ${nodeTop}`;
-}
-
-function paperExactPath(sourceLeft: number, sourceTop: number, targetLeft: number, targetTop: number) {
-  return `M ${sourceLeft} ${sourceTop} Q ${(sourceLeft + targetLeft) / 2} ${(sourceTop + targetTop) / 2} ${targetLeft} ${targetTop}`;
 }
 
 function edgeClassName(
@@ -251,7 +237,11 @@ export function AssociationGraphLayer({
     const anchor = anchorById.get(edge.anchorId);
     if (!node || !anchor) return [];
     const edgeId = `primary:${edge.anchorId}:${edge.paperKey}`;
-    const exactPath = anchorExactPath(edge.anchorLeft, edge.anchorTop, edge.nodeLeft, edge.nodeTop);
+    const exactPath = createAssociationExactPath(
+      { left: edge.anchorLeft, top: edge.anchorTop },
+      { left: edge.nodeLeft, top: edge.nodeTop },
+      0.52
+    ).d;
     const distance = Math.hypot(edge.nodeLeft - edge.anchorLeft, edge.nodeTop - edge.anchorTop);
     const presentation = associationAnchorEdgePresentation(node.source.confidenceBasis);
     return [{
@@ -269,7 +259,11 @@ export function AssociationGraphLayer({
     const target = nodeByPaperKey.get(edge.targetPaperKey);
     if (!source || !target) return [];
     const edgeId = `paper:${edge.kind}:${edge.sourcePaperKey}:${edge.targetPaperKey}`;
-    const exactPath = paperExactPath(edge.sourceLeft, edge.sourceTop, edge.targetLeft, edge.targetTop);
+    const exactPath = createAssociationExactPath(
+      { left: edge.sourceLeft, top: edge.sourceTop },
+      { left: edge.targetLeft, top: edge.targetTop },
+      0.5
+    ).d;
     const presentation = associationPaperEdgePresentation(edge.kind);
     const endpointFocused = activePaperKey === edge.sourcePaperKey || activePaperKey === edge.targetPaperKey ||
       hover?.node.paperKey === edge.sourcePaperKey || hover?.node.paperKey === edge.targetPaperKey;
@@ -292,12 +286,11 @@ export function AssociationGraphLayer({
   });
   const secondaryInkEdges: RenderedAssociationEdge[] = secondaryEdges.map((edge) => {
     const edgeId = `secondary:${edge.anchorId}:${edge.paperKey}`;
-    const exactPath = anchorExactPath(
-      edge.anchorLeft,
-      edge.anchorTop,
-      edge.node.left,
-      edge.node.top
-    );
+    const exactPath = createAssociationExactPath(
+      { left: edge.anchorLeft, top: edge.anchorTop },
+      { left: edge.node.left, top: edge.node.top },
+      0.52
+    ).d;
     const presentation = associationAnchorEdgePresentation(edge.node.source.confidenceBasis);
     return {
       accessibleLabel: `次级关联：${edge.paperKey} 与 ${edge.anchorLabel}`,

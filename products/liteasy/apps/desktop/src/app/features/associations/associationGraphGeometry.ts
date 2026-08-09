@@ -1,3 +1,5 @@
+import { createAssociationExactPath } from "./associationExactPath";
+
 export type AssociationPoint = {
   left: number;
   top: number;
@@ -202,7 +204,11 @@ export function evaluateAssociationGeometry(input: AssociationGeometryInput): As
     const distance = Math.hypot(paper.left - anchor.left, paper.top - anchor.top);
     const ideal = 158 + (1 - Math.min(Math.max(paper.relevance, 0), 1)) * 152;
     weightedStress += 3 * ((distance - ideal) / ideal) ** 2;
-    segments.push({ start: anchor, end: paper, primary: true, weight: 3 });
+    segments.push(...createAssociationExactPath(anchor, paper, 0.52).segments.map((segment) => ({
+      ...segment,
+      primary: true,
+      weight: 3
+    })));
   }
   for (const edge of input.paperEdges) {
     const source = nodeByKey.get(edge.sourcePaperKey);
@@ -212,7 +218,11 @@ export function evaluateAssociationGeometry(input: AssociationGeometryInput): As
     const distance = Math.hypot(target.left - source.left, target.top - source.top);
     const ideal = 108 + (1 - strength) * 172;
     weightedStress += ((distance - ideal) / ideal) ** 2;
-    segments.push({ start: source, end: target, primary: false, weight: 1 });
+    segments.push(...createAssociationExactPath(source, target, 0.5).segments.map((segment) => ({
+      ...segment,
+      primary: false,
+      weight: 1
+    })));
   }
 
   let primaryEdgeCrossings = 0;

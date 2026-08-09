@@ -177,19 +177,22 @@ test("keeps a dense 24-anchor candidate search deterministic and hard-gated", ()
   }
 });
 
-test("enforces global search budgets on a dense supported 24-paper mobile canvas", {
+test("enforces global search budgets on a supported eight-anchor 24-paper mobile canvas", {
   timeout: 15_000
 }, () => {
   const denseInput = input({
-    anchors: Array.from({ length: 24 }, (_, index) => ({
+    anchors: Array.from({ length: 8 }, (_, index) => ({
       anchorId: `mobile-anchor-${String(index).padStart(2, "0")}`,
-      rect: { height: 16, left: 500, top: 70 + index * 45, width: 100 }
+      rect: { height: 16, left: 500, top: 80 + index * 145, width: 100 }
     })),
     documentHeight: 1200,
     frameWidth: 1100,
-    sourcesByAnchor: Object.fromEntries(Array.from({ length: 24 }, (_, index) => [
+    sourcesByAnchor: Object.fromEntries(Array.from({ length: 8 }, (_, index) => [
       `mobile-anchor-${String(index).padStart(2, "0")}`,
-      [source(`mobile-paper-${String(index).padStart(2, "0")}`, 0.82)]
+      Array.from({ length: 3 }, (_, sourceIndex) => source(
+        `mobile-paper-${String(index).padStart(2, "0")}-${sourceIndex}`,
+        0.9 - sourceIndex / 10
+      ))
     ]))
   });
 
@@ -496,7 +499,7 @@ test("is deterministic for identical constrained input", () => {
     .toEqual(layoutConstrainedAssociationPageGraph(constrainedInput));
 });
 
-test("returns exact baseline positions when no candidate can satisfy hard constraints", () => {
+test("returns an anchor-only hard-safe graph when even one paper cannot fit", () => {
   const impossible = input({
     anchors: [{ anchorId: "a1", rect: { height: 18, left: 70, top: 60, width: 80 } }],
     documentHeight: 110,
@@ -505,10 +508,45 @@ test("returns exact baseline positions when no candidate can satisfy hard constr
       a1: [source("too-large", 0.9)]
     }
   });
-  const baseline = layoutAssociationPageGraph(impossible);
   const graph = layoutConstrainedAssociationPageGraph(impossible);
 
-  expect(graph.layoutSource).toBe("baseline");
-  expect(graph.nodes).toEqual(baseline.nodes);
-  expect(graph.edges).toEqual(baseline.edges);
+  expect(graph.layoutSource).toBe("degraded");
+  expect(graph.nodes).toEqual([]);
+  expect(graph.edges).toEqual([]);
+  expect(graph.hiddenCountByAnchor).toEqual({ a1: 1 });
+  expect(graph.quality).toMatchObject({
+    anchorObstructions: 0,
+    nodeOverlaps: 0,
+    overflowCount: 0,
+    primaryEdgeCrossings: 0,
+    sameSideViolations: 0
+  });
+});
+
+test("degrades an infeasible dense graph to one high-value paper per anchor", () => {
+  const dense = input({
+    anchors: [
+      { anchorId: "a1", rect: { height: 18, left: 160, top: 110, width: 80 } },
+      { anchorId: "a2", rect: { height: 18, left: 160, top: 330, width: 80 } }
+    ],
+    documentHeight: 500,
+    frameWidth: 400,
+    sourcesByAnchor: {
+      a1: Array.from({ length: 8 }, (_, index) => source(`a1-${index}`, 1 - index / 10)),
+      a2: Array.from({ length: 8 }, (_, index) => source(`a2-${index}`, 1 - index / 10))
+    }
+  });
+
+  const graph = layoutConstrainedAssociationPageGraph(dense);
+
+  expect(graph.layoutSource).toBe("degraded");
+  expect(graph.nodes.map((node) => node.paperKey).sort()).toEqual(["a1-0", "a2-0"]);
+  expect(graph.hiddenCountByAnchor).toEqual({ a1: 7, a2: 7 });
+  expect(graph.quality).toMatchObject({
+    anchorObstructions: 0,
+    nodeOverlaps: 0,
+    overflowCount: 0,
+    primaryEdgeCrossings: 0,
+    sameSideViolations: 0
+  });
 });
