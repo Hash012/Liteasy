@@ -51,7 +51,8 @@ export type UseThinReadingVisualizationControllerInput = {
   onDocumentUpdated: (document: ThinReadingDocumentV2) => void;
   saveThinReadingDocument: (
     artifactId: string,
-    document: ThinReadingDocumentV2
+    document: ThinReadingDocumentV2,
+    signal: AbortSignal
   ) => Promise<void>;
   setVisualizationPreference?: (
     enabled: boolean
@@ -156,11 +157,18 @@ export function useThinReadingVisualizationController({
     ]).catch(() => undefined);
   }
 
-  function disposeActiveRequests(reason: ThinReadingVisualizationCancellationReason = "workflow_disposed") {
+  function disposeActiveRequests(
+    reason: ThinReadingVisualizationCancellationReason = "workflow_disposed",
+    options: { resetStatuses?: boolean } = {}
+  ) {
     const requests = [...activeRequestsRef.current.values()];
     activeRequestsRef.current.clear();
     requests.forEach((request) => {
       request.abortController.abort();
+      setNodeStatus(request.nodeId, {
+        reasonCode: reason === "preference_disabled" ? "preference_disabled" : "stale_request",
+        status: "omitted"
+      });
       cancelRemoteGeneration({
         artifactId: request.artifactId,
         nodeId: request.nodeId,
@@ -168,6 +176,9 @@ export function useThinReadingVisualizationController({
         requestId: request.requestId
       });
     });
+    if (options.resetStatuses && mountedRef.current) {
+      setStatuses({});
+    }
   }
 
   useEffect(() => {
@@ -308,7 +319,7 @@ export function useThinReadingVisualizationController({
             }
           }
         };
-        await saveThinReadingDocument(input.artifactId, nextDocument);
+        await saveThinReadingDocument(input.artifactId, nextDocument, abortController.signal);
         const postSaveDocument = getThinReadingDocument(input.artifactId);
         const postSaveNode = postSaveDocument?.nodes[input.node.id];
         const postSaveIntent = postSaveNode?.visualizationDecision?.status === "accepted"
@@ -358,7 +369,7 @@ export function useThinReadingVisualizationController({
   }
 
   async function commitGeneratedNode(input: ThinReadingVisualizationNodeInput) {
-    await saveThinReadingDocument(input.artifactId, input.document);
+    await saveThinReadingDocument(input.artifactId, input.document, new AbortController().signal);
     void startVisualization(input);
   }
 

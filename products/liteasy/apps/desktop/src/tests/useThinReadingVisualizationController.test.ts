@@ -87,6 +87,34 @@ test("cancels a request while its visualization result is waiting to persist", a
   });
 });
 
+test("passes the request AbortSignal into durable visualization persistence", async () => {
+  const save = vi.fn(async (_artifactId: string, _document: unknown, signal?: AbortSignal) => {
+    if (!signal) {
+      throw new Error("missing_abort_signal");
+    }
+    await new Promise<void>((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("save_aborted")), { once: true });
+    });
+  });
+  const { result } = renderController({ saveThinReadingDocument: save });
+  let generation!: Promise<unknown>;
+  await act(async () => {
+    generation = result.current.startVisualization({
+      artifactId: "thin-1",
+      document: documentWithNode(),
+      node: nodeWithIntent
+    });
+  });
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    await result.current.cancelVisualization(nodeWithIntent.id, "preference_disabled");
+    await generation;
+  });
+
+  expect(save.mock.calls[0]?.[2]).toBeInstanceOf(AbortSignal);
+  expect((save.mock.calls[0]?.[2] as AbortSignal).aborted).toBe(true);
+});
+
 test("reports generation failure when visualization persistence fails", async () => {
   const { result } = renderController({
     saveThinReadingDocument: vi.fn(async () => {
@@ -289,6 +317,49 @@ test("aborts and cancels active work without persisting after the controller unm
     reason: "workflow_disposed"
   }));
   expect(saveThinReadingDocument).not.toHaveBeenCalled();
+});
+
+test("marks active nodes omitted when workflow disposal happens while mounted", async () => {
+  const pending = deferred<readonly [typeof readyArtifact]>();
+  generateVisualization.mockReturnValueOnce(pending.promise);
+  const { result } = renderController();
+  act(() => {
+    void result.current.startVisualization({
+      artifactId: "thin-1",
+      document: documentWithNode(),
+      node: nodeWithIntent
+    });
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  act(() => {
+    result.current.dispose();
+  });
+  expect(result.current.statuses[nodeWithIntent.id]).toEqual({
+    reasonCode: "stale_request",
+    status: "omitted"
+  });
+});
+
+test("can reset statuses while disposing a workflow account", async () => {
+  const pending = deferred<readonly [typeof readyArtifact]>();
+  generateVisualization.mockReturnValueOnce(pending.promise);
+  const { result } = renderController();
+  act(() => {
+    void result.current.startVisualization({
+      artifactId: "thin-1",
+      document: documentWithNode(),
+      node: nodeWithIntent
+    });
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  act(() => {
+    result.current.dispose("workflow_disposed", { resetStatuses: true });
+  });
+  expect(result.current.statuses).toEqual({});
 });
 
 test("does not wait for a hanging remote cancellation before persisting preference", async () => {

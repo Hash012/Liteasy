@@ -4,7 +4,7 @@ import { loadStoredAccountSession } from "../account/accountSessionStorage";
 
 type ArtifactResultTransport = (
   url: string,
-  init?: { body?: string; headers?: Record<string, string>; method?: string }
+  init?: { body?: string; headers?: Record<string, string>; method?: string; signal?: AbortSignal }
 ) => Promise<{
   json: () => Promise<unknown>;
   ok: boolean;
@@ -97,11 +97,12 @@ export function createArtifactResultClient(input: {
       return payload.artifact;
     },
 
-    async save(document: AgentArtifactResult) {
+    async save(document: AgentArtifactResult, signal?: AbortSignal) {
       const response = await transport(endpoint(input.getBaseEndpoint()), {
         body: JSON.stringify(document),
         headers: { ...authorizationHeaders(), "Content-Type": "application/json" },
-        method: "POST"
+        method: "POST",
+        ...(signal ? { signal } : {})
       });
       const payload = await response.json() as { error?: string; path?: string };
       if (!response.ok || !payload.path) {

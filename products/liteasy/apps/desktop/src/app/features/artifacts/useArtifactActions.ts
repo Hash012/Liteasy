@@ -1426,7 +1426,10 @@ export function useArtifactActions({
   async function persistThinReadingDocument(
     artifactId: string,
     nextDocument: Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>,
-    options: { commitMode?: "after_save" | "before_save" | "none" } = {}
+    options: {
+      commitMode?: "after_save" | "before_save" | "none";
+      signal?: AbortSignal;
+    } = {}
   ) {
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
@@ -1454,7 +1457,7 @@ export function useArtifactActions({
       existing,
       papers,
       uiDsl: existing.uiDsl
-    }));
+    }), options.signal);
     if (options.commitMode === "after_save") {
       commitDocument();
     }

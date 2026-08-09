@@ -86,6 +86,27 @@ test("saves and lists account-scoped Agent artifact documents", async () => {
   ]);
 });
 
+test("passes an abort signal through artifact persistence transport", async () => {
+  const transport = vi.fn(async () => ({
+    json: async () => ({ path: "artifact.json" }),
+    ok: true,
+    status: 201
+  }));
+  const client = createArtifactResultClient({
+    getAccessToken: () => "session-token",
+    getBaseEndpoint: () => "http://127.0.0.1:8787",
+    transport
+  });
+  const controller = new AbortController();
+
+  await client.save(document, controller.signal);
+
+  expect(transport).toHaveBeenCalledWith(
+    "http://127.0.0.1:8787/v1/agent-artifacts",
+    expect.objectContaining({ signal: controller.signal })
+  );
+});
+
 test("reports a failed artifact deletion", async () => {
   const client = createArtifactResultClient({
     getAccessToken: () => "session-token",

@@ -226,12 +226,15 @@ export function useArtifactWorkflowController({
         actions.applyThinReadingDocument(document.artifactId, document);
       }
     },
-    saveThinReadingDocument: async (artifactId, document) => {
+    saveThinReadingDocument: async (artifactId, document, signal) => {
       const actions = artifactActionsRef.current;
       if (!actions) {
         throw new Error("thin_reading_visualization_persistence_unavailable");
       }
-      await actions.persistThinReadingDocument(artifactId, document, { commitMode: "none" });
+      await actions.persistThinReadingDocument(artifactId, document, {
+        commitMode: "none",
+        signal
+      });
     },
     setVisualizationPreference: setMultimodalVisualizationPreference
   });
@@ -272,7 +275,7 @@ export function useArtifactWorkflowController({
     const requestId = ++catalogRequestRef.current;
     setArtifactCatalogLoadState({ status: "loading" });
     persistenceReadyRef.current = false;
-    thinReadingVisualization.dispose();
+    thinReadingVisualization.dispose("workflow_disposed", { resetStatuses: true });
     artifactStore.clearAccountArtifacts();
     thinReadingVisualization.hydrateReadyArtifacts([], { replace: true });
     artifactActions.syncArtifacts();
