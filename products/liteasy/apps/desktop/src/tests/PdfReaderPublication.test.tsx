@@ -409,3 +409,73 @@ test("retains local truth when create recovery cannot confirm the remote outcome
     operation: "retract"
   }));
 });
+
+test("reuses a queued retract and deletes only after it confirms not published", async () => {
+  let finishCreate!: (publication: PdfAnnotationPublication) => void;
+  let finishRetract!: (publication: PdfAnnotationPublication) => void;
+  const onChange = vi.fn(({ operation }) => new Promise<PdfAnnotationPublication>((resolve) => {
+    if (operation === "publish") finishCreate = resolve;
+    else finishRetract = resolve;
+  }));
+  renderStoredAnnotation(publicationAnnotation(), onChange);
+
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+
+  expect(screen.getByText("Publication evidence")).toBeInTheDocument();
+  expect(onChange).toHaveBeenCalledTimes(2);
+  finishCreate({
+    desiredVisibility: "public",
+    remoteAnnotationId: "remote-created-before-queued-retract",
+    remoteRevision: 2,
+    state: "published"
+  });
+  expect(screen.getByText("Publication evidence")).toBeInTheDocument();
+  finishRetract({
+    desiredVisibility: "private",
+    remoteAnnotationId: "remote-created-before-queued-retract",
+    remoteRevision: 3,
+    state: "not_published"
+  });
+
+  await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
+  expect(onChange).toHaveBeenCalledTimes(2);
+});
+
+test("retains local truth when the queued retract outcome remains unknown", async () => {
+  let finishCreate!: (publication: PdfAnnotationPublication) => void;
+  let finishRetract!: (publication: PdfAnnotationPublication) => void;
+  const onChange = vi.fn(({ operation }) => new Promise<PdfAnnotationPublication>((resolve) => {
+    if (operation === "publish") finishCreate = resolve;
+    else finishRetract = resolve;
+  }));
+  renderStoredAnnotation(publicationAnnotation(), onChange);
+
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+
+  expect(screen.getByText("Publication evidence")).toBeInTheDocument();
+  finishCreate({
+    desiredVisibility: "public",
+    remoteAnnotationId: "remote-with-unknown-retract",
+    remoteRevision: 2,
+    state: "published"
+  });
+  finishRetract({
+    desiredVisibility: "private",
+    lastError: "撤回未完成，论坛发布状态未知。recovery unavailable",
+    state: "failed"
+  });
+
+  expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
+  expect(await screen.findByText(/recovery unavailable/u)).toBeInTheDocument();
+  expect(onChange).toHaveBeenCalledTimes(2);
+});

@@ -66,6 +66,11 @@ type TextLayerPosition = {
   normalizedOffset: number;
 };
 
+type PublicationTransport = {
+  operation: "publish" | "update" | "retract";
+  promise: Promise<PdfAnnotationPublication>;
+};
+
 type PdfSidebarMode = "thumbnails" | "annotations";
 
 export type PdfAnnotationPublicationChange = {
@@ -1084,7 +1089,7 @@ export function PdfReader({
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const publicationIntentsRef = useRef(new Map<string, "private" | "public">());
-  const publicationTransportsRef = useRef(new Map<string, Promise<PdfAnnotationPublication>>());
+  const publicationTransportsRef = useRef(new Map<string, PublicationTransport>());
   const [sharingAnnotationId, setSharingAnnotationId] = useState<string | null>(null);
   const [teamAnnotations, setTeamAnnotations] = useState<TeamAnnotation[]>([]);
   const [teamAnnotationMessage, setTeamAnnotationMessage] = useState("");
@@ -1446,16 +1451,17 @@ export function PdfReader({
       ? undefined
       : await collectPdfLiteratureHints(activePaper, pdfDocument, pageTexts[1]);
     if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return;
-    let transport: Promise<PdfAnnotationPublication> | undefined;
+    let transport: PublicationTransport | undefined;
     try {
-      transport = Promise.resolve(onChangeAnnotationPublication({
+      const promise = Promise.resolve(onChangeAnnotationPublication({
         annotation,
         ...(hints ? { literatureHints: hints } : {}),
         operation,
         paper: activePaper
       }));
+      transport = { operation, promise };
       publicationTransportsRef.current.set(annotation.id, transport);
-      const publication = await transport;
+      const publication = await promise;
       if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id
         ? { ...item, publication }
@@ -1633,32 +1639,50 @@ export function PdfReader({
     };
     const pendingCreate = annotation.publication.state === "pending_create" &&
       !annotation.publication.remoteAnnotationId;
-    const createTransport = pendingCreate
-      ? publicationTransportsRef.current.get(annotation.id)
-      : undefined;
+    let transport = publicationTransportsRef.current.get(annotation.id);
 
     publicationIntentsRef.current.set(annotation.id, "private");
-    if (pendingCreate && !createTransport) {
+    if (pendingCreate && !transport) {
       remove();
       return;
     }
-    if (createTransport) {
+    if (transport || annotation.publication.state === "pending_retract") {
       setActiveAnnotationId(null);
-      let createdPublication: PdfAnnotationPublication;
+      let settledPublication: PdfAnnotationPublication | undefined;
       try {
-        createdPublication = await createTransport;
+        settledPublication = await transport?.promise;
       } catch (error) {
         const message = error instanceof Error ? error.message : "论坛发布请求失败。";
-        createdPublication = {
+        settledPublication = {
           desiredVisibility: "private",
           lastError: `撤回未完成，论坛发布状态未知。${message}`,
           state: "failed"
         };
       }
-      if (createdPublication.state === "not_published" && !createdPublication.remoteAnnotationId) {
+      await Promise.resolve();
+      const queuedTransport = publicationTransportsRef.current.get(annotation.id);
+      if (queuedTransport && queuedTransport !== transport && queuedTransport.operation === "retract") {
+        transport = queuedTransport;
+        try {
+          settledPublication = await queuedTransport.promise;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "论坛撤回请求失败。";
+          settledPublication = {
+            desiredVisibility: "private",
+            lastError: `撤回未完成，论坛发布状态未知。${message}`,
+            state: "failed"
+          };
+        }
+      }
+      const latest = annotationsRef.current.find((item) => item.id === annotation.id);
+      if (settledPublication?.state === "not_published" || latest?.publication.state === "not_published") {
         remove();
         return;
       }
+      if (transport?.operation === "retract" || annotation.publication.state === "pending_retract") {
+        return;
+      }
+      const createdPublication = settledPublication ?? latest?.publication ?? annotation.publication;
       const pending = revisePdfAnnotation(annotation, {
         publication: createdPublication.remoteAnnotationId
           ? {
