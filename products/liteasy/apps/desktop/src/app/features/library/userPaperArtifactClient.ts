@@ -18,14 +18,14 @@ export function isUserPaperArtifactStoreAvailable() {
 export async function loadUserPaperArtifact<T>(input: {
   artifactKind: UserPaperArtifactKind;
   paperId: string;
-}): Promise<T | null | undefined> {
+}): Promise<T | undefined> {
   if (!isUserPaperArtifactStoreAvailable() || !input.paperId.trim()) {
     return undefined;
   }
   const snapshot = await invoke<T | null>("load_user_paper_artifact", {
     ...input
   });
-  return snapshot;
+  return snapshot ?? undefined;
 }
 
 export async function saveUserPaperArtifact(input: {
