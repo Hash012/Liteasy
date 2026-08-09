@@ -26,6 +26,22 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: applicationUrl, max: 4, ssl: false });
 const migrationPool = new Pool({ connectionString: migrationUrl, max: 1, ssl: false });
 
+async function waitForAdvisoryWait(minimum, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const waiting = await pool.query(`
+      SELECT count(*)::int AS count
+        FROM pg_stat_activity
+       WHERE wait_event_type = 'Lock'
+         AND wait_event = 'advisory'
+         AND query LIKE '%pg_advisory_xact_lock(hashtextextended%'
+    `);
+    if (waiting.rows[0].count >= minimum) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`intuecho_advisory_wait_timeout:${minimum}`);
+}
+
 try {
   const migrated = await migrateIntuecho(migrationPool, { applicationRole: application.username });
   const expectedMigrations = [
@@ -40,10 +56,11 @@ try {
     "009_detach_deleted_annotation_audit.sql",
     "010_direct_message_read_state.sql",
     "011_literature_resolution_provenance.sql",
-    "012_desktop_annotation_publications.sql"
+    "012_desktop_annotation_publications.sql",
+    "013_desktop_annotation_publication_digest.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 12, current: true });
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 13, current: true });
   await migrationPool.query(`
     DO $$
     DECLARE tables text;
@@ -491,6 +508,35 @@ try {
     updatedAt: "2026-08-09T01:00:00.000Z"
   }]);
   assert.deepEqual(publicationReplayed, publicationCreated);
+  const [publicationVersionConflict] = await annotations.applyDesktopAnnotationPublications(userOne, [{
+    ...publicationOperation,
+    body: "同一来源版本不能静默接受不同正文。",
+    updatedAt: "2026-08-09T01:00:00.000Z"
+  }]);
+  assert.equal(publicationVersionConflict.error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  const [publicationOperationConflict] = await annotations.applyDesktopAnnotationPublications(userOne, [{
+    annotationId: publicationOperation.annotationId,
+    operation: "retract",
+    queueKey: publicationOperation.queueKey,
+    remoteAnnotationId: publicationCreated.remoteAnnotationId,
+    revision: publicationOperation.revision,
+    updatedAt: "2026-08-09T01:00:00.000Z"
+  }]);
+  assert.equal(publicationOperationConflict.error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  const intraBatchPublication = {
+    ...publicationOperation,
+    annotationId: "desktop-publication-intra-batch",
+    queueKey: "desktop-publication-intra-batch",
+    updatedAt: "2026-08-09T01:30:00.000Z"
+  };
+  const intraBatchResults = await annotations.applyDesktopAnnotationPublications(userTwo, [
+    intraBatchPublication,
+    { ...intraBatchPublication, body: "同批次内的冲突正文。" }
+  ]);
+  assert.equal(intraBatchResults[0].state, "published");
+  assert.equal(intraBatchResults[1].error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  const publicationDigest = await pool.query("SELECT operation_digest FROM desktop_annotation_publications WHERE owner_id = $1 AND queue_key = $2", [userOne.id, publicationOperation.queueKey]);
+  assert.match(publicationDigest.rows[0].operation_digest, /^[a-f0-9]{64}$/);
   const [publicationUpdated] = await annotations.applyDesktopAnnotationPublications(userOne, [{
     ...publicationOperation,
     body: "桌面批注的第二个来源修订。",
@@ -557,6 +603,60 @@ try {
   const forwardPublicationIds = Object.fromEntries(forwardPublicationBatch.map((result) => [result.queueKey, result.remoteAnnotationId]));
   const reversePublicationIds = Object.fromEntries(reversePublicationBatch.map((result) => [result.queueKey, result.remoteAnnotationId]));
   assert.deepEqual(reversePublicationIds, forwardPublicationIds);
+
+  const raceOwner = { id: "publication-deletion-race-user", initials: "RD", name: "Race Deletion User" };
+  const raceOperation = {
+    ...publicationOperation,
+    annotationId: "desktop-publication-deletion-race",
+    queueKey: "desktop-publication-deletion-race",
+    updatedAt: "2026-08-09T07:00:00.000Z"
+  };
+  const raceDeletionInput = {
+    idempotencyKey: "delete-publication-race-user:intuecho",
+    reason: "Barrier controlled publication account deletion race",
+    requestedBy: "admin-1",
+    subjectId: raceOwner.id,
+    traceId: "trace-publication-delete-race"
+  };
+  const raceLifecycleKey = `intuecho-account-deletion:${raceOwner.id}`;
+  const barrier = await pool.connect();
+  let barrierLocked = false;
+  let racingPublication;
+  let racingDeletion;
+  let raceSetupError;
+  try {
+    await barrier.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [raceLifecycleKey]);
+    barrierLocked = true;
+    racingPublication = annotations.applyDesktopAnnotationPublications(raceOwner, [raceOperation]);
+    await waitForAdvisoryWait(1);
+    racingDeletion = new PostgresAccountLifecycleRepository(pool).deleteAccount(raceDeletionInput);
+    await waitForAdvisoryWait(2);
+    await barrier.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [raceLifecycleKey]);
+    barrierLocked = false;
+  } catch (error) {
+    raceSetupError = error;
+  } finally {
+    if (barrierLocked) await barrier.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [raceLifecycleKey]);
+    barrier.release();
+  }
+  if (raceSetupError) {
+    await Promise.allSettled([racingPublication, racingDeletion].filter(Boolean));
+    throw raceSetupError;
+  }
+  const [[racePublicationResult], raceDeletionResult] = await Promise.all([racingPublication, racingDeletion]);
+  assert.equal(raceDeletionResult.replayed, false);
+  if (racePublicationResult.state === "published") {
+    assert.equal(raceDeletionResult.result.deletedAnnotationPublications, 1);
+  } else {
+    assert.equal(racePublicationResult.error, "ANNOTATION_PUBLICATION_OWNER_DELETED");
+    assert.equal(raceDeletionResult.result.deletedAnnotationPublications, 0);
+  }
+  const raceResidue = await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM desktop_annotation_publications WHERE owner_id = $1) AS publications,
+      (SELECT count(*)::int FROM annotations WHERE author_id = $1) AS annotations
+  `, [raceOwner.id]);
+  assert.deepEqual(raceResidue.rows[0], { annotations: 0, publications: 0 });
 
   const privateRoot = await annotations.createAnnotation(userOne, {
     body: "账号删除时必须移除的私有批注。",

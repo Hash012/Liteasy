@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
-import { AnnotationCommunityError, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
+import { AnnotationCommunityError, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
 import {
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
@@ -225,12 +225,18 @@ export class PostgresAnnotationCommunityRepository {
 
   async applyDesktopAnnotationPublications(author, operations) {
     return withTransaction(this.pool, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`intuecho-account-deletion:${author.id}`]);
+      const deleted = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [author.id]);
+      if (deleted.rows[0]) {
+        return operations.map((operation) => this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_OWNER_DELETED"));
+      }
       const queueKeys = [...new Set(operations.map((operation) => operation.queueKey))].sort();
       for (const queueKey of queueKeys) {
         await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`desktop-publication:${author.id}:${queueKey}`]);
       }
       const results = [];
       for (const operation of operations) {
+        const operationDigest = desktopAnnotationPublicationDigest(operation);
         const priorResult = await client.query("SELECT * FROM desktop_annotation_publications WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, operation.queueKey]);
         const prior = priorResult.rows[0];
         if (prior && prior.source_annotation_id !== operation.annotationId) {
@@ -242,13 +248,17 @@ export class PostgresAnnotationCommunityRepository {
           continue;
         }
         if (prior && Number(prior.source_revision) === operation.revision && new Date(prior.source_updated_at).getTime() === new Date(operation.updatedAt).getTime()) {
+          if (prior.operation_digest !== operationDigest) {
+            results.push(this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_VERSION_CONFLICT"));
+            continue;
+          }
           results.push(this.#publicationResult(operation, prior));
           continue;
         }
         if (operation.operation === "retract") {
-          results.push(await this.#retractDesktopPublication(client, author, operation, prior));
+          results.push(await this.#retractDesktopPublication(client, author, operation, operationDigest, prior));
         } else {
-          results.push(await this.#upsertDesktopPublication(client, author, operation, prior));
+          results.push(await this.#upsertDesktopPublication(client, author, operation, operationDigest, prior));
         }
       }
       return results;
@@ -291,7 +301,7 @@ export class PostgresAnnotationCommunityRepository {
     };
   }
 
-  async #upsertDesktopPublication(client, author, operation, prior) {
+  async #upsertDesktopPublication(client, author, operation, operationDigest, prior) {
     const confirmed = await this.#literatureRecord(operation.literatureId, client);
     if (!confirmed) return this.#publicationFailure(operation, "LITERATURE_NOT_FOUND");
     const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
@@ -308,14 +318,14 @@ export class PostgresAnnotationCommunityRepository {
     await this.#assignPlatformTags(client, id, operation.body, []);
     const syncedAt = new Date().toISOString();
     if (!prior) {
-      await client.query("INSERT INTO desktop_annotation_publications(owner_id, queue_key, source_annotation_id, annotation_id, source_revision, source_updated_at, state, remote_revision, synced_at) VALUES ($1, $2, $3, $4, $5, $6, 'published', $7, $8)", [author.id, operation.queueKey, operation.annotationId, id, operation.revision, operation.updatedAt, remoteRevision, syncedAt]);
+      await client.query("INSERT INTO desktop_annotation_publications(owner_id, queue_key, source_annotation_id, annotation_id, source_revision, source_updated_at, operation_digest, state, remote_revision, synced_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'published', $8, $9)", [author.id, operation.queueKey, operation.annotationId, id, operation.revision, operation.updatedAt, operationDigest, remoteRevision, syncedAt]);
     } else {
-      await client.query("UPDATE desktop_annotation_publications SET source_revision = $3, source_updated_at = $4, state = 'published', remote_revision = $5, synced_at = $6 WHERE owner_id = $1 AND queue_key = $2", [author.id, operation.queueKey, operation.revision, operation.updatedAt, remoteRevision, syncedAt]);
+      await client.query("UPDATE desktop_annotation_publications SET source_revision = $3, source_updated_at = $4, operation_digest = $5, state = 'published', remote_revision = $6, synced_at = $7 WHERE owner_id = $1 AND queue_key = $2", [author.id, operation.queueKey, operation.revision, operation.updatedAt, operationDigest, remoteRevision, syncedAt]);
     }
     return this.#publicationResult(operation, { annotation_id: id, remote_revision: remoteRevision, state: "published", synced_at: syncedAt });
   }
 
-  async #retractDesktopPublication(client, author, operation, prior) {
+  async #retractDesktopPublication(client, author, operation, operationDigest, prior) {
     if (!prior) return this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_NOT_FOUND");
     if (prior.annotation_id !== operation.remoteAnnotationId) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_MISMATCH");
     const annotation = await client.query("SELECT revision FROM annotations WHERE id = $1 AND author_id = $2 FOR UPDATE", [prior.annotation_id, author.id]);
@@ -323,7 +333,7 @@ export class PostgresAnnotationCommunityRepository {
     const remoteRevision = Number(annotation.rows[0].revision) + 1;
     await client.query("UPDATE annotations SET visibility = 'private', organization_id = NULL, share_to_plaza = false, revision = $2, updated_at = $3 WHERE id = $1", [prior.annotation_id, remoteRevision, operation.updatedAt]);
     const syncedAt = new Date().toISOString();
-    await client.query("UPDATE desktop_annotation_publications SET source_revision = $3, source_updated_at = $4, state = 'retracted', remote_revision = $5, synced_at = $6 WHERE owner_id = $1 AND queue_key = $2", [author.id, operation.queueKey, operation.revision, operation.updatedAt, remoteRevision, syncedAt]);
+    await client.query("UPDATE desktop_annotation_publications SET source_revision = $3, source_updated_at = $4, operation_digest = $5, state = 'retracted', remote_revision = $6, synced_at = $7 WHERE owner_id = $1 AND queue_key = $2", [author.id, operation.queueKey, operation.revision, operation.updatedAt, operationDigest, remoteRevision, syncedAt]);
     return this.#publicationResult(operation, { annotation_id: prior.annotation_id, remote_revision: remoteRevision, state: "retracted", synced_at: syncedAt });
   }
 

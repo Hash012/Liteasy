@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import Database from "better-sqlite3";
 import { literatureRecordSchema } from "@intuecho/contracts";
-import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
+import { desktopAnnotationPublicationDigest, SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { PostgresAnnotationCommunityRepository } from "./postgresAnnotationCommunityRepository.mjs";
 import { createIntuechoApp } from "./server.mjs";
 import { IdentityVerificationError } from "./identityVerifier.mjs";
@@ -271,6 +271,71 @@ function insertConfirmedPublicationLiterature(db, literatureId = "literature-pub
   return literatureId;
 }
 
+function postgresPublicationHarness() {
+  const annotations = new Map();
+  const publications = new Map();
+  const queries = [];
+  const client = {
+    async query(sql, values = []) {
+      const normalized = sql.trim();
+      queries.push({ sql: normalized, values });
+      if (normalized.includes("SELECT 1 FROM account_deletion_jobs")) return { rows: [] };
+      if (normalized.startsWith("SELECT * FROM desktop_annotation_publications")) {
+        return { rows: publications.has(`${values[0]}:${values[1]}`) ? [publications.get(`${values[0]}:${values[1]}`)] : [] };
+      }
+      if (normalized.startsWith("SELECT * FROM literature_records")) {
+        const now = new Date("2026-08-09T00:00:00.000Z");
+        return { rows: [{ authors: ["Confirmed Author"], confirmed_at: now, created_at: now, document_type: "journal_article", id: values[0], publication_year: 2026, record_source: "manual", revision: 1, source_provider: null, title: "Confirmed Literature", updated_at: now }] };
+      }
+      if (normalized.startsWith("SELECT 1 FROM literature_records")) return { rows: [{ exists: 1 }] };
+      if (normalized.startsWith("SELECT identity_kind AS kind")) return { rows: [] };
+      if (normalized.startsWith("SELECT education_stage")) return { rows: [] };
+      if (normalized.startsWith("SELECT institution_name AS name")) return { rows: [] };
+      if (normalized.startsWith("INSERT INTO annotations(")) {
+        annotations.set(values[0], { body: values[1], id: values[0], revision: 1, share_to_plaza: true, visibility: "public" });
+        return { rows: [] };
+      }
+      if (normalized.startsWith("SELECT revision FROM annotations")) {
+        const annotation = annotations.get(values[0]);
+        return { rows: annotation ? [{ revision: annotation.revision }] : [] };
+      }
+      if (normalized.startsWith("UPDATE annotations SET body")) {
+        annotations.set(values[0], { ...annotations.get(values[0]), body: values[1], revision: Number(values[5]), share_to_plaza: true, visibility: "public" });
+        return { rows: [] };
+      }
+      if (normalized.startsWith("UPDATE annotations SET visibility")) {
+        annotations.set(values[0], { ...annotations.get(values[0]), revision: Number(values[1]), share_to_plaza: false, visibility: "private" });
+        return { rows: [] };
+      }
+      if (normalized.startsWith("SELECT tags.id AS tag_id")) return { rows: [] };
+      if (normalized.startsWith("INSERT INTO desktop_annotation_publications")) {
+        const hasDigest = values.length === 9;
+        publications.set(`${values[0]}:${values[1]}`, {
+          annotation_id: values[3],
+          operation_digest: hasDigest ? values[6] : null,
+          owner_id: values[0],
+          queue_key: values[1],
+          remote_revision: Number(values[hasDigest ? 7 : 6]),
+          source_annotation_id: values[2],
+          source_revision: Number(values[4]),
+          source_updated_at: new Date(values[5]),
+          state: "published",
+          synced_at: new Date(values[hasDigest ? 8 : 7])
+        });
+        return { rows: [] };
+      }
+      return { rows: [] };
+    },
+    release() {}
+  };
+  return {
+    annotations,
+    publications,
+    queries,
+    repository: new PostgresAnnotationCommunityRepository({ async connect() { return client; } })
+  };
+}
+
 function annotationV2Payload(overrides = {}) {
   const literature = {
     identity: {
@@ -520,6 +585,65 @@ test("derives desktop publication targets from confirmed literature instead of c
   db.close();
 });
 
+test("rejects divergent same-version desktop publications in SQLite", () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  const literatureId = insertConfirmedPublicationLiterature(db, "literature-version-conflict");
+  const author = { id: "publication-owner", initials: "PO", name: "Publication Owner" };
+  const initial = publicationOperation({ literatureId, updatedAt: "2026-08-09T01:00:00.0000Z" });
+  const [created] = repository.applyDesktopAnnotationPublications(author, [initial]);
+  const [divergentUpsert] = repository.applyDesktopAnnotationPublications(author, [{
+    ...initial,
+    body: "A different body at the same source version.",
+    updatedAt: "2026-08-09T01:00:00.000Z"
+  }]);
+  assert.equal(divergentUpsert.error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  const [divergentRetract] = repository.applyDesktopAnnotationPublications(author, [{
+    annotationId: initial.annotationId,
+    operation: "retract",
+    queueKey: initial.queueKey,
+    remoteAnnotationId: created.remoteAnnotationId,
+    revision: initial.revision,
+    updatedAt: "2026-08-09T01:00:00.000Z"
+  }]);
+  assert.equal(divergentRetract.error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  const batchInitial = publicationOperation({ annotationId: "batch-annotation", literatureId, queueKey: "batch-queue" });
+  const batch = repository.applyDesktopAnnotationPublications(author, [batchInitial, { ...batchInitial, body: "Divergent intra-batch body." }]);
+  assert.equal(batch[0].state, "published");
+  assert.equal(batch[1].error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  assert.equal(db.prepare("SELECT body FROM annotations_v2 WHERE id = ?").get(batch[0].remoteAnnotationId).body, batchInitial.body);
+  assert.match(db.prepare("SELECT operation_digest FROM desktop_annotation_publications_v2 WHERE owner_id = ? AND queue_key = ?").get(author.id, initial.queueKey).operation_digest, /^[a-f0-9]{64}$/);
+  db.close();
+});
+
+test("rejects divergent same-version desktop publications in PostgreSQL", async () => {
+  const instance = postgresPublicationHarness();
+  const author = { id: "publication-owner", initials: "PO", name: "Publication Owner" };
+  const initial = publicationOperation({ updatedAt: "2026-08-09T01:00:00.0000Z" });
+  const [created] = await instance.repository.applyDesktopAnnotationPublications(author, [initial]);
+  const [divergentUpsert] = await instance.repository.applyDesktopAnnotationPublications(author, [{
+    ...initial,
+    body: "A different body at the same source version.",
+    updatedAt: "2026-08-09T01:00:00.000Z"
+  }]);
+  assert.equal(divergentUpsert.error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  const [divergentRetract] = await instance.repository.applyDesktopAnnotationPublications(author, [{
+    annotationId: initial.annotationId,
+    operation: "retract",
+    queueKey: initial.queueKey,
+    remoteAnnotationId: created.remoteAnnotationId,
+    revision: initial.revision,
+    updatedAt: "2026-08-09T01:00:00.000Z"
+  }]);
+  assert.equal(divergentRetract.error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  const batchInitial = publicationOperation({ annotationId: "batch-annotation", queueKey: "batch-queue" });
+  const batch = await instance.repository.applyDesktopAnnotationPublications(author, [batchInitial, { ...batchInitial, body: "Divergent intra-batch body." }]);
+  assert.equal(batch[0].state, "published");
+  assert.equal(batch[1].error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
+  assert.equal(instance.annotations.get(batch[0].remoteAnnotationId).body, batchInitial.body);
+  assert.match(instance.publications.get(`${author.id}:${initial.queueKey}`).operation_digest, /^[a-f0-9]{64}$/);
+});
+
 test("acquires PostgreSQL literature identity locks in canonical key order", async () => {
   const lockKeys = [];
   const row = {
@@ -563,8 +687,13 @@ test("acquires PostgreSQL literature identity locks in canonical key order", asy
 
 test("replays PostgreSQL desktop publications when updated timestamps identify the same instant", async () => {
   const queries = [];
+  const replayOperation = publicationOperation({
+    revision: 2,
+    updatedAt: "2026-08-09T02:00:00.0000Z"
+  });
   const prior = {
     annotation_id: "annotation-remote-1",
+    operation_digest: desktopAnnotationPublicationDigest(replayOperation),
     owner_id: "user-1",
     queue_key: "paper-publication-1:desktop-annotation-1",
     remote_revision: 2,
@@ -585,10 +714,7 @@ test("replays PostgreSQL desktop publications when updated timestamps identify t
   const repository = new PostgresAnnotationCommunityRepository({
     async connect() { return client; }
   });
-  const [replayed] = await repository.applyDesktopAnnotationPublications({ id: "user-1" }, [publicationOperation({
-    revision: 2,
-    updatedAt: "2026-08-09T02:00:00.0000Z"
-  })]);
+  const [replayed] = await repository.applyDesktopAnnotationPublications({ id: "user-1" }, [replayOperation]);
   assert.deepEqual(replayed, {
     annotationId: "desktop-annotation-1",
     queueKey: "paper-publication-1:desktop-annotation-1",
@@ -601,10 +727,11 @@ test("replays PostgreSQL desktop publications when updated timestamps identify t
 });
 
 test("acquires PostgreSQL desktop publication locks in canonical order while preserving result order", async () => {
-  const lockKeys = [];
+  const locks = [];
   const client = {
     async query(sql, values = []) {
-      if (sql.includes("pg_advisory_xact_lock")) lockKeys.push(values[0]);
+      if (sql.includes("pg_advisory_xact_lock")) locks.push({ sql, value: values[0] });
+      if (sql.includes("account_deletion_jobs")) return { rows: [] };
       if (sql.startsWith("SELECT * FROM desktop_annotation_publications")) return { rows: [] };
       if (sql.startsWith("SELECT * FROM literature_records")) return { rows: [] };
       return { rows: [] };
@@ -618,11 +745,29 @@ test("acquires PostgreSQL desktop publication locks in canonical order while pre
     publicationOperation({ annotationId: "annotation-z", queueKey: "queue-z" }),
     publicationOperation({ annotationId: "annotation-a", queueKey: "queue-a" })
   ]);
-  assert.deepEqual(lockKeys, [
+  assert.deepEqual(locks.map((lock) => lock.value), [
+    "intuecho-account-deletion:publication-owner",
     "desktop-publication:publication-owner:queue-a",
     "desktop-publication:publication-owner:queue-z"
   ]);
+  assert.match(locks[0].sql, /hashtextextended\(\$1, 0\)/);
   assert.deepEqual(results.map((result) => result.queueKey), ["queue-z", "queue-a"]);
+});
+
+test("rejects PostgreSQL desktop publications for a deleted owner before taking queue locks", async () => {
+  const queries = [];
+  const client = {
+    async query(sql, values = []) {
+      queries.push({ sql, values });
+      if (sql.includes("account_deletion_jobs")) return { rows: [{ subject_id: "deleted-owner" }] };
+      return { rows: [] };
+    },
+    release() {}
+  };
+  const repository = new PostgresAnnotationCommunityRepository({ async connect() { return client; } });
+  const [result] = await repository.applyDesktopAnnotationPublications({ id: "deleted-owner" }, [publicationOperation()]);
+  assert.equal(result.error, "ANNOTATION_PUBLICATION_OWNER_DELETED");
+  assert.equal(queries.some((query) => query.values.includes("desktop-publication:deleted-owner:paper-publication-1:desktop-annotation-1")), false);
 });
 
 test("does not serialize untouched PostgreSQL legacy rows as canonical literature", async () => {

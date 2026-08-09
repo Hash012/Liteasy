@@ -18,7 +18,8 @@ test("loads ordered immutable forum migrations", () => {
     "009_detach_deleted_annotation_audit.sql",
     "010_direct_message_read_state.sql",
     "011_literature_resolution_provenance.sql",
-    "012_desktop_annotation_publications.sql"
+    "012_desktop_annotation_publications.sql",
+    "013_desktop_annotation_publication_digest.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -45,6 +46,8 @@ test("loads ordered immutable forum migrations", () => {
   assert.match(migrations[10].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[11].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[11].sql, /CREATE TABLE desktop_annotation_publications/);
+  assert.match(migrations[12].checksum, /^[a-f0-9]{64}$/);
+  assert.match(migrations[12].sql, /ADD COLUMN operation_digest/);
 });
 
 test("readiness rejects missing, changed and unknown migrations", async () => {
@@ -55,7 +58,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 12, current: true });
+  }), { count: 13, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [
@@ -91,5 +94,16 @@ test("upgrades SQLite literature provenance schema with snapshots and guarded co
   assert.throws(() => db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, record_source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run("bad-source", "Bad", "[]", "invalid", "now", "now"), /literature_record_source_invalid/);
   assert.throws(() => db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("legacy", "invalid", "id", "metadata", "now"), /literature_identity_kind_invalid/);
   assert.throws(() => db.prepare("INSERT OR REPLACE INTO literature_record_versions_v2(id, literature_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)").run("replacement", "legacy", 1, "{}", "replace", "now"), /literature_record_version_is_append_only|UNIQUE/);
+  db.close();
+});
+
+test("upgrades existing SQLite desktop publication mappings with a legacy digest sentinel", () => {
+  const db = new Database(":memory:");
+  db.exec("CREATE TABLE desktop_annotation_publications_v2 (owner_id TEXT NOT NULL, queue_key TEXT NOT NULL, source_annotation_id TEXT NOT NULL, annotation_id TEXT NOT NULL UNIQUE, source_revision INTEGER NOT NULL, source_updated_at TEXT NOT NULL, state TEXT NOT NULL, remote_revision INTEGER NOT NULL, synced_at TEXT NOT NULL, PRIMARY KEY(owner_id, queue_key))");
+  db.prepare("INSERT INTO desktop_annotation_publications_v2(owner_id, queue_key, source_annotation_id, annotation_id, source_revision, source_updated_at, state, remote_revision, synced_at) VALUES (?, ?, ?, ?, 1, ?, 'published', 1, ?)")
+    .run("owner", "queue", "source", "remote", "2026-08-09T01:00:00.000Z", "2026-08-09T01:00:01.000Z");
+  initializeAnnotationCommunitySqlite(db);
+  const row = db.prepare("SELECT operation_digest FROM desktop_annotation_publications_v2 WHERE owner_id = 'owner'").get();
+  assert.equal(row.operation_digest, "0".repeat(64));
   db.close();
 });
