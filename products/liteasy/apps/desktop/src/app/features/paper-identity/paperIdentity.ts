@@ -1,4 +1,5 @@
 import type { Paper } from "../workspace/workspace.types";
+import { paperIdentityFromLiterature } from "./literatureRecord";
 
 export type PaperIdentityKind =
   | "doi"
@@ -7,7 +8,12 @@ export type PaperIdentityKind =
   | "title_authors_year_hash"
   | "local_paper_id";
 
-export type PaperIdentitySource = "inferred" | "local" | "metadata";
+export type PaperIdentitySource =
+  | "inferred"
+  | "local"
+  | "manual"
+  | "metadata"
+  | "public_registry";
 
 export type PaperIdentityCandidate = {
   id: string;
@@ -177,6 +183,9 @@ function titleAuthorsYearHash(input: PaperIdentityInput) {
 }
 
 export function resolvePaperIdentity(input: PaperIdentityInput): PaperIdentity {
+  if (input.literature) {
+    return paperIdentityFromLiterature(input, input.literature);
+  }
   const candidates: PaperIdentityCandidate[] = [];
   const sourceText = [input.title, input.sourcePath].filter(Boolean).join(" ");
 

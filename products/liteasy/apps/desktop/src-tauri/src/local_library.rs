@@ -4739,15 +4739,18 @@ mod tests {
     fn exports_a_complete_byte_verified_library_backup_without_changing_the_source() {
         let source = initialized_library("backup-source");
         let destination_parent = temporary_directory("backup-parent");
+        let paper_artifact_directory =
+            paper_artifact_directory_name("paper-1").expect("safe artifact directory");
+        let literature = br#"{"literature":{"authors":["Ada Lovelace"],"identifiers":[{"kind":"doi","source":"manual","value":"10.1000/manual"}],"literatureId":"literature-1","provenance":{"confirmedAt":"2026-08-09T10:00:00.000Z","mode":"manual"},"title":"A Manually Confirmed Paper","year":2026},"version":1}"#;
         fs::create_dir_all(source.join("topic")).unwrap();
         fs::write(source.join("topic/paper.pdf"), b"%PDF-1.7\nbody").unwrap();
-        fs::write(
-            source
-                .join(INTERNAL_DIRECTORY_NAME)
-                .join("paper-artifacts/note.json"),
-            br#"{"note":"kept"}"#,
-        )
-        .unwrap();
+        let literature_path = source
+            .join(INTERNAL_DIRECTORY_NAME)
+            .join(ARTIFACTS_DIRECTORY_NAME)
+            .join(paper_artifact_directory)
+            .join("bibliographic-identity.v1.json");
+        fs::create_dir_all(literature_path.parent().unwrap()).unwrap();
+        fs::write(&literature_path, literature).unwrap();
 
         let backup = export_library_backup_at_root(&source, &destination_parent).unwrap();
 
@@ -4757,13 +4760,8 @@ mod tests {
             verified_tree_manifest(&backup).unwrap()
         );
         assert_eq!(
-            fs::read(
-                backup
-                    .join(INTERNAL_DIRECTORY_NAME)
-                    .join("paper-artifacts/note.json")
-            )
-            .unwrap(),
-            br#"{"note":"kept"}"#
+            fs::read(backup.join(literature_path.strip_prefix(&source).unwrap())).unwrap(),
+            literature
         );
         fs::remove_dir_all(source).unwrap();
         fs::remove_dir_all(destination_parent).unwrap();

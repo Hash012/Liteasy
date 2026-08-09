@@ -15,7 +15,13 @@ fn artifact_kind_is_allowed(kind: &str) -> bool {
         // "fulltext" belongs in the library, never the cache: OCR is not reproducible, and
         // every anchor and highlight is positioned against these text offsets. Re-extracting
         // after a cache wipe would drift them all at once.
-        "annotations" | "anchor-graph" | "anchors" | "citations" | "fulltext" | "reader-state"
+        "annotations"
+            | "anchor-graph"
+            | "anchors"
+            | "bibliographic-identity"
+            | "citations"
+            | "fulltext"
+            | "reader-state"
     )
 }
 
@@ -194,6 +200,7 @@ mod tests {
     fn only_allows_known_user_artifact_kinds() {
         assert!(artifact_kind_is_allowed("annotations"));
         assert!(artifact_kind_is_allowed("anchor-graph"));
+        assert!(artifact_kind_is_allowed("bibliographic-identity"));
         assert!(artifact_kind_is_allowed("citations"));
         assert!(!artifact_kind_is_allowed("../../outside"));
     }

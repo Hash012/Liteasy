@@ -4,6 +4,7 @@ export type UserPaperArtifactKind =
   | "anchor-graph"
   | "anchors"
   | "annotations"
+  | "bibliographic-identity"
   | "citations"
   | "fulltext"
   | "reader-state";
