@@ -8,7 +8,7 @@ import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { AgentArtifactResult } from "../app/features/artifacts/artifact.types";
-import { availableCapability } from "./fixtures/visualizationControllerFixtures";
+import { availableCapability, readyArtifact } from "./fixtures/visualizationControllerFixtures";
 
 function mindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -862,6 +862,58 @@ describe("useArtifactWorkflowController", () => {
         thinReadingDocument: expect.objectContaining({ targetLanguage: "en-US" })
       })
     ]);
+  });
+
+  test("hydrates ready visualization history from a restored V2 document", async () => {
+    const baseDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-ready",
+      papers: [{ id: paper.id, title: paper.title }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "Persisted explanation.",
+        withinPaperClosure: true
+      },
+      targetLanguage: "en"
+    });
+    const root = baseDocument.nodes[baseDocument.rootNodeId];
+    const restoredArtifact = { ...readyArtifact, nodeId: root.id };
+    const thinReadingDocument = {
+      ...baseDocument,
+      nodes: {
+        ...baseDocument.nodes,
+        [root.id]: { ...root, visualizations: [restoredArtifact] }
+      }
+    };
+    const { result } = renderHook(() => useArtifactWorkflowController({
+      artifactLocalRepository: {
+        list: vi.fn(async () => [{
+          artifactId: thinReadingDocument.artifactId,
+          papers: [{ id: paper.id, title: paper.title }],
+          thinReadingDocument,
+          title: "Thin reading",
+          type: "thin_reading" as const
+        }]),
+        replace: vi.fn(async () => undefined)
+      },
+      artifactResultClient: artifactResultClient(),
+      artifactStore: createArtifactStore(),
+      getImportedChunksByPaperId: () => ({}),
+      getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+      getSelectedPapers: () => [],
+      onAnalysisHint: vi.fn(),
+      queueImportForPapers: vi.fn(() => "idle"),
+      runAgentAnalysis: vi.fn(async () => completedRun())
+    }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.model.thinReadingVisualizationReadyArtifacts).toEqual([restoredArtifact]);
   });
 
   test("isolates server artifacts across login, account switch, and logout", async () => {

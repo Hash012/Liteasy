@@ -107,6 +107,10 @@ type ArtifactWorkflowModel = {
 };
 
 type ArtifactWorkflowActions = {
+  applyThinReadingDocument: (
+    artifactId: string,
+    document: Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>
+  ) => void;
   cancelArtifactTask: (taskId: string) => Promise<string>;
   cancelThinReadingVisualization: (
     nodeId: string,
@@ -216,13 +220,18 @@ export function useArtifactWorkflowController({
       const document = tab?.type === "thin_reading" ? tab.thinReadingDocument : undefined;
       return document?.version === "liteasy.thin-reading/v2" ? document : undefined;
     },
-    onDocumentUpdated: () => undefined,
+    onDocumentUpdated: (document) => {
+      const actions = artifactActionsRef.current;
+      if (actions) {
+        actions.applyThinReadingDocument(document.artifactId, document);
+      }
+    },
     saveThinReadingDocument: async (artifactId, document) => {
       const actions = artifactActionsRef.current;
       if (!actions) {
         throw new Error("thin_reading_visualization_persistence_unavailable");
       }
-      await actions.persistThinReadingDocument(artifactId, document, { commitAfterSave: true });
+      await actions.persistThinReadingDocument(artifactId, document, { commitMode: "none" });
     },
     setVisualizationPreference: setMultimodalVisualizationPreference
   });
@@ -263,7 +272,9 @@ export function useArtifactWorkflowController({
     const requestId = ++catalogRequestRef.current;
     setArtifactCatalogLoadState({ status: "loading" });
     persistenceReadyRef.current = false;
+    thinReadingVisualization.dispose();
     artifactStore.clearAccountArtifacts();
+    thinReadingVisualization.hydrateReadyArtifacts([], { replace: true });
     artifactActions.syncArtifacts();
 
     try {
@@ -282,6 +293,15 @@ export function useArtifactWorkflowController({
         persistenceReadyRef.current = true;
       }
       artifactActions.syncArtifacts();
+      thinReadingVisualization.hydrateReadyArtifacts(
+        artifactStore.getCatalog().flatMap((tab) => {
+          const document = tab.type === "thin_reading" ? tab.thinReadingDocument : undefined;
+          return document?.version === "liteasy.thin-reading/v2"
+            ? Object.values(document.nodes).flatMap((node) => node.visualizations)
+            : [];
+        }),
+        { replace: true }
+      );
       setArtifactCatalogLoadState({ status: "ready" });
     } catch (error) {
       if (requestId !== catalogRequestRef.current) {
@@ -346,6 +366,7 @@ export function useArtifactWorkflowController({
 
   return {
     actions: {
+      applyThinReadingDocument: artifactActions.applyThinReadingDocument,
       cancelArtifactTask: artifactActions.cancelArtifactTask,
       cancelThinReadingVisualization: thinReadingVisualization.cancelVisualization,
       closeArtifactTab: artifactActions.closeArtifactTab,

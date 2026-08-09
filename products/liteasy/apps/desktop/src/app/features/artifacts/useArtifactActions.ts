@@ -1426,7 +1426,7 @@ export function useArtifactActions({
   async function persistThinReadingDocument(
     artifactId: string,
     nextDocument: Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>,
-    options: { commitAfterSave?: boolean } = {}
+    options: { commitMode?: "after_save" | "before_save" | "none" } = {}
   ) {
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
@@ -1445,7 +1445,7 @@ export function useArtifactActions({
       });
       syncArtifacts();
     };
-    if (!options.commitAfterSave) {
+    if ((options.commitMode ?? "before_save") === "before_save") {
       commitDocument();
     }
     await artifactResultClient.save(createThinReadingResultDocument({
@@ -1455,9 +1455,29 @@ export function useArtifactActions({
       papers,
       uiDsl: existing.uiDsl
     }));
-    if (options.commitAfterSave) {
+    if (options.commitMode === "after_save") {
       commitDocument();
     }
+  }
+
+  function applyThinReadingDocument(
+    artifactId: string,
+    nextDocument: Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>
+  ) {
+    const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
+      artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
+    if (!existing || existing.type !== "thin_reading") {
+      throw new Error("找不到可应用的薄读产物。");
+    }
+    const primaryPaperId = nextDocument.paperIds[0];
+    artifactStore.upsertTab({
+      ...existing,
+      papers: primaryPaperId
+        ? (existing.papers ?? []).filter((paper) => paper.id === primaryPaperId)
+        : [],
+      thinReadingDocument: nextDocument
+    });
+    syncArtifacts();
   }
 
   function updateThinReadingDocument(artifactId: string, nextDocument: NonNullable<ArtifactTab["thinReadingDocument"]>) {
@@ -1518,6 +1538,7 @@ export function useArtifactActions({
     handleAssistantArtifact,
     openArtifact,
     openSkillDocument,
+    applyThinReadingDocument,
     persistThinReadingDocument,
     regenerateArtifact,
     retryInterruptedThinReadingBranch,

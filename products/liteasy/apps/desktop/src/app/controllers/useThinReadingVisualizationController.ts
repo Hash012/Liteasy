@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   parseMultimodalVisualizationCapability,
   type MultimodalVisualizationCapability
@@ -121,15 +121,62 @@ export function useThinReadingVisualizationController({
   const [statuses, setStatuses] = useState<Record<string, ThinReadingVisualizationStatus>>({});
   const activeRequestsRef = useRef(new Map<string, ActiveRequest>());
   const locallyEnabledRef = useRef(true);
-  const capabilityOverrideRef = useRef<MultimodalVisualizationCapability>();
+  const mountedRef = useRef(true);
+  const saveQueuesRef = useRef(new Map<string, Promise<void>>());
+  const cancelGenerationRef = useRef(cancelGeneration);
+  cancelGenerationRef.current = cancelGeneration;
 
   function currentCapability() {
-    return capabilityOverrideRef.current ?? parseMultimodalVisualizationCapability(getCapability());
+    return parseMultimodalVisualizationCapability(getCapability());
   }
 
   function setNodeStatus(nodeId: string, status: ThinReadingVisualizationStatus) {
+    if (!mountedRef.current) {
+      return;
+    }
     setStatuses((current) => ({ ...current, [nodeId]: status }));
   }
+
+  function cancelRemoteGeneration(input: {
+    artifactId: string;
+    nodeId: string;
+    reason: ThinReadingVisualizationCancellationReason;
+    requestId: string;
+  }) {
+    const cancel = cancelGenerationRef.current;
+    if (!cancel) {
+      return;
+    }
+    const timeout = new Promise<void>((resolve) => {
+      globalThis.setTimeout(resolve, 1_000);
+    });
+    void Promise.race([
+      Promise.resolve().then(() => cancel(input)),
+      timeout
+    ]).catch(() => undefined);
+  }
+
+  function disposeActiveRequests(reason: ThinReadingVisualizationCancellationReason = "workflow_disposed") {
+    const requests = [...activeRequestsRef.current.values()];
+    activeRequestsRef.current.clear();
+    requests.forEach((request) => {
+      request.abortController.abort();
+      cancelRemoteGeneration({
+        artifactId: request.artifactId,
+        nodeId: request.nodeId,
+        reason,
+        requestId: request.requestId
+      });
+    });
+  }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      disposeActiveRequests();
+    };
+  }, []);
 
   async function startVisualization(input: ThinReadingVisualizationNodeInput) {
     const intent = input.node.visualizationDecision?.status === "accepted"
@@ -226,20 +273,72 @@ export function useThinReadingVisualizationController({
         return status;
       }
 
-      // Once persistence starts, the request is committed and preference changes preserve it.
-      activeRequestsRef.current.delete(key);
-      const nextDocument: ThinReadingDocumentV2 = {
-        ...latestDocument,
-        nodes: {
-          ...latestDocument.nodes,
-          [latestNode.id]: {
-            ...latestNode,
-            visualizations: [...latestNode.visualizations, ...artifacts]
-          }
+      const previousSave = saveQueuesRef.current.get(input.artifactId) ?? Promise.resolve();
+      const persistResult = previousSave.then(async () => {
+        const currentRequest = activeRequestsRef.current.get(key);
+        const freshCapability = currentCapability();
+        const currentDocument = getThinReadingDocument(input.artifactId);
+        const currentNode = currentDocument?.nodes[input.node.id];
+        const currentIntent = currentNode?.visualizationDecision?.status === "accepted"
+          ? currentNode.visualizationDecision.intent
+          : undefined;
+        if (
+          abortController.signal.aborted ||
+          currentRequest?.requestId !== requestId ||
+          !currentDocument ||
+          !currentNode ||
+          !currentIntent ||
+          !intentsMatch(intent, currentIntent) ||
+          omissionReason(freshCapability, intent, locallyEnabledRef.current)
+        ) {
+          return false;
         }
-      };
-      await saveThinReadingDocument(input.artifactId, nextDocument);
-      onDocumentUpdated(nextDocument);
+        const existingArtifactIds = new Set(currentNode.visualizations.map((artifact) => artifact.artifactId));
+        const mergedArtifacts = artifacts.filter((artifact) => !existingArtifactIds.has(artifact.artifactId));
+        if (mergedArtifacts.length === 0) {
+          return false;
+        }
+        const nextDocument: ThinReadingDocumentV2 = {
+          ...currentDocument,
+          nodes: {
+            ...currentDocument.nodes,
+            [currentNode.id]: {
+              ...currentNode,
+              visualizations: [...currentNode.visualizations, ...mergedArtifacts]
+            }
+          }
+        };
+        await saveThinReadingDocument(input.artifactId, nextDocument);
+        const postSaveDocument = getThinReadingDocument(input.artifactId);
+        const postSaveNode = postSaveDocument?.nodes[input.node.id];
+        const postSaveIntent = postSaveNode?.visualizationDecision?.status === "accepted"
+          ? postSaveNode.visualizationDecision.intent
+          : undefined;
+        if (
+          abortController.signal.aborted ||
+          activeRequestsRef.current.get(key)?.requestId !== requestId ||
+          !postSaveIntent ||
+          !intentsMatch(intent, postSaveIntent) ||
+          omissionReason(currentCapability(), intent, locallyEnabledRef.current)
+        ) {
+          return false;
+        }
+        onDocumentUpdated(nextDocument);
+        return true;
+      });
+      saveQueuesRef.current.set(
+        input.artifactId,
+        persistResult.then(() => undefined, () => undefined)
+      );
+      const didPersist = await persistResult;
+      if (!didPersist) {
+        if (activeRequestsRef.current.get(key)?.requestId === requestId) {
+          activeRequestsRef.current.delete(key);
+          setNodeStatus(input.node.id, { reasonCode: "stale_request", status: "omitted" });
+        }
+        return { reasonCode: "stale_request", status: "omitted" } as const;
+      }
+      activeRequestsRef.current.delete(key);
       setReadyArtifacts((current) => [...current, ...artifacts]);
       const status = { artifacts, status: "ready" } as const;
       setNodeStatus(input.node.id, status);
@@ -273,19 +372,15 @@ export function useThinReadingVisualizationController({
     await Promise.all(matches.map(async ([key, request]) => {
       activeRequestsRef.current.delete(key);
       request.abortController.abort();
-      try {
-        await cancelGeneration?.({
-          artifactId: request.artifactId,
-          nodeId: request.nodeId,
-          reason,
-          requestId: request.requestId
-        });
-      } catch {
-        // Local abort is authoritative; remote cancellation is best effort.
-      }
       setNodeStatus(request.nodeId, {
         reasonCode: reason === "preference_disabled" ? "preference_disabled" : "stale_request",
         status: "omitted"
+      });
+      cancelRemoteGeneration({
+        artifactId: request.artifactId,
+        nodeId: request.nodeId,
+        reason,
+        requestId: request.requestId
       });
     }));
   }
@@ -301,15 +396,31 @@ export function useThinReadingVisualizationController({
       )));
     }
     if (setVisualizationPreference) {
-      capabilityOverrideRef.current = parseMultimodalVisualizationCapability(
-        await setVisualizationPreference(enabled)
-      );
+      await setVisualizationPreference(enabled);
     }
+  }
+
+  function hydrateReadyArtifacts(
+    artifacts: readonly VisualizationArtifactV1[],
+    options: { replace?: boolean } = {}
+  ) {
+    if (!mountedRef.current) {
+      return;
+    }
+    setReadyArtifacts((current) => {
+      const byId = new Map(
+        (options.replace ? [] : current).map((artifact) => [artifact.artifactId, artifact])
+      );
+      artifacts.forEach((artifact) => byId.set(artifact.artifactId, artifact));
+      return [...byId.values()];
+    });
   }
 
   return {
     cancelVisualization,
     commitGeneratedNode,
+    dispose: disposeActiveRequests,
+    hydrateReadyArtifacts,
     readyArtifacts,
     setEnabled,
     startVisualization,
