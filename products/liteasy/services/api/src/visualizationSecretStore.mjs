@@ -36,7 +36,10 @@ export function parseVisualizationSecrets(value) {
 
 export class EnvironmentVisualizationSecretStore {
   constructor(environment = process.env) {
-    this.secrets = parseVisualizationSecrets(environment[secretEnvironmentVariable]);
+    const isEnvironment = environment === process.env ||
+      Object.prototype.hasOwnProperty.call(environment ?? {}, secretEnvironmentVariable);
+    const entries = environment instanceof Map ? Object.fromEntries(environment) : environment;
+    this.secrets = parseVisualizationSecrets(isEnvironment ? entries?.[secretEnvironmentVariable] : JSON.stringify(entries));
   }
 
   resolve(secretRef) {

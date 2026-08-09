@@ -1,4 +1,5 @@
 import { lookup as systemDnsLookup } from "node:dns/promises";
+import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import { EnvironmentVisualizationSecretStore, validateVisualizationSecretRef } from "./visualizationSecretStore.mjs";
 import { VisualizationCircuitBreaker } from "./visualizationCircuitBreaker.mjs";
@@ -46,7 +47,7 @@ function parseEndpoint(value) {
   return endpoint;
 }
 
-function normalizeRoute(route) {
+export function normalizeRoute(route) {
   if (!route || typeof route !== "object" || Array.isArray(route)) throw new Error("visualization_route_invalid");
   for (const key of Object.keys(route)) {
     if (key !== "secretRef" && credentialFieldPattern.test(key)) throw new Error("visualization_route_credential_material_rejected");
@@ -93,24 +94,164 @@ function hostnameAllowed(hostname, allowedHostnames) {
   return allowedHostnames.some((allowed) => allowed === hostname || (allowed.startsWith("*.") && hostname.endsWith(allowed.slice(1))));
 }
 
+function ipv4Integer(address) {
+  if (isIP(address) !== 4) return null;
+  return address.split(".").reduce((value, octet) => (value * 256) + Number(octet), 0) >>> 0;
+}
+
+function ipv4InRange(value, base, bits) {
+  const shift = 32 - bits;
+  return (value >>> shift) === (ipv4Integer(base) >>> shift);
+}
+
+function publicIpv4(address) {
+  const value = ipv4Integer(address);
+  if (value === null) return false;
+  return ![
+    ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8],
+    ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.0.2.0", 24],
+    ["192.88.99.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["198.51.100.0", 24],
+    ["203.0.113.0", 24], ["224.0.0.0", 4], ["240.0.0.0", 4]
+  ].some(([base, bits]) => ipv4InRange(value, base, bits));
+}
+
+function ipv6Integer(address) {
+  if (typeof address !== "string" || address.includes("%") || isIP(address) !== 6) return null;
+  let source = address.toLowerCase();
+  if (source.includes(".")) {
+    const separator = source.lastIndexOf(":");
+    const ipv4 = ipv4Integer(source.slice(separator + 1));
+    if (ipv4 === null) return null;
+    source = `${source.slice(0, separator)}:${(ipv4 >>> 16).toString(16)}:${(ipv4 & 0xffff).toString(16)}`;
+  }
+  const sides = source.split("::");
+  if (sides.length > 2) return null;
+  const left = sides[0] ? sides[0].split(":") : [];
+  const right = sides[1] ? sides[1].split(":") : [];
+  const missing = 8 - left.length - right.length;
+  if ((sides.length === 1 && missing !== 0) || (sides.length === 2 && missing < 1)) return null;
+  const groups = [...left, ...Array(missing).fill("0"), ...right];
+  if (groups.length !== 8 || groups.some((group) => !/^[a-f0-9]{1,4}$/.test(group))) return null;
+  return groups.reduce((value, group) => (value << 16n) | BigInt(`0x${group}`), 0n);
+}
+
+function ipv6InRange(value, base, bits) {
+  const baseValue = ipv6Integer(base);
+  const shift = BigInt(128 - bits);
+  return baseValue !== null && (value >> shift) === (baseValue >> shift);
+}
+
+function ipv4FromInteger(value) {
+  return [24, 16, 8, 0].map((shift) => Number((value >> BigInt(shift)) & 0xffn)).join(".");
+}
+
+function publicIpv6(address) {
+  const value = ipv6Integer(address);
+  if (value === null) return false;
+  if (ipv6InRange(value, "::ffff:0:0", 96)) return publicIpv4(ipv4FromInteger(value & 0xffffffffn));
+  if (ipv6InRange(value, "64:ff9b::", 96)) return publicIpv4(ipv4FromInteger(value & 0xffffffffn));
+  if (ipv6InRange(value, "2002::", 16)) {
+    return publicIpv4(ipv4FromInteger((value >> 80n) & 0xffffffffn));
+  }
+  if (!ipv6InRange(value, "2000::", 3)) return false;
+  return ![
+    ["2001::", 23],
+    ["2001:db8::", 32],
+    ["3fff::", 20]
+  ].some(([base, bits]) => ipv6InRange(value, base, bits));
+}
+
 function publicAddress(address) {
-  const family = isIP(address);
-  if (family === 4) {
-    const [first, second] = address.split(".").map(Number);
-    return first !== 0 && first !== 10 && first !== 127 && !(first === 169 && second === 254)
-      && !(first === 172 && second >= 16 && second <= 31) && !(first === 192 && second === 168)
-      && !(first === 100 && second >= 64 && second <= 127);
+  return publicIpv4(address) || publicIpv6(address);
+}
+
+function canonicalAddress(address) {
+  const value = ipv6Integer(address);
+  if (value !== null && ipv6InRange(value, "::ffff:0:0", 96)) {
+    return ipv4FromInteger(value & 0xffffffffn);
   }
-  if (family === 6) {
-    const normalized = address.toLowerCase();
-    return normalized !== "::" && normalized !== "::1" && !normalized.startsWith("fe80:") && !normalized.startsWith("fc") && !normalized.startsWith("fd");
-  }
-  return false;
+  return String(address).toLowerCase();
 }
 
 function requestSignal(signal, timeoutMs) {
-  const timeout = AbortSignal.timeout(timeoutMs);
-  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort(new DOMException("provider route timed out", "TimeoutError"));
+  }, timeoutMs);
+  const forwardAbort = () => controller.abort(signal.reason ?? new DOMException("request aborted", "AbortError"));
+  if (signal) {
+    if (signal.aborted) forwardAbort();
+    else signal.addEventListener("abort", forwardAbort, { once: true });
+  }
+  controller.signal.addEventListener("abort", () => {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", forwardAbort);
+  }, { once: true });
+  return controller.signal;
+}
+
+function waitWithSignal(value, signal) {
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const aborted = () => reject(signal.reason ?? new DOMException("aborted", "AbortError"));
+    signal.addEventListener("abort", aborted, { once: true });
+    Promise.resolve(value).then(resolve, reject).finally(() => signal.removeEventListener("abort", aborted));
+  });
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw signal.reason ?? new DOMException("aborted", "AbortError");
+}
+
+function pinnedLookup(records) {
+  const addresses = records.map((record) => ({
+    address: record.address,
+    family: record.family ?? isIP(record.address)
+  }));
+  return (_hostname, options, callback) => {
+    const requestedFamily = typeof options === "number" ? options : options?.family;
+    const compatible = requestedFamily ? addresses.filter((entry) => entry.family === requestedFamily) : addresses;
+    if (compatible.length === 0) {
+      callback(Object.assign(new Error("visualization_egress_address_family_unavailable"), { code: "EAI_ADDRFAMILY" }));
+      return;
+    }
+    if (typeof options === "object" && options?.all) callback(null, compatible);
+    else callback(null, compatible[0].address, compatible[0].family);
+  };
+}
+
+async function pinnedHttpsFetch(url, init, security) {
+  const parsed = new URL(url);
+  const headers = Object.fromEntries(new Headers(init.headers).entries());
+  const body = init.body;
+  if (body !== undefined && typeof body !== "string" && !Buffer.isBuffer(body) && !(body instanceof Uint8Array)) {
+    throw new VisualizationProviderError("visualization_provider_request_invalid");
+  }
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(parsed, {
+      headers,
+      lookup: security.lookup,
+      method: init.method ?? "GET",
+      signal: init.signal
+    }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("error", reject);
+      response.on("end", () => {
+        const responseBody = [204, 205, 304].includes(response.statusCode) ? null : Buffer.concat(chunks);
+        const result = new Response(responseBody, {
+          headers: response.headers,
+          status: response.statusCode,
+          statusText: response.statusMessage
+        });
+        Object.defineProperty(result, "peerAddress", { value: response.socket.remoteAddress });
+        resolve(result);
+      });
+    });
+    request.on("error", reject);
+    if (body !== undefined) request.write(body);
+    request.end();
+  });
 }
 
 function normalizedProbeResult(result, route) {
@@ -144,9 +285,10 @@ function normalizedImageResult(result) {
 }
 
 export class VisualizationProviderGateway {
-  constructor({ adapter, circuitBreaker = new VisualizationCircuitBreaker(), dnsLookup = systemDnsLookup, egressPolicy = {}, fetchImpl = fetch, secretStore = new EnvironmentVisualizationSecretStore() } = {}) {
-    if (!adapter || typeof adapter !== "object") throw new Error("visualization_provider_adapter_invalid");
+  constructor({ adapter, adapters = {}, circuitBreaker = new VisualizationCircuitBreaker(), dnsLookup = systemDnsLookup, egressPolicy = {}, fetchImpl = pinnedHttpsFetch, secretStore = new EnvironmentVisualizationSecretStore() } = {}) {
+    if ((!adapter || typeof adapter !== "object") && (!adapters || typeof adapters !== "object")) throw new Error("visualization_provider_adapter_invalid");
     this.adapter = adapter;
+    this.adapters = adapters;
     this.circuitBreaker = circuitBreaker;
     this.dnsLookup = dnsLookup;
     this.egressPolicy = { allowedHostnames: [...new Set(egressPolicy.allowedHostnames ?? [])].map((host) => host.toLowerCase()) };
@@ -173,19 +315,26 @@ export class VisualizationProviderGateway {
 
   async testRoute(input) {
     const route = this.#selectRoute(input, "validation", { allowCircuitOpen: true });
-    await this.#validateEgress(route.endpoint);
-    if (typeof this.adapter.probe !== "function") throw new Error("visualization_provider_adapter_invalid");
+    const adapter = this.#adapterFor(route);
+    const probe = adapter.probe ?? adapter.test;
+    if (typeof probe !== "function") throw new Error("visualization_provider_adapter_invalid");
     const signal = requestSignal(input?.signal, route.timeoutMs);
+    const request = this.#authenticatedRequest(route, signal);
+    this.#incrementActive(route);
     try {
-      const result = await this.adapter.probe({
+      await this.#validateEgress(route.endpoint, signal);
+      const result = await probe.call(adapter, {
         operation: "validation",
         route,
         signal,
-        request: this.#authenticatedRequest(route, signal)
+        request
       });
+      throwIfAborted(signal);
       return normalizedProbeResult(result, route);
     } catch (error) {
       throw this.#providerError(error, input?.signal);
+    } finally {
+      this.#decrementActive(route);
     }
   }
 
@@ -212,23 +361,26 @@ export class VisualizationProviderGateway {
   async #generate(input, operation, adapterMethod, resultNormalizer) {
     const route = this.#selectRoute(input, operation);
     if (!this.circuitBreaker.allows(route)) throw new VisualizationProviderError("visualization_circuit_open");
-    if (typeof this.adapter[adapterMethod] !== "function") throw new Error("visualization_provider_adapter_invalid");
+    const adapter = this.#adapterFor(route);
+    if (typeof adapter[adapterMethod] !== "function") throw new Error("visualization_provider_adapter_invalid");
     const signal = requestSignal(input?.signal, route.timeoutMs);
     const request = this.#authenticatedRequest(route, signal);
-    this.activeRequests.set(route.routeId, (this.activeRequests.get(route.routeId) ?? 0) + 1);
+    this.#incrementActive(route);
     let adapterInvoked = false;
     try {
-      await this.#validateEgress(route.endpoint);
+      await this.#validateEgress(route.endpoint, signal);
       adapterInvoked = true;
-      const result = await this.adapter[adapterMethod]({
+      const result = await adapter[adapterMethod]({
         dataClass: input.dataClass,
         input: input.input,
+        payload: input.payload,
         modality: input.modality,
         paperContent: input.paperContent,
         route,
         signal,
         request
       });
+      throwIfAborted(signal);
       const normalized = resultNormalizer(result);
       this.circuitBreaker.recordSuccess(route);
       return normalized;
@@ -236,10 +388,24 @@ export class VisualizationProviderGateway {
       if (adapterInvoked && !input?.signal?.aborted) this.circuitBreaker.recordFailure(route);
       throw this.#providerError(error, input?.signal);
     } finally {
-      const active = (this.activeRequests.get(route.routeId) ?? 1) - 1;
-      if (active === 0) this.activeRequests.delete(route.routeId);
-      else this.activeRequests.set(route.routeId, active);
+      this.#decrementActive(route);
     }
+  }
+
+  #adapterFor(route) {
+    const adapter = this.adapters?.[route.providerId] ?? this.adapter;
+    if (!adapter || typeof adapter !== "object") throw new Error("visualization_provider_adapter_invalid");
+    return adapter;
+  }
+
+  #incrementActive(route) {
+    this.activeRequests.set(route.routeId, (this.activeRequests.get(route.routeId) ?? 0) + 1);
+  }
+
+  #decrementActive(route) {
+    const active = (this.activeRequests.get(route.routeId) ?? 1) - 1;
+    if (active <= 0) this.activeRequests.delete(route.routeId);
+    else this.activeRequests.set(route.routeId, active);
   }
 
   #providerError(error, signal) {
@@ -261,30 +427,49 @@ export class VisualizationProviderGateway {
   async #fetchWithValidatedRedirects(url, init) {
     let current = new URL(url).toString();
     for (let redirects = 0; redirects <= 5; redirects += 1) {
-      await this.#validateEgress(current);
-      const response = await this.fetchImpl(current, { ...init, redirect: "manual" });
+      const egress = await this.#validateEgress(current, init.signal);
+      const response = await this.fetchImpl(current, { ...init, redirect: "manual" }, {
+        addresses: egress.addresses,
+        lookup: pinnedLookup(egress.records)
+      });
+      const peerAddress = response?.peerAddress;
+      if (typeof peerAddress !== "string" || !egress.addresses.includes(canonicalAddress(peerAddress))) {
+        throw new VisualizationProviderError("visualization_egress_denied");
+      }
       if (![301, 302, 303, 307, 308].includes(response.status)) return response;
       const location = response.headers.get("location");
       if (!location || redirects === 5) throw new VisualizationProviderError("visualization_provider_redirect_invalid");
-      current = new URL(location, current).toString();
+      const redirect = new URL(location, current);
+      if (redirect.origin !== new URL(current).origin) {
+        throw new VisualizationProviderError("visualization_provider_redirect_invalid");
+      }
+      current = redirect.toString();
     }
     throw new VisualizationProviderError("visualization_provider_redirect_invalid");
   }
 
-  async #validateEgress(endpoint) {
+  async #validateEgress(endpoint, signal) {
     const parsed = parseEndpoint(endpoint);
     if (!hostnameAllowed(parsed.hostname.toLowerCase(), this.egressPolicy.allowedHostnames)) {
       throw new VisualizationProviderError("visualization_egress_denied");
     }
     let addresses;
     try {
-      addresses = await this.dnsLookup(parsed.hostname, { all: true, verbatim: true });
-    } catch {
+      addresses = await waitWithSignal(this.dnsLookup(parsed.hostname, { all: true, verbatim: true }), signal);
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason ?? error;
       throw new VisualizationProviderError("visualization_egress_denied");
     }
-    const values = Array.isArray(addresses) ? addresses.map((entry) => typeof entry === "string" ? entry : entry.address) : [];
+    const records = Array.isArray(addresses) ? addresses.map((entry) => typeof entry === "string"
+      ? { address: entry, family: isIP(entry) }
+      : { address: entry.address, family: entry.family ?? isIP(entry.address) }) : [];
+    const values = records.map((entry) => entry.address);
     if (values.length === 0 || values.some((address) => !publicAddress(address))) {
       throw new VisualizationProviderError("visualization_egress_denied");
     }
+    return {
+      addresses: [...new Set(values.map(canonicalAddress))],
+      records
+    };
   }
 }

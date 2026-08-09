@@ -23,6 +23,7 @@ const route = Object.freeze({
   secretRef: "viz-secret:provider-1",
   timeoutMs: 1_000
 });
+const publicAddress = "93.184.216.34";
 
 function secretStore() {
   return new EnvironmentVisualizationSecretStore({
@@ -47,7 +48,7 @@ function gatewayWithFailingAdapter({ threshold = 3 } = {}) {
     gateway: new VisualizationProviderGateway({
       adapter,
       circuitBreaker: new VisualizationCircuitBreaker({ failureThreshold: threshold }),
-      dnsLookup: async () => ["203.0.113.10"],
+      dnsLookup: async () => [publicAddress],
       egressPolicy: { allowedHostnames: ["provider.example"] },
       secretStore: secretStore()
     }),
@@ -118,7 +119,7 @@ test("selects the lowest-priority enabled route compatible with the requested op
         return { text: "normalized graph" };
       }
     },
-    dnsLookup: async () => ["203.0.113.10"],
+    dnsLookup: async () => [publicAddress],
     egressPolicy: { allowedHostnames: ["provider.example"] },
     secretStore: secretStore()
   });
@@ -135,7 +136,10 @@ test("selects the lowest-priority enabled route compatible with the requested op
 
 test("rejects routes whose endpoint resolves outside the deployment egress policy", async () => {
   const gateway = new VisualizationProviderGateway({
-    adapter: { async generateStructured() { return { text: "not reached" }; } },
+    adapter: {
+      async generateStructured() { return { text: "not reached" }; },
+      async probe() { return { capabilities: route.operations, authenticated: true, reachable: true }; }
+    },
     dnsLookup: async () => ["10.0.0.9"],
     egressPolicy: { allowedHostnames: ["provider.example"] },
     secretStore: secretStore()
@@ -156,7 +160,7 @@ test("fails before invoking an adapter when the route secret reference is missin
         return { text: "not reached" };
       }
     },
-    dnsLookup: async () => ["203.0.113.10"],
+    dnsLookup: async () => [publicAddress],
     egressPolicy: { allowedHostnames: ["provider.example"] },
     secretStore: new EnvironmentVisualizationSecretStore({ LITEASY_VISUALIZATION_SECRETS_JSON: "{}" })
   });
@@ -180,7 +184,7 @@ test("does not exceed the selected route concurrency while DNS validation is asy
         return { text: "generated" };
       }
     },
-    dnsLookup: async () => ["203.0.113.10"],
+    dnsLookup: async () => [publicAddress],
     egressPolicy: { allowedHostnames: ["provider.example"] },
     secretStore: secretStore()
   });
@@ -213,7 +217,7 @@ test("propagates caller cancellation to image generation and redacted route prob
         resolve();
       }
     },
-    dnsLookup: async () => ["203.0.113.10"],
+    dnsLookup: async () => [publicAddress],
     egressPolicy: { allowedHostnames: ["provider.example"] },
     secretStore: secretStore()
   });
@@ -236,4 +240,144 @@ test("propagates caller cancellation to image generation and redacted route prob
   await assert.rejects(probe, /visualization_request_aborted/);
   assert.equal(seen.length, 2);
   assert.equal(seen.every((signal) => signal.aborted), true);
+});
+
+test("rejects cross-origin redirects before forwarding authorization or POST bodies", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ authorization: init.headers.Authorization, body: init.body, url });
+    const response = new Response(null, {
+      headers: { location: "https://redirect.example/collect" },
+      status: 307
+    });
+    Object.defineProperty(response, "peerAddress", { value: publicAddress });
+    return response;
+  };
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured(input) {
+        await input.request(input.route.endpoint, { body: "private-paper-body", method: "POST" });
+        return { text: "not reached" };
+      }
+    },
+    dnsLookup: async () => [publicAddress],
+    egressPolicy: { allowedHostnames: ["provider.example", "redirect.example"] },
+    fetchImpl,
+    secretStore: secretStore()
+  });
+
+  await assert.rejects(
+    () => gateway.generateStructured({ dataClass: "paper", modality: "semantic_graph", route }),
+    /visualization_provider_redirect_invalid/
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, route.endpoint);
+  assert.equal(calls.some((call) => call.url.includes("redirect.example")), false);
+});
+
+test("rejects every non-global address class including mapped private IPv6", async () => {
+  const nonGlobalAddresses = [
+    "0.0.0.1", "10.0.0.1", "100.64.0.1", "127.0.0.1", "169.254.1.1", "172.16.0.1",
+    "192.0.0.1", "192.0.2.1", "192.168.0.1", "198.18.0.1", "198.51.100.1",
+    "203.0.113.1", "224.0.0.1", "240.0.0.1", "255.255.255.255", "::", "::1",
+    "::ffff:10.0.0.1", "64:ff9b::a00:1", "100::1", "2001:2::1", "2001:db8::1",
+    "3fff::1", "fc00::1", "fe80::1", "ff02::1"
+  ];
+
+  for (const address of nonGlobalAddresses) {
+    const gateway = new VisualizationProviderGateway({
+      adapter: { async generateStructured() { return { text: "not reached" }; } },
+      dnsLookup: async () => [address],
+      egressPolicy: { allowedHostnames: ["provider.example"] },
+      secretStore: secretStore()
+    });
+    await assert.rejects(
+      () => gateway.generateStructured({ dataClass: "paper", modality: "semantic_graph", route }),
+      /visualization_egress_denied/,
+      address
+    );
+  }
+});
+
+test("rejects a connection whose peer differs from the DNS-validated address", async () => {
+  let pinnedAddress;
+  const fetchImpl = async (_url, _init, security) => {
+    pinnedAddress = await new Promise((resolve, reject) => {
+      security.lookup("provider.example", {}, (error, address) => error ? reject(error) : resolve(address));
+    });
+    const response = new Response("{}", { status: 200 });
+    Object.defineProperty(response, "peerAddress", { value: "10.0.0.9" });
+    return response;
+  };
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured(input) {
+        await input.request(input.route.endpoint, { method: "POST" });
+        return { text: "not reached" };
+      }
+    },
+    dnsLookup: async () => [publicAddress],
+    egressPolicy: { allowedHostnames: ["provider.example"] },
+    fetchImpl,
+    secretStore: secretStore()
+  });
+
+  await assert.rejects(
+    () => gateway.generateStructured({ dataClass: "paper", modality: "semantic_graph", route }),
+    /visualization_egress_denied/
+  );
+  assert.equal(pinnedAddress, publicAddress);
+});
+
+test("counts route probes against max concurrency", async () => {
+  let releaseProbe;
+  const waiting = new Promise((resolve) => { releaseProbe = resolve; });
+  let started;
+  const probeStarted = new Promise((resolve) => { started = resolve; });
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async probe() {
+        started();
+        await waiting;
+        return { capabilities: route.operations, authenticated: true, reachable: true };
+      }
+    },
+    dnsLookup: async () => [publicAddress],
+    egressPolicy: { allowedHostnames: ["provider.example"] },
+    secretStore: secretStore()
+  });
+  const input = { dataClass: "paper", modality: "semantic_graph", route };
+  const first = gateway.testRoute(input);
+  await probeStarted;
+  await assert.rejects(() => gateway.testRoute(input), /visualization_route_unavailable/);
+  releaseProbe();
+  assert.equal((await first).reachable, true);
+});
+
+test("cancels stalled DNS validation on caller abort and route timeout", async () => {
+  const stalledLookup = async () => new Promise(() => {});
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured() { return { text: "not reached" }; },
+      async probe() { return { capabilities: route.operations, authenticated: true, reachable: true }; }
+    },
+    dnsLookup: stalledLookup,
+    egressPolicy: { allowedHostnames: ["provider.example"] },
+    secretStore: secretStore()
+  });
+  const controller = new AbortController();
+  const cancelled = gateway.generateStructured({
+    dataClass: "paper",
+    modality: "semantic_graph",
+    route,
+    signal: controller.signal
+  });
+  controller.abort();
+  await assert.rejects(cancelled, /visualization_request_aborted/);
+
+  const timedRoute = { ...route, timeoutMs: 100 };
+  await assert.rejects(
+    () => gateway.testRoute({ dataClass: "paper", modality: "semantic_graph", route: timedRoute }),
+    /visualization_provider_timeout/
+  );
 });
