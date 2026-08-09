@@ -1,5 +1,16 @@
+import { parseVisualizationSecrets } from "./visualizationSecretStore.mjs";
+
 const allowedEnvironments = new Set(["production", "staging", "test"]);
 const allowedSslModes = new Set(["require", "verify-ca", "verify-full"]);
+
+function parseVisualizationEgressHostnames(value) {
+  if (value === undefined || value === "") return Object.freeze([]);
+  const hostnames = [...new Set(value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))].sort();
+  if (hostnames.some((hostname) => !/^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/.test(hostname))) {
+    throw new Error("cloud_config_invalid: LITEASY_VISUALIZATION_EGRESS_HOSTNAMES contains an invalid hostname");
+  }
+  return Object.freeze(hostnames);
+}
 
 function required(env, name) {
   const value = env[name]?.trim();
@@ -240,7 +251,6 @@ export function loadCloudConfig(env = process.env) {
       return configured ? [[provider, configured]] : [];
     })
   );
-
   return Object.freeze({
     allowedOrigins: Object.freeze(parseAllowedOrigins(required(env, "LITEASY_ALLOWED_ORIGINS"), environment)),
     database: Object.freeze({
@@ -330,6 +340,10 @@ export function loadCloudConfig(env = process.env) {
       forcePathStyle: parseBoolean(env.LITEASY_S3_FORCE_PATH_STYLE, "LITEASY_S3_FORCE_PATH_STYLE"),
       prefix: normalizePrefix(env.LITEASY_S3_PREFIX),
       region: required(env, "LITEASY_S3_REGION")
+    }),
+    visualization: Object.freeze({
+      egressHostnames: parseVisualizationEgressHostnames(env.LITEASY_VISUALIZATION_EGRESS_HOSTNAMES),
+      secrets: parseVisualizationSecrets(env.LITEASY_VISUALIZATION_SECRETS_JSON)
     })
   });
 }

@@ -88,6 +88,23 @@ test("loads deployment-scoped model providers without exposing credentials", () 
   assert.equal(JSON.stringify(publicCloudConfig(config)).includes("secret"), false);
 });
 
+test("loads visualization secret references from the deployment-owned JSON variable only", () => {
+  const config = loadCloudConfig(validEnv({
+    LITEASY_VISUALIZATION_EGRESS_HOSTNAMES: "provider.example, backup.example",
+    LITEASY_VISUALIZATION_SECRETS_JSON: JSON.stringify({
+      "viz-secret:provider-1": "deployment-managed-value"
+    })
+  }));
+
+  assert.deepEqual(config.visualization.egressHostnames, ["backup.example", "provider.example"]);
+  assert.equal(config.visualization.secrets["viz-secret:provider-1"], "deployment-managed-value");
+  assert.equal(JSON.stringify(publicCloudConfig(config)).includes("deployment-managed-value"), false);
+  assert.throws(
+    () => loadCloudConfig(validEnv({ LITEASY_VISUALIZATION_SECRETS_JSON: "not-json" })),
+    /LITEASY_VISUALIZATION_SECRETS_JSON/
+  );
+});
+
 test("rejects partial, insecure, or credential-bearing model provider configuration", () => {
   assert.throws(() => loadCloudConfig(validEnv({
     LITEASY_MODEL_OPENAI_API_KEY: "only-a-key"
