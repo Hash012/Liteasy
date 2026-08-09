@@ -62,6 +62,12 @@ function renderStoredAnnotation(
   return onChangeAnnotationPublication;
 }
 
+function publicationToggle(excerpt = "Publication evidence", kind = "注释", page = 1) {
+  return screen.getByRole("checkbox", {
+    name: `将第 ${page} 页${kind}批注公开到论坛：${excerpt}`
+  });
+}
+
 function makeRect() {
   return {
     bottom: 240,
@@ -117,7 +123,7 @@ test.each(["高亮", "划线", "注释"])("creates %s privately by default", asy
   selectPdfText(`private ${command}`);
   await userEvent.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: command }));
 
-  expect(screen.getByRole("checkbox", { name: /^公开到论坛$/u })).not.toBeChecked();
+  expect(publicationToggle(`private ${command}`, command)).not.toBeChecked();
   expect(onChangeAnnotationPublication).not.toHaveBeenCalled();
   await waitFor(() => expect(window.localStorage.getItem(pdfAnnotationStorageKey(paper)!))
     .toContain('"desiredVisibility":"private"'));
@@ -156,7 +162,9 @@ test("publishes one annotation from its visibility checkbox and exposes pending 
   }));
   renderStoredAnnotation(publicationAnnotation(), onChange);
 
-  const toggle = await screen.findByRole("checkbox", { name: /^公开到论坛$/u });
+  const toggle = await screen.findByRole("checkbox", {
+    name: "将第 1 页注释批注公开到论坛：Publication evidence"
+  });
   await userEvent.click(toggle);
   expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ operation: "publish", paper }));
   expect(screen.getByText("正在公开到论坛")).toBeInTheDocument();
@@ -168,6 +176,24 @@ test("publishes one annotation from its visibility checkbox and exposes pending 
     state: "published"
   });
   expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();
+});
+
+test("gives same-excerpt publication checkboxes unique names and announces each status", () => {
+  const note = publicationAnnotation();
+  const highlight: PdfAnnotationV2 = {
+    ...publicationAnnotation(),
+    color: "yellow",
+    id: "annotation-2",
+    kind: "highlight",
+    text: "高亮"
+  };
+  savePdfAnnotations(pdfAnnotationStorageKey(paper), [note, highlight]);
+  render(<PdfReader selectedPapers={[paper]} zoom={100} />);
+
+  expect(publicationToggle()).not.toBeChecked();
+  expect(publicationToggle("Publication evidence", "高亮")).not.toBeChecked();
+  expect(screen.getAllByRole("status")).toHaveLength(2);
+  expect(screen.getAllByRole("status")[0]).toHaveTextContent("未公开到论坛");
 });
 
 test("collects bounded bibliographic hints without reading or forwarding PDF bytes and full text", async () => {
@@ -265,7 +291,7 @@ test("deletes a published local annotation only after retract is confirmed", asy
 
 test("cancels a queued create before it starts", () => {
   const onChange = renderStoredAnnotation(publicationAnnotation());
-  const toggle = screen.getByRole("checkbox", { name: /^公开到论坛$/u });
+  const toggle = publicationToggle();
 
   fireEvent.click(toggle);
   fireEvent.click(toggle);
@@ -284,7 +310,7 @@ test("queues an exact retract when visibility is disabled after create starts", 
         state: "not_published" as const
       }));
   renderStoredAnnotation(publicationAnnotation(), onChange);
-  const toggle = screen.getByRole("checkbox", { name: /^公开到论坛$/u });
+  const toggle = publicationToggle();
 
   await userEvent.click(toggle);
   await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
@@ -297,4 +323,89 @@ test("queues an exact retract when visibility is disabled after create starts", 
     state: "published"
   });
   expect(await screen.findByText("未公开到论坛")).toBeInTheDocument();
+});
+
+test("deletes a pending create before transport without publishing it", async () => {
+  const onChange = renderStoredAnnotation(publicationAnnotation());
+  const toggle = publicationToggle();
+
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.click(screen.getByRole("button", { name: "删除" }));
+
+  await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test("waits for an in-flight create and retracts that exact annotation before deleting it", async () => {
+  let finishCreate!: (publication: PdfAnnotationPublication) => void;
+  const onChange = vi.fn(({ operation }) => operation === "publish"
+    ? new Promise<PdfAnnotationPublication>((resolve) => { finishCreate = resolve; })
+    : Promise.resolve({
+        desiredVisibility: "private" as const,
+        remoteAnnotationId: "remote-created-during-delete",
+        remoteRevision: 3,
+        state: "not_published" as const
+      }));
+  renderStoredAnnotation(publicationAnnotation(), onChange);
+
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+  const createInput = onChange.mock.calls[0][0];
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+
+  expect(screen.getByText("Publication evidence")).toBeInTheDocument();
+  expect(onChange).toHaveBeenCalledTimes(1);
+  finishCreate({
+    desiredVisibility: "public",
+    remoteAnnotationId: "remote-created-during-delete",
+    remoteRevision: 2,
+    state: "published"
+  });
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+  expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    annotation: expect.objectContaining({
+      id: createInput.annotation.id,
+      publication: expect.objectContaining({
+        remoteAnnotationId: "remote-created-during-delete",
+        remoteRevision: 2
+      })
+    }),
+    operation: "retract",
+    paper: createInput.paper
+  }));
+  await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
+});
+
+test("retains local truth when create recovery cannot confirm the remote outcome", async () => {
+  let finishCreate!: (publication: PdfAnnotationPublication) => void;
+  const onChange = vi.fn(({ operation }) => operation === "publish"
+    ? new Promise<PdfAnnotationPublication>((resolve) => { finishCreate = resolve; })
+    : Promise.resolve({
+        desiredVisibility: "private" as const,
+        lastError: "撤回未完成，论坛发布状态未知。create recovery failed",
+        state: "failed" as const
+      }));
+  renderStoredAnnotation(publicationAnnotation(), onChange);
+
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+  finishCreate({
+    desiredVisibility: "public",
+    lastError: "create receipt missing",
+    state: "failed"
+  });
+
+  expect(await screen.findByText("Publication evidence")).toBeInTheDocument();
+  expect(await screen.findByText(/create recovery failed/u)).toBeInTheDocument();
+  expect(onChange).toHaveBeenCalledTimes(2);
+  expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    annotation: expect.objectContaining({ id: "annotation-1" }),
+    operation: "retract"
+  }));
 });

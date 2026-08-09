@@ -579,7 +579,9 @@ describe("ReaderPane", () => {
     });
     fireEvent.mouseUp(screen.getByLabelText("PDF 页面滚动区"));
     await user.click(within(screen.getByLabelText("选中文本批注菜单")).getByRole("button", { name: "注释" }));
-    await user.click(screen.getByRole("checkbox", { name: "公开到论坛" }));
+    await user.click(screen.getByRole("checkbox", {
+      name: "将第 1 页注释批注公开到论坛：a forum draft annotation"
+    }));
 
     expect(onChangeAnnotationPublication).toHaveBeenCalledWith(expect.objectContaining({ operation: "publish" }));
     expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();

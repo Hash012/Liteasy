@@ -1084,7 +1084,7 @@ export function PdfReader({
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("");
   const publicationIntentsRef = useRef(new Map<string, "private" | "public">());
-  const publicationStartedRef = useRef(new Set<string>());
+  const publicationTransportsRef = useRef(new Map<string, Promise<PdfAnnotationPublication>>());
   const [sharingAnnotationId, setSharingAnnotationId] = useState<string | null>(null);
   const [teamAnnotations, setTeamAnnotations] = useState<TeamAnnotation[]>([]);
   const [teamAnnotationMessage, setTeamAnnotationMessage] = useState("");
@@ -1426,53 +1426,58 @@ export function PdfReader({
     });
   }
 
-  async function applyPublication(annotation: PdfAnnotationV2, operation: "publish" | "update" | "retract") {
+  async function applyPublication(
+    annotation: PdfAnnotationV2,
+    operation: "publish" | "update" | "retract"
+  ): Promise<PdfAnnotationPublication | undefined> {
     if (!activePaper || !onChangeAnnotationPublication) {
+      const publication: PdfAnnotationPublication = {
+        ...annotation.publication,
+        lastError: "论坛发布功能暂不可用。",
+        state: "failed"
+      };
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id
-        ? {
-            ...item,
-            publication: {
-              ...item.publication,
-              lastError: "论坛发布功能暂不可用。",
-              state: "failed"
-            }
-          }
+        ? { ...item, publication }
         : item));
-      return;
+      return publication;
     }
     const expectedIntent = operation === "retract" ? "private" : "public";
     const hints = operation === "retract"
       ? undefined
       : await collectPdfLiteratureHints(activePaper, pdfDocument, pageTexts[1]);
     if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return;
-    publicationStartedRef.current.add(annotation.id);
+    let transport: Promise<PdfAnnotationPublication> | undefined;
     try {
-      const publication = await onChangeAnnotationPublication({
+      transport = Promise.resolve(onChangeAnnotationPublication({
         annotation,
         ...(hints ? { literatureHints: hints } : {}),
         operation,
         paper: activePaper
-      });
-      if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return;
+      }));
+      publicationTransportsRef.current.set(annotation.id, transport);
+      const publication = await transport;
+      if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id
         ? { ...item, publication }
         : item));
+      return publication;
     } catch (error) {
-      if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return;
       const message = error instanceof Error ? error.message : "论坛发布请求失败。";
+      const publication: PdfAnnotationPublication = {
+        ...annotation.publication,
+        desiredVisibility: expectedIntent,
+        lastError: operation === "retract" ? `撤回未完成，论坛仍公开。${message}` : message,
+        state: "failed"
+      };
+      if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return publication;
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id
-        ? {
-            ...item,
-            publication: {
-              ...item.publication,
-              desiredVisibility: expectedIntent,
-              lastError: operation === "retract" ? `撤回未完成，论坛仍公开。${message}` : message,
-              state: "failed"
-            }
-          }
+        ? { ...item, publication }
         : item));
+      return publication;
     } finally {
-      publicationStartedRef.current.delete(annotation.id);
+      if (transport && publicationTransportsRef.current.get(annotation.id) === transport) {
+        publicationTransportsRef.current.delete(annotation.id);
+      }
     }
   }
 
@@ -1602,7 +1607,7 @@ export function PdfReader({
   function setAnnotationPublic(annotationId: string, isPublic: boolean) {
     const annotation = annotationsRef.current.find((item) => item.id === annotationId);
     if (!annotation) return;
-    if (!isPublic && !publicationStartedRef.current.has(annotationId) &&
+    if (!isPublic && !publicationTransportsRef.current.has(annotationId) &&
       annotation.publication.state === "pending_create" && !annotation.publication.remoteAnnotationId) {
       publicationIntentsRef.current.set(annotationId, "private");
       const cancelled = revisePdfAnnotation(annotation, {
@@ -1618,6 +1623,77 @@ export function PdfReader({
         ? annotation.publication.remoteAnnotationId ? "update" : "publish"
         : "retract"
     );
+  }
+
+  async function deleteAnnotation(annotation: PdfAnnotationV2) {
+    const remove = () => {
+      setCurrentAnnotations((current) => current.filter((item) => item.id !== annotation.id));
+      setActiveAnnotationId(null);
+      setStatus("已删除批注。");
+    };
+    const pendingCreate = annotation.publication.state === "pending_create" &&
+      !annotation.publication.remoteAnnotationId;
+    const createTransport = pendingCreate
+      ? publicationTransportsRef.current.get(annotation.id)
+      : undefined;
+
+    publicationIntentsRef.current.set(annotation.id, "private");
+    if (pendingCreate && !createTransport) {
+      remove();
+      return;
+    }
+    if (createTransport) {
+      setActiveAnnotationId(null);
+      let createdPublication: PdfAnnotationPublication;
+      try {
+        createdPublication = await createTransport;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "论坛发布请求失败。";
+        createdPublication = {
+          desiredVisibility: "private",
+          lastError: `撤回未完成，论坛发布状态未知。${message}`,
+          state: "failed"
+        };
+      }
+      if (createdPublication.state === "not_published" && !createdPublication.remoteAnnotationId) {
+        remove();
+        return;
+      }
+      const pending = revisePdfAnnotation(annotation, {
+        publication: createdPublication.remoteAnnotationId
+          ? {
+              ...createdPublication,
+              desiredVisibility: "private",
+              lastError: undefined,
+              state: "pending_retract"
+            }
+          : {
+              ...createdPublication,
+              desiredVisibility: "private"
+            },
+        updatedAt: new Date().toISOString()
+      });
+      setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
+      const retracted = await applyPublication(pending, "retract");
+      if (retracted?.state === "not_published") remove();
+      return;
+    }
+    if (!annotation.publication.remoteAnnotationId) {
+      remove();
+      return;
+    }
+    const pending = revisePdfAnnotation(annotation, {
+      publication: {
+        ...annotation.publication,
+        desiredVisibility: "private",
+        state: "pending_retract"
+      },
+      updatedAt: new Date().toISOString()
+    });
+    setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
+    setActiveAnnotationId(null);
+    const retracted = await applyPublication(pending, "retract");
+    if (retracted?.state === "not_published") remove();
   }
 
   function setAutoPublic(value: boolean) {
@@ -1824,32 +1900,11 @@ export function PdfReader({
                                   ))}
                                 </div>
                               )}
-                              <button onClick={() => {
-                                const remove = () => {
-                                  setCurrentAnnotations((current) => current.filter((item) => item.id !== annotation.id));
-                                  setActiveAnnotationId(null);
-                                  setStatus("已删除批注。");
-                                };
-                                if (!annotation.publication.remoteAnnotationId) {
-                                  remove();
-                                  return;
-                                }
-                                publicationIntentsRef.current.set(annotation.id, "private");
-                                const pending = revisePdfAnnotation(annotation, {
-                                  publication: {
-                                    ...annotation.publication,
-                                    desiredVisibility: "private",
-                                    state: "pending_retract"
-                                  },
-                                  updatedAt: new Date().toISOString()
-                                });
-                                setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
-                                setActiveAnnotationId(null);
-                                void applyPublication(pending, "retract").then(() => {
-                                  const latest = annotationsRef.current.find((item) => item.id === annotation.id);
-                                  if (latest?.publication.state === "not_published") remove();
-                                });
-                              }} type="button" className="delete-button">
+                              <button
+                                className="delete-button"
+                                onClick={() => void deleteAnnotation(annotation)}
+                                type="button"
+                              >
                                 删除
                               </button>
                             </div>
@@ -1862,13 +1917,16 @@ export function PdfReader({
                           ) : null}
                           <label className="pdf-annotation-public-toggle">
                             <input
+                              aria-label={`将第 ${annotation.page} 页${getAnnotationLabel(annotation.kind)}批注公开到论坛：${annotation.excerpt}`}
                               checked={annotation.publication.desiredVisibility === "public"}
                               onChange={(event) => setAnnotationPublic(annotation.id, event.currentTarget.checked)}
                               type="checkbox"
                             />
                             公开到论坛
                           </label>
-                          <small>{publicationStatus(annotation.publication)}</small>
+                          <small aria-live="polite" role="status">
+                            {publicationStatus(annotation.publication)}
+                          </small>
                           {onShareAnnotationToOrganization ? (
                             <Button
                               appearance="subtle"
