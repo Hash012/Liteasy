@@ -187,6 +187,8 @@ export type VisualizationProviderRoute = {
   updatedBy: string;
 };
 
+export type VisualizationProviderRouteMutation = Omit<VisualizationProviderRoute, "updatedAt" | "updatedBy">;
+
 export type VisualizationEntitlement = {
   allowed: boolean;
   explicitRequestsAllowed: boolean;

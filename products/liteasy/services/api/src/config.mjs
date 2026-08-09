@@ -245,6 +245,11 @@ export function loadCloudConfig(env = process.env) {
     "LITEASY_IDP_INTUECHO_SERVICE_CLIENT_ID",
     [identityClientId, desktopClientId, adminClientId, managementClientId]
   );
+  const visualizationServiceClientId = requireConfidentialClientId(
+    env,
+    "LITEASY_IDP_VISUALIZATION_SERVICE_CLIENT_ID",
+    [identityClientId, desktopClientId, adminClientId, managementClientId, intuechoServiceClientId]
+  );
   const modelProviders = Object.fromEntries(
     ["openai", "deepseek"].flatMap((provider) => {
       const configured = optionalModelProvider(env, provider, environment);
@@ -273,7 +278,8 @@ export function loadCloudConfig(env = process.env) {
       managementClientSecret: required(env, "LITEASY_IDP_MANAGEMENT_CLIENT_SECRET"),
       managementUrl: requireHttpUrl(env, "LITEASY_IDP_MANAGEMENT_URL", environment),
       revocationUrl: requireHttpUrl(env, "LITEASY_IDP_REVOCATION_URL", environment),
-      tokenUrl: requireHttpUrl(env, "LITEASY_IDP_TOKEN_URL", environment)
+      tokenUrl: requireHttpUrl(env, "LITEASY_IDP_TOKEN_URL", environment),
+      visualizationServiceClientId
     }),
     intuecho: Object.freeze({
       adminApiUrl: requireHttpUrl(env, "LITEASY_INTUECHO_ADMIN_API_URL", environment)

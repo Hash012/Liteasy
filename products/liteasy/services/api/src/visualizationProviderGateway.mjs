@@ -11,6 +11,11 @@ const routeFields = new Set([
   "revision", "routeId", "secretRef", "timeoutMs"
 ]);
 const supportedOperations = new Set(["structured_generation", "image_generation", "validation"]);
+const responseLimits = Object.freeze({
+  image_generation: 16 * 1024 * 1024,
+  structured_generation: 2 * 1024 * 1024,
+  validation: 256 * 1024
+});
 
 export class VisualizationProviderError extends Error {
   constructor(code) {
@@ -240,10 +245,30 @@ async function pinnedHttpsFetch(url, init, security) {
       method: init.method ?? "GET",
       signal: init.signal
     }, (response) => {
+      const maximumBytes = Number.isSafeInteger(security?.maximumBytes) ? security.maximumBytes : responseLimits.structured_generation;
+      const declared = Number(response.headers["content-length"] ?? 0);
+      if (declared > maximumBytes) {
+        response.destroy();
+        reject(new VisualizationProviderError("visualization_provider_response_too_large"));
+        return;
+      }
       const chunks = [];
-      response.on("data", (chunk) => chunks.push(chunk));
+      let byteLength = 0;
+      let rejected = false;
+      response.on("data", (chunk) => {
+        if (rejected) return;
+        byteLength += chunk.length;
+        if (byteLength > maximumBytes) {
+          rejected = true;
+          response.destroy();
+          reject(new VisualizationProviderError("visualization_provider_response_too_large"));
+          return;
+        }
+        chunks.push(chunk);
+      });
       response.on("error", reject);
       response.on("end", () => {
+        if (rejected) return;
         const responseBody = [204, 205, 304].includes(response.statusCode) ? null : Buffer.concat(chunks);
         const result = new Response(responseBody, {
           headers: response.headers,
@@ -271,33 +296,34 @@ function normalizedProbeResult(result, route) {
   return Object.freeze({ authenticated: true, capabilities, reachable: true });
 }
 
-function normalizedStructuredResult(result) {
+function normalizedStructuredResult(result, invocationId) {
   if (!result || typeof result !== "object" || typeof result.text !== "string" || result.text.trim() === "") {
     throw new VisualizationProviderError("visualization_provider_response_invalid");
   }
-  const cost = normalizedCost(result.cost);
+  const cost = normalizedCost(result.cost, invocationId);
   return Object.freeze({ ...(cost ? { cost } : {}), text: result.text });
 }
 
-function normalizedImageResult(result) {
+function normalizedImageResult(result, invocationId) {
   if (!result || typeof result !== "object" || typeof result.mimeType !== "string" || !/^image\/[a-z0-9.+-]+$/i.test(result.mimeType)) {
     throw new VisualizationProviderError("visualization_provider_response_invalid");
   }
   if (typeof result.data !== "string" && !(result.bytes instanceof Uint8Array)) {
     throw new VisualizationProviderError("visualization_provider_response_invalid");
   }
-  const cost = normalizedCost(result.cost);
+  const cost = normalizedCost(result.cost, invocationId);
   return Object.freeze(result.bytes instanceof Uint8Array
     ? { bytes: result.bytes, ...(cost ? { cost } : {}), mimeType: result.mimeType }
     : { data: result.data, ...(cost ? { cost } : {}), mimeType: result.mimeType });
 }
 
-function normalizedCost(cost) {
+function normalizedCost(cost, invocationId) {
   if (cost === undefined) return null;
   if (!cost || typeof cost !== "object" || Array.isArray(cost) ||
     typeof cost.amount !== "number" || !Number.isFinite(cost.amount) || cost.amount < 0 ||
     typeof cost.currency !== "string" || !/^[A-Z]{3}$/.test(cost.currency) ||
-    typeof cost.invocationId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(cost.invocationId) ||
+    (cost.invocationId !== undefined && (typeof cost.invocationId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(cost.invocationId))) ||
+    (cost.invocationId === undefined && (typeof invocationId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(invocationId))) ||
     typeof cost.providerRequestId !== "string" || cost.providerRequestId.trim().length === 0 ||
     cost.providerRequestId.length > 240 || !Number.isInteger(cost.units) || cost.units < 0) {
     throw new VisualizationProviderError("visualization_provider_cost_invalid");
@@ -305,7 +331,7 @@ function normalizedCost(cost) {
   return Object.freeze({
     amount: cost.amount,
     currency: cost.currency,
-    invocationId: cost.invocationId,
+    invocationId: invocationId ?? cost.invocationId,
     providerRequestId: cost.providerRequestId,
     units: cost.units
   });
@@ -350,7 +376,7 @@ export class VisualizationProviderGateway {
     const credential = this.secretStore.resolve(route.secretRef);
     const lifecycle = requestSignal(input?.signal, route.timeoutMs, this.timers);
     const { signal } = lifecycle;
-    const request = this.#authenticatedRequest(route, signal, credential);
+    const request = this.#authenticatedRequest(route, signal, credential, responseLimits.validation);
     this.#incrementActive(route);
     try {
       await this.#validateEgress(route.endpoint, signal);
@@ -398,7 +424,7 @@ export class VisualizationProviderGateway {
     const credential = this.secretStore.resolve(route.secretRef);
     const lifecycle = requestSignal(input?.signal, route.timeoutMs, this.timers);
     const { signal } = lifecycle;
-    const request = this.#authenticatedRequest(route, signal, credential);
+    const request = this.#authenticatedRequest(route, signal, credential, responseLimits[operation]);
     this.#incrementActive(route);
     let adapterInvoked = false;
     try {
@@ -415,12 +441,12 @@ export class VisualizationProviderGateway {
         request
       });
       throwIfAborted(signal);
-      const normalized = resultNormalizer(result);
+      const normalized = resultNormalizer(result, input?.invocationId);
       this.circuitBreaker.recordSuccess(route);
       return normalized;
     } catch (error) {
       if (adapterInvoked && !input?.signal?.aborted) this.circuitBreaker.recordFailure(route);
-      throw this.#providerError(error, input?.signal);
+      throw this.#providerError(error, input?.signal, input?.invocationId);
     } finally {
       lifecycle.dispose();
       this.#decrementActive(route);
@@ -443,14 +469,18 @@ export class VisualizationProviderGateway {
     else this.activeRequests.set(route.routeId, active);
   }
 
-  #providerError(error, signal) {
+  #providerError(error, signal, invocationId) {
     if (error instanceof VisualizationProviderError) return error;
-    if (signal?.aborted) return new VisualizationProviderError("visualization_request_aborted");
-    if (error?.name === "AbortError" || error?.name === "TimeoutError") return new VisualizationProviderError("visualization_provider_timeout");
-    return new VisualizationProviderError("visualization_provider_unavailable");
+    const normalizedError = signal?.aborted
+      ? new VisualizationProviderError("visualization_request_aborted")
+      : error?.name === "AbortError" || error?.name === "TimeoutError"
+        ? new VisualizationProviderError("visualization_provider_timeout")
+        : new VisualizationProviderError("visualization_provider_unavailable");
+    if (error?.cost !== undefined) normalizedError.cost = normalizedCost(error.cost, invocationId);
+    return normalizedError;
   }
 
-  #authenticatedRequest(route, signal, credential) {
+  #authenticatedRequest(route, signal, credential, responseMaxBytes) {
     const routeEndpoint = new URL(route.endpoint);
     return async (url = route.endpoint, init = {}) => {
       let target;
@@ -468,21 +498,50 @@ export class VisualizationProviderGateway {
         ...init,
         headers: { ...Object.fromEntries(callerHeaders), Authorization: `Bearer ${credential}` },
         signal
-      });
+      }, Number.isSafeInteger(init.responseMaxBytes)
+        ? Math.min(init.responseMaxBytes, responseMaxBytes)
+        : responseMaxBytes);
     };
   }
 
-  async #fetchWithValidatedRedirects(url, init) {
+  async #fetchWithValidatedRedirects(url, init, maximumBytes) {
     let current = new URL(url).toString();
     for (let redirects = 0; redirects <= 5; redirects += 1) {
       const egress = await this.#validateEgress(current, init.signal);
-      const response = await this.fetchImpl(current, { ...init, redirect: "manual" }, {
+      let response = await this.fetchImpl(current, { ...init, redirect: "manual" }, {
         addresses: egress.addresses,
-        lookup: pinnedLookup(egress.records)
+        lookup: pinnedLookup(egress.records),
+        maximumBytes: maximumBytes ?? responseLimits.structured_generation
       });
       const peerAddress = response?.peerAddress;
       if (typeof peerAddress !== "string" || !egress.addresses.includes(canonicalAddress(peerAddress))) {
         throw new VisualizationProviderError("visualization_egress_denied");
+      }
+      const contentLength = Number(response.headers?.get?.("content-length") ?? 0);
+      if (contentLength > (maximumBytes ?? responseLimits.structured_generation)) {
+        throw new VisualizationProviderError("visualization_provider_response_too_large");
+      }
+      if (response.body?.getReader) {
+        const reader = response.body.getReader();
+        const chunks = [];
+        let total = 0;
+        while (true) {
+          const next = await reader.read();
+          if (next.done) break;
+          total += next.value.byteLength;
+          if (total > (maximumBytes ?? responseLimits.structured_generation)) {
+            await reader.cancel();
+            throw new VisualizationProviderError("visualization_provider_response_too_large");
+          }
+          chunks.push(next.value);
+        }
+        const rebuilt = new Response(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))), {
+          headers: response.headers,
+          status: response.status,
+          statusText: response.statusText
+        });
+        if (response.peerAddress) Object.defineProperty(rebuilt, "peerAddress", { value: response.peerAddress });
+        response = rebuilt;
       }
       if (![301, 302, 303, 307, 308].includes(response.status)) return response;
       const location = response.headers.get("location");

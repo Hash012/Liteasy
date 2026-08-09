@@ -2,6 +2,7 @@ const unavailableCapability = Object.freeze({
   allowed: false,
   availableModalities: [],
   enabled: false,
+  explicitRequestsAllowed: false,
   quota: Object.freeze({ available: false }),
   serviceAvailable: false
 });
@@ -84,15 +85,17 @@ export function normalizeVisualizationAuditQuery(input = {}) {
 
 function capabilityProjection(value) {
   if (!value || typeof value !== "object") return unavailableCapability;
-  const serviceAvailable = value.allowed === true && value.serviceAvailable === true;
+  const entitled = value.allowed === true;
+  const serviceAvailable = entitled && value.serviceAvailable === true;
   const quotaAvailable = serviceAvailable && value.quota?.available === true;
   const remainingBand = value.quota?.remainingBand;
   return {
-    allowed: serviceAvailable,
+    allowed: entitled,
     availableModalities: serviceAvailable && Array.isArray(value.availableModalities)
       ? value.availableModalities.filter((item) => typeof item === "string")
       : [],
-    enabled: serviceAvailable && value.enabled === true,
+    enabled: entitled && value.enabled === true && serviceAvailable,
+    explicitRequestsAllowed: entitled && value.explicitRequestsAllowed === true,
     quota: {
       available: quotaAvailable,
       ...(quotaAvailable && new Set(["none", "low", "available"]).has(remainingBand)
@@ -126,13 +129,15 @@ function rollbackReason(error) {
 function publicError(error) {
   if (error instanceof VisualizationServiceError) return error;
   const code = error?.code ?? error?.message;
-  if (typeof code !== "string" || !code.startsWith("visualization_")) return error;
-  const status = code === "visualization_provider_timeout" ? 504
+  if (typeof code !== "string" || (!code.startsWith("visualization_") && !code.startsWith("quota_") && !code.startsWith("idempotency_"))) return error;
+  const status = error?.status ?? (code === "visualization_provider_timeout" ? 504
     : code === "visualization_request_aborted" ? 499
       : code === "visualization_validation_failed" ? 422
-        : new Set(["visualization_entitlement_revoked", "visualization_source_access_revoked"]).has(code) ? 403
-          : code === "visualization_route_revision_changed" ? 409
-            : 503;
+        : new Set(["visualization_entitlement_revoked", "visualization_source_access_revoked", "visualization_explicit_request_not_allowed", "visualization_not_allowed", "visualization_modality_not_allowed"]).has(code) ? 403
+          : new Set(["visualization_route_revision_changed", "visualization_route_revision_conflict", "visualization_entitlement_revision_conflict", "visualization_quota_revision_conflict", "visualization_reservation_expired", "idempotency_key_reused"]).has(code) ? 409
+            : code === "visualization_quota_exceeded" ? 429
+              : code.endsWith("_invalid") ? 400
+                : 503);
   return new VisualizationServiceError(code, status);
 }
 
@@ -173,36 +178,89 @@ export class VisualizationService {
   }
 
   async setPreference(subjectId, input) {
-    const entitlement = await this.repository.getEntitlement(subjectId);
-    if (input?.enabled === true && entitlement.allowed !== true) return unavailableCapability;
-    await this.repository.setPreference(subjectId, input);
-    return this.accountCapability(subjectId);
+    try {
+      const entitlement = await this.repository.getEntitlement(subjectId);
+      if (input?.enabled === true && entitlement.allowed !== true) return unavailableCapability;
+      await this.repository.setPreference(subjectId, input);
+      return this.accountCapability(subjectId);
+    } catch (error) {
+      throw publicError(error);
+    }
   }
 
   async generate(subjectId, input, context = {}) {
     throwIfAborted(context.signal);
-    const reserved = await this.repository.reserve(subjectId, input.reservation);
+    const providerRequest = input.providerRequest ?? {};
+    const operation = providerRequest.operation ?? "structured_generation";
+    const dataClass = providerRequest.dataClass ?? "paper";
+    let reserved;
+    try {
+      reserved = await this.repository.reserve(subjectId, {
+        ...input.reservation,
+        dataClass,
+        operation,
+        requestedBy: input.reservation?.requestedBy ?? "automatic"
+      });
+    } catch (error) {
+      throw publicError(error);
+    }
     const reservationId = reserved.reservation.reservationId;
     let costRecorded = false;
+    let invocationId = providerRequest.invocationId ?? `vinvoke_${randomUUID()}`;
+    let invocationStarted = false;
+    let providerCost;
+    let providerRequestId;
+    let route;
     try {
-      const route = await this.repository.getProviderRoute(reserved.reservation.routeId);
+      route = await this.repository.getProviderRoute(reserved.reservation.routeId);
       if (!route?.enabled || route.revision !== reserved.reservation.routeRevision) {
         throw new VisualizationServiceError("visualization_route_revision_changed", 409);
       }
-      const { route: _ignoredRoute, routes: _ignoredRoutes, ...request } = input.providerRequest ?? {};
+      const { route: _ignoredRoute, routes: _ignoredRoutes, ...request } = providerRequest;
       const providerInput = {
         ...request,
         modality: reserved.reservation.modality,
         route,
         signal: context.signal
       };
-      const result = input.providerRequest?.operation === "image_generation"
+      providerRequestId = providerRequest.providerRequestId ?? providerRequest.idempotencyKey ?? reserved.reservation.idempotencyKey;
+      if (typeof this.repository.startProviderInvocation === "function") {
+        const invocation = await this.repository.startProviderInvocation({
+          dataClass,
+          idempotencyKey: reserved.reservation.idempotencyKey,
+          invocationId,
+          modality: reserved.reservation.modality,
+          operation,
+          providerRequestId,
+          reservationId,
+          responseMaxBytes: operation === "image_generation" ? 16 * 1024 * 1024 : operation === "validation" ? 256 * 1024 : 2 * 1024 * 1024,
+          routeId: route.routeId,
+          routeRevision: route.revision,
+          subjectId,
+        });
+        invocationId = invocation?.invocation_id ?? invocation?.invocationId ?? invocationId;
+        invocationStarted = true;
+      }
+      providerInput.invocationId = invocationId;
+      const result = operation === "image_generation"
         ? await this.gateway.generateImage(providerInput)
         : await this.gateway.generateStructured(providerInput);
-      throwIfAborted(context.signal);
-      if (result?.cost) {
-        await this.#recordProviderCost(result.cost, route, "succeeded", context.traceId);
+      providerCost = result?.cost;
+      if (providerCost) {
+        await this.#recordProviderCost(providerCost, route, "succeeded", context.traceId, {
+          invocationId,
+          providerRequestId
+        });
         costRecorded = true;
+      }
+      throwIfAborted(context.signal);
+      if (invocationStarted && typeof this.repository.completeProviderInvocation === "function") {
+        await this.repository.completeProviderInvocation({
+          invocationId,
+          providerUnits: result?.cost?.units ?? 0,
+          responseHash: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+          state: "succeeded"
+        });
       }
       const { cost: _cost, ...providerResult } = result;
       const validation = await this.validateArtifact({
@@ -216,12 +274,29 @@ export class VisualizationService {
       }
       return { reservation: reserved.reservation, result: providerResult, validation };
     } catch (error) {
-      if (!costRecorded && error?.cost) {
-        const route = await this.repository.getProviderRoute(reserved.reservation.routeId);
-        await this.#recordProviderCost(error.cost, route, "failed", context.traceId);
+      let accountingError;
+      const failedCost = providerCost ?? error?.cost;
+      if (!costRecorded && failedCost && route) {
+        try {
+          await this.#recordProviderCost(failedCost, route, "failed", context.traceId, {
+            invocationId,
+            providerRequestId
+          });
+          costRecorded = true;
+        } catch (recordError) {
+          accountingError = recordError;
+        }
+      }
+      if (invocationStarted && typeof this.repository.completeProviderInvocation === "function") {
+        const code = error?.code ?? error?.message;
+        await this.repository.completeProviderInvocation({
+          errorCode: typeof code === "string" ? code.slice(0, 120) : "provider_failed",
+          invocationId,
+          state: code === "visualization_request_aborted" ? "cancelled" : code === "visualization_provider_timeout" ? "timed_out" : "failed"
+        }).catch(() => {});
       }
       await rollback(this.repository, subjectId, reservationId, error, context.traceId);
-      throw publicError(error);
+      throw publicError(accountingError ?? error);
     }
   }
 
@@ -252,7 +327,6 @@ export class VisualizationService {
         reservationId,
         routeId: input.routeId,
         routeRevision: input.routeRevision,
-        settledUnits: input.settledUnits,
         traceId: context.traceId,
         validation
       });
@@ -262,14 +336,14 @@ export class VisualizationService {
     }
   }
 
-  async #recordProviderCost(cost, route, outcome, traceId) {
+  async #recordProviderCost(cost, route, outcome, traceId, identifiers = {}) {
     await this.repository.recordProviderCost({
       amount: cost.amount,
       currency: cost.currency,
-      invocationId: cost.invocationId,
+      invocationId: identifiers.invocationId ?? cost.invocationId,
       metadata: { outcome, traceId },
       providerId: route.providerId,
-      providerRequestId: cost.providerRequestId,
+      providerRequestId: identifiers.providerRequestId ?? cost.providerRequestId,
       reasonCode: `provider_${outcome}`,
       routeId: route.routeId,
       units: cost.units
@@ -278,51 +352,97 @@ export class VisualizationService {
 
   async listProviderRoutes(principal, input = {}) {
     requirePlatformAdmin(principal);
-    return this.repository.listProviderRoutes(input);
+    try { return await this.repository.listProviderRoutes(input); } catch (error) { throw publicError(error); }
   }
 
   async saveProviderRoute(principal, input) {
     const actorId = requirePlatformAdmin(principal);
     mutationInput(input);
     const route = this.gateway.validateRoute(input.route);
-    return this.repository.saveProviderRoute({ ...input, route, updatedBy: actorId });
+    try { return await this.repository.saveProviderRoute({ ...input, route, updatedBy: actorId }); } catch (error) { throw publicError(error); }
   }
 
   async testProviderRoute(principal, input, signal) {
-    requirePlatformAdmin(principal);
+    const actorId = requirePlatformAdmin(principal);
     mutationInput(input);
-    return this.gateway.testRoute({ ...input.providerRequest, signal });
+    try {
+      const routeId = identifier(input.routeId, "visualization_route_id_invalid");
+      const probeInput = {
+        actorId,
+        expectedRevision: input.expectedRevision,
+        idempotencyKey: input.idempotencyKey,
+        reason: input.reason,
+        routeId,
+        traceId: input.traceId
+      };
+      let claim;
+      if (typeof this.repository.claimProviderProbe === "function") {
+        claim = await this.repository.claimProviderProbe(probeInput);
+        if (claim.replayed) return claim;
+        if (claim.pending) {
+          for (let attempt = 0; attempt < 40; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            const replay = await this.repository.getProviderProbeReplay(probeInput);
+            if (replay) return replay;
+          }
+          throw new VisualizationServiceError("visualization_provider_probe_pending", 503);
+        }
+      } else if (typeof this.repository.getProviderProbeReplay === "function") {
+        const replay = await this.repository.getProviderProbeReplay(probeInput);
+        if (replay) return replay;
+      }
+      const route = claim?.route ?? await this.repository.getProviderRoute(routeId);
+      if (!route || Number(route.revision) !== Number(input.expectedRevision)) {
+        throw new VisualizationServiceError("visualization_route_revision_conflict", 409);
+      }
+      const { route: _ignoredRoute, routes: _ignoredRoutes, ...providerRequest } = input.providerRequest ?? {};
+      const result = await this.gateway.testRoute({
+        ...providerRequest,
+        dataClass: input.providerRequest?.dataClass ?? route.dataClasses[0],
+        modality: input.providerRequest?.modality ?? route.modalities[0],
+        route,
+        signal
+      });
+      if (typeof this.repository.recordProviderProbe === "function") {
+        return await this.repository.recordProviderProbe({
+          ...probeInput,
+          probe: { authenticated: result.authenticated === true, capabilities: result.capabilities ?? [], reachable: result.reachable === true }
+        });
+      }
+      return result;
+    } catch (error) { throw publicError(error); }
   }
 
   async getEntitlement(principal, input) {
     requirePlatformAdmin(principal);
-    return { entitlement: await this.repository.getEntitlement(input.subjectId) };
+    try { return { entitlement: await this.repository.getEntitlement(input.subjectId) }; } catch (error) { throw publicError(error); }
   }
 
   async setEntitlement(principal, input) {
     const actorId = requirePlatformAdmin(principal);
     mutationInput(input);
-    return this.repository.setEntitlement(input.subjectId, { ...input, grantedBy: actorId });
+    try { return await this.repository.setEntitlement(input.subjectId, { ...input, grantedBy: actorId }); } catch (error) { throw publicError(error); }
   }
 
   async listQuotaPolicies(principal, input = {}) {
     requirePlatformAdmin(principal);
-    return this.repository.listQuotaPolicies(input);
+    try { return await this.repository.listQuotaPolicies(input); } catch (error) { throw publicError(error); }
   }
 
   async setQuotaPolicy(principal, input) {
     const actorId = requirePlatformAdmin(principal);
     mutationInput(input);
-    return this.repository.setQuotaPolicy(input.subjectId, { ...input, updatedBy: actorId });
+    try { return await this.repository.setQuotaPolicy(input.subjectId, { ...input, updatedBy: actorId }); } catch (error) { throw publicError(error); }
   }
 
   async listUsage(principal, input = {}) {
     requirePlatformAdmin(principal);
-    return this.repository.listUsage(input);
+    try { return await this.repository.listUsage(input); } catch (error) { throw publicError(error); }
   }
 
   async listAudit(principal, input = {}) {
     requirePlatformAdmin(principal);
-    return this.repository.listAudit(normalizeVisualizationAuditQuery(input));
+    try { return await this.repository.listAudit(normalizeVisualizationAuditQuery(input)); } catch (error) { throw publicError(error); }
   }
 }
+import { createHash, randomUUID } from "node:crypto";

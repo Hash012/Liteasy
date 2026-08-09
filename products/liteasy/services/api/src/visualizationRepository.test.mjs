@@ -7,6 +7,7 @@ function transactionHarness() {
     entitlements: new Map(),
     preferences: new Map(),
     policies: new Map(),
+    costPolicies: new Map(),
     reservations: new Map(),
     idempotency: new Map(),
     usage: [],
@@ -36,6 +37,7 @@ function transactionHarness() {
         state.preferences.set(values[0], { subject_id: values[0], enabled: values[1], revision: "1" });
         return { rows: [state.preferences.get(values[0])] };
       }
+      if (normalized.startsWith("INSERT INTO audit_events")) return { rows: [] };
       if (normalized.includes("FROM visualization_entitlements")) {
         if (normalized.startsWith("SELECT e.*")) {
           const entitlement = state.entitlements.get(values[0]);
@@ -54,8 +56,9 @@ function transactionHarness() {
         return { rows: row ? [row] : [] };
       }
       if (normalized.includes("FROM visualization_provider_configs")) {
-        return { rows: [{ route_id: "route-1", revision: "1", enabled: true, circuit_state: "closed", circuit_open_until: null, modalities: ["semantic_graph"], route_available: true }] };
+        return { rows: [{ route_id: "route-1", provider_id: "provider-1", revision: "1", enabled: true, circuit_state: "closed", circuit_open_until: null, modalities: ["semantic_graph"], operations: ["structured_generation", "validation"], data_classes: ["paper"], route_available: true }] };
       }
+      if (normalized.includes("FROM visualization_cost_policies")) return { rows: [{ modality: "semantic_graph", operation: "structured_generation", data_class: "paper", unit_cost: 4, revision: "1", enabled: true }] };
       if (normalized.includes("FROM visualization_quota_reservations") && normalized.includes("idempotency_key")) {
         const row = [...state.reservations.values()].find((item) => item.subject_id === values[0] && item.idempotency_key === values[1]);
         return { rows: row ? [row] : [] };
@@ -67,12 +70,12 @@ function transactionHarness() {
       if (normalized.startsWith("SELECT COALESCE(SUM")) return { rows: [{ used_units: "0" }] };
       if (normalized.startsWith("SELECT COUNT")) return { rows: [{ active_count: "0" }] };
       if (normalized.startsWith("INSERT INTO visualization_quota_reservations")) {
-        const row = { reservation_id: values[0], subject_id: values[1], idempotency_key: values[2], modality: values[3], route_revision: String(values[5]), policy_revision: String(values[6]), reserved_units: values[7], settled_units: null, state: "reserved", expires_at: new Date(values[8]), created_at: new Date(), updated_at: new Date() };
+        const row = { reservation_id: values[0], subject_id: values[1], idempotency_key: values[2], modality: values[3], route_id: values[4], route_revision: String(values[5]), policy_revision: String(values[6]), requested_by: values[7], cost_table_revision: String(values[8]), reserved_units: values[9], settled_units: null, state: "reserved", expires_at: new Date(values[10]), created_at: new Date(), updated_at: new Date() };
         state.reservations.set(row.reservation_id, row);
         return { rows: [row] };
       }
       if (normalized.startsWith("UPDATE visualization_quota_reservations")) {
-        const row = state.reservations.get(values[1]);
+        const row = state.reservations.get(values[1] ?? values[0]);
         if (row) { row.state = values[0]; row.settled_units = values[2] ?? row.settled_units; }
         return { rows: row ? [row] : [] };
       }
@@ -104,9 +107,24 @@ test("rejects reservation when the request idempotency key is reused with anothe
   const repository = new PostgresVisualizationRepository(harness.pool);
   await repository.reserve(subject, { idempotencyKey: "request-0001", modality: "semantic_graph", routeId: "route-1", units: 1, traceId: "trace-1" });
   await assert.rejects(
-    repository.reserve(subject, { idempotencyKey: "request-0001", modality: "semantic_graph", routeId: "route-1", units: 2, traceId: "trace-1" }),
+    repository.reserve(subject, { idempotencyKey: "request-0001", modality: "circuit", routeId: "route-1", units: 2, traceId: "trace-1" }),
     /idempotency_key_reused/
   );
+});
+
+test("reserve requires a non-empty entitlement modality allowlist and prices the locked route provider", async () => {
+  const harness = transactionHarness();
+  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: [], revision: "1" });
+  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
+  harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "4", monthly_units: "8", max_concurrency: "1", timezone: "UTC", revision: "1" });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await assert.rejects(
+    repository.reserve(subject, { idempotencyKey: "request-0003", modality: "semantic_graph", routeId: "route-1", traceId: "trace-1" }),
+    /visualization_modality_not_allowed/
+  );
+  harness.state.entitlements.get("user-1").allowed_modalities = ["semantic_graph"];
+  await repository.reserve(subject, { idempotencyKey: "request-0004", modality: "semantic_graph", routeId: "route-1", traceId: "trace-1" });
+  assert.equal(harness.calls.some(({ sql, values }) => sql.includes("visualization_cost_policies") && values.includes("provider-1")), true);
 });
 
 test("settlement and rollback write user ledger transitions independently from provider costs", async () => {
@@ -579,11 +597,13 @@ test("publication locks and rechecks governance before atomically saving and set
     reservationId: "reservation-1",
     routeId: "route-1",
     routeRevision: 7,
-    settledUnits: 2,
+    settledUnits: 0,
     traceId: "trace-publish-1",
     validation: { outcome: "pass" }
   });
   assert.equal(result.artifact.artifactId, "artifact-1");
+  const settlement = harness.calls.find((call) => call.sql.startsWith("UPDATE visualization_quota_reservations"));
+  assert.equal(settlement.values[1], 4, "successful publication settles the server-reserved units");
   assert.ok(calls.indexOf(calls.find((sql) => sql.startsWith("INSERT INTO visualization_artifacts"))) <
     calls.indexOf(calls.find((sql) => sql.startsWith("UPDATE visualization_quota_reservations"))));
 });

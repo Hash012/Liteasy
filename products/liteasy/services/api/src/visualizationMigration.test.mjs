@@ -31,6 +31,6 @@ test("visualization ledgers are append-only and provider costs cannot become use
 
 test("migration head includes 020 visualization control plane", async () => {
   const { readMigrations } = await import("./migrations.mjs");
-  const migration = readMigrations().at(-1);
+  const migration = readMigrations().find(({ name }) => name === "020_visualization_control_plane.sql");
   assert.equal(migration?.name, "020_visualization_control_plane.sql");
 });

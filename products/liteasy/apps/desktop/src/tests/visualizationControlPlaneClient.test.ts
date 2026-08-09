@@ -3,7 +3,10 @@ import { setMultimodalVisualizationPreference } from "../app/features/visualizat
 
 test("sets the authenticated multimodal preference with an idempotency key", async () => {
   const transport = vi.fn(async () => ({
-    json: async () => ({ enabled: true }),
+    json: async () => ({
+      allowed: true, enabled: true, serviceAvailable: true, explicitRequestsAllowed: false,
+      quota: { available: true }, availableModalities: ["semantic_graph"]
+    }),
     ok: true,
     status: 200
   }));
@@ -13,7 +16,7 @@ test("sets the authenticated multimodal preference with an idempotency key", asy
     endpoint: "https://api.liteasy.example/",
     sessionId: "desktop-access-token",
     transport
-  })).resolves.toEqual({ enabled: true });
+  })).resolves.toMatchObject({ enabled: true });
 
   expect(transport).toHaveBeenCalledWith(expect.objectContaining({
     headers: {
@@ -40,4 +43,24 @@ test("surfaces preference mutation failures", async () => {
       status: 403
     })
   })).rejects.toThrow("multimodal_visualization_preference_unavailable:403");
+});
+
+test("returns the typed capability projection after a preference mutation", async () => {
+  await expect(setMultimodalVisualizationPreference({
+    enabled: true,
+    endpoint: "https://api.liteasy.example",
+    sessionId: "desktop-access-token",
+    transport: async () => ({
+      json: async () => ({
+        allowed: true,
+        enabled: true,
+        serviceAvailable: true,
+        explicitRequestsAllowed: false,
+        quota: { available: true },
+        availableModalities: ["semantic_graph"]
+      }),
+      ok: true,
+      status: 200
+    })
+  })).resolves.toMatchObject({ enabled: true });
 });

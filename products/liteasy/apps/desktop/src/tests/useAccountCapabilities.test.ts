@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { useAccountCapabilities } from "../app/features/account/useAccountCapabilities";
 import type { AccountSession } from "../app/features/account/account.types";
@@ -17,6 +17,7 @@ const unavailableMultimodalCapability = {
   allowed: false,
   enabled: false,
   serviceAvailable: false,
+  explicitRequestsAllowed: false,
   quota: { available: false },
   availableModalities: []
 };
@@ -55,6 +56,7 @@ test("does not retain a stale allowed capability after refresh fails", async () 
             allowed: true,
             enabled: true,
             serviceAvailable: true,
+            explicitRequestsAllowed: false,
             quota: { available: true },
             availableModalities: ["semantic_graph"]
           }
@@ -116,4 +118,39 @@ test("does not restore a previous account capability after an account switch", a
   });
   await Promise.resolve();
   expect(result.current.developerDiagnostics).toBe(false);
+});
+
+test("exposes explicit refresh and invalidation and fails closed synchronously on session changes", async () => {
+  const transport = vi.fn(async () => ({
+    json: async () => ({
+      developerDiagnostics: false,
+      multimodalVisualization: {
+        allowed: true,
+        enabled: true,
+        serviceAvailable: true,
+        explicitRequestsAllowed: false,
+        quota: { available: true },
+        availableModalities: ["semantic_graph"]
+      }
+    }),
+    ok: true,
+    status: 200
+  }));
+  const { result, rerender } = renderHook(
+    ({ accountSession }) => useAccountCapabilities({
+      accountSession,
+      endpoint: "https://api.liteasy.example",
+      transport
+    }),
+    { initialProps: { accountSession: session("account-a") } }
+  );
+  await waitFor(() => expect(result.current.multimodalVisualization.allowed).toBe(true));
+  expect(typeof result.current.refresh).toBe("function");
+  expect(typeof result.current.invalidate).toBe("function");
+  act(() => result.current.invalidate());
+  rerender({ accountSession: session("account-a") });
+  expect(result.current.multimodalVisualization.allowed).toBe(false);
+  rerender({ accountSession: session("account-b") });
+  expect(result.current.multimodalVisualization.allowed).toBe(false);
+  await waitFor(() => expect(transport).toHaveBeenCalledTimes(2));
 });

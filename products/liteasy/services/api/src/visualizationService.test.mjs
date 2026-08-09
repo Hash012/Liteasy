@@ -109,6 +109,7 @@ test("account capability exposes only the fail-closed desktop projection", async
     allowed: true,
     availableModalities: ["semantic_graph"],
     enabled: true,
+    explicitRequestsAllowed: true,
     quota: { available: true, remainingBand: "available" },
     serviceAvailable: true
   });
@@ -120,6 +121,7 @@ test("account capability exposes only the fail-closed desktop projection", async
     allowed: false,
     availableModalities: [],
     enabled: false,
+    explicitRequestsAllowed: false,
     quota: { available: false },
     serviceAvailable: false
   });
@@ -136,9 +138,10 @@ test("account capability exposes only the fail-closed desktop projection", async
     }
   } });
   assert.deepEqual(await missingGovernance.service.accountCapability("user_1"), {
-    allowed: false,
+    allowed: true,
     availableModalities: [],
     enabled: false,
+    explicitRequestsAllowed: false,
     quota: { available: false },
     serviceAvailable: false
   });
@@ -243,7 +246,6 @@ test("submission rechecks all publication gates before settling", async () => {
     reservationId: "reservation_1",
     routeId: "route_1",
     routeRevision: 7,
-    settledUnits: 2,
     traceId: "trace_4",
     validation: { outcome: "pass", validatorVersions: { schema: "1" } }
   });
@@ -404,6 +406,8 @@ test("generation records available provider cost metadata outside user usage", a
         text: "{\"artifact\":true}"
       };
     }
+  }, repository: {
+    async startProviderInvocation() { return { invocation_id: "persisted-invocation" }; }
   } });
   await instance.service.generate("user_1", {
     providerRequest: { dataClass: "paper", modality: "semantic_graph" },
@@ -419,7 +423,7 @@ test("generation records available provider cost metadata outside user usage", a
   assert.deepEqual(cost, {
     amount: 0.02,
     currency: "USD",
-    invocationId: "invocation_1",
+    invocationId: "persisted-invocation",
     metadata: { outcome: "succeeded", traceId: "trace_9" },
     providerId: "provider-1",
     providerRequestId: "provider-request-1",

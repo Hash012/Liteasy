@@ -11,6 +11,7 @@ import type {
   VisualizationAuditRow,
   VisualizationEntitlement,
   VisualizationProviderRoute,
+  VisualizationProviderRouteMutation,
   VisualizationQuotaPolicy,
   VisualizationUsageRow
 } from "./types";
@@ -282,7 +283,7 @@ export function createAdminApiClient({
     saveVisualizationProviderRoute(input: {
       expectedRevision: number;
       reason: string;
-      route: VisualizationProviderRoute;
+      route: VisualizationProviderRouteMutation;
     }) {
       return cloudPost<{ route: VisualizationProviderRoute }>(
         "/v1/admin/visualization/providers/save",
@@ -318,7 +319,7 @@ export function createAdminApiClient({
     },
     testVisualizationProviderRoute(input: {
       expectedRevision: number;
-      providerRequest: Record<string, unknown>;
+      routeId: string;
       reason: string;
     }) {
       return cloudPost<Record<string, unknown>>("/v1/admin/visualization/providers/test", {

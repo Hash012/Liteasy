@@ -1,4 +1,8 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
+import {
+  parseMultimodalVisualizationCapability,
+  type MultimodalVisualizationCapability
+} from "../account/accountCapabilitiesClient";
 
 export type VisualizationControlPlaneTransportRequest = {
   body: string;
@@ -32,7 +36,7 @@ export async function setMultimodalVisualizationPreference(input: {
   endpoint: string;
   sessionId: string;
   transport?: VisualizationControlPlaneTransport;
-}): Promise<unknown> {
+}): Promise<MultimodalVisualizationCapability> {
   const transport = input.transport ?? defaultTransport;
   const response = await transport({
     body: JSON.stringify({
@@ -50,5 +54,9 @@ export async function setMultimodalVisualizationPreference(input: {
   if (!response.ok) {
     throw new Error(`multimodal_visualization_preference_unavailable:${response.status}`);
   }
-  return response.json();
+  const payload = await response.json();
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("multimodal_visualization_capability_invalid");
+  }
+  return parseMultimodalVisualizationCapability(payload);
 }

@@ -23,7 +23,8 @@ const expectedClients = new Set([
   "liteasy-cloud",
   "liteasy-desktop-public",
   "liteasy-identity-introspection",
-  "liteasy-keycloak-admin"
+  "liteasy-keycloak-admin",
+  "liteasy-visualization-service"
 ]);
 const publicAudiences = new Map([
   ["liteasy-desktop-public", "liteasy-desktop"],
@@ -45,7 +46,8 @@ const secretEnvironment = [
   "LITEASY_DB_MIGRATOR_PASSWORD",
   "LITEASY_IDENTITY_ADMIN_CLIENT_SECRET",
   "LITEASY_IDENTITY_INTROSPECTION_CLIENT_SECRET",
-  "LITEASY_IDENTITY_MANAGEMENT_CLIENT_SECRET"
+  "LITEASY_IDENTITY_MANAGEMENT_CLIENT_SECRET",
+  "LITEASY_VISUALIZATION_SERVICE_CLIENT_SECRET"
 ];
 
 function command(executable, args, options = {}) {
@@ -69,6 +71,11 @@ export function verifyStaticFoundation() {
   assert.equal(realm.realm, "liteasy");
   assert.equal(realm.enabled, true);
   assert.equal(Array.isArray(realm.users) ? realm.users.length : 0, 0, "realm import must not contain product users");
+  const clientScopes = new Map(realm.clientScopes.map((scope) => [scope.name, scope]));
+  const visualizationScope = clientScopes.get("visualization:generate");
+  assert.equal(visualizationScope?.protocol, "openid-connect", "realm must define visualization:generate");
+  assert.equal(visualizationScope.attributes?.["include.in.token.scope"], "true");
+  assert.equal(visualizationScope.attributes?.["display.on.consent.screen"], "false");
   const clients = new Map(realm.clients.map((client) => [client.clientId, client]));
   assert.deepEqual(new Set(clients.keys()), expectedClients);
 
@@ -81,7 +88,7 @@ export function verifyStaticFoundation() {
     assert.equal(mapperAudience(client), audience, `${clientId} audience mismatch`);
   }
 
-  for (const clientId of ["liteasy-cloud", "intuecho-api", "liteasy-account-lifecycle", "liteasy-identity-introspection", "intuecho-organization-service", "liteasy-keycloak-admin"]) {
+  for (const clientId of ["liteasy-cloud", "intuecho-api", "liteasy-account-lifecycle", "liteasy-identity-introspection", "intuecho-organization-service", "liteasy-keycloak-admin", "liteasy-visualization-service"]) {
     const client = clients.get(clientId);
     assert.equal(client.publicClient, false, `${clientId} must be confidential`);
     assert.match(client.secret, /^\$\{[A-Z0-9_]+\}$/, `${clientId} must receive its secret from the environment`);
@@ -96,6 +103,14 @@ export function verifyStaticFoundation() {
     new Set(["organization:authorize"])
   );
   assert.equal(mapperAudience(clients.get("intuecho-organization-service")), "liteasy-internal");
+  assert.deepEqual(
+    new Set(clients.get("liteasy-visualization-service").defaultClientScopes),
+    new Set(["visualization:generate"])
+  );
+  assert.equal(mapperAudience(clients.get("liteasy-visualization-service")), "liteasy-internal");
+  assert.equal(clients.get("liteasy-visualization-service").serviceAccountsEnabled, true);
+  assert.equal(clients.get("liteasy-visualization-service").standardFlowEnabled, false);
+  assert.equal(clients.get("liteasy-visualization-service").directAccessGrantsEnabled, false);
   assert.equal(clients.get("liteasy-identity-introspection").serviceAccountsEnabled, false);
 
   const composeSource = fs.readFileSync(composePath, "utf8");
@@ -279,13 +294,29 @@ export async function verifyRuntimeFoundation() {
     "liteasy-internal",
     ["organization:authorize"]
   );
+  const visualization = await serviceToken(
+    discovery.token_endpoint,
+    "liteasy-visualization-service",
+    secrets.LITEASY_VISUALIZATION_SERVICE_CLIENT_SECRET,
+    "visualization:generate"
+  );
+  await introspectServiceToken(
+    discovery.introspection_endpoint,
+    { clientId: "liteasy-cloud", clientSecret: secrets.LITEASY_CLOUD_CLIENT_SECRET },
+    "liteasy-visualization-service",
+    visualization,
+    issuer,
+    "liteasy-internal",
+    ["visualization:generate"]
+  );
   return {
     identityManagementAuthorization: true,
     jwks: true,
     oidcDiscovery: true,
     revocationEndpoint: true,
     runtime: true,
-    serviceTokens: true
+    serviceTokens: true,
+    visualizationAuthorization: true
   };
 }
 

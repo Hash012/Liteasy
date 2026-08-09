@@ -7,6 +7,7 @@ export type MultimodalVisualizationCapability = {
   allowed: boolean;
   enabled: boolean;
   serviceAvailable: boolean;
+  explicitRequestsAllowed: boolean;
   quota: { available: boolean };
   availableModalities: GeneratedVisualizationModality[];
 };
@@ -20,6 +21,7 @@ export const unavailableMultimodalVisualizationCapability: MultimodalVisualizati
   allowed: false,
   enabled: false,
   serviceAvailable: false,
+  explicitRequestsAllowed: false,
   quota: { available: false },
   availableModalities: []
 };
@@ -54,10 +56,11 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: string[]) {
   return Object.keys(value).every((key) => keys.includes(key));
 }
 
-function parseMultimodalVisualizationCapability(value: unknown): MultimodalVisualizationCapability {
+export function parseMultimodalVisualizationCapability(value: unknown): MultimodalVisualizationCapability {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "allowed",
     "enabled",
+    "explicitRequestsAllowed",
     "serviceAvailable",
     "quota",
     "availableModalities"
@@ -68,6 +71,7 @@ function parseMultimodalVisualizationCapability(value: unknown): MultimodalVisua
     typeof value.allowed !== "boolean" ||
     typeof value.enabled !== "boolean" ||
     typeof value.serviceAvailable !== "boolean" ||
+    typeof value.explicitRequestsAllowed !== "boolean" ||
     !isRecord(value.quota) ||
     !hasOnlyKeys(value.quota, ["available", "remainingBand"]) ||
     typeof value.quota.available !== "boolean" ||
@@ -97,6 +101,7 @@ function parseMultimodalVisualizationCapability(value: unknown): MultimodalVisua
     allowed: value.allowed,
     enabled: value.enabled,
     serviceAvailable: value.serviceAvailable,
+    explicitRequestsAllowed: value.explicitRequestsAllowed,
     quota: { available: value.quota.available },
     availableModalities: [...value.availableModalities]
   };

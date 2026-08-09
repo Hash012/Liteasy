@@ -5,6 +5,7 @@ const unavailableMultimodalCapability = {
   allowed: false,
   enabled: false,
   serviceAvailable: false,
+  explicitRequestsAllowed: false,
   quota: { available: false },
   availableModalities: []
 };
@@ -17,6 +18,7 @@ test("loads capabilities with the authenticated desktop bearer session", async (
         allowed: true,
         enabled: true,
         serviceAvailable: true,
+        explicitRequestsAllowed: false,
         quota: { available: true },
         availableModalities: ["semantic_graph"]
       }
@@ -35,6 +37,7 @@ test("loads capabilities with the authenticated desktop bearer session", async (
       allowed: true,
       enabled: true,
       serviceAvailable: true,
+      explicitRequestsAllowed: false,
       quota: { available: true },
       availableModalities: ["semantic_graph"]
     }
@@ -75,6 +78,7 @@ test("fails closed for invalid nested multimodal fields while retaining diagnost
           allowed: true,
           enabled: true,
           serviceAvailable: true,
+          explicitRequestsAllowed: false,
           quota: { available: true, units: 4 },
           availableModalities: ["semantic_graph"]
         }
@@ -99,6 +103,7 @@ test("fails closed for contradictory multimodal capability combinations", async 
           allowed: false,
           enabled: true,
           serviceAvailable: true,
+          explicitRequestsAllowed: false,
           quota: { available: true },
           availableModalities: ["semantic_graph"]
         }
@@ -122,4 +127,26 @@ test("rejects missing or non-boolean server authorization results", async () => 
       status: 200
     })
   })).rejects.toThrow("account_capabilities_invalid");
+});
+
+test("preserves the safe explicit-request entitlement flag", async () => {
+  await expect(loadAccountCapabilities({
+    endpoint: "https://api.liteasy.example",
+    sessionId: "desktop-access-token",
+    transport: async () => ({
+      json: async () => ({
+        developerDiagnostics: false,
+        multimodalVisualization: {
+          allowed: true,
+          enabled: false,
+          serviceAvailable: true,
+          explicitRequestsAllowed: true,
+          quota: { available: true },
+          availableModalities: ["semantic_graph"]
+        }
+      }),
+      ok: true,
+      status: 200
+    })
+  })).resolves.toMatchObject({ multimodalVisualization: { explicitRequestsAllowed: true } });
 });

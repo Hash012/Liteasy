@@ -24,7 +24,8 @@ const values = {
   LITEASY_IDENTITY_MANAGEMENT_CLIENT_SECRET: secret(),
   LITEASY_IDENTITY_INTROSPECTION_CLIENT_SECRET: secret(),
   LITEASY_IDENTITY_ADMIN_CLIENT_SECRET: secret(),
-  INTUECHO_ORGANIZATION_SERVICE_SECRET: secret()
+  INTUECHO_ORGANIZATION_SERVICE_SECRET: secret(),
+  LITEASY_VISUALIZATION_SERVICE_CLIENT_SECRET: secret()
 };
 const missing = Object.entries(values).filter(([name]) => !Object.hasOwn(existing, name));
 if (missing.length === 0) {

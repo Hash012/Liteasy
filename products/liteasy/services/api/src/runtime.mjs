@@ -28,6 +28,7 @@ import { SecureExternalPdfDownloader } from "./secureExternalPdfDownloader.mjs";
 import { PostgresTeamAnnotationRepository } from "./teamAnnotationRepository.mjs";
 import { authorizeLibraryScope } from "./libraryAuthorization.mjs";
 import { VisualizationProviderGateway } from "./visualizationProviderGateway.mjs";
+import { EnvironmentVisualizationSecretStore } from "./visualizationSecretStore.mjs";
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
 import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
 import { VisualizationService } from "./visualizationService.mjs";
@@ -53,10 +54,17 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const visualizationRepository = dependencies.visualizationRepository ??
     new PostgresVisualizationRepository(pool);
   const visualizationProviderGateway = dependencies.visualizationProviderGateway ??
-    new VisualizationProviderGateway({
-      adapters: dependencies.visualizationProviderAdapters ?? {},
-      egressPolicy: config.visualization?.egressPolicy
-    });
+    (dependencies.visualizationProviderGatewayFactory
+      ? dependencies.visualizationProviderGatewayFactory({
+        adapters: dependencies.visualizationProviderAdapters ?? {},
+        egressPolicy: { allowedHostnames: config.visualization?.egressHostnames ?? [] },
+        secretStore: new EnvironmentVisualizationSecretStore(config.visualization?.secrets ?? {})
+      })
+      : new VisualizationProviderGateway({
+        adapters: dependencies.visualizationProviderAdapters ?? {},
+        egressPolicy: { allowedHostnames: config.visualization?.egressHostnames ?? [] },
+        secretStore: new EnvironmentVisualizationSecretStore(config.visualization?.secrets ?? {})
+      }));
   const visualizationDocumentAuthorizer = dependencies.visualizationDocumentAuthorizer ??
     (async ({ document, subjectId }) => {
       const scope = await authorizeLibraryScope(pool, {

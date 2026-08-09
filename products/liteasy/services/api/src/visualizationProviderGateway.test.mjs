@@ -171,6 +171,30 @@ test("preserves validated provider cost metadata for the service ledger", async 
   });
 });
 
+test("adapter response limit may lower but cannot raise the operation hard cap", async () => {
+  let maximumBytes;
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured({ request }) {
+        return (await request(undefined, { responseMaxBytes: 64 * 1024 * 1024 })).json();
+      }
+    },
+    dnsLookup: async () => [{ address: "8.8.8.8", family: 4 }],
+    egressPolicy: { allowedHostnames: ["provider.example"] },
+    fetchImpl: async (_url, _init, security) => {
+      maximumBytes = security.maximumBytes;
+      const response = new Response(JSON.stringify({ text: "ok" }));
+      Object.defineProperty(response, "peerAddress", { value: "8.8.8.8" });
+      return response;
+    },
+    secretStore: { resolve: () => "deployment-secret" }
+  });
+  await gateway.generateStructured({
+    dataClass: "paper", modality: "semantic_graph", route, signal: new AbortController().signal
+  });
+  assert.equal(maximumBytes, 2 * 1024 * 1024);
+});
+
 test("rejects routes whose endpoint resolves outside the deployment egress policy", async () => {
   const gateway = new VisualizationProviderGateway({
     adapter: {

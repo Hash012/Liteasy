@@ -569,7 +569,10 @@ export function AdminWorkspace({
           />
         ) : null}
         {!loading && view === "visualization" ? (
-          <VisualizationGovernanceView api={api} principal={identity?.principal ?? null} />
+          <VisualizationGovernanceView
+            api={api}
+            principal={identity ? { ...identity.principal, authenticationFresh: identity.authentication.fresh } : null}
+          />
         ) : null}
         {!loading && view === "audit" ? (
           <AuditView

@@ -77,12 +77,13 @@ The public clients are `liteasy-desktop-public`, `intuecho-web`, and
 `intuecho-web`, and `liteasy-admin`. Password grants are disabled and PKCE S256 is
 required. Confidential clients are separate for Liteasy Cloud introspection,
 Intuecho API introspection, identity-management introspection, organization
-authorization, lifecycle calls, and Keycloak Admin REST. The lifecycle caller
-secret is not used by identity-management to introspect tokens.
+authorization, visualization generation, lifecycle calls, and Keycloak Admin
+REST. The lifecycle caller secret is not used by identity-management to
+introspect tokens.
 
 `verify` checks discovery issuer and the advertised token, JWKS, introspection, and
-revocation endpoints; obtains both service tokens; validates issuer, client ID,
-audience, and scopes; and sends the lifecycle token to the protected adapter route.
+revocation endpoints; obtains all three scoped service tokens; validates issuer,
+client ID, audience, and scopes; and sends the lifecycle token to the protected adapter route.
 The route deliberately targets a nonexistent subject, so authorization and the
 Keycloak Admin boundary are exercised without changing a product account.
 
