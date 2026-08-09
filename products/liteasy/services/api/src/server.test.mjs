@@ -408,6 +408,26 @@ function runtime() {
           uploadedBy: input.actorId
         };
       }
+    },
+    visualizationService: {
+      async accountCapability(subjectId) {
+        calls.push({ visualizationCapability: true, subjectId });
+        return {
+          allowed: true,
+          availableModalities: ["semantic_graph"],
+          enabled: true,
+          quota: { available: true, remainingBand: "available" },
+          serviceAvailable: true
+        };
+      },
+      async setEntitlement(principal, input) {
+        calls.push({ principal, visualizationEntitlement: input });
+        return { entitlement: { allowed: input.allowed, subjectId: input.subjectId } };
+      },
+      async setPreference(subjectId, input) {
+        calls.push({ subjectId, visualizationPreference: input });
+        return { allowed: true, availableModalities: [], enabled: input.enabled, quota: { available: true }, serviceAvailable: true };
+      }
     }
   };
 }
@@ -653,7 +673,16 @@ test("enables desktop diagnostics only outside production after a database role 
     productionResult
   );
   assert.equal(productionResult.status, 200);
-  assert.deepEqual(jsonBody(productionResult), { developerDiagnostics: false });
+  assert.deepEqual(jsonBody(productionResult), {
+    developerDiagnostics: false,
+    multimodalVisualization: {
+      allowed: true,
+      availableModalities: ["semantic_graph"],
+      enabled: true,
+      quota: { available: true, remainingBand: "available" },
+      serviceAvailable: true
+    }
+  });
   assert.equal(productionRuntime.calls.some((item) => item.hasRole), false);
   assert.equal(productionRuntime.calls[0].audience, "liteasy-desktop");
 
@@ -665,11 +694,70 @@ test("enables desktop diagnostics only outside production after a database role 
   const stagingResult = response();
   await stagingHandler(request("GET", "/v1/account/capabilities"), stagingResult);
   assert.equal(stagingResult.status, 200);
-  assert.deepEqual(jsonBody(stagingResult), { developerDiagnostics: true });
+  assert.equal(jsonBody(stagingResult).developerDiagnostics, true);
+  assert.equal(jsonBody(stagingResult).multimodalVisualization.enabled, true);
   assert.deepEqual(
     stagingRuntime.calls.find((item) => item.hasRole),
     { hasRole: "developer_diagnostics", subjectId: "user_1" }
   );
+});
+
+test("persists the signed-in user's visualization preference", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+  await handler(request("POST", "/v1/account/preferences/multimodal-visualization/set", {
+    enabled: false,
+    idempotencyKey: "preference-0001"
+  }), result);
+  assert.equal(result.status, 200, result.body.toString("utf8"));
+  const mutation = instance.calls.find((item) => item.visualizationPreference);
+  assert.equal(mutation.subjectId, "user_1");
+  assert.match(mutation.visualizationPreference.traceId, /^trace_/);
+});
+
+test("requires fresh platform administrator authorization for visualization entitlement changes", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+  await handler(request("POST", "/v1/admin/visualization/entitlements/set", {
+    allowed: true,
+    allowedModalities: ["semantic_graph"],
+    expectedRevision: 0,
+    explicitRequestsAllowed: true,
+    idempotencyKey: "entitlement-0001",
+    reason: "Approved for the research account",
+    subjectId: "user_2"
+  }), result);
+  assert.equal(result.status, 200, result.body.toString("utf8"));
+  assert.equal(instance.calls[0].audience, "liteasy-admin");
+  const mutation = instance.calls.find((item) => item.visualizationEntitlement);
+  assert.equal(mutation.principal.subjectId, "admin_1");
+  assert.match(mutation.visualizationEntitlement.traceId, /^trace_/);
+
+  const staleInstance = runtime();
+  staleInstance.identityVerifier.verifyAuthorizationHeader = async (_header, audience) => ({
+    audience,
+    authenticationMethods: ["pwd", "mfa"],
+    authTime: Math.floor(Date.now() / 1000) - 600,
+    subject: "admin_1"
+  });
+  const staleResult = response();
+  await createCloudRequestHandler(staleInstance, internalConfig())(request(
+    "POST",
+    "/v1/admin/visualization/entitlements/set",
+    {
+      allowed: true,
+      allowedModalities: ["semantic_graph"],
+      expectedRevision: 0,
+      explicitRequestsAllowed: true,
+      idempotencyKey: "entitlement-0002",
+      reason: "Approved for the research account",
+      subjectId: "user_2"
+    }
+  ), staleResult);
+  assert.equal(staleResult.status, 403);
+  assert.equal(staleInstance.calls.some((item) => item.visualizationEntitlement), false);
 });
 
 test("passes identity-derived actor and server trace into a mutation", async () => {

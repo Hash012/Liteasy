@@ -74,6 +74,67 @@ function reservationView(row) {
   } : null;
 }
 
+function providerRouteView(row) {
+  return row ? {
+    circuitFailures: Number(row.circuit_failures),
+    circuitOpenUntil: row.circuit_open_until?.toISOString?.() ?? row.circuit_open_until ?? null,
+    circuitState: row.circuit_state,
+    dataClasses: row.data_classes ?? [],
+    enabled: row.enabled,
+    endpoint: row.endpoint,
+    maxConcurrency: Number(row.max_concurrency),
+    modalities: row.modalities ?? [],
+    model: row.model,
+    operations: row.operations ?? [],
+    priority: Number(row.priority),
+    providerId: row.provider_id,
+    region: row.region,
+    revision: Number(row.revision),
+    routeId: row.route_id,
+    secretRef: row.secret_ref,
+    timeoutMs: Number(row.timeout_ms),
+    updatedAt: row.updated_at?.toISOString?.() ?? null,
+    updatedBy: row.updated_by
+  } : null;
+}
+
+function quotaPolicyView(row) {
+  return {
+    dailyUnits: Number(row.daily_units),
+    maxConcurrency: Number(row.max_concurrency),
+    monthlyUnits: Number(row.monthly_units),
+    reason: row.reason,
+    revision: Number(row.revision),
+    subjectId: row.subject_id,
+    timezone: row.timezone,
+    updatedAt: row.updated_at?.toISOString?.() ?? null,
+    updatedBy: row.updated_by
+  };
+}
+
+function boundedLimit(value, fallback = 100) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 200) {
+    throw new Error("visualization_list_limit_invalid");
+  }
+  return parsed;
+}
+
+function operationKey(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{8,200}$/.test(value)) {
+    throw new Error("idempotency_key_invalid");
+  }
+  return value;
+}
+
+function routeId(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{1,120}$/.test(value)) {
+    throw new Error("visualization_route_id_invalid");
+  }
+  return value;
+}
+
 export class PostgresVisualizationRepository {
   constructor(pool) {
     this.pool = pool;
@@ -83,6 +144,185 @@ export class PostgresVisualizationRepository {
     const id = subjectId(subject);
     const result = await this.pool.query("SELECT * FROM visualization_entitlements WHERE subject_id = $1", [id]);
     return rowEntitlement(result.rows[0]);
+  }
+
+  async getProviderRoute(routeInput) {
+    const id = routeId(routeInput);
+    const result = await this.pool.query(
+      "SELECT * FROM visualization_provider_configs WHERE route_id = $1",
+      [id]
+    );
+    return providerRouteView(result.rows[0]);
+  }
+
+  async listProviderRoutes() {
+    const result = await this.pool.query(`
+      SELECT * FROM visualization_provider_configs
+       ORDER BY priority, route_id
+    `);
+    return { routes: result.rows.map(providerRouteView) };
+  }
+
+  async saveProviderRoute(input) {
+    const route = input?.route;
+    const id = routeId(route?.routeId);
+    const actorId = subjectId(input?.updatedBy);
+    const key = operationKey(input?.idempotencyKey);
+    if (!Number.isSafeInteger(input?.expectedRevision) || input.expectedRevision < 0) {
+      throw new Error("visualization_route_revision_invalid");
+    }
+    if (typeof input?.reason !== "string" || input.reason.trim().length < 8 || input.reason.trim().length > 1000) {
+      throw new Error("visualization_reason_invalid");
+    }
+    const hash = requestHash({
+      expectedRevision: input.expectedRevision,
+      reason: input.reason.trim(),
+      route
+    });
+    return withPostgresTransaction(this.pool, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        `visualization-provider:${actorId}:${key}`
+      ]);
+      const prior = await client.query(`
+        SELECT request_hash, response_body FROM idempotency_records
+         WHERE actor_id = $1 AND operation = 'visualization-provider-save'
+           AND idempotency_key = $2 AND expires_at > now()
+      `, [actorId, key]);
+      if (prior.rows[0]) {
+        if (prior.rows[0].request_hash !== hash) throw new Error("idempotency_key_reused");
+        return prior.rows[0].response_body;
+      }
+      const current = await client.query(`
+        SELECT * FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE
+      `, [id]);
+      const revision = Number(current.rows[0]?.revision ?? 0);
+      if (revision !== input.expectedRevision) {
+        throw new Error("visualization_route_revision_conflict");
+      }
+      const saved = await client.query(`
+        INSERT INTO visualization_provider_configs(
+          route_id, provider_id, endpoint, model, secret_ref, operations, modalities,
+          data_classes, region, priority, timeout_ms, max_concurrency, enabled,
+          circuit_state, circuit_failures, circuit_open_until, revision, updated_by
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,
+          $14,$15,$16,$17,$18
+        )
+        ON CONFLICT(route_id) DO UPDATE SET
+          provider_id = excluded.provider_id, endpoint = excluded.endpoint,
+          model = excluded.model, secret_ref = excluded.secret_ref,
+          operations = excluded.operations, modalities = excluded.modalities,
+          data_classes = excluded.data_classes, region = excluded.region,
+          priority = excluded.priority, timeout_ms = excluded.timeout_ms,
+          max_concurrency = excluded.max_concurrency, enabled = excluded.enabled,
+          circuit_state = excluded.circuit_state,
+          circuit_failures = excluded.circuit_failures,
+          circuit_open_until = excluded.circuit_open_until,
+          revision = visualization_provider_configs.revision + 1,
+          updated_by = excluded.updated_by, updated_at = now()
+        RETURNING *
+      `, [
+        id,
+        route.providerId,
+        route.endpoint,
+        route.model,
+        route.secretRef,
+        json(route.operations),
+        json(route.modalities),
+        json(route.dataClasses),
+        route.region,
+        route.priority,
+        route.timeoutMs,
+        route.maxConcurrency,
+        route.enabled,
+        route.circuitState,
+        route.circuitFailures,
+        route.circuitOpenUntil,
+        revision + 1,
+        actorId
+      ]);
+      const response = { route: providerRouteView(saved.rows[0]) };
+      await client.query(`
+        INSERT INTO audit_events(
+          audit_id, actor_id, actor_audience, action, resource_type, resource_id,
+          reason, trace_id, detail
+        ) VALUES ($1,$2,'liteasy-admin','visualization_provider_saved',
+          'visualization_provider',$3,$4,$5,$6::jsonb)
+      `, [
+        `audit_${randomUUID()}`,
+        actorId,
+        id,
+        input.reason.trim(),
+        required(input, "traceId"),
+        json({ revision: response.route.revision })
+      ]);
+      await client.query(`
+        INSERT INTO idempotency_records(
+          actor_id, operation, idempotency_key, request_hash, response_status,
+          response_body, expires_at
+        ) VALUES ($1,'visualization-provider-save',$2,$3,200,$4::jsonb,now()+interval '24 hours')
+      `, [actorId, key, hash, json(response)]);
+      return response;
+    });
+  }
+
+  async listQuotaPolicies(input = {}) {
+    const limit = boundedLimit(input.limit);
+    const requestedSubject = input.subjectId === undefined ? null : subjectId(input.subjectId);
+    const result = await this.pool.query(`
+      SELECT * FROM visualization_quota_policies
+       WHERE ($1::text IS NULL OR subject_id = $1)
+       ORDER BY updated_at DESC, subject_id
+       LIMIT $2
+    `, [requestedSubject, limit]);
+    return { policies: result.rows.map(quotaPolicyView) };
+  }
+
+  async listUsage(input = {}) {
+    const limit = boundedLimit(input.limit);
+    const requestedSubject = input.subjectId === undefined ? null : subjectId(input.subjectId);
+    const result = await this.pool.query(`
+      SELECT event_id, subject_id, reservation_id, idempotency_key, event_type,
+             units_delta, reason_code, trace_id, created_at
+        FROM visualization_usage_ledger
+       WHERE ($1::text IS NULL OR subject_id = $1)
+       ORDER BY created_at DESC, event_id
+       LIMIT $2
+    `, [requestedSubject, limit]);
+    return { rows: result.rows.map((row) => ({
+      createdAt: row.created_at?.toISOString?.() ?? null,
+      eventId: row.event_id,
+      eventType: row.event_type,
+      idempotencyKey: row.idempotency_key,
+      reasonCode: row.reason_code,
+      reservationId: row.reservation_id,
+      subjectId: row.subject_id,
+      traceId: row.trace_id,
+      unitsDelta: Number(row.units_delta)
+    })) };
+  }
+
+  async listAudit(input = {}) {
+    const limit = boundedLimit(input.limit);
+    const result = await this.pool.query(`
+      SELECT audit_id, actor_id, action, resource_type, resource_id, reason,
+             trace_id, detail, occurred_at
+        FROM audit_events
+       WHERE action LIKE 'visualization_%'
+       ORDER BY occurred_at DESC, audit_id
+       LIMIT $1
+    `, [limit]);
+    return { rows: result.rows.map((row) => ({
+      action: row.action,
+      actorId: row.actor_id,
+      auditId: row.audit_id,
+      detail: row.detail ?? {},
+      occurredAt: row.occurred_at?.toISOString?.() ?? null,
+      reason: row.reason,
+      resourceId: row.resource_id,
+      resourceType: row.resource_type,
+      traceId: row.trace_id
+    })) };
   }
 
   async capability(subject) {

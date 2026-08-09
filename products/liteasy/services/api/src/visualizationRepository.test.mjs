@@ -177,3 +177,207 @@ test("rejects incomplete settlement and provider cost records", async () => {
   await assert.rejects(() => repository.recordProviderCost({ invocationId: "invoke-1", routeId: "route-1", providerId: "provider-1", providerRequestId: "provider-request-1", amount: -1, currency: "USD", units: 1, reasonCode: "x" }), /visualization_provider_cost_amount_invalid/);
   await assert.rejects(() => repository.recordProviderCost({ invocationId: "invoke-1", routeId: "route-1", providerId: "provider-1", providerRequestId: "provider-request-1", amount: 1, currency: "usd", units: 1, reasonCode: "x" }), /visualization_provider_cost_currency_invalid/);
 });
+
+const providerRow = {
+  circuit_failures: 0,
+  circuit_open_until: null,
+  circuit_state: "closed",
+  created_at: new Date("2026-08-09T00:00:00.000Z"),
+  data_classes: ["paper"],
+  enabled: true,
+  endpoint: "https://visual.example/v1",
+  max_concurrency: 2,
+  modalities: ["semantic_graph"],
+  model: "visual-1",
+  operations: ["structured_generation", "validation"],
+  priority: 10,
+  provider_id: "provider-1",
+  region: "cn-east",
+  revision: "1",
+  route_id: "route-1",
+  secret_ref: "viz-secret:provider-1",
+  timeout_ms: 30000,
+  updated_at: new Date("2026-08-09T00:00:00.000Z"),
+  updated_by: "admin-1"
+};
+
+function adminPool(query) {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      const normalized = sql.trim().replace(/\s+/g, " ");
+      calls.push({ sql: normalized, values });
+      if (/^(BEGIN|COMMIT|ROLLBACK)/.test(normalized) || normalized.startsWith("SELECT pg_advisory_xact_lock")) {
+        return { rows: [] };
+      }
+      return query(normalized, values, calls);
+    },
+    release() {}
+  };
+  return {
+    calls,
+    pool: {
+      async connect() { return client; },
+      async query(sql, values) { return client.query(sql, values); }
+    }
+  };
+}
+
+test("lists and resolves normalized provider route administration records", async () => {
+  const harness = adminPool(async (sql) => {
+    if (sql.includes("FROM visualization_provider_configs")) return { rows: [providerRow] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const listed = await repository.listProviderRoutes();
+  const loaded = await repository.getProviderRoute("route-1");
+  assert.deepEqual(listed, { routes: [loaded] });
+  assert.deepEqual(loaded, {
+    circuitFailures: 0,
+    circuitOpenUntil: null,
+    circuitState: "closed",
+    dataClasses: ["paper"],
+    enabled: true,
+    endpoint: "https://visual.example/v1",
+    maxConcurrency: 2,
+    modalities: ["semantic_graph"],
+    model: "visual-1",
+    operations: ["structured_generation", "validation"],
+    priority: 10,
+    providerId: "provider-1",
+    region: "cn-east",
+    revision: 1,
+    routeId: "route-1",
+    secretRef: "viz-secret:provider-1",
+    timeoutMs: 30000,
+    updatedAt: "2026-08-09T00:00:00.000Z",
+    updatedBy: "admin-1"
+  });
+});
+
+test("saves a provider route with optimistic revision, idempotency, and audit", async () => {
+  let saved = false;
+  const harness = adminPool(async (sql, values) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [] };
+    if (sql.startsWith("INSERT INTO visualization_provider_configs")) {
+      saved = true;
+      return { rows: [providerRow] };
+    }
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const result = await repository.saveProviderRoute({
+    expectedRevision: 0,
+    idempotencyKey: "provider-save-0001",
+    reason: "Approved provider route",
+    route: {
+      circuitFailures: 0,
+      circuitOpenUntil: null,
+      circuitState: "closed",
+      dataClasses: ["paper"],
+      enabled: true,
+      endpoint: "https://visual.example/v1",
+      maxConcurrency: 2,
+      modalities: ["semantic_graph"],
+      model: "visual-1",
+      operations: ["structured_generation", "validation"],
+      priority: 10,
+      providerId: "provider-1",
+      region: "cn-east",
+      revision: 1,
+      routeId: "route-1",
+      secretRef: "viz-secret:provider-1",
+      timeoutMs: 30000
+    },
+    traceId: "trace-provider-1",
+    updatedBy: "admin-1"
+  });
+  assert.equal(saved, true);
+  assert.equal(result.route.routeId, "route-1");
+  assert.equal(harness.calls.some((call) => call.sql.startsWith("INSERT INTO audit_events")), true);
+  assert.equal(harness.calls.some((call) => call.sql.startsWith("INSERT INTO idempotency_records")), true);
+});
+
+test("rejects a stale provider route revision before mutation", async () => {
+  const harness = adminPool(async (sql) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [providerRow] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await assert.rejects(() => repository.saveProviderRoute({
+    expectedRevision: 0,
+    idempotencyKey: "provider-save-0002",
+    reason: "Approved provider route",
+    route: { routeId: "route-1" },
+    traceId: "trace-provider-2",
+    updatedBy: "admin-1"
+  }), /visualization_route_revision_conflict/);
+  assert.equal(harness.calls.some((call) => /^(INSERT|UPDATE) visualization_provider_configs/.test(call.sql)), false);
+});
+
+test("projects bounded visualization usage and administrator audit rows", async () => {
+  const harness = adminPool(async (sql) => {
+    if (sql.includes("FROM visualization_usage_ledger")) return { rows: [{
+      created_at: new Date("2026-08-09T01:00:00.000Z"),
+      event_id: "usage-1",
+      event_type: "settled",
+      idempotency_key: "request-0001",
+      reason_code: "completed",
+      reservation_id: "reservation-1",
+      subject_id: "user-1",
+      trace_id: "trace-usage-1",
+      units_delta: -2
+    }] };
+    if (sql.includes("FROM audit_events")) return { rows: [{
+      action: "visualization_provider_saved",
+      actor_id: "admin-1",
+      audit_id: "audit-1",
+      detail: { revision: 1 },
+      occurred_at: new Date("2026-08-09T01:00:00.000Z"),
+      reason: "Approved provider route",
+      resource_id: "route-1",
+      resource_type: "visualization_provider",
+      trace_id: "trace-audit-1"
+    }] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const usage = await repository.listUsage({ limit: 50, subjectId: "user-1" });
+  const audit = await repository.listAudit({ limit: 50 });
+  assert.equal(usage.rows[0].unitsDelta, -2);
+  assert.equal(audit.rows[0].action, "visualization_provider_saved");
+  assert.equal(harness.calls.every((call) => !call.values.includes(5000)), true);
+});
+
+test("lists quota policies through the production repository", async () => {
+  const harness = adminPool(async (sql) => {
+    if (sql.includes("FROM visualization_quota_policies")) return { rows: [{
+      daily_units: 20,
+      max_concurrency: 2,
+      monthly_units: 100,
+      reason: "Approved quota policy",
+      revision: "3",
+      subject_id: "user-1",
+      timezone: "Asia/Shanghai",
+      updated_at: new Date("2026-08-09T01:00:00.000Z"),
+      updated_by: "admin-1"
+    }] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  assert.deepEqual(await repository.listQuotaPolicies({ limit: 25 }), {
+    policies: [{
+      dailyUnits: 20,
+      maxConcurrency: 2,
+      monthlyUnits: 100,
+      reason: "Approved quota policy",
+      revision: 3,
+      subjectId: "user-1",
+      timezone: "Asia/Shanghai",
+      updatedAt: "2026-08-09T01:00:00.000Z",
+      updatedBy: "admin-1"
+    }]
+  });
+});

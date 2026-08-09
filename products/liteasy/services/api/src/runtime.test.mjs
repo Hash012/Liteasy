@@ -103,3 +103,27 @@ test("refuses readiness while legacy PDF objects still lack scan proof", async (
   );
   assert.equal(pool.ended, true);
 });
+
+test("wires visualization dependencies while preserving injection", async () => {
+  const pool = poolWithReadiness();
+  const visualizationRepository = { capability() {} };
+  const visualizationProviderGateway = { generateStructured() {} };
+  const runtime = await startCloudRuntime({ recommendation: {
+    endpoint: "https://api.crossref.org/works", mailto: "test@example.com", timeoutMs: 1000
+  } }, {
+    identityReadinessCheck: async () => ({ discovery: true, jwks: true }),
+    identityVerifier: {},
+    objectStore: { async assertSecurityConfiguration() { return { privateAccess: true }; } },
+    pdfUploadService: {
+      async assertNoUnverifiedObjects() { return { unverified: 0 }; },
+      async repairPendingWorkflows() { return { repaired: 0, scanned: 0 }; }
+    },
+    pool,
+    visualizationProviderGateway,
+    visualizationRepository
+  });
+  assert.equal(runtime.visualizationRepository, visualizationRepository);
+  assert.equal(runtime.visualizationProviderGateway, visualizationProviderGateway);
+  assert.equal(runtime.visualizationService.repository, visualizationRepository);
+  await runtime.close();
+});

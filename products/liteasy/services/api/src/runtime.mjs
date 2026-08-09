@@ -26,6 +26,10 @@ import { RecommendationService } from "./recommendationService.mjs";
 import { S3ObjectStore } from "./s3ObjectStore.mjs";
 import { SecureExternalPdfDownloader } from "./secureExternalPdfDownloader.mjs";
 import { PostgresTeamAnnotationRepository } from "./teamAnnotationRepository.mjs";
+import { authorizeLibraryScope } from "./libraryAuthorization.mjs";
+import { VisualizationProviderGateway } from "./visualizationProviderGateway.mjs";
+import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
+import { VisualizationService } from "./visualizationService.mjs";
 
 export async function startCloudRuntime(config, dependencies = {}) {
   const pool = dependencies.pool ?? createPostgresPool(config.database);
@@ -45,6 +49,30 @@ export async function startCloudRuntime(config, dependencies = {}) {
     intuechoLifecycleClient
   );
   const libraryRepository = dependencies.libraryRepository ?? new PostgresLibraryRepository(pool);
+  const visualizationRepository = dependencies.visualizationRepository ??
+    new PostgresVisualizationRepository(pool);
+  const visualizationProviderGateway = dependencies.visualizationProviderGateway ??
+    new VisualizationProviderGateway({
+      adapters: dependencies.visualizationProviderAdapters ?? {},
+      egressPolicy: config.visualization?.egressPolicy
+    });
+  const visualizationDocumentAuthorizer = dependencies.visualizationDocumentAuthorizer ??
+    (async ({ document, subjectId }) => {
+      const scope = await authorizeLibraryScope(pool, {
+        audience: "liteasy-desktop",
+        subject: subjectId
+      }, document, "read");
+      const current = await libraryRepository.getDownloadablePdf(scope, document?.documentId);
+      return {
+        allowed: current.contentHash === document?.sourceIdentityHash,
+        sourceIdentityHash: current.contentHash
+      };
+    });
+  const visualizationService = dependencies.visualizationService ?? new VisualizationService({
+    authorizeDocument: visualizationDocumentAuthorizer,
+    gateway: visualizationProviderGateway,
+    repository: visualizationRepository
+  });
   const organizationGovernanceRepository = dependencies.organizationGovernanceRepository ??
     new PostgresOrganizationGovernanceRepository(pool);
   const organizationPolicyRepository = dependencies.organizationPolicyRepository ??
@@ -127,6 +155,9 @@ export async function startCloudRuntime(config, dependencies = {}) {
       recommendationRepository,
       recommendationService,
       teamAnnotationRepository,
+      visualizationProviderGateway,
+      visualizationRepository,
+      visualizationService,
       readiness: Object.freeze({
         identity: identity.discovery && identity.jwks ? "ready" : "failed",
         migrations: "current",

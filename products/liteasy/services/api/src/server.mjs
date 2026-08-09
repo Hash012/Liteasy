@@ -18,6 +18,8 @@ import { ModelProxyError } from "./modelProxyService.mjs";
 import { PdfUploadError } from "./pdfUploadService.mjs";
 import { PlatformAdminError } from "./platformAdminRepository.mjs";
 import { startCloudRuntime } from "./runtime.mjs";
+import { VisualizationServiceError } from "./visualizationService.mjs";
+import { handleVisualizationRequest } from "./visualizationRoutes.mjs";
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -196,7 +198,8 @@ function sendError(response, error, traceId) {
     error instanceof LibraryRepositoryError ||
     error instanceof ModelProxyError ||
     error instanceof PdfUploadError ||
-    error instanceof PlatformAdminError;
+    error instanceof PlatformAdminError ||
+    error instanceof VisualizationServiceError;
   const code = known ? error.code : "internal_error";
   const status = known ? error.status : 500;
   if (!known) console.error(`[cloud] ${traceId}`, error);
@@ -276,6 +279,17 @@ export function createCloudRequestHandler(runtime, config) {
         return;
       }
 
+      if (await handleVisualizationRequest({
+        config,
+        readJsonBody,
+        request,
+        response,
+        runtime,
+        sendJson,
+        traceId,
+        url
+      })) return;
+
       if (request.method === "POST" && new Set([
         "/v1/internal/intuecho/organizations/access",
         "/v1/internal/intuecho/organizations/invitations",
@@ -313,20 +327,6 @@ export function createCloudRequestHandler(runtime, config) {
             traceId
           }
         ));
-        return;
-      }
-
-      if (request.method === "GET" && url.pathname === "/v1/account/capabilities") {
-        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
-          request.headers.authorization,
-          "liteasy-desktop"
-        );
-        const developerDiagnostics = config.environment !== "production" &&
-          await runtime.platformAdminRepository.hasRole(
-            identity.subject,
-            "developer_diagnostics"
-          );
-        sendJson(response, 200, { developerDiagnostics });
         return;
       }
 
