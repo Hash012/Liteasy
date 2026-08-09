@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 const tagSchema = z.string().trim().min(1).max(32);
+const rectangleSchema = z.object({
+  height: z.number().finite(),
+  left: z.number().finite(),
+  top: z.number().finite(),
+  width: z.number().finite()
+}).strict();
 
 export const contextualDraftSchema = z.object({
   topicId: z.string().min(1),
@@ -38,7 +44,7 @@ export const paperIdentitySchema = z.object({
 
 const scopedPaperIdentitySchema = z.object({ primary: paperIdentitySchema }).optional();
 const annotationScopeSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("pdf_passage"), page: z.number().int().positive(), paperIdentity: scopedPaperIdentitySchema, rects: z.array(z.record(z.unknown())).max(200) }),
+  z.object({ kind: z.literal("pdf_passage"), page: z.number().int().positive(), paperIdentity: scopedPaperIdentitySchema, rects: z.array(rectangleSchema).max(200) }),
   z.object({ kind: z.literal("document"), paperIdentity: scopedPaperIdentitySchema }),
   z.object({ kind: z.literal("section"), paperIdentity: scopedPaperIdentitySchema, sectionKey: z.string().trim().min(1).max(500) }),
   z.object({
@@ -132,7 +138,8 @@ const literatureProviderSchema = z.enum(["intuecho", "openalex", "crossref", "ar
 export const literatureCandidateSchema = z.object({
   candidateKey: z.string().trim().min(1).max(1000),
   provider: literatureProviderSchema,
-  record: literatureDisplaySchema
+  record: literatureDisplaySchema,
+  recordUrl: z.string().url().refine((value) => new URL(value).protocol === "https:").optional()
 });
 
 const manualLiteratureIdentifierSchema = z.object({
@@ -240,7 +247,7 @@ const sourceEvidenceSchema = z.object({
   excerpt: z.string().trim().min(1).max(4000),
   literature: literatureReferenceSchema,
   page: z.number().int().positive().optional(),
-  rects: z.array(z.record(z.unknown())).max(200).default([])
+  rects: z.array(rectangleSchema).max(200).default([])
 });
 
 export const annotationTargetSchema = z.discriminatedUnion("kind", [
@@ -402,7 +409,7 @@ const desktopPublicationSourcePassageSchema = z.object({
   anchorHash: z.string().trim().min(8).max(500),
   excerpt: z.string().trim().min(1).max(4000),
   page: z.number().int().positive().optional(),
-  rects: z.array(z.record(z.unknown())).max(200).default([])
+  rects: z.array(rectangleSchema).max(200).default([])
 }).strict();
 
 const desktopPublicationUpsertSchema = desktopPublicationOperationSchema.extend({

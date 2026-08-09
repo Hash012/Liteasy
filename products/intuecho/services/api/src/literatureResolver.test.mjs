@@ -117,6 +117,29 @@ test("normalizes DOI URL queries before internal lookup even when providers are 
   }
 });
 
+test("normalizes lowercase OpenAlex queries before repository lookup", async () => {
+  const resolver = createLiteratureResolver({
+    providers: [],
+    repository: repository({
+      async findLiteratureByIdentifiers(identifiers) {
+        assert.deepEqual(identifiers, [{ kind: "openalex_id", value: "W123" }]);
+        return {
+          authors: ["A. Author"],
+          identifiers: [{ kind: "openalex_id", source: "manual", value: "W123" }],
+          literatureId: "literature-openalex",
+          provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+          title: "Stored OpenAlex Work"
+        };
+      }
+    })
+  });
+
+  const result = await resolver.resolve(user, { purpose: "forum_compose", query: "w123" });
+
+  assert.equal(result.status, "exact");
+  assert.equal(result.candidate.candidateKey, "intuecho:literature-openalex");
+});
+
 test("deduplicates Crossref and OpenAlex candidates only through their shared stable identifier", async () => {
   const resolver = createLiteratureResolver({
     providers: [
@@ -145,6 +168,102 @@ test("deduplicates Crossref and OpenAlex candidates only through their shared st
 
   assert.equal(result.status, "exact");
   assert.deepEqual(result.candidate.record.identifiers.map((item) => item.kind).sort(), ["doi", "openalex_id"]);
+});
+
+test("binds a shared-DOI exact result to the provider that attests the requested arXiv id", async () => {
+  const semanticCandidate = candidate({
+    candidateKey: "semantic_scholar:semantic_scholar_id:semantic-123",
+    identifiers: [
+      publicIdentifier("semantic_scholar_id", "semantic-123"),
+      publicIdentifier("doi", "10.1000/shared"),
+      publicIdentifier("arxiv_id", "2401.01234")
+    ],
+    provider: "semantic_scholar",
+    title: "Shared Work"
+  });
+  let confirmed;
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("openalex", {
+        search: async () => [candidate({
+          candidateKey: "openalex:openalex_id:W123",
+          identifiers: [
+            publicIdentifier("openalex_id", "W123"),
+            publicIdentifier("doi", "10.1000/shared")
+          ],
+          provider: "openalex",
+          title: "Shared Work"
+        })]
+      }),
+      provider("semantic_scholar", {
+        fetchCandidate: async (candidateKey) => {
+          assert.equal(candidateKey, semanticCandidate.candidateKey);
+          return semanticCandidate;
+        },
+        search: async () => [semanticCandidate]
+      })
+    ],
+    repository: repository({
+      async confirmRefetchedLiterature(_owner, verifiedCandidate) {
+        confirmed = verifiedCandidate;
+        return verifiedCandidate.record;
+      }
+    })
+  });
+
+  const resolved = await resolver.resolve(user, { purpose: "forum_compose", query: "arXiv:2401.01234v2" });
+
+  assert.equal(resolved.status, "exact");
+  assert.equal(resolved.candidate.candidateKey, semanticCandidate.candidateKey);
+  assert.deepEqual(resolved.candidate.record.identifiers, semanticCandidate.record.identifiers);
+  await resolver.confirm(user, { candidateKey: resolved.candidate.candidateKey, mode: "candidate" });
+  assert.deepEqual(confirmed.record.identifiers, semanticCandidate.record.identifiers);
+});
+
+test("honors limit one for internal search, provider aggregation, and final candidates", async () => {
+  const observedLimits = [];
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("crossref", {
+        search: async (input) => {
+          observedLimits.push(input.limit);
+          return [candidate({
+            candidateKey: "crossref:doi:10.1000/first",
+            identifiers: [publicIdentifier("doi", "10.1000/first")],
+            provider: "crossref",
+            title: "First external result"
+          })];
+        }
+      }),
+      provider("arxiv", {
+        search: async (input) => {
+          observedLimits.push(input.limit);
+          return [candidate({
+            candidateKey: "arxiv:arxiv_id:2401.00001",
+            identifiers: [publicIdentifier("arxiv_id", "2401.00001")],
+            provider: "arxiv",
+            title: "Second external result"
+          })];
+        }
+      })
+    ],
+    repository: repository({
+      async searchStoredLiterature(_query, limit) {
+        observedLimits.push(limit);
+        return [];
+      }
+    })
+  });
+
+  const result = await resolver.resolve(user, {
+    limit: 1,
+    purpose: "forum_compose",
+    query: "bounded results"
+  });
+
+  assert.equal(result.status, "ambiguous");
+  assert.equal(result.candidates.length, 1);
+  assert.deepEqual(observedLimits, [1, 1, 1]);
 });
 
 test("does not merge a preprint and publication from title similarity alone", async () => {

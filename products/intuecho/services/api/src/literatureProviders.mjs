@@ -273,10 +273,9 @@ function createCrossrefProvider(endpoint, transport) {
 
 function createOpenAlexProvider(endpoint, apiKey, transport) {
   async function byId(id) {
-    const body = await transport(withPath(endpoint, id), {
-      allowNotFound: true,
-      headers: { authorization: `Bearer ${apiKey}` }
-    });
+    const url = withPath(endpoint, id);
+    url.searchParams.set("api_key", apiKey);
+    const body = await transport(url, { allowNotFound: true });
     return body ? openAlexCandidate(body) : null;
   }
   return Object.freeze({
@@ -289,6 +288,7 @@ function createOpenAlexProvider(endpoint, apiKey, transport) {
     },
     async search(input) {
       const url = new URL(endpoint);
+      url.searchParams.set("api_key", apiKey);
       const doi = normalizedDoi(input);
       if (doi) url.searchParams.set("filter", `doi:${doi}`);
       else {
@@ -297,7 +297,7 @@ function createOpenAlexProvider(endpoint, apiKey, transport) {
         url.searchParams.set("search", query);
       }
       url.searchParams.set("per-page", String(requestedLimit(input)));
-      const body = await transport(url, { headers: { authorization: `Bearer ${apiKey}` } });
+      const body = await transport(url);
       return (Array.isArray(body?.results) ? body.results : []).map(openAlexCandidate).filter(Boolean).slice(0, requestedLimit(input));
     }
   });

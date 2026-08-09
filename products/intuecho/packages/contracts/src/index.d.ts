@@ -25,6 +25,7 @@ export type LiteratureCandidate = {
     title: string;
     year?: number;
   };
+  recordUrl?: string;
 };
 
 export type ManualLiteratureInput = {
@@ -90,11 +91,18 @@ export type LegacyLiteratureReference = {
 
 export type LiteratureReference = ConfirmedLiteratureReference | LegacyLiteratureReference;
 
+export type Rectangle = {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
 export type SourcePassage = {
   anchorHash: string;
   excerpt: string;
   page?: number;
-  rects: Array<Record<string, unknown>>;
+  rects: Rectangle[];
 };
 
 export type SourceEvidence = SourcePassage & {

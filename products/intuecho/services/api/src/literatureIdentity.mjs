@@ -8,12 +8,22 @@ const canonicalKindOrder = [
   "title_authors_year_hash"
 ];
 
+const literatureSourceTransitions = Object.freeze({
+  legacy_metadata: new Set(["manual", "public_registry"]),
+  manual: new Set(["manual", "public_registry"]),
+  public_registry: new Set(["public_registry"])
+});
+
 export class LiteratureIdentityConflictError extends Error {
   constructor(code) {
     super(code);
     this.code = code;
     this.name = "LiteratureIdentityConflictError";
   }
+}
+
+export function canTransitionLiteratureSource(currentSource, nextSource) {
+  return literatureSourceTransitions[currentSource]?.has(nextSource) ?? false;
 }
 
 function normalizeBibliographicText(value) {
@@ -51,7 +61,9 @@ export function normalizeLiteratureIdentifier(kind, value) {
       .toLocaleLowerCase("en-US");
   }
   if (kind === "openalex_id") {
-    return normalized.replace(/^https?:\/\/(?:www\.)?openalex\.org\//i, "");
+    const workId = normalized.replace(/^https?:\/\/(?:www\.)?openalex\.org\//i, "");
+    if (!/^w\d+$/i.test(workId)) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_REQUIRED");
+    return workId.toUpperCase();
   }
   if (kind === "title_authors_year_hash") return normalized.toLocaleLowerCase("en-US");
   return normalized;

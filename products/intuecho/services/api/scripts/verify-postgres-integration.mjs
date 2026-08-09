@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { PostgresAccountLifecycleRepository } from "../src/accountLifecycleRepository.mjs";
-import { migrateIntuecho, verifyIntuechoMigrations } from "../src/migrations.mjs";
+import { migrateIntuecho, readIntuechoMigrations, verifyIntuechoMigrations } from "../src/migrations.mjs";
 import { PostgresAnnotationCommunityRepository } from "../src/postgresAnnotationCommunityRepository.mjs";
 import { PostgresForumRepository } from "../src/postgresForumRepository.mjs";
 
@@ -57,10 +58,52 @@ try {
     "010_direct_message_read_state.sql",
     "011_literature_resolution_provenance.sql",
     "012_desktop_annotation_publications.sql",
-    "013_desktop_annotation_publication_digest.sql"
+    "013_desktop_annotation_publication_digest.sql",
+    "014_correct_legacy_literature_snapshots.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 13, current: true });
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 14, current: true });
+  const legacySnapshotLiteratureId = `migration-014-legacy-${randomUUID()}`;
+  const legacySnapshotVersionId = `migration-014-version-${randomUUID()}`;
+  await migrationPool.query(`
+    INSERT INTO literature_records(
+      id, title, authors, publication_year, document_type, record_source, revision
+    ) VALUES ($1, 'Corrected legacy snapshot', '["Legacy Author"]'::jsonb, 2020, 'article', 'legacy_metadata', 1)
+  `, [legacySnapshotLiteratureId]);
+  await migrationPool.query(`
+    INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source)
+    VALUES ($1, 'doi', '10.1000/migration-014', 'metadata')
+  `, [legacySnapshotLiteratureId]);
+  await migrationPool.query(`
+    INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by)
+    VALUES ($1, $2, 1, '{"provenance":{"mode":"manual"},"title":"Wrong legacy snapshot"}'::jsonb, 'migration_011')
+  `, [legacySnapshotVersionId, legacySnapshotLiteratureId]);
+  const correctiveMigration = readIntuechoMigrations().find((item) => item.name === "014_correct_legacy_literature_snapshots.sql");
+  assert.ok(correctiveMigration);
+  await migrationPool.query(correctiveMigration.sql);
+  const correctedLegacySnapshot = await migrationPool.query(
+    "SELECT snapshot FROM literature_record_versions WHERE id = $1",
+    [legacySnapshotVersionId]
+  );
+  assert.deepEqual(correctedLegacySnapshot.rows[0].snapshot, {
+    authors: ["Legacy Author"],
+    documentType: "article",
+    identifiers: [{ kind: "doi", source: "metadata", value: "10.1000/migration-014" }],
+    literatureId: legacySnapshotLiteratureId,
+    recordSource: "legacy_metadata",
+    title: "Corrected legacy snapshot",
+    year: 2020
+  });
+  const restoredLiteratureVersionTrigger = await migrationPool.query(`
+    SELECT 1 FROM pg_trigger
+     WHERE tgname = 'literature_record_versions_append_only'
+       AND NOT tgisinternal
+  `);
+  assert.equal(restoredLiteratureVersionTrigger.rowCount, 1);
+  await assert.rejects(
+    () => migrationPool.query("UPDATE literature_record_versions SET changed_by = 'tampered' WHERE id = $1", [legacySnapshotVersionId]),
+    /literature_record_version_is_append_only/
+  );
   await migrationPool.query(`
     DO $$
     DECLARE tables text;
@@ -325,6 +368,35 @@ try {
   });
   const manualVersion = await pool.query("SELECT snapshot ->> 'title' AS title FROM literature_record_versions WHERE literature_id = $1 AND revision = 1", [manualLiterature.literatureId]);
   assert.equal(manualVersion.rows[0].title, "Integration Manual Literature");
+  const identityCorrectedLiterature = await annotations.confirmLiterature(literatureOwner, {
+    mode: "manual",
+    record: {
+      authors: ["Ada Lovelace"],
+      identifiers: [
+        { kind: "doi", source: "manual", value: "10.1000/integration-manual" },
+        { kind: "openalex_id", source: "manual", value: "w424242" }
+      ],
+      title: "Corrected Integration Literature",
+      year: 1843
+    }
+  });
+  assert.deepEqual(identityCorrectedLiterature.identifiers.map((identifier) => `${identifier.kind}:${identifier.value}`), [
+    "doi:10.1000/integration-manual",
+    "openalex_id:W424242"
+  ]);
+  const identityCorrectionState = await pool.query(`
+    SELECT
+      record.revision,
+      version.snapshot -> 'identifiers' AS prior_identifiers
+      FROM literature_records AS record
+      JOIN literature_record_versions AS version
+        ON version.literature_id = record.id AND version.revision = 2
+     WHERE record.id = $1
+  `, [manualLiterature.literatureId]);
+  assert.equal(Number(identityCorrectionState.rows[0].revision), 3);
+  assert.deepEqual(identityCorrectionState.rows[0].prior_identifiers, [
+    { kind: "doi", source: "manual", value: "10.1000/integration-manual" }
+  ]);
   const secondLiterature = await annotations.confirmLiterature(literatureOwner, {
     mode: "manual",
     record: {
@@ -350,6 +422,87 @@ try {
     /LITERATURE_IDENTITY_CONFLICT/
   );
   assert.equal((await annotations.findLiteratureByIdentifiers(secondLiterature.identifiers)).literatureId, secondLiterature.literatureId);
+  const verifiedLiterature = await annotations.confirmRefetchedLiterature(literatureOwner, {
+    candidateKey: "crossref:doi:10.1000/integration-verified",
+    provider: "crossref",
+    record: {
+      authors: ["Verified Integration Author"],
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/integration-verified" }],
+      title: "Verified Integration Literature",
+      year: 2026
+    }
+  });
+  const downgradeAttempt = await annotations.confirmLiterature(literatureOwner, {
+    mode: "manual",
+    record: {
+      authors: ["Spoofed Manual Author"],
+      identifiers: [
+        { kind: "doi", source: "manual", value: "10.1000/integration-verified" },
+        { kind: "arxiv_id", source: "manual", value: "2401.09999" }
+      ],
+      title: "Spoofed Manual Literature",
+      year: 1900
+    }
+  });
+  assert.equal(downgradeAttempt.title, "Verified Integration Literature");
+  assert.equal(downgradeAttempt.provenance.mode, "public_registry");
+  assert.deepEqual(downgradeAttempt.identifiers, verifiedLiterature.identifiers);
+  const protectedLegacySync = await annotations.syncDesktopAnnotations(literatureOwner, [
+    {
+      annotationId: "legacy-protect-verified",
+      body: "Legacy payload cannot rewrite verified literature.",
+      createdAt: "2026-08-09T00:10:00.000Z",
+      queueKey: "legacy-protect-verified",
+      targets: [{
+        kind: "whole_document",
+        literature: {
+          identity: { id: "doi:10.1000/integration-verified", kind: "doi", source: "metadata", value: "10.1000/integration-verified" },
+          metadata: { authors: ["Spoofed Legacy Author"], title: "Spoofed Verified Legacy Title", year: 1901 }
+        }
+      }],
+      updatedAt: "2026-08-09T00:10:00.000Z"
+    },
+    {
+      annotationId: "legacy-protect-manual",
+      body: "Legacy payload cannot rewrite manual canonical literature.",
+      createdAt: "2026-08-09T00:11:00.000Z",
+      queueKey: "legacy-protect-manual",
+      targets: [{
+        kind: "whole_document",
+        literature: {
+          identity: { id: "doi:10.1000/integration-manual", kind: "doi", source: "metadata", value: "10.1000/integration-manual" },
+          metadata: { authors: ["Spoofed Legacy Author"], title: "Spoofed Manual Legacy Title", year: 1902 }
+        }
+      }],
+      updatedAt: "2026-08-09T00:11:00.000Z"
+    }
+  ]);
+  assert.deepEqual(protectedLegacySync.map((result) => result.status), ["synced", "synced"]);
+  const protectedCanonicalRows = await pool.query(`
+    SELECT id, record_source, revision, title
+      FROM literature_records
+     WHERE id = ANY($1::text[])
+     ORDER BY id
+  `, [[manualLiterature.literatureId, verifiedLiterature.literatureId]]);
+  assert.deepEqual(protectedCanonicalRows.rows.map((row) => ({
+    id: row.id,
+    recordSource: row.record_source,
+    revision: Number(row.revision),
+    title: row.title
+  })), [
+    {
+      id: manualLiterature.literatureId,
+      recordSource: "manual",
+      revision: 3,
+      title: "Corrected Integration Literature"
+    },
+    {
+      id: verifiedLiterature.literatureId,
+      recordSource: "public_registry",
+      revision: 1,
+      title: "Verified Integration Literature"
+    }
+  ].sort((left, right) => left.id.localeCompare(right.id)));
   const userOne = { id: "user-1", initials: "同名", name: "同名研究者" };
   const userTwo = { id: "user-2", initials: "证据", name: "证据复核者" };
   assert.deepEqual(await annotations.updateProfile(userOne.id, {
@@ -604,6 +757,91 @@ try {
   const reversePublicationIds = Object.fromEntries(reversePublicationBatch.map((result) => [result.queueKey, result.remoteAnnotationId]));
   assert.deepEqual(reversePublicationIds, forwardPublicationIds);
 
+  const mixedPublicationOwner = { id: "mixed-publication-owner", initials: "MP", name: "Mixed Publication Owner" };
+  const mixedPublicationResults = await annotations.applyDesktopAnnotationPublications(mixedPublicationOwner, [
+    {
+      ...publicationOperation,
+      annotationId: "mixed-publication-a",
+      queueKey: "mixed-publication-a",
+      updatedAt: "2026-08-09T06:10:00.000Z"
+    },
+    {
+      ...publicationOperation,
+      annotationId: "mixed-publication-missing",
+      literatureId: "missing-mixed-publication-literature",
+      queueKey: "mixed-publication-missing",
+      updatedAt: "2026-08-09T06:10:00.000Z"
+    },
+    {
+      ...publicationOperation,
+      annotationId: "mixed-publication-b",
+      queueKey: "mixed-publication-b",
+      updatedAt: "2026-08-09T06:10:00.000Z"
+    }
+  ]);
+  assert.deepEqual(mixedPublicationResults.map((result) => result.state ?? result.error), [
+    "published",
+    "LITERATURE_NOT_FOUND",
+    "published"
+  ]);
+  assert.equal((await pool.query(
+    "SELECT count(*)::int AS count FROM desktop_annotation_publications WHERE owner_id = $1",
+    [mixedPublicationOwner.id]
+  )).rows[0].count, 2);
+
+  const rollbackPublicationOwner = { id: "rollback-publication-owner", initials: "RP", name: "Rollback Publication Owner" };
+  const rollbackBaseline = (await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM annotations) AS annotations,
+      (SELECT count(*)::int FROM annotation_targets) AS targets,
+      (SELECT count(*)::int FROM desktop_annotation_publications) AS publications
+  `)).rows[0];
+  await migrationPool.query(`
+    CREATE OR REPLACE FUNCTION inject_late_desktop_publication_failure() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      RAISE EXCEPTION 'injected_late_desktop_publication_failure';
+    END;
+    $$;
+    DROP TRIGGER IF EXISTS inject_late_desktop_publication_failure ON desktop_annotation_publications;
+    CREATE TRIGGER inject_late_desktop_publication_failure
+    BEFORE INSERT ON desktop_annotation_publications
+    FOR EACH ROW
+    WHEN (NEW.queue_key = 'rollback-publication-b')
+    EXECUTE FUNCTION inject_late_desktop_publication_failure();
+  `);
+  try {
+    await assert.rejects(
+      () => annotations.applyDesktopAnnotationPublications(rollbackPublicationOwner, [
+        {
+          ...publicationOperation,
+          annotationId: "rollback-publication-a",
+          queueKey: "rollback-publication-a",
+          updatedAt: "2026-08-09T06:20:00.000Z"
+        },
+        {
+          ...publicationOperation,
+          annotationId: "rollback-publication-b",
+          queueKey: "rollback-publication-b",
+          updatedAt: "2026-08-09T06:20:00.000Z"
+        }
+      ]),
+      /injected_late_desktop_publication_failure/
+    );
+  } finally {
+    await migrationPool.query(`
+      DROP TRIGGER IF EXISTS inject_late_desktop_publication_failure ON desktop_annotation_publications;
+      DROP FUNCTION IF EXISTS inject_late_desktop_publication_failure();
+    `);
+  }
+  const rollbackAfter = (await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM annotations) AS annotations,
+      (SELECT count(*)::int FROM annotation_targets) AS targets,
+      (SELECT count(*)::int FROM desktop_annotation_publications) AS publications
+  `)).rows[0];
+  assert.deepEqual(rollbackAfter, rollbackBaseline);
+
   const raceOwner = { id: "publication-deletion-race-user", initials: "RD", name: "Race Deletion User" };
   const raceOperation = {
     ...publicationOperation,
@@ -657,6 +895,64 @@ try {
       (SELECT count(*)::int FROM annotations WHERE author_id = $1) AS annotations
   `, [raceOwner.id]);
   assert.deepEqual(raceResidue.rows[0], { annotations: 0, publications: 0 });
+
+  const legacyRaceOwner = { id: "legacy-sync-deletion-race-user", initials: "LR", name: "Legacy Race User" };
+  const legacyRaceItem = {
+    annotationId: "legacy-sync-deletion-race",
+    body: "Compatibility sync must serialize with account deletion.",
+    createdAt: "2026-08-09T07:10:00.000Z",
+    queueKey: "legacy-sync-deletion-race",
+    targets: [{ kind: "whole_document", literature: { literatureId: manualLiterature.literatureId } }],
+    updatedAt: "2026-08-09T07:10:00.000Z"
+  };
+  const legacyRaceDeletionInput = {
+    idempotencyKey: "delete-legacy-sync-race-user:intuecho",
+    reason: "Barrier controlled legacy sync account deletion race",
+    requestedBy: "admin-1",
+    subjectId: legacyRaceOwner.id,
+    traceId: "trace-legacy-sync-delete-race"
+  };
+  const legacyRaceLifecycleKey = `intuecho-account-deletion:${legacyRaceOwner.id}`;
+  const legacyBarrier = await pool.connect();
+  let legacyBarrierLocked = false;
+  let racingLegacySync;
+  let racingLegacyDeletion;
+  let legacyRaceSetupError;
+  try {
+    await legacyBarrier.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [legacyRaceLifecycleKey]);
+    legacyBarrierLocked = true;
+    racingLegacySync = annotations.syncDesktopAnnotations(legacyRaceOwner, [legacyRaceItem]);
+    await waitForAdvisoryWait(1);
+    racingLegacyDeletion = new PostgresAccountLifecycleRepository(pool).deleteAccount(legacyRaceDeletionInput);
+    await waitForAdvisoryWait(2);
+    await legacyBarrier.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [legacyRaceLifecycleKey]);
+    legacyBarrierLocked = false;
+  } catch (error) {
+    legacyRaceSetupError = error;
+  } finally {
+    if (legacyBarrierLocked) {
+      await legacyBarrier.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [legacyRaceLifecycleKey]);
+    }
+    legacyBarrier.release();
+  }
+  if (legacyRaceSetupError) {
+    await Promise.allSettled([racingLegacySync, racingLegacyDeletion].filter(Boolean));
+    throw legacyRaceSetupError;
+  }
+  const [[legacyRaceSyncResult], legacyRaceDeletionResult] = await Promise.all([racingLegacySync, racingLegacyDeletion]);
+  assert.equal(legacyRaceDeletionResult.replayed, false);
+  if (legacyRaceSyncResult.status === "synced") {
+    assert.equal(legacyRaceDeletionResult.result.deletedAnnotationSyncs, 1);
+  } else {
+    assert.equal(legacyRaceSyncResult.error, "ANNOTATION_PUBLICATION_OWNER_DELETED");
+    assert.equal(legacyRaceDeletionResult.result.deletedAnnotationSyncs, 0);
+  }
+  const legacyRaceResidue = await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM desktop_annotation_syncs WHERE owner_id = $1) AS syncs,
+      (SELECT count(*)::int FROM annotations WHERE author_id = $1) AS annotations
+  `, [legacyRaceOwner.id]);
+  assert.deepEqual(legacyRaceResidue.rows[0], { annotations: 0, syncs: 0 });
 
   const privateRoot = await annotations.createAnnotation(userOne, {
     body: "账号删除时必须移除的私有批注。",

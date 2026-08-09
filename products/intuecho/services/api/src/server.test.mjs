@@ -271,8 +271,9 @@ function insertConfirmedPublicationLiterature(db, literatureId = "literature-pub
   return literatureId;
 }
 
-function postgresPublicationHarness() {
+function postgresPublicationHarness({ missingLiteratureIds = [] } = {}) {
   const annotations = new Map();
+  const missingLiterature = new Set(missingLiteratureIds);
   const publications = new Map();
   const queries = [];
   const client = {
@@ -284,6 +285,7 @@ function postgresPublicationHarness() {
         return { rows: publications.has(`${values[0]}:${values[1]}`) ? [publications.get(`${values[0]}:${values[1]}`)] : [] };
       }
       if (normalized.startsWith("SELECT * FROM literature_records")) {
+        if (missingLiterature.has(values[0])) return { rows: [] };
         const now = new Date("2026-08-09T00:00:00.000Z");
         return { rows: [{ authors: ["Confirmed Author"], confirmed_at: now, created_at: now, document_type: "journal_article", id: values[0], publication_year: 2026, record_source: "manual", revision: 1, source_provider: null, title: "Confirmed Literature", updated_at: now }] };
       }
@@ -551,6 +553,109 @@ test("reuses legacy normalized DOI values and preserves untouched legacy provena
   db.close();
 });
 
+test("legacy annotation routes cannot overwrite canonical literature metadata", async () => {
+  await withApp(async (app, db) => {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const owner = { id: "literature-owner", initials: "LO", name: "Literature Owner" };
+    const verified = await repository.confirmRefetchedLiterature(owner, {
+      candidateKey: "crossref:doi:10.1000/route-verified",
+      provider: "crossref",
+      record: {
+        authors: ["Verified Author"],
+        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/route-verified" }],
+        title: "Verified Route Literature",
+        year: 2026
+      }
+    });
+    const manual = await repository.confirmLiterature(owner, {
+      mode: "manual",
+      record: {
+        authors: ["Manual Author"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/route-manual" }],
+        title: "Manual Route Literature",
+        year: 2025
+      }
+    });
+
+    const created = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({
+        targets: [{
+          kind: "whole_document",
+          literature: {
+            identity: { id: "doi:10.1000/route-verified", kind: "doi", source: "metadata", value: "10.1000/route-verified" },
+            metadata: { authors: ["Spoofed Author"], title: "Spoofed Verified Title", year: 1900 }
+          }
+        }]
+      }),
+      url: "/v1/annotations"
+    });
+    assert.equal(created.statusCode, 201, created.body);
+
+    const synced = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: {
+        annotations: [{
+          annotationId: "legacy-canonical-protection",
+          body: "Legacy sync must not rewrite canonical literature.",
+          createdAt: "2026-08-09T01:00:00.000Z",
+          queueKey: "legacy-canonical-protection",
+          status: "pending_public",
+          targets: [{
+            kind: "whole_document",
+            literature: {
+              identity: { id: "doi:10.1000/route-manual", kind: "doi", source: "metadata", value: "10.1000/route-manual" },
+              metadata: { authors: ["Spoofed Author"], title: "Spoofed Manual Title", year: 1901 }
+            }
+          }],
+          updatedAt: "2026-08-09T01:00:00.000Z"
+        }]
+      },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(synced.statusCode, 200, synced.body);
+
+    assert.equal((await repository.findLiteratureById(verified.literatureId)).title, "Verified Route Literature");
+    assert.equal((await repository.findLiteratureById(manual.literatureId)).title, "Manual Route Literature");
+    assert.deepEqual(db.prepare("SELECT record_source, revision FROM literature_records_v2 WHERE id = ?").get(manual.literatureId), {
+      record_source: "manual",
+      revision: 1
+    });
+    assert.deepEqual(db.prepare("SELECT record_source, revision FROM literature_records_v2 WHERE id = ?").get(verified.literatureId), {
+      record_source: "public_registry",
+      revision: 1
+    });
+  });
+});
+
+test("annotation routes reject unsafe rectangle fields without persisting annotations or targets", async () => {
+  await withApp(async (app, db) => {
+    const payload = annotationV2Payload({
+      targets: [{
+        anchorHash: "sha256:unsafe-rectangle",
+        excerpt: "Unsafe nested payloads must not cross the annotation boundary.",
+        kind: "source_passage",
+        literature: annotationV2Payload().targets[0].literature,
+        page: 2,
+        rects: [{ fullText: "must not persist", height: 40, left: 12, top: 24, width: 180 }]
+      }]
+    });
+    const response = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload,
+      url: "/v1/annotations"
+    });
+
+    assert.equal(response.statusCode, 400, response.body);
+    assert.equal(response.json().error, "INVALID_ANNOTATION");
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotations_v2").get().count, 0);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_targets_v2").get().count, 0);
+  });
+});
+
 test("derives desktop publication targets from confirmed literature instead of caller metadata", async () => {
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);
@@ -642,6 +747,59 @@ test("rejects divergent same-version desktop publications in PostgreSQL", async 
   assert.equal(batch[1].error, "ANNOTATION_PUBLICATION_VERSION_CONFLICT");
   assert.equal(instance.annotations.get(batch[0].remoteAnnotationId).body, batchInitial.body);
   assert.match(instance.publications.get(`${author.id}:${initial.queueKey}`).operation_digest, /^[a-f0-9]{64}$/);
+});
+
+test("SQLite desktop publication batches preserve domain failures while committing valid operations", () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  const literatureId = insertConfirmedPublicationLiterature(db, "literature-mixed-sqlite");
+  const author = { id: "mixed-sqlite-owner", initials: "MS", name: "Mixed SQLite Owner" };
+  const results = repository.applyDesktopAnnotationPublications(author, [
+    publicationOperation({ annotationId: "mixed-sqlite-a", literatureId, queueKey: "mixed-sqlite-a" }),
+    publicationOperation({ annotationId: "mixed-sqlite-missing", literatureId: "missing-literature", queueKey: "mixed-sqlite-missing" }),
+    publicationOperation({ annotationId: "mixed-sqlite-b", literatureId, queueKey: "mixed-sqlite-b" })
+  ]);
+
+  assert.deepEqual(results.map((result) => result.state ?? result.error), ["published", "LITERATURE_NOT_FOUND", "published"]);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM desktop_annotation_publications_v2 WHERE owner_id = ?").get(author.id).count, 2);
+  db.close();
+});
+
+test("PostgreSQL desktop publication batches preserve domain failures while committing valid operations", async () => {
+  const instance = postgresPublicationHarness({ missingLiteratureIds: ["missing-literature"] });
+  const author = { id: "mixed-postgres-owner", initials: "MP", name: "Mixed PostgreSQL Owner" };
+  const results = await instance.repository.applyDesktopAnnotationPublications(author, [
+    publicationOperation({ annotationId: "mixed-postgres-a", queueKey: "mixed-postgres-a" }),
+    publicationOperation({ annotationId: "mixed-postgres-missing", literatureId: "missing-literature", queueKey: "mixed-postgres-missing" }),
+    publicationOperation({ annotationId: "mixed-postgres-b", queueKey: "mixed-postgres-b" })
+  ]);
+
+  assert.deepEqual(results.map((result) => result.state ?? result.error), ["published", "LITERATURE_NOT_FOUND", "published"]);
+  assert.equal(instance.publications.size, 2);
+});
+
+test("SQLite rolls back an entire desktop publication batch after a late database failure", () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  const literatureId = insertConfirmedPublicationLiterature(db, "literature-rollback-sqlite");
+  const author = { id: "rollback-sqlite-owner", initials: "RS", name: "Rollback SQLite Owner" };
+  db.exec(`
+    CREATE TRIGGER fail_late_desktop_publication_v2
+    BEFORE INSERT ON desktop_annotation_publications_v2
+    WHEN NEW.queue_key = 'rollback-sqlite-b'
+    BEGIN
+      SELECT RAISE(ABORT, 'injected_late_publication_failure');
+    END;
+  `);
+
+  assert.throws(() => repository.applyDesktopAnnotationPublications(author, [
+    publicationOperation({ annotationId: "rollback-sqlite-a", literatureId, queueKey: "rollback-sqlite-a" }),
+    publicationOperation({ annotationId: "rollback-sqlite-b", literatureId, queueKey: "rollback-sqlite-b" })
+  ]), /injected_late_publication_failure/);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM desktop_annotation_publications_v2 WHERE owner_id = ?").get(author.id).count, 0);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM annotations_v2 WHERE author_id = ?").get(author.id).count, 0);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_targets_v2").get().count, 0);
+  db.close();
 });
 
 test("acquires PostgreSQL literature identity locks in canonical key order", async () => {

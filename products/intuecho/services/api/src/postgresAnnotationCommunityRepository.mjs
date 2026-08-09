@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { withTransaction } from "./postgres.mjs";
 import { AnnotationCommunityError, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
 import {
+  canTransitionLiteratureSource,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
   titleAuthorsYearFingerprint
@@ -129,10 +130,16 @@ export class PostgresAnnotationCommunityRepository {
         const snapshot = await this.#literatureRecord(literatureId, client);
         await client.query("INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by, created_at) VALUES ($1, $2, 1, $3::jsonb, $4, $5)", [`literature_record_version_${randomUUID()}`, literatureId, JSON.stringify(snapshot), actor, now]);
       } else {
+        if (!canTransitionLiteratureSource(existing.record_source, source)) {
+          return this.#literatureRecord(literatureId, client);
+        }
         const currentAuthors = JSON.stringify(existing.authors ?? []);
         const nextAuthors = JSON.stringify(input.authors);
-        const identityMismatch = (await client.query("SELECT 1 FROM literature_identities WHERE literature_id = $1 AND identity_source <> $2 LIMIT 1", [literatureId, source])).rows[0];
-        const changed = existing.title !== input.title || currentAuthors !== nextAuthors || existing.publication_year !== (input.year ?? null) || existing.document_type !== (input.documentType ?? null) || existing.record_source !== source || existing.source_provider !== provider || Boolean(identityMismatch);
+        const existingIdentities = (await client.query("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities WHERE literature_id = $1 ORDER BY identity_kind, identity_value", [literatureId])).rows;
+        const existingIdentityKeys = new Set(existingIdentities.map((identifier) => `${identifier.kind}:${normalizeIdentity(identifier.kind, identifier.value)}`));
+        const identityMismatch = existingIdentities.some((identifier) => identifier.source !== source);
+        const identityAddition = normalized.some((identifier) => !existingIdentityKeys.has(`${identifier.kind}:${identifier.value}`));
+        const changed = existing.title !== input.title || currentAuthors !== nextAuthors || existing.publication_year !== (input.year ?? null) || existing.document_type !== (input.documentType ?? null) || existing.record_source !== source || existing.source_provider !== provider || identityMismatch || identityAddition;
         if (changed) {
           const current = await this.#literatureSnapshot(literatureId, client);
           const revision = Number(existing.revision ?? 1);
@@ -200,68 +207,76 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   async syncDesktopAnnotations(author, items) {
-    return withTransaction(this.pool, async (client) => {
-      const results = [];
-      for (const item of items) {
-        const priorResult = await client.query("SELECT * FROM desktop_annotation_syncs WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, item.queueKey]);
-        const prior = priorResult.rows[0];
-        const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
-        if (!prior) {
-          await client.query(`INSERT INTO annotations(id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, share_to_plaza, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'public', true, $7, $8)`, [id, item.body, author.id, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), item.createdAt, item.updatedAt]);
-          await this.#replaceTargets(client, id, item.targets);
-          await this.#assignPlatformTags(client, id, item.body, []);
-          await client.query(`INSERT INTO desktop_annotation_syncs(owner_id, queue_key, source_annotation_id, annotation_id, source_created_at, source_updated_at) VALUES ($1, $2, $3, $4, $5, $6)`, [author.id, item.queueKey, item.annotationId, id, item.createdAt, item.updatedAt]);
-        } else if (new Date(item.updatedAt) >= prior.source_updated_at) {
-          await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = $6 WHERE id = $1`, [id, item.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), item.updatedAt]);
-          await this.#replaceTargets(client, id, item.targets);
-          await this.#assignPlatformTags(client, id, item.body, []);
-          await client.query(`UPDATE desktop_annotation_syncs SET source_annotation_id = $3, source_updated_at = $4, updated_at = now() WHERE owner_id = $1 AND queue_key = $2`, [author.id, item.queueKey, item.annotationId, item.updatedAt]);
+    return this.#withDesktopPublicationLifecycle(author, items,
+      () => items.map((item) => this.#publicationFailure(item, "ANNOTATION_PUBLICATION_OWNER_DELETED")),
+      async (client) => {
+        const results = [];
+        for (const item of items) {
+          const priorResult = await client.query("SELECT * FROM desktop_annotation_syncs WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, item.queueKey]);
+          const prior = priorResult.rows[0];
+          const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
+          if (!prior) {
+            await client.query(`INSERT INTO annotations(id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, share_to_plaza, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'public', true, $7, $8)`, [id, item.body, author.id, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), item.createdAt, item.updatedAt]);
+            await this.#replaceTargets(client, id, item.targets, author.id);
+            await this.#assignPlatformTags(client, id, item.body, []);
+            await client.query(`INSERT INTO desktop_annotation_syncs(owner_id, queue_key, source_annotation_id, annotation_id, source_created_at, source_updated_at) VALUES ($1, $2, $3, $4, $5, $6)`, [author.id, item.queueKey, item.annotationId, id, item.createdAt, item.updatedAt]);
+          } else if (new Date(item.updatedAt) >= prior.source_updated_at) {
+            await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = $6 WHERE id = $1`, [id, item.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), item.updatedAt]);
+            await this.#replaceTargets(client, id, item.targets, author.id);
+            await this.#assignPlatformTags(client, id, item.body, []);
+            await client.query(`UPDATE desktop_annotation_syncs SET source_annotation_id = $3, source_updated_at = $4, updated_at = now() WHERE owner_id = $1 AND queue_key = $2`, [author.id, item.queueKey, item.annotationId, item.updatedAt]);
+          }
+          results.push({ annotationId: item.annotationId, intuechoAnnotationId: id, queueKey: item.queueKey, status: "synced", syncedAt: new Date().toISOString() });
         }
-        results.push({ annotationId: item.annotationId, intuechoAnnotationId: id, queueKey: item.queueKey, status: "synced", syncedAt: new Date().toISOString() });
-      }
-      return results;
-    });
+        return results;
+      });
   }
 
   async applyDesktopAnnotationPublications(author, operations) {
+    return this.#withDesktopPublicationLifecycle(author, operations,
+      () => operations.map((operation) => this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_OWNER_DELETED")),
+      async (client) => {
+        const results = [];
+        for (const operation of operations) {
+          const operationDigest = desktopAnnotationPublicationDigest(operation);
+          const priorResult = await client.query("SELECT * FROM desktop_annotation_publications WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, operation.queueKey]);
+          const prior = priorResult.rows[0];
+          if (prior && prior.source_annotation_id !== operation.annotationId) {
+            results.push(this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_QUEUE_CONFLICT"));
+            continue;
+          }
+          if (prior && this.#publicationIsStale(prior, operation)) {
+            results.push(this.#publicationFailure(operation, "STALE_ANNOTATION_PUBLICATION"));
+            continue;
+          }
+          if (prior && Number(prior.source_revision) === operation.revision && new Date(prior.source_updated_at).getTime() === new Date(operation.updatedAt).getTime()) {
+            if (prior.operation_digest !== operationDigest) {
+              results.push(this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_VERSION_CONFLICT"));
+              continue;
+            }
+            results.push(this.#publicationResult(operation, prior));
+            continue;
+          }
+          if (operation.operation === "retract") {
+            results.push(await this.#retractDesktopPublication(client, author, operation, operationDigest, prior));
+          } else {
+            results.push(await this.#upsertDesktopPublication(client, author, operation, operationDigest, prior));
+          }
+        }
+        return results;
+      });
+  }
+
+  async #withDesktopPublicationLifecycle(author, items, deletedResult, operation) {
     return withTransaction(this.pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`intuecho-account-deletion:${author.id}`]);
       const deleted = await client.query("SELECT 1 FROM account_deletion_jobs WHERE subject_id = $1", [author.id]);
-      if (deleted.rows[0]) {
-        return operations.map((operation) => this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_OWNER_DELETED"));
-      }
-      const queueKeys = [...new Set(operations.map((operation) => operation.queueKey))].sort();
+      if (deleted.rows[0]) return deletedResult();
+      const queueKeys = [...new Set(items.map((item) => item.queueKey))].sort();
       for (const queueKey of queueKeys) {
         await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`desktop-publication:${author.id}:${queueKey}`]);
       }
-      const results = [];
-      for (const operation of operations) {
-        const operationDigest = desktopAnnotationPublicationDigest(operation);
-        const priorResult = await client.query("SELECT * FROM desktop_annotation_publications WHERE owner_id = $1 AND queue_key = $2 FOR UPDATE", [author.id, operation.queueKey]);
-        const prior = priorResult.rows[0];
-        if (prior && prior.source_annotation_id !== operation.annotationId) {
-          results.push(this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_QUEUE_CONFLICT"));
-          continue;
-        }
-        if (prior && this.#publicationIsStale(prior, operation)) {
-          results.push(this.#publicationFailure(operation, "STALE_ANNOTATION_PUBLICATION"));
-          continue;
-        }
-        if (prior && Number(prior.source_revision) === operation.revision && new Date(prior.source_updated_at).getTime() === new Date(operation.updatedAt).getTime()) {
-          if (prior.operation_digest !== operationDigest) {
-            results.push(this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_VERSION_CONFLICT"));
-            continue;
-          }
-          results.push(this.#publicationResult(operation, prior));
-          continue;
-        }
-        if (operation.operation === "retract") {
-          results.push(await this.#retractDesktopPublication(client, author, operation, operationDigest, prior));
-        } else {
-          results.push(await this.#upsertDesktopPublication(client, author, operation, operationDigest, prior));
-        }
-      }
-      return results;
+      return operation(client);
     });
   }
 
@@ -314,7 +329,7 @@ export class PostgresAnnotationCommunityRepository {
       remoteRevision = Number(annotation.rows[0].revision) + 1;
       await client.query("UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, visibility = 'public', organization_id = NULL, share_to_plaza = true, revision = $6, updated_at = $7 WHERE id = $1", [id, operation.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), remoteRevision, operation.updatedAt]);
     }
-    await this.#replaceTargets(client, id, [this.#publicationTarget(confirmed.literatureId, operation.sourcePassage)]);
+    await this.#replaceTargets(client, id, [this.#publicationTarget(confirmed.literatureId, operation.sourcePassage)], author.id);
     await this.#assignPlatformTags(client, id, operation.body, []);
     const syncedAt = new Date().toISOString();
     if (!prior) {
@@ -385,6 +400,17 @@ export class PostgresAnnotationCommunityRepository {
     const row = result.rows[0];
     if (!row) return null;
     const identities = await client.query("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities WHERE literature_id = $1 ORDER BY identity_kind, identity_value", [id]);
+    if (row.record_source === "legacy_metadata") {
+      return {
+        authors: Array.isArray(row.authors) ? row.authors : [],
+        identifiers: identities.rows,
+        literatureId: row.id,
+        recordSource: "legacy_metadata",
+        title: row.title,
+        ...(row.document_type ? { documentType: row.document_type } : {}),
+        ...(row.publication_year === null || row.publication_year === undefined ? {} : { year: row.publication_year })
+      };
+    }
     const mode = row.record_source === "public_registry" ? "public_registry" : "manual";
     const confirmedAtValue = row.confirmed_at ?? row.updated_at;
     const confirmedAt = confirmedAtValue instanceof Date ? confirmedAtValue.toISOString() : new Date(confirmedAtValue).toISOString();
@@ -419,7 +445,7 @@ export class PostgresAnnotationCommunityRepository {
     return literatureIds;
   }
 
-  async #resolveLiterature(client, reference) {
+  async #resolveLiterature(client, reference, changedBy) {
     if (reference?.literatureId) {
       const found = await client.query("SELECT 1 FROM literature_records WHERE id = $1", [reference.literatureId]);
       if (!found.rows[0]) throw new AnnotationCommunityError("LITERATURE_NOT_FOUND", 404);
@@ -431,24 +457,36 @@ export class PostgresAnnotationCommunityRepository {
     const matching = await this.#matchingLiteratureIds([{ kind, value }], client, true);
     if (matching.size) {
       const id = [...matching][0];
-      await client.query(`UPDATE literature_records SET title = $2, authors = $3::jsonb, publication_year = $4, document_type = $5, updated_at = now() WHERE id = $1`, [id, reference.metadata.title, JSON.stringify(reference.metadata.authors), reference.metadata.year ?? null, reference.metadata.documentType ?? null]);
+      const existing = (await client.query("SELECT * FROM literature_records WHERE id = $1 FOR UPDATE", [id])).rows[0];
+      if (!existing || existing.record_source !== "legacy_metadata") return id;
+      const nextAuthors = JSON.stringify(reference.metadata.authors);
+      const changed = existing.title !== reference.metadata.title || JSON.stringify(existing.authors ?? []) !== nextAuthors || existing.publication_year !== (reference.metadata.year ?? null) || existing.document_type !== (reference.metadata.documentType ?? null);
+      if (changed) {
+        const revision = Number(existing.revision ?? 1);
+        const snapshot = await this.#literatureSnapshot(id, client, existing);
+        const now = new Date();
+        await client.query("INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by, created_at) VALUES ($1, $2, $3, $4::jsonb, $5, $6) ON CONFLICT (literature_id, revision) DO NOTHING", [`literature_record_version_${randomUUID()}`, id, revision, JSON.stringify(snapshot), changedBy, now]);
+        await client.query(`UPDATE literature_records SET title = $2, authors = $3::jsonb, publication_year = $4, document_type = $5, revision = $6, updated_at = $7 WHERE id = $1`, [id, reference.metadata.title, nextAuthors, reference.metadata.year ?? null, reference.metadata.documentType ?? null, revision + 1, now]);
+      }
       return id;
     }
     const id = `literature_${randomUUID()}`;
     await client.query(`INSERT INTO literature_records(id, title, authors, publication_year, document_type) VALUES ($1, $2, $3::jsonb, $4, $5)`, [id, reference.metadata.title, JSON.stringify(reference.metadata.authors), reference.metadata.year ?? null, reference.metadata.documentType ?? null]);
     await client.query(`INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source) VALUES ($1, $2, $3, $4)`, [id, kind, value, reference.identity.source]);
+    const snapshot = await this.#literatureSnapshot(id, client);
+    await client.query("INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by) VALUES ($1, $2, 1, $3::jsonb, $4)", [`literature_record_version_${randomUUID()}`, id, JSON.stringify(snapshot), changedBy]);
     return id;
   }
 
-  async #replaceTargets(client, annotationId, targets) {
+  async #replaceTargets(client, annotationId, targets, changedBy) {
     await client.query("DELETE FROM annotation_targets WHERE annotation_id = $1", [annotationId]);
     for (const [targetPosition, target] of targets.entries()) {
       const targetId = `target_${randomUUID()}`;
-      const literatureId = await this.#resolveLiterature(client, target.literature);
+      const literatureId = await this.#resolveLiterature(client, target.literature, changedBy);
       await client.query(`INSERT INTO annotation_targets(id, annotation_id, literature_id, target_kind, position, target) VALUES ($1, $2, $3, $4, $5, $6::jsonb)`, [targetId, annotationId, literatureId, target.kind, targetPosition, JSON.stringify(target)]);
       if (target.kind === "derived_passage") {
         for (const [position, evidence] of target.evidence.entries()) {
-          await client.query(`INSERT INTO annotation_target_evidence(target_id, position, literature_id, evidence) VALUES ($1, $2, $3, $4::jsonb)`, [targetId, position, await this.#resolveLiterature(client, evidence.literature), JSON.stringify(evidence)]);
+          await client.query(`INSERT INTO annotation_target_evidence(target_id, position, literature_id, evidence) VALUES ($1, $2, $3, $4::jsonb)`, [targetId, position, await this.#resolveLiterature(client, evidence.literature, changedBy), JSON.stringify(evidence)]);
         }
       }
     }
@@ -550,7 +588,7 @@ export class PostgresAnnotationCommunityRepository {
         INSERT INTO annotations(id, parent_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza)
         VALUES ($1, NULL, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
       `, [id, input.body, author.id, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), input.visibility, input.organizationId ?? null, input.shareToPlaza]);
-      await this.#replaceTargets(client, id, input.targets);
+      await this.#replaceTargets(client, id, input.targets, author.id);
       await this.#replaceUserTags(client, id, input.tags);
       await this.#assignPlatformTags(client, id, input.body, input.tags);
       return this.annotation(id, author, client);
@@ -574,7 +612,7 @@ export class PostgresAnnotationCommunityRepository {
       const oldTags = await this.#tags(id, client);
       await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`, [`annotation_version_${randomUUID()}`, id, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), row.visibility, row.organization_id, row.share_to_plaza, JSON.stringify(oldTargets), JSON.stringify(oldTags), author.id]);
       await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, visibility = $6, organization_id = $7, share_to_plaza = $8, revision = revision + 1, updated_at = now() WHERE id = $1`, [id, update.body ?? row.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), visibility, organizationId, shareToPlaza]);
-      if (update.targets) await this.#replaceTargets(client, id, update.targets);
+      if (update.targets) await this.#replaceTargets(client, id, update.targets, author.id);
       if (update.tags) await this.#replaceUserTags(client, id, update.tags);
       const userTags = update.tags ?? (await client.query(`SELECT tags.name FROM annotation_tags JOIN tags ON tags.id = annotation_tags.tag_id WHERE annotation_tags.annotation_id = $1 AND annotation_tags.origin = 'user'`, [id])).rows.map((tag) => tag.name);
       await this.#assignPlatformTags(client, id, update.body ?? row.body, userTags);
@@ -657,7 +695,7 @@ export class PostgresAnnotationCommunityRepository {
       await client.query(`INSERT INTO annotation_replies(id, parent_annotation_id, derived_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id) VALUES ($1, $2, NULL, $3, $4, $5, $6, $7::jsonb, $8, $9)`, [replyId, parentAnnotationId, input.body, author.id, author.name, author.initials, profile, parent.visibility, parent.organization_id]);
       if (derivedAnnotationId) {
         await client.query(`INSERT INTO annotations(id, source_reply_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)`, [derivedAnnotationId, replyId, input.body, author.id, author.name, author.initials, profile, parent.visibility, parent.organization_id, input.shareToPlaza]);
-        await this.#replaceTargets(client, derivedAnnotationId, input.targets);
+        await this.#replaceTargets(client, derivedAnnotationId, input.targets, author.id);
         await this.#replaceUserTags(client, derivedAnnotationId, input.tags);
         await this.#assignPlatformTags(client, derivedAnnotationId, input.body, input.tags);
         await client.query("UPDATE annotation_replies SET derived_annotation_id = $2 WHERE id = $1", [replyId, derivedAnnotationId]);

@@ -91,17 +91,20 @@ function sharesIdentity(left, right) {
   return [...identityKeys(right)].some((key) => leftKeys.has(key));
 }
 
-function mergeExternalCandidates(left, right) {
-  if (left.provider === "intuecho") return left;
-  if (right.provider === "intuecho") return right;
-  const identifiers = normalizedIdentifiers([...left.record.identifiers, ...right.record.identifiers]);
-  return {
-    ...left,
-    record: { ...left.record, identifiers }
-  };
+function attestsRequestedIdentity(candidate, requestedKeys) {
+  return [...identityKeys(candidate)].some((key) => requestedKeys.has(key));
 }
 
-function rankAndDeduplicate(candidates) {
+function selectRepresentative(left, right, requestedKeys) {
+  const leftAttests = attestsRequestedIdentity(left, requestedKeys);
+  const rightAttests = attestsRequestedIdentity(right, requestedKeys);
+  if (leftAttests !== rightAttests) return rightAttests ? right : left;
+  if (left.provider === "intuecho") return left;
+  if (right.provider === "intuecho") return right;
+  return left;
+}
+
+function rankAndDeduplicate(candidates, requestedKeys) {
   const ranked = [];
   for (const candidate of candidates) {
     const matching = ranked.map((existing, index) => sharesIdentity(existing, candidate) ? index : -1).filter((index) => index >= 0);
@@ -110,16 +113,21 @@ function rankAndDeduplicate(candidates) {
       continue;
     }
     const matched = matching.map((index) => ranked[index]);
-    let merged = matched.find((item) => item.provider === "intuecho") ?? matched[0];
+    let representative = matched[0];
     for (const item of matched) {
-      if (item !== merged) merged = mergeExternalCandidates(merged, item);
+      if (item !== representative) representative = selectRepresentative(representative, item, requestedKeys);
     }
-    merged = mergeExternalCandidates(merged, candidate);
+    representative = selectRepresentative(representative, candidate, requestedKeys);
     const retained = ranked.filter((_item, index) => !matching.includes(index));
-    retained.splice(matching[0], 0, merged);
+    retained.splice(matching[0], 0, representative);
     ranked.splice(0, ranked.length, ...retained);
   }
-  return ranked.slice(0, MAX_CANDIDATES);
+  return ranked;
+}
+
+function requestedLimit(input) {
+  const requested = Number(input?.limit ?? MAX_CANDIDATES);
+  return Math.max(1, Math.min(Number.isInteger(requested) ? requested : MAX_CANDIDATES, MAX_CANDIDATES));
 }
 
 function requestedStableIdentifiers(input) {
@@ -188,14 +196,16 @@ export function createLiteratureResolver({ providers, repository }) {
   if (!repository) throw new TypeError("repository is required");
   return Object.freeze({
     async resolve(owner, input) {
+      const limit = requestedLimit(input);
       const query = input?.query ?? input?.hints?.title ?? input?.hints?.identifiers?.[0]?.value ?? "";
       const requestedIdentifiers = requestedStableIdentifiers(input);
+      const requestedKeys = new Set(requestedIdentifiers.map((identifier) => `${identifier.kind}:${identifier.value}`));
       if (requestedIdentifiers.length > 0) {
         const identified = await repository.findLiteratureByIdentifiers(requestedIdentifiers);
         const exact = internalCandidate(identified);
         if (exact) return { candidate: exact, status: "exact", unavailableProviders: [] };
       }
-      const stored = await repository.searchStoredLiterature(query, MAX_CANDIDATES);
+      const stored = await repository.searchStoredLiterature(query, limit);
       const external = await Promise.allSettled(configuredProviders.map((provider) => provider.search(input)));
       const unavailableProviders = external.flatMap((result, index) => result.status === "rejected" ? [configuredProviders[index].name] : []);
       const providerCandidates = external.flatMap((result, index) => result.status === "fulfilled"
@@ -204,7 +214,7 @@ export function createLiteratureResolver({ providers, repository }) {
       const candidates = rankAndDeduplicate([
         ...(Array.isArray(stored) ? stored.map(internalCandidate).filter(Boolean) : []),
         ...providerCandidates
-      ]);
+      ], requestedKeys).slice(0, limit);
       const exact = exactCandidate(input, candidates);
       if (exact) return { candidate: exact, status: "exact", unavailableProviders };
       if (candidates.length) return { candidates, status: "ambiguous", unavailableProviders };

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   annotationTargetSchema,
   desktopAnnotationPublicationBatchSchema,
+  literatureCandidateSchema,
   literatureConfirmInputSchema,
   literatureRecordSchema,
   literatureResolveInputSchema
@@ -150,5 +151,68 @@ test("validates publication operations without accepting literature metadata or 
       updatedAt: "2026-08-09T00:01:00.000Z",
       visibility: "private"
     }]
+  }).success, false);
+});
+
+test("accepts only strict finite publication rectangles", () => {
+  const operation = {
+    annotationId: "annotation_1",
+    body: "A source annotation.",
+    literatureId: "literature_1",
+    operation: "upsert",
+    queueKey: "queue_1",
+    revision: 1,
+    sourcePassage: {
+      anchorHash: "sha256:passage",
+      excerpt: "A source passage.",
+      rects: [{ height: 40.5, left: 12, top: 24, width: 180 }]
+    },
+    updatedAt: "2026-08-09T00:00:00.000Z"
+  };
+  assert.equal(desktopAnnotationPublicationBatchSchema.safeParse({ operations: [operation] }).success, true);
+  assert.equal(desktopAnnotationPublicationBatchSchema.safeParse({
+    operations: [{
+      ...operation,
+      sourcePassage: {
+        ...operation.sourcePassage,
+        rects: [{ height: 40, left: 12, pdfBytes: "base64", top: 24, width: 180 }]
+      }
+    }]
+  }).success, false);
+  assert.equal(desktopAnnotationPublicationBatchSchema.safeParse({
+    operations: [{
+      ...operation,
+      sourcePassage: {
+        ...operation.sourcePassage,
+        rects: [{ height: 40, left: 12, top: 24, width: Number.POSITIVE_INFINITY }]
+      }
+    }]
+  }).success, false);
+  assert.equal(annotationTargetSchema.safeParse({
+    anchorHash: "sha256:passage",
+    excerpt: "A source passage.",
+    kind: "source_passage",
+    literature: { literatureId: "literature_1" },
+    rects: [{ fullText: "must not cross the API", height: 40, left: 12, top: 24, width: 180 }]
+  }).success, false);
+});
+
+test("declares optional HTTPS provider record URLs", () => {
+  const candidate = {
+    candidateKey: "crossref:doi:10.1000/record-url",
+    provider: "crossref",
+    record: {
+      authors: ["A. Author"],
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/record-url" }],
+      title: "A Paper"
+    }
+  };
+  assert.equal(literatureCandidateSchema.parse({
+    ...candidate,
+    recordUrl: "https://doi.org/10.1000/record-url"
+  }).recordUrl, "https://doi.org/10.1000/record-url");
+  assert.equal(literatureCandidateSchema.safeParse({
+    ...candidate,
+    recordUrl: "http://example.test/record-url"
   }).success, false);
 });

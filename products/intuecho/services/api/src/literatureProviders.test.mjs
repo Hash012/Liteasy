@@ -153,7 +153,8 @@ test("projects OpenAlex search and exact re-fetch records with canonical identif
   }, {
     fetchImpl: async (requestUrl, options) => {
       const url = new URL(requestUrl);
-      assert.equal(options.headers.authorization, "Bearer server-only-key");
+      assert.equal(url.searchParams.get("api_key"), "server-only-key");
+      assert.equal(options.headers.authorization, undefined);
       if (url.pathname.endsWith("/W123")) return jsonResponse(openAlexWork);
       assert.equal(url.searchParams.get("filter"), "doi:10.1000/openalex");
       assert.equal(url.searchParams.get("per-page"), "10");

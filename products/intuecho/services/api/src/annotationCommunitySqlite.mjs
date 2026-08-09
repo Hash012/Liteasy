@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   LiteratureIdentityConflictError,
+  canTransitionLiteratureSource,
   normalizeLiteratureIdentifier,
   titleAuthorsYearFingerprint
 } from "./literatureIdentity.mjs";
@@ -338,8 +339,16 @@ export class SqliteAnnotationCommunityRepository {
         this.db.prepare("INSERT INTO literature_record_versions_v2(id, literature_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, 1, ?, ?, ?)")
           .run(`literature_record_version_${randomUUID()}`, literatureId, snapshot, actor, now);
       } else {
-        const identityMismatch = this.db.prepare("SELECT 1 FROM literature_identities_v2 WHERE literature_id = ? AND identity_source <> ? LIMIT 1").get(literatureId, source);
-        const changed = existing.title !== input.title || existing.authors_json !== JSON.stringify(input.authors) || existing.publication_year !== (input.year ?? null) || existing.document_type !== (input.documentType ?? null) || existing.record_source !== source || existing.source_provider !== provider || Boolean(identityMismatch);
+        if (!canTransitionLiteratureSource(existing.record_source, source)) {
+          return this.#literatureRecord(literatureId);
+        }
+        const existingIdentifiers = this.db.prepare("SELECT identity_kind, identity_value, identity_source FROM literature_identities_v2 WHERE literature_id = ?").all(literatureId);
+        const existingKeys = new Set(existingIdentifiers.map((identifier) => (
+          `${identifier.identity_kind}:${normalizeIdentity(identifier.identity_kind, identifier.identity_value)}`
+        )));
+        const newAlias = normalized.some((identifier) => !existingKeys.has(`${identifier.kind}:${identifier.value}`));
+        const identitySourceChange = existingIdentifiers.some((identifier) => identifier.identity_source !== source);
+        const changed = existing.title !== input.title || existing.authors_json !== JSON.stringify(input.authors) || existing.publication_year !== (input.year ?? null) || existing.document_type !== (input.documentType ?? null) || existing.record_source !== source || existing.source_provider !== provider || identitySourceChange || newAlias;
         if (changed) {
           const current = this.#literatureSnapshot(literatureId);
           const revision = Number(existing.revision ?? 1);
@@ -403,14 +412,14 @@ export class SqliteAnnotationCommunityRepository {
       if (!prior) {
         this.db.prepare(`INSERT INTO annotations_v2(id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'public', NULL, 1, 1, ?, ?)`)
           .run(id, item.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), item.createdAt, item.updatedAt);
-        this.#replaceTargets(id, item.targets, syncedAt);
+        this.#replaceTargets(id, item.targets, syncedAt, author.id);
         this.#assignPlatformTags(id, item.body, [], syncedAt);
         this.db.prepare("INSERT INTO desktop_annotation_syncs_v2(owner_id, queue_key, source_annotation_id, annotation_id, source_created_at, source_updated_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
           .run(author.id, item.queueKey, item.annotationId, id, item.createdAt, item.updatedAt, syncedAt);
       } else if (Date.parse(item.updatedAt) >= Date.parse(prior.source_updated_at)) {
         this.db.prepare("UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?")
           .run(item.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), item.updatedAt, id);
-        this.#replaceTargets(id, item.targets, syncedAt);
+        this.#replaceTargets(id, item.targets, syncedAt, author.id);
         this.#assignPlatformTags(id, item.body, [], syncedAt);
         this.db.prepare("UPDATE desktop_annotation_syncs_v2 SET source_annotation_id = ?, source_updated_at = ?, updated_at = ? WHERE owner_id = ? AND queue_key = ?")
           .run(item.annotationId, item.updatedAt, syncedAt, author.id, item.queueKey);
@@ -488,7 +497,7 @@ export class SqliteAnnotationCommunityRepository {
       this.db.prepare("UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = 'public', organization_id = NULL, share_to_plaza = 1, revision = ?, updated_at = ? WHERE id = ?")
         .run(operation.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), remoteRevision, operation.updatedAt, id);
     }
-    this.#replaceTargets(id, [this.#publicationTarget(confirmed.literatureId, operation.sourcePassage)], now);
+    this.#replaceTargets(id, [this.#publicationTarget(confirmed.literatureId, operation.sourcePassage)], now, author.id);
     this.#assignPlatformTags(id, operation.body, [], now);
     if (!prior) {
       this.db.prepare("INSERT INTO desktop_annotation_publications_v2(owner_id, queue_key, source_annotation_id, annotation_id, source_revision, source_updated_at, operation_digest, state, remote_revision, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'published', ?, ?)")
@@ -602,7 +611,7 @@ export class SqliteAnnotationCommunityRepository {
     return literatureIds;
   }
 
-  #resolveLiterature(reference, now) {
+  #resolveLiterature(reference, now, changedBy) {
     if (reference?.literatureId) {
       if (!this.db.prepare("SELECT 1 FROM literature_records_v2 WHERE id = ?").get(reference.literatureId)) {
         throw new AnnotationCommunityError("LITERATURE_NOT_FOUND", 404);
@@ -612,31 +621,42 @@ export class SqliteAnnotationCommunityRepository {
     const kind = reference.identity.kind;
     const value = normalizeIdentity(kind, reference.identity.value);
     const matching = this.#matchingLiteratureIds([{ kind, value }]);
-    const existing = matching.size ? { literature_id: [...matching][0] } : null;
-    const id = existing?.literature_id ?? `literature_${randomUUID()}`;
+    const id = matching.size ? [...matching][0] : `literature_${randomUUID()}`;
+    const existing = matching.size ? this.db.prepare("SELECT * FROM literature_records_v2 WHERE id = ?").get(id) : null;
     if (!existing) {
       this.db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, publication_year, document_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .run(id, reference.metadata.title, JSON.stringify(reference.metadata.authors), reference.metadata.year ?? null, reference.metadata.documentType ?? null, now, now);
       this.db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)")
         .run(id, kind, value, reference.identity.source, now);
+      this.db.prepare("INSERT INTO literature_record_versions_v2(id, literature_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, 1, ?, ?, ?)")
+        .run(`literature_record_version_${randomUUID()}`, id, JSON.stringify(this.#literatureSnapshot(id)), changedBy, now);
+    } else if (existing.record_source === "legacy_metadata") {
+      const authors = JSON.stringify(reference.metadata.authors);
+      const changed = existing.title !== reference.metadata.title || existing.authors_json !== authors || existing.publication_year !== (reference.metadata.year ?? null) || existing.document_type !== (reference.metadata.documentType ?? null);
+      if (changed) {
+        const revision = Number(existing.revision ?? 1);
+        this.db.prepare("INSERT OR IGNORE INTO literature_record_versions_v2(id, literature_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+          .run(`literature_record_version_${randomUUID()}`, id, revision, JSON.stringify(this.#literatureSnapshot(id)), changedBy, now);
+        this.db.prepare("UPDATE literature_records_v2 SET title = ?, authors_json = ?, publication_year = ?, document_type = ?, revision = ?, updated_at = ? WHERE id = ?")
+          .run(reference.metadata.title, authors, reference.metadata.year ?? null, reference.metadata.documentType ?? null, revision + 1, now, id);
+      }
     } else {
-      this.db.prepare("UPDATE literature_records_v2 SET title = ?, authors_json = ?, publication_year = ?, document_type = ?, updated_at = ? WHERE id = ?")
-        .run(reference.metadata.title, JSON.stringify(reference.metadata.authors), reference.metadata.year ?? null, reference.metadata.documentType ?? null, now, id);
+      // Confirmed manual and registry records are immutable to legacy desktop metadata.
     }
     return id;
   }
 
-  #replaceTargets(annotationId, targets, now) {
+  #replaceTargets(annotationId, targets, now, changedBy) {
     this.db.prepare("DELETE FROM annotation_target_evidence_v2 WHERE target_id IN (SELECT id FROM annotation_targets_v2 WHERE annotation_id = ?)").run(annotationId);
     this.db.prepare("DELETE FROM annotation_targets_v2 WHERE annotation_id = ?").run(annotationId);
     const insertTarget = this.db.prepare("INSERT INTO annotation_targets_v2(id, annotation_id, literature_id, target_kind, position, target_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
     const insertEvidence = this.db.prepare("INSERT INTO annotation_target_evidence_v2(target_id, position, literature_id, evidence_json) VALUES (?, ?, ?, ?)");
     for (const [targetPosition, target] of targets.entries()) {
       const targetId = `target_${randomUUID()}`;
-      const literatureId = this.#resolveLiterature(target.literature, now);
+      const literatureId = this.#resolveLiterature(target.literature, now, changedBy);
       insertTarget.run(targetId, annotationId, literatureId, target.kind, targetPosition, JSON.stringify(target), now);
       for (const [position, evidence] of (target.kind === "derived_passage" ? target.evidence : []).entries()) {
-        insertEvidence.run(targetId, position, this.#resolveLiterature(evidence.literature, now), JSON.stringify(evidence));
+        insertEvidence.run(targetId, position, this.#resolveLiterature(evidence.literature, now, changedBy), JSON.stringify(evidence));
       }
     }
   }
@@ -737,7 +757,7 @@ export class SqliteAnnotationCommunityRepository {
         INSERT INTO annotations_v2(id, parent_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at)
         VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       `).run(id, input.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), input.visibility, input.organizationId ?? null, input.shareToPlaza ? 1 : 0, now, now);
-      this.#replaceTargets(id, input.targets, now);
+      this.#replaceTargets(id, input.targets, now, author.id);
       this.#replaceUserTags(id, input.tags, now);
       this.#assignPlatformTags(id, input.body, input.tags, now);
     })();
@@ -764,7 +784,7 @@ export class SqliteAnnotationCommunityRepository {
         .run(`annotation_version_${randomUUID()}`, id, row.revision, JSON.stringify(this.#serialize(row, author)), author.id, now);
       this.db.prepare(`UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = ?, organization_id = ?, share_to_plaza = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
         .run(update.body ?? row.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), visibility, organizationId, shareToPlaza ? 1 : 0, now, id);
-      if (update.targets) this.#replaceTargets(id, update.targets, now);
+      if (update.targets) this.#replaceTargets(id, update.targets, now, author.id);
       if (update.tags) this.#replaceUserTags(id, update.tags, now);
       this.#assignPlatformTags(id, update.body ?? row.body, update.tags ?? this.#tags(id).filter((tag) => tag.origin === "user").map((tag) => tag.name), now);
     })();
@@ -843,7 +863,7 @@ export class SqliteAnnotationCommunityRepository {
       if (derivedAnnotationId) {
         this.db.prepare(`INSERT INTO annotations_v2(id, parent_annotation_id, source_reply_id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
           .run(derivedAnnotationId, replyId, input.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), parent.visibility, parent.organization_id, input.shareToPlaza ? 1 : 0, now, now);
-        this.#replaceTargets(derivedAnnotationId, input.targets, now);
+        this.#replaceTargets(derivedAnnotationId, input.targets, now, author.id);
         this.#replaceUserTags(derivedAnnotationId, input.tags, now);
         this.#assignPlatformTags(derivedAnnotationId, input.body, input.tags, now);
       }

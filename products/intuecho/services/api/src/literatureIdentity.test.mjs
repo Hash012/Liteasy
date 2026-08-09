@@ -32,6 +32,15 @@ test("normalizes arXiv abs and PDF URLs to the versionless identifier", () => {
   assert.equal(normalizeLiteratureIdentifier("arxiv_id", "https://arxiv.org/pdf/2401.01234v2.pdf"), "2401.01234");
 });
 
+test("canonicalizes case-insensitive OpenAlex work identifiers", () => {
+  assert.equal(normalizeLiteratureIdentifier("openalex_id", "w123"), "W123");
+  assert.equal(normalizeLiteratureIdentifier("openalex_id", "https://openalex.org/w456"), "W456");
+  assert.throws(
+    () => normalizeLiteratureIdentifier("openalex_id", "authors/A123"),
+    (error) => error instanceof LiteratureIdentityConflictError && error.code === "LITERATURE_IDENTITY_REQUIRED"
+  );
+});
+
 test("fingerprints normalized title, ordered authors, and year", () => {
   assert.equal(
     titleAuthorsYearFingerprint({
