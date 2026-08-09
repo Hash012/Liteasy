@@ -100,6 +100,28 @@ describe("projectAssociationPageGraph", () => {
       ]);
   });
 
+  test("keeps the shared paper budget when anchor coverage alone exceeds 24", () => {
+    const anchors = Array.from({ length: 25 }, (_, index) => ({
+      anchorId: `anchor-${String(index + 1).padStart(2, "0")}`,
+      quality: { score: 1 - index * 0.01 }
+    }));
+    const graph = projectAssociationPageGraph({
+      anchors,
+      paperEdges: [],
+      sourcesByAnchor: Object.fromEntries(anchors.map((anchor, index) => [
+        anchor.anchorId,
+        [source(`source-${index + 1}`, {
+          canonicalPaperId: `openalex:W${String(index + 1).padStart(3, "0")}`
+        })]
+      ]))
+    });
+
+    expect(graph.paperNodes).toHaveLength(24);
+    expect(graph.hiddenPaperCount).toBe(1);
+    expect(graph.paperNodes.some((paper) => paper.anchorIds.includes("anchor-01"))).toBe(true);
+    expect(graph.paperNodes.some((paper) => paper.anchorIds.includes("anchor-25"))).toBe(false);
+  });
+
   test("keeps verified relations across different anchor owners", () => {
     const graph = projectAssociationPageGraph({
       anchors: [{ anchorId: "anchor-a" }, { anchorId: "anchor-b" }],

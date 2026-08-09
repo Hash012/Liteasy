@@ -79,6 +79,7 @@ function selectAssociationPaperNodes(
   const selectedPaperKeys = new Set<string>();
 
   for (const { anchor } of anchorOrder) {
+    if (selectedPaperKeys.size >= maximumAssociationPageGraphPapers) break;
     const alreadyCovered = values.some(({ node }) =>
       selectedPaperKeys.has(node.paperKey) && node.anchorIds.includes(anchor.anchorId));
     if (alreadyCovered) continue;
