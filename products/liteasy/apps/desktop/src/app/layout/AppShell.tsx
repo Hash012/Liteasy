@@ -86,6 +86,10 @@ import { useOrganizationShellController } from "../controllers/useOrganizationSh
 import { useExternalPaperController } from "../controllers/useExternalPaperController";
 import { useLibraryResourceTransferController } from "../controllers/useLibraryResourceTransferController";
 import { useTeamAnnotationController } from "../controllers/useTeamAnnotationController";
+import {
+  createPersistPaperLiterature,
+  usePdfAnnotationPublicationController
+} from "../controllers/usePdfAnnotationPublicationController";
 import type {
   ActionContext,
   DockMoveItemId,
@@ -94,14 +98,11 @@ import type {
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import { executeUIDslActionRef } from "../features/agent-runtime/dynamicActionExecutor";
 import { DynamicCanvas } from "../features/generative-ui/DynamicCanvas";
-import type { PdfEvidenceTarget, PdfForumSelection } from "../features/pdf/PdfReader";
-import type { PdfAnnotation } from "../features/pdf/pdfAnnotationStorage";
-import {
-  listPdfAnnotationPendingPublicItems,
-  syncPdfAnnotationPendingItems
-} from "../features/pdf/pdfAnnotationIntuechoSync";
+import type { PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { Paper } from "../features/workspace/workspace.types";
-import { resolvePaperIdentity } from "../features/paper-identity/paperIdentity";
+import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
+import { literatureMetadataRepository } from "../features/paper-identity/literatureMetadataRepository";
+import { canManageOrganizationLibrary } from "../features/organization/organizationStoragePolicy";
 import { useForumController } from "../features/forum/useForumController";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
 import { generateWorkbenchOverlayUIDslDocument } from "../features/generative-ui/uiDslGenerator";
@@ -1018,6 +1019,30 @@ export function AppShell({
     endpoint: externalKnowledgeEndpoint,
     organizationSummary
   });
+  const pdfPublicationCloudClient = useMemo(
+    () => createCloudLibraryStorageClient({ endpoint: externalKnowledgeEndpoint }),
+    [externalKnowledgeEndpoint]
+  );
+  const persistPdfPaperLiterature = useMemo(() => createPersistPaperLiterature({
+    canManageLibraryReference: (reference) => reference.scopeType === "organization" &&
+      organizationSummary?.organizationId === reference.scopeId &&
+      canManageOrganizationLibrary(organizationSummary.myRole),
+    cloudLibraryClient: pdfPublicationCloudClient,
+    literatureMetadataRepository
+  }), [organizationSummary?.myRole, organizationSummary?.organizationId, pdfPublicationCloudClient]);
+  const pdfAnnotationPublication = usePdfAnnotationPublicationController({
+    forumClient: forum.client,
+    literatureMetadataRepository,
+    onPaperUpdated: (paper) => {
+      const current = cloneWorkspaceState(workspaceStoreRef.current.getState());
+      setWorkspaceState({
+        ...current,
+        papers: current.papers.map((item) => item.id === paper.id ? paper : item)
+      });
+    },
+    persistPaperLiterature: persistPdfPaperLiterature,
+    workspaceStore: workspaceStoreRef.current
+  });
   const leftPaneSize = paneLayout.collapsed.left
     ? "0px"
     : `minmax(220px, ${paneLayout.layout.left}fr)`;
@@ -1534,80 +1559,6 @@ export function AppShell({
     ];
   }
 
-  function forumAuthors(paper: Paper) {
-    if (Array.isArray(paper.authors)) {
-      return [...paper.authors];
-    }
-    return typeof paper.authors === "string"
-      ? paper.authors.split(/\s*(?:;|,|、)\s*/u).filter(Boolean)
-      : [];
-  }
-
-  async function forumAnchorHash(value: string) {
-    if (globalThis.crypto?.subtle) {
-      const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(value.normalize("NFKC")));
-      return `sha256:${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-    }
-    let hash = 2166136261;
-    for (const character of value) {
-      hash ^= character.charCodeAt(0);
-      hash = Math.imul(hash, 16777619);
-    }
-    return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
-  }
-
-  async function postSelectionToForum(selection: PdfForumSelection) {
-    const excerpt = selection.excerpt.trim();
-    const identity = resolvePaperIdentity(selection.paper).primary;
-    if (identity.kind === "local_paper_id") {
-      throw new Error("公开批注前需要补全 DOI、arXiv、Semantic Scholar 标识，或完整的标题、作者和年份。");
-    }
-    const year = typeof selection.paper.year === "number"
-      ? selection.paper.year
-      : Number.parseInt(selection.paper.year ?? "", 10);
-    const literature = {
-      identity: {
-        id: identity.id,
-        kind: identity.kind,
-        source: identity.source === "metadata" ? "metadata" as const : "inferred" as const,
-        value: identity.value
-      },
-      metadata: {
-        authors: forumAuthors(selection.paper),
-        title: selection.paper.title,
-        ...(Number.isInteger(year) ? { year } : {})
-      }
-    };
-    return forum.createDraftAndOpen({
-      targets: [{
-        anchorHash: await forumAnchorHash(`${identity.kind}:${identity.value}:${selection.page}:${excerpt}`),
-        excerpt,
-        kind: "source_passage",
-        literature,
-        page: selection.page,
-        rects: []
-      }],
-      visibility: "public"
-    });
-  }
-
-  async function syncAnnotationToForum(input: { annotation: PdfAnnotation; paper: Paper }) {
-    const excerpt = input.annotation.excerpt.trim();
-    if (excerpt.length < 8) {
-      throw new Error("引用文段至少需要 8 个字符，才能同步到论坛草稿。");
-    }
-    const endpoint = resolveIntuechoEndpoint();
-    const [result] = await syncPdfAnnotationPendingItems({
-      endpoint,
-      items: listPdfAnnotationPendingPublicItems([input.annotation]),
-      sessionId: cloudAccessTokenRef.current
-    });
-    if (!result || result.status !== "synced") {
-      throw new Error(result?.status === "failed" ? result.error : "Intuecho 未确认该批注。");
-    }
-    return { intuechoAnnotationId: result.intuechoAnnotationId };
-  }
-
   function renderArtifactSurface(
     tabs = artifactTabs,
     activeArtifactId: string | null = activeCenterArtifactId
@@ -1772,8 +1723,7 @@ export function AppShell({
         intuechoSessionId={accountSession?.sessionId}
         paperRelationsTransport={effectiveModelTransport}
         onLoadForumFeed={forum.loadFeed}
-        onPostToForum={postSelectionToForum}
-        onSyncAnnotationToForum={syncAnnotationToForum}
+        onChangeAnnotationPublication={pdfAnnotationPublication.actions.changePublication}
         onStartAnalysis={startReaderScopedAnalysis}
         onAddReaderContextToConversation={addReaderContextToConversation}
         onUpdateThinReadingDocument={artifactWorkflow.actions.updateThinReadingDocument}
@@ -1999,9 +1949,11 @@ export function AppShell({
           leaveSummary={leaveSummary}
           list={organizationList}
           listMessage={organizationListMessage}
+          literatureDialog={pdfAnnotationPublication.model.literatureDialog}
           organizationActionMessage={organizationActionMessage}
           organizationActionPending={organizationActionPending}
           onCancelClearProfile={profileActions.closeClearProfileConfirm}
+          onCancelLiteratureResolution={pdfAnnotationPublication.actions.cancelResolution}
           onClearProfile={profileActions.clearUserProfile}
           onCloseAcademicArchive={profileActions.closeAcademicArchive}
           onCloseCreateOrganization={organizationShell.actions.closeCreateDialog}
@@ -2036,6 +1988,9 @@ export function AppShell({
           onOpenSharedLibrary={(summary) => {
             void organizationShell.actions.openOrganizationSharedLibrary(summary);
           }}
+          onRetryLiteratureResolution={pdfAnnotationPublication.actions.retryResolution}
+          onSelectLiteratureCandidate={pdfAnnotationPublication.actions.selectCandidate}
+          onSubmitManualLiterature={pdfAnnotationPublication.actions.submitManual}
           onSelectOrganization={organizationShell.actions.selectOrganization}
           organizationDialogOpen={organizationDialogOpen}
           loginDialogOpen={loginDialogOpen}
