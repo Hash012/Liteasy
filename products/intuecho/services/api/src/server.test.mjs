@@ -237,7 +237,7 @@ test("persists manual literature provenance, immutable corrections, and identity
   db.close();
 });
 
-test("requires a refetched candidate and resolves canonical literature targets", async () => {
+test("separates manual confirmation from refetched candidates and resolves canonical targets", async () => {
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);
   const owner = { id: "candidate-owner", name: "Ada Lovelace", initials: "AL" };
@@ -251,7 +251,7 @@ test("requires a refetched candidate and resolves canonical literature targets",
         year: 1843
       }
     }),
-    (error) => error?.code === "LITERATURE_CANDIDATE_NOT_FOUND"
+    (error) => error?.code === "LITERATURE_CONFIRMATION_INVALID"
   );
   await assert.rejects(
     () => repository.confirmLiterature(owner, {
@@ -265,11 +265,22 @@ test("requires a refetched candidate and resolves canonical literature targets",
     }),
     (error) => error?.code === "LITERATURE_CONFIRMATION_INVALID"
   );
-  const confirmed = await repository.confirmLiterature(owner, {
+  await assert.rejects(
+    () => repository.confirmRefetchedLiterature(owner, {
+      candidateKey: "candidate_1",
+      provider: "crossref",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/canonical" }],
+        title: "Spoofed Candidate",
+        year: 1843
+      }
+    }),
+    (error) => error?.code === "LITERATURE_CANDIDATE_NOT_FOUND"
+  );
+  const confirmed = await repository.confirmRefetchedLiterature(owner, {
     candidateKey: "crossref:doi:10.1000/canonical",
-    mode: "candidate",
     provider: "crossref",
-    refetched: true,
     record: {
       authors: ["Ada Lovelace"],
       identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/canonical" }],
@@ -355,6 +366,27 @@ test("acquires PostgreSQL literature identity locks in canonical key order", asy
     }
   });
   assert.deepEqual(lockKeys, ["arxiv_id:2401.0001", "doi:10.1000/z"]);
+});
+
+test("does not serialize untouched PostgreSQL legacy rows as canonical literature", async () => {
+  const legacyRow = {
+    authors: ["Legacy Author"],
+    document_type: null,
+    id: "legacy-postgres",
+    publication_year: 2020,
+    record_source: "legacy_metadata"
+  };
+  const pool = {
+    async query(sql) {
+      if (sql.includes("identity_kind = ANY")) {
+        return { rows: [{ identity_kind: "doi", identity_value: "https://doi.org/10.1000/legacy", literature_id: "legacy-postgres" }] };
+      }
+      if (sql.startsWith("SELECT * FROM literature_records")) return { rows: [legacyRow] };
+      throw new Error(`unexpected query: ${sql}`);
+    }
+  };
+  const repository = new PostgresAnnotationCommunityRepository(pool);
+  assert.equal(await repository.findLiteratureByIdentifiers([{ kind: "doi", value: "10.1000/legacy" }]), null);
 });
 
 test("public reads are anonymous while writes require a Bearer session", async () => {

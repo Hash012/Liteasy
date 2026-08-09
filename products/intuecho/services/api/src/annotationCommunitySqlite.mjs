@@ -234,19 +234,30 @@ export class SqliteAnnotationCommunityRepository {
   }
 
   async confirmLiterature(owner, confirmation) {
+    if (confirmation?.mode !== "manual") throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
+    return this.#confirmLiterature(owner, { record: confirmation.record, source: "manual" });
+  }
+
+  async confirmRefetchedLiterature(owner, verifiedCandidate) {
+    const provider = verifiedCandidate?.provider;
+    const record = verifiedCandidate?.record;
+    if (!provider || !verifiedCandidate?.candidateKey || !record || !Array.isArray(record.identifiers)) {
+      throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+    }
+    const primary = record.identifiers[0];
+    if (!primary || primary.source !== "public_registry") {
+      throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+    }
+    const expectedKey = `${provider}:${primary.kind}:${normalizeIdentity(primary.kind, primary.value)}`;
+    if (verifiedCandidate.candidateKey !== expectedKey) throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
+    return this.#confirmLiterature(owner, { provider, record, source: "public_registry" });
+  }
+
+  async #confirmLiterature(owner, { provider = null, record, source }) {
     const actor = typeof owner === "string" ? owner : owner?.id;
     if (!actor) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_OWNER_REQUIRED");
-    let mode = confirmation?.mode;
-    const requestedMode = mode;
-    let provider = confirmation?.provider ?? null;
-    let record = confirmation?.record;
-    if (mode === "candidate") {
-      if (!confirmation?.candidateKey || !confirmation?.refetched || !record) throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
-      mode = "public_registry";
-    }
-    if (mode !== "manual" && !(mode === "public_registry" && requestedMode === "candidate")) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
     if (!record || !Array.isArray(record.identifiers)) throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
-    if (record.identifiers.some((identifier) => identifier.source !== mode)) {
+    if (record.identifiers.some((identifier) => identifier.source !== source)) {
       throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
     }
     const input = {
@@ -257,25 +268,19 @@ export class SqliteAnnotationCommunityRepository {
       year: record.year
     };
     if (input.identifiers.length === 0) {
-      if (mode !== "manual") throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
+      if (source !== "manual") throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
       input.identifiers.push({ kind: "title_authors_year_hash", source: "manual", value: titleAuthorsYearFingerprint(input) });
     }
     const normalized = [...new Map(input.identifiers.map((identifier) => {
       const value = normalizeIdentity(identifier.kind, identifier.value);
       return [`${identifier.kind}:${value}`, { ...identifier, value }];
     })).values()];
-    if (requestedMode === "candidate") {
-      const primary = normalized[0];
-      const expectedKey = `${provider ?? ""}:${primary?.kind ?? ""}:${primary?.value ?? ""}`;
-      if (!provider || confirmation.candidateKey !== expectedKey) throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
-    }
     return this.db.transaction(() => {
       const matched = this.#matchingLiteratureIds(normalized);
       if (matched.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
       const now = new Date().toISOString();
       const literatureId = [...matched][0] ?? `literature_${randomUUID()}`;
       const existing = matched.size ? this.db.prepare("SELECT * FROM literature_records_v2 WHERE id = ?").get(literatureId) : null;
-      const source = mode === "public_registry" ? "public_registry" : "manual";
       if (!existing) {
         this.db.prepare(`INSERT INTO literature_records_v2(id, title, authors_json, publication_year, document_type, record_source, source_provider, confirmed_at, revision, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
