@@ -4,5 +4,8 @@
   "type": "module",
   "exports": "./src/index.js",
   "types": "./src/index.d.ts",
+  "scripts": {
+    "test": "tsc --noEmit --target ES2020 --module NodeNext --moduleResolution NodeNext --skipLibCheck src/replyProjectionContracts.typecheck.ts"
+  },
   "dependencies": { "zod": "^3.24.2" }
 }

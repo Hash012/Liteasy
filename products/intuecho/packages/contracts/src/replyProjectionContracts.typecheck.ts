@@ -1,4 +1,5 @@
 import { createReplySchema, updateReplyPublicationSchema, updateReplySchema } from "@intuecho/contracts";
+import type { z } from "zod";
 
 const pureReply = createReplySchema.parse({ body: "Thread-only response" });
 const publishAsAnnotation: boolean = pureReply.publishAsAnnotation;
@@ -7,6 +8,18 @@ const replyTargets: unknown[] = pureReply.targets;
 
 const updatedReply = updateReplySchema.parse({ body: "Edited response" });
 const updatedBody: string = updatedReply.body;
+
+const sourcePassageReply: z.input<typeof createReplySchema> = {
+  body: "Source passage response",
+  publishAsAnnotation: true,
+  targets: [{
+    anchorHash: "sha256:source-passage",
+    excerpt: "A source passage can use the runtime rectangle default.",
+    kind: "source_passage",
+    literature: { literatureId: "literature_1" }
+  }]
+};
+createReplySchema.parse(sourcePassageReply);
 
 const publication = updateReplyPublicationSchema.parse({
   published: true,
@@ -19,6 +32,26 @@ if (publication.published) {
   void publicationTags;
   void publicationTargets;
 }
+
+const derivedPassagePublication: z.input<typeof updateReplyPublicationSchema> = {
+  published: true,
+  tags: ["derived"],
+  targets: [{
+    derivedContent: {
+      artifactId: "artifact_1",
+      excerpt: "Derived content.",
+      version: "v1"
+    },
+    evidence: [{
+      anchorHash: "sha256:derived-evidence",
+      excerpt: "Derived evidence also uses the runtime rectangle default.",
+      literature: { literatureId: "literature_1" }
+    }],
+    kind: "derived_passage",
+    literature: { literatureId: "literature_1" }
+  }]
+};
+updateReplyPublicationSchema.parse(derivedPassagePublication);
 
 void publishAsAnnotation;
 void replyTags;

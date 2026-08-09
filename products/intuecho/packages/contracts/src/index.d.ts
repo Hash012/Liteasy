@@ -109,6 +109,14 @@ export type SourceEvidence = SourcePassage & {
   literature: LiteratureReference;
 };
 
+export type SourcePassageInput = Omit<SourcePassage, "rects"> & {
+  rects?: Rectangle[];
+};
+
+export type SourceEvidenceInput = SourcePassageInput & {
+  literature: LiteratureReference;
+};
+
 export type AnnotationTarget =
   | { kind: "whole_document"; literature: LiteratureReference }
   | ({ kind: "source_passage" } & SourceEvidence)
@@ -120,6 +128,21 @@ export type AnnotationTarget =
         version: string;
       };
       evidence: SourceEvidence[];
+      kind: "derived_passage";
+      literature: LiteratureReference;
+    };
+
+export type AnnotationTargetInput =
+  | { kind: "whole_document"; literature: LiteratureReference }
+  | ({ kind: "source_passage" } & SourceEvidenceInput)
+  | {
+      derivedContent: {
+        artifactId: string;
+        excerpt: string;
+        nodeId?: string;
+        version: string;
+      };
+      evidence: SourceEvidenceInput[];
       kind: "derived_passage";
       literature: LiteratureReference;
     };
@@ -154,7 +177,7 @@ export type CreateReplyInput = {
   body: string;
   publishAsAnnotation?: boolean;
   tags?: string[];
-  targets?: AnnotationTarget[];
+  targets?: AnnotationTargetInput[];
 };
 
 export type CreateReply = {
@@ -168,7 +191,7 @@ export type UpdateReply = { body: string };
 
 export type UpdateReplyPublicationInput =
   | { published: false }
-  | { published: true; tags?: string[]; targets: AnnotationTarget[] };
+  | { published: true; tags?: string[]; targets: AnnotationTargetInput[] };
 
 export type UpdateReplyPublication =
   | { published: false }
