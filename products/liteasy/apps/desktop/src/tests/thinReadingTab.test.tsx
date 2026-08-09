@@ -661,7 +661,7 @@ describe("ThinReadingTab", () => {
     );
   });
 
-  test("keeps legacy v1 navigation read-only", () => {
+  test("keeps legacy v1 navigation read-only", async () => {
     const childId = "thin-reading-child-v1";
     const root = v1Fixture.nodes[v1Fixture.rootNodeId];
     const document = parseThinReadingDocument({
@@ -675,21 +675,37 @@ describe("ThinReadingTab", () => {
           depth: 1,
           id: childId,
           parentId: v1Fixture.rootNodeId,
-          recommendationScope: { kind: "section", paperId: "paper-1", sectionKey: "methods" },
-          source: { kind: "omitted_section", label: "Methods", sectionKey: "methods" },
-          title: "Methods"
+          recommendationScope: { kind: "section", paperId: "paper-1", sectionKey: "results" },
+          source: { kind: "omitted_section", label: "Results", sectionKey: "results" },
+          title: "Results"
         }
       }
     });
     const onUpdateDocument = vi.fn();
+    const onGenerateBranch = vi.fn(async () => undefined);
 
-    renderTab(document, onUpdateDocument);
+    render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={onUpdateDocument}
+        papers={createThinReadingFixture().papers}
+      />
+    );
     fireEvent.click(within(screen.getByLabelText("Thin reading depth"))
       .getByRole("button", { name: "Overview" }));
 
     expect(within(screen.getByLabelText("Thin reading depth")).getByText("Overview"))
       .toHaveAttribute("aria-current", "page");
     expect(onUpdateDocument).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explore Methods" }));
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith(expect.objectContaining({
+      artifactId: document.artifactId,
+      document: expect.objectContaining({ activeNodeId: document.rootNodeId }),
+      source: { kind: "omitted_section", label: "Methods", sectionKey: "methods" }
+    })));
   });
 
   test("shows a selection affordance and requests Agent branch generation from selected text", async () => {

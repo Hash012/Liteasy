@@ -686,7 +686,10 @@ export function ThinReadingTab({
         return;
       }
       setGenerating(true);
-      await onGenerateBranch({ artifactId, document, source });
+      const branchDocument = document.version === "liteasy.thin-reading/v1"
+        ? { ...document, activeNodeId: activeNode.id }
+        : document;
+      await onGenerateBranch({ artifactId, document: branchDocument, source });
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : String(error));
     } finally {
