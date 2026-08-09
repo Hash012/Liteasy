@@ -56,7 +56,9 @@ export function resolveThinReadingVisualizationIntentRequest(source: ThinReading
         const cueFamilies = [
           /(?:过程|步骤|流程|flow|process)/iu.test(prompt) ? "process" : undefined,
           /(?:结构|层次|结构图|structure)/iu.test(prompt) ? "structure" : undefined,
-          /(?:比较|对比|compare|comparison)/iu.test(prompt) ? "comparison" : undefined
+          /(?:比较|对比|compare|comparison)/iu.test(prompt) ? "comparison" : undefined,
+          /(?:几何|geometry|geometric)/iu.test(prompt) ? "geometry" : undefined,
+          /(?:证据|evidence)/iu.test(prompt) ? "evidence" : undefined
         ].filter(Boolean);
         if (cueFamilies.length !== 1) {
           return { explicit: true };

@@ -70,6 +70,18 @@ describe("thinReadingPromptRegistry", () => {
     }
   });
 
+  test.each([
+    ["geometry and process", "show the geometry of this process"],
+    ["evidence and structure", "展示该结构的证据关系"]
+  ])("keeps %s typed prompts provenance-only", (_description, prompt) => {
+    expect(resolveThinReadingVisualizationIntentRequest({
+      excerpt: "解释这里。",
+      kind: "selected_text",
+      prompt,
+      requestedOutput: "visualization_intent"
+    })).toEqual({ explicit: true });
+  });
+
   test("provides exactly three original retention examples for every paper type and language", () => {
     for (const paperType of thinReadingPaperTypes) {
       const zhExamples = getThinReadingFewShotExamples(paperType, "zh-CN");
