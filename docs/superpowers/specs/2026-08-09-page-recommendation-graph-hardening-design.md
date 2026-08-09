@@ -105,9 +105,10 @@ only the renderer and bypass the quality gate.
 
 ## 5. Browser Density And Performance Evidence
 
-The browser fixture gains a maximum-density variant with eight anchors and 24 selected paper
-components, including a shared paper and verified cross-anchor relations. Desktop, narrow, and
-mobile assertions inspect the real SVG/DOM and require:
+The browser fixture gains a maximum-density variant with eight anchors and 32 source records. One
+cross-provider DOI alias pair merges those records into 31 components, and the value selector
+retains 24. The fixture also includes a shared paper and verified cross-anchor relations. Desktop,
+narrow, and mobile assertions inspect the real SVG/DOM and require:
 
 - final hard geometry `0/0/0/0/0`;
 - all primary SVG hit paths have zero non-shared-endpoint crossings;
