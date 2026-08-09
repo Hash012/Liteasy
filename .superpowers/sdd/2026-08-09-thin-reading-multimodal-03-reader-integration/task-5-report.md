@@ -1,7 +1,10 @@
 # Task 5 Review Package
 
 Status: complete
-Commit: amended after composition review (`feat: deepen thin reading visual objects`)
+Commits:
+
+- `85c7e7c` `feat: deepen thin reading visual objects`
+- `b5fb027` `fix: wire thin reading visual deep dives`
 
 ## Scope
 
@@ -32,7 +35,6 @@ Task 5 adds fail-closed deep-dive targets for generated semantic objects, whole 
 
 ## Concerns
 
-- The overlay is a reusable feature component; wiring it into a particular reader figure card remains a composition concern for the reader surface owner.
 - Real-provider smoke still requires deployment-admin route and account configuration.
 
 ## Finding-Driven Compatibility
