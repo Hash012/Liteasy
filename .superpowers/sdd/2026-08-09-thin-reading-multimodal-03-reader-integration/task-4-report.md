@@ -1,7 +1,7 @@
 # Task 4 Report: Fixed Reader Layout And Minimal Toggle
 
 status: complete
-commit: 5b469924729e14ca6e68f2305102f3ff2f0f4cbd
+commit: b8d11ccc214ece15409610da17eefca1a4f60fec
 
 ## RED
 
