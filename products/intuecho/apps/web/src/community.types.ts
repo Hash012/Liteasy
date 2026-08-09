@@ -1,4 +1,6 @@
 import type {
+  AnnotationTarget as ContractAnnotationTarget,
+  LiteratureReference as ContractLiteratureReference,
   LiteratureCandidate,
   LiteratureConfirmInput,
   LiteratureRecord,
@@ -8,6 +10,8 @@ import type {
 } from "@intuecho/contracts";
 
 export type {
+  AnnotationTarget as ContractAnnotationTarget,
+  LiteratureReference as ContractLiteratureReference,
   LiteratureCandidate,
   LiteratureConfirmInput,
   LiteratureRecord,
@@ -23,33 +27,8 @@ export type PaperIdentity = {
   value: string;
 };
 
-export type LiteratureReference = {
-  identity: PaperIdentity;
-  metadata: {
-    authors: string[];
-    documentType?: string;
-    title: string;
-    year?: number;
-  };
-};
-
-export type SourceEvidence = {
-  anchorHash: string;
-  excerpt: string;
-  literature: LiteratureReference;
-  page?: number;
-  rects: Array<Record<string, unknown>>;
-};
-
-export type AnnotationTarget =
-  | { kind: "whole_document"; literature: LiteratureReference }
-  | ({ kind: "source_passage" } & SourceEvidence)
-  | {
-      derivedContent: { artifactId: string; excerpt: string; nodeId?: string; version: string };
-      evidence: SourceEvidence[];
-      kind: "derived_passage";
-      literature: LiteratureReference;
-    };
+export type LiteratureReference = ContractLiteratureReference;
+export type AnnotationTarget = ContractAnnotationTarget;
 
 export type AnnotationVisibility = "private" | "organization" | "mutual_followers" | "public";
 

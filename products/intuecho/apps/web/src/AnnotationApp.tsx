@@ -54,11 +54,11 @@ import {
   type CommunityReply,
   type ConversationSummary,
   type CreateAnnotationInput,
-  type LiteratureReference,
   type PaperIdentity,
   type PlazaFilters
 } from "./community.types";
 import { communityApi } from "./communityApi";
+import { LiteratureTargetEditor } from "./LiteratureTargetEditor";
 import type { IdentityMode, IdentitySession } from "./identity.types";
 import { identityApi, readIdentitySession, setAuthRequiredHandler } from "./identityClient";
 
@@ -404,7 +404,7 @@ function AnnotationCard({ annotation, onCompose, onConversation, session }: {
     <div className="annotation-content"><p className="annotation-body">{current.body}</p></div>
     {current.withdrawnAt && <p className="moderation-state">已由组织管理员撤回</p>}
     {current.originalReply?.status === "parent_deleted" && <p className="deleted-reply-context">原回复对象已删除</p>}
-    <div className="target-list">{current.targets.map((target, index) => <TargetChip key={`${target.literature.identity.id}-${index}`} target={target} />)}</div>
+    <div className="target-list">{current.targets.map((target, index) => <TargetChip key={`${target.kind}-${index}`} target={target} />)}</div>
     {current.tags.length > 0 && <div className="annotation-tags">{current.tags.map((tag) => tag.origin === "platform" && current.viewerIsAuthor && tag.state === "active" ? <button type="button" key={`${tag.origin}-${tag.name}`} className="platform-tag" aria-label={`申诉平台标签 ${tag.name}`} onClick={() => { setAppealReason(""); setAppealTag(tag.name); }}>#{tag.name} · 平台</button> : <span key={`${tag.origin}-${tag.name}`} className={tag.origin === "platform" ? "platform-tag" : ""}>#{tag.name}{tag.origin === "platform" ? tag.state === "appealed" ? " · 审核中" : tag.state === "upheld" ? " · 已维持" : " · 平台" : ""}</span>)}</div>}
     <footer>
       <div className="star-rating" aria-label={current.ratingCount ? `${current.ratingAverage} 星，共 ${current.ratingCount} 人评分` : "暂无评分"}>
@@ -440,9 +440,10 @@ function AnnotationDetail({ annotationId, onCompose, onConversation, refresh, se
 }
 
 function TargetChip({ target }: { target: AnnotationTarget }) {
+  const title = "metadata" in target.literature ? target.literature.metadata.title : `文献 ${target.literature.literatureId}`;
   return <div className="target-chip">
     <Library20Regular />
-    <span><strong>{target.literature.metadata.title}</strong><small>{target.kind === "whole_document" ? "整篇文献" : target.kind === "source_passage" ? `${target.page ? `第 ${target.page} 页 · ` : ""}${target.excerpt}` : `薄读内容 · ${target.derivedContent.excerpt}`}</small></span>
+    <span><strong>{title}</strong><small>{target.kind === "whole_document" ? "整篇文献" : target.kind === "source_passage" ? `${target.page ? `第 ${target.page} 页 · ` : ""}${target.excerpt}` : `薄读内容 · ${target.derivedContent.excerpt}`}</small></span>
   </div>;
 }
 
@@ -522,71 +523,13 @@ function AnnotationComposer({ context, onClose, onSaved }: {
           {visibility === "organization" && <label>组织 ID<Input value={organizationId} disabled={Boolean(parent)} onChange={(_, data) => setOrganizationId(data.value)} required /></label>}
         </div>
         {visibility === "public" && <Checkbox checked={shareToPlaza} label={parent ? "同时作为独立批注发布到广场" : "发布到广场"} onChange={(_, data) => setShareToPlaza(Boolean(data.checked))} />}
-        <TargetEditor targets={targets} onChange={setTargets} required={!parent || shareToPlaza} />
+        <LiteratureTargetEditor targets={targets} onChange={setTargets} required={!parent || shareToPlaza} />
         <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>
         {status && <p className="form-error" role="alert">{status}</p>}
         <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || !body.trim() || ((!parent || shareToPlaza) && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>
   </div>;
-}
-
-function TargetEditor({ onChange, required, targets }: { onChange: (targets: AnnotationTarget[]) => void; required: boolean; targets: AnnotationTarget[] }) {
-  const [kind, setKind] = useState<"whole_document" | "source_passage">("whole_document");
-  const [identityKind, setIdentityKind] = useState<PaperIdentity["kind"]>("doi");
-  const [identityValue, setIdentityValue] = useState("");
-  const [title, setTitle] = useState("");
-  const [authors, setAuthors] = useState("");
-  const [year, setYear] = useState("");
-  const [documentType, setDocumentType] = useState("");
-  const [excerpt, setExcerpt] = useState("");
-  const [page, setPage] = useState("");
-  const [status, setStatus] = useState("");
-  async function add() {
-    if (!identityValue.trim() || !title.trim()) { setStatus("请填写文献身份和标题"); return; }
-    if (kind === "source_passage" && !excerpt.trim()) { setStatus("请填写关联字句"); return; }
-    const literature: LiteratureReference = {
-      identity: { id: `${identityKind}:${identityValue.trim()}`, kind: identityKind, source: "metadata", value: identityValue.trim() },
-      metadata: {
-        authors: authors.split(/[;,，；]/u).map((value) => value.trim()).filter(Boolean),
-        ...(documentType.trim() ? { documentType: documentType.trim() } : {}),
-        title: title.trim(),
-        ...(year ? { year: Number(year) } : {})
-      }
-    };
-    const target: AnnotationTarget = kind === "whole_document" ? { kind, literature } : {
-      anchorHash: await anchorHash(excerpt),
-      excerpt: excerpt.trim(),
-      kind,
-      literature,
-      ...(page ? { page: Number(page) } : {}),
-      rects: []
-    };
-    onChange([...targets, target]);
-    setIdentityValue(""); setTitle(""); setAuthors(""); setYear(""); setDocumentType(""); setExcerpt(""); setPage(""); setStatus("");
-  }
-  return <section className="target-editor">
-    <div className="section-row"><div><strong>关联文献</strong>{required && <span>必填</span>}</div><small>{targets.length} 处</small></div>
-    <div className="selected-targets">{targets.map((target, index) => <div key={`${target.literature.identity.id}-${index}`}><TargetChip target={target} /><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="移除关联" onClick={() => onChange(targets.filter((_, position) => position !== index))} /></div>)}</div>
-    <div className="target-form">
-      <label>范围<select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}><option value="whole_document">整篇文献</option><option value="source_passage">原文字句</option></select></label>
-      <label>身份<select value={identityKind} onChange={(event) => setIdentityKind(event.target.value as PaperIdentity["kind"])}><option value="doi">DOI</option><option value="arxiv_id">arXiv</option><option value="semantic_scholar_id">Semantic Scholar</option><option value="title_authors_year_hash">标题作者年份指纹</option></select></label>
-      <label className="wide">身份值<Input value={identityValue} onChange={(_, data) => setIdentityValue(data.value)} /></label>
-      <label className="wide">文献标题<Input value={title} onChange={(_, data) => setTitle(data.value)} /></label>
-      <label className="wide">作者<Input value={authors} onChange={(_, data) => setAuthors(data.value)} placeholder="使用分号分隔" /></label>
-      <label>年份<Input type="number" value={year} onChange={(_, data) => setYear(data.value)} /></label>
-      <label>文献类型<Input value={documentType} onChange={(_, data) => setDocumentType(data.value)} /></label>
-      {kind === "source_passage" && <><label>页码<Input type="number" value={page} onChange={(_, data) => setPage(data.value)} /></label><label className="wide">关联字句<Textarea value={excerpt} onChange={(_, data) => setExcerpt(data.value)} resize="vertical" /></label></>}
-      <Button type="button" icon={<Add20Regular />} onClick={() => void add()}>添加关联</Button>
-      {status && <span className="form-error">{status}</span>}
-    </div>
-  </section>;
-}
-
-async function anchorHash(excerpt: string) {
-  const bytes = new TextEncoder().encode(excerpt.trim().normalize("NFKC"));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return `sha256:${[...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function FollowingAnnotations({ onCompose, onConversation, refresh, session }: {
