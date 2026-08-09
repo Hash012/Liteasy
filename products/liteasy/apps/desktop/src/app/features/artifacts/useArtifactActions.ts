@@ -50,12 +50,14 @@ import {
   resolveArtifactFailureCode
 } from "./artifactFailurePresentation";
 import { resolveThinReadingTargetLanguage } from "../thin-reading/thinReadingAgent";
+import { describeDeepDiveTarget } from "../thin-reading/thinReadingDeepDiveTarget";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
   ThinReadingGenerationContext,
   ThinReadingNodeSeed
 } from "../thin-reading/thinReading.types";
+import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.types";
 
 type ArtifactStore = ReturnType<typeof createArtifactStore>;
 
@@ -346,6 +348,37 @@ function isThinReadingOmittedSectionSource(
   ));
 }
 
+function isValidThinReadingVisualizationTarget(
+  document: ThinReadingDocument,
+  node: ThinReadingDocument["nodes"][string],
+  target: DeepDiveTargetV1,
+  figures: readonly MineruFigure[]
+) {
+  if (target.nodeId !== node.id) return false;
+  const paperEvidenceIds = new Set([
+    ...node.evidence.paperEvidence,
+    ...(node.evidence.paperEvidenceSpans ?? []).map((span) => span.id)
+  ]);
+  if (target.kind === "generated_object") {
+    if (document.version !== "liteasy.thin-reading/v2") return false;
+    const artifact = (node as import("../thin-reading/thinReading.types").ThinReadingNodeV2).visualizations.find((item) => item.artifactId === target.artifactId);
+    const object = artifact?.semanticObjects.find((item) => item.objectId === target.objectId);
+    const claims = new Set((artifact?.spec.payload && "claims" in artifact.spec.payload) ? artifact.spec.payload.claims.map((claim) => claim.id) : []);
+    return Boolean(object?.selectable) && JSON.stringify(object?.objectPath) === JSON.stringify(target.objectPath) &&
+      target.evidenceClaimIds.length > 0 && target.evidenceClaimIds.every((id) => claims.has(id)) &&
+      target.evidenceClaimIds.every((id) => node.evidence.claims?.some((claim) => claim.id === id));
+  }
+  if (target.evidenceIds.length === 0 || target.evidenceIds.some((id) => !paperEvidenceIds.has(id))) return false;
+  const figure = figures.find((candidate) => candidate.id === target.sourceFigureId);
+  if (!figure) return false;
+  if (target.kind === "source_region") {
+    const { bbox, sourcePixelSize } = target;
+    return sourcePixelSize.width > 0 && sourcePixelSize.height > 0 && bbox.x >= 0 && bbox.y >= 0 &&
+      bbox.width > 0 && bbox.height > 0 && bbox.x + bbox.width <= 1 && bbox.y + bbox.height <= 1;
+  }
+  return true;
+}
+
 function thinReadingAncestorSummaries(
   document: ThinReadingDocument,
   nodeId: string
@@ -365,8 +398,11 @@ function thinReadingTitleForSource(source: ThinReadingBranchSource, targetLangua
   if (source.kind === "omitted_section") {
     return source.label;
   }
+  const excerpt = source.kind === "visualization_target"
+    ? describeDeepDiveTarget(source.target)
+    : source.excerpt;
   return truncateThinReadingTitle(
-    source.excerpt,
+    excerpt,
     targetLanguage.startsWith("en") ? "Selected passage" : "正文选区"
   );
 }
@@ -1207,7 +1243,13 @@ export function useArtifactActions({
     const activeNode = scopedDocument.nodes[scopedDocument.activeNodeId] ?? scopedDocument.nodes[scopedDocument.rootNodeId];
     const validBodySelection = source.kind === "selected_text" &&
       isThinReadingBodyExcerpt(activeNode.summary, source.excerpt);
-    if (!validBodySelection && !isThinReadingOmittedSectionSource(activeNode, source)) {
+    const validVisualizationTarget = source.kind === "visualization_target" && isValidThinReadingVisualizationTarget(
+      scopedDocument,
+      activeNode,
+      source.target,
+      getMineruFiguresForPaperId?.(primaryPaperId) ?? []
+    );
+    if (!validBodySelection && !validVisualizationTarget && !isThinReadingOmittedSectionSource(activeNode, source)) {
       throw new Error("薄读只能从当前层正文选区或当前层列出的未覆盖模块继续深入。");
     }
     const existingChild = findThinReadingChildBySource(scopedDocument, activeNode.id, source);
@@ -1293,7 +1335,11 @@ export function useArtifactActions({
       parentWithinPaperClosure: activeNode.withinPaperClosure,
       parentSummary: activeNode.summary,
       parentTitle: activeNode.title,
-      prompt: source.kind === "selected_text" ? source.prompt : undefined,
+      prompt: source.kind === "selected_text"
+        ? source.prompt
+        : source.kind === "visualization_target"
+          ? `请围绕 ${describeDeepDiveTarget(source.target)} 进行深入解读，严格绑定该对象的证据。`
+          : undefined,
       selectedExternalSources,
       source,
       targetLanguage: document.targetLanguage

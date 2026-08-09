@@ -5,6 +5,7 @@ import type {
   ThinReadingDocumentV2,
   ThinReadingNodeV2
 } from "./thinReading.types";
+import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.types";
 
 const v1DocumentVersion = "liteasy.thin-reading/v1";
 const v2DocumentVersion = "liteasy.thin-reading/v2";
@@ -33,6 +34,36 @@ function hasUniqueOptionalStringArray(value: Record<string, unknown>, key: strin
   return items === undefined || (isStringArray(items) && new Set(items).size === items.length);
 }
 
+function isPersistedDeepDiveTarget(value: unknown): value is DeepDiveTargetV1 {
+  if (!isRecord(value) || typeof value.kind !== "string" || typeof value.nodeId !== "string") return false;
+  if (value.kind === "generated_object") {
+    return typeof value.artifactId === "string" && value.artifactId.trim().length > 0 &&
+      typeof value.objectId === "string" && value.objectId.trim().length > 0 &&
+      isStringArray(value.objectPath) && value.objectPath.length > 0 &&
+      isStringArray(value.evidenceClaimIds) && value.evidenceClaimIds.length > 0;
+  }
+  if (value.kind === "source_figure") {
+    return typeof value.sourceFigureId === "string" && value.sourceFigureId.trim().length > 0 &&
+      isStringArray(value.evidenceIds) && value.evidenceIds.length > 0;
+  }
+  if (value.kind !== "source_region" || typeof value.sourceFigureId !== "string" ||
+      !isStringArray(value.evidenceIds) || value.evidenceIds.length === 0 || !isRecord(value.bbox) ||
+      !isRecord(value.sourcePixelSize)) return false;
+  const bbox = value.bbox as Record<string, unknown>;
+  const pixels = value.sourcePixelSize as Record<string, unknown>;
+  const x = bbox.x;
+  const y = bbox.y;
+  const width = bbox.width;
+  const height = bbox.height;
+  const pixelWidth = pixels.width;
+  const pixelHeight = pixels.height;
+  return [x, y, width, height].every((item) => typeof item === "number" && Number.isFinite(item)) &&
+    typeof pixelWidth === "number" && Number.isFinite(pixelWidth) && pixelWidth > 0 &&
+    typeof pixelHeight === "number" && Number.isFinite(pixelHeight) && pixelHeight > 0 &&
+    (x as number) >= 0 && (y as number) >= 0 && (width as number) > 0 && (height as number) > 0 &&
+    (x as number) + (width as number) <= 1 && (y as number) + (height as number) <= 1;
+}
+
 function equalStringArrays(left: unknown, right: unknown) {
   if (left === undefined && right === undefined) {
     return true;
@@ -52,6 +83,9 @@ function isPersistedThinReadingNodeSource(value: unknown): value is Record<strin
   if (value.kind === "omitted_section") {
     return typeof value.label === "string" && value.label.trim().length > 0 &&
       typeof value.sectionKey === "string" && value.sectionKey.trim().length > 0;
+  }
+  if (value.kind === "visualization_target") {
+    return isPersistedDeepDiveTarget(value.target);
   }
   const expectedOutput = value.quickCommand === "mermaid_causal"
     ? "mermaid"
@@ -102,7 +136,15 @@ function scopeMatchesPersistedNodeSource(scope: unknown, source: unknown) {
     return scope.kind === "whole_paper";
   }
   if (source.kind === "omitted_section") {
-    return scope.kind === "section" && scope.sectionKey === source.sectionKey;
+      return scope.kind === "section" && scope.sectionKey === source.sectionKey;
+  }
+  if (source.kind === "visualization_target") {
+    const target = source.target as DeepDiveTargetV1;
+    const targetEvidenceIds = target.kind === "generated_object"
+      ? target.evidenceClaimIds
+      : target.evidenceIds;
+    return scope.kind === "selected_passage" &&
+      isStringArray(scope.evidenceIds) && equalStringArrays(scope.evidenceIds, targetEvidenceIds);
   }
   return scope.kind === "selected_passage" &&
     scope.excerpt === source.excerpt &&

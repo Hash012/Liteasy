@@ -5,6 +5,7 @@ import type {
   ThinReadingDocument,
   ThinReadingNode
 } from "../thin-reading/thinReading.types";
+import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.types";
 
 const storageKey = "liteasy.artifact-task-recovery/v1";
 
@@ -40,6 +41,25 @@ function isRecoverableBranchSource(value: unknown): value is ThinReadingBranchSo
       source.label.length <= maxSectionLabelLength &&
       typeof source.sectionKey === "string" && source.sectionKey.trim().length > 0 &&
       source.sectionKey.length <= maxSectionKeyLength;
+  }
+  if (source.kind === "visualization_target") {
+    const target = source.target as DeepDiveTargetV1;
+    if (!target || typeof target !== "object" || typeof target.nodeId !== "string" || target.nodeId.trim().length === 0) return false;
+    if (target.kind === "generated_object") {
+      return typeof target.artifactId === "string" && target.artifactId.length > 0 &&
+        typeof target.objectId === "string" && target.objectId.length > 0 &&
+        isUniqueBoundedStringArray(target.objectPath) && target.objectPath.length > 0 &&
+        isUniqueBoundedStringArray(target.evidenceClaimIds);
+    }
+    if (target.kind === "source_figure") {
+      return typeof target.sourceFigureId === "string" && target.sourceFigureId.length > 0 &&
+        isUniqueBoundedStringArray(target.evidenceIds);
+    }
+    return target.kind === "source_region" && typeof target.sourceFigureId === "string" &&
+      target.sourceFigureId.length > 0 && isUniqueBoundedStringArray(target.evidenceIds) &&
+      target.bbox.x >= 0 && target.bbox.y >= 0 && target.bbox.width > 0 && target.bbox.height > 0 &&
+      target.bbox.x + target.bbox.width <= 1 && target.bbox.y + target.bbox.height <= 1 &&
+      target.sourcePixelSize.width > 0 && target.sourcePixelSize.height > 0;
   }
   if (source.kind !== "selected_text" || typeof source.excerpt !== "string" ||
     source.excerpt.trim().length === 0 || source.excerpt.length > maxExcerptLength) return false;
@@ -123,6 +143,22 @@ export function validateThinReadingBranchRecoverySnapshot(
     ))
       ? { valid: true }
       : { valid: false, reason: "原未覆盖模块已不在父页面的可深入列表中。" };
+  }
+  if (snapshot.source.kind === "visualization_target") {
+    if (snapshot.source.target.nodeId !== parent.id) {
+      return { valid: false, reason: "原视觉对象已不在当前父节点。" };
+    }
+    const evidenceIds = new Set([
+      ...parent.evidence.paperEvidence,
+      ...(parent.evidence.paperEvidenceSpans ?? []).map((span) => span.id),
+      ...(parent.evidence.claims ?? []).map((claim) => claim.id)
+    ]);
+    const targetEvidenceIds = snapshot.source.target.kind === "generated_object"
+      ? snapshot.source.target.evidenceClaimIds
+      : snapshot.source.target.evidenceIds;
+    return targetEvidenceIds.length > 0 && targetEvidenceIds.every((id) => evidenceIds.has(id))
+      ? { valid: true }
+      : { valid: false, reason: "原视觉对象证据已变化。" };
   }
   const evidenceIds = new Set([...parent.evidence.paperEvidence, ...(parent.evidence.paperEvidenceSpans ?? []).map((span) => span.id)]);
   if ((snapshot.source.evidenceIds ?? []).some((id) => !evidenceIds.has(id))) {

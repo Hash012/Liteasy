@@ -3,7 +3,11 @@ import type {
   PaperIdentityCandidate,
   PaperIdentityInput
 } from "../paper-identity/paperIdentity";
-import type { VisualizationArtifactV1, GeneratedVisualizationModality } from "../visualization/visualizationArtifact.types";
+import type {
+  DeepDiveTargetV1,
+  VisualizationArtifactV1,
+  GeneratedVisualizationModality
+} from "../visualization/visualizationArtifact.types";
 
 export type ThinReadingPaper = PaperIdentityInput;
 
@@ -35,6 +39,18 @@ export type ThinReadingRequestedOutput =
 export type ThinReadingNodeSource =
   | { kind: "root_overview" }
   | { kind: "omitted_section"; label: string; sectionKey: string }
+  | {
+      kind: "visualization_target";
+      target: DeepDiveTargetV1;
+      /** Optional compatibility fields for prompt/context consumers. */
+      evidenceIds?: readonly string[];
+      externalSourceIds?: readonly string[];
+      excerpt?: string;
+      label?: string;
+      prompt?: string;
+      requestedOutput?: ThinReadingRequestedOutput;
+      sectionKey?: string;
+    }
   | {
       kind: "selected_text";
       evidenceIds?: readonly string[];

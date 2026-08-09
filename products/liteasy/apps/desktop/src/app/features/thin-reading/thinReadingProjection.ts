@@ -27,6 +27,7 @@ import {
   freezePaperIdentity,
   resolvePaperIdentityMap
 } from "../paper-identity/paperIdentity";
+import { describeDeepDiveTarget } from "./thinReadingDeepDiveTarget";
 
 export type ThinReadingBranchOption = {
   child: ThinReadingNode;
@@ -83,8 +84,26 @@ function freezeSource(source: ThinReadingNodeSource): ThinReadingNodeSource {
       : undefined,
     externalSourceIds: source.kind === "selected_text" && source.externalSourceIds
       ? Object.freeze([...source.externalSourceIds])
-      : undefined
-  });
+      : source.kind === "visualization_target" && source.externalSourceIds
+        ? Object.freeze([...source.externalSourceIds])
+        : undefined,
+    ...(source.kind === "visualization_target" ? {
+      target: Object.freeze({
+        ...source.target,
+        ...(source.target.kind === "generated_object" ? {
+          evidenceClaimIds: Object.freeze([...source.target.evidenceClaimIds]),
+          objectPath: Object.freeze([...source.target.objectPath]),
+          viewport: source.target.viewport ? Object.freeze({ ...source.target.viewport }) : undefined
+        } : source.target.kind === "source_region" ? {
+          bbox: Object.freeze({ ...source.target.bbox }),
+          evidenceIds: Object.freeze([...source.target.evidenceIds]),
+          sourcePixelSize: Object.freeze({ ...source.target.sourcePixelSize })
+        } : {
+          evidenceIds: Object.freeze([...source.target.evidenceIds])
+        })
+      })
+    } : {})
+  }) as unknown as ThinReadingNodeSource;
 }
 
 function freezeScope(scope: ThinReadingRecommendationScope): ThinReadingRecommendationScope {
@@ -416,6 +435,18 @@ function recommendationScopeForSource(
   const paperIdentity = paperId ? document.paperIdentities?.[paperId] : undefined;
   if (source.kind === "omitted_section") {
     return { kind: "section", paperId, paperIdentity, sectionKey: source.sectionKey };
+  }
+  if (source.kind === "visualization_target") {
+    const evidenceIds = source.target.kind === "generated_object"
+      ? source.target.evidenceClaimIds
+      : source.target.evidenceIds;
+    return {
+      kind: "selected_passage",
+      evidenceIds: [...evidenceIds],
+      excerpt: describeDeepDiveTarget(source.target),
+      paperId,
+      paperIdentity
+    };
   }
   return {
     kind: "selected_passage",

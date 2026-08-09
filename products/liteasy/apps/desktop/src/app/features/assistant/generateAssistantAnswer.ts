@@ -887,6 +887,7 @@ function buildThinReadingRepairPrompt(input: {
   };
 }) {
   const isAnchorRepair = input.reason.includes("薄读锚点");
+  const isRootOrientationRepair = input.reason.includes("薄读首页方向质量门");
   const targetedRepair = input.targetedEvidenceRepair;
   const unsupportedSentenceIds = new Set(targetedRepair?.review.unsupportedSentenceIds ?? []);
   const unsupportedSentences = targetedRepair?.node.evidence.summarySentences?.filter((sentence) =>
