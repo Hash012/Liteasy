@@ -44,6 +44,11 @@ export class PostgresAnnotationCommunityRepository {
     return id ? this.#literatureRecord(id, client) : null;
   }
 
+  async findLiteratureById(literatureId, client = this.pool) {
+    const id = String(literatureId ?? "").trim();
+    return id ? this.#literatureRecord(id, client) : null;
+  }
+
   async searchStoredLiterature(query, limit = 10, client = this.pool) {
     const bounded = Math.max(1, Math.min(Number(limit) || 10, 10));
     const value = String(query ?? "").trim();

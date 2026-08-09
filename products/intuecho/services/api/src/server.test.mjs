@@ -162,6 +162,7 @@ test("persists manual literature provenance, immutable corrections, and identity
   });
   assert.equal(first.provenance.mode, "manual");
   assert.equal((await repository.findLiteratureByIdentifiers(first.identifiers)).literatureId, first.literatureId);
+  assert.equal((await repository.findLiteratureById(first.literatureId)).literatureId, first.literatureId);
   const concurrent = await Promise.all([
     repository.confirmLiterature(owner, {
       mode: "manual",
@@ -309,6 +310,7 @@ test("reuses legacy normalized DOI values and preserves untouched legacy provena
   db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, 'doi', ?, 'metadata', ?)")
     .run("legacy-record", "https://doi.org/10.1000/legacy", "2026-08-09T00:00:00.000Z");
   assert.equal(await repository.findLiteratureByIdentifiers([{ kind: "doi", value: "10.1000/legacy" }]), null);
+  assert.equal(await repository.findLiteratureById("legacy-record"), null);
   const untouched = await repository.searchStoredLiterature("Legacy DOI", 10);
   assert.deepEqual(untouched, []);
   assert.equal(db.prepare("SELECT identity_source FROM literature_identities_v2 WHERE literature_id = ?").get("legacy-record").identity_source, "metadata");
@@ -387,6 +389,7 @@ test("does not serialize untouched PostgreSQL legacy rows as canonical literatur
   };
   const repository = new PostgresAnnotationCommunityRepository(pool);
   assert.equal(await repository.findLiteratureByIdentifiers([{ kind: "doi", value: "10.1000/legacy" }]), null);
+  assert.equal(await repository.findLiteratureById("legacy-postgres"), null);
 });
 
 test("public reads are anonymous while writes require a Bearer session", async () => {

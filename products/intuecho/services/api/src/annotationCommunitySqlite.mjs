@@ -216,6 +216,11 @@ export class SqliteAnnotationCommunityRepository {
     return id ? this.#literatureRecord(id) : null;
   }
 
+  async findLiteratureById(literatureId) {
+    const id = String(literatureId ?? "").trim();
+    return id ? this.#literatureRecord(id) : null;
+  }
+
   async searchStoredLiterature(query, limit = 10) {
     const bounded = Math.max(1, Math.min(Number(limit) || 10, 10));
     const value = String(query ?? "").trim();
