@@ -6,7 +6,6 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  desktopCommunityAnnotationBatchSchema,
   communityRecommendationQuerySchema,
   contextualDraftSchema,
   createFeedbackSchema,
@@ -384,14 +383,6 @@ export async function createIntuechoApp({
     if (result.error) return reply.code(result.status).send({ error: result.error });
     return result;
   });
-  for (const route of ["/v1/pdf-annotations:sync", "/v1/thin-reading/annotations:sync"]) {
-    app.post(route, async (request, reply) => {
-      const user = requireDesktopUser(request, reply); if (!user) return;
-      const parsed = desktopCommunityAnnotationBatchSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: "INVALID_ANNOTATIONS", issues: parsed.error.issues });
-      return { results: annotationCommunity.syncDesktopAnnotations(user, parsed.data.annotations) };
-    });
-  }
   app.post("/v1/thin-reading/recommendations:query", async (request, reply) => {
     if (!requireDesktopUser(request, reply)) return;
     const parsed = communityRecommendationQuerySchema.safeParse(request.body);

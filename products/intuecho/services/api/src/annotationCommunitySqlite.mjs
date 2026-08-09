@@ -128,6 +128,7 @@ export function initializeAnnotationCommunitySqlite(db) {
     CREATE INDEX IF NOT EXISTS annotations_v2_parent_idx ON annotations_v2(parent_annotation_id, created_at);
     CREATE TABLE IF NOT EXISTS annotation_targets_v2 (id TEXT PRIMARY KEY, annotation_id TEXT NOT NULL, literature_id TEXT NOT NULL, target_kind TEXT NOT NULL, position INTEGER NOT NULL, target_json TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS desktop_annotation_syncs_v2 (owner_id TEXT NOT NULL, queue_key TEXT NOT NULL, source_annotation_id TEXT NOT NULL, annotation_id TEXT NOT NULL UNIQUE, source_created_at TEXT NOT NULL, source_updated_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(owner_id, queue_key));
+    CREATE TABLE IF NOT EXISTS desktop_annotation_publications_v2 (owner_id TEXT NOT NULL, queue_key TEXT NOT NULL, source_annotation_id TEXT NOT NULL, annotation_id TEXT NOT NULL UNIQUE, source_revision INTEGER NOT NULL CHECK(source_revision > 0), source_updated_at TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('published', 'retracted')), remote_revision INTEGER NOT NULL CHECK(remote_revision > 0), synced_at TEXT NOT NULL, PRIMARY KEY(owner_id, queue_key));
     CREATE INDEX IF NOT EXISTS annotation_targets_v2_literature_idx ON annotation_targets_v2(literature_id, annotation_id);
     CREATE TABLE IF NOT EXISTS annotation_target_evidence_v2 (target_id TEXT NOT NULL, position INTEGER NOT NULL, literature_id TEXT NOT NULL, evidence_json TEXT NOT NULL, PRIMARY KEY(target_id, position));
     CREATE INDEX IF NOT EXISTS annotation_target_evidence_v2_literature_idx ON annotation_target_evidence_v2(literature_id, target_id);
@@ -377,6 +378,97 @@ export class SqliteAnnotationCommunityRepository {
       }
       return { annotationId: item.annotationId, intuechoAnnotationId: id, queueKey: item.queueKey, status: "synced", syncedAt };
     }))();
+  }
+
+  applyDesktopAnnotationPublications(author, operations) {
+    return this.db.transaction(() => operations.map((operation) => {
+      const prior = this.db.prepare("SELECT * FROM desktop_annotation_publications_v2 WHERE owner_id = ? AND queue_key = ?").get(author.id, operation.queueKey);
+      if (prior?.source_annotation_id !== undefined && prior.source_annotation_id !== operation.annotationId) {
+        return this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_QUEUE_CONFLICT");
+      }
+      if (prior && this.#publicationIsStale(prior, operation)) {
+        return this.#publicationFailure(operation, "STALE_ANNOTATION_PUBLICATION");
+      }
+      if (prior && Number(prior.source_revision) === operation.revision && Date.parse(prior.source_updated_at) === Date.parse(operation.updatedAt)) {
+        return this.#publicationResult(operation, prior);
+      }
+      if (operation.operation === "retract") return this.#retractDesktopPublication(author, operation, prior);
+      return this.#upsertDesktopPublication(author, operation, prior);
+    }))();
+  }
+
+  #publicationFailure(operation, error) {
+    return { annotationId: operation.annotationId, error, queueKey: operation.queueKey };
+  }
+
+  #publicationIsStale(prior, operation) {
+    if (operation.revision < Number(prior.source_revision)) return true;
+    if (operation.revision === Number(prior.source_revision)) return Date.parse(prior.source_updated_at) !== Date.parse(operation.updatedAt);
+    return Date.parse(operation.updatedAt) < Date.parse(prior.source_updated_at);
+  }
+
+  #publicationResult(operation, row) {
+    return {
+      annotationId: operation.annotationId,
+      queueKey: operation.queueKey,
+      remoteAnnotationId: row.annotation_id,
+      remoteRevision: Number(row.remote_revision),
+      state: row.state,
+      syncedAt: row.synced_at
+    };
+  }
+
+  #publicationTarget(literatureId, sourcePassage) {
+    return {
+      anchorHash: sourcePassage.anchorHash,
+      excerpt: sourcePassage.excerpt,
+      kind: "source_passage",
+      literature: { literatureId },
+      ...(sourcePassage.page ? { page: sourcePassage.page } : {}),
+      rects: sourcePassage.rects ?? []
+    };
+  }
+
+  #upsertDesktopPublication(author, operation, prior) {
+    const confirmed = this.#literatureRecord(operation.literatureId);
+    if (!confirmed) return this.#publicationFailure(operation, "LITERATURE_NOT_FOUND");
+    const now = new Date().toISOString();
+    const id = prior?.annotation_id ?? `annotation_${randomUUID()}`;
+    let remoteRevision = 1;
+    if (!prior) {
+      this.db.prepare(`INSERT INTO annotations_v2(id, body, author_id, author_name, author_initials, author_profile_snapshot_json, visibility, organization_id, share_to_plaza, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'public', NULL, 1, 1, ?, ?)`)
+        .run(id, operation.body, author.id, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), operation.updatedAt, operation.updatedAt);
+    } else {
+      const annotation = this.db.prepare("SELECT revision FROM annotations_v2 WHERE id = ? AND author_id = ?").get(id, author.id);
+      if (!annotation) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_NOT_FOUND");
+      remoteRevision = Number(annotation.revision) + 1;
+      this.db.prepare("UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = 'public', organization_id = NULL, share_to_plaza = 1, revision = ?, updated_at = ? WHERE id = ?")
+        .run(operation.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), remoteRevision, operation.updatedAt, id);
+    }
+    this.#replaceTargets(id, [this.#publicationTarget(confirmed.literatureId, operation.sourcePassage)], now);
+    this.#assignPlatformTags(id, operation.body, [], now);
+    if (!prior) {
+      this.db.prepare("INSERT INTO desktop_annotation_publications_v2(owner_id, queue_key, source_annotation_id, annotation_id, source_revision, source_updated_at, state, remote_revision, synced_at) VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?)")
+        .run(author.id, operation.queueKey, operation.annotationId, id, operation.revision, operation.updatedAt, remoteRevision, now);
+    } else {
+      this.db.prepare("UPDATE desktop_annotation_publications_v2 SET source_revision = ?, source_updated_at = ?, state = 'published', remote_revision = ?, synced_at = ? WHERE owner_id = ? AND queue_key = ?")
+        .run(operation.revision, operation.updatedAt, remoteRevision, now, author.id, operation.queueKey);
+    }
+    return this.#publicationResult(operation, { annotation_id: id, remote_revision: remoteRevision, state: "published", synced_at: now });
+  }
+
+  #retractDesktopPublication(author, operation, prior) {
+    if (!prior) return this.#publicationFailure(operation, "ANNOTATION_PUBLICATION_NOT_FOUND");
+    if (prior.annotation_id !== operation.remoteAnnotationId) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_MISMATCH");
+    const annotation = this.db.prepare("SELECT revision FROM annotations_v2 WHERE id = ? AND author_id = ?").get(prior.annotation_id, author.id);
+    if (!annotation) return this.#publicationFailure(operation, "REMOTE_ANNOTATION_NOT_FOUND");
+    const now = new Date().toISOString();
+    const remoteRevision = Number(annotation.revision) + 1;
+    this.db.prepare("UPDATE annotations_v2 SET visibility = 'private', organization_id = NULL, share_to_plaza = 0, revision = ?, updated_at = ? WHERE id = ?")
+      .run(remoteRevision, operation.updatedAt, prior.annotation_id);
+    this.db.prepare("UPDATE desktop_annotation_publications_v2 SET source_revision = ?, source_updated_at = ?, state = 'retracted', remote_revision = ?, synced_at = ? WHERE owner_id = ? AND queue_key = ?")
+      .run(operation.revision, operation.updatedAt, remoteRevision, now, author.id, operation.queueKey);
+    return this.#publicationResult(operation, { annotation_id: prior.annotation_id, remote_revision: remoteRevision, state: "retracted", synced_at: now });
   }
 
   async communityRecommendations(scope, viewer = null) {

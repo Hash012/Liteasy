@@ -1,7 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import {
-  desktopCommunityAnnotationBatchSchema,
   communityRecommendationQuerySchema,
   contextualDraftSchema,
   createFeedbackSchema,
@@ -249,17 +248,6 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   });
   app.post("/v1/draft-handoffs/:handoffId/consume", async (request) =>
     runtime.repository.consumeDraftHandoff(request.params.handoffId, requireUser(request).id));
-  for (const route of ["/v1/pdf-annotations:sync", "/v1/thin-reading/annotations:sync"]) {
-    app.post(route, async (request) => {
-      const value = validated(desktopCommunityAnnotationBatchSchema, request.body, "INVALID_ANNOTATIONS");
-      return {
-        results: await runtime.annotationCommunityRepository.syncDesktopAnnotations(
-          requireDesktopUser(request),
-          value.annotations
-        )
-      };
-    });
-  }
   app.post("/v1/thin-reading/recommendations:query", async (request) => {
     const value = validated(
       communityRecommendationQuerySchema,

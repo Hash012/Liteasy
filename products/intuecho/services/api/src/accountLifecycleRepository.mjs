@@ -70,6 +70,7 @@ export class PostgresAccountLifecycleRepository {
       const handoffs = await client.query("DELETE FROM desktop_draft_handoffs WHERE owner_id = $1", [subjectId]);
       const annotationHandoffs = await client.query("DELETE FROM desktop_annotation_handoffs WHERE owner_id = $1", [subjectId]);
       const annotationSyncs = await client.query("DELETE FROM desktop_annotation_syncs WHERE owner_id = $1", [subjectId]);
+      const annotationPublications = await client.query("DELETE FROM desktop_annotation_publications WHERE owner_id = $1", [subjectId]);
       const annotations = await client.query("DELETE FROM community_annotations WHERE owner_id = $1", [subjectId]);
       const drafts = await client.query("DELETE FROM drafts WHERE owner_id = $1", [subjectId]);
       // Appeals reference platform tags with ON DELETE RESTRICT, so detach them before
@@ -171,6 +172,7 @@ export class PostgresAccountLifecycleRepository {
         anonymizedComments: comments.rowCount,
         anonymizedPosts: posts.rowCount,
         deletedAnnotationHandoffs: annotationHandoffs.rowCount,
+        deletedAnnotationPublications: annotationPublications.rowCount,
         deletedAnnotationSaves: annotationSaves.rowCount,
         deletedAnnotationRatings: annotationRatings.rowCount,
         deletedAnnotationSignals: annotationSignals.rowCount,

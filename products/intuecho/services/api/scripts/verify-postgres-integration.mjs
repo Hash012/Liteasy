@@ -39,10 +39,11 @@ try {
     "008_account_deletion_annotation_history.sql",
     "009_detach_deleted_annotation_audit.sql",
     "010_direct_message_read_state.sql",
-    "011_literature_resolution_provenance.sql"
+    "011_literature_resolution_provenance.sql",
+    "012_desktop_annotation_publications.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 11, current: true });
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 12, current: true });
   await migrationPool.query(`
     DO $$
     DECLARE tables text;
@@ -467,6 +468,96 @@ try {
   }]);
   assert.equal(synced[0].status, "synced");
 
+  const publicationOperation = {
+    annotationId: "desktop-publication-1",
+    body: "来自桌面端、只引用已确认文献的公开批注。",
+    literatureId: manualLiterature.literatureId,
+    operation: "upsert",
+    queueKey: "desktop-publication-queue-1",
+    revision: 1,
+    sourcePassage: {
+      anchorHash: "sha256:postgres-publication-source",
+      excerpt: "The desktop publication retains this source passage.",
+      page: 5,
+      rects: []
+    },
+    updatedAt: "2026-08-09T01:00:00.0000Z"
+  };
+  const [publicationCreated] = await annotations.applyDesktopAnnotationPublications(userOne, [publicationOperation]);
+  assert.equal(publicationCreated.state, "published");
+  assert.equal(publicationCreated.remoteRevision, 1);
+  const [publicationReplayed] = await annotations.applyDesktopAnnotationPublications(userOne, [{
+    ...publicationOperation,
+    updatedAt: "2026-08-09T01:00:00.000Z"
+  }]);
+  assert.deepEqual(publicationReplayed, publicationCreated);
+  const [publicationUpdated] = await annotations.applyDesktopAnnotationPublications(userOne, [{
+    ...publicationOperation,
+    body: "桌面批注的第二个来源修订。",
+    revision: 2,
+    updatedAt: "2026-08-09T02:00:00.000Z"
+  }]);
+  assert.equal(publicationUpdated.remoteAnnotationId, publicationCreated.remoteAnnotationId);
+  assert.equal(publicationUpdated.remoteRevision, publicationCreated.remoteRevision + 1);
+  const [publicationStale] = await annotations.applyDesktopAnnotationPublications(userOne, [{
+    ...publicationOperation,
+    body: "过期来源修订不能覆盖远端批注。",
+    updatedAt: "2026-08-09T03:00:00.000Z"
+  }]);
+  assert.equal(publicationStale.error, "STALE_ANNOTATION_PUBLICATION");
+  const [publicationStaleTimestamp] = await annotations.applyDesktopAnnotationPublications(userOne, [{
+    ...publicationOperation,
+    body: "时间倒退的来源修订不能覆盖远端批注。",
+    revision: 3,
+    updatedAt: "2026-08-09T01:30:00.000Z"
+  }]);
+  assert.equal(publicationStaleTimestamp.error, "STALE_ANNOTATION_PUBLICATION");
+  const retractOperation = {
+    annotationId: publicationOperation.annotationId,
+    operation: "retract",
+    queueKey: publicationOperation.queueKey,
+    remoteAnnotationId: publicationCreated.remoteAnnotationId,
+    revision: 4,
+    updatedAt: "2026-08-09T04:00:00.000Z"
+  };
+  const [publicationRetracted] = await annotations.applyDesktopAnnotationPublications(userOne, [retractOperation]);
+  assert.equal(publicationRetracted.state, "retracted");
+  assert.deepEqual((await annotations.applyDesktopAnnotationPublications(userOne, [retractOperation]))[0], publicationRetracted);
+  const [otherOwnerPublication] = await annotations.applyDesktopAnnotationPublications(userTwo, [publicationOperation]);
+  assert.notEqual(otherOwnerPublication.remoteAnnotationId, publicationCreated.remoteAnnotationId);
+  const publicationRow = await pool.query("SELECT visibility, share_to_plaza FROM annotations WHERE id = $1", [publicationCreated.remoteAnnotationId]);
+  assert.deepEqual(publicationRow.rows[0], { share_to_plaza: false, visibility: "private" });
+  const publicationTarget = await pool.query("SELECT literature_id, target FROM annotation_targets WHERE annotation_id = $1", [publicationCreated.remoteAnnotationId]);
+  assert.equal(publicationTarget.rows[0].literature_id, manualLiterature.literatureId);
+  assert.deepEqual(publicationTarget.rows[0].target.literature, { literatureId: manualLiterature.literatureId });
+  assert.equal((await pool.query("SELECT title FROM literature_records WHERE id = $1", [manualLiterature.literatureId])).rows[0].title, "Corrected Integration Literature");
+  const [publishedDeletionPublication] = await annotations.applyDesktopAnnotationPublications(userOne, [{
+    ...publicationOperation,
+    annotationId: "desktop-publication-account-deletion",
+    queueKey: "desktop-publication-account-deletion",
+    updatedAt: "2026-08-09T05:00:00.000Z"
+  }]);
+  assert.equal(publishedDeletionPublication.state, "published");
+  const concurrentPublicationA = {
+    ...publicationOperation,
+    annotationId: "desktop-publication-concurrent-a",
+    queueKey: "desktop-publication-concurrent-a",
+    updatedAt: "2026-08-09T06:00:00.000Z"
+  };
+  const concurrentPublicationB = {
+    ...publicationOperation,
+    annotationId: "desktop-publication-concurrent-b",
+    queueKey: "desktop-publication-concurrent-b",
+    updatedAt: "2026-08-09T06:00:00.000Z"
+  };
+  const [forwardPublicationBatch, reversePublicationBatch] = await Promise.all([
+    annotations.applyDesktopAnnotationPublications(userTwo, [concurrentPublicationA, concurrentPublicationB]),
+    annotations.applyDesktopAnnotationPublications(userTwo, [concurrentPublicationB, concurrentPublicationA])
+  ]);
+  const forwardPublicationIds = Object.fromEntries(forwardPublicationBatch.map((result) => [result.queueKey, result.remoteAnnotationId]));
+  const reversePublicationIds = Object.fromEntries(reversePublicationBatch.map((result) => [result.queueKey, result.remoteAnnotationId]));
+  assert.deepEqual(reversePublicationIds, forwardPublicationIds);
+
   const privateRoot = await annotations.createAnnotation(userOne, {
     body: "账号删除时必须移除的私有批注。",
     shareToPlaza: false,
@@ -626,13 +717,14 @@ try {
   const accountDeletion = await accountLifecycle.deleteAccount(accountDeletionInput);
   assert.equal(accountDeletion.replayed, false);
   assert.deepEqual(accountDeletion.result, {
-    anonymizedAnnotations: 2,
+    anonymizedAnnotations: 3,
     anonymizedAnnotationVersions: 1,
     anonymizedComments: 1,
     anonymizedPosts: 1,
     anonymizedReplies: 1,
     anonymizedReplyVersions: 1,
     deletedAnnotationHandoffs: 1,
+    deletedAnnotationPublications: 2,
     deletedAnnotationRatings: 1,
     deletedAnnotationSaves: 1,
     deletedAnnotationSignals: 0,
@@ -664,6 +756,7 @@ try {
       (SELECT count(*)::int FROM feedback WHERE submitted_by = 'user-1') AS attributed_feedback,
       (SELECT count(*)::int FROM desktop_annotation_handoffs WHERE owner_id = 'user-1') AS annotation_handoffs,
       (SELECT count(*)::int FROM desktop_annotation_syncs WHERE owner_id = 'user-1') AS annotation_syncs,
+      (SELECT count(*)::int FROM desktop_annotation_publications WHERE owner_id = 'user-1') AS annotation_publications,
       (SELECT count(*)::int FROM annotation_saves WHERE user_id = 'user-1') AS annotation_saves,
       (SELECT count(*)::int FROM annotation_signals WHERE user_id = 'user-1') AS annotation_signals,
       (SELECT count(*)::int FROM annotation_ratings WHERE user_id = 'user-1') AS annotation_ratings,
@@ -675,6 +768,7 @@ try {
   `);
   assert.deepEqual(privateAfterDeletion.rows[0], {
     annotation_handoffs: 0,
+    annotation_publications: 0,
     annotation_ratings: 0,
     annotation_saves: 0,
     annotation_signals: 0,

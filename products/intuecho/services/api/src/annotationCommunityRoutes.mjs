@@ -6,6 +6,8 @@ import {
   createConversationSchema,
   createReplySchema,
   desktopAnnotationHandoffSchema,
+  desktopAnnotationPublicationBatchSchema,
+  desktopCommunityAnnotationBatchSchema,
   followUserSchema,
   markConversationReadSchema,
   sendMessageSchema,
@@ -109,6 +111,25 @@ export function registerAnnotationCommunityRoutes(app, repository, {
       if (!viewer) return;
       const input = validated(desktopAnnotationHandoffSchema, request.body, "INVALID_HANDOFF");
       return reply.code(201).send(await repository.createHandoff(viewer.id, input));
+    }));
+
+    app.post("/v1/pdf-annotations:sync", async (request, reply) => route(reply, async () => {
+      const viewer = requireDesktopUser(request, reply);
+      if (!viewer) return;
+      const publication = desktopAnnotationPublicationBatchSchema.safeParse(request.body);
+      if (publication.success) {
+        return { results: await repository.applyDesktopAnnotationPublications(viewer, publication.data.operations) };
+      }
+      const legacy = desktopCommunityAnnotationBatchSchema.safeParse(request.body);
+      if (legacy.success) return { results: await repository.syncDesktopAnnotations(viewer, legacy.data.annotations) };
+      throw new AnnotationCommunityError("INVALID_ANNOTATIONS");
+    }));
+
+    app.post("/v1/thin-reading/annotations:sync", async (request, reply) => route(reply, async () => {
+      const viewer = requireDesktopUser(request, reply);
+      if (!viewer) return;
+      const legacy = validated(desktopCommunityAnnotationBatchSchema, request.body, "INVALID_ANNOTATIONS");
+      return { results: await repository.syncDesktopAnnotations(viewer, legacy.annotations) };
     }));
   }
 

@@ -14,6 +14,7 @@ function config() {
 function runtime(overrides = {}) {
   const calls = [];
   const annotationCommunityRepository = {
+    async applyDesktopAnnotationPublications(viewer, operations) { calls.push({ applyDesktopAnnotationPublications: { operations, viewer } }); return operations.map((operation) => ({ annotationId: operation.annotationId, queueKey: operation.queueKey, remoteAnnotationId: "annotation-remote-1", remoteRevision: operation.revision, state: operation.operation === "retract" ? "retracted" : "published", syncedAt: "2026-08-09T01:00:00.000Z" })); },
     async consumeHandoff(handoffId, viewerId) { calls.push({ consumeAnnotationHandoff: { handoffId, viewerId } }); return { draft: { body: "", shareToPlaza: true, tags: [], targets: [], visibility: "public" }, replayed: false }; },
     async createHandoff(viewerId, input) { calls.push({ createAnnotationHandoff: { input, viewerId } }); return { expiresAt: new Date("2026-08-07T00:05:00.000Z"), handoffId: "annotation-handoff-1" }; },
     async listAdminAnnotations() { calls.push({ listAdminAnnotations: true }); return []; },
@@ -21,6 +22,7 @@ function runtime(overrides = {}) {
     async moderateAnnotation(input) { calls.push({ moderateAnnotation: input }); return { action: input.action, annotationId: input.annotationId, ok: true }; },
     async plaza() { return []; },
     async resolveTagAppeal(appealId, adminId, input, traceId) { calls.push({ resolveTagAppeal: { adminId, appealId, input, traceId } }); return { appealId, decision: input.decision }; },
+    async syncDesktopAnnotations(viewer, annotations) { calls.push({ syncDesktopAnnotations: { annotations, viewer } }); return annotations.map((annotation) => ({ annotationId: annotation.annotationId, intuechoAnnotationId: "annotation-legacy-1", queueKey: annotation.queueKey, status: "synced", syncedAt: annotation.updatedAt })); },
     ...overrides.annotationCommunityRepository
   };
   const repository = {
@@ -245,6 +247,67 @@ test("uses the desktop audience for topic-free annotation handoff and Web audien
     });
     assert.equal(consumed.statusCode, 200, consumed.body);
     assert.deepEqual(instance.calls.find((item) => item.consumeAnnotationHandoff).consumeAnnotationHandoff, { handoffId: "annotation-handoff-1", viewerId: "user-1" });
+  } finally {
+    await app.close();
+  }
+});
+
+test("routes desktop publication operations through the desktop audience and repository contract", async () => {
+  const instance = runtime();
+  const app = await createProductionIntuechoApp(instance, config());
+  try {
+    const response = await app.inject({
+      headers: { authorization: "Bearer desktop-token" },
+      method: "POST",
+      payload: {
+        operations: [{
+          annotationId: "desktop-annotation-1",
+          body: "这条桌面批注只引用已确认的文献记录。",
+          literatureId: "literature-publication-1",
+          operation: "upsert",
+          queueKey: "paper-publication-1:desktop-annotation-1",
+          revision: 1,
+          sourcePassage: { anchorHash: "sha256:publication-source", excerpt: "A source passage retained by the desktop annotation.", page: 3, rects: [] },
+          updatedAt: "2026-08-09T01:00:00.000Z"
+        }]
+      },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().results[0].state, "published");
+    assert.deepEqual(instance.calls.find((item) => item.applyDesktopAnnotationPublications).applyDesktopAnnotationPublications.viewer, {
+      id: "user-1",
+      initials: "同名",
+      name: "同名研究者"
+    });
+  } finally {
+    await app.close();
+  }
+});
+
+test("keeps the legacy desktop annotation payload readable during publication rollout", async () => {
+  const instance = runtime();
+  const app = await createProductionIntuechoApp(instance, config());
+  try {
+    const response = await app.inject({
+      headers: { authorization: "Bearer desktop-token" },
+      method: "POST",
+      payload: {
+        annotations: [{
+          annotationId: "desktop-annotation-legacy",
+          body: "旧版桌面批注。",
+          createdAt: "2026-08-09T01:00:00.000Z",
+          queueKey: "paper-legacy:desktop-annotation-legacy",
+          status: "pending_public",
+          targets: [{ kind: "whole_document", literature: { identity: { id: "doi:10.1000/legacy-route", kind: "doi", source: "metadata", value: "10.1000/legacy-route" }, metadata: { authors: [], title: "Legacy route" } } }],
+          updatedAt: "2026-08-09T01:00:00.000Z"
+        }]
+      },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().results[0].status, "synced");
+    assert.equal(instance.calls.some((item) => item.syncDesktopAnnotations), true);
   } finally {
     await app.close();
   }

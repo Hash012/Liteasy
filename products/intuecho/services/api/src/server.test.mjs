@@ -240,6 +240,37 @@ function annotationPayload(overrides = {}) {
   };
 }
 
+function publicationOperation(overrides = {}) {
+  return {
+    annotationId: "desktop-annotation-1",
+    body: "这条桌面批注只引用已确认的文献记录。",
+    literatureId: "literature-publication-1",
+    operation: "upsert",
+    queueKey: "paper-publication-1:desktop-annotation-1",
+    revision: 1,
+    sourcePassage: {
+      anchorHash: "sha256:publication-source",
+      excerpt: "A source passage retained by the desktop annotation.",
+      page: 3,
+      rects: []
+    },
+    updatedAt: "2026-08-09T01:00:00.000Z",
+    ...overrides
+  };
+}
+
+function insertConfirmedPublicationLiterature(db, literatureId = "literature-publication-1") {
+  const now = "2026-08-09T00:00:00.000Z";
+  db.prepare(`INSERT INTO literature_records_v2(
+    id, title, authors_json, publication_year, document_type, record_source,
+    source_provider, confirmed_at, revision, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, 'manual', NULL, ?, 1, ?, ?)`)
+    .run(literatureId, "Server Confirmed Publication Literature", JSON.stringify(["Confirmed Author"]), 2026, "journal_article", now, now, now);
+  db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, 'doi', ?, 'manual', ?)")
+    .run(literatureId, "10.1000/confirmed-publication", now);
+  return literatureId;
+}
+
 function annotationV2Payload(overrides = {}) {
   const literature = {
     identity: {
@@ -455,6 +486,40 @@ test("reuses legacy normalized DOI values and preserves untouched legacy provena
   db.close();
 });
 
+test("derives desktop publication targets from confirmed literature instead of caller metadata", async () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  const literatureId = insertConfirmedPublicationLiterature(db, "literature-trust-boundary");
+  const [created] = repository.applyDesktopAnnotationPublications({
+    id: "publication-owner",
+    initials: "PO",
+    name: "Publication Owner"
+  }, [publicationOperation({
+    literatureId,
+    sourcePassage: {
+      anchorHash: "sha256:trusted-source",
+      excerpt: "Only canonical passage fields cross the repository boundary.",
+      kind: "derived_passage",
+      literature: { literatureId: "spoofed-literature" },
+      page: 5,
+      provenance: { provider: "spoofed-provider" },
+      rects: [],
+      title: "Spoofed title"
+    }
+  })]);
+  assert.equal(created.state, "published");
+  const target = JSON.parse(db.prepare("SELECT target_json FROM annotation_targets_v2 WHERE annotation_id = ?").get(created.remoteAnnotationId).target_json);
+  assert.deepEqual(target, {
+    anchorHash: "sha256:trusted-source",
+    excerpt: "Only canonical passage fields cross the repository boundary.",
+    kind: "source_passage",
+    literature: { literatureId },
+    page: 5,
+    rects: []
+  });
+  db.close();
+});
+
 test("acquires PostgreSQL literature identity locks in canonical key order", async () => {
   const lockKeys = [];
   const row = {
@@ -494,6 +559,70 @@ test("acquires PostgreSQL literature identity locks in canonical key order", asy
     }
   });
   assert.deepEqual(lockKeys, ["arxiv_id:2401.0001", "doi:10.1000/z"]);
+});
+
+test("replays PostgreSQL desktop publications when updated timestamps identify the same instant", async () => {
+  const queries = [];
+  const prior = {
+    annotation_id: "annotation-remote-1",
+    owner_id: "user-1",
+    queue_key: "paper-publication-1:desktop-annotation-1",
+    remote_revision: 2,
+    source_annotation_id: "desktop-annotation-1",
+    source_revision: 2,
+    source_updated_at: new Date("2026-08-09T02:00:00.000Z"),
+    state: "published",
+    synced_at: new Date("2026-08-09T02:00:01.000Z")
+  };
+  const client = {
+    async query(sql) {
+      queries.push(sql);
+      if (sql.startsWith("SELECT * FROM desktop_annotation_publications")) return { rows: [prior] };
+      return { rows: [] };
+    },
+    release() {}
+  };
+  const repository = new PostgresAnnotationCommunityRepository({
+    async connect() { return client; }
+  });
+  const [replayed] = await repository.applyDesktopAnnotationPublications({ id: "user-1" }, [publicationOperation({
+    revision: 2,
+    updatedAt: "2026-08-09T02:00:00.0000Z"
+  })]);
+  assert.deepEqual(replayed, {
+    annotationId: "desktop-annotation-1",
+    queueKey: "paper-publication-1:desktop-annotation-1",
+    remoteAnnotationId: "annotation-remote-1",
+    remoteRevision: 2,
+    state: "published",
+    syncedAt: "2026-08-09T02:00:01.000Z"
+  });
+  assert.equal(queries.some((sql) => sql.startsWith("UPDATE annotations")), false);
+});
+
+test("acquires PostgreSQL desktop publication locks in canonical order while preserving result order", async () => {
+  const lockKeys = [];
+  const client = {
+    async query(sql, values = []) {
+      if (sql.includes("pg_advisory_xact_lock")) lockKeys.push(values[0]);
+      if (sql.startsWith("SELECT * FROM desktop_annotation_publications")) return { rows: [] };
+      if (sql.startsWith("SELECT * FROM literature_records")) return { rows: [] };
+      return { rows: [] };
+    },
+    release() {}
+  };
+  const repository = new PostgresAnnotationCommunityRepository({
+    async connect() { return client; }
+  });
+  const results = await repository.applyDesktopAnnotationPublications({ id: "publication-owner" }, [
+    publicationOperation({ annotationId: "annotation-z", queueKey: "queue-z" }),
+    publicationOperation({ annotationId: "annotation-a", queueKey: "queue-a" })
+  ]);
+  assert.deepEqual(lockKeys, [
+    "desktop-publication:publication-owner:queue-a",
+    "desktop-publication:publication-owner:queue-z"
+  ]);
+  assert.deepEqual(results.map((result) => result.queueKey), ["queue-z", "queue-a"]);
 });
 
 test("does not serialize untouched PostgreSQL legacy rows as canonical literature", async () => {
@@ -820,6 +949,117 @@ test("community annotation sync is idempotent per user and recommendations use e
       }
     });
     assert.deepEqual(unrelated.json(), { recommendations: [] });
+  });
+});
+
+test("desktop publication operations keep confirmed literature metadata server-owned across replay, update, retract, and owners", async () => {
+  await withApp(async (app, db) => {
+    const literatureId = insertConfirmedPublicationLiterature(db);
+    const createdResponse = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [publicationOperation({ literatureId, updatedAt: "2026-08-09T01:00:00.0000Z" })] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(createdResponse.statusCode, 200, createdResponse.body);
+    const created = createdResponse.json().results[0];
+    assert.equal(created.state, "published");
+    assert.equal(created.remoteRevision, 1);
+
+    const storedTarget = JSON.parse(db.prepare("SELECT target_json FROM annotation_targets_v2 WHERE annotation_id = ?").get(created.remoteAnnotationId).target_json);
+    assert.deepEqual(storedTarget.literature, { literatureId });
+    assert.equal(db.prepare("SELECT title FROM literature_records_v2 WHERE id = ?").get(literatureId).title, "Server Confirmed Publication Literature");
+
+    const replayResponse = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [publicationOperation({ literatureId })] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    const replayed = replayResponse.json().results[0];
+    assert.equal(replayResponse.statusCode, 200, replayResponse.body);
+    assert.equal(replayed.remoteAnnotationId, created.remoteAnnotationId);
+    assert.equal(replayed.remoteRevision, created.remoteRevision);
+
+    const updateResponse = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [publicationOperation({
+        body: "新版桌面批注。",
+        literatureId,
+        revision: 2,
+        updatedAt: "2026-08-09T02:00:00.000Z"
+      })] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    const updated = updateResponse.json().results[0];
+    assert.equal(updated.remoteAnnotationId, created.remoteAnnotationId);
+    assert.equal(updated.remoteRevision, created.remoteRevision + 1);
+
+    const staleResponse = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [publicationOperation({
+        body: "过期桌面批注。",
+        literatureId,
+        updatedAt: "2026-08-09T03:00:00.000Z"
+      })] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(staleResponse.statusCode, 200, staleResponse.body);
+    assert.equal(staleResponse.json().results[0].error, "STALE_ANNOTATION_PUBLICATION");
+    assert.equal(db.prepare("SELECT body FROM annotations_v2 WHERE id = ?").get(created.remoteAnnotationId).body, "新版桌面批注。");
+
+    const staleTimestampResponse = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [publicationOperation({
+        body: "时间倒退的桌面批注。",
+        literatureId,
+        revision: 3,
+        updatedAt: "2026-08-09T01:30:00.000Z"
+      })] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(staleTimestampResponse.statusCode, 200, staleTimestampResponse.body);
+    assert.equal(staleTimestampResponse.json().results[0].error, "STALE_ANNOTATION_PUBLICATION");
+    assert.equal(db.prepare("SELECT body FROM annotations_v2 WHERE id = ?").get(created.remoteAnnotationId).body, "新版桌面批注。");
+
+    const retractOperation = {
+      annotationId: "desktop-annotation-1",
+      operation: "retract",
+      queueKey: "paper-publication-1:desktop-annotation-1",
+      remoteAnnotationId: created.remoteAnnotationId,
+      revision: 4,
+      updatedAt: "2026-08-09T04:00:00.000Z"
+    };
+    const retractResponse = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [retractOperation] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    const retracted = retractResponse.json().results[0];
+    assert.equal(retracted.state, "retracted");
+    assert.equal(db.prepare("SELECT visibility, share_to_plaza FROM annotations_v2 WHERE id = ?").get(created.remoteAnnotationId).visibility, "private");
+    assert.equal(db.prepare("SELECT visibility, share_to_plaza FROM annotations_v2 WHERE id = ?").get(created.remoteAnnotationId).share_to_plaza, 0);
+
+    const repeatedRetract = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { operations: [retractOperation] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.deepEqual(repeatedRetract.json().results[0], retracted);
+
+    const otherOwner = await app.inject({
+      headers: otherDesktopHeader,
+      method: "POST",
+      payload: { operations: [publicationOperation({ literatureId })] },
+      url: "/v1/pdf-annotations:sync"
+    });
+    assert.equal(otherOwner.statusCode, 200, otherOwner.body);
+    assert.notEqual(otherOwner.json().results[0].remoteAnnotationId, created.remoteAnnotationId);
   });
 });
 
