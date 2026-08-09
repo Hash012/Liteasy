@@ -78,7 +78,7 @@ authorized default-on/callback behavior and unauthorized disabled behavior.
 The same review identified an empty `ready` status rendering a blank stage. The
 region now uses the stable `未生成` fallback, covered by a dedicated test.
 
-Fix commit: pending
+Fix commit: 6a0725913fcd36d7cb10325c853e8ad8b70d86c8
 
 Verification:
 
