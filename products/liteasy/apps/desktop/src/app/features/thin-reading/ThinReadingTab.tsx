@@ -338,9 +338,13 @@ export function ThinReadingTab({
   paperRelationsTransport,
   papers
 }: ThinReadingTabProps) {
-  const activeNode = document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId];
+  const [legacyActiveNodeId, setLegacyActiveNodeId] = useState(document.activeNodeId);
+  const displayedActiveNodeId = document.version === "liteasy.thin-reading/v1"
+    ? legacyActiveNodeId
+    : document.activeNodeId;
+  const activeNode = document.nodes[displayedActiveNodeId] ?? document.nodes[document.rootNodeId];
   const activeLegacyEvidence = document.version === "liteasy.thin-reading/v1"
-    ? (document.nodes[document.activeNodeId] ?? document.nodes[document.rootNodeId]).evidence
+    ? (document.nodes[displayedActiveNodeId] ?? document.nodes[document.rootNodeId]).evidence
     : undefined;
   const fetchedCommunityRecommendationState = useThinReadingCommunityRecommendations({
     endpoint: intuechoEndpoint,
@@ -374,6 +378,11 @@ export function ThinReadingTab({
   const [forumState, setForumState] = useState<"idle" | "loading" | "ready" | "error" | "unmapped">("idle");
   const [forumRefresh, setForumRefresh] = useState(0);
   const [expandedRecommendationId, setExpandedRecommendationId] = useState<string | null>(null);
+  useEffect(() => {
+    if (document.version === "liteasy.thin-reading/v1") {
+      setLegacyActiveNodeId(document.activeNodeId);
+    }
+  }, [artifactId, document.activeNodeId, document.version]);
   const paperRelations = useThinReadingPaperRelations({
     artifactId,
     enabled: recommendationStage === "graph",
@@ -563,6 +572,11 @@ export function ThinReadingTab({
   }
 
   function goToNode(nodeId: string) {
+    if (document.version === "liteasy.thin-reading/v1") {
+      setLegacyActiveNodeId(nodeId);
+      setBranchMenuOpen(false);
+      return;
+    }
     update({ ...document, activeNodeId: nodeId });
     setBranchMenuOpen(false);
   }

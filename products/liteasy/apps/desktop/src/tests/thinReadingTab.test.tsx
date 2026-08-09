@@ -687,6 +687,8 @@ describe("ThinReadingTab", () => {
     fireEvent.click(within(screen.getByLabelText("Thin reading depth"))
       .getByRole("button", { name: "Overview" }));
 
+    expect(within(screen.getByLabelText("Thin reading depth")).getByText("Overview"))
+      .toHaveAttribute("aria-current", "page");
     expect(onUpdateDocument).not.toHaveBeenCalled();
   });
 
