@@ -72,6 +72,10 @@ test("deletes private forum state and anonymizes public authors in one transacti
   assert.equal(instance.calls.some((call) => call.sql.startsWith("DELETE FROM community_annotations")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("DELETE FROM desktop_draft_handoffs")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("DELETE FROM desktop_annotation_publications")), true);
+  assert.equal(
+    instance.calls.find((call) => call.sql.includes("WITH RECURSIVE deletion_tree")).sql.includes("annotation_replies"),
+    true
+  );
   assert.deepEqual(
     instance.calls.filter((call) => call.sql === "DELETE FROM annotations WHERE id = $1").map((call) => call.values[0]),
     ["annotation-child", "annotation-root"]

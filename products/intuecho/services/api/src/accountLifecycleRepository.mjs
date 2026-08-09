@@ -77,22 +77,42 @@ export class PostgresAccountLifecycleRepository {
       // deleting the subject's non-public annotation tree.
       const tagAppeals = await client.query("DELETE FROM annotation_tag_appeals WHERE submitted_by = $1", [subjectId]);
       const privateAnnotationTree = await client.query(`
-        WITH RECURSIVE deletion_tree(id, depth) AS (
-          SELECT id, 0 FROM annotations
+        WITH RECURSIVE deletion_tree(id, depth, path) AS (
+          SELECT id, 0, ARRAY[id] FROM annotations
            WHERE author_id = $1 AND visibility <> 'public'
+          UNION
+          SELECT derived.id, 0, ARRAY[derived.id]
+            FROM annotation_replies reply
+            JOIN annotations derived ON derived.id = reply.derived_annotation_id
+           WHERE reply.author_id = $1
+             AND reply.visibility <> 'public'
+             AND derived.visibility <> 'public'
           UNION ALL
-          SELECT child.id, parent.depth + 1
-            FROM annotations child
-            JOIN deletion_tree parent ON child.parent_annotation_id = parent.id
-           WHERE child.visibility <> 'public'
+          SELECT descendant.id, parent.depth + 1, parent.path || descendant.id
+            FROM deletion_tree parent
+            JOIN LATERAL (
+              SELECT child.id
+                FROM annotations child
+               WHERE child.parent_annotation_id = parent.id
+                 AND child.visibility <> 'public'
+              UNION
+              SELECT derived.id
+                FROM annotation_replies reply
+                JOIN annotations derived ON derived.id = reply.derived_annotation_id
+               WHERE reply.parent_annotation_id = parent.id
+                 AND derived.visibility <> 'public'
+            ) descendant ON true
+           WHERE NOT descendant.id = ANY(parent.path)
         )
         SELECT id, max(depth)::integer AS depth
           FROM deletion_tree
          GROUP BY id
          ORDER BY depth DESC, id
       `, [subjectId]);
+      let deletedNonPublicReplies = 0;
       for (const annotation of privateAnnotationTree.rows) {
-        await client.query("DELETE FROM annotation_replies WHERE parent_annotation_id = $1", [annotation.id]);
+        const childReplies = await client.query("DELETE FROM annotation_replies WHERE parent_annotation_id = $1 RETURNING visibility", [annotation.id]);
+        deletedNonPublicReplies += childReplies.rows.filter((reply) => reply.visibility !== "public").length;
         await client.query("DELETE FROM annotations WHERE id = $1", [annotation.id]);
       }
       const annotationSignalTargets = await client.query("SELECT annotation_id FROM annotation_signals WHERE user_id = $1", [subjectId]);
@@ -183,7 +203,7 @@ export class PostgresAccountLifecycleRepository {
         deletedDrafts: drafts.rowCount,
         deletedDirectConversations: conversations.rowCount,
         deletedNonPublicAnnotations: privateAnnotationTree.rows.length,
-        deletedNonPublicReplies: privateReplies.rowCount,
+        deletedNonPublicReplies: deletedNonPublicReplies + privateReplies.rowCount,
         deletedPostSaves: postSaves.rowCount,
         deletedProfile: profile.rowCount,
         deletedSignals: signals.rowCount,

@@ -13,11 +13,13 @@ import { IdentityVerificationError } from "./identityVerifier.mjs";
 const identities = new Map([
   ["user-token", { id: "user-1", name: "林立", initials: "LL" }],
   ["same-name-token", { id: "user-2", name: "林立", initials: "LL" }],
-  ["third-token", { id: "user-3", name: "第三位研究者", initials: "第三" }]
+  ["third-token", { id: "user-3", name: "第三位研究者", initials: "第三" }],
+  ["fourth-token", { id: "user-4", name: "第四位研究者", initials: "第四" }]
 ]);
 const userHeader = { authorization: "Bearer user-token" };
 const sameNameHeader = { authorization: "Bearer same-name-token" };
 const thirdHeader = { authorization: "Bearer third-token" };
+const fourthHeader = { authorization: "Bearer fourth-token" };
 const adminHeader = { authorization: "Bearer admin-token" };
 const desktopHeader = { authorization: "Bearer desktop-token" };
 const otherDesktopHeader = { authorization: "Bearer other-desktop-token" };
@@ -1588,6 +1590,225 @@ test("reply projections inherit every parent visibility without entering a broad
   });
 });
 
+test("reply scope locks and transitive root audiences prevent stale or nested disclosure", async () => {
+  await withApp(async (app, db) => {
+    const target = annotationV2Payload().targets[0];
+    const follow = (headers, targetUserId) => app.inject({
+      headers,
+      method: "POST",
+      payload: { targetUserId },
+      url: "/v1/follows"
+    });
+    for (const [headers, targetUserId] of [
+      [userHeader, "user-2"], [sameNameHeader, "user-1"],
+      [userHeader, "user-3"], [thirdHeader, "user-1"],
+      [fourthHeader, "user-2"], [sameNameHeader, "user-4"],
+      [fourthHeader, "user-3"], [thirdHeader, "user-4"]
+    ]) {
+      assert.equal((await follow(headers, targetUserId)).statusCode, 200);
+    }
+
+    const mutualRoot = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "Root audience A", shareToPlaza: false, visibility: "mutual_followers" }),
+      url: "/v1/annotations"
+    });
+    const projectionB = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "Projection B", publishAsAnnotation: true, tags: [], targets: [target] },
+      url: `/v1/annotations/${mutualRoot.json().annotation.id}/replies`
+    });
+    assert.equal(projectionB.statusCode, 201, projectionB.body);
+    const projectionC = await app.inject({
+      headers: thirdHeader,
+      method: "POST",
+      payload: { body: "Nested projection C", publishAsAnnotation: true, tags: [], targets: [target] },
+      url: `/v1/annotations/${projectionB.json().annotation.id}/replies`
+    });
+    assert.equal(projectionC.statusCode, 201, projectionC.body);
+    const nestedId = projectionC.json().annotation.id;
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${nestedId}` })).statusCode, 200);
+    assert.equal((await app.inject({ headers: fourthHeader, method: "GET", url: `/v1/annotations/${nestedId}` })).statusCode, 404);
+    const fourthFeed = await app.inject({ headers: fourthHeader, method: "GET", url: "/v1/me/following-annotations" });
+    assert.equal(fourthFeed.statusCode, 200, fourthFeed.body);
+    assert.equal(fourthFeed.json().annotations.some((annotation) => annotation.id === nestedId), false);
+    assert.equal((await app.inject({ headers: fourthHeader, method: "PUT", payload: { rating: 5 }, url: `/v1/annotations/${nestedId}/rating` })).statusCode, 404);
+    assert.equal((await app.inject({ headers: fourthHeader, method: "POST", url: `/v1/annotations/${nestedId}/save` })).statusCode, 404);
+    assert.equal((await app.inject({
+      headers: fourthHeader,
+      method: "POST",
+      payload: { body: "Must not attach outside root audience", publishAsAnnotation: false, tags: [], targets: [] },
+      url: `/v1/annotations/${nestedId}/replies`
+    })).statusCode, 404);
+
+    db.prepare("UPDATE annotations_v2 SET source_reply_id = ? WHERE id = ?").run("missing-source-reply", nestedId);
+    assert.equal((await app.inject({ headers: thirdHeader, method: "GET", url: `/v1/annotations/${nestedId}` })).statusCode, 404);
+
+    const publicParent = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "Public scope lock" }),
+      url: "/v1/annotations"
+    });
+    assert.equal((await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "Pure reply locks parent scope", publishAsAnnotation: false, tags: [], targets: [] },
+      url: `/v1/annotations/${publicParent.json().annotation.id}/replies`
+    })).statusCode, 201);
+    const narrowed = await app.inject({
+      headers: userHeader,
+      method: "PUT",
+      payload: { organizationId: null, shareToPlaza: false, visibility: "private" },
+      url: `/v1/annotations/${publicParent.json().annotation.id}`
+    });
+    assert.equal(narrowed.statusCode, 409, narrowed.body);
+    assert.equal(narrowed.json().error, "ANNOTATION_SCOPE_LOCKED_BY_REPLIES");
+
+    const organizationParent = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "Organization scope lock", organizationId: "org-scope-a", shareToPlaza: false, visibility: "organization" }),
+      url: "/v1/annotations"
+    });
+    assert.equal((await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "Organization reply locks reassignment", publishAsAnnotation: false, tags: [], targets: [] },
+      url: `/v1/annotations/${organizationParent.json().annotation.id}/replies`
+    })).statusCode, 201);
+    const reassigned = await app.inject({
+      headers: userHeader,
+      method: "PUT",
+      payload: { organizationId: "org-scope-b" },
+      url: `/v1/annotations/${organizationParent.json().annotation.id}`
+    });
+    assert.equal(reassigned.statusCode, 409, reassigned.body);
+    assert.equal(reassigned.json().error, "ANNOTATION_SCOPE_LOCKED_BY_REPLIES");
+
+    const staleParent = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "Stale pure reply parent" }),
+      url: "/v1/annotations"
+    });
+    const staleReply = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "Publish only against current parent scope", publishAsAnnotation: false, tags: [], targets: [] },
+      url: `/v1/annotations/${staleParent.json().annotation.id}/replies`
+    });
+    db.prepare("UPDATE annotations_v2 SET visibility = 'private', share_to_plaza = 0 WHERE id = ?").run(staleParent.json().annotation.id);
+    const stalePublication = await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { published: true, tags: [], targets: [target] },
+      url: `/v1/replies/${staleReply.json().reply.id}/publication`
+    });
+    assert.equal(stalePublication.statusCode, 400, stalePublication.body);
+    assert.equal(stalePublication.json().error, "REPLY_VISIBILITY_MISMATCH");
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotations_v2 WHERE source_reply_id = ?").get(staleReply.json().reply.id).count, 0);
+  }, {
+    authorizeOrganizationVisibility: async ({ organizationId, userId }) =>
+      new Set(["org-scope-a", "org-scope-b"]).has(organizationId) && new Set(["user-1", "user-2"]).has(userId)
+  });
+});
+
+test("linked organization and platform moderation preserve withdrawal provenance", async () => {
+  await withApp(async (app, db) => {
+    const target = annotationV2Payload().targets[0];
+    const createProjection = async (body) => {
+      const parent = await app.inject({
+        headers: userHeader,
+        method: "POST",
+        payload: annotationV2Payload({ body: `${body} parent`, organizationId: "org-moderation", shareToPlaza: false, visibility: "organization" }),
+        url: "/v1/annotations"
+      });
+      const projected = await app.inject({
+        headers: sameNameHeader,
+        method: "POST",
+        payload: { body, publishAsAnnotation: true, tags: [], targets: [target] },
+        url: `/v1/annotations/${parent.json().annotation.id}/replies`
+      });
+      assert.equal(projected.statusCode, 201, projected.body);
+      return { parentId: parent.json().annotation.id, ...projected.json() };
+    };
+    const organizationModerate = (annotationId, action) => app.inject({
+      headers: thirdHeader,
+      method: "POST",
+      payload: { action, reason: `${action} through organization governance` },
+      url: `/v1/annotations/${annotationId}/organization-moderation`
+    });
+    const platformModerate = (annotationId, action) => app.inject({
+      headers: adminHeader,
+      method: "POST",
+      payload: { action, reason: `${action} through platform governance` },
+      url: `/v1/admin/annotations/${annotationId}/moderate`
+    });
+
+    const governed = await createProjection("Organization linked reply");
+    assert.equal((await organizationModerate(governed.annotation.id, "withdraw")).statusCode, 200);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${governed.annotation.id}/replies` })).statusCode, 404);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${governed.parentId}/replies` })).json().replies.length, 0);
+    assert.deepEqual(
+      db.prepare("SELECT action, linked_reply_id FROM annotation_moderation_audit_v2 WHERE annotation_id = ? ORDER BY created_at").all(governed.annotation.id),
+      [{ action: "withdraw", linked_reply_id: governed.reply.id }]
+    );
+    assert.equal((await organizationModerate(governed.annotation.id, "restore")).statusCode, 200);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${governed.parentId}/replies` })).json().replies.length, 1);
+
+    const platformGoverned = await createProjection("Platform withdrawal superseded by author");
+    assert.equal((await platformModerate(platformGoverned.annotation.id, "withdraw")).statusCode, 200);
+    const authorWithdrawal = await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { published: false },
+      url: `/v1/replies/${platformGoverned.reply.id}/publication`
+    });
+    assert.equal(authorWithdrawal.statusCode, 200, authorWithdrawal.body);
+    const platformRestore = await platformModerate(platformGoverned.annotation.id, "restore");
+    assert.equal(platformRestore.statusCode, 409, platformRestore.body);
+    assert.equal(platformRestore.json().error, "ANNOTATION_MODERATION_CONFLICT");
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${platformGoverned.parentId}/replies` })).json().replies.length, 0);
+
+    const directlyWithdrawn = await createProjection("Platform withdrawal superseded by direct author withdrawal");
+    assert.equal((await platformModerate(directlyWithdrawn.annotation.id, "withdraw")).statusCode, 200);
+    assert.equal((await app.inject({
+      headers: sameNameHeader,
+      method: "DELETE",
+      url: `/v1/annotations/${directlyWithdrawn.annotation.id}`
+    })).statusCode, 200);
+    assert.equal(
+      db.prepare("SELECT moderated_by FROM annotation_replies_v2 WHERE id = ?").get(directlyWithdrawn.reply.id).moderated_by,
+      "author:user-2"
+    );
+    assert.equal((await platformModerate(directlyWithdrawn.annotation.id, "restore")).statusCode, 409);
+    assert.equal((await app.inject({ headers: userHeader, method: "GET", url: `/v1/annotations/${directlyWithdrawn.parentId}/replies` })).json().replies.length, 0);
+
+    const userWithdrawn = await createProjection("User withdrawal cannot gain organization restore");
+    assert.equal((await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { published: false },
+      url: `/v1/replies/${userWithdrawn.reply.id}/publication`
+    })).statusCode, 200);
+    assert.equal((await organizationModerate(userWithdrawn.annotation.id, "restore")).statusCode, 409);
+
+    const platformOnly = await createProjection("Platform withdrawal cannot gain organization restore");
+    assert.equal((await platformModerate(platformOnly.annotation.id, "withdraw")).statusCode, 200);
+    assert.equal((await organizationModerate(platformOnly.annotation.id, "restore")).statusCode, 409);
+  }, {
+    authorizeOrganizationAccess: async ({ organizationId, userId }) => ({
+      allowed: organizationId === "org-moderation" && new Set(["user-1", "user-2", "user-3"]).has(userId),
+      role: userId === "user-3" ? "admin" : "member"
+    }),
+    authorizeOrganizationVisibility: async ({ organizationId, userId }) =>
+      organizationId === "org-moderation" && new Set(["user-1", "user-2", "user-3"]).has(userId)
+  });
+});
+
 test("reply publication, editing, moderation, deletion, and engagement preserve canonical lifecycle boundaries", async () => {
   await withApp(async (app, db) => {
     const target = annotationV2Payload().targets[0];
@@ -1610,6 +1831,38 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     assert.equal(pure.json().reply.derivedAnnotationId, null);
     assert.equal(pure.json().reply.derivedAnnotationState, "none");
     const replyId = pure.json().reply.id;
+
+    const lateParentResponse = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: annotationV2Payload({ body: "Late publication parent" }),
+      url: "/v1/annotations"
+    });
+    assert.equal(lateParentResponse.statusCode, 201, lateParentResponse.body);
+    const lateParent = lateParentResponse.json().annotation;
+    const editedBeforePublication = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "Edited before projection", publishAsAnnotation: false, tags: [], targets: [] },
+      url: `/v1/annotations/${lateParent.id}/replies`
+    });
+    assert.equal(editedBeforePublication.statusCode, 201, editedBeforePublication.body);
+    const editedBeforePublicationId = editedBeforePublication.json().reply.id;
+    assert.equal((await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { body: "Edited before projection body" },
+      url: `/v1/replies/${editedBeforePublicationId}`
+    })).statusCode, 200);
+    const lateProjection = await app.inject({
+      headers: sameNameHeader,
+      method: "PUT",
+      payload: { published: true, tags: [], targets: [target] },
+      url: `/v1/replies/${editedBeforePublicationId}/publication`
+    });
+    assert.equal(lateProjection.statusCode, 200, lateProjection.body);
+    assert.equal(lateProjection.json().reply.revision, 2);
+    assert.equal(lateProjection.json().annotation.revision, 1);
 
     const implicitProjection = await app.inject({
       headers: sameNameHeader,
@@ -1805,7 +2058,7 @@ test("reply publication, editing, moderation, deletion, and engagement preserve 
     assert.equal((await app.inject({ method: "GET", url: `/v1/annotations/${parent.id}/replies` })).json().replies.length, 0);
     const moderatedReply = db.prepare("SELECT moderated_at, moderation_reason, moderated_by FROM annotation_replies_v2 WHERE id = ?").get(replyId);
     assert.ok(moderatedReply.moderated_at);
-    assert.equal(moderatedReply.moderated_by, "admin-1");
+    assert.equal(moderatedReply.moderated_by, "platform:admin-1");
     assert.match(moderatedReply.moderation_reason, /linked reply/);
     assert.deepEqual(
       db.prepare("SELECT annotation_id, linked_reply_id, action FROM annotation_moderation_audit_v2 WHERE annotation_id = ? ORDER BY created_at").all(derivedId),
@@ -1932,12 +2185,21 @@ test("reply body and derived projection edits roll back together after a late da
 
 test("SQLite reply lifecycle rechecks state after asynchronous organization authorization", async () => {
   let nextAuthorizationGate = null;
+  let nextAccessGate = null;
   const pauseNextAuthorization = () => {
     let release;
     let started;
     const released = new Promise((resolve) => { release = resolve; });
     const waiting = new Promise((resolve) => { started = resolve; });
     nextAuthorizationGate = { release, released, started };
+    return { release, waiting };
+  };
+  const pauseNextAccessAuthorization = () => {
+    let release;
+    let started;
+    const released = new Promise((resolve) => { release = resolve; });
+    const waiting = new Promise((resolve) => { started = resolve; });
+    nextAccessGate = { release, released, started };
     return { release, waiting };
   };
   await withApp(async (app, db) => {
@@ -2016,7 +2278,102 @@ test("SQLite reply lifecycle rechecks state after asynchronous organization auth
     assert.equal(stalePublication.statusCode, 404, stalePublication.body);
     assert.equal(stalePublication.json().error, "REPLY_NOT_FOUND");
     assert.equal(db.prepare("SELECT count(*) AS count FROM annotations_v2 WHERE source_reply_id = ?").get(replyForPublication.id).count, 0);
+
+    const readDuringMove = await createOrganizationParent("Organization annotation moved during read authorization");
+    const readGate = pauseNextAuthorization();
+    const pendingRead = app.inject({ headers: sameNameHeader, method: "GET", url: `/v1/annotations/${readDuringMove.id}` });
+    await readGate.waiting;
+    db.prepare("UPDATE annotations_v2 SET organization_id = 'org-moved' WHERE id = ?").run(readDuringMove.id);
+    readGate.release();
+    const staleRead = await pendingRead;
+    assert.equal(staleRead.statusCode, 404, staleRead.body);
+
+    const updateDuringWithdrawal = await createOrganizationParent("Organization annotation withdrawn during metadata update");
+    const metadataGate = pauseNextAuthorization();
+    const pendingMetadataUpdate = app.inject({
+      headers: userHeader,
+      method: "PUT",
+      payload: { body: "Must not commit behind a stale 404" },
+      url: `/v1/annotations/${updateDuringWithdrawal.id}`
+    });
+    await metadataGate.waiting;
+    db.prepare("UPDATE annotations_v2 SET withdrawn_at = ? WHERE id = ?").run(new Date().toISOString(), updateDuringWithdrawal.id);
+    metadataGate.release();
+    const staleMetadataUpdate = await pendingMetadataUpdate;
+    assert.equal(staleMetadataUpdate.statusCode, 404, staleMetadataUpdate.body);
+    assert.deepEqual(
+      db.prepare("SELECT body, revision FROM annotations_v2 WHERE id = ?").get(updateDuringWithdrawal.id),
+      { body: "Organization annotation withdrawn during metadata update", revision: 1 }
+    );
+
+    const moderationDuringMove = await createOrganizationParent("Organization annotation moved during moderation authorization");
+    const moderationGate = pauseNextAccessAuthorization();
+    const pendingModeration = app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { action: "withdraw", reason: "Old organization admin must not commit after reassignment." },
+      url: `/v1/annotations/${moderationDuringMove.id}/organization-moderation`
+    });
+    await moderationGate.waiting;
+    db.prepare("UPDATE annotations_v2 SET organization_id = 'org-moved' WHERE id = ?").run(moderationDuringMove.id);
+    moderationGate.release();
+    const staleModeration = await pendingModeration;
+    assert.equal(staleModeration.statusCode, 404, staleModeration.body);
+    assert.equal(db.prepare("SELECT withdrawn_at FROM annotations_v2 WHERE id = ?").get(moderationDuringMove.id).withdrawn_at, null);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_moderation_audit_v2 WHERE annotation_id = ?").get(moderationDuringMove.id).count, 0);
+
+    const moderationDuringRevision = await createOrganizationParent("Organization annotation revised during moderation authorization");
+    const revisionGate = pauseNextAccessAuthorization();
+    const pendingRevisionModeration = app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { action: "withdraw", reason: "Revision changed while authorization was pending." },
+      url: `/v1/annotations/${moderationDuringRevision.id}/organization-moderation`
+    });
+    await revisionGate.waiting;
+    db.prepare("UPDATE annotations_v2 SET body = ?, revision = revision + 1, updated_at = ? WHERE id = ?")
+      .run("Changed while authorization was pending", new Date().toISOString(), moderationDuringRevision.id);
+    revisionGate.release();
+    const staleRevisionModeration = await pendingRevisionModeration;
+    assert.equal(staleRevisionModeration.statusCode, 404, staleRevisionModeration.body);
+    assert.equal(db.prepare("SELECT withdrawn_at FROM annotations_v2 WHERE id = ?").get(moderationDuringRevision.id).withdrawn_at, null);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_moderation_audit_v2 WHERE annotation_id = ?").get(moderationDuringRevision.id).count, 0);
+
+    const nestedRoot = await createOrganizationParent("Organization root for nested reply authorization");
+    const nestedProjectionResponse = await app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "Nested organization projection", publishAsAnnotation: true, tags: [], targets: annotationV2Payload().targets },
+      url: `/v1/annotations/${nestedRoot.id}/replies`
+    });
+    assert.equal(nestedProjectionResponse.statusCode, 201, nestedProjectionResponse.body);
+    const nestedProjection = nestedProjectionResponse.json().annotation;
+    const nestedCreateGate = pauseNextAuthorization();
+    const pendingNestedReply = app.inject({
+      headers: sameNameHeader,
+      method: "POST",
+      payload: { body: "Must not attach to stale root", publishAsAnnotation: false, tags: [], targets: [] },
+      url: `/v1/annotations/${nestedProjection.id}/replies`
+    });
+    await nestedCreateGate.waiting;
+    db.prepare("UPDATE annotations_v2 SET organization_id = 'org-moved' WHERE id = ?").run(nestedRoot.id);
+    nestedCreateGate.release();
+    const staleNestedReply = await pendingNestedReply;
+    assert.equal(staleNestedReply.statusCode, 404, staleNestedReply.body);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM annotation_replies_v2 WHERE parent_annotation_id = ?").get(nestedProjection.id).count, 0);
   }, {
+    authorizeOrganizationAccess: async ({ organizationId, userId }) => {
+      if (nextAccessGate) {
+        const gate = nextAccessGate;
+        nextAccessGate = null;
+        gate.started();
+        await gate.released;
+      }
+      return {
+        allowed: organizationId === "org-race" && new Set(["user-1", "user-2"]).has(userId),
+        role: userId === "user-2" ? "admin" : "member"
+      };
+    },
     authorizeOrganizationVisibility: async ({ organizationId, userId }) => {
       if (nextAuthorizationGate) {
         const gate = nextAuthorizationGate;

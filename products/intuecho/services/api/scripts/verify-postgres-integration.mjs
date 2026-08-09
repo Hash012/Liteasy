@@ -848,17 +848,31 @@ try {
   );
 
   const lifecycleAnnotations = new PostgresAnnotationCommunityRepository(pool, {
+    async authorizeOrganizationAccess({ organizationId, userId }) {
+      return {
+        allowed: new Set(["org-lifecycle", "org-lifecycle-other"]).has(organizationId) && new Set(["scope-user-1", "scope-user-2", "scope-user-3"]).has(userId),
+        role: userId === "scope-user-3" ? "admin" : "member"
+      };
+    },
     async authorizeOrganizationVisibility({ organizationId, userId }) {
-      return organizationId === "org-lifecycle" && new Set(["scope-user-1", "scope-user-2"]).has(userId);
+      return new Set(["org-lifecycle", "org-lifecycle-other"]).has(organizationId) && new Set(["scope-user-1", "scope-user-2", "scope-user-3"]).has(userId);
     }
   });
   const scopeUserOne = { id: "scope-user-1", initials: "S1", name: "Scope User One" };
   const scopeUserTwo = { id: "scope-user-2", initials: "S2", name: "Scope User Two" };
   const scopeUserThree = { id: "scope-user-3", initials: "S3", name: "Scope User Three" };
+  const scopeUserFour = { id: "scope-user-4", initials: "S4", name: "Scope User Four" };
+  const scopeUserFive = { id: "scope-user-5", initials: "S5", name: "Scope User Five" };
   await lifecycleAnnotations.toggleFollow(scopeUserOne.id, scopeUserTwo.id);
   await lifecycleAnnotations.toggleFollow(scopeUserTwo.id, scopeUserOne.id);
   await lifecycleAnnotations.toggleFollow(scopeUserTwo.id, scopeUserThree.id);
   await lifecycleAnnotations.toggleFollow(scopeUserThree.id, scopeUserTwo.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserOne.id, scopeUserFour.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserFour.id, scopeUserOne.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserFive.id, scopeUserTwo.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserTwo.id, scopeUserFive.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserFive.id, scopeUserFour.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserFour.id, scopeUserFive.id);
   const scopeCases = [
     { author: scopeUserOne, name: "public", replyAuthor: scopeUserTwo, shareToPlaza: true, viewer: scopeUserOne },
     {
@@ -924,6 +938,225 @@ try {
   assert.deepEqual(
     scopedProjectionIds.filter(({ id }) => scopedPlazaIds.has(id)).map(({ name }) => name),
     ["public"]
+  );
+
+  const scopeLockedPublic = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL public scope lock",
+    shareToPlaza: true,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "public"
+  });
+  const scopeLockedPureReply = await lifecycleAnnotations.createReply(scopeLockedPublic.id, scopeUserTwo, {
+    body: "PostgreSQL pure reply locks parent scope",
+    publishAsAnnotation: false,
+    tags: [],
+    targets: []
+  });
+  await assert.rejects(
+    () => lifecycleAnnotations.updateAnnotation(scopeLockedPublic.id, scopeUserOne, {
+      organizationId: null,
+      shareToPlaza: false,
+      visibility: "private"
+    }),
+    (error) => error.code === "ANNOTATION_SCOPE_LOCKED_BY_REPLIES" && error.status === 409
+  );
+  await pool.query("UPDATE annotations SET visibility = 'private', share_to_plaza = false WHERE id = $1", [scopeLockedPublic.id]);
+  await assert.rejects(
+    () => lifecycleAnnotations.updateReplyPublication(scopeLockedPureReply.reply.id, scopeUserTwo, {
+      published: true,
+      tags: [],
+      targets: [sourcePassage]
+    }),
+    (error) => error.code === "REPLY_VISIBILITY_MISMATCH"
+  );
+  assert.equal(Number((await pool.query("SELECT count(*) FROM annotations WHERE source_reply_id = $1", [scopeLockedPureReply.reply.id])).rows[0].count), 0);
+
+  const scopeLockedOrganization = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL organization scope lock",
+    organizationId: "org-lifecycle",
+    shareToPlaza: false,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "organization"
+  });
+  await lifecycleAnnotations.createReply(scopeLockedOrganization.id, scopeUserTwo, {
+    body: "PostgreSQL organization reply locks reassignment",
+    publishAsAnnotation: false,
+    tags: [],
+    targets: []
+  });
+  await assert.rejects(
+    () => lifecycleAnnotations.updateAnnotation(scopeLockedOrganization.id, scopeUserOne, { organizationId: "org-lifecycle-other" }),
+    (error) => error.code === "ANNOTATION_SCOPE_LOCKED_BY_REPLIES" && error.status === 409
+  );
+
+  const nestedRoot = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL transitive audience root",
+    shareToPlaza: false,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "mutual_followers"
+  });
+  const nestedProjectionB = await lifecycleAnnotations.createReply(nestedRoot.id, scopeUserTwo, {
+    body: "PostgreSQL nested projection B",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  const nestedProjectionC = await lifecycleAnnotations.createReply(nestedProjectionB.annotation.id, scopeUserFour, {
+    body: "PostgreSQL nested projection C",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  assert.equal((await lifecycleAnnotations.annotation(nestedProjectionC.annotation.id, scopeUserOne)).id, nestedProjectionC.annotation.id);
+  await assert.rejects(
+    () => lifecycleAnnotations.annotation(nestedProjectionC.annotation.id, scopeUserFive),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+  assert.equal((await lifecycleAnnotations.followingFeed(scopeUserFive)).some((annotation) => annotation.id === nestedProjectionC.annotation.id), false);
+  await assert.rejects(
+    () => lifecycleAnnotations.rateAnnotation(nestedProjectionC.annotation.id, scopeUserFive, 5),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+  await assert.rejects(
+    () => lifecycleAnnotations.toggleSave(nestedProjectionC.annotation.id, scopeUserFive),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+  await assert.rejects(
+    () => lifecycleAnnotations.createReply(nestedProjectionC.annotation.id, scopeUserFive, {
+      body: "Must not attach outside the root audience",
+      publishAsAnnotation: false,
+      tags: [],
+      targets: []
+    }),
+    (error) => error.code === "PARENT_ANNOTATION_NOT_FOUND"
+  );
+  await pool.query("UPDATE annotation_replies SET derived_annotation_id = NULL WHERE id = $1", [nestedProjectionC.reply.id]);
+  await assert.rejects(
+    () => lifecycleAnnotations.annotation(nestedProjectionC.annotation.id, scopeUserFour),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+
+  const organizationGovernedParent = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL organization governed parent",
+    organizationId: "org-lifecycle",
+    shareToPlaza: false,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "organization"
+  });
+  const organizationGovernedProjection = await lifecycleAnnotations.createReply(organizationGovernedParent.id, scopeUserTwo, {
+    body: "PostgreSQL organization governed projection",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  await lifecycleAnnotations.moderateOrganizationAnnotation({
+    action: "withdraw",
+    annotationId: organizationGovernedProjection.annotation.id,
+    reason: "Organization withdraws linked projection.",
+    traceId: "trace-org-linked-withdraw",
+    userId: scopeUserThree.id
+  });
+  assert.equal((await lifecycleAnnotations.replies(organizationGovernedParent.id, scopeUserOne)).length, 0);
+  const organizationLinkedAudit = await pool.query("SELECT linked_reply_id FROM annotation_moderation_audit WHERE annotation_id = $1", [organizationGovernedProjection.annotation.id]);
+  assert.deepEqual(organizationLinkedAudit.rows, [{ linked_reply_id: organizationGovernedProjection.reply.id }]);
+  await lifecycleAnnotations.moderateOrganizationAnnotation({
+    action: "restore",
+    annotationId: organizationGovernedProjection.annotation.id,
+    reason: "Organization restores linked projection.",
+    traceId: "trace-org-linked-restore",
+    userId: scopeUserThree.id
+  });
+
+  const provenanceParent = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL moderation provenance parent",
+    organizationId: "org-lifecycle",
+    shareToPlaza: false,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "organization"
+  });
+  const platformProvenanceProjection = await lifecycleAnnotations.createReply(provenanceParent.id, scopeUserTwo, {
+    body: "Platform withdrawal superseded by author",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  await lifecycleAnnotations.moderateAnnotation({
+    action: "withdraw",
+    adminId: "admin-1",
+    annotationId: platformProvenanceProjection.annotation.id,
+    reason: "Platform withdraws before author override.",
+    traceId: "trace-platform-author-override-withdraw"
+  });
+  await lifecycleAnnotations.updateReplyPublication(platformProvenanceProjection.reply.id, scopeUserTwo, { published: false });
+  await assert.rejects(
+    () => lifecycleAnnotations.moderateAnnotation({
+      action: "restore",
+      adminId: "admin-1",
+      annotationId: platformProvenanceProjection.annotation.id,
+      reason: "Platform must not restore after author override.",
+      traceId: "trace-platform-author-override-restore"
+    }),
+    (error) => error.code === "ANNOTATION_MODERATION_CONFLICT"
+  );
+  assert.equal((await lifecycleAnnotations.replies(provenanceParent.id, scopeUserOne)).length, 0);
+
+  const directlyWithdrawnProjection = await lifecycleAnnotations.createReply(provenanceParent.id, scopeUserTwo, {
+    body: "Platform withdrawal superseded by direct author withdrawal",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  await lifecycleAnnotations.moderateAnnotation({
+    action: "withdraw",
+    adminId: "admin-1",
+    annotationId: directlyWithdrawnProjection.annotation.id,
+    reason: "Platform withdraws before direct author override.",
+    traceId: "trace-platform-direct-author-override-withdraw"
+  });
+  await lifecycleAnnotations.withdraw(directlyWithdrawnProjection.annotation.id, scopeUserTwo);
+  assert.equal(
+    (await pool.query("SELECT moderated_by FROM annotation_replies WHERE id = $1", [directlyWithdrawnProjection.reply.id])).rows[0].moderated_by,
+    `author:${scopeUserTwo.id}`
+  );
+  await assert.rejects(
+    () => lifecycleAnnotations.moderateAnnotation({
+      action: "restore",
+      adminId: "admin-1",
+      annotationId: directlyWithdrawnProjection.annotation.id,
+      reason: "Platform must not restore after direct author override.",
+      traceId: "trace-platform-direct-author-override-restore"
+    }),
+    (error) => error.code === "ANNOTATION_MODERATION_CONFLICT"
+  );
+  assert.equal((await lifecycleAnnotations.replies(provenanceParent.id, scopeUserOne)).some((reply) => reply.id === directlyWithdrawnProjection.reply.id), false);
+
+  const platformOnlyProjection = await lifecycleAnnotations.createReply(provenanceParent.id, scopeUserTwo, {
+    body: "Platform governance cannot become organization governance",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  await lifecycleAnnotations.moderateAnnotation({
+    action: "withdraw",
+    adminId: "admin-1",
+    annotationId: platformOnlyProjection.annotation.id,
+    reason: "Platform-only withdrawal.",
+    traceId: "trace-platform-only-withdraw"
+  });
+  await assert.rejects(
+    () => lifecycleAnnotations.moderateOrganizationAnnotation({
+      action: "restore",
+      annotationId: platformOnlyProjection.annotation.id,
+      reason: "Organization must not restore platform withdrawal.",
+      traceId: "trace-org-platform-restore",
+      userId: scopeUserThree.id
+    }),
+    (error) => error.code === "ANNOTATION_MODERATION_CONFLICT"
   );
 
   const lifecycleParent = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
@@ -1071,7 +1304,7 @@ try {
   `, [lifecyclePure.reply.id]);
   assert.deepEqual(lifecycleModeratedReply.rows, [{
     moderated: true,
-    moderated_by: "admin-1",
+    moderated_by: "platform:admin-1",
     moderation_reason: "Withdraw linked lifecycle reply."
   }]);
   await lifecycleAnnotations.moderateAnnotation({
@@ -1682,6 +1915,93 @@ try {
     /annotation_moderation_audit_annotation_not_found/
   );
 
+  const deletionNestedRootUser = { id: "deletion-nested-root-user", initials: "DNR", name: "Deletion Nested Root User" };
+  const deletionNestedReplyUser = { id: "deletion-nested-reply-user", initials: "DNP", name: "Deletion Nested Reply User" };
+  const deletionNestedChildUser = { id: "deletion-nested-child-user", initials: "DNC", name: "Deletion Nested Child User" };
+  await lifecycleAnnotations.toggleFollow(deletionNestedRootUser.id, deletionNestedReplyUser.id);
+  await lifecycleAnnotations.toggleFollow(deletionNestedReplyUser.id, deletionNestedRootUser.id);
+  await lifecycleAnnotations.toggleFollow(deletionNestedRootUser.id, deletionNestedChildUser.id);
+  await lifecycleAnnotations.toggleFollow(deletionNestedChildUser.id, deletionNestedRootUser.id);
+  const deletionNestedRoot = await lifecycleAnnotations.createAnnotation(deletionNestedRootUser, {
+    body: "Cross-author nested deletion root",
+    shareToPlaza: false,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "mutual_followers"
+  });
+  const deletionNestedProjection = await lifecycleAnnotations.createReply(deletionNestedRoot.id, deletionNestedReplyUser, {
+    body: "Reply author deletion must remove its projection tree",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  const deletionNestedChild = await lifecycleAnnotations.createReply(deletionNestedProjection.annotation.id, deletionNestedChildUser, {
+    body: "Nested projection must not become an orphan",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  const nestedReplyDeletion = await new PostgresAccountLifecycleRepository(pool).deleteAccount({
+    idempotencyKey: "delete-nested-reply-user-integration",
+    reason: "Delete reply author and retire the complete projection tree.",
+    requestedBy: "admin-1",
+    subjectId: deletionNestedReplyUser.id,
+    traceId: "trace-delete-nested-reply-user"
+  });
+  assert.equal(nestedReplyDeletion.result.deletedNonPublicAnnotations, 2);
+  assert.equal(nestedReplyDeletion.result.deletedNonPublicReplies, 2);
+  const nestedReplyDeletionState = await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM annotations WHERE id = ANY($1::text[])) AS annotation_count,
+      (SELECT count(*)::int FROM annotation_replies WHERE id = ANY($2::text[])) AS reply_count,
+      (SELECT count(*)::int FROM annotations WHERE source_reply_id = ANY($2::text[])) AS orphan_count
+  `, [
+    [deletionNestedProjection.annotation.id, deletionNestedChild.annotation.id],
+    [deletionNestedProjection.reply.id, deletionNestedChild.reply.id]
+  ]);
+  assert.deepEqual(nestedReplyDeletionState.rows[0], { annotation_count: 0, orphan_count: 0, reply_count: 0 });
+
+  const deletionRootUser = { id: "deletion-root-user", initials: "DR", name: "Deletion Root User" };
+  const deletionReplyUser = { id: "deletion-reply-user", initials: "DP", name: "Deletion Reply User" };
+  await lifecycleAnnotations.toggleFollow(deletionRootUser.id, deletionReplyUser.id);
+  await lifecycleAnnotations.toggleFollow(deletionReplyUser.id, deletionRootUser.id);
+  const deletionRoot = await lifecycleAnnotations.createAnnotation(deletionRootUser, {
+    body: "Dedicated account-deletion root audience",
+    shareToPlaza: false,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "mutual_followers"
+  });
+  const deletionProjection = await lifecycleAnnotations.createReply(deletionRoot.id, deletionReplyUser, {
+    body: "Cross-author projection must not become an orphan",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  const dedicatedDeletion = await new PostgresAccountLifecycleRepository(pool).deleteAccount({
+    idempotencyKey: "delete-projection-root-integration",
+    reason: "Delete dedicated root and retire cross-author projections.",
+    requestedBy: "admin-1",
+    subjectId: deletionRootUser.id,
+    traceId: "trace-delete-projection-root"
+  });
+  assert.equal(dedicatedDeletion.result.deletedNonPublicAnnotations, 2);
+  const retiredProjectionState = await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM annotations WHERE id = $1) AS root_count,
+      (SELECT count(*)::int FROM annotations WHERE id = $2) AS projection_count,
+      (SELECT count(*)::int FROM annotation_replies WHERE id = $3) AS reply_count
+  `, [deletionRoot.id, deletionProjection.annotation.id, deletionProjection.reply.id]);
+  assert.deepEqual(retiredProjectionState.rows[0], { projection_count: 0, reply_count: 0, root_count: 0 });
+  await assert.rejects(
+    () => lifecycleAnnotations.updateAnnotation(deletionProjection.annotation.id, deletionReplyUser, {
+      organizationId: null,
+      shareToPlaza: true,
+      visibility: "public"
+    }),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+
   const privateDraft = await repository.createContextualDraft("user-1", {
     anchorHash: "anchor-hash-private",
     citationEnabled: true,
@@ -1732,7 +2052,7 @@ try {
     deletedDrafts: 2,
     deletedDirectConversations: 1,
     deletedNonPublicAnnotations: 3,
-    deletedNonPublicReplies: 0,
+    deletedNonPublicReplies: 1,
     deletedPostSaves: 1,
     deletedProfile: 1,
     deletedSignals: 1,

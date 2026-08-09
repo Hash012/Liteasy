@@ -48,6 +48,7 @@ function plazaFilters(query = {}) {
 const messages = {
   ANNOTATION_NOT_FOUND: "找不到这条批注。",
   ANNOTATION_MODERATION_CONFLICT: "这条批注已经处于目标治理状态。",
+  ANNOTATION_SCOPE_LOCKED_BY_REPLIES: "已有回复后不能修改批注的可见范围或所属组织。",
   ANNOTATION_TARGET_REQUIRED: "批注必须关联至少一篇文献或一个文献字句。",
   AUTH_REQUIRED: "登录后才能进行此操作。",
   CANNOT_FOLLOW_SELF: "不能关注自己。",
