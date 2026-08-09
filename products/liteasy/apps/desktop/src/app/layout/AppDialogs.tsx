@@ -14,6 +14,9 @@ import type { OrganizationRole } from "../features/organization/organization.typ
 import { AcademicArchiveDialog } from "../features/profile/AcademicArchiveDialog";
 import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfirmDialog";
 import type { AcademicProfile } from "../features/profile/profile.types";
+import { LiteratureResolutionDialog } from "../features/forum/LiteratureResolutionDialog";
+import type { LiteratureDialogModel } from "../controllers/usePdfAnnotationPublicationController";
+import type { ManualLiteratureInput } from "../features/paper-identity/literature.types";
 
 export type AppDialogsProps = {
   academicProfile: AcademicProfile;
@@ -29,6 +32,7 @@ export type AppDialogsProps = {
   leaveSummary: OrganizationSummary | null;
   list: OrganizationList | null;
   listMessage: string;
+  literatureDialog?: LiteratureDialogModel | null;
   organizationActionMessage?: string;
   organizationActionPending?: boolean;
   loginDialogOpen?: boolean;
@@ -39,6 +43,7 @@ export type AppDialogsProps = {
   onCloseInviteMember: () => void;
   onCloseJoinOrganization: () => void;
   onCloseLeaveOrganization: () => void;
+  onCancelLiteratureResolution?: () => void;
   onSkipLogin?: () => void;
   onSubmitAccountLogin?: (login: AccountLoginInput) => void;
   onSubmitAccountRegistration?: (registration: AccountRegistrationInput) => void;
@@ -52,6 +57,9 @@ export type AppDialogsProps = {
   }) => void;
   onJoinOrganization: (invitationToken: string) => void;
   onLeaveOrganization: () => void;
+  onRetryLiteratureResolution?: () => void;
+  onSelectLiteratureCandidate?: (candidateKey: string) => void;
+  onSubmitManualLiterature?: (record: ManualLiteratureInput) => void;
   onExportProfile: () => void;
   onOpenSharedLibrary: (summary: OrganizationSummary) => void;
   onSelectOrganization: (organizationId: string) => void;
@@ -73,6 +81,7 @@ export function AppDialogs({
   leaveSummary,
   list,
   listMessage,
+  literatureDialog = null,
   organizationActionMessage,
   organizationActionPending,
   loginDialogOpen = false,
@@ -83,6 +92,7 @@ export function AppDialogs({
   onCloseInviteMember,
   onCloseJoinOrganization,
   onCloseLeaveOrganization,
+  onCancelLiteratureResolution,
   onSkipLogin,
   onSubmitAccountLogin,
   onSubmitAccountRegistration,
@@ -93,6 +103,9 @@ export function AppDialogs({
   onInviteMember,
   onJoinOrganization,
   onLeaveOrganization,
+  onRetryLiteratureResolution,
+  onSelectLiteratureCandidate,
+  onSubmitManualLiterature,
   onExportProfile,
   onOpenSharedLibrary,
   onSelectOrganization,
@@ -101,6 +114,15 @@ export function AppDialogs({
 }: AppDialogsProps) {
   return (
     <div className="workspace-dialog-layer" data-testid="workspace-dialog-layer">
+      {literatureDialog ? (
+        <LiteratureResolutionDialog
+          model={literatureDialog}
+          onCancel={onCancelLiteratureResolution ?? (() => undefined)}
+          onRetry={onRetryLiteratureResolution ?? (() => undefined)}
+          onSelectCandidate={onSelectLiteratureCandidate ?? (() => undefined)}
+          onSubmitManual={onSubmitManualLiterature ?? (() => undefined)}
+        />
+      ) : null}
       {loginDialogOpen ? (
         <LightweightLoginDialog
           accountMessage={accountMessage}
