@@ -1,8 +1,8 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { LiteratureResolutionDialog } from "../app/features/forum/LiteratureResolutionDialog";
-import type { LiteratureDialogModel } from "../app/controllers/usePdfAnnotationPublicationController";
+import type { LiteratureDialogModel } from "../app/features/forum/literatureResolution.types";
 
 function actions() {
   return {
@@ -31,6 +31,47 @@ const candidatesModel: LiteratureDialogModel = {
 };
 
 describe("LiteratureResolutionDialog", () => {
+  test("shows resolving immediately with focus trapped on an enabled cancel path", async () => {
+    const callbacks = actions();
+    const user = userEvent.setup();
+    render(<LiteratureResolutionDialog {...callbacks} model={{
+      kind: "resolving",
+      pending: true,
+      unavailableProviders: []
+    }} />);
+
+    expect(screen.getByText("正在识别文献")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "确认文献身份" });
+    const cancel = screen.getByRole("button", { name: "取消公开" });
+    expect(cancel).toBeEnabled();
+    await waitFor(() => expect(dialog).toHaveFocus());
+    await user.tab();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+  });
+
+  test("shows the exact candidate while confirmation is pending", () => {
+    render(<LiteratureResolutionDialog {...actions()} model={{
+      candidate: candidatesModel.candidates[0],
+      kind: "confirming",
+      pending: true,
+      unavailableProviders: []
+    }} />);
+
+    expect(screen.getByText("正在确认 A Test Paper")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "取消公开" })).toBeEnabled();
+  });
+
+  test("cancels the modal with Escape", async () => {
+    const callbacks = actions();
+    const user = userEvent.setup();
+    render(<LiteratureResolutionDialog {...callbacks} model={candidatesModel} />);
+
+    await user.keyboard("{Escape}");
+
+    expect(callbacks.onCancel).toHaveBeenCalledTimes(1);
+  });
+
   test("renders accessible candidates and selects one by its stable key", async () => {
     const callbacks = actions();
     const user = userEvent.setup();
@@ -60,9 +101,8 @@ describe("LiteratureResolutionDialog", () => {
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1);
   });
 
-  test("submits manual title plus authors and year without claiming verification", async () => {
+  test("submits manual title plus authors and year without claiming verification", () => {
     const callbacks = actions();
-    const user = userEvent.setup();
     render(<LiteratureResolutionDialog {...callbacks} model={{
       kind: "manual",
       pending: false,
@@ -71,10 +111,17 @@ describe("LiteratureResolutionDialog", () => {
 
     const dialog = screen.getByRole("dialog", { name: "确认文献身份" });
     expect(within(dialog).queryByText(/已验证/)).not.toBeInTheDocument();
-    await user.type(within(dialog).getByLabelText("文献标题"), "Manual Paper");
-    await user.type(within(dialog).getByLabelText("作者"), "Ada Lovelace; Grace Hopper");
-    await user.type(within(dialog).getByLabelText("年份"), "2025");
-    await user.click(within(dialog).getByRole("button", { name: "确认文献信息" }));
+    const submit = within(dialog).getByRole("button", { name: "确认文献信息" });
+    fireEvent.change(within(dialog).getByLabelText("文献标题"), {
+      target: { value: "Manual Paper" }
+    });
+    fireEvent.change(within(dialog).getByLabelText("作者"), {
+      target: { value: "Ada Lovelace; Grace Hopper" }
+    });
+    fireEvent.change(within(dialog).getByLabelText("年份"), {
+      target: { value: "2025" }
+    });
+    fireEvent.click(submit);
 
     expect(callbacks.onSubmitManual).toHaveBeenCalledWith({
       authors: ["Ada Lovelace", "Grace Hopper"],
@@ -84,19 +131,26 @@ describe("LiteratureResolutionDialog", () => {
     });
   });
 
-  test("accepts a title and external identifier without author-year metadata", async () => {
+  test("accepts a title and external identifier without author-year metadata", () => {
     const callbacks = actions();
-    const user = userEvent.setup();
     render(<LiteratureResolutionDialog {...callbacks} model={{
       kind: "manual",
       pending: false,
       unavailableProviders: []
     }} />);
 
-    await user.type(screen.getByLabelText("文献标题"), "Manual DOI Paper");
-    await user.selectOptions(screen.getByLabelText("外部标识类型"), "doi");
-    await user.type(screen.getByLabelText("外部标识"), "10.1000/manual");
-    await user.click(screen.getByRole("button", { name: "确认文献信息" }));
+    const dialog = screen.getByRole("dialog", { name: "确认文献身份" });
+    const submit = within(dialog).getByRole("button", { name: "确认文献信息" });
+    fireEvent.change(within(dialog).getByLabelText("文献标题"), {
+      target: { value: "Manual DOI Paper" }
+    });
+    fireEvent.change(within(dialog).getByLabelText("外部标识类型"), {
+      target: { value: "doi" }
+    });
+    fireEvent.change(within(dialog).getByLabelText("外部标识"), {
+      target: { value: "10.1000/manual" }
+    });
+    fireEvent.click(submit);
 
     expect(callbacks.onSubmitManual).toHaveBeenCalledWith({
       authors: [],
@@ -105,9 +159,8 @@ describe("LiteratureResolutionDialog", () => {
     });
   });
 
-  test("requires title and one supported identity path", async () => {
+  test("requires title and one supported identity path", () => {
     const callbacks = actions();
-    const user = userEvent.setup();
     render(<LiteratureResolutionDialog {...callbacks} model={{
       kind: "manual",
       pending: false,
@@ -116,8 +169,12 @@ describe("LiteratureResolutionDialog", () => {
 
     const submit = screen.getByRole("button", { name: "确认文献信息" });
     expect(submit).toBeDisabled();
-    await user.type(screen.getByLabelText("文献标题"), "Incomplete Paper");
-    await user.type(screen.getByLabelText("作者"), "Ada Lovelace");
+    fireEvent.change(screen.getByLabelText("文献标题"), {
+      target: { value: "Incomplete Paper" }
+    });
+    fireEvent.change(screen.getByLabelText("作者"), {
+      target: { value: "Ada Lovelace" }
+    });
     expect(submit).toBeDisabled();
   });
 

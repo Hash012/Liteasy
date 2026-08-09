@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, test, vi } from "vitest";
 import {
   createPersistPaperLiterature,
@@ -89,6 +90,7 @@ function setup(input: {
   resolveLiterature?: ReturnType<typeof vi.fn>;
   confirmLiterature?: ReturnType<typeof vi.fn>;
   applyAnnotationPublications?: ReturnType<typeof vi.fn>;
+  onPaperUpdated?: ReturnType<typeof vi.fn>;
 } = {}) {
   const workspaceStore = createWorkspaceStore(input.initialPapers ?? [paper()]);
   const loadLiterature = input.loadLiterature ?? vi.fn().mockResolvedValue(undefined);
@@ -100,9 +102,11 @@ function setup(input: {
   const applyAnnotationPublications = input.applyAnnotationPublications ?? vi.fn().mockImplementation(
     async (operations: ForumAnnotationPublicationOperation[]) => ({ results: operations.map((operation) => receipt(operation)) })
   );
+  const onPaperUpdated = input.onPaperUpdated ?? vi.fn();
   const hook = renderHook(() => usePdfAnnotationPublicationController({
     forumClient: { applyAnnotationPublications, confirmLiterature, resolveLiterature },
     literatureMetadataRepository: { load: loadLiterature },
+    onPaperUpdated,
     persistPaperLiterature,
     workspaceStore
   }));
@@ -111,6 +115,7 @@ function setup(input: {
     applyAnnotationPublications,
     confirmLiterature,
     loadLiterature,
+    onPaperUpdated,
     persistPaperLiterature,
     resolveLiterature,
     workspaceStore
@@ -122,6 +127,7 @@ describe("usePdfAnnotationPublicationController", () => {
     const save = vi.fn().mockResolvedValue(undefined);
     const updateLiterature = vi.fn();
     const persist = createPersistPaperLiterature({
+      canManageLibraryReference: () => true,
       cloudLibraryClient: { updateLiterature },
       literatureMetadataRepository: { save }
     });
@@ -137,6 +143,7 @@ describe("usePdfAnnotationPublicationController", () => {
     const save = vi.fn();
     const updateLiterature = vi.fn().mockResolvedValue({ revision: 5 });
     const persist = createPersistPaperLiterature({
+      canManageLibraryReference: () => true,
       cloudLibraryClient: { updateLiterature },
       literatureMetadataRepository: { save }
     });
@@ -163,6 +170,53 @@ describe("usePdfAnnotationPublicationController", () => {
       libraryReference: { ...cloudPaper.libraryReference!, revision: 5 },
       literature: literature()
     });
+  });
+
+  test("falls back to local authoritative metadata for an organization member", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const updateLiterature = vi.fn();
+    const persist = createPersistPaperLiterature({
+      canManageLibraryReference: () => false,
+      cloudLibraryClient: { updateLiterature },
+      literatureMetadataRepository: { save }
+    });
+    const memberPaper = paper({
+      libraryReference: {
+        documentId: "document-1",
+        revision: 4,
+        scopeId: "organization-1",
+        scopeType: "organization"
+      }
+    });
+
+    const updated = await persist(memberPaper, literature());
+
+    expect(save).toHaveBeenCalledWith("paper-1", literature());
+    expect(updateLiterature).not.toHaveBeenCalled();
+    expect(updated).toEqual({ ...memberPaper, literature: literature() });
+  });
+
+  test("always persists a user-library reference through its cloud owner", async () => {
+    const save = vi.fn();
+    const updateLiterature = vi.fn().mockResolvedValue({ revision: 5 });
+    const persist = createPersistPaperLiterature({
+      canManageLibraryReference: () => false,
+      cloudLibraryClient: { updateLiterature },
+      literatureMetadataRepository: { save }
+    });
+    const userPaper = paper({
+      libraryReference: {
+        documentId: "document-1",
+        revision: 4,
+        scopeId: "user-1",
+        scopeType: "user"
+      }
+    });
+
+    await persist(userPaper, literature());
+
+    expect(updateLiterature).toHaveBeenCalledTimes(1);
+    expect(save).not.toHaveBeenCalled();
   });
 
   test("reuses paper literature and persists it before a local publication", async () => {
@@ -300,6 +354,55 @@ describe("usePdfAnnotationPublicationController", () => {
     await act(async () => { publication = await pending; });
     expect(publication).toMatchObject({ state: "published" });
     expect(context.confirmLiterature).toHaveBeenCalledWith({ candidateKey: candidate.candidateKey, mode: "candidate" });
+  });
+
+  test("exposes a cancellable resolving model before the resolver returns and ignores its late result", async () => {
+    const resolution = deferred<{
+      candidates: [];
+      status: "not_found";
+      unavailableProviders: [];
+    }>();
+    const context = setup({ resolveLiterature: vi.fn().mockReturnValue(resolution.promise) });
+    let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
+    act(() => {
+      pending = context.result.current.actions.changePublication({
+        annotation: annotation(), operation: "publish", paper: paper()
+      });
+    });
+
+    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("resolving"));
+    act(() => context.result.current.actions.cancelResolution());
+    await expect(pending).resolves.toEqual({ desiredVisibility: "private", state: "not_published" });
+    act(() => resolution.resolve({ candidates: [], status: "not_found", unavailableProviders: [] }));
+    await Promise.resolve();
+    expect(context.result.current.model.literatureDialog).toBeNull();
+  });
+
+  test("exposes confirming immediately and ignores a candidate confirmation after cancel", async () => {
+    const confirmation = deferred<{ literature: LiteratureRecord }>();
+    const candidate = {
+      candidateKey: "candidate:doi:10.1000/test",
+      provider: "crossref" as const,
+      record: { authors: [], identifiers: [], title: "A Test Paper" }
+    };
+    const context = setup({
+      confirmLiterature: vi.fn().mockReturnValue(confirmation.promise),
+      resolveLiterature: vi.fn().mockResolvedValue({ candidate, status: "exact", unavailableProviders: [] })
+    });
+    let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
+    act(() => {
+      pending = context.result.current.actions.changePublication({
+        annotation: annotation(), operation: "publish", paper: paper()
+      });
+    });
+
+    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("confirming"));
+    act(() => context.result.current.actions.cancelResolution());
+    await expect(pending).resolves.toEqual({ desiredVisibility: "private", state: "not_published" });
+    act(() => confirmation.resolve({ literature: literature() }));
+    await Promise.resolve();
+    expect(context.persistPaperLiterature).not.toHaveBeenCalled();
+    expect(context.applyAnnotationPublications).not.toHaveBeenCalled();
   });
 
   test("returns a stable busy result for another paper while identity resolution is active", async () => {
@@ -553,7 +656,44 @@ describe("usePdfAnnotationPublicationController", () => {
 
     expect(result).toMatchObject({ desiredVisibility: "private", state: "failed" });
     expect(result.lastError).toContain("论坛仍公开");
+    expect(result).toMatchObject({ remoteAnnotationId: "remote-existing", remoteRevision: 3 });
   });
+
+  test.each(["update", "retract"] as const)(
+    "preserves remote publication provenance when %s fails",
+    async (operation) => {
+      const applyAnnotationPublications = vi.fn().mockImplementation(
+        async ([pendingOperation]: ForumAnnotationPublicationOperation[]) => ({ results: [{
+          annotationId: pendingOperation.annotationId,
+          error: "请求过于频繁，请稍后重试。",
+          pendingOperation,
+          queueKey: pendingOperation.queueKey,
+          state: "failed"
+        }] })
+      );
+      const currentPaper = paper({ literature: literature() });
+      const context = setup({ applyAnnotationPublications, initialPapers: [currentPaper] });
+      const current = annotation({
+        publication: {
+          desiredVisibility: operation === "retract" ? "private" : "public",
+          remoteAnnotationId: "remote-existing",
+          remoteRevision: 7,
+          state: operation === "retract" ? "pending_retract" : "pending_update"
+        },
+        revision: 8
+      });
+
+      const result = await act(() => context.result.current.actions.changePublication({
+        annotation: current, operation, paper: currentPaper
+      }));
+
+      expect(result).toMatchObject({
+        remoteAnnotationId: "remote-existing",
+        remoteRevision: 7,
+        state: "failed"
+      });
+    }
+  );
 
   test("serializes publish then retract and retracts the create receipt identity", async () => {
     const create = deferred<{ results: ForumAnnotationPublicationResult[] }>();
@@ -592,6 +732,36 @@ describe("usePdfAnnotationPublicationController", () => {
     expect(operations[1]).toMatchObject({ operation: "retract", remoteAnnotationId: "created-remotely" });
   });
 
+  test("settles a queued retract privately when create conclusively fails without a remote copy", async () => {
+    const apply = vi.fn().mockImplementation(async ([operation]: ForumAnnotationPublicationOperation[]) => ({
+      results: [{
+        annotationId: operation.annotationId,
+        error: "请求被拒绝。",
+        pendingOperation: operation,
+        queueKey: operation.queueKey,
+        state: "failed"
+      }]
+    }));
+    const currentPaper = paper({ literature: literature() });
+    const context = setup({ applyAnnotationPublications: apply, initialPapers: [currentPaper] });
+
+    const publishing = context.result.current.actions.changePublication({
+      annotation: annotation(), operation: "publish", paper: currentPaper
+    });
+    const retracting = context.result.current.actions.changePublication({
+      annotation: annotation({
+        publication: { desiredVisibility: "private", state: "pending_retract" },
+        revision: 2
+      }),
+      operation: "retract",
+      paper: currentPaper
+    });
+
+    await expect(publishing).resolves.toMatchObject({ state: "failed" });
+    await expect(retracting).resolves.toEqual({ desiredVisibility: "private", state: "not_published" });
+    expect(apply).toHaveBeenCalledTimes(1);
+  });
+
   test("writes the returned cloud revision and literature into the workspace before publication", async () => {
     const currentPaper = paper({
       libraryReference: { documentId: "document-1", revision: 4, scopeId: "user-1", scopeType: "user" }
@@ -613,5 +783,57 @@ describe("usePdfAnnotationPublicationController", () => {
 
     expect(context.workspaceStore.getState().papers[0]).toEqual(persisted);
     expect(context.workspaceStore.getState().workspaceRevision).toBe(1);
+    expect(context.onPaperUpdated).toHaveBeenCalledWith(persisted);
+  });
+
+  test("writes paper state back and reuses the returned cloud revision for a sequential publication", async () => {
+    const initialPaper = paper({
+      libraryReference: { documentId: "document-1", revision: 4, scopeId: "user-1", scopeType: "user" }
+    });
+    const persistPaperLiterature = vi.fn().mockImplementation(async (
+      current: Paper,
+      confirmed: LiteratureRecord
+    ) => ({
+      ...current,
+      libraryReference: {
+        ...current.libraryReference!,
+        revision: current.libraryReference!.revision + 1
+      },
+      literature: confirmed
+    }));
+    const workspaceStore = createWorkspaceStore([initialPaper]);
+    const forumClient = {
+      applyAnnotationPublications: vi.fn().mockImplementation(
+        async (operations: ForumAnnotationPublicationOperation[]) => ({
+          results: operations.map((operation) => receipt(operation))
+        })
+      ),
+      confirmLiterature: vi.fn(),
+      resolveLiterature: vi.fn()
+    };
+    const { result } = renderHook(() => {
+      const [readerPaper, setReaderPaper] = useState(initialPaper);
+      const controller = usePdfAnnotationPublicationController({
+        forumClient,
+        literatureMetadataRepository: { load: vi.fn().mockResolvedValue(literature()) },
+        onPaperUpdated: setReaderPaper,
+        persistPaperLiterature,
+        workspaceStore
+      });
+      return { controller, readerPaper };
+    });
+
+    await act(() => result.current.controller.actions.changePublication({
+      annotation: annotation(), operation: "publish", paper: result.current.readerPaper
+    }));
+    await act(() => result.current.controller.actions.changePublication({
+      annotation: annotation({ id: "annotation-2" }),
+      operation: "publish",
+      paper: initialPaper
+    }));
+
+    expect(persistPaperLiterature.mock.calls.map(([current]) => current.libraryReference?.revision)).toEqual([4, 5]);
+    expect(result.current.readerPaper.libraryReference?.revision).toBe(6);
+    expect(result.current.readerPaper.literature).toEqual(literature());
   });
 });

@@ -1,6 +1,18 @@
 import { useState } from "react";
-import { Button, Field, Input, Select, Textarea } from "@fluentui/react-components";
-import type { LiteratureDialogModel } from "../../controllers/usePdfAnnotationPublicationController";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Field,
+  Input,
+  Select,
+  Textarea
+} from "@fluentui/react-components";
+import type { LiteratureDialogModel } from "./literatureResolution.types";
 import type {
   LiteratureIdentifierKind,
   ManualLiteratureInput
@@ -61,46 +73,55 @@ export function LiteratureResolutionDialog({
   }
 
   return (
-    <div className="workspace-dialog-backdrop profile-dialog-backdrop" data-testid="workspace-dialog-backdrop">
-      <div
-        aria-label="确认文献身份"
-        aria-modal="true"
-        className="workspace-modal-panel profile-dialog"
-        role="dialog"
-      >
-        <div className="profile-dialog-header">
-          <div className="profile-dialog-title">确认文献身份</div>
-        </div>
+    <Dialog
+      modalType="modal"
+      onOpenChange={(_, data) => {
+        if (!data.open) onCancel();
+      }}
+      open
+    >
+      <DialogSurface aria-label="确认文献身份" className="workspace-modal-panel profile-dialog">
+        <DialogBody>
+          <DialogTitle>确认文献身份</DialogTitle>
+          <DialogContent>
+            {model.kind === "resolving" ? (
+              <div className="profile-archive-card">正在识别文献</div>
+            ) : null}
 
-        {model.kind === "candidates" ? (
-          <div>
-            {model.candidates.map((candidate) => {
-              const primaryIdentifier = candidate.record.identifiers[0];
-              const byline = [
-                candidate.record.authors.join("、"),
-                candidate.record.year ? String(candidate.record.year) : ""
-              ].filter(Boolean).join(" · ");
-              return (
-                <div className="profile-archive-card" key={candidate.candidateKey}>
-                  <div className="profile-dialog-title">{candidate.record.title}</div>
-                  {byline ? <div>{byline}</div> : null}
-                  {primaryIdentifier ? (
-                    <div>{identifierLabels[primaryIdentifier.kind]} {primaryIdentifier.value}</div>
-                  ) : null}
-                  <Button
-                    appearance="secondary"
-                    disabled={model.pending}
-                    onClick={() => onSelectCandidate(candidate.candidateKey)}
-                  >
-                    选择 {candidate.record.title}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
+            {model.kind === "confirming" ? (
+              <div className="profile-archive-card">正在确认 {model.candidate.record.title}</div>
+            ) : null}
 
-        {model.kind === "unavailable" ? (
+            {model.kind === "candidates" ? (
+              <div>
+                {model.candidates.map((candidate) => {
+                  const primaryIdentifier = candidate.record.identifiers[0];
+                  const byline = [
+                    candidate.record.authors.join("、"),
+                    candidate.record.year ? String(candidate.record.year) : ""
+                  ].filter(Boolean).join(" · ");
+                  return (
+                    <div className="profile-archive-card" key={candidate.candidateKey}>
+                      <div className="profile-dialog-title">{candidate.record.title}</div>
+                      {byline ? <div>{byline}</div> : null}
+                      {primaryIdentifier ? (
+                        <div>{identifierLabels[primaryIdentifier.kind]} {primaryIdentifier.value}</div>
+                      ) : null}
+                      <Button
+                        appearance="secondary"
+                        aria-label={`选择 ${candidate.record.title}`}
+                        disabled={model.pending}
+                        onClick={() => onSelectCandidate(candidate.candidateKey)}
+                      >
+                        选择
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {model.kind === "unavailable" ? (
           <div className="profile-archive-card">
             <div className="profile-dialog-title">文献检索暂时不可用</div>
             {model.unavailableProviders.length > 0 ? (
@@ -112,9 +133,9 @@ export function LiteratureResolutionDialog({
               ).join("、")}</div>
             ) : null}
           </div>
-        ) : null}
+            ) : null}
 
-        {model.kind === "manual" ? (
+            {model.kind === "manual" ? (
           <div className="profile-archive-card">
             <Field label="文献标题" required>
               <Input
@@ -164,28 +185,33 @@ export function LiteratureResolutionDialog({
               />
             </Field>
           </div>
-        ) : null}
+            ) : null}
 
-        {model.message ? (
-          <div aria-live="polite" className="organization-action-message">{model.message}</div>
-        ) : null}
+            {model.message ? (
+              <div aria-live="polite" className="organization-action-message">{model.message}</div>
+            ) : null}
+          </DialogContent>
 
-        <div className="profile-dialog-actions">
-          <Button appearance="secondary" onClick={onCancel}>
-            取消公开
-          </Button>
-          {model.kind === "unavailable" ? (
-            <Button appearance="primary" disabled={model.pending} onClick={onRetry}>
-              重试检索
+          <DialogActions className="profile-dialog-actions">
+            <Button
+              appearance="secondary"
+              onClick={onCancel}
+            >
+              取消公开
             </Button>
-          ) : null}
-          {model.kind === "manual" ? (
-            <Button appearance="primary" disabled={model.pending || !canSubmitManual} onClick={submitManual}>
-              确认文献信息
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </div>
+            {model.kind === "unavailable" ? (
+              <Button appearance="primary" disabled={model.pending} onClick={onRetry}>
+                重试检索
+              </Button>
+            ) : null}
+            {model.kind === "manual" ? (
+              <Button appearance="primary" disabled={model.pending || !canSubmitManual} onClick={submitManual}>
+                确认文献信息
+              </Button>
+            ) : null}
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   );
 }

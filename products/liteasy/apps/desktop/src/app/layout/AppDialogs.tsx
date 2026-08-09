@@ -15,7 +15,7 @@ import { AcademicArchiveDialog } from "../features/profile/AcademicArchiveDialog
 import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfirmDialog";
 import type { AcademicProfile } from "../features/profile/profile.types";
 import { LiteratureResolutionDialog } from "../features/forum/LiteratureResolutionDialog";
-import type { LiteratureDialogModel } from "../controllers/usePdfAnnotationPublicationController";
+import type { LiteratureDialogModel } from "../features/forum/literatureResolution.types";
 import type { ManualLiteratureInput } from "../features/paper-identity/literature.types";
 
 export type AppDialogsProps = {

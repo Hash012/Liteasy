@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { ForumLiteratureResolveInput } from "../features/forum/forum.types";
 import type { ForumClient } from "../features/forum/forumClient";
+import type { LiteratureDialogModel } from "../features/forum/literatureResolution.types";
 import type {
   LiteratureCandidate,
   LiteratureRecord,
@@ -19,27 +20,6 @@ import {
 import type { createWorkspaceStore } from "../features/workspace/workspace.store";
 import type { Paper } from "../features/workspace/workspace.types";
 
-export type LiteratureDialogModel =
-  | {
-      candidates: LiteratureCandidate[];
-      kind: "candidates";
-      message?: string;
-      pending: boolean;
-      unavailableProviders: LiteratureResolveResult["unavailableProviders"];
-    }
-  | {
-      kind: "manual";
-      message?: string;
-      pending: boolean;
-      unavailableProviders: LiteratureResolveResult["unavailableProviders"];
-    }
-  | {
-      kind: "unavailable";
-      message?: string;
-      pending: boolean;
-      unavailableProviders: LiteratureResolveResult["unavailableProviders"];
-    };
-
 export type ChangePdfAnnotationPublicationInput = {
   annotation: PdfAnnotationV2;
   literatureHints?: NonNullable<ForumLiteratureResolveInput["hints"]>;
@@ -57,6 +37,7 @@ type PdfAnnotationPublicationControllerInput = {
   literatureMetadataRepository: {
     load(paperId: string): Promise<LiteratureRecord | undefined>;
   };
+  onPaperUpdated(paper: Paper): void;
   persistPaperLiterature(
     paper: Paper,
     literature: LiteratureRecord
@@ -65,6 +46,7 @@ type PdfAnnotationPublicationControllerInput = {
 };
 
 type PaperLiteraturePersistenceInput = {
+  canManageLibraryReference(reference: NonNullable<Paper["libraryReference"]>): boolean;
   cloudLibraryClient: {
     updateLiterature(
       scope: { scopeId: string; scopeType: "organization" | "user" },
@@ -93,15 +75,19 @@ const busyPublication: PdfAnnotationPublication = {
 };
 
 export function createPersistPaperLiterature({
+  canManageLibraryReference,
   cloudLibraryClient,
   literatureMetadataRepository
 }: PaperLiteraturePersistenceInput) {
   return async (paper: Paper, literature: LiteratureRecord): Promise<Paper> => {
-    if (!paper.libraryReference) {
+    const reference = paper.libraryReference;
+    const persistInCloud = reference && (
+      reference.scopeType === "user" || canManageLibraryReference(reference)
+    );
+    if (!reference || !persistInCloud) {
       await literatureMetadataRepository.save(paper.id, literature);
       return { ...paper, literature };
     }
-    const reference = paper.libraryReference;
     const result = await cloudLibraryClient.updateLiterature(
       { scopeId: reference.scopeId, scopeType: reference.scopeType },
       reference.documentId,
@@ -126,7 +112,8 @@ function errorMessage(error: unknown, fallback: string) {
 
 function failedPublication(
   operation: ChangePdfAnnotationPublicationInput["operation"],
-  error: unknown
+  error: unknown,
+  priorPublication?: PdfAnnotationPublication
 ): PdfAnnotationPublication {
   const message = errorMessage(error, "论坛发布请求失败，请稍后重试。");
   return {
@@ -134,6 +121,12 @@ function failedPublication(
     lastError: operation === "retract" && !message.includes("论坛仍公开")
       ? `撤回未完成，论坛仍公开。${message}`
       : message,
+    ...(priorPublication?.remoteAnnotationId
+      ? { remoteAnnotationId: priorPublication.remoteAnnotationId }
+      : {}),
+    ...(priorPublication?.remoteRevision !== undefined
+      ? { remoteRevision: priorPublication.remoteRevision }
+      : {}),
     state: "failed"
   };
 }
@@ -175,6 +168,7 @@ function validManualRecord(record: ManualLiteratureInput) {
 export function usePdfAnnotationPublicationController({
   forumClient,
   literatureMetadataRepository,
+  onPaperUpdated,
   persistPaperLiterature,
   workspaceStore
 }: PdfAnnotationPublicationControllerInput) {
@@ -182,6 +176,7 @@ export function usePdfAnnotationPublicationController({
   const activeResolutionRef = useRef<ActiveResolution | null>(null);
   const forumClientRef = useRef(forumClient);
   const latestPublicationRef = useRef(new Map<string, PdfAnnotationPublication>());
+  const latestPapersRef = useRef(new Map<string, Paper>());
   const publicationQueuesRef = useRef(new Map<string, Promise<void>>());
   forumClientRef.current = forumClient;
 
@@ -219,7 +214,13 @@ export function usePdfAnnotationPublicationController({
     if (!isActive(active) || active.pending ||
       !active.candidates.some((candidate) => candidate.candidateKey === candidateKey)) return;
     active.pending = true;
-    setLiteratureDialog((current) => current ? { ...current, message: undefined, pending: true } : current);
+    const candidate = active.candidates.find((item) => item.candidateKey === candidateKey)!;
+    setLiteratureDialog({
+      candidate,
+      kind: "confirming",
+      pending: true,
+      unavailableProviders: active.unavailableProviders
+    });
     try {
       const confirmed = await forumClientRef.current.confirmLiterature({ candidateKey, mode: "candidate" });
       finishResolution(active, confirmed.literature);
@@ -300,6 +301,11 @@ export function usePdfAnnotationPublicationController({
         unavailableProviders: []
       };
       activeResolutionRef.current = active;
+      setLiteratureDialog({
+        kind: "resolving",
+        pending: true,
+        unavailableProviders: []
+      });
       void attemptResolution(active);
     });
   }
@@ -308,13 +314,14 @@ export function usePdfAnnotationPublicationController({
     input: ChangePdfAnnotationPublicationInput
   ): Promise<PdfAnnotationPublication> {
     const queueKey = `${input.annotation.paperIdentity.paperId}:${input.annotation.id}`;
+    const priorPublication = latestPublicationRef.current.get(queueKey) ?? input.annotation.publication;
     try {
       let operation;
       if (input.operation === "retract") {
         const latest = latestPublicationRef.current.get(queueKey);
         const remoteAnnotationId = latest?.remoteAnnotationId ?? input.annotation.publication.remoteAnnotationId;
         if (!remoteAnnotationId) {
-          return failedPublication(input.operation, "PDF 批注缺少可撤回的论坛批注 ID。");
+          return { desiredVisibility: "private", state: "not_published" };
         }
         operation = createRetractOperation({
           ...input.annotation,
@@ -325,9 +332,10 @@ export function usePdfAnnotationPublicationController({
           }
         });
       } else {
-        let confirmedLiterature = input.paper.literature;
+        const currentPaper = latestPapersRef.current.get(input.paper.id) ?? input.paper;
+        let confirmedLiterature = currentPaper.literature;
         if (!confirmedLiterature) {
-          confirmedLiterature = await literatureMetadataRepository.load(input.paper.id);
+          confirmedLiterature = await literatureMetadataRepository.load(currentPaper.id);
         }
         if (!confirmedLiterature) {
           const pendingResolution = resolveAndConfirm(input.literatureHints);
@@ -337,15 +345,24 @@ export function usePdfAnnotationPublicationController({
             return { desiredVisibility: "private", state: "not_published" };
           }
         }
-        const persistedPaper = await persistPaperLiterature(input.paper, confirmedLiterature);
-        workspaceStore.updatePapers([persistedPaper ?? { ...input.paper, literature: confirmedLiterature }]);
+        const persistedPaper = await persistPaperLiterature(currentPaper, confirmedLiterature) ?? {
+          ...currentPaper,
+          literature: confirmedLiterature
+        };
+        latestPapersRef.current.set(persistedPaper.id, persistedPaper);
+        workspaceStore.updatePapers([persistedPaper]);
+        onPaperUpdated(persistedPaper);
         operation = createUpsertOperation(input.annotation, confirmedLiterature);
       }
 
       const response = await forumClientRef.current.applyAnnotationPublications([operation]);
       const result = response.results[0];
       if (!result || result.state === "failed") {
-        return failedPublication(input.operation, result?.error ?? "论坛发布响应缺少该批注的可验证结果。");
+        return failedPublication(
+          input.operation,
+          result?.error ?? "论坛发布响应缺少该批注的可验证结果。",
+          priorPublication
+        );
       }
       const currentAnnotation = operation.operation === "retract"
         ? {
@@ -360,7 +377,7 @@ export function usePdfAnnotationPublicationController({
       latestPublicationRef.current.set(queueKey, publication);
       return publication;
     } catch (error) {
-      return failedPublication(input.operation, error);
+      return failedPublication(input.operation, error, priorPublication);
     }
   }
 
