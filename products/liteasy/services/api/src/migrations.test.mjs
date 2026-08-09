@@ -93,5 +93,5 @@ test("runtime verification requires the exact immutable migration set", async ()
 
 test("production migration head includes the visualization control plane", () => {
   const migrations = readMigrations();
-  assert.equal(migrations.at(-1)?.name, "021_visualization_final_review.sql");
+  assert.equal(migrations.at(-1)?.name, "022_visualization_cost_policy_lifecycle.sql");
 });

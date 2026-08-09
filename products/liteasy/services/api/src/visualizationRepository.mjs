@@ -164,6 +164,39 @@ function providerRouteView(row) {
   } : null;
 }
 
+function costPolicyView(row) {
+  return row ? {
+    dataClass: row.data_class,
+    enabled: row.enabled,
+    modality: row.modality,
+    operation: row.operation,
+    providerId: row.provider_id,
+    reason: row.reason,
+    revision: Number(row.revision),
+    unitCost: Number(row.unit_cost),
+    updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at ?? null,
+    updatedBy: row.updated_by
+  } : null;
+}
+
+function routeCostPolicyCombinations(route) {
+  const combinations = [];
+  for (const modality of route.modalities ?? []) {
+    for (const operation of route.operations ?? []) {
+      for (const dataClass of route.dataClasses ?? []) {
+        combinations.push({
+          dataClass,
+          modality,
+          operation,
+          providerId: route.providerId,
+          unitCost: operation === "image_generation" ? 4 : 1
+        });
+      }
+    }
+  }
+  return combinations;
+}
+
 function quotaPolicyView(row) {
   return {
     dailyUnits: Number(row.daily_units),
@@ -300,7 +333,7 @@ export class PostgresVisualizationRepository {
   async saveProviderRoute(input) {
     const route = input?.route;
     const id = routeId(route?.routeId);
-    const actorId = subjectId(input?.updatedBy);
+    const actorId = subjectId(input?.updatedBy ?? input?.actorId);
     const key = operationKey(input?.idempotencyKey);
     if (!Number.isSafeInteger(input?.expectedRevision) || input.expectedRevision < 0) {
       throw new Error("visualization_route_revision_invalid");
@@ -378,7 +411,27 @@ export class PostgresVisualizationRepository {
         input.expectedRevision
       ]);
       if (!saved.rows[0]) throw new Error("visualization_route_revision_conflict");
-      const response = { route: providerRouteView(saved.rows[0]) };
+      const costPolicies = [];
+      for (const combination of routeCostPolicyCombinations(route)) {
+        const policy = await client.query(`
+          INSERT INTO visualization_cost_policies(
+            modality, operation, data_class, provider_id, unit_cost, revision,
+            enabled, updated_by, reason
+          ) VALUES ($1,$2,$3,$4,$5,1,true,$6,$7)
+          ON CONFLICT (modality, operation, data_class, provider_id, revision) DO NOTHING
+          RETURNING *
+        `, [
+          combination.modality,
+          combination.operation,
+          combination.dataClass,
+          combination.providerId,
+          combination.unitCost,
+          actorId,
+          input.reason.trim()
+        ]);
+        if (policy.rows[0]) costPolicies.push(costPolicyView(policy.rows[0]));
+      }
+      const response = { route: providerRouteView(saved.rows[0]), costPolicies };
       await client.query(`
         INSERT INTO audit_events(
           audit_id, actor_id, actor_audience, action, resource_type, resource_id,
@@ -390,8 +443,8 @@ export class PostgresVisualizationRepository {
         actorId,
         id,
         input.reason.trim(),
-        required(input, "traceId"),
-        json({ revision: response.route.revision })
+        input.traceId ?? `trace_${randomUUID()}`,
+        json({ costPolicyCount: costPolicies.length, revision: response.route.revision })
       ]);
       await client.query(`
         INSERT INTO idempotency_records(
@@ -475,7 +528,17 @@ export class PostgresVisualizationRepository {
              EXISTS(
                SELECT 1 FROM visualization_provider_configs route
                 WHERE route.enabled = true AND route.circuit_state <> 'open'
-                  AND route.operations ?| ARRAY['structured_generation','image_generation']
+                  AND EXISTS (
+                    SELECT 1
+                      FROM jsonb_array_elements_text(route.operations) operation(value)
+                      CROSS JOIN jsonb_array_elements_text(route.data_classes) data_class(value)
+                      JOIN visualization_cost_policies cost
+                        ON cost.provider_id = route.provider_id
+                       AND cost.operation = operation.value
+                       AND cost.data_class = data_class.value
+                       AND cost.enabled = true
+                     WHERE operation.value IN ('structured_generation','image_generation','validation')
+                  )
                   AND route.modalities ?| ARRAY(
                     SELECT jsonb_array_elements_text(e.allowed_modalities)
                   )
@@ -487,8 +550,16 @@ export class PostgresVisualizationRepository {
                      FROM jsonb_array_elements_text(e.allowed_modalities) allowed_modality(value)
                      JOIN visualization_provider_configs route
                        ON route.enabled = true AND route.circuit_state <> 'open'
-                      AND route.operations ?| ARRAY['structured_generation','image_generation']
                       AND route.modalities ? allowed_modality.value
+                     JOIN LATERAL jsonb_array_elements_text(route.operations) operation(value) ON true
+                     JOIN LATERAL jsonb_array_elements_text(route.data_classes) data_class(value) ON true
+                     JOIN visualization_cost_policies cost
+                       ON cost.provider_id = route.provider_id
+                      AND cost.modality = allowed_modality.value
+                      AND cost.operation = operation.value
+                      AND cost.data_class = data_class.value
+                      AND cost.enabled = true
+                      AND cost.operation IN ('structured_generation','image_generation','validation')
                  ) available
              ), '[]'::jsonb) AS available_modalities,
              COALESCE((SELECT SUM(u.units_delta) FROM visualization_usage_ledger u

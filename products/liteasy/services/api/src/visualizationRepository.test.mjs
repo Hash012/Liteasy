@@ -12,7 +12,10 @@ function transactionHarness() {
     idempotency: new Map(),
     usage: [],
     costs: [],
-    artifacts: []
+    artifacts: [],
+    routeAvailable: undefined,
+    availableModalities: undefined,
+    availableCostPolicy: true
   };
   const calls = [];
   const client = {
@@ -42,7 +45,16 @@ function transactionHarness() {
         if (normalized.startsWith("SELECT e.*")) {
           const entitlement = state.entitlements.get(values[0]);
           const preference = state.preferences.get(values[0]);
-          return { rows: entitlement ? [{ ...entitlement, preference_enabled: preference?.enabled ?? true }] : [] };
+          return { rows: entitlement ? [{ ...entitlement, preference_enabled: preference?.enabled ?? true,
+            route_available: state.routeAvailable === undefined ? undefined : state.routeAvailable && state.availableCostPolicy,
+            available_modalities: state.availableModalities ?? [],
+            quota_subject_id: state.policies.has(values[0]) ? values[0] : null,
+            daily_units: state.policies.get(values[0])?.daily_units,
+            monthly_units: state.policies.get(values[0])?.monthly_units,
+            max_concurrency: state.policies.get(values[0])?.max_concurrency,
+            timezone: state.policies.get(values[0])?.timezone,
+            daily_used: 0, monthly_used: 0, active_count: 0
+          }] : [] };
         }
         const row = state.entitlements.get(values[0]);
         return { rows: row ? [row] : [] };
@@ -58,7 +70,7 @@ function transactionHarness() {
       if (normalized.includes("FROM visualization_provider_configs")) {
         return { rows: [{ route_id: "route-1", provider_id: "provider-1", revision: "1", enabled: true, circuit_state: "closed", circuit_open_until: null, modalities: ["semantic_graph"], operations: ["structured_generation", "validation"], data_classes: ["paper"], route_available: true }] };
       }
-      if (normalized.includes("FROM visualization_cost_policies")) return { rows: [{ modality: "semantic_graph", operation: "structured_generation", data_class: "paper", unit_cost: 4, revision: "1", enabled: true }] };
+      if (normalized.includes("FROM visualization_cost_policies")) return { rows: state.availableCostPolicy ? [{ modality: "semantic_graph", operation: "structured_generation", data_class: "paper", unit_cost: 4, revision: "1", enabled: true }] : [] };
       if (normalized.includes("FROM visualization_quota_reservations") && normalized.includes("idempotency_key")) {
         const row = [...state.reservations.values()].find((item) => item.subject_id === values[0] && item.idempotency_key === values[1]);
         return { rows: row ? [row] : [] };
@@ -315,6 +327,49 @@ test("saves a provider route with optimistic revision, idempotency, and audit", 
   assert.equal(result.route.routeId, "route-1");
   assert.equal(harness.calls.some((call) => call.sql.startsWith("INSERT INTO audit_events")), true);
   assert.equal(harness.calls.some((call) => call.sql.startsWith("INSERT INTO idempotency_records")), true);
+});
+
+test("creating a provider route provisions cost policies for every declared capability", async () => {
+  const harness = adminPool(async (sql, values) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [] };
+    if (sql.startsWith("INSERT INTO visualization_provider_configs")) return { rows: [{ ...providerRow, route_id: "route-new", provider_id: "provider-new", revision: "1" }] };
+    if (sql.startsWith("INSERT INTO visualization_cost_policies")) return { rows: [{ modality: values[0], operation: values[1], data_class: values[2], provider_id: values[3], unit_cost: values[4], revision: "1", enabled: true, updated_by: values[5], reason: values[6] }] };
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const result = await repository.saveProviderRoute({
+    route: {
+      routeId: "route-new", providerId: "provider-new", revision: 1,
+      operations: ["structured_generation"], modalities: ["semantic_graph"], dataClasses: ["paper"],
+      endpoint: "https://provider.example/v1", secretRef: "viz-secret:provider-new",
+      model: "visual-1", region: "global", priority: 1, timeoutMs: 30000, maxConcurrency: 1,
+      enabled: true, circuitState: "closed", circuitFailures: 0, circuitOpenUntil: null
+    },
+    expectedRevision: 0, updatedBy: "admin-1", idempotencyKey: "route-create-1",
+    reason: "enable provider route", traceId: "trace-route-new"
+  });
+  assert.equal(result.route.revision, 1);
+  assert.equal(result.costPolicies.length, 1);
+  assert.equal(harness.calls.some(({ sql }) => sql.includes("visualization_cost_policies")), true);
+});
+
+test("capability and reserve fail closed when the locked route has no matching cost policy", async () => {
+  const harness = transactionHarness();
+  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: ["semantic_graph"], revision: "1" });
+  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
+  harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "4", monthly_units: "8", max_concurrency: "1", timezone: "UTC", revision: "1" });
+  harness.state.routeAvailable = true;
+  harness.state.availableModalities = ["semantic_graph"];
+  harness.state.availableCostPolicy = false;
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const capability = await repository.capability("user-1");
+  assert.equal(capability.allowed, true);
+  assert.equal(capability.serviceAvailable, false);
+  await assert.rejects(repository.reserve("user-1", {
+    idempotencyKey: "request-new-1", modality: "semantic_graph", operation: "structured_generation",
+    dataClass: "paper", routeId: "route-1"
+  }), /visualization_cost_policy_unconfigured/);
 });
 
 test("rejects a stale provider route revision before mutation", async () => {

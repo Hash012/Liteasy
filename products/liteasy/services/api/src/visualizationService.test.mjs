@@ -190,6 +190,23 @@ test("provider failure refunds the reservation with a stable reason", async () =
   }]);
 });
 
+test("missing provider cost policy is surfaced before provider work", async () => {
+  const calls = [];
+  const instance = serviceHarness({ repository: {
+    async reserve() {
+      calls.push("reserve");
+      throw new Error("visualization_cost_policy_unconfigured");
+    }
+  }, gateway: {
+    async generateStructured() { calls.push("provider"); throw new Error("provider_must_not_be_contacted"); }
+  } });
+  await assert.rejects(() => instance.service.generate("user_1", {
+    providerRequest: { dataClass: "paper", operation: "structured_generation" },
+    reservation: { idempotencyKey: "policy-missing-1", modality: "semantic_graph", routeId: "route-new" }
+  }), (error) => error.code === "visualization_cost_policy_unconfigured" && error.status === 503);
+  assert.deepEqual(calls, ["reserve"]);
+});
+
 test("late provider completion after cancellation is discarded and refunded", async () => {
   const controller = new AbortController();
   const instance = serviceHarness({ gateway: {
