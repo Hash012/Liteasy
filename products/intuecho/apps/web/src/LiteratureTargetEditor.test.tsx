@@ -151,6 +151,29 @@ describe("LiteratureTargetEditor", () => {
     expect(screen.getByRole("button", { name: "手动添加文献" })).toBeVisible();
   });
 
+  test("keeps the newest candidate when two confirmations complete out of order", async () => {
+    const user = userEvent.setup();
+    const candidateA = { ...candidate, candidateKey: "crossref:doi:10.1000/a", record: { ...candidate.record, title: "Candidate A" } };
+    const candidateB = { ...candidate, candidateKey: "crossref:doi:10.1000/b", record: { ...candidate.record, title: "Candidate B" } };
+    const confirmationA = deferred<{ literature: typeof confirmed }>();
+    const confirmationB = deferred<{ literature: typeof confirmed }>();
+    resolveLiterature.mockResolvedValue({ status: "ambiguous", candidates: [candidateA, candidateB], unavailableProviders: [] });
+    confirmLiterature.mockImplementation((input) => "candidateKey" in input && input.candidateKey === candidateA.candidateKey ? confirmationA.promise : confirmationB.promise);
+    const { onChange } = renderEditor();
+    await user.type(screen.getByRole("combobox", { name: "检索关联文献" }), "10.1000/candidates");
+    await user.click(screen.getByRole("button", { name: "检索" }));
+    await user.click(await screen.findByRole("button", { name: "选择 Candidate A" }));
+    await user.click(screen.getByRole("button", { name: "选择 Candidate B" }));
+
+    confirmationB.resolve({ literature: { ...confirmed, literatureId: "literature-b", title: "Candidate B" } });
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith([{ kind: "whole_document", literature: { literatureId: "literature-b" } }]));
+    confirmationA.resolve({ literature: { ...confirmed, literatureId: "literature-a", title: "Candidate A" } });
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith([{ kind: "whole_document", literature: { literatureId: "literature-b" } }]);
+  });
+
   test("lets the author choose an ambiguous candidate and keeps unavailable results retryable", async () => {
     const user = userEvent.setup();
     resolveLiterature

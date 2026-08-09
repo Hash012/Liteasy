@@ -84,7 +84,8 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
     }
   }
 
-  async function confirm(candidate: LiteratureCandidate, attempt = attemptRef.current) {
+  async function confirm(candidate: LiteratureCandidate, originatingAttempt?: number) {
+    const attempt = originatingAttempt ?? ++attemptRef.current;
     setLoading(true); setStatus("");
     try {
       const response = await communityApi.confirmLiterature({ candidateKey: candidate.candidateKey, mode: "candidate" });
@@ -114,7 +115,7 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
     const numericYear = manualYear.trim() ? Number(manualYear) : undefined;
     if (!title) { setStatus("请填写手动文献标题"); return; }
     if (!value && (!authors.length || !numericYear)) { setStatus("请填写 DOI 等稳定标识，或同时填写作者和年份"); return; }
-    const attempt = attemptRef.current;
+    const attempt = ++attemptRef.current;
     setLoading(true); setStatus("");
     try {
       const response = await communityApi.confirmLiterature({ mode: "manual", record: {
