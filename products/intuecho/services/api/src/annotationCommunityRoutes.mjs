@@ -14,6 +14,7 @@ import {
   tagAppealSchema,
   tagAppealResolutionSchema,
   updateAnnotationSchema,
+  updateReplyPublicationSchema,
   updateReplySchema
 } from "@intuecho/contracts";
 import { AnnotationCommunityError } from "./annotationCommunitySqlite.mjs";
@@ -51,6 +52,7 @@ const messages = {
   AUTH_REQUIRED: "登录后才能进行此操作。",
   CANNOT_FOLLOW_SELF: "不能关注自己。",
   CONVERSATION_NOT_FOUND: "找不到这段私聊。",
+  DERIVED_BODY_READ_ONLY: "独立批注正文必须通过原回复修改。",
   INVALID_ANNOTATION: "批注内容或关联目标不符合要求。",
   INVALID_ANNOTATION_UPDATE: "批注修改内容不符合要求。",
   INVALID_LITERATURE_FILTER: "文献筛选条件不符合要求。",
@@ -59,6 +61,7 @@ const messages = {
   INVALID_PROFILE: "学术资料不符合要求。",
   INVALID_RATING: "评分必须是 1 到 5 的整数。",
   INVALID_REPLY: "回复内容或关联目标不符合要求。",
+  INVALID_REPLY_PUBLICATION: "回复的独立批注设置不符合要求。",
   INVALID_REPLY_UPDATE: "回复修改内容不符合要求。",
   INVALID_TAG_APPEAL: "标签申诉理由不符合要求。",
   INVALID_TAG_APPEAL_RESOLUTION: "标签申诉审核内容不符合要求。",
@@ -217,6 +220,18 @@ export function registerAnnotationCommunityRoutes(app, repository, {
     if (!author) return;
     const input = validated(updateReplySchema, request.body, "INVALID_REPLY_UPDATE");
     return { reply: await repository.updateReply(request.params.replyId, author, input) };
+  }));
+
+  app.put("/v1/replies/:replyId/publication", async (request, reply) => route(reply, async () => {
+    const author = requireUser(request, reply);
+    if (!author) return;
+    const input = validated(updateReplyPublicationSchema, request.body, "INVALID_REPLY_PUBLICATION");
+    return repository.updateReplyPublication(request.params.replyId, author, input);
+  }));
+
+  app.delete("/v1/replies/:replyId", async (request, reply) => route(reply, async () => {
+    const author = requireUser(request, reply);
+    return author ? repository.deleteReply(request.params.replyId, author) : undefined;
   }));
 
   app.get("/v1/me/academic-profile", async (request, reply) => route(reply, async () => {

@@ -758,7 +758,7 @@ try {
 
   const authoredPublicReply = await annotations.createReply(publicAnnotation.id, userOne, {
     body: "公开回复在账号注销时保留正文并去除身份信息。",
-    shareToPlaza: false,
+    publishAsAnnotation: false,
     tags: [],
     targets: []
   });
@@ -768,7 +768,7 @@ try {
 
   const publicReply = await annotations.createReply(publicAnnotation.id, userTwo, {
     body: "回复原批注，并以自己的文献字句同步进入广场。",
-    shareToPlaza: true,
+    publishAsAnnotation: true,
     tags: ["回复证据"],
     targets: [sourcePassage]
   });
@@ -846,6 +846,364 @@ try {
     ),
     /annotation_moderation_audit_is_append_only/
   );
+
+  const lifecycleAnnotations = new PostgresAnnotationCommunityRepository(pool, {
+    async authorizeOrganizationVisibility({ organizationId, userId }) {
+      return organizationId === "org-lifecycle" && new Set(["scope-user-1", "scope-user-2"]).has(userId);
+    }
+  });
+  const scopeUserOne = { id: "scope-user-1", initials: "S1", name: "Scope User One" };
+  const scopeUserTwo = { id: "scope-user-2", initials: "S2", name: "Scope User Two" };
+  const scopeUserThree = { id: "scope-user-3", initials: "S3", name: "Scope User Three" };
+  await lifecycleAnnotations.toggleFollow(scopeUserOne.id, scopeUserTwo.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserTwo.id, scopeUserOne.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserTwo.id, scopeUserThree.id);
+  await lifecycleAnnotations.toggleFollow(scopeUserThree.id, scopeUserTwo.id);
+  const scopeCases = [
+    { author: scopeUserOne, name: "public", replyAuthor: scopeUserTwo, shareToPlaza: true, viewer: scopeUserOne },
+    {
+      author: scopeUserOne,
+      name: "organization",
+      organizationId: "org-lifecycle",
+      replyAuthor: scopeUserTwo,
+      shareToPlaza: false,
+      viewer: scopeUserOne
+    },
+    {
+      author: scopeUserOne,
+      name: "mutual_followers",
+      replyAuthor: scopeUserTwo,
+      shareToPlaza: false,
+      viewer: scopeUserOne
+    },
+    { author: scopeUserOne, name: "private", replyAuthor: scopeUserOne, shareToPlaza: false, viewer: scopeUserOne }
+  ];
+  const scopedProjectionIds = [];
+  for (const scope of scopeCases) {
+    const parent = await lifecycleAnnotations.createAnnotation(scope.author, {
+      body: `${scope.name} lifecycle parent`,
+      organizationId: scope.organizationId,
+      shareToPlaza: scope.name === "public",
+      tags: [],
+      targets: [wholeDocument],
+      visibility: scope.name
+    });
+    const projected = await lifecycleAnnotations.createReply(parent.id, scope.replyAuthor, {
+      body: `${scope.name} lifecycle projection`,
+      publishAsAnnotation: true,
+      tags: ["scope"],
+      targets: [sourcePassage]
+    });
+    assert.equal(projected.annotation.visibility, scope.name);
+    assert.equal(projected.annotation.organizationId, scope.organizationId ?? null);
+    assert.equal(projected.annotation.shareToPlaza, scope.shareToPlaza);
+    assert.equal(projected.reply.derivedAnnotationState, "published");
+    assert.equal((await lifecycleAnnotations.annotation(projected.annotation.id, scope.viewer)).id, projected.annotation.id);
+    scopedProjectionIds.push({ id: projected.annotation.id, name: scope.name });
+    if (scope.name !== "public") {
+      await assert.rejects(
+        () => lifecycleAnnotations.updateAnnotation(projected.annotation.id, scope.replyAuthor, {
+          shareToPlaza: true,
+          visibility: "public"
+        }),
+        (error) => error.code === "REPLY_VISIBILITY_MISMATCH"
+      );
+    }
+    if (scope.name === "mutual_followers") {
+      await assert.rejects(
+        () => lifecycleAnnotations.annotation(parent.id, scopeUserThree),
+        (error) => error.code === "ANNOTATION_NOT_FOUND"
+      );
+      await assert.rejects(
+        () => lifecycleAnnotations.annotation(projected.annotation.id, scopeUserThree),
+        (error) => error.code === "ANNOTATION_NOT_FOUND"
+      );
+    }
+  }
+  const scopedPlazaIds = new Set((await lifecycleAnnotations.plaza(scopeUserOne)).map((annotation) => annotation.id));
+  assert.deepEqual(
+    scopedProjectionIds.filter(({ id }) => scopedPlazaIds.has(id)).map(({ name }) => name),
+    ["public"]
+  );
+
+  const lifecycleParent = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL reply lifecycle parent",
+    shareToPlaza: true,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "public"
+  });
+  const lifecyclePure = await lifecycleAnnotations.createReply(lifecycleParent.id, scopeUserTwo, {
+    body: "PostgreSQL pure canonical reply",
+    publishAsAnnotation: false,
+    tags: [],
+    targets: []
+  });
+  assert.equal(lifecyclePure.annotation, null);
+  assert.equal(lifecyclePure.reply.derivedAnnotationId, null);
+  assert.equal(lifecyclePure.reply.derivedAnnotationState, "none");
+  const lifecyclePublished = await lifecycleAnnotations.updateReplyPublication(lifecyclePure.reply.id, scopeUserTwo, {
+    published: true,
+    tags: ["lifecycle"],
+    targets: [sourcePassage]
+  });
+  assert.equal(lifecyclePublished.annotation.visibility, "public");
+  assert.equal(lifecyclePublished.annotation.shareToPlaza, true);
+  assert.equal(lifecyclePublished.reply.derivedAnnotationState, "published");
+  const lifecycleDerivedId = lifecyclePublished.annotation.id;
+
+  await lifecycleAnnotations.updateProfile(scopeUserTwo.id, {
+    educationStage: "硕士研究生",
+    institutions: [{ name: "PostgreSQL Evidence Lab" }]
+  });
+  const lifecycleEdited = await lifecycleAnnotations.updateReply(lifecyclePure.reply.id, scopeUserTwo, {
+    body: "PostgreSQL canonical reply after editing"
+  });
+  const lifecycleDerivedAfterEdit = await lifecycleAnnotations.annotation(lifecycleDerivedId, scopeUserTwo);
+  assert.equal(lifecycleEdited.body, "PostgreSQL canonical reply after editing");
+  assert.equal(lifecycleDerivedAfterEdit.body, lifecycleEdited.body);
+  assert.equal(lifecycleEdited.revision, 2);
+  assert.equal(lifecycleDerivedAfterEdit.revision, lifecycleEdited.revision);
+  assert.deepEqual(lifecycleEdited.author.profile, {
+    educationStage: "硕士研究生",
+    institutions: [{ name: "PostgreSQL Evidence Lab" }]
+  });
+  assert.deepEqual(lifecycleDerivedAfterEdit.author.profile, lifecycleEdited.author.profile);
+  const lifecycleSnapshots = await pool.query(`
+    SELECT
+      (SELECT body FROM annotation_reply_versions WHERE reply_id = $1 AND revision = 1) AS reply_body,
+      (SELECT body FROM annotation_versions WHERE annotation_id = $2 AND revision = 1) AS annotation_body
+  `, [lifecyclePure.reply.id, lifecycleDerivedId]);
+  assert.deepEqual(lifecycleSnapshots.rows[0], {
+    annotation_body: "PostgreSQL pure canonical reply",
+    reply_body: "PostgreSQL pure canonical reply"
+  });
+  await assert.rejects(
+    () => lifecycleAnnotations.updateAnnotation(lifecycleDerivedId, scopeUserTwo, { body: "Invalid derived body edit" }),
+    (error) => error.code === "DERIVED_BODY_READ_ONLY"
+  );
+  const lifecycleMetadataEdit = await lifecycleAnnotations.updateAnnotation(lifecycleDerivedId, scopeUserTwo, {
+    tags: ["direct metadata revision"]
+  });
+  assert.equal(lifecycleMetadataEdit.revision, 3);
+
+  const lifecycleWithdrawn = await lifecycleAnnotations.updateReplyPublication(lifecyclePure.reply.id, scopeUserTwo, {
+    published: false
+  });
+  assert.equal(lifecycleWithdrawn.annotation, null);
+  assert.equal(lifecycleWithdrawn.reply.derivedAnnotationState, "withdrawn");
+  assert.equal((await lifecycleAnnotations.replies(lifecycleParent.id, scopeUserOne))[0].id, lifecyclePure.reply.id);
+  await assert.rejects(
+    () => lifecycleAnnotations.moderateAnnotation({
+      action: "restore",
+      adminId: "admin-1",
+      annotationId: lifecycleDerivedId,
+      reason: "User withdrawal is not platform moderation.",
+      traceId: "trace-user-withdrawal-restore"
+    }),
+    (error) => error.code === "ANNOTATION_MODERATION_CONFLICT"
+  );
+  const lifecycleRestored = await lifecycleAnnotations.updateReplyPublication(lifecyclePure.reply.id, scopeUserTwo, {
+    published: true,
+    tags: ["restored"],
+    targets: [sourcePassage]
+  });
+  assert.equal(lifecycleRestored.annotation.id, lifecycleDerivedId);
+  assert.equal(lifecycleRestored.annotation.revision, 4);
+  assert.equal(lifecycleRestored.reply.derivedAnnotationState, "published");
+  await lifecycleAnnotations.withdraw(lifecycleDerivedId, scopeUserTwo);
+  assert.equal((await lifecycleAnnotations.replies(lifecycleParent.id, scopeUserOne))[0].derivedAnnotationState, "withdrawn");
+  const lifecycleUserRestored = await lifecycleAnnotations.updateReplyPublication(lifecyclePure.reply.id, scopeUserTwo, {
+    published: true,
+    tags: ["restored"],
+    targets: [sourcePassage]
+  });
+  assert.equal(lifecycleUserRestored.annotation.revision, 5);
+  const lifecycleEditedAfterMetadata = await lifecycleAnnotations.updateReply(lifecyclePure.reply.id, scopeUserTwo, {
+    body: "PostgreSQL canonical reply remains editable after metadata changes"
+  });
+  const lifecycleDerivedAfterMetadata = await lifecycleAnnotations.annotation(lifecycleDerivedId, scopeUserTwo);
+  assert.equal(lifecycleEditedAfterMetadata.revision, 3);
+  assert.equal(lifecycleDerivedAfterMetadata.revision, 6);
+  assert.equal(lifecycleDerivedAfterMetadata.body, lifecycleEditedAfterMetadata.body);
+
+  const lifecycleParentBeforeEngagement = await lifecycleAnnotations.annotation(lifecycleParent.id, scopeUserOne);
+  const lifecycleSourceBeforeEngagement = await pool.query(
+    "SELECT body, revision FROM annotation_replies WHERE id = $1",
+    [lifecyclePure.reply.id]
+  );
+  assert.deepEqual(await lifecycleAnnotations.rateAnnotation(lifecycleDerivedId, scopeUserOne, 5), {
+    ratingAverage: 5,
+    ratingCount: 1,
+    viewerRating: 5
+  });
+  assert.deepEqual(await lifecycleAnnotations.toggleSave(lifecycleDerivedId, scopeUserOne), { saved: true });
+  const projectionEngagementReply = await lifecycleAnnotations.createReply(lifecycleDerivedId, scopeUserOne, {
+    body: "PostgreSQL engagement reply",
+    publishAsAnnotation: false,
+    tags: [],
+    targets: []
+  });
+  assert.equal(projectionEngagementReply.annotation, null);
+  const lifecycleSourceAfterEngagement = await pool.query(
+    "SELECT body, revision FROM annotation_replies WHERE id = $1",
+    [lifecyclePure.reply.id]
+  );
+  assert.deepEqual(lifecycleSourceAfterEngagement.rows, lifecycleSourceBeforeEngagement.rows);
+  const lifecycleParentAfterEngagement = await lifecycleAnnotations.annotation(lifecycleParent.id, scopeUserOne);
+  assert.equal(lifecycleParentAfterEngagement.ratingCount, lifecycleParentBeforeEngagement.ratingCount);
+  assert.equal(lifecycleParentAfterEngagement.viewerSaved, lifecycleParentBeforeEngagement.viewerSaved);
+  assert.equal((await lifecycleAnnotations.replies(lifecycleParent.id, scopeUserOne)).length, 1);
+  assert.equal((await lifecycleAnnotations.replies(lifecycleDerivedId, scopeUserOne)).length, 1);
+
+  await lifecycleAnnotations.moderateAnnotation({
+    action: "withdraw",
+    adminId: "admin-1",
+    annotationId: lifecycleDerivedId,
+    reason: "Withdraw linked lifecycle reply.",
+    traceId: "trace-lifecycle-reply-withdraw"
+  });
+  assert.equal((await lifecycleAnnotations.replies(lifecycleParent.id, scopeUserOne)).length, 0);
+  const lifecycleModeratedReply = await pool.query(`
+    SELECT moderated_at IS NOT NULL AS moderated, moderated_by, moderation_reason
+      FROM annotation_replies
+     WHERE id = $1
+  `, [lifecyclePure.reply.id]);
+  assert.deepEqual(lifecycleModeratedReply.rows, [{
+    moderated: true,
+    moderated_by: "admin-1",
+    moderation_reason: "Withdraw linked lifecycle reply."
+  }]);
+  await lifecycleAnnotations.moderateAnnotation({
+    action: "restore",
+    adminId: "admin-1",
+    annotationId: lifecycleDerivedId,
+    reason: "Restore linked lifecycle reply.",
+    traceId: "trace-lifecycle-reply-restore"
+  });
+  assert.equal((await lifecycleAnnotations.replies(lifecycleParent.id, scopeUserOne))[0].id, lifecyclePure.reply.id);
+  const replyLifecycleAudit = await pool.query(`
+    SELECT action, linked_reply_id
+      FROM annotation_moderation_audit
+     WHERE annotation_id = $1
+     ORDER BY created_at, id
+  `, [lifecycleDerivedId]);
+  assert.deepEqual(replyLifecycleAudit.rows, [
+    { action: "withdraw", linked_reply_id: lifecyclePure.reply.id },
+    { action: "restore", linked_reply_id: lifecyclePure.reply.id }
+  ]);
+  assert.deepEqual(await lifecycleAnnotations.deleteReply(lifecyclePure.reply.id, scopeUserTwo), {
+    ok: true,
+    replyId: lifecyclePure.reply.id
+  });
+  assert.equal((await lifecycleAnnotations.replies(lifecycleParent.id, scopeUserOne)).length, 0);
+  await assert.rejects(
+    () => lifecycleAnnotations.annotation(lifecycleDerivedId, scopeUserTwo),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+  await assert.rejects(
+    () => lifecycleAnnotations.moderateAnnotation({
+      action: "restore",
+      adminId: "admin-1",
+      annotationId: lifecycleDerivedId,
+      reason: "A deleted canonical reply must stay withdrawn.",
+      traceId: "trace-deleted-reply-restore"
+    }),
+    (error) => error.code === "ANNOTATION_MODERATION_CONFLICT"
+  );
+  await assert.rejects(
+    () => lifecycleAnnotations.annotation(lifecycleDerivedId, scopeUserTwo),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+
+  const parentDeletionRoot = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL parent deletion context",
+    shareToPlaza: true,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "public"
+  });
+  const parentDeletionProjection = await lifecycleAnnotations.createReply(parentDeletionRoot.id, scopeUserTwo, {
+    body: "PostgreSQL projection survives parent deletion",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  await lifecycleAnnotations.withdraw(parentDeletionRoot.id, scopeUserOne);
+  assert.deepEqual(
+    (await lifecycleAnnotations.annotation(parentDeletionProjection.annotation.id, scopeUserOne)).originalReply,
+    { replyId: parentDeletionProjection.reply.id, status: "parent_deleted" }
+  );
+  await lifecycleAnnotations.moderateAnnotation({
+    action: "withdraw",
+    adminId: "admin-1",
+    annotationId: parentDeletionProjection.annotation.id,
+    reason: "Withdraw projection after its parent was deleted.",
+    traceId: "trace-parent-deleted-projection-withdraw"
+  });
+  await assert.rejects(
+    () => lifecycleAnnotations.annotation(parentDeletionProjection.annotation.id, scopeUserOne),
+    (error) => error.code === "ANNOTATION_NOT_FOUND"
+  );
+  await lifecycleAnnotations.moderateAnnotation({
+    action: "restore",
+    adminId: "admin-1",
+    annotationId: parentDeletionProjection.annotation.id,
+    reason: "Restore projection after its parent was deleted.",
+    traceId: "trace-parent-deleted-projection-restore"
+  });
+  assert.deepEqual(
+    (await lifecycleAnnotations.annotation(parentDeletionProjection.annotation.id, scopeUserOne)).originalReply,
+    { replyId: parentDeletionProjection.reply.id, status: "parent_deleted" }
+  );
+
+  const rollbackParent = await lifecycleAnnotations.createAnnotation(scopeUserOne, {
+    body: "PostgreSQL rollback parent",
+    shareToPlaza: true,
+    tags: [],
+    targets: [wholeDocument],
+    visibility: "public"
+  });
+  const rollbackProjection = await lifecycleAnnotations.createReply(rollbackParent.id, scopeUserTwo, {
+    body: "PostgreSQL rollback source",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: [sourcePassage]
+  });
+  await migrationPool.query(`
+    INSERT INTO annotation_versions(
+      id, annotation_id, revision, body, author_profile_snapshot, visibility,
+      organization_id, share_to_plaza, targets, tags, changed_by
+    ) VALUES ($1, $2, 1, $3, $4::jsonb, 'public', NULL, true, $5::jsonb, '[]'::jsonb, $6)
+  `, [
+    `forced-rollback-version-${randomUUID()}`,
+    rollbackProjection.annotation.id,
+    rollbackProjection.annotation.body,
+    JSON.stringify(rollbackProjection.annotation.author.profile),
+    JSON.stringify(rollbackProjection.annotation.targets),
+    scopeUserTwo.id
+  ]);
+  await assert.rejects(
+    () => lifecycleAnnotations.updateReply(rollbackProjection.reply.id, scopeUserTwo, {
+      body: "PostgreSQL update must roll back"
+    }),
+    /annotation_versions_annotation_id_revision_key/
+  );
+  const rollbackState = await pool.query(`
+    SELECT
+      (SELECT body FROM annotation_replies WHERE id = $1) AS reply_body,
+      (SELECT revision::int FROM annotation_replies WHERE id = $1) AS reply_revision,
+      (SELECT body FROM annotations WHERE id = $2) AS annotation_body,
+      (SELECT revision::int FROM annotations WHERE id = $2) AS annotation_revision,
+      (SELECT count(*)::int FROM annotation_reply_versions WHERE reply_id = $1) AS reply_versions
+  `, [rollbackProjection.reply.id, rollbackProjection.annotation.id]);
+  assert.deepEqual(rollbackState.rows[0], {
+    annotation_body: "PostgreSQL rollback source",
+    annotation_revision: 1,
+    reply_body: "PostgreSQL rollback source",
+    reply_revision: 1,
+    reply_versions: 0
+  });
   const plaza = await annotations.plaza(userOne, {
     documentType: "journal_article",
     educationStage: "博士研究生",
@@ -1221,7 +1579,7 @@ try {
   );
   const privateReply = await annotations.createReply(privateRoot.id, userOne, {
     body: "账号删除必须从子节点开始移除的私有回复。",
-    shareToPlaza: false,
+    publishAsAnnotation: false,
     tags: [],
     targets: []
   });

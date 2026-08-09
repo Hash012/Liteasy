@@ -569,9 +569,22 @@ export class PostgresAnnotationCommunityRepository {
     }
   }
 
-  async #canView(row, viewer) {
+  async #canView(row, viewer, client = this.pool) {
     if (row.author_id === viewer?.id || row.visibility === "public") return true;
-    if (row.visibility === "mutual_followers") return this.#mutual(row.author_id, viewer?.id);
+    if (row.visibility === "mutual_followers") {
+      let audienceAuthorId = row.author_id;
+      if (row.source_reply_id) {
+        const result = await client.query(`
+          SELECT parent.author_id
+            FROM annotation_replies reply
+            JOIN annotations parent ON parent.id = reply.parent_annotation_id
+           WHERE reply.id = $1
+        `, [row.source_reply_id]);
+        audienceAuthorId = result.rows[0]?.author_id ?? audienceAuthorId;
+      }
+      if (audienceAuthorId === viewer?.id) return true;
+      return this.#mutual(audienceAuthorId, viewer?.id, client);
+    }
     if (row.visibility === "organization" && viewer?.id) {
       return this.#organizationVisible({ organizationId: row.organization_id, userId: viewer.id });
     }
@@ -600,6 +613,10 @@ export class PostgresAnnotationCommunityRepository {
       const row = await this.#row(id, client, true);
       if (!row || row.withdrawn_at) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
       if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_ANNOTATION_AUTHOR", 403);
+      if (row.source_reply_id && update.body !== undefined) throw new AnnotationCommunityError("DERIVED_BODY_READ_ONLY");
+      if (row.source_reply_id && (update.visibility !== undefined || update.organizationId !== undefined || update.shareToPlaza !== undefined)) {
+        throw new AnnotationCommunityError("REPLY_VISIBILITY_MISMATCH");
+      }
       const visibility = update.visibility ?? row.visibility;
       const organizationId = update.organizationId === undefined ? row.organization_id : update.organizationId;
       const shareToPlaza = update.shareToPlaza ?? row.share_to_plaza;
@@ -663,8 +680,19 @@ export class PostgresAnnotationCommunityRepository {
 
   async annotation(id, viewer, client = this.pool) {
     const row = await this.#row(id, client);
-    if (!row || row.withdrawn_at || !await this.#canView(row, viewer)) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
+    if (!row || row.withdrawn_at || !await this.#canView(row, viewer, client)) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
     return this.#serialize(row, viewer, client);
+  }
+
+  async #replyRow(id, client = this.pool, lock = false) {
+    const result = await client.query(`
+      SELECT reply.*, derived.withdrawn_at AS derived_withdrawn_at
+        FROM annotation_replies reply
+        LEFT JOIN annotations derived ON derived.id = reply.derived_annotation_id
+       WHERE reply.id = $1
+       ${lock ? "FOR UPDATE OF reply" : ""}
+    `, [id]);
+    return result.rows[0] ?? null;
   }
 
   #serializeReply(row, viewer) {
@@ -673,6 +701,7 @@ export class PostgresAnnotationCommunityRepository {
       body: row.body,
       createdAt: row.created_at,
       derivedAnnotationId: row.derived_annotation_id,
+      derivedAnnotationState: !row.derived_annotation_id ? "none" : row.derived_withdrawn_at ? "withdrawn" : "published",
       id: row.id,
       parentAnnotationId: row.parent_annotation_id,
       revision: Number(row.revision),
@@ -684,31 +713,29 @@ export class PostgresAnnotationCommunityRepository {
   async createReply(parentAnnotationId, author, input) {
     return withTransaction(this.pool, async (client) => {
       const parent = await this.#row(parentAnnotationId, client, true);
-      if (!parent || parent.withdrawn_at || !await this.#canView(parent, author)) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
+      if (!parent || parent.withdrawn_at || !await this.#canView(parent, author, client)) throw new AnnotationCommunityError("PARENT_ANNOTATION_NOT_FOUND", 404);
       if (parent.visibility === "organization" && !await this.#organizationVisible({ organizationId: parent.organization_id, userId: author.id })) {
         throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
       }
-      if (input.shareToPlaza && parent.visibility !== "public") throw new AnnotationCommunityError("PLAZA_REQUIRES_PUBLIC_VISIBILITY");
       const replyId = `reply_${randomUUID()}`;
-      const derivedAnnotationId = input.targets.length ? `annotation_${randomUUID()}` : null;
+      const derivedAnnotationId = input.publishAsAnnotation ? `annotation_${randomUUID()}` : null;
       const profile = JSON.stringify(await this.#profileSnapshot(author.id, client));
       await client.query(`INSERT INTO annotation_replies(id, parent_annotation_id, derived_annotation_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id) VALUES ($1, $2, NULL, $3, $4, $5, $6, $7::jsonb, $8, $9)`, [replyId, parentAnnotationId, input.body, author.id, author.name, author.initials, profile, parent.visibility, parent.organization_id]);
       if (derivedAnnotationId) {
-        await client.query(`INSERT INTO annotations(id, source_reply_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)`, [derivedAnnotationId, replyId, input.body, author.id, author.name, author.initials, profile, parent.visibility, parent.organization_id, input.shareToPlaza]);
+        await client.query(`INSERT INTO annotations(id, source_reply_id, body, author_id, author_name, author_initials, author_profile_snapshot, visibility, organization_id, share_to_plaza) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)`, [derivedAnnotationId, replyId, input.body, author.id, author.name, author.initials, profile, parent.visibility, parent.organization_id, parent.visibility === "public"]);
         await this.#replaceTargets(client, derivedAnnotationId, input.targets, author.id);
         await this.#replaceUserTags(client, derivedAnnotationId, input.tags);
         await this.#assignPlatformTags(client, derivedAnnotationId, input.body, input.tags);
         await client.query("UPDATE annotation_replies SET derived_annotation_id = $2 WHERE id = $1", [replyId, derivedAnnotationId]);
       }
-      const reply = (await client.query("SELECT * FROM annotation_replies WHERE id = $1", [replyId])).rows[0];
+      const reply = await this.#replyRow(replyId, client);
       return { annotation: derivedAnnotationId ? await this.annotation(derivedAnnotationId, author, client) : null, reply: this.#serializeReply(reply, author) };
     });
   }
 
   async updateReply(replyId, author, input) {
     return withTransaction(this.pool, async (client) => {
-      const result = await client.query("SELECT * FROM annotation_replies WHERE id = $1 FOR UPDATE", [replyId]);
-      const row = result.rows[0];
+      const row = await this.#replyRow(replyId, client, true);
       if (!row || row.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
       if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
       if (row.visibility === "organization" && !await this.#organizationVisible({ organizationId: row.organization_id, userId: author.id })) throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
@@ -720,15 +747,90 @@ export class PostgresAnnotationCommunityRepository {
         const targets = await this.#targets(derived.id, client);
         const tags = await this.#tags(derived.id, client);
         await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`, [`annotation_version_${randomUUID()}`, derived.id, derived.revision, derived.body, JSON.stringify(derived.author_profile_snapshot), derived.visibility, derived.organization_id, derived.share_to_plaza, JSON.stringify(targets), JSON.stringify(tags), author.id]);
-        await client.query("UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = now() WHERE id = $1", [derived.id, input.body, author.name, author.initials, profile]);
+        await client.query("UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = $6, updated_at = now() WHERE id = $1", [derived.id, input.body, author.name, author.initials, profile, Number(derived.revision) + 1]);
       }
-      return this.#serializeReply((await client.query("SELECT * FROM annotation_replies WHERE id = $1", [replyId])).rows[0], author);
+      return this.#serializeReply(await this.#replyRow(replyId, client), author);
+    });
+  }
+
+  async updateReplyPublication(replyId, author, input) {
+    return withTransaction(this.pool, async (client) => {
+      const row = await this.#replyRow(replyId, client, true);
+      if (!row || row.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
+      if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
+      if (row.visibility === "organization" && !await this.#organizationVisible({ organizationId: row.organization_id, userId: author.id })) {
+        throw new AnnotationCommunityError("ORGANIZATION_ACCESS_DENIED", 403);
+      }
+      if (input.published && row.moderated_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
+      let derivedAnnotationId = row.derived_annotation_id;
+      if (!input.published) {
+        if (derivedAnnotationId) {
+          await this.#row(derivedAnnotationId, client, true);
+          await client.query("UPDATE annotations SET withdrawn_at = now(), updated_at = now() WHERE id = $1", [derivedAnnotationId]);
+        }
+        return {
+          annotation: null,
+          reply: this.#serializeReply(await this.#replyRow(replyId, client), author)
+        };
+      }
+      if (!derivedAnnotationId) {
+        derivedAnnotationId = `annotation_${randomUUID()}`;
+        await client.query(`
+          INSERT INTO annotations(
+            id, source_reply_id, body, author_id, author_name, author_initials,
+            author_profile_snapshot, visibility, organization_id, share_to_plaza, revision
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11)
+        `, [derivedAnnotationId, replyId, row.body, row.author_id, row.author_name, row.author_initials, JSON.stringify(row.author_profile_snapshot), row.visibility, row.organization_id, row.visibility === "public", row.revision]);
+        await client.query("UPDATE annotation_replies SET derived_annotation_id = $2 WHERE id = $1", [replyId, derivedAnnotationId]);
+      } else {
+        const derived = await this.#row(derivedAnnotationId, client, true);
+        const targets = await this.#targets(derived.id, client);
+        const tags = await this.#tags(derived.id, client);
+        await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`, [`annotation_version_${randomUUID()}`, derived.id, derived.revision, derived.body, JSON.stringify(derived.author_profile_snapshot), derived.visibility, derived.organization_id, derived.share_to_plaza, JSON.stringify(targets), JSON.stringify(tags), author.id]);
+        await client.query(`
+          UPDATE annotations
+             SET body = $2, author_name = $3, author_initials = $4,
+                 author_profile_snapshot = $5::jsonb, visibility = $6,
+                 organization_id = $7, share_to_plaza = $8, revision = $9,
+                 withdrawn_at = NULL, updated_at = now()
+           WHERE id = $1
+        `, [derivedAnnotationId, row.body, row.author_name, row.author_initials, JSON.stringify(row.author_profile_snapshot), row.visibility, row.organization_id, row.visibility === "public", Number(derived.revision) + 1]);
+      }
+      await this.#replaceTargets(client, derivedAnnotationId, input.targets, author.id);
+      await this.#replaceUserTags(client, derivedAnnotationId, input.tags);
+      await this.#assignPlatformTags(client, derivedAnnotationId, row.body, input.tags);
+      return {
+        annotation: await this.annotation(derivedAnnotationId, author, client),
+        reply: this.#serializeReply(await this.#replyRow(replyId, client), author)
+      };
+    });
+  }
+
+  async deleteReply(replyId, author) {
+    return withTransaction(this.pool, async (client) => {
+      const row = await this.#replyRow(replyId, client, true);
+      if (!row || row.deleted_at) throw new AnnotationCommunityError("REPLY_NOT_FOUND", 404);
+      if (row.author_id !== author.id) throw new AnnotationCommunityError("NOT_REPLY_AUTHOR", 403);
+      if (row.derived_annotation_id) await this.#row(row.derived_annotation_id, client, true);
+      await client.query("UPDATE annotation_replies SET body = '[deleted]', deleted_at = now(), updated_at = now() WHERE id = $1", [replyId]);
+      if (row.derived_annotation_id) {
+        await client.query("UPDATE annotations SET withdrawn_at = now(), updated_at = now() WHERE id = $1", [row.derived_annotation_id]);
+      }
+      return { ok: true, replyId };
     });
   }
 
   async replies(id, viewer) {
     await this.annotation(id, viewer);
-    const result = await this.pool.query("SELECT * FROM annotation_replies WHERE parent_annotation_id = $1 AND deleted_at IS NULL ORDER BY created_at, id", [id]);
+    const result = await this.pool.query(`
+      SELECT reply.*, derived.withdrawn_at AS derived_withdrawn_at
+        FROM annotation_replies reply
+        LEFT JOIN annotations derived ON derived.id = reply.derived_annotation_id
+       WHERE reply.parent_annotation_id = $1
+         AND reply.deleted_at IS NULL
+         AND reply.moderated_at IS NULL
+       ORDER BY reply.created_at, reply.id
+    `, [id]);
     return result.rows.map((row) => this.#serializeReply(row, viewer));
   }
 
@@ -1107,17 +1209,38 @@ export class PostgresAnnotationCommunityRepository {
 
   async moderateAnnotation(input) {
     return withTransaction(this.pool, async (client) => {
-      const found = await client.query("SELECT * FROM annotations WHERE id = $1 FOR UPDATE", [input.annotationId]);
-      const annotation = found.rows[0];
+      const candidate = await this.#row(input.annotationId, client);
+      if (!candidate) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
+      const linkedReply = candidate.source_reply_id
+        ? await this.#replyRow(candidate.source_reply_id, client, true)
+        : null;
+      const annotation = await this.#row(input.annotationId, client, true);
       if (!annotation) throw new AnnotationCommunityError("ANNOTATION_NOT_FOUND", 404);
+      if (
+        input.action === "restore" &&
+        annotation.source_reply_id &&
+        (!linkedReply?.moderated_at || (linkedReply.deleted_at && !linkedReply.parent_deleted_at))
+      ) {
+        throw new AnnotationCommunityError("ANNOTATION_MODERATION_CONFLICT", 409);
+      }
       if ((input.action === "withdraw") === Boolean(annotation.withdrawn_at)) {
         throw new AnnotationCommunityError("ANNOTATION_MODERATION_CONFLICT", 409);
       }
       await client.query("UPDATE annotations SET withdrawn_at = CASE WHEN $2 = 'withdraw' THEN now() ELSE NULL END, updated_at = now() WHERE id = $1", [annotation.id, input.action]);
+      if (annotation.source_reply_id) {
+        await client.query(`
+          UPDATE annotation_replies
+             SET moderated_at = CASE WHEN $2 = 'withdraw' THEN now() ELSE NULL END,
+                 moderation_reason = CASE WHEN $2 = 'withdraw' THEN $3 ELSE NULL END,
+                 moderated_by = CASE WHEN $2 = 'withdraw' THEN $4 ELSE NULL END,
+                 updated_at = now()
+           WHERE id = $1
+        `, [annotation.source_reply_id, input.action, input.reason, input.adminId]);
+      }
       await client.query(`
-        INSERT INTO annotation_moderation_audit(id, annotation_id, action, reason, admin_user_id, trace_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `, [`annotationaudit_${randomUUID()}`, annotation.id, input.action, input.reason, input.adminId, input.traceId]);
+        INSERT INTO annotation_moderation_audit(id, annotation_id, linked_reply_id, action, reason, admin_user_id, trace_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [`annotationaudit_${randomUUID()}`, annotation.id, annotation.source_reply_id, input.action, input.reason, input.adminId, input.traceId]);
       return { action: input.action, annotationId: annotation.id, ok: true };
     });
   }
