@@ -43,19 +43,23 @@ export function resolveThinReadingVisualizationIntentRequest(source: ThinReading
   switch (source.quickCommand) {
     case "html_svg_structure":
     case "visualize_structure":
-      return { candidateModalities: ["semantic_graph"] as const, purpose: "explain_structure" as const };
+      return { candidateModalities: ["semantic_graph"] as const, explicit: true, purpose: "explain_structure" as const };
     case "html_algorithm_animation":
     case "visualize_process":
-      return { candidateModalities: ["physics_process"] as const, purpose: "show_process" as const };
+      return { candidateModalities: ["physics_process"] as const, explicit: true, purpose: "show_process" as const };
     case "mermaid_causal":
     case "visualize_flow":
-      return { candidateModalities: ["semantic_graph"] as const, purpose: "show_process" as const };
+      return { candidateModalities: ["semantic_graph"] as const, explicit: true, purpose: "show_process" as const };
     default:
-      if (
-        source.requestedOutput === "visualization_intent" &&
-        /(?:visuali[sz]e|visualization|可视化|图示|流程图|结构图|示意)/iu.test(source.prompt ?? "")
-      ) {
-        return { candidateModalities: ["semantic_graph"] as const, purpose: "explain_structure" as const };
+      if (source.requestedOutput === "visualization_intent") {
+        const prompt = source.prompt ?? "";
+        if (/(?:过程|步骤|流程|flow|process)/iu.test(prompt)) {
+          return { candidateModalities: ["physics_process"] as const, explicit: true, purpose: "show_process" as const };
+        }
+        if (/(?:结构|层次|结构图|structure)/iu.test(prompt)) {
+          return { candidateModalities: ["semantic_graph"] as const, explicit: true, purpose: "explain_structure" as const };
+        }
+        return { explicit: true };
       }
       return undefined;
   }

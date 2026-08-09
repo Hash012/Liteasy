@@ -522,12 +522,12 @@ function assertVisualOutput(input: {
     const requested = input.source
       ? resolveThinReadingVisualizationIntentRequest(input.source)
       : undefined;
-    const isExplicit = requested !== undefined;
+    const isExplicit = requested?.explicit === true;
     const intent = input.parsed.visualizationIntent;
     if (
       !intent.evidenceIds.every((id) => input.allowedEvidenceIds.includes(id) && adoptedEvidenceIds.has(id)) ||
       intent.requestedBy !== (isExplicit ? "explicit_user_request" : "automatic") ||
-      (requested && (intent.purpose !== requested.purpose ||
+      (requested?.purpose && (intent.purpose !== requested.purpose ||
         intent.candidateModalities.length !== requested.candidateModalities.length ||
         intent.candidateModalities.some((modality, index) => modality !== requested.candidateModalities[index])))
     ) {
@@ -1569,8 +1569,10 @@ function sourceInstruction(context: ThinReadingGenerationContext) {
   const requestedVisualization = resolveThinReadingVisualizationIntentRequest(context.source);
   return [
     `任务：针对用户选中的薄读文本继续深入：${truncatePromptText(context.source.excerpt, 1_600)}。`,
-    requestedVisualization
+    requestedVisualization?.purpose
       ? `用户明确请求可视化：若本轮证据与模态匹配，返回 requestedBy=explicit_user_request、purpose=${requestedVisualization.purpose} 且 candidateModalities 仅取 ${requestedVisualization.candidateModalities.join(", ")} 的可验证意图；否则返回 null。`
+      : requestedVisualization
+        ? "用户明确请求可视化：仅在本轮证据充分且模态匹配时返回 requestedBy=explicit_user_request 的可验证意图；否则返回 null。"
       : "",
     context.source.evidenceIds?.length
       ? "选区在上一层具有论文证据映射。它只用于指出本次深入的焦点；不得复用、输出或推断任何上一层 evidence ID，必须在本轮可用证据目录中重新选择能直接支持该讲解的 ID。"
@@ -1610,8 +1612,10 @@ export function buildThinReadingVisualGuidance(context: ThinReadingGenerationCon
     "- 原文图只在能直接澄清正文机制、结构或结果时选 1-2 张；recommendedFigures 的 figureId 必须来自目录，evidenceIds 必须绑定本轮证据，并告诉读者看图时关注什么；不合适就留空。",
     "- 仅当一张图能比正文更清楚地解释结构、比较、过程、几何或证据关系时，返回 visualizationIntent；它只列 purpose、候选受控模态、支撑它的本轮 evidence ID、requestedBy 和预期学习收益。",
     "- 证据不足、图文重复、候选模态与内容不匹配，或没有可靠图形表达时，visualizationIntent 必须为 null。不得生成图形源码、可执行内容或标记语言。",
-    requestedVisualization
+    requestedVisualization?.purpose
       ? `- 本轮用户明确要求可视化：若证据与模态匹配，visualizationIntent.requestedBy 必须为 explicit_user_request，purpose 必须为 ${requestedVisualization.purpose}，candidateModalities 仅可使用 ${requestedVisualization.candidateModalities.join(", ")}；不匹配时仍返回 null。`
+      : requestedVisualization
+        ? "- 本轮用户明确要求可视化：若证据与模态匹配，visualizationIntent.requestedBy 必须为 explicit_user_request；不匹配时仍返回 null。"
       : "- 本轮没有明确可视化请求：若确有可靠增益，visualizationIntent.requestedBy 为 automatic；否则为 null。"
   ].join("\n");
 }

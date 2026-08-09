@@ -152,6 +152,28 @@ describe("thinReadingAgent", () => {
     })).toThrow("thin_reading_visualization_intent_invalid");
   });
 
+  test("requires explicit provenance but permits unconstrained modality for generic typed prompts", () => {
+    const source = {
+      excerpt: "解释这里。",
+      kind: "selected_text" as const,
+      prompt: "请展开说明。",
+      requestedOutput: "visualization_intent" as const
+    };
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      ...v2ModelOutput,
+      visualizationIntent: {
+        ...v2ModelOutput.visualizationIntent,
+        candidateModalities: ["physics_process"],
+        purpose: "show_process",
+        requestedBy: "explicit_user_request"
+      }
+    }), { allowedEvidenceIds: ["evidence-survey-taxonomy"], source }).visualizationIntent).toBeDefined();
+    expect(() => parseThinReadingModelSeed(JSON.stringify(v2ModelOutput), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      source
+    })).toThrow("thin_reading_visualization_intent_invalid");
+  });
+
   test("materializes a validated intent on the v2 node that owns it", () => {
     const rootSeed = parseThinReadingModelSeed(JSON.stringify(v2ModelOutput), {
       allowedEvidenceIds: ["evidence-survey-taxonomy"]

@@ -26,6 +26,7 @@ describe("thinReadingPromptRegistry", () => {
       quickCommand: "mermaid_causal"
     })).toEqual({
       candidateModalities: ["semantic_graph"],
+      explicit: true,
       purpose: "show_process"
     });
     expect(resolveThinReadingVisualizationIntentRequest({
@@ -34,7 +35,27 @@ describe("thinReadingPromptRegistry", () => {
       quickCommand: "visualize_structure"
     })).toEqual({
       candidateModalities: ["semantic_graph"],
+      explicit: true,
       purpose: "explain_structure"
+    });
+  });
+
+  test("keeps generic typed requests explicit while constraining reliable process cues", () => {
+    expect(resolveThinReadingVisualizationIntentRequest({
+      excerpt: "解释这里。",
+      kind: "selected_text",
+      prompt: "请展开说明。",
+      requestedOutput: "visualization_intent"
+    })).toEqual({ explicit: true });
+    expect(resolveThinReadingVisualizationIntentRequest({
+      excerpt: "解释步骤。",
+      kind: "selected_text",
+      prompt: "请用可视化说明这个过程。",
+      requestedOutput: "visualization_intent"
+    })).toEqual({
+      candidateModalities: ["physics_process"],
+      explicit: true,
+      purpose: "show_process"
     });
   });
 
