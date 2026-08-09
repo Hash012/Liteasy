@@ -1,4 +1,26 @@
 import { requireFreshMfa } from "./identityVerifier.mjs";
+import { normalizeVisualizationAuditQuery, VisualizationServiceError } from "./visualizationService.mjs";
+
+const adminReadQueryKeys = new Map([
+  ["/v1/admin/visualization/providers", new Set()],
+  ["/v1/admin/visualization/quota-policies", new Set(["limit", "subjectId"])],
+  ["/v1/admin/visualization/usage", new Set(["limit", "subjectId"])],
+  ["/v1/admin/visualization/audit", new Set(["action", "from", "limit", "subjectId", "to"])]
+]);
+
+function adminReadInput(url) {
+  const allowed = adminReadQueryKeys.get(url.pathname);
+  const input = {};
+  for (const [key, value] of url.searchParams) {
+    if (!allowed?.has(key) || Object.hasOwn(input, key)) {
+      throw new VisualizationServiceError("visualization_query_invalid");
+    }
+    input[key] = value;
+  }
+  return url.pathname === "/v1/admin/visualization/audit"
+    ? normalizeVisualizationAuditQuery(input)
+    : input;
+}
 
 async function desktopIdentity(runtime, request) {
   return runtime.identityVerifier.verifyAuthorizationHeader(
@@ -53,7 +75,7 @@ export async function handleVisualizationRequest({
   ]);
   if (request.method === "GET" && adminReads.has(url.pathname)) {
     const principal = await adminPrincipal(runtime, request);
-    const input = Object.fromEntries(url.searchParams.entries());
+    const input = adminReadInput(url);
     sendJson(response, 200, await runtime.visualizationService[adminReads.get(url.pathname)](principal, input));
     return true;
   }

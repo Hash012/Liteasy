@@ -37,6 +37,51 @@ function mutationInput(input) {
   return input;
 }
 
+export function normalizeVisualizationAuditQuery(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new VisualizationServiceError("visualization_audit_filter_invalid");
+  }
+  const allowed = new Set(["action", "from", "limit", "subjectId", "to"]);
+  if (Object.keys(input).some((key) => !allowed.has(key))) {
+    throw new VisualizationServiceError("visualization_audit_filter_invalid");
+  }
+  const normalized = {};
+  if (input.limit !== undefined) {
+    const limit = typeof input.limit === "number" ? input.limit : Number(input.limit);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+      throw new VisualizationServiceError("visualization_list_limit_invalid");
+    }
+    normalized.limit = limit;
+  }
+  if (input.subjectId !== undefined) {
+    if (typeof input.subjectId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(input.subjectId)) {
+      throw new VisualizationServiceError("visualization_subject_invalid");
+    }
+    normalized.subjectId = input.subjectId;
+  }
+  if (input.action !== undefined) {
+    if (typeof input.action !== "string" || !/^visualization_[A-Za-z0-9._:-]{1,120}$/.test(input.action)) {
+      throw new VisualizationServiceError("visualization_audit_action_invalid");
+    }
+    normalized.action = input.action;
+  }
+  for (const key of ["from", "to"]) {
+    if (input[key] === undefined) continue;
+    if (typeof input[key] !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input[key])) {
+      throw new VisualizationServiceError("visualization_audit_date_invalid");
+    }
+    const parsed = new Date(`${input[key]}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== input[key]) {
+      throw new VisualizationServiceError("visualization_audit_date_invalid");
+    }
+    normalized[key] = input[key];
+  }
+  if (normalized.from && normalized.to && normalized.from > normalized.to) {
+    throw new VisualizationServiceError("visualization_audit_date_range_invalid");
+  }
+  return normalized;
+}
+
 function capabilityProjection(value) {
   if (!value || typeof value !== "object") return unavailableCapability;
   const serviceAvailable = value.allowed === true && value.serviceAvailable === true;
@@ -278,6 +323,6 @@ export class VisualizationService {
 
   async listAudit(principal, input = {}) {
     requirePlatformAdmin(principal);
-    return this.repository.listAudit(input);
+    return this.repository.listAudit(normalizeVisualizationAuditQuery(input));
   }
 }

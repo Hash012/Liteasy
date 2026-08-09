@@ -423,6 +423,10 @@ function runtime() {
           serviceAvailable: true
         };
       },
+      async listAudit(principal, input) {
+        calls.push({ principal, visualizationAudit: input });
+        return { rows: [] };
+      },
       async setEntitlement(principal, input) {
         calls.push({ principal, visualizationEntitlement: input });
         return { entitlement: { allowed: input.allowed, subjectId: input.subjectId } };
@@ -765,6 +769,29 @@ test("requires fresh platform administrator authorization for visualization enti
   ), staleResult);
   assert.equal(staleResult.status, 403);
   assert.equal(staleInstance.calls.some((item) => item.visualizationEntitlement), false);
+});
+
+test("applies strict platform administrator visualization audit filters", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const filtered = response();
+  await handler(request(
+    "GET",
+    "/v1/admin/visualization/audit?subjectId=user-1&action=visualization_entitlement_updated&from=2026-08-01&to=2026-08-09&limit=25"
+  ), filtered);
+  assert.equal(filtered.status, 200, filtered.body.toString("utf8"));
+  assert.deepEqual(instance.calls.find((item) => item.visualizationAudit).visualizationAudit, {
+    action: "visualization_entitlement_updated",
+    from: "2026-08-01",
+    limit: 25,
+    subjectId: "user-1",
+    to: "2026-08-09"
+  });
+
+  const malformed = response();
+  await handler(request("GET", "/v1/admin/visualization/audit?from=2026-08-10&to=2026-08-09"), malformed);
+  assert.equal(malformed.status, 400);
+  assert.equal(instance.calls.filter((item) => item.visualizationAudit).length, 1);
 });
 
 test("internal visualization generation requires the dedicated service identity", async () => {

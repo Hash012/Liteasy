@@ -291,6 +291,36 @@ test("administrator mutations reject short idempotency keys before persistence",
   }), /idempotency_key_invalid/);
 });
 
+test("normalizes bounded visualization audit filters before querying the repository", async () => {
+  const calls = [];
+  const instance = serviceHarness({ repository: {
+    async listAudit(input) {
+      calls.push(input);
+      return { rows: [] };
+    }
+  } });
+  const principal = { roles: ["platform_admin"], subjectId: "admin_1" };
+  await instance.service.listAudit(principal, {
+    action: "visualization_entitlement_updated",
+    from: "2026-08-01",
+    limit: "50",
+    subjectId: "user-1",
+    to: "2026-08-09"
+  });
+  assert.deepEqual(calls, [{
+    action: "visualization_entitlement_updated",
+    from: "2026-08-01",
+    limit: 50,
+    subjectId: "user-1",
+    to: "2026-08-09"
+  }]);
+  await assert.rejects(() => instance.service.listAudit(principal, {
+    from: "2026-08-10",
+    to: "2026-08-09"
+  }), (error) => error.code === "visualization_audit_date_range_invalid");
+  assert.equal(calls.length, 1);
+});
+
 test("provider route saves use gateway normalization before repository persistence", async () => {
   const calls = [];
   const route = { routeId: "route-1" };

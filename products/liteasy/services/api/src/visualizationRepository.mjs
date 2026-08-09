@@ -165,6 +165,40 @@ function boundedLimit(value, fallback = 100) {
   return parsed;
 }
 
+function auditListInput(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("visualization_audit_filter_invalid");
+  }
+  const allowed = new Set(["action", "from", "limit", "subjectId", "to"]);
+  if (Object.keys(input).some((key) => !allowed.has(key))) {
+    throw new Error("visualization_audit_filter_invalid");
+  }
+  const date = (value) => {
+    if (value === undefined) return null;
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      throw new Error("visualization_audit_date_invalid");
+    }
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== value) {
+      throw new Error("visualization_audit_date_invalid");
+    }
+    return value;
+  };
+  const from = date(input.from);
+  const to = date(input.to);
+  if (from && to && from > to) throw new Error("visualization_audit_date_range_invalid");
+  if (input.action !== undefined && (typeof input.action !== "string" || !/^visualization_[A-Za-z0-9._:-]{1,120}$/.test(input.action))) {
+    throw new Error("visualization_audit_action_invalid");
+  }
+  return {
+    action: input.action ?? null,
+    from,
+    limit: boundedLimit(input.limit),
+    subjectId: input.subjectId === undefined ? null : subjectId(input.subjectId),
+    to
+  };
+}
+
 function operationKey(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9._:-]{8,200}$/.test(value)) {
     throw new Error("idempotency_key_invalid");
@@ -350,15 +384,19 @@ export class PostgresVisualizationRepository {
   }
 
   async listAudit(input = {}) {
-    const limit = boundedLimit(input.limit);
+    const filter = auditListInput(input);
     const result = await this.pool.query(`
       SELECT audit_id, actor_id, action, resource_type, resource_id, reason,
              trace_id, detail, occurred_at
         FROM audit_events
        WHERE action LIKE 'visualization_%'
+         AND ($1::text IS NULL OR scope_id = $1)
+         AND ($2::text IS NULL OR action = $2)
+         AND ($3::date IS NULL OR occurred_at >= $3::date)
+         AND ($4::date IS NULL OR occurred_at < ($4::date + interval '1 day'))
        ORDER BY occurred_at DESC, audit_id
-       LIMIT $1
-    `, [limit]);
+       LIMIT $5
+    `, [filter.subjectId, filter.action, filter.from, filter.to, filter.limit]);
     return { rows: result.rows.map((row) => ({
       action: row.action,
       actorId: row.actor_id,

@@ -345,10 +345,23 @@ test("projects bounded visualization usage and administrator audit rows", async 
   });
   const repository = new PostgresVisualizationRepository(harness.pool);
   const usage = await repository.listUsage({ limit: 50, subjectId: "user-1" });
-  const audit = await repository.listAudit({ limit: 50 });
+  const audit = await repository.listAudit({
+    action: "visualization_provider_saved",
+    from: "2026-08-01",
+    limit: 50,
+    subjectId: "user-1",
+    to: "2026-08-09"
+  });
   assert.equal(usage.rows[0].unitsDelta, -2);
   assert.equal(audit.rows[0].action, "visualization_provider_saved");
   assert.equal(harness.calls.every((call) => !call.values.includes(5000)), true);
+  const auditCall = harness.calls.find((call) => call.sql.includes("FROM audit_events"));
+  assert.match(auditCall.sql, /scope_id = \$1/);
+  assert.match(auditCall.sql, /action = \$2/);
+  assert.match(auditCall.sql, /occurred_at >= \$3::date/);
+  assert.match(auditCall.sql, /occurred_at < \(\$4::date \+ interval '1 day'\)/);
+  assert.deepEqual(auditCall.values, ["user-1", "visualization_provider_saved", "2026-08-01", "2026-08-09", 50]);
+  await assert.rejects(() => repository.listAudit({ from: "2026-08-10", to: "2026-08-09" }), /visualization_audit_date_range_invalid/);
 });
 
 test("lists quota policies through the production repository", async () => {
