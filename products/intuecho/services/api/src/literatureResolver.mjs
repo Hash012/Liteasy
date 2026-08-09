@@ -1,0 +1,232 @@
+import { normalizeLiteratureIdentifier } from "./literatureIdentity.mjs";
+
+const MAX_CANDIDATES = 10;
+const stableKinds = new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]);
+
+export class LiteratureResolverError extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+    this.name = "LiteratureResolverError";
+  }
+}
+
+function normalizedIdentifierKey(identifier) {
+  if (!identifier?.kind || !stableKinds.has(identifier.kind)) return null;
+  try {
+    return `${identifier.kind}:${normalizeLiteratureIdentifier(identifier.kind, identifier.value)}`;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedIdentifiers(identifiers) {
+  return [...new Map((Array.isArray(identifiers) ? identifiers : []).map((identifier) => {
+    const key = normalizedIdentifierKey(identifier);
+    return key ? [key, { ...identifier, value: key.slice(identifier.kind.length + 1) }] : null;
+  }).filter(Boolean)).values()];
+}
+
+function displayRecord(record) {
+  const title = String(record?.title ?? "").trim();
+  const identifiers = normalizedIdentifiers(record?.identifiers);
+  if (!title || identifiers.length === 0) return null;
+  const authors = (Array.isArray(record.authors) ? record.authors : []).map((author) => String(author ?? "").trim()).filter(Boolean).slice(0, 200);
+  const year = Number(record.year);
+  return {
+    authors,
+    ...(record.documentType ? { documentType: String(record.documentType).trim() } : {}),
+    identifiers,
+    title,
+    ...(Number.isInteger(year) && year >= 1000 && year <= 9999 ? { year } : {})
+  };
+}
+
+function internalCandidate(record) {
+  const display = displayRecord(record);
+  const literatureId = String(record?.literatureId ?? "").trim();
+  if (!display || !literatureId) return null;
+  return {
+    candidateKey: `intuecho:${literatureId}`,
+    provider: "intuecho",
+    record: display
+  };
+}
+
+function externalCandidate(value, providerName) {
+  if (!value || value.provider !== providerName || typeof value.candidateKey !== "string" || !value.candidateKey.startsWith(`${providerName}:`)) {
+    return null;
+  }
+  const record = displayRecord(value.record);
+  const primary = record?.identifiers[0];
+  if (!record || !primary || primary.source !== "public_registry") return null;
+  const expectedKey = `${providerName}:${primary.kind}:${primary.value}`;
+  if (value.candidateKey !== expectedKey) return null;
+  let recordUrl = null;
+  try {
+    const parsed = new URL(value.recordUrl);
+    if (parsed.protocol === "https:") recordUrl = parsed.toString();
+  } catch {
+    // An optional source URL is discarded unless it is HTTPS.
+  }
+  return {
+    candidateKey: expectedKey,
+    provider: providerName,
+    record,
+    ...(recordUrl ? { recordUrl } : {})
+  };
+}
+
+function identityKeys(candidate) {
+  return new Set(candidate.record.identifiers.map(normalizedIdentifierKey).filter(Boolean));
+}
+
+function sharesIdentity(left, right) {
+  const leftKeys = identityKeys(left);
+  return [...identityKeys(right)].some((key) => leftKeys.has(key));
+}
+
+function mergeExternalCandidates(left, right) {
+  if (left.provider === "intuecho") return left;
+  if (right.provider === "intuecho") return right;
+  const identifiers = normalizedIdentifiers([...left.record.identifiers, ...right.record.identifiers]);
+  return {
+    ...left,
+    record: { ...left.record, identifiers }
+  };
+}
+
+function rankAndDeduplicate(candidates) {
+  const ranked = [];
+  for (const candidate of candidates) {
+    const matching = ranked.map((existing, index) => sharesIdentity(existing, candidate) ? index : -1).filter((index) => index >= 0);
+    if (matching.length === 0) {
+      ranked.push(candidate);
+      continue;
+    }
+    const matched = matching.map((index) => ranked[index]);
+    let merged = matched.find((item) => item.provider === "intuecho") ?? matched[0];
+    for (const item of matched) {
+      if (item !== merged) merged = mergeExternalCandidates(merged, item);
+    }
+    merged = mergeExternalCandidates(merged, candidate);
+    const retained = ranked.filter((_item, index) => !matching.includes(index));
+    retained.splice(matching[0], 0, merged);
+    ranked.splice(0, ranked.length, ...retained);
+  }
+  return ranked.slice(0, MAX_CANDIDATES);
+}
+
+function requestedStableKeys(input) {
+  const keys = [];
+  for (const identifier of input?.hints?.identifiers ?? []) {
+    const key = normalizedIdentifierKey(identifier);
+    if (key) keys.push(key);
+  }
+  const query = String(input?.query ?? "").trim();
+  const candidates = [
+    ["doi", /^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\/.+/i],
+    ["arxiv_id", /^(?:https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\/|arxiv:\s*)?\d{4}\.\d{4,5}(?:v\d+)?(?:\.pdf)?$/i],
+    ["openalex_id", /^(?:https?:\/\/(?:www\.)?openalex\.org\/)?W\d+$/i],
+    ["semantic_scholar_id", /^corpusid\s*:\s*.+$/i]
+  ];
+  for (const [kind, pattern] of candidates) {
+    if (!pattern.test(query)) continue;
+    const key = normalizedIdentifierKey({ kind, value: query });
+    if (key) keys.push(key);
+  }
+  return new Set(keys);
+}
+
+function normalizeText(value) {
+  return String(value ?? "").normalize("NFKC").toLocaleLowerCase("en-US").replace(/[\p{P}\p{S}\s]+/gu, " ").trim();
+}
+
+function matchesHighConfidenceHints(candidate, hints) {
+  if (!hints?.title || !hints?.year || !Array.isArray(hints.authors) || hints.authors.length === 0) return false;
+  if (normalizeText(candidate.record.title) !== normalizeText(hints.title) || candidate.record.year !== hints.year) return false;
+  const expectedAuthors = hints.authors.map(normalizeText).filter(Boolean);
+  const actualAuthors = candidate.record.authors.map(normalizeText).filter(Boolean);
+  return expectedAuthors.length > 0 && expectedAuthors.length === actualAuthors.length && expectedAuthors.every((author, index) => author === actualAuthors[index]);
+}
+
+function exactCandidate(input, candidates) {
+  const requested = requestedStableKeys(input);
+  const byIdentifier = candidates.filter((candidate) => [...identityKeys(candidate)].some((key) => requested.has(key)));
+  if (byIdentifier.length > 0) return byIdentifier[0];
+  const highConfidence = candidates.filter((candidate) => matchesHighConfidenceHints(candidate, input?.hints));
+  return highConfidence.length === 1 ? highConfidence[0] : null;
+}
+
+function candidateKeyParts(candidateKey) {
+  if (typeof candidateKey !== "string") return null;
+  if (candidateKey.startsWith("intuecho:")) {
+    const literatureId = candidateKey.slice("intuecho:".length);
+    return literatureId && !literatureId.includes(":") ? { literatureId, provider: "intuecho" } : null;
+  }
+  const [provider, kind, ...valueParts] = candidateKey.split(":");
+  const value = valueParts.join(":");
+  if (!provider || !kind || !value) return null;
+  try {
+    return { kind, provider, value: normalizeLiteratureIdentifier(kind, value) };
+  } catch {
+    return null;
+  }
+}
+
+export function createLiteratureResolver({ providers, repository }) {
+  const configuredProviders = Array.isArray(providers) ? [...providers] : [];
+  if (!repository) throw new TypeError("repository is required");
+  return Object.freeze({
+    async resolve(owner, input) {
+      const query = input?.query ?? input?.hints?.title ?? input?.hints?.identifiers?.[0]?.value ?? "";
+      const stored = await repository.searchStoredLiterature(query, MAX_CANDIDATES);
+      const external = await Promise.allSettled(configuredProviders.map((provider) => provider.search(input)));
+      const unavailableProviders = external.flatMap((result, index) => result.status === "rejected" ? [configuredProviders[index].name] : []);
+      const providerCandidates = external.flatMap((result, index) => result.status === "fulfilled"
+        ? (Array.isArray(result.value) ? result.value.map((candidate) => externalCandidate(candidate, configuredProviders[index].name)).filter(Boolean) : [])
+        : []);
+      const candidates = rankAndDeduplicate([
+        ...(Array.isArray(stored) ? stored.map(internalCandidate).filter(Boolean) : []),
+        ...providerCandidates
+      ]);
+      const exact = exactCandidate(input, candidates);
+      if (exact) return { candidate: exact, status: "exact", unavailableProviders };
+      if (candidates.length) return { candidates, status: "ambiguous", unavailableProviders };
+      if (configuredProviders.length > 0 && external.every((result) => result.status === "rejected")) {
+        return { retryable: true, status: "unavailable", unavailableProviders };
+      }
+      return { candidates: [], status: "not_found", unavailableProviders };
+    },
+
+    async confirm(owner, input) {
+      if (input?.mode === "manual") return repository.confirmLiterature(owner, input);
+      const parts = candidateKeyParts(input?.candidateKey);
+      if (!parts) throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
+      if (parts.provider === "intuecho") {
+        const stored = await repository.findLiteratureById(parts.literatureId);
+        if (!stored) throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
+        return stored;
+      }
+      const provider = configuredProviders.find((item) => item.name === parts.provider);
+      if (!provider || typeof provider.fetchCandidate !== "function") {
+        throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
+      }
+      let verified;
+      try {
+        verified = await provider.fetchCandidate(input.candidateKey);
+      } catch {
+        throw new LiteratureResolverError("LITERATURE_PROVIDER_UNAVAILABLE");
+      }
+      const candidate = externalCandidate(verified, parts.provider);
+      if (!candidate || candidate.candidateKey !== input.candidateKey) {
+        throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
+      }
+      return repository.confirmRefetchedLiterature(owner, {
+        candidateKey: candidate.candidateKey,
+        provider: candidate.provider,
+        record: candidate.record
+      });
+    }
+  });
+}
