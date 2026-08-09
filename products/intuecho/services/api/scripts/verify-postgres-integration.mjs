@@ -8,6 +8,7 @@ import { PostgresForumRepository } from "../src/postgresForumRepository.mjs";
 
 const applicationUrl = process.env.INTUECHO_TEST_DATABASE_URL;
 const migrationUrl = process.env.INTUECHO_TEST_MIGRATION_DATABASE_URL;
+const migration014Only = process.env.INTUECHO_MIGRATION_014_ONLY === "1";
 if (!applicationUrl || !migrationUrl) {
   throw new Error("INTUECHO_TEST_DATABASE_URL and INTUECHO_TEST_MIGRATION_DATABASE_URL are required");
 }
@@ -63,37 +64,135 @@ try {
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 14, current: true });
-  const legacySnapshotLiteratureId = `migration-014-legacy-${randomUUID()}`;
-  const legacySnapshotVersionId = `migration-014-version-${randomUUID()}`;
+  const historicalLiteratureId = `migration-014-historical-${randomUUID()}`;
+  const historicalVersionId = `migration-014-historical-version-${randomUUID()}`;
+  const manualLiteratureId = `migration-014-manual-${randomUUID()}`;
+  const manualVersionId = `migration-014-manual-version-${randomUUID()}`;
+  const registryLiteratureId = `migration-014-registry-${randomUUID()}`;
+  const registryVersionId = `migration-014-registry-version-${randomUUID()}`;
+  const nonMigrationVersionId = `migration-014-non-migration-version-${randomUUID()}`;
   await migrationPool.query(`
     INSERT INTO literature_records(
       id, title, authors, publication_year, document_type, record_source, revision
-    ) VALUES ($1, 'Corrected legacy snapshot', '["Legacy Author"]'::jsonb, 2020, 'article', 'legacy_metadata', 1)
-  `, [legacySnapshotLiteratureId]);
+    ) VALUES
+      ($1, 'Current title', '["Current Author"]'::jsonb, 2026, 'report', 'legacy_metadata', 2),
+      ($2, 'Current manual title', '["Current Manual Author"]'::jsonb, 2025, 'article', 'manual', 2),
+      ($3, 'Current registry title', '["Current Registry Author"]'::jsonb, 2024, 'article', 'public_registry', 2)
+  `, [historicalLiteratureId, manualLiteratureId, registryLiteratureId]);
   await migrationPool.query(`
     INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source)
-    VALUES ($1, 'doi', '10.1000/migration-014', 'metadata')
-  `, [legacySnapshotLiteratureId]);
+    VALUES ($1, 'doi', $2, 'metadata')
+  `, [historicalLiteratureId, `10.1000/current-${randomUUID()}`]);
   await migrationPool.query(`
     INSERT INTO literature_record_versions(id, literature_id, revision, snapshot, changed_by)
-    VALUES ($1, $2, 1, '{"provenance":{"mode":"manual"},"title":"Wrong legacy snapshot"}'::jsonb, 'migration_011')
-  `, [legacySnapshotVersionId, legacySnapshotLiteratureId]);
+    VALUES
+      ($1, $2, 1, $3::jsonb, 'migration_011'),
+      ($4, $5, 1, $6::jsonb, 'migration_011'),
+      ($7, $8, 1, $9::jsonb, 'migration_011'),
+      ($10, $5, 2, $11::jsonb, 'manual_correction')
+  `, [
+    historicalVersionId,
+    historicalLiteratureId,
+    JSON.stringify({
+      authors: ["Historical Author", "Second Historical Author"],
+      documentType: "book",
+      identifiers: [
+        { kind: "doi", source: "metadata", value: "10.1000/historical-identity" },
+        { kind: "title_authors_year_hash", source: "inferred", value: "historical-hash" }
+      ],
+      literatureId: historicalLiteratureId,
+      provenance: { confirmedAt: null, mode: "manual", provider: null },
+      title: "Historical title",
+      year: 1998
+    }),
+    manualVersionId,
+    manualLiteratureId,
+    JSON.stringify({
+      authors: ["Original Manual Author"],
+      documentType: "preprint",
+      identifiers: [{ kind: "arxiv_id", source: "metadata", value: "2401.00001" }],
+      literatureId: manualLiteratureId,
+      provenance: { confirmedAt: null, mode: "manual", provider: null },
+      title: "Original manual title",
+      year: 2023
+    }),
+    registryVersionId,
+    registryLiteratureId,
+    JSON.stringify({
+      authors: ["Original Registry Author"],
+      documentType: "article",
+      identifiers: [{ kind: "openalex_id", source: "metadata", value: "W123456789" }],
+      literatureId: registryLiteratureId,
+      provenance: { confirmedAt: null, mode: "manual", provider: null },
+      title: "Original registry title",
+      year: 2022
+    }),
+    nonMigrationVersionId,
+    JSON.stringify({
+      literatureId: manualLiteratureId,
+      provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual", provider: null },
+      title: "Later manual correction"
+    })
+  ]);
   const correctiveMigration = readIntuechoMigrations().find((item) => item.name === "014_correct_legacy_literature_snapshots.sql");
   assert.ok(correctiveMigration);
   await migrationPool.query(correctiveMigration.sql);
-  const correctedLegacySnapshot = await migrationPool.query(
-    "SELECT snapshot FROM literature_record_versions WHERE id = $1",
-    [legacySnapshotVersionId]
+  const correctedHistoricalSnapshot = await migrationPool.query(
+    "SELECT snapshot, xmin::text AS xmin FROM literature_record_versions WHERE id = $1",
+    [historicalVersionId]
   );
-  assert.deepEqual(correctedLegacySnapshot.rows[0].snapshot, {
-    authors: ["Legacy Author"],
-    documentType: "article",
-    identifiers: [{ kind: "doi", source: "metadata", value: "10.1000/migration-014" }],
-    literatureId: legacySnapshotLiteratureId,
+  assert.deepEqual(correctedHistoricalSnapshot.rows[0].snapshot, {
+    authors: ["Historical Author", "Second Historical Author"],
+    documentType: "book",
+    identifiers: [
+      { kind: "doi", source: "metadata", value: "10.1000/historical-identity" },
+      { kind: "title_authors_year_hash", source: "inferred", value: "historical-hash" }
+    ],
+    literatureId: historicalLiteratureId,
     recordSource: "legacy_metadata",
-    title: "Corrected legacy snapshot",
-    year: 2020
-  });
+    title: "Historical title",
+    year: 1998
+  }, "migration 014 must not rebuild historical revision 1 fields from current literature rows");
+  const correctedUpgradedSnapshots = await migrationPool.query(`
+    SELECT id, snapshot FROM literature_record_versions
+     WHERE id = ANY($1::text[])
+     ORDER BY id
+  `, [[manualVersionId, registryVersionId]]);
+  const upgradedSnapshotsById = new Map(correctedUpgradedSnapshots.rows.map((row) => [row.id, row.snapshot]));
+  assert.deepEqual(upgradedSnapshotsById.get(manualVersionId), {
+    authors: ["Original Manual Author"],
+    documentType: "preprint",
+    identifiers: [{ kind: "arxiv_id", source: "metadata", value: "2401.00001" }],
+    literatureId: manualLiteratureId,
+    recordSource: "legacy_metadata",
+    title: "Original manual title",
+    year: 2023
+  }, "migration 014 must correct migration_011 history after the current source becomes manual");
+  assert.deepEqual(upgradedSnapshotsById.get(registryVersionId), {
+    authors: ["Original Registry Author"],
+    documentType: "article",
+    identifiers: [{ kind: "openalex_id", source: "metadata", value: "W123456789" }],
+    literatureId: registryLiteratureId,
+    recordSource: "legacy_metadata",
+    title: "Original registry title",
+    year: 2022
+  }, "migration 014 must correct migration_011 history after the current source becomes public_registry");
+  const untouchedNonMigrationSnapshot = await migrationPool.query(
+    "SELECT snapshot FROM literature_record_versions WHERE id = $1",
+    [nonMigrationVersionId]
+  );
+  assert.deepEqual(untouchedNonMigrationSnapshot.rows[0].snapshot, {
+    literatureId: manualLiteratureId,
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual", provider: null },
+    title: "Later manual correction"
+  }, "migration 014 must not alter snapshots written outside migration_011");
+  await migrationPool.query(correctiveMigration.sql);
+  const rerunHistoricalSnapshot = await migrationPool.query(
+    "SELECT snapshot, xmin::text AS xmin FROM literature_record_versions WHERE id = $1",
+    [historicalVersionId]
+  );
+  assert.deepEqual(rerunHistoricalSnapshot.rows[0].snapshot, correctedHistoricalSnapshot.rows[0].snapshot);
+  assert.equal(rerunHistoricalSnapshot.rows[0].xmin, correctedHistoricalSnapshot.rows[0].xmin);
   const restoredLiteratureVersionTrigger = await migrationPool.query(`
     SELECT 1 FROM pg_trigger
      WHERE tgname = 'literature_record_versions_append_only'
@@ -101,9 +200,19 @@ try {
   `);
   assert.equal(restoredLiteratureVersionTrigger.rowCount, 1);
   await assert.rejects(
-    () => migrationPool.query("UPDATE literature_record_versions SET changed_by = 'tampered' WHERE id = $1", [legacySnapshotVersionId]),
+    () => migrationPool.query("UPDATE literature_record_versions SET changed_by = 'tampered' WHERE id = $1", [historicalVersionId]),
     /literature_record_version_is_append_only/
   );
+  await assert.rejects(
+    () => migrationPool.query("DELETE FROM literature_record_versions WHERE id = $1", [historicalVersionId]),
+    /literature_record_version_is_append_only/
+  );
+  if (migration014Only) {
+    process.stdout.write(`${JSON.stringify({ migration014: true, verified: true })}\n`);
+    await pool.end();
+    await migrationPool.end();
+    process.exit(0);
+  }
   await migrationPool.query(`
     DO $$
     DECLARE tables text;
