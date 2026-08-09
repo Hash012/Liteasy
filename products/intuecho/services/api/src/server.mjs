@@ -24,6 +24,10 @@ import {
 } from "./storageBoundary.mjs";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { registerAnnotationCommunityRoutes } from "./annotationCommunityRoutes.mjs";
+import { createLiteratureProviders } from "./literatureProviders.mjs";
+import { createLiteratureRateLimiter } from "./literatureRateLimiter.mjs";
+import { createLiteratureResolver } from "./literatureResolver.mjs";
+import { LiteratureRouteError, registerLiteratureRoutes } from "./literatureRoutes.mjs";
 
 function normalizeTag(value) {
   return value.trim().replace(/^#/, "").replace(/\s+/g, " ").slice(0, 32);
@@ -85,6 +89,8 @@ export async function createIntuechoApp({
   authorizeOrganizationInvitation,
   authorizeOrganizationVisibility,
   listOrganizations,
+  literatureRateLimiter,
+  literatureResolver,
   databasePath,
   desktopIdentityVerifier = createIdentityVerifier({ expectedAudience: "liteasy-desktop" }),
   desktopOrigins = (process.env.INTUECHO_DESKTOP_ORIGINS ?? "http://127.0.0.1:1420,http://localhost:1420,tauri://localhost,http://tauri.localhost")
@@ -111,6 +117,16 @@ export async function createIntuechoApp({
     try {
       if (request.url.startsWith("/v1/admin/")) {
         request.intuechoAdmin = await adminIdentityVerifier(match[1]);
+      } else if (isLiteratureRequest(request)) {
+        try {
+          request.intuechoDesktopUser = await desktopIdentityVerifier(match[1]);
+        } catch (desktopError) {
+          try {
+            request.intuechoUser = await identityVerifier(match[1]);
+          } catch {
+            throw desktopError;
+          }
+        }
       } else if (isDesktopIntegrationRequest(request)) {
         request.intuechoDesktopUser = await desktopIdentityVerifier(match[1]);
       } else {
@@ -128,6 +144,12 @@ export async function createIntuechoApp({
       return reply.code(503).send({ error: "IDENTITY_SERVICE_UNAVAILABLE", message: "身份服务暂时不可用，请稍后重试。", traceId: request.id });
     }
   });
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof LiteratureRouteError) {
+      return reply.code(error.status).send({ error: error.code, traceId: request.id });
+    }
+    throw error;
+  });
 
   function isDesktopIntegrationRequest(request) {
     const pathname = request.url.split("?", 1)[0];
@@ -137,7 +159,17 @@ export async function createIntuechoApp({
       "/v1/pdf-annotations:sync",
       "/v1/thin-reading/annotations:sync",
       "/v1/thin-reading/recommendations:query",
-      "/v1/integrations/desktop/works:resolve"
+      "/v1/integrations/desktop/works:resolve",
+      "/v1/literature:resolve",
+      "/v1/literature:confirm"
+    ]).has(pathname);
+  }
+
+  function isLiteratureRequest(request) {
+    const pathname = request.url.split("?", 1)[0];
+    return request.method === "POST" && new Set([
+      "/v1/literature:resolve",
+      "/v1/literature:confirm"
     ]).has(pathname);
   }
 
@@ -169,11 +201,22 @@ export async function createIntuechoApp({
     authorizeOrganizationVisibility,
     listOrganizations
   });
+  const configuredLiteratureResolver = literatureResolver ?? createLiteratureResolver({
+    providers: createLiteratureProviders({}, { fetchImpl: globalThis.fetch }),
+    repository: annotationCommunity
+  });
   registerAnnotationCommunityRoutes(app, annotationCommunity, {
     currentUser: viewer,
     requireAdmin,
     requireDesktopUser,
     requireUser
+  });
+  registerLiteratureRoutes(app, {
+    currentUser: (request) => request.intuechoUser ?? request.intuechoDesktopUser ?? null,
+    rateLimiter: literatureRateLimiter ?? createLiteratureRateLimiter(),
+    requireDesktopUser,
+    requireUser,
+    resolver: configuredLiteratureResolver
   });
 
   function tagsForPost(postId) { return db.prepare("SELECT tags.name FROM tags JOIN post_tags ON post_tags.tag_id = tags.id WHERE post_tags.post_id = ? ORDER BY tags.name").all(postId).map((tag) => tag.name); }

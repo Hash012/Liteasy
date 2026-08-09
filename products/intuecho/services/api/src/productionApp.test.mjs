@@ -68,10 +68,87 @@ function runtime(overrides = {}) {
       },
       ...overrides.identityVerifier
     },
+    literatureResolver: {
+      async confirm(owner) {
+        return { literatureId: `confirmed-${owner.id}` };
+      },
+      async resolve(owner) {
+        return { status: "exact", candidate: { candidateKey: "crossref:doi:10.1000/reliable", provider: "crossref", record: { authors: [], identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/reliable" }], title: `Reliable for ${owner.id}` } }, unavailableProviders: [] };
+      },
+      ...overrides.literatureResolver
+    },
     readiness: { postgres: { writable: true } },
     repository
   };
 }
+
+test("uses each authenticated audience for literature resolution and keeps provider errors public", async () => {
+  const instance = runtime();
+  instance.identityVerifier.verifyAuthorizationHeader = async (header, audience) => {
+    instance.calls.push({ audience, header });
+    if (header === "Bearer web-token" && audience === "liteasy-desktop") {
+      throw new Error("desktop audience rejected");
+    }
+    return { audience, name: "同名研究者", subject: "user-1", token: header.slice("Bearer ".length) };
+  };
+  const app = await createProductionIntuechoApp(instance, config());
+  try {
+    const web = await app.inject({
+      headers: { authorization: "Bearer web-token" },
+      method: "POST",
+      payload: { purpose: "forum_compose", query: "10.1000/reliable" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(web.statusCode, 200, web.body);
+    assert.equal(web.json().status, "exact");
+    assert.equal(instance.calls.find((item) => item.audience === "intuecho-web").audience, "intuecho-web");
+
+    const desktop = await app.inject({
+      headers: { authorization: "Bearer desktop-token" },
+      method: "POST",
+      payload: { purpose: "liteasy_pdf_annotation", query: "10.1000/reliable" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(desktop.statusCode, 200, desktop.body);
+    assert.equal(instance.calls.find((item) => item.audience === "liteasy-desktop").audience, "liteasy-desktop");
+
+    const desktopConfirm = await app.inject({
+      headers: { authorization: "Bearer desktop-token" },
+      method: "POST",
+      payload: { candidateKey: "intuecho:literature-1", mode: "candidate" },
+      url: "/v1/literature:confirm"
+    });
+    assert.equal(desktopConfirm.statusCode, 200, desktopConfirm.body);
+    assert.equal(desktopConfirm.json().literatureId, "confirmed-user-1");
+
+    const invalid = await app.inject({
+      headers: { authorization: "Bearer web-token" },
+      method: "POST",
+      payload: { purpose: "forum_compose" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.json().code, "INVALID_LITERATURE_QUERY");
+
+    instance.literatureResolver.confirm = async () => {
+      const error = new Error("provider key=server-only-key");
+      error.code = "LITERATURE_PROVIDER_UNAVAILABLE";
+      throw error;
+    };
+
+    const unavailable = await app.inject({
+      headers: { authorization: "Bearer web-token" },
+      method: "POST",
+      payload: { candidateKey: "crossref:doi:10.1000/reliable", mode: "candidate" },
+      url: "/v1/literature:confirm"
+    });
+    assert.equal(unavailable.statusCode, 503);
+    assert.equal(unavailable.json().code, "LITERATURE_PROVIDER_UNAVAILABLE");
+    assert.equal(unavailable.body.includes("server-only-key"), false);
+  } finally {
+    await app.close();
+  }
+});
 
 test("keeps public reads anonymous and exposes only public identity client metadata", async () => {
   const instance = runtime();

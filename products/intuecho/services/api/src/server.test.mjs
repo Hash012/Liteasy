@@ -58,7 +58,9 @@ async function withApp(run, {
   listOrganizations,
   desktopIdentityVerifier: selectedDesktopIdentityVerifier = desktopIdentityVerifier,
   fixture = true,
-  identityVerifier: selectedIdentityVerifier = identityVerifier
+  identityVerifier: selectedIdentityVerifier = identityVerifier,
+  literatureRateLimiter,
+  literatureResolver
 } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "intuecho-test-"));
   const databasePath = join(directory, "test.db");
@@ -70,7 +72,9 @@ async function withApp(run, {
     listOrganizations,
     databasePath,
     desktopIdentityVerifier: selectedDesktopIdentityVerifier,
-    identityVerifier: selectedIdentityVerifier
+    identityVerifier: selectedIdentityVerifier,
+    literatureRateLimiter,
+    literatureResolver
   });
   if (fixture) insertFixture(db);
   try {
@@ -81,6 +85,128 @@ async function withApp(run, {
     await rm(directory, { recursive: true, force: true });
   }
 }
+
+function literatureResolver(overrides = {}) {
+  return {
+    async confirm(owner, input) {
+      return {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: input.mode === "manual" ? "manual" : "public_registry", value: "10.1000/reliable" }],
+        literatureId: "literature-1",
+        provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: input.mode === "manual" ? "manual" : "public_registry" },
+        title: `Confirmed for ${owner.id}`
+      };
+    },
+    async resolve(owner, input) {
+      return {
+        candidate: {
+          candidateKey: "crossref:doi:10.1000/reliable",
+          provider: "crossref",
+          record: {
+            authors: ["Ada Lovelace"],
+            identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/reliable" }],
+            title: `Reliable for ${owner.id}`
+          }
+        },
+        status: "exact",
+        unavailableProviders: []
+      };
+    },
+    ...overrides
+  };
+}
+
+test("literature routes accept authenticated Web and desktop audiences while rejecting anonymous requests", async () => {
+  await withApp(async (app) => {
+    const anonymous = await app.inject({
+      method: "POST",
+      payload: { purpose: "forum_compose", query: "10.1000/reliable" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(anonymous.statusCode, 401);
+    assert.equal(anonymous.json().error, "AUTH_REQUIRED");
+
+    const web = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { purpose: "forum_compose", query: "10.1000/reliable" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(web.statusCode, 200, web.body);
+    assert.equal(web.json().status, "exact");
+    assert.equal(web.json().candidate.record.title, "Reliable for user-1");
+
+    const desktop = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: { purpose: "liteasy_pdf_annotation", query: "10.1000/reliable" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(desktop.statusCode, 200, desktop.body);
+    assert.equal(desktop.json().status, "exact");
+  }, { literatureResolver: literatureResolver() });
+});
+
+test("literature routes project invalid requests and resolver failures without provider details", async () => {
+  await withApp(async (app) => {
+    const invalid = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { purpose: "forum_compose" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.json().error, "INVALID_LITERATURE_QUERY");
+
+    const unavailable = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { candidateKey: "crossref:doi:10.1000/reliable", mode: "candidate" },
+      url: "/v1/literature:confirm"
+    });
+    assert.equal(unavailable.statusCode, 503);
+    assert.equal(unavailable.json().error, "LITERATURE_PROVIDER_UNAVAILABLE");
+    assert.equal(unavailable.body.includes("server-only-key"), false);
+  }, {
+    literatureResolver: literatureResolver({
+      async confirm() {
+        const error = new Error("provider failed with server-only-key");
+        error.code = "LITERATURE_PROVIDER_UNAVAILABLE";
+        throw error;
+      }
+    })
+  });
+});
+
+test("literature routes accept thirty calls then reject only that user and operation", async () => {
+  await withApp(async (app) => {
+    for (let call = 0; call < 30; call += 1) {
+      const response = await app.inject({
+        headers: userHeader,
+        method: "POST",
+        payload: { purpose: "forum_compose", query: "10.1000/reliable" },
+        url: "/v1/literature:resolve"
+      });
+      assert.equal(response.statusCode, 200, response.body);
+    }
+    const limited = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { purpose: "forum_compose", query: "10.1000/reliable" },
+      url: "/v1/literature:resolve"
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.equal(limited.json().error, "LITERATURE_RATE_LIMITED");
+
+    const confirm = await app.inject({
+      headers: userHeader,
+      method: "POST",
+      payload: { candidateKey: "intuecho:literature-1", mode: "candidate" },
+      url: "/v1/literature:confirm"
+    });
+    assert.equal(confirm.statusCode, 200, confirm.body);
+  }, { literatureResolver: literatureResolver() });
+});
 
 function annotationPayload(overrides = {}) {
   const identity = {

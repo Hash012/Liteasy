@@ -108,6 +108,14 @@ export function loadIntuechoProductionConfig(env = process.env) {
       tokenUrl: parseUrl(required(env, "INTUECHO_IDP_TOKEN_URL"), "INTUECHO_IDP_TOKEN_URL", environment),
       webClientId
     }),
+    literatureProviders: Object.freeze({
+      arxivEndpoint: parseUrl(env.INTUECHO_ARXIV_ENDPOINT ?? "https://export.arxiv.org/api/query", "INTUECHO_ARXIV_ENDPOINT", environment),
+      crossrefEndpoint: parseUrl(env.INTUECHO_CROSSREF_ENDPOINT ?? "https://api.crossref.org/works", "INTUECHO_CROSSREF_ENDPOINT", environment),
+      openAlexApiKey: env.INTUECHO_OPENALEX_API_KEY?.trim() || null,
+      openAlexEndpoint: parseUrl(env.INTUECHO_OPENALEX_ENDPOINT ?? "https://api.openalex.org/works", "INTUECHO_OPENALEX_ENDPOINT", environment),
+      semanticScholarApiKey: env.INTUECHO_SEMANTIC_SCHOLAR_API_KEY?.trim() || null,
+      semanticScholarEndpoint: parseUrl(env.INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT ?? "https://api.semanticscholar.org/graph/v1/paper", "INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT", environment)
+    }),
     organizationAuthorization: Object.freeze({
       apiUrl: parseUrl(required(env, "INTUECHO_ORGANIZATION_API_URL"), "INTUECHO_ORGANIZATION_API_URL", environment),
       audience: "liteasy-internal",

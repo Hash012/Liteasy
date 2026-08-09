@@ -44,6 +44,22 @@ test("loads a separate PostgreSQL, IdP and administration boundary", () => {
   assert.equal(loadIntuechoMigrationConfig(environment()).applicationRole, "intuecho_app");
 });
 
+test("keeps optional literature provider keys in the runtime-only configuration", () => {
+  const config = loadIntuechoProductionConfig(environment({
+    INTUECHO_OPENALEX_API_KEY: "openalex-secret",
+    INTUECHO_SEMANTIC_SCHOLAR_API_KEY: "semantic-scholar-secret"
+  }));
+  assert.deepEqual(config.literatureProviders, {
+    arxivEndpoint: "https://export.arxiv.org/api/query",
+    crossrefEndpoint: "https://api.crossref.org/works",
+    openAlexApiKey: "openalex-secret",
+    openAlexEndpoint: "https://api.openalex.org/works",
+    semanticScholarApiKey: "semantic-scholar-secret",
+    semanticScholarEndpoint: "https://api.semanticscholar.org/graph/v1/paper"
+  });
+  assert.equal(JSON.stringify(publicIntuechoIdentityConfig(config)).includes("secret"), false);
+});
+
 test("requires HTTPS and non-loopback services outside tests", () => {
   assert.throws(
     () => loadIntuechoProductionConfig(environment({ NODE_ENV: "production" })),
