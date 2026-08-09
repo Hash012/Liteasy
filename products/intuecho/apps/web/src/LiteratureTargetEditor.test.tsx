@@ -38,6 +38,12 @@ function renderEditor(onChange = vi.fn(), targets: AnnotationTarget[] = []) {
   return { onChange, ...render(<LiteratureTargetEditor onChange={onChange} required targets={targets} />) };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -81,6 +87,70 @@ describe("LiteratureTargetEditor", () => {
     expect(resolveLiterature).toHaveBeenCalledTimes(1);
   });
 
+  test("ignores a superseded exact resolver response instead of opening manual fallback or writing a target", async () => {
+    const user = userEvent.setup();
+    const first = deferred<Awaited<ReturnType<typeof communityApi.resolveLiterature>>>();
+    const second = deferred<Awaited<ReturnType<typeof communityApi.resolveLiterature>>>();
+    resolveLiterature.mockImplementation(({ query }) => query?.endsWith("first") ? first.promise : second.promise);
+    confirmLiterature.mockResolvedValue({ literature: confirmed });
+    const { onChange } = renderEditor();
+    const query = screen.getByRole("combobox", { name: "检索关联文献" });
+
+    await user.type(query, "10.1000/first");
+    await user.click(screen.getByRole("button", { name: "检索" }));
+    await user.clear(query);
+    await user.type(query, "10.1000/second");
+    await user.keyboard("{Enter}");
+    second.resolve({ status: "not_found", candidates: [], unavailableProviders: [] });
+    expect(await screen.findByText(/没有找到/)).toBeVisible();
+    first.resolve({ status: "exact", candidate, unavailableProviders: [] });
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+    expect(screen.getByRole("button", { name: "手动添加文献" })).toBeVisible();
+    expect(confirmLiterature).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  test("ignores a superseded not-found response after a newer exact target is confirmed", async () => {
+    const user = userEvent.setup();
+    const first = deferred<Awaited<ReturnType<typeof communityApi.resolveLiterature>>>();
+    resolveLiterature.mockImplementation(({ query }) => query?.endsWith("first") ? first.promise : Promise.resolve({ status: "exact", candidate, unavailableProviders: [] }));
+    confirmLiterature.mockResolvedValue({ literature: confirmed });
+    const { onChange } = renderEditor();
+    const query = screen.getByRole("combobox", { name: "检索关联文献" });
+    await user.type(query, "10.1000/first");
+    await user.click(screen.getByRole("button", { name: "检索" }));
+    await user.clear(query);
+    await user.type(query, "10.1000/new");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith([{ kind: "whole_document", literature: { literatureId: "literature-1" } }]));
+    first.resolve({ status: "not_found", candidates: [], unavailableProviders: [] });
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+    expect(screen.queryByRole("button", { name: "手动添加文献" })).not.toBeInTheDocument();
+  });
+
+  test("does not apply a superseded candidate confirmation", async () => {
+    const user = userEvent.setup();
+    const confirm = deferred<{ literature: typeof confirmed }>();
+    resolveLiterature
+      .mockResolvedValueOnce({ status: "exact", candidate, unavailableProviders: [] })
+      .mockResolvedValueOnce({ status: "not_found", candidates: [], unavailableProviders: [] });
+    confirmLiterature.mockReturnValue(confirm.promise);
+    const { onChange } = renderEditor();
+    const query = screen.getByRole("combobox", { name: "检索关联文献" });
+    await user.type(query, "10.1000/first");
+    await user.click(screen.getByRole("button", { name: "检索" }));
+    await waitFor(() => expect(confirmLiterature).toHaveBeenCalled());
+    await user.clear(query);
+    await user.type(query, "10.1000/new");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(resolveLiterature).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/没有找到/)).toBeVisible();
+    confirm.resolve({ literature: confirmed });
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "手动添加文献" })).toBeVisible();
+  });
+
   test("lets the author choose an ambiguous candidate and keeps unavailable results retryable", async () => {
     const user = userEvent.setup();
     resolveLiterature
@@ -102,8 +172,9 @@ describe("LiteratureTargetEditor", () => {
     await user.type(query, "retry");
     await user.click(screen.getByRole("button", { name: "检索" }));
     expect(await screen.findByText(/暂时不可用/)).toBeVisible();
+    const callsBeforeRetry = resolveLiterature.mock.calls.length;
     await user.click(screen.getByRole("button", { name: "重试检索" }));
-    await waitFor(() => expect(resolveLiterature).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(resolveLiterature).toHaveBeenCalledTimes(callsBeforeRetry + 1));
     expect(screen.queryByLabelText("手动文献标题")).not.toBeInTheDocument();
   });
 
@@ -184,5 +255,15 @@ describe("LiteratureTargetEditor", () => {
     expect(screen.getAllByRole("button", { name: "移除关联文献" })).toHaveLength(2);
     await user.click(screen.getAllByRole("button", { name: "移除关联文献" })[0]);
     expect(onChange).toHaveBeenLastCalledWith([secondTarget]);
+  });
+
+  test("uses the hydrated canonical record when reopening an existing target", () => {
+    renderEditor(vi.fn(), [{
+      kind: "whole_document",
+      literature: { literatureId: "literature-1", literatureRecord: confirmed }
+    }] as unknown as AnnotationTarget[]);
+
+    expect(screen.getByText("A Reliable Paper")).toBeVisible();
+    expect(screen.queryByText("文献 literature-1")).not.toBeInTheDocument();
   });
 });

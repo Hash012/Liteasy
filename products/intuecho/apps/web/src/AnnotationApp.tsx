@@ -48,6 +48,7 @@ import {
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   type AcademicProfile,
+  type AnnotationReadTarget,
   type AnnotationTarget,
   type CommunityAnnotation,
   type CommunityReply,
@@ -438,8 +439,10 @@ function AnnotationDetail({ annotationId, onCompose, onConversation, refresh, se
   return <section className="single-column annotation-detail"><div className="page-heading"><span>批注</span><h1>详情</h1></div>{error ? <ErrorNotice message={error} /> : !data ? <Loading /> : <AnnotationCard annotation={data.annotation} session={session} onCompose={onCompose} onConversation={onConversation} />}</section>;
 }
 
-function TargetChip({ target }: { target: AnnotationTarget }) {
-  const title = "metadata" in target.literature ? target.literature.metadata.title : `文献 ${target.literature.literatureId}`;
+function TargetChip({ target }: { target: AnnotationReadTarget }) {
+  const title = "literatureRecord" in target.literature && target.literature.literatureRecord
+    ? target.literature.literatureRecord.title
+    : "metadata" in target.literature ? target.literature.metadata.title : `文献 ${target.literature.literatureId}`;
   return <div className="target-chip">
     <Library20Regular />
     <span><strong>{title}</strong><small>{target.kind === "whole_document" ? "整篇文献" : target.kind === "source_passage" ? `${target.page ? `第 ${target.page} 页 · ` : ""}${target.excerpt}` : `薄读内容 · ${target.derivedContent.excerpt}`}</small></span>

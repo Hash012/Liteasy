@@ -124,6 +124,20 @@ test("keeps a reply pure until independent publication is explicitly enabled", a
   expect(await screen.findByText("文献 literature-parent")).toBeVisible();
 });
 
+test("renders a hydrated canonical title after an annotation reload", () => {
+  const hydrated = {
+    ...publicParent,
+    targets: [{
+      kind: "whole_document",
+      literature: { literatureId: "literature-parent", literatureRecord: confirmedLiterature }
+    }]
+  } as unknown as CommunityAnnotation;
+  render(<AnnotationCard annotation={hydrated} session={null} onCompose={vi.fn()} onConversation={vi.fn()} />);
+
+  expect(screen.getByText("Inherited Literature")).toBeVisible();
+  expect(screen.queryByText("文献 literature-parent")).not.toBeInTheDocument();
+});
+
 test("submits a pure reply with the canonical empty publication payload", async () => {
   const user = userEvent.setup();
   const onSaved = vi.fn();

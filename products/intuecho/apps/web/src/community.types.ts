@@ -29,6 +29,16 @@ export type PaperIdentity = {
 
 export type LiteratureReference = ContractLiteratureReference;
 export type AnnotationTarget = ContractAnnotationTarget;
+type LiteratureReadReference<T> = T & { literatureRecord?: LiteratureRecord };
+type AnnotationReadEvidence<T> = T extends { literature: infer Reference }
+  ? Omit<T, "literature"> & { literature: LiteratureReadReference<Reference> }
+  : T;
+type AnnotationReadProjection<T> = T extends { literature: infer Reference }
+  ? Omit<T, "evidence" | "literature"> &
+      { literature: LiteratureReadReference<Reference> } &
+      (T extends { evidence: Array<infer Evidence> } ? { evidence: Array<AnnotationReadEvidence<Evidence>> } : {})
+  : T;
+export type AnnotationReadTarget = AnnotationReadProjection<ContractAnnotationTarget>;
 
 export type AnnotationVisibility = "private" | "organization" | "mutual_followers" | "public";
 
@@ -52,7 +62,7 @@ export type CommunityAnnotation = {
   revision: number;
   shareToPlaza: boolean;
   tags: Array<{ confidence: number | null; name: string; origin: "platform" | "user"; state: "active" | "appealed" | "upheld" }>;
-  targets: AnnotationTarget[];
+  targets: AnnotationReadTarget[];
   updatedAt: string;
   viewerCanModerate: boolean;
   viewerIsAuthor: boolean;

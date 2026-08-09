@@ -831,7 +831,7 @@ export class SqliteAnnotationCommunityRepository {
     const visibility = update.visibility ?? authorizedRow.visibility;
     const organizationId = update.organizationId === undefined ? authorizedRow.organization_id : update.organizationId;
     const shareToPlaza = update.shareToPlaza ?? Boolean(authorizedRow.share_to_plaza);
-    const targets = update.targets ?? this.#targets(id);
+      const targets = update.targets ?? this.#targets(id, false);
     if (targets.length === 0) throw new AnnotationCommunityError("ANNOTATION_TARGET_REQUIRED");
     if (shareToPlaza && visibility !== "public") throw new AnnotationCommunityError("PLAZA_REQUIRES_PUBLIC_VISIBILITY");
     if ((visibility === "organization") !== Boolean(organizationId)) throw new AnnotationCommunityError("INVALID_ANNOTATION_VISIBILITY");
@@ -849,7 +849,7 @@ export class SqliteAnnotationCommunityRepository {
     const now = new Date().toISOString();
     this.db.transaction(() => {
       this.db.prepare("INSERT INTO annotation_versions_v2(id, annotation_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(`annotation_version_${randomUUID()}`, id, row.revision, JSON.stringify(this.#serialize(row, author)), author.id, now);
+        .run(`annotation_version_${randomUUID()}`, id, row.revision, JSON.stringify(this.#serialize(row, author, false)), author.id, now);
       this.db.prepare(`UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = ?, organization_id = ?, share_to_plaza = ?, revision = revision + 1, updated_at = ? WHERE id = ?`)
         .run(update.body ?? row.body, author.name, author.initials ?? initialsFor(author.name), JSON.stringify(this.#profileSnapshot(author.id)), visibility, organizationId, shareToPlaza ? 1 : 0, now, id);
       if (update.targets) this.#replaceTargets(id, update.targets, now, author.id);
@@ -859,15 +859,33 @@ export class SqliteAnnotationCommunityRepository {
     return this.annotation(id, author);
   }
 
-  #targets(annotationId) {
-    return this.db.prepare("SELECT target_json FROM annotation_targets_v2 WHERE annotation_id = ? ORDER BY position").all(annotationId).map((row) => parseJson(row.target_json, null)).filter(Boolean);
+  #targets(annotationId, hydrate = true) {
+    const rows = this.db.prepare("SELECT id, literature_id, target_json FROM annotation_targets_v2 WHERE annotation_id = ? ORDER BY position").all(annotationId);
+    return rows.map((row) => {
+      const target = parseJson(row.target_json, null);
+      if (!target || !hydrate) return target;
+      const literatureRecord = this.#literatureRecord(row.literature_id);
+      const hydrated = {
+        ...target,
+        literature: literatureRecord ? { ...target.literature, literatureRecord } : target.literature
+      };
+      if (target.kind === "derived_passage") {
+        const evidence = this.db.prepare("SELECT literature_id, evidence_json FROM annotation_target_evidence_v2 WHERE target_id = ? ORDER BY position").all(row.id);
+        hydrated.evidence = evidence.map((item) => {
+          const value = parseJson(item.evidence_json, null);
+          const record = this.#literatureRecord(item.literature_id);
+          return value && record ? { ...value, literature: { ...value.literature, literatureRecord: record } } : value;
+        }).filter(Boolean);
+      }
+      return hydrated;
+    }).filter(Boolean);
   }
 
   #tags(annotationId) {
     return this.db.prepare("SELECT tag_name AS name, origin, state, confidence FROM annotation_tags_v2 WHERE annotation_id = ? AND state <> 'removed' ORDER BY origin, tag_name").all(annotationId);
   }
 
-  #serialize(row, viewer) {
+  #serialize(row, viewer, hydrateTargets = true) {
     const rating = this.db.prepare("SELECT count(*) AS count, avg(rating) AS average FROM annotation_ratings_v2 WHERE annotation_id = ?").get(row.id);
     const viewerRating = viewer?.id ? this.db.prepare("SELECT rating FROM annotation_ratings_v2 WHERE annotation_id = ? AND user_id = ?").get(row.id, viewer.id)?.rating ?? null : null;
     const viewerSaved = viewer?.id ? Boolean(this.db.prepare("SELECT 1 FROM annotation_saves_v2 WHERE annotation_id = ? AND user_id = ?").get(row.id, viewer.id)) : false;
@@ -884,7 +902,7 @@ export class SqliteAnnotationCommunityRepository {
       revision: row.revision,
       shareToPlaza: Boolean(row.share_to_plaza),
       tags: this.#tags(row.id),
-      targets: this.#targets(row.id),
+      targets: this.#targets(row.id, hydrateTargets),
       updatedAt: row.updated_at,
       viewerCanModerate: false,
       viewerIsAuthor: Boolean(viewer?.id && row.author_id === viewer.id),
@@ -986,7 +1004,7 @@ export class SqliteAnnotationCommunityRepository {
       if (row.derived_annotation_id) {
         const derived = this.#annotationRow(row.derived_annotation_id);
         this.db.prepare("INSERT INTO annotation_versions_v2(id, annotation_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-          .run(`annotation_version_${randomUUID()}`, derived.id, derived.revision, JSON.stringify(this.#serialize(derived, author)), author.id, now);
+          .run(`annotation_version_${randomUUID()}`, derived.id, derived.revision, JSON.stringify(this.#serialize(derived, author, false)), author.id, now);
         this.db.prepare("UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, revision = revision + 1, updated_at = ? WHERE id = ?")
           .run(input.body, author.name, author.initials ?? initialsFor(author.name), profile, now, derived.id);
       }
@@ -1048,7 +1066,7 @@ export class SqliteAnnotationCommunityRepository {
       } else {
         const derived = this.#annotationRow(derivedAnnotationId);
         this.db.prepare("INSERT INTO annotation_versions_v2(id, annotation_id, revision, snapshot_json, changed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-          .run(`annotation_version_${randomUUID()}`, derived.id, derived.revision, JSON.stringify(this.#serialize(derived, author)), author.id, now);
+          .run(`annotation_version_${randomUUID()}`, derived.id, derived.revision, JSON.stringify(this.#serialize(derived, author, false)), author.id, now);
         this.db.prepare(`UPDATE annotations_v2 SET body = ?, author_name = ?, author_initials = ?, author_profile_snapshot_json = ?, visibility = ?, organization_id = ?, share_to_plaza = ?, revision = ?, withdrawn_at = NULL, updated_at = ? WHERE id = ?`)
           .run(row.body, row.author_name, row.author_initials, row.author_profile_snapshot_json, row.visibility, row.organization_id, row.visibility === "public" ? 1 : 0, derived.revision + 1, now, derivedAnnotationId);
       }
@@ -1292,7 +1310,7 @@ export class SqliteAnnotationCommunityRepository {
   #searchText(row) {
     const targets = this.#targets(row.id);
     const tags = this.#tags(row.id).map((tag) => tag.name);
-    return [row.body, ...tags, ...targets.flatMap((target) => [target.literature?.metadata?.title, target.literature?.title, target.excerpt, target.derivedContent?.excerpt])].filter(Boolean).join(" ");
+    return [row.body, ...tags, ...targets.flatMap((target) => [target.literature?.literatureRecord?.title, target.literature?.metadata?.title, target.literature?.title, target.excerpt, target.derivedContent?.excerpt, ...(target.evidence ?? []).map((evidence) => evidence.literature?.literatureRecord?.title)])].filter(Boolean).join(" ");
   }
 
   toggleFollow(userId, targetUserId) {

@@ -530,6 +530,40 @@ test("separates manual confirmation from refetched candidates and resolves canon
   db.close();
 });
 
+test("hydrates canonical literature display metadata on annotation reads and title search", async () => {
+  const db = new Database(":memory:");
+  const repository = new SqliteAnnotationCommunityRepository(db);
+  const owner = { id: "hydration-owner", name: "Hydration Owner", initials: "HO" };
+  const literature = await repository.confirmLiterature(owner, {
+    mode: "manual",
+    record: {
+      authors: ["Canonical Author"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/hydrated" }],
+      title: "Durable Canonical Title",
+      year: 2026
+    }
+  });
+  const annotation = await repository.createAnnotation(owner, {
+    body: "The body does not repeat the title.",
+    shareToPlaza: true,
+    tags: [],
+    targets: [{ kind: "whole_document", literature: { literatureId: literature.literatureId } }],
+    visibility: "public"
+  });
+  assert.deepEqual(annotation.targets[0].literature.literatureRecord, literature);
+  const feed = await repository.plaza(owner, { query: "Durable Canonical Title" });
+  assert.equal(feed.length, 1);
+  assert.equal(feed[0].targets[0].literature.literatureRecord.title, "Durable Canonical Title");
+  assert.deepEqual(JSON.parse(db.prepare("SELECT target_json FROM annotation_targets_v2 WHERE annotation_id = ?").get(annotation.id).target_json), {
+    kind: "whole_document",
+    literature: { literatureId: literature.literatureId }
+  });
+  await repository.updateAnnotation(annotation.id, owner, { body: "Updated without rewriting its target." });
+  const version = JSON.parse(db.prepare("SELECT snapshot_json FROM annotation_versions_v2 WHERE annotation_id = ?").get(annotation.id).snapshot_json);
+  assert.equal(version.targets[0].literature.literatureRecord, undefined);
+  db.close();
+});
+
 test("reuses legacy normalized DOI values and preserves untouched legacy provenance", async () => {
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);

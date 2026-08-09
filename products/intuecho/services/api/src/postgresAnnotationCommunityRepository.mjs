@@ -671,7 +671,7 @@ export class PostgresAnnotationCommunityRepository {
       if (scopeChanged && (await client.query("SELECT 1 FROM annotation_replies WHERE parent_annotation_id = $1 LIMIT 1", [id])).rows[0]) {
         throw new AnnotationCommunityError("ANNOTATION_SCOPE_LOCKED_BY_REPLIES", 409);
       }
-      const oldTargets = await this.#targets(id, client);
+      const oldTargets = await this.#targets(id, client, false);
       const oldTags = await this.#tags(id, client);
       await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`, [`annotation_version_${randomUUID()}`, id, row.revision, row.body, JSON.stringify(row.author_profile_snapshot), row.visibility, row.organization_id, row.share_to_plaza, JSON.stringify(oldTargets), JSON.stringify(oldTags), author.id]);
       await client.query(`UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, visibility = $6, organization_id = $7, share_to_plaza = $8, revision = revision + 1, updated_at = now() WHERE id = $1`, [id, update.body ?? row.body, author.name, author.initials, JSON.stringify(await this.#profileSnapshot(author.id, client)), visibility, organizationId, shareToPlaza]);
@@ -683,9 +683,27 @@ export class PostgresAnnotationCommunityRepository {
     });
   }
 
-  async #targets(id, client = this.pool) {
-    const result = await client.query("SELECT target FROM annotation_targets WHERE annotation_id = $1 ORDER BY position", [id]);
-    return result.rows.map((row) => row.target);
+  async #targets(id, client = this.pool, hydrate = true) {
+    const result = await client.query("SELECT id, literature_id, target FROM annotation_targets WHERE annotation_id = $1 ORDER BY position", [id]);
+    if (!hydrate) return result.rows.map((row) => row.target);
+    const targets = [];
+    for (const row of result.rows) {
+      const literatureRecord = await this.#literatureRecord(row.literature_id, client);
+      const target = {
+        ...row.target,
+        literature: literatureRecord ? { ...row.target.literature, literatureRecord } : row.target.literature
+      };
+      if (row.target.kind === "derived_passage") {
+        const evidence = await client.query("SELECT literature_id, evidence FROM annotation_target_evidence WHERE target_id = $1 ORDER BY position", [row.id]);
+        target.evidence = [];
+        for (const item of evidence.rows) {
+          const record = await this.#literatureRecord(item.literature_id, client);
+          target.evidence.push(record ? { ...item.evidence, literature: { ...item.evidence.literature, literatureRecord: record } } : item.evidence);
+        }
+      }
+      targets.push(target);
+    }
+    return targets;
   }
 
   async #tags(id, client = this.pool) {
@@ -807,7 +825,7 @@ export class PostgresAnnotationCommunityRepository {
       await client.query("UPDATE annotation_replies SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = revision + 1, updated_at = now() WHERE id = $1", [replyId, input.body, author.name, author.initials, profile]);
       if (row.derived_annotation_id) {
         const derived = await this.#row(row.derived_annotation_id, client, true);
-        const targets = await this.#targets(derived.id, client);
+        const targets = await this.#targets(derived.id, client, false);
         const tags = await this.#tags(derived.id, client);
         await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`, [`annotation_version_${randomUUID()}`, derived.id, derived.revision, derived.body, JSON.stringify(derived.author_profile_snapshot), derived.visibility, derived.organization_id, derived.share_to_plaza, JSON.stringify(targets), JSON.stringify(tags), author.id]);
         await client.query("UPDATE annotations SET body = $2, author_name = $3, author_initials = $4, author_profile_snapshot = $5::jsonb, revision = $6, updated_at = now() WHERE id = $1", [derived.id, input.body, author.name, author.initials, profile, Number(derived.revision) + 1]);
@@ -871,7 +889,7 @@ export class PostgresAnnotationCommunityRepository {
         await client.query("UPDATE annotation_replies SET derived_annotation_id = $2 WHERE id = $1", [replyId, derivedAnnotationId]);
       } else {
         const derived = await this.#row(derivedAnnotationId, client, true);
-        const targets = await this.#targets(derived.id, client);
+        const targets = await this.#targets(derived.id, client, false);
         const tags = await this.#tags(derived.id, client);
         await client.query(`INSERT INTO annotation_versions(id, annotation_id, revision, body, author_profile_snapshot, visibility, organization_id, share_to_plaza, targets, tags, changed_by) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`, [`annotation_version_${randomUUID()}`, derived.id, derived.revision, derived.body, JSON.stringify(derived.author_profile_snapshot), derived.visibility, derived.organization_id, derived.share_to_plaza, JSON.stringify(targets), JSON.stringify(tags), author.id]);
         await client.query(`
@@ -1108,7 +1126,7 @@ export class PostgresAnnotationCommunityRepository {
   }
 
   #searchText(annotation) {
-    return [annotation.body, ...annotation.tags.map((tag) => tag.name), ...annotation.targets.flatMap((target) => [target.literature?.metadata?.title, target.literature?.title, target.excerpt, target.derivedContent?.excerpt])].filter(Boolean).join(" ");
+    return [annotation.body, ...annotation.tags.map((tag) => tag.name), ...annotation.targets.flatMap((target) => [target.literature?.literatureRecord?.title, target.literature?.metadata?.title, target.literature?.title, target.excerpt, target.derivedContent?.excerpt, ...(target.evidence ?? []).map((evidence) => evidence.literature?.literatureRecord?.title)])].filter(Boolean).join(" ");
   }
 
   async toggleFollow(userId, targetUserId) {

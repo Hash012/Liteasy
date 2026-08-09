@@ -116,4 +116,29 @@ describe("communityApi literature clients", () => {
       headers: { Authorization: "Bearer session-token" }
     }));
   });
+
+  test("strips hydrated literature projections from annotation write requests", async () => {
+    fetchMock.mockResolvedValue(ok({ annotation: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+    const hydratedTarget = {
+      kind: "whole_document" as const,
+      literature: { literatureId: "literature-1", literatureRecord: confirmed }
+    };
+
+    await communityApi.createAnnotation({
+      body: "Canonical write boundary",
+      shareToPlaza: true,
+      tags: [],
+      targets: [hydratedTarget],
+      visibility: "public"
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      body: "Canonical write boundary",
+      shareToPlaza: true,
+      tags: [],
+      targets: [{ kind: "whole_document", literature: { literatureId: "literature-1" } }],
+      visibility: "public"
+    });
+  });
 });

@@ -752,6 +752,37 @@ try {
   assert.equal(publicAnnotation.tags.some((tag) =>
     tag.name === "证据分类" && tag.origin === "platform" && tag.state === "active"
   ), true);
+  const canonicalReference = { literatureId: manualLiterature.literatureId };
+  const canonicalRead = await annotations.createAnnotation(literatureOwner, {
+    body: "Canonical display data is hydrated only at the read boundary.",
+    shareToPlaza: true,
+    tags: [],
+    targets: [{
+      derivedContent: {
+        artifactId: "artifact-canonical-hydration",
+        excerpt: "Canonical hydration includes derived evidence.",
+        nodeId: "node-canonical-hydration",
+        version: "thin-reading-v1"
+      },
+      evidence: [{
+        anchorHash: "sha256:canonical-hydration-evidence",
+        excerpt: "Canonical evidence preserves its source record.",
+        literature: canonicalReference,
+        rects: []
+      }],
+      kind: "derived_passage",
+      literature: canonicalReference
+    }],
+    visibility: "public"
+  });
+  assert.equal(canonicalRead.targets[0].literature.literatureRecord.title, "Corrected Integration Literature");
+  assert.equal(canonicalRead.targets[0].evidence[0].literature.literatureRecord.title, "Corrected Integration Literature");
+  const storedCanonicalTarget = await pool.query("SELECT target FROM annotation_targets WHERE annotation_id = $1", [canonicalRead.id]);
+  const storedCanonicalEvidence = await pool.query("SELECT evidence FROM annotation_target_evidence WHERE target_id = (SELECT id FROM annotation_targets WHERE annotation_id = $1)", [canonicalRead.id]);
+  assert.equal(storedCanonicalTarget.rows[0].target.literature.literatureRecord, undefined);
+  assert.equal(storedCanonicalEvidence.rows[0].evidence.literature.literatureRecord, undefined);
+  const titleSearch = await annotations.plaza(userOne, { query: "Corrected Integration Literature" });
+  assert.equal(titleSearch.some((annotation) => annotation.id === canonicalRead.id), true);
   await annotations.updateAnnotation(publicAnnotation.id, userOne, {
     body: `${sharedBody} 编辑后保留历史版本。`
   });
