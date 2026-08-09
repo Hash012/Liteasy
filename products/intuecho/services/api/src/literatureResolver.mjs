@@ -12,9 +12,14 @@ export class LiteratureResolverError extends Error {
 }
 
 function normalizedIdentifierKey(identifier) {
+  const normalized = normalizedIdentifier(identifier);
+  return normalized ? `${normalized.kind}:${normalized.value}` : null;
+}
+
+function normalizedIdentifier(identifier) {
   if (!identifier?.kind || !stableKinds.has(identifier.kind)) return null;
   try {
-    return `${identifier.kind}:${normalizeLiteratureIdentifier(identifier.kind, identifier.value)}`;
+    return { kind: identifier.kind, value: normalizeLiteratureIdentifier(identifier.kind, identifier.value) };
   } catch {
     return null;
   }
@@ -117,11 +122,11 @@ function rankAndDeduplicate(candidates) {
   return ranked.slice(0, MAX_CANDIDATES);
 }
 
-function requestedStableKeys(input) {
-  const keys = [];
+function requestedStableIdentifiers(input) {
+  const identifiers = [];
   for (const identifier of input?.hints?.identifiers ?? []) {
-    const key = normalizedIdentifierKey(identifier);
-    if (key) keys.push(key);
+    const normalized = normalizedIdentifier(identifier);
+    if (normalized) identifiers.push(normalized);
   }
   const query = String(input?.query ?? "").trim();
   const candidates = [
@@ -132,10 +137,14 @@ function requestedStableKeys(input) {
   ];
   for (const [kind, pattern] of candidates) {
     if (!pattern.test(query)) continue;
-    const key = normalizedIdentifierKey({ kind, value: query });
-    if (key) keys.push(key);
+    const normalized = normalizedIdentifier({ kind, value: query });
+    if (normalized) identifiers.push(normalized);
   }
-  return new Set(keys);
+  return [...new Map(identifiers.map((identifier) => [`${identifier.kind}:${identifier.value}`, identifier])).values()];
+}
+
+function requestedStableKeys(input) {
+  return new Set(requestedStableIdentifiers(input).map((identifier) => `${identifier.kind}:${identifier.value}`));
 }
 
 function normalizeText(value) {
@@ -180,6 +189,12 @@ export function createLiteratureResolver({ providers, repository }) {
   return Object.freeze({
     async resolve(owner, input) {
       const query = input?.query ?? input?.hints?.title ?? input?.hints?.identifiers?.[0]?.value ?? "";
+      const requestedIdentifiers = requestedStableIdentifiers(input);
+      if (requestedIdentifiers.length > 0) {
+        const identified = await repository.findLiteratureByIdentifiers(requestedIdentifiers);
+        const exact = internalCandidate(identified);
+        if (exact) return { candidate: exact, status: "exact", unavailableProviders: [] };
+      }
       const stored = await repository.searchStoredLiterature(query, MAX_CANDIDATES);
       const external = await Promise.allSettled(configuredProviders.map((provider) => provider.search(input)));
       const unavailableProviders = external.flatMap((result, index) => result.status === "rejected" ? [configuredProviders[index].name] : []);

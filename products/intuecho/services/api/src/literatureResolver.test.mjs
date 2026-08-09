@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Database from "better-sqlite3";
+import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { createLiteratureResolver } from "./literatureResolver.mjs";
 
 const user = { id: "reader-1" };
@@ -29,6 +31,9 @@ function repository(overrides = {}) {
       return { source: "refetched", title: verifiedCandidate.record.title };
     },
     async findLiteratureById() {
+      return null;
+    },
+    async findLiteratureByIdentifiers() {
       return null;
     },
     async searchStoredLiterature() {
@@ -68,6 +73,48 @@ test("prefers an internal confirmed record over matching provider candidates", a
   assert.equal(result.candidate.candidateKey, "intuecho:literature_internal");
   assert.equal(result.candidate.record.title, "Confirmed Title");
   assert.deepEqual(result.unavailableProviders, []);
+});
+
+test("normalizes DOI URL queries before internal lookup even when providers are offline", async () => {
+  const db = new Database(":memory:");
+  const literatureRepository = new SqliteAnnotationCommunityRepository(db);
+  try {
+    const stored = await literatureRepository.confirmLiterature(user, {
+      mode: "manual",
+      record: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/verified" }],
+        title: "Confirmed DOI Record",
+        year: 1843
+      }
+    });
+    const resolver = createLiteratureResolver({
+      providers: [provider("crossref", { search: async () => { throw new Error("offline"); } })],
+      repository: literatureRepository
+    });
+
+    const result = await resolver.resolve(user, {
+      purpose: "forum_compose",
+      query: "https://doi.org/10.1000/Verified."
+    });
+
+    assert.deepEqual(result, {
+      candidate: {
+        candidateKey: `intuecho:${stored.literatureId}`,
+        provider: "intuecho",
+        record: {
+          authors: ["Ada Lovelace"],
+          identifiers: [{ kind: "doi", source: "manual", value: "10.1000/verified" }],
+          title: "Confirmed DOI Record",
+          year: 1843
+        }
+      },
+      status: "exact",
+      unavailableProviders: []
+    });
+  } finally {
+    db.close();
+  }
 });
 
 test("deduplicates Crossref and OpenAlex candidates only through their shared stable identifier", async () => {

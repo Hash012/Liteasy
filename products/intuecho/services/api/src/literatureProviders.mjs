@@ -117,22 +117,35 @@ function withPath(endpoint, segment) {
   return url;
 }
 
-async function request(fetchImpl, url, { headers, responseType = "json", allowNotFound = false } = {}) {
+async function request(fetchImpl, url, { headers, responseType = "json", allowNotFound = false, timeoutMs = PROVIDER_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
-  try {
+  let timeout;
+  const operation = (async () => {
     const response = await fetchImpl(url.toString(), {
       headers: { accept: responseType === "json" ? "application/json" : "application/atom+xml", ...headers },
       signal: controller.signal
     });
     if (allowNotFound && response?.status === 404) return null;
     if (!response?.ok) throw new LiteratureProviderError();
-    return responseType === "text" ? await response.text() : await response.json();
+    return responseType === "text" ? response.text() : response.json();
+  })();
+  const deadline = new Promise((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new LiteratureProviderError());
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([operation, deadline]);
   } catch {
     throw new LiteratureProviderError();
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function createProviderTransport(fetchImpl, timeoutMs) {
+  return (url, options = {}) => request(fetchImpl, url, { ...options, timeoutMs });
 }
 
 function parseCandidateKey(candidateKey, provider, kind) {
@@ -230,9 +243,9 @@ function arxivCandidates(xml) {
   }).filter(Boolean);
 }
 
-function createCrossrefProvider(endpoint, fetchImpl) {
+function createCrossrefProvider(endpoint, transport) {
   async function byDoi(doi) {
-    const body = await request(fetchImpl, withPath(endpoint, doi), { allowNotFound: true });
+    const body = await transport(withPath(endpoint, doi), { allowNotFound: true });
     const projected = body ? crossrefCandidate(body.message) : null;
     return projected ? [projected] : [];
   }
@@ -251,16 +264,16 @@ function createCrossrefProvider(endpoint, fetchImpl) {
       const url = new URL(endpoint);
       url.searchParams.set("query.bibliographic", query);
       url.searchParams.set("rows", String(requestedLimit(input)));
-      const body = await request(fetchImpl, url);
+      const body = await transport(url);
       return (Array.isArray(body?.message?.items) ? body.message.items : [])
         .map(crossrefCandidate).filter(Boolean).slice(0, requestedLimit(input));
     }
   });
 }
 
-function createOpenAlexProvider(endpoint, apiKey, fetchImpl) {
+function createOpenAlexProvider(endpoint, apiKey, transport) {
   async function byId(id) {
-    const body = await request(fetchImpl, withPath(endpoint, id), {
+    const body = await transport(withPath(endpoint, id), {
       allowNotFound: true,
       headers: { authorization: `Bearer ${apiKey}` }
     });
@@ -284,17 +297,17 @@ function createOpenAlexProvider(endpoint, apiKey, fetchImpl) {
         url.searchParams.set("search", query);
       }
       url.searchParams.set("per-page", String(requestedLimit(input)));
-      const body = await request(fetchImpl, url, { headers: { authorization: `Bearer ${apiKey}` } });
+      const body = await transport(url, { headers: { authorization: `Bearer ${apiKey}` } });
       return (Array.isArray(body?.results) ? body.results : []).map(openAlexCandidate).filter(Boolean).slice(0, requestedLimit(input));
     }
   });
 }
 
-function createArxivProvider(endpoint, fetchImpl) {
+function createArxivProvider(endpoint, transport) {
   async function requestEntries(searchParams) {
     const url = new URL(endpoint);
     for (const [name, value] of Object.entries(searchParams)) url.searchParams.set(name, value);
-    return arxivCandidates(await request(fetchImpl, url, { responseType: "text" }));
+    return arxivCandidates(await transport(url, { responseType: "text" }));
   }
   return Object.freeze({
     name: "arxiv",
@@ -316,10 +329,10 @@ function createArxivProvider(endpoint, fetchImpl) {
   });
 }
 
-function createSemanticScholarProvider(endpoint, apiKey, fetchImpl) {
+function createSemanticScholarProvider(endpoint, apiKey, transport) {
   const headers = { "x-api-key": apiKey };
   async function byId(id) {
-    const body = await request(fetchImpl, withPath(endpoint, id), { allowNotFound: true, headers });
+    const body = await transport(withPath(endpoint, id), { allowNotFound: true, headers });
     return body ? semanticScholarCandidate(body) : null;
   }
   return Object.freeze({
@@ -338,22 +351,24 @@ function createSemanticScholarProvider(endpoint, apiKey, fetchImpl) {
       url.searchParams.set("limit", String(requestedLimit(input)));
       url.searchParams.set("query", query);
       url.searchParams.set("fields", "paperId,title,authors,year,externalIds,url,venue");
-      const body = await request(fetchImpl, url, { headers });
+      const body = await transport(url, { headers });
       return (Array.isArray(body?.data) ? body.data : []).map(semanticScholarCandidate).filter(Boolean).slice(0, requestedLimit(input));
     }
   });
 }
 
-export function createLiteratureProviders(config = {}, { fetchImpl } = {}) {
+export function createLiteratureProviders(config = {}, { fetchImpl, timeoutMs = PROVIDER_TIMEOUT_MS } = {}) {
   if (typeof fetchImpl !== "function") throw new TypeError("fetchImpl is required");
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new TypeError("timeoutMs must be positive");
+  const transport = createProviderTransport(fetchImpl, timeoutMs);
   const providers = [];
   if (nonEmptyString(config.openAlexApiKey)) {
-    providers.push(createOpenAlexProvider(config.openAlexEndpoint ?? "https://api.openalex.org/works", config.openAlexApiKey.trim(), fetchImpl));
+    providers.push(createOpenAlexProvider(config.openAlexEndpoint ?? "https://api.openalex.org/works", config.openAlexApiKey.trim(), transport));
   }
-  providers.push(createCrossrefProvider(config.crossrefEndpoint ?? "https://api.crossref.org/works", fetchImpl));
-  providers.push(createArxivProvider(config.arxivEndpoint ?? "https://export.arxiv.org/api/query", fetchImpl));
+  providers.push(createCrossrefProvider(config.crossrefEndpoint ?? "https://api.crossref.org/works", transport));
+  providers.push(createArxivProvider(config.arxivEndpoint ?? "https://export.arxiv.org/api/query", transport));
   if (nonEmptyString(config.semanticScholarApiKey)) {
-    providers.push(createSemanticScholarProvider(config.semanticScholarEndpoint ?? "https://api.semanticscholar.org/graph/v1/paper", config.semanticScholarApiKey.trim(), fetchImpl));
+    providers.push(createSemanticScholarProvider(config.semanticScholarEndpoint ?? "https://api.semanticscholar.org/graph/v1/paper", config.semanticScholarApiKey.trim(), transport));
   }
   return Object.freeze(providers);
 }

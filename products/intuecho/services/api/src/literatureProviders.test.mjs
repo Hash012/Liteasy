@@ -137,6 +137,100 @@ test("projects an exact arXiv identifier lookup into a public candidate", async 
   }]);
 });
 
+test("projects OpenAlex search and exact re-fetch records with canonical identifiers", async () => {
+  const openAlexWork = {
+    authorships: [{ author: { display_name: "Ada Lovelace" } }],
+    display_name: "OpenAlex Work",
+    doi: "https://doi.org/10.1000/OpenAlex.",
+    id: "https://openalex.org/W123",
+    primary_location: { landing_page_url: "http://untrusted.example/record" },
+    publication_year: 2024,
+    type: "article"
+  };
+  const providers = createLiteratureProviders({
+    openAlexApiKey: "server-only-key",
+    openAlexEndpoint: "https://catalog.example.test/openalex/works"
+  }, {
+    fetchImpl: async (requestUrl, options) => {
+      const url = new URL(requestUrl);
+      assert.equal(options.headers.authorization, "Bearer server-only-key");
+      if (url.pathname.endsWith("/W123")) return jsonResponse(openAlexWork);
+      assert.equal(url.searchParams.get("filter"), "doi:10.1000/openalex");
+      assert.equal(url.searchParams.get("per-page"), "10");
+      return jsonResponse({ results: [openAlexWork] });
+    }
+  });
+  const openAlex = provider(providers, "openalex");
+
+  const searched = await openAlex.search({ purpose: "forum_compose", query: "10.1000/openalex" });
+  const refetched = await openAlex.fetchCandidate("openalex:openalex_id:W123");
+
+  assert.deepEqual(searched, [{
+    candidateKey: "openalex:openalex_id:W123",
+    provider: "openalex",
+    record: {
+      authors: ["Ada Lovelace"],
+      documentType: "article",
+      identifiers: [
+        { kind: "openalex_id", source: "public_registry", value: "W123" },
+        { kind: "doi", source: "public_registry", value: "10.1000/openalex" }
+      ],
+      title: "OpenAlex Work",
+      year: 2024
+    },
+    recordUrl: "https://openalex.org/W123"
+  }]);
+  assert.deepEqual(refetched, searched[0]);
+});
+
+test("projects Semantic Scholar search and exact re-fetch records with canonical identifiers", async () => {
+  const semanticWork = {
+    authors: [{ name: "Grace Hopper" }],
+    externalIds: { ArXiv: "arXiv:2401.01234v2", DOI: "https://doi.org/10.1000/Semantic." },
+    paperId: "semantic-123",
+    title: "Semantic Work",
+    url: "http://untrusted.example/record",
+    venue: "Journal",
+    year: 2025
+  };
+  const providers = createLiteratureProviders({
+    semanticScholarApiKey: "server-only-key",
+    semanticScholarEndpoint: "https://catalog.example.test/semantic/paper"
+  }, {
+    fetchImpl: async (requestUrl, options) => {
+      const url = new URL(requestUrl);
+      assert.equal(options.headers["x-api-key"], "server-only-key");
+      if (url.pathname.endsWith("/semantic-123")) return jsonResponse(semanticWork);
+      assert.equal(url.pathname, "/semantic/paper/search");
+      assert.equal(url.searchParams.get("query"), "DOI:10.1000/semantic");
+      assert.equal(url.searchParams.get("limit"), "10");
+      return jsonResponse({ data: [semanticWork] });
+    }
+  });
+  const semanticScholar = provider(providers, "semantic_scholar");
+
+  const searched = await semanticScholar.search({ purpose: "forum_compose", query: "10.1000/semantic" });
+  const refetched = await semanticScholar.fetchCandidate("semantic_scholar:semantic_scholar_id:semantic-123");
+
+  assert.deepEqual(searched, [{
+    candidateKey: "semantic_scholar:semantic_scholar_id:semantic-123",
+    provider: "semantic_scholar",
+    record: {
+      authors: ["Grace Hopper"],
+      documentType: "publication",
+      identifiers: [
+        { kind: "semantic_scholar_id", source: "public_registry", value: "semantic-123" },
+        { kind: "doi", source: "public_registry", value: "10.1000/semantic" },
+        { kind: "arxiv_id", source: "public_registry", value: "2401.01234" }
+      ],
+      title: "Semantic Work",
+      year: 2025
+    },
+    recordUrl: "https://www.semanticscholar.org/paper/semantic-123"
+  }]);
+  assert.deepEqual(refetched, searched[0]);
+});
+
 test("aborts an unresponsive provider request after three seconds", async () => {
   const providers = createLiteratureProviders({
     crossrefEndpoint: "https://catalog.example.test/works"
@@ -156,18 +250,17 @@ test("keeps the abort deadline active while parsing a provider response body", a
   const providers = createLiteratureProviders({
     crossrefEndpoint: "https://catalog.example.test/works"
   }, {
-    fetchImpl: async (_requestUrl, options) => ({
+    fetchImpl: async () => ({
       ok: true,
       status: 200,
       async json() {
-        return new Promise((_resolve, reject) => {
-          options.signal.addEventListener("abort", () => reject(new Error("body read aborted")), { once: true });
-        });
+        return new Promise(() => {});
       }
-    })
+    }),
+    timeoutMs: 20
   });
   const deadline = new Promise((_resolve, reject) => {
-    setTimeout(() => reject(new Error("body read exceeded provider timeout")), 3_250);
+    setTimeout(() => reject(new Error("body read exceeded provider timeout")), 250);
   });
 
   await assert.rejects(
