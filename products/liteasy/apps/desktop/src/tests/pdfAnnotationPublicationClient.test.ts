@@ -118,6 +118,26 @@ describe("PDF annotation publication client", () => {
       method: "POST"
     }));
     expect(result.results[0]).toMatchObject({ state: "retracted", remoteRevision: 8 });
+    expect(result.results[0]).toMatchObject({ sourceRevision: operation.revision });
+  });
+
+  test("fails every duplicate queue-key operation before sending a divergent batch", async () => {
+    const first = createUpsertOperation(annotation(), literature);
+    const second = { ...first, body: "Divergent body", revision: first.revision + 1 };
+    const fetchMock = vi.fn();
+    const client = createForumClient({ fetchImpl: fetchMock as unknown as typeof fetch, sessionId: "desktop-session" });
+
+    await expect(client.applyAnnotationPublications([first, second])).resolves.toEqual({
+      results: [first, second].map((pendingOperation) => ({
+        annotationId: pendingOperation.annotationId,
+        code: "DUPLICATE_PUBLICATION_QUEUE_KEY",
+        error: "同一批发布请求包含重复的队列键。",
+        pendingOperation,
+        queueKey: pendingOperation.queueKey,
+        state: "failed"
+      }))
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -158,5 +178,63 @@ describe("PDF annotation publication client", () => {
       }]
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects a retract receipt for a different remote annotation", async () => {
+    const operation = createRetractOperation(annotation({
+      publication: { desiredVisibility: "private", remoteAnnotationId: "annotation-remote-1", state: "pending_retract" }
+    }));
+    const client = createForumClient({
+      fetchImpl: vi.fn(async () => ({
+        json: async () => ({ results: [{
+          annotationId: operation.annotationId,
+          queueKey: operation.queueKey,
+          remoteAnnotationId: "annotation-remote-other",
+          remoteRevision: 8,
+          state: "retracted",
+          syncedAt: "2026-08-09T03:00:00.000Z"
+        }] }),
+        ok: true,
+        status: 200
+      })) as unknown as typeof fetch,
+      sessionId: "desktop-session"
+    });
+
+    await expect(client.applyAnnotationPublications([operation])).resolves.toEqual({
+      results: [expect.objectContaining({
+        pendingOperation: operation,
+        state: "failed"
+      })]
+    });
+  });
+
+  test("preserves a valid server failure while retaining its pending operation", async () => {
+    const operation = createUpsertOperation(annotation(), literature);
+    const client = createForumClient({
+      fetchImpl: vi.fn(async () => ({
+        json: async () => ({ results: [{
+          annotationId: operation.annotationId,
+          code: "LITERATURE_NOT_FOUND",
+          error: "LITERATURE_NOT_FOUND",
+          message: "已确认的文献记录不存在。",
+          queueKey: operation.queueKey
+        }] }),
+        ok: true,
+        status: 200
+      })) as unknown as typeof fetch,
+      sessionId: "desktop-session"
+    });
+
+    await expect(client.applyAnnotationPublications([operation])).resolves.toEqual({
+      results: [{
+        annotationId: operation.annotationId,
+        code: "LITERATURE_NOT_FOUND",
+        error: "LITERATURE_NOT_FOUND",
+        message: "已确认的文献记录不存在。",
+        pendingOperation: operation,
+        queueKey: operation.queueKey,
+        state: "failed"
+      }]
+    });
   });
 });

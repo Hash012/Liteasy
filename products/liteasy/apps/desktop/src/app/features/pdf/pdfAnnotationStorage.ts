@@ -82,6 +82,7 @@ type PdfAnnotationPublicationReceipt = {
   queueKey: string;
   remoteAnnotationId: string;
   remoteRevision: number;
+  sourceRevision: number;
   state: "published" | "retracted";
   syncedAt: string;
 };
@@ -156,12 +157,22 @@ const publicationStates = new Set<PdfAnnotationPublication["state"]>([
 function isPublication(value: unknown): value is PdfAnnotationPublication {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PdfAnnotationPublication>;
+  const hasRemoteAnnotation = typeof candidate.remoteAnnotationId === "string" && candidate.remoteAnnotationId.trim().length > 0;
+  const remoteRequired = candidate.state === "published" || candidate.state === "pending_update" ||
+    candidate.state === "pending_retract" ||
+    (candidate.desiredVisibility === "private" && candidate.state === "failed");
+  const visibilityCoherent = candidate.state === "failed" ||
+    (candidate.desiredVisibility === "private"
+      ? candidate.state === "not_published" || candidate.state === "pending_retract"
+      : candidate.state !== "not_published" && candidate.state !== "pending_retract");
   return (candidate.desiredVisibility === "private" || candidate.desiredVisibility === "public") &&
     typeof candidate.state === "string" && publicationStates.has(candidate.state as PdfAnnotationPublication["state"]) &&
     (candidate.lastError === undefined || typeof candidate.lastError === "string") &&
-    (candidate.remoteAnnotationId === undefined || typeof candidate.remoteAnnotationId === "string") &&
+    (candidate.remoteAnnotationId === undefined || hasRemoteAnnotation) &&
+    (!remoteRequired || hasRemoteAnnotation) && visibilityCoherent &&
     (candidate.remoteRevision === undefined ||
-      (typeof candidate.remoteRevision === "number" && Number.isInteger(candidate.remoteRevision) && candidate.remoteRevision > 0));
+      (hasRemoteAnnotation && typeof candidate.remoteRevision === "number" &&
+        Number.isInteger(candidate.remoteRevision) && candidate.remoteRevision > 0));
 }
 
 function hasAnnotationFields(value: unknown) {
@@ -270,6 +281,10 @@ export function normalizePdfAnnotations(value: unknown, fallbackPaperIdentity?: 
       const { syncState: _syncState, visibility: _visibility, ...current } = annotation;
       return [{ ...current, publication: { ...annotation.publication! }, rects: annotation.rects.map((rect) => ({ ...rect })) }];
     }
+    if (annotation && typeof annotation === "object" && !Array.isArray(annotation) &&
+      ("publication" in annotation || "revision" in annotation)) {
+      return [];
+    }
     if (isVersionOneAnnotation(annotation)) {
       const { syncState, visibility, ...legacy } = annotation;
       let publication: PdfAnnotationPublication;
@@ -328,9 +343,13 @@ export function confirmPdfAnnotationPublication(
   receipt: PdfAnnotationPublicationReceipt
 ): PdfAnnotationV2 {
   const queueKey = `${annotation.paperIdentity.paperId}:${annotation.id}`;
-  if (receipt.annotationId !== annotation.id || receipt.queueKey !== queueKey ||
+  if (receipt.annotationId !== annotation.id || receipt.queueKey !== queueKey || receipt.sourceRevision !== annotation.revision ||
     !Number.isInteger(receipt.remoteRevision) || receipt.remoteRevision <= 0 ||
-    !receipt.remoteAnnotationId.trim()) {
+    !receipt.remoteAnnotationId.trim() ||
+    (annotation.publication.remoteAnnotationId !== undefined &&
+      annotation.publication.remoteAnnotationId !== receipt.remoteAnnotationId) ||
+    (annotation.publication.remoteRevision !== undefined &&
+      receipt.remoteRevision < annotation.publication.remoteRevision)) {
     throw new Error("论坛发布回执与本地批注不匹配。");
   }
   return {

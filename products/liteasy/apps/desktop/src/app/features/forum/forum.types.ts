@@ -115,13 +115,16 @@ export type ForumAnnotationPublicationReceipt = {
   queueKey: string;
   remoteAnnotationId: string;
   remoteRevision: number;
+  sourceRevision: number;
   state: "published" | "retracted";
   syncedAt: string;
 };
 
 export type ForumAnnotationPublicationFailure = {
   annotationId: string;
+  code?: string;
   error: string;
+  message?: string;
   pendingOperation: ForumAnnotationPublicationOperation;
   queueKey: string;
   state: "failed";

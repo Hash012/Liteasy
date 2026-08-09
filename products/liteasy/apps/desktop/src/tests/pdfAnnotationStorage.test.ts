@@ -149,6 +149,7 @@ test("confirms a retract as not published while retaining the remote audit ident
     queueKey: `${current.paperIdentity.paperId}:${current.id}`,
     remoteAnnotationId: "annotation-remote",
     remoteRevision: 5,
+    sourceRevision: current.revision,
     state: "retracted",
     syncedAt: "2026-08-07T02:00:00.000Z"
   }).publication).toEqual({
@@ -157,6 +158,55 @@ test("confirms a retract as not published while retaining the remote audit ident
     remoteRevision: 5,
     state: "not_published"
   });
+});
+
+test("rejects a stale or regressing publication receipt without changing pending local truth", () => {
+  const current = revisePdfAnnotation(normalizePdfAnnotations([legacyAnnotation()], fallbackIdentity)[0], {
+    publication: {
+      desiredVisibility: "private",
+      remoteAnnotationId: "annotation-remote",
+      remoteRevision: 5,
+      state: "pending_retract"
+    },
+    updatedAt: "2026-08-07T01:00:00.000Z"
+  });
+  const receipt = {
+    annotationId: current.id,
+    queueKey: `${current.paperIdentity.paperId}:${current.id}`,
+    remoteAnnotationId: "annotation-remote",
+    remoteRevision: 6,
+    sourceRevision: current.revision,
+    state: "retracted" as const,
+    syncedAt: "2026-08-07T02:00:00.000Z"
+  };
+
+  expect(() => confirmPdfAnnotationPublication(current, {
+    ...receipt,
+    sourceRevision: current.revision - 1
+  })).toThrow("回执与本地批注不匹配");
+  expect(() => confirmPdfAnnotationPublication(current, {
+    ...receipt,
+    remoteRevision: 4
+  })).toThrow("回执与本地批注不匹配");
+  expect(current.publication).toMatchObject({ remoteRevision: 5, state: "pending_retract" });
+});
+
+test.each([
+  [{ desiredVisibility: "public", state: "published" }, "published without remote ID"],
+  [{ desiredVisibility: "private", state: "pending_retract" }, "pending retract without remote ID"],
+  [{ desiredVisibility: "public", state: "not_published" }, "public not-published state"],
+  [{ desiredVisibility: "private", remoteAnnotationId: "remote", state: "published" }, "private published state"],
+  [{ desiredVisibility: "private", state: "pending_create" }, "private pending-create state"],
+  [{ desiredVisibility: "private", state: "failed" }, "failed retract without remote ID"]
+])("rejects a persisted v2 publication invariant violation: %s", (publication) => {
+  const value = {
+    ...legacyAnnotation(),
+    publication,
+    revision: 2
+  };
+  delete value.visibility;
+
+  expect(normalizePdfAnnotations([value], fallbackIdentity)).toEqual([]);
 });
 
 test("keeps browser-only annotation persistence for non-Tauri development", () => {
