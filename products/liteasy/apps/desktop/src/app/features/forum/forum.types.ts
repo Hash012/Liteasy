@@ -1,3 +1,10 @@
+import type {
+  LiteratureConfirmInput,
+  LiteratureRecord,
+  LiteratureResolveInput,
+  LiteratureResolveResult
+} from "../paper-identity/literature.types";
+
 export type ForumPaperIdentity = {
   id: string;
   kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "title_authors_year_hash";
@@ -73,3 +80,53 @@ export type ForumPost = {
   viewer_saved: boolean;
   work_id: string | null;
 };
+
+export type ForumLiteratureResolveInput = LiteratureResolveInput;
+export type ForumLiteratureResolveResult = LiteratureResolveResult;
+export type ForumLiteratureConfirmInput = LiteratureConfirmInput;
+export type ForumLiteratureConfirmResult = { literature: LiteratureRecord };
+
+type ForumAnnotationPublicationOperationBase = {
+  annotationId: string;
+  queueKey: string;
+  revision: number;
+  updatedAt: string;
+};
+
+export type ForumAnnotationPublicationOperation =
+  | (ForumAnnotationPublicationOperationBase & {
+      body: string;
+      literatureId: string;
+      operation: "upsert";
+      sourcePassage: {
+        anchorHash: string;
+        excerpt: string;
+        page?: number;
+        rects: Array<{ height: number; left: number; top: number; width: number }>;
+      };
+    })
+  | (ForumAnnotationPublicationOperationBase & {
+      operation: "retract";
+      remoteAnnotationId: string;
+    });
+
+export type ForumAnnotationPublicationReceipt = {
+  annotationId: string;
+  queueKey: string;
+  remoteAnnotationId: string;
+  remoteRevision: number;
+  state: "published" | "retracted";
+  syncedAt: string;
+};
+
+export type ForumAnnotationPublicationFailure = {
+  annotationId: string;
+  error: string;
+  pendingOperation: ForumAnnotationPublicationOperation;
+  queueKey: string;
+  state: "failed";
+};
+
+export type ForumAnnotationPublicationResult =
+  | ForumAnnotationPublicationReceipt
+  | ForumAnnotationPublicationFailure;

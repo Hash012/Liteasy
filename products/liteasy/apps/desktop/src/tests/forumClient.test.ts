@@ -26,6 +26,35 @@ function context(): ForumContext {
 }
 
 describe("forum client", () => {
+  test("resolves and confirms literature with late-bound authentication", async () => {
+    let sessionId = "session-1";
+    const fetchMock = vi.fn(async (url: string) => ({
+      json: async () => url.endsWith(":resolve")
+        ? { candidates: [], status: "not_found", unavailableProviders: [] }
+        : { literature: { literatureId: "literature-1", title: "Paper" } },
+      ok: true,
+      status: 200
+    }));
+    const client = createForumClient({
+      apiBaseUrl: "http://forum.test",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      getSessionId: () => sessionId
+    });
+
+    await client.resolveLiterature({ purpose: "liteasy_pdf_annotation", query: "Paper" });
+    sessionId = "session-2";
+    await client.confirmLiterature({ candidateKey: "candidate-1", mode: "candidate" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://forum.test/v1/literature:resolve", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer session-1", "Content-Type": "application/json" }),
+      method: "POST"
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://forum.test/v1/literature:confirm", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer session-2", "Content-Type": "application/json" }),
+      method: "POST"
+    }));
+  });
+
   test("creates an annotation handoff without a topic or server work mapping", async () => {
     const fetchMock = vi.fn(async () => ({
       json: async () => ({ expiresAt: "2026-08-07T01:05:00.000Z", handoffId: "handoff-1" }),

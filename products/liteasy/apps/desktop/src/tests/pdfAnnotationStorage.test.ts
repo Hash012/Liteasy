@@ -1,7 +1,11 @@
 import { afterEach, expect, test } from "vitest";
 import {
   clearMigratedPdfAnnotationBrowserCache,
+  confirmPdfAnnotationPublication,
   loadPdfAnnotationBrowserMigrationState,
+  normalizePdfAnnotationPrivateState,
+  normalizePdfAnnotations,
+  revisePdfAnnotation,
   savePdfAnnotationAutoPublic,
   savePdfAnnotations,
   type PdfAnnotation
@@ -37,9 +41,122 @@ function annotation(id: string, updatedAt = "2026-08-07T00:00:00.000Z"): PdfAnno
   };
 }
 
+const fallbackIdentity = {
+  candidates: [],
+  paperId: "paper-legacy",
+  primary: { id: "doi:10.1000/legacy", kind: "doi" as const, source: "metadata" as const, value: "10.1000/legacy" },
+  title: "Legacy paper"
+};
+
+function legacyAnnotation(input: Record<string, unknown> = {}) {
+  return {
+    createdAt: "2026-08-06T00:00:00.000Z",
+    excerpt: "Legacy excerpt",
+    id: "legacy-annotation",
+    kind: "note",
+    page: 2,
+    paperIdentity: fallbackIdentity,
+    rects: [],
+    text: "Legacy annotation",
+    updatedAt: "2026-08-07T00:00:00.000Z",
+    visibility: "private",
+    ...input
+  };
+}
+
 afterEach(() => {
   window.localStorage.clear();
   setTauriRuntime(false);
+});
+
+test("migrates a synced v1 annotation to confirmed published state", () => {
+  const [normalized] = normalizePdfAnnotations([legacyAnnotation({
+    syncState: {
+      intuechoAnnotationId: "annotation-remote",
+      status: "synced",
+      syncedAt: "2026-08-07T01:00:00.000Z"
+    },
+    visibility: "pending_public"
+  })], fallbackIdentity);
+
+  expect(normalized.publication).toMatchObject({
+    desiredVisibility: "public",
+    remoteAnnotationId: "annotation-remote",
+    state: "published"
+  });
+  expect(normalized.revision).toBe(1);
+  expect(normalized).not.toHaveProperty("syncState");
+  expect(normalized).not.toHaveProperty("visibility");
+});
+
+test.each([
+  ["private", undefined, { desiredVisibility: "private", state: "not_published" }],
+  ["pending_public", undefined, { desiredVisibility: "public", state: "pending_create" }],
+  ["pending_public", { error: "offline", lastAttemptAt: "2026-08-07T01:00:00.000Z", status: "failed" },
+    { desiredVisibility: "public", lastError: "offline", state: "failed" }],
+  ["pending_public", { forumDraftId: "legacy-handoff", status: "synced", syncedAt: "2026-08-07T01:00:00.000Z" },
+    { desiredVisibility: "public", lastError: expect.stringContaining("legacy-handoff"), state: "failed" }]
+])("normalizes v1 visibility %s without inventing remote publication success", (visibility, syncState, expected) => {
+  const [normalized] = normalizePdfAnnotations([legacyAnnotation({ syncState, visibility })], fallbackIdentity);
+  expect(normalized.publication).toMatchObject(expected);
+  expect(normalized.revision).toBe(1);
+});
+
+test("normalizes annotation snapshots to version 2", () => {
+  expect(normalizePdfAnnotationPrivateState({
+    annotations: [legacyAnnotation()],
+    autoPublic: true,
+    version: 1
+  }, fallbackIdentity)).toMatchObject({
+    annotations: [expect.objectContaining({ revision: 1 })],
+    autoPublic: true,
+    version: 2
+  });
+});
+
+test("increments the local revision for body target and publication-intent edits", () => {
+  const [current] = normalizePdfAnnotations([legacyAnnotation()], fallbackIdentity);
+  const bodyEdit = revisePdfAnnotation(current, {
+    note: "Edited note",
+    updatedAt: "2026-08-07T01:00:00.000Z"
+  });
+  const targetEdit = revisePdfAnnotation(bodyEdit, {
+    excerpt: "Edited excerpt",
+    rects: [{ height: 3, left: 1, top: 2, width: 4 }],
+    updatedAt: "2026-08-07T02:00:00.000Z"
+  });
+  const intentEdit = revisePdfAnnotation(targetEdit, {
+    publication: { desiredVisibility: "public", state: "pending_create" },
+    updatedAt: "2026-08-07T03:00:00.000Z"
+  });
+
+  expect([current.revision, bodyEdit.revision, targetEdit.revision, intentEdit.revision]).toEqual([1, 2, 3, 4]);
+});
+
+test("confirms a retract as not published while retaining the remote audit identity", () => {
+  const current = revisePdfAnnotation(normalizePdfAnnotations([legacyAnnotation()], fallbackIdentity)[0], {
+    publication: {
+      desiredVisibility: "private",
+      remoteAnnotationId: "annotation-remote",
+      remoteRevision: 4,
+      state: "pending_retract"
+    },
+    updatedAt: "2026-08-07T01:00:00.000Z"
+  });
+
+  expect(confirmPdfAnnotationPublication(current, {
+    annotationId: current.id,
+    queueKey: `${current.paperIdentity.paperId}:${current.id}`,
+    remoteAnnotationId: "annotation-remote",
+    remoteRevision: 5,
+    state: "retracted",
+    syncedAt: "2026-08-07T02:00:00.000Z"
+  }).publication).toEqual({
+    desiredVisibility: "private",
+    remoteAnnotationId: "annotation-remote",
+    remoteRevision: 5,
+    state: "not_published"
+  });
 });
 
 test("keeps browser-only annotation persistence for non-Tauri development", () => {
