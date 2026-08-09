@@ -302,6 +302,30 @@ function providerProbeIdentity(input) {
   };
 }
 
+function providerProbeError(error) {
+  const code = error?.code;
+  const stableCode = new Set([
+    "visualization_provider_timeout",
+    "visualization_provider_unavailable",
+    "visualization_request_aborted"
+  ]).has(code) ? code : "visualization_provider_unavailable";
+  const status = stableCode === "visualization_provider_timeout" ? 504
+    : stableCode === "visualization_request_aborted" ? 499 : 503;
+  return { code: stableCode, status };
+}
+
+function providerProbeResult(value) {
+  const probe = value?.probe ?? value ?? {};
+  if (probe.cancelled === true) return { cancelled: true };
+  return {
+    authenticated: probe.authenticated === true,
+    capabilities: Array.isArray(probe.capabilities)
+      ? probe.capabilities.filter((item) => typeof item === "string").slice(0, 32)
+      : [],
+    reachable: probe.reachable === true
+  };
+}
+
 export class PostgresVisualizationRepository {
   constructor(pool) {
     this.pool = pool;
@@ -1140,7 +1164,7 @@ export class PostgresVisualizationRepository {
           response_body, expires_at
         ) VALUES ($1,'visualization-provider-probe',$2,$3,202,$4::jsonb,now()+interval '24 hours')
       `, [actorId, key, hash, json({ state: "pending" })]);
-      return { replayed: false, route: providerRouteView(route) };
+      return { claimed: true, replayed: false, route: providerRouteView(route) };
     });
   }
 
@@ -1154,24 +1178,31 @@ export class PostgresVisualizationRepository {
         if (prior.rows[0].request_hash !== hash) throw new VisualizationRepositoryError("idempotency_key_reused", 409);
         if (prior.rows[0].response_body?.state !== "pending") return { ...prior.rows[0].response_body, replayed: true };
       }
-      const route = (await client.query("SELECT revision FROM visualization_provider_configs WHERE route_id = $1 FOR UPDATE", [routeIdentifier])).rows[0];
-      if (!route || Number(route.revision) !== Number(input.expectedRevision)) throw new VisualizationRepositoryError("visualization_route_revision_conflict", 409);
-      const response = {
-        probe: input.probe ?? { reachable: false },
+      const failure = input.error ? providerProbeError(input.error) : null;
+      const response = failure ? {
+        error: failure,
         replayed: false,
         routeId: routeIdentifier,
-        routeRevision: Number(route.revision)
+        routeRevision: Number(input.expectedRevision)
+      } : {
+        probe: providerProbeResult(input.result ?? input.probe),
+        replayed: false,
+        routeId: routeIdentifier,
+        routeRevision: Number(input.expectedRevision)
       };
       await client.query(`
         INSERT INTO audit_events(audit_id, actor_id, actor_audience, action, resource_type, resource_id, reason, trace_id, detail)
         VALUES ($1,$2,'liteasy-admin','visualization_provider_probe','visualization_provider',$3,$4,$5,$6::jsonb)
-      `, [`audit_${randomUUID()}`, actorId, routeIdentifier, reason, traceId, json({ probe: response.probe, redacted: true })]);
+      `, [`audit_${randomUUID()}`, actorId, routeIdentifier, reason, traceId, json({
+        ...(failure ? { error: failure } : { probe: response.probe }),
+        redacted: true
+      })]);
       await client.query(`
         UPDATE idempotency_records
-           SET response_status = 200, response_body = $4::jsonb
+           SET response_status = $4, response_body = $5::jsonb
          WHERE actor_id = $1 AND operation = 'visualization-provider-probe'
            AND idempotency_key = $2 AND request_hash = $3
-      `, [actorId, key, hash, json(response)]);
+      `, [actorId, key, hash, failure?.status ?? 200, json(response)]);
       return response;
     });
   }

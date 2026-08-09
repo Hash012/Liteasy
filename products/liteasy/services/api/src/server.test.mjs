@@ -7,6 +7,7 @@ import { LibraryRepositoryError } from "./libraryRepository.mjs";
 import { ModelProxyError } from "./modelProxyService.mjs";
 import { PdfUploadError } from "./pdfUploadService.mjs";
 import { createCloudRequestHandler } from "./server.mjs";
+import { VisualizationServiceError } from "./visualizationService.mjs";
 
 function request(method, url, body, authorization = "Bearer valid") {
   const stream = Readable.from(body === undefined ? [] : [JSON.stringify(body)]);
@@ -435,6 +436,10 @@ function runtime() {
         calls.push({ subjectId, visualizationPreference: input });
         return { allowed: true, availableModalities: [], enabled: input.enabled, quota: { available: true }, serviceAvailable: true };
       },
+      async testProviderRoute(principal, input) {
+        calls.push({ principal, visualizationProviderProbe: input });
+        throw new VisualizationServiceError("visualization_provider_unavailable", 503);
+      },
       async generate(subjectId, input, context) {
         calls.push({ context, subjectId, visualizationGenerate: input });
         return { reservation: { reservationId: "reservation-1" }, result: { text: "validated" } };
@@ -769,6 +774,27 @@ test("requires fresh platform administrator authorization for visualization enti
   ), staleResult);
   assert.equal(staleResult.status, 403);
   assert.equal(staleInstance.calls.some((item) => item.visualizationEntitlement), false);
+});
+
+test("returns a stable provider probe failure through the fresh admin route", async () => {
+  const instance = runtime();
+  const result = response();
+  await createCloudRequestHandler(instance, internalConfig())(request(
+    "POST",
+    "/v1/admin/visualization/providers/test",
+    {
+      expectedRevision: 3,
+      idempotencyKey: "probe-failure-1",
+      reason: "verify provider route",
+      routeId: "route-1",
+      providerRequest: { modality: "semantic_graph", dataClass: "paper" }
+    }
+  ), result);
+  assert.equal(result.status, 503);
+  assert.equal(jsonBody(result).code, "visualization_provider_unavailable");
+  const probe = instance.calls.find((item) => item.visualizationProviderProbe);
+  assert.equal(probe.principal.subjectId, "admin_1");
+  assert.match(probe.visualizationProviderProbe.traceId, /^trace_/);
 });
 
 test("applies strict platform administrator visualization audit filters", async () => {

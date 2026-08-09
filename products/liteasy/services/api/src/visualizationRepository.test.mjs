@@ -409,6 +409,50 @@ test("rejects a stale provider route revision before mutation", async () => {
   assert.equal(harness.calls.some((call) => /^(INSERT|UPDATE) visualization_provider_configs/.test(call.sql)), false);
 });
 
+test("finalizes a failed provider probe as a redacted replayable error and audits once", async () => {
+  let idempotencyRow = null;
+  let auditCount = 0;
+  const harness = adminPool(async (sql, values, calls) => {
+    if (sql.includes("FROM idempotency_records")) return { rows: idempotencyRow ? [idempotencyRow] : [] };
+    if (sql.includes("FROM visualization_provider_configs")) return { rows: [providerRow] };
+    if (sql.startsWith("INSERT INTO idempotency_records")) {
+      idempotencyRow = { request_hash: values[2], response_body: JSON.parse(values[3]) };
+      return { rows: [] };
+    }
+    if (sql.startsWith("INSERT INTO audit_events")) {
+      auditCount += 1;
+      assert.equal(String(values[5]).includes("provider secret"), false);
+      return { rows: [] };
+    }
+    if (sql.startsWith("UPDATE idempotency_records")) {
+      idempotencyRow.response_body = JSON.parse(values[4]);
+      return { rows: [] };
+    }
+    return { rows: [] };
+  });
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const input = {
+    actorId: "admin-1",
+    expectedRevision: 1,
+    idempotencyKey: "probe-failure-1",
+    reason: "verify provider route",
+    routeId: "route-1",
+    traceId: "trace-1"
+  };
+  const claim = await repository.claimProviderProbe(input);
+  assert.equal(claim.claimed, true);
+  const finalized = await repository.recordProviderProbe({
+    ...input,
+    error: Object.assign(new Error("provider secret"), { code: "visualization_provider_unavailable", status: 503 })
+  });
+  assert.equal(finalized.error.code, "visualization_provider_unavailable");
+  assert.equal(finalized.error.status, 503);
+  assert.equal(auditCount, 1);
+  const replay = await repository.getProviderProbeReplay(input);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.error.code, "visualization_provider_unavailable");
+});
+
 test("projects bounded visualization usage and administrator audit rows", async () => {
   const harness = adminPool(async (sql) => {
     if (sql.includes("FROM visualization_usage_ledger")) return { rows: [{

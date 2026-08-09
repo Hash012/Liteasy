@@ -369,6 +369,84 @@ test("provider route saves use gateway normalization before repository persisten
   assert.equal(calls[1][1].updatedBy, "admin_1");
 });
 
+test("a failed provider probe finalizes its claim and replays without a second provider call", async () => {
+  let calls = 0;
+  const records = new Map();
+  const route = { routeId: "route-1", revision: 3, modalities: ["semantic_graph"], dataClasses: ["paper"] };
+  const input = {
+    routeId: "route-1",
+    expectedRevision: 3,
+    idempotencyKey: "probe-failure-1",
+    reason: "verify provider route",
+    traceId: "trace-1",
+    providerRequest: { modality: "semantic_graph", dataClass: "paper" }
+  };
+  const instance = serviceHarness({
+    gateway: {
+      async testRoute() {
+        calls += 1;
+        throw new Error("provider down");
+      }
+    },
+    repository: {
+      async claimProviderProbe(probeInput) {
+        const prior = records.get(probeInput.idempotencyKey);
+        if (prior) return { ...prior, replayed: true };
+        records.set(probeInput.idempotencyKey, { pending: true });
+        return { claimed: true, route };
+      },
+      async getProviderProbeReplay(probeInput) {
+        const prior = records.get(probeInput.idempotencyKey);
+        return prior?.pending ? null : { ...prior, replayed: true };
+      },
+      async recordProviderProbe(probeInput) {
+        records.set(probeInput.idempotencyKey, {
+          routeId: probeInput.routeId,
+          routeRevision: probeInput.expectedRevision,
+          error: { code: "visualization_provider_unavailable", status: 503 }
+        });
+        return records.get(probeInput.idempotencyKey);
+      }
+    }
+  });
+
+  await assert.rejects(() => instance.service.testProviderRoute(
+    { subjectId: "admin-1", roles: ["platform_admin"], authentication: { fresh: true } }, input
+  ), (error) => error.code === "visualization_provider_unavailable" && error.status === 503);
+  const replay = await instance.service.testProviderRoute(
+    { subjectId: "admin-1", roles: ["platform_admin"], authentication: { fresh: true } }, input
+  );
+  assert.equal(calls, 1);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.error.code, "visualization_provider_unavailable");
+});
+
+test("a cancelled provider probe finalizes a cancelled result", async () => {
+  const records = [];
+  const controller = new AbortController();
+  const instance = serviceHarness({
+    gateway: {
+      async testRoute() {
+        controller.abort();
+        throw Object.assign(new Error("cancelled"), { name: "AbortError" });
+      }
+    },
+    repository: {
+      async claimProviderProbe() { return { claimed: true, route: { routeId: "route-1", revision: 3, modalities: ["semantic_graph"], dataClasses: ["paper"] } }; },
+      async recordProviderProbe(input) { records.push(input); return { cancelled: true }; }
+    }
+  });
+  await assert.rejects(() => instance.service.testProviderRoute(
+    { subjectId: "admin-1", roles: ["platform_admin"], authentication: { fresh: true } },
+    {
+      routeId: "route-1", expectedRevision: 3, idempotencyKey: "probe-cancel-1",
+      reason: "verify provider route", traceId: "trace-1",
+      providerRequest: { modality: "semantic_graph", dataClass: "paper" }
+    }, controller.signal
+  ), /visualization_request_aborted/);
+  assert.deepEqual(records[0].result, { cancelled: true });
+});
+
 test("generation ignores caller routes and enforces the reserved stored route revision", async () => {
   const instance = serviceHarness();
   await instance.service.generate("user_1", {

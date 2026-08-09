@@ -141,6 +141,17 @@ function publicError(error) {
   return new VisualizationServiceError(code, status);
 }
 
+function providerProbeFailure(error) {
+  const code = error?.code;
+  if (code === "visualization_request_aborted" || error?.name === "AbortError") {
+    return new VisualizationServiceError("visualization_request_aborted", 499);
+  }
+  if (code === "visualization_provider_timeout" || error?.name === "TimeoutError") {
+    return new VisualizationServiceError("visualization_provider_timeout", 504);
+  }
+  return new VisualizationServiceError("visualization_provider_unavailable", 503);
+}
+
 async function rollback(repository, subjectId, reservationId, error, traceId) {
   await repository.rollback(subjectId, {
     reasonCode: rollbackReason(error),
@@ -396,17 +407,34 @@ export class VisualizationService {
         throw new VisualizationServiceError("visualization_route_revision_conflict", 409);
       }
       const { route: _ignoredRoute, routes: _ignoredRoutes, ...providerRequest } = input.providerRequest ?? {};
-      const result = await this.gateway.testRoute({
-        ...providerRequest,
-        dataClass: input.providerRequest?.dataClass ?? route.dataClasses[0],
-        modality: input.providerRequest?.modality ?? route.modalities[0],
-        route,
-        signal
-      });
-      if (typeof this.repository.recordProviderProbe === "function") {
+      const ownsClaim = typeof this.repository.claimProviderProbe !== "function"
+        || (claim && !claim.pending && !claim.replayed);
+      let result;
+      try {
+        throwIfAborted(signal);
+        result = await this.gateway.testRoute({
+          ...providerRequest,
+          dataClass: input.providerRequest?.dataClass ?? route.dataClasses[0],
+          modality: input.providerRequest?.modality ?? route.modalities[0],
+          route,
+          signal
+        });
+        throwIfAborted(signal);
+      } catch (error) {
+        const failure = providerProbeFailure(error);
+        if (typeof this.repository.recordProviderProbe === "function" && ownsClaim) {
+          if (failure.code === "visualization_request_aborted") {
+            await this.repository.recordProviderProbe({ ...probeInput, result: { cancelled: true } });
+          } else {
+            await this.repository.recordProviderProbe({ ...probeInput, error: failure });
+          }
+        }
+        throw failure;
+      }
+      if (typeof this.repository.recordProviderProbe === "function" && ownsClaim) {
         return await this.repository.recordProviderProbe({
           ...probeInput,
-          probe: { authenticated: result.authenticated === true, capabilities: result.capabilities ?? [], reachable: result.reachable === true }
+          result: { authenticated: result.authenticated === true, capabilities: result.capabilities ?? [], reachable: result.reachable === true }
         });
       }
       return result;
