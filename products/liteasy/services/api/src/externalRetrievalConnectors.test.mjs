@@ -123,6 +123,33 @@ test("relation connectors resolve a pure Crossref paper through its DOI", async 
   assert.equal(semanticScholar[0].doi, "doi:10.1000/crossref");
 });
 
+test("Semantic Scholar relations resolve a DOI present only in canonical aliases", async () => {
+  const calls = [];
+  const connectors = createExternalRetrievalConnectors(config, {
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return jsonResponse({
+        externalIds: { DOI: "10.1000/CANONICAL-ONLY" },
+        paperId: "S-CANONICAL",
+        references: []
+      });
+    }
+  });
+
+  const result = await connectors.relations({
+    baseUrl: retrievalConnectorEndpoints.semantic_scholar,
+    connectorType: "semantic_scholar"
+  }, { papers: [{
+    aliases: ["crossref:10.1000/canonical-only", "doi:10.1000/canonical-only"],
+    id: "paper-canonical",
+    provider: "crossref",
+    sourceId: "10.1000/canonical-only"
+  }] });
+
+  assert.match(calls[0], /paper\/DOI%3A10\.1000%2Fcanonical-only/u);
+  assert.equal(result[0].id, "semantic_scholar:S-CANONICAL");
+});
+
 test("OpenAlex relations retain graph-ID records when the DOI filter fails", async () => {
   const connectors = createExternalRetrievalConnectors(config, {
     fetchImpl: async (url) => {

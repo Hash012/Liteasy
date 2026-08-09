@@ -314,7 +314,8 @@ export function createExternalRetrievalConnectors(config, { fetchImpl = fetch } 
             .map((alias) => normalizeGraphId("semantic_scholar", alias)).filter(Boolean)
             .map((alias) => alias.slice("semantic_scholar:".length));
           if (graphIds.length > 0) return graphIds;
-          const doi = doiKey(paper.doi);
+          const doi = [paper.doi, ...(paper.aliases ?? [])]
+            .map((value) => doiKey(value)).filter(Boolean).sort()[0];
           return doi ? [`DOI:${doi}`] : [];
         }))].sort();
         return (await Promise.all(candidates.map(async (candidate) => {
