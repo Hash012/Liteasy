@@ -3,6 +3,7 @@ import type {
   LiteratureConfirmInput,
   LiteratureRecord,
   LiteratureResolveInput,
+  LiteratureResolveResult,
   UpdateReplyPublicationInput
 } from "@intuecho/contracts";
 
@@ -11,6 +12,7 @@ export type {
   LiteratureConfirmInput,
   LiteratureRecord,
   LiteratureResolveInput,
+  LiteratureResolveResult,
   UpdateReplyPublicationInput
 } from "@intuecho/contracts";
 
@@ -141,11 +143,6 @@ export type CreateReplyInput = {
 };
 
 export type ReplyPublicationInput = UpdateReplyPublicationInput;
-
-export type LiteratureResolveResult =
-  | { status: "exact"; candidate: LiteratureCandidate; unavailableProviders?: string[] }
-  | { status: "ambiguous"; candidates: LiteratureCandidate[]; unavailableProviders?: string[] }
-  | { status: "not_found"; candidates: []; unavailableProviders?: string[] };
 
 export type PlazaFilters = {
   documentType?: string;

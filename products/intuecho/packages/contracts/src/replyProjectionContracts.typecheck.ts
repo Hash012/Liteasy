@@ -1,5 +1,28 @@
 import { createReplySchema, updateReplyPublicationSchema, updateReplySchema } from "@intuecho/contracts";
+import type { LiteratureCandidate, LiteratureResolveResult } from "@intuecho/contracts";
 import type { z } from "zod";
+
+const resolverCandidate: LiteratureCandidate = {
+  candidateKey: "crossref:doi:10.1000/example",
+  provider: "crossref",
+  record: {
+    authors: ["A. Author"],
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/example" }],
+    title: "Example"
+  }
+};
+const resolverResult: LiteratureResolveResult = {
+  candidate: resolverCandidate,
+  status: "exact",
+  unavailableProviders: ["openalex"]
+};
+const unavailableResolverResult: LiteratureResolveResult = {
+  retryable: true,
+  status: "unavailable",
+  unavailableProviders: ["crossref", "semantic_scholar"]
+};
+void resolverResult;
+void unavailableResolverResult;
 
 const pureReply = createReplySchema.parse({ body: "Thread-only response" });
 const publishAsAnnotation: boolean = pureReply.publishAsAnnotation;

@@ -66,6 +66,16 @@ export type LiteratureResolveInput = {
   query?: string;
 };
 
+export type LiteratureProviderAvailability = {
+  unavailableProviders: Array<"openalex" | "crossref" | "arxiv" | "semantic_scholar">;
+};
+
+export type LiteratureResolveResult =
+  | ({ candidate: LiteratureCandidate; status: "exact" } & LiteratureProviderAvailability)
+  | ({ candidates: LiteratureCandidate[]; status: "ambiguous" } & LiteratureProviderAvailability)
+  | ({ candidates: []; status: "not_found" } & LiteratureProviderAvailability)
+  | ({ retryable: true; status: "unavailable" } & LiteratureProviderAvailability);
+
 export type LiteratureConfirmInput =
   | { candidateKey: string; mode: "candidate" }
   | { mode: "manual"; record: ManualLiteratureInput };

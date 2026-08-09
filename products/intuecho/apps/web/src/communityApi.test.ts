@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type {
   LiteratureCandidate,
-  LiteratureRecord
+  LiteratureRecord,
+  LiteratureResolveResult
 } from "@intuecho/contracts";
 import { communityApi } from "./communityApi";
 
@@ -57,18 +58,60 @@ describe("communityApi literature clients", () => {
     localStorage.clear();
   });
 
-  test("resolves and confirms literature through authenticated endpoints", async () => {
+  test("uses canonical resolver result and authenticated literature requests", async () => {
     fetchMock
       .mockResolvedValueOnce(ok({ candidates: [candidate], status: "ambiguous" }))
       .mockResolvedValueOnce(ok({ literature: confirmed }));
     vi.stubGlobal("fetch", fetchMock);
 
+    const result: LiteratureResolveResult = {
+      candidates: [candidate],
+      status: "ambiguous",
+      unavailableProviders: ["crossref"]
+    };
+    expect(result.unavailableProviders).toEqual(["crossref"]);
+    const unavailable: LiteratureResolveResult = {
+      retryable: true,
+      status: "unavailable",
+      unavailableProviders: ["openalex", "semantic_scholar"]
+    };
+    expect(unavailable.status).toBe("unavailable");
+
     await communityApi.resolveLiterature({ purpose: "forum_compose", query: "A Paper" });
     await communityApi.confirmLiterature({ candidateKey: candidate.candidateKey, mode: "candidate" });
 
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      expect.stringContaining("/v1/literature:resolve"),
-      expect.stringContaining("/v1/literature:confirm")
-    ]);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, expect.stringContaining("/v1/literature:resolve"), expect.objectContaining({
+      method: "POST",
+      headers: { Authorization: "Bearer session-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ purpose: "forum_compose", query: "A Paper" })
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, expect.stringContaining("/v1/literature:confirm"), expect.objectContaining({
+      method: "POST",
+      headers: { Authorization: "Bearer session-token", "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateKey: candidate.candidateKey, mode: "candidate" })
+    }));
+  });
+
+  test("uses authenticated encoded reply publication and deletion requests", async () => {
+    fetchMock
+      .mockResolvedValueOnce(ok({ reply: {} }))
+      .mockResolvedValueOnce(ok({ ok: true, replyId: "reply/id" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const replyId = "reply/id with spaces";
+    const publication = { published: true as const, tags: ["method"], targets: [] };
+
+    await communityApi.updateReplyPublication(replyId, publication);
+    await communityApi.deleteReply(replyId);
+
+    const encoded = encodeURIComponent(replyId);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, expect.stringContaining(`/v1/replies/${encoded}/publication`), expect.objectContaining({
+      method: "PUT",
+      headers: { Authorization: "Bearer session-token", "Content-Type": "application/json" },
+      body: JSON.stringify(publication)
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, expect.stringContaining(`/v1/replies/${encoded}`), expect.objectContaining({
+      method: "DELETE",
+      headers: { Authorization: "Bearer session-token" }
+    }));
   });
 });
