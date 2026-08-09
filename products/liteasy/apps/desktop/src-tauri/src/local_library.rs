@@ -4751,6 +4751,11 @@ mod tests {
             .join("bibliographic-identity.v1.json");
         fs::create_dir_all(literature_path.parent().unwrap()).unwrap();
         fs::write(&literature_path, literature).unwrap();
+        let note_path = source
+            .join(INTERNAL_DIRECTORY_NAME)
+            .join(ARTIFACTS_DIRECTORY_NAME)
+            .join("note.json");
+        fs::write(&note_path, br#"{"note":"kept"}"#).unwrap();
 
         let backup = export_library_backup_at_root(&source, &destination_parent).unwrap();
 
@@ -4762,6 +4767,10 @@ mod tests {
         assert_eq!(
             fs::read(backup.join(literature_path.strip_prefix(&source).unwrap())).unwrap(),
             literature
+        );
+        assert_eq!(
+            fs::read(backup.join(note_path.strip_prefix(&source).unwrap())).unwrap(),
+            br#"{"note":"kept"}"#
         );
         fs::remove_dir_all(source).unwrap();
         fs::remove_dir_all(destination_parent).unwrap();

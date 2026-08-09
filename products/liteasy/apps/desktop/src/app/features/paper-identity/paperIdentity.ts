@@ -1,5 +1,5 @@
 import type { Paper } from "../workspace/workspace.types";
-import { paperIdentityFromLiterature } from "./literatureRecord";
+import type { LiteratureRecord } from "./literature.types";
 
 export type PaperIdentityKind =
   | "doi"
@@ -29,6 +29,41 @@ export type PaperIdentity = {
   sourcePath?: string;
   title: string;
 };
+
+export function paperIdentityFromLiterature(
+  paper: Pick<Paper, "id" | "sourcePath" | "title">,
+  literature: LiteratureRecord
+): PaperIdentity {
+  const priority: readonly PaperIdentityCandidate["kind"][] = [
+    "doi",
+    "arxiv_id",
+    "semantic_scholar_id",
+    "title_authors_year_hash"
+  ];
+  const candidates: PaperIdentityCandidate[] = literature.identifiers
+    .filter((identifier) => priority.some((kind) => kind === identifier.kind))
+    .map((identifier) => ({
+      id: `${identifier.kind}:${identifier.value}`,
+      kind: identifier.kind as PaperIdentityCandidate["kind"],
+      source: identifier.source,
+      value: identifier.value
+    }))
+    .sort((left, right) => priority.indexOf(left.kind) - priority.indexOf(right.kind));
+  const fallback: PaperIdentityCandidate = {
+    id: `local_paper_id:${paper.id}`,
+    kind: "local_paper_id",
+    source: "local",
+    value: paper.id
+  };
+  const primary = candidates[0] ?? fallback;
+  return Object.freeze({
+    candidates: Object.freeze([...candidates, fallback].map((candidate) => Object.freeze({ ...candidate }))),
+    paperId: paper.id,
+    primary: Object.freeze({ ...primary }),
+    sourcePath: paper.sourcePath,
+    title: literature.title
+  });
+}
 
 type PaperIdentityMetadata = {
   arxivId?: unknown;

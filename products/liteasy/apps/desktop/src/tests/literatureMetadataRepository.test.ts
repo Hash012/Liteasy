@@ -20,7 +20,7 @@ function fixtureLiterature(): LiteratureRecord {
 describe("literatureMetadataRepository", () => {
   const loadArtifact = vi.fn();
   const saveArtifact = vi.fn();
-  const repository = createLiteratureMetadataRepository({ loadArtifact, saveArtifact });
+  const repository = createLiteratureMetadataRepository({ loadArtifact, saveArtifact, isAvailable: () => true });
 
   beforeEach(() => {
     loadArtifact.mockReset();
@@ -62,6 +62,29 @@ describe("literatureMetadataRepository", () => {
     const writeError = new Error("disk unavailable");
     saveArtifact.mockRejectedValue(writeError);
     await expect(repository.save("paper-1", fixtureLiterature())).rejects.toBe(writeError);
+  });
+
+  test("fails explicitly when the Tauri host is unavailable", async () => {
+    const unavailable = createLiteratureMetadataRepository({
+      isAvailable: () => false,
+      loadArtifact,
+      saveArtifact
+    });
+
+    await expect(unavailable.load("paper-1")).rejects.toThrow("本地文献元数据存储不可用");
+    await expect(unavailable.save("paper-1", fixtureLiterature())).rejects.toThrow("本地文献元数据存储不可用");
+    expect(loadArtifact).not.toHaveBeenCalled();
+    expect(saveArtifact).not.toHaveBeenCalled();
+  });
+
+  test("treats a null artifact as corruption rather than an absent record", async () => {
+    const corrupted = createLiteratureMetadataRepository({
+      isAvailable: () => true,
+      loadArtifact: vi.fn().mockResolvedValue(null) as typeof loadArtifact,
+      saveArtifact
+    });
+
+    await expect(corrupted.load("paper-1")).rejects.toThrow("文献元数据快照无效");
   });
 
   test("rejects empty paper identifiers before touching storage", async () => {

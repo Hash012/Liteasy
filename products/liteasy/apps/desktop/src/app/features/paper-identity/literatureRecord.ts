@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import type { Paper } from "../workspace/workspace.types";
+import { inferPaperIdentityMetadataFromPdfText, paperIdentityFromLiterature, resolvePaperIdentity } from "./paperIdentity";
 import type { PaperIdentity, PaperIdentityCandidate } from "./paperIdentity";
-import { inferPaperIdentityMetadataFromPdfText, resolvePaperIdentity } from "./paperIdentity";
+import type { Paper } from "../workspace/workspace.types";
 import type {
   LiteratureRecord,
   LiteratureResolveInput,
@@ -80,41 +80,7 @@ export function normalizeLiteratureSnapshot(value: unknown): LiteratureSnapshot 
   return parsed.data;
 }
 
-export function paperIdentityFromLiterature(
-  paper: Pick<Paper, "id" | "sourcePath" | "title">,
-  literature: LiteratureRecord
-): PaperIdentity {
-  const priority: readonly PaperIdentityCandidate["kind"][] = [
-    "doi",
-    "arxiv_id",
-    "semantic_scholar_id",
-    "title_authors_year_hash"
-  ];
-  const candidates: PaperIdentityCandidate[] = literature.identifiers
-    .filter((identifier) => priority.some((kind) => kind === identifier.kind))
-    .map((identifier) => ({
-      id: `${identifier.kind}:${identifier.value}`,
-      kind: identifier.kind as PaperIdentityCandidate["kind"],
-      source: identifier.source,
-      value: identifier.value
-    }))
-    .sort((left, right) => priority.indexOf(left.kind) - priority.indexOf(right.kind));
-  const fallback: PaperIdentityCandidate = {
-    id: `local_paper_id:${paper.id}`,
-    kind: "local_paper_id",
-    source: "local",
-    value: paper.id
-  };
-  const primary = candidates[0] ?? fallback;
-  const allCandidates = [...candidates, fallback];
-  return Object.freeze({
-    candidates: Object.freeze(allCandidates.map((candidate) => Object.freeze({ ...candidate }))),
-    paperId: paper.id,
-    primary: Object.freeze({ ...primary }),
-    sourcePath: paper.sourcePath,
-    title: literature.title
-  });
-}
+export { paperIdentityFromLiterature };
 
 export function createPdfLiteratureHints(
   paper: Pick<Paper, "arxivId" | "doi" | "id" | "semanticScholarId" | "title">,
