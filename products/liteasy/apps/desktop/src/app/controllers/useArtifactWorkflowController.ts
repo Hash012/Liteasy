@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useArtifactActions } from "../features/artifacts/useArtifactActions";
+import {
+  useThinReadingVisualizationController,
+  type ThinReadingVisualizationCancellationReason,
+  type ThinReadingVisualizationNodeInput
+} from "./useThinReadingVisualizationController";
 import type {
   ArtifactCatalogLoadState,
   ArtifactRegenerationRequest,
   ArtifactTask,
   ArtifactTab,
   ArtifactTaskStage,
-  ArtifactType
+  ArtifactType,
+  ThinReadingVisualizationGenerationRequest,
+  ThinReadingVisualizationStatus
 } from "../features/artifacts/artifact.types";
 import type { AgentCoreCatalogEntry } from "../features/agent-core/agentCoreConfig";
 import type { createArtifactStore } from "../features/artifacts/artifact.store";
@@ -19,6 +26,7 @@ import type { ThinReadingBranchSource, ThinReadingDocument } from "../features/t
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { DuplicateArtifactGenerationConfirmation } from "../features/artifacts/useArtifactActions";
 import type { MineruFigure } from "../features/import/import.types";
+import type { MultimodalVisualizationCapability } from "../features/account/accountCapabilitiesClient";
 import {
   createArtifactLocalRepository,
   type ArtifactLocalRepository
@@ -40,8 +48,18 @@ type UseArtifactWorkflowControllerInput = {
     input: DuplicateArtifactGenerationConfirmation
   ) => boolean;
   cancelAgentRun?: (runId: string, reason?: string) => Promise<void>;
+  cancelThinReadingVisualization?: (input: {
+    artifactId: string;
+    nodeId: string;
+    reason: ThinReadingVisualizationCancellationReason;
+    requestId: string;
+  }) => Promise<void>;
+  generateThinReadingVisualization?: (
+    request: ThinReadingVisualizationGenerationRequest
+  ) => Promise<readonly unknown[]>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
+  getMultimodalVisualizationCapability?: () => unknown;
   getMineruFiguresForPaperId?: (paperId: string) => MineruFigure[];
   getIntuechoEndpoint?: () => string;
   getIntuechoSessionId?: () => string | undefined;
@@ -74,6 +92,9 @@ type UseArtifactWorkflowControllerInput = {
     }) => void,
     options?: AgentArtifactGenerationOptions
   ) => Promise<AgentRun>;
+  setMultimodalVisualizationPreference?: (
+    enabled: boolean
+  ) => Promise<MultimodalVisualizationCapability>;
 };
 
 type ArtifactWorkflowModel = {
@@ -81,10 +102,16 @@ type ArtifactWorkflowModel = {
   artifactCatalogLoadState: ArtifactCatalogLoadState;
   artifactTabs: ArtifactTab[];
   artifactTasks: ArtifactTask[];
+  thinReadingVisualizationReadyArtifacts: ReturnType<typeof useThinReadingVisualizationController>["readyArtifacts"];
+  thinReadingVisualizationStatuses: Record<string, ThinReadingVisualizationStatus>;
 };
 
 type ArtifactWorkflowActions = {
   cancelArtifactTask: (taskId: string) => Promise<string>;
+  cancelThinReadingVisualization: (
+    nodeId: string,
+    reason: ThinReadingVisualizationCancellationReason
+  ) => Promise<void>;
   closeArtifactTab: (artifactId: string) => void;
   deleteArtifact: (artifactId: string) => Promise<string>;
   generateThinReadingBranch: (input: {
@@ -101,6 +128,10 @@ type ArtifactWorkflowActions = {
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
   startAnalysisForPapers: (artifactType: ArtifactType, papers: Paper[]) => string;
+  startThinReadingVisualization: (
+    input: ThinReadingVisualizationNodeInput
+  ) => ReturnType<ReturnType<typeof useThinReadingVisualizationController>["startVisualization"]>;
+  setThinReadingVisualizationEnabled: (enabled: boolean) => Promise<void>;
   updateThinReadingDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   syncThinReadingAnnotations: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
 };
@@ -112,8 +143,11 @@ export function useArtifactWorkflowController({
   artifactLocalRepository,
   confirmDuplicateGeneration,
   cancelAgentRun,
+  cancelThinReadingVisualization,
+  generateThinReadingVisualization,
   getImportedChunksByPaperId,
   getImportedChunksForPaperId,
+  getMultimodalVisualizationCapability,
   getMineruFiguresForPaperId,
   getIntuechoEndpoint,
   getIntuechoSessionId,
@@ -126,7 +160,8 @@ export function useArtifactWorkflowController({
   isAgentModelAccessAvailable,
   onAnalysisHint,
   queueImportForPapers,
-  runAgentAnalysis
+  runAgentAnalysis,
+  setMultimodalVisualizationPreference
 }: UseArtifactWorkflowControllerInput): {
   actions: ArtifactWorkflowActions;
   model: ArtifactWorkflowModel;
@@ -141,6 +176,7 @@ export function useArtifactWorkflowController({
   const localRepositoryRef = useRef<ArtifactLocalRepository | null>(null);
   const persistenceReadyRef = useRef(false);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const artifactActionsRef = useRef<ReturnType<typeof useArtifactActions> | null>(null);
   if (!localRepositoryRef.current) {
     localRepositoryRef.current = artifactLocalRepository ?? createArtifactLocalRepository();
   }
@@ -170,6 +206,27 @@ export function useArtifactWorkflowController({
     setArtifactTasks(tasks);
   }
 
+  const thinReadingVisualization = useThinReadingVisualizationController({
+    cancelGeneration: cancelThinReadingVisualization,
+    generateVisualization: generateThinReadingVisualization,
+    getCapability: () => getMultimodalVisualizationCapability?.(),
+    getThinReadingDocument: (artifactId) => {
+      const tab = artifactStore.getOpenTabs().find((candidate) => candidate.artifactId === artifactId) ??
+        artifactStore.getCatalog().find((candidate) => candidate.artifactId === artifactId);
+      const document = tab?.type === "thin_reading" ? tab.thinReadingDocument : undefined;
+      return document?.version === "liteasy.thin-reading/v2" ? document : undefined;
+    },
+    onDocumentUpdated: () => undefined,
+    saveThinReadingDocument: async (artifactId, document) => {
+      const actions = artifactActionsRef.current;
+      if (!actions) {
+        throw new Error("thin_reading_visualization_persistence_unavailable");
+      }
+      await actions.persistThinReadingDocument(artifactId, document, { commitAfterSave: true });
+    },
+    setVisualizationPreference: setMultimodalVisualizationPreference
+  });
+
   const artifactActions = useArtifactActions({
     artifactStore,
     artifactResultClient,
@@ -191,9 +248,16 @@ export function useArtifactWorkflowController({
     onArtifactCatalogChanged: handleArtifactCatalogChanged,
     onArtifactTabsChanged: setArtifactTabs,
     onArtifactTasksChanged: handleArtifactTasksChanged,
+    onThinReadingDocumentPersisted: ({ artifactId, document, nodeId }) => {
+      const node = document.nodes[nodeId];
+      if (node) {
+        void thinReadingVisualization.startVisualization({ artifactId, document, node });
+      }
+    },
     queueImportForPapers,
     runAgentAnalysis
   });
+  artifactActionsRef.current = artifactActions;
 
   async function reloadArtifactCatalog() {
     const requestId = ++catalogRequestRef.current;
@@ -283,6 +347,7 @@ export function useArtifactWorkflowController({
   return {
     actions: {
       cancelArtifactTask: artifactActions.cancelArtifactTask,
+      cancelThinReadingVisualization: thinReadingVisualization.cancelVisualization,
       closeArtifactTab: artifactActions.closeArtifactTab,
       deleteArtifact: artifactActions.deleteArtifact,
       generateThinReadingBranch: artifactActions.generateThinReadingBranch,
@@ -314,6 +379,8 @@ export function useArtifactWorkflowController({
       retryInterruptedThinReadingBranch: artifactActions.retryInterruptedThinReadingBranch,
       startAnalysis: artifactActions.startAnalysis,
       startAnalysisForPapers: artifactActions.startAnalysisForPapers,
+      startThinReadingVisualization: thinReadingVisualization.startVisualization,
+      setThinReadingVisualizationEnabled: thinReadingVisualization.setEnabled,
       updateThinReadingDocument: artifactActions.updateThinReadingDocument,
       syncThinReadingAnnotations: artifactActions.syncThinReadingAnnotations
     },
@@ -321,7 +388,9 @@ export function useArtifactWorkflowController({
       artifactCatalog,
       artifactCatalogLoadState,
       artifactTabs,
-      artifactTasks
+      artifactTasks,
+      thinReadingVisualizationReadyArtifacts: thinReadingVisualization.readyArtifacts,
+      thinReadingVisualizationStatuses: thinReadingVisualization.statuses
     }
   };
 }

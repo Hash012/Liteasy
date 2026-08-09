@@ -119,6 +119,11 @@ type UseArtifactActionsInput = {
   onArtifactCatalogChanged: (catalog: ArtifactTab[]) => void;
   onArtifactTabsChanged: (tabs: ArtifactTab[]) => void;
   onArtifactTasksChanged: (tasks: ArtifactTask[]) => void;
+  onThinReadingDocumentPersisted?: (input: {
+    artifactId: string;
+    document: Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>;
+    nodeId: string;
+  }) => void;
   queueImportForPapers: (
     papers: Paper[],
     onComplete?: () => void,
@@ -473,6 +478,7 @@ export function useArtifactActions({
   onArtifactCatalogChanged,
   onArtifactTabsChanged,
   onArtifactTasksChanged,
+  onThinReadingDocumentPersisted,
   queueImportForPapers,
   runAgentAnalysis
 }: UseArtifactActionsInput) {
@@ -712,6 +718,11 @@ export function useArtifactActions({
           type: "thin_reading"
         });
         syncArtifacts(taskId);
+        onThinReadingDocumentPersisted?.({
+          artifactId,
+          document: thinReadingDocument,
+          nodeId: thinReadingDocument.activeNodeId
+        });
         onAnalysisHint("薄读 Agent 生成完成并已保存到当前账号。");
         return;
       }
@@ -1328,6 +1339,9 @@ export function useArtifactActions({
         source,
         title: thinReadingTitleForSource(source, document.targetLanguage)
       });
+      if (nextDocument.version !== "liteasy.thin-reading/v2") {
+        throw new Error("thin_reading_v1_read_only");
+      }
       artifactStore.updateTask(taskId, {
         message: "正在保存薄读下一层",
         progress: 95,
@@ -1358,6 +1372,11 @@ export function useArtifactActions({
         thinReadingDocument: nextDocument
       });
       syncArtifacts(taskId);
+      onThinReadingDocumentPersisted?.({
+        artifactId,
+        document: nextDocument,
+        nodeId: nextDocument.activeNodeId
+      });
       onAnalysisHint("薄读下一层已由 Agent 生成并已保存到当前账号。");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1404,34 +1423,49 @@ export function useArtifactActions({
     });
   }
 
-  function updateThinReadingDocument(artifactId: string, nextDocument: NonNullable<ArtifactTab["thinReadingDocument"]>) {
-    if (nextDocument.version === "liteasy.thin-reading/v1") {
-      onAnalysisHint("旧版薄读仅供查看；请先从深入操作创建新版副本。");
-      return;
-    }
+  async function persistThinReadingDocument(
+    artifactId: string,
+    nextDocument: Extract<ThinReadingDocument, { version: "liteasy.thin-reading/v2" }>,
+    options: { commitAfterSave?: boolean } = {}
+  ) {
     const existing = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
       artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
     if (!existing || existing.type !== "thin_reading") {
-      return;
+      throw new Error("找不到可保存的薄读产物。");
     }
     const primaryPaperId = nextDocument.paperIds[0];
     const papers = primaryPaperId
       ? (existing.papers ?? []).filter((paper) => paper.id === primaryPaperId)
       : [];
-
-    artifactStore.upsertTab({
-      ...existing,
-      papers,
-      thinReadingDocument: nextDocument
-    });
-    syncArtifacts();
-    void artifactResultClient.save(createThinReadingResultDocument({
+    const commitDocument = () => {
+      artifactStore.upsertTab({
+        ...existing,
+        papers,
+        thinReadingDocument: nextDocument
+      });
+      syncArtifacts();
+    };
+    if (!options.commitAfterSave) {
+      commitDocument();
+    }
+    await artifactResultClient.save(createThinReadingResultDocument({
       createdAt: existing.createdAt ?? new Date().toISOString(),
       document: nextDocument,
       existing,
       papers,
       uiDsl: existing.uiDsl
-    })).catch((error) => {
+    }));
+    if (options.commitAfterSave) {
+      commitDocument();
+    }
+  }
+
+  function updateThinReadingDocument(artifactId: string, nextDocument: NonNullable<ArtifactTab["thinReadingDocument"]>) {
+    if (nextDocument.version === "liteasy.thin-reading/v1") {
+      onAnalysisHint("旧版薄读仅供查看；请先从深入操作创建新版副本。");
+      return;
+    }
+    void persistThinReadingDocument(artifactId, nextDocument).catch((error) => {
       onAnalysisHint(`薄读本地状态保存失败：${error instanceof Error ? error.message : String(error)}`);
     });
   }
@@ -1484,6 +1518,7 @@ export function useArtifactActions({
     handleAssistantArtifact,
     openArtifact,
     openSkillDocument,
+    persistThinReadingDocument,
     regenerateArtifact,
     retryInterruptedThinReadingBranch,
     generateThinReadingBranch,

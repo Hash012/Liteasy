@@ -10,8 +10,38 @@ import type { ThinReadingDocument } from "../thin-reading/thinReading.types";
 import type { MineruFigure } from "../import/import.types";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { ThinReadingBranchRecoverySnapshot } from "./artifactTaskRecovery";
+import type { GeneratedVisualizationModality, VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
 
 export type ArtifactTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+export type ThinReadingVisualizationOmissionReason =
+  | "capability_unavailable"
+  | "explicit_request_unavailable"
+  | "generation_failed"
+  | "intent_unavailable"
+  | "modality_unavailable"
+  | "preference_disabled"
+  | "quota_unavailable"
+  | "result_invalid"
+  | "service_unavailable"
+  | "stale_request";
+
+export type ThinReadingVisualizationStatus =
+  | { status: "idle" }
+  | { reasonCode: ThinReadingVisualizationOmissionReason; status: "omitted" }
+  | { requestId: string; status: "generating" }
+  | { artifacts: readonly VisualizationArtifactV1[]; status: "ready" };
+
+export type ThinReadingVisualizationGenerationRequest = {
+  artifactId: string;
+  candidateModalities: readonly GeneratedVisualizationModality[];
+  evidenceIds: readonly string[];
+  nodeId: string;
+  purpose: "explain_structure" | "compare" | "show_process" | "show_geometry" | "show_evidence";
+  requestId: string;
+  requestedArtifactCount: 1 | 2;
+  signal: AbortSignal;
+};
 export type ArtifactType = "comparison_table" | "layered_graph" | "mindmap" | "ppt" | "skill_doc" | "thin_reading" | "tree";
 export type ArtifactTaskStage =
   | "waiting_for_import"

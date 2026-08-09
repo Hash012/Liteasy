@@ -8,6 +8,7 @@ import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { AgentArtifactResult } from "../app/features/artifacts/artifact.types";
+import { availableCapability } from "./fixtures/visualizationControllerFixtures";
 
 function mindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -111,6 +112,37 @@ function completedRun(options: {
   };
 }
 
+function completedThinReadingRun(): AgentRun {
+  const run = completedRun();
+  const answer = run.events.find((event) => event.type === "assistant.message");
+  if (!answer || answer.type !== "assistant.message") {
+    throw new Error("expected assistant answer event");
+  }
+  answer.metadata = {
+    ...answer.metadata,
+    thinReading: {
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "The mechanism has two evidence-backed stages.",
+        visualizationIntent: {
+          candidateModalities: ["semantic_graph"],
+          evidenceIds: ["evidence-1"],
+          expectedLearningGain: "high",
+          purpose: "show_process",
+          requestedBy: "automatic"
+        },
+        withinPaperClosure: true
+      }
+    }
+  };
+  return {
+    ...run,
+    input: { artifactType: "thin_reading", message: "thin reading", mode: "qa" }
+  };
+}
+
 function artifactResultClient() {
   return {
     delete: vi.fn(async () => undefined),
@@ -193,6 +225,128 @@ describe("useArtifactWorkflowController", () => {
 
     expect(result.current.model.artifactTabs).toEqual([]);
     expect(result.current.model.artifactTasks).toEqual([]);
+  });
+
+  test("exposes thin-reading visualization orchestration through the workflow boundary", async () => {
+    const thinReadingDocument = createThinReadingDocument({
+      artifactId: "artifact-thin-visual",
+      papers: [{ id: paper.id, title: paper.title }],
+      rootSeed: {
+        evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+        omittedSections: [],
+        recommendations: [],
+        summary: "The mechanism has two evidence-backed stages.",
+        visualizationIntent: {
+          candidateModalities: ["semantic_graph"],
+          evidenceIds: ["evidence-1"],
+          expectedLearningGain: "high",
+          purpose: "show_process",
+          requestedBy: "automatic"
+        },
+        withinPaperClosure: true
+      },
+      targetLanguage: "en"
+    });
+    const localRepository = {
+      list: vi.fn(async () => [{
+        artifactId: thinReadingDocument.artifactId,
+        papers: [{ id: paper.id, title: paper.title }],
+        thinReadingDocument,
+        title: "Thin reading",
+        type: "thin_reading" as const
+      }]),
+      replace: vi.fn(async () => undefined)
+    };
+    let settleGeneration!: () => void;
+    const generateThinReadingVisualization = vi.fn(() => new Promise<readonly unknown[]>((resolve) => {
+      settleGeneration = () => resolve([]);
+    }));
+    const cancelThinReadingVisualization = vi.fn(async () => undefined);
+    const { result } = renderHook(() => useArtifactWorkflowController({
+      artifactLocalRepository: localRepository,
+      artifactResultClient: artifactResultClient(),
+      artifactStore: createArtifactStore(),
+      cancelThinReadingVisualization,
+      generateThinReadingVisualization,
+      getImportedChunksByPaperId: () => ({}),
+      getMultimodalVisualizationCapability: () => availableCapability,
+      getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+      getSelectedPapers: () => [],
+      onAnalysisHint: vi.fn(),
+      queueImportForPapers: vi.fn(() => "idle"),
+      runAgentAnalysis: vi.fn(async () => completedRun())
+    }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const node = thinReadingDocument.nodes[thinReadingDocument.rootNodeId];
+    act(() => {
+      void result.current.actions.startThinReadingVisualization({
+        artifactId: thinReadingDocument.artifactId,
+        document: thinReadingDocument,
+        node
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(generateThinReadingVisualization).toHaveBeenCalledWith(expect.objectContaining({
+      artifactId: thinReadingDocument.artifactId,
+      nodeId: node.id,
+      requestedArtifactCount: 1,
+      signal: expect.any(AbortSignal)
+    }));
+    await act(async () => {
+      await result.current.actions.cancelThinReadingVisualization(node.id, "user_cancelled");
+      settleGeneration();
+      await Promise.resolve();
+    });
+    expect(cancelThinReadingVisualization).toHaveBeenCalledWith(expect.objectContaining({
+      nodeId: node.id,
+      reason: "user_cancelled"
+    }));
+  });
+
+  test("starts automatic visualization only after the generated thin-reading node is persisted", async () => {
+    const client = artifactResultClient();
+    let settleGeneration!: () => void;
+    const generateThinReadingVisualization = vi.fn(() => new Promise<readonly unknown[]>((resolve) => {
+      settleGeneration = () => resolve([]);
+    }));
+    const { result } = renderHook(() => useArtifactWorkflowController({
+      artifactResultClient: client,
+      artifactStore: createArtifactStore(),
+      generateThinReadingVisualization,
+      getImportedChunksByPaperId: () => ({
+        [paper.id]: buildImportedChunksForPaper(paper)
+      }),
+      getImportedChunksForPaperId: () => buildImportedChunksForPaper(paper),
+      getMultimodalVisualizationCapability: () => availableCapability,
+      getSelectedDocumentSet: () => ({ documentIds: [paper.id], locked: true }),
+      getSelectedPapers: () => [paper],
+      onAnalysisHint: vi.fn(),
+      queueImportForPapers: vi.fn(() => "already_imported"),
+      runAgentAnalysis: vi.fn(async () => completedThinReadingRun())
+    }));
+
+    act(() => {
+      result.current.actions.startAnalysis("thin_reading");
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(client.save).toHaveBeenCalledBefore(generateThinReadingVisualization);
+    expect(generateThinReadingVisualization).toHaveBeenCalledTimes(1);
+    settleGeneration();
+    await act(async () => {
+      await Promise.resolve();
+    });
   });
 
   test("marks a persisted in-flight thin-reading task as interrupted after restart", async () => {
