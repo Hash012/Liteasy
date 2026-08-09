@@ -152,3 +152,80 @@ export type AdminApiErrorBody = {
   message?: string;
   traceId?: string;
 };
+
+export type VisualizationModality =
+  | "semantic_graph"
+  | "circuit"
+  | "physics_diagram"
+  | "biology_structure"
+  | "geometry_2d"
+  | "function_plot"
+  | "geometry_3d"
+  | "physics_process"
+  | "reaction_process"
+  | "raster_illustration";
+
+export type VisualizationProviderRoute = {
+  circuitFailures: number;
+  circuitOpenUntil: string | null;
+  circuitState: "closed" | "open" | "half_open";
+  dataClasses: string[];
+  enabled: boolean;
+  endpoint: string;
+  maxConcurrency: number;
+  modalities: VisualizationModality[];
+  model: string;
+  operations: Array<"structured_generation" | "image_generation" | "validation">;
+  priority: number;
+  providerId: string;
+  region: string;
+  revision: number;
+  routeId: string;
+  secretRef: string;
+  timeoutMs: number;
+  updatedAt: string | null;
+  updatedBy: string;
+};
+
+export type VisualizationEntitlement = {
+  allowed: boolean;
+  explicitRequestsAllowed: boolean;
+  allowedModalities: VisualizationModality[];
+  revision: number;
+};
+
+export type VisualizationQuotaPolicy = {
+  dailyUnits: number;
+  maxConcurrency: number;
+  monthlyUnits: number;
+  reason: string;
+  revision: number;
+  subjectId: string;
+  timezone: string;
+  updatedAt: string | null;
+  updatedBy: string;
+};
+
+export type VisualizationUsageRow = {
+  createdAt: string | null;
+  eventId: string;
+  eventType: string;
+  idempotencyKey: string;
+  reasonCode: string | null;
+  reservationId: string | null;
+  subjectId: string;
+  traceId: string;
+  unitsDelta: number;
+};
+
+export type VisualizationAuditRow = {
+  action: string;
+  actorId: string;
+  auditId: string;
+  detail: Record<string, unknown>;
+  occurredAt: string | null;
+  reason: string | null;
+  resourceId: string | null;
+  resourceType: string;
+  traceId: string;
+};

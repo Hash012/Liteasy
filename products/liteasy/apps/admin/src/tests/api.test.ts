@@ -120,3 +120,35 @@ test("preserves stable error codes and trace identifiers", async () => {
   expect(error).toBeInstanceOf(AdminApiError);
   expect(error).toMatchObject({ code: "fresh_mfa_required", status: 403, traceId: "trace-1" });
 });
+
+test("uses visualization control-plane routes and idempotency keys", async () => {
+  const requests: Array<{ init?: RequestInit; url: string }> = [];
+  const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push({ init, url: String(input) });
+    if (String(input).endsWith("/entitlements/get")) {
+      return new Response(JSON.stringify({ entitlement: { allowed: false, explicitRequestsAllowed: false, allowedModalities: [], revision: 3 } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ entitlement: { allowed: true, explicitRequestsAllowed: false, allowedModalities: [], revision: 4 } }), { status: 200 });
+  });
+  const client = createAdminApiClient({
+    accessToken: "admin-token",
+    cloudUrl: "https://api.liteasy.example",
+    fetchImpl,
+    forumUrl: "https://forum.liteasy.example"
+  });
+
+  await client.getVisualizationEntitlement({ subjectId: "user-1" });
+  await client.setVisualizationEntitlement({
+    allowed: true,
+    allowedModalities: [],
+    expectedRevision: 3,
+    explicitRequestsAllowed: false,
+    reason: "Approved visualization entitlement",
+    subjectId: "user-1"
+  });
+  expect(requests[0].url).toBe("https://api.liteasy.example/v1/admin/visualization/entitlements/get");
+  expect(JSON.parse(String(requests[1].init?.body))).toEqual(expect.objectContaining({
+    expectedRevision: 3,
+    idempotencyKey: "set-visualization-entitlement:00000000-0000-4000-8000-000000000001"
+  }));
+});

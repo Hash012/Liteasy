@@ -31,6 +31,7 @@ import {
   ClipboardTaskListLtrRegular,
   CommentMultipleRegular,
   DatabaseRegular,
+  DataUsageSettingsRegular,
   DeleteRegular,
   DocumentArrowDownRegular,
   GaugeRegular,
@@ -42,6 +43,7 @@ import {
   SignOutRegular
 } from "@fluentui/react-icons";
 import { AdminApiError, type AdminApiClient } from "./api";
+import { VisualizationGovernanceView } from "./VisualizationGovernanceView";
 import type {
   AdminIdentity,
   AdminSession,
@@ -55,7 +57,7 @@ import type {
   StorageQuota
 } from "./types";
 
-type AdminView = "accounts" | "audit" | "forum" | "models" | "organizations" | "overview" | "quotas" | "support";
+type AdminView = "accounts" | "audit" | "forum" | "models" | "organizations" | "overview" | "quotas" | "support" | "visualization";
 type Notice = { intent: "error" | "success" | "warning"; message: string; title: string };
 type RetrievalConnectorType = Exclude<RetrievalSource["connectorType"], null>;
 type Confirmation = {
@@ -72,6 +74,7 @@ const navigation: Array<{ icon: ReactElement; id: AdminView; label: string }> = 
   { icon: <GaugeRegular />, id: "quotas", label: "配额" },
   { icon: <KeyRegular />, id: "support", label: "支持访问" },
   { icon: <BrainCircuitRegular />, id: "models", label: "模型与检索" },
+  { icon: <DataUsageSettingsRegular />, id: "visualization", label: "可视化治理" },
   { icon: <ClipboardTaskListLtrRegular />, id: "audit", label: "审计" },
   { icon: <CommentMultipleRegular />, id: "forum", label: "论坛治理" }
 ];
@@ -564,6 +567,9 @@ export function AdminWorkspace({
             sourceDraft={sourceDraft}
             sources={sources}
           />
+        ) : null}
+        {!loading && view === "visualization" ? (
+          <VisualizationGovernanceView api={api} principal={identity?.principal ?? null} />
         ) : null}
         {!loading && view === "audit" ? (
           <AuditView

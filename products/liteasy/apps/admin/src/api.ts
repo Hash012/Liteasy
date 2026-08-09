@@ -7,7 +7,12 @@ import type {
   GovernanceDirectory,
   ModelPolicy,
   RetrievalSource,
-  StorageQuota
+  StorageQuota,
+  VisualizationAuditRow,
+  VisualizationEntitlement,
+  VisualizationProviderRoute,
+  VisualizationQuotaPolicy,
+  VisualizationUsageRow
 } from "./types";
 
 type AdminApiClientInput = {
@@ -237,6 +242,85 @@ export function createAdminApiClient({
         "/v1/admin/organizations/status",
         { ...input, idempotencyKey: idempotencyKey("organization-status") }
       );
+    },
+    getVisualizationEntitlement(input: { subjectId: string }) {
+      return cloudPost<{ entitlement: VisualizationEntitlement }>(
+        "/v1/admin/visualization/entitlements/get",
+        input
+      );
+    },
+    listVisualizationAudit(input: { limit?: number } = {}) {
+      const params = new URLSearchParams();
+      if (input.limit !== undefined) params.set("limit", String(input.limit));
+      return cloudGet<{ rows: VisualizationAuditRow[] }>(
+        `/v1/admin/visualization/audit${params.size ? `?${params.toString()}` : ""}`
+      );
+    },
+    listVisualizationProviderRoutes() {
+      return cloudGet<{ routes: VisualizationProviderRoute[] }>("/v1/admin/visualization/providers");
+    },
+    listVisualizationQuotaPolicies(input: { limit?: number; subjectId?: string } = {}) {
+      const params = new URLSearchParams();
+      if (input.limit !== undefined) params.set("limit", String(input.limit));
+      if (input.subjectId) params.set("subjectId", input.subjectId);
+      return cloudGet<{ policies: VisualizationQuotaPolicy[] }>(
+        `/v1/admin/visualization/quota-policies${params.size ? `?${params.toString()}` : ""}`
+      );
+    },
+    listVisualizationUsage(input: { limit?: number; subjectId?: string } = {}) {
+      const params = new URLSearchParams();
+      if (input.limit !== undefined) params.set("limit", String(input.limit));
+      if (input.subjectId) params.set("subjectId", input.subjectId);
+      return cloudGet<{ rows: VisualizationUsageRow[] }>(
+        `/v1/admin/visualization/usage${params.size ? `?${params.toString()}` : ""}`
+      );
+    },
+    saveVisualizationProviderRoute(input: {
+      expectedRevision: number;
+      reason: string;
+      route: VisualizationProviderRoute;
+    }) {
+      return cloudPost<{ route: VisualizationProviderRoute }>(
+        "/v1/admin/visualization/providers/save",
+        { ...input, idempotencyKey: idempotencyKey("save-visualization-provider") }
+      );
+    },
+    setVisualizationEntitlement(input: {
+      allowed: boolean;
+      allowedModalities: VisualizationEntitlement["allowedModalities"];
+      expectedRevision: number;
+      explicitRequestsAllowed: boolean;
+      reason: string;
+      subjectId: string;
+    }) {
+      return cloudPost<{ entitlement: VisualizationEntitlement }>(
+        "/v1/admin/visualization/entitlements/set",
+        { ...input, idempotencyKey: idempotencyKey("set-visualization-entitlement") }
+      );
+    },
+    setVisualizationQuotaPolicy(input: {
+      dailyUnits: number;
+      expectedRevision: number;
+      maxConcurrency: number;
+      monthlyUnits: number;
+      reason: string;
+      subjectId: string;
+      timezone: string;
+    }) {
+      return cloudPost<{ policy: VisualizationQuotaPolicy }>(
+        "/v1/admin/visualization/quota-policies/set",
+        { ...input, idempotencyKey: idempotencyKey("set-visualization-quota-policy") }
+      );
+    },
+    testVisualizationProviderRoute(input: {
+      expectedRevision: number;
+      providerRequest: Record<string, unknown>;
+      reason: string;
+    }) {
+      return cloudPost<Record<string, unknown>>("/v1/admin/visualization/providers/test", {
+        ...input,
+        idempotencyKey: idempotencyKey("test-visualization-provider")
+      });
     }
   };
 }
