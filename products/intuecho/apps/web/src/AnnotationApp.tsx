@@ -49,16 +49,14 @@ import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type React
 import {
   type AcademicProfile,
   type AnnotationTarget,
-  type AnnotationVisibility,
   type CommunityAnnotation,
   type CommunityReply,
   type ConversationSummary,
-  type CreateAnnotationInput,
   type PaperIdentity,
   type PlazaFilters
 } from "./community.types";
 import { communityApi } from "./communityApi";
-import { LiteratureTargetEditor } from "./LiteratureTargetEditor";
+import { AnnotationComposer as ExtractedAnnotationComposer, type ComposerState } from "./AnnotationComposer";
 import type { IdentityMode, IdentitySession } from "./identity.types";
 import { identityApi, readIdentitySession, setAuthRequiredHandler } from "./identityClient";
 
@@ -67,7 +65,6 @@ const DevelopmentAuthForm = import.meta.env.DEV
   : null;
 
 type View = "plaza" | "following" | "messages" | "mine" | "organizations" | "profile";
-type ComposerState = { draft?: CreateAnnotationInput; edit?: CommunityAnnotation; replyTo?: CommunityAnnotation };
 type ConversationSelection = { canSend?: boolean; id: string; participant: CommunityAnnotation["author"]; unreadCount?: number };
 const pendingHandoffStorageKey = "intuecho.pending-annotation-handoff.v2";
 const intuechoTheme = {
@@ -229,7 +226,7 @@ export function AnnotationApp() {
         </>}
       </main>
     </div>
-    {composer && <AnnotationComposer context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
+    {composer && <ExtractedAnnotationComposer context={composer} onClose={() => setComposer(null)} onSaved={() => { setComposer(null); setRefresh((value) => value + 1); }} />}
     {conversation && <ConversationDrawer conversation={conversation} session={session!} onInboxChange={() => setInboxRefresh((value) => value + 1)} onClose={() => { setConversation(null); setInboxRefresh((value) => value + 1); }} />}
     {authOpen && <AuthDialog identityMode={identityMode} onAuthenticated={(next) => { setSession(next); setAuthOpen(false); }} onClose={() => setAuthOpen(false)} />}
   </FluentProvider>;
@@ -348,7 +345,7 @@ function PlazaFilters({ value, onChange }: { value: PlazaFilters; onChange: (val
   </div>;
 }
 
-function AnnotationCard({ annotation, onCompose, onConversation, session }: {
+export function AnnotationCard({ annotation, onCompose, onConversation, session }: {
   annotation: CommunityAnnotation;
   onCompose: (value: { edit?: CommunityAnnotation; replyTo?: CommunityAnnotation }) => void;
   onConversation?: (value: ConversationSelection) => void;
@@ -403,6 +400,7 @@ function AnnotationCard({ annotation, onCompose, onConversation, session }: {
     </header>
     <div className="annotation-content"><p className="annotation-body">{current.body}</p></div>
     {current.withdrawnAt && <p className="moderation-state">已由组织管理员撤回</p>}
+    {current.originalReply && <p className="derived-reply-context">回复了某条批注</p>}
     {current.originalReply?.status === "parent_deleted" && <p className="deleted-reply-context">原回复对象已删除</p>}
     <div className="target-list">{current.targets.map((target, index) => <TargetChip key={`${target.kind}-${index}`} target={target} />)}</div>
     {current.tags.length > 0 && <div className="annotation-tags">{current.tags.map((tag) => tag.origin === "platform" && current.viewerIsAuthor && tag.state === "active" ? <button type="button" key={`${tag.origin}-${tag.name}`} className="platform-tag" aria-label={`申诉平台标签 ${tag.name}`} onClick={() => { setAppealReason(""); setAppealTag(tag.name); }}>#{tag.name} · 平台</button> : <span key={`${tag.origin}-${tag.name}`} className={tag.origin === "platform" ? "platform-tag" : ""}>#{tag.name}{tag.origin === "platform" ? tag.state === "appealed" ? " · 审核中" : tag.state === "upheld" ? " · 已维持" : " · 平台" : ""}</span>)}</div>}
@@ -447,16 +445,18 @@ function TargetChip({ target }: { target: AnnotationTarget }) {
   </div>;
 }
 
-function ReplyThread({ annotation, onCompose, session }: { annotation: CommunityAnnotation; onCompose: (value: { replyTo?: CommunityAnnotation }) => void; session: IdentitySession | null }) {
+export function ReplyThread({ annotation, onCompose, session }: { annotation: CommunityAnnotation; onCompose: (value: { replyTo?: CommunityAnnotation }) => void; session: IdentitySession | null }) {
   const { data, error } = useRemote(() => communityApi.replies(annotation.id), annotation.id);
   return <section className="reply-thread">
     <div className="reply-heading"><strong>回复</strong>{session && <Button size="small" appearance="subtle" icon={<Add20Regular />} onClick={() => onCompose({ replyTo: annotation })}>写回复</Button>}</div>
-    {error ? <ErrorNotice message={error} /> : !data ? <Spinner size="tiny" /> : data.replies.length ? data.replies.map((reply) => <ReplyItem key={reply.id} reply={reply} session={session} onCompose={onCompose} />) : <span className="empty-replies">暂无回复</span>}
+    {error ? <ErrorNotice message={error} /> : !data ? <Spinner size="tiny" /> : data.replies.length ? data.replies.map((reply) => <ReplyItem key={reply.id} parent={annotation} reply={reply} session={session} onCompose={onCompose} />) : <span className="empty-replies">暂无回复</span>}
   </section>;
 }
 
-function ReplyItem({ reply }: { onCompose: (value: { replyTo?: CommunityAnnotation }) => void; reply: CommunityReply; session: IdentitySession | null }) {
+export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: CommunityAnnotation }) => void; parent: CommunityAnnotation; reply: CommunityReply; session: IdentitySession | null }) {
   const [body, setBody] = useState(reply.body);
+  const [publicationState, setPublicationState] = useState(reply.derivedAnnotationState);
+  const [derivedAnnotationId, setDerivedAnnotationId] = useState(reply.derivedAnnotationId);
   const [editing, setEditing] = useState(false);
   const [status, setStatus] = useState("");
   async function save() {
@@ -466,70 +466,20 @@ function ReplyItem({ reply }: { onCompose: (value: { replyTo?: CommunityAnnotati
       setEditing(false);
     } catch (reason) { setStatus(reason instanceof Error ? reason.message : "回复保存失败"); }
   }
-  return <article className="reply-item"><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><Textarea value={body} onChange={(_, data) => setBody(data.value)} /><div className="reply-edit-actions"><Button size="small" onClick={() => setEditing(false)}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}{reply.derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(reply.derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}</footer>{status && <p className="inline-status" role="status">{status}</p>}</article>;
-}
-
-function AnnotationComposer({ context, onClose, onSaved }: {
-  context: ComposerState;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const original = context.edit;
-  const parent = context.replyTo;
-  const draft = context.draft;
-  const [body, setBody] = useState(original?.body ?? draft?.body ?? "");
-  const [tags, setTags] = useState(original?.tags.filter((tag) => tag.origin === "user").map((tag) => tag.name) ?? draft?.tags ?? []);
-  const [tagInput, setTagInput] = useState("");
-  const [targets, setTargets] = useState<AnnotationTarget[]>(original?.targets ?? draft?.targets ?? []);
-  const [visibility, setVisibility] = useState<AnnotationVisibility>(original?.visibility ?? draft?.visibility ?? parent?.visibility ?? "public");
-  const [organizationId, setOrganizationId] = useState(original?.organizationId ?? draft?.organizationId ?? parent?.organizationId ?? "");
-  const [shareToPlaza, setShareToPlaza] = useState(original?.shareToPlaza ?? draft?.shareToPlaza ?? !parent);
-  const [status, setStatus] = useState("");
-  const [pending, setPending] = useState(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setPending(true);
-    setStatus("");
-    const input: CreateAnnotationInput = {
-      body,
-      ...(visibility === "organization" ? { organizationId } : {}),
-      shareToPlaza,
-      tags,
-      targets,
-      visibility
-    };
+  async function updatePublication(published: boolean) {
     try {
-      if (original) await communityApi.updateAnnotation(original.id, input);
-      else if (parent) await communityApi.createReply(parent.id, { body, shareToPlaza, tags, targets });
-      else await communityApi.createAnnotation(input);
-      onSaved();
-    } catch (reason) {
-      setStatus(reason instanceof Error ? reason.message : "批注保存失败");
-      setPending(false);
+      const input = published ? { published: true as const, targets: parent.targets, tags: [] } : { published: false as const };
+      const result = await communityApi.updateReplyPublication(reply.id, input);
+      setPublicationState(result.reply.derivedAnnotationState);
+      setDerivedAnnotationId(result.reply.derivedAnnotationId);
+      setStatus("");
+    } catch {
+      setStatus(published ? "恢复失败，独立批注仍隐藏" : "撤回失败，独立批注仍公开");
     }
   }
-  function addTag() {
-    const value = tagInput.trim().replace(/^#/, "");
-    if (value && !tags.some((tag) => tag.toLocaleLowerCase("zh-CN") === value.toLocaleLowerCase("zh-CN")) && tags.length < 20) setTags([...tags, value]);
-    setTagInput("");
-  }
-  return <div className="drawer-backdrop" role="presentation">
-    <aside className="annotation-drawer" role="dialog" aria-modal="true" aria-labelledby="composer-title">
-      <header><div><span>{original ? "编辑" : parent ? "回复" : "新批注"}</span><h2 id="composer-title">{parent ? `回复 ${parent.author.name}` : "发布批注"}</h2></div><Tooltip content="关闭" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="关闭" onClick={onClose} /></Tooltip></header>
-      <form onSubmit={submit}>
-        <label className="field-label">批注内容<Textarea value={body} onChange={(_, data) => setBody(data.value)} resize="vertical" rows={7} required /></label>
-        <div className="visibility-row">
-          <label>可见范围<select value={visibility} disabled={Boolean(parent)} onChange={(event) => { const next = event.target.value as AnnotationVisibility; setVisibility(next); if (next !== "public") setShareToPlaza(false); }}><option value="public">公开</option><option value="private">仅自己</option><option value="organization">指定组织</option><option value="mutual_followers">仅互相关注</option></select></label>
-          {visibility === "organization" && <label>组织 ID<Input value={organizationId} disabled={Boolean(parent)} onChange={(_, data) => setOrganizationId(data.value)} required /></label>}
-        </div>
-        {visibility === "public" && <Checkbox checked={shareToPlaza} label={parent ? "同时作为独立批注发布到广场" : "发布到广场"} onChange={(_, data) => setShareToPlaza(Boolean(data.checked))} />}
-        <LiteratureTargetEditor targets={targets} onChange={setTargets} required={!parent || shareToPlaza} />
-        <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>
-        {status && <p className="form-error" role="alert">{status}</p>}
-        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || !body.trim() || ((!parent || shareToPlaza) && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
-      </form>
-    </aside>
-  </div>;
+  const publicationLabel = publicationState === "published" ? "停止独立批注" : publicationState === "withdrawn" ? "恢复独立批注" : "发布为独立批注";
+  const publicationStateLabel = publicationState === "published" ? "已发布" : publicationState === "withdrawn" ? "已撤回" : "未发布";
+  return <article className="reply-item"><header><span className="author-avatar">{reply.author.initials}</span><div><strong>{reply.author.name}</strong><small>{new Date(reply.updatedAt).toLocaleDateString("zh-CN")}{reply.revision > 1 ? " · 已编辑" : ""}</small></div></header>{editing ? <><Textarea value={body} onChange={(_, data) => setBody(data.value)} /><div className="reply-edit-actions"><Button size="small" onClick={() => setEditing(false)}>取消</Button><Button size="small" appearance="primary" onClick={() => void save()}>保存</Button></div></> : <p>{body}</p>}<span className={`reply-publication-state ${publicationState}`}>独立批注：{publicationStateLabel}</span>{publicationState === "published" && derivedAnnotationId && <a className="derived-annotation-link" href={`/annotations/${encodeURIComponent(derivedAnnotationId)}`}>查看同步发布的批注</a>}<footer>{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" icon={<Edit20Regular />} onClick={() => setEditing(true)}>编辑</Button>}{reply.viewerIsAuthor && !editing && <Button size="small" appearance="subtle" onClick={() => void updatePublication(publicationState !== "published")}>{publicationLabel}</Button>}</footer>{status && <p className="inline-status" role="status">{status}</p>}</article>;
 }
 
 function FollowingAnnotations({ onCompose, onConversation, refresh, session }: {

@@ -3,18 +3,19 @@ import { randomBytes } from "node:crypto";
 const identityBaseUrl = process.env.LITEASY_IDENTITY_ENDPOINT ?? "http://127.0.0.1:8787";
 const forumBaseUrl = process.env.INTUECHO_API_ENDPOINT ?? "http://127.0.0.1:4040";
 
-async function request(baseUrl, path, { body, sessionId } = {}) {
+async function request(baseUrl, path, { body, method, sessionId } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     body: body === undefined ? undefined : JSON.stringify(body),
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       ...(sessionId ? { Authorization: `Bearer ${sessionId}` } : {})
     },
-    method: body === undefined ? "GET" : "POST"
+    method: method ?? (body === undefined ? "GET" : "POST")
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`${path} failed with HTTP ${response.status}: ${payload.message ?? payload.error ?? payload.code ?? "unknown error"}`);
+    const code = payload.code ?? payload.error;
+    throw new Error(`${path} failed with HTTP ${response.status}${code ? ` ${code}` : ""}: ${payload.message ?? "unknown error"}`);
   }
   return payload;
 }
@@ -102,6 +103,22 @@ const annotation = await request(forumBaseUrl, "/v1/pdf-annotations:sync", {
       queueKey: `colbert-demo:pdf-${suffix}`,
       scope: { kind: "pdf_passage", page: 1, rects: [] },
       status: "pending_public",
+      targets: [{
+        anchorHash: `e2e:${suffix}:colbert`,
+        excerpt: "contextualized late interaction",
+        kind: "source_passage",
+        literature: {
+          identity: paperIdentity,
+          metadata: {
+            authors: ["Omar Khattab", "Matei Zaharia"],
+            documentType: "conference_paper",
+            title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+            year: 2020
+          }
+        },
+        page: 1,
+        rects: []
+      }],
       updatedAt: new Date().toISOString()
     }]
   },
@@ -109,6 +126,56 @@ const annotation = await request(forumBaseUrl, "/v1/pdf-annotations:sync", {
 });
 const remoteAnnotationId = annotation.results?.[0]?.intuechoAnnotationId;
 assert(remoteAnnotationId, "PDF annotation sync did not return a verified receipt");
+
+const parentAnnotation = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(remoteAnnotationId)}`, {
+  sessionId: webSession.sessionId
+});
+assert(parentAnnotation.annotation?.targets?.length > 0, "synced parent annotation did not retain a literature target");
+
+const pureReply = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(remoteAnnotationId)}/replies`, {
+  body: { body: "仅保留在线程中的回复", publishAsAnnotation: false, tags: [], targets: [] },
+  sessionId: webSession.sessionId
+});
+assert(pureReply.reply?.derivedAnnotationState === "none" && pureReply.annotation === null, "pure reply unexpectedly created an independent annotation");
+
+const projectedReply = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(remoteAnnotationId)}/replies`, {
+  body: {
+    body: "同时发布为独立批注的回复",
+    publishAsAnnotation: true,
+    tags: ["端到端联调"],
+    targets: parentAnnotation.annotation.targets
+  },
+  sessionId: webSession.sessionId
+});
+const projectedAnnotationId = projectedReply.reply?.derivedAnnotationId;
+assert(projectedAnnotationId && projectedReply.reply.derivedAnnotationState === "published", "reply projection was not published");
+assert(projectedReply.annotation?.targets?.length === parentAnnotation.annotation.targets.length, "reply projection did not inherit literature targets");
+assert(projectedReply.annotation?.shareToPlaza === true, "public reply projection was not published to the plaza");
+
+const editedReply = await request(forumBaseUrl, `/v1/replies/${encodeURIComponent(projectedReply.reply.id)}`, {
+  body: { body: "回复正文已同步编辑" },
+  method: "PUT",
+  sessionId: webSession.sessionId
+});
+assert(editedReply.reply?.body === "回复正文已同步编辑", "canonical reply edit did not persist");
+const editedProjection = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(projectedAnnotationId)}`, {
+  sessionId: webSession.sessionId
+});
+assert(editedProjection.annotation?.body === "回复正文已同步编辑", "canonical reply edit did not synchronize the projection");
+
+const withdrawnProjection = await request(forumBaseUrl, `/v1/replies/${encodeURIComponent(projectedReply.reply.id)}/publication`, {
+  body: { published: false },
+  method: "PUT",
+  sessionId: webSession.sessionId
+});
+assert(withdrawnProjection.reply?.derivedAnnotationState === "withdrawn", "reply projection withdrawal did not retain remote state");
+
+const restoredProjection = await request(forumBaseUrl, `/v1/replies/${encodeURIComponent(projectedReply.reply.id)}/publication`, {
+  body: { published: true, tags: ["端到端联调"], targets: parentAnnotation.annotation.targets },
+  method: "PUT",
+  sessionId: webSession.sessionId
+});
+assert(restoredProjection.reply?.derivedAnnotationState === "published", "reply projection restore did not publish remote state");
 
 const recommendations = await request(forumBaseUrl, "/v1/thin-reading/recommendations:query", {
   body: { scope: { kind: "document", paperIdentity } },
@@ -119,11 +186,22 @@ assert(
   "community recommendation query did not return the exact-paper annotation"
 );
 
+await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(remoteAnnotationId)}`, {
+  method: "DELETE",
+  sessionId: webSession.sessionId
+});
+const orphanContext = await request(forumBaseUrl, `/v1/annotations/${encodeURIComponent(projectedAnnotationId)}`, {
+  sessionId: webSession.sessionId
+});
+assert(orphanContext.annotation?.originalReply?.status === "parent_deleted", "derived annotation did not preserve deleted-parent context");
+
 console.log(JSON.stringify({
   annotationId: remoteAnnotationId,
   draftId: consumed.draftId,
   handoffId: handoff.handoffId,
   postId: published.postId,
+  projectedAnnotationId,
+  pureReplyId: pureReply.reply.id,
   subjectId: desktopSession.userId,
   verified: true
 }, null, 2));

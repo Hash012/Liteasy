@@ -89,6 +89,7 @@ export type CommunityReply = {
   body: string;
   createdAt: string;
   derivedAnnotationId: string | null;
+  derivedAnnotationState: "none" | "published" | "withdrawn";
   id: string;
   parentAnnotationId: string;
   revision: number;
@@ -116,7 +117,7 @@ export type ConversationSummary = {
 
 export type CreateReplyInput = {
   body: string;
-  shareToPlaza: boolean;
+  publishAsAnnotation: boolean;
   tags: string[];
   targets: AnnotationTarget[];
 };

@@ -294,6 +294,12 @@ a { color: inherit; text-decoration: none; }
 .reply-item > footer { display: flex; gap: 4px; }
 .reply-edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 .derived-annotation-link { display: inline-block; margin: 2px 0 6px; color: var(--intuecho-brand); font-size: 12px; }
+.reply-publication-state { display: block; margin: 2px 0 5px; color: var(--intuecho-muted); font-size: 12px; }
+.reply-publication-state.published { color: #2d6740; }
+.derived-reply-context,
+.inherited-visibility { margin: 8px 0; color: var(--intuecho-muted); font-size: 12px; }
+.reply-publication-fields { display: grid; gap: 10px; }
+.reply-publication-fields .literature-target-editor { margin-top: 2px; }
 .empty-replies { display: block; padding: 12px 0; color: var(--intuecho-faint); font-size: 12px; }
 
 .drawer-backdrop,
