@@ -72,7 +72,7 @@ export function registerLiteratureRoutes(app, {
     }
     if (!rateLimiter.tryConsume("confirm", user.id)) throw new LiteratureRouteError("LITERATURE_RATE_LIMITED");
     try {
-      return await resolver.confirm(user, parsed.data);
+      return { literature: await resolver.confirm(user, parsed.data) };
     } catch (error) {
       throw normalizedError(error, parsed.data);
     }

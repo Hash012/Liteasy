@@ -148,6 +148,23 @@ test("literature routes accept authenticated Web and desktop audiences while rej
     });
     assert.equal(desktop.statusCode, 200, desktop.body);
     assert.equal(desktop.json().status, "exact");
+
+    const confirmed = await app.inject({
+      headers: desktopHeader,
+      method: "POST",
+      payload: {
+        mode: "manual",
+        record: {
+          authors: ["Ada Lovelace"],
+          identifiers: [{ kind: "doi", source: "manual", value: "10.1000/reliable" }],
+          title: "Reliable manual record"
+        }
+      },
+      url: "/v1/literature:confirm"
+    });
+    assert.equal(confirmed.statusCode, 200, confirmed.body);
+    assert.equal(confirmed.json().literature.provenance.mode, "manual");
+    assert.equal(confirmed.json().literature.identifiers[0].source, "manual");
   }, { literatureResolver: literatureResolver() });
 });
 

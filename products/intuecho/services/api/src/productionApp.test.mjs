@@ -121,7 +121,7 @@ test("uses each authenticated audience for literature resolution and keeps provi
       url: "/v1/literature:confirm"
     });
     assert.equal(desktopConfirm.statusCode, 200, desktopConfirm.body);
-    assert.equal(desktopConfirm.json().literatureId, "confirmed-user-1");
+    assert.equal(desktopConfirm.json().literature.literatureId, "confirmed-user-1");
 
     const invalid = await app.inject({
       headers: { authorization: "Bearer web-token" },
