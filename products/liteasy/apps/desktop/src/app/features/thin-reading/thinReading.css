@@ -11,6 +11,10 @@
 }
 .thin-reading.is-external { background: #f7f1e8; }
 .thin-reading.is-near-boundary { background: #f5f8f1; }
+@media (max-width: 520px) {
+  .thin-reading { overflow-x: auto; }
+  .thin-reading__body.is-graph-dimmed { min-width: 1100px; }
+}
 
 .thin-reading__topbar {
   align-items: center;
@@ -54,6 +58,7 @@
 .thin-reading__mode-copy { color: var(--thin-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .thin-reading__body { --association-scrim: rgba(251, 250, 245, .76); display: grid; gap: clamp(36px, 8vw, 120px); grid-template-columns: minmax(0, 700px) minmax(190px, 260px); margin: 0 auto; max-width: 1100px; padding: clamp(38px, 6vw, 76px) 24px 80px; position: relative; }
+.thin-reading__body.is-graph-dimmed { min-height: clamp(960px, 120vh, 1200px); }
 .thin-reading.is-external .thin-reading__body { --association-scrim: rgba(247, 241, 232, .78); }
 .thin-reading.is-near-boundary .thin-reading__body { --association-scrim: rgba(245, 248, 241, .78); }
 
@@ -65,6 +70,19 @@
 .thin-reading__anchor.is-hidden { background: transparent; color: inherit; cursor: inherit; pointer-events: none; text-decoration: none; }
 .thin-reading.is-intuecho-collapsed .thin-reading__body { grid-template-columns: minmax(0, 780px); justify-content: center; max-width: 900px; padding-left: 18px; padding-right: 18px; }
 .thin-reading__article { min-width: 0; }
+.thin-reading__visualization-toggle { align-items: center; display: inline-flex; gap: 6px; min-height: 32px; }
+.thin-reading__visualization-toggle small { color: var(--thin-muted); font-size: 11px; white-space: nowrap; }
+.thin-reading__visualizations { display: grid; gap: 12px; margin: 0 0 28px; min-height: 132px; }
+.thin-reading__visualizations-empty { align-items: center; background: #f7fbf9; border: 1px dashed #c7d8d2; border-radius: 6px; color: var(--thin-muted); display: flex; min-height: 132px; padding: 16px; }
+.thin-reading__source-figures { display: grid; gap: 12px; margin: 30px 0 36px; }
+.thin-reading__source-figures h3 { color: #426460; font-size: 14px; font-weight: 650; margin: 0; }
+.thin-reading__source-figures-empty { color: var(--thin-muted); font-size: 13px; margin: 0; }
+.thin-reading__source-figure-grid { display: grid; gap: 14px; }
+.thin-reading__legacy-source { border-top: 1px solid var(--thin-line); display: grid; gap: 10px; margin: 20px 0 0; padding-top: 18px; }
+.thin-reading__legacy-source h3 { color: var(--thin-muted); font-size: 12px; font-weight: 600; margin: 0; }
+.visualization-artifact-host { align-items: stretch; aspect-ratio: 16 / 7; background: #fffefa; border: 1px solid var(--thin-line); border-radius: 6px; display: flex; min-height: 132px; overflow: hidden; }
+.visualization-artifact-host__fallback { align-content: center; color: #385f5c; display: grid; gap: 5px; padding: 16px; width: 100%; }
+.visualization-artifact-host__fallback span { color: var(--thin-muted); font-size: 12px; }
 .thin-reading__near-boundary {
   border-left: 3px solid #829a56;
   color: #617044;
@@ -219,7 +237,6 @@
 .thin-reading__visual-evidence-heading h3 { color: #30454a; font-family: Georgia, serif; font-size: 21px; font-weight: 500; margin: 3px 0 0; }
 .thin-reading__visual-evidence-heading > span { color: var(--thin-muted); font-size: 11px; line-height: 1.5; max-width: 150px; text-align: right; }
 .thin-reading__figure-embed { align-items: stretch; background: #fffefa; border: 1px solid var(--thin-line); border-radius: 6px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(220px, .9fr); margin: 0; overflow: hidden; }
-.thin-reading__figure-embed.is-inline { font-family: Inter, "Noto Sans SC", system-ui, sans-serif; margin: 20px 0 28px; max-width: 100%; }
 .thin-reading__figure-media { align-items: center; background: #f4f6f4; border-right: 1px solid var(--thin-line); display: flex; min-height: 210px; padding: 10px; }
 .thin-reading__figure-media img { display: block; height: auto; margin: 0 auto; max-height: 420px; max-width: min(100%, 720px); object-fit: contain; width: auto; }
 .thin-reading__figure-embed figcaption { display: grid; align-content: center; gap: 9px; padding: 20px; }
@@ -332,4 +349,10 @@
   .thin-reading__intuecho-floating { right: 12px; top: 12px; }
   .thin-reading__selection-popover { align-items: stretch; bottom: 12px; flex-direction: column; left: 12px !important; max-width: calc(100vw - 24px); top: auto !important; }
   .thin-reading__selection-quick-commands { min-width: 0; }
+}
+@media (max-width: 520px) {
+  .thin-reading__body.is-graph-dimmed {
+    display: grid;
+    grid-template-columns: minmax(0, 700px) minmax(190px, 260px);
+  }
 }

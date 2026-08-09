@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { Button, Tooltip } from "@fluentui/react-components";
+import { Button, Switch, Tooltip } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
   ArrowRightRegular,
@@ -43,6 +43,7 @@ import type {
   ThinReadingAnchor,
   ThinReadingBranchSource,
   ThinReadingDocument,
+  ThinReadingNodeV2,
   ThinReadingEvidenceSpan,
   ThinReadingExternalSource,
   ThinReadingQuickCommand,
@@ -51,6 +52,11 @@ import type {
 } from "./thinReading.types";
 import type { MineruFigure } from "../import/import.types";
 import type { VisualizationTabData } from "../visualization/visualization.types";
+import type { VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
+import type { MultimodalVisualizationCapability } from "../account/accountCapabilitiesClient";
+import type { ThinReadingVisualizationStatus } from "../artifacts/artifact.types";
+import { ThinReadingVisualizationRegion } from "./ThinReadingVisualizationRegion";
+import { ThinReadingSourceFigures, type ThinReadingSourceFigure } from "./ThinReadingSourceFigures";
 import { ThinReadingGraphView } from "./ThinReadingGraphView";
 import type { ThinReadingGraphMode } from "./ThinReadingGraphView";
 import { AgentLiveWorkPanel } from "../agent-work/AgentLiveWorkPanel";
@@ -97,6 +103,7 @@ export type ThinReadingTabProps = {
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onRetryInterruptedBranch?: () => Promise<void>;
   onSyncIntuecho?: (input: { artifactId: string; document: ThinReadingDocument }) => Promise<void>;
+  onToggleVisualization?: (enabled: boolean) => void;
   onUpdateDocument: (artifactId: string, nextDocument: ThinReadingDocument) => void;
   papers: Array<{
     arxivId?: string;
@@ -107,6 +114,9 @@ export type ThinReadingTabProps = {
     title: string;
     year?: number | string;
   }>;
+  visualizationArtifacts?: readonly VisualizationArtifactV1[];
+  visualizationCapability?: MultimodalVisualizationCapability;
+  visualizationStatus?: ThinReadingVisualizationStatus;
 };
 
 type ThinReadingSelection = {
@@ -121,53 +131,7 @@ type ThinReadingSelection = {
 
 type SelectionRect = Pick<DOMRect, "bottom" | "left" | "top">;
 
-type InlineFigurePresentation = {
-  evidenceIds: readonly string[];
-  figure: MineruFigure;
-  reason: string;
-  recommendedBy: "agent" | "fallback";
-};
-
 type RecommendationStage = "article" | "marks" | "graph";
-
-function figurePlacementLabel(placement: NonNullable<MineruFigure["analysis"]>["placement"] | undefined) {
-  switch (placement) {
-    case "method": return "方法图解";
-    case "results": return "结果证据";
-    case "evidence": return "关键证据";
-    default: return "核心图解";
-  }
-}
-
-function fallbackFigureSentenceIndex(figure: MineruFigure, sentenceCount: number) {
-  if (sentenceCount <= 1) return 0;
-  switch (figure.analysis?.placement) {
-    case "method": return Math.min(sentenceCount - 1, Math.floor(sentenceCount * .34));
-    case "results": return Math.min(sentenceCount - 1, Math.floor(sentenceCount * .72));
-    case "evidence": return Math.min(sentenceCount - 1, Math.floor(sentenceCount * .55));
-    default: return 0;
-  }
-}
-
-function InlineMineruFigure({ entry }: { entry: InlineFigurePresentation }) {
-  const { figure, reason, recommendedBy } = entry;
-  return (
-    <figure className="thin-reading__figure-embed is-inline" data-thin-reading-ignore-selection>
-      <div className="thin-reading__figure-media">
-        <img alt={figure.analysis?.title ?? figure.alt} loading="lazy" src={figure.dataUrl} />
-      </div>
-      <figcaption>
-        <div className="thin-reading__figure-kicker">
-          <span>{figurePlacementLabel(figure.analysis?.placement)}</span>
-          <span>原文第 {figure.page} 页</span>
-        </div>
-        <h4>{figure.analysis?.title ?? figure.alt}</h4>
-        <p>{figure.analysis?.description ?? "这张原文图表直接支撑相邻段落的解释。"}</p>
-        <small>{recommendedBy === "agent" ? "模型建议读者先看" : "相关性建议"}：{reason}</small>
-      </figcaption>
-    </figure>
-  );
-}
 
 const selectionQuickCommands = [
   {
@@ -333,10 +297,14 @@ export function ThinReadingTab({
   onPromoteExternalPaperToLibrary,
   onRetryInterruptedBranch,
   onSyncIntuecho,
+  onToggleVisualization,
   onUpdateDocument,
   paperRelationsEndpoint = "",
   paperRelationsTransport,
-  papers
+  papers,
+  visualizationArtifacts = [],
+  visualizationCapability,
+  visualizationStatus
 }: ThinReadingTabProps) {
   const [legacyActiveNodeId, setLegacyActiveNodeId] = useState(document.activeNodeId);
   const displayedActiveNodeId = document.version === "liteasy.thin-reading/v1"
@@ -915,22 +883,11 @@ export function ThinReadingTab({
   const nodeAnnotations = document.annotations.filter((annotation) => annotation.nodeId === activeNode.id);
   const paperEvidenceSpans = activeNode.evidence.paperEvidenceSpans ?? [];
   const summarySentences = getSummarySentences(activeNode);
-  const inlineFiguresBySentence = useMemo(() => {
-    const placements = new Map<number, InlineFigurePresentation[]>();
-    inlineFigures.forEach((entry) => {
-      const evidenceMatch = entry.evidenceIds.length > 0
-        ? summarySentences.findIndex((sentence) => sentence.evidenceIds.some((id) => entry.evidenceIds.includes(id)))
-        : -1;
-      let sentenceIndex = evidenceMatch >= 0
-        ? evidenceMatch
-        : fallbackFigureSentenceIndex(entry.figure, summarySentences.length);
-      while (placements.has(sentenceIndex) && sentenceIndex < summarySentences.length - 1) {
-        sentenceIndex += 1;
-      }
-      placements.set(sentenceIndex, [...(placements.get(sentenceIndex) ?? []), entry]);
-    });
-    return placements;
-  }, [inlineFigures, summarySentences]);
+  const sourceFigures = inlineFigures as readonly ThinReadingSourceFigure[];
+  const activeVisualizations = [
+    ...(document.version === "liteasy.thin-reading/v2" ? (activeNode as ThinReadingNodeV2).visualizations : []),
+    ...visualizationArtifacts.filter((artifact) => artifact.nodeId === activeNode.id)
+  ].filter((artifact, index, all) => all.findIndex((candidate) => candidate.artifactId === artifact.artifactId) === index);
   const anchors = activeNode.evidence.anchors ?? [];
   const activeAnchor = anchors.find((anchor) => anchor.id === activeAnchorId) ?? null;
   const marksVisible = recommendationStage !== "article";
@@ -1025,6 +982,20 @@ export function ThinReadingTab({
         <div className="thin-reading__controls">
           {headerAction}
           <span className="thin-reading__language">{labels.languageName}</span>
+          <Tooltip content="控制生成可视化" positioning="below" relationship="description">
+            <span className="thin-reading__visualization-toggle">
+              <Switch
+                checked={Boolean(visualizationCapability?.allowed && visualizationCapability.enabled)}
+                disabled={!visualizationCapability?.allowed}
+                label="多模态"
+                onChange={(_, data) => onToggleVisualization?.(data.checked)}
+              />
+              {!visualizationCapability?.allowed ? <small>暂不可用</small> : null}
+              {visualizationCapability?.allowed && visualizationStatus?.status === "generating" ? <small>生成中</small> : null}
+              {visualizationCapability?.allowed && visualizationStatus?.status === "omitted" ? <small>已简化</small> : null}
+              {visualizationCapability?.allowed && visualizationStatus?.status === "idle" ? <small>未生成</small> : null}
+            </span>
+          </Tooltip>
           <div className="thin-reading__depth-nav">
             <button aria-label={previousLabel} disabled={!canGoBack} onClick={() => parent && goToNode(parent.id)} type="button">
               <ArrowLeftRegular aria-hidden="true" />
@@ -1154,7 +1125,7 @@ export function ThinReadingTab({
         onMouseUp={inspectSelection}
         ref={contentRef}
       >
-        <article className="thin-reading__article">
+        <article className="thin-reading__article" data-testid="thin-reading-node">
           {paperTypeLabel ? <div className="thin-reading__article-meta">{paperTypeLabel}</div> : null}
           {closureState === "near_boundary" ? (
             <section className="thin-reading__near-boundary" aria-label={labels.nearBoundary}>
@@ -1163,7 +1134,8 @@ export function ThinReadingTab({
             </section>
           ) : null}
           <h2>{activeNode.title}</h2>
-          <section>
+          <ThinReadingVisualizationRegion artifacts={activeVisualizations} status={visualizationStatus} />
+          <section data-testid="thin-reading-prose">
             <div
               className="thin-reading__summary"
               data-thin-reading-annotation-target="node_summary"
@@ -1272,33 +1244,36 @@ export function ThinReadingTab({
                     })}
                       </span>
                     </p>
-                    {(inlineFiguresBySentence.get(index) ?? []).map((entry) => (
-                      <InlineMineruFigure entry={entry} key={entry.figure.id} />
-                    ))}
                   </div>
                 );
               })}
             </div>
           </section>
-          {activeLegacyEvidence?.mermaid ? (
-            <MermaidPreview code={activeLegacyEvidence.mermaid} onOpenInTab={() => onOpenVisualization?.({ code: activeLegacyEvidence.mermaid!, id: `mermaid:${artifactId}:${activeNode.id}`, kind: "mermaid", title: `${activeNode.title} · 关系与流程` })} title="关系与流程" />
+          {activeLegacyEvidence ? (
+            <section aria-label="旧版薄读来源" className="thin-reading__legacy-source">
+              <h3>旧版薄读来源（只读）</h3>
+              {activeLegacyEvidence.mermaid ? (
+                <MermaidPreview code={activeLegacyEvidence.mermaid} onOpenInTab={() => onOpenVisualization?.({ code: activeLegacyEvidence.mermaid!, id: `mermaid:${artifactId}:${activeNode.id}`, kind: "mermaid", title: `${activeNode.title} · 关系与流程` })} title="关系与流程" />
+              ) : null}
+              {activeLegacyEvidence.interactiveDemo ? (
+                <HtmlDemoPreview
+                  description={activeLegacyEvidence.interactiveDemo.description}
+                  html={activeLegacyEvidence.interactiveDemo.html}
+                  onOpenInTab={onOpenVisualization
+                    ? () => onOpenVisualization({
+                        description: activeLegacyEvidence.interactiveDemo!.description,
+                        html: activeLegacyEvidence.interactiveDemo!.html,
+                        id: `html-demo:${artifactId}:${activeNode.id}`,
+                        kind: "html_demo",
+                        title: activeLegacyEvidence.interactiveDemo!.title
+                      })
+                    : undefined}
+                  title={activeLegacyEvidence.interactiveDemo.title}
+                />
+              ) : null}
+            </section>
           ) : null}
-          {activeLegacyEvidence?.interactiveDemo ? (
-            <HtmlDemoPreview
-              description={activeLegacyEvidence.interactiveDemo.description}
-              html={activeLegacyEvidence.interactiveDemo.html}
-              onOpenInTab={onOpenVisualization
-                ? () => onOpenVisualization({
-                    description: activeLegacyEvidence.interactiveDemo!.description,
-                    html: activeLegacyEvidence.interactiveDemo!.html,
-                    id: `html-demo:${artifactId}:${activeNode.id}`,
-                    kind: "html_demo",
-                    title: activeLegacyEvidence.interactiveDemo!.title
-                  })
-                : undefined}
-              title={activeLegacyEvidence.interactiveDemo.title}
-            />
-          ) : null}
+          <ThinReadingSourceFigures figures={sourceFigures.slice(0, 2)} />
           {activeNode.omittedSections.length > 0 ? (
             <section className="thin-reading__omitted" aria-label={labels.omittedRegion}>
               <div className="thin-reading__omitted-actions">

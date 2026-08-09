@@ -21,6 +21,9 @@ import type { ThinReadingPaperRelationsTransport } from "../thin-reading/thinRea
 import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
 import type { MineruFigure } from "../import/import.types";
 import type { VisualizationTabData } from "../visualization/visualization.types";
+import type { VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
+import type { MultimodalVisualizationCapability } from "../account/accountCapabilitiesClient";
+import type { ThinReadingVisualizationStatus } from "./artifact.types";
 import { AgentLiveWorkPanel } from "../agent-work/AgentLiveWorkPanel";
 import { ArtifactExportMenu } from "./ArtifactExportMenu";
 import { presentArtifactFailure } from "./artifactFailurePresentation";
@@ -54,11 +57,15 @@ type ArtifactTabsProps = {
   ) => string | void | Promise<string | void>;
   onRetryInterruptedThinReadingBranch?: (taskId: string) => Promise<void>;
   onUpdateThinReadingDocument?: (artifactId: string, nextDocument: ThinReadingDocument) => void;
+  onToggleThinReadingVisualization?: (enabled: boolean) => void;
   onStartAnalysis: (artifactType: ArtifactType) => void;
   selectedCount: number;
   selectionLocked: boolean;
   tasks: ArtifactTask[];
   tabs: ArtifactTab[];
+  thinReadingVisualizationCapability?: MultimodalVisualizationCapability;
+  thinReadingVisualizationReadyArtifacts?: readonly VisualizationArtifactV1[];
+  thinReadingVisualizationStatuses?: Record<string, ThinReadingVisualizationStatus>;
 };
 
 export type ArtifactEvidenceOpenRequest = {
@@ -185,11 +192,15 @@ export function ArtifactTabs({
   onRegenerateArtifact,
   onRetryInterruptedThinReadingBranch,
   onUpdateThinReadingDocument,
+  onToggleThinReadingVisualization,
   onStartAnalysis,
   selectedCount,
   selectionLocked,
   tasks,
-  tabs
+  tabs,
+  thinReadingVisualizationCapability,
+  thinReadingVisualizationReadyArtifacts = [],
+  thinReadingVisualizationStatuses = {}
 }: ArtifactTabsProps) {
   const [regenerationOpen, setRegenerationOpen] = useState(false);
   const [supplementalContext, setSupplementalContext] = useState("");
@@ -296,9 +307,15 @@ export function ArtifactTabs({
         onSyncIntuecho={onSyncThinReadingAnnotations}
         onLoadForumFeed={onLoadForumFeed}
         onUpdateDocument={onUpdateThinReadingDocument ?? (() => undefined)}
+        onToggleVisualization={onToggleThinReadingVisualization}
         paperRelationsEndpoint={externalKnowledgeEndpoint}
         paperRelationsTransport={paperRelationsTransport}
         papers={activeTab.papers ?? []}
+        visualizationArtifacts={thinReadingVisualizationReadyArtifacts}
+        visualizationCapability={thinReadingVisualizationCapability}
+        visualizationStatus={activeTab.thinReadingDocument.version === "liteasy.thin-reading/v2"
+          ? thinReadingVisualizationStatuses[activeTab.thinReadingDocument.activeNodeId]
+          : undefined}
         figures={[
           ...(activeTab.figures ?? []),
           ...(activeTab.papers ?? []).flatMap((paper) => mineruFiguresByPaperId?.[paper.id] ?? [])

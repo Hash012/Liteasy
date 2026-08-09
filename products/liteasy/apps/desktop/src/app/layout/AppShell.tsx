@@ -42,7 +42,12 @@ import { createArtifactResultClient } from "../features/artifacts/artifactResult
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { AgentRun } from "../features/agent-api/agentApi.types";
 import type { AccountTransport } from "../features/account/accountSessionClient";
-import type { AccountCapabilitiesTransport } from "../features/account/accountCapabilitiesClient";
+import {
+  unavailableMultimodalVisualizationCapability,
+  type AccountCapabilitiesTransport,
+  type MultimodalVisualizationCapability
+} from "../features/account/accountCapabilitiesClient";
+import { setMultimodalVisualizationPreference } from "../features/visualization/visualizationControlPlaneClient";
 import { loadStoredAccountSession } from "../features/account/accountSessionStorage";
 import type { RecommendationTransport } from "../features/recommendations/recommendationClient";
 import type { DocumentMetadataTransport } from "../features/metadata/documentMetadataClient";
@@ -345,6 +350,9 @@ export function AppShell({
   });
   const { cachedReaderPapers } = externalPapers;
   const artifactAccountId = loadStoredAccountSession()?.userId;
+  const multimodalVisualizationCapabilityRef = useRef<MultimodalVisualizationCapability>(
+    unavailableMultimodalVisualizationCapability
+  );
 
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
@@ -364,6 +372,7 @@ export function AppShell({
     getImportedChunksForPaperId: (paperId) =>
       importStoreRef.current.getParsedChunksByDocumentId(paperId),
     getMineruFiguresForPaperId: (paperId) => mineruFiguresByPaperId[paperId] ?? [],
+    getMultimodalVisualizationCapability: () => multimodalVisualizationCapabilityRef.current,
     getIntuechoEndpoint: resolveIntuechoEndpoint,
     getIntuechoSessionId: () => cloudAccessTokenRef.current,
     getModelDiagnosticContext: () => {
@@ -382,9 +391,26 @@ export function AppShell({
     onAnalysisHint: setAnalysisHint,
     queueImportForPapers: workspaceActions.queueImportForPapers,
     runAgentAnalysis: (artifactType, onProgress, options) =>
-      agentArtifactRunnerRef.current(artifactType, onProgress, options)
+      agentArtifactRunnerRef.current(artifactType, onProgress, options),
+    setMultimodalVisualizationPreference: (enabled) => {
+      const sessionId = cloudAccessTokenRef.current;
+      if (!sessionId) {
+        return Promise.reject(new Error("multimodal_visualization_preference_unavailable"));
+      }
+      return setMultimodalVisualizationPreference({
+        enabled,
+        endpoint: settingsState["models.control_plane_endpoint"],
+        sessionId
+      });
+    }
   });
-  const { artifactCatalog, artifactTabs, artifactTasks } = artifactWorkflow.model;
+  const {
+    artifactCatalog,
+    artifactTabs,
+    artifactTasks,
+    thinReadingVisualizationReadyArtifacts,
+    thinReadingVisualizationStatuses
+  } = artifactWorkflow.model;
   const activeThinReadingTask = artifactTasks.find((task) => (
     task.type === "thin_reading" &&
     (task.status === "queued" || task.status === "running")
@@ -604,6 +630,7 @@ export function AppShell({
     accountSession,
     loginDialogOpen
   } = cloudAccount.model;
+  multimodalVisualizationCapabilityRef.current = cloudAccount.model.multimodalVisualization;
   cloudAccessTokenRef.current = accountSession?.sessionId;
   usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
@@ -1600,6 +1627,7 @@ export function AppShell({
           onGenerateThinReadingBranch={artifactWorkflow.actions.generateThinReadingBranch}
           onRetryInterruptedThinReadingBranch={artifactWorkflow.actions.retryInterruptedThinReadingBranch}
           onSyncThinReadingAnnotations={artifactWorkflow.actions.syncThinReadingAnnotations}
+          onToggleThinReadingVisualization={artifactWorkflow.actions.setThinReadingVisualizationEnabled}
           onStartAnalysis={(artifactType) => {
             void registeredWorkspaceActions.handleDirectAnalysis(artifactType);
           }}
@@ -1608,6 +1636,9 @@ export function AppShell({
           selectionLocked={workspaceState.selectionLocked}
           tabs={tabs}
           tasks={artifactTasks}
+          thinReadingVisualizationCapability={cloudAccount.model.multimodalVisualization}
+          thinReadingVisualizationReadyArtifacts={thinReadingVisualizationReadyArtifacts}
+          thinReadingVisualizationStatuses={thinReadingVisualizationStatuses}
         />
       </section>
     );

@@ -17,6 +17,7 @@ import type { ThinReadingDocument } from "../app/features/thin-reading/thinReadi
 import type { ThinReadingCommunityRecommendationState } from "../app/features/thin-reading/useThinReadingCommunityRecommendations";
 import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
+import { propsWithVisualAndFigure, unauthorizedProps } from "./fixtures/thinReadingVisualProps";
 
 function makeDocument(): ThinReadingDocument {
   return createThinReadingDocument(createThinReadingFixture());
@@ -75,6 +76,22 @@ afterEach(() => {
 });
 
 describe("ThinReadingTab", () => {
+  test("renders generated visuals before prose and source figures after prose", () => {
+    render(<ThinReadingTab {...propsWithVisualAndFigure} />);
+    const order = within(screen.getByTestId("thin-reading-node"))
+      .getAllByTestId(/thin-reading-(visuals|prose|source-figures)/)
+      .map((element) => element.dataset.testid);
+    expect(order).toEqual([
+      "thin-reading-visuals", "thin-reading-prose", "thin-reading-source-figures"
+    ]);
+  });
+
+  test("shows a disabled off switch without hiding source figures when unauthorized", () => {
+    render(<ThinReadingTab {...unauthorizedProps} />);
+    expect(screen.getByRole("switch", { name: "多模态" })).toBeDisabled();
+    expect(screen.getByText("论文原图")).toBeVisible();
+  });
+
   test("keeps a desktop selection popover inside the visible viewport", () => {
     expect(resolveThinReadingSelectionPopoverPosition({
       bottom: 520,
@@ -1131,10 +1148,10 @@ describe("ThinReadingTab", () => {
 
     expect(container.querySelectorAll(".thin-reading__figure-embed h4")[0]).toHaveTextContent("整体流程图");
     expect(container.querySelectorAll(".thin-reading__figure-embed h4")[1]).toHaveTextContent("结构细节图");
-    expect(container.querySelector(".thin-reading__summary-unit .thin-reading__figure-embed")).not.toBeNull();
+    expect(container.querySelector(".thin-reading__source-figures .thin-reading__figure-embed")).not.toBeNull();
     expect(container.querySelector(".thin-reading__visual-evidence")).toBeNull();
-    expect(screen.getByText("模型建议读者先看：先看整体信息流。")).toBeInTheDocument();
-    expect(screen.getByText("模型建议读者先看：再看 token 间对齐细节。")).toBeInTheDocument();
+    expect(screen.getByText("建议先看：先看整体信息流。")).toBeInTheDocument();
+    expect(screen.getByText("建议先看：再看 token 间对齐细节。")).toBeInTheDocument();
   });
 
   test("renders a read-only v1 HTML demo and forwards it to the visualization tab", () => {
