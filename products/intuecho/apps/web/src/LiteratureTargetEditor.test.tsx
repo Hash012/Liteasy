@@ -126,9 +126,11 @@ describe("LiteratureTargetEditor", () => {
     await user.click(screen.getByRole("button", { name: "添加已确认文献" }));
     await waitFor(() => expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ kind: "source_passage", literature: { literatureId: "literature-1" }, page: 3, excerpt: "Important passage" })]));
     const selectedTargets = onChange.mock.calls[onChange.mock.calls.length - 1]?.[0] ?? [];
-    view.rerender(<LiteratureTargetEditor onChange={onChange} required targets={selectedTargets} />);
+    const secondTarget: AnnotationTarget = { kind: "whole_document", literature: { literatureId: "literature-2" } };
+    view.rerender(<LiteratureTargetEditor onChange={onChange} required targets={[...selectedTargets, secondTarget]} />);
     expect(screen.getAllByText("A Reliable Paper").length).toBeGreaterThanOrEqual(1);
-    await user.click(screen.getByRole("button", { name: "移除关联文献" }));
-    expect(onChange).toHaveBeenLastCalledWith([]);
+    expect(screen.getAllByRole("button", { name: "移除关联文献" })).toHaveLength(2);
+    await user.click(screen.getAllByRole("button", { name: "移除关联文献" })[0]);
+    expect(onChange).toHaveBeenLastCalledWith([secondTarget]);
   });
 });
