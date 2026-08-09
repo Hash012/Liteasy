@@ -56,6 +56,7 @@ import {
   type PlazaFilters
 } from "./community.types";
 import { communityApi } from "./communityApi";
+import { canonicalizeInheritedTargets } from "./canonicalizeInheritedTargets";
 import { AnnotationComposer as ExtractedAnnotationComposer, type ComposerState } from "./AnnotationComposer";
 import type { IdentityMode, IdentitySession } from "./identity.types";
 import { identityApi, readIdentitySession, setAuthRequiredHandler } from "./identityClient";
@@ -467,14 +468,31 @@ export function ReplyItem({ parent, reply }: { onCompose: (value: { replyTo?: Co
     } catch (reason) { setStatus(reason instanceof Error ? reason.message : "回复保存失败"); }
   }
   async function updatePublication(published: boolean) {
+    if (!published) {
+      try {
+        const result = await communityApi.updateReplyPublication(reply.id, { published: false });
+        setPublicationState(result.reply.derivedAnnotationState);
+        setDerivedAnnotationId(result.reply.derivedAnnotationId);
+        setStatus("");
+      } catch {
+        setStatus("撤回失败，独立批注仍公开");
+      }
+      return;
+    }
+    let canonicalTargets: AnnotationTarget[];
     try {
-      const input = published ? { published: true as const, targets: parent.targets, tags: [] } : { published: false as const };
-      const result = await communityApi.updateReplyPublication(reply.id, input);
+      canonicalTargets = await canonicalizeInheritedTargets(parent.targets);
+    } catch {
+      setStatus("恢复失败，父批注文献需重新确认，独立批注仍隐藏");
+      return;
+    }
+    try {
+      const result = await communityApi.updateReplyPublication(reply.id, { published: true, targets: canonicalTargets, tags: [] });
       setPublicationState(result.reply.derivedAnnotationState);
       setDerivedAnnotationId(result.reply.derivedAnnotationId);
       setStatus("");
     } catch {
-      setStatus(published ? "恢复失败，独立批注仍隐藏" : "撤回失败，独立批注仍公开");
+      setStatus("恢复失败，独立批注仍隐藏");
     }
   }
   const publicationLabel = publicationState === "published" ? "停止独立批注" : publicationState === "withdrawn" ? "恢复独立批注" : "发布为独立批注";

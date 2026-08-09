@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { AnnotationCard, ReplyItem, ReplyThread } from "./AnnotationApp";
 import { AnnotationComposer } from "./AnnotationComposer";
+import { canonicalizeInheritedTargets } from "./canonicalizeInheritedTargets";
 import { communityApi } from "./communityApi";
 import type { CommunityAnnotation, CommunityReply } from "./community.types";
 
@@ -11,7 +12,9 @@ vi.mock("./communityApi", () => ({
   communityApi: {
     createAnnotation: vi.fn(),
     createReply: vi.fn(),
+    confirmLiterature: vi.fn(),
     replies: vi.fn(),
+    resolveLiterature: vi.fn(),
     updateAnnotation: vi.fn(),
     updateReply: vi.fn(),
     updateReplyPublication: vi.fn()
@@ -19,7 +22,9 @@ vi.mock("./communityApi", () => ({
 }));
 
 const createReply = vi.mocked(communityApi.createReply);
+const confirmLiterature = vi.mocked(communityApi.confirmLiterature);
 const replies = vi.mocked(communityApi.replies);
+const resolveLiterature = vi.mocked(communityApi.resolveLiterature);
 const updateAnnotation = vi.mocked(communityApi.updateAnnotation);
 const updateReply = vi.mocked(communityApi.updateReply);
 const updateReplyPublication = vi.mocked(communityApi.updateReplyPublication);
@@ -74,9 +79,28 @@ const publishedReply: CommunityReply = {
   viewerIsAuthor: true
 };
 
+const legacyCandidate = {
+  candidateKey: "crossref:doi:10.1000/parent",
+  provider: "crossref" as const,
+  record: {
+    authors: ["A. Author"],
+    identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/parent" }],
+    title: "Inherited Literature",
+    year: 2026
+  }
+};
+
+const confirmedLiterature = {
+  ...legacyCandidate.record,
+  literatureId: "literature-parent",
+  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const }
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   createReply.mockResolvedValue({ annotation: null, reply: { ...publishedReply, derivedAnnotationId: null, derivedAnnotationState: "none" } });
+  resolveLiterature.mockResolvedValue({ candidate: legacyCandidate, status: "exact", unavailableProviders: [] });
+  confirmLiterature.mockResolvedValue({ literature: confirmedLiterature });
   updateReply.mockResolvedValue({ reply: publishedReply });
 });
 afterEach(() => cleanup());
@@ -90,7 +114,7 @@ test("keeps a reply pure until independent publication is explicitly enabled", a
 
   await user.click(screen.getByRole("checkbox", { name: "同时发布为独立批注" }));
 
-  expect(screen.getByText("Inherited Literature")).toBeVisible();
+  expect(await screen.findByText("文献 literature-parent")).toBeVisible();
 });
 
 test("submits a pure reply with the canonical empty publication payload", async () => {
@@ -110,18 +134,64 @@ test("submits a pure reply with the canonical empty publication payload", async 
   expect(onSaved).toHaveBeenCalledOnce();
 });
 
-test("clones inherited targets into an explicitly published reply", async () => {
+test("canonicalizes inherited legacy targets before publishing a reply", async () => {
   const user = userEvent.setup();
   render(<AnnotationComposer context={{ replyTo: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);
 
   await user.type(screen.getByLabelText("批注内容"), "Published reply");
   await user.click(screen.getByRole("checkbox", { name: "同时发布为独立批注" }));
+  await waitFor(() => expect(confirmLiterature).toHaveBeenCalledWith({ candidateKey: legacyCandidate.candidateKey, mode: "candidate" }));
   await user.click(screen.getByRole("button", { name: "发布" }));
 
   await waitFor(() => expect(createReply).toHaveBeenCalledOnce());
   const payload = createReply.mock.calls[0][1];
-  expect(payload).toEqual({ body: "Published reply", publishAsAnnotation: true, tags: [], targets: publicParent.targets });
+  expect(resolveLiterature).toHaveBeenCalledWith({
+    hints: {
+      authors: ["A. Author"],
+      identifiers: [{ kind: "doi", value: "10.1000/parent" }],
+      title: "Inherited Literature",
+      year: 2026
+    },
+    purpose: "forum_compose"
+  });
+  expect(payload).toEqual({ body: "Published reply", publishAsAnnotation: true, tags: [], targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }] });
   expect(payload.targets[0]).not.toBe(publicParent.targets[0]);
+});
+
+test.each([
+  { candidates: [legacyCandidate], status: "ambiguous" as const, unavailableProviders: [] },
+  { retryable: true as const, status: "unavailable" as const, unavailableProviders: ["crossref" as const] }
+])("fails closed when inherited literature resolution is $status", async (resolution) => {
+  const user = userEvent.setup();
+  resolveLiterature.mockResolvedValue(resolution);
+  render(<AnnotationComposer context={{ replyTo: publicParent }} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+  await user.type(screen.getByLabelText("批注内容"), "Do not publish legacy metadata");
+  await user.click(screen.getByRole("checkbox", { name: "同时发布为独立批注" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("请重新确认关联文献后再发布独立批注");
+  expect(screen.getByRole("button", { name: "发布" })).toBeDisabled();
+  expect(createReply).not.toHaveBeenCalled();
+  expect(confirmLiterature).not.toHaveBeenCalled();
+});
+
+test("canonicalizes both the primary and evidence literature in a derived target", async () => {
+  const literature = publicParent.targets[0].literature;
+  const targets = await canonicalizeInheritedTargets([{
+    derivedContent: { artifactId: "artifact-1", excerpt: "Derived excerpt", version: "v1" },
+    evidence: [{ anchorHash: "sha256:evidence", excerpt: "Source evidence", literature, rects: [] }],
+    kind: "derived_passage",
+    literature
+  }]);
+
+  expect(targets).toEqual([{
+    derivedContent: { artifactId: "artifact-1", excerpt: "Derived excerpt", version: "v1" },
+    evidence: [{ anchorHash: "sha256:evidence", excerpt: "Source evidence", literature: { literatureId: "literature-parent" }, rects: [] }],
+    kind: "derived_passage",
+    literature: { literatureId: "literature-parent" }
+  }]);
+  expect(resolveLiterature).toHaveBeenCalledOnce();
+  expect(confirmLiterature).toHaveBeenCalledOnce();
 });
 
 test.each([
@@ -194,6 +264,34 @@ test("switches a confirmed projection between published and withdrawn commands",
   await waitFor(() => expect(updateReplyPublication).toHaveBeenCalledWith(publishedReply.id, { published: false }));
   expect(screen.queryByRole("link", { name: "查看同步发布的批注" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "恢复独立批注" })).toBeVisible();
+});
+
+test("canonicalizes legacy parent targets before restoring a projection", async () => {
+  const user = userEvent.setup();
+  const withdrawnReply = { ...publishedReply, derivedAnnotationState: "withdrawn" as const };
+  updateReplyPublication.mockResolvedValue({ annotation: null, reply: { ...withdrawnReply, derivedAnnotationState: "published" } });
+  render(<ReplyItem parent={publicParent} reply={withdrawnReply} session={null} onCompose={vi.fn()} />);
+
+  await user.click(screen.getByRole("button", { name: "恢复独立批注" }));
+
+  await waitFor(() => expect(updateReplyPublication).toHaveBeenCalledWith(withdrawnReply.id, {
+    published: true,
+    tags: [],
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature-parent" } }]
+  }));
+});
+
+test("keeps a projection withdrawn when legacy parent targets cannot be canonicalized", async () => {
+  const user = userEvent.setup();
+  resolveLiterature.mockResolvedValue({ retryable: true, status: "unavailable", unavailableProviders: ["crossref"] });
+  const withdrawnReply = { ...publishedReply, derivedAnnotationState: "withdrawn" as const };
+  render(<ReplyItem parent={publicParent} reply={withdrawnReply} session={null} onCompose={vi.fn()} />);
+
+  await user.click(screen.getByRole("button", { name: "恢复独立批注" }));
+
+  expect(await screen.findByRole("status")).toHaveTextContent("恢复失败，父批注文献需重新确认，独立批注仍隐藏");
+  expect(updateReplyPublication).not.toHaveBeenCalled();
+  expect(screen.getByText("独立批注：已撤回")).toBeVisible();
 });
 
 test("renders one reply with one projection link and independent projection controls", async () => {

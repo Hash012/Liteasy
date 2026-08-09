@@ -1,6 +1,7 @@
 import { Button, Checkbox, Input, Textarea, Tooltip } from "@fluentui/react-components";
 import { Add20Regular, Dismiss20Regular, Send20Regular } from "@fluentui/react-icons";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { canonicalizeInheritedTargets, inheritedTargetsAreCanonical } from "./canonicalizeInheritedTargets";
 import { communityApi } from "./communityApi";
 import type {
   AnnotationTarget,
@@ -19,10 +20,6 @@ type Props = {
   onSaved: () => void;
 };
 
-function cloneTarget(target: AnnotationTarget): AnnotationTarget {
-  return structuredClone(target);
-}
-
 export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const original = context.edit;
   const parent = context.replyTo;
@@ -32,28 +29,56 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
   const [tags, setTags] = useState(original?.tags.filter((tag) => tag.origin === "user").map((tag) => tag.name) ?? draft?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [publishAsAnnotation, setPublishAsAnnotation] = useState(false);
+  const [replyTargetsReady, setReplyTargetsReady] = useState(false);
   const [targets, setTargets] = useState<AnnotationTarget[]>(original?.targets ?? draft?.targets ?? []);
   const [visibility, setVisibility] = useState<AnnotationVisibility>(original?.visibility ?? draft?.visibility ?? parent?.visibility ?? "public");
   const [organizationId, setOrganizationId] = useState(original?.organizationId ?? draft?.organizationId ?? parent?.organizationId ?? "");
   const [shareToPlaza, setShareToPlaza] = useState(original?.shareToPlaza ?? draft?.shareToPlaza ?? true);
   const [status, setStatus] = useState("");
   const [pending, setPending] = useState(false);
+  const publicationAttempt = useRef(0);
 
-  function setReplyPublication(enabled: boolean) {
-    const inheritedTargets = enabled ? parent?.targets.map(cloneTarget) ?? [] : [];
-    setPublishAsAnnotation(enabled && inheritedTargets.length > 0);
+  async function setReplyPublication(enabled: boolean) {
+    const attempt = ++publicationAttempt.current;
+    const inheritedTargets = enabled ? structuredClone(parent?.targets ?? []) : [];
+    const hasTargets = inheritedTargets.length > 0;
+    setPublishAsAnnotation(enabled && hasTargets);
     setTargets(inheritedTargets);
+    setReplyTargetsReady(hasTargets && inheritedTargetsAreCanonical(inheritedTargets));
+    setStatus("");
+    if (!enabled || !hasTargets || inheritedTargetsAreCanonical(inheritedTargets)) return;
+    try {
+      const canonicalTargets = await canonicalizeInheritedTargets(inheritedTargets);
+      if (publicationAttempt.current !== attempt) return;
+      setTargets(canonicalTargets);
+      setReplyTargetsReady(true);
+    } catch {
+      if (publicationAttempt.current !== attempt) return;
+      setReplyTargetsReady(false);
+      setStatus("请重新确认关联文献后再发布独立批注");
+    }
   }
 
   function updateReplyTargets(nextTargets: AnnotationTarget[]) {
+    publicationAttempt.current += 1;
     setTargets(nextTargets);
-    if (nextTargets.length === 0) setPublishAsAnnotation(false);
+    const ready = nextTargets.length > 0 && inheritedTargetsAreCanonical(nextTargets);
+    setReplyTargetsReady(ready);
+    if (ready) setStatus("");
+    if (nextTargets.length === 0) {
+      setPublishAsAnnotation(false);
+    }
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     setStatus("");
+    if (parent && publishAsAnnotation && (!replyTargetsReady || !inheritedTargetsAreCanonical(targets))) {
+      setStatus("请重新确认关联文献后再发布独立批注");
+      setPending(false);
+      return;
+    }
     const input: CreateAnnotationInput = {
       body,
       ...(visibility === "organization" ? { organizationId } : {}),
@@ -97,7 +122,7 @@ export function AnnotationComposer({ context, onClose, onSaved }: Props) {
         </>}
         {!isReplyEdit && (!parent || publishAsAnnotation) && <div className="tag-editor-v2"><label>标签</label><div className="tag-row">{tags.map((tag) => <button type="button" key={tag} onClick={() => setTags(tags.filter((item) => item !== tag))}>#{tag}<Dismiss20Regular /></button>)}</div><div className="tag-input"><Input value={tagInput} onChange={(_, data) => setTagInput(data.value)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === ",") { event.preventDefault(); addTag(); } }} /><Button type="button" icon={<Add20Regular />} onClick={addTag}>添加</Button></div></div>}
         {status && <p className="form-error" role="alert">{status}</p>}
-        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || !body.trim() || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
+        <div className="drawer-actions"><Button type="button" appearance="secondary" onClick={onClose}>取消</Button><Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={pending || !body.trim() || (Boolean(parent) && publishAsAnnotation && !replyTargetsReady) || (!parent && !isReplyEdit && targets.length === 0)}>{pending ? "正在保存" : original ? "保存修改" : "发布"}</Button></div>
       </form>
     </aside>
   </div>;
