@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import pg from "pg";
 import { PostgresAccountLifecycleRepository } from "../src/accountLifecycleRepository.mjs";
 import { migrateIntuecho, readIntuechoMigrations, verifyIntuechoMigrations } from "../src/migrations.mjs";
@@ -45,7 +48,69 @@ async function waitForAdvisoryWait(minimum, timeoutMs = 5000) {
 }
 
 try {
-  const migrated = await migrateIntuecho(migrationPool, { applicationRole: application.username });
+  await migrationPool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
+  const allMigrations = readIntuechoMigrations();
+  const migration015 = allMigrations.find((item) => item.name === "015_reply_projection_lifecycle.sql");
+  assert.ok(migration015);
+  const legacyMigrations = allMigrations.filter((item) => item.name < migration015.name);
+  const legacyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "intuecho-migration-015-legacy-"));
+  const projectionDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "intuecho-migration-015-projection-"));
+  for (const item of legacyMigrations) fs.writeFileSync(path.join(legacyDirectory, item.name), item.sql);
+  fs.writeFileSync(path.join(projectionDirectory, migration015.name), migration015.sql);
+  let migrated;
+  try {
+    const legacyMigration = await migrateIntuecho(migrationPool, {
+      applicationRole: application.username,
+      directory: legacyDirectory
+    });
+    assert.deepEqual(legacyMigration.applied, legacyMigrations.map((item) => item.name));
+    await migrationPool.query(`
+      BEGIN;
+      INSERT INTO literature_records(id, title, authors)
+      VALUES ('migration-015-literature', 'Legacy migration literature.', '[]'::jsonb);
+      INSERT INTO annotations(
+        id, body, author_id, author_name, author_initials, author_profile_snapshot,
+        visibility, share_to_plaza
+      ) VALUES (
+        'migration-015-parent', 'Legacy reply parent.', 'legacy-author', 'Legacy Author', 'LA',
+        '{}'::jsonb, 'public', false
+      );
+      INSERT INTO annotation_targets(id, annotation_id, literature_id, target_kind, position, target)
+      VALUES (
+        'migration-015-parent-target', 'migration-015-parent', 'migration-015-literature',
+        'whole_document', 0, '{"kind":"whole_document"}'::jsonb
+      );
+      COMMIT;
+    `);
+    await migrationPool.query(`
+      INSERT INTO annotation_replies(
+        id, parent_annotation_id, body, author_id, author_name, author_initials,
+        author_profile_snapshot, visibility
+      ) VALUES (
+        'migration-015-existing-reply', 'migration-015-parent', 'Existing active reply.',
+        'legacy-author', 'Legacy Author', 'LA', '{}'::jsonb, 'public'
+      )
+    `);
+    migrated = await migrateIntuecho(migrationPool, {
+      applicationRole: application.username,
+      directory: projectionDirectory
+    });
+  } finally {
+    fs.rmSync(legacyDirectory, { force: true, recursive: true });
+    fs.rmSync(projectionDirectory, { force: true, recursive: true });
+  }
+  assert.deepEqual(migrated.applied, [migration015.name]);
+  const upgradedReply = await migrationPool.query(`
+    SELECT deleted_at, moderated_at, moderated_by, moderation_reason
+      FROM annotation_replies
+     WHERE id = 'migration-015-existing-reply'
+  `);
+  assert.deepEqual(upgradedReply.rows, [{
+    deleted_at: null,
+    moderated_at: null,
+    moderated_by: null,
+    moderation_reason: null
+  }]);
   const expectedMigrations = [
     "001_forum_core.sql",
     "002_account_lifecycle.sql",
@@ -60,10 +125,11 @@ try {
     "011_literature_resolution_provenance.sql",
     "012_desktop_annotation_publications.sql",
     "013_desktop_annotation_publication_digest.sql",
-    "014_correct_legacy_literature_snapshots.sql"
+    "014_correct_legacy_literature_snapshots.sql",
+    "015_reply_projection_lifecycle.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 14, current: true });
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 15, current: true });
   const historicalLiteratureId = `migration-014-historical-${randomUUID()}`;
   const historicalVersionId = `migration-014-historical-version-${randomUUID()}`;
   const manualLiteratureId = `migration-014-manual-${randomUUID()}`;
@@ -712,6 +778,74 @@ try {
     authoredPublicReply.reply.id,
     publicReply.reply.id
   ]);
+  const replyModerationColumns = await migrationPool.query(`
+    SELECT column_name
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'annotation_replies'
+       AND column_name IN ('moderated_at', 'moderation_reason', 'moderated_by')
+     ORDER BY column_name
+  `);
+  assert.deepEqual(replyModerationColumns.rows.map((row) => row.column_name), [
+    'moderated_at',
+    'moderated_by',
+    'moderation_reason'
+  ]);
+  const auditLinkColumns = await migrationPool.query(`
+    SELECT column_name
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'annotation_moderation_audit'
+       AND column_name = 'linked_reply_id'
+  `);
+  assert.deepEqual(auditLinkColumns.rows.map((row) => row.column_name), ['linked_reply_id']);
+  const activeReply = await migrationPool.query(`
+    SELECT deleted_at, moderated_at, moderated_by, moderation_reason
+      FROM annotation_replies
+     WHERE id = $1
+  `, [authoredPublicReply.reply.id]);
+  assert.deepEqual(activeReply.rows, [{
+    deleted_at: null,
+    moderated_at: null,
+    moderated_by: null,
+    moderation_reason: null
+  }]);
+  const linkedReplyAudit = await migrationPool.query(`
+    INSERT INTO annotation_moderation_audit(
+      id, annotation_id, linked_reply_id, action, reason, admin_user_id, trace_id
+    ) VALUES (
+      'linked-reply-audit', $1, $2, 'withdraw',
+      'Linked reply moderation audit.', 'admin-1', 'trace-linked-reply-audit'
+    )
+    RETURNING annotation_id, linked_reply_id
+  `, [publicReply.annotation.id, publicReply.reply.id]);
+  assert.deepEqual(linkedReplyAudit.rows, [{
+    annotation_id: publicReply.annotation.id,
+    linked_reply_id: publicReply.reply.id
+  }]);
+  await assert.rejects(
+    () => migrationPool.query(`
+      INSERT INTO annotation_moderation_audit(
+        id, annotation_id, linked_reply_id, action, reason, admin_user_id, trace_id
+      ) VALUES (
+        'invalid-linked-reply-audit', $1, $2, 'withdraw',
+        'An unrelated reply cannot be audited as a projection.', 'admin-1', 'trace-invalid-linked-reply'
+      )
+    `, [publicReply.annotation.id, authoredPublicReply.reply.id]),
+    /annotation_moderation_audit_linked_reply_invalid/
+  );
+  await assert.rejects(
+    () => migrationPool.query(
+      "UPDATE annotation_moderation_audit SET reason = 'tampered' WHERE id = 'linked-reply-audit'"
+    ),
+    /annotation_moderation_audit_is_append_only/
+  );
+  await assert.rejects(
+    () => migrationPool.query(
+      "DELETE FROM annotation_moderation_audit WHERE id = 'linked-reply-audit'"
+    ),
+    /annotation_moderation_audit_is_append_only/
+  );
   const plaza = await annotations.plaza(userOne, {
     documentType: "journal_article",
     educationStage: "博士研究生",

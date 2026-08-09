@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   annotationTargetSchema,
+  createReplySchema,
   desktopAnnotationPublicationBatchSchema,
   literatureCandidateSchema,
   literatureConfirmInputSchema,
   literatureRecordSchema,
-  literatureResolveInputSchema
+  literatureResolveInputSchema,
+  updateReplyPublicationSchema
 } from "@intuecho/contracts";
 
 test("requires a stable manual identity or title-author-year", () => {
@@ -194,6 +196,57 @@ test("accepts only strict finite publication rectangles", () => {
     kind: "source_passage",
     literature: { literatureId: "literature_1" },
     rects: [{ fullText: "must not cross the API", height: 40, left: 12, top: 24, width: 180 }]
+  }).success, false);
+});
+
+test("creates a pure reply without literature targets by default", () => {
+  const parsed = createReplySchema.safeParse({
+    body: "Thread-only response",
+    tags: [],
+    targets: []
+  });
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.publishAsAnnotation, false);
+});
+
+test("requires targets only when a reply is published as an independent annotation", () => {
+  assert.equal(createReplySchema.safeParse({
+    body: "Independent response",
+    publishAsAnnotation: true,
+    tags: [],
+    targets: []
+  }).success, false);
+  assert.equal(createReplySchema.safeParse({
+    body: "Thread-only response with an invalid projection target",
+    publishAsAnnotation: false,
+    tags: [],
+    targets: [{ kind: "whole_document", literature: { literatureId: "literature_1" } }]
+  }).success, false);
+});
+
+test("validates reply publication updates with canonical literature targets", () => {
+  const target = { kind: "whole_document", literature: { literatureId: "literature_1" } };
+  assert.equal(updateReplyPublicationSchema.safeParse({ published: false }).success, true);
+  assert.equal(updateReplyPublicationSchema.safeParse({
+    published: true,
+    tags: [],
+    targets: []
+  }).success, false);
+  assert.equal(updateReplyPublicationSchema.safeParse({
+    published: true,
+    tags: ["evidence"],
+    targets: [target]
+  }).success, true);
+  assert.equal(updateReplyPublicationSchema.safeParse({
+    published: true,
+    tags: [],
+    targets: [{
+      anchorHash: "sha256:passage",
+      excerpt: "A source passage.",
+      kind: "source_passage",
+      literature: { literatureId: "literature_1" },
+      rects: [{ height: 40, left: 12, top: 24, width: 180, unsupported: true }]
+    }]
   }).success, false);
 });
 

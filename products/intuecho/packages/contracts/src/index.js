@@ -308,18 +308,30 @@ export const academicProfileSchema = z.object({
 
 export const createReplySchema = z.object({
   body: z.string().trim().min(1).max(8000),
-  shareToPlaza: z.boolean().default(true),
+  publishAsAnnotation: z.boolean().default(false),
   tags: annotationTagsSchema,
   targets: z.array(annotationTargetSchema).max(100).default([])
 }).superRefine((value, context) => {
-  if (value.shareToPlaza && value.targets.length === 0) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["targets"], message: "只有关联文献的回复才能同时发布为批注。" });
+  if (value.publishAsAnnotation && value.targets.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["targets"], message: "独立批注必须关联文献。" });
+  }
+  if (!value.publishAsAnnotation && value.targets.length > 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["targets"], message: "普通回复不保存独立批注目标。" });
   }
 });
 
 export const updateReplySchema = z.object({
   body: z.string().trim().min(1).max(8000)
 });
+
+export const updateReplyPublicationSchema = z.discriminatedUnion("published", [
+  z.object({ published: z.literal(false) }),
+  z.object({
+    published: z.literal(true),
+    tags: annotationTagsSchema,
+    targets: z.array(annotationTargetSchema).min(1).max(100)
+  })
+]);
 
 export const followUserSchema = z.object({
   targetUserId: z.string().trim().min(1).max(200)

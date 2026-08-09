@@ -20,7 +20,8 @@ test("loads ordered immutable forum migrations", () => {
     "011_literature_resolution_provenance.sql",
     "012_desktop_annotation_publications.sql",
     "013_desktop_annotation_publication_digest.sql",
-    "014_correct_legacy_literature_snapshots.sql"
+    "014_correct_legacy_literature_snapshots.sql",
+    "015_reply_projection_lifecycle.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -59,7 +60,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 14, current: true });
+  }), { count: 15, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [
