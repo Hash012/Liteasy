@@ -59,6 +59,17 @@ describe("thinReadingPromptRegistry", () => {
     });
   });
 
+  test("keeps mixed and comparison typed prompts provenance-only", () => {
+    for (const prompt of ["比较结构和过程", "请比较两个方案"]) {
+      expect(resolveThinReadingVisualizationIntentRequest({
+        excerpt: "解释这里。",
+        kind: "selected_text",
+        prompt,
+        requestedOutput: "visualization_intent"
+      })).toEqual({ explicit: true });
+    }
+  });
+
   test("provides exactly three original retention examples for every paper type and language", () => {
     for (const paperType of thinReadingPaperTypes) {
       const zhExamples = getThinReadingFewShotExamples(paperType, "zh-CN");

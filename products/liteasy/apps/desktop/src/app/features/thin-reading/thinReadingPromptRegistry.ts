@@ -53,10 +53,18 @@ export function resolveThinReadingVisualizationIntentRequest(source: ThinReading
     default:
       if (source.requestedOutput === "visualization_intent") {
         const prompt = source.prompt ?? "";
-        if (/(?:过程|步骤|流程|flow|process)/iu.test(prompt)) {
+        const cueFamilies = [
+          /(?:过程|步骤|流程|flow|process)/iu.test(prompt) ? "process" : undefined,
+          /(?:结构|层次|结构图|structure)/iu.test(prompt) ? "structure" : undefined,
+          /(?:比较|对比|compare|comparison)/iu.test(prompt) ? "comparison" : undefined
+        ].filter(Boolean);
+        if (cueFamilies.length !== 1) {
+          return { explicit: true };
+        }
+        if (cueFamilies[0] === "process") {
           return { candidateModalities: ["physics_process"] as const, explicit: true, purpose: "show_process" as const };
         }
-        if (/(?:结构|层次|结构图|structure)/iu.test(prompt)) {
+        if (cueFamilies[0] === "structure") {
           return { candidateModalities: ["semantic_graph"] as const, explicit: true, purpose: "explain_structure" as const };
         }
         return { explicit: true };
