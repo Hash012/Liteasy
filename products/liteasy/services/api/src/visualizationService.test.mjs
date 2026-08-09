@@ -619,3 +619,109 @@ test("provider cost remains linked to the durable invocation on success and canc
   assert.equal(completions.at(-1).providerRequestId, "provider-request-9");
   assert.equal(completions.at(-1).state, "cancelled");
 });
+
+test("replayed provider invocations do not contact the gateway twice", async () => {
+  let gatewayCalls = 0;
+  let starts = 0;
+  const route = {
+    dataClasses: ["paper"],
+    enabled: true,
+    modalities: ["semantic_graph"],
+    operations: ["structured_generation"],
+    providerId: "provider-1",
+    revision: 1,
+    routeId: "route-1"
+  };
+  const service = new VisualizationService({
+    authorizeDocument: async () => ({ allowed: true }),
+    gateway: {
+      async generateStructured() {
+        gatewayCalls += 1;
+        return { cost: { amount: 0.02, currency: "USD", providerRequestId: "provider-request-12", units: 2 }, text: "{\"artifact\":true}" };
+      }
+    },
+    repository: {
+      async finalizeProviderInvocation() {},
+      async getProviderRoute() { return route; },
+      async reserve() {
+        return { reservation: {
+          idempotencyKey: "generation-0012",
+          modality: "semantic_graph",
+          reservationId: "reservation-12",
+          routeId: "route-1",
+          routeRevision: 1
+        } };
+      },
+      async rollback() {},
+      async startProviderInvocation() {
+        starts += 1;
+        return starts === 1
+          ? { invocationId: "durable-invocation-12", replayed: false, state: "started" }
+          : { invocationId: "durable-invocation-12", replayed: true, state: "succeeded" };
+      }
+    },
+    validateArtifact: async () => ({ outcome: "pass" })
+  });
+  const input = {
+    providerRequest: { dataClass: "paper", modality: "semantic_graph" },
+    reservation: { idempotencyKey: "generation-0012", modality: "semantic_graph", routeId: "route-1", units: 4 }
+  };
+
+  await service.generate({ subjectId: "user-1" }, input);
+  await assert.rejects(
+    service.generate({ subjectId: "user-1" }, input),
+    (error) => error.code === "visualization_invocation_replayed" && error.status === 409
+  );
+  assert.equal(gatewayCalls, 1);
+});
+
+test("failed atomic provider reconciliation does not fall back to a second cost write", async () => {
+  const calls = [];
+  const route = {
+    dataClasses: ["paper"],
+    enabled: true,
+    modalities: ["semantic_graph"],
+    operations: ["structured_generation"],
+    providerId: "provider-1",
+    revision: 1,
+    routeId: "route-1"
+  };
+  const service = new VisualizationService({
+    authorizeDocument: async () => ({ allowed: true }),
+    gateway: {
+      async generateStructured() {
+        return { cost: { amount: 0.02, currency: "USD", providerRequestId: "provider-request-duplicate", units: 2 }, text: "{\"artifact\":true}" };
+      }
+    },
+    repository: {
+      async finalizeProviderInvocation(input) {
+        calls.push(["finalize", input]);
+        throw new Error("visualization_provider_request_id_conflict");
+      },
+      async getProviderRoute() { return route; },
+      async recordProviderCost(input) { calls.push(["legacy-cost", input]); },
+      async reserve() {
+        return { reservation: {
+          idempotencyKey: "generation-0013",
+          modality: "semantic_graph",
+          reservationId: "reservation-13",
+          routeId: "route-1",
+          routeRevision: 1
+        } };
+      },
+      async rollback() { calls.push(["rollback"]); },
+      async startProviderInvocation() { return { invocationId: "durable-invocation-13", replayed: false, state: "started" }; }
+    },
+    validateArtifact: async () => ({ outcome: "pass" })
+  });
+
+  await assert.rejects(
+    service.generate({ subjectId: "user-1" }, {
+      providerRequest: { dataClass: "paper", modality: "semantic_graph" },
+      reservation: { idempotencyKey: "generation-0013", modality: "semantic_graph", routeId: "route-1", units: 4 }
+    }),
+    /visualization_provider_request_id_conflict/
+  );
+  assert.deepEqual(calls.map(([name]) => name), ["finalize", "rollback"]);
+  assert.equal(calls[0][1].cost.invocationId, "durable-invocation-13");
+});

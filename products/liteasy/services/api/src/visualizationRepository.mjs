@@ -80,6 +80,64 @@ function positiveUnits(value, code = "visualization_units_invalid") {
   return value;
 }
 
+function providerCostRecord(input) {
+  const invocationId = required(input, "invocationId");
+  const routeId = required(input, "routeId");
+  const providerId = required(input, "providerId");
+  const providerRequestId = required(input, "providerRequestId");
+  const costReasonCode = reasonCode(input);
+  if (typeof input.amount !== "number" || !Number.isFinite(input.amount) || input.amount < 0) throw new Error("visualization_provider_cost_amount_invalid");
+  if (typeof input.currency !== "string" || !/^[A-Z]{3}$/.test(input.currency)) throw new Error("visualization_provider_cost_currency_invalid");
+  if (!Number.isInteger(input.units) || input.units < 0) throw new Error("visualization_provider_cost_units_invalid");
+  if (input.metadata !== undefined && (!input.metadata || typeof input.metadata !== "object" || Array.isArray(input.metadata))) throw new Error("visualization_provider_cost_metadata_invalid");
+  return { ...input, invocationId, metadata: input.metadata ?? {}, providerId, providerRequestId, reasonCode: costReasonCode, routeId };
+}
+
+function providerInvocationCompletion(input) {
+  const invocationId = required(input, "invocationId");
+  const state = input.state;
+  if (!["succeeded", "failed", "cancelled", "timed_out"].includes(state)) throw new VisualizationRepositoryError("visualization_invocation_state_invalid");
+  const responseHash = input.responseHash === undefined ? null : input.responseHash;
+  if (responseHash !== null && (typeof responseHash !== "string" || !/^[a-f0-9]{64}$/.test(responseHash))) throw new VisualizationRepositoryError("visualization_invocation_hash_invalid");
+  const providerRequestId = input.providerRequestId === undefined ? null : required(input, "providerRequestId");
+  if (input.providerUnits !== undefined && (!Number.isSafeInteger(input.providerUnits) || input.providerUnits < 0)) {
+    throw new VisualizationRepositoryError("visualization_provider_cost_units_invalid");
+  }
+  return {
+    errorCode: input.errorCode ?? null,
+    invocationId,
+    providerRequestId,
+    providerUnits: input.providerUnits ?? null,
+    responseHash,
+    state
+  };
+}
+
+async function insertProviderCost(client, input) {
+  const cost = providerCostRecord(input);
+  const result = await client.query("INSERT INTO visualization_provider_cost_ledger(cost_event_id, invocation_id, route_id, provider_id, provider_request_id, amount, currency, units, reason_code, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) ON CONFLICT (invocation_id, provider_request_id) DO NOTHING RETURNING *", [`vcost_${randomUUID()}`, cost.invocationId, cost.routeId, cost.providerId, cost.providerRequestId, cost.amount, cost.currency, cost.units, cost.reasonCode, json(cost.metadata)]);
+  return result.rows[0];
+}
+
+async function completeProviderInvocationRow(client, input) {
+  const completion = providerInvocationCompletion(input);
+  const result = await client.query(`
+    UPDATE visualization_provider_invocations
+       SET state = $2, completed_at = COALESCE(completed_at, now()),
+           provider_request_id = COALESCE($3, provider_request_id),
+           response_hash = COALESCE(response_hash, $4), error_code = COALESCE(error_code, $5),
+           provider_units = COALESCE($6, provider_units)
+     WHERE invocation_id = $1 AND state = 'started'
+     RETURNING *
+  `, [completion.invocationId, completion.state, completion.providerRequestId, completion.responseHash, completion.errorCode, completion.providerUnits]);
+  if (result.rows[0]) return { completed: true, row: result.rows[0] };
+  const existing = await client.query(
+    "SELECT * FROM visualization_provider_invocations WHERE invocation_id = $1",
+    [completion.invocationId]
+  );
+  return { completed: false, row: existing.rows[0] ?? null };
+}
+
 function reservationView(row) {
   return row ? {
     reservationId: row.reservation_id,
@@ -1047,17 +1105,7 @@ export class PostgresVisualizationRepository {
   }
 
   async recordProviderCost(input) {
-    const invocationId = required(input, "invocationId");
-    const routeId = required(input, "routeId");
-    const providerId = required(input, "providerId");
-    const providerRequestId = required(input, "providerRequestId");
-    const code = reasonCode(input);
-    if (typeof input.amount !== "number" || !Number.isFinite(input.amount) || input.amount < 0) throw new Error("visualization_provider_cost_amount_invalid");
-    if (typeof input.currency !== "string" || !/^[A-Z]{3}$/.test(input.currency)) throw new Error("visualization_provider_cost_currency_invalid");
-    if (!Number.isInteger(input.units) || input.units < 0) throw new Error("visualization_provider_cost_units_invalid");
-    if (input.metadata !== undefined && (!input.metadata || typeof input.metadata !== "object" || Array.isArray(input.metadata))) throw new Error("visualization_provider_cost_metadata_invalid");
-    const result = await this.pool.query("INSERT INTO visualization_provider_cost_ledger(cost_event_id, invocation_id, route_id, provider_id, provider_request_id, amount, currency, units, reason_code, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) ON CONFLICT (invocation_id, provider_request_id) DO NOTHING RETURNING *", [`vcost_${randomUUID()}`, invocationId, routeId, providerId, providerRequestId, input.amount, input.currency, input.units, code, json(input.metadata ?? {})]);
-    return result.rows[0];
+    return insertProviderCost(this.pool, input);
   }
 
   async startProviderInvocation(input) {
@@ -1083,7 +1131,10 @@ export class PostgresVisualizationRepository {
       Number.isSafeInteger(input.responseMaxBytes) && input.responseMaxBytes > 0 ? input.responseMaxBytes : 2 * 1024 * 1024,
       input.dataClass ?? null, input.modality ?? null
     ]);
-    if (result.rows[0]) return result.rows[0];
+    if (result.rows[0]) {
+      result.rows[0].replayed = false;
+      return result.rows[0];
+    }
     const existing = await this.pool.query(`
       SELECT * FROM visualization_provider_invocations
        WHERE reservation_id = $1 AND idempotency_key = $2
@@ -1096,34 +1147,24 @@ export class PostgresVisualizationRepository {
       row.route_id !== routeIdentifier || Number(row.route_revision) !== input.routeRevision) {
       throw new VisualizationRepositoryError("idempotency_key_reused", 409);
     }
+    row.replayed = true;
     return row;
   }
 
   async completeProviderInvocation(input) {
-    const invocationId = required(input, "invocationId");
-    const state = input.state;
-    if (!["succeeded", "failed", "cancelled", "timed_out"].includes(state)) throw new VisualizationRepositoryError("visualization_invocation_state_invalid");
-    const responseHash = input.responseHash === undefined ? null : input.responseHash;
-    if (responseHash !== null && (typeof responseHash !== "string" || !/^[a-f0-9]{64}$/.test(responseHash))) throw new VisualizationRepositoryError("visualization_invocation_hash_invalid");
-    const providerRequestId = input.providerRequestId === undefined ? null : required(input, "providerRequestId");
-    if (input.providerUnits !== undefined && (!Number.isSafeInteger(input.providerUnits) || input.providerUnits < 0)) {
-      throw new VisualizationRepositoryError("visualization_provider_cost_units_invalid");
+    return (await completeProviderInvocationRow(this.pool, input)).row;
+  }
+
+  async finalizeProviderInvocation(input) {
+    const completion = providerInvocationCompletion(input);
+    if (input.cost?.invocationId !== undefined && input.cost.invocationId !== completion.invocationId) {
+      throw new VisualizationRepositoryError("visualization_invocation_identity_invalid");
     }
-    const result = await this.pool.query(`
-      UPDATE visualization_provider_invocations
-         SET state = $2, completed_at = COALESCE(completed_at, now()),
-             provider_request_id = COALESCE($3, provider_request_id),
-             response_hash = COALESCE(response_hash, $4), error_code = COALESCE(error_code, $5),
-             provider_units = COALESCE($6, provider_units)
-       WHERE invocation_id = $1 AND state = 'started'
-       RETURNING *
-    `, [invocationId, state, providerRequestId, responseHash, input.errorCode ?? null, input.providerUnits ?? null]);
-    if (result.rows[0]) return result.rows[0];
-    const existing = await this.pool.query(
-      "SELECT * FROM visualization_provider_invocations WHERE invocation_id = $1",
-      [invocationId]
-    );
-    return existing.rows[0] ?? null;
+    return withPostgresTransaction(this.pool, async (client) => {
+      const finalized = await completeProviderInvocationRow(client, completion);
+      if (finalized.completed && input.cost) await insertProviderCost(client, input.cost);
+      return finalized.row;
+    });
   }
 
   async recordProviderInvocation(input) {

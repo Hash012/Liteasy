@@ -128,6 +128,11 @@ function transactionHarness() {
       if (normalized.startsWith("UPDATE visualization_provider_invocations")) {
         const row = state.invocations.get(values[0]);
         if (!row || row.state !== "started") return { rows: [] };
+        if (values[2] && [...state.invocations.values()].some((item) => (
+          item.invocation_id !== row.invocation_id && item.provider_request_id === values[2]
+        ))) {
+          throw new Error("visualization_provider_request_id_conflict");
+        }
         row.state = values[1];
         row.provider_request_id = values[2] ?? row.provider_request_id;
         row.response_hash = values[3] ?? row.response_hash;
@@ -276,6 +281,47 @@ test("provider invocation completion reconciles the provider request ID exactly 
   assert.equal(replayed.provider_request_id, "provider-request-9");
   assert.equal(replayed.state, "succeeded");
   assert.equal(harness.state.invocations.size, 1);
+});
+
+test("provider request collisions roll back reconciliation before any cost row is inserted", async () => {
+  const harness = transactionHarness();
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  await repository.startProviderInvocation({
+    dataClass: "paper",
+    idempotencyKey: "generation-0011",
+    invocationId: "durable-invocation-11",
+    modality: "semantic_graph",
+    operation: "structured_generation",
+    reservationId: "reservation-11",
+    routeId: "route-1",
+    routeRevision: 1,
+    subjectId: "user-1"
+  });
+  harness.state.invocations.set("other-invocation", {
+    invocation_id: "other-invocation",
+    provider_request_id: "provider-request-duplicate",
+    state: "succeeded"
+  });
+
+  await assert.rejects(repository.finalizeProviderInvocation({
+    cost: {
+      amount: 0.02,
+      currency: "USD",
+      metadata: { outcome: "succeeded", traceId: "trace-11" },
+      providerId: "provider-1",
+      providerRequestId: "provider-request-duplicate",
+      reasonCode: "provider_succeeded",
+      routeId: "route-1",
+      units: 2
+    },
+    invocationId: "durable-invocation-11",
+    providerRequestId: "provider-request-duplicate",
+    providerUnits: 2,
+    responseHash: "b".repeat(64),
+    state: "succeeded"
+  }), /visualization_provider_request_id_conflict/);
+  assert.equal(harness.state.costs.length, 0);
+  assert.equal(harness.state.invocations.get("durable-invocation-11").state, "started");
 });
 
 const providerRow = {

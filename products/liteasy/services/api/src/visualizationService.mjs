@@ -222,6 +222,7 @@ export class VisualizationService {
     let providerCost;
     let providerRequestId;
     let providerRequestIdObserved = false;
+    let finalizationAttempted = false;
     let route;
     try {
       route = await this.repository.getProviderRoute(reserved.reservation.routeId);
@@ -250,6 +251,9 @@ export class VisualizationService {
           subjectId,
         });
         invocationId = invocation?.invocation_id ?? invocation?.invocationId ?? invocationId;
+        if (invocation?.replayed === true || (invocation?.state && invocation.state !== "started")) {
+          throw new VisualizationServiceError("visualization_invocation_replayed", 409);
+        }
         invocationStarted = true;
       }
       providerInput.invocationId = invocationId;
@@ -260,14 +264,24 @@ export class VisualizationService {
       providerRequestIdObserved = providerCost?.providerRequestId !== undefined;
       providerRequestId = providerCost?.providerRequestId ?? providerRequestId;
       if (providerCost) {
-        await this.#recordProviderCost(providerCost, route, "succeeded", context.traceId, {
-          invocationId,
-          providerRequestId
-        });
-        costRecorded = true;
+        const cost = this.#providerCostRecord(providerCost, route, "succeeded", context.traceId, { invocationId, providerRequestId });
+        if (invocationStarted && typeof this.repository.finalizeProviderInvocation === "function") {
+          finalizationAttempted = true;
+          await this.repository.finalizeProviderInvocation({
+            cost,
+            invocationId,
+            ...(providerRequestIdObserved ? { providerRequestId, providerUnits: providerCost.units } : {}),
+            responseHash: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+            state: "succeeded"
+          });
+          costRecorded = true;
+        } else {
+          await this.repository.recordProviderCost(cost);
+          costRecorded = true;
+        }
       }
       throwIfAborted(context.signal);
-      if (invocationStarted && typeof this.repository.completeProviderInvocation === "function") {
+      if (invocationStarted && !finalizationAttempted && typeof this.repository.completeProviderInvocation === "function") {
         await this.repository.completeProviderInvocation({
           invocationId,
           ...(providerRequestIdObserved ? {
@@ -294,18 +308,31 @@ export class VisualizationService {
       const failedCost = providerCost ?? error?.cost;
       providerRequestIdObserved = failedCost?.providerRequestId !== undefined;
       providerRequestId = failedCost?.providerRequestId ?? providerRequestId;
-      if (!costRecorded && failedCost && route) {
+      if (!finalizationAttempted && invocationStarted && typeof this.repository.finalizeProviderInvocation === "function") {
         try {
-          await this.#recordProviderCost(failedCost, route, "failed", context.traceId, {
+          finalizationAttempted = true;
+          await this.repository.finalizeProviderInvocation({
+            ...(failedCost && route ? {
+              cost: this.#providerCostRecord(failedCost, route, "failed", context.traceId, { invocationId, providerRequestId })
+            } : {}),
+            errorCode: typeof (error?.code ?? error?.message) === "string" ? (error.code ?? error.message).slice(0, 120) : "provider_failed",
             invocationId,
-            providerRequestId
+            ...(providerRequestIdObserved ? { providerRequestId, providerUnits: failedCost?.units ?? 0 } : {}),
+            state: error?.code === "visualization_request_aborted" ? "cancelled" : error?.code === "visualization_provider_timeout" ? "timed_out" : "failed"
           });
+          costRecorded = Boolean(failedCost);
+        } catch (recordError) {
+          accountingError = recordError;
+        }
+      } else if (!finalizationAttempted && !costRecorded && failedCost && route) {
+        try {
+          await this.#recordProviderCost(failedCost, route, "failed", context.traceId, { invocationId, providerRequestId });
           costRecorded = true;
         } catch (recordError) {
           accountingError = recordError;
         }
       }
-      if (invocationStarted && typeof this.repository.completeProviderInvocation === "function") {
+      if (invocationStarted && !finalizationAttempted && typeof this.repository.completeProviderInvocation === "function") {
         const code = error?.code ?? error?.message;
         await this.repository.completeProviderInvocation({
           errorCode: typeof code === "string" ? code.slice(0, 120) : "provider_failed",
@@ -358,8 +385,8 @@ export class VisualizationService {
     }
   }
 
-  async #recordProviderCost(cost, route, outcome, traceId, identifiers = {}) {
-    await this.repository.recordProviderCost({
+  #providerCostRecord(cost, route, outcome, traceId, identifiers = {}) {
+    return {
       amount: cost.amount,
       currency: cost.currency,
       invocationId: identifiers.invocationId,
@@ -369,7 +396,11 @@ export class VisualizationService {
       reasonCode: `provider_${outcome}`,
       routeId: route.routeId,
       units: cost.units
-    });
+    };
+  }
+
+  async #recordProviderCost(cost, route, outcome, traceId, identifiers = {}) {
+    await this.repository.recordProviderCost(this.#providerCostRecord(cost, route, outcome, traceId, identifiers));
   }
 
   async listProviderRoutes(principal, input = {}) {
