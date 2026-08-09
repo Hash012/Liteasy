@@ -1,3 +1,19 @@
+import type {
+  LiteratureCandidate,
+  LiteratureConfirmInput,
+  LiteratureRecord,
+  LiteratureResolveInput,
+  UpdateReplyPublicationInput
+} from "@intuecho/contracts";
+
+export type {
+  LiteratureCandidate,
+  LiteratureConfirmInput,
+  LiteratureRecord,
+  LiteratureResolveInput,
+  UpdateReplyPublicationInput
+} from "@intuecho/contracts";
+
 export type PaperIdentity = {
   id: string;
   kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "title_authors_year_hash";
@@ -123,6 +139,13 @@ export type CreateReplyInput = {
   tags: string[];
   targets: AnnotationTarget[];
 };
+
+export type ReplyPublicationInput = UpdateReplyPublicationInput;
+
+export type LiteratureResolveResult =
+  | { status: "exact"; candidate: LiteratureCandidate; unavailableProviders?: string[] }
+  | { status: "ambiguous"; candidates: LiteratureCandidate[]; unavailableProviders?: string[] }
+  | { status: "not_found"; candidates: []; unavailableProviders?: string[] };
 
 export type PlazaFilters = {
   documentType?: string;

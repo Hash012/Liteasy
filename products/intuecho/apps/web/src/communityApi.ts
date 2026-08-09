@@ -15,6 +15,13 @@ import type {
   OrganizationAnnotationGroup,
   PlazaFilters
 } from "./community.types";
+import type {
+  LiteratureRecord,
+  LiteratureResolveInput,
+  LiteratureResolveResult,
+  LiteratureConfirmInput,
+  ReplyPublicationInput
+} from "./community.types";
 
 async function request<T>(path: string, init?: RequestInit, authenticated = false): Promise<T> {
   const session = await resolveIdentitySession();
@@ -53,6 +60,10 @@ export const communityApi = {
   replies: (id: string) => request<{ replies: CommunityReply[] }>(`/v1/annotations/${encodeURIComponent(id)}/replies`),
   createReply: (id: string, body: CreateReplyInput) => request<{ annotation: CommunityAnnotation | null; reply: CommunityReply }>(`/v1/annotations/${encodeURIComponent(id)}/replies`, { method: "POST", body: JSON.stringify(body) }, true),
   updateReply: (id: string, body: { body: string }) => request<{ reply: CommunityReply }>(`/v1/replies/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }, true),
+  resolveLiterature: (body: LiteratureResolveInput) => request<LiteratureResolveResult>("/v1/literature:resolve", { method: "POST", body: JSON.stringify(body) }, true),
+  confirmLiterature: (body: LiteratureConfirmInput) => request<{ literature: LiteratureRecord }>("/v1/literature:confirm", { method: "POST", body: JSON.stringify(body) }, true),
+  updateReplyPublication: (id: string, body: ReplyPublicationInput) => request(`/v1/replies/${encodeURIComponent(id)}/publication`, { method: "PUT", body: JSON.stringify(body) }, true),
+  deleteReply: (id: string) => request<{ ok: true; replyId: string }>(`/v1/replies/${encodeURIComponent(id)}`, { method: "DELETE" }, true),
   academicProfile: () => request<{ profile: AcademicProfile }>("/v1/me/academic-profile", undefined, true),
   updateAcademicProfile: (body: Omit<AcademicProfile, "revision">) => request<{ profile: AcademicProfile }>("/v1/me/academic-profile", { method: "PUT", body: JSON.stringify(body) }, true),
   followUser: (targetUserId: string) => request<{ following: boolean; mutual: boolean }>("/v1/follows", { method: "POST", body: JSON.stringify({ targetUserId }) }, true),

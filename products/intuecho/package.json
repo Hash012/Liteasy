@@ -5,7 +5,7 @@
   "workspaces": ["apps/*", "services/*", "packages/*"],
   "scripts": {
     "build": "npm run build --workspace=@intuecho/web && npm run check --workspace=@intuecho/api",
-    "test": "npm run test --workspace=@intuecho/contracts && npm run test --workspace=@intuecho/api",
+    "test": "npm run test --workspace=@intuecho/contracts && npm run test --workspace=@intuecho/api && npm run test --workspace=@intuecho/web",
     "dev:web": "npm run dev --workspace=@intuecho/web",
     "dev:api": "npm run dev --workspace=@intuecho/api"
   }
