@@ -171,6 +171,45 @@ test("preserves validated provider cost metadata for the service ledger", async 
   });
 });
 
+test("normalizes error cost metadata with the durable invocation ID", async () => {
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured() {
+        throw Object.assign(new Error("provider cancelled after billing"), {
+          cost: {
+            amount: 0.02,
+            currency: "USD",
+            invocationId: "provider-owned-id",
+            providerRequestId: "provider-request-9",
+            units: 2,
+            untrusted: "discarded"
+          }
+        });
+      }
+    },
+    dnsLookup: async () => [publicAddress],
+    egressPolicy: { allowedHostnames: ["provider.example"] },
+    secretStore: secretStore()
+  });
+
+  await assert.rejects(
+    gateway.generateStructured({
+      dataClass: "paper",
+      invocationId: "durable-invocation-9",
+      modality: "semantic_graph",
+      route
+    }),
+    (error) => error.code === "visualization_provider_unavailable" &&
+      JSON.stringify(error.cost) === JSON.stringify({
+        amount: 0.02,
+        currency: "USD",
+        invocationId: "durable-invocation-9",
+        providerRequestId: "provider-request-9",
+        units: 2
+      })
+  );
+});
+
 test("adapter response limit may lower but cannot raise the operation hard cap", async () => {
   let maximumBytes;
   const gateway = new VisualizationProviderGateway({

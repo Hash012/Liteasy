@@ -221,6 +221,7 @@ export class VisualizationService {
     let invocationStarted = false;
     let providerCost;
     let providerRequestId;
+    let providerRequestIdObserved = false;
     let route;
     try {
       route = await this.repository.getProviderRoute(reserved.reservation.routeId);
@@ -234,7 +235,7 @@ export class VisualizationService {
         route,
         signal: context.signal
       };
-      providerRequestId = providerRequest.providerRequestId ?? providerRequest.idempotencyKey ?? reserved.reservation.idempotencyKey;
+      providerRequestId = providerRequest.providerRequestId;
       if (typeof this.repository.startProviderInvocation === "function") {
         const invocation = await this.repository.startProviderInvocation({
           dataClass,
@@ -242,7 +243,6 @@ export class VisualizationService {
           invocationId,
           modality: reserved.reservation.modality,
           operation,
-          providerRequestId,
           reservationId,
           responseMaxBytes: operation === "image_generation" ? 16 * 1024 * 1024 : operation === "validation" ? 256 * 1024 : 2 * 1024 * 1024,
           routeId: route.routeId,
@@ -257,6 +257,8 @@ export class VisualizationService {
         ? await this.gateway.generateImage(providerInput)
         : await this.gateway.generateStructured(providerInput);
       providerCost = result?.cost;
+      providerRequestIdObserved = providerCost?.providerRequestId !== undefined;
+      providerRequestId = providerCost?.providerRequestId ?? providerRequestId;
       if (providerCost) {
         await this.#recordProviderCost(providerCost, route, "succeeded", context.traceId, {
           invocationId,
@@ -268,7 +270,10 @@ export class VisualizationService {
       if (invocationStarted && typeof this.repository.completeProviderInvocation === "function") {
         await this.repository.completeProviderInvocation({
           invocationId,
-          providerUnits: result?.cost?.units ?? 0,
+          ...(providerRequestIdObserved ? {
+            providerRequestId,
+            providerUnits: result?.cost?.units ?? 0
+          } : {}),
           responseHash: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
           state: "succeeded"
         });
@@ -287,6 +292,8 @@ export class VisualizationService {
     } catch (error) {
       let accountingError;
       const failedCost = providerCost ?? error?.cost;
+      providerRequestIdObserved = failedCost?.providerRequestId !== undefined;
+      providerRequestId = failedCost?.providerRequestId ?? providerRequestId;
       if (!costRecorded && failedCost && route) {
         try {
           await this.#recordProviderCost(failedCost, route, "failed", context.traceId, {
@@ -303,6 +310,10 @@ export class VisualizationService {
         await this.repository.completeProviderInvocation({
           errorCode: typeof code === "string" ? code.slice(0, 120) : "provider_failed",
           invocationId,
+          ...(providerRequestIdObserved ? {
+            providerRequestId,
+            providerUnits: failedCost?.units ?? 0
+          } : {}),
           state: code === "visualization_request_aborted" ? "cancelled" : code === "visualization_provider_timeout" ? "timed_out" : "failed"
         }).catch(() => {});
       }
@@ -351,7 +362,7 @@ export class VisualizationService {
     await this.repository.recordProviderCost({
       amount: cost.amount,
       currency: cost.currency,
-      invocationId: identifiers.invocationId ?? cost.invocationId,
+      invocationId: identifiers.invocationId,
       metadata: { outcome, traceId },
       providerId: route.providerId,
       providerRequestId: identifiers.providerRequestId ?? cost.providerRequestId,

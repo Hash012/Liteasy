@@ -337,6 +337,12 @@ function normalizedCost(cost, invocationId) {
   });
 }
 
+function responseLimit(operationCap, requestedLimit) {
+  return Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(operationCap, requestedLimit)
+    : operationCap;
+}
+
 export class VisualizationProviderGateway {
   constructor({ adapter, adapters = {}, circuitBreaker = new VisualizationCircuitBreaker(), clearTimeoutImpl = clearTimeout, dnsLookup = systemDnsLookup, egressPolicy = {}, fetchImpl = pinnedHttpsFetch, secretStore = new EnvironmentVisualizationSecretStore(), setTimeoutImpl = setTimeout } = {}) {
     if ((!adapter || typeof adapter !== "object") && (!adapters || typeof adapters !== "object")) throw new Error("visualization_provider_adapter_invalid");
@@ -470,12 +476,12 @@ export class VisualizationProviderGateway {
   }
 
   #providerError(error, signal, invocationId) {
-    if (error instanceof VisualizationProviderError) return error;
-    const normalizedError = signal?.aborted
-      ? new VisualizationProviderError("visualization_request_aborted")
-      : error?.name === "AbortError" || error?.name === "TimeoutError"
-        ? new VisualizationProviderError("visualization_provider_timeout")
-        : new VisualizationProviderError("visualization_provider_unavailable");
+    const normalizedError = error instanceof VisualizationProviderError ? error
+      : signal?.aborted
+        ? new VisualizationProviderError("visualization_request_aborted")
+        : error?.name === "AbortError" || error?.name === "TimeoutError"
+          ? new VisualizationProviderError("visualization_provider_timeout")
+          : new VisualizationProviderError("visualization_provider_unavailable");
     if (error?.cost !== undefined) normalizedError.cost = normalizedCost(error.cost, invocationId);
     return normalizedError;
   }
@@ -498,9 +504,7 @@ export class VisualizationProviderGateway {
         ...init,
         headers: { ...Object.fromEntries(callerHeaders), Authorization: `Bearer ${credential}` },
         signal
-      }, Number.isSafeInteger(init.responseMaxBytes)
-        ? Math.min(init.responseMaxBytes, responseMaxBytes)
-        : responseMaxBytes);
+      }, responseLimit(responseMaxBytes, init.responseMaxBytes));
     };
   }
 

@@ -528,3 +528,94 @@ test("generation records available provider cost metadata outside user usage", a
     units: 2
   });
 });
+
+test("provider cost remains linked to the durable invocation on success and cancellation", async () => {
+  const subject = { subjectId: "user-1" };
+  const invocations = [];
+  const costRows = [];
+  const completions = [];
+  let cancelled = false;
+  const repository = {
+    async getProviderRoute(routeId) {
+      return {
+        dataClasses: ["paper"],
+        enabled: true,
+        modalities: ["semantic_graph"],
+        operations: ["structured_generation"],
+        providerId: "provider-1",
+        revision: 7,
+        routeId
+      };
+    },
+    async recordProviderCost(row) { costRows.push(row); },
+    async reserve() {
+      return { reservation: {
+        idempotencyKey: `generation-${invocations.length + 1}`,
+        modality: "semantic_graph",
+        reservationId: `reservation-${invocations.length + 1}`,
+        routeId: "route-1",
+        routeRevision: 7
+      } };
+    },
+    async rollback() {},
+    async startProviderInvocation(invocation) {
+      invocations.push(invocation);
+      return { invocationId: invocation.invocationId };
+    },
+    async completeProviderInvocation(completion) { completions.push(completion); }
+  };
+  const controller = new AbortController();
+  let activeController = controller;
+  const service = new VisualizationService({
+    authorizeDocument: async () => ({ allowed: true }),
+    gateway: {
+      async generateStructured({ signal }) {
+        const cost = {
+          amount: 0.02,
+          currency: "USD",
+          providerRequestId: "provider-request-9",
+          units: 2
+        };
+        if (cancelled) {
+          activeController.abort();
+          throw Object.assign(new Error("visualization_request_aborted"), {
+            code: "visualization_request_aborted",
+            cost
+          });
+        }
+        assert.equal(signal, controller.signal);
+        return { cost, text: "{\"artifact\":true}" };
+      }
+    },
+    repository,
+    validateArtifact: async () => ({ outcome: "pass" })
+  });
+  const input = {
+    providerRequest: { dataClass: "paper", modality: "semantic_graph" },
+    reservation: {
+      idempotencyKey: "generation-0009",
+      modality: "semantic_graph",
+      routeId: "route-1",
+      traceId: "trace-9",
+      units: 4
+    }
+  };
+
+  await service.generate(subject, input, { signal: controller.signal, traceId: "trace-9" });
+  assert.equal(costRows[0].invocationId, invocations[0].invocationId);
+  assert.equal(costRows[0].providerRequestId, "provider-request-9");
+  assert.equal(completions[0].providerRequestId, "provider-request-9");
+
+  const cancelledController = new AbortController();
+  cancelled = true;
+  activeController = cancelledController;
+  await assert.rejects(
+    service.generate(subject, input, { signal: cancelledController.signal, traceId: "trace-10" }),
+    /visualization_request_aborted/
+  );
+  assert.equal(costRows.at(-1).invocationId, invocations.at(-1).invocationId);
+  assert.equal(costRows.at(-1).providerRequestId, "provider-request-9");
+  assert.equal(completions.at(-1).invocationId, invocations.at(-1).invocationId);
+  assert.equal(completions.at(-1).providerRequestId, "provider-request-9");
+  assert.equal(completions.at(-1).state, "cancelled");
+});

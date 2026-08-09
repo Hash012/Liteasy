@@ -1047,7 +1047,7 @@ export class PostgresVisualizationRepository {
   }
 
   async recordProviderCost(input) {
-    required(input, "invocationId");
+    const invocationId = required(input, "invocationId");
     const routeId = required(input, "routeId");
     const providerId = required(input, "providerId");
     const providerRequestId = required(input, "providerRequestId");
@@ -1056,7 +1056,7 @@ export class PostgresVisualizationRepository {
     if (typeof input.currency !== "string" || !/^[A-Z]{3}$/.test(input.currency)) throw new Error("visualization_provider_cost_currency_invalid");
     if (!Number.isInteger(input.units) || input.units < 0) throw new Error("visualization_provider_cost_units_invalid");
     if (input.metadata !== undefined && (!input.metadata || typeof input.metadata !== "object" || Array.isArray(input.metadata))) throw new Error("visualization_provider_cost_metadata_invalid");
-    const result = await this.pool.query("INSERT INTO visualization_provider_cost_ledger(cost_event_id, invocation_id, route_id, provider_id, provider_request_id, amount, currency, units, reason_code, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) ON CONFLICT (invocation_id, provider_request_id) DO NOTHING RETURNING *", [`vcost_${randomUUID()}`, input.invocationId, routeId, providerId, providerRequestId, input.amount, input.currency, input.units, code, json(input.metadata ?? {})]);
+    const result = await this.pool.query("INSERT INTO visualization_provider_cost_ledger(cost_event_id, invocation_id, route_id, provider_id, provider_request_id, amount, currency, units, reason_code, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) ON CONFLICT (invocation_id, provider_request_id) DO NOTHING RETURNING *", [`vcost_${randomUUID()}`, invocationId, routeId, providerId, providerRequestId, input.amount, input.currency, input.units, code, json(input.metadata ?? {})]);
     return result.rows[0];
   }
 
@@ -1065,7 +1065,7 @@ export class PostgresVisualizationRepository {
     const reservationId = required(input, "reservationId");
     const subject = subjectId(input.subjectId);
     const routeIdentifier = routeId(input.routeId);
-    const providerRequestId = required(input, "providerRequestId");
+    const providerRequestId = input.providerRequestId === undefined ? invocationId : required(input, "providerRequestId");
     const idempotencyKey = operationKey(input.idempotencyKey);
     if (!Number.isSafeInteger(input.routeRevision) || input.routeRevision < 1) throw new VisualizationRepositoryError("visualization_route_revision_invalid");
     if (!["structured_generation", "image_generation", "validation"].includes(input.operation)) throw new VisualizationRepositoryError("visualization_operation_invalid");
@@ -1086,16 +1086,14 @@ export class PostgresVisualizationRepository {
     if (result.rows[0]) return result.rows[0];
     const existing = await this.pool.query(`
       SELECT * FROM visualization_provider_invocations
-       WHERE (reservation_id = $1 AND idempotency_key = $2)
-          OR (route_id = $3 AND provider_request_id = $4)
+       WHERE reservation_id = $1 AND idempotency_key = $2
        ORDER BY started_at DESC
        LIMIT 1
-    `, [reservationId, idempotencyKey, routeIdentifier, providerRequestId]);
+    `, [reservationId, idempotencyKey]);
     const row = existing.rows[0];
     if (!row) return null;
     if (row.reservation_id !== reservationId || row.idempotency_key !== idempotencyKey ||
-      row.route_id !== routeIdentifier || Number(row.route_revision) !== input.routeRevision ||
-      row.provider_request_id !== providerRequestId) {
+      row.route_id !== routeIdentifier || Number(row.route_revision) !== input.routeRevision) {
       throw new VisualizationRepositoryError("idempotency_key_reused", 409);
     }
     return row;
@@ -1107,15 +1105,25 @@ export class PostgresVisualizationRepository {
     if (!["succeeded", "failed", "cancelled", "timed_out"].includes(state)) throw new VisualizationRepositoryError("visualization_invocation_state_invalid");
     const responseHash = input.responseHash === undefined ? null : input.responseHash;
     if (responseHash !== null && (typeof responseHash !== "string" || !/^[a-f0-9]{64}$/.test(responseHash))) throw new VisualizationRepositoryError("visualization_invocation_hash_invalid");
+    const providerRequestId = input.providerRequestId === undefined ? null : required(input, "providerRequestId");
+    if (input.providerUnits !== undefined && (!Number.isSafeInteger(input.providerUnits) || input.providerUnits < 0)) {
+      throw new VisualizationRepositoryError("visualization_provider_cost_units_invalid");
+    }
     const result = await this.pool.query(`
       UPDATE visualization_provider_invocations
          SET state = $2, completed_at = COALESCE(completed_at, now()),
-             response_hash = COALESCE(response_hash, $3), error_code = COALESCE(error_code, $4),
-             provider_units = COALESCE($5, provider_units)
-       WHERE invocation_id = $1
+             provider_request_id = COALESCE($3, provider_request_id),
+             response_hash = COALESCE(response_hash, $4), error_code = COALESCE(error_code, $5),
+             provider_units = COALESCE($6, provider_units)
+       WHERE invocation_id = $1 AND state = 'started'
        RETURNING *
-    `, [invocationId, state, responseHash, input.errorCode ?? null, input.providerUnits ?? null]);
-    return result.rows[0] ?? null;
+    `, [invocationId, state, providerRequestId, responseHash, input.errorCode ?? null, input.providerUnits ?? null]);
+    if (result.rows[0]) return result.rows[0];
+    const existing = await this.pool.query(
+      "SELECT * FROM visualization_provider_invocations WHERE invocation_id = $1",
+      [invocationId]
+    );
+    return existing.rows[0] ?? null;
   }
 
   async recordProviderInvocation(input) {

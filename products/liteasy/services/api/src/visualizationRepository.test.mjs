@@ -12,6 +12,7 @@ function transactionHarness() {
     idempotency: new Map(),
     usage: [],
     costs: [],
+    invocations: new Map(),
     artifacts: [],
     routeAvailable: undefined,
     routeOperations: undefined,
@@ -103,6 +104,37 @@ function transactionHarness() {
       if (normalized.startsWith("INSERT INTO visualization_provider_cost_ledger")) {
         state.costs.push(values);
         return { rows: [] };
+      }
+      if (normalized.startsWith("INSERT INTO visualization_provider_invocations")) {
+        const row = {
+          completed_at: null,
+          error_code: null,
+          invocation_id: values[0],
+          provider_request_id: values[6] ?? null,
+          provider_units: 0,
+          reservation_id: values[1],
+          response_hash: null,
+          state: "started"
+        };
+        state.invocations.set(row.invocation_id, row);
+        return { rows: [row] };
+      }
+      if (normalized.startsWith("SELECT * FROM visualization_provider_invocations")) {
+        const row = state.invocations.get(values[0]) ?? [...state.invocations.values()].find((item) => (
+          item.reservation_id === values[0] || item.provider_request_id === values[3]
+        ));
+        return { rows: row ? [row] : [] };
+      }
+      if (normalized.startsWith("UPDATE visualization_provider_invocations")) {
+        const row = state.invocations.get(values[0]);
+        if (!row || row.state !== "started") return { rows: [] };
+        row.state = values[1];
+        row.provider_request_id = values[2] ?? row.provider_request_id;
+        row.response_hash = values[3] ?? row.response_hash;
+        row.error_code = values[4] ?? row.error_code;
+        row.provider_units = values[5] ?? row.provider_units;
+        row.completed_at = new Date();
+        return { rows: [row] };
       }
       if (normalized.startsWith("SELECT * FROM visualization_artifacts")) return { rows: state.artifacts };
       if (normalized.startsWith("INSERT INTO visualization_artifacts")) return { rows: [] };
@@ -211,6 +243,39 @@ test("rejects incomplete settlement and provider cost records", async () => {
   await assert.rejects(() => repository.settle(subject, { reservationId: "reservation-1", reasonCode: "x" }), /visualization_reservation_not_found/);
   await assert.rejects(() => repository.recordProviderCost({ invocationId: "invoke-1", routeId: "route-1", providerId: "provider-1", providerRequestId: "provider-request-1", amount: -1, currency: "USD", units: 1, reasonCode: "x" }), /visualization_provider_cost_amount_invalid/);
   await assert.rejects(() => repository.recordProviderCost({ invocationId: "invoke-1", routeId: "route-1", providerId: "provider-1", providerRequestId: "provider-request-1", amount: 1, currency: "usd", units: 1, reasonCode: "x" }), /visualization_provider_cost_currency_invalid/);
+});
+
+test("provider invocation completion reconciles the provider request ID exactly once", async () => {
+  const harness = transactionHarness();
+  const repository = new PostgresVisualizationRepository(harness.pool);
+  const started = await repository.startProviderInvocation({
+    dataClass: "paper",
+    idempotencyKey: "generation-0010",
+    invocationId: "durable-invocation-10",
+    modality: "semantic_graph",
+    operation: "structured_generation",
+    reservationId: "reservation-10",
+    routeId: "route-1",
+    routeRevision: 1,
+    subjectId: "user-1"
+  });
+  assert.equal(started.invocation_id, "durable-invocation-10");
+  assert.equal(started.provider_request_id, "durable-invocation-10");
+
+  const completion = {
+    invocationId: "durable-invocation-10",
+    providerRequestId: "provider-request-9",
+    providerUnits: 2,
+    responseHash: "a".repeat(64),
+    state: "succeeded"
+  };
+  const completed = await repository.completeProviderInvocation(completion);
+  const replayed = await repository.completeProviderInvocation(completion);
+  assert.equal(completed.provider_request_id, "provider-request-9");
+  assert.equal(completed.state, "succeeded");
+  assert.equal(replayed.provider_request_id, "provider-request-9");
+  assert.equal(replayed.state, "succeeded");
+  assert.equal(harness.state.invocations.size, 1);
 });
 
 const providerRow = {
