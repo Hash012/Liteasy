@@ -88,6 +88,11 @@ export function VisualizationGovernanceView({ api, principal }: {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ intent: "error" | "success"; message: string } | null>(null);
+  const [usageSubjectFilter, setUsageSubjectFilter] = useState("");
+  const [auditSubjectFilter, setAuditSubjectFilter] = useState("");
+  const [auditActionFilter, setAuditActionFilter] = useState("");
+  const [auditFromFilter, setAuditFromFilter] = useState("");
+  const [auditToFilter, setAuditToFilter] = useState("");
 
   const authorized = Boolean(principal?.roles.includes("platform_admin"));
 
@@ -99,8 +104,14 @@ export function VisualizationGovernanceView({ api, principal }: {
       const [routeResult, policyResult, usageResult, auditResult] = await Promise.all([
         api.listVisualizationProviderRoutes(),
         api.listVisualizationQuotaPolicies({ limit: 100 }),
-        api.listVisualizationUsage({ limit: 50 }),
-        api.listVisualizationAudit({ limit: 50 })
+        api.listVisualizationUsage({ limit: 50, ...(usageSubjectFilter.trim() ? { subjectId: usageSubjectFilter.trim() } : {}) }),
+        api.listVisualizationAudit({
+          limit: 50,
+          ...(auditActionFilter.trim() ? { action: auditActionFilter.trim() } : {}),
+          ...(auditFromFilter ? { from: auditFromFilter } : {}),
+          ...(auditSubjectFilter.trim() ? { subjectId: auditSubjectFilter.trim() } : {}),
+          ...(auditToFilter ? { to: auditToFilter } : {})
+        })
       ]);
       setRoutes(routeResult.routes);
       setPolicies(policyResult.policies);
@@ -114,6 +125,41 @@ export function VisualizationGovernanceView({ api, principal }: {
   }
 
   useEffect(() => { void load(); }, [authorized, api]);
+
+  async function toggleRoute(route: VisualizationProviderRoute, enabled: boolean) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await api.saveVisualizationProviderRoute({
+        expectedRevision: route.revision,
+        reason: "管理员控制面板更新路由状态",
+        route: { ...route, enabled }
+      });
+      setRoutes((current) => current.map((item) => item.routeId === result.route.routeId ? result.route : item));
+      setNotice({ intent: "success", message: "Provider 路由状态已保存。" });
+    } catch (error) {
+      setNotice({ intent: "error", message: errorMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testRoute(route: VisualizationProviderRoute) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await api.testVisualizationProviderRoute({
+        expectedRevision: route.revision,
+        providerRequest: { routes: [route], modality: route.modalities[0] ?? "semantic_graph", dataClass: route.dataClasses[0] ?? "paper" },
+        reason: "管理员路由连通性测试"
+      });
+      setNotice({ intent: "success", message: "Provider 路由测试完成。" });
+    } catch (error) {
+      setNotice({ intent: "error", message: errorMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function queryEntitlement(event: FormEvent) {
     event.preventDefault();
@@ -227,20 +273,21 @@ export function VisualizationGovernanceView({ api, principal }: {
             <TableHeaderCell>路由</TableHeaderCell><TableHeaderCell>Provider</TableHeaderCell><TableHeaderCell>状态</TableHeaderCell><TableHeaderCell>修订</TableHeaderCell><TableHeaderCell>操作</TableHeaderCell>
           </TableRow></TableHeader><TableBody>
             {routes.map((route) => <TableRow key={route.routeId}>
-              <TableCell>{route.routeId}<br /><small>{route.region}</small></TableCell><TableCell>{route.providerId}<br /><small>{route.model}</small></TableCell>
-              <TableCell><Switch checked={route.enabled} label={route.enabled ? "启用" : "停用"} onChange={() => setRoutes((current) => current.map((item) => item.routeId === route.routeId ? { ...item, enabled: !item.enabled } : item))} /></TableCell>
-              <TableCell>{route.revision}</TableCell><TableCell><div className="admin-row-actions"><Button appearance="subtle" onClick={() => setRouteDraft(route)}>编辑</Button><Tooltip content="测试 Provider 路由" relationship="label"><Button aria-label={`测试 ${route.routeId}`} icon={<SendRegular />} onClick={() => void api.testVisualizationProviderRoute({ expectedRevision: route.revision, providerRequest: { routes: [route], modality: route.modalities[0] ?? "semantic_graph", dataClass: route.dataClasses[0] ?? "paper" }, reason: "管理员路由连通性测试" })} /></Tooltip></div></TableCell>
+              <TableCell>{route.routeId}<br /><small>{route.region}</small></TableCell><TableCell>{route.providerId}</TableCell>
+              <TableCell><Switch checked={route.enabled} disabled={busy} label={route.enabled ? "启用" : "停用"} onChange={(_, data) => void toggleRoute(route, data.checked)} /></TableCell>
+              <TableCell>{route.revision}</TableCell><TableCell><div className="admin-row-actions"><Button appearance="subtle" disabled={busy} onClick={() => setRouteDraft(route)}>编辑</Button><Tooltip content="测试 Provider 路由" relationship="label"><Button aria-label={`测试 ${route.routeId}`} disabled={busy} icon={<SendRegular />} onClick={() => void testRoute(route)} /></Tooltip></div></TableCell>
             </TableRow>)}
           </TableBody></Table></div>
           <Button appearance="secondary" onClick={() => setRouteDraft(emptyRoute())}>新增路由</Button>
-          {routeDraft ? <form className="admin-form admin-form-horizontal visualization-editor" onSubmit={saveRoute}>
-            <Field label="路由 ID" required><Input name="routeId" defaultValue={routeDraft.routeId} required /></Field><Field label="Provider ID" required><Input name="providerId" defaultValue={routeDraft.providerId} required /></Field>
-            <Field label="Endpoint" required><Input name="endpoint" defaultValue={routeDraft.endpoint} required /></Field><Field label="Model" required><Input name="model" defaultValue={routeDraft.model} required /></Field>
-            <Field label="Secret Ref" required><Input name="secretRef" defaultValue={routeDraft.secretRef} required /></Field><Field label="最大并发" required><Input name="maxConcurrency" defaultValue={String(routeDraft.maxConcurrency)} min={1} type="number" /></Field>
-            <Field label="超时（毫秒）" required><Input name="timeoutMs" defaultValue={String(routeDraft.timeoutMs)} min={100} type="number" /></Field><Field label="原因"><Input name="reason" defaultValue="管理员控制面板更新" /></Field>
-            <div className="admin-form-actions"><Button appearance="primary" disabled={busy} icon={<SaveRegular />} type="submit">保存</Button><Button appearance="subtle" onClick={() => setRouteDraft(null)} type="button">取消</Button></div>
-          </form> : null}
         </section>
+
+        {routeDraft ? <section className="admin-section visualization-advanced"><h2>高级管理员 Provider 配置</h2><form className="admin-form admin-form-horizontal visualization-editor" onSubmit={saveRoute}>
+          <Field label="路由 ID" required><Input name="routeId" defaultValue={routeDraft.routeId} required /></Field><Field label="Provider ID" required><Input name="providerId" defaultValue={routeDraft.providerId} required /></Field>
+          <Field label="Endpoint" required><Input name="endpoint" defaultValue={routeDraft.endpoint} required /></Field><Field label="Model" required><Input name="model" defaultValue={routeDraft.model} required /></Field>
+          <Field label="Secret Ref" required><Input name="secretRef" defaultValue={routeDraft.secretRef} required /></Field><Field label="最大并发" required><Input name="maxConcurrency" defaultValue={String(routeDraft.maxConcurrency)} min={1} type="number" /></Field>
+          <Field label="超时（毫秒）" required><Input name="timeoutMs" defaultValue={String(routeDraft.timeoutMs)} min={100} type="number" /></Field><Field label="原因"><Input name="reason" defaultValue="管理员控制面板更新" /></Field>
+          <div className="admin-form-actions"><Button appearance="primary" disabled={busy} icon={<SaveRegular />} type="submit">保存</Button><Button appearance="subtle" onClick={() => setRouteDraft(null)} type="button">取消</Button></div>
+        </form></section> : null}
 
         <section className="admin-section"><h2>用户授权</h2><form className="admin-filter" onSubmit={queryEntitlement}><Field label="用户 ID" required><Input aria-label="用户 ID" onChange={(_, data) => setSubjectId(data.value)} value={subjectId} required /></Field><Button appearance="primary" disabled={busy} type="submit">查询</Button></form>
           {entitlement ? <form className="admin-form visualization-editor" onSubmit={saveEntitlement}>
@@ -253,7 +300,18 @@ export function VisualizationGovernanceView({ api, principal }: {
 
         <section className="admin-section"><h2>配额策略</h2><div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow><TableHeaderCell>用户</TableHeaderCell><TableHeaderCell>每日</TableHeaderCell><TableHeaderCell>每月</TableHeaderCell><TableHeaderCell>并发</TableHeaderCell><TableHeaderCell>操作</TableHeaderCell></TableRow></TableHeader><TableBody>{policies.map((policy) => <TableRow key={policy.subjectId}><TableCell>{policy.subjectId}<br /><small>修订 {policy.revision}</small></TableCell><TableCell colSpan={3}><form className="visualization-inline-form" onSubmit={(event) => void savePolicy(policy, event)}><Input aria-label={`${policy.subjectId} 每日配额`} name="dailyUnits" defaultValue={String(policy.dailyUnits)} type="number" min={0} /><Input aria-label={`${policy.subjectId} 每月配额`} name="monthlyUnits" defaultValue={String(policy.monthlyUnits)} type="number" min={0} /><Input aria-label={`${policy.subjectId} 并发限制`} name="maxConcurrency" defaultValue={String(policy.maxConcurrency)} type="number" min={1} /><Input name="reason" defaultValue="管理员控制面板更新" /><Button aria-label={`保存 ${policy.subjectId} 配额`} appearance="subtle" disabled={busy} icon={<SaveRegular />} type="submit" /></form></TableCell><TableCell>{policy.timezone}</TableCell></TableRow>)}</TableBody></Table></div></section>
 
-        <section className="admin-section visualization-advanced"><h2>高级管理员数据</h2><div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow><TableHeaderCell>用户</TableHeaderCell><TableHeaderCell>事件</TableHeaderCell><TableHeaderCell>单位变化</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell><TableHeaderCell>Trace</TableHeaderCell></TableRow></TableHeader><TableBody>{usage.map((row) => <TableRow key={row.eventId}><TableCell>{row.subjectId}</TableCell><TableCell>{row.eventType}</TableCell><TableCell>{row.unitsDelta}</TableCell><TableCell>{date(row.createdAt)}</TableCell><TableCell>{row.traceId}</TableCell></TableRow>)}</TableBody></Table></div><div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow><TableHeaderCell>操作</TableHeaderCell><TableHeaderCell>资源</TableHeaderCell><TableHeaderCell>原因</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell><TableHeaderCell>Trace</TableHeaderCell></TableRow></TableHeader><TableBody>{audit.map((row) => <TableRow key={row.auditId}><TableCell>{row.action}</TableCell><TableCell>{row.resourceType}:{row.resourceId ?? "-"}</TableCell><TableCell>{row.reason ?? "-"}</TableCell><TableCell>{date(row.occurredAt)}</TableCell><TableCell>{row.traceId}</TableCell></TableRow>)}</TableBody></Table></div></section>
+        <section className="admin-section visualization-advanced"><h2>高级管理员数据</h2>
+          <form className="visualization-filter" onSubmit={(event) => { event.preventDefault(); void load(); }}>
+            <Field label="使用量用户 ID"><Input aria-label="使用量用户 ID" onChange={(_, data) => setUsageSubjectFilter(data.value)} value={usageSubjectFilter} /></Field>
+            <Button appearance="secondary" disabled={busy || loading} type="submit">刷新使用量</Button>
+          </form>
+          <div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow><TableHeaderCell>用户</TableHeaderCell><TableHeaderCell>事件</TableHeaderCell><TableHeaderCell>单位变化</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell><TableHeaderCell>Trace</TableHeaderCell></TableRow></TableHeader><TableBody>{usage.map((row) => <TableRow key={row.eventId}><TableCell>{row.subjectId}</TableCell><TableCell>{row.eventType}</TableCell><TableCell>{row.unitsDelta}</TableCell><TableCell>{date(row.createdAt)}</TableCell><TableCell>{row.traceId}</TableCell></TableRow>)}</TableBody></Table></div>
+          <form className="visualization-filter" onSubmit={(event) => { event.preventDefault(); void load(); }}>
+            <Field label="审计用户 ID"><Input aria-label="审计用户 ID" onChange={(_, data) => setAuditSubjectFilter(data.value)} value={auditSubjectFilter} /></Field><Field label="审计操作"><Input aria-label="审计操作" onChange={(_, data) => setAuditActionFilter(data.value)} value={auditActionFilter} /></Field><Field label="开始日期"><Input aria-label="开始日期" onChange={(_, data) => setAuditFromFilter(data.value)} type="date" value={auditFromFilter} /></Field><Field label="结束日期"><Input aria-label="结束日期" onChange={(_, data) => setAuditToFilter(data.value)} type="date" value={auditToFilter} /></Field>
+            <Button appearance="secondary" disabled={busy || loading} type="submit">刷新审计</Button>
+          </form>
+          <div className="admin-table-wrap"><Table size="small"><TableHeader><TableRow><TableHeaderCell>操作</TableHeaderCell><TableHeaderCell>资源</TableHeaderCell><TableHeaderCell>原因</TableHeaderCell><TableHeaderCell>时间</TableHeaderCell><TableHeaderCell>Trace</TableHeaderCell></TableRow></TableHeader><TableBody>{audit.map((row) => <TableRow key={row.auditId}><TableCell>{row.action}</TableCell><TableCell>{row.resourceType}:{row.resourceId ?? "-"}</TableCell><TableCell>{row.reason ?? "-"}</TableCell><TableCell>{date(row.occurredAt)}</TableCell><TableCell>{row.traceId}</TableCell></TableRow>)}</TableBody></Table></div>
+        </section>
       </> : null}
     </div>
   );

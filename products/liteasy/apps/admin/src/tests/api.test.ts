@@ -152,3 +152,18 @@ test("uses visualization control-plane routes and idempotency keys", async () =>
     idempotencyKey: "set-visualization-entitlement:00000000-0000-4000-8000-000000000001"
   }));
 });
+
+test("passes visualization usage and audit filters to the control plane", async () => {
+  const fetchImpl = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({ rows: [] }), { status: 200 }));
+  const client = createAdminApiClient({
+    accessToken: "admin-token",
+    cloudUrl: "https://api.liteasy.example",
+    fetchImpl,
+    forumUrl: "https://forum.liteasy.example"
+  });
+
+  await client.listVisualizationUsage({ limit: 20, subjectId: "user-1" });
+  await client.listVisualizationAudit({ action: "visualization_entitlement_updated", from: "2026-08-01", subjectId: "user-1", to: "2026-08-09" });
+  expect(fetchImpl.mock.calls[0][0]).toBe("https://api.liteasy.example/v1/admin/visualization/usage?limit=20&subjectId=user-1");
+  expect(fetchImpl.mock.calls[1][0]).toBe("https://api.liteasy.example/v1/admin/visualization/audit?action=visualization_entitlement_updated&from=2026-08-01&subjectId=user-1&to=2026-08-09");
+});

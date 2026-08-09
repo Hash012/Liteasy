@@ -249,9 +249,13 @@ export function createAdminApiClient({
         input
       );
     },
-    listVisualizationAudit(input: { limit?: number } = {}) {
+    listVisualizationAudit(input: { action?: string; from?: string; limit?: number; subjectId?: string; to?: string } = {}) {
       const params = new URLSearchParams();
+      if (input.action) params.set("action", input.action);
+      if (input.from) params.set("from", input.from);
       if (input.limit !== undefined) params.set("limit", String(input.limit));
+      if (input.subjectId) params.set("subjectId", input.subjectId);
+      if (input.to) params.set("to", input.to);
       return cloudGet<{ rows: VisualizationAuditRow[] }>(
         `/v1/admin/visualization/audit${params.size ? `?${params.toString()}` : ""}`
       );

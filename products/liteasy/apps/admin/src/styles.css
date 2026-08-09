@@ -381,6 +381,19 @@ textarea {
   width: 112px;
 }
 
+.visualization-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.visualization-filter > div {
+  min-width: 150px;
+  flex: 1 1 160px;
+}
+
 .visualization-advanced .admin-table-wrap + .admin-table-wrap {
   margin-top: 12px;
 }
