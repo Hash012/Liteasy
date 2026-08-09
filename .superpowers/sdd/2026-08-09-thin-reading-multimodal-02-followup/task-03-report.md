@@ -26,3 +26,12 @@ Verification:
 - Focused gateway, service, and repository tests passed.
 - `npm test` in `products/liteasy/services/api` passed: 252 tests, 0 failures.
 - `git diff --check` passed.
+
+## Fix Round 2
+
+- The service now checks caller cancellation immediately after receiving provider data and before any successful finalization. A provider result that races with cancellation is finalized once as `cancelled`, with its validated provider cost atomically linked to the durable invocation, before user reservation rollback.
+- Added a race regression where the gateway aborts just before returning its cost-bearing result; it asserts one cancelled finalization, one durable cost row, no succeeded finalization, and one rollback.
+
+Verification:
+
+- `npm test` in `products/liteasy/services/api` passed: 253 tests, 0 failures.

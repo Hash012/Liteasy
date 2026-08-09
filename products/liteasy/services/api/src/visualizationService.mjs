@@ -263,6 +263,7 @@ export class VisualizationService {
       providerCost = result?.cost;
       providerRequestIdObserved = providerCost?.providerRequestId !== undefined;
       providerRequestId = providerCost?.providerRequestId ?? providerRequestId;
+      throwIfAborted(context.signal);
       if (providerCost) {
         const cost = this.#providerCostRecord(providerCost, route, "succeeded", context.traceId, { invocationId, providerRequestId });
         if (invocationStarted && typeof this.repository.finalizeProviderInvocation === "function") {
@@ -280,7 +281,6 @@ export class VisualizationService {
           costRecorded = true;
         }
       }
-      throwIfAborted(context.signal);
       if (invocationStarted && !finalizationAttempted && typeof this.repository.completeProviderInvocation === "function") {
         await this.repository.completeProviderInvocation({
           invocationId,

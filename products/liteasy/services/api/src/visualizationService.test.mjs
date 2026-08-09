@@ -725,3 +725,62 @@ test("failed atomic provider reconciliation does not fall back to a second cost 
   assert.deepEqual(calls.map(([name]) => name), ["finalize", "rollback"]);
   assert.equal(calls[0][1].cost.invocationId, "durable-invocation-13");
 });
+
+test("late cancellation finalizes the provider invocation as cancelled with one durable cost row", async () => {
+  const controller = new AbortController();
+  const costRows = [];
+  const finalizations = [];
+  const rollbacks = [];
+  const route = {
+    dataClasses: ["paper"],
+    enabled: true,
+    modalities: ["semantic_graph"],
+    operations: ["structured_generation"],
+    providerId: "provider-1",
+    revision: 1,
+    routeId: "route-1"
+  };
+  const service = new VisualizationService({
+    authorizeDocument: async () => ({ allowed: true }),
+    gateway: {
+      async generateStructured() {
+        controller.abort();
+        return { cost: { amount: 0.02, currency: "USD", providerRequestId: "provider-request-14", units: 2 }, text: "{\"artifact\":true}" };
+      }
+    },
+    repository: {
+      async finalizeProviderInvocation(input) {
+        finalizations.push(input);
+        if (input.cost) costRows.push(input.cost);
+      },
+      async getProviderRoute() { return route; },
+      async reserve() {
+        return { reservation: {
+          idempotencyKey: "generation-0014",
+          modality: "semantic_graph",
+          reservationId: "reservation-14",
+          routeId: "route-1",
+          routeRevision: 1
+        } };
+      },
+      async rollback(_subject, input) { rollbacks.push(input); },
+      async startProviderInvocation() { return { invocationId: "durable-invocation-14", replayed: false, state: "started" }; }
+    },
+    validateArtifact: async () => ({ outcome: "pass" })
+  });
+
+  await assert.rejects(
+    service.generate({ subjectId: "user-1" }, {
+      providerRequest: { dataClass: "paper", modality: "semantic_graph" },
+      reservation: { idempotencyKey: "generation-0014", modality: "semantic_graph", routeId: "route-1", units: 4 }
+    }, { signal: controller.signal }),
+    /visualization_request_aborted/
+  );
+  assert.equal(finalizations.length, 1);
+  assert.equal(finalizations[0].state, "cancelled");
+  assert.equal(finalizations[0].cost.invocationId, "durable-invocation-14");
+  assert.equal(finalizations[0].cost.providerRequestId, "provider-request-14");
+  assert.equal(costRows.length, 1);
+  assert.equal(costRows[0].invocationId, "durable-invocation-14");
+  assert.equal(rollbacks.length, 1);
+});
