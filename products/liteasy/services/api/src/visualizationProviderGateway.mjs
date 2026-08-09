@@ -173,21 +173,27 @@ function canonicalAddress(address) {
   return String(address).toLowerCase();
 }
 
-function requestSignal(signal, timeoutMs) {
+function requestSignal(signal, timeoutMs, { clearTimeoutImpl, setTimeoutImpl }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => {
+  let disposed = false;
+  let timeout;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    if (timeout !== undefined) clearTimeoutImpl(timeout);
+    signal?.removeEventListener("abort", forwardAbort);
+    controller.signal.removeEventListener("abort", dispose);
+  };
+  const forwardAbort = () => controller.abort(signal.reason ?? new DOMException("request aborted", "AbortError"));
+  controller.signal.addEventListener("abort", dispose, { once: true });
+  timeout = setTimeoutImpl(() => {
     controller.abort(new DOMException("provider route timed out", "TimeoutError"));
   }, timeoutMs);
-  const forwardAbort = () => controller.abort(signal.reason ?? new DOMException("request aborted", "AbortError"));
   if (signal) {
     if (signal.aborted) forwardAbort();
     else signal.addEventListener("abort", forwardAbort, { once: true });
   }
-  controller.signal.addEventListener("abort", () => {
-    clearTimeout(timeout);
-    signal?.removeEventListener("abort", forwardAbort);
-  }, { once: true });
-  return controller.signal;
+  return Object.freeze({ dispose, signal: controller.signal });
 }
 
 function waitWithSignal(value, signal) {
@@ -285,8 +291,9 @@ function normalizedImageResult(result) {
 }
 
 export class VisualizationProviderGateway {
-  constructor({ adapter, adapters = {}, circuitBreaker = new VisualizationCircuitBreaker(), dnsLookup = systemDnsLookup, egressPolicy = {}, fetchImpl = pinnedHttpsFetch, secretStore = new EnvironmentVisualizationSecretStore() } = {}) {
+  constructor({ adapter, adapters = {}, circuitBreaker = new VisualizationCircuitBreaker(), clearTimeoutImpl = clearTimeout, dnsLookup = systemDnsLookup, egressPolicy = {}, fetchImpl = pinnedHttpsFetch, secretStore = new EnvironmentVisualizationSecretStore(), setTimeoutImpl = setTimeout } = {}) {
     if ((!adapter || typeof adapter !== "object") && (!adapters || typeof adapters !== "object")) throw new Error("visualization_provider_adapter_invalid");
+    if (typeof clearTimeoutImpl !== "function" || typeof setTimeoutImpl !== "function") throw new Error("visualization_provider_timer_invalid");
     this.adapter = adapter;
     this.adapters = adapters;
     this.circuitBreaker = circuitBreaker;
@@ -294,6 +301,7 @@ export class VisualizationProviderGateway {
     this.egressPolicy = { allowedHostnames: [...new Set(egressPolicy.allowedHostnames ?? [])].map((host) => host.toLowerCase()) };
     this.fetchImpl = fetchImpl;
     this.secretStore = secretStore;
+    this.timers = { clearTimeoutImpl, setTimeoutImpl };
     this.activeRequests = new Map();
   }
 
@@ -318,8 +326,10 @@ export class VisualizationProviderGateway {
     const adapter = this.#adapterFor(route);
     const probe = adapter.probe ?? adapter.test;
     if (typeof probe !== "function") throw new Error("visualization_provider_adapter_invalid");
-    const signal = requestSignal(input?.signal, route.timeoutMs);
-    const request = this.#authenticatedRequest(route, signal);
+    const credential = this.secretStore.resolve(route.secretRef);
+    const lifecycle = requestSignal(input?.signal, route.timeoutMs, this.timers);
+    const { signal } = lifecycle;
+    const request = this.#authenticatedRequest(route, signal, credential);
     this.#incrementActive(route);
     try {
       await this.#validateEgress(route.endpoint, signal);
@@ -334,6 +344,7 @@ export class VisualizationProviderGateway {
     } catch (error) {
       throw this.#providerError(error, input?.signal);
     } finally {
+      lifecycle.dispose();
       this.#decrementActive(route);
     }
   }
@@ -363,8 +374,10 @@ export class VisualizationProviderGateway {
     if (!this.circuitBreaker.allows(route)) throw new VisualizationProviderError("visualization_circuit_open");
     const adapter = this.#adapterFor(route);
     if (typeof adapter[adapterMethod] !== "function") throw new Error("visualization_provider_adapter_invalid");
-    const signal = requestSignal(input?.signal, route.timeoutMs);
-    const request = this.#authenticatedRequest(route, signal);
+    const credential = this.secretStore.resolve(route.secretRef);
+    const lifecycle = requestSignal(input?.signal, route.timeoutMs, this.timers);
+    const { signal } = lifecycle;
+    const request = this.#authenticatedRequest(route, signal, credential);
     this.#incrementActive(route);
     let adapterInvoked = false;
     try {
@@ -388,6 +401,7 @@ export class VisualizationProviderGateway {
       if (adapterInvoked && !input?.signal?.aborted) this.circuitBreaker.recordFailure(route);
       throw this.#providerError(error, input?.signal);
     } finally {
+      lifecycle.dispose();
       this.#decrementActive(route);
     }
   }
@@ -415,13 +429,26 @@ export class VisualizationProviderGateway {
     return new VisualizationProviderError("visualization_provider_unavailable");
   }
 
-  #authenticatedRequest(route, signal) {
-    const credential = this.secretStore.resolve(route.secretRef);
-    return async (url = route.endpoint, init = {}) => this.#fetchWithValidatedRedirects(url, {
-      ...init,
-      headers: { ...init.headers, Authorization: `Bearer ${credential}` },
-      signal
-    });
+  #authenticatedRequest(route, signal, credential) {
+    const routeEndpoint = new URL(route.endpoint);
+    return async (url = route.endpoint, init = {}) => {
+      let target;
+      try {
+        target = new URL(url, routeEndpoint);
+      } catch {
+        throw new VisualizationProviderError("visualization_provider_request_origin_invalid");
+      }
+      if (target.origin !== routeEndpoint.origin || target.username || target.password) {
+        throw new VisualizationProviderError("visualization_provider_request_origin_invalid");
+      }
+      const callerHeaders = new Headers(init.headers);
+      callerHeaders.delete("authorization");
+      return this.#fetchWithValidatedRedirects(target, {
+        ...init,
+        headers: { ...Object.fromEntries(callerHeaders), Authorization: `Bearer ${credential}` },
+        signal
+      });
+    };
   }
 
   async #fetchWithValidatedRedirects(url, init) {

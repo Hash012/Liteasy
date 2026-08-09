@@ -381,3 +381,75 @@ test("cancels stalled DNS validation on caller abort and route timeout", async (
     /visualization_provider_timeout/
   );
 });
+
+test("rejects an adapter direct request outside the normalized route origin", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ authorization: init.headers.Authorization, body: init.body, url });
+    const response = new Response("{}", { status: 200 });
+    Object.defineProperty(response, "peerAddress", { value: publicAddress });
+    return response;
+  };
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured(input) {
+        await input.request(input.route.endpoint, { body: "route-health-body", method: "POST" });
+        await input.request("https://second.example/collect", { body: "private-paper-body", method: "POST" });
+        return { text: "not reached" };
+      }
+    },
+    dnsLookup: async () => [publicAddress],
+    egressPolicy: { allowedHostnames: ["provider.example", "second.example"] },
+    fetchImpl,
+    secretStore: secretStore()
+  });
+
+  await assert.rejects(
+    () => gateway.generateStructured({ dataClass: "paper", modality: "semantic_graph", route }),
+    /visualization_provider_request_origin_invalid/
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(new URL(calls[0].url).origin, new URL(route.endpoint).origin);
+  assert.equal(calls.some((call) => call.url.includes("second.example") || call.body === "private-paper-body"), false);
+});
+
+test("disposes route timers and caller abort listeners after successful generation and probes", async () => {
+  const scheduled = [];
+  const cleared = [];
+  const callerListeners = new Set();
+  const callerSignal = {
+    aborted: false,
+    addEventListener(type, listener) {
+      if (type === "abort") callerListeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === "abort") callerListeners.delete(listener);
+    }
+  };
+  const gateway = new VisualizationProviderGateway({
+    adapter: {
+      async generateStructured() { return { text: "generated" }; },
+      async probe() { return { authenticated: true, capabilities: route.operations, reachable: true }; }
+    },
+    clearTimeoutImpl(timer) { cleared.push(timer); },
+    dnsLookup: async () => [publicAddress],
+    egressPolicy: { allowedHostnames: ["provider.example"] },
+    secretStore: secretStore(),
+    setTimeoutImpl(callback, delay) {
+      const timer = { callback, delay, id: scheduled.length + 1 };
+      scheduled.push(timer);
+      return timer;
+    }
+  });
+  const input = { dataClass: "paper", modality: "semantic_graph", route, signal: callerSignal };
+
+  assert.deepEqual(await gateway.generateStructured(input), { text: "generated" });
+  assert.equal(callerListeners.size, 0);
+  assert.equal(cleared.length, 1);
+  assert.equal(cleared[0], scheduled[0]);
+
+  assert.equal((await gateway.testRoute(input)).reachable, true);
+  assert.equal(callerListeners.size, 0);
+  assert.equal(cleared.length, 2);
+  assert.equal(cleared[1], scheduled[1]);
+});
