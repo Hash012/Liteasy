@@ -150,6 +150,30 @@ export type DesktopAnnotationPublicationBatch = {
   operations: DesktopAnnotationPublicationOperation[];
 };
 
+export type CreateReplyInput = {
+  body: string;
+  publishAsAnnotation?: boolean;
+  tags?: string[];
+  targets?: AnnotationTarget[];
+};
+
+export type CreateReply = {
+  body: string;
+  publishAsAnnotation: boolean;
+  tags: string[];
+  targets: AnnotationTarget[];
+};
+
+export type UpdateReply = { body: string };
+
+export type UpdateReplyPublicationInput =
+  | { published: false }
+  | { published: true; tags?: string[]; targets: AnnotationTarget[] };
+
+export type UpdateReplyPublication =
+  | { published: false }
+  | { published: true; tags: string[]; targets: AnnotationTarget[] };
+
 export declare const literatureIdentifierKindSchema: z.ZodType<LiteratureIdentifierKind>;
 export declare const literatureSourceSchema: z.ZodType<LiteratureSource>;
 export declare const literatureIdentifierSchema: z.ZodType<LiteratureIdentifier>;
@@ -180,8 +204,9 @@ export declare const literatureMetadataSchema: z.ZodType<LegacyLiteratureReferen
 export declare const createAnnotationSchema: z.ZodType<unknown>;
 export declare const updateAnnotationSchema: z.ZodType<unknown>;
 export declare const academicProfileSchema: z.ZodType<unknown>;
-export declare const createReplySchema: z.ZodType<unknown>;
-export declare const updateReplySchema: z.ZodType<unknown>;
+export declare const createReplySchema: z.ZodType<CreateReply, z.ZodTypeDef, CreateReplyInput>;
+export declare const updateReplySchema: z.ZodType<UpdateReply>;
+export declare const updateReplyPublicationSchema: z.ZodType<UpdateReplyPublication, z.ZodTypeDef, UpdateReplyPublicationInput>;
 export declare const followUserSchema: z.ZodType<unknown>;
 export declare const createConversationSchema: z.ZodType<unknown>;
 export declare const markConversationReadSchema: z.ZodType<unknown>;
