@@ -51,6 +51,12 @@ export function resolveThinReadingVisualizationIntentRequest(source: ThinReading
     case "visualize_flow":
       return { candidateModalities: ["semantic_graph"] as const, purpose: "show_process" as const };
     default:
+      if (
+        source.requestedOutput === "visualization_intent" &&
+        /(?:visuali[sz]e|visualization|可视化|图示|流程图|结构图|示意)/iu.test(source.prompt ?? "")
+      ) {
+        return { candidateModalities: ["semantic_graph"] as const, purpose: "explain_structure" as const };
+      }
       return undefined;
   }
 }

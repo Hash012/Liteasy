@@ -17,6 +17,7 @@ import type { PreparedMultiPaperAnalysis } from "../app/features/paper-analysis/
 import type { ThinReadingGenerationContext } from "../app/features/thin-reading/thinReading.types";
 import {
   intentWithUnknownEvidence,
+  intentWithUnadoptedEvidence,
   v2ModelOutput
 } from "./fixtures/thinReadingAgentFixtures";
 
@@ -92,6 +93,62 @@ describe("thinReadingAgent", () => {
   test("rejects a visualization intent with evidence outside the reviewed set", () => {
     expect(() => parseThinReadingModelSeed(JSON.stringify(intentWithUnknownEvidence), {
       allowedEvidenceIds: ["evidence-survey-taxonomy"]
+    })).toThrow("thin_reading_visualization_intent_invalid");
+  });
+
+  test("rejects a visualization intent whose reviewed evidence was not adopted by the node", () => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify(intentWithUnadoptedEvidence), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy", "evidence-reviewed-but-unadopted"]
+    })).toThrow("thin_reading_visualization_intent_invalid");
+  });
+
+  test("requires explicit intent shape only for a bounded prompt-only visualization request", () => {
+    const output = {
+      ...v2ModelOutput,
+      visualizationIntent: {
+        ...v2ModelOutput.visualizationIntent,
+        candidateModalities: ["physics_process"],
+        purpose: "show_process",
+        requestedBy: "explicit_user_request"
+      }
+    };
+    expect(() => parseThinReadingModelSeed(JSON.stringify(output), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      source: {
+        excerpt: "解释方法。",
+        kind: "selected_text",
+        prompt: "请用可视化展示这段结构。",
+        requestedOutput: "visualization_intent"
+      }
+    })).toThrow("thin_reading_visualization_intent_invalid");
+    expect(parseThinReadingModelSeed(JSON.stringify({
+      ...output,
+      visualizationIntent: {
+        ...output.visualizationIntent,
+        candidateModalities: ["semantic_graph"],
+        purpose: "explain_structure"
+      }
+    }), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      source: {
+        excerpt: "解释方法。",
+        kind: "selected_text",
+        prompt: "请用可视化展示这段结构。",
+        requestedOutput: "visualization_intent"
+      }
+    }).visualizationIntent?.requestedBy).toBe("explicit_user_request");
+  });
+
+  test("rejects explicit visualization intent for an automatic root request", () => {
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...v2ModelOutput,
+      visualizationIntent: {
+        ...v2ModelOutput.visualizationIntent,
+        requestedBy: "explicit_user_request"
+      }
+    }), {
+      allowedEvidenceIds: ["evidence-survey-taxonomy"],
+      source: { kind: "root_overview" }
     })).toThrow("thin_reading_visualization_intent_invalid");
   });
 

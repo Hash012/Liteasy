@@ -16,6 +16,7 @@ import type {
   ThinReadingEvidenceSpan,
   ThinReadingExternalSource,
   ThinReadingNodeSeed,
+  ThinReadingNodeSource,
   ThinReadingPaperType,
   ThinReadingSectionToken,
   ThinReadingSummarySentence
@@ -490,6 +491,7 @@ type ParseThinReadingModelSeedOptions = {
   requireExplicitTraceability?: boolean;
   requireNumericFidelity?: boolean;
   requiredChineseTerminology?: readonly RequiredChineseTerminology[];
+  source?: ThinReadingNodeSource;
   targetLanguage?: string;
 };
 
@@ -497,6 +499,7 @@ function assertVisualOutput(input: {
   allowedEvidenceIds: readonly string[];
   availableFigureIds: readonly string[];
   parsed: ParsedThinReadingModelOutput;
+  source?: ThinReadingNodeSource;
 }) {
   const availableFigureIds = new Set(input.availableFigureIds);
   const invalidFigure = input.parsed.recommendedFigures.find((figure) => (
@@ -510,10 +513,26 @@ function assertVisualOutput(input: {
     fieldName: "recommendedFigures.evidenceIds",
     paperEvidence: input.parsed.recommendedFigures.flatMap((figure) => figure.evidenceIds)
   });
-  if (input.parsed.visualizationIntent && !input.parsed.visualizationIntent.evidenceIds.every((id) => (
-    input.allowedEvidenceIds.includes(id)
-  ))) {
-    throw new Error("thin_reading_visualization_intent_invalid");
+  if (input.parsed.visualizationIntent) {
+    const adoptedEvidenceIds = new Set([
+      ...input.parsed.paperEvidence,
+      ...input.parsed.claims.flatMap((claim) => claim.evidenceIds),
+      ...input.parsed.summarySentences.flatMap((sentence) => sentence.evidenceIds)
+    ]);
+    const requested = input.source
+      ? resolveThinReadingVisualizationIntentRequest(input.source)
+      : undefined;
+    const isExplicit = requested !== undefined;
+    const intent = input.parsed.visualizationIntent;
+    if (
+      !intent.evidenceIds.every((id) => input.allowedEvidenceIds.includes(id) && adoptedEvidenceIds.has(id)) ||
+      intent.requestedBy !== (isExplicit ? "explicit_user_request" : "automatic") ||
+      (requested && (intent.purpose !== requested.purpose ||
+        intent.candidateModalities.length !== requested.candidateModalities.length ||
+        intent.candidateModalities.some((modality, index) => modality !== requested.candidateModalities[index])))
+    ) {
+      throw new Error("thin_reading_visualization_intent_invalid");
+    }
   }
 }
 
@@ -1389,7 +1408,8 @@ export function parseThinReadingModelSeed(
   assertVisualOutput({
     allowedEvidenceIds,
     availableFigureIds: options.availableFigureIds ?? [],
-    parsed
+    parsed,
+    source: options.source
   });
   assertChineseTerminologyOrder({
     analysisEvidence,

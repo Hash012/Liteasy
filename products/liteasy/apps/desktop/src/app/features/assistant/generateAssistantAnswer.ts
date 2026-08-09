@@ -1567,6 +1567,7 @@ async function generateThinReadingWithQualityRepair(input: {
         requireExplicitTraceability: true,
         requireNumericFidelity: generationContext.source.kind !== "root_overview",
         requiredChineseTerminology,
+        source: generationContext.source,
         targetLanguage: context.targetLanguage
       });
       repairReasons.push(

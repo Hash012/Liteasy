@@ -35,6 +35,14 @@ export const intentWithUnknownEvidence = {
   }
 } as const;
 
+export const intentWithUnadoptedEvidence = {
+  ...v2ModelOutput,
+  visualizationIntent: {
+    ...v2ModelOutput.visualizationIntent,
+    evidenceIds: ["evidence-reviewed-but-unadopted"]
+  }
+} as const;
+
 export function modelReturning(output: unknown) {
   return {
     generateAnswer: async () => ({ answer: JSON.stringify(output) })
