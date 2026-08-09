@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ArtifactTab, ArtifactType } from "./artifact.types";
 import { IntuitionGraphDocumentSchema } from "../intuition-graph/intuitionGraph.schema";
+import { parseThinReadingDocument } from "../thin-reading/thinReadingVersioning";
 
 const browserStorageKey = "liteasy.artifact-catalog.v1";
 const databaseName = "liteasy-artifact-cache";
@@ -400,13 +401,23 @@ function isCachedThinReadingDocument(value: unknown, artifactId: string) {
   if (!isRecord(value)) {
     return false;
   }
+  try {
+    const parsed = parseThinReadingDocument(value);
+    if (parsed.artifactId !== artifactId) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
   const nodes = value.nodes;
   if (!isRecord(nodes)) {
     return false;
   }
   const rootNodeId = value.rootNodeId;
   const activeNodeId = value.activeNodeId;
-  const baseDocumentValid = value.version === "liteasy.thin-reading/v1" &&
+  const isV1 = value.version === "liteasy.thin-reading/v1";
+  const isV2 = value.version === "liteasy.thin-reading/v2";
+  const baseDocumentValid = (isV1 || isV2) &&
     value.artifactId === artifactId &&
     typeof value.title === "string" &&
     typeof value.targetLanguage === "string" &&
@@ -490,6 +501,13 @@ function isCachedThinReadingDocument(value: unknown, artifactId: string) {
         !Array.isArray(node.evidence.externalSources) ||
         !node.evidence.externalSources.every(isCachedExternalSource)
       ))) {
+      return false;
+    }
+    if (isV2 && (!Array.isArray(node.visualizations) ||
+      node.evidence.interactiveDemo !== undefined || node.evidence.mermaid !== undefined)) {
+      return false;
+    }
+    if (isV1 && node.visualizations !== undefined) {
       return false;
     }
     const paperEvidence = node.evidence.paperEvidence;

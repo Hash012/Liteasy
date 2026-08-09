@@ -66,7 +66,7 @@ describe("thinReadingProjection", () => {
       artifactId: "artifact-thin-1",
       paperIds: ["paper-1"],
       targetLanguage: "zh-CN",
-      version: "liteasy.thin-reading/v1"
+      version: "liteasy.thin-reading/v2"
     });
     expect(document.activeNodeId).toBe(document.rootNodeId);
     expect(document.paperIdentities?.["paper-1"].primary).toMatchObject({
@@ -452,7 +452,7 @@ describe("thinReadingProjection", () => {
     expect(Object.isFrozen((child.source as Extract<typeof child.source, { kind: "selected_text" }>).externalSourceIds)).toBe(true);
   });
 
-  test("retains generated diagrams, demos, and model-selected MinerU figures", () => {
+  test("drops executable legacy evidence while retaining model-selected MinerU figures", () => {
     const visualSeed = seed();
     visualSeed.evidence = {
       ...visualSeed.evidence,
@@ -477,10 +477,8 @@ describe("thinReadingProjection", () => {
     });
     const evidence = document.nodes[document.rootNodeId].evidence;
 
-    expect(evidence.mermaid).toContain("MaxSim");
-    expect(evidence.interactiveDemo).toMatchObject({ kind: "html", title: "MaxSim 动画" });
-    expect(evidence.interactiveDemo?.html).toContain("<input type=range>");
-    expect(evidence.interactiveDemo?.html).toContain("<script>location='https://attacker.example'</script>");
+    expect(evidence).not.toHaveProperty("mermaid");
+    expect(evidence).not.toHaveProperty("interactiveDemo");
     expect(evidence.recommendedFigures).toEqual([expect.objectContaining({
       figureId: "paper-1:figure-2",
       evidenceIds: ["evidence-1"]

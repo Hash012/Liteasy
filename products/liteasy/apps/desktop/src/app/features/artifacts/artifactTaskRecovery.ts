@@ -18,7 +18,7 @@ const maxPersistedTaskMessageLength = 480;
 
 export type ThinReadingBranchRecoverySnapshot = {
   artifactId: string;
-  documentVersion: "liteasy.thin-reading/v1";
+  documentVersion: "liteasy.thin-reading/v1" | "liteasy.thin-reading/v2";
   parentNodeId: string;
   primaryPaperId: string;
   source: ThinReadingBranchSource;
@@ -63,7 +63,8 @@ function isThinReadingBranchRecoverySnapshot(value: unknown): value is ThinReadi
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const snapshot = value as Record<string, unknown>;
   return typeof snapshot.artifactId === "string" && snapshot.artifactId.trim().length > 0 &&
-    snapshot.documentVersion === "liteasy.thin-reading/v1" &&
+    (snapshot.documentVersion === "liteasy.thin-reading/v1" ||
+      snapshot.documentVersion === "liteasy.thin-reading/v2") &&
     typeof snapshot.parentNodeId === "string" && snapshot.parentNodeId.trim().length > 0 &&
     typeof snapshot.primaryPaperId === "string" && snapshot.primaryPaperId.trim().length > 0 &&
     isRecoverableBranchSource(snapshot.source);

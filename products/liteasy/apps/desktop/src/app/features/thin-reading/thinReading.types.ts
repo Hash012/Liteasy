@@ -3,6 +3,7 @@ import type {
   PaperIdentityCandidate,
   PaperIdentityInput
 } from "../paper-identity/paperIdentity";
+import type { VisualizationArtifactV1, GeneratedVisualizationModality } from "../visualization/visualizationArtifact.types";
 
 export type ThinReadingPaper = PaperIdentityInput;
 
@@ -331,7 +332,7 @@ export type ThinReadingGenerationAudit = {
   version: "liteasy.thin-reading-agent/v1" | "liteasy.thin-reading-agent/v2";
 };
 
-export type ThinReadingNodeEvidence = {
+export type ThinReadingNodeEvidenceV1 = {
   anchors?: readonly ThinReadingAnchor[];
   claims?: readonly ThinReadingClaim[];
   externalKnowledge: readonly string[];
@@ -347,6 +348,11 @@ export type ThinReadingNodeEvidence = {
   recommendationPaperEdges?: readonly ThinReadingRecommendationPaperEdge[];
   summarySentences?: readonly ThinReadingSummarySentence[];
 };
+
+export type ThinReadingNodeEvidenceV2 = Omit<ThinReadingNodeEvidenceV1, "interactiveDemo" | "mermaid">;
+
+/** V1 is accepted as a read-only persisted shape; new nodes use this v2 base. */
+export type ThinReadingNodeEvidence = ThinReadingNodeEvidenceV1;
 
 export type ThinReadingNodeSeed = {
   closureState?: ThinReadingClosureState;
@@ -387,13 +393,13 @@ export type ThinReadingGenerationContext = {
   selectedExternalSources?: readonly ThinReadingExternalSource[];
 };
 
-export type ThinReadingNode = {
+export type ThinReadingNodeBase<Evidence extends ThinReadingNodeEvidenceV1 = ThinReadingNodeEvidenceV1> = {
   childIds: readonly string[];
   closureState?: ThinReadingClosureState;
   createdAt: string;
   depth: number;
   id: string;
-  evidence: ThinReadingNodeEvidence;
+  evidence: Evidence;
   omittedSections: readonly ThinReadingSectionToken[];
   paperType?: ThinReadingPaperType;
   parentId?: string;
@@ -404,6 +410,32 @@ export type ThinReadingNode = {
   title: string;
   withinPaperClosure: boolean;
 };
+
+export type VisualizationIntentV1 = {
+  candidateModalities: readonly GeneratedVisualizationModality[];
+  evidenceIds: readonly string[];
+  expectedLearningGain: "low" | "medium" | "high";
+  nodeId: string;
+  purpose: "explain_structure" | "compare" | "show_process" | "show_geometry" | "show_evidence";
+  requestedBy: "automatic" | "explicit_user_request";
+};
+
+export type VisualizationDecisionV1 = {
+  intent: VisualizationIntentV1;
+  reasonCode?: string;
+  status: "accepted" | "omitted";
+};
+
+export type ThinReadingNodeV1 = ThinReadingNodeBase<ThinReadingNodeEvidenceV1> & {
+  version?: "liteasy.thin-reading/v1";
+};
+
+export type ThinReadingNodeV2 = ThinReadingNodeBase<ThinReadingNodeEvidenceV2> & {
+  visualizationDecision?: VisualizationDecisionV1;
+  visualizations: readonly VisualizationArtifactV1[];
+};
+
+export type ThinReadingNode = ThinReadingNodeV1 | ThinReadingNodeV2;
 
 export type ThinReadingAnnotationTarget =
   | { claimId: string; kind: "claim"; nodeId: string }
@@ -435,7 +467,7 @@ export type ThinReadingAnnotationSettings = {
   autoPublic: boolean;
 };
 
-export type ThinReadingDocument = {
+export type ThinReadingDocumentBase<Node extends ThinReadingNode = ThinReadingNode> = {
   annotationSettings: ThinReadingAnnotationSettings;
   annotations: readonly ThinReadingAnnotation[];
   artifactId: string;
@@ -444,11 +476,24 @@ export type ThinReadingDocument = {
   title: string;
   targetLanguage: string;
   activeNodeId: string;
-  nodes: Readonly<Record<string, ThinReadingNode>>;
+  nodes: Readonly<Record<string, Node>>;
   pendingPublicAnnotationIds: readonly string[];
   rootNodeId: string;
+};
+
+export type ThinReadingDocumentV1 = ThinReadingDocumentBase<ThinReadingNodeV1> & {
   version: "liteasy.thin-reading/v1";
 };
+
+export type ThinReadingDocumentV2 = ThinReadingDocumentBase<ThinReadingNodeV2> & {
+  migrationProvenance?: {
+    migratedAt: string;
+    sourceArtifactId: string;
+  };
+  version: "liteasy.thin-reading/v2";
+};
+
+export type ThinReadingDocument = ThinReadingDocumentV1 | ThinReadingDocumentV2;
 
 export type CreateThinReadingDocumentInput = {
   artifactId: string;

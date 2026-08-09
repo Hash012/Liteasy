@@ -171,6 +171,20 @@ describe("artifactTaskRecovery", () => {
     expect(validateThinReadingBranchRecoverySnapshot(snapshot, document)).toEqual({ valid: true });
   });
 
+  test("persists and validates v2 branch recovery snapshots", () => {
+    const document = createDocument();
+    const snapshot = createThinReadingBranchRecoverySnapshot({
+      artifactId: document.artifactId,
+      document,
+      parentNodeId: document.rootNodeId,
+      primaryPaperId: "paper-1",
+      source: { kind: "omitted_section", label: "实验", sectionKey: "experiments" }
+    });
+
+    expect(snapshot.documentVersion).toBe("liteasy.thin-reading/v2");
+    expect(validateThinReadingBranchRecoverySnapshot(snapshot, document)).toEqual({ valid: true });
+  });
+
   test("rejects a recovery snapshot whose quick command and output type disagree", () => {
     const document = createDocument();
 
