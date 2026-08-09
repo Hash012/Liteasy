@@ -10,7 +10,7 @@ import {
   Dismiss20Regular,
   Search20Regular
 } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LiteratureCandidate, LiteratureRecord, LiteratureResolveResult } from "@intuecho/contracts";
 import { communityApi } from "./communityApi";
 import type { AnnotationTarget } from "./community.types";
@@ -46,6 +46,7 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
   const [kind, setKind] = useState<TargetKind>("whole_document");
   const [result, setResult] = useState<LiteratureResolveResult | null>(null);
   const [confirmed, setConfirmed] = useState<LiteratureRecord | null>(null);
+  const [literatureRecords, setLiteratureRecords] = useState<Record<string, LiteratureRecord>>({});
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [manual, setManual] = useState(false);
@@ -57,6 +58,12 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
   const [manualValue, setManualValue] = useState("");
   const [excerpt, setExcerpt] = useState("");
   const [page, setPage] = useState("");
+
+  useEffect(() => {
+    if (query.trim().length < 3 || /^(10\.\d|https?:\/\/|arxiv[:/]|S2:|W\d+)/iu.test(query.trim())) return;
+    const timer = window.setTimeout(() => void search(), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   async function search() {
     if (!query.trim()) { setStatus("请输入文献标题、DOI 或其他标识"); return; }
@@ -76,6 +83,7 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
     try {
       const response = await communityApi.confirmLiterature({ candidateKey: candidate.candidateKey, mode: "candidate" });
       setConfirmed(response.literature);
+      setLiteratureRecords((records) => ({ ...records, [response.literature.literatureId]: response.literature }));
       if (kind === "whole_document") void addConfirmed(response.literature, "", "");
     } catch (reason) { setStatus(reason instanceof Error ? reason.message : "文献确认失败"); }
     finally { setLoading(false); }
@@ -101,7 +109,9 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
         identifiers: value ? [{ kind: manualKind, source: "manual", value }] : [], title,
         ...(numericYear ? { year: numericYear } : {})
       }});
-      setConfirmed(response.literature); void addConfirmed(response.literature);
+      setConfirmed(response.literature);
+      setLiteratureRecords((records) => ({ ...records, [response.literature.literatureId]: response.literature }));
+      void addConfirmed(response.literature);
     } catch (reason) { setStatus(reason instanceof Error ? reason.message : "文献确认失败"); }
     finally { setLoading(false); }
   }
@@ -110,9 +120,10 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
   return <section className="target-editor literature-target-editor">
     <div className="section-row"><div><strong>关联文献</strong>{required && <span>必填</span>}</div><small>{targets.length} 处</small></div>
     <label className="field-label">目标范围<select aria-label="目标范围" value={kind} onChange={(event) => setKind(event.target.value as TargetKind)}><option value="whole_document">整篇文献</option><option value="source_passage">原文字句</option></select></label>
-    {targets.length > 0 && <div className="selected-targets">{targets.map((target, index) => <div key={`${target.kind}-${index}`}><div className="target-chip"><span><strong>{"metadata" in target.literature ? target.literature.metadata.title : "已确认文献"}</strong><small>{target.kind === "whole_document" ? "整篇文献" : `${"page" in target && target.page ? `第 ${target.page} 页 · ` : ""}${"excerpt" in target ? target.excerpt : "原文摘录"}`}</small></span></div><Tooltip content="移除关联文献" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="移除关联文献" onClick={() => onChange(targets.filter((_, position) => position !== index))} /></Tooltip></div>)}</div>}
+    {targets.length > 0 && <div className="selected-targets">{targets.map((target, index) => { const reference = target.literature; const title = "metadata" in reference ? reference.metadata.title : literatureRecords[reference.literatureId]?.title ?? `文献 ${reference.literatureId}`; return <div key={`${target.kind}-${index}`}><div className="target-chip"><span><strong>{title}</strong><small>{target.kind === "whole_document" ? "整篇文献" : `${"page" in target && target.page ? `第 ${target.page} 页 · ` : ""}${"excerpt" in target ? target.excerpt : "原文摘录"}`}</small></span></div><Tooltip content="移除关联文献" relationship="label"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="移除关联文献" onClick={() => onChange(targets.filter((_, position) => position !== index))} /></Tooltip></div>; })}</div>}
     <div className="literature-search-row"><Input role="combobox" aria-label="检索关联文献" contentBefore={<Search20Regular />} value={query} onChange={(_, data) => setQuery(data.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(); } }} /><Button type="button" appearance="primary" onClick={() => void search()} disabled={loading}>检索</Button></div>
     {loading && <div className="literature-loading" role="status"><Spinner size="tiny" /> 正在检索文献</div>}
+    {result?.status === "unavailable" && <Button type="button" appearance="subtle" aria-label="重试检索" onClick={() => void search()} disabled={loading}>重试检索</Button>}
     {result?.status === "ambiguous" && <div className="literature-candidates" role="list">{candidates.map((candidate) => <div key={candidate.candidateKey} role="listitem"><span><strong>{candidate.record.title}</strong><small>{candidate.record.authors.join("、")}{candidate.record.year ? ` · ${candidate.record.year}` : ""}</small></span><Button type="button" aria-label={`选择 ${candidate.record.title}`} onClick={() => void confirm(candidate)}>选择</Button></div>)}</div>}
     {confirmed && <div className="literature-confirmed-record" role="status"><strong>{recordTitle(confirmed)}</strong>{kind === "whole_document" ? <small>已确认，可继续添加为关联文献</small> : <div className="target-form literature-passage-form"><label>页码<Input aria-label="页码" type="number" min={1} value={page} onChange={(_, data) => setPage(data.value)} /></label><label className="wide">原文摘录<Textarea aria-label="原文摘录" value={excerpt} onChange={(_, data) => setExcerpt(data.value)} /></label><Button type="button" icon={<Add20Regular />} onClick={() => void addConfirmed(confirmed)}>添加已确认文献</Button></div>}</div>}
     {result?.status === "not_found" && !manual && <Button type="button" appearance="subtle" onClick={() => setManual(true)}>手动添加文献</Button>}

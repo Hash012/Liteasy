@@ -63,7 +63,8 @@ describe("LiteratureTargetEditor", () => {
     const user = userEvent.setup();
     resolveLiterature
       .mockResolvedValueOnce({ status: "ambiguous", candidates: [candidate, { ...candidate, candidateKey: "openalex:openalex_id:W1", provider: "openalex", record: { ...candidate.record, title: "Another Paper", identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W1" }] } }], unavailableProviders: [] })
-      .mockResolvedValueOnce({ status: "unavailable", retryable: true, unavailableProviders: ["crossref"] });
+      .mockResolvedValueOnce({ status: "unavailable", retryable: true, unavailableProviders: ["crossref"] })
+      .mockResolvedValueOnce({ status: "not_found", candidates: [], unavailableProviders: [] });
     confirmLiterature.mockResolvedValue({ literature: confirmed });
     const view = renderEditor();
     const { onChange } = view;
@@ -79,7 +80,17 @@ describe("LiteratureTargetEditor", () => {
     await user.type(query, "retry");
     await user.click(screen.getByRole("button", { name: "检索" }));
     expect(await screen.findByText(/暂时不可用/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "重试检索" }));
+    await waitFor(() => expect(resolveLiterature).toHaveBeenCalledTimes(3));
     expect(screen.queryByLabelText("手动文献标题")).not.toBeInTheDocument();
+  });
+
+  test("debounces title search after three characters", async () => {
+    const user = userEvent.setup();
+    resolveLiterature.mockResolvedValue({ status: "not_found", candidates: [], unavailableProviders: [] });
+    renderEditor();
+    await user.type(screen.getByRole("combobox", { name: "检索关联文献" }), "abc");
+    await waitFor(() => expect(resolveLiterature).toHaveBeenCalledWith({ purpose: "forum_compose", query: "abc" }));
   });
 
   test("allows manual fallback only after not found and enforces minimum metadata", async () => {
@@ -116,7 +127,7 @@ describe("LiteratureTargetEditor", () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ kind: "source_passage", literature: { literatureId: "literature-1" }, page: 3, excerpt: "Important passage" })]));
     const selectedTargets = onChange.mock.calls[onChange.mock.calls.length - 1]?.[0] ?? [];
     view.rerender(<LiteratureTargetEditor onChange={onChange} required targets={selectedTargets} />);
-    expect(screen.getByText("A Reliable Paper")).toBeVisible();
+    expect(screen.getAllByText("A Reliable Paper").length).toBeGreaterThanOrEqual(1);
     await user.click(screen.getByRole("button", { name: "移除关联文献" }));
     expect(onChange).toHaveBeenLastCalledWith([]);
   });
