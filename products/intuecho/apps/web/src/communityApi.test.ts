@@ -100,8 +100,10 @@ describe("communityApi literature clients", () => {
     const replyId = "reply/id with spaces";
     const publication = { published: true as const, tags: ["method"], targets: [] };
 
-    await communityApi.updateReplyPublication(replyId, publication);
-    await communityApi.deleteReply(replyId);
+    const publicationResult = await communityApi.updateReplyPublication(replyId, publication);
+    expect(publicationResult.reply).toBeDefined();
+    const deletionResult = await communityApi.deleteReply(replyId);
+    expect(deletionResult.replyId).toBe("reply/id");
 
     const encoded = encodeURIComponent(replyId);
     expect(fetchMock).toHaveBeenNthCalledWith(1, expect.stringContaining(`/v1/replies/${encoded}/publication`), expect.objectContaining({
