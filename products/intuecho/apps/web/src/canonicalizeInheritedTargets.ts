@@ -28,7 +28,10 @@ export async function canonicalizeInheritedTargets(targets: AnnotationTarget[]):
         purpose: "forum_compose"
       });
       if (result.status !== "exact") throw new Error("LITERATURE_RECONFIRMATION_REQUIRED");
-      const confirmed = await communityApi.confirmLiterature({ candidateKey: result.candidate.candidateKey, mode: "candidate" });
+      const confirmed = await communityApi.confirmLiterature({
+        candidateKey: result.candidate.candidateKey,
+        mode: result.confirmationMode
+      });
       return { literatureId: confirmed.literature.literatureId };
     })();
     confirmations.set(key, confirmation);

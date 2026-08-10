@@ -110,6 +110,7 @@ test("normalizes DOI URL queries before internal lookup even when providers are 
           year: 1843
         }
       },
+      confirmationMode: "candidate",
       status: "exact",
       unavailableProviders: []
     });
@@ -174,7 +175,7 @@ test("deduplicates Crossref and OpenAlex candidates only through their shared st
   assert.deepEqual(result.candidate.record.identifiers.map((item) => item.kind), ["doi"]);
 });
 
-test("requires explicit selection for corroborated aggregate candidates", async () => {
+test("marks two independently corroborated aggregate candidates as exact", async () => {
   const resolver = createLiteratureResolver({
     providers: [
       provider("openalex", {
@@ -210,9 +211,9 @@ test("requires explicit selection for corroborated aggregate candidates", async 
     purpose: "liteasy_pdf_annotation"
   });
 
-  assert.equal(result.status, "ambiguous");
-  assert.equal(result.candidates.length, 1);
-  assert.equal(result.candidates[0].provider, "openalex");
+  assert.equal(result.status, "exact");
+  assert.equal(result.confirmationMode, "corroborated");
+  assert.equal(result.candidate.provider, "openalex");
 });
 
 test("rejects an aggregate publication candidate that collapses arXiv and DOI versions", async () => {
@@ -571,6 +572,105 @@ test("re-fetches an external candidate and never accepts the client record", asy
 
   assert.deepEqual(result, { source: "refetched", title: "Verified Provider Record" });
   assert.deepEqual(confirmedCandidate.relations, refetched.relations);
+});
+
+test("re-fetches an independent aggregate source before corroborated confirmation", async () => {
+  const selected = candidate({
+    candidateKey: "openalex:openalex_id:W123",
+    identifiers: [
+      publicIdentifier("openalex_id", "W123"),
+      publicIdentifier("doi", "10.1000/shared")
+    ],
+    provider: "openalex"
+  });
+  const corroborating = candidate({
+    candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+    identifiers: [
+      publicIdentifier("semantic_scholar_id", "corpus:456"),
+      publicIdentifier("doi", "10.1000/shared")
+    ],
+    provider: "semantic_scholar"
+  });
+  let confirmedCandidate;
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("openalex", { fetchCandidate: async () => selected }),
+      provider("semantic_scholar", {
+        fetchCandidate: async (candidateKey) => candidateKey === corroborating.candidateKey ? corroborating : null,
+        search: async () => [corroborating]
+      })
+    ],
+    repository: repository({
+      async confirmRefetchedLiterature(_owner, verifiedCandidate) {
+        confirmedCandidate = verifiedCandidate;
+        return { source: "refetched", title: verifiedCandidate.record.title };
+      }
+    })
+  });
+
+  await resolver.confirm(user, {
+    candidateKey: selected.candidateKey,
+    mode: "corroborated"
+  });
+
+  assert.deepEqual(confirmedCandidate.corroborations, [corroborating]);
+});
+
+test("rejects corroborated confirmation when the independent source no longer agrees", async () => {
+  const selected = candidate({
+    candidateKey: "openalex:openalex_id:W123",
+    identifiers: [publicIdentifier("openalex_id", "W123")],
+    provider: "openalex"
+  });
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("openalex", { fetchCandidate: async () => selected }),
+      provider("semantic_scholar", { search: async () => [] })
+    ],
+    repository: repository()
+  });
+
+  await assert.rejects(() => resolver.confirm(user, {
+    candidateKey: selected.candidateKey,
+    mode: "corroborated"
+  }), /LITERATURE_CORROBORATION_REQUIRED/);
+});
+
+test("rejects user-selected aggregate confirmation after a fresh cross-source conflict", async () => {
+  const selected = candidate({
+    candidateKey: "openalex:openalex_id:W123",
+    identifiers: [
+      publicIdentifier("openalex_id", "W123"),
+      publicIdentifier("doi", "10.1000/shared")
+    ],
+    provider: "openalex"
+  });
+  const conflicting = candidate({
+    authors: ["Different Author"],
+    candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+    identifiers: [
+      publicIdentifier("semantic_scholar_id", "corpus:456"),
+      publicIdentifier("doi", "10.1000/shared")
+    ],
+    provider: "semantic_scholar",
+    title: "Different Paper",
+    year: 2025
+  });
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("openalex", { fetchCandidate: async () => selected }),
+      provider("semantic_scholar", {
+        fetchCandidate: async () => conflicting,
+        search: async () => [conflicting]
+      })
+    ],
+    repository: repository()
+  });
+
+  await assert.rejects(() => resolver.confirm(user, {
+    candidateKey: selected.candidateKey,
+    mode: "candidate"
+  }), /LITERATURE_IDENTITY_CONFLICT/);
 });
 
 test("reloads internal candidates by literature id before confirming", async () => {

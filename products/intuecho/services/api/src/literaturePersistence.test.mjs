@@ -117,6 +117,40 @@ test("SQLite binds Crossref, OpenAlex, and Semantic Scholar DOI claims to one id
   }
 });
 
+test("SQLite stores independently corroborated aggregate claims in one confirmation transaction", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const record = await repository.confirmRefetchedLiterature(owner, {
+      ...candidate({
+        candidateKey: "openalex:openalex_id:W123",
+        identifiers: [
+          { kind: "openalex_id", source: "public_registry", value: "W123" },
+          { kind: "doi", source: "public_registry", value: "10.1000/shared" }
+        ],
+        provider: "openalex"
+      }),
+      corroborations: [candidate({
+        candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+        identifiers: [
+          { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" },
+          { kind: "doi", source: "public_registry", value: "10.1000/shared" }
+        ],
+        provider: "semantic_scholar"
+      })]
+    });
+
+    assert.equal(record.revision, 1);
+    const doiIdentifier = db.prepare("SELECT id FROM literature_identifiers_v2 WHERE identifier_kind = 'doi'").get();
+    assert.deepEqual(db.prepare("SELECT provider, identifier_id FROM literature_identity_claims_v2 ORDER BY provider").all(), [
+      { identifier_id: doiIdentifier.id, provider: "openalex" },
+      { identifier_id: doiIdentifier.id, provider: "semantic_scholar" }
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
 test("SQLite does not merge aggregate preprint and publication records with matching bibliography", async () => {
   const db = new Database(":memory:");
   try {
@@ -571,6 +605,35 @@ test("PostgreSQL binds Crossref, OpenAlex, and Semantic Scholar DOI claims to on
     provider: claim.provider
   })).sort((left, right) => left.provider.localeCompare(right.provider)), [
     { identifierId: doiIdentifier.id, provider: "crossref" },
+    { identifierId: doiIdentifier.id, provider: "openalex" },
+    { identifierId: doiIdentifier.id, provider: "semantic_scholar" }
+  ]);
+});
+
+test("PostgreSQL stores independently corroborated aggregate claims in one confirmation transaction", async () => {
+  const harness = postgresHarness();
+  const record = await harness.repository.confirmRefetchedLiterature(owner, {
+    ...candidate({
+      candidateKey: "openalex:openalex_id:W123",
+      identifiers: [
+        { kind: "openalex_id", source: "public_registry", value: "W123" },
+        { kind: "doi", source: "public_registry", value: "10.1000/shared" }
+      ],
+      provider: "openalex"
+    }),
+    corroborations: [candidate({
+      candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+      identifiers: [
+        { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" },
+        { kind: "doi", source: "public_registry", value: "10.1000/shared" }
+      ],
+      provider: "semantic_scholar"
+    })]
+  });
+
+  assert.equal(record.revision, 1);
+  const doiIdentifier = harness.identifiers.find((identifier) => identifier.identifier_kind === "doi");
+  assert.deepEqual(harness.claims.map((claim) => ({ identifierId: claim.identifier_id, provider: claim.provider })), [
     { identifierId: doiIdentifier.id, provider: "openalex" },
     { identifierId: doiIdentifier.id, provider: "semantic_scholar" }
   ]);

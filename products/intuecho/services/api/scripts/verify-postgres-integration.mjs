@@ -602,6 +602,53 @@ try {
   assert.deepEqual(identityCorrectionState.rows[0].prior_identifiers, [
     { kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" }
   ]);
+  const corroboratedLiterature = await annotations.confirmRefetchedLiterature(literatureOwner, {
+    candidateKey: "openalex:openalex_id:W434343",
+    provider: "openalex",
+    record: {
+      authors: ["Independent Evidence Author"],
+      documentType: "article",
+      identifiers: [
+        { kind: "openalex_id", source: "public_registry", value: "W434343" },
+        { kind: "doi", source: "public_registry", value: "10.1000/integration-corroborated" }
+      ],
+      title: "Independently Corroborated Literature",
+      year: 2025
+    },
+    corroborations: [{
+      candidateKey: "semantic_scholar:semantic_scholar_id:corpus:434343",
+      provider: "semantic_scholar",
+      record: {
+        authors: ["Independent Evidence Author"],
+        documentType: "publication",
+        identifiers: [
+          { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:434343" },
+          { kind: "doi", source: "public_registry", value: "10.1000/integration-corroborated" }
+        ],
+        title: "Independently Corroborated Literature",
+        year: 2025
+      }
+    }]
+  });
+  const corroboratedIdentityState = await pool.query(`
+    SELECT
+      (SELECT count(*)::int FROM literature_records WHERE id = $1) AS records,
+      (SELECT count(*)::int FROM literature_identifiers WHERE literature_id = $1 AND identifier_kind = 'doi') AS doi_identifiers,
+      count(*)::int AS claims,
+      count(DISTINCT claim.identifier_id)::int AS claim_identifiers,
+      bool_and(identifier.identifier_kind = 'doi') AS claims_bind_doi
+      FROM literature_identity_claims AS claim
+      JOIN literature_identifiers AS identifier ON identifier.id = claim.identifier_id
+     WHERE identifier.literature_id = $1
+       AND claim.provider IN ('openalex', 'semantic_scholar')
+  `, [corroboratedLiterature.literatureId]);
+  assert.deepEqual(corroboratedIdentityState.rows[0], {
+    claim_identifiers: 1,
+    claims: 2,
+    claims_bind_doi: true,
+    doi_identifiers: 1,
+    records: 1
+  });
   const secondLiterature = await annotations.confirmRefetchedLiterature(literatureOwner, {
     candidateKey: "crossref:doi:10.1000/integration-other",
     provider: "crossref",

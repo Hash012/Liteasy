@@ -211,7 +211,7 @@ export const literatureResolveInputSchema = z.object({
 
 export const literatureConfirmInputSchema = z.object({
   candidateKey: z.string().trim().min(1).max(1000),
-  mode: z.literal("candidate")
+  mode: z.enum(["candidate", "corroborated"])
 }).strict();
 
 export const literatureProjectionVerificationSchema = z.object({

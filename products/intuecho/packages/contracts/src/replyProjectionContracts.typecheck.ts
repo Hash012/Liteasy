@@ -13,6 +13,7 @@ const resolverCandidate: LiteratureCandidate = {
 };
 const resolverResult: LiteratureResolveResult = {
   candidate: resolverCandidate,
+  confirmationMode: "candidate",
   status: "exact",
   unavailableProviders: ["openalex"]
 };

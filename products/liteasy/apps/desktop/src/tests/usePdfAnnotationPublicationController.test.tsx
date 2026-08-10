@@ -312,6 +312,7 @@ describe("usePdfAnnotationPublicationController", () => {
       confirmLiterature: vi.fn().mockResolvedValue({ literature: literature() }),
       resolveLiterature: vi.fn().mockResolvedValue({
         candidate,
+        confirmationMode: "candidate",
         status: "exact",
         unavailableProviders: []
       })
@@ -349,6 +350,36 @@ describe("usePdfAnnotationPublicationController", () => {
       mode: "candidate"
     });
     expect(context.result.current.model.literatureDialog).toBeNull();
+  });
+
+  it("preserves corroborated confirmation mode for an exact aggregate result", async () => {
+    const corroboratedCandidate = {
+      candidateKey: "openalex:openalex_id:W123",
+      provider: "openalex" as const,
+      record: { authors: ["Ada Lovelace"], identifiers: [], title: "A Test Paper", year: 2026 }
+    };
+    const context = setup({
+      confirmLiterature: vi.fn().mockResolvedValue({ literature: literature() }),
+      resolveLiterature: vi.fn().mockResolvedValue({
+        candidate: corroboratedCandidate,
+        confirmationMode: "corroborated",
+        status: "exact",
+        unavailableProviders: []
+      })
+    });
+
+    await act(async () => {
+      await context.result.current.actions.changePublication({
+        annotation: annotation(),
+        operation: "publish",
+        paper: paper()
+      });
+    });
+
+    expect(context.confirmLiterature).toHaveBeenCalledWith({
+      candidateKey: corroboratedCandidate.candidateKey,
+      mode: "corroborated"
+    });
   });
 
   test("defers an ambiguous result until the user selects a candidate", async () => {
@@ -416,7 +447,7 @@ describe("usePdfAnnotationPublicationController", () => {
     };
     const context = setup({
       confirmLiterature: vi.fn().mockReturnValue(confirmation.promise),
-      resolveLiterature: vi.fn().mockResolvedValue({ candidate, status: "exact", unavailableProviders: [] })
+      resolveLiterature: vi.fn().mockResolvedValue({ candidate, confirmationMode: "candidate", status: "exact", unavailableProviders: [] })
     });
     let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
     act(() => {
@@ -473,7 +504,7 @@ describe("usePdfAnnotationPublicationController", () => {
       confirmLiterature: vi.fn().mockResolvedValue({ literature: literature() }),
       resolveLiterature: vi.fn()
         .mockResolvedValueOnce({ retryable: true, status: "unavailable", unavailableProviders: ["crossref"] })
-        .mockResolvedValueOnce({ candidate, status: "exact", unavailableProviders: [] })
+        .mockResolvedValueOnce({ candidate, confirmationMode: "candidate", status: "exact", unavailableProviders: [] })
     });
     let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
     act(() => {

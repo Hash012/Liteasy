@@ -54,7 +54,7 @@ afterEach(() => cleanup());
 describe("LiteratureTargetEditor", () => {
   test("searches title or identifiers and auto-confirms an exact result", async () => {
     const user = userEvent.setup();
-    resolveLiterature.mockResolvedValue({ status: "exact", candidate, unavailableProviders: [] });
+    resolveLiterature.mockResolvedValue({ status: "exact", candidate, confirmationMode: "corroborated", unavailableProviders: [] });
     confirmLiterature.mockResolvedValue({ literature: confirmed });
     const view = renderEditor();
     const { onChange } = view;
@@ -63,6 +63,7 @@ describe("LiteratureTargetEditor", () => {
     await user.click(screen.getByRole("button", { name: "检索" }));
 
     expect(await screen.findByText("A Reliable Paper")).toBeVisible();
+    expect(confirmLiterature).toHaveBeenCalledWith({ candidateKey: candidate.candidateKey, mode: "corroborated" });
     await waitFor(() => expect(onChange).toHaveBeenCalledWith([{ kind: "whole_document", literature: { literatureId: "literature-1" } }]));
     expect(screen.queryByLabelText("身份类型")).not.toBeInTheDocument();
   });
@@ -73,7 +74,7 @@ describe("LiteratureTargetEditor", () => {
     ["OpenAlex", "W123456789"]
   ])("submits a %s identifier explicitly without title debounce", async (_label, queryValue) => {
     const user = userEvent.setup();
-    resolveLiterature.mockResolvedValue({ status: "exact", candidate, unavailableProviders: [] });
+    resolveLiterature.mockResolvedValue({ status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] });
     confirmLiterature.mockResolvedValue({ literature: confirmed });
     const { onChange } = renderEditor();
     const query = screen.getByRole("combobox", { name: "检索关联文献" });
@@ -105,7 +106,7 @@ describe("LiteratureTargetEditor", () => {
     await user.keyboard("{Enter}");
     second.resolve({ status: "not_found", candidates: [], unavailableProviders: [] });
     expect(await screen.findByText(/没有找到/)).toBeVisible();
-    first.resolve({ status: "exact", candidate, unavailableProviders: [] });
+    first.resolve({ status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] });
     await new Promise((resolve) => window.setTimeout(resolve, 50));
     expect(screen.queryByRole("button", { name: "手动添加文献" })).not.toBeInTheDocument();
     expect(confirmLiterature).not.toHaveBeenCalled();
@@ -115,7 +116,7 @@ describe("LiteratureTargetEditor", () => {
   test("ignores a superseded not-found response after a newer exact target is confirmed", async () => {
     const user = userEvent.setup();
     const first = deferred<Awaited<ReturnType<typeof communityApi.resolveLiterature>>>();
-    resolveLiterature.mockImplementation(({ query }) => query?.endsWith("first") ? first.promise : Promise.resolve({ status: "exact", candidate, unavailableProviders: [] }));
+    resolveLiterature.mockImplementation(({ query }) => query?.endsWith("first") ? first.promise : Promise.resolve({ status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] }));
     confirmLiterature.mockResolvedValue({ literature: confirmed });
     const { onChange } = renderEditor();
     const query = screen.getByRole("combobox", { name: "检索关联文献" });
@@ -134,7 +135,7 @@ describe("LiteratureTargetEditor", () => {
     const user = userEvent.setup();
     const confirm = deferred<{ literature: typeof confirmed }>();
     resolveLiterature
-      .mockResolvedValueOnce({ status: "exact", candidate, unavailableProviders: [] })
+      .mockResolvedValueOnce({ status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] })
       .mockResolvedValueOnce({ status: "not_found", candidates: [], unavailableProviders: [] });
     confirmLiterature.mockReturnValue(confirm.promise);
     const { onChange } = renderEditor();
@@ -239,7 +240,7 @@ describe("LiteratureTargetEditor", () => {
 
   test("supports source-passage details, multiple records, and removal", async () => {
     const user = userEvent.setup();
-    resolveLiterature.mockResolvedValue({ status: "exact", candidate, unavailableProviders: [] });
+    resolveLiterature.mockResolvedValue({ status: "exact", candidate, confirmationMode: "candidate", unavailableProviders: [] });
     confirmLiterature.mockResolvedValue({ literature: confirmed });
     const view = renderEditor();
     const { onChange } = view;

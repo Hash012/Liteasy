@@ -112,7 +112,7 @@ function deferred<T>() {
 beforeEach(() => {
   vi.clearAllMocks();
   createReply.mockResolvedValue({ annotation: null, reply: { ...publishedReply, derivedAnnotationId: null, derivedAnnotationState: "none" } });
-  resolveLiterature.mockResolvedValue({ candidate: legacyCandidate, status: "exact", unavailableProviders: [] });
+  resolveLiterature.mockResolvedValue({ candidate: legacyCandidate, confirmationMode: "candidate", status: "exact", unavailableProviders: [] });
   confirmLiterature.mockResolvedValue({ literature: confirmedLiterature });
   updateReply.mockResolvedValue({ reply: publishedReply });
 });
@@ -202,7 +202,7 @@ test("starts only one legacy confirmation while reply publication is being enabl
   expect(checkbox).toBeDisabled();
   expect(screen.getByRole("button", { name: "发布" })).toBeDisabled();
   expect(resolveLiterature).toHaveBeenCalledOnce();
-  resolution.resolve({ candidate: legacyCandidate, status: "exact", unavailableProviders: [] });
+  resolution.resolve({ candidate: legacyCandidate, confirmationMode: "candidate", status: "exact", unavailableProviders: [] });
   await waitFor(() => expect(confirmLiterature).toHaveBeenCalledOnce());
   expect(checkbox).toBeEnabled();
   expect(screen.getByRole("button", { name: "发布" })).toBeEnabled();
@@ -227,6 +227,17 @@ test.each([
 
 test("canonicalizes both the primary and evidence literature in a derived target", async () => {
   const literature = publicParent.targets[0].literature;
+  const aggregateCandidate = {
+    ...legacyCandidate,
+    candidateKey: "openalex:openalex_id:W123",
+    provider: "openalex" as const
+  };
+  resolveLiterature.mockResolvedValueOnce({
+    candidate: aggregateCandidate,
+    confirmationMode: "corroborated",
+    status: "exact",
+    unavailableProviders: []
+  });
   const targets = await canonicalizeInheritedTargets([{
     derivedContent: { artifactId: "artifact-1", excerpt: "Derived excerpt", version: "v1" },
     evidence: [{ anchorHash: "sha256:evidence", excerpt: "Source evidence", literature, rects: [] }],
@@ -241,7 +252,7 @@ test("canonicalizes both the primary and evidence literature in a derived target
     literature: { literatureId: "literature-parent" }
   }]);
   expect(resolveLiterature).toHaveBeenCalledOnce();
-  expect(confirmLiterature).toHaveBeenCalledOnce();
+  expect(confirmLiterature).toHaveBeenCalledWith({ candidateKey: aggregateCandidate.candidateKey, mode: "corroborated" });
 });
 
 test.each([

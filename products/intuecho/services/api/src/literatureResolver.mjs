@@ -2,12 +2,14 @@ import {
   hasCrossVersionIdentifierConflict,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
-  sameLiteratureBibliography
+  sameLiteratureBibliography,
+  sameLiteratureVersionBibliography
 } from "./literatureIdentity.mjs";
 
 const MAX_CANDIDATES = 10;
 const stableKinds = new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]);
 const primaryRegistryProviders = new Set(["crossref", "arxiv"]);
+const aggregateRegistryProviders = new Set(["openalex", "semantic_scholar"]);
 
 export class LiteratureResolverError extends Error {
   constructor(code) {
@@ -156,6 +158,17 @@ function hasIdentityConflict(candidates) {
     sharesIdentity(candidate, other) && !bibliographiesDoNotConflict(candidate, other)));
 }
 
+function corroboratedAggregateCandidate(candidates, requestedKeys) {
+  const aggregateCandidates = candidates.filter((candidate) => aggregateRegistryProviders.has(candidate.provider));
+  for (const [index, candidate] of aggregateCandidates.entries()) {
+    for (const other of aggregateCandidates.slice(index + 1)) {
+      if (candidate.provider === other.provider || !sameLiteratureVersionBibliography(candidate.record, other.record)) continue;
+      return selectRepresentative(candidate, other, requestedKeys);
+    }
+  }
+  return null;
+}
+
 function requestedLimit(input) {
   const requested = Number(input?.limit ?? MAX_CANDIDATES);
   return Math.max(1, Math.min(Number.isInteger(requested) ? requested : MAX_CANDIDATES, MAX_CANDIDATES));
@@ -236,6 +249,50 @@ function candidateKeyParts(candidateKey) {
   }
 }
 
+function confirmationSearchInput(record) {
+  return {
+    hints: {
+      ...(record.authors.length ? { authors: [...record.authors] } : {}),
+      identifiers: record.identifiers.map(({ kind, value }) => ({ kind, value })),
+      title: record.title,
+      ...(record.year ? { year: record.year } : {})
+    },
+    limit: MAX_CANDIDATES,
+    purpose: "liteasy_pdf_annotation"
+  };
+}
+
+async function refetchCrossSourceCandidates(selected, configuredProviders) {
+  const otherProviders = configuredProviders.filter((provider) => provider.name !== selected.provider &&
+    providerSupports(provider, "resolveIdentity", "search") &&
+    providerSupports(provider, "refetchForConfirmation", "fetchCandidate"));
+  const searched = await Promise.allSettled(otherProviders.map(async (provider) => {
+    const operation = providerOperation(provider, "resolveIdentity");
+    const values = await operation.call(provider, confirmationSearchInput(selected.record));
+    return (Array.isArray(values) ? values : [])
+      .map((value) => externalCandidate(value, provider.name))
+      .filter(Boolean)
+      .filter((candidate) => sharesIdentity(selected, candidate) ||
+        sameLiteratureVersionBibliography(selected.record, candidate.record));
+  }));
+  const discovered = searched.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+  if (discovered.some((candidate) => sharesIdentity(selected, candidate) && !bibliographiesDoNotConflict(selected, candidate))) {
+    throw new LiteratureResolverError("LITERATURE_IDENTITY_CONFLICT");
+  }
+  const byKey = new Map(discovered.map((candidate) => [candidate.candidateKey, candidate]));
+  const refetched = await Promise.allSettled([...byKey.values()].map(async (candidate) => {
+    const provider = otherProviders.find((item) => item.name === candidate.provider);
+    const refetch = provider?.refetchForConfirmation ?? provider?.fetchCandidate;
+    const value = await refetch.call(provider, candidate.candidateKey);
+    return externalCandidate(value, candidate.provider);
+  }));
+  const verified = refetched.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
+  if (verified.some((candidate) => sharesIdentity(selected, candidate) && !bibliographiesDoNotConflict(selected, candidate))) {
+    throw new LiteratureResolverError("LITERATURE_IDENTITY_CONFLICT");
+  }
+  return verified.filter((candidate) => sameLiteratureVersionBibliography(selected.record, candidate.record));
+}
+
 export function createLiteratureResolver({ providers, repository }) {
   const configuredProviders = Array.isArray(providers) ? [...providers] : [];
   if (!repository) throw new TypeError("repository is required");
@@ -248,7 +305,7 @@ export function createLiteratureResolver({ providers, repository }) {
       if (requestedIdentifiers.length > 0) {
         const identified = await repository.findLiteratureByIdentifiers(requestedIdentifiers);
         const exact = internalCandidate(identified);
-        if (exact) return { candidate: exact, status: "exact", unavailableProviders: [] };
+        if (exact) return { candidate: exact, confirmationMode: "candidate", status: "exact", unavailableProviders: [] };
       }
       const stored = await repository.searchStoredLiterature(query, limit);
       const capability = isPdfIdentityPurpose(input) ? "resolveIdentity" : "search";
@@ -271,7 +328,11 @@ export function createLiteratureResolver({ providers, repository }) {
       const candidates = rankAndDeduplicate(admittedCandidates, requestedKeys).slice(0, limit);
       const exact = exactCandidate(input, candidates);
       if (exact && (exact.provider === "intuecho" || primaryRegistryProviders.has(exact.provider))) {
-        return { candidate: exact, status: "exact", unavailableProviders };
+        return { candidate: exact, confirmationMode: "candidate", status: "exact", unavailableProviders };
+      }
+      const corroborated = corroboratedAggregateCandidate(admittedCandidates, requestedKeys);
+      if (corroborated) {
+        return { candidate: corroborated, confirmationMode: "corroborated", status: "exact", unavailableProviders };
       }
       if (candidates.length) return { candidates, status: "ambiguous", unavailableProviders };
       if (selectedProviders.length > 0 && external.every((result) => result.status === "rejected")) {
@@ -304,10 +365,17 @@ export function createLiteratureResolver({ providers, repository }) {
       if (!candidate || candidate.candidateKey !== input.candidateKey) {
         throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
       }
+      const corroborations = aggregateRegistryProviders.has(candidate.provider)
+        ? await refetchCrossSourceCandidates(candidate, configuredProviders)
+        : [];
+      if (input.mode === "corroborated" && corroborations.length === 0) {
+        throw new LiteratureResolverError("LITERATURE_CORROBORATION_REQUIRED");
+      }
       return repository.confirmRefetchedLiterature(owner, {
         candidateKey: candidate.candidateKey,
         provider: candidate.provider,
         record: candidate.record,
+        ...(corroborations.length ? { corroborations } : {}),
         ...(candidate.relations ? { relations: candidate.relations } : {}),
         ...(candidate.recordUrl ? { recordUrl: candidate.recordUrl } : {})
       });

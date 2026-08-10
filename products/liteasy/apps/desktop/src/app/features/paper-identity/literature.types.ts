@@ -96,10 +96,10 @@ type LiteratureProviderAvailability = {
 };
 
 export type LiteratureResolveResult =
-  | ({ candidate: LiteratureCandidate; status: "exact" } & LiteratureProviderAvailability)
+  | ({ candidate: LiteratureCandidate; confirmationMode: "candidate" | "corroborated"; status: "exact" } & LiteratureProviderAvailability)
   | ({ candidates: LiteratureCandidate[]; status: "ambiguous" } & LiteratureProviderAvailability)
   | ({ candidates: LiteratureCandidate[]; status: "conflict" } & LiteratureProviderAvailability)
   | ({ candidates: []; status: "not_found" } & LiteratureProviderAvailability)
   | ({ retryable: true; status: "unavailable" } & LiteratureProviderAvailability);
 
-export type LiteratureConfirmInput = { candidateKey: string; mode: "candidate" };
+export type LiteratureConfirmInput = { candidateKey: string; mode: "candidate" | "corroborated" };

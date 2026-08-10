@@ -11,8 +11,9 @@ import {
   updateReplyPublicationSchema
 } from "@intuecho/contracts";
 
-test("accepts only candidate confirmation keys", () => {
+test("accepts only source-confirmed candidate modes", () => {
   assert.equal(literatureConfirmInputSchema.safeParse({ mode: "candidate", candidateKey: "crossref:doi:10.1000/test" }).success, true);
+  assert.equal(literatureConfirmInputSchema.safeParse({ mode: "corroborated", candidateKey: "openalex:openalex_id:W123" }).success, true);
   assert.equal(literatureConfirmInputSchema.safeParse({
     mode: "manual",
     record: { authors: ["Ada Lovelace"], identifiers: [], title: "Unindexed Work", year: 1843 }

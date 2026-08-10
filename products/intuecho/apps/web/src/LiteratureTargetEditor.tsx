@@ -65,7 +65,7 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
       const next = await communityApi.resolveLiterature({ purpose: "forum_compose", query: query.trim() });
       if (attempt !== attemptRef.current) return;
       setResult(next);
-      if (next.status === "exact") await confirm(next.candidate, attempt);
+      if (next.status === "exact") await confirm(next.candidate, attempt, next.confirmationMode);
       if (next.status === "unavailable") setStatus("文献检索服务暂时不可用，请重试。");
       if (next.status === "not_found") setStatus("没有找到可由公开来源确认的文献。");
       if (next.status === "conflict") setStatus("来源返回的稳定标识与题录存在冲突，无法确认。");
@@ -76,11 +76,15 @@ export function LiteratureTargetEditor({ onChange, required, targets }: Props) {
     }
   }
 
-  async function confirm(candidate: LiteratureCandidate, originatingAttempt?: number) {
+  async function confirm(
+    candidate: LiteratureCandidate,
+    originatingAttempt?: number,
+    mode: "candidate" | "corroborated" = "candidate"
+  ) {
     const attempt = originatingAttempt ?? ++attemptRef.current;
     setLoading(true); setStatus("");
     try {
-      const response = await communityApi.confirmLiterature({ candidateKey: candidate.candidateKey, mode: "candidate" });
+      const response = await communityApi.confirmLiterature({ candidateKey: candidate.candidateKey, mode });
       if (attempt !== attemptRef.current) return;
       setConfirmed(response.literature);
       setLiteratureRecords((records) => ({ ...records, [response.literature.literatureId]: response.literature }));

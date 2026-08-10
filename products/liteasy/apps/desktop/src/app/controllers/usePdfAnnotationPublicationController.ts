@@ -230,7 +230,11 @@ export function usePdfAnnotationPublicationController({
     });
   }
 
-  async function confirmCandidate(active: ActiveResolution, candidateKey: string) {
+  async function confirmCandidate(
+    active: ActiveResolution,
+    candidateKey: string,
+    mode: "candidate" | "corroborated" = "candidate"
+  ) {
     if (!isActive(active) || active.pending ||
       !active.candidates.some((candidate) => candidate.candidateKey === candidateKey)) return;
     active.pending = true;
@@ -242,7 +246,7 @@ export function usePdfAnnotationPublicationController({
       unavailableProviders: active.unavailableProviders
     });
     try {
-      const confirmed = await forumClientRef.current.confirmLiterature({ candidateKey, mode: "candidate" });
+      const confirmed = await forumClientRef.current.confirmLiterature({ candidateKey, mode });
       finishResolution(active, confirmed.literature);
     } catch (error) {
       showCandidates(
@@ -259,7 +263,7 @@ export function usePdfAnnotationPublicationController({
     active.unavailableProviders = result.unavailableProviders;
     if (result.status === "exact") {
       active.candidates = [result.candidate];
-      await confirmCandidate(active, result.candidate.candidateKey);
+      await confirmCandidate(active, result.candidate.candidateKey, result.confirmationMode);
       return;
     }
     active.pending = false;
