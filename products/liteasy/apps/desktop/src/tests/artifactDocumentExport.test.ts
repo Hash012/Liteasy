@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   artifactMarkdownToHtml,
   createArtifactHtml,
-  createArtifactMarkdown
+  createArtifactMarkdown,
+  createArtifactExportPayload
 } from "../app/features/artifacts/artifactDocumentExport";
 import type { ArtifactTab, ArtifactType } from "../app/features/artifacts/artifact.types";
 import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";

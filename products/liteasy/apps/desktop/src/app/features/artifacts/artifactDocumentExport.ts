@@ -1,9 +1,13 @@
 import type { ArtifactOutlineNode, ArtifactTab, ArtifactType } from "./artifact.types";
+import type {
+  ArtifactDocumentFormat,
+  ArtifactExportPayload
+} from "./artifactExport.types";
 import type { VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
 import type { MineruFigure } from "../import/import.types";
 import type { ThinReadingEvidenceSpan, ThinReadingFigureRecommendation } from "../thin-reading/thinReading.types";
 
-export type ArtifactDocumentFormat = "html" | "markdown" | "pdf";
+export type { ArtifactDocumentFormat, ArtifactExportPayload } from "./artifactExport.types";
 
 const artifactTypeLabels: Record<ArtifactType, string> = {
   comparison_table: "文献对比",
@@ -362,6 +366,15 @@ function decodeBase64(value: string) {
   return bytes;
 }
 
+function encodeBase64(value: Uint8Array) {
+  const chunks: string[] = [];
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < value.length; offset += chunkSize) {
+    chunks.push(String.fromCharCode(...value.subarray(offset, offset + chunkSize)));
+  }
+  return btoa(chunks.join(""));
+}
+
 function combinePdfBytes(chunks: readonly Uint8Array[]) {
   const size = chunks.reduce((total, chunk) => total + chunk.length, 0);
   const output = new Uint8Array(size);
@@ -502,16 +515,53 @@ export function createArtifactPdf(tab: ArtifactTab) {
   return createPdfDocument(images);
 }
 
-export async function exportArtifactDocument(tab: ArtifactTab, format: ArtifactDocumentFormat) {
+export function createArtifactExportPayload(
+  tab: ArtifactTab,
+  format: ArtifactDocumentFormat
+): ArtifactExportPayload {
   const fileStem = safeFileStem(tab.title);
   if (format === "markdown") {
-    downloadBlob(`${fileStem}.md`, `\uFEFF${createArtifactMarkdown(tab)}`, "text/markdown;charset=utf-8");
-    return;
+    return {
+      artifactId: tab.artifactId,
+      content: `\uFEFF${createArtifactMarkdown(tab)}`,
+      contentEncoding: "utf8",
+      fileName: `${fileStem}.md`,
+      format,
+      title: tab.title
+    };
   }
   const html = createArtifactHtml(tab);
   if (format === "html") {
-    downloadBlob(`${fileStem}.html`, html, "text/html;charset=utf-8");
+    return {
+      artifactId: tab.artifactId,
+      content: html,
+      contentEncoding: "utf8",
+      fileName: `${fileStem}.html`,
+      format,
+      title: tab.title
+    };
+  }
+  return {
+    artifactId: tab.artifactId,
+    content: encodeBase64(createArtifactPdf(tab)),
+    contentEncoding: "base64",
+    fileName: `${fileStem}.pdf`,
+    format,
+    title: tab.title
+  };
+}
+
+export function downloadArtifactPayload(payload: ArtifactExportPayload) {
+  if (payload.contentEncoding === "base64") {
+    downloadBlob(payload.fileName, decodeBase64(payload.content), "application/pdf");
     return;
   }
-  downloadBlob(`${fileStem}.pdf`, createArtifactPdf(tab), "application/pdf");
+  const mimeType = payload.format === "markdown"
+    ? "text/markdown;charset=utf-8"
+    : "text/html;charset=utf-8";
+  downloadBlob(payload.fileName, payload.content, mimeType);
+}
+
+export async function exportArtifactDocument(tab: ArtifactTab, format: ArtifactDocumentFormat) {
+  downloadArtifactPayload(createArtifactExportPayload(tab, format));
 }
