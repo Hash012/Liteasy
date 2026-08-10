@@ -87,6 +87,20 @@ export class PostgresAgentArtifactRepository {
     return { artifacts: result.rows.map((row) => artifact(row.body)) };
   }
 
+  async get(subjectInput, artifactIdInput) {
+    const subjectId = subject(subjectInput);
+    const id = artifactId(artifactIdInput);
+    const result = await this.pool.query(`
+      SELECT body, revision FROM agent_artifacts
+       WHERE subject_id = $1 AND artifact_id = $2
+    `, [subjectId, id]);
+    if (!result.rows[0]) throw new LibraryRepositoryError("agent_artifact_not_found", 404);
+    return {
+      artifact: artifact(result.rows[0].body),
+      revision: Number(result.rows[0].revision)
+    };
+  }
+
   async save(subjectInput, input, traceId) {
     const subjectId = subject(subjectInput);
     const body = artifact(input);

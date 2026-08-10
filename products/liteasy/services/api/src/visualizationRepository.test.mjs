@@ -865,20 +865,21 @@ test("publication locks and rechecks governance before atomically saving and set
     state: "reserved",
     subject_id: "user-1"
   };
-  const harness = adminPool(async (sql) => {
+  const harness = adminPool(async (sql, values) => {
     calls.push(sql);
     if (sql.includes("FROM visualization_quota_reservations") && sql.includes("FOR UPDATE")) return { rows: [reservation] };
     if (sql.includes("FROM visualization_entitlements") && sql.includes("FOR UPDATE")) return { rows: [{ allowed: true, allowed_modalities: ["semantic_graph"] }] };
     if (sql.includes("FROM visualization_user_preferences")) return { rows: [{ enabled: true }] };
     if (sql.includes("FROM visualization_provider_configs") && sql.includes("FOR UPDATE")) return { rows: [{ enabled: true, revision: "7" }] };
-    if (sql.includes("FROM library_entries entry")) return { rows: [{ content_hash: "c".repeat(64) }] };
+    if (sql.includes("FROM library_entries entry")) {
+      return { rows: [{ content_hash: values[0] === "document-2" ? "d".repeat(64) : "c".repeat(64) }] };
+    }
     if (sql.startsWith("INSERT INTO visualization_artifacts")) return { rows: [{ artifact_id: "artifact-1" }] };
     if (sql.startsWith("UPDATE visualization_quota_reservations")) return { rows: [{ ...reservation, settled_units: 2, state: "settled" }] };
     return { rows: [] };
   });
   const repository = new PostgresVisualizationRepository(harness.pool);
   const result = await repository.publish("user-1", {
-    access: { allowed: true, scopeId: "user-1", scopeType: "user", sourceIdentityHash: "c".repeat(64) },
     artifact: {
       artifactId: "artifact-1",
       body: { artifactVersion: "liteasy.visualization/v1" },
@@ -889,7 +890,20 @@ test("publication locks and rechecks governance before atomically saving and set
       specHash: "b".repeat(64),
       state: "ready"
     },
-    document: { documentId: "document-1", sourceIdentityHash: "c".repeat(64) },
+    documents: [
+      {
+        access: { allowed: true, scopeId: "user-1", scopeType: "user", sourceIdentityHash: "c".repeat(64) },
+        documentId: "document-1",
+        isPrimary: true,
+        sourceIdentityHash: "c".repeat(64)
+      },
+      {
+        access: { allowed: true, scopeId: "user-1", scopeType: "user", sourceIdentityHash: "d".repeat(64) },
+        documentId: "document-2",
+        isPrimary: false,
+        sourceIdentityHash: "d".repeat(64)
+      }
+    ],
     reservationId: "reservation-1",
     routeId: "route-1",
     routeRevision: 7,
@@ -900,6 +914,13 @@ test("publication locks and rechecks governance before atomically saving and set
   assert.equal(result.artifact.artifactId, "artifact-1");
   const settlement = harness.calls.find((call) => call.sql.startsWith("UPDATE visualization_quota_reservations"));
   assert.equal(settlement.values[1], 4, "successful publication settles the server-reserved units");
+  const artifactInsert = harness.calls.find((call) => call.sql.startsWith("INSERT INTO visualization_artifacts"));
+  assert.equal(artifactInsert.values[3], "document-1");
+  const sourceInserts = harness.calls.filter((call) => call.sql.startsWith("INSERT INTO visualization_artifact_sources"));
+  assert.deepEqual(sourceInserts.map(({ values }) => values.slice(2)), [
+    ["document-1", "c".repeat(64), true],
+    ["document-2", "d".repeat(64), false]
+  ]);
   assert.ok(calls.indexOf(calls.find((sql) => sql.startsWith("INSERT INTO visualization_artifacts"))) <
     calls.indexOf(calls.find((sql) => sql.startsWith("UPDATE visualization_quota_reservations"))));
 });

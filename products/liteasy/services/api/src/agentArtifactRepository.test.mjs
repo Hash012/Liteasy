@@ -30,6 +30,28 @@ test("lists only the authenticated subject's Agent artifacts", async () => {
   assert.match(calls[0].sql, /WHERE subject_id = \$1/);
 });
 
+test("gets one artifact only through its subject-bound identity", async () => {
+  const calls = [];
+  const repository = new PostgresAgentArtifactRepository({
+    async query(sql, params) {
+      calls.push({ params, sql });
+      return params[0] === "user_1" && params[1] === "artifact_1"
+        ? { rows: [{ body: document(), revision: "3" }] }
+        : { rows: [] };
+    }
+  });
+
+  assert.deepEqual(await repository.get("user_1", "artifact_1"), {
+    artifact: document(),
+    revision: 3
+  });
+  await assert.rejects(
+    () => repository.get("user_2", "artifact_1"),
+    /agent_artifact_not_found/
+  );
+  assert.match(calls[0].sql, /WHERE subject_id = \$1 AND artifact_id = \$2/);
+});
+
 test("saves an Agent artifact and audit record in one transaction", async () => {
   const calls = [];
   const client = {

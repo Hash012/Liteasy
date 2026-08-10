@@ -160,6 +160,31 @@ async function rollback(repository, subjectId, reservationId, error, traceId) {
   });
 }
 
+function publicationDocuments(input) {
+  const values = Array.isArray(input?.documents)
+    ? input.documents
+    : input?.document
+      ? [{ ...input.document, isPrimary: true }]
+      : [];
+  if (values.length < 1 || values.length > 256) {
+    throw new VisualizationServiceError("visualization_source_invalid");
+  }
+  const documents = values.map((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value) ||
+      typeof value.documentId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(value.documentId) ||
+      typeof value.sourceIdentityHash !== "string" || !/^[a-f0-9]{64}$/.test(value.sourceIdentityHash) ||
+      typeof value.isPrimary !== "boolean") {
+      throw new VisualizationServiceError("visualization_source_invalid");
+    }
+    return { ...value };
+  });
+  if (new Set(documents.map(({ documentId }) => documentId)).size !== documents.length ||
+    documents.filter(({ isPrimary }) => isPrimary).length !== 1) {
+    throw new VisualizationServiceError("visualization_source_invalid");
+  }
+  return documents;
+}
+
 export class VisualizationServiceError extends Error {
   constructor(code, status = 400) {
     super(code);
@@ -361,18 +386,19 @@ export class VisualizationService {
       if (validation?.outcome !== "pass") {
         throw new VisualizationServiceError("visualization_validation_failed", 422);
       }
-      const access = await this.authorizeDocument({
-        document: input.document,
-        subjectId
-      });
-      if (access?.allowed !== true || access.sourceIdentityHash !== input.document?.sourceIdentityHash) {
-        throw new VisualizationServiceError("visualization_source_access_revoked", 403);
+      const documents = publicationDocuments(input);
+      const authorizedDocuments = [];
+      for (const document of documents) {
+        const access = await this.authorizeDocument({ document, subjectId });
+        if (access?.allowed !== true || access.sourceIdentityHash !== document.sourceIdentityHash) {
+          throw new VisualizationServiceError("visualization_source_access_revoked", 403);
+        }
+        authorizedDocuments.push({ ...document, access });
       }
       throwIfAborted(context.signal);
       return await this.repository.publish(subjectId, {
-        access,
         artifact: input.artifact,
-        document: input.document,
+        documents: authorizedDocuments,
         reservationId,
         routeId: input.routeId,
         routeRevision: input.routeRevision,

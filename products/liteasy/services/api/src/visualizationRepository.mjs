@@ -21,6 +21,32 @@ function required(input, name) {
   return input[name].trim();
 }
 
+function publicationSources(input) {
+  const values = Array.isArray(input?.documents)
+    ? input.documents
+    : input?.document
+      ? [{ ...input.document, access: input.access, isPrimary: true }]
+      : [];
+  if (values.length < 1 || values.length > 256) throw new Error("visualization_source_invalid");
+  const sources = values.map((source) => {
+    if (!source || typeof source !== "object" || Array.isArray(source) ||
+      typeof source.documentId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(source.documentId) ||
+      typeof source.sourceIdentityHash !== "string" || !/^[a-f0-9]{64}$/.test(source.sourceIdentityHash) ||
+      typeof source.isPrimary !== "boolean" || source.access?.allowed !== true ||
+      !new Set(["user", "organization"]).has(source.access.scopeType) ||
+      typeof source.access.scopeId !== "string" || source.access.scopeId.length === 0 ||
+      source.access.sourceIdentityHash !== source.sourceIdentityHash) {
+      throw new Error("visualization_source_access_revoked");
+    }
+    return source;
+  });
+  if (new Set(sources.map(({ documentId }) => documentId)).size !== sources.length ||
+    sources.filter(({ isPrimary }) => isPrimary).length !== 1) {
+    throw new Error("visualization_source_invalid");
+  }
+  return sources;
+}
+
 function requestHash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -886,13 +912,11 @@ export class PostgresVisualizationRepository {
     const id = subjectId(subject);
     const reservationId = required(input, "reservationId");
     const artifact = input?.artifact;
-    const documentId = required(input?.document, "documentId");
-    const access = input?.access;
+    const sources = publicationSources(input);
+    const primarySource = sources.find(({ isPrimary }) => isPrimary);
+    const documentId = primarySource.documentId;
     if (!artifact || typeof artifact !== "object" || input?.validation?.outcome !== "pass") {
       throw new Error("visualization_validation_failed");
-    }
-    if (!access || access.allowed !== true || !new Set(["user", "organization"]).has(access.scopeType)) {
-      throw new Error("visualization_source_access_revoked");
     }
     return withPostgresTransaction(this.pool, async (client) => {
       const reservation = (await client.query(`
@@ -933,28 +957,29 @@ export class PostgresVisualizationRepository {
         input.routeId !== reservation.route_id || input.routeRevision !== Number(reservation.route_revision)) {
         throw new Error("visualization_route_revision_changed");
       }
-      const source = (await client.query(`
-        SELECT reference.content_hash
-          FROM library_entries entry
-          JOIN storage_object_references reference USING(document_id)
-          JOIN storage_objects object ON object.content_hash = reference.content_hash
-         WHERE entry.document_id = $1 AND entry.scope_type = $2 AND entry.scope_id = $3
-           AND entry.entry_kind = 'pdf' AND entry.status = 'active'
-           AND entry.availability = 'available' AND object.status = 'available'
-           AND object.security_scan_hash = object.content_hash
-           AND ($2 = 'user' AND $3 = $4 OR $2 = 'organization' AND EXISTS(
-             SELECT 1 FROM organizations organization
-             LEFT JOIN organization_members member
-               ON member.organization_id = organization.organization_id
-              AND member.member_subject = $4
-              WHERE organization.organization_id = $3 AND organization.status = 'active'
-                AND (organization.owner_subject = $4 OR member.status = 'active')
-           ))
-         FOR UPDATE OF entry, reference, object
-      `, [documentId, access.scopeType, access.scopeId, id])).rows[0];
-      if (!source || source.content_hash !== access.sourceIdentityHash ||
-        source.content_hash !== input.document.sourceIdentityHash) {
-        throw new Error("visualization_source_access_revoked");
+      for (const source of sources) {
+        const current = (await client.query(`
+          SELECT reference.content_hash
+            FROM library_entries entry
+            JOIN storage_object_references reference USING(document_id)
+            JOIN storage_objects object ON object.content_hash = reference.content_hash
+           WHERE entry.document_id = $1 AND entry.scope_type = $2 AND entry.scope_id = $3
+             AND entry.entry_kind = 'pdf' AND entry.status = 'active'
+             AND entry.availability = 'available' AND object.status = 'available'
+             AND object.security_scan_hash = object.content_hash
+             AND ($2 = 'user' AND $3 = $4 OR $2 = 'organization' AND EXISTS(
+               SELECT 1 FROM organizations organization
+               LEFT JOIN organization_members member
+                 ON member.organization_id = organization.organization_id
+                AND member.member_subject = $4
+                WHERE organization.organization_id = $3 AND organization.status = 'active'
+                  AND (organization.owner_subject = $4 OR member.status = 'active')
+             ))
+           FOR UPDATE OF entry, reference, object
+        `, [source.documentId, source.access.scopeType, source.access.scopeId, id])).rows[0];
+        if (!current || current.content_hash !== source.sourceIdentityHash) {
+          throw new Error("visualization_source_access_revoked");
+        }
       }
       if (artifact.modality !== undefined && artifact.modality !== reservation.modality) {
         throw new Error("visualization_artifact_modality_mismatch");
@@ -973,6 +998,13 @@ export class PostgresVisualizationRepository {
         artifact.contentHash ?? null, json(artifact.body), json(input.validation)
       ]);
       if (!insertedArtifact.rows[0]) throw new Error("visualization_artifact_conflict");
+      for (const source of sources) {
+        await client.query(`
+          INSERT INTO visualization_artifact_sources(
+            subject_id, artifact_id, document_id, source_identity_hash, is_primary
+          ) VALUES ($1,$2,$3,$4,$5)
+        `, [id, required(artifact, "artifactId"), source.documentId, source.sourceIdentityHash, source.isPrimary]);
+      }
       const updated = (await client.query(`
         UPDATE visualization_quota_reservations
            SET state = 'settled', settled_units = $2, updated_at = now()

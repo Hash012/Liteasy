@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { VisualizationService } from "./visualizationService.mjs";
 
+const sourceIdentityHash = "c".repeat(64);
+
 function serviceHarness(overrides = {}) {
   const calls = [];
   const repository = {
@@ -90,7 +92,7 @@ function serviceHarness(overrides = {}) {
       allowed: true,
       scopeId: "user_1",
       scopeType: "user",
-      sourceIdentityHash: "source_1"
+      sourceIdentityHash
     };
   });
   const validateArtifact = overrides.validateArtifact ?? (async (input) => {
@@ -243,7 +245,7 @@ test("submission rechecks all publication gates before settling", async () => {
   };
   await instance.service.submit("user_1", {
     artifact,
-    document: { documentId: "document_1", sourceIdentityHash: "source_1" },
+    document: { documentId: "document_1", sourceIdentityHash },
     modality: "semantic_graph",
     reservationId: "reservation_1",
     routeId: "route_1",
@@ -252,20 +254,91 @@ test("submission rechecks all publication gates before settling", async () => {
   }, { traceId: "trace_4" });
   assert.deepEqual(instance.calls.map(([name]) => name), ["validateArtifact", "authorizeDocument", "publish"]);
   assert.deepEqual(instance.calls[2][2], {
-    access: {
-      allowed: true,
-      scopeId: "user_1",
-      scopeType: "user",
-      sourceIdentityHash: "source_1"
-    },
     artifact,
-    document: { documentId: "document_1", sourceIdentityHash: "source_1" },
+    documents: [{
+      access: {
+        allowed: true,
+        scopeId: "user_1",
+        scopeType: "user",
+        sourceIdentityHash
+      },
+      documentId: "document_1",
+      isPrimary: true,
+      sourceIdentityHash
+    }],
     reservationId: "reservation_1",
     routeId: "route_1",
     routeRevision: 7,
     traceId: "trace_4",
     validation: { outcome: "pass", validatorVersions: { schema: "1" } }
   });
+});
+
+test("submission authorizes every unique source before publishing once", async () => {
+  const hashes = new Map([
+    ["document_1", "c".repeat(64)],
+    ["document_2", "d".repeat(64)]
+  ]);
+  const instance = serviceHarness({
+    authorizeDocument: async (input) => {
+      instance.calls.push(["authorizeDocument", input]);
+      return {
+        allowed: true,
+        scopeId: "user_1",
+        scopeType: "user",
+        sourceIdentityHash: hashes.get(input.document.documentId)
+      };
+    }
+  });
+  await instance.service.submit("user_1", {
+    artifact: { artifactId: "artifact_1", modality: "semantic_graph" },
+    documents: [
+      { documentId: "document_1", isPrimary: true, sourceIdentityHash: "c".repeat(64) },
+      { documentId: "document_2", isPrimary: false, sourceIdentityHash: "d".repeat(64) }
+    ],
+    modality: "semantic_graph",
+    reservationId: "reservation_1",
+    routeId: "route_1",
+    routeRevision: 7
+  }, { traceId: "trace_multi_source" });
+
+  assert.deepEqual(instance.calls.map(([name]) => name), [
+    "validateArtifact", "authorizeDocument", "authorizeDocument", "publish"
+  ]);
+  assert.equal(instance.calls.at(-1)[2].documents.length, 2);
+  assert.equal(instance.calls.at(-1)[2].documents.filter(({ isPrimary }) => isPrimary).length, 1);
+});
+
+test("submission rolls back before publication when any source hash changed", async () => {
+  const instance = serviceHarness({
+    authorizeDocument: async (input) => {
+      instance.calls.push(["authorizeDocument", input]);
+      return {
+        allowed: true,
+        scopeId: "user_1",
+        scopeType: "user",
+        sourceIdentityHash: input.document.documentId === "document_2"
+          ? "e".repeat(64)
+          : input.document.sourceIdentityHash
+      };
+    }
+  });
+  await assert.rejects(
+    () => instance.service.submit("user_1", {
+      artifact: { artifactId: "artifact_1", modality: "semantic_graph" },
+      documents: [
+        { documentId: "document_1", isPrimary: true, sourceIdentityHash: "c".repeat(64) },
+        { documentId: "document_2", isPrimary: false, sourceIdentityHash: "d".repeat(64) }
+      ],
+      reservationId: "reservation_1",
+      routeId: "route_1",
+      routeRevision: 7
+    }, { traceId: "trace_changed_source" }),
+    /visualization_source_access_revoked/
+  );
+  assert.deepEqual(instance.calls.map(([name]) => name), [
+    "validateArtifact", "authorizeDocument", "authorizeDocument", "rollback"
+  ]);
 });
 
 test("entitlement revocation immediately before submission refunds and blocks publication", async () => {
@@ -276,7 +349,7 @@ test("entitlement revocation immediately before submission refunds and blocks pu
   } });
   await assert.rejects(() => instance.service.submit("user_1", {
     artifact: { artifactId: "artifact_1", modality: "semantic_graph" },
-    document: { documentId: "document_1", sourceIdentityHash: "source_1" },
+    document: { documentId: "document_1", sourceIdentityHash },
     modality: "semantic_graph",
     reservationId: "reservation_1",
     routeId: "route_1",
