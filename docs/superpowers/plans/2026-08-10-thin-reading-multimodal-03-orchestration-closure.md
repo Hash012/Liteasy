@@ -335,17 +335,17 @@ git commit -m "feat: compile trusted visualization artifacts"
 - Produces: `start(subjectId, input, traceId)`, `status(subjectId, requestId)`, `cancel(subjectId, requestId, input, traceId)`, `drainOne()`, `recover()`.
 - Consumes: generation repository, source resolver, account capability, `VisualizationService`, compiler registry.
 
-- [ ] **Step 1: Write failing orchestration lifecycle tests**
+- [x] **Step 1: Write failing orchestration lifecycle tests**
 
 Cover exact replay, unauthorized/preference-off/quota/modality omission with zero provider calls, one vs two artifact limits, per-artifact reservation, compiler rejection rollback, cancellation before provider, cancellation during provider, cancellation after provider before publication, stale artifact revision, partial two-artifact failure, and expired-lease recovery without duplicate invocation.
 
-- [ ] **Step 2: Implement start/status/cancel**
+- [x] **Step 2: Implement start/status/cancel**
 
 Strict start input fields are `artifactId`, `nodeId`, `requestId`, `requestedArtifactCount`. Resolve source before queueing; derive `requestedBy` and ensure count equals `1` for automatic or `1..2` for explicit. Intersect intent candidates with account capability and compiler catalog. If empty, persist terminal `omitted/modality_unavailable`; otherwise create `queued` and schedule a non-blocking drain.
 
 Cancellation updates the database first, then aborts the matching in-memory controller. Status reloads published artifact bodies by subject and stored result IDs and validates them strictly before returning. Persist only this public reason-code set: `capability_unauthorized`, `preference_disabled`, `modality_unavailable`, `quota_exhausted`, `stale_artifact`, `evidence_invalid`, `source_access_revoked`, `cancelled`, `provider_unavailable`, `validation_failed`, `partial_generation_failed`, `provider_result_recovery_required`, and `internal_failure`; map all private dependency errors at the orchestration boundary.
 
-- [ ] **Step 3: Implement one leased worker operation**
+- [x] **Step 3: Implement one leased worker operation**
 
 For each requested output:
 
@@ -382,11 +382,11 @@ await visualizationService.submit(subjectId, {
 
 Recheck request state and current source revision before every provider call and publication. On cancellation, roll back any unsubmitted reservation and never delete already committed artifacts. If output 1 succeeds and output 2 fails, return the first artifact with terminal `succeeded` plus `partial_generation_failed`; never fabricate the second.
 
-- [ ] **Step 4: Implement recovery and shutdown**
+- [x] **Step 4: Implement recovery and shutdown**
 
 `recover()` calls the repository recovery transition: it requeues expired leases whose invocations have no terminal result, fails expired rows that already have a terminal invocation with `provider_result_recovery_required`, and then drains bounded work. Runtime exposes `close()` that aborts controllers and waits for active drains. A polling timer is optional only while queued work exists and is always unref'd/cleared in tests and shutdown.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 node --test src/visualizationOrchestrationService.test.mjs src/visualizationOrchestrationWorker.test.mjs src/runtime.test.mjs
