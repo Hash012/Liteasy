@@ -413,6 +413,25 @@ function runtime() {
         };
       }
     },
+    visualizationOrchestrationService: {
+      async cancel(subjectId, requestId, input, traceId) {
+        calls.push({ subjectId, traceId, visualizationCancel: { input, requestId } });
+        return { reasonCode: "cancelled", requestId, resultArtifactIds: [], status: "cancelled" };
+      },
+      async start(subjectId, input, traceId) {
+        calls.push({ subjectId, traceId, visualizationStart: input });
+        return { requestId: input.requestId, resultArtifactIds: [], retryAfterMs: 500, status: "queued" };
+      },
+      async status(subjectId, requestId) {
+        calls.push({ subjectId, visualizationStatus: requestId });
+        return {
+          artifacts: [{ artifactId: "result-1", artifactVersion: "liteasy.visualization/v1" }],
+          requestId,
+          resultArtifactIds: ["result-1"],
+          status: "succeeded"
+        };
+      }
+    },
     visualizationService: {
       async accountCapability(subjectId) {
         calls.push({ visualizationCapability: true, subjectId });
@@ -856,6 +875,69 @@ test("internal visualization generation requires the dedicated service identity"
     requiredScope: "visualization:generate"
   });
   assert.equal(instance.calls.find((item) => item.visualizationGenerate).subjectId, "user_1");
+});
+
+test("serves subject-bound account visualization start, status, and cancellation", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const started = response();
+  await handler(request("POST", "/v1/account/visualization/requests", {
+    artifactId: "artifact-1",
+    nodeId: "node-1",
+    requestId: "request-1",
+    requestedArtifactCount: 1
+  }), started);
+  assert.equal(started.status, 202, started.body.toString("utf8"));
+  assert.equal(instance.calls.find((item) => item.visualizationStart).subjectId, "user_1");
+
+  const status = response();
+  await handler(request("GET", "/v1/account/visualization/requests/request-1"), status);
+  assert.equal(status.status, 200, status.body.toString("utf8"));
+  assert.deepEqual(jsonBody(status).artifacts, [
+    { artifactId: "result-1", artifactVersion: "liteasy.visualization/v1" }
+  ]);
+  assert.equal(instance.calls.find((item) => item.visualizationStatus).subjectId, "user_1");
+
+  const cancelled = response();
+  await handler(request("POST", "/v1/account/visualization/requests/request-1/cancel", {
+    idempotencyKey: "request-1:cancel:user"
+  }), cancelled);
+  assert.equal(cancelled.status, 200, cancelled.body.toString("utf8"));
+  assert.equal(instance.calls.find((item) => item.visualizationCancel).subjectId, "user_1");
+});
+
+test("keeps desktop account and confidential visualization identities non-interchangeable", async () => {
+  const instance = runtime();
+  instance.identityVerifier.verifyAuthorizationHeader = async (header, audience) => {
+    if (header === "Bearer service" || audience !== "liteasy-desktop") {
+      throw new IdentityError("access_token_invalid", 401);
+    }
+    return { audience, subject: "user_1" };
+  };
+  instance.identityVerifier.verifyServiceAuthorizationHeader = async (header) => {
+    if (header === "Bearer desktop") throw new IdentityError("service_client_mismatch", 403);
+    return { clientId: "liteasy-visualization-service", scopes: ["visualization:generate"] };
+  };
+  const handler = createCloudRequestHandler(instance, internalConfig());
+
+  const serviceAtAccountRoute = response();
+  await handler(request("POST", "/v1/account/visualization/requests", {
+    artifactId: "artifact-1",
+    nodeId: "node-1",
+    requestId: "request-1",
+    requestedArtifactCount: 1,
+    subjectId: "user_2"
+  }, "Bearer service"), serviceAtAccountRoute);
+  assert.equal(serviceAtAccountRoute.status, 401);
+  assert.equal(instance.calls.some((item) => item.visualizationStart), false);
+
+  const desktopAtInternalRoute = response();
+  await handler(request("POST", "/v1/internal/visualization/generate", {
+    input: { providerRequest: {}, reservation: {} },
+    subjectId: "user_2"
+  }, "Bearer desktop"), desktopAtInternalRoute);
+  assert.equal(desktopAtInternalRoute.status, 403);
+  assert.equal(instance.calls.some((item) => item.visualizationGenerate), false);
 });
 
 test("passes identity-derived actor and server trace into a mutation", async () => {

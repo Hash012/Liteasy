@@ -5,6 +5,13 @@ const publicReasons = new Set([
   "stale_artifact", "evidence_invalid", "source_access_revoked", "cancelled", "provider_unavailable",
   "validation_failed", "partial_generation_failed", "provider_result_recovery_required", "internal_failure"
 ]);
+const publicRepositoryErrors = new Set([
+  "idempotency_key_reused",
+  "visualization_request_cancelled",
+  "visualization_request_id_reused",
+  "visualization_request_not_found",
+  "visualization_request_terminal"
+]);
 
 function record(value, fields, code) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
@@ -70,6 +77,24 @@ export function visualizationOrchestrationReason(error) {
   return "internal_failure";
 }
 
+function publicDependencyError(error) {
+  if (error instanceof VisualizationServiceError) return error;
+  const code = error?.code ?? error?.message;
+  if (publicRepositoryErrors.has(code)) {
+    return new VisualizationServiceError(code, error?.status ?? (code.endsWith("_not_found") ? 404 : 409));
+  }
+  return new VisualizationServiceError("internal_failure", 500);
+}
+
+function sourceError(error) {
+  const code = visualizationOrchestrationReason(error);
+  const status = code === "source_access_revoked" ? 403
+    : code === "evidence_invalid" ? 422
+      : code === "stale_artifact" ? 409
+        : 500;
+  return new VisualizationServiceError(code, status);
+}
+
 function gateReason(source, capability, compilerRegistry, requestedArtifactCount) {
   if (capability?.allowed !== true) return "capability_unauthorized";
   if (source.intent.requestedBy === "explicit_user_request" && capability.explicitRequestsAllowed !== true) {
@@ -110,7 +135,7 @@ export class VisualizationOrchestrationService {
         subjectId
       });
     } catch (error) {
-      throw new VisualizationServiceError(visualizationOrchestrationReason(error), error?.status ?? 422);
+      throw sourceError(error);
     }
     if (source.intent?.requestedBy === "automatic" && input.requestedArtifactCount !== 1) {
       throw new VisualizationServiceError("visualization_requested_count_invalid");
@@ -120,15 +145,24 @@ export class VisualizationOrchestrationService {
     }
     const capability = await this.visualizationService.accountCapability(subjectId);
     const reasonCode = gateReason(source, capability, this.compilerRegistry, input.requestedArtifactCount);
-    const projection = await this.generationRepository.create(subjectId, {
-      ...input,
-      artifactRevision: source.artifactRevision,
-      intentHash: source.intentHash,
-      traceId
-    });
+    let projection;
+    try {
+      projection = await this.generationRepository.create(subjectId, {
+        ...input,
+        artifactRevision: source.artifactRevision,
+        intentHash: source.intentHash,
+        traceId
+      });
+    } catch (error) {
+      throw publicDependencyError(error);
+    }
     if (projection.status !== "queued") return this.status(subjectId, input.requestId);
     if (reasonCode) {
-      return this.generationRepository.markTerminal(subjectId, input.requestId, "omitted", reasonCode);
+      try {
+        return await this.generationRepository.markTerminal(subjectId, input.requestId, "omitted", reasonCode);
+      } catch (error) {
+        throw publicDependencyError(error);
+      }
     }
     this.worker.schedule();
     return projection;
@@ -137,7 +171,12 @@ export class VisualizationOrchestrationService {
   async status(subjectInput, requestInput) {
     const subjectId = subject(subjectInput);
     const requestId = identifier(requestInput, "visualization_request_id_invalid");
-    const projection = await this.generationRepository.get(subjectId, requestId);
+    let projection;
+    try {
+      projection = await this.generationRepository.get(subjectId, requestId);
+    } catch (error) {
+      throw publicDependencyError(error);
+    }
     if (projection.status !== "succeeded") return { ...projection, artifacts: [] };
     try {
       const artifacts = await this.visualizationService.publishedArtifacts(subjectId, projection.resultArtifactIds);
@@ -153,7 +192,12 @@ export class VisualizationOrchestrationService {
     const input = record(inputValue, new Set(["idempotencyKey"]), "visualization_cancel_invalid");
     const idempotencyKey = identifier(input.idempotencyKey, "idempotency_key_invalid");
     if (idempotencyKey.length < 8) throw new VisualizationServiceError("idempotency_key_invalid");
-    const projection = await this.generationRepository.requestCancel(subjectId, requestId, idempotencyKey);
+    let projection;
+    try {
+      projection = await this.generationRepository.requestCancel(subjectId, requestId, idempotencyKey);
+    } catch (error) {
+      throw publicDependencyError(error);
+    }
     this.worker.abort(subjectId, requestId);
     return projection;
   }

@@ -7,6 +7,56 @@ const adminReadQueryKeys = new Map([
   ["/v1/admin/visualization/usage", new Set(["limit", "subjectId"])],
   ["/v1/admin/visualization/audit", new Set(["action", "from", "limit", "subjectId", "to"])]
 ]);
+const activeGenerationStates = new Set(["cancel_requested", "queued", "running"]);
+
+function exactObject(value, fields, code) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+    Object.keys(value).some((key) => !fields.has(key))) {
+    throw new VisualizationServiceError(code);
+  }
+  return value;
+}
+
+function requestIdentifier(value, code, maximum = 200) {
+  if (typeof value !== "string" || value.length > maximum || !/^[A-Za-z0-9._:-]+$/.test(value)) {
+    throw new VisualizationServiceError(code);
+  }
+  return value;
+}
+
+function accountStartInput(value) {
+  const input = exactObject(
+    value,
+    new Set(["artifactId", "nodeId", "requestId", "requestedArtifactCount"]),
+    "visualization_request_invalid"
+  );
+  if (!Number.isSafeInteger(input.requestedArtifactCount) ||
+    input.requestedArtifactCount < 1 || input.requestedArtifactCount > 2) {
+    throw new VisualizationServiceError("visualization_requested_count_invalid");
+  }
+  return {
+    artifactId: requestIdentifier(input.artifactId, "visualization_artifact_id_invalid", 160),
+    nodeId: requestIdentifier(input.nodeId, "visualization_node_id_invalid", 160),
+    requestId: requestIdentifier(input.requestId, "visualization_request_id_invalid"),
+    requestedArtifactCount: input.requestedArtifactCount
+  };
+}
+
+function accountCancelInput(value) {
+  const input = exactObject(value, new Set(["idempotencyKey"]), "visualization_cancel_invalid");
+  const idempotencyKey = requestIdentifier(input.idempotencyKey, "idempotency_key_invalid");
+  if (idempotencyKey.length < 8) throw new VisualizationServiceError("idempotency_key_invalid");
+  return { idempotencyKey };
+}
+
+function accountRequestId(pathname) {
+  const match = pathname.match(/^\/v1\/account\/visualization\/requests\/([A-Za-z0-9._:-]{1,200})(\/cancel)?$/);
+  return match ? { cancel: Boolean(match[2]), requestId: match[1] } : null;
+}
+
+function sendGenerationProjection(sendJson, response, projection) {
+  sendJson(response, activeGenerationStates.has(projection?.status) ? 202 : 200, projection);
+}
 
 function adminReadInput(url) {
   const allowed = adminReadQueryKeys.get(url.pathname);
@@ -48,6 +98,38 @@ export async function handleVisualizationRequest({
   traceId,
   url
 }) {
+  if (request.method === "POST" && url.pathname === "/v1/account/visualization/requests") {
+    const identity = await desktopIdentity(runtime, request);
+    const input = accountStartInput(await readJsonBody(request, 16 * 1024));
+    const projection = await runtime.visualizationOrchestrationService.start(identity.subject, input, traceId);
+    sendGenerationProjection(sendJson, response, projection);
+    return true;
+  }
+
+  const accountRequest = accountRequestId(url.pathname);
+  if (request.method === "GET" && accountRequest && !accountRequest.cancel) {
+    const identity = await desktopIdentity(runtime, request);
+    if ([...url.searchParams].length > 0) throw new VisualizationServiceError("visualization_query_invalid");
+    const projection = await runtime.visualizationOrchestrationService.status(
+      identity.subject,
+      requestIdentifier(accountRequest.requestId, "visualization_request_id_invalid")
+    );
+    sendGenerationProjection(sendJson, response, projection);
+    return true;
+  }
+
+  if (request.method === "POST" && accountRequest?.cancel) {
+    const identity = await desktopIdentity(runtime, request);
+    const input = accountCancelInput(await readJsonBody(request, 16 * 1024));
+    sendJson(response, 200, await runtime.visualizationOrchestrationService.cancel(
+      identity.subject,
+      requestIdentifier(accountRequest.requestId, "visualization_request_id_invalid"),
+      input,
+      traceId
+    ));
+    return true;
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/account/capabilities") {
     const identity = await desktopIdentity(runtime, request);
     const developerDiagnostics = config.environment !== "production" &&
