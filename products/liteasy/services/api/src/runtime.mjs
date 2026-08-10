@@ -30,8 +30,10 @@ import { authorizeLibraryScope } from "./libraryAuthorization.mjs";
 import { VisualizationProviderGateway } from "./visualizationProviderGateway.mjs";
 import { EnvironmentVisualizationSecretStore } from "./visualizationSecretStore.mjs";
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
+import { VisualizationArtifactCompilerRegistry } from "./visualizationArtifactCompiler.mjs";
 import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
 import { VisualizationService } from "./visualizationService.mjs";
+import { productionVisualizationProviderAdapters } from "./visualizationStructuredProviderAdapter.mjs";
 
 export async function startCloudRuntime(config, dependencies = {}) {
   const pool = dependencies.pool ?? createPostgresPool(config.database);
@@ -53,15 +55,23 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const libraryRepository = dependencies.libraryRepository ?? new PostgresLibraryRepository(pool);
   const visualizationRepository = dependencies.visualizationRepository ??
     new PostgresVisualizationRepository(pool);
+  const visualizationArtifactCompilerRegistry = dependencies.visualizationArtifactCompilerRegistry ??
+    new VisualizationArtifactCompilerRegistry({
+      catalog: dependencies.visualizationBuiltinCatalog,
+      compilers: dependencies.visualizationArtifactCompilers ?? {},
+      validateArtifact: dependencies.visualizationArtifactValidator ?? validateVisualizationArtifact
+    });
+  const visualizationProviderAdapters = dependencies.visualizationProviderAdapters ??
+    productionVisualizationProviderAdapters;
   const visualizationProviderGateway = dependencies.visualizationProviderGateway ??
     (dependencies.visualizationProviderGatewayFactory
       ? dependencies.visualizationProviderGatewayFactory({
-        adapters: dependencies.visualizationProviderAdapters ?? {},
+        adapters: visualizationProviderAdapters,
         egressPolicy: { allowedHostnames: config.visualization?.egressHostnames ?? [] },
         secretStore: new EnvironmentVisualizationSecretStore(config.visualization?.secrets ?? {})
       })
       : new VisualizationProviderGateway({
-        adapters: dependencies.visualizationProviderAdapters ?? {},
+        adapters: visualizationProviderAdapters,
         egressPolicy: { allowedHostnames: config.visualization?.egressHostnames ?? [] },
         secretStore: new EnvironmentVisualizationSecretStore(config.visualization?.secrets ?? {})
       }));
@@ -167,6 +177,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       recommendationRepository,
       recommendationService,
       teamAnnotationRepository,
+      visualizationArtifactCompilerRegistry,
       visualizationProviderGateway,
       visualizationRepository,
       visualizationService,

@@ -1,0 +1,11 @@
+{
+  "entries": [
+    {
+      "enabled": true,
+      "generated": false,
+      "modality": "source_figure",
+      "skillId": "source-figure"
+    }
+  ],
+  "version": "liteasy.visualization-builtins/v1"
+}

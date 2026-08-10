@@ -1,6 +1,7 @@
 import { z } from "zod";
 import sourceFigureManifest from "../visualization/skills/source-figure/skill.json";
 import sourceFigureInstructions from "../visualization/skills/source-figure/instructions.md?raw";
+import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
   BuiltinSkillManifestV1,
@@ -46,6 +47,16 @@ const packageSchema = z.object({
   instructions: z.string().min(1).max(100_000),
   manifest: manifestSchema,
   validatorIds: z.array(stableId).max(64).optional()
+}).strict();
+
+const builtinCatalogSchema = z.object({
+  entries: z.array(z.object({
+    enabled: z.boolean(),
+    generated: z.boolean(),
+    modality,
+    skillId: stableId
+  }).strict()),
+  version: z.literal("liteasy.visualization-builtins/v1")
 }).strict();
 
 type BuiltinSkillRegistration = {
@@ -114,5 +125,20 @@ registerBuiltinSkill(sourceFigure, async () => ({
   manifest: sourceFigure,
   instructions: sourceFigureInstructions
 }));
+
+const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);
+for (const entry of builtinCatalog.entries.filter(({ enabled }) => enabled)) {
+  const registration = packages.get(entry.skillId);
+  if (!registration || registration.manifest.modality !== entry.modality) {
+    throw new Error("builtin_skill_catalog_mismatch");
+  }
+}
+
+export function getVisualizationBuiltinCatalog() {
+  return {
+    entries: builtinCatalog.entries.map((entry) => ({ ...entry })),
+    version: builtinCatalog.version
+  };
+}
 
 export type { BuiltinSkillRegistration };

@@ -108,6 +108,7 @@ test("wires visualization dependencies while preserving injection", async () => 
   const pool = poolWithReadiness();
   const visualizationRepository = { capability() {} };
   const visualizationProviderGateway = { generateStructured() {} };
+  const visualizationArtifactCompilerRegistry = { availableModalities() { return ["test"]; } };
   const runtime = await startCloudRuntime({ recommendation: {
     endpoint: "https://api.crossref.org/works", mailto: "test@example.com", timeoutMs: 1000
   } }, {
@@ -119,10 +120,12 @@ test("wires visualization dependencies while preserving injection", async () => 
       async repairPendingWorkflows() { return { repaired: 0, scanned: 0 }; }
     },
     pool,
+    visualizationArtifactCompilerRegistry,
     visualizationProviderGateway,
     visualizationRepository
   });
   assert.equal(runtime.visualizationRepository, visualizationRepository);
+  assert.equal(runtime.visualizationArtifactCompilerRegistry, visualizationArtifactCompilerRegistry);
   assert.equal(runtime.visualizationProviderGateway, visualizationProviderGateway);
   assert.equal(runtime.visualizationService.repository, visualizationRepository);
   await runtime.close();
@@ -151,7 +154,9 @@ test("constructs visualization gateway with the validated hostname policy and se
     visualizationRepository: { capability() {} }
   });
   assert.deepEqual(options.egressPolicy, { allowedHostnames: ["provider.example"] });
+  assert.deepEqual(Object.keys(options.adapters).sort(), ["openai", "openai-compatible"]);
   assert.equal(options.secretStore.resolve("viz-secret:provider-1"), "deployment-secret");
+  assert.deepEqual(runtime.visualizationArtifactCompilerRegistry.availableModalities(), []);
   await runtime.close();
 });
 

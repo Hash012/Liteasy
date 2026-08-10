@@ -1,5 +1,6 @@
 import {
   getBuiltinSkillSummary,
+  getVisualizationBuiltinCatalog,
   loadBuiltinSkill,
   registerBuiltinSkill
 } from "../app/features/skills/builtinSkillRegistry";
@@ -44,6 +45,16 @@ test("loads only registered built-in packages", async () => {
     expect.objectContaining({ id: "source-figure", remote: false })
   ]));
   await expect(loadBuiltinSkill("https://example.test/skill")).rejects.toThrow("builtin_skill_not_found");
+});
+
+test("matches every enabled shared catalog entry to a local built-in package", () => {
+  const summaries = getBuiltinSkillSummary();
+  const catalog = getVisualizationBuiltinCatalog();
+  expect(catalog.version).toBe("liteasy.visualization-builtins/v1");
+  expect(catalog.entries.filter(({ enabled }) => enabled).every((entry) => (
+    summaries.some((summary) => summary.id === entry.skillId && summary.modality === entry.modality)
+  ))).toBe(true);
+  expect(catalog.entries.filter(({ enabled, generated }) => enabled && generated)).toEqual([]);
 });
 
 test("loads a registered package without invoking an action", async () => {
