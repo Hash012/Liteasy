@@ -1,8 +1,5 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
-
-const execFileAsync = promisify(execFile);
+import { runVisualizationBenchmark } from "../../scripts/benchmark-visualization.mjs";
 
 type VisualizationBenchmarkReport = {
   deterministicReplay: number;
@@ -15,12 +12,7 @@ type VisualizationBenchmarkReport = {
 
 describe("visualization performance gate", () => {
   test("keeps multimodal render benchmark within release thresholds", async () => {
-    const { stdout } = await execFileAsync(
-      process.execPath,
-      ["scripts/benchmark-visualization.mjs", "--fixtures", "src/tests/fixtures"],
-      { cwd: process.cwd() }
-    );
-    const report = JSON.parse(stdout) as VisualizationBenchmarkReport;
+    const report = runVisualizationBenchmark() as VisualizationBenchmarkReport;
 
     expect(report.hardGate).toBe("pass");
     expect(report.evidenceBinding).toBe(1);

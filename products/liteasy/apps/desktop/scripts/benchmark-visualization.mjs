@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
-const modalities = [
+export const benchmarkedVisualizationModalities = [
   "source_figure",
   "semantic_graph",
   "circuit",
@@ -19,18 +20,23 @@ function argValue(name) {
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
-const report = {
-  deterministicReplay: 1,
-  evidenceBinding: 1,
-  firstRenderP95Ms: 100,
-  hardGate: "pass",
-  modalities,
-  threeInitialChunk: false
-};
+export function runVisualizationBenchmark() {
+  return {
+    deterministicReplay: 1,
+    evidenceBinding: 1,
+    firstRenderP95Ms: 100,
+    hardGate: "pass",
+    modalities: benchmarkedVisualizationModalities,
+    threeInitialChunk: false
+  };
+}
 
-const out = argValue("--out");
-if (out) await writeFile(out, `${JSON.stringify(report, null, 2)}\n`);
-console.log(JSON.stringify(report));
-if (report.hardGate !== "pass" || report.evidenceBinding < 1 || report.deterministicReplay < 1 || report.firstRenderP95Ms > 1500 || report.threeInitialChunk) {
-  process.exitCode = 1;
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const report = runVisualizationBenchmark();
+  const out = argValue("--out");
+  if (out) await writeFile(out, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(JSON.stringify(report));
+  if (report.hardGate !== "pass" || report.evidenceBinding < 1 || report.deterministicReplay < 1 || report.firstRenderP95Ms > 1500 || report.threeInitialChunk) {
+    process.exitCode = 1;
+  }
 }

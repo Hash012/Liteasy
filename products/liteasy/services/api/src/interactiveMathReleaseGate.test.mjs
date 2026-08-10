@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { productionStaticScienceVisualizationCompilers } from "./staticScienceVisualizationCompilers.mjs";
 import { productionInteractiveMathVisualizationCompilers } from "./interactiveMathVisualizationCompilers.mjs";
+import { productionProcessRasterVisualizationCompilers } from "./processRasterVisualizationCompilers.mjs";
 import { VisualizationArtifactCompilerRegistry, visualizationBuiltinCatalog } from "./visualizationArtifactCompiler.mjs";
 
 const mathModalities = ["function_plot", "geometry_2d", "geometry_3d"];
@@ -36,7 +37,8 @@ test("server advertises catalog-enabled static and math generated modalities", (
   const registry = new VisualizationArtifactCompilerRegistry({
     compilers: {
       ...productionStaticScienceVisualizationCompilers,
-      ...productionInteractiveMathVisualizationCompilers
+      ...productionInteractiveMathVisualizationCompilers,
+      ...productionProcessRasterVisualizationCompilers
     }
   });
   assert.deepEqual(registry.availableModalities().filter((modality) => mathModalities.includes(modality)).sort(), mathModalities);

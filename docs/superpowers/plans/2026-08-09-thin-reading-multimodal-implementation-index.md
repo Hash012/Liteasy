@@ -45,17 +45,22 @@ Status: complete on branch `feat/thin-reading-multimodal-phase4-static` as of 20
 
 ### Phase 5 - Interactive Math Renderers
 
-Status: not started as of 2026-08-11.
+Status: complete on branch `feat/thin-reading-multimodal-phase4-static` as of 2026-08-11.
 
-- The Phase 5 plan has been corrected to include authoritative API compiler descriptors, server domain hard validators, cross-runtime conformance fixtures, and a shared catalog gate for `function_plot`, `geometry_2d`, and `geometry_3d`.
-- Desktop math availability must be the intersection of an enabled catalog entry, matching API compiler, complete desktop Skill/Kernel/Validator/Renderer/fallback chain, and runtime checks for worker/WebGL capability.
+- Interactive math modalities implemented and gated: `function_plot`, `geometry_2d`, `geometry_3d`.
+- Commits: `32b5c73`, `0b6800c`, `4479d39`, `7be9979`, `7f43d2d`, `ad0a862`, `e7501d6`.
+- Final Phase 5 gate passed API compiler/runtime tests, desktop conformance/release/registry tests, browser visual tests for all three math modalities, and desktop production build.
+- Desktop math availability is the intersection of an enabled shared catalog entry and the complete local Skill/Kernel/Validator/Renderer/fallback chain. The service compiler registry remains the authoritative publication boundary.
 
 ### Phase 6 - Process, Raster, And Release
 
-Status: not started as of 2026-08-11.
+Status: implementation tasks 1-6 complete on branch `feat/thin-reading-multimodal-phase4-static` as of 2026-08-11; final broad release gate still pending.
 
-- The Phase 6 plan has been corrected to include authoritative API compiler descriptors, server domain hard validators, cross-runtime conformance fixtures, and a shared catalog gate for `physics_process`, `reaction_process`, and `raster_illustration`.
-- Final completion still requires the cross-modality release command, PostgreSQL/API/admin/desktop/Playwright/build gates, and real-provider smoke execution when configured or an explicit `skipped_configuration` record when not configured.
+- Process and raster modalities implemented and gated: `physics_process`, `reaction_process`, `raster_illustration`.
+- Commits through Task 5: `2c4e476`, `2a4e6a9`, `b85d3b1`, `55c4252`, `22aa03c`.
+- Task 6 adds final API and desktop cross-modal release commands. Observed focused gates: API `npm run test:multimodal-release` passed 9/9 subtests; desktop `npm run test:multimodal-release` passed 11 files / 27 tests.
+- Provider smoke is wired to execute only when `LITEASY_VISUALIZATION_SMOKE_ROUTE` is configured; current local focused gate records `skipped_configuration` because that route is not configured.
+- Final completion still requires the broad PostgreSQL, API, admin, desktop, Playwright, production build, and cross-modal release gates. Do not declare the overall feature complete until those pass.
 
 ## Why This Is A Plan Suite
 

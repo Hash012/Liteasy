@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { productionStaticScienceVisualizationCompilers } from "./staticScienceVisualizationCompilers.mjs";
+import { productionInteractiveMathVisualizationCompilers } from "./interactiveMathVisualizationCompilers.mjs";
+import { productionProcessRasterVisualizationCompilers } from "./processRasterVisualizationCompilers.mjs";
 import { VisualizationArtifactCompilerRegistry, visualizationBuiltinCatalog } from "./visualizationArtifactCompiler.mjs";
 
 const staticModalities = ["biology_structure", "circuit", "physics_diagram", "semantic_graph"];
@@ -14,9 +16,9 @@ const expectedSkillIds = {
   semantic_graph: "semantic-graph"
 };
 
-test("shared catalog enables exactly the verified static generated modalities", () => {
+test("shared catalog enables the verified static generated modalities", () => {
   const enabledGenerated = catalog.entries
-    .filter((entry) => entry.enabled && entry.generated)
+    .filter((entry) => entry.enabled && entry.generated && staticModalities.includes(entry.modality))
     .map((entry) => entry.modality)
     .sort();
   assert.deepEqual(enabledGenerated, staticModalities);
@@ -33,11 +35,15 @@ test("every enabled static catalog entry has a matching server compiler descript
   }
 });
 
-test("server advertises only catalog-enabled generated modalities", () => {
+test("server advertises catalog-enabled static generated modalities", () => {
   const registry = new VisualizationArtifactCompilerRegistry({
-    compilers: productionStaticScienceVisualizationCompilers
+    compilers: {
+      ...productionStaticScienceVisualizationCompilers,
+      ...productionInteractiveMathVisualizationCompilers,
+      ...productionProcessRasterVisualizationCompilers
+    }
   });
-  assert.deepEqual(registry.availableModalities().sort(), staticModalities);
+  assert.deepEqual(registry.availableModalities().filter((modality) => staticModalities.includes(modality)).sort(), staticModalities);
 });
 
 test("shared catalog remains valid JSON", () => {
