@@ -21,7 +21,7 @@ test("prepares a turn with agent.md, memory, capabilities, and budget context", 
   expect(prepared.turn.runtimeContext.prompt.budgetSummary).toContain("最大迭代：64");
 });
 
-test("does not trust a caller-provided visualization catalog entry without a complete chain", () => {
+test("replaces caller-provided visualization catalog entries with the verified local chain", () => {
   const skills = getAgentCoreSkills({
     ...defaultAgentCoreConfig,
     skills: [
@@ -35,7 +35,12 @@ test("does not trust a caller-provided visualization catalog entry without a com
       }
     ]
   });
-  expect(skills.some((skill) => skill.id === "thin-reading-visualize")).toBe(false);
+  expect(skills.filter((skill) => skill.id === "thin-reading-visualize")).toEqual([expect.objectContaining({
+    description: expect.stringContaining("证据"),
+    label: "文献可视化",
+    status: "active"
+  })]);
+  expect(skills.some((skill) => skill.label === "stale")).toBe(false);
 });
 
 test("summarizes evidence-bound thin-reading visualization only when a complete chain is available", () => {

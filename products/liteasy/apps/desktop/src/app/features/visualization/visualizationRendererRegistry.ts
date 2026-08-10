@@ -157,7 +157,7 @@ export function getAvailableVisualizationModalities(
 }
 
 for (const [modality, registration] of Object.entries(staticModalityChain)) {
-  if (registration.kernelId) registerVisualizationKernel({ id: registration.kernelId, version: "1.0.0" });
+  if ("kernelId" in registration) registerVisualizationKernel({ id: registration.kernelId, version: "1.0.0" });
   registerVisualizationRenderer({
     id: registration.rendererId,
     modality: modality as VisualizationModality,

@@ -34,7 +34,8 @@ export async function validateRasterImage(input: RasterValidationInput): Promise
 }
 
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  const digestInput = bytes as unknown as BufferSource;
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", digestInput);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
