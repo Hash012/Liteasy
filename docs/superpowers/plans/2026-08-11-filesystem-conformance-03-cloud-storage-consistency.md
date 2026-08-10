@@ -210,13 +210,13 @@ git commit -m "fix: collect abandoned S3 staging objects"
 - Consumes: the production API package test command and PostgreSQL integration verifier's environment-based skip behavior.
 - Produces: a clean branch with focused red-green evidence and a fresh full-suite result.
 
-- [ ] **Step 1: Run the complete production API suite**
+- [x] **Step 1: Run the complete production API suite**
 
 Run: `npm test`
 
 Expected: all non-environmental tests pass; PostgreSQL/S3 integration checks may report their documented skip when credentials are absent.
 
-- [ ] **Step 2: Review the complete branch diff**
+- [x] **Step 2: Review the complete branch diff**
 
 Run: `git diff 42afd1a...HEAD --check`
 
@@ -224,8 +224,14 @@ Run: `git diff 42afd1a...HEAD -- products/liteasy/services/api docs/superpowers/
 
 Expected: no whitespace errors, no dependency on `development/`, no user-controlled authorization data, and no unrelated edits.
 
-- [ ] **Step 3: Record final verification state**
+- [x] **Step 3: Record final verification state**
 
 Run: `git status --short --branch`
 
 Expected: clean `fix/filesystem-conformance` branch after focused commits.
+
+## Verification Notes
+
+- `npm test`: 367 tests, 364 passed, 3 PostgreSQL visualization tests skipped because `LITEASY_TEST_DATABASE_URL` was not configured, 0 failed.
+- `git diff 42afd1a...HEAD --check`: passed.
+- The local PostgreSQL integration wrapper reached `127.0.0.1:55432` but the existing `deployment/local/.env` migrator password did not match the running database (`28P01`). No database credentials or local infrastructure were changed as part of this repair.
