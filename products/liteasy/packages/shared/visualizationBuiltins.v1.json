@@ -29,6 +29,24 @@
       "generated": true,
       "modality": "biology_structure",
       "skillId": "biology-structure"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "function_plot",
+      "skillId": "function-plot"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "geometry_2d",
+      "skillId": "geometry-2d"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "geometry_3d",
+      "skillId": "geometry-3d"
     }
   ],
   "version": "liteasy.visualization-builtins/v1"

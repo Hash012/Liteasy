@@ -51,7 +51,7 @@ function tokenize(source: string): Token[] {
         if (!/[0-9]/.test(source[index] ?? "")) throw new Error("expression_token_forbidden");
         while (/[0-9_]/.test(source[index] ?? "")) index += 1;
       }
-      const raw = source.slice(start, index).replaceAll("_", "");
+      const raw = source.slice(start, index).replace(/_/gu, "");
       const value = Number(raw);
       if (!Number.isFinite(value)) throw new Error("expression_token_forbidden");
       tokens.push({ kind: "number", value });

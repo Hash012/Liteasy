@@ -91,7 +91,7 @@ test("matches every enabled shared catalog entry to a local built-in package", (
     summaries.some((summary) => summary.id === entry.skillId && summary.modality === entry.modality)
   ))).toBe(true);
   expect(catalog.entries.filter(({ enabled, generated }) => enabled && generated).map((entry) => entry.modality).sort()).toEqual([
-    "biology_structure", "circuit", "physics_diagram", "semantic_graph"
+    "biology_structure", "circuit", "function_plot", "geometry_2d", "geometry_3d", "physics_diagram", "semantic_graph"
   ]);
 });
 
