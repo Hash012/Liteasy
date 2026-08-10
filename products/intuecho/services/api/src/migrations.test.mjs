@@ -23,7 +23,8 @@ test("loads ordered immutable forum migrations", () => {
     "014_correct_legacy_literature_snapshots.sql",
     "015_reply_projection_lifecycle.sql",
     "016_source_confirmed_literature_identity.sql",
-    "017_constrain_legacy_aggregate_confirmation.sql"
+    "017_constrain_legacy_aggregate_confirmation.sql",
+    "018_align_literature_identity_model.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -58,6 +59,8 @@ test("loads ordered immutable forum migrations", () => {
   assert.match(migrations[15].sql, /legacy_literature_identity_is_read_only/);
   assert.match(migrations[16].sql, /identity_status = 'legacy_unverified'/);
   assert.match(migrations[16].sql, /confirmationBasis/);
+  assert.match(migrations[17].sql, /RENAME COLUMN document_type TO version_kind/);
+  assert.match(migrations[17].sql, /ADD COLUMN identifier_id/);
 });
 
 test("readiness rejects missing, changed and unknown migrations", async () => {
@@ -68,7 +71,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 17, current: true });
+  }), { count: 18, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [
@@ -104,17 +107,19 @@ test("upgrades SQLite literature provenance schema with snapshots and guarded co
   db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("registry-confirmed", "doi", "https://doi.org/10.1000/confirmed", "public_registry", "2026-08-09T00:00:00.000Z");
   db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("aggregate-without-refetch-evidence", "openalex_id", "W123", "public_registry", "2026-08-09T00:00:00.000Z");
   initializeAnnotationCommunitySqlite(db);
-  assert.deepEqual(new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name)), new Set(["id", "title", "authors_json", "publication_year", "document_type", "created_at", "updated_at", "record_source", "source_provider", "confirmed_at", "revision", "identity_status"]));
+  const literatureColumns = new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name));
+  assert.ok(literatureColumns.has("version_kind"));
+  assert.ok(literatureColumns.has("confirmation_status"));
   assert.deepEqual(db.prepare("SELECT identifier_kind, normalized_value, is_legacy_alias FROM literature_identifiers_v2 WHERE literature_id = 'legacy'").all(), [{
     identifier_kind: "doi",
     is_legacy_alias: 0,
     normalized_value: "10.1000/legacy"
   }]);
-  assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'legacy'").get().identity_status, "legacy_unverified");
-  assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'registry-confirmed'").get().identity_status, "confirmed");
-  assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'registry-without-evidence'").get().identity_status, "legacy_unverified");
-  assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'aggregate-without-refetch-evidence'").get().identity_status, "legacy_unverified");
-  assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2 WHERE literature_id = 'registry-confirmed'").get().count, 1);
+  assert.equal(db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = 'legacy'").get().confirmation_status, "legacy_unverified");
+  assert.equal(db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = 'registry-confirmed'").get().confirmation_status, "confirmed");
+  assert.equal(db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = 'registry-without-evidence'").get().confirmation_status, "legacy_unverified");
+  assert.equal(db.prepare("SELECT confirmation_status FROM literature_records_v2 WHERE id = 'aggregate-without-refetch-evidence'").get().confirmation_status, "legacy_unverified");
+  assert.equal(db.prepare(`SELECT count(*) AS count FROM literature_identity_claims_v2 claim JOIN literature_identifiers_v2 identifier ON identifier.id = claim.identifier_id WHERE identifier.literature_id = 'registry-confirmed'`).get().count, 1);
   assert.equal(db.prepare("SELECT count(*) AS count FROM literature_record_versions_v2 WHERE literature_id = 'legacy'").get().count, 1);
   const legacySnapshot = JSON.parse(db.prepare("SELECT snapshot_json FROM literature_record_versions_v2 WHERE literature_id = 'legacy'").get().snapshot_json);
   assert.equal(legacySnapshot.recordSource, "legacy_metadata");
@@ -136,7 +141,40 @@ test("initializes the source-confirmed SQLite schema on an empty database", () =
     "literature_relations_v2"
   ]), new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('literature_identifiers_v2', 'literature_identity_claims_v2', 'literature_relations_v2')").all().map((row) => row.name)));
   const claimColumns = db.prepare("PRAGMA table_info(literature_identity_claims_v2)").all().map((column) => column.name);
-  assert.deepEqual(claimColumns, ["id", "literature_id", "provider", "provider_record_id", "verification_status", "evidence_json", "observed_at", "created_at"]);
+  assert.deepEqual(claimColumns, ["id", "identifier_id", "provider", "provider_record_id", "verification_status", "evidence_json", "observed_at", "created_at"]);
+  const identifierColumns = db.prepare("PRAGMA table_info(literature_identifiers_v2)").all();
+  assert.equal(identifierColumns.find((column) => column.name === "id")?.pk, 1);
+  db.close();
+});
+
+test("rebuilds the previous SQLite identifier and claim tables around identifier ids", () => {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE literature_records_v2 (id TEXT PRIMARY KEY, title TEXT NOT NULL, authors_json TEXT NOT NULL, publication_year INTEGER, document_type TEXT, record_source TEXT NOT NULL DEFAULT 'legacy_metadata', source_provider TEXT, confirmed_at TEXT, revision INTEGER NOT NULL DEFAULT 1, identity_status TEXT NOT NULL DEFAULT 'legacy_unverified', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE literature_identities_v2 (literature_id TEXT NOT NULL, identity_kind TEXT NOT NULL, identity_value TEXT NOT NULL, identity_source TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(literature_id, identity_kind, identity_value), UNIQUE(identity_kind, identity_value));
+    CREATE TABLE literature_identifiers_v2 (literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, identifier_kind TEXT NOT NULL, normalized_value TEXT NOT NULL, is_legacy_alias INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, PRIMARY KEY(literature_id, identifier_kind, normalized_value), UNIQUE(identifier_kind, normalized_value));
+    CREATE TABLE literature_identity_claims_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, provider TEXT NOT NULL, provider_record_id TEXT NOT NULL, verification_status TEXT NOT NULL, evidence_json TEXT NOT NULL, observed_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider, provider_record_id));
+    INSERT INTO literature_records_v2(id, title, authors_json, record_source, source_provider, confirmed_at, identity_status, created_at, updated_at) VALUES ('confirmed', 'Confirmed', '["Author"]', 'public_registry', 'crossref', '2026-08-09T00:00:00.000Z', 'confirmed', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identifiers_v2(literature_id, identifier_kind, normalized_value, created_at) VALUES ('confirmed', 'doi', '10.1000/confirmed', '2026-08-09T00:00:00.000Z');
+    INSERT INTO literature_identity_claims_v2(id, literature_id, provider, provider_record_id, verification_status, evidence_json, observed_at, created_at) VALUES ('claim', 'confirmed', 'crossref', '10.1000/confirmed', 'confirmed', '{}', '2026-08-09T00:00:00.000Z', '2026-08-09T00:00:00.000Z');
+  `);
+
+  initializeAnnotationCommunitySqlite(db);
+
+  const identifierColumns = db.prepare("PRAGMA table_info(literature_identifiers_v2)").all();
+  assert.equal(identifierColumns.find((column) => column.name === "id")?.pk, 1);
+  const claimColumns = db.prepare("PRAGMA table_info(literature_identity_claims_v2)").all().map((column) => column.name);
+  assert.ok(claimColumns.includes("identifier_id"));
+  assert.ok(!claimColumns.includes("literature_id"));
+  assert.deepEqual(db.prepare(`
+    SELECT identifier.literature_id, claim.provider, claim.provider_record_id
+      FROM literature_identity_claims_v2 claim
+      JOIN literature_identifiers_v2 identifier ON identifier.id = claim.identifier_id
+  `).get(), {
+    literature_id: "confirmed",
+    provider: "crossref",
+    provider_record_id: "10.1000/confirmed"
+  });
   db.close();
 });
 

@@ -135,10 +135,21 @@ const literatureDisplaySchema = z.object({
 
 const literatureProviderSchema = z.enum(["intuecho", "openalex", "crossref", "arxiv", "semantic_scholar"]);
 
+const literatureCandidateRelationSchema = z.object({
+  direction: z.enum(["from_current", "to_current"]),
+  evidence: z.record(z.unknown()).refine((value) => Object.keys(value).length > 0),
+  relationType: z.enum(["is_preprint_of", "version_of", "translation_of"]),
+  targetIdentifier: z.object({
+    kind: literatureIdentifierKindSchema,
+    value: z.string().trim().min(1).max(1000)
+  }).strict()
+}).strict();
+
 export const literatureCandidateSchema = z.object({
   candidateKey: z.string().trim().min(1).max(1000),
   provider: literatureProviderSchema,
   record: literatureDisplaySchema,
+  relations: z.array(literatureCandidateRelationSchema).max(20).optional(),
   recordUrl: z.string().url().refine((value) => new URL(value).protocol === "https:").optional()
 });
 

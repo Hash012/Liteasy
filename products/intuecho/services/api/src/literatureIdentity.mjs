@@ -28,6 +28,8 @@ const publicationDocumentTypes = new Set([
   "proceedings-article",
   "publication"
 ]);
+const literatureRelationDirections = new Set(["from_current", "to_current"]);
+const literatureRelationTypes = new Set(["is_preprint_of", "translation_of", "version_of"]);
 
 const preprintDocumentTypes = new Set([
   "posted-content",
@@ -122,6 +124,53 @@ export function normalizeLiteratureIdentifier(kind, value) {
     return workId.toUpperCase();
   }
   if (kind === "title_authors_year_hash") return normalized.toLocaleLowerCase("en-US");
+  return normalized;
+}
+
+export function selectLiteratureClaimIdentifier(identifiers, provider) {
+  const normalized = (Array.isArray(identifiers) ? identifiers : []).map((identifier) => ({
+    ...identifier,
+    value: normalizeLiteratureIdentifier(identifier.kind, identifier.value)
+  }));
+  const preferredKinds = {
+    arxiv: ["arxiv_id"],
+    crossref: ["doi"],
+    openalex: ["doi", "arxiv_id", "openalex_id"],
+    semantic_scholar: ["doi", "arxiv_id", "semantic_scholar_id"]
+  }[provider] ?? [];
+  for (const kind of preferredKinds) {
+    const identifier = normalized.find((item) => item.kind === kind);
+    if (identifier) return identifier;
+  }
+  return normalized[0] ?? null;
+}
+
+export function normalizeLiteratureRelations(relations) {
+  const normalized = [];
+  const seen = new Set();
+  for (const relation of Array.isArray(relations) ? relations : []) {
+    const direction = String(relation?.direction ?? "").trim();
+    const relationType = String(relation?.relationType ?? "").trim();
+    const targetKind = String(relation?.targetIdentifier?.kind ?? "").trim();
+    if (!literatureRelationDirections.has(direction) || !literatureRelationTypes.has(relationType) || !targetKind) continue;
+    let targetValue;
+    try {
+      targetValue = normalizeLiteratureIdentifier(targetKind, relation.targetIdentifier.value);
+    } catch {
+      continue;
+    }
+    const evidence = relation?.evidence;
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) || Object.keys(evidence).length === 0) continue;
+    const key = `${direction}:${relationType}:${targetKind}:${targetValue}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({
+      direction,
+      evidence: { ...evidence },
+      relationType,
+      targetIdentifier: { kind: targetKind, value: targetValue }
+    });
+  }
   return normalized;
 }
 

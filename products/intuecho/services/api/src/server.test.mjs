@@ -53,13 +53,13 @@ function insertFixture(db) {
   db.prepare("INSERT INTO comments (id, post_id, body, author_id, author_name, author_initials, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run("comment-1", "post-1", "一条测试讨论。", "author-2", "作者乙", "B", "2026-01-01T01:00:00.000Z");
   const now = "2026-08-09T00:00:00.000Z";
-  db.prepare(`INSERT INTO literature_records_v2(id, title, authors_json, publication_year, document_type, record_source, source_provider, confirmed_at, revision, identity_status, created_at, updated_at)
+  db.prepare(`INSERT INTO literature_records_v2(id, title, authors_json, publication_year, version_kind, record_source, source_provider, confirmed_at, revision, confirmation_status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 'public_registry', 'crossref', ?, 1, 'confirmed', ?, ?)`)
     .run("literature-1", "A Reliable Paper", JSON.stringify(["Author"]), 2025, "journal_article", now, now, now);
-  db.prepare("INSERT INTO literature_identifiers_v2(literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, 'doi', ?, 0, ?)")
-    .run("literature-1", "10.1000/reliable", now);
-  db.prepare("INSERT INTO literature_identity_claims_v2(id, literature_id, provider, provider_record_id, verification_status, evidence_json, observed_at, created_at) VALUES (?, ?, 'crossref', ?, 'confirmed', '{}', ?, ?)")
-    .run("claim-fixture-1", "literature-1", "10.1000/reliable", now, now);
+  db.prepare("INSERT INTO literature_identifiers_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, 'doi', ?, 0, ?)")
+    .run("identifier-fixture-1", "literature-1", "10.1000/reliable", now);
+  db.prepare("INSERT INTO literature_identity_claims_v2(id, identifier_id, provider, provider_record_id, verification_status, evidence_json, observed_at, created_at) VALUES (?, ?, 'crossref', ?, 'confirmed', '{}', ?, ?)")
+    .run("claim-fixture-1", "identifier-fixture-1", "10.1000/reliable", now, now);
 }
 
 async function withApp(run, {
@@ -283,12 +283,12 @@ function publicationOperation(overrides = {}) {
 function insertConfirmedPublicationLiterature(db, literatureId = "literature-publication-1") {
   const now = "2026-08-09T00:00:00.000Z";
   db.prepare(`INSERT INTO literature_records_v2(
-    id, title, authors_json, publication_year, document_type, record_source,
-    source_provider, confirmed_at, revision, identity_status, created_at, updated_at
+    id, title, authors_json, publication_year, version_kind, record_source,
+    source_provider, confirmed_at, revision, confirmation_status, created_at, updated_at
   ) VALUES (?, ?, ?, ?, ?, 'public_registry', 'crossref', ?, 1, 'confirmed', ?, ?)`)
     .run(literatureId, "Server Confirmed Publication Literature", JSON.stringify(["Confirmed Author"]), 2026, "journal_article", now, now, now);
-  db.prepare("INSERT INTO literature_identifiers_v2(literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, 'doi', ?, 0, ?)")
-    .run(literatureId, "10.1000/confirmed-publication", now);
+  db.prepare("INSERT INTO literature_identifiers_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, 'doi', ?, 0, ?)")
+    .run(`identifier-${literatureId}`, literatureId, "10.1000/confirmed-publication", now);
   return literatureId;
 }
 
@@ -308,7 +308,7 @@ function postgresPublicationHarness({ missingLiteratureIds = [] } = {}) {
       if (normalized.startsWith("SELECT * FROM literature_records")) {
         if (missingLiterature.has(values[0])) return { rows: [] };
         const now = new Date("2026-08-09T00:00:00.000Z");
-        return { rows: [{ authors: ["Confirmed Author"], confirmed_at: now, created_at: now, document_type: "journal_article", id: values[0], identity_status: "confirmed", publication_year: 2026, record_source: "public_registry", revision: 1, source_provider: "crossref", title: "Confirmed Literature", updated_at: now }] };
+        return { rows: [{ authors: ["Confirmed Author"], confirmation_status: "confirmed", confirmed_at: now, created_at: now, id: values[0], publication_year: 2026, record_source: "public_registry", revision: 1, source_provider: "crossref", title: "Confirmed Literature", updated_at: now, version_kind: "journal_article" }] };
       }
       if (normalized.startsWith("SELECT 1 FROM literature_records")) return { rows: [{ exists: 1 }] };
       if (normalized.startsWith("SELECT identifier_kind AS kind")) return { rows: [{ kind: "doi", source: "public_registry", value: "10.1000/confirmed-publication" }] };
@@ -811,11 +811,11 @@ test("rejects PostgreSQL desktop publications for a deleted owner before taking 
 test("does not serialize untouched PostgreSQL legacy rows as canonical literature", async () => {
   const legacyRow = {
     authors: ["Legacy Author"],
-    document_type: null,
+    confirmation_status: "legacy_unverified",
     id: "legacy-postgres",
     publication_year: 2020,
     record_source: "legacy_metadata",
-    identity_status: "legacy_unverified"
+    version_kind: null
   };
   const pool = {
     async query(sql) {

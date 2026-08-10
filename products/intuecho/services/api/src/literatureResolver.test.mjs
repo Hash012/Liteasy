@@ -10,11 +10,12 @@ function publicIdentifier(kind, value) {
   return { kind, source: "public_registry", value };
 }
 
-function candidate({ candidateKey, identifiers, provider, title = "A Paper", authors = ["A. Author"], documentType, year = 2026 }) {
+function candidate({ candidateKey, identifiers, provider, relations, title = "A Paper", authors = ["A. Author"], documentType, year = 2026 }) {
   return {
     candidateKey,
     provider,
-    record: { authors, ...(documentType ? { documentType } : {}), identifiers, title, year }
+    record: { authors, ...(documentType ? { documentType } : {}), identifiers, title, year },
+    ...(relations ? { relations } : {})
   };
 }
 
@@ -538,8 +539,15 @@ test("re-fetches an external candidate and never accepts the client record", asy
     candidateKey: "crossref:doi:10.1000/verified",
     identifiers: [publicIdentifier("doi", "10.1000/verified")],
     provider: "crossref",
+    relations: [{
+      direction: "to_current",
+      evidence: { sourceField: "relation.has-preprint" },
+      relationType: "is_preprint_of",
+      targetIdentifier: { kind: "arxiv_id", value: "2401.01234" }
+    }],
     title: "Verified Provider Record"
   });
+  let confirmedCandidate;
   const resolver = createLiteratureResolver({
     providers: [provider("crossref", {
       async fetchCandidate(candidateKey) {
@@ -547,7 +555,12 @@ test("re-fetches an external candidate and never accepts the client record", asy
         return refetched;
       }
     })],
-    repository: repository()
+    repository: repository({
+      async confirmRefetchedLiterature(_owner, verifiedCandidate) {
+        confirmedCandidate = verifiedCandidate;
+        return { source: "refetched", title: verifiedCandidate.record.title };
+      }
+    })
   });
 
   const result = await resolver.confirm(user, {
@@ -557,6 +570,7 @@ test("re-fetches an external candidate and never accepts the client record", asy
   });
 
   assert.deepEqual(result, { source: "refetched", title: "Verified Provider Record" });
+  assert.deepEqual(confirmedCandidate.relations, refetched.relations);
 });
 
 test("reloads internal candidates by literature id before confirming", async () => {

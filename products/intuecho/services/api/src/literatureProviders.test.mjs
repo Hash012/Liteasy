@@ -110,6 +110,32 @@ test("bounds Crossref title search to ten projected candidates", async () => {
   assert.equal(candidates[9].record.title, "Bounded 9");
 });
 
+test("projects Crossref version relations as source evidence", async () => {
+  const providers = createLiteratureProviders({
+    crossrefEndpoint: "https://catalog.example.test/works"
+  }, {
+    fetchImpl: async () => jsonResponse({
+      message: crossrefWork({
+        relation: {
+          "has-preprint": [{ "id-type": "doi", id: "10.1000/preprint" }]
+        }
+      })
+    })
+  });
+
+  const [candidate] = await provider(providers, "crossref").search({
+    purpose: "forum_compose",
+    query: "10.1000/verified"
+  });
+
+  assert.deepEqual(candidate.relations, [{
+    direction: "to_current",
+    evidence: { sourceField: "relation.has-preprint" },
+    relationType: "is_preprint_of",
+    targetIdentifier: { kind: "doi", value: "10.1000/preprint" }
+  }]);
+});
+
 test("projects an exact arXiv identifier lookup into a public candidate", async () => {
   const providers = createLiteratureProviders({
     arxivEndpoint: "https://catalog.example.test/arxiv/query"
@@ -127,6 +153,7 @@ test("projects an exact arXiv identifier lookup into a public candidate", async 
             <title>Preprint Work</title>
             <published>2024-01-10T00:00:00Z</published>
             <author><name>Ada Lovelace</name></author>
+            <arxiv:doi>10.1000/published-version</arxiv:doi>
           </entry></feed>`;
         }
       };
@@ -148,6 +175,12 @@ test("projects an exact arXiv identifier lookup into a public candidate", async 
       title: "Preprint Work",
       year: 2024
     },
+    relations: [{
+      direction: "from_current",
+      evidence: { sourceField: "arxiv:doi" },
+      relationType: "is_preprint_of",
+      targetIdentifier: { kind: "doi", value: "10.1000/published-version" }
+    }],
     recordUrl: "https://arxiv.org/abs/2401.01234"
   }]);
 });
@@ -241,6 +274,12 @@ test("projects Semantic Scholar search and exact re-fetch records with canonical
       title: "Semantic Work",
       year: 2025
     },
+    relations: [{
+      direction: "to_current",
+      evidence: { sourceField: "externalIds.ArXiv" },
+      relationType: "is_preprint_of",
+      targetIdentifier: { kind: "arxiv_id", value: "2401.01234" }
+    }],
     recordUrl: "https://www.semanticscholar.org/paper/semantic-123"
   }]);
   assert.deepEqual(refetched, searched[0]);

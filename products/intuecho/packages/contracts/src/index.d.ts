@@ -25,6 +25,12 @@ export type LiteratureCandidate = {
     title: string;
     year?: number;
   };
+  relations?: Array<{
+    direction: "from_current" | "to_current";
+    evidence: Record<string, unknown>;
+    relationType: "is_preprint_of" | "version_of" | "translation_of";
+    targetIdentifier: { kind: LiteratureIdentifierKind; value: string };
+  }>;
   recordUrl?: string;
 };
 

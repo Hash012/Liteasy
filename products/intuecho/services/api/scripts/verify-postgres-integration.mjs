@@ -128,10 +128,12 @@ try {
     "014_correct_legacy_literature_snapshots.sql",
     "015_reply_projection_lifecycle.sql",
     "016_source_confirmed_literature_identity.sql",
-    "017_constrain_legacy_aggregate_confirmation.sql"
+    "017_constrain_legacy_aggregate_confirmation.sql",
+    "018_align_literature_identity_model.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 15, current: false });
+  const stagedMigrationRows = await pool.query("SELECT name FROM schema_migrations ORDER BY name");
+  assert.deepEqual(stagedMigrationRows.rows.map((row) => row.name), expectedMigrations.slice(0, 15));
   const historicalLiteratureId = `migration-014-historical-${randomUUID()}`;
   const historicalVersionId = `migration-014-historical-version-${randomUUID()}`;
   const manualLiteratureId = `migration-014-manual-${randomUUID()}`;
@@ -299,14 +301,15 @@ try {
   });
   assert.deepEqual(sourceConfirmedMigration.applied, [
     "016_source_confirmed_literature_identity.sql",
-    "017_constrain_legacy_aggregate_confirmation.sql"
+    "017_constrain_legacy_aggregate_confirmation.sql",
+    "018_align_literature_identity_model.sql"
   ]);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 17, current: true });
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 18, current: true });
   const constrainedLegacyAggregate = await migrationPool.query(
-    "SELECT identity_status FROM literature_records WHERE id = $1",
+    "SELECT confirmation_status FROM literature_records WHERE id = $1",
     [legacyAggregateId]
   );
-  assert.equal(constrainedLegacyAggregate.rows[0].identity_status, "legacy_unverified");
+  assert.equal(constrainedLegacyAggregate.rows[0].confirmation_status, "legacy_unverified");
   await migrationPool.query(`
     DO $$
     DECLARE tables text;
@@ -329,10 +332,24 @@ try {
   const provenanceColumns = await migrationPool.query(`
     SELECT column_name FROM information_schema.columns
      WHERE table_schema = 'public' AND table_name = 'literature_records'
-       AND column_name IN ('record_source', 'source_provider', 'confirmed_at', 'revision', 'identity_status')
+       AND column_name IN ('record_source', 'source_provider', 'confirmed_at', 'revision', 'confirmation_status', 'version_kind')
      ORDER BY column_name
   `);
-  assert.deepEqual(provenanceColumns.rows.map((row) => row.column_name), ["confirmed_at", "identity_status", "record_source", "revision", "source_provider"]);
+  assert.deepEqual(provenanceColumns.rows.map((row) => row.column_name), ["confirmation_status", "confirmed_at", "record_source", "revision", "source_provider", "version_kind"]);
+  const identityModelColumns = await migrationPool.query(`
+    SELECT table_name, column_name
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND (
+         (table_name = 'literature_identifiers' AND column_name = 'id')
+         OR (table_name = 'literature_identity_claims' AND column_name = 'identifier_id')
+       )
+     ORDER BY table_name, column_name
+  `);
+  assert.deepEqual(identityModelColumns.rows, [
+    { column_name: "id", table_name: "literature_identifiers" },
+    { column_name: "identifier_id", table_name: "literature_identity_claims" }
+  ]);
   const versionTrigger = await migrationPool.query(`
     SELECT 1 FROM pg_trigger
      WHERE tgname = 'literature_record_versions_append_only'
@@ -534,6 +551,7 @@ try {
     provider: "crossref",
     record: {
       authors: ["Ada Lovelace"],
+      documentType: "journal_article",
       identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" }],
       title: "Integration Confirmed Literature",
       year: 1843
@@ -558,6 +576,7 @@ try {
     provider: "crossref",
     record: {
       authors: ["Ada Lovelace"],
+      documentType: "journal_article",
       identifiers: [
         { kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" },
         { kind: "openalex_id", source: "public_registry", value: "w424242" }
@@ -593,6 +612,50 @@ try {
       year: 1952
     }
   });
+  const relatedPreprint = await annotations.confirmRefetchedLiterature(literatureOwner, {
+    candidateKey: "arxiv:arxiv_id:2401.01234",
+    provider: "arxiv",
+    record: {
+      authors: ["Evidence Author"],
+      documentType: "preprint",
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+      title: "Evidenced Version Relation",
+      year: 2024
+    },
+    relations: [{
+      direction: "from_current",
+      evidence: { sourceField: "arxiv:doi" },
+      relationType: "is_preprint_of",
+      targetIdentifier: { kind: "doi", value: "10.1000/evidenced-publication" }
+    }]
+  });
+  const relatedPublication = await annotations.confirmRefetchedLiterature(literatureOwner, {
+    candidateKey: "crossref:doi:10.1000/evidenced-publication",
+    provider: "crossref",
+    record: {
+      authors: ["Evidence Author"],
+      documentType: "journal_article",
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/evidenced-publication" }],
+      title: "Evidenced Version Relation",
+      year: 2024
+    }
+  });
+  assert.deepEqual((await annotations.findLiteratureRelations(relatedPreprint.literatureId)).map((relation) => ({
+    ...relation,
+    createdAt: "timestamp"
+  })), [{
+    createdAt: "timestamp",
+    evidence: {
+      candidateKey: "arxiv:arxiv_id:2401.01234",
+      sourceField: "arxiv:doi",
+      targetIdentifier: { kind: "doi", value: "10.1000/evidenced-publication" }
+    },
+    fromLiteratureId: relatedPreprint.literatureId,
+    provider: "arxiv",
+    relationType: "is_preprint_of",
+    toLiteratureId: relatedPublication.literatureId,
+    verificationStatus: "confirmed"
+  }]);
   await assert.rejects(
     () => annotations.confirmRefetchedLiterature(literatureOwner, {
       candidateKey: confirmedLiteratureCandidate.candidateKey,
@@ -1392,8 +1455,8 @@ try {
     educationStage: "博士研究生",
     institution: "证据研究院",
     literatureIdentityKind: "doi",
-    literatureIdentityValue: "10.1000/annotation-integration",
-    query: "/证据",
+    literatureIdentityValue: "10.1000/integration-confirmed",
+    query: "/PostgreSQL",
     sort: "recommended"
   });
   assert.equal(plaza.some((item) => item.id === publicAnnotation.id), true);

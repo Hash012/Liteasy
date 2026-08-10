@@ -1,6 +1,7 @@
 import {
   hasCrossVersionIdentifierConflict,
   normalizeLiteratureIdentifier,
+  normalizeLiteratureRelations,
   sameLiteratureBibliography
 } from "./literatureIdentity.mjs";
 
@@ -68,6 +69,7 @@ function externalCandidate(value, providerName) {
     return null;
   }
   const record = displayRecord(value.record);
+  const relations = normalizeLiteratureRelations(value.relations);
   const primary = record?.identifiers[0];
   if (!record || !primary || primary.source !== "public_registry" || hasCrossVersionIdentifierConflict(record)) return null;
   const expectedKey = `${providerName}:${primary.kind}:${primary.value}`;
@@ -83,6 +85,7 @@ function externalCandidate(value, providerName) {
     candidateKey: expectedKey,
     provider: providerName,
     record,
+    ...(relations.length ? { relations } : {}),
     ...(recordUrl ? { recordUrl } : {})
   };
 }
@@ -305,6 +308,7 @@ export function createLiteratureResolver({ providers, repository }) {
         candidateKey: candidate.candidateKey,
         provider: candidate.provider,
         record: candidate.record,
+        ...(candidate.relations ? { relations: candidate.relations } : {}),
         ...(candidate.recordUrl ? { recordUrl: candidate.recordUrl } : {})
       });
     },

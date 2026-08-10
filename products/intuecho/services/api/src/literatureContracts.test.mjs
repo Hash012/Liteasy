@@ -273,3 +273,26 @@ test("declares optional HTTPS provider record URLs", () => {
     recordUrl: "http://example.test/record-url"
   }).success, false);
 });
+
+test("accepts only evidenced provider version relations", () => {
+  const candidate = {
+    candidateKey: "arxiv:arxiv_id:2401.01234",
+    provider: "arxiv",
+    record: {
+      authors: ["A. Author"],
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+      title: "A Preprint"
+    },
+    relations: [{
+      direction: "from_current",
+      evidence: { sourceField: "arxiv:doi" },
+      relationType: "is_preprint_of",
+      targetIdentifier: { kind: "doi", value: "10.1000/publication" }
+    }]
+  };
+  assert.equal(literatureCandidateSchema.safeParse(candidate).success, true);
+  assert.equal(literatureCandidateSchema.safeParse({
+    ...candidate,
+    relations: [{ ...candidate.relations[0], evidence: {} }]
+  }).success, false);
+});

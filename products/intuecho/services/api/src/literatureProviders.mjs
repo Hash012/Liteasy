@@ -73,7 +73,7 @@ function httpsUrl(...values) {
   return null;
 }
 
-function candidate({ identifiers, provider, recordUrl, title, authors = [], documentType, year }) {
+function candidate({ identifiers, provider, recordUrl, relations = [], title, authors = [], documentType, year }) {
   const primary = identifiers[0];
   if (!primary || !title) return null;
   return {
@@ -86,8 +86,39 @@ function candidate({ identifiers, provider, recordUrl, title, authors = [], docu
       title,
       ...(year ? { year } : {})
     },
+    ...(relations.length ? { relations } : {}),
     ...(recordUrl ? { recordUrl } : {})
   };
+}
+
+function relation({ direction, relationType, sourceField, targetIdentifier }) {
+  if (!targetIdentifier) return null;
+  return {
+    direction,
+    evidence: { sourceField },
+    relationType,
+    targetIdentifier: { kind: targetIdentifier.kind, value: targetIdentifier.value }
+  };
+}
+
+function crossrefRelations(work) {
+  const mappings = {
+    "has-preprint": { direction: "to_current", relationType: "is_preprint_of" },
+    "has-translation": { direction: "to_current", relationType: "translation_of" },
+    "has-version": { direction: "to_current", relationType: "version_of" },
+    "is-preprint-of": { direction: "from_current", relationType: "is_preprint_of" },
+    "is-translation-of": { direction: "from_current", relationType: "translation_of" },
+    "is-version-of": { direction: "from_current", relationType: "version_of" }
+  };
+  return Object.entries(work?.relation ?? {}).flatMap(([sourceField, entries]) => {
+    const mapping = mappings[sourceField];
+    if (!mapping) return [];
+    return (Array.isArray(entries) ? entries : []).map((entry) => relation({
+      ...mapping,
+      sourceField: `relation.${sourceField}`,
+      targetIdentifier: entry?.["id-type"] === "doi" ? publicIdentifier("doi", entry.id) : null
+    })).filter(Boolean);
+  });
 }
 
 function normalizedDoi(input) {
@@ -175,6 +206,7 @@ function crossrefCandidate(work) {
     identifiers: [doi],
     provider: "crossref",
     recordUrl: httpsUrl(work.URL, `https://doi.org/${doi.value}`),
+    relations: crossrefRelations(work),
     title,
     year: yearFrom(work.published?.["date-parts"] ?? work.issued?.["date-parts"])
   });
@@ -211,6 +243,12 @@ function semanticScholarCandidate(paper) {
       : [semanticScholarId, arxivId, doi?.value.startsWith("10.48550/arxiv.") ? doi : null]),
     provider: "semantic_scholar",
     recordUrl: httpsUrl(paper.url, `https://www.semanticscholar.org/paper/${encodeURIComponent(semanticScholarId.value)}`),
+    relations: isPublication && arxivId ? [relation({
+      direction: "to_current",
+      relationType: "is_preprint_of",
+      sourceField: "externalIds.ArXiv",
+      targetIdentifier: arxivId
+    })] : [],
     title,
     year: yearFrom(paper.year)
   });
@@ -235,6 +273,7 @@ function arxivCandidates(xml) {
   return entries.map((entry) => {
     const rawId = xmlValue(entry, "id");
     const arxivId = publicIdentifier("arxiv_id", rawId);
+    const publicationDoi = publicIdentifier("doi", xmlValue(entry, "arxiv:doi"));
     const title = bibliographicTitle(xmlValue(entry, "title"));
     if (!arxivId || !title) return null;
     const authors = [...entry.matchAll(/<author(?:\s[^>]*)?>[\s\S]*?<name(?:\s[^>]*)?>([\s\S]*?)<\/name>[\s\S]*?<\/author>/gi)]
@@ -245,6 +284,12 @@ function arxivCandidates(xml) {
       identifiers: [arxivId],
       provider: "arxiv",
       recordUrl: `https://arxiv.org/abs/${arxivId.value}`,
+      relations: publicationDoi ? [relation({
+        direction: "from_current",
+        relationType: "is_preprint_of",
+        sourceField: "arxiv:doi",
+        targetIdentifier: publicationDoi
+      })] : [],
       title,
       year: yearFrom(String(xmlValue(entry, "published") ?? "").slice(0, 4))
     });
