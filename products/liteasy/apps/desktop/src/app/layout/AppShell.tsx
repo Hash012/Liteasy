@@ -1791,6 +1791,8 @@ export function AppShell({
         loadPdfSource={externalPapers.loadPdfSource}
         loadLiteratureRelations={forum.client.literatureRelations}
         onAddExternalPdfToLibrary={workspaceActions.addExternalPdfToLibrary}
+        onAcquireLiteratureVersion={(literature, relation) =>
+          externalPapers.acquireLiteratureVersion(literature, relation.evidence)}
         onOpenExternalFullText={externalPapers.openExternalFullTextInReader}
         onOpenLiteratureVersion={openLiteratureVersion}
         onPaperAnnotated={
@@ -2078,6 +2080,7 @@ export function AppShell({
             void organizationShell.actions.openOrganizationSharedLibrary(summary);
           }}
           onRetryLiteratureResolution={pdfAnnotationPublication.actions.retryResolution}
+          onSearchLiterature={pdfAnnotationPublication.actions.searchLiterature}
           onSelectLiteratureCandidate={pdfAnnotationPublication.actions.selectCandidate}
           onSelectOrganization={organizationShell.actions.selectOrganization}
           organizationDialogOpen={organizationDialogOpen}

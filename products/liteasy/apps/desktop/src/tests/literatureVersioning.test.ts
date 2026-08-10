@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  createLiteratureCitationExport,
   formatLiteratureBibtex,
   groupLiteratureCandidates,
   literatureVersionOpenTarget,
@@ -89,6 +90,20 @@ describe("literatureVersioning", () => {
 
     expect(preferredCitationLiterature(current, versions).literatureId).toBe("literature-publication");
     expect(formatLiteratureBibtex(publication)).toContain("doi = {10.1000/published}");
+    expect(createLiteratureCitationExport({
+      current,
+      format: "bibtex",
+      versions
+    })).toMatchObject({
+      literature: { literatureId: "literature-publication" },
+      text: expect.stringContaining("doi = {10.1000/published}")
+    });
+    expect(createLiteratureCitationExport({
+      current,
+      format: "citation",
+      selectedLiteratureId: current.literatureId,
+      versions
+    }).literature.literatureId).toBe(current.literatureId);
   });
 
   test("opens a matching local version before falling back to its registry page", () => {

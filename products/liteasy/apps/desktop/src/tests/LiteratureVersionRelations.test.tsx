@@ -19,6 +19,7 @@ describe("LiteratureVersionRelations", () => {
   test("shows an evidenced published version without merging it into the current preprint", async () => {
     const user = userEvent.setup();
     const copyText = vi.fn(async () => undefined);
+    const onAcquireVersion = vi.fn(async () => ({ created: true, documentId: "metadata-publication" }));
     const onOpenVersion = vi.fn();
     const loadRelations = vi.fn(async () => ({
       literatureId: "literature-preprint",
@@ -50,6 +51,7 @@ describe("LiteratureVersionRelations", () => {
       copyText={copyText}
       currentLiterature={currentLiterature}
       loadRelations={loadRelations}
+      onAcquireVersion={onAcquireVersion}
       onOpenVersion={onOpenVersion}
     />);
 
@@ -61,6 +63,9 @@ describe("LiteratureVersionRelations", () => {
 
     await user.click(screen.getByRole("button", { name: "打开 Published Version" }));
     expect(onOpenVersion).toHaveBeenCalledWith(expect.objectContaining({ literatureId: "literature-publication" }), expect.any(Object));
+    await user.click(screen.getByRole("button", { name: "将 Published Version 加入文献库" }));
+    expect(onAcquireVersion).toHaveBeenCalledWith(expect.objectContaining({ literatureId: "literature-publication" }), expect.any(Object));
+    expect(await screen.findByText("已加入文献库")).toBeInTheDocument();
 
     expect(screen.getByRole("combobox", { name: "引用版本" })).toHaveValue("literature-publication");
     await user.click(screen.getByRole("button", { name: "复制 BibTeX" }));

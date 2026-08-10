@@ -4,7 +4,10 @@ import type {
   ForumLiteratureResolveInput
 } from "../features/forum/forum.types";
 import type { ForumClient } from "../features/forum/forumClient";
-import type { LiteratureDialogModel } from "../features/forum/literatureResolution.types";
+import type {
+  LiteratureDialogModel,
+  LiteratureSearchDraft
+} from "../features/forum/literatureResolution.types";
 import type {
   LiteratureCandidate,
   LiteratureRecord,
@@ -184,6 +187,16 @@ function boundedHints(
   };
 }
 
+function searchDraftFromRequest(request: ForumLiteratureResolveInput): LiteratureSearchDraft | undefined {
+  const hints = request.hints;
+  if (!hints?.title || !hints.authors?.length || !hints.year) return undefined;
+  return {
+    authors: [...hints.authors],
+    title: hints.title,
+    year: hints.year
+  };
+}
+
 export function usePdfAnnotationPublicationController({
   forumClient,
   literatureMetadataRepository,
@@ -226,6 +239,7 @@ export function usePdfAnnotationPublicationController({
       kind: "candidates",
       ...(message ? { message } : {}),
       pending: false,
+      ...(searchDraftFromRequest(active.request) ? { searchDraft: searchDraftFromRequest(active.request) } : {}),
       unavailableProviders
     });
   }
@@ -276,6 +290,7 @@ export function usePdfAnnotationPublicationController({
         kind: "conflict",
         message: "来源返回的稳定标识与题录互相冲突，当前文件不能公开。",
         pending: false,
+        ...(searchDraftFromRequest(active.request) ? { searchDraft: searchDraftFromRequest(active.request) } : {}),
         unavailableProviders: result.unavailableProviders
       });
       return;
@@ -285,6 +300,7 @@ export function usePdfAnnotationPublicationController({
         kind: "unresolved",
         message: "尚未找到可由公开来源确认的文献版本。",
         pending: false,
+        ...(searchDraftFromRequest(active.request) ? { searchDraft: searchDraftFromRequest(active.request) } : {}),
         unavailableProviders: result.unavailableProviders
       });
       return;
@@ -292,6 +308,7 @@ export function usePdfAnnotationPublicationController({
     setLiteratureDialog({
       kind: "unavailable",
       pending: false,
+      ...(searchDraftFromRequest(active.request) ? { searchDraft: searchDraftFromRequest(active.request) } : {}),
       unavailableProviders: result.unavailableProviders
     });
   }
@@ -312,6 +329,7 @@ export function usePdfAnnotationPublicationController({
         kind: "unavailable",
         message: errorMessage(error, "文献检索暂时不可用，请重试。"),
         pending: false,
+        ...(searchDraftFromRequest(active.request) ? { searchDraft: searchDraftFromRequest(active.request) } : {}),
         unavailableProviders: active.unavailableProviders
       });
     }
@@ -507,6 +525,38 @@ export function usePdfAnnotationPublicationController({
     if (active && new Set(["conflict", "unavailable", "unresolved"]).has(literatureDialog?.kind ?? "")) void attemptResolution(active);
   }
 
+  function searchLiterature(draft: LiteratureSearchDraft) {
+    const active = activeResolutionRef.current;
+    if (!active || active.pending) return;
+    const hints = boundedHints(draft);
+    if (!hints?.title || !hints.authors?.length || !hints.year) {
+      setLiteratureDialog((current) => current ? {
+        ...current,
+        message: "请填写题名、完整作者和出版年份后检索。"
+      } : current);
+      return;
+    }
+    active.candidates = [];
+    active.request = {
+      hints: {
+        authors: hints.authors,
+        title: hints.title,
+        year: hints.year
+      },
+      limit: 5,
+      purpose: "liteasy_pdf_annotation",
+      query: hints.title
+    };
+    active.unavailableProviders = [];
+    setLiteratureDialog({
+      kind: "resolving",
+      pending: false,
+      searchDraft: draft,
+      unavailableProviders: []
+    });
+    void attemptResolution(active);
+  }
+
   function cancelResolution() {
     const active = activeResolutionRef.current;
     if (active) finishResolution(active, undefined);
@@ -517,6 +567,7 @@ export function usePdfAnnotationPublicationController({
       cancelResolution,
       changePublication,
       retryResolution,
+      searchLiterature,
       selectCandidate
     },
     model: { literatureDialog }

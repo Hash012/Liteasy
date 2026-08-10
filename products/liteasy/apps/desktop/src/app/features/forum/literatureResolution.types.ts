@@ -3,9 +3,16 @@ import type {
   LiteratureResolveResult
 } from "../paper-identity/literature.types";
 
+export type LiteratureSearchDraft = {
+  authors: string[];
+  title: string;
+  year: number;
+};
+
 type LiteratureDialogBase = {
   message?: string;
   pending: boolean;
+  searchDraft?: LiteratureSearchDraft;
   unavailableProviders: LiteratureResolveResult["unavailableProviders"];
 };
 

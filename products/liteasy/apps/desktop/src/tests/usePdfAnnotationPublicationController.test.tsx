@@ -541,6 +541,58 @@ describe("usePdfAnnotationPublicationController", () => {
     await expect(pending).resolves.toEqual({ desiredVisibility: "private", state: "not_published" });
   });
 
+  test("restarts provider resolution from corrected bibliography without reusing extracted identifiers", async () => {
+    const candidate = {
+      candidateKey: "crossref:doi:10.1000/corrected",
+      provider: "crossref" as const,
+      record: {
+        authors: ["Ada Lovelace", "Grace Hopper"],
+        identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/corrected" }],
+        title: "Corrected Paper",
+        year: 2026
+      }
+    };
+    const context = setup({
+      resolveLiterature: vi.fn()
+        .mockResolvedValueOnce({ candidates: [], status: "not_found", unavailableProviders: [] })
+        .mockResolvedValueOnce({ candidates: [candidate], status: "ambiguous", unavailableProviders: [] })
+    });
+    let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
+    act(() => {
+      pending = context.result.current.actions.changePublication({
+        annotation: annotation(),
+        literatureHints: {
+          identifiers: [{ kind: "doi", value: "10.1000/incorrect" }],
+          title: "Incorrect Paper"
+        },
+        operation: "publish",
+        paper: paper()
+      });
+    });
+    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("unresolved"));
+
+    act(() => context.result.current.actions.searchLiterature({
+      authors: ["Ada Lovelace", "Grace Hopper"],
+      title: "Corrected Paper",
+      year: 2026
+    }));
+
+    await waitFor(() => expect(context.resolveLiterature).toHaveBeenCalledTimes(2));
+    expect(context.resolveLiterature.mock.calls[1][0]).toEqual({
+      hints: {
+        authors: ["Ada Lovelace", "Grace Hopper"],
+        title: "Corrected Paper",
+        year: 2026
+      },
+      limit: 5,
+      purpose: "liteasy_pdf_annotation",
+      query: "Corrected Paper"
+    });
+    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("candidates"));
+    act(() => context.result.current.actions.cancelResolution());
+    await expect(pending).resolves.toEqual({ desiredVisibility: "private", state: "not_published" });
+  });
+
   test("cancels identity resolution without an error state", async () => {
     const context = setup({
       resolveLiterature: vi.fn().mockResolvedValue({ candidates: [], status: "not_found", unavailableProviders: [] })

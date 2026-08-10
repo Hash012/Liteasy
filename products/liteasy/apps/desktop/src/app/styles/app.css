@@ -4044,7 +4044,8 @@ body {
 .literature-version-heading,
 .literature-version-state,
 .literature-citation-export,
-.literature-citation-actions {
+.literature-citation-actions,
+.literature-version-actions {
   align-items: center;
   display: flex;
 }
@@ -4090,10 +4091,20 @@ body {
   gap: 2px;
 }
 
+.literature-version-actions {
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
 .literature-candidate-groups,
-.literature-candidate-group {
+.literature-candidate-group,
+.literature-search-fields {
   display: grid;
   gap: 8px;
+}
+
+.literature-search-fields {
+  padding-top: 8px;
 }
 
 .literature-candidate-group {

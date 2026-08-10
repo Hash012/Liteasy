@@ -110,6 +110,30 @@ export function preferredCitationLiterature(
   )?.literature ?? current;
 }
 
+export function createLiteratureCitationExport({
+  current,
+  format,
+  selectedLiteratureId,
+  versions
+}: {
+  current: LiteratureRecord;
+  format: "bibtex" | "citation";
+  selectedLiteratureId?: string;
+  versions: LiteratureVersionRelation[];
+}) {
+  const availableLiterature = [current, ...versions.map((version) => version.literature)];
+  const explicitlySelected = selectedLiteratureId
+    ? availableLiterature.find((literature) => literature.literatureId === selectedLiteratureId)
+    : undefined;
+  const literature = explicitlySelected ?? preferredCitationLiterature(current, versions);
+  return {
+    literature,
+    text: format === "bibtex"
+      ? formatLiteratureBibtex(literature)
+      : formatLiteratureCitation(literature)
+  };
+}
+
 function preferredIdentifier(record: LiteratureRecord) {
   return record.identifiers.find((identifier) => identifier.kind === "doi")
     ?? record.identifiers.find((identifier) => identifier.kind === "arxiv_id")

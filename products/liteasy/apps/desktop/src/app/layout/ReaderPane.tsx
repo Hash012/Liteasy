@@ -48,6 +48,10 @@ type ReaderPaneProps = {
   organizationAnnotationActorId?: string;
   canModerateOrganizationAnnotations?: boolean;
   onAddExternalPdfToLibrary?: (input: { bytes: Uint8Array; fileName: string; title: string }) => Promise<void>;
+  onAcquireLiteratureVersion?: (
+    literature: LiteratureRecord,
+    relation: LiteratureRelation
+  ) => Promise<{ created: boolean; documentId: string } | void>;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
   onOpenLiteratureVersion?: (literature: LiteratureRecord, relation: LiteratureRelation) => void | Promise<void>;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
@@ -115,6 +119,7 @@ export function ReaderPane({
   organizationAnnotationActorId,
   canModerateOrganizationAnnotations,
   onAddExternalPdfToLibrary,
+  onAcquireLiteratureVersion,
   onOpenExternalFullText,
   onOpenLiteratureVersion,
   onPaperAnnotated,
@@ -210,6 +215,7 @@ export function ReaderPane({
             loadPdfSource={loadPdfSource}
             loadLiteratureRelations={loadLiteratureRelations}
             loadOrganizationAnnotations={loadOrganizationAnnotations}
+            onAcquireLiteratureVersion={onAcquireLiteratureVersion}
             onOpenLiteratureVersion={onOpenLiteratureVersion}
             organizationAnnotationActorId={organizationAnnotationActorId}
             canModerateOrganizationAnnotations={canModerateOrganizationAnnotations}

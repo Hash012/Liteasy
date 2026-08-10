@@ -27,6 +27,9 @@ import { createCloudLibraryStorageClient } from "../features/library/cloudLibrar
 import type { ThinReadingExternalSource } from "../features/thin-reading/thinReading.types";
 import type { ModelTransport } from "../features/models/modelHttpClient";
 import { normalizeLiteratureSnapshot } from "../features/paper-identity/literatureRecord";
+import { literatureMetadataRepository } from "../features/paper-identity/literatureMetadataRepository";
+import type { LiteratureRecord } from "../features/paper-identity/literature.types";
+import { literatureRecordUrl } from "../features/forum/literatureVersioning";
 
 type UseExternalPaperControllerInput = {
   addExternalPdfToLibrary: (input: {
@@ -34,6 +37,7 @@ type UseExternalPaperControllerInput = {
     fileName: string;
     title: string;
   }) => Promise<void>;
+  addMetadataOnlyEntry?: typeof addMetadataOnlyLibraryEntry;
   cloudLibraryClientFactory?: (endpoint: string) => Pick<
     ReturnType<typeof createCloudLibraryStorageClient>,
     "exportDocument" | "openDocument"
@@ -42,6 +46,7 @@ type UseExternalPaperControllerInput = {
   promoteCachedPdf?: typeof promoteCachedPdfToLibrary;
   transport: ModelTransport;
   refreshLocalLibrary: () => Promise<unknown>;
+  saveLiteratureMetadata?: (documentId: string, literature: LiteratureRecord) => Promise<void>;
   setActiveCenterArtifactId: Dispatch<SetStateAction<string | null>>;
   setActiveReaderPaperId: Dispatch<SetStateAction<string | null>>;
   setOpenReaderPaperIds: Dispatch<SetStateAction<string[]>>;
@@ -71,10 +76,13 @@ const defaultCloudLibraryClientFactory = (endpoint: string) =>
  */
 export function useExternalPaperController({
   addExternalPdfToLibrary,
+  addMetadataOnlyEntry = addMetadataOnlyLibraryEntry,
   cloudLibraryClientFactory = defaultCloudLibraryClientFactory,
   endpoint,
   promoteCachedPdf = promoteCachedPdfToLibrary,
   refreshLocalLibrary,
+  saveLiteratureMetadata = (documentId, literature) =>
+    literatureMetadataRepository.save(documentId, literature),
   setActiveCenterArtifactId,
   setActiveReaderPaperId,
   setOpenReaderPaperIds,
@@ -217,7 +225,7 @@ export function useExternalPaperController({
       return;
     }
     if (!source.fullTextUrl) {
-      await addMetadataOnlyLibraryEntry({
+      await addMetadataOnlyEntry({
         doi: source.doi,
         externalUrl: source.url,
         sourceId: source.id,
@@ -233,7 +241,24 @@ export function useExternalPaperController({
     });
     setCachedReaderPapers((current) => removeCachedReaderPaper(current, cached.id));
     await refreshLocalLibrary();
-  }, [addExternalPdfToLibrary, endpoint, promoteCachedPdf, refreshLocalLibrary, resolveExternalCachedPaper, transport]);
+  }, [addExternalPdfToLibrary, addMetadataOnlyEntry, endpoint, promoteCachedPdf, refreshLocalLibrary, resolveExternalCachedPaper, transport]);
+
+  const acquireLiteratureVersion = useCallback(async (
+    literature: LiteratureRecord,
+    evidence: Record<string, unknown>
+  ) => {
+    const doi = literature.identifiers.find((identifier) => identifier.kind === "doi")?.value;
+    const externalUrl = literatureRecordUrl(literature, evidence);
+    const result = await addMetadataOnlyEntry({
+      ...(doi ? { doi } : {}),
+      ...(externalUrl ? { externalUrl } : {}),
+      sourceId: `literature:${literature.literatureId}`,
+      title: literature.title
+    });
+    await saveLiteratureMetadata(result.documentId, literature);
+    await refreshLocalLibrary();
+    return result;
+  }, [addMetadataOnlyEntry, refreshLocalLibrary, saveLiteratureMetadata]);
 
   const loadPdfSource = useCallback((sourcePath: string) =>
     isCachedSourcePath(cachedReaderPapers, sourcePath)
@@ -242,6 +267,7 @@ export function useExternalPaperController({
 
   return {
     cachedReaderPapers,
+    acquireLiteratureVersion,
     loadPdfSource,
     openCloudDocumentInReader,
     openExternalFullTextInReader,

@@ -8,9 +8,11 @@ function createHarness(
   exportDocument: ReturnType<typeof vi.fn>,
   literature?: unknown
 ) {
+  const addMetadataOnlyEntry = vi.fn(async () => ({ created: true, documentId: "metadata-version" }));
   const addExternalPdfToLibrary = vi.fn(async () => undefined);
   const promoteCachedPdf = vi.fn(async () => "/library/paper.pdf");
   const refreshLocalLibrary = vi.fn(async () => undefined);
+  const saveLiteratureMetadata = vi.fn(async () => undefined);
   const cloudClient = {
     exportDocument,
     openDocument: vi.fn(async () => ({
@@ -29,10 +31,12 @@ function createHarness(
   };
   const result = renderHook(() => useExternalPaperController({
     addExternalPdfToLibrary,
+    addMetadataOnlyEntry,
     cloudLibraryClientFactory: () => cloudClient as never,
     endpoint: "https://cloud.example.test",
     promoteCachedPdf,
     refreshLocalLibrary,
+    saveLiteratureMetadata,
     setActiveCenterArtifactId: vi.fn(),
     setActiveReaderPaperId: vi.fn(),
     setOpenReaderPaperIds: vi.fn(),
@@ -40,12 +44,45 @@ function createHarness(
   }));
   return {
     addExternalPdfToLibrary,
+    addMetadataOnlyEntry,
     cloudClient,
     promoteCachedPdf,
     refreshLocalLibrary,
-    result
+    result,
+    saveLiteratureMetadata
   };
 }
+
+test("acquires a confirmed related version as a local metadata entry with its identity snapshot", async () => {
+  const harness = createHarness(vi.fn());
+  const literature = {
+    authors: ["Ada Lovelace"],
+    identifiers: [{ kind: "doi" as const, role: "confirmable" as const, source: "public_registry" as const, value: "10.1000/published" }],
+    literatureId: "literature-publication",
+    provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const },
+    revision: 2,
+    status: "confirmed" as const,
+    title: "Published Version",
+    year: 2026
+  };
+
+  let acquired;
+  await act(async () => {
+    acquired = await harness.result.result.current.acquireLiteratureVersion(literature, {
+      recordUrl: "https://doi.org/10.1000/published"
+    });
+  });
+
+  expect(harness.addMetadataOnlyEntry).toHaveBeenCalledWith({
+    doi: "10.1000/published",
+    externalUrl: "https://doi.org/10.1000/published",
+    sourceId: "literature:literature-publication",
+    title: "Published Version"
+  });
+  expect(harness.saveLiteratureMetadata).toHaveBeenCalledWith("metadata-version", literature);
+  expect(harness.refreshLocalLibrary).toHaveBeenCalledTimes(1);
+  expect(acquired).toEqual({ created: true, documentId: "metadata-version" });
+});
 
 test("rechecks organization export policy before promoting a reader cache", async () => {
   const exportDocument = vi.fn(async () => ({

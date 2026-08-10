@@ -6,8 +6,15 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Field,
+  Input,
+  Textarea
 } from "@fluentui/react-components";
-import type { LiteratureDialogModel } from "./literatureResolution.types";
+import { useEffect, useState } from "react";
+import type {
+  LiteratureDialogModel,
+  LiteratureSearchDraft
+} from "./literatureResolution.types";
 import type { LiteratureIdentifierKind } from "../paper-identity/literature.types";
 import {
   candidateVersionLabel,
@@ -20,6 +27,7 @@ type LiteratureResolutionDialogProps = {
   model: LiteratureDialogModel;
   onCancel: () => void;
   onRetry: () => void;
+  onSearch: (draft: LiteratureSearchDraft) => void;
   onSelectCandidate: (candidateKey: string) => void;
 };
 
@@ -35,8 +43,27 @@ export function LiteratureResolutionDialog({
   model,
   onCancel,
   onRetry,
+  onSearch,
   onSelectCandidate
 }: LiteratureResolutionDialogProps) {
+  const [title, setTitle] = useState(model.searchDraft?.title ?? "");
+  const [authors, setAuthors] = useState(model.searchDraft?.authors.join("\n") ?? "");
+  const [year, setYear] = useState(model.searchDraft?.year ? String(model.searchDraft.year) : "");
+  const canCorrectSearch = new Set(["candidates", "conflict", "unavailable", "unresolved"]).has(model.kind);
+
+  useEffect(() => {
+    setTitle(model.searchDraft?.title ?? "");
+    setAuthors(model.searchDraft?.authors.join("\n") ?? "");
+    setYear(model.searchDraft?.year ? String(model.searchDraft.year) : "");
+  }, [model.searchDraft]);
+
+  const parsedAuthors = authors.split(/[;\n]+/u)
+    .map((author) => author.replace(/\s+/gu, " ").trim())
+    .filter(Boolean);
+  const parsedYear = Number(year);
+  const canSearch = Boolean(title.trim() && parsedAuthors.length &&
+    Number.isInteger(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999);
+
   return (
     <Dialog
       modalType="modal"
@@ -125,6 +152,47 @@ export function LiteratureResolutionDialog({
                 <div className="profile-dialog-title">
                   {model.kind === "conflict" ? "来源信息存在冲突" : "文献身份尚未确认"}
                 </div>
+              </div>
+            ) : null}
+
+            {canCorrectSearch ? (
+              <div className="literature-search-fields">
+                <Field label="文献标题" required>
+                  <Input
+                    disabled={model.pending}
+                    onChange={(_, data) => setTitle(data.value)}
+                    value={title}
+                  />
+                </Field>
+                <Field label="作者" required>
+                  <Textarea
+                    disabled={model.pending}
+                    onChange={(_, data) => setAuthors(data.value)}
+                    resize="vertical"
+                    value={authors}
+                  />
+                </Field>
+                <Field label="出版年份" required>
+                  <Input
+                    disabled={model.pending}
+                    max={9999}
+                    min={1000}
+                    onChange={(_, data) => setYear(data.value)}
+                    type="number"
+                    value={year}
+                  />
+                </Field>
+                <Button
+                  appearance="secondary"
+                  disabled={model.pending || !canSearch}
+                  onClick={() => onSearch({
+                    authors: parsedAuthors,
+                    title: title.replace(/\s+/gu, " ").trim(),
+                    year: parsedYear
+                  })}
+                >
+                  按修正题录检索
+                </Button>
               </div>
             ) : null}
 

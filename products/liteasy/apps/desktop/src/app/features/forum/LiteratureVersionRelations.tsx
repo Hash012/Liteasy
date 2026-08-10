@@ -2,6 +2,7 @@ import { Button, Select } from "@fluentui/react-components";
 import {
   ArrowClockwiseRegular,
   CopyRegular,
+  DocumentAddRegular,
   DocumentArrowDownRegular,
   OpenRegular
 } from "@fluentui/react-icons";
@@ -13,8 +14,7 @@ import type {
   LiteratureVersionRelation
 } from "../paper-identity/literature.types";
 import {
-  formatLiteratureBibtex,
-  formatLiteratureCitation,
+  createLiteratureCitationExport,
   literatureProviderLabel,
   preferredCitationLiterature,
   relationEvidenceLabel
@@ -24,6 +24,10 @@ type LiteratureVersionRelationsProps = {
   copyText?: (value: string) => Promise<void>;
   currentLiterature: LiteratureRecord;
   loadRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
+  onAcquireVersion?: (
+    literature: LiteratureRecord,
+    relation: LiteratureVersionRelation["relation"]
+  ) => Promise<{ created: boolean; documentId: string } | void>;
   onOpenVersion?: (literature: LiteratureRecord, relation: LiteratureVersionRelation["relation"]) => void | Promise<void>;
 };
 
@@ -62,12 +66,14 @@ export function LiteratureVersionRelations({
   copyText = defaultCopyText,
   currentLiterature,
   loadRelations,
+  onAcquireVersion,
   onOpenVersion
 }: LiteratureVersionRelationsProps) {
   const [reloadKey, setReloadKey] = useState(0);
   const [result, setResult] = useState<LiteratureRelationsResult | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [citationLiteratureId, setCitationLiteratureId] = useState(currentLiterature.literatureId);
+  const [pendingAcquisitionId, setPendingAcquisitionId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
@@ -107,12 +113,30 @@ export function LiteratureVersionRelations({
   async function copyCitation(format: "citation" | "bibtex") {
     setActionMessage("");
     try {
-      await copyText(format === "bibtex"
-        ? formatLiteratureBibtex(citationLiterature)
-        : formatLiteratureCitation(citationLiterature));
+      const citationExport = createLiteratureCitationExport({
+        current: currentLiterature,
+        format,
+        selectedLiteratureId: citationLiteratureId,
+        versions: result?.versions ?? []
+      });
+      await copyText(citationExport.text);
       setActionMessage(format === "bibtex" ? "BibTeX 已复制" : "引用已复制");
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "引用复制失败，请重试。");
+    }
+  }
+
+  async function acquireVersion(version: LiteratureVersionRelation) {
+    if (!onAcquireVersion || pendingAcquisitionId) return;
+    setPendingAcquisitionId(version.literature.literatureId);
+    setActionMessage("正在加入文献库");
+    try {
+      const acquired = await onAcquireVersion(version.literature, version.relation);
+      setActionMessage(acquired?.created === false ? "该版本已在文献库中" : "已加入文献库");
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "关联版本加入失败，请重试。");
+    } finally {
+      setPendingAcquisitionId(null);
     }
   }
 
@@ -143,18 +167,33 @@ export function LiteratureVersionRelations({
           <article className="literature-version-relation" key={`${version.relation.relationType}:${version.literature.literatureId}`}>
             <div className="literature-version-heading">
               <strong>{relationLabel(version)}</strong>
-              {onOpenVersion ? (
-                <Button
-                  appearance="subtle"
-                  aria-label={`打开 ${version.literature.title}`}
-                  icon={<OpenRegular />}
-                  onClick={() => void Promise.resolve(onOpenVersion(version.literature, version.relation)).catch((error) => {
-                    setActionMessage(error instanceof Error ? error.message : "关联版本打开失败。");
-                  })}
-                  size="small"
-                  title={`打开 ${version.literature.title}`}
-                />
-              ) : null}
+              <div className="literature-version-actions">
+                {onAcquireVersion ? (
+                  <Button
+                    appearance="subtle"
+                    aria-label={`将 ${version.literature.title} 加入文献库`}
+                    disabled={pendingAcquisitionId !== null}
+                    icon={<DocumentAddRegular />}
+                    onClick={() => void acquireVersion(version)}
+                    size="small"
+                    title={pendingAcquisitionId === version.literature.literatureId
+                      ? "正在加入文献库"
+                      : `将 ${version.literature.title} 加入文献库`}
+                  />
+                ) : null}
+                {onOpenVersion ? (
+                  <Button
+                    appearance="subtle"
+                    aria-label={`打开 ${version.literature.title}`}
+                    icon={<OpenRegular />}
+                    onClick={() => void Promise.resolve(onOpenVersion(version.literature, version.relation)).catch((error) => {
+                      setActionMessage(error instanceof Error ? error.message : "关联版本打开失败。");
+                    })}
+                    size="small"
+                    title={`打开 ${version.literature.title}`}
+                  />
+                ) : null}
+              </div>
             </div>
             <span>{version.literature.title}</span>
             {identifier ? (

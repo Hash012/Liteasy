@@ -15,7 +15,10 @@ import { AcademicArchiveDialog } from "../features/profile/AcademicArchiveDialog
 import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfirmDialog";
 import type { AcademicProfile } from "../features/profile/profile.types";
 import { LiteratureResolutionDialog } from "../features/forum/LiteratureResolutionDialog";
-import type { LiteratureDialogModel } from "../features/forum/literatureResolution.types";
+import type {
+  LiteratureDialogModel,
+  LiteratureSearchDraft
+} from "../features/forum/literatureResolution.types";
 
 export type AppDialogsProps = {
   academicProfile: AcademicProfile;
@@ -57,6 +60,7 @@ export type AppDialogsProps = {
   onJoinOrganization: (invitationToken: string) => void;
   onLeaveOrganization: () => void;
   onRetryLiteratureResolution?: () => void;
+  onSearchLiterature?: (draft: LiteratureSearchDraft) => void;
   onSelectLiteratureCandidate?: (candidateKey: string) => void;
   onExportProfile: () => void;
   onOpenSharedLibrary: (summary: OrganizationSummary) => void;
@@ -102,6 +106,7 @@ export function AppDialogs({
   onJoinOrganization,
   onLeaveOrganization,
   onRetryLiteratureResolution,
+  onSearchLiterature,
   onSelectLiteratureCandidate,
   onExportProfile,
   onOpenSharedLibrary,
@@ -116,6 +121,7 @@ export function AppDialogs({
           model={literatureDialog}
           onCancel={onCancelLiteratureResolution ?? (() => undefined)}
           onRetry={onRetryLiteratureResolution ?? (() => undefined)}
+          onSearch={onSearchLiterature ?? (() => undefined)}
           onSelectCandidate={onSelectLiteratureCandidate ?? (() => undefined)}
         />
       ) : null}

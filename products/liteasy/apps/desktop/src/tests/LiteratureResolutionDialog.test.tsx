@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { LiteratureResolutionDialog } from "../app/features/forum/LiteratureResolutionDialog";
@@ -8,6 +8,7 @@ function actions() {
   return {
     onCancel: vi.fn(),
     onRetry: vi.fn(),
+    onSearch: vi.fn(),
     onSelectCandidate: vi.fn()
   };
 }
@@ -123,19 +124,37 @@ describe("LiteratureResolutionDialog", () => {
     expect(screen.getByText("来源：Crossref")).toBeInTheDocument();
   });
 
-  test("shows retry without exposing manual entry when providers are unavailable", async () => {
+  test("allows corrected bibliography to restart provider search without creating a manual record", async () => {
     const callbacks = actions();
     const user = userEvent.setup();
     render(<LiteratureResolutionDialog {...callbacks} model={{
       kind: "unavailable",
       pending: false,
+      searchDraft: {
+        authors: ["Incorrect Author"],
+        title: "Incorrect Title",
+        year: 2024
+      },
       unavailableProviders: ["crossref", "openalex"]
     }} />);
 
     expect(screen.getByText("文献检索暂时不可用")).toBeInTheDocument();
-    expect(screen.queryByLabelText("文献标题")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "重试检索" }));
-    expect(callbacks.onRetry).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByRole("textbox", { name: "文献标题" }), {
+      target: { value: "Corrected Paper" }
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "作者" }), {
+      target: { value: "Ada Lovelace\nGrace Hopper" }
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "出版年份" }), {
+      target: { value: "2026" }
+    });
+    await user.click(screen.getByRole("button", { name: "按修正题录检索" }));
+
+    expect(callbacks.onSearch).toHaveBeenCalledWith({
+      authors: ["Ada Lovelace", "Grace Hopper"],
+      title: "Corrected Paper",
+      year: 2026
+    });
   });
 
   test("forwards cancel and disables resolution actions while pending", async () => {

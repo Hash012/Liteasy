@@ -110,6 +110,7 @@ function PdfAnnotationPublicationBrowserFixture() {
             model={controller.model.literatureDialog}
             onCancel={controller.actions.cancelResolution}
             onRetry={controller.actions.retryResolution}
+            onSearch={controller.actions.searchLiterature}
             onSelectCandidate={controller.actions.selectCandidate}
           />
         ) : null}

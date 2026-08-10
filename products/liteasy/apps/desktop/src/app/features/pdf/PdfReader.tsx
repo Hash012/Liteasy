@@ -98,6 +98,10 @@ type PdfReaderProps = {
   loadLiteratureHints?: typeof collectPdfLiteratureHints;
   loadLiteratureRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  onAcquireLiteratureVersion?: (
+    literature: LiteratureRecord,
+    relation: LiteratureRelation
+  ) => Promise<{ created: boolean; documentId: string } | void>;
   onOpenLiteratureVersion?: (literature: LiteratureRecord, relation: LiteratureRelation) => void | Promise<void>;
   pdfBackground?: string;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
@@ -1072,6 +1076,7 @@ export function PdfReader({
   loadLiteratureHints = collectPdfLiteratureHints,
   loadLiteratureRelations,
   loadPdfSource,
+  onAcquireLiteratureVersion,
   onOpenLiteratureVersion,
   pdfBackground = "#ffffff",
   onPaperAnnotated,
@@ -1982,6 +1987,7 @@ export function PdfReader({
                       <LiteratureVersionRelations
                         currentLiterature={activePaper.literature}
                         loadRelations={loadLiteratureRelations}
+                        onAcquireVersion={onAcquireLiteratureVersion}
                         onOpenVersion={onOpenLiteratureVersion}
                       />
                     </>
