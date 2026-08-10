@@ -405,11 +405,11 @@ git commit -m "feat: orchestrate durable visualization requests"
 - Produces: start, status, and cancel account routes from the approved closure design.
 - Consumes: `runtime.visualizationOrchestrationService` and desktop identity verification.
 
-- [ ] **Step 1: Write failing authorization and contract tests**
+- [x] **Step 1: Write failing authorization and contract tests**
 
 Assert inactive/wrong-audience tokens fail, body `subjectId` and unknown fields fail, subject A cannot query/cancel subject B, start returns 202 for active and 200 for terminal replay, status returns strict artifacts only, cancel requires exact `{ idempotencyKey }`, and disconnect aborts only the route wait rather than bypassing durable cancellation.
 
-- [ ] **Step 2: Implement route parsing**
+- [x] **Step 2: Implement route parsing**
 
 Handle:
 
@@ -421,11 +421,11 @@ POST /v1/account/visualization/requests/:requestId/cancel
 
 Use `desktopIdentity()` before reading request data. Limit start/cancel bodies to 16 KiB. Validate request/artifact/node identifiers and idempotency keys against the existing bounded identifier policy. Return only `VisualizationServiceError` public codes; other errors map to the generic server failure response.
 
-- [ ] **Step 3: Preserve internal service routes**
+- [x] **Step 3: Preserve internal service routes**
 
 Keep `/v1/internal/visualization/generate|submit` and their confidential client/scope checks unchanged. Add a regression proving a desktop token cannot use them and a service token cannot impersonate an account request without a desktop subject.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 node --test src/visualizationRoutes.test.mjs src/server.test.mjs
