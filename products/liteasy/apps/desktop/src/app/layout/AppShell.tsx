@@ -353,6 +353,7 @@ export function AppShell({
   const multimodalVisualizationCapabilityRef = useRef<MultimodalVisualizationCapability>(
     unavailableMultimodalVisualizationCapability
   );
+  const updateMultimodalVisualizationCapabilityRef = useRef<(value: unknown) => void>(() => undefined);
 
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
@@ -401,6 +402,9 @@ export function AppShell({
         enabled,
         endpoint: settingsState["models.control_plane_endpoint"],
         sessionId
+      }).then((capability) => {
+        updateMultimodalVisualizationCapabilityRef.current(capability);
+        return capability;
       });
     }
   });
@@ -631,6 +635,8 @@ export function AppShell({
     loginDialogOpen
   } = cloudAccount.model;
   multimodalVisualizationCapabilityRef.current = cloudAccount.model.multimodalVisualization;
+  updateMultimodalVisualizationCapabilityRef.current =
+    cloudAccount.actions.setMultimodalVisualizationCapability;
   cloudAccessTokenRef.current = accountSession?.sessionId;
   usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,

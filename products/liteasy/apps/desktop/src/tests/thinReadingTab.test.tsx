@@ -808,10 +808,15 @@ describe("ThinReadingTab", () => {
     } as unknown as Selection);
     fireEvent.mouseUp(paragraph);
 
+    const quickCommands = screen.getByLabelText("快捷命令列表");
+    expect(within(quickCommands).getAllByRole("button").map((button) => button.getAttribute("aria-label")))
+      .toEqual(["生成流程可视化", "生成结构可视化", "生成过程可视化"]);
+    expect(within(quickCommands).queryByText(/HTML|mermaid/i)).not.toBeInTheDocument();
+
     fireEvent.change(screen.getByRole("textbox", { name: "深入提示（可选）" }), {
       target: { value: "强调并行化收益" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "将这个算法做成 HTML 动画" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成流程可视化" }));
 
     await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
       artifactId: document.artifactId,
@@ -820,9 +825,9 @@ describe("ThinReadingTab", () => {
         evidenceIds: ["evidence-attention-self-attention"],
         excerpt: "被选中的摘要",
         kind: "selected_text",
-        prompt: "请把这段内容做成一个真正易懂的 HTML 动画：用单文件内联 HTML/CSS/SVG，逐步展示算法关键步骤，只呈现证据支持的状态变化，并配 2-3 句简短说明。\n\n用户补充：强调并行化收益",
-        quickCommand: "html_algorithm_animation",
-        requestedOutput: "html_demo"
+        prompt: "请生成受控的流程可视化：只使用论文证据支持的步骤和关系，并配 2-3 句简短说明。\n\n用户补充：强调并行化收益",
+        quickCommand: "visualize_flow",
+        requestedOutput: "visualization_intent"
       }
     }));
   });
@@ -853,7 +858,7 @@ describe("ThinReadingTab", () => {
     } as unknown as Selection);
     fireEvent.mouseUp(paragraph);
 
-    const command = screen.getByRole("button", { name: "将这个算法做成 HTML 动画" });
+    const command = screen.getByRole("button", { name: "生成流程可视化" });
     fireEvent.click(command);
     fireEvent.click(command);
 

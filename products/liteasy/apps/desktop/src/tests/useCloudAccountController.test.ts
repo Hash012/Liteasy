@@ -124,4 +124,78 @@ describe("useCloudAccountController", () => {
 
     expect(onRegistered).toHaveBeenCalledTimes(1);
   });
+
+  test("applies a returned multimodal preference capability immediately", async () => {
+    const input = createControllerInput();
+    const accountCapabilitiesTransport = vi.fn(async () => ({
+      json: async () => ({
+        developerDiagnostics: false,
+        multimodalVisualization: {
+          allowed: true,
+          enabled: true,
+          serviceAvailable: true,
+          explicitRequestsAllowed: true,
+          quota: { available: true },
+          availableModalities: ["semantic_graph"]
+        }
+      }),
+      ok: true,
+      status: 200
+    }));
+    const accountTransport = vi.fn(async () => ({
+      json: async () => ({
+        session: {
+          email: "researcher@liteasy.dev",
+          expiresAt: "2026-05-15T09:30:00Z",
+          membershipTier: "pro" as const,
+          name: "Liteasy Researcher",
+          sessionId: "ltsy_session_1"
+        }
+      }),
+      ok: true,
+      status: 200
+    }));
+    const { result } = renderHook(() => useCloudAccountController({
+      ...input,
+      accountCapabilitiesTransport,
+      accountTransport
+    }));
+
+    await act(async () => {
+      await result.current.actions.submitAccountLogin({
+        email: "researcher@liteasy.dev",
+        password: "a-secure-password"
+      });
+    });
+    await waitFor(() => expect(result.current.model.multimodalVisualization.enabled).toBe(true));
+
+    act(() => {
+      result.current.actions.setMultimodalVisualizationCapability({
+        allowed: true,
+        enabled: false,
+        serviceAvailable: true,
+        explicitRequestsAllowed: true,
+        quota: { available: true },
+        availableModalities: ["semantic_graph"]
+      });
+    });
+
+    expect(result.current.model.multimodalVisualization.enabled).toBe(false);
+
+    act(() => {
+      result.current.actions.setMultimodalVisualizationCapability({
+        allowed: false,
+        enabled: false,
+        serviceAvailable: false,
+        explicitRequestsAllowed: false,
+        quota: { available: false },
+        availableModalities: []
+      });
+    });
+    expect(result.current.model.multimodalVisualization).toMatchObject({
+      allowed: false,
+      enabled: false,
+      serviceAvailable: false
+    });
+  });
 });

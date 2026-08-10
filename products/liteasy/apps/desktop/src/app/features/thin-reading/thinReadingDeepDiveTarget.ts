@@ -171,11 +171,13 @@ export function isDeepDiveTargetBoundToNode(target: DeepDiveTargetV1, node: Thin
     const object = artifact?.semanticObjects.find((item) => item.objectId === target.objectId);
     if (!artifact || artifact.nodeId !== node.id || artifact.validation.outcome !== "pass" || !object?.selectable ||
         !equalStringArrays(object.objectPath, target.objectPath) ||
-        !equalStringArrays(object.evidenceClaimIds, target.evidenceClaimIds) ||
-        !("claims" in artifact.spec.payload)) {
+        !equalStringArrays(object.evidenceClaimIds, target.evidenceClaimIds)) {
       return false;
     }
-    const artifactClaims = new Set(artifact.spec.payload.claims.map((claim) => claim.id));
+    const artifactClaims = new Set(artifact.evidenceBindings.map((binding) => binding.claimId));
+    if ("claims" in artifact.spec.payload) {
+      artifact.spec.payload.claims.forEach((claim) => artifactClaims.add(claim.id));
+    }
     const nodeClaims = new Set((node.evidence.claims ?? []).map((claim) => claim.id));
     return target.evidenceClaimIds.length > 0 && target.evidenceClaimIds.every((claimId) => (
       artifactClaims.has(claimId) && nodeClaims.has(claimId)

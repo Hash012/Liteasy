@@ -38,6 +38,7 @@ type CloudAccountModel = {
 type CloudAccountActions = {
   logoutFromCloudAccount: () => void;
   openLoginDialog: () => void;
+  setMultimodalVisualizationCapability: (value: unknown) => void;
   setSuppressLoginReminder: (checked: boolean) => void;
   skipLogin: () => void;
   submitSystemBrowserLogin: () => Promise<void>;
@@ -144,6 +145,7 @@ export function useCloudAccountController({
         setLoginDialogDismissedThisSession(false);
         setLoginDialogOpen(true);
       },
+      setMultimodalVisualizationCapability: accountCapabilities.setMultimodalVisualizationCapability,
       setSuppressLoginReminder,
       skipLogin,
       submitAccountLogin,

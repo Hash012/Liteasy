@@ -61,4 +61,50 @@ describe("thin reading deep-dive targets", () => {
       objectPath: ["object-1"]
     }, node)).toBe(false);
   });
+
+  test("binds generated objects for generic modalities through evidence bindings", () => {
+    const document = createThinReadingDocument(createThinReadingFixture());
+    const root = document.nodes[document.rootNodeId];
+    const claimId = root.evidence.claims?.[0]?.id;
+    if (!claimId) throw new Error("expected fixture claim");
+    const circuitArtifact = {
+      ...artifactWithSelectedObject,
+      artifactId: "viz-circuit",
+      modality: "circuit" as const,
+      nodeId: root.id,
+      evidenceBindings: [{ claimId, evidenceIds: ["e-1"], confidence: "direct" as const }],
+      spec: {
+        modality: "circuit" as const,
+        payload: {
+          components: [{
+            id: "object-1",
+            kind: "resistor",
+            position: [0, 0] as [number, number],
+            ports: [],
+            evidenceClaimIds: [claimId]
+          }],
+          wires: [],
+          networks: [],
+          parameters: [],
+          measurementPoints: [],
+          currents: [],
+          voltages: []
+        }
+      },
+      semanticObjects: [{
+        ...artifactWithSelectedObject.semanticObjects[0],
+        evidenceClaimIds: [claimId]
+      }]
+    };
+    const node = { ...root, visualizations: [circuitArtifact] };
+
+    expect(isDeepDiveTargetBoundToNode({
+      artifactId: circuitArtifact.artifactId,
+      evidenceClaimIds: [claimId],
+      kind: "generated_object",
+      nodeId: root.id,
+      objectId: "object-1",
+      objectPath: ["object-1"]
+    }, node)).toBe(true);
+  });
 });

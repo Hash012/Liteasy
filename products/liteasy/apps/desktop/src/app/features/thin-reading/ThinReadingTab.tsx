@@ -135,25 +135,25 @@ type RecommendationStage = "article" | "marks" | "graph";
 
 const selectionQuickCommands = [
   {
-    description: "用单文件 HTML 动画把步骤按顺序演给读者看。",
-    label: "将这个算法做成 HTML 动画",
-    prompt: "请把这段内容做成一个真正易懂的 HTML 动画：用单文件内联 HTML/CSS/SVG，逐步展示算法关键步骤，只呈现证据支持的状态变化，并配 2-3 句简短说明。",
-    quickCommand: "html_algorithm_animation",
-    requestedOutput: "html_demo"
+    description: "把证据支持的步骤和关系整理成流程图。",
+    label: "生成流程可视化",
+    prompt: "请生成受控的流程可视化：只使用论文证据支持的步骤和关系，并配 2-3 句简短说明。",
+    quickCommand: "visualize_flow",
+    requestedOutput: "visualization_intent"
   },
   {
-    description: "用 HTML/SVG 画清关键部件、连接关系和信息流。",
-    label: "将这个结构用 HTML/SVG 描绘出来",
-    prompt: "请用单文件内联 HTML/SVG 把这段结构画清楚：突出部件、连接关系和信息流，标签尽量少但易懂，并配 2-3 句说明。",
-    quickCommand: "html_svg_structure",
-    requestedOutput: "html_demo"
+    description: "把证据支持的部件和连接关系整理成结构图。",
+    label: "生成结构可视化",
+    prompt: "请生成受控的结构可视化：只使用论文证据支持的部件和连接关系，并配 2-3 句简短说明。",
+    quickCommand: "visualize_structure",
+    requestedOutput: "visualization_intent"
   },
   {
-    description: "把因果链压缩成 Mermaid 图和几句白话解释。",
-    label: "用 mermaid 图呈现这段话的因果关系",
-    prompt: "请用 Mermaid 图呈现这段话的因果链：节点命名口语化、边上写因果动作，正文压缩成 3-5 句浅显解释。",
-    quickCommand: "mermaid_causal",
-    requestedOutput: "mermaid"
+    description: "把证据支持的变化步骤整理成过程图。",
+    label: "生成过程可视化",
+    prompt: "请生成受控的过程可视化：只使用论文证据支持的变化步骤，并配 2-3 句简短说明。",
+    quickCommand: "visualize_process",
+    requestedOutput: "visualization_intent"
   }
 ] as const satisfies ReadonlyArray<{
   description: string;
@@ -1536,7 +1536,7 @@ export function ThinReadingTab({
                       type="button"
                     >
                       <span className="thin-reading__selection-command-icon" aria-hidden="true">
-                        {command.requestedOutput === "mermaid" ? <BranchForkRegular /> : command.quickCommand === "html_svg_structure" ? <LightbulbRegular /> : <ArrowRightRegular />}
+                        {command.quickCommand === "visualize_structure" ? <LightbulbRegular /> : command.quickCommand === "visualize_process" ? <BranchForkRegular /> : <ArrowRightRegular />}
                       </span>
                       <span className="thin-reading__selection-command-copy">
                         <strong>{command.label}</strong>
