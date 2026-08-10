@@ -13,6 +13,9 @@ const SemanticGraphBrowserFixture = import.meta.env.DEV
 const ScienceDiagramBrowserFixture = import.meta.env.DEV
   ? lazy(() => import("./tests/fixtures/scienceDiagramBrowserFixture"))
   : null;
+const BiologyStructureBrowserFixture = import.meta.env.DEV
+  ? lazy(() => import("./tests/fixtures/biologyStructureBrowserFixture"))
+  : null;
 
 export default function App() {
   const fixture = import.meta.env.DEV ? window.location.search : "";
@@ -41,6 +44,13 @@ export default function App() {
     return (
       <Suspense fallback={null}>
         <ScienceDiagramBrowserFixture />
+      </Suspense>
+    );
+  }
+  if (fixture === "?biology-structure-fixture" && BiologyStructureBrowserFixture) {
+    return (
+      <Suspense fallback={null}>
+        <BiologyStructureBrowserFixture />
       </Suspense>
     );
   }

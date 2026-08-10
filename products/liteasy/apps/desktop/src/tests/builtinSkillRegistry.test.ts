@@ -71,6 +71,18 @@ test("loads disabled circuit and physics diagram packages without generated cata
     .toEqual([]);
 });
 
+test("loads disabled biology structure package without generated catalog access", async () => {
+  await expect(loadBuiltinSkill("biology-structure")).resolves.toMatchObject({
+    manifest: expect.objectContaining({
+      id: "biology-structure",
+      modality: "biology_structure",
+      rendererId: "biology-structure-svg"
+    })
+  });
+  expect(getVisualizationBuiltinCatalog().entries.filter(({ enabled, generated }) => enabled && generated))
+    .toEqual([]);
+});
+
 test("matches every enabled shared catalog entry to a local built-in package", () => {
   const summaries = getBuiltinSkillSummary();
   const catalog = getVisualizationBuiltinCatalog();

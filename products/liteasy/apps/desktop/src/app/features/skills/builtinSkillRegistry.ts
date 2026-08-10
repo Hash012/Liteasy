@@ -7,6 +7,8 @@ import circuitManifest from "../visualization/skills/circuit/skill.json";
 import circuitInstructions from "../visualization/skills/circuit/instructions.md?raw";
 import physicsDiagramManifest from "../visualization/skills/physics-diagram/skill.json";
 import physicsDiagramInstructions from "../visualization/skills/physics-diagram/instructions.md?raw";
+import biologyStructureManifest from "../visualization/skills/biology-structure/skill.json";
+import biologyStructureInstructions from "../visualization/skills/biology-structure/instructions.md?raw";
 import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
@@ -154,6 +156,14 @@ registerBuiltinSkill(physicsDiagram, async () => ({
   manifest: physicsDiagram,
   instructions: physicsDiagramInstructions,
   validatorIds: physicsDiagram.validatorIds
+}));
+
+const biologyStructure = parseManifest(biologyStructureManifest);
+registerBuiltinSkill(biologyStructure, async () => ({
+  fallbackModalities: biologyStructure.fallbackModalities,
+  manifest: biologyStructure,
+  instructions: biologyStructureInstructions,
+  validatorIds: biologyStructure.validatorIds
 }));
 
 const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);
