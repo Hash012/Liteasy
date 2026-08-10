@@ -10,6 +10,9 @@ import {
 import {
   associationSectorAngle,
   evaluateAssociationGeometry,
+  pointIsInSideSector,
+  rectanglesWithinClearance,
+  segmentsCross,
   type AssociationGeometryInput,
   type AssociationLayoutQuality,
   type AssociationSide
@@ -53,6 +56,8 @@ export type PageGraphInput = {
   anchors: readonly PageGraphAnchorInput[];
   documentHeight: number;
   frameWidth: number;
+  /** Deduplicated papers owned by more than one anchor must remain legible in the resting graph. */
+  multiAnchorPaperKeys?: ReadonlySet<string>;
   /** Optional projection identity; source metadata remains untouched for rendering and actions. */
   paperKeyBySource?: ReadonlyMap<ThinReadingExternalSource, string>;
   /** Verified page-wide relations from the projection; every owner group shares this spring set. */
@@ -107,20 +112,33 @@ export type PageGraphPaperEdge = PageGraphPaperRelation & {
 };
 
 export type ConstrainedPageGraph = PageGraph & {
+  baselineQuality: AssociationLayoutQuality;
+  candidateQuality: AssociationLayoutQuality;
   layoutSource: "baseline" | "constrained";
   paperEdges: readonly PageGraphPaperEdge[];
   quality: AssociationLayoutQuality;
+  searchDiagnostics: AssociationLayoutSearchDiagnostics;
+};
+
+export type AssociationLayoutSearchDiagnostics = {
+  initialSlotCandidateEvaluations: number;
+  repairCandidateEvaluations: number;
+  repairNodesVisited: number;
+  repairRounds: number;
+  sideVariantsEvaluated: number;
+  softVariantsEvaluated: number;
 };
 
 /**
  * Kept in step with `--association-node-width/height` in app.css. The height is the *tallest* a
- * card gets — crossing badge, year, and a two-line title — because a layout that reserves the
- * average height overlaps exactly on the cards that carry the most.
+ * card gets in Chromium — crossing badge, year, two title lines, padding, and borders — because a
+ * layout that reserves the average height overlaps exactly on the cards that carry the most.
  */
 export const pageGraphNodeWidth = 152;
-export const pageGraphNodeHeight = 76;
+export const pageGraphNodeHeight = 100;
 export const pageGraphDotSize = 14;
 export const maximumPageGraphSources = 8;
+export const maximumAssociationSideVariants = 24;
 
 const nodeGap = 10;
 const frameInsetHorizontal = 10;
@@ -128,9 +146,20 @@ const frameInsetVertical = 8;
 
 const nearRadius = 158;
 const radiusSpread = 152;
-const dotThreshold = 0.62;
+const dotThreshold = 0.34;
 const relaxationStep = 26;
 const relaxationRounds = 24;
+const maximumRepairRounds = 5;
+
+const initialRelativeAngles = Array.from({ length: 23 }, (_, index) => (index - 11) * 5)
+  .sort((left, right) => Math.abs(left) - Math.abs(right) || left - right)
+  .map((degrees) => degrees * Math.PI / 180);
+const initialRadiusOffsets = Array.from({ length: 61 }, (_, index) => index * 8);
+const repairCoarseRelativeAngles = Array.from({ length: 23 }, (_, index) => (index - 11) * 5)
+  .sort((left, right) => Math.abs(left) - Math.abs(right) || left - right)
+  .map((degrees) => degrees * Math.PI / 180);
+const repairCoarseRadiusOffsets = Array.from({ length: 31 }, (_, index) => index * 16);
+const repairFineRadiusOffsets = [-8, 8];
 
 /**
  * Fan directions, in degrees, biased away from straight up and down.
@@ -161,12 +190,14 @@ type OccupiedBox = {
   top: number;
 };
 
-/** Half the footprint a node occupies: a collapsed dot claims far less room than a title card. */
-function nodeBox(isDot: boolean, left: number, top: number): OccupiedBox {
-  const half = isDot ? pageGraphDotSize / 2 : undefined;
+/**
+ * A compact node still reserves its full focused footprint. The visible dot is only progressive
+ * disclosure; keyboard or pointer focus must not expand it over another paper or anchor.
+ */
+function nodeBox(_isDot: boolean, left: number, top: number): OccupiedBox {
   return {
-    halfHeight: half ?? pageGraphNodeHeight / 2,
-    halfWidth: half ?? pageGraphNodeWidth / 2,
+    halfHeight: pageGraphNodeHeight / 2,
+    halfWidth: pageGraphNodeWidth / 2,
     left,
     top
   };
@@ -205,6 +236,7 @@ export function layoutAssociationPageGraph({
   anchors,
   documentHeight,
   frameWidth,
+  multiAnchorPaperKeys,
   paperKeyBySource,
   sourcesByAnchor
 }: PageGraphInput): PageGraph {
@@ -254,13 +286,15 @@ export function layoutAssociationPageGraph({
         ? Math.abs(fanAngle)
         : verticalRoom === "above" ? -Math.abs(fanAngle) : fanAngle;
       const angle = (prefersLeft ? 180 - rawAngle : rawAngle) * Math.PI / 180;
+      const paperKey = paperKeyBySource?.get(source) ?? pageGraphPaperKey(source);
       placements.push({
         anchorId: anchor.anchorId,
         angle,
         confidence: clamp(source.confidence ?? 0.3, 0, 1),
-        isDot: normalizedDistance > dotThreshold,
+        isDot: !multiAnchorPaperKeys?.has(paperKey) &&
+          (frameWidth < 520 || normalizedDistance > dotThreshold),
         left: centre.left + Math.cos(angle) * radius,
-        paperKey: paperKeyBySource?.get(source) ?? pageGraphPaperKey(source),
+        paperKey,
         relevance,
         source,
         top: centre.top + Math.sin(angle) * radius
@@ -425,6 +459,184 @@ export function evaluateAssociationLayout(input: PageGraphInput, graph: PageGrap
   return evaluateAssociationGeometry(geometryInput(input, graph));
 }
 
+function hardViolationCount(quality: AssociationLayoutQuality) {
+  return quality.primaryEdgeCrossings + quality.sameSideViolations + quality.nodeOverlaps +
+    quality.anchorObstructions + quality.overflowCount;
+}
+
+/** Returns only nodes that can affect a current hard violation. */
+function hardViolationPaperKeys(
+  input: PageGraphInput,
+  graph: PageGraph,
+  sideByAnchor: ReadonlyMap<string, AssociationSide>
+) {
+  const result = new Set<string>();
+  const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
+  const rectangles = graph.nodes.map((node) => ({
+    bottom: node.top + pageGraphNodeHeight / 2,
+    left: node.left - pageGraphNodeWidth / 2,
+    right: node.left + pageGraphNodeWidth / 2,
+    top: node.top - pageGraphNodeHeight / 2
+  }));
+  rectangles.forEach((rectangle, index) => {
+    const node = graph.nodes[index]!;
+    if (rectangle.left < frameInsetHorizontal ||
+        rectangle.right > input.frameWidth - frameInsetHorizontal ||
+        rectangle.top < frameInsetVertical ||
+        rectangle.bottom > input.documentHeight - frameInsetVertical) {
+      result.add(node.paperKey);
+    }
+    for (const anchor of input.anchors) {
+      if (anchorObstacles(anchor).some((obstacle) => rectanglesWithinClearance(rectangle, {
+        bottom: obstacle.top + obstacle.halfHeight,
+        left: obstacle.left - obstacle.halfWidth,
+        right: obstacle.left + obstacle.halfWidth,
+        top: obstacle.top - obstacle.halfHeight
+      }, nodeGap))) {
+        result.add(node.paperKey);
+        break;
+      }
+    }
+  });
+  for (let leftIndex = 0; leftIndex < rectangles.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < rectangles.length; rightIndex += 1) {
+      if (rectanglesWithinClearance(rectangles[leftIndex]!, rectangles[rightIndex]!, nodeGap)) {
+        result.add(graph.nodes[leftIndex]!.paperKey);
+        result.add(graph.nodes[rightIndex]!.paperKey);
+      }
+    }
+  }
+
+  const primarySegments = graph.nodes.flatMap((node) => {
+    const anchorId = node.anchorIds[0];
+    const anchor = anchorId ? anchorById.get(anchorId) : undefined;
+    if (!anchorId || !anchor) return [];
+    const centre = anchorCentre(anchor.rect);
+    const side = sideByAnchor.get(anchorId);
+    if (side && !pointIsInSideSector(centre, node, side)) result.add(node.paperKey);
+    return [{ anchorId, end: node, paperKey: node.paperKey, start: centre }];
+  });
+  for (let leftIndex = 0; leftIndex < primarySegments.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < primarySegments.length; rightIndex += 1) {
+      const left = primarySegments[leftIndex]!;
+      const right = primarySegments[rightIndex]!;
+      if (segmentsCross(left, right)) {
+        result.add(left.paperKey);
+        result.add(right.paperKey);
+      }
+    }
+  }
+  return result;
+}
+
+function stressByPaperKey(input: PageGraphInput, graph: PageGraph) {
+  const nodeByKey = new Map(graph.nodes.map((node) => [node.paperKey, node] as const));
+  const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
+  const result = new Map(graph.nodes.map((node) => {
+    const anchorId = node.anchorIds[0];
+    const anchor = anchorId ? anchorById.get(anchorId) : undefined;
+    if (!anchor) return [node.paperKey, 0] as const;
+    const centre = anchorCentre(anchor.rect);
+    const ideal = nearRadius + (1 - node.relevance) * radiusSpread;
+    return [node.paperKey, 3 * (Math.hypot(node.left - centre.left, node.top - centre.top) - ideal) ** 2 /
+      ideal ** 2] as const;
+  }));
+  for (const edge of input.paperEdges ?? []) {
+    const source = nodeByKey.get(edge.sourcePaperKey);
+    const target = nodeByKey.get(edge.targetPaperKey);
+    if (!source || !target) continue;
+    const ideal = 108 + (1 - clamp(edge.strength, 0, 1)) * 172;
+    const stress = ((Math.hypot(source.left - target.left, source.top - target.top) - ideal) / ideal) ** 2 / 2;
+    result.set(edge.sourcePaperKey, (result.get(edge.sourcePaperKey) ?? 0) + stress);
+    result.set(edge.targetPaperKey, (result.get(edge.targetPaperKey) ?? 0) + stress);
+  }
+  return result;
+}
+
+function softRepairPaperKeys(
+  input: PageGraphInput,
+  graph: PageGraph,
+  baseline: PageGraph,
+  quality: AssociationLayoutQuality,
+  baselineQuality: AssociationLayoutQuality
+) {
+  const result = new Set<string>();
+  const nodeByKey = new Map(graph.nodes.map((node) => [node.paperKey, node] as const));
+  const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
+  const segments = graph.nodes.flatMap((node) => {
+    const anchorId = node.anchorIds[0];
+    const anchor = anchorId ? anchorById.get(anchorId) : undefined;
+    return anchor ? [{ end: node, paperKeys: [node.paperKey], start: anchorCentre(anchor.rect) }] : [];
+  });
+  for (const edge of input.paperEdges ?? []) {
+    const source = nodeByKey.get(edge.sourcePaperKey);
+    const target = nodeByKey.get(edge.targetPaperKey);
+    if (source && target) segments.push({
+      end: target,
+      paperKeys: [edge.sourcePaperKey, edge.targetPaperKey],
+      start: source
+    });
+  }
+  if (quality.weightedCrossings > baselineQuality.weightedCrossings) {
+    for (let leftIndex = 0; leftIndex < segments.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < segments.length; rightIndex += 1) {
+        const left = segments[leftIndex]!;
+        const right = segments[rightIndex]!;
+        if (segmentsCross(left, right)) {
+          left.paperKeys.forEach((paperKey) => result.add(paperKey));
+          right.paperKeys.forEach((paperKey) => result.add(paperKey));
+        }
+      }
+    }
+  }
+  if (quality.weightedStress > baselineQuality.weightedStress + 1e-9) {
+    const candidateStress = stressByPaperKey(input, graph);
+    const baselineStress = stressByPaperKey(input, baseline);
+    [...candidateStress].map(([paperKey, stress]) => [
+      paperKey,
+      stress - (baselineStress.get(paperKey) ?? 0)
+    ] as const).filter(([, excess]) => excess > 1e-9)
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .forEach(([paperKey]) => result.add(paperKey));
+    for (const edge of input.paperEdges ?? []) {
+      if (nodeByKey.has(edge.sourcePaperKey) && nodeByKey.has(edge.targetPaperKey)) {
+        result.add(edge.sourcePaperKey);
+        result.add(edge.targetPaperKey);
+      }
+    }
+  }
+  return result;
+}
+
+function expandRepairConstraintClosure(
+  input: PageGraphInput,
+  graph: PageGraph,
+  paperKeys: Set<string>
+) {
+  const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
+  let closureChanged = true;
+  while (closureChanged) {
+    closureChanged = false;
+    const selectedAnchorIds = new Set(graph.nodes.filter((node) => paperKeys.has(node.paperKey))
+      .flatMap((node) => node.anchorIds[0] ?? []));
+    for (const node of graph.nodes) {
+      const anchorId = node.anchorIds[0];
+      if (!anchorId || paperKeys.has(node.paperKey)) continue;
+      const anchor = anchorById.get(anchorId);
+      const neighboursSelectedAnchor = anchor && [...selectedAnchorIds].some((selectedAnchorId) => {
+        const selectedAnchor = anchorById.get(selectedAnchorId);
+        return selectedAnchor && Math.abs(
+          anchorCentre(anchor.rect).top - anchorCentre(selectedAnchor.rect).top
+        ) <= pageGraphNodeHeight * 2 + nodeGap;
+      });
+      if (selectedAnchorIds.has(anchorId) || neighboursSelectedAnchor) {
+        paperKeys.add(node.paperKey);
+        closureChanged = true;
+      }
+    }
+  }
+}
+
 type ForceNode = SimulationNodeDatum & {
   anchorId?: string;
   id: string;
@@ -504,6 +716,63 @@ function sideAssignments(input: PageGraphInput, baseline: PageGraph) {
   return new Map(ordered.map((anchor, index) => [anchor.anchorId, selected.path[index]!] as const));
 }
 
+function sideVariantSignature(variant: ReadonlyMap<string, AssociationSide>) {
+  return [...variant].sort(([left], [right]) => left.localeCompare(right))
+    .map(([anchorId, side]) => `${anchorId}:${side}`).join("|");
+}
+
+/**
+ * Produces a fixed-budget deterministic search neighbourhood around the preferred assignment.
+ * Priority is supplied by the caller because anchor value belongs to the graph, not this combinator.
+ */
+export function createAssociationSideVariants(
+  preferredSides: ReadonlyMap<string, AssociationSide>,
+  anchorPriority: readonly string[] = [...preferredSides.keys()].sort()
+) {
+  const orderedAnchorIds = [
+    ...new Set([
+      ...anchorPriority.filter((anchorId) => preferredSides.has(anchorId)),
+      ...[...preferredSides.keys()].sort()
+    ])
+  ];
+  const variants: Map<string, AssociationSide>[] = [];
+  const signatures = new Set<string>();
+  const addVariant = (flippedAnchorIds: ReadonlySet<string>) => {
+    const variant = new Map([...preferredSides].map(([anchorId, side]) => [
+      anchorId,
+      flippedAnchorIds.has(anchorId) ? side === "left" ? "right" : "left" : side
+    ] as const));
+    const signature = sideVariantSignature(variant);
+    if (signatures.has(signature) || variants.length >= maximumAssociationSideVariants) return;
+    signatures.add(signature);
+    variants.push(variant);
+  };
+
+  addVariant(new Set());
+  addVariant(new Set(orderedAnchorIds));
+
+  const mutations = orderedAnchorIds.map((anchorId, priority) => ({
+    anchorIds: [anchorId],
+    priority
+  }));
+  for (let first = 0; first < orderedAnchorIds.length; first += 1) {
+    for (let second = first + 1; second < orderedAnchorIds.length; second += 1) {
+      mutations.push({
+        anchorIds: [orderedAnchorIds[first]!, orderedAnchorIds[second]!],
+        priority: first + second
+      });
+    }
+  }
+  mutations.sort((left, right) => left.priority - right.priority ||
+    left.anchorIds.length - right.anchorIds.length ||
+    left.anchorIds.join("\u0000").localeCompare(right.anchorIds.join("\u0000")));
+  for (const mutation of mutations) {
+    addVariant(new Set(mutation.anchorIds));
+    if (variants.length >= maximumAssociationSideVariants) break;
+  }
+  return variants;
+}
+
 function projectToSector(
   node: ForceNode,
   anchor: ForceNode,
@@ -546,9 +815,15 @@ function projectToSector(
   }
 }
 
-function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
+function candidateGraph(
+  input: PageGraphInput,
+  baseline: PageGraph,
+  baselineQuality: AssociationLayoutQuality,
+  sideByAnchor: ReadonlyMap<string, AssociationSide>,
+  diagnostics: AssociationLayoutSearchDiagnostics,
+  repairMode: "none" | "soft"
+): PageGraph {
   const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
-  const sideByAnchor = sideAssignments(input, baseline);
   const forceNodes: ForceNode[] = input.anchors.map((anchor) => {
     const centre = anchorCentre(anchor.rect);
     return { anchorId: anchor.anchorId, fx: centre.left, fy: centre.top, id: `anchor:${anchor.anchorId}`,
@@ -605,11 +880,8 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
     .alphaDecay(0.055)
     .velocityDecay(0.46)
     .force("charge", forceManyBody<ForceNode>().strength((node) => node.isAnchor ? 0 : -12))
-    .force("collision", forceCollide<ForceNode>().radius((node) => {
-      if (node.isAnchor) return 30;
-      const graphNode = baseline.nodes.find((entry) => entry.paperKey === node.paperKey)!;
-      return graphNode.isDot ? pageGraphDotSize / 2 + 5 : pageGraphNodeHeight / 2 + 5;
-    }).iterations(2))
+    .force("collision", forceCollide<ForceNode>().radius((node) =>
+      node.isAnchor ? 30 : pageGraphNodeHeight / 2 + 5).iterations(2))
     .force("links", forceLink<ForceNode, ForceLink>(forceLinks)
       .id((node) => node.id)
       .distance((link) => link.distance)
@@ -630,9 +902,9 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
   // one snaps to the nearest exact legal polar slot while retaining the force result as a tie-break.
   const collisionOrder = [...baseline.nodes].sort((left, right) =>
     right.relevance - left.relevance || left.paperKey.localeCompare(right.paperKey));
-  const rectangleAt = (graphNode: PageGraphNode, left: number, top: number) => {
-    const halfWidth = graphNode.isDot ? pageGraphDotSize / 2 : pageGraphNodeWidth / 2;
-    const halfHeight = graphNode.isDot ? pageGraphDotSize / 2 : pageGraphNodeHeight / 2;
+  const rectangleAt = (_graphNode: PageGraphNode, left: number, top: number) => {
+    const halfWidth = pageGraphNodeWidth / 2;
+    const halfHeight = pageGraphNodeHeight / 2;
     return {
       bottom: top + halfHeight,
       left: left - halfWidth,
@@ -649,8 +921,6 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
   const intersects = (left: ReturnType<typeof rectangleAt>, right: ReturnType<typeof rectangleAt>) =>
     left.left < right.right + nodeGap && left.right > right.left - nodeGap &&
     left.top < right.bottom + nodeGap && left.bottom > right.top - nodeGap;
-  const relativeAngles = [0, -10, 10, -20, 20, -30, 30, -40, 40, -50, 50, -55, 55]
-    .map((degrees) => degrees * Math.PI / 180);
   const relationsByPaperKey = new Map<string, PageGraphPaperRelation[]>();
   for (const relation of input.paperEdges ?? []) {
     relationsByPaperKey.set(relation.sourcePaperKey, [
@@ -671,41 +941,56 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
     const forceLeft = node.x!;
     const forceTop = node.y!;
     const ideal = nearRadius + (1 - graphNode.relevance) * radiusSpread;
-    const candidates = relativeAngles.flatMap((relativeAngle) =>
-      Array.from({ length: 31 }, (_, radiusIndex) => {
-        const radius = ideal + radiusIndex * 8;
-        const angle = (side === "right" ? 0 : Math.PI) + relativeAngle;
-        const left = anchor.x! + Math.cos(angle) * radius;
-        const top = anchor.y! + Math.sin(angle) * radius;
-        const rectangle = rectangleAt(graphNode, left, top);
-        const radialStress = ((radius - ideal) / ideal) ** 2;
-        const forceDistance = Math.hypot(left - forceLeft, top - forceTop);
-        const relationStress = (relationsByPaperKey.get(graphNode.paperKey) ?? []).reduce((sum, relation) => {
-          const otherKey = relation.sourcePaperKey === graphNode.paperKey
-            ? relation.targetPaperKey
-            : relation.sourcePaperKey;
-          const other = forceNodeByPaperKey.get(otherKey);
-          if (!other) return sum;
-          const relationIdeal = 108 + (1 - clamp(relation.strength, 0, 1)) * 172;
-          const distance = Math.hypot(left - other.x!, top - other.y!);
-          return sum + ((distance - relationIdeal) / relationIdeal) ** 2;
-        }, 0);
-        return {
-          forceDistance,
-          left,
-          radialStress,
-          rectangle,
-          score: radialStress * 3 + relationStress + forceDistance * 1e-6,
-          top
-        };
-      })).filter((candidate) => candidate.left - pageGraphNodeWidth / 2 >= frameInsetHorizontal &&
-        candidate.left + pageGraphNodeWidth / 2 <= input.frameWidth - frameInsetHorizontal &&
-        candidate.top - pageGraphNodeHeight / 2 >= frameInsetVertical &&
-        candidate.top + pageGraphNodeHeight / 2 <= input.documentHeight - frameInsetVertical &&
-        !placedRectangles.some((rectangle) => intersects(candidate.rectangle, rectangle)))
-      .sort((left, right) => left.score - right.score || left.radialStress - right.radialStress ||
-        left.forceDistance - right.forceDistance || left.top - right.top || left.left - right.left);
-    const selected = candidates[0];
+    const seenCandidates = new Set<string>();
+    const evaluateSlot = (relativeAngle: number, radius: number) => {
+      const signature = `${relativeAngle.toFixed(6)}:${radius.toFixed(3)}`;
+      if (seenCandidates.has(signature) || radius < 96 ||
+          Math.abs(relativeAngle) > associationSectorAngle + 1e-9) return undefined;
+      seenCandidates.add(signature);
+      diagnostics.initialSlotCandidateEvaluations += 1;
+      const angle = (side === "right" ? 0 : Math.PI) + relativeAngle;
+      const left = anchor.x! + Math.cos(angle) * radius;
+      const top = anchor.y! + Math.sin(angle) * radius;
+      const rectangle = rectangleAt(graphNode, left, top);
+      const radialStress = ((radius - ideal) / ideal) ** 2;
+      const forceDistance = Math.hypot(left - forceLeft, top - forceTop);
+      const relationStress = (relationsByPaperKey.get(graphNode.paperKey) ?? []).reduce((sum, relation) => {
+        const otherKey = relation.sourcePaperKey === graphNode.paperKey
+          ? relation.targetPaperKey
+          : relation.sourcePaperKey;
+        const other = forceNodeByPaperKey.get(otherKey);
+        if (!other) return sum;
+        const relationIdeal = 108 + (1 - clamp(relation.strength, 0, 1)) * 172;
+        const distance = Math.hypot(left - other.x!, top - other.y!);
+        return sum + ((distance - relationIdeal) / relationIdeal) ** 2;
+      }, 0);
+      const insideFrame = left - pageGraphNodeWidth / 2 >= frameInsetHorizontal &&
+        left + pageGraphNodeWidth / 2 <= input.frameWidth - frameInsetHorizontal &&
+        top - pageGraphNodeHeight / 2 >= frameInsetVertical &&
+        top + pageGraphNodeHeight / 2 <= input.documentHeight - frameInsetVertical;
+      return {
+        collisionCount: placedRectangles.filter((placed) => intersects(rectangle, placed)).length,
+        forceDistance,
+        insideFrame,
+        left,
+        radialStress,
+        radius,
+        rectangle,
+        relativeAngle,
+        score: radialStress * 3 + relationStress + forceDistance * 1e-6,
+        top
+      };
+    };
+    const candidates = initialRelativeAngles.flatMap((relativeAngle) =>
+      initialRadiusOffsets.flatMap((radiusOffset) =>
+        evaluateSlot(relativeAngle, ideal + radiusOffset) ?? []));
+    candidates.sort((left, right) => Number(right.insideFrame) - Number(left.insideFrame) ||
+      left.collisionCount - right.collisionCount || left.score - right.score ||
+      left.radialStress - right.radialStress || left.forceDistance - right.forceDistance ||
+      left.top - right.top || left.left - right.left);
+    const legalCandidates = candidates.filter((candidate) =>
+      candidate.insideFrame && candidate.collisionCount === 0);
+    const selected = legalCandidates[0];
     if (selected) {
       node.x = selected.left;
       node.y = selected.top;
@@ -735,6 +1020,99 @@ function candidateGraph(input: PageGraphInput, baseline: PageGraph): PageGraph {
   // owner's selected sector. Equal crossing counts keep the current relevance-distance order.
   let graph = graphFromNodes(nodes);
   let quality = evaluateAssociationLayout(input, graph);
+  const compareQuality = (left: AssociationLayoutQuality, right: AssociationLayoutQuality) =>
+    left.overflowCount - right.overflowCount ||
+    left.nodeOverlaps - right.nodeOverlaps ||
+    left.anchorObstructions - right.anchorObstructions ||
+    left.sameSideViolations - right.sameSideViolations ||
+    left.primaryEdgeCrossings - right.primaryEdgeCrossings ||
+    hardViolationCount(left) - hardViolationCount(right) ||
+    left.weightedCrossings - right.weightedCrossings ||
+    left.weightedStress - right.weightedStress;
+
+  // Greedy rectangle placement can leave one late node without a legal slot on a dense line of
+  // adjacent anchors. A deterministic local repair lets every node try the same sector lattice
+  // against the completed graph, accepting only an objectively better measured layout.
+  for (let round = 0; repairMode !== "none" && round < maximumRepairRounds; round += 1) {
+    const violatingPaperKeys = hardViolationPaperKeys(input, graph, sideByAnchor);
+    if (repairMode === "soft") {
+      softRepairPaperKeys(input, graph, baseline, quality, baselineQuality)
+        .forEach((paperKey) => violatingPaperKeys.add(paperKey));
+      expandRepairConstraintClosure(input, graph, violatingPaperKeys);
+    }
+    if (violatingPaperKeys.size === 0) break;
+    diagnostics.repairRounds += 1;
+    let roundImproved = false;
+    const repairOrder = nodes.filter((node) => violatingPaperKeys.has(node.paperKey))
+      .sort((left, right) =>
+      Number(right.isDot) - Number(left.isDot) || left.relevance - right.relevance ||
+      left.paperKey.localeCompare(right.paperKey));
+    for (const repairNode of repairOrder) {
+      diagnostics.repairNodesVisited += 1;
+      const nodeIndex = nodes.findIndex((node) => node.paperKey === repairNode.paperKey);
+      const anchorId = repairNode.anchorIds[0];
+      const anchor = anchorId ? anchorById.get(anchorId) : undefined;
+      const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
+      if (nodeIndex < 0 || !anchor || !side) continue;
+      const centre = anchorCentre(anchor.rect);
+      const ideal = nearRadius + (1 - repairNode.relevance) * radiusSpread;
+      let bestNodes = nodes;
+      let bestGraph = graph;
+      let bestQuality = quality;
+      const seenCandidates = new Set<string>();
+      const evaluateRepairSlot = (relativeAngle: number, radius: number) => {
+        const signature = `${relativeAngle.toFixed(6)}:${radius.toFixed(3)}`;
+        if (seenCandidates.has(signature) || radius < 96 ||
+            Math.abs(relativeAngle) > associationSectorAngle + 1e-9) return undefined;
+        seenCandidates.add(signature);
+        const angle = (side === "right" ? 0 : Math.PI) + relativeAngle;
+        const candidateNode = {
+          ...repairNode,
+          left: centre.left + Math.cos(angle) * radius,
+          top: centre.top + Math.sin(angle) * radius
+        };
+        if (candidateNode.left - pageGraphNodeWidth / 2 < frameInsetHorizontal ||
+            candidateNode.left + pageGraphNodeWidth / 2 > input.frameWidth - frameInsetHorizontal ||
+            candidateNode.top - pageGraphNodeHeight / 2 < frameInsetVertical ||
+            candidateNode.top + pageGraphNodeHeight / 2 > input.documentHeight - frameInsetVertical) {
+          return undefined;
+        }
+        diagnostics.repairCandidateEvaluations += 1;
+        const candidateNodes = [...nodes];
+        candidateNodes[nodeIndex] = candidateNode;
+        const candidateGraph = graphFromNodes(candidateNodes);
+        const candidateQuality = evaluateAssociationLayout(input, candidateGraph);
+        const candidate = { candidateGraph, candidateNodes, candidateQuality, radius, relativeAngle };
+        if (compareQuality(candidateQuality, bestQuality) < 0) {
+          bestNodes = candidateNodes;
+          bestGraph = candidateGraph;
+          bestQuality = candidateQuality;
+        }
+        return candidate;
+      };
+      const activeRepairAngles = repairCoarseRelativeAngles;
+      const activeRepairRadii = repairCoarseRadiusOffsets;
+      const coarseCandidates = activeRepairAngles.flatMap((relativeAngle) =>
+        activeRepairRadii.flatMap((radiusOffset) =>
+          evaluateRepairSlot(relativeAngle, ideal + radiusOffset) ?? []));
+      coarseCandidates.sort((left, right) => compareQuality(left.candidateQuality, right.candidateQuality) ||
+        left.radius - right.radius || left.relativeAngle - right.relativeAngle);
+      const seedByAngle = new Map<number, typeof coarseCandidates[number]>();
+      for (const candidate of coarseCandidates) {
+        if (!seedByAngle.has(candidate.relativeAngle)) seedByAngle.set(candidate.relativeAngle, candidate);
+      }
+      for (const seed of seedByAngle.values()) {
+        for (const radiusOffset of repairFineRadiusOffsets) {
+          evaluateRepairSlot(seed.relativeAngle, seed.radius + radiusOffset);
+        }
+      }
+      nodes = bestNodes;
+      graph = bestGraph;
+      if (compareQuality(bestQuality, quality) < 0) roundImproved = true;
+      quality = bestQuality;
+    }
+    if (!roundImproved) break;
+  }
   for (const anchor of [...input.anchors].sort((left, right) => left.anchorId.localeCompare(right.anchorId))) {
     const paperKeys = nodes.filter((node) => node.anchorIds[0] === anchor.anchorId)
       .sort((left, right) => left.top - right.top || left.paperKey.localeCompare(right.paperKey))
@@ -787,16 +1165,89 @@ function candidateIsAccepted(candidate: AssociationLayoutQuality, baseline: Asso
 }
 
 export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): ConstrainedPageGraph {
+  const searchDiagnostics: AssociationLayoutSearchDiagnostics = {
+    initialSlotCandidateEvaluations: 0,
+    repairCandidateEvaluations: 0,
+    repairNodesVisited: 0,
+    repairRounds: 0,
+    sideVariantsEvaluated: 0,
+    softVariantsEvaluated: 0
+  };
   const baseline = layoutAssociationPageGraph(input);
   const baselineQuality = evaluateAssociationLayout(input, baseline);
-  const candidate = candidateGraph(input, baseline);
+  const preferredSides = sideAssignments(input, baseline);
+  const anchorValueById = new Map([...preferredSides.keys()].map((anchorId) => [
+    anchorId,
+    baseline.nodes.filter((node) => node.anchorIds[0] === anchorId)
+      .reduce((sum, node) => sum + node.relevance, 0)
+  ] as const));
+  const anchorPriority = [...preferredSides.keys()].sort((left, right) =>
+    (anchorValueById.get(right) ?? 0) - (anchorValueById.get(left) ?? 0) ||
+    left.localeCompare(right));
+  const sideVariants = createAssociationSideVariants(preferredSides, anchorPriority);
+  const candidates: Array<{
+    graph: PageGraph;
+    quality: AssociationLayoutQuality;
+    sides: ReadonlyMap<string, AssociationSide>;
+  }> = [];
+  for (const sides of sideVariants) {
+    searchDiagnostics.sideVariantsEvaluated += 1;
+    const graph = candidateGraph(input, baseline, baselineQuality, sides, searchDiagnostics, "none");
+    const quality = evaluateAssociationLayout(input, graph);
+    candidates.push({ graph, quality, sides });
+    if (candidateIsAccepted(quality, baselineQuality)) break;
+  }
+  const compareCandidate = (left: typeof candidates[number], right: typeof candidates[number]) => {
+      const hardViolations = (quality: AssociationLayoutQuality) => quality.primaryEdgeCrossings +
+        quality.sameSideViolations + quality.nodeOverlaps + quality.anchorObstructions + quality.overflowCount;
+      return hardViolations(left.quality) - hardViolations(right.quality) ||
+      left.quality.primaryEdgeCrossings - right.quality.primaryEdgeCrossings ||
+      left.quality.sameSideViolations - right.quality.sameSideViolations ||
+      left.quality.nodeOverlaps - right.quality.nodeOverlaps ||
+      left.quality.anchorObstructions - right.quality.anchorObstructions ||
+      left.quality.overflowCount - right.quality.overflowCount ||
+      Number(left.quality.weightedCrossings > baselineQuality.weightedCrossings) -
+        Number(right.quality.weightedCrossings > baselineQuality.weightedCrossings) ||
+      Number(left.quality.weightedStress > baselineQuality.weightedStress + 1e-9) -
+        Number(right.quality.weightedStress > baselineQuality.weightedStress + 1e-9) ||
+      Math.max(0, left.quality.weightedCrossings - baselineQuality.weightedCrossings) -
+        Math.max(0, right.quality.weightedCrossings - baselineQuality.weightedCrossings) ||
+      Math.max(0, left.quality.weightedStress - baselineQuality.weightedStress) -
+        Math.max(0, right.quality.weightedStress - baselineQuality.weightedStress) ||
+      left.quality.weightedCrossings - right.quality.weightedCrossings ||
+      left.quality.weightedStress - right.quality.weightedStress;
+    };
+  const distinctSideCandidates = (limit: number) => {
+    const signatures = new Set<string>();
+    return candidates.filter((candidate) => {
+      const signature = sideVariantSignature(candidate.sides);
+      if (signatures.has(signature)) return false;
+      signatures.add(signature);
+      return true;
+    }).slice(0, limit);
+  };
+  candidates.sort(compareCandidate);
+  if (!candidates.some((candidate) => candidateIsAccepted(candidate.quality, baselineQuality))) {
+    for (const { sides } of distinctSideCandidates(2)) {
+      searchDiagnostics.softVariantsEvaluated += 1;
+      const graph = candidateGraph(input, baseline, baselineQuality, sides, searchDiagnostics, "soft");
+      const quality = evaluateAssociationLayout(input, graph);
+      candidates.push({ graph, quality, sides });
+      if (candidateIsAccepted(quality, baselineQuality)) break;
+    }
+    candidates.sort(compareCandidate);
+  }
+  const candidate = candidates[0]!.graph;
   const candidateQuality = evaluateAssociationLayout(input, candidate);
   const accepted = candidateIsAccepted(candidateQuality, baselineQuality);
   const graph = accepted ? candidate : baseline;
   return {
     ...graph,
+    baselineQuality,
+    candidateQuality,
     layoutSource: accepted ? "constrained" : "baseline",
     paperEdges: projectedPaperEdges(input, graph),
-    quality: accepted ? candidateQuality : baselineQuality
+    quality: accepted ? candidateQuality : baselineQuality,
+    searchDiagnostics
   };
 }

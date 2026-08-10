@@ -110,6 +110,21 @@ test("shows a shared paper once with only its stable primary edge at rest", () =
   expect(screen.getByText("2 个锚点交叉")).toBeVisible();
 });
 
+test("keeps a low-relevance shared paper expanded with its crossing badge at mobile width", () => {
+  const shared = { canonicalPaperId: "openalex:W99", relevance: 0.1 };
+  const { container } = renderLayer({
+    frameWidth: 390,
+    sourcesByAnchor: {
+      "anchor-1": [source("W1a", shared)],
+      "anchor-2": [source("W1b", shared)]
+    }
+  });
+
+  const node = container.querySelector(".association-node.is-crossing");
+  expect(node).not.toHaveClass("is-dot");
+  expect(node?.querySelector(".association-node__crossing")).toBeVisible();
+});
+
 test("adds secondary anchor edges only while the shared paper or secondary anchor is focused", () => {
   const shared = { canonicalPaperId: "openalex:W99", relevance: 0.9 };
   const sourcesByAnchor = {

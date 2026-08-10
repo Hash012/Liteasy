@@ -9,6 +9,8 @@ import {
   parseThinReadingEvidenceReview,
   parseThinReadingModelSeed,
   resolveThinReadingOmittedSections,
+  thinReadingEvidenceObservationJsonSchema,
+  thinReadingEvidencePlanJsonSchema,
   thinReadingEvidenceReviewJsonSchema
 } from "../app/features/thin-reading/thinReadingAgent";
 import { classifyThinReadingPaper } from "../app/features/thin-reading/thinReadingPromptRegistry";
@@ -241,6 +243,9 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("核心思想、论文全景、领域位置");
     expect(prompt).toContain("全景不是章节目录");
     expect(prompt).toContain("领域位置证据不足");
+    expect(prompt).toContain("先选证据，再写句子");
+    expect(prompt).toContain("evidence ID 不是主题标签");
+    expect(prompt).toContain("主体、关系、对象、条件和范围");
   });
 
   test("maps an agent anchor onto an exact span of the thin-reading sentence", () => {
@@ -426,12 +431,12 @@ describe("thinReadingAgent", () => {
     expect(parseThinReadingModelSeed(JSON.stringify({
       ...baseOutput,
       claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "得分从 0.34 提升到 0.39。" }],
-      summary: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。",
+      summary: "该方法在目标数据集上的检索效果明显改善（得分从 0.34 提升到 0.39，原文报告增幅为 14.7%）。",
       summarySentences: [{
         evidenceIds: [numericEvidence.id],
         externalKnowledge: [],
         status: "grounded",
-        text: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。"
+        text: "该方法在目标数据集上的检索效果明显改善（得分从 0.34 提升到 0.39，原文报告增幅为 14.7%）。"
       }]
     }), {
       analysis: numericAnalysis,
@@ -440,10 +445,48 @@ describe("thinReadingAgent", () => {
       targetLanguage: "zh-CN"
     }).summary).toContain("14.7%");
 
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "检索效果明显改善。" }],
+      summary: "该方法在目标数据集上的检索效果明显改善，得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标数据集上的检索效果明显改善，得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。"
+      }]
+    }), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("定性解释（定量数字）");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "目标评测数据集上的检索得分最终提升到 0.39。" }],
+      summary: "该方法在目标评测数据集上的检索得分最终提升到 0.39，整体结果得到改善。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标评测数据集上的检索得分最终提升到 0.39，整体结果得到改善。"
+      }]
+    }), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("截断了原文的定量区间或前后对比（0.34、0.39）");
+
     expect(buildThinReadingAgentPrompt({
       context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
       prepared: numericAnalysis
-    })).toContain("按原文断言拆成最小命题");
+    })).toEqual(expect.stringContaining("按原文断言拆成最小命题"));
+    expect(buildThinReadingAgentPrompt({
+      context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
+      prepared: numericAnalysis
+    })).toContain("明显改善（得分从 0.34 提升到 0.39，增幅 14.7%）");
   });
 
   test("requires 4096 only for the sentence that summarizes its source assertion", () => {
@@ -501,6 +544,54 @@ describe("thinReadingAgent", () => {
       requireNumericFidelity: true,
       targetLanguage: "en-US"
     }).summary).toContain("4096");
+  });
+
+  test("does not force an unrelated number from a single compound evidence sentence", () => {
+    const mixedAssertionEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-time-and-compatibility",
+      quote: "Simulation time covers 25 ms in the benchmark, while CoreNEURON remains binary compatible with NEURON.",
+      summary: "基准仿真时间覆盖 25 ms，同时 CoreNEURON 与 NEURON 保持二进制兼容。",
+      terms: ["simulation time", "binary compatibility"]
+    };
+    const mixedAssertionAnalysis = {
+      ...prepared,
+      evidence: [mixedAssertionEvidence],
+      evidencePrompt: `[${mixedAssertionEvidence.id}] ${mixedAssertionEvidence.quote}`
+    };
+    const output = (text: string) => ({
+      claims: [{ evidenceIds: [mixedAssertionEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [mixedAssertionEvidence.id],
+      paperType: "systems",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [mixedAssertionEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(parseThinReadingModelSeed(JSON.stringify(output(
+      "CoreNEURON 与 NEURON 保持二进制兼容，因此结果可以按相同表示进行比较。"
+    )), {
+      analysis: mixedAssertionAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).not.toContain("25");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(output(
+      "该基准使用固定的仿真时间窗口来比较 CoreNEURON 与 NEURON 的运行结果。"
+    )), {
+      analysis: mixedAssertionAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("概括了包含数值的论文断言（25）");
   });
 
   test("keeps formula bounds only when a branch sentence explains the constraint", () => {
@@ -736,6 +827,26 @@ describe("thinReadingAgent", () => {
     })).toThrow("不可用的 evidence ID");
   });
 
+  test("keeps provider evidence-loop schemas aligned with local validation limits", () => {
+    expect(thinReadingEvidencePlanJsonSchema).toMatchObject({
+      properties: {
+        focus: { maxItems: 5, minItems: 1 },
+        pageRequests: { maxItems: 3 },
+        searchQueries: { maxItems: 3 },
+        selectedEvidenceIds: { maxItems: 12, minItems: 1 }
+      }
+    });
+    expect(thinReadingEvidenceObservationJsonSchema).toMatchObject({
+      properties: {
+        focus: { maxItems: 3 },
+        pageRequests: { maxItems: 2 },
+        reason: { maxLength: 420, minLength: 8 },
+        searchQueries: { maxItems: 2 },
+        selectedEvidenceIds: { maxItems: 8 }
+      }
+    });
+  });
+
   test("bounds the second-round evidence observation decision to the original allowlist", () => {
     const firstPlan = parseThinReadingEvidencePlan({
       allowedEvidenceIds: ["evidence-survey-taxonomy"],
@@ -808,7 +919,7 @@ describe("thinReadingAgent", () => {
       }],
       withinPaperClosure: true
     }), { analysis: prepared, requireExplicitTraceability: true, targetLanguage: "zh-CN" });
-    const prompt = buildThinReadingEvidenceReviewPrompt({ node, prepared });
+    const prompt = buildThinReadingEvidenceReviewPrompt({ node, prepared, rootOverview: true });
     const sentenceId = node.evidence.summarySentences[0].id;
     expect(prompt).toContain("证据复核 Agent");
     expect(prompt).toContain(sentenceId);
@@ -818,6 +929,16 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("判断语义蕴含");
     expect(prompt).toContain("正文作保守弱化仍可判 supported");
     expect(prompt).toContain("正文必须与生成和检索过程隔离");
+    expect(prompt).toContain(`<sentence id="${sentenceId}">`);
+    expect(prompt).toContain("bound_paper_evidence");
+    expect(prompt).toContain("This survey presents a taxonomy of vector database systems.");
+    expect(prompt).toContain("只能使用同一 <sentence> 内绑定的证据");
+    expect(prompt).toContain("修辞性过渡本身不是事实命题");
+    expect(prompt).toContain("root_orientation_review_required=true");
+    expect(prompt).toContain("核心思想、论文全景、领域位置");
+    expect(prompt).toContain("evidence_unavailable");
+    expect(prompt).not.toContain("reason 只写 8-420");
+    expect(prompt).not.toContain("论文内证据矩阵");
     expect(parseThinReadingEvidenceReview({
       output: JSON.stringify({
         propositionVerdicts: [{
@@ -866,6 +987,63 @@ describe("thinReadingAgent", () => {
       }),
       sentenceIds: [sentenceId, "thin-reading-sentence-unreviewed"]
     })).toThrow("没有逐句覆盖正文");
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "句子有直接证据，但首页方向审计字段缺失。",
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requireRootOrientation: true,
+      sentenceIds: [sentenceId]
+    })).toThrow("缺少首页方向审计");
+
+    const rootReview = parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "正文命题有直接证据，首页建立了综述的组织主轴。",
+        rootOrientation: {
+          coreIdea: "covered",
+          fieldPosition: "evidence_unavailable",
+          paperPanorama: "covered",
+          paperType: "survey",
+          paperTypeVerdict: "supported",
+          reason: "总述给出分类框架和知识地图；当前证据没有足够的领域位置材料。",
+          retentionVerdict: "focused",
+          verdict: "pass"
+        },
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requireRootOrientation: true,
+      sentenceIds: [sentenceId]
+    });
+    expect(rootReview.rootOrientation).toMatchObject({
+      fieldPosition: "evidence_unavailable",
+      verdict: "pass"
+    });
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "首页方向审计自相矛盾。",
+        rootOrientation: {
+          coreIdea: "missing",
+          fieldPosition: "covered",
+          paperPanorama: "covered",
+          paperType: "survey",
+          paperTypeVerdict: "supported",
+          reason: "核心思想缺失时不应通过首页方向门。",
+          retentionVerdict: "focused",
+          verdict: "pass"
+        },
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requireRootOrientation: true,
+      sentenceIds: [sentenceId]
+    })).toThrow("首页方向审计返回矛盾");
   });
 
   test("normalizes evidence-review diagnostics without weakening its verdict contract", () => {
@@ -921,7 +1099,10 @@ describe("thinReadingAgent", () => {
     expect(missingReason.reason).toBe("所有正文句均通过证据复核。");
     expect(invalidReasonType.reason).toBe("所有正文句均通过证据复核。");
     expect(thinReadingEvidenceReviewJsonSchema).toMatchObject({
-      properties: { reason: { type: "string" } }
+      properties: {
+        reason: { type: "string" },
+        rootOrientation: expect.any(Object)
+      }
     });
   });
 
@@ -1295,7 +1476,7 @@ describe("thinReadingAgent", () => {
     expect(seed.evidence.summarySentences).toHaveLength(2);
   });
 
-  test("rejects a Chinese gloss that reverses a key term from the current evidence", () => {
+  test("normalizes a Chinese gloss that reverses a key term from the current evidence", () => {
     const reversedOutput = (summary: string) => JSON.stringify({
       externalKnowledge: [],
       claims: [],
@@ -1312,18 +1493,62 @@ describe("thinReadingAgent", () => {
       }],
       withinPaperClosure: true
     });
-    expect(() => parseThinReadingModelSeed(reversedOutput(
+    expect(parseThinReadingModelSeed(reversedOutput(
       "这篇综述以分类法（taxonomy）组织向量数据库系统的知识地图。"
     ), {
       analysisEvidence: prepared.evidence,
       targetLanguage: "zh-CN"
-    })).toThrow("不得反向写为“中文（taxonomy）”");
-    expect(() => parseThinReadingModelSeed(reversedOutput(
+    }).summary).toContain("以taxonomy（分类法）组织");
+    expect(parseThinReadingModelSeed(reversedOutput(
       "这篇综述以“分类法”（taxonomy）组织向量数据库系统的知识地图。"
     ), {
       analysisEvidence: prepared.evidence,
       targetLanguage: "zh-CN"
-    })).toThrow("不得反向写为“中文（taxonomy）”");
+    }).summary).toContain("以taxonomy（分类法）组织");
+  });
+
+  test("deterministically normalizes an unambiguous requested terminology pair", () => {
+    const lateInteractionEvidence = {
+      ...prepared.evidence[0],
+      quote: "ColBERT uses late interaction with MaxSim.",
+      summary: "ColBERT 使用 late interaction 和 MaxSim。",
+      terms: ["late interaction", "MaxSim"]
+    };
+    const reversedTerm = "后期交互（late interaction）";
+    const summary = `ColBERT 使用${reversedTerm}连接查询和文档词元，并通过 MaxSim 保留细粒度匹配信号。`;
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      anchors: [{
+        importance: 0.9,
+        kind: "mechanism",
+        label: "后期交互",
+        searchQuery: "ColBERT late interaction MaxSim",
+        summarySentenceIndex: 0,
+        text: reversedTerm
+      }],
+      externalKnowledge: [],
+      claims: [{ evidenceIds: [lateInteractionEvidence.id], status: "grounded", text: summary }],
+      omittedSections: [],
+      paperEvidence: [lateInteractionEvidence.id],
+      paperType: "experimental",
+      recommendations: [],
+      summary,
+      summarySentences: [{
+        evidenceIds: [lateInteractionEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: [lateInteractionEvidence],
+      requiredChineseTerminology: [{ original: "late interaction", translation: "后期交互" }],
+      targetLanguage: "zh-CN"
+    });
+
+    expect(seed.summary).toContain("late interaction（后期交互）");
+    expect(seed.evidence.claims[0].text).toContain("late interaction（后期交互）");
+    expect(seed.evidence.summarySentences?.[0].text).toContain("late interaction（后期交互）");
+    expect(seed.evidence.anchors?.[0].text).toBe("late interaction（后期交互）");
   });
 
   test("requires an explicitly requested Chinese terminology pair in a selected branch", () => {

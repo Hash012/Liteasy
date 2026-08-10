@@ -3,6 +3,10 @@ import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 
 const css = readFileSync(resolve(process.cwd(), "src/app/styles/app.css"), "utf8");
+const thinReadingCss = readFileSync(
+  resolve(process.cwd(), "src/app/features/thin-reading/thinReading.css"),
+  "utf8"
+);
 
 function extractBlock(startToken: string) {
   const start = css.indexOf(startToken);
@@ -82,5 +86,15 @@ describe("layout style contract", () => {
     expect(generatedButtonBlock).toContain('background: var(--button-background);');
     expect(generatedButtonBlock).toContain('color: var(--button-color);');
     expect(generatedButtonBlock).toContain('font-weight: var(--button-font-weight);');
+  });
+
+  test("reserves stable vertical room for the expanded page recommendation graph", () => {
+    expect(thinReadingCss).toMatch(
+      /\.thin-reading__body\.is-graph-dimmed\s*\{[^}]*min-height:\s*clamp\(960px, 120vh, 1200px\);/u
+    );
+    expect(thinReadingCss).toMatch(
+      /@media\s*\(max-width:\s*520px\)[\s\S]*\.thin-reading__body\.is-graph-dimmed\s*\{[^}]*min-width:\s*1100px;/u
+    );
+    expect(thinReadingCss).toContain("overflow-x: auto;");
   });
 });

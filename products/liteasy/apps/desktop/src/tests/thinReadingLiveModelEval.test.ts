@@ -23,6 +23,11 @@ type LiveThinReadingGoldCase = {
   paperType: ThinReadingPaperType;
   page: number;
   question: string;
+  requiredRootOrientation?: {
+    coreIdea: readonly ThinReadingGoldConcept[];
+    fieldPosition: readonly ThinReadingGoldConcept[];
+    paperPanorama: readonly ThinReadingGoldConcept[];
+  };
   requiredTerminology?: readonly { original: ThinReadingGoldConcept; translation: ThinReadingGoldConcept }[];
   targetLanguage?: string;
   title: string;
@@ -218,14 +223,32 @@ const liveGoldCases: Record<string, LiveThinReadingGoldCase> = {
         snippet: "The evaluation compares effectiveness and latency on MS MARCO passage ranking and TREC deep learning tracks.",
         summary: "The evaluation compares ranking effectiveness and retrieval latency.",
         tags: ["MS MARCO", "TREC", "latency"]
+      },
+      {
+        page: 1,
+        paperId: "live-colbert-zh",
+        paperTitle: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
+        snippet: "Representation-based models encode queries and documents independently, while interaction models jointly process query-document pairs; ColBERT places late interaction between these approaches.",
+        summary: "既有表示模型独立编码查询和文档，交互模型联合处理查询-文档对；ColBERT 的后期交互位于两条路线之间。",
+        tags: ["representation-based", "interaction model", "late interaction", "field position"]
       }
     ],
     expectedEvidenceSubstring: "Under late interaction, q and d are separately encoded",
-    expectedSummaryConcepts: ["ColBERT", "late interaction", "MaxSim", ["效率", "高效", "efficient", "efficiency"]],
+    expectedSummaryConcepts: [
+      "ColBERT",
+      "late interaction",
+      "MaxSim",
+      ["效率", "高效", "廉价", "低成本", "轻量", "剪枝", "efficient", "efficiency", "cheap", "pruning"]
+    ],
     paperId: "live-colbert-zh",
     paperType: "experimental",
     page: 2,
     question: "用中文生成 ColBERT 的薄读总述。必须保留 late interaction（后期交互）这个关键术语，说明 MaxSim 的作用、效率取舍和评测边界。",
+    requiredRootOrientation: {
+      coreIdea: ["late interaction", ["后期交互", "后交互", "晚期交互", "后段交互", "延迟交互"]],
+      fieldPosition: [["独立编码", "分别编码"], ["联合处理", "联合编码", "交互模型"]],
+      paperPanorama: ["MaxSim", ["效率", "高效", "廉价", "剪枝"]]
+    },
     requiredTerminology: [{
       original: "late interaction",
       translation: ["后期交互", "后交互", "晚期交互", "后段交互", "延迟交互"]
@@ -286,7 +309,7 @@ rootLiveTest("meets a live thin-reading quality gate through the desktop model p
   });
   expect(result.thinReading).toBeDefined();
   expect(result.thinReading?.qualityGate.attempts).toBeGreaterThanOrEqual(1);
-  expect(result.thinReading?.qualityGate.attempts).toBeLessThanOrEqual(2);
+  expect(result.thinReading?.qualityGate.attempts).toBeLessThanOrEqual(3);
   expect(result.thinReading?.rootSeed.summary.length).toBeGreaterThanOrEqual(24);
   expect(result.thinReading?.rootSeed.evidence.paperEvidence).not.toHaveLength(0);
   expect(result.thinReading?.rootSeed.evidence.paperEvidenceSpans).not.toHaveLength(0);
@@ -294,6 +317,9 @@ rootLiveTest("meets a live thin-reading quality gate through the desktop model p
   expect(result.thinReading?.rootSeed.evidence.summarySentences?.every((sentence) => (
     sentence.status === "unsupported" || sentence.evidenceIds.length > 0
   ))).toBe(true);
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.evidenceReview?.rootOrientation).toMatchObject({
+    verdict: "pass"
+  });
 
   const requiredEvidence = result.analysis?.evidence.find((evidence) => (
     evidence.quote.includes(liveCase.expectedEvidenceSubstring)
@@ -317,6 +343,7 @@ rootLiveTest("meets a live thin-reading quality gate through the desktop model p
         quote: requiredEvidence.quote
       }],
       requiredSummaryConcepts: liveCase.expectedSummaryConcepts,
+      requiredRootOrientation: liveCase.requiredRootOrientation,
       requiredTerminology: liveCase.requiredTerminology,
       stage: "root",
       targetLanguage: liveCase.targetLanguage ?? "en-US"

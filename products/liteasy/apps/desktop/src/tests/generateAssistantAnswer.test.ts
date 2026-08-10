@@ -55,6 +55,33 @@ function evidenceReviewPropositions(
     });
 }
 
+function evidenceReviewRootOrientation(prompt: string) {
+  if (!prompt.includes("root_orientation_review_required=true")) {
+    return null;
+  }
+  const paperType = prompt.match(/候选主要论文类型：([a-z_]+)。/)?.[1] ?? "unknown";
+  return {
+    coreIdea: "covered" as const,
+    fieldPosition: "evidence_unavailable" as const,
+    paperPanorama: "covered" as const,
+    paperType,
+    paperTypeVerdict: paperType === "unknown" ? "ambiguous" as const : "supported" as const,
+    reason: "首页围绕候选论文的主要贡献形成聚焦总述；当前测试证据没有额外的领域位置材料。",
+    retentionVerdict: "focused" as const,
+    verdict: "pass" as const
+  };
+}
+
+function passingEvidenceReview(prompt: string) {
+  return {
+    propositionVerdicts: evidenceReviewPropositions(prompt),
+    reason: "每个正文句均由其绑定证据直接支持。",
+    rootOrientation: evidenceReviewRootOrientation(prompt),
+    unsupportedSentenceIds: [],
+    verdict: "pass" as const
+  };
+}
+
 test("prioritizes verified citation edges while retaining bounded topic-search context", () => {
   const sources = [
     {
@@ -648,6 +675,13 @@ test("parses thin-reading structured output from a live model request", async ()
     modelTransport: async (request) => {
       requests.push({ body: request.body, url: request.url });
       const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true,
+          status: 200
+        };
+      }
       const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       return {
         json: async () => ({
@@ -766,10 +800,10 @@ test("parses thin-reading structured output from a live model request", async ()
           externalSourceIds: ["openalex:W123"],
           quality: {
             citationProvenance: 0,
-            evidenceAttention: 0,
+            evidenceAttention: 1,
             evidenceCoverage: 0.25,
             reason: "核心方法 · 1 条证据",
-            score: 0.3775
+            score: 0.5775
           },
           text: "MaxSim late interaction"
         })
@@ -812,6 +846,13 @@ test("persists ranked anchor quality when every per-anchor search fails", async 
     mode: "qa",
     modelTransport: async (request) => {
       const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true,
+          status: 200
+        };
+      }
       const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       const summary = "ColBERT 使用 MaxSim late interaction 保留细粒度匹配信号。";
       return {
@@ -873,14 +914,14 @@ test("persists ranked anchor quality when every per-anchor search fails", async 
       externalSourceIds: [],
       quality: {
         citationProvenance: 0,
-        evidenceAttention: 0,
+        evidenceAttention: 1,
         evidenceCoverage: 0.25,
         reason: "核心概念 · 1 条证据",
         score: expect.any(Number)
       }
     })
   ]);
-  expect(result.thinReading?.rootSeed.evidence.anchors?.[0]?.quality?.score).toBeCloseTo(0.3425, 8);
+  expect(result.thinReading?.rootSeed.evidence.anchors?.[0]?.quality?.score).toBeCloseTo(0.5425, 8);
 });
 
 test("runs thin-reading through the DeepSeek provider without downgrading to mock data", async () => {
@@ -927,6 +968,13 @@ test("runs thin-reading through the DeepSeek provider without downgrading to moc
     modelTransport: async (request) => {
       requests.push({ body: request.body, url: request.url });
       const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" } }),
+          ok: true,
+          status: 200
+        };
+      }
       const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       return {
         json: async () => ({
@@ -994,6 +1042,230 @@ test("runs thin-reading through the DeepSeek provider without downgrading to moc
   });
 });
 
+test("rewrites a truthful but unfocused homepage after the root orientation audit", async () => {
+  const store = createSettingsStore();
+  const generationPrompts: string[] = [];
+  let reviewAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT separately encodes query and document token embeddings, applies late interaction with MaxSim, and evaluates effectiveness and latency.",
+        summary: "ColBERT 分别编码查询和文档词元，以 MaxSim 实现 late interaction，并同时评测效果与延迟。",
+        tags: ["ColBERT", "late interaction", "MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        reviewAttempts += 1;
+        const rootOrientation = reviewAttempts === 1
+          ? {
+              coreIdea: "covered" as const,
+              fieldPosition: "evidence_unavailable" as const,
+              paperPanorama: "missing" as const,
+              paperType: "experimental" as const,
+              paperTypeVerdict: "supported" as const,
+              reason: "正文命题都真实，但只给出方法名，没有建立问题、机制与决定性评测边界之间的关系。",
+              retentionVerdict: "unfocused" as const,
+              verdict: "fail" as const
+            }
+          : evidenceReviewRootOrientation(prompt);
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt),
+              reason: "每个正文句均由其绑定证据直接支持。",
+              rootOrientation,
+              unsupportedSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      generationPrompts.push(prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const summary = generationPrompts.length === 1
+        ? "ColBERT 提出 late interaction（后期交互）并使用 MaxSim。"
+        : "ColBERT 分别编码查询与文档词元，再用 MaxSim 完成 late interaction（后期交互），从而把核心机制与效果、延迟两类评测边界连成完整主轴。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: summary }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: summary
+            }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-root-orientation-repair",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(generationPrompts).toHaveLength(2);
+  expect(generationPrompts[1]).toContain("薄读首页方向质量门");
+  expect(generationPrompts[1]).toContain("本轮属于首页方向质量门后的定向修复");
+  expect(result.thinReading?.qualityGate).toMatchObject({
+    attempts: 2,
+    repaired: true,
+    repairReasons: [expect.stringContaining("薄读首页方向质量门未通过")]
+  });
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.evidenceReview?.rootOrientation).toMatchObject({
+    coreIdea: "covered",
+    paperPanorama: "covered",
+    retentionVerdict: "focused",
+    verdict: "pass"
+  });
+});
+
+test("allows a third homepage generation only for a sentence-targeted evidence repair", async () => {
+  const store = createSettingsStore();
+  let generationAttempts = 0;
+  let reviewAttempts = 0;
+  const generationPrompts: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT separately encodes query and document embeddings and applies MaxSim late interaction.",
+        summary: "ColBERT 分别编码查询和文档向量，并应用 MaxSim late interaction。",
+        tags: ["ColBERT", "MaxSim", "late interaction"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        reviewAttempts += 1;
+        const sentenceId = prompt.match(/id=(thin-reading-sentence-[^;\s]+)/)?.[1] ?? "";
+        const unsupportedSentenceIds = reviewAttempts < 3 ? [sentenceId] : [];
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt, unsupportedSentenceIds),
+              reason: reviewAttempts < 3
+                ? "该句仍加入了绑定证据没有明示的离线预编码能力，必须继续收窄。"
+                : "第三轮正文已收窄为绑定证据直接支持的机制。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
+              unsupportedSentenceIds,
+              verdict: reviewAttempts < 3 ? "fail" : "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+
+      generationAttempts += 1;
+      generationPrompts.push(prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
+      const summary = generationAttempts < 3
+        ? "ColBERT 通过文档离线预编码和 MaxSim late interaction 提升检索效率。"
+        : "ColBERT 分别编码查询和文档向量，再应用 MaxSim late interaction 完成相关性计算。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [{ evidenceIds: [evidenceId], status: "grounded", text: summary }],
+            externalKnowledge: [],
+            omittedSections: [],
+            paperEvidence: [evidenceId],
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{
+              evidenceIds: [evidenceId],
+              externalKnowledge: [],
+              status: "grounded",
+              text: summary
+            }],
+            withinPaperClosure: true
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "生成薄读",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-third-root-evidence-repair",
+      depth: 0,
+      paperIds: ["demo-1"],
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "root_overview" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(generationAttempts).toBe(3);
+  expect(reviewAttempts).toBe(3);
+  expect(generationPrompts[2]).toContain("必须原样保留的已通过句");
+  expect(generationPrompts[2]).toContain("失败句绑定的论文原文证据");
+  expect(result.thinReading?.rootSeed.summary).not.toContain("离线预编码");
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 3, repaired: true });
+});
+
 test("uses a live evidence plan to narrow a large thin-reading evidence matrix", async () => {
   const store = createSettingsStore();
   const prompts: string[] = [];
@@ -1055,20 +1327,31 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
         };
       }
       if (prompt.includes("证据复核 Agent")) {
-        reviewAttempts += 1;
+        const isFormatRetry = prompt.includes("上一轮证据复核输出未通过结构校验");
+        if (!isFormatRetry) {
+          reviewAttempts += 1;
+        }
         const sentenceId = prompt.match(/id=(thin-reading-sentence-[^;\s]+)/)?.[1] ?? "";
         return {
           json: async () => ({
-            answer: JSON.stringify(reviewAttempts === 1
+            answer: JSON.stringify(isFormatRetry
               ? {
                   propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
                   reason: "该句将三段证据共同支撑的范围表述得过强，需要压缩为可直接验证的判断。",
+                  rootOrientation: evidenceReviewRootOrientation(prompt),
                   unsupportedSentenceIds: [sentenceId],
                   verdict: "fail"
                 }
-              : {
+              : reviewAttempts === 1
+                ? {
+                    reason: "首次复核故意遗漏逐句命题判定，用于验证结构重试。",
+                    unsupportedSentenceIds: [sentenceId],
+                    verdict: "fail"
+                  }
+                : {
                   propositionVerdicts: evidenceReviewPropositions(prompt),
                   reason: "通过",
+                  rootOrientation: evidenceReviewRootOrientation(prompt),
                   unsupportedSentenceIds: [],
                   verdict: "pass"
                 }),
@@ -1112,16 +1395,24 @@ test("uses a live evidence plan to narrow a large thin-reading evidence matrix",
     }
   });
 
-  expect(prompts).toHaveLength(6);
+  expect(prompts).toHaveLength(7);
   expect(prompts[1]).toContain("证据观察 Agent");
   expect(prompts[2]).not.toContain("Evidence summary 8");
   expect(prompts[3]).toContain("证据复核 Agent");
-  expect(prompts[4]).toContain("薄读证据复核未通过");
-  expect(prompts[4]).toContain("只允许修改这些失败句及依赖它们的 claims");
-  expect(prompts[4]).toContain("改写为绑定 evidence 直接蕴含的最小命题");
-  expect(prompts[4]).toContain("Evidence passage 1 describes the method and result");
-  expect(prompts[4]).toContain("必须原样保留的已通过句");
-  expect(prompts[5]).toContain("证据复核 Agent");
+  expect(prompts[4]).toContain("上一轮证据复核输出未通过结构校验");
+  expect(prompts[4]).toContain("propositionVerdicts 必须覆盖每个实际 sentence ID");
+  expect(prompts[4]).toContain("unsupportedSentenceIds 为空时 verdict=pass");
+  expect(prompts[4]).not.toContain("reason 必须是 8-420");
+  expect(prompts[5]).toContain("薄读证据复核未通过");
+  expect(prompts[5]).toContain("只允许修改这些失败句及依赖它们的 claims");
+  expect(prompts[5]).toContain("改写为绑定 evidence 直接蕴含的最小命题");
+  expect(prompts[5]).toContain("Evidence passage 1 describes the method and result");
+  expect(prompts[5]).toContain("必须原样保留的已通过句");
+  expect(prompts[5]).toContain("最终修复检查清单");
+  expect(prompts[5]).toContain("不得使用其他句子或相邻段落的未绑定证据");
+  expect(prompts[5]).toContain("同步重建 summary、summarySentences 与相关 claims");
+  expect(prompts[5].lastIndexOf("最终修复检查清单")).toBeGreaterThan(prompts[5].lastIndexOf("</invalid_output>"));
+  expect(prompts[6]).toContain("证据复核 Agent");
   expect(result.thinReading?.evidencePlan).toMatchObject({ selectedEvidenceIds: plannedEvidenceIds });
   expect(result.thinReading?.evidenceLoop).toMatchObject({
     rounds: [expect.objectContaining({ round: 1 })],
@@ -1165,8 +1456,16 @@ test("continues thin reading with a bounded deterministic evidence scope when pl
           status: 502
         };
       }
-      generationPrompts.push(String(body.prompt));
-      const evidenceId = String(body.prompt).match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "";
+      const prompt = String(body.prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationPrompts.push(prompt);
+      const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "";
       const summary = "该论文的方法由确定性范围内的证据直接支持，并清楚界定了核心机制与结论边界。";
       return {
         json: async () => ({
@@ -1285,6 +1584,7 @@ test("retries a cross-layer evidence ID with the current planning allowlist", as
             answer: JSON.stringify({
               propositionVerdicts: evidenceReviewPropositions(prompt),
               reason: "每个句子均由本轮指定证据直接支持。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
               unsupportedSentenceIds: [],
               verdict: "pass"
             }),
@@ -1405,7 +1705,7 @@ test("executes a bounded second evidence-tool round after observing a concrete g
       }
       if (prompt.includes("证据复核 Agent")) {
         return {
-          json: async () => ({ answer: JSON.stringify({ propositionVerdicts: evidenceReviewPropositions(prompt), reason: "每句均有直接证据。", unsupportedSentenceIds: [], verdict: "pass" }), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          json: async () => ({ answer: JSON.stringify({ propositionVerdicts: evidenceReviewPropositions(prompt), reason: "每句均有直接证据。", rootOrientation: evidenceReviewRootOrientation(prompt), unsupportedSentenceIds: [], verdict: "pass" }), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
           ok: true, status: 200
         };
       }
@@ -1470,6 +1770,13 @@ test("repairs an incomplete live thin-reading trace exactly once", async () => {
     mode: "qa",
     modelTransport: async (request) => {
       const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true,
+          status: 200
+        };
+      }
       prompts.push(prompt);
       const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       const summary = "ColBERT 用 MaxSim late interaction 保留细粒度匹配信号，并降低文档编码的在线成本。";
@@ -1568,6 +1875,13 @@ test("accepts a DeepSeek mechanism anchor without entering structured-output rep
         prompt: string;
         provider?: string;
       };
+      if (body.prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(body.prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" } }),
+          ok: true,
+          status: 200
+        };
+      }
       expect(body).toMatchObject({ model: "deepseek-v4-flash", provider: "deepseek" });
       prompts.push(String(body.prompt));
       if (body.outputFormat?.schema) {
@@ -1671,6 +1985,13 @@ test("repairs only invalid anchor spans and quarantines a repeated failure witho
     mode: "qa",
     modelTransport: async (request) => {
       const body = JSON.parse(request.body) as { prompt: string };
+      if (body.prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(body.prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "deepseek" } }),
+          ok: true,
+          status: 200
+        };
+      }
       prompts.push(body.prompt);
       const evidenceId = body.prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       const summary = "CoreNEURON 是面向神经元仿真的计算库。它支持在线和离线两种执行工作流。测试报告了内存与时间开销下降。内存改进源于去除 NEURON 的通用数据结构，如 Node、Section、Object。";
@@ -1785,6 +2106,13 @@ test("repairs a selected Chinese branch that omits an explicitly requested termi
     mode: "qa",
     modelTransport: async (request) => {
       const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true,
+          status: 200
+        };
+      }
       prompts.push(prompt);
       const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       const summary = prompts.length === 1
@@ -1916,6 +2244,7 @@ test("quarantines paper sentences that remain partially supported after targeted
             answer: JSON.stringify({
               propositionVerdicts: evidenceReviewPropositions(prompt, unsupportedSentenceIds),
               reason: "三处命题分别扩张了性能因果、实现细节和统计显著性；其余句子有直接支持。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
               unsupportedSentenceIds,
               verdict: "fail"
             }),
@@ -1976,11 +2305,11 @@ test("quarantines paper sentences that remain partially supported after targeted
     settings: store.getState(),
     thinReadingContext: {
       artifactId: "artifact-thin-partial-quarantine",
-      depth: 0,
+      depth: 1,
       paperIds: ["demo-1"],
       primaryPaperId: "demo-1",
       primaryPaperTitle: "CoreNEURON",
-      source: { kind: "root_overview" },
+      source: { kind: "selected_text", excerpt: "CoreNEURON 的机制与性能结果" },
       targetLanguage: "zh-CN"
     }
   });
@@ -2102,6 +2431,13 @@ test("restricts a direct thin-reading request to its primary paper", async () =>
     mode: "qa",
     modelTransport: async (request) => {
       const prompt = String(JSON.parse(request.body).prompt);
+      if (prompt.includes("证据复核 Agent")) {
+        return {
+          json: async () => ({ answer: JSON.stringify(passingEvidenceReview(prompt)), execution: { backend: "dev_cloud", mode: "live", provider: "openai" } }),
+          ok: true,
+          status: 200
+        };
+      }
       const evidenceId = prompt.match(/\[(evidence-[^\]]+)\]/)?.[1] ?? "evidence-1";
       return {
         json: async () => ({
@@ -2193,6 +2529,7 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
             answer: JSON.stringify({
               propositionVerdicts: evidenceReviewPropositions(modelPrompt),
               reason: "外部句由绑定来源摘要直接支持。",
+              rootOrientation: evidenceReviewRootOrientation(modelPrompt),
               unsupportedSentenceIds: [],
               verdict: "pass"
             }),
@@ -2345,12 +2682,14 @@ test("drops an unsupported external-only sentence when external expansion was au
               ? {
                   propositionVerdicts: evidenceReviewPropositions(prompt, [unsupportedSentenceId]),
                   reason: "外部来源摘要没有提及可塑性，不能支持该句。",
+                  rootOrientation: evidenceReviewRootOrientation(prompt),
                   unsupportedSentenceIds: [unsupportedSentenceId],
                   verdict: "fail"
                 }
               : {
                   propositionVerdicts: evidenceReviewPropositions(prompt),
                   reason: "删除无支持的外部句后，其余句均由论文证据直接支持。",
+                  rootOrientation: evidenceReviewRootOrientation(prompt),
                   unsupportedSentenceIds: [],
                   verdict: "pass"
                 }),
@@ -2490,12 +2829,14 @@ test("replaces one unsupported required external source with a focused retrieval
               ? {
                   propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
                   reason: "初始外部来源只涉及相邻主题，不能支持后续研究的具体命题。",
+                  rootOrientation: evidenceReviewRootOrientation(prompt),
                   unsupportedSentenceIds: [sentenceId],
                   verdict: "fail"
                 }
               : {
                   propositionVerdicts: evidenceReviewPropositions(prompt),
                   reason: "替代来源摘要直接支持该外部句。",
+                  rootOrientation: evidenceReviewRootOrientation(prompt),
                   unsupportedSentenceIds: [],
                   verdict: "pass"
                 }),
@@ -2620,6 +2961,7 @@ test("returns a closure boundary when a required external claim has no replaceme
             answer: JSON.stringify({
               propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
               reason: "该来源只涉及相邻主题，不能直接支持所问外部命题。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
               unsupportedSentenceIds: [sentenceId],
               verdict: "fail"
             }),
@@ -2732,6 +3074,7 @@ test("keeps a selected canonical external source available when a follow-up look
             answer: JSON.stringify({
               propositionVerdicts: evidenceReviewPropositions(modelPrompt),
               reason: "外部句由绑定来源摘要直接支持。",
+              rootOrientation: evidenceReviewRootOrientation(modelPrompt),
               unsupportedSentenceIds: [],
               verdict: "pass"
             }),
@@ -2931,6 +3274,7 @@ test("runs at most two responsibility Subagents for a genuinely large thin-readi
             answer: JSON.stringify({
               propositionVerdicts: evidenceReviewPropositions(prompt),
               reason: "每个句子都由绑定证据直接支持。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
               unsupportedSentenceIds: [],
               verdict: "pass"
             }),

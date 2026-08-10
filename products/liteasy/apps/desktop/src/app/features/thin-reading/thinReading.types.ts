@@ -339,6 +339,16 @@ export type ThinReadingGenerationAudit = {
       verdict: ThinReadingPropositionVerdict;
     }[];
     reason: string;
+    rootOrientation?: {
+      coreIdea: "covered" | "missing";
+      fieldPosition: "covered" | "evidence_unavailable" | "missing";
+      paperPanorama: "covered" | "missing";
+      paperType: ThinReadingPaperType;
+      paperTypeVerdict: "ambiguous" | "mismatch" | "supported";
+      reason: string;
+      retentionVerdict: "focused" | "unfocused";
+      verdict: "pass" | "fail";
+    } | null;
     unsupportedSentenceIds: readonly string[];
     verdict: "pass";
   };

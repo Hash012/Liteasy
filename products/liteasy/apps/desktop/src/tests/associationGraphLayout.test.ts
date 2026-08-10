@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
 import {
+  createAssociationSideVariants,
   evaluateAssociationLayout,
   layoutAssociationPageGraph,
   layoutConstrainedAssociationPageGraph,
@@ -98,6 +99,84 @@ test("merges a paper shared by two anchors into one node with one edge per ancho
   expect(graph.edges.every((edge) => edge.crossing === (edge.paperKey === "openalex:W42"))).toBe(true);
 });
 
+test("keeps an explicitly shared paper expanded at low relevance on a mobile graph", () => {
+  const graph = layoutAssociationPageGraph(input({
+    documentHeight: 1200,
+    frameWidth: 390,
+    multiAnchorPaperKeys: new Set(["openalex:W42"]),
+    sourcesByAnchor: {
+      a1: [source("W42", 0.1, { canonicalPaperId: "openalex:W42" })]
+    }
+  }));
+
+  expect(graph.nodes).toHaveLength(1);
+  expect(graph.nodes[0]).toMatchObject({ isDot: false, paperKey: "openalex:W42" });
+});
+
+test("bounds and deduplicates deterministic side variants for a dense 24-anchor page", () => {
+  const preferred = new Map(Array.from({ length: 24 }, (_, index) => [
+    `anchor-${String(index).padStart(2, "0")}`,
+    index % 2 === 0 ? "left" as const : "right" as const
+  ]));
+  const priority = [...preferred.keys()].reverse();
+  const variants = createAssociationSideVariants(preferred, priority);
+  const signatures = variants.map((variant) => [...variant].sort(([left], [right]) =>
+    left.localeCompare(right)).map(([anchorId, side]) => `${anchorId}:${side}`).join("|"));
+
+  expect(variants.length).toBeLessThanOrEqual(24);
+  expect(new Set(signatures).size).toBe(variants.length);
+  expect(variants[0]).toEqual(preferred);
+  expect(variants).toContainEqual(new Map([...preferred].map(([anchorId, side]) => [
+    anchorId,
+    side === "left" ? "right" : "left"
+  ])));
+  expect(variants).toContainEqual(new Map([...preferred].map(([anchorId, side]) => [
+    anchorId,
+    anchorId === priority[0] ? side === "left" ? "right" : "left" : side
+  ])));
+  expect(variants).toContainEqual(new Map([...preferred].map(([anchorId, side]) => [
+    anchorId,
+    anchorId === priority[0] || anchorId === priority[1]
+      ? side === "left" ? "right" : "left"
+      : side
+  ])));
+});
+
+test("keeps a dense 24-anchor candidate search deterministic and hard-gated", () => {
+  const denseInput = input({
+    anchors: Array.from({ length: 24 }, (_, index) => ({
+      anchorId: `anchor-${String(index).padStart(2, "0")}`,
+      rect: { height: 16, left: 520, top: 100 + index * 125, width: 100 }
+    })),
+    documentHeight: 3200,
+    frameWidth: 1200,
+    sourcesByAnchor: Object.fromEntries(Array.from({ length: 24 }, (_, index) => [
+      `anchor-${String(index).padStart(2, "0")}`,
+      [source(`paper-${String(index).padStart(2, "0")}`, 0.82)]
+    ]))
+  });
+
+  const first = layoutConstrainedAssociationPageGraph(denseInput);
+
+  expect(first.searchDiagnostics.sideVariantsEvaluated).toBeLessThanOrEqual(24);
+  expect(first.searchDiagnostics.softVariantsEvaluated).toBeLessThanOrEqual(2);
+  expect(first.searchDiagnostics.repairNodesVisited).toBeLessThanOrEqual(48);
+  expect(first.searchDiagnostics.repairCandidateEvaluations).toBeLessThanOrEqual(5_000);
+  expect(first.searchDiagnostics.initialSlotCandidateEvaluations).toBeLessThanOrEqual(35_000);
+  if (first.layoutSource === "constrained") {
+    expect(first.quality).toMatchObject({
+      anchorObstructions: 0,
+      nodeOverlaps: 0,
+      overflowCount: 0,
+      primaryEdgeCrossings: 0,
+      sameSideViolations: 0
+    });
+    expect(first.quality.weightedStress).toBeLessThanOrEqual(first.baselineQuality.weightedStress + 1e-9);
+  } else {
+    expect(first.nodes).toEqual(layoutAssociationPageGraph(denseInput).nodes);
+  }
+});
+
 test("keeps every node inside the frame and clear of the others", () => {
   const graph = layoutAssociationPageGraph(input({
     anchors: [
@@ -186,6 +265,19 @@ test("keeps a dense primary fan in one side sector with zero primary crossings",
     }
   }));
 
+  expect(graph.candidateQuality).toMatchObject({
+    anchorObstructions: 0,
+    nodeOverlaps: 0,
+    overflowCount: 0,
+    primaryEdgeCrossings: 0,
+    sameSideViolations: 0
+  });
+  expect(graph.candidateQuality.weightedCrossings).toBeLessThanOrEqual(
+    graph.baselineQuality.weightedCrossings
+  );
+  expect(graph.candidateQuality.weightedStress).toBeLessThanOrEqual(
+    graph.baselineQuality.weightedStress + 1e-9
+  );
   expect(graph.layoutSource).toBe("constrained");
   expect(graph.quality.sameSideViolations).toBe(0);
   expect(graph.quality.primaryEdgeCrossings).toBe(0);

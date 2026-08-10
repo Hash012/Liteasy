@@ -217,6 +217,9 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
     evidenceReview: audit.evidenceReview
       ? Object.freeze({
           ...audit.evidenceReview,
+          rootOrientation: audit.evidenceReview.rootOrientation
+            ? Object.freeze({ ...audit.evidenceReview.rootOrientation })
+            : audit.evidenceReview.rootOrientation,
           unsupportedSentenceIds: Object.freeze([...audit.evidenceReview.unsupportedSentenceIds])
         })
       : undefined,
