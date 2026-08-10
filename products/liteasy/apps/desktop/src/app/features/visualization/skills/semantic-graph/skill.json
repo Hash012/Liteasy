@@ -1,0 +1,16 @@
+{
+  "costClass": "low",
+  "evidenceRequirements": ["all factual nodes and edges must cite evidence claims"],
+  "fallbackModalities": ["source_figure"],
+  "id": "semantic-graph",
+  "integrityRules": ["typed semantic_graph spec only", "no generated SVG or HTML", "flowchart and causal graph must be acyclic"],
+  "kernelId": "semantic-graph-v1",
+  "modality": "semantic_graph",
+  "outputSchemaId": "liteasy.visualization/semantic-graph/v1",
+  "remote": false,
+  "rendererId": "semantic-graph-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["trusted safe SVG renderer", "observation-only interaction"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

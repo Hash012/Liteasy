@@ -1,0 +1,16 @@
+{
+  "costClass": "low",
+  "evidenceRequirements": ["declared parameters, key points, and auxiliary curves must cite evidence claims"],
+  "fallbackModalities": ["source_figure"],
+  "id": "function-plot",
+  "integrityRules": ["typed function_plot spec only", "no generated SVG or HTML", "expressions must use the bounded allowlist"],
+  "kernelId": "function-plot-v1",
+  "modality": "function_plot",
+  "outputSchemaId": "liteasy.visualization/function-plot/v1",
+  "remote": false,
+  "rendererId": "function-plot-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["trusted local SVG renderer", "observation-only pan, zoom, selection, and parameter controls"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

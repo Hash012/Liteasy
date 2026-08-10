@@ -1,0 +1,33 @@
+{
+  "components": [
+    {
+      "evidenceClaimIds": ["claim-circuit"],
+      "id": "battery",
+      "kind": "voltage_source",
+      "ports": [
+        { "id": "battery-pos", "name": "+", "position": [120, 120] },
+        { "id": "battery-neg", "name": "-", "position": [120, 260] }
+      ],
+      "position": [120, 190]
+    },
+    {
+      "evidenceClaimIds": ["claim-circuit"],
+      "id": "resistor",
+      "kind": "resistor",
+      "ports": [
+        { "id": "resistor-in", "name": "in", "position": [360, 120] },
+        { "id": "resistor-out", "name": "out", "position": [360, 260] }
+      ],
+      "position": [360, 190]
+    }
+  ],
+  "currents": [],
+  "measurementPoints": [{ "evidenceClaimIds": ["claim-circuit"], "id": "junction", "nodeId": "battery-pos" }],
+  "networks": [{ "id": "loop", "memberIds": ["battery-pos", "resistor-in", "resistor-out", "battery-neg"] }],
+  "parameters": [{ "evidenceClaimIds": ["claim-circuit"], "id": "ohms-law", "unit": "V/A", "value": 10 }],
+  "voltages": [{ "componentId": "battery", "unit": "V", "value": 10 }],
+  "wires": [
+    { "evidenceClaimIds": ["claim-circuit"], "from": "battery-pos", "id": "wire-1", "to": "resistor-in" },
+    { "evidenceClaimIds": ["claim-circuit"], "from": "resistor-out", "id": "wire-2", "to": "battery-neg" }
+  ]
+}

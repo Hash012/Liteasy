@@ -1,0 +1,23 @@
+{
+  "auxiliaryCurves": [],
+  "axes": {
+    "xLabel": "x",
+    "yLabel": "f(x)"
+  },
+  "domain": {
+    "min": -2,
+    "max": 2
+  },
+  "expression": "x^2",
+  "keyPoints": [
+    {
+      "evidenceClaimIds": ["claim-vertex"],
+      "id": "vertex",
+      "label": "vertex",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "parameters": [],
+  "variable": "x"
+}

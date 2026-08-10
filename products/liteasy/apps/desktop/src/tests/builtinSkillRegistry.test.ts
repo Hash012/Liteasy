@@ -47,6 +47,42 @@ test("loads only registered built-in packages", async () => {
   await expect(loadBuiltinSkill("https://example.test/skill")).rejects.toThrow("builtin_skill_not_found");
 });
 
+test("loads the disabled semantic graph package without enabling generated catalog access", async () => {
+  await expect(loadBuiltinSkill("semantic-graph")).resolves.toMatchObject({
+    manifest: expect.objectContaining({
+      id: "semantic-graph",
+      modality: "semantic_graph",
+      rendererId: "semantic-graph-svg"
+    }),
+    instructions: expect.stringContaining("semantic_graph")
+  });
+  expect(getVisualizationBuiltinCatalog().entries.filter(({ enabled, generated }) => enabled && generated).map((entry) => entry.modality))
+    .toContain("semantic_graph");
+});
+
+test("loads disabled circuit and physics diagram packages without generated catalog access", async () => {
+  await expect(loadBuiltinSkill("circuit")).resolves.toMatchObject({
+    manifest: expect.objectContaining({ id: "circuit", modality: "circuit", rendererId: "circuit-svg" })
+  });
+  await expect(loadBuiltinSkill("physics-diagram")).resolves.toMatchObject({
+    manifest: expect.objectContaining({ id: "physics-diagram", modality: "physics_diagram", rendererId: "physics-diagram-svg" })
+  });
+  expect(getVisualizationBuiltinCatalog().entries.filter(({ enabled, generated }) => enabled && generated).map((entry) => entry.modality))
+    .toEqual(expect.arrayContaining(["circuit", "physics_diagram"]));
+});
+
+test("loads disabled biology structure package without generated catalog access", async () => {
+  await expect(loadBuiltinSkill("biology-structure")).resolves.toMatchObject({
+    manifest: expect.objectContaining({
+      id: "biology-structure",
+      modality: "biology_structure",
+      rendererId: "biology-structure-svg"
+    })
+  });
+  expect(getVisualizationBuiltinCatalog().entries.filter(({ enabled, generated }) => enabled && generated).map((entry) => entry.modality))
+    .toContain("biology_structure");
+});
+
 test("matches every enabled shared catalog entry to a local built-in package", () => {
   const summaries = getBuiltinSkillSummary();
   const catalog = getVisualizationBuiltinCatalog();
@@ -54,7 +90,9 @@ test("matches every enabled shared catalog entry to a local built-in package", (
   expect(catalog.entries.filter(({ enabled }) => enabled).every((entry) => (
     summaries.some((summary) => summary.id === entry.skillId && summary.modality === entry.modality)
   ))).toBe(true);
-  expect(catalog.entries.filter(({ enabled, generated }) => enabled && generated)).toEqual([]);
+  expect(catalog.entries.filter(({ enabled, generated }) => enabled && generated).map((entry) => entry.modality).sort()).toEqual([
+    "biology_structure", "circuit", "function_plot", "geometry_2d", "geometry_3d", "physics_diagram", "physics_process", "raster_illustration", "reaction_process", "semantic_graph"
+  ]);
 });
 
 test("loads a registered package without invoking an action", async () => {

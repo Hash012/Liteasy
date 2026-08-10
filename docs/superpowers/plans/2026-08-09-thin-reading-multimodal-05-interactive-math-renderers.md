@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement safe, reproducible function plots, interactive 2D geometry, and lazy-loaded 3D geometry with bounded kernels, worker isolation, keyboard-accessible controls, and browser pixel checks.
+**Goal:** Implement safe, reproducible function plots, interactive 2D geometry, and lazy-loaded 3D geometry with bounded kernels, worker isolation, authoritative service compilers, keyboard-accessible controls, and browser pixel checks.
 
-**Architecture:** Mathematical content is parsed into an allowlisted expression/geometry AST and evaluated by deterministic kernels with explicit domains, sample limits, and cancellation. SVG/Canvas renderers consume normalized kernel output. Three.js is loaded only after a validated 3D artifact is visible and remains isolated from the initial desktop bundle; unsupported or numerically unstable cases fall back to a static 2D projection or formula/table.
+**Architecture:** Mathematical content is parsed into an allowlisted expression/geometry AST and evaluated by deterministic kernels with explicit domains, sample limits, and cancellation. The Liteasy API compiler is the publication authority: provider output is accepted only as typed specs and must pass server hard validators before publication. SVG/Canvas renderers consume normalized kernel output. Three.js is loaded only after a validated 3D artifact is visible and remains isolated from the initial desktop bundle; unsupported or numerically unstable cases fall back to a static 2D projection or formula/table.
 
 **Tech Stack:** TypeScript 5.8, Chevrotain (existing parser), KaTeX, SVG/Canvas, Three.js as a lazy dependency, Web Workers, Vitest, React Testing Library, Playwright.
 
@@ -16,6 +16,7 @@
 - A numerical result is labelled derived and is valid only within the declared model, domain, precision, and error bounds.
 - Interactions are observation-only: pan, zoom, rotate, sliders, playback, visibility, highlighting, and selection; editing creates a new request.
 - The UI remains minimal and does not expose parser, kernel, renderer, or numerical implementation terms.
+- Generated math modalities remain disabled in the shared production catalog until the service compiler, service hard validator, desktop Skill, Kernel, Validator, Renderer, accessibility projection, fallback, normal/refusal/interaction fixtures, desktop/mobile visual tests, and catalog gate all pass.
 
 ---
 
@@ -211,16 +212,51 @@ git add products/liteasy/apps/desktop/src/app/features/visualization/kernels/geo
 git commit -m "feat: add lazy interactive 3d geometry"
 ```
 
-### Task 5: Math Modality Availability Gate
+### Task 5: Authoritative Interactive Math Compilers And Conformance
+
+**Files:**
+- Create: `products/liteasy/services/api/src/interactiveMathVisualizationCompilers.mjs`
+- Test: `products/liteasy/services/api/src/interactiveMathVisualizationCompilers.test.mjs`
+- Test: `products/liteasy/services/api/src/interactiveMathReleaseGate.test.mjs`
+- Create: `development/test-data/thin-reading-multimodal/interactive-math-conformance.v1.json`
+- Test: `products/liteasy/apps/desktop/src/tests/interactiveMathConformance.test.ts`
+
+**Interfaces:**
+- Consumes: `VisualizationArtifactV1`, shared JSON Schema, and typed specs for `function_plot`, `geometry_2d`, and `geometry_3d`.
+- Produces: service compiler descriptors, server domain hard validation, valid/refusal/invalid conformance fixtures, and cross-runtime agreement tests.
+
+- [ ] **Step 1: Write failing service hard-gate tests**
+
+The tests must prove that the API rejects executable math, non-finite domains, degenerate geometry, missing evidence bindings, unsafe 3D meshes, and catalog entries without a matching compiler.
+
+- [ ] **Step 2: Implement compiler descriptors and hard validators**
+
+Add immutable service compiler descriptors for `function_plot`, `geometry_2d`, and `geometry_3d`. The compiler accepts only schema-valid typed specs, re-runs bounded expression and geometry domain validation independent of the desktop implementation, attaches compiler/version metadata, and rejects any factual label, object, constraint, parameter, derived property, or vector without evidence binding. It never accepts SVG, HTML, scripts, shader code, URLs, or arbitrary DOM from provider output.
+
+- [ ] **Step 3: Add cross-runtime conformance fixtures**
+
+Fixtures cover normal, refusal/fallback, invalid executable input, invalid evidence binding, runtime-unavailable 3D fallback, and interaction metadata for all three math modalities. Desktop and API tests must agree on which fixtures pass, fail, or omit.
+
+- [ ] **Step 4: Run focused API and desktop conformance tests and commit**
+
+```bash
+cd products/liteasy/services/api && node --test src/interactiveMathVisualizationCompilers.test.mjs src/interactiveMathReleaseGate.test.mjs
+cd products/liteasy/apps/desktop && npm test -- src/tests/interactiveMathConformance.test.ts
+git add products/liteasy/services/api/src/interactiveMathVisualizationCompilers.mjs products/liteasy/services/api/src/interactiveMathVisualizationCompilers.test.mjs products/liteasy/services/api/src/interactiveMathReleaseGate.test.mjs development/test-data/thin-reading-multimodal/interactive-math-conformance.v1.json products/liteasy/apps/desktop/src/tests/interactiveMathConformance.test.ts
+git commit -m "feat: validate interactive math artifacts on server"
+```
+
+### Task 6: Math Modality Availability Gate
 
 **Files:**
 - Modify: `products/liteasy/apps/desktop/src/app/features/visualization/visualizationRendererRegistry.ts`
 - Modify: `products/liteasy/apps/desktop/src/app/features/visualization/visualizationValidatorRegistry.ts`
+- Modify: `products/liteasy/packages/shared/visualizationBuiltins.v1.json`
 - Create: `products/liteasy/apps/desktop/src/tests/interactiveMathReleaseGate.test.ts`
 
 **Interfaces:**
-- Consumes: function plot, geometry 2D, and geometry 3D registrations.
-- Produces: complete availability projection with explicit unavailability reasons for failed worker, WebGL, validator, or fixture checks.
+- Consumes: function plot, geometry 2D, geometry 3D registrations, the shared production catalog, and API compiler descriptors.
+- Produces: complete fail-closed availability projection with explicit unavailability reasons for disabled catalog entries, missing compilers, failed worker/WebGL health, missing validators, or fixture mismatches.
 
 - [ ] **Step 1: Write the release gate test**
 
@@ -238,6 +274,8 @@ Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/interactiveMathR
 Expected: PASS with fail-closed math capability projection.
 
 ```bash
-git add products/liteasy/apps/desktop/src/app/features/visualization/visualizationRendererRegistry.ts products/liteasy/apps/desktop/src/app/features/visualization/visualizationValidatorRegistry.ts products/liteasy/apps/desktop/src/tests/interactiveMathReleaseGate.test.ts
+git add products/liteasy/apps/desktop/src/app/features/visualization/visualizationRendererRegistry.ts products/liteasy/apps/desktop/src/app/features/visualization/visualizationValidatorRegistry.ts products/liteasy/packages/shared/visualizationBuiltins.v1.json products/liteasy/apps/desktop/src/tests/interactiveMathReleaseGate.test.ts
 git commit -m "feat: gate interactive math capabilities"
 ```
+
+Only this task may enable `function_plot`, `geometry_2d`, and `geometry_3d` in the shared production catalog, and only in the same focused change that proves the service compiler registry and desktop implementation chain are complete.
