@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import { useState } from "react";
-import type { BiologyStructureSpecV1 } from "../visualizationArtifact.types";
+import type { BiologyStructureSpecV1, VisualizationArtifactV1 } from "../visualizationArtifact.types";
 import { validateBiologyStructure } from "../kernels/biologyStructureKernel";
 import { createSafeSvgScene } from "../rendering/safeSvgScene";
 
@@ -47,3 +47,13 @@ export function BiologyStructureRenderer({ rendered }: { rendered: BiologyStruct
     </section>
   );
 }
+
+export const biologyStructureVisualizationRenderer = {
+  id: "biology-structure-svg",
+  modality: "biology_structure",
+  render(artifact: VisualizationArtifactV1) {
+    if (artifact.spec.modality !== "biology_structure") throw new Error("biology_structure_artifact_invalid");
+    return <BiologyStructureRenderer rendered={renderBiologyStructure(artifact.spec.payload)} />;
+  },
+  version: "1.0.0"
+} as const;

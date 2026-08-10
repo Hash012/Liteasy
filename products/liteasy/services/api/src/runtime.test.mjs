@@ -194,7 +194,9 @@ test("constructs visualization gateway with the validated hostname policy and se
   assert.deepEqual(options.egressPolicy, { allowedHostnames: ["provider.example"] });
   assert.deepEqual(Object.keys(options.adapters).sort(), ["openai", "openai-compatible"]);
   assert.equal(options.secretStore.resolve("viz-secret:provider-1"), "deployment-secret");
-  assert.deepEqual(runtime.visualizationArtifactCompilerRegistry.availableModalities(), []);
+  assert.deepEqual(runtime.visualizationArtifactCompilerRegistry.availableModalities().sort(), [
+    "biology_structure", "circuit", "physics_diagram", "semantic_graph"
+  ]);
   await runtime.close();
 });
 

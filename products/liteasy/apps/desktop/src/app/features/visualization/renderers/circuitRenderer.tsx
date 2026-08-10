@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import { useState } from "react";
-import type { CircuitSpecV1 } from "../visualizationArtifact.types";
+import type { CircuitSpecV1, VisualizationArtifactV1 } from "../visualizationArtifact.types";
 import { validateCircuit } from "../kernels/circuitKernel";
 import { createSafeSvgScene } from "../rendering/safeSvgScene";
 
@@ -48,3 +48,13 @@ export function CircuitRenderer({ rendered }: { rendered: CircuitRenderResult })
     </section>
   );
 }
+
+export const circuitVisualizationRenderer = {
+  id: "circuit-svg",
+  modality: "circuit",
+  render(artifact: VisualizationArtifactV1) {
+    if (artifact.spec.modality !== "circuit") throw new Error("circuit_artifact_invalid");
+    return <CircuitRenderer rendered={renderCircuit(artifact.spec.payload)} />;
+  },
+  version: "1.0.0"
+} as const;

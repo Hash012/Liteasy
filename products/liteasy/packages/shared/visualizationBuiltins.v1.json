@@ -5,6 +5,30 @@
       "generated": false,
       "modality": "source_figure",
       "skillId": "source-figure"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "semantic_graph",
+      "skillId": "semantic-graph"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "circuit",
+      "skillId": "circuit"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "physics_diagram",
+      "skillId": "physics-diagram"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "biology_structure",
+      "skillId": "biology-structure"
     }
   ],
   "version": "liteasy.visualization-builtins/v1"

@@ -31,7 +31,7 @@ function requireEvidence(ids: readonly string[] | undefined, knownClaims: Readon
   }
 }
 
-function orderedDagNodes(nodeIds: readonly string[], edges: readonly Array<{ from: string; to: string }>): string[] {
+function orderedDagNodes(nodeIds: readonly string[], edges: ReadonlyArray<{ from: string; to: string }>): string[] {
   const incoming = new Map(nodeIds.map((id) => [id, 0]));
   const outgoing = new Map(nodeIds.map((id) => [id, [] as string[]]));
   for (const edge of edges) {

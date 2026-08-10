@@ -166,7 +166,7 @@ test("fails closed when a hard validator does not pass", async () => {
   );
 });
 
-test("builds a bounded provider payload and production catalog enables no generated modality", () => {
+test("builds a bounded provider payload and supports an explicit empty generated catalog", () => {
   const instance = registry();
   assert.equal("compilers" in instance, false);
   assert.deepEqual(instance.availableModalities(), ["semantic_graph"]);
@@ -179,7 +179,9 @@ test("builds a bounded provider payload and production catalog enables no genera
     schema: proposalSchema,
     schemaName: "liteasy_semantic_graph_proposal_v1"
   });
-  assert.deepEqual(new VisualizationArtifactCompilerRegistry().availableModalities(), []);
+  assert.deepEqual(new VisualizationArtifactCompilerRegistry({
+    catalog: { entries: [], version: "liteasy.visualization-builtins/v1" }
+  }).availableModalities(), []);
 });
 
 test("rejects an enabled generated catalog entry without a compiler", () => {
