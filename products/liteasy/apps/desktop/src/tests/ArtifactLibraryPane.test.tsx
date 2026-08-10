@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { ArtifactLibraryPane } from "../app/features/artifacts/ArtifactLibraryPane";
@@ -106,7 +106,7 @@ describe("ArtifactLibraryPane", () => {
     expect(screen.queryByText("薄读")).not.toBeInTheDocument();
   });
 
-  test("opens saved artifacts and uses dialogs for rename and delete", async () => {
+  test("opens saved artifacts from the row and action menu", async () => {
     const user = userEvent.setup();
     const paneProps = props();
     render(<ArtifactLibraryPane {...paneProps} />);
@@ -120,13 +120,24 @@ describe("ArtifactLibraryPane", () => {
     await waitFor(() => {
       expect(screen.queryByRole("menuitem", { name: "打开" })).not.toBeInTheDocument();
     });
+  });
+
+  test("renames a saved artifact after its action menu closes", async () => {
+    const user = userEvent.setup();
+    const paneProps = props();
+    render(<ArtifactLibraryPane {...paneProps} />);
 
     await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
     await user.click(await screen.findByRole("menuitem", { name: "重命名" }));
-    const nameInput = await screen.findByRole("textbox", { name: "产物名称" });
+    await waitFor(() => {
+      expect(screen.queryByRole("menuitem", { name: "重命名" })).not.toBeInTheDocument();
+    });
+    const dialog = await screen.findByRole("dialog", { name: "重命名产物" });
+    const nameInput = within(dialog).getByRole("textbox", { name: "产物名称" });
     await user.clear(nameInput);
     await user.type(nameInput, "新的薄读");
-    await user.click(screen.getByRole("button", { name: "保存" }));
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
     expect(paneProps.onRenameArtifact).toHaveBeenCalledWith(
       "artifact-thin-reading",
       "新的薄读"
@@ -134,9 +145,18 @@ describe("ArtifactLibraryPane", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "重命名产物" })).not.toBeInTheDocument();
     });
+  });
 
-    await user.click(await screen.findByRole("button", { name: "产物操作：薄读" }));
+  test("deletes a saved artifact after its action menu closes", async () => {
+    const user = userEvent.setup();
+    const paneProps = props();
+    render(<ArtifactLibraryPane {...paneProps} />);
+
+    await user.click(screen.getByRole("button", { name: "产物操作：薄读" }));
     await user.click(screen.getByRole("menuitem", { name: "删除" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("menuitem", { name: "删除" })).not.toBeInTheDocument();
+    });
     expect(await screen.findByRole("dialog", { name: "删除产物" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "确认删除" }));
     expect(paneProps.onDeleteArtifact).toHaveBeenCalledWith("artifact-thin-reading");

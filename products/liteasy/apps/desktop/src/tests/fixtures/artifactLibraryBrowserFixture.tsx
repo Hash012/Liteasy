@@ -68,7 +68,7 @@ export default function ArtifactLibraryBrowserFixture() {
             onRemoveExport={(recordId) => {
               setExports((current) => current.filter((record) => record.id !== recordId));
             }}
-            onRenameArtifact={(artifactId, name) => {
+            onRenameArtifact={async (artifactId, name) => {
               setArtifacts((current) => current.map((item) => (
                 item.artifactId === artifactId ? { ...item, title: name } : item
               )));

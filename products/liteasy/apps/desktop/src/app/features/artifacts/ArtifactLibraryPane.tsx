@@ -27,7 +27,7 @@ import {
   OpenRegular,
   SearchRegular
 } from "@fluentui/react-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ArtifactExportHistoryStatus,
   ArtifactExportRecord
@@ -337,6 +337,27 @@ function SavedArtifactList({
   onRetry: () => unknown;
   queryActive: boolean;
 }) {
+  const [openMenuArtifactId, setOpenMenuArtifactId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    artifact: ArtifactTab;
+    kind: "delete" | "rename";
+  } | null>(null);
+
+  useEffect(() => {
+    if (openMenuArtifactId !== null || pendingAction === null) return;
+    setPendingAction(null);
+    if (pendingAction.kind === "rename") {
+      onRename(pendingAction.artifact);
+      return;
+    }
+    onDelete(pendingAction.artifact);
+  }, [onDelete, onRename, openMenuArtifactId, pendingAction]);
+
+  function scheduleDialog(kind: "delete" | "rename", artifact: ArtifactTab) {
+    setPendingAction({ artifact, kind });
+    setOpenMenuArtifactId(null);
+  }
+
   if (!accountAvailable) {
     return <div className="artifact-library-empty">登录后查看账号中保存的产物</div>;
   }
@@ -392,7 +413,13 @@ function SavedArtifactList({
               ) : null}
             </span>
           </Button>
-          <Menu positioning="below-end">
+          <Menu
+            onOpenChange={(_, data) => {
+              setOpenMenuArtifactId(data.open ? artifact.artifactId : null);
+            }}
+            open={openMenuArtifactId === artifact.artifactId}
+            positioning="below-end"
+          >
             <MenuTrigger disableButtonEnhancement>
               <Tooltip content={`产物操作：${artifact.title}`} relationship="label">
                 <Button
@@ -406,8 +433,8 @@ function SavedArtifactList({
             <MenuPopover>
               <MenuList>
                 <MenuItem icon={<OpenRegular />} onClick={() => onOpen(artifact.artifactId)}>打开</MenuItem>
-                <MenuItem icon={<EditRegular />} onClick={() => onRename(artifact)}>重命名</MenuItem>
-                <MenuItem icon={<DeleteRegular />} onClick={() => onDelete(artifact)}>删除</MenuItem>
+                <MenuItem icon={<EditRegular />} onClick={() => scheduleDialog("rename", artifact)}>重命名</MenuItem>
+                <MenuItem icon={<DeleteRegular />} onClick={() => scheduleDialog("delete", artifact)}>删除</MenuItem>
               </MenuList>
             </MenuPopover>
           </Menu>
