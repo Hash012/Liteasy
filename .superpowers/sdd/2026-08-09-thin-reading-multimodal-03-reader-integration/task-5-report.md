@@ -68,3 +68,12 @@ All five Important findings are addressed in a separate follow-up change.
 - `git diff --check` passed.
 
 Real provider smoke remains unavailable without deployment-admin route and account configuration.
+
+## Review Fix Round 2
+
+The scoped re-review identified two residual Important issues and both are addressed.
+
+- Generated artifacts now must carry the same `nodeId` as the current parent node, preventing a valid artifact copied from another node from passing all branch, persistence, and recovery entry points.
+- The letterboxed native-image regression retains a visible drag-rectangle assertion in addition to the emitted normalized target assertion.
+
+Test-first evidence: the cross-node artifact regression failed before the validator change (`true` returned for a node mismatch), then passed with the full Task 5 affected suite at 85/85.

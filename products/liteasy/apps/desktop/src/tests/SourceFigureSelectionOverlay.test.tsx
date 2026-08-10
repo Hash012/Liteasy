@@ -44,6 +44,12 @@ describe("SourceFigureSelectionOverlay", () => {
 
     fireEvent(image, new MouseEvent("pointerdown", { bubbles: true, clientX: 200, clientY: 100 }));
     fireEvent(image, new MouseEvent("pointermove", { bubbles: true, clientX: 360, clientY: 190 }));
+    expect(screen.getByTestId("source-figure-selection-rect")).toHaveStyle({
+      height: "90px",
+      left: "200px",
+      top: "100px",
+      width: "160px"
+    });
     fireEvent(image, new MouseEvent("pointerup", { bubbles: true, clientX: 360, clientY: 190 }));
 
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({

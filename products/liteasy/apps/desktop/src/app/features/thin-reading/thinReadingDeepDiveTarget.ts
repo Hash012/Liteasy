@@ -169,7 +169,7 @@ export function isDeepDiveTargetBoundToNode(target: DeepDiveTargetV1, node: Thin
     if (!("visualizations" in node)) return false;
     const artifact = node.visualizations.find((item) => item.artifactId === target.artifactId);
     const object = artifact?.semanticObjects.find((item) => item.objectId === target.objectId);
-    if (!artifact || artifact.validation.outcome !== "pass" || !object?.selectable ||
+    if (!artifact || artifact.nodeId !== node.id || artifact.validation.outcome !== "pass" || !object?.selectable ||
         !equalStringArrays(object.objectPath, target.objectPath) ||
         !equalStringArrays(object.evidenceClaimIds, target.evidenceClaimIds) ||
         !("claims" in artifact.spec.payload)) {

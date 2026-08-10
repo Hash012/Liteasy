@@ -1,9 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { artifactWithSelectedObject, unknownObject } from "./fixtures/visualizationFixtures";
+import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
+import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import {
   createGeneratedObjectTarget,
   createSourceFigureTarget,
-  createSourceRegionTarget
+  createSourceRegionTarget,
+  isDeepDiveTargetBoundToNode
 } from "../app/features/thin-reading/thinReadingDeepDiveTarget";
 
 describe("thin reading deep-dive targets", () => {
@@ -28,5 +31,34 @@ describe("thin reading deep-dive targets", () => {
       sourceFigureId: "figure-missing",
       evidenceIds: ["e-1"]
     })).toThrow("deep_dive_target_source_figure_invalid");
+  });
+
+  test("rejects a generated artifact whose own node binding differs from its parent", () => {
+    const document = createThinReadingDocument(createThinReadingFixture());
+    const root = document.nodes[document.rootNodeId];
+    const claimId = root.evidence.claims?.[0]?.id;
+    if (!claimId) throw new Error("expected fixture claim");
+    const artifact = {
+      ...artifactWithSelectedObject,
+      nodeId: "another-node",
+      semanticObjects: [{ ...artifactWithSelectedObject.semanticObjects[0], evidenceClaimIds: [claimId] }],
+      spec: {
+        ...artifactWithSelectedObject.spec,
+        payload: {
+          ...artifactWithSelectedObject.spec.payload,
+          claims: [{ ...artifactWithSelectedObject.spec.payload.claims[0], id: claimId }]
+        }
+      }
+    };
+    const node = { ...root, visualizations: [artifact] };
+
+    expect(isDeepDiveTargetBoundToNode({
+      artifactId: artifact.artifactId,
+      evidenceClaimIds: [claimId],
+      kind: "generated_object",
+      nodeId: root.id,
+      objectId: "object-1",
+      objectPath: ["object-1"]
+    }, node)).toBe(false);
   });
 });
