@@ -1,15 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPostgresPool, verifyPostgresReadiness, withPostgresTransaction } from "./postgres.mjs";
-
-test("allows an opt-in integration pool to disable TLS", () => {
-  let options;
-  class PoolDouble {
-    constructor(input) { options = input; }
-  }
-  createPostgresPool({ connectionString: "postgresql://localhost/liteasy_test", sslMode: "disable" }, PoolDouble);
-  assert.equal(options.ssl, false);
-});
+import { verifyPostgresReadiness, withPostgresTransaction } from "./postgres.mjs";
 
 test("requires PostgreSQL 15 or newer and a writable primary", async () => {
   await assert.rejects(

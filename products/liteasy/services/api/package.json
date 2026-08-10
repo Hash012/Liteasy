@@ -10,7 +10,6 @@
     "start": "node src/server.mjs",
     "test": "node --test",
     "test:postgres:integration": "node scripts/verify-postgres-integration.mjs",
-    "test:postgres:visualization": "node --test src/visualizationPostgres.integration.test.mjs",
     "test:s3:integration": "node scripts/verify-s3-integration.mjs"
   },
   "dependencies": {
