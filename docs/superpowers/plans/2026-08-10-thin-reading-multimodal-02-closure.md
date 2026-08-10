@@ -107,27 +107,6 @@ git commit -m "test: refresh Liteasy PostgreSQL integration gate"
 
 ### Task 2: Real Visualization Governance And Quota Transactions
 
-> **Retrospective execution amendment (2026-08-10):** The initial real
-> PostgreSQL run, after the Task 2 test was written, exposed two repository
-> defects that require files outside this task's original three-file list. This
-> amendment is intentionally retrospective and does not rewrite the earlier
-> commit history. The required `createVisualizationTestPool({ connectionString,
-> sslMode: "disable" })` interface reached `createPostgresPool()` as a TLS
-> configuration and failed with `DEPTH_ZERO_SELF_SIGNED_CERT`; authorize
-> `products/liteasy/services/api/src/postgres.mjs` and
-> `products/liteasy/services/api/src/postgres.test.mjs` to map that explicit
-> test-only mode to `pg` `ssl: false`, with a Pool-options regression test.
-> Concurrent `reserve()` calls then reproducibly failed with PostgreSQL `40001`
-> after waiting behind the subject advisory lock because their `SERIALIZABLE`
-> snapshots predated the lock holder's commit; authorize
-> `products/liteasy/services/api/src/visualizationRepository.mjs` and
-> `products/liteasy/services/api/src/visualizationRepository.test.mjs` to run
-> only `reserve()` at `READ COMMITTED`, return the dedicated 429
-> `visualization_concurrency_exceeded` error, and cover it through a
-> deterministic database lock barrier. The same repository/test files are also
-> authorized to inject a defaulted repository clock so hand-calculated UTC
-> fixtures can verify Asia/Shanghai boundaries without wall-clock dependence.
-
 **Files:**
 - Create: `products/liteasy/services/api/src/visualizationPostgres.integration.test.mjs`
 - Modify: `products/liteasy/services/api/package.json`

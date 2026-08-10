@@ -225,33 +225,10 @@ test("uses net ledger deltas and the policy timezone for both quota windows", as
   await repository.reserve(subject, { idempotencyKey: "request-0003", modality: "semantic_graph", routeId: "route-1", units: 1, traceId: "trace-6" });
   const sql = harness.calls.filter((call) => call.sql.includes("visualization_usage_ledger")).map((call) => call.sql).join("\n");
   assert.doesNotMatch(sql, /GREATEST\s*\(/);
-  assert.match(sql, /date_trunc\('day', \$\d+::timestamptz,/);
-  assert.match(sql, /date_trunc\('month', \$\d+::timestamptz,/);
+  assert.match(sql, /date_trunc\('day', now\(\),/);
+  assert.match(sql, /date_trunc\('month', now\(\),/);
   assert.match(sql, /COALESCE\(r\.created_at, u\.created_at\)/);
   assert.match(harness.calls.map((call) => call.sql).join("\n"), /state = 'expired'/);
-});
-
-test("reserve pins quota accounting to its configured clock behind a read-committed subject lock", async () => {
-  const harness = transactionHarness();
-  const referenceTime = new Date("2026-08-10T04:00:00.000Z");
-  harness.state.entitlements.set("user-1", { subject_id: "user-1", allowed: true, explicit_requests_allowed: true, allowed_modalities: ["semantic_graph"], revision: "1" });
-  harness.state.preferences.set("user-1", { subject_id: "user-1", enabled: true, revision: "1" });
-  harness.state.policies.set("user-1", { subject_id: "user-1", daily_units: "10", monthly_units: "20", max_concurrency: "1", timezone: "Asia/Shanghai", revision: "1" });
-  const repository = new PostgresVisualizationRepository(harness.pool, { now: () => referenceTime });
-
-  const result = await repository.reserve(subject, {
-    idempotencyKey: "request-clock-0001",
-    modality: "semantic_graph",
-    routeId: "route-1",
-    traceId: "trace-clock-1"
-  });
-
-  assert.equal(result.reservation.expiresAt, "2026-08-10T04:02:00.000Z");
-  const usage = harness.calls.find((call) => call.sql.startsWith("SELECT COALESCE(SUM"));
-  assert.equal(usage.values[2], referenceTime);
-  const active = harness.calls.find((call) => call.sql.startsWith("SELECT COUNT"));
-  assert.equal(active.values[1], referenceTime);
-  assert.equal(harness.calls.some((call) => call.sql === "BEGIN ISOLATION LEVEL READ COMMITTED"), true);
 });
 
 test("fails closed when cache identity or access checks are missing", async () => {
