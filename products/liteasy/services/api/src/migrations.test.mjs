@@ -115,6 +115,7 @@ test("production migration set includes the visualization control plane through 
     "019_agent_artifacts.sql",
     "020_visualization_control_plane.sql",
     "021_visualization_final_review.sql",
-    "022_visualization_cost_policy_lifecycle.sql"
+    "022_visualization_cost_policy_lifecycle.sql",
+    "023_visualization_generation_requests.sql"
   ]);
 });

@@ -5,6 +5,7 @@ import { withPostgresTransaction } from "./postgres.mjs";
 import { createVisualizationTestPool, cleanupVisualizationTestSubject } from "./testSupport/visualizationTestPool.mjs";
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
 import { canonicalVisualizationArtifact } from "./visualizationArtifactTestFixture.mjs";
+import { PostgresVisualizationGenerationRepository } from "./visualizationGenerationRepository.mjs";
 import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
 
 const connectionString = process.env.LITEASY_TEST_DATABASE_URL;
@@ -712,6 +713,71 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
   }
 }
 
+async function verifyGenerationRequestTransactions(pool) {
+  const suffix = randomUUID();
+  const subjectId = `viz-generation-subject-${suffix}`;
+  const request = {
+    artifactId: `viz-generation-artifact-${suffix}`,
+    artifactRevision: 2,
+    intentHash: createHash("sha256").update(`intent-${suffix}`).digest("hex"),
+    nodeId: `viz-generation-node-${suffix}`,
+    requestId: `viz-generation-request-${suffix}`,
+    requestedArtifactCount: 1,
+    traceId: `trace-generation-${suffix}`
+  };
+  let currentTime = new Date("2026-08-10T04:00:00.000Z");
+  const repository = new PostgresVisualizationGenerationRepository(pool, { now: () => currentTime });
+  try {
+    const created = await repository.create(subjectId, request);
+    assert.equal(created.status, "queued");
+    assert.deepEqual(await repository.create(subjectId, request), created);
+    await assert.rejects(
+      () => repository.create(subjectId, { ...request, nodeId: `${request.nodeId}-other` }),
+      /visualization_request_id_reused/
+    );
+    await assert.rejects(
+      () => repository.get(`${subjectId}-other`, request.requestId),
+      /visualization_request_not_found/
+    );
+
+    const claimed = await repository.claimNext(`viz-generation-worker-${suffix}`);
+    assert.equal(claimed.requestId, request.requestId);
+    assert.equal(claimed.state, "running");
+    assert.equal(claimed.attempts, 1);
+
+    const cancelKey = `viz-generation-cancel-${suffix}`;
+    assert.equal((await repository.requestCancel(subjectId, request.requestId, cancelKey)).status, "cancel_requested");
+    await assert.rejects(
+      () => repository.markSucceeded(subjectId, request.requestId, [`viz-result-${suffix}`]),
+      /visualization_request_cancelled/
+    );
+    const cancelled = await repository.markTerminal(subjectId, request.requestId, "cancelled", "cancelled");
+    assert.equal(cancelled.status, "cancelled");
+    assert.deepEqual(await repository.requestCancel(subjectId, request.requestId, cancelKey), cancelled);
+
+    const recoveryRequest = { ...request, requestId: `${request.requestId}-recovery` };
+    await repository.create(subjectId, recoveryRequest);
+    const recoveryClaim = await repository.claimNext(`viz-generation-recovery-worker-${suffix}`);
+    assert.equal(recoveryClaim.requestId, recoveryRequest.requestId);
+    currentTime = new Date(currentTime.getTime() + 30_001);
+    assert.deepEqual(await repository.requeueExpired(), {
+      cancelledRequestIds: [],
+      failedRequestIds: [],
+      requeuedRequestIds: [recoveryRequest.requestId]
+    });
+    assert.equal((await repository.claimNext(`viz-generation-recovery-worker-2-${suffix}`)).attempts, 2);
+    const succeeded = await repository.markSucceeded(subjectId, recoveryRequest.requestId, [`viz-result-${suffix}`]);
+    assert.equal(succeeded.status, "succeeded");
+    assert.deepEqual(succeeded.resultArtifactIds, [`viz-result-${suffix}`]);
+    await assert.rejects(
+      () => repository.markTerminal(subjectId, recoveryRequest.requestId, "failed", "internal_failure"),
+      /visualization_request_terminal/
+    );
+  } finally {
+    await pool.query("DELETE FROM visualization_generation_requests WHERE subject_id = $1", [subjectId]);
+  }
+}
+
 test("visualization governance is atomic in PostgreSQL", {
   skip: connectionString ? false : "LITEASY_TEST_DATABASE_URL is not configured"
 }, async () => {
@@ -729,6 +795,17 @@ test("visualization publication and provider accounting are atomic in PostgreSQL
   const pool = createVisualizationTestPool({ connectionString, sslMode: "disable" });
   try {
     await verifyPublicationAndProviderAccountingTransactions(pool);
+  } finally {
+    await pool.end();
+  }
+});
+
+test("visualization generation requests are durable in PostgreSQL", {
+  skip: connectionString ? false : "LITEASY_TEST_DATABASE_URL is not configured"
+}, async () => {
+  const pool = createVisualizationTestPool({ connectionString, sslMode: "disable" });
+  try {
+    await verifyGenerationRequestTransactions(pool);
   } finally {
     await pool.end();
   }

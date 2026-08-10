@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import test from "node:test";
 
 const migrationUrl = new URL("../migrations/020_visualization_control_plane.sql", import.meta.url);
+const generationMigrationUrl = new URL("../migrations/023_visualization_generation_requests.sql", import.meta.url);
 
 test("visualization migration defines separate user and provider ledgers", async () => {
   const sql = await fs.readFile(migrationUrl, "utf8");
@@ -33,4 +34,21 @@ test("migration head includes 020 visualization control plane", async () => {
   const { readMigrations } = await import("./migrations.mjs");
   const migration = readMigrations().find(({ name }) => name === "020_visualization_control_plane.sql");
   assert.equal(migration?.name, "020_visualization_control_plane.sql");
+});
+
+test("generation request migration defines a leased subject-bound state machine", async () => {
+  const sql = await fs.readFile(generationMigrationUrl, "utf8");
+  assert.match(sql, /CREATE TABLE visualization_generation_requests/);
+  assert.match(sql, /PRIMARY KEY \(subject_id, request_id\)/);
+  assert.match(sql, /queued','running','cancel_requested','succeeded','cancelled','omitted','failed/);
+  assert.match(sql, /attempts smallint NOT NULL DEFAULT 0 CHECK \(attempts BETWEEN 0 AND 3\)/);
+  assert.match(sql, /CREATE INDEX visualization_generation_requests_claim_idx[\s\S]*WHERE state IN \('queued','running','cancel_requested'\)/);
+});
+
+test("generation request migration binds multiple artifact sources with one primary", async () => {
+  const sql = await fs.readFile(generationMigrationUrl, "utf8");
+  assert.match(sql, /CREATE TABLE visualization_artifact_sources/);
+  assert.match(sql, /PRIMARY KEY \(subject_id, artifact_id, document_id\)/);
+  assert.match(sql, /visualization_artifact_sources_primary_idx/);
+  assert.match(sql, /WHERE is_primary = true/);
 });

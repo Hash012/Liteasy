@@ -49,7 +49,8 @@ try {
     "019_agent_artifacts.sql",
     "020_visualization_control_plane.sql",
     "021_visualization_final_review.sql",
-    "022_visualization_cost_policy_lifecycle.sql"
+    "022_visualization_cost_policy_lifecycle.sql",
+    "023_visualization_generation_requests.sql"
   ]);
   await assert.rejects(
     () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),
@@ -1334,6 +1335,33 @@ try {
       ) VALUES ($1, 'account-delete-fixture', 'account-delete-fixture-key', $2, 200, '{}', now() + interval '1 day')
     `, [deletionSubject, "d".repeat(64)])
   ]);
+  await pool.query(`
+    INSERT INTO visualization_artifacts(
+      subject_id, artifact_id, document_id, node_id, modality, state,
+      spec_hash, evidence_hash, body, validation
+    ) VALUES (
+      $1, 'account-delete-visualization', 'account-delete-document',
+      'account-delete-node', 'semantic_graph', 'ready', $2, $3, '{}', '{}'
+    )
+  `, [deletionSubject, "a".repeat(64), "b".repeat(64)]);
+  await Promise.all([
+    pool.query(`
+      INSERT INTO visualization_artifact_sources(
+        subject_id, artifact_id, document_id, source_identity_hash, is_primary
+      ) VALUES (
+        $1, 'account-delete-visualization', 'account-delete-document', $2, true
+      )
+    `, [deletionSubject, "c".repeat(64)]),
+    pool.query(`
+      INSERT INTO visualization_generation_requests(
+        subject_id, request_id, artifact_id, artifact_revision, node_id,
+        request_hash, intent_hash, requested_artifact_count, state, trace_id
+      ) VALUES (
+        $1, 'account-delete-request', 'account-delete-artifact', 1,
+        'account-delete-node', $2, $3, 1, 'queued', 'trace-account-delete'
+      )
+    `, [deletionSubject, "4".repeat(64), "5".repeat(64)])
+  ]);
 
   const accountLifecycle = new PostgresAccountLifecycleRepository(pool);
   const deletionOperation = {
@@ -1393,8 +1421,10 @@ try {
     deletedScopeRevisions: 1,
     deletedStorageQuotas: 1,
     deletedTeamAnnotations: 1,
-    deletedVisualizationArtifacts: 0,
+    deletedVisualizationArtifactSources: 1,
+    deletedVisualizationArtifacts: 1,
     deletedVisualizationEntitlements: 0,
+    deletedVisualizationGenerationRequests: 1,
     deletedVisualizationPreferences: 0,
     deletedVisualizationQuotaPolicies: 0,
     revokedPlatformRoles: 1,
@@ -1409,6 +1439,9 @@ try {
         WHERE invited_subject = $1 OR accepted_by = $1 OR revoked_by = $1 OR created_by = $1) AS invitations,
       (SELECT count(*)::int FROM team_annotations WHERE uploaded_by = $1) AS annotations,
       (SELECT count(*)::int FROM agent_artifacts WHERE subject_id = $1) AS agent_artifacts,
+      (SELECT count(*)::int FROM visualization_generation_requests WHERE subject_id = $1) AS visualization_generation_requests,
+      (SELECT count(*)::int FROM visualization_artifact_sources WHERE subject_id = $1) AS visualization_artifact_sources,
+      (SELECT count(*)::int FROM visualization_artifacts WHERE subject_id = $1) AS visualization_artifacts,
       (SELECT count(*)::int FROM academic_profiles WHERE subject_id = $1) AS profiles,
       (SELECT count(*)::int FROM personalization_terms WHERE subject_id = $1) AS terms,
       (SELECT count(*)::int FROM personalization_signals WHERE subject_id = $1) AS signals,
@@ -1432,7 +1465,10 @@ try {
     profiles: 0,
     signals: 0,
     suppressions: 0,
-    terms: 0
+    terms: 0,
+    visualization_artifact_sources: 0,
+    visualization_artifacts: 0,
+    visualization_generation_requests: 0
   });
   assert.equal((await pool.query(
     "SELECT count(*)::int AS count FROM library_entries WHERE document_id = 'account-organization-document'"
@@ -1529,7 +1565,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
-    migrations: 22,
+    migrations: 23,
     revision: 12,
     verified: true
   })}\n`);

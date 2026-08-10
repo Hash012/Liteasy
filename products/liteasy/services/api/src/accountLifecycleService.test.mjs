@@ -19,7 +19,14 @@ function harness(overrides = {}) {
       return { ...input, jobId: "job_1", lastCompletedStage: input.stage, state: input.stage };
     },
     async projectStatus(input) { calls.push(["projectStatus", input.status]); },
-    async purgeLiteasyData() { calls.push(["purgeLiteasyData"]); return { result: { deletedEntries: 1 } }; },
+    async purgeLiteasyData() {
+      calls.push(["purgeLiteasyData"]);
+      return { result: {
+        deletedEntries: 1,
+        deletedVisualizationArtifactSources: 1,
+        deletedVisualizationGenerationRequests: 1
+      } };
+    },
     ...overrides.repository
   };
   const identityAdminClient = {
@@ -69,6 +76,11 @@ test("disables identity first and deletes it only after both business services f
   assert.deepEqual(instance.calls.filter((item) => item[0] === "identity").map((item) => item[1]), [
     "disabled", "deleted"
   ]);
+  assert.deepEqual(result.deletion.result.liteasy, {
+    deletedEntries: 1,
+    deletedVisualizationArtifactSources: 1,
+    deletedVisualizationGenerationRequests: 1
+  });
 });
 
 test("does not allow the current administrator to disable or delete itself", async () => {

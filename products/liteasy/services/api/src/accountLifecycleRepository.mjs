@@ -263,6 +263,14 @@ export class PostgresAccountLifecycleRepository {
         "DELETE FROM agent_artifacts WHERE subject_id = $1",
         [input.subjectId]
       );
+      const visualizationGenerationRequests = await client.query(
+        "DELETE FROM visualization_generation_requests WHERE subject_id = $1",
+        [input.subjectId]
+      );
+      const visualizationArtifactSources = await client.query(
+        "DELETE FROM visualization_artifact_sources WHERE subject_id = $1",
+        [input.subjectId]
+      );
       const visualizationArtifacts = await client.query(
         "DELETE FROM visualization_artifacts WHERE subject_id = $1",
         [input.subjectId]
@@ -304,6 +312,8 @@ export class PostgresAccountLifecycleRepository {
         ...accountTableCounts,
         deletedEntries: entries.rowCount,
         deletedAgentArtifacts: agentArtifacts.rowCount,
+        deletedVisualizationGenerationRequests: visualizationGenerationRequests.rowCount,
+        deletedVisualizationArtifactSources: visualizationArtifactSources.rowCount,
         deletedVisualizationArtifacts: visualizationArtifacts.rowCount,
         deletedVisualizationPreferences: visualizationPreferences.rowCount,
         deletedVisualizationEntitlements: visualizationEntitlements.rowCount,
