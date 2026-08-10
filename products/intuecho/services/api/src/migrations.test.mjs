@@ -22,7 +22,8 @@ test("loads ordered immutable forum migrations", () => {
     "013_desktop_annotation_publication_digest.sql",
     "014_correct_legacy_literature_snapshots.sql",
     "015_reply_projection_lifecycle.sql",
-    "016_source_confirmed_literature_identity.sql"
+    "016_source_confirmed_literature_identity.sql",
+    "017_constrain_legacy_aggregate_confirmation.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -55,6 +56,8 @@ test("loads ordered immutable forum migrations", () => {
   assert.match(migrations[15].sql, /CREATE TABLE literature_identity_claims/);
   assert.match(migrations[15].sql, /CREATE TABLE literature_relations/);
   assert.match(migrations[15].sql, /legacy_literature_identity_is_read_only/);
+  assert.match(migrations[16].sql, /identity_status = 'legacy_unverified'/);
+  assert.match(migrations[16].sql, /confirmationBasis/);
 });
 
 test("readiness rejects missing, changed and unknown migrations", async () => {
@@ -65,7 +68,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 16, current: true });
+  }), { count: 17, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [
@@ -95,8 +98,11 @@ test("upgrades SQLite literature provenance schema with snapshots and guarded co
     .run("registry-confirmed", "Registry Confirmed", "[]", "public_registry", "crossref", "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z");
   db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, record_source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
     .run("registry-without-evidence", "Registry Without Evidence", "[]", "public_registry", "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z");
+  db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, publication_year, record_source, source_provider, confirmed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("aggregate-without-refetch-evidence", "Aggregate Legacy", JSON.stringify(["Aggregate Author"]), 2026, "public_registry", "openalex", "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z");
   db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("legacy", "doi", "https://doi.org/10.1000/legacy", "metadata", "2026-08-09T00:00:00.000Z");
   db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("registry-confirmed", "doi", "https://doi.org/10.1000/confirmed", "public_registry", "2026-08-09T00:00:00.000Z");
+  db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, ?, ?, ?, ?)").run("aggregate-without-refetch-evidence", "openalex_id", "W123", "public_registry", "2026-08-09T00:00:00.000Z");
   initializeAnnotationCommunitySqlite(db);
   assert.deepEqual(new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name)), new Set(["id", "title", "authors_json", "publication_year", "document_type", "created_at", "updated_at", "record_source", "source_provider", "confirmed_at", "revision", "identity_status"]));
   assert.deepEqual(db.prepare("SELECT identifier_kind, normalized_value, is_legacy_alias FROM literature_identifiers_v2 WHERE literature_id = 'legacy'").all(), [{
@@ -107,6 +113,7 @@ test("upgrades SQLite literature provenance schema with snapshots and guarded co
   assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'legacy'").get().identity_status, "legacy_unverified");
   assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'registry-confirmed'").get().identity_status, "confirmed");
   assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'registry-without-evidence'").get().identity_status, "legacy_unverified");
+  assert.equal(db.prepare("SELECT identity_status FROM literature_records_v2 WHERE id = 'aggregate-without-refetch-evidence'").get().identity_status, "legacy_unverified");
   assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2 WHERE literature_id = 'registry-confirmed'").get().count, 1);
   assert.equal(db.prepare("SELECT count(*) AS count FROM literature_record_versions_v2 WHERE literature_id = 'legacy'").get().count, 1);
   const legacySnapshot = JSON.parse(db.prepare("SELECT snapshot_json FROM literature_record_versions_v2 WHERE literature_id = 'legacy'").get().snapshot_json);

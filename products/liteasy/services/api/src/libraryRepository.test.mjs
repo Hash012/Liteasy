@@ -161,3 +161,25 @@ test("rejects stale or unconfirmed literature before PostgreSQL mutation work be
   ), /literature_projection_not_confirmed/);
   assert.equal(connections, 0);
 });
+
+test("rejects a client-supplied literature snapshot in metadata-only creation", async () => {
+  let connections = 0;
+  const repository = new PostgresLibraryRepository({
+    async connect() {
+      connections += 1;
+      throw new Error("must not connect");
+    }
+  });
+
+  await assert.rejects(() => repository.createMetadataEntry(
+    { scopeId: "user-1", scopeType: "user" },
+    {
+      actorId: "user-1",
+      expectedRevision: 0,
+      idempotencyKey: "metadata-literature-spoof",
+      metadata: { literature: confirmedLiterature },
+      title: "Spoofed literature"
+    }
+  ), /literature_projection_verification_required/);
+  assert.equal(connections, 0);
+});

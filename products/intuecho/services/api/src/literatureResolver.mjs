@@ -153,16 +153,6 @@ function hasIdentityConflict(candidates) {
     sharesIdentity(candidate, other) && !bibliographiesDoNotConflict(candidate, other)));
 }
 
-function hasIndependentAggregateSupport(candidate, candidates) {
-  const providers = new Set(candidates
-    .filter((other) => other.provider !== "intuecho" &&
-      !primaryRegistryProviders.has(other.provider) &&
-      sharesIdentity(candidate, other) &&
-      bibliographiesDoNotConflict(candidate, other))
-    .map((other) => other.provider));
-  return providers.size >= 2;
-}
-
 function requestedLimit(input) {
   const requested = Number(input?.limit ?? MAX_CANDIDATES);
   return Math.max(1, Math.min(Number.isInteger(requested) ? requested : MAX_CANDIDATES, MAX_CANDIDATES));
@@ -277,8 +267,7 @@ export function createLiteratureResolver({ providers, repository }) {
       }
       const candidates = rankAndDeduplicate(admittedCandidates, requestedKeys).slice(0, limit);
       const exact = exactCandidate(input, candidates);
-      if (exact && (exact.provider === "intuecho" || primaryRegistryProviders.has(exact.provider) ||
-        hasIndependentAggregateSupport(exact, admittedCandidates))) {
+      if (exact && (exact.provider === "intuecho" || primaryRegistryProviders.has(exact.provider))) {
         return { candidate: exact, status: "exact", unavailableProviders };
       }
       if (candidates.length) return { candidates, status: "ambiguous", unavailableProviders };

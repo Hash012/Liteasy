@@ -142,6 +142,39 @@ test("preserves reader-prioritized paper order and thin-reading context", () => 
   expect(getAgentRequestThinReadingContext(malformedIdentityRequest)?.primaryPaperIdentity).toBeUndefined();
 });
 
+test("preserves source-confirmed paper identity in thin-reading agent context", () => {
+  const request = {
+    attachments: [{
+      metadata: {
+        thinReadingContext: {
+          artifactId: "artifact-confirmed",
+          depth: 0,
+          paperIds: ["paper-confirmed"],
+          primaryPaperId: "paper-confirmed",
+          primaryPaperIdentity: {
+            id: "doi:10.1000/confirmed",
+            kind: "doi" as const,
+            source: "public_registry" as const,
+            value: "10.1000/confirmed"
+          },
+          primaryPaperTitle: "Confirmed Paper",
+          source: { kind: "root_overview" as const },
+          targetLanguage: "zh-CN"
+        }
+      },
+      source: "selection" as const,
+      uri: "liteasy://selection/current"
+    }]
+  };
+
+  expect(getAgentRequestThinReadingContext(request)?.primaryPaperIdentity).toEqual({
+    id: "doi:10.1000/confirmed",
+    kind: "doi",
+    source: "public_registry",
+    value: "10.1000/confirmed"
+  });
+});
+
 test("normalizes thin-reading visual commands and metadata-only MinerU figures", () => {
   const request = {
     attachments: [{

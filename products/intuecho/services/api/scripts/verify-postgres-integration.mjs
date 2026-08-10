@@ -127,7 +127,8 @@ try {
     "013_desktop_annotation_publication_digest.sql",
     "014_correct_legacy_literature_snapshots.sql",
     "015_reply_projection_lifecycle.sql",
-    "016_source_confirmed_literature_identity.sql"
+    "016_source_confirmed_literature_identity.sql",
+    "017_constrain_legacy_aggregate_confirmation.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
   assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 15, current: false });
@@ -280,11 +281,32 @@ try {
     await migrationPool.end();
     process.exit(0);
   }
+  const legacyAggregateId = `migration-017-aggregate-${randomUUID()}`;
+  await migrationPool.query(`
+    INSERT INTO literature_records(
+      id, title, authors, publication_year, document_type, record_source,
+      source_provider, confirmed_at, revision
+    ) VALUES ($1, 'Legacy aggregate title', '["Aggregate Author"]'::jsonb, 2026,
+      'article', 'public_registry', 'openalex', now(), 1)
+  `, [legacyAggregateId]);
+  await migrationPool.query(`
+    INSERT INTO literature_identities(
+      literature_id, identity_kind, identity_value, identity_source
+    ) VALUES ($1, 'openalex_id', 'W170000001', 'public_registry')
+  `, [legacyAggregateId]);
   const sourceConfirmedMigration = await migrateIntuecho(migrationPool, {
     applicationRole: application.username
   });
-  assert.deepEqual(sourceConfirmedMigration.applied, ["016_source_confirmed_literature_identity.sql"]);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 16, current: true });
+  assert.deepEqual(sourceConfirmedMigration.applied, [
+    "016_source_confirmed_literature_identity.sql",
+    "017_constrain_legacy_aggregate_confirmation.sql"
+  ]);
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 17, current: true });
+  const constrainedLegacyAggregate = await migrationPool.query(
+    "SELECT identity_status FROM literature_records WHERE id = $1",
+    [legacyAggregateId]
+  );
+  assert.equal(constrainedLegacyAggregate.rows[0].identity_status, "legacy_unverified");
   await migrationPool.query(`
     DO $$
     DECLARE tables text;

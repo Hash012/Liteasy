@@ -333,6 +333,10 @@ export class PostgresLibraryRepository {
     const scope = validateScope(scopeInput);
     const title = nodeName(input.title, "title");
     const folderId = optionalText(input.folderId, 200) ?? null;
+    if (input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata) &&
+      Object.hasOwn(input.metadata, "literature")) {
+      throw new LibraryRepositoryError("literature_projection_verification_required");
+    }
     const metadata = {
       ...(input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata) ? input.metadata : {}),
       ...(optionalText(input.doi, 300) ? { doi: optionalText(input.doi, 300) } : {}),

@@ -289,7 +289,10 @@ function isPaperIdentityKind(value: unknown): value is PaperIdentityCandidate["k
 }
 
 function isPaperIdentitySource(value: unknown): value is PaperIdentityCandidate["source"] {
-  return value === "inferred" || value === "local" || value === "metadata";
+  return value === "inferred" ||
+    value === "local" ||
+    value === "metadata" ||
+    value === "public_registry";
 }
 
 function normalizePaperIdentityCandidate(value: unknown): PaperIdentityCandidate | undefined {

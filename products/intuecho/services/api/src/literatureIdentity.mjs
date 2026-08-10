@@ -19,6 +19,30 @@ function normalizeBibliographicAuthor(value) {
   return normalizeBibliographicText(parts.length === 2 ? `${parts[1]} ${parts[0]}` : source);
 }
 
+const publicationDocumentTypes = new Set([
+  "article",
+  "book-chapter",
+  "conference-paper",
+  "conference_paper",
+  "journal-article",
+  "proceedings-article",
+  "publication"
+]);
+
+const preprintDocumentTypes = new Set([
+  "posted-content",
+  "preprint",
+  "working-paper",
+  "working_paper"
+]);
+
+function literatureVersionClass(record) {
+  const documentType = String(record?.documentType ?? "").trim().toLocaleLowerCase("en-US");
+  if (publicationDocumentTypes.has(documentType)) return "publication";
+  if (preprintDocumentTypes.has(documentType)) return "preprint";
+  return null;
+}
+
 export function normalizeLiteratureBibliography(input) {
   const title = normalizeBibliographicText(input?.title);
   const authors = Array.isArray(input?.authors)
@@ -37,18 +61,25 @@ export function sameLiteratureBibliography(left, right) {
     JSON.stringify(leftNormalized.authors) === JSON.stringify(rightNormalized.authors));
 }
 
+export function sameLiteratureVersionBibliography(left, right) {
+  if (!sameLiteratureBibliography(left, right)) return false;
+  const leftVersion = literatureVersionClass(left);
+  const rightVersion = literatureVersionClass(right);
+  if (leftVersion && rightVersion && leftVersion !== rightVersion) return false;
+  const identifiers = [...(left?.identifiers ?? []), ...(right?.identifiers ?? [])];
+  return !hasCrossVersionIdentifierConflict({
+    documentType: leftVersion === "publication" || rightVersion === "publication"
+      ? "publication"
+      : leftVersion === "preprint" || rightVersion === "preprint"
+        ? "preprint"
+        : undefined,
+    identifiers
+  });
+}
+
 export function hasCrossVersionIdentifierConflict(record) {
   const documentType = String(record?.documentType ?? "").trim().toLocaleLowerCase("en-US");
-  const publicationTypes = new Set([
-    "article",
-    "book-chapter",
-    "conference-paper",
-    "conference_paper",
-    "journal-article",
-    "proceedings-article",
-    "publication"
-  ]);
-  if (!publicationTypes.has(documentType)) return false;
+  if (!publicationDocumentTypes.has(documentType)) return false;
   const identifiers = Array.isArray(record?.identifiers) ? record.identifiers : [];
   const hasArxiv = identifiers.some((identifier) => identifier.kind === "arxiv_id");
   const hasFormalDoi = identifiers.some((identifier) => identifier.kind === "doi" &&

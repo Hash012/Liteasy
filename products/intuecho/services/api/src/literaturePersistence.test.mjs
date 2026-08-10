@@ -42,6 +42,59 @@ test("SQLite reuses one confirmed literature id across owners and separates iden
       provider_record_id: "10.1000/verified",
       verification_status: "confirmed"
     }]);
+    assert.deepEqual(new Set(db.prepare("SELECT changed_by FROM literature_record_versions_v2").all().map((row) => row.changed_by)), new Set(["literature_resolver"]));
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite reuses one version when two aggregate providers independently confirm the same bibliography", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const openAlex = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W123",
+      documentType: "article",
+      identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+      provider: "openalex"
+    }));
+    const semanticScholar = await repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+      candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+      documentType: "publication",
+      identifiers: [{ kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" }],
+      provider: "semantic_scholar"
+    }));
+
+    assert.equal(semanticScholar.literatureId, openAlex.literatureId);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2").get().count, 2);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2").get().count, 2);
+    const claim = db.prepare("SELECT evidence_json FROM literature_identity_claims_v2 WHERE provider = 'semantic_scholar'").get();
+    assert.equal(JSON.parse(claim.evidence_json).confirmationBasis, "independent_aggregate_bibliography");
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite does not merge aggregate preprint and publication records with matching bibliography", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const preprint = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W123",
+      documentType: "preprint",
+      identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+      provider: "openalex"
+    }));
+    const publication = await repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+      candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+      documentType: "publication",
+      identifiers: [{ kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" }],
+      provider: "semantic_scholar"
+    }));
+
+    assert.notEqual(publication.literatureId, preprint.literatureId);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 2);
   } finally {
     db.close();
   }
@@ -97,6 +150,33 @@ test("SQLite binds a provider record id to one literature even when its external
   }
 });
 
+test("SQLite replaces migrated aggregate claim evidence after a fresh server refetch", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const first = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W123",
+      identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+      provider: "openalex"
+    }));
+    db.prepare("UPDATE literature_records_v2 SET identity_status = 'legacy_unverified' WHERE id = ?").run(first.literatureId);
+    db.prepare("UPDATE literature_identity_claims_v2 SET evidence_json = ? WHERE literature_id = ?")
+      .run(JSON.stringify({ migration: "sqlite_source_confirmed_identity" }), first.literatureId);
+
+    const refreshed = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W123",
+      identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+      provider: "openalex"
+    }));
+
+    assert.equal(refreshed.status, "confirmed");
+    const claim = db.prepare("SELECT evidence_json FROM literature_identity_claims_v2 WHERE literature_id = ?").get(first.literatureId);
+    assert.equal(JSON.parse(claim.evidence_json).confirmationBasis, "user_selected_refetch");
+  } finally {
+    db.close();
+  }
+});
+
 test("SQLite keeps preprint and publication identities separate and returns evidenced relations", async () => {
   const db = new Database(":memory:");
   try {
@@ -110,6 +190,13 @@ test("SQLite keeps preprint and publication identities separate and returns evid
       candidateKey: "crossref:doi:10.1000/publication",
       identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/publication" }]
     }));
+    await assert.rejects(() => repository.confirmLiteratureRelation({
+      evidence: {},
+      fromLiteratureId: preprint.literatureId,
+      provider: "crossref",
+      relationType: "is_preprint_of",
+      toLiteratureId: publication.literatureId
+    }), /LITERATURE_RELATION_EVIDENCE_REQUIRED/);
     await repository.confirmLiteratureRelation({
       evidence: { recordUrl: "https://registry.example.test/relation" },
       fromLiteratureId: preprint.literatureId,
@@ -183,6 +270,13 @@ function postgresHarness() {
       if (query.startsWith("SELECT literature_id FROM literature_identifiers")) {
         return { rows: identifiers.filter((item) => values[0].includes(item.literature_id)).map((item) => ({ literature_id: item.literature_id })) };
       }
+      if (query.startsWith("SELECT DISTINCT claim.literature_id")) {
+        return {
+          rows: claims.filter((claim) => values[0].includes(claim.provider) && claim.provider !== values[1])
+            .filter((claim) => records.get(claim.literature_id)?.publication_year === values[2])
+            .map((claim) => ({ literature_id: claim.literature_id }))
+        };
+      }
       if (query.startsWith("SELECT literature_id FROM literature_identity_claims")) {
         return { rows: claims.filter((item) => item.provider === values[0] && item.provider_record_id === values[1]) };
       }
@@ -199,9 +293,27 @@ function postgresHarness() {
         });
         return { rows: [] };
       }
+      if (query.startsWith("UPDATE literature_records SET title")) {
+        const record = records.get(values[0]);
+        records.set(values[0], {
+          ...record,
+          authors: JSON.parse(values[2]),
+          confirmed_at: values[6],
+          document_type: values[4],
+          identity_status: "confirmed",
+          publication_year: values[3],
+          record_source: "public_registry",
+          revision: values[7],
+          source_provider: values[5],
+          title: values[1],
+          updated_at: values[8]
+        });
+        return { rows: [] };
+      }
       if (query.startsWith("SELECT identifier_kind AS kind")) {
         return { rows: identifiers.filter((item) => item.literature_id === values[0]).map((item) => ({ kind: item.identifier_kind, source: "public_registry", value: item.normalized_value })) };
       }
+      if (query.startsWith("SELECT identity_kind AS kind")) return { rows: [] };
       if (query.startsWith("INSERT INTO literature_identifiers")) {
         if (!identifiers.some((item) => item.identifier_kind === values[1] && item.normalized_value === values[2])) {
           identifiers.push({ literature_id: values[0], identifier_kind: values[1], normalized_value: values[2] });
@@ -209,13 +321,26 @@ function postgresHarness() {
         return { rows: [] };
       }
       if (query.startsWith("INSERT INTO literature_identity_claims")) {
-        if (!claims.some((item) => item.provider === values[2] && item.provider_record_id === values[3])) {
-          claims.push({ literature_id: values[1], provider: values[2], provider_record_id: values[3] });
+        const existing = claims.find((item) => item.provider === values[2] && item.provider_record_id === values[3]);
+        if (existing) {
+          if (existing.literature_id === values[1]) {
+            existing.evidence = JSON.parse(values[4]);
+            existing.observed_at = values[5];
+          }
+        } else {
+          claims.push({
+            evidence: JSON.parse(values[4]),
+            literature_id: values[1],
+            observed_at: values[5],
+            provider: values[2],
+            provider_record_id: values[3]
+          });
         }
         return { rows: [] };
       }
       if (query.startsWith("INSERT INTO literature_record_versions")) {
         versions.push({
+          changedBy: query.includes("VALUES ($1, $2, 1") ? values[3] : values[4],
           literatureId: values[1],
           revision: query.includes("VALUES ($1, $2, 1") ? 1 : Number(values[2])
         });
@@ -242,9 +367,93 @@ test("PostgreSQL confirmation stores one identifier owner and one provider claim
     normalized_value: "10.1000/verified"
   }]);
   assert.deepEqual(harness.claims, [{
+    evidence: {
+      candidateKey: "crossref:doi:10.1000/verified",
+      confirmationBasis: "primary_registry_refetch",
+      recordUrl: "https://registry.example.test/record",
+      sourceTier: "primary"
+    },
     literature_id: record.literatureId,
+    observed_at: harness.claims[0].observed_at,
     provider: "crossref",
     provider_record_id: "10.1000/verified"
   }]);
-  assert.deepEqual(harness.versions, [{ literatureId: record.literatureId, revision: 1 }]);
+  assert.deepEqual(harness.versions, [{
+    changedBy: "literature_resolver",
+    literatureId: record.literatureId,
+    revision: 1
+  }]);
+  assert.equal(harness.versions[0].changedBy, "literature_resolver");
+});
+
+test("PostgreSQL reuses one version when two aggregate providers independently confirm the same bibliography", async () => {
+  const harness = postgresHarness();
+  const openAlex = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "openalex:openalex_id:W123",
+    documentType: "article",
+    identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+    provider: "openalex"
+  }));
+  const semanticScholar = await harness.repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+    candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+    documentType: "publication",
+    identifiers: [{ kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" }],
+    provider: "semantic_scholar"
+  }));
+
+  assert.equal(semanticScholar.literatureId, openAlex.literatureId);
+  assert.equal(harness.records.size, 1);
+  assert.equal(harness.identifiers.length, 2);
+  assert.equal(harness.claims.length, 2);
+});
+
+test("PostgreSQL does not merge aggregate preprint and publication records with matching bibliography", async () => {
+  const harness = postgresHarness();
+  const preprint = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "openalex:openalex_id:W123",
+    documentType: "preprint",
+    identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+    provider: "openalex"
+  }));
+  const publication = await harness.repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+    candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+    documentType: "publication",
+    identifiers: [{ kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" }],
+    provider: "semantic_scholar"
+  }));
+
+  assert.notEqual(publication.literatureId, preprint.literatureId);
+  assert.equal(harness.records.size, 2);
+});
+
+test("PostgreSQL replaces migrated aggregate evidence after refetch and rejects empty relation evidence", async () => {
+  const harness = postgresHarness();
+  const openAlex = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "openalex:openalex_id:W123",
+    identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+    provider: "openalex"
+  }));
+  const publication = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "crossref:doi:10.1000/publication",
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/publication" }],
+    title: "Published Registry Title"
+  }));
+  harness.records.get(openAlex.literatureId).identity_status = "legacy_unverified";
+  const claim = harness.claims.find((item) => item.provider === "openalex");
+  claim.evidence = { migration: "016_source_confirmed_literature_identity" };
+
+  await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "openalex:openalex_id:W123",
+    identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
+    provider: "openalex"
+  }));
+
+  assert.equal(claim.evidence.confirmationBasis, "user_selected_refetch");
+  await assert.rejects(() => harness.repository.confirmLiteratureRelation({
+    evidence: {},
+    fromLiteratureId: openAlex.literatureId,
+    provider: "intuecho",
+    relationType: "version_of",
+    toLiteratureId: publication.literatureId
+  }), /LITERATURE_RELATION_EVIDENCE_REQUIRED/);
 });
