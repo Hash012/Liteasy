@@ -385,8 +385,9 @@ function providerProbeResult(value) {
 }
 
 export class PostgresVisualizationRepository {
-  constructor(pool) {
+  constructor(pool, { now = () => new Date() } = {}) {
     this.pool = pool;
+    this.now = now;
   }
 
   async getEntitlement(subject) {
@@ -603,6 +604,7 @@ export class PostgresVisualizationRepository {
 
   async capability(subject) {
     const id = subjectId(subject);
+    const currentTime = this.now();
     const result = await this.pool.query(`
       SELECT e.*, p.enabled AS preference_enabled, p.revision AS preference_revision,
              q.subject_id AS quota_subject_id, q.daily_units, q.monthly_units,
@@ -647,18 +649,18 @@ export class PostgresVisualizationRepository {
              COALESCE((SELECT SUM(u.units_delta) FROM visualization_usage_ledger u
                        LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
                        WHERE u.subject_id = e.subject_id
-                         AND COALESCE(r.created_at, u.created_at) >= date_trunc('day', now(), COALESCE(q.timezone, 'UTC'))), 0) AS daily_used,
+                         AND COALESCE(r.created_at, u.created_at) >= date_trunc('day', $2::timestamptz, COALESCE(q.timezone, 'UTC'))), 0) AS daily_used,
              COALESCE((SELECT SUM(u.units_delta) FROM visualization_usage_ledger u
                        LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
                        WHERE u.subject_id = e.subject_id
-                         AND COALESCE(r.created_at, u.created_at) >= date_trunc('month', now(), COALESCE(q.timezone, 'UTC'))), 0) AS monthly_used,
+                         AND COALESCE(r.created_at, u.created_at) >= date_trunc('month', $2::timestamptz, COALESCE(q.timezone, 'UTC'))), 0) AS monthly_used,
              (SELECT COUNT(*) FROM visualization_quota_reservations r
-               WHERE r.subject_id = e.subject_id AND r.state = 'reserved' AND r.expires_at > now()) AS active_count
+               WHERE r.subject_id = e.subject_id AND r.state = 'reserved' AND r.expires_at > $2::timestamptz) AS active_count
         FROM visualization_entitlements e
         LEFT JOIN visualization_user_preferences p ON p.subject_id = e.subject_id
         LEFT JOIN visualization_quota_policies q ON q.subject_id = e.subject_id
        WHERE e.subject_id = $1
-    `, [id]);
+    `, [id, currentTime]);
     const row = result.rows[0];
     if (!row) return { allowed: false, enabled: false, serviceAvailable: false, availableModalities: [], quota: { available: false } };
     const daily = Number(row.daily_units ?? 0);
@@ -1000,6 +1002,7 @@ export class PostgresVisualizationRepository {
     const hash = requestHash({ dataClass, modality, operation, requestedBy, routeId: routeIdentifier });
     return withPostgresTransaction(this.pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`visualization-reserve:${id}`]);
+      const currentTime = this.now();
       const prior = await client.query("SELECT * FROM idempotency_records WHERE actor_id = $1 AND operation = $2 AND idempotency_key = $3 AND expires_at > now()", [id, "visualization-reserve", idempotencyKey]);
       if (prior.rows[0]) {
         if (prior.rows[0].request_hash !== hash) throw new Error("idempotency_key_reused");
@@ -1028,16 +1031,16 @@ export class PostgresVisualizationRepository {
       `, [modality, operation, dataClass, route.provider_id])).rows[0];
       if (!costPolicy) throw new VisualizationRepositoryError("visualization_cost_policy_unconfigured", 503);
       const reservedUnits = positiveUnits(Number(costPolicy.unit_cost));
-      await this.#expireReservations(client, id, input.traceId ?? `trace_${randomUUID()}`);
+      await this.#expireReservations(client, id, input.traceId ?? `trace_${randomUUID()}`, currentTime);
       const usage = await client.query(`
         SELECT
-          COALESCE(SUM(u.units_delta) FILTER (WHERE COALESCE(r.created_at, u.created_at) >= date_trunc('day', now(), $2)), 0) AS daily_used,
-          COALESCE(SUM(u.units_delta) FILTER (WHERE COALESCE(r.created_at, u.created_at) >= date_trunc('month', now(), $2)), 0) AS monthly_used
+          COALESCE(SUM(u.units_delta) FILTER (WHERE COALESCE(r.created_at, u.created_at) >= date_trunc('day', $3::timestamptz, $2)), 0) AS daily_used,
+          COALESCE(SUM(u.units_delta) FILTER (WHERE COALESCE(r.created_at, u.created_at) >= date_trunc('month', $3::timestamptz, $2)), 0) AS monthly_used
           FROM visualization_usage_ledger u
           LEFT JOIN visualization_quota_reservations r ON r.reservation_id = u.reservation_id
          WHERE u.subject_id = $1
-      `, [id, ianaTimezone(policy.timezone ?? "UTC")]);
-      const active = await client.query("SELECT COUNT(*) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > now()", [id]);
+      `, [id, ianaTimezone(policy.timezone ?? "UTC"), currentTime]);
+      const active = await client.query("SELECT COUNT(*) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > $2", [id, currentTime]);
       if (Number(usage.rows[0]?.daily_used ?? usage.rows[0]?.used_units ?? 0) + reservedUnits > Number(policy.daily_units)
         || Number(usage.rows[0]?.monthly_used ?? 0) + reservedUnits > Number(policy.monthly_units)) throw new Error("visualization_quota_exceeded");
       if (Number(active.rows[0]?.active_count ?? 0) >= Number(policy.max_concurrency)) {
@@ -1046,7 +1049,7 @@ export class PostgresVisualizationRepository {
       const reservationId = input.reservationId ?? `vizres_${randomUUID()}`;
       const ttlMs = input.ttlMs ?? 120000;
       if (!Number.isSafeInteger(ttlMs) || ttlMs < 1000 || ttlMs > 900000) throw new VisualizationRepositoryError("visualization_reservation_ttl_invalid");
-      const expiresAt = new Date(Date.now() + ttlMs);
+      const expiresAt = new Date(currentTime.getTime() + ttlMs);
       const routeRevision = Number(route.revision);
       const policyRevision = Number(policy.revision);
       const costTableRevision = Number(costPolicy.revision);
@@ -1059,13 +1062,13 @@ export class PostgresVisualizationRepository {
     }, { isolation: "READ COMMITTED" });
   }
 
-  async #expireReservations(client, id, traceId) {
+  async #expireReservations(client, id, traceId, currentTime) {
     const expired = await client.query(`
       UPDATE visualization_quota_reservations
          SET state = 'expired', settled_units = 0, updated_at = now()
-       WHERE subject_id = $1 AND state = 'reserved' AND expires_at <= now()
+       WHERE subject_id = $1 AND state = 'reserved' AND expires_at <= $2
        RETURNING reservation_id, reserved_units, policy_revision, cost_table_revision
-    `, [id]);
+    `, [id, currentTime]);
     for (const row of expired.rows) {
       await client.query(`
         INSERT INTO visualization_usage_ledger(
