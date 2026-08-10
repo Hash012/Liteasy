@@ -8,7 +8,11 @@ import { buildImportedChunksForPaper } from "./fixtures/retrievalFixtures";
 import type { Paper } from "../app/features/workspace/workspace.types";
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { AgentArtifactResult } from "../app/features/artifacts/artifact.types";
-import { availableCapability, readyArtifact } from "./fixtures/visualizationControllerFixtures";
+import {
+  availableCapability,
+  documentWithNode,
+  readyArtifact
+} from "./fixtures/visualizationControllerFixtures";
 
 function mindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -914,6 +918,136 @@ describe("useArtifactWorkflowController", () => {
     });
 
     expect(result.current.model.thinReadingVisualizationReadyArtifacts).toEqual([restoredArtifact]);
+  });
+
+  test("recovers pending visualizations once per account scope", async () => {
+    const client = artifactResultClient();
+    client.list.mockResolvedValue([{
+      ...persistedArtifact(),
+      artifactId: "thin-1",
+      artifactType: "thin_reading",
+      thinReadingDocument: documentWithNode(),
+      title: "Recovered thin reading"
+    }]);
+    const pendingThinReadingVisualizations = vi.fn(() => [{
+      artifactId: "thin-1",
+      createdAt: "2026-08-10T08:00:00.000Z",
+      nodeId: "node-root",
+      requestId: "visualization-recovery",
+      requestedArtifactCount: 1 as const
+    }]);
+    const resumeThinReadingVisualization = vi.fn(async () => []);
+    const common = {
+      artifactResultClient: client,
+      artifactStore: createArtifactStore(),
+      getImportedChunksByPaperId: () => ({}),
+      getMultimodalVisualizationCapability: () => availableCapability,
+      getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+      getSelectedPapers: () => [],
+      onAnalysisHint: vi.fn(),
+      pendingThinReadingVisualizations,
+      queueImportForPapers: vi.fn(() => "idle" as const),
+      resumeThinReadingVisualization,
+      runAgentAnalysis: vi.fn(async () => completedRun())
+    };
+    const { rerender } = renderHook(
+      ({ scopeKey }) => useArtifactWorkflowController({
+        ...common,
+        artifactResultScopeKey: scopeKey
+      }),
+      { initialProps: { scopeKey: "https://cloud.example:user-a" } }
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(resumeThinReadingVisualization).toHaveBeenCalledTimes(1);
+    expect(resumeThinReadingVisualization.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      requestId: "visualization-recovery"
+    }));
+
+    rerender({ scopeKey: "https://cloud.example:user-b" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(resumeThinReadingVisualization).toHaveBeenCalledTimes(2);
+
+    rerender({ scopeKey: "https://cloud.example:user-a" });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(resumeThinReadingVisualization).toHaveBeenCalledTimes(2);
+  });
+
+  test("disposes and remotely cancels recovered visualization requests", async () => {
+    const client = artifactResultClient();
+    const artifactStore = createArtifactStore();
+    client.list.mockResolvedValue([{
+      ...persistedArtifact(),
+      artifactId: "thin-1",
+      artifactType: "thin_reading",
+      thinReadingDocument: documentWithNode(),
+      title: "Recovered thin reading"
+    }]);
+    const cancelThinReadingVisualization = vi.fn(async () => undefined);
+    const pendingThinReadingVisualizations = vi.fn(() => [{
+      artifactId: "thin-1",
+      createdAt: "2026-08-10T08:00:00.000Z",
+      nodeId: "node-root",
+      requestId: "visualization-recovery-active",
+      requestedArtifactCount: 1 as const
+    }]);
+    const resumeThinReadingVisualization = vi.fn((_request, signal: AbortSignal) => (
+      new Promise<readonly unknown[]>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+          once: true
+        });
+      })
+    ));
+    const { result } = renderHook(() => useArtifactWorkflowController({
+      artifactResultClient: client,
+      artifactResultScopeKey: "https://cloud.example:user-a",
+      artifactStore,
+      cancelThinReadingVisualization,
+      getImportedChunksByPaperId: () => ({}),
+      getMultimodalVisualizationCapability: () => availableCapability,
+      getSelectedDocumentSet: () => ({ documentIds: [], locked: false }),
+      getSelectedPapers: () => [],
+      onAnalysisHint: vi.fn(),
+      pendingThinReadingVisualizations,
+      queueImportForPapers: vi.fn(() => "idle"),
+      resumeThinReadingVisualization,
+      runAgentAnalysis: vi.fn(async () => completedRun())
+    }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(resumeThinReadingVisualization).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.actions.disposeThinReadingVisualizations();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(cancelThinReadingVisualization).toHaveBeenCalledWith({
+      artifactId: "thin-1",
+      nodeId: "node-root",
+      reason: "workflow_disposed",
+      requestId: "visualization-recovery-active"
+    });
   });
 
   test("isolates server artifacts across login, account switch, and logout", async () => {

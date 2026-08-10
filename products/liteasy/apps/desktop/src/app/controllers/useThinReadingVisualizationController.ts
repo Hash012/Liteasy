@@ -15,6 +15,8 @@ import type {
 } from "../features/thin-reading/thinReading.types";
 import { parseVisualizationArtifact } from "../features/visualization/visualizationArtifact.schema";
 import type { VisualizationArtifactV1 } from "../features/visualization/visualizationArtifact.types";
+import { VisualizationOrchestrationClientError } from "../features/visualization/visualizationOrchestrationClient";
+import type { PendingVisualizationRequest } from "../features/visualization/visualizationPendingRequestStore";
 
 export type ThinReadingVisualizationNodeInput = {
   artifactId: string;
@@ -49,6 +51,10 @@ export type UseThinReadingVisualizationControllerInput = {
   getThinReadingDocument: (artifactId: string) => ThinReadingDocumentV2 | undefined;
   initialReadyArtifacts?: readonly VisualizationArtifactV1[];
   onDocumentUpdated: (document: ThinReadingDocumentV2) => void;
+  resumeVisualization?: (
+    request: PendingVisualizationRequest,
+    signal: AbortSignal
+  ) => Promise<readonly unknown[]>;
   saveThinReadingDocument: (
     artifactId: string,
     document: ThinReadingDocumentV2,
@@ -113,6 +119,7 @@ export function useThinReadingVisualizationController({
   getThinReadingDocument,
   initialReadyArtifacts = [],
   onDocumentUpdated,
+  resumeVisualization,
   saveThinReadingDocument,
   setVisualizationPreference
 }: UseThinReadingVisualizationControllerInput) {
@@ -189,11 +196,22 @@ export function useThinReadingVisualizationController({
     };
   }, []);
 
-  async function startVisualization(input: ThinReadingVisualizationNodeInput) {
+  async function runVisualization(
+    input: ThinReadingVisualizationNodeInput,
+    recovery?: PendingVisualizationRequest
+  ) {
     const intent = input.node.visualizationDecision?.status === "accepted"
       ? input.node.visualizationDecision.intent
       : undefined;
     if (!intent || intent.nodeId !== input.node.id || input.document.version !== "liteasy.thin-reading/v2") {
+      if (recovery) {
+        cancelRemoteGeneration({
+          artifactId: recovery.artifactId,
+          nodeId: recovery.nodeId,
+          reason: "workflow_disposed",
+          requestId: recovery.requestId
+        });
+      }
       const status = { reasonCode: "intent_unavailable", status: "omitted" } as const;
       setNodeStatus(input.node.id, status);
       return status;
@@ -201,7 +219,15 @@ export function useThinReadingVisualizationController({
 
     const capability = currentCapability();
     const reasonCode = omissionReason(capability, intent, locallyEnabledRef.current);
-    if (reasonCode || !generateVisualization) {
+    if (reasonCode || (recovery ? !resumeVisualization : !generateVisualization)) {
+      if (recovery) {
+        cancelRemoteGeneration({
+          artifactId: recovery.artifactId,
+          nodeId: recovery.nodeId,
+          reason: reasonCode === "preference_disabled" ? "preference_disabled" : "workflow_disposed",
+          requestId: recovery.requestId
+        });
+      }
       const status = {
         reasonCode: reasonCode ?? "service_unavailable",
         status: "omitted"
@@ -217,7 +243,7 @@ export function useThinReadingVisualizationController({
       activeRequestsRef.current.delete(key);
     }
     const abortController = new AbortController();
-    const requestId = createRequestId();
+    const requestId = recovery?.requestId ?? createRequestId();
     const activeRequest: ActiveRequest = {
       abortController,
       artifactId: input.artifactId,
@@ -229,18 +255,33 @@ export function useThinReadingVisualizationController({
     setNodeStatus(input.node.id, { requestId, status: "generating" });
 
     try {
-      const rawArtifacts = await generateVisualization({
-        artifactId: input.artifactId,
-        candidateModalities: intent.candidateModalities.filter((modality) => (
-          capability.availableModalities.includes(modality)
-        )),
-        evidenceIds: intent.evidenceIds,
-        nodeId: input.node.id,
-        purpose: intent.purpose,
-        requestId,
-        requestedArtifactCount: intent.requestedBy === "automatic" ? 1 : 2,
-        signal: abortController.signal
-      });
+      const requestedArtifactCount = intent.requestedBy === "automatic" ? 1 : 2;
+      if (recovery && (
+        recovery.artifactId !== input.artifactId || recovery.nodeId !== input.node.id ||
+        recovery.requestedArtifactCount !== requestedArtifactCount
+      )) {
+        cancelRemoteGeneration({
+          artifactId: recovery.artifactId,
+          nodeId: recovery.nodeId,
+          reason: "workflow_disposed",
+          requestId: recovery.requestId
+        });
+        throw new Error("thin_reading_visualization_recovery_stale");
+      }
+      const rawArtifacts = recovery
+        ? await resumeVisualization!(recovery, abortController.signal)
+        : await generateVisualization!({
+          artifactId: input.artifactId,
+          candidateModalities: intent.candidateModalities.filter((modality) => (
+            capability.availableModalities.includes(modality)
+          )),
+          evidenceIds: intent.evidenceIds,
+          nodeId: input.node.id,
+          purpose: intent.purpose,
+          requestId,
+          requestedArtifactCount,
+          signal: abortController.signal
+        });
       const latestRequest = activeRequestsRef.current.get(key);
       const latestCapability = currentCapability();
       const latestDocument = getThinReadingDocument(input.artifactId);
@@ -354,18 +395,42 @@ export function useThinReadingVisualizationController({
       const status = { artifacts, status: "ready" } as const;
       setNodeStatus(input.node.id, status);
       return status;
-    } catch {
+    } catch (error) {
       if (activeRequestsRef.current.get(key)?.requestId !== requestId) {
         return { reasonCode: "stale_request", status: "omitted" } as const;
       }
       activeRequestsRef.current.delete(key);
       const status = {
-        reasonCode: abortController.signal.aborted ? "stale_request" : "generation_failed",
+        reasonCode: abortController.signal.aborted ||
+          (error instanceof Error && error.message === "thin_reading_visualization_recovery_stale")
+          ? "stale_request"
+          : error instanceof VisualizationOrchestrationClientError
+            ? error.reasonCode
+            : "generation_failed",
         status: "omitted"
       } as const;
       setNodeStatus(input.node.id, status);
       return status;
     }
+  }
+
+  function startVisualization(input: ThinReadingVisualizationNodeInput) {
+    return runVisualization(input);
+  }
+
+  async function resumePendingVisualization(request: PendingVisualizationRequest) {
+    const document = getThinReadingDocument(request.artifactId);
+    const node = document?.nodes[request.nodeId];
+    if (!document || !node) {
+      cancelRemoteGeneration({
+        artifactId: request.artifactId,
+        nodeId: request.nodeId,
+        reason: "workflow_disposed",
+        requestId: request.requestId
+      });
+      return { reasonCode: "stale_request", status: "omitted" } as const;
+    }
+    return runVisualization({ artifactId: request.artifactId, document, node }, request);
   }
 
   async function commitGeneratedNode(input: ThinReadingVisualizationNodeInput) {
@@ -433,6 +498,7 @@ export function useThinReadingVisualizationController({
     dispose: disposeActiveRequests,
     hydrateReadyArtifacts,
     readyArtifacts,
+    resumePendingVisualization,
     setEnabled,
     startVisualization,
     statuses

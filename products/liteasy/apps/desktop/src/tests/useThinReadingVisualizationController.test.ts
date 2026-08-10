@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { useThinReadingVisualizationController } from "../app/controllers/useThinReadingVisualizationController";
+import { VisualizationOrchestrationClientError } from "../app/features/visualization/visualizationOrchestrationClient";
 import {
   availableCapability,
   cancelGeneration,
@@ -133,6 +134,104 @@ test("reports generation failure when visualization persistence fails", async ()
 
   expect(outcome).toEqual({ reasonCode: "generation_failed", status: "omitted" });
   expect(result.current.statuses[nodeWithIntent.id]).toEqual(outcome);
+});
+
+test("preserves public orchestration omission reasons", async () => {
+  const { result } = renderController({
+    generateVisualization: vi.fn(async () => {
+      throw new VisualizationOrchestrationClientError("service_unavailable");
+    })
+  });
+
+  let outcome;
+  await act(async () => {
+    outcome = await result.current.startVisualization({
+      artifactId: "thin-1",
+      document: documentWithNode(),
+      node: nodeWithIntent
+    });
+  });
+
+  expect(outcome).toEqual({ reasonCode: "service_unavailable", status: "omitted" });
+});
+
+test("resumes with the original request id through strict parsing and persistence", async () => {
+  const resumeVisualization = vi.fn(async () => [readyArtifact]);
+  const { result, onDocumentUpdated } = renderController({ resumeVisualization });
+  const pending = {
+    artifactId: "thin-1",
+    createdAt: "2026-08-10T08:00:00.000Z",
+    nodeId: nodeWithIntent.id,
+    requestId: "visualization-request-recovered",
+    requestedArtifactCount: 1 as const
+  };
+
+  let outcome;
+  await act(async () => {
+    outcome = await result.current.resumePendingVisualization(pending);
+  });
+
+  expect(resumeVisualization).toHaveBeenCalledWith(pending, expect.any(AbortSignal));
+  expect(saveThinReadingDocument).toHaveBeenCalledWith(
+    "thin-1",
+    expect.objectContaining({
+      nodes: expect.objectContaining({
+        [nodeWithIntent.id]: expect.objectContaining({ visualizations: [readyArtifact] })
+      })
+    }),
+    expect.any(AbortSignal)
+  );
+  expect(onDocumentUpdated).toHaveBeenCalledTimes(1);
+  expect(outcome).toEqual({ artifacts: [readyArtifact], status: "ready" });
+});
+
+test("cancels recovered requests whose document or node is unavailable", async () => {
+  const { result } = renderController({
+    getThinReadingDocument: () => undefined,
+    resumeVisualization: vi.fn()
+  });
+
+  let outcome;
+  await act(async () => {
+    outcome = await result.current.resumePendingVisualization({
+      artifactId: "thin-missing",
+      createdAt: "2026-08-10T08:00:00.000Z",
+      nodeId: "node-missing",
+      requestId: "visualization-request-missing",
+      requestedArtifactCount: 1
+    });
+  });
+
+  await waitFor(() => expect(cancelGeneration).toHaveBeenCalledWith({
+    artifactId: "thin-missing",
+    nodeId: "node-missing",
+    reason: "workflow_disposed",
+    requestId: "visualization-request-missing"
+  }));
+  expect(outcome).toEqual({ reasonCode: "stale_request", status: "omitted" });
+});
+
+test("fails closed and cancels when recovered request count conflicts with intent", async () => {
+  const resumeVisualization = vi.fn();
+  const { result } = renderController({ resumeVisualization });
+
+  let outcome;
+  await act(async () => {
+    outcome = await result.current.resumePendingVisualization({
+      artifactId: "thin-1",
+      createdAt: "2026-08-10T08:00:00.000Z",
+      nodeId: nodeWithIntent.id,
+      requestId: "visualization-request-conflict",
+      requestedArtifactCount: 2
+    });
+  });
+
+  await waitFor(() => expect(cancelGeneration).toHaveBeenCalledWith(expect.objectContaining({
+    reason: "workflow_disposed",
+    requestId: "visualization-request-conflict"
+  })));
+  expect(resumeVisualization).not.toHaveBeenCalled();
+  expect(outcome).toEqual({ reasonCode: "stale_request", status: "omitted" });
 });
 
 test.each([

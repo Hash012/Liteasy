@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AccountLoginInput,
   AccountRegistrationInput,
@@ -14,6 +14,10 @@ import type {
   MultimodalVisualizationCapability
 } from "../features/account/accountCapabilitiesClient";
 import { useAccountCapabilities } from "../features/account/useAccountCapabilities";
+import {
+  createVisualizationOrchestrationClient,
+  type VisualizationOrchestrationClient
+} from "../features/visualization/visualizationOrchestrationClient";
 
 type UseCloudAccountControllerInput = {
   accountCapabilitiesTransport?: AccountCapabilitiesTransport;
@@ -22,6 +26,8 @@ type UseCloudAccountControllerInput = {
   getSettings: () => SettingsState;
   isOnline: boolean;
   onRegistered?: () => void;
+  visualizationFetch?: typeof fetch;
+  visualizationStorage?: Storage;
 };
 
 type CloudAccountModel = {
@@ -36,6 +42,8 @@ type CloudAccountModel = {
 };
 
 type CloudAccountActions = {
+  cancelVisualizationGeneration: VisualizationOrchestrationClient["cancel"];
+  generateVisualization: VisualizationOrchestrationClient["startAndWait"];
   logoutFromCloudAccount: () => void;
   openLoginDialog: () => void;
   setMultimodalVisualizationCapability: (value: unknown) => void;
@@ -44,6 +52,8 @@ type CloudAccountActions = {
   submitSystemBrowserLogin: () => Promise<void>;
   submitAccountLogin: (login: AccountLoginInput) => Promise<void>;
   submitAccountRegistration: (registration: AccountRegistrationInput) => Promise<void>;
+  pendingVisualizationRequests: VisualizationOrchestrationClient["pending"];
+  resumeVisualizationGeneration: VisualizationOrchestrationClient["resumeAndWait"];
 };
 
 export function useCloudAccountController({
@@ -52,7 +62,9 @@ export function useCloudAccountController({
   applyLocalDevCloudDefaults,
   getSettings,
   isOnline,
-  onRegistered
+  onRegistered,
+  visualizationFetch,
+  visualizationStorage
 }: UseCloudAccountControllerInput): {
   actions: CloudAccountActions;
   model: CloudAccountModel;
@@ -88,6 +100,20 @@ export function useCloudAccountController({
     endpoint: getSettings()["models.control_plane_endpoint"],
     transport: accountCapabilitiesTransport
   });
+  const multimodalVisualizationRef = useRef(accountCapabilities.multimodalVisualization);
+  multimodalVisualizationRef.current = accountCapabilities.multimodalVisualization;
+  const controlPlaneEndpoint = getSettings()["models.control_plane_endpoint"];
+  const visualizationClient = useMemo(() => {
+    if (!accountSession) return null;
+    return createVisualizationOrchestrationClient({
+      endpoint: controlPlaneEndpoint,
+      fetchImpl: visualizationFetch,
+      getAccessToken: () => accountSession.sessionId,
+      getCapability: () => multimodalVisualizationRef.current,
+      storage: visualizationStorage,
+      subjectId: accountSession.userId ?? accountSession.email
+    });
+  }, [accountSession?.email, accountSession?.sessionId, accountSession?.userId, controlPlaneEndpoint, visualizationFetch, visualizationStorage]);
 
   useEffect(() => {
     if (
@@ -140,10 +166,20 @@ export function useCloudAccountController({
 
   return {
     actions: {
+      cancelVisualizationGeneration: async (input) => visualizationClient?.cancel(input),
+      generateVisualization: async (request) => {
+        if (!visualizationClient) throw new Error("visualization_account_session_required");
+        return visualizationClient.startAndWait(request);
+      },
       logoutFromCloudAccount,
       openLoginDialog: () => {
         setLoginDialogDismissedThisSession(false);
         setLoginDialogOpen(true);
+      },
+      pendingVisualizationRequests: () => visualizationClient?.pending() ?? [],
+      resumeVisualizationGeneration: async (request, signal) => {
+        if (!visualizationClient) throw new Error("visualization_account_session_required");
+        return visualizationClient.resumeAndWait(request, signal);
       },
       setMultimodalVisualizationCapability: accountCapabilities.setMultimodalVisualizationCapability,
       setSuppressLoginReminder,
@@ -157,7 +193,7 @@ export function useCloudAccountController({
       accountPending,
       accountSession,
       cloudAvailabilityStatus,
-      controlPlaneEndpoint: getSettings()["models.control_plane_endpoint"],
+      controlPlaneEndpoint,
       developerDiagnostics: accountCapabilities.developerDiagnostics,
       multimodalVisualization: accountCapabilities.multimodalVisualization,
       loginDialogOpen

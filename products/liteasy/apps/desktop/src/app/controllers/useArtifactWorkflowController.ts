@@ -27,6 +27,7 @@ import type { AgentArtifactGenerationOptions } from "../features/artifacts/useAr
 import type { DuplicateArtifactGenerationConfirmation } from "../features/artifacts/useArtifactActions";
 import type { MineruFigure } from "../features/import/import.types";
 import type { MultimodalVisualizationCapability } from "../features/account/accountCapabilitiesClient";
+import type { PendingVisualizationRequest } from "../features/visualization/visualizationPendingRequestStore";
 import {
   createArtifactLocalRepository,
   type ArtifactLocalRepository
@@ -56,6 +57,11 @@ type UseArtifactWorkflowControllerInput = {
   }) => Promise<void>;
   generateThinReadingVisualization?: (
     request: ThinReadingVisualizationGenerationRequest
+  ) => Promise<readonly unknown[]>;
+  pendingThinReadingVisualizations?: () => readonly PendingVisualizationRequest[];
+  resumeThinReadingVisualization?: (
+    request: PendingVisualizationRequest,
+    signal: AbortSignal
   ) => Promise<readonly unknown[]>;
   getImportedChunksByPaperId: () => Record<string, RetrievalChunk[]>;
   getImportedChunksForPaperId?: (paperId: string) => RetrievalChunk[];
@@ -118,6 +124,7 @@ type ArtifactWorkflowActions = {
   ) => Promise<void>;
   closeArtifactTab: (artifactId: string) => void;
   deleteArtifact: (artifactId: string) => Promise<string>;
+  disposeThinReadingVisualizations: () => void;
   generateThinReadingBranch: (input: {
     artifactId: string;
     document: ThinReadingDocument;
@@ -163,8 +170,10 @@ export function useArtifactWorkflowController({
   getSelectedPapers,
   isAgentModelAccessAvailable,
   onAnalysisHint,
+  pendingThinReadingVisualizations,
   queueImportForPapers,
   runAgentAnalysis,
+  resumeThinReadingVisualization,
   setMultimodalVisualizationPreference
 }: UseArtifactWorkflowControllerInput): {
   actions: ArtifactWorkflowActions;
@@ -181,6 +190,7 @@ export function useArtifactWorkflowController({
   const persistenceReadyRef = useRef(false);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
   const artifactActionsRef = useRef<ReturnType<typeof useArtifactActions> | null>(null);
+  const visualizationRecoveryScopesRef = useRef(new Set<string>());
   if (!localRepositoryRef.current) {
     localRepositoryRef.current = artifactLocalRepository ?? createArtifactLocalRepository();
   }
@@ -226,6 +236,7 @@ export function useArtifactWorkflowController({
         actions.applyThinReadingDocument(document.artifactId, document);
       }
     },
+    resumeVisualization: resumeThinReadingVisualization,
     saveThinReadingDocument: async (artifactId, document, signal) => {
       const actions = artifactActionsRef.current;
       if (!actions) {
@@ -238,6 +249,18 @@ export function useArtifactWorkflowController({
     },
     setVisualizationPreference: setMultimodalVisualizationPreference
   });
+
+  useEffect(() => {
+    if (artifactCatalogLoadState.status !== "ready" || !artifactResultScopeKey ||
+      !pendingThinReadingVisualizations || !resumeThinReadingVisualization ||
+      visualizationRecoveryScopesRef.current.has(artifactResultScopeKey)) {
+      return;
+    }
+    visualizationRecoveryScopesRef.current.add(artifactResultScopeKey);
+    pendingThinReadingVisualizations().forEach((request) => {
+      void thinReadingVisualization.resumePendingVisualization(request);
+    });
+  }, [artifactCatalogLoadState.status, artifactResultScopeKey, pendingThinReadingVisualizations, resumeThinReadingVisualization]);
 
   const artifactActions = useArtifactActions({
     artifactStore,
@@ -374,6 +397,7 @@ export function useArtifactWorkflowController({
       cancelThinReadingVisualization: thinReadingVisualization.cancelVisualization,
       closeArtifactTab: artifactActions.closeArtifactTab,
       deleteArtifact: artifactActions.deleteArtifact,
+      disposeThinReadingVisualizations: thinReadingVisualization.dispose,
       generateThinReadingBranch: artifactActions.generateThinReadingBranch,
       handleAssistantArtifact: artifactActions.handleAssistantArtifact,
       openArtifact: artifactActions.openArtifact,

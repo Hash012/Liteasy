@@ -36,8 +36,11 @@ import { FloatingModalityButton } from "../features/artifacts/FloatingModalityBu
 import type {
   ArtifactOutlineNode,
   ArtifactTaskStage,
-  ArtifactType
+  ArtifactType,
+  ThinReadingVisualizationGenerationRequest
 } from "../features/artifacts/artifact.types";
+import type { PendingVisualizationRequest } from "../features/visualization/visualizationPendingRequestStore";
+import type { VisualizationArtifactV1 } from "../features/visualization/visualizationArtifact.types";
 import { createArtifactResultClient } from "../features/artifacts/artifactResultClient";
 import type { AgentArtifactGenerationOptions } from "../features/artifacts/useArtifactActions";
 import type { AgentRun } from "../features/agent-api/agentApi.types";
@@ -354,6 +357,24 @@ export function AppShell({
     unavailableMultimodalVisualizationCapability
   );
   const updateMultimodalVisualizationCapabilityRef = useRef<(value: unknown) => void>(() => undefined);
+  const cancelVisualizationGenerationRef = useRef<(input: {
+    artifactId: string;
+    nodeId: string;
+    reason: "preference_disabled" | "user_cancelled" | "workflow_disposed";
+    requestId: string;
+  }) => Promise<void>>(async () => undefined);
+  const generateVisualizationRef = useRef<(
+    request: ThinReadingVisualizationGenerationRequest
+  ) => Promise<readonly VisualizationArtifactV1[]>>(async () => {
+    throw new Error("visualization_account_session_required");
+  });
+  const pendingVisualizationRequestsRef = useRef<() => readonly PendingVisualizationRequest[]>(() => []);
+  const resumeVisualizationGenerationRef = useRef<(
+    request: PendingVisualizationRequest,
+    signal: AbortSignal
+  ) => Promise<readonly VisualizationArtifactV1[]>>(async () => {
+    throw new Error("visualization_account_session_required");
+  });
 
   const artifactWorkflow = useArtifactWorkflowController({
     artifactStore,
@@ -362,6 +383,8 @@ export function AppShell({
       ? `${settingsState["models.cloud_proxy_endpoint"]}:${artifactAccountId}`
       : undefined,
     cancelAgentRun: (runId, reason) => agentCancelRunnerRef.current(runId, reason),
+    cancelThinReadingVisualization: (input) => cancelVisualizationGenerationRef.current(input),
+    generateThinReadingVisualization: (request) => generateVisualizationRef.current(request),
     getAssistantLanguage: () => settingsStoreRef.current.getState()["assistant.language"],
     getActiveReaderPaper: () => {
       const paperId = activeReaderPaperId;
@@ -390,9 +413,13 @@ export function AppShell({
     getSelectedPapers: workspaceActions.getSelectedPapers,
     isAgentModelAccessAvailable: () => Boolean(modelTransport || cloudAccessTokenRef.current),
     onAnalysisHint: setAnalysisHint,
+    pendingThinReadingVisualizations: () => pendingVisualizationRequestsRef.current(),
     queueImportForPapers: workspaceActions.queueImportForPapers,
     runAgentAnalysis: (artifactType, onProgress, options) =>
       agentArtifactRunnerRef.current(artifactType, onProgress, options),
+    resumeThinReadingVisualization: (request, signal) => (
+      resumeVisualizationGenerationRef.current(request, signal)
+    ),
     setMultimodalVisualizationPreference: (enabled) => {
       const sessionId = cloudAccessTokenRef.current;
       if (!sessionId) {
@@ -637,6 +664,10 @@ export function AppShell({
   multimodalVisualizationCapabilityRef.current = cloudAccount.model.multimodalVisualization;
   updateMultimodalVisualizationCapabilityRef.current =
     cloudAccount.actions.setMultimodalVisualizationCapability;
+  cancelVisualizationGenerationRef.current = cloudAccount.actions.cancelVisualizationGeneration;
+  generateVisualizationRef.current = cloudAccount.actions.generateVisualization;
+  pendingVisualizationRequestsRef.current = cloudAccount.actions.pendingVisualizationRequests;
+  resumeVisualizationGenerationRef.current = cloudAccount.actions.resumeVisualizationGeneration;
   cloudAccessTokenRef.current = accountSession?.sessionId;
   usePolicySync({
     applyModelPolicySnapshot: modelSettings.applyModelPolicySnapshot,
@@ -681,6 +712,7 @@ export function AppShell({
     workspaceStoreRef
   });
   function logoutAndClearOrganizationState() {
+    artifactWorkflow.actions.disposeThinReadingVisualizations();
     cloudAccount.actions.logoutFromCloudAccount();
     organizationShell.actions.resetOrganizationState();
   }
