@@ -149,6 +149,30 @@ async function failedPublicationSnapshot(pool, subjectId, reservationId) {
   return result.rows[0];
 }
 
+async function expiryAccountingSnapshot(pool, subjectId, reservationId) {
+  return withPostgresTransaction(pool, async (client) => {
+    const reservationResult = await client.query(`
+      SELECT state, settled_units
+        FROM visualization_quota_reservations
+       WHERE subject_id = $1 AND reservation_id = $2
+    `, [subjectId, reservationId]);
+    const ledgerResult = await client.query(`
+      SELECT event_type, units_delta, reason_code
+        FROM visualization_usage_ledger
+       WHERE subject_id = $1 AND reservation_id = $2
+       ORDER BY event_type
+    `, [subjectId, reservationId]);
+    return {
+      ledger: ledgerResult.rows.map((row) => ({
+        eventType: row.event_type,
+        reasonCode: row.reason_code,
+        unitsDelta: Number(row.units_delta)
+      })),
+      reservation: reservationResult.rows[0]
+    };
+  }, { isolation: "REPEATABLE READ" });
+}
+
 function providerCost(invocationId, providerRequestId, routeId, providerId, suffix) {
   return {
     amount: 0.02,
@@ -235,7 +259,8 @@ async function verifyGovernanceTransactions(pool) {
   const adminId = `viz-governance-admin-${suffix}`;
   const subjectId = `viz-governance-subject-${suffix}`;
   const routeId = `viz-governance-route-${suffix}`;
-  const repository = new PostgresVisualizationRepository(pool, { now: () => referenceTime });
+  let currentTime = referenceTime;
+  const repository = new PostgresVisualizationRepository(pool, { now: () => currentTime });
   const routeInput = {
     expectedRevision: 0,
     idempotencyKey: `provider-save-${suffix}`,
@@ -349,6 +374,36 @@ async function verifyGovernanceTransactions(pool) {
       reasonCode: "integration_window_release",
       reservationId: pinned.reservation.reservationId,
       traceId: `trace-window-rollback-${suffix}`
+    });
+
+    const expiring = await repository.reserve(subjectId, {
+      ...reservation(`reserve-expiring-${suffix}`, routeId, suffix),
+      ttlMs: 1000
+    });
+    currentTime = new Date(referenceTime.getTime() + 1000);
+    const afterExpiry = await repository.reserve(
+      subjectId,
+      reservation(`reserve-after-expiry-${suffix}`, routeId, suffix)
+    );
+    const expirySnapshot = await expiryAccountingSnapshot(
+      pool,
+      subjectId,
+      expiring.reservation.reservationId
+    );
+    assert.deepEqual(expirySnapshot.reservation, { settled_units: 0, state: "expired" });
+    assert.deepEqual(expirySnapshot.ledger, [
+      { eventType: "expired", reasonCode: "reservation_expired", unitsDelta: -1 },
+      { eventType: "reserved", reasonCode: null, unitsDelta: 1 }
+    ]);
+    assert.equal(
+      expirySnapshot.ledger.reduce((total, event) => total + event.unitsDelta, 0),
+      0,
+      "expiry transition refunds all reserved units in the committed transaction"
+    );
+    await repository.rollback(subjectId, {
+      reasonCode: "integration_expiry_replacement_release",
+      reservationId: afterExpiry.reservation.reservationId,
+      traceId: `trace-expiry-replacement-rollback-${suffix}`
     });
 
     await insertWindowFixtures(pool, subjectId, suffix);
