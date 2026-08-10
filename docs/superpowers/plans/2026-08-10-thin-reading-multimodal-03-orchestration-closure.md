@@ -278,11 +278,11 @@ git commit -m "feat: resolve authoritative visualization evidence"
 - Produces: `openAiCompatibleVisualizationAdapter`, `VisualizationArtifactCompilerRegistry`, and shared availability metadata.
 - Compiler signature: `compile({ evidence, locale, modality, nodeId, proposal, reservation, source }) -> VisualizationArtifactV1`.
 
-- [ ] **Step 1: Write failing adapter and compiler tests**
+- [x] **Step 1: Write failing adapter and compiler tests**
 
 Adapter tests assert exact endpoint/model/schema body, use only gateway-supplied `request()`, reject non-2xx/invalid JSON/missing output text, and normalize provider request/cost metadata. Compiler tests reject unknown compiler, unknown proposal fields, unbound claim IDs, server-version overrides, missing hard validators, and mismatched node/modality.
 
-- [ ] **Step 2: Implement the allowlisted OpenAI-compatible adapter**
+- [x] **Step 2: Implement the allowlisted OpenAI-compatible adapter**
 
 `generateStructured()` sends:
 
@@ -300,17 +300,17 @@ await request(route.endpoint, {
 
 Parse `output_text` or Responses API `output[].content[].text` without logging response content. Emit a gateway `cost` only when the provider response includes an explicit finite nonnegative amount, a three-letter currency, a stable `response.id`, and nonnegative integer usage units; otherwise omit cost rather than fabricating a zero price. Tests cover both explicit-cost normalization and the standard usage-without-price case. `probe()` sends a content-free schema request and returns declared capabilities. Runtime registers only keys `openai` and `openai-compatible`; arbitrary provider IDs remain unavailable.
 
-- [ ] **Step 3: Implement the compiler registry**
+- [x] **Step 3: Implement the compiler registry**
 
 The registry is constructor-injected and immutable after runtime startup. A compiler receives an untrusted proposal containing only modality spec, evidence bindings, semantic objects, interaction and accessibility. It validates proposal shape, rejects all claim/evidence IDs outside `source.evidence`, overwrites artifact/node/modality/implementation/usage/timestamps with server values, runs registered hard validators, computes hashes, and calls `validateVisualizationArtifact()` before returning.
 
 The production catalog initially advertises only existing `source_figure` reading support and no generated modality. Tests inject a `semantic_graph` compiler/catalog entry through the same constructor; Plans 4-6 add production entries only with their complete chains.
 
-- [ ] **Step 4: Verify shared catalog consumption**
+- [x] **Step 4: Verify shared catalog consumption**
 
 Desktop built-in registry reads the shared catalog and asserts every enabled desktop entry has its local manifest. API runtime asserts every generated server entry has a compiler. Neither consumer enables a modality from the union type alone.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 cd products/liteasy/services/api
