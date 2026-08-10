@@ -47,6 +47,19 @@ test("loads only registered built-in packages", async () => {
   await expect(loadBuiltinSkill("https://example.test/skill")).rejects.toThrow("builtin_skill_not_found");
 });
 
+test("loads the disabled semantic graph package without enabling generated catalog access", async () => {
+  await expect(loadBuiltinSkill("semantic-graph")).resolves.toMatchObject({
+    manifest: expect.objectContaining({
+      id: "semantic-graph",
+      modality: "semantic_graph",
+      rendererId: "semantic-graph-svg"
+    }),
+    instructions: expect.stringContaining("semantic_graph")
+  });
+  expect(getVisualizationBuiltinCatalog().entries.filter(({ enabled, generated }) => enabled && generated))
+    .toEqual([]);
+});
+
 test("matches every enabled shared catalog entry to a local built-in package", () => {
   const summaries = getBuiltinSkillSummary();
   const catalog = getVisualizationBuiltinCatalog();

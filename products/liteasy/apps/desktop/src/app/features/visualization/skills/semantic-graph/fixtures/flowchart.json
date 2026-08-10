@@ -1,0 +1,38 @@
+{
+  "claims": [
+    {
+      "evidenceIds": ["evidence-1"],
+      "id": "claim-1",
+      "text": "输入先于输出"
+    }
+  ],
+  "edges": [
+    {
+      "evidenceClaimIds": ["claim-1"],
+      "from": "start",
+      "id": "edge-1",
+      "kind": "precedes",
+      "to": "end"
+    }
+  ],
+  "groups": [],
+  "hierarchy": [],
+  "nodes": [
+    {
+      "evidenceClaimIds": ["claim-1"],
+      "id": "start",
+      "kind": "step",
+      "label": "输入",
+      "objectPath": ["start"]
+    },
+    {
+      "evidenceClaimIds": ["claim-1"],
+      "id": "end",
+      "kind": "step",
+      "label": "输出",
+      "objectPath": ["end"]
+    }
+  ],
+  "subtype": "flowchart",
+  "timeOrder": []
+}

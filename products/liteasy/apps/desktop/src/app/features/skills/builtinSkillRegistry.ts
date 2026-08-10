@@ -1,6 +1,8 @@
 import { z } from "zod";
 import sourceFigureManifest from "../visualization/skills/source-figure/skill.json";
 import sourceFigureInstructions from "../visualization/skills/source-figure/instructions.md?raw";
+import semanticGraphManifest from "../visualization/skills/semantic-graph/skill.json";
+import semanticGraphInstructions from "../visualization/skills/semantic-graph/instructions.md?raw";
 import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
@@ -124,6 +126,14 @@ const sourceFigure = parseManifest(sourceFigureManifest);
 registerBuiltinSkill(sourceFigure, async () => ({
   manifest: sourceFigure,
   instructions: sourceFigureInstructions
+}));
+
+const semanticGraph = parseManifest(semanticGraphManifest);
+registerBuiltinSkill(semanticGraph, async () => ({
+  fallbackModalities: semanticGraph.fallbackModalities,
+  manifest: semanticGraph,
+  instructions: semanticGraphInstructions,
+  validatorIds: semanticGraph.validatorIds
 }));
 
 const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);
