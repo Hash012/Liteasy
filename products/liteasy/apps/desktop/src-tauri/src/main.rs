@@ -14,7 +14,7 @@ fn main() {
         std::process::exit(exit_code);
     }
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(agent_host::AgentHostState::default())
         .manage(local_library::LocalLibraryWatchState::default())
         .setup(|app| {
@@ -68,6 +68,11 @@ fn main() {
             user_paper_store::load_user_paper_artifact,
             user_paper_store::save_user_paper_artifact
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Liteasy desktop");
+        .build(tauri::generate_context!())
+        .expect("error while building Liteasy desktop");
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Resumed) {
+            local_library::resume_local_library_watcher(app_handle);
+        }
+    });
 }
