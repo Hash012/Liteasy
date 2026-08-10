@@ -169,6 +169,19 @@ pub struct LocalLibrarySnapshot {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AddMetadataOnlyLibraryEntryResult {
+    pub created: bool,
+    pub document_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashLocalMetadataEntryResult {
+    pub trash_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DuplicateLocalPdf {
     pub content_hash: String,
     pub existing_document_ids: Vec<String>,
@@ -1832,33 +1845,49 @@ pub fn add_metadata_only_library_entry(
     doi: Option<String>,
     external_url: Option<String>,
     source_id: Option<String>,
-) -> Result<LocalLibrarySnapshot, String> {
+) -> Result<AddMetadataOnlyLibraryEntryResult, String> {
+    let root = library_root(&app)?;
+    with_local_library_index_transaction(&app, || {
+        add_metadata_only_entry_at_root(&root, title, doi, external_url, source_id)
+    })
+}
+
+fn add_metadata_only_entry_at_root(
+    root: &Path,
+    title: String,
+    doi: Option<String>,
+    external_url: Option<String>,
+    source_id: Option<String>,
+) -> Result<AddMetadataOnlyLibraryEntryResult, String> {
     let title = title.trim().to_string();
     if title.is_empty() {
         return Err("条目标题不能为空。".to_string());
     }
     let doi = non_empty(doi);
     let external_url = non_empty(external_url);
-    let root = library_root(&app)?;
-    let mut index = read_index(&root)?;
+    let mut index = read_index(root)?;
     let id = metadata_only_entry_id(doi.as_deref(), external_url.as_deref(), &title);
-    if !index.metadata_only.iter().any(|entry| entry.id == id) {
+    let created = !index.metadata_only.iter().any(|entry| entry.id == id);
+    if created {
         let entry = MetadataOnlyEntry {
             doi,
             external_url,
-            id,
+            id: id.clone(),
             source_id: non_empty(source_id),
             title,
         };
-        write_metadata_entry(&root, &entry)?;
+        write_metadata_entry(root, &entry)?;
         index.metadata_only.push(entry.clone());
         index.revision = index.revision.saturating_add(1).max(1);
-        if let Err(error) = write_index(&root, &index) {
-            let _ = fs::remove_file(metadata_entry_path(&root, &entry.id)?);
+        if let Err(error) = write_index(root, &index) {
+            let _ = fs::remove_file(metadata_entry_path(root, &entry.id)?);
             return Err(error);
         }
     }
-    load_local_library_snapshot(app)
+    Ok(AddMetadataOnlyLibraryEntryResult {
+        created,
+        document_id: id,
+    })
 }
 
 fn resolve_import_directory(
@@ -2663,18 +2692,25 @@ fn trash_resource_at_root(root: &Path, source_path: &str) -> Result<PathBuf, Str
 pub fn trash_local_metadata_entry(
     app: AppHandle,
     document_id: String,
-) -> Result<LocalLibrarySnapshot, String> {
+) -> Result<TrashLocalMetadataEntryResult, String> {
     let root = library_root(&app)?;
-    let mut index = read_index(&root)?;
+    with_local_library_index_transaction(&app, || {
+        let trash_id = trash_metadata_entry_at_root(&root, &document_id)?;
+        Ok(TrashLocalMetadataEntryResult { trash_id })
+    })
+}
+
+fn trash_metadata_entry_at_root(root: &Path, document_id: &str) -> Result<String, String> {
+    let mut index = read_index(root)?;
     let position = index
         .metadata_only
         .iter()
         .position(|entry| entry.id == document_id)
         .ok_or_else(|| "找不到仅元数据条目。".to_string())?;
     let entry = index.metadata_only.remove(position);
-    let library_marker = ensure_library_marker(&root)?;
+    let library_marker = ensure_library_marker(root)?;
     let trash_id = next_trash_id(&entry.id);
-    let transaction = trash_transaction_directory(&root, &trash_id)?;
+    let transaction = trash_transaction_directory(root, &trash_id)?;
     let trashed_at = unix_timestamp();
     let manifest = LocalTrashManifest {
         artifact_references: Vec::new(),
@@ -2702,7 +2738,7 @@ pub fn trash_local_metadata_entry(
         operation: "trash".to_string(),
         base_revision: index.revision,
         target_revision: index.revision.saturating_add(1).max(1),
-        trash_ids: vec![trash_id],
+        trash_ids: vec![trash_id.clone()],
         restore_target_relative: None,
         payload_relative_path: None,
         artifact_names: Vec::new(),
@@ -2715,10 +2751,10 @@ pub fn trash_local_metadata_entry(
         let _ = fs::remove_dir_all(&transaction);
         return Err(error);
     }
-    let metadata_path = metadata_entry_path(&root, &entry.id)?;
+    let metadata_path = metadata_entry_path(root, &entry.id)?;
     if let Err(error) = fs::rename(&metadata_path, transaction.join("metadata-entry.json")) {
         return Err(rollback_trash_error(
-            &root,
+            root,
             &transaction,
             &operation,
             format!("无法将仅元数据条目移入回收站：{error}"),
@@ -2726,16 +2762,16 @@ pub fn trash_local_metadata_entry(
     }
     record_committed_trash_operation(&mut index, &transaction_id);
     index.revision = index.revision.saturating_add(1).max(1);
-    if let Err(error) = write_index(&root, &index) {
+    if let Err(error) = write_index(root, &index) {
         return Err(rollback_trash_error(
-            &root,
+            root,
             &transaction,
             &operation,
             format!("索引更新失败，仅元数据删除未提交：{error}"),
         ));
     }
-    finalize_committed_trash(&root, &transaction, &operation)?;
-    load_local_library_snapshot(app)
+    finalize_committed_trash(root, &transaction, &operation)?;
+    Ok(trash_id)
 }
 
 fn unique_restore_target(requested: &Path) -> Result<PathBuf, String> {
@@ -3910,20 +3946,21 @@ pub fn start_local_library_watcher(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{
-        append_pdf_import_chunk, artifacts_directory, directory_contains_name, echo_paths_overlap,
-        ensure_library_marker, ensure_relative_folder, export_library_backup_at_root,
-        import_staging_directory, index_path, legacy_account_namespace, metadata_entries_directory,
-        metadata_entry_path, metadata_only_entry_id, migrate_legacy_layout, non_empty,
-        paper_artifact_directory_name, prepare_legacy_root_selection, prepare_library_migration,
-        purge_expired_import_sessions_at, purge_expired_trash_at,
-        purge_trash_items_with_index_writer, read_index, read_trash_manifest,
-        record_committed_trash_operation, recover_trash_operations, resolve_import_directory,
-        restore_legacy_library_marker, restore_trash_at_root, scan_local_library_paths,
-        scan_local_library_root, stage_trash_operation, trash_directory, trash_operation_directory,
-        trash_resource_at_root, trash_transaction_directory, unique_restore_target_with_case_rule,
-        verified_tree_manifest, write_bytes_atomically_with_publisher, write_index,
-        write_metadata_entry, write_trash_manifest, write_trash_operation_marker,
-        LocalLibraryIndex, LocalLibraryWatchBatch, LocalLibraryWatchSignal, LocalLibraryWatchState,
+        add_metadata_only_entry_at_root, append_pdf_import_chunk, artifacts_directory,
+        directory_contains_name, echo_paths_overlap, ensure_library_marker, ensure_relative_folder,
+        export_library_backup_at_root, import_staging_directory, index_path,
+        legacy_account_namespace, metadata_entries_directory, metadata_entry_path,
+        metadata_only_entry_id, migrate_legacy_layout, non_empty, paper_artifact_directory_name,
+        prepare_legacy_root_selection, prepare_library_migration, purge_expired_import_sessions_at,
+        purge_expired_trash_at, purge_trash_items_with_index_writer, read_index,
+        read_trash_manifest, record_committed_trash_operation, recover_trash_operations,
+        resolve_import_directory, restore_legacy_library_marker, restore_trash_at_root,
+        scan_local_library_paths, scan_local_library_root, stage_trash_operation, trash_directory,
+        trash_metadata_entry_at_root, trash_operation_directory, trash_resource_at_root,
+        trash_transaction_directory, unique_restore_target_with_case_rule, verified_tree_manifest,
+        write_bytes_atomically_with_publisher, write_index, write_metadata_entry,
+        write_trash_manifest, write_trash_operation_marker, LocalLibraryIndex,
+        LocalLibraryWatchBatch, LocalLibraryWatchSignal, LocalLibraryWatchState,
         LocalTrashManifest, MetadataOnlyEntry, TrashOperationMarker, ARTIFACTS_DIRECTORY_NAME,
         INTERNAL_DIRECTORY_NAME, LEGACY_PROFILE_MARKER_FILE_NAME, LIBRARY_MARKER_FILE_NAME,
     };
@@ -4374,6 +4411,43 @@ mod tests {
         fs::remove_file(super::index_path(&root)).unwrap();
         let rebuilt = read_index(&root).unwrap();
         assert_eq!(rebuilt.metadata_only, vec![entry]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn metadata_mutations_report_exact_created_and_trashed_resources() {
+        let root = initialized_library("metadata-mutation-results");
+        let first = add_metadata_only_entry_at_root(
+            &root,
+            "Paper".to_string(),
+            Some("10.1000/test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+        let second = add_metadata_only_entry_at_root(
+            &root,
+            "Paper".to_string(),
+            Some("10.1000/test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(first.created);
+        assert!(!second.created);
+        assert_eq!(first.document_id, second.document_id);
+        assert_eq!(read_index(&root).unwrap().metadata_only.len(), 1);
+
+        let trash_id = trash_metadata_entry_at_root(&root, &first.document_id).unwrap();
+        let manifest =
+            read_trash_manifest(&trash_directory(&root).join(&trash_id).join("manifest.json"))
+                .unwrap();
+        assert_eq!(
+            manifest.document_id.as_deref(),
+            Some(first.document_id.as_str())
+        );
+
         fs::remove_dir_all(root).unwrap();
     }
 

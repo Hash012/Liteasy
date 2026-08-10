@@ -197,12 +197,17 @@ export type AddMetadataOnlyLibraryEntryInput = {
   title: string;
 };
 
+export type AddMetadataOnlyLibraryEntryResult = {
+  created: boolean;
+  documentId: string;
+};
+
 /** Records a paper that can be listed and cited but never opened — what a non-open-access
  *  result becomes when the user keeps it. */
 export const addMetadataOnlyLibraryEntry = (
   input: AddMetadataOnlyLibraryEntryInput
-): Promise<LocalLibrarySnapshot> =>
-  invoke<LocalLibrarySnapshot>("add_metadata_only_library_entry", {
+): Promise<AddMetadataOnlyLibraryEntryResult> =>
+  invoke<AddMetadataOnlyLibraryEntryResult>("add_metadata_only_library_entry", {
     doi: input.doi,
     externalUrl: input.externalUrl,
     sourceId: input.sourceId,
@@ -355,8 +360,14 @@ export async function persistZoteroPdfDirectory(input: {
 export const trashLocalLibraryResource = (sourcePath: string): Promise<LocalLibrarySnapshot> =>
   invoke<LocalLibrarySnapshot>("trash_local_library_resource", { sourcePath });
 
-export const trashLocalMetadataEntry = (documentId: string): Promise<LocalLibrarySnapshot> =>
-  invoke<LocalLibrarySnapshot>("trash_local_metadata_entry", { documentId });
+export type TrashLocalMetadataEntryResult = {
+  trashId: string;
+};
+
+export const trashLocalMetadataEntry = (
+  documentId: string
+): Promise<TrashLocalMetadataEntryResult> =>
+  invoke<TrashLocalMetadataEntryResult>("trash_local_metadata_entry", { documentId });
 
 export const restoreLocalLibraryTrashItem = (trashId: string): Promise<LocalLibrarySnapshot> =>
   invoke<LocalLibrarySnapshot>("restore_local_library_trash_item", { trashId });

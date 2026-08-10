@@ -529,6 +529,69 @@ describe("LeftPane", () => {
     );
   });
 
+  test("keeps the complete folder subtree in drag data while search filters descendants", async () => {
+    const user = userEvent.setup();
+    cloudTrees.user.tree = {
+      entries: [
+        {
+          createdAt: "2026-08-11T00:00:00.000Z",
+          documentId: "matching-document",
+          entryKind: "metadata_only",
+          folderId: "reading-folder",
+          scopeId: "user:user-1",
+          scopeType: "user",
+          status: "active",
+          title: "Matching paper",
+          updatedAt: "2026-08-11T00:00:00.000Z"
+        },
+        {
+          createdAt: "2026-08-11T00:00:00.000Z",
+          documentId: "nonmatching-document",
+          entryKind: "metadata_only",
+          folderId: "reading-folder",
+          scopeId: "user:user-1",
+          scopeType: "user",
+          status: "active",
+          title: "Hidden paper",
+          updatedAt: "2026-08-11T00:00:00.000Z"
+        }
+      ],
+      folders: [{
+        createdAt: "2026-08-11T00:00:00.000Z",
+        folderId: "reading-folder",
+        name: "Reading",
+        status: "active",
+        updatedAt: "2026-08-11T00:00:00.000Z"
+      }],
+      revision: 3,
+      scopeId: "user:user-1",
+      scopeType: "user"
+    };
+    render(<LeftPane {...createProps({ leftRailView: "library" })} />);
+
+    await user.type(screen.getByRole("textbox", { name: "搜索文献资源" }), "Matching");
+    expect(screen.getByRole("button", { name: "Matching paper" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hidden paper" })).not.toBeInTheDocument();
+
+    const setData = vi.fn();
+    const folderRow = screen
+      .getByRole("button", { name: "Reading" })
+      .closest(".library-folder-row");
+    expect(folderRow).not.toBeNull();
+    fireEvent.dragStart(folderRow!, {
+      dataTransfer: { effectAllowed: "", setData }
+    });
+
+    const transferCall = setData.mock.calls.find(([type]) =>
+      type === "application/x-liteasy-library-resource-v2"
+    );
+    expect(transferCall).toBeDefined();
+    const payload = JSON.parse(transferCall![1]);
+    expect(payload.tree.entries.map((entry: { entry: { documentId: string } }) =>
+      entry.entry.documentId
+    ).sort()).toEqual(["matching-document", "nonmatching-document"]);
+  });
+
   test("forwards explicit negative feedback from a live recommendation", async () => {
     const user = userEvent.setup();
     const onDismissRecommendation = vi.fn();

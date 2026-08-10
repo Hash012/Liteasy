@@ -33,6 +33,7 @@ const local = vi.hoisted(() => ({
   persistPdfByteStream: vi.fn(),
   purgeLocalLibraryTrashItem: vi.fn(),
   readLocalLibraryPdf: vi.fn(),
+  trashLocalMetadataEntry: vi.fn(),
   trashLocalLibraryResource: vi.fn()
 }));
 const recommendationPdf = vi.hoisted(() => ({
@@ -167,6 +168,10 @@ beforeEach(() => {
   });
   local.persistDroppedPdfFiles.mockResolvedValue({});
   local.persistPdfByteStream.mockResolvedValue({});
+  local.purgeLocalLibraryTrashItem.mockResolvedValue({});
+  local.trashLocalMetadataEntry.mockResolvedValue({
+    trashId: "trash-metadata-created"
+  });
 });
 
 test.each([
@@ -397,4 +402,109 @@ test("failed cloud folder copies trash and purge the visible partial subtree", a
   })).rejects.toThrow("write failed");
   expect(cloud.trashFolder).toHaveBeenCalledWith(collectionScope, "created-root", 2);
   expect(cloud.purgeFolder).toHaveBeenCalledWith(collectionScope, "created-root", 3);
+});
+
+test("failed cloud folder copies purge metadata entries created outside the physical subtree", async () => {
+  local.createLocalLibraryFolder.mockResolvedValue({
+    folders: [{ name: "Source", parentPath: null, path: "/library/Source" }],
+    rootPath: "/library"
+  });
+  local.addMetadataOnlyLibraryEntry.mockResolvedValue({
+    created: true,
+    documentId: "metadata-created"
+  });
+  local.persistPdfByteStream.mockRejectedValue(new Error("downloaded PDF import failed"));
+  local.trashLocalLibraryResource.mockResolvedValue({
+    trashEntries: [{ originalRelativePath: "Source", trashId: "trash-root" }]
+  });
+  const source: LibraryResourceFolderSource = {
+    area: "collection",
+    folder: {
+      createdAt: "2026-08-06T00:00:00.000Z",
+      folderId: "source-folder",
+      name: "Source",
+      status: "active",
+      updatedAt: "2026-08-06T00:00:00.000Z"
+    },
+    scope: collectionScope,
+    tree: {
+      children: [],
+      entries: [
+        {
+          area: "collection",
+          entry: metadataEntry("metadata-source"),
+          scope: collectionScope
+        },
+        {
+          area: "collection",
+          entry: documentEntry("pdf-source"),
+          scope: collectionScope
+        }
+      ],
+      name: "Source"
+    }
+  };
+  const { result } = renderController();
+
+  await expect(result.current(source, {
+    area: "local",
+    localFolderPath: "/library"
+  })).rejects.toThrow("downloaded PDF import failed");
+
+  expect(local.trashLocalLibraryResource).toHaveBeenCalledWith("/library/Source");
+  expect(local.purgeLocalLibraryTrashItem).toHaveBeenCalledWith("trash-root");
+  expect(local.trashLocalMetadataEntry).toHaveBeenCalledWith("metadata-created");
+  expect(local.purgeLocalLibraryTrashItem).toHaveBeenCalledWith("trash-metadata-created");
+});
+
+test("failed cloud folder copies preserve metadata entries that predated the copy", async () => {
+  local.createLocalLibraryFolder.mockResolvedValue({
+    folders: [{ name: "Source", parentPath: null, path: "/library/Source" }],
+    rootPath: "/library"
+  });
+  local.addMetadataOnlyLibraryEntry.mockResolvedValue({
+    created: false,
+    documentId: "metadata-existing"
+  });
+  local.persistPdfByteStream.mockRejectedValue(new Error("downloaded PDF import failed"));
+  local.trashLocalLibraryResource.mockResolvedValue({
+    trashEntries: [{ originalRelativePath: "Source", trashId: "trash-root" }]
+  });
+  const source: LibraryResourceFolderSource = {
+    area: "collection",
+    folder: {
+      createdAt: "2026-08-06T00:00:00.000Z",
+      folderId: "source-folder",
+      name: "Source",
+      status: "active",
+      updatedAt: "2026-08-06T00:00:00.000Z"
+    },
+    scope: collectionScope,
+    tree: {
+      children: [],
+      entries: [
+        {
+          area: "collection",
+          entry: metadataEntry("metadata-source"),
+          scope: collectionScope
+        },
+        {
+          area: "collection",
+          entry: documentEntry("pdf-source"),
+          scope: collectionScope
+        }
+      ],
+      name: "Source"
+    }
+  };
+  const { result } = renderController();
+
+  await expect(result.current(source, {
+    area: "local",
+    localFolderPath: "/library"
+  })).rejects.toThrow("downloaded PDF import failed");
+
+  expect(local.trashLocalMetadataEntry).not.toHaveBeenCalled();
+  expect(local.purgeLocalLibraryTrashItem).toHaveBeenCalledTimes(1);
+  expect(local.purgeLocalLibraryTrashItem).toHaveBeenCalledWith("trash-root");
 });
