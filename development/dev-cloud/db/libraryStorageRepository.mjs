@@ -207,6 +207,26 @@ export function createLibraryStorageRepository(database, options = {}) {
   const stagingDirectory = path.join(objectDirectory, ".staging");
   const now = () => options.now?.() ?? new Date();
   fs.mkdirSync(objectDirectory, { recursive: true, mode: 0o700 });
+
+  function persistLiteratureProjection(literature, timestamp) {
+    const snapshot = JSON.stringify(literature);
+    database.prepare(`
+      INSERT OR IGNORE INTO literature_record_projections(
+        literature_id, revision, snapshot_json, created_at
+      ) VALUES (?, ?, ?, ?)
+    `).run(literature.literatureId, literature.revision, snapshot, timestamp);
+    const stored = database.prepare(`
+      SELECT snapshot_json FROM literature_record_projections
+      WHERE literature_id = ? AND revision = ?
+    `).get(literature.literatureId, literature.revision);
+    if (stored?.snapshot_json !== snapshot) {
+      throw new LibraryStorageError(
+        "literature_projection_revision_conflict",
+        "The confirmed literature revision has a different projection.",
+        409
+      );
+    }
+  }
   fs.mkdirSync(stagingDirectory, { recursive: true, mode: 0o700 });
 
   const quotaRow = database.prepare(
@@ -1137,11 +1157,15 @@ export function createLibraryStorageRepository(database, options = {}) {
         throw new LibraryStorageError("invalid_metadata_entry", "A title is required.");
       }
       const metadata = JSON.parse(row.metadata_json ?? "{}");
+      let literature;
       if (Object.prototype.hasOwnProperty.call(changes, "literature")) {
-        metadata.literature = normalizedLiterature(changes.literature);
+        literature = normalizedLiterature(changes.literature);
+        metadata.literature = literature;
       }
       try {
         database.transaction(() => {
+          const timestamp = now().toISOString();
+          if (literature) persistLiteratureProjection(literature, timestamp);
           database.prepare(`
             UPDATE library_metadata_entries
             SET folder_id = ?, title = ?, normalized_title = ?, metadata_json = ?, updated_at = ?
@@ -1151,7 +1175,7 @@ export function createLibraryStorageRepository(database, options = {}) {
             title,
             normalizedName(title),
             JSON.stringify(metadata),
-            now().toISOString(),
+            timestamp,
             documentId
           );
           bumpRevision(scope.scopeType, scope.scopeId);
@@ -1193,10 +1217,14 @@ export function createLibraryStorageRepository(database, options = {}) {
         new Set(names.map((entry) => entry.normalized_file_name))
       );
       const metadata = JSON.parse(row.metadata_json ?? "{}");
+      let literature;
       if (Object.prototype.hasOwnProperty.call(changes, "literature")) {
-        metadata.literature = normalizedLiterature(changes.literature);
+        literature = normalizedLiterature(changes.literature);
+        metadata.literature = literature;
       }
       database.transaction(() => {
+        const timestamp = now().toISOString();
+        if (literature) persistLiteratureProjection(literature, timestamp);
         database.prepare(`
           UPDATE library_documents
           SET folder_id = ?, file_name = ?, normalized_file_name = ?, metadata_json = ?, updated_at = ?
@@ -1206,7 +1234,7 @@ export function createLibraryStorageRepository(database, options = {}) {
           fileName,
           normalizedName(fileName),
           JSON.stringify(metadata),
-          now().toISOString(),
+          timestamp,
           documentId
         );
         bumpRevision(scope.scopeType, scope.scopeId);

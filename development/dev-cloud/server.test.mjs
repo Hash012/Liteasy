@@ -407,7 +407,33 @@ test("renames a metadata-only library entry through the versioned mutation API",
 });
 
 test("persists literature through an idempotent library metadata update", async () => {
-  const handler = createDevCloudRequestHandler();
+  const verifiedReferences = [];
+  const literature = {
+    authors: ["Ada Lovelace"],
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/liteasy" }],
+    literatureId: "literature_confirmed_liteasy",
+    provenance: {
+      confirmedAt: "2026-08-09T00:00:00.000Z",
+      mode: "public_registry",
+      provider: "crossref"
+    },
+    revision: 1,
+    status: "confirmed",
+    title: "Cloud Literature Metadata",
+    year: 2026
+  };
+  const handler = createDevCloudRequestHandler({
+    literatureProjectionVerifier: {
+      async verifyProjection(reference) {
+        verifiedReferences.push(reference);
+        return {
+          ...literature,
+          revision: reference.revision,
+          title: reference.revision === 1 ? literature.title : "Different literature"
+        };
+      }
+    }
+  });
   const sessionId = "literature-route-user";
   const scope = { scopeId: `user:${sessionId}`, scopeType: "user", sessionId };
   const created = await invokeHandler({
@@ -422,20 +448,16 @@ test("persists literature through an idempotent library metadata update", async 
     method: "POST",
     url: "/v1/library/entries/metadata"
   });
-  const literature = {
-    authors: ["Ada Lovelace"],
-    identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
-    literatureId: "literature:doi:10.1000/liteasy",
-    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
-    title: "Cloud Literature Metadata",
-    year: 2026
-  };
   const updateBody = {
     ...scope,
     documentId: created.json.entry.documentId,
     expectedRevision: created.json.revision,
     idempotencyKey: "literature-update-1",
-    literature
+    literature: {
+      literatureId: literature.literatureId,
+      revision: literature.revision,
+      title: "Client-forged title"
+    }
   };
 
   const updated = await invokeHandler({
@@ -461,7 +483,7 @@ test("persists literature through an idempotent library metadata update", async 
   const conflictingReplay = await invokeHandler({
     body: JSON.stringify({
       ...updateBody,
-      literature: { ...literature, title: "Different literature" }
+      literature: { literatureId: literature.literatureId, revision: 2 }
     }),
     handler,
     headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
@@ -471,6 +493,47 @@ test("persists literature through an idempotent library metadata update", async 
   assert.equal(conflictingReplay.statusCode, 409);
   assert.equal(conflictingReplay.json.code, "idempotency_key_reused");
   assert.equal(conflictingReplay.json.revision, undefined);
+  assert.deepEqual(verifiedReferences, [
+    { literatureId: literature.literatureId, revision: 1 },
+    { literatureId: literature.literatureId, revision: 1 },
+    { literatureId: literature.literatureId, revision: 2 }
+  ]);
+});
+
+test("fails closed when literature projection verification is unavailable", async () => {
+  const handler = createDevCloudRequestHandler({ intuechoLiteratureProjection: {} });
+  const sessionId = "literature-verifier-unavailable";
+  const scope = { scopeId: `user:${sessionId}`, scopeType: "user", sessionId };
+  const created = await invokeHandler({
+    body: JSON.stringify({
+      ...scope,
+      expectedRevision: 0,
+      idempotencyKey: "literature-unavailable-create",
+      title: "Unverified projection"
+    }),
+    handler,
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/entries/metadata"
+  });
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      ...scope,
+      documentId: created.json.entry.documentId,
+      expectedRevision: created.json.revision,
+      idempotencyKey: "literature-unavailable-update",
+      literature: { literatureId: "literature_confirmed", revision: 1 }
+    }),
+    handler,
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/update"
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.json.code, "literature_projection_verifier_unavailable");
+  assert.equal(response.json.revision, undefined);
 });
 
 test("fails closed when an organization member attempts a literature update", async () => {
@@ -498,13 +561,7 @@ test("fails closed when an organization member attempts a literature update", as
       documentId: "document-missing",
       expectedRevision: 0,
       idempotencyKey: "literature-org-member-1",
-      literature: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
-        literatureId: "literature:doi:10.1000/liteasy",
-        provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
-        title: "Cloud Literature Metadata"
-      },
+      literature: { literatureId: "literature_confirmed_liteasy", revision: 1 },
       scopeId: "organization-literature",
       scopeType: "organization"
     }),

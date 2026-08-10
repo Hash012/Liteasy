@@ -33,11 +33,17 @@ function createHarness(start = new Date("2026-08-02T00:00:00.000Z")) {
 }
 
 const pdf = Buffer.from("%PDF-1.7\nLiteasy storage fixture\n%%EOF");
-const manualLiterature = {
+const confirmedLiterature = {
   authors: ["Ada Lovelace"],
-  identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
-  literatureId: "literature:doi:10.1000/liteasy",
-  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+  identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/liteasy" }],
+  literatureId: "literature_confirmed_liteasy",
+  provenance: {
+    confirmedAt: "2026-08-09T00:00:00.000Z",
+    mode: "public_registry",
+    provider: "crossref"
+  },
+  revision: 1,
+  status: "confirmed",
   title: "Cloud Literature Metadata",
   year: 2026
 };
@@ -533,16 +539,16 @@ for (const entryKind of ["pdf", "metadata_only"]) {
         scopeType: "user"
       }, {
         expectedRevision: revision,
-        literature: manualLiterature
+        literature: confirmedLiterature
       });
 
-      assert.deepEqual(updated.metadata.literature, manualLiterature);
+      assert.deepEqual(updated.metadata.literature, confirmedLiterature);
       assert.equal(harness.repository.getRevision("user", "user:alice"), revision + 1);
       const table = entryKind === "pdf" ? "library_documents" : "library_metadata_entries";
       const row = harness.database.prepare(
         `SELECT metadata_json FROM ${table} WHERE document_id = ?`
       ).get(created.documentId);
-      assert.deepEqual(JSON.parse(row.metadata_json).literature, manualLiterature);
+      assert.deepEqual(JSON.parse(row.metadata_json).literature, confirmedLiterature);
     } finally {
       harness.close();
     }
@@ -566,7 +572,7 @@ test("invalid literature does not change development library metadata or revisio
       scopeType: "user"
     }, {
       expectedRevision: revision,
-      literature: { ...manualLiterature, identifiers: [] }
+      literature: { ...confirmedLiterature, identifiers: [] }
     }), (error) => error?.code === "literature_metadata_invalid");
 
     assert.equal(harness.repository.getRevision("user", "user:alice"), revision);
@@ -574,6 +580,58 @@ test("invalid literature does not change development library metadata or revisio
       harness.repository.listMetadataEntries("user", "user:alice")[0].metadata,
       { retained: true }
     );
+  } finally {
+    harness.close();
+  }
+});
+
+test("keeps confirmed literature projections append-only across library entries", () => {
+  const harness = createHarness();
+  try {
+    const first = harness.repository.createMetadataEntry({
+      expectedRevision: 0,
+      scopeId: "user:alice",
+      scopeType: "user",
+      title: "First copy"
+    });
+    const second = harness.repository.createMetadataEntry({
+      expectedRevision: 1,
+      scopeId: "user:alice",
+      scopeType: "user",
+      title: "Second copy"
+    });
+    harness.repository.updateEntry(first.documentId, {
+      scopeId: "user:alice",
+      scopeType: "user"
+    }, {
+      expectedRevision: 2,
+      literature: confirmedLiterature
+    });
+    harness.repository.updateEntry(second.documentId, {
+      scopeId: "user:alice",
+      scopeType: "user"
+    }, {
+      expectedRevision: 3,
+      literature: confirmedLiterature
+    });
+
+    assert.equal(harness.database.prepare(
+      "SELECT COUNT(*) AS count FROM literature_record_projections"
+    ).get().count, 1);
+    assert.throws(() => harness.database.prepare(`
+      UPDATE literature_record_projections SET created_at = created_at
+    `).run(), /literature_projection_is_append_only/);
+    assert.throws(() => harness.database.prepare(
+      "DELETE FROM literature_record_projections"
+    ).run(), /literature_projection_is_append_only/);
+    assert.throws(() => harness.repository.updateEntry(second.documentId, {
+      scopeId: "user:alice",
+      scopeType: "user"
+    }, {
+      expectedRevision: 4,
+      literature: { ...confirmedLiterature, title: "Conflicting snapshot" }
+    }), (error) => error?.code === "literature_projection_revision_conflict");
+    assert.equal(harness.repository.getRevision("user", "user:alice"), 4);
   } finally {
     harness.close();
   }

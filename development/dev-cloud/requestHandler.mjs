@@ -68,6 +68,12 @@ import {
   createLibraryStorageRepository,
   LibraryStorageError
 } from "./db/libraryStorageRepository.mjs";
+import { IntuechoLiteratureClient } from "../../products/liteasy/services/api/src/intuechoLiteratureClient.mjs";
+import {
+  LiteratureMetadataValidationError,
+  normalizeLiteratureMetadata,
+  normalizeLiteratureProjectionReference
+} from "../../products/liteasy/services/api/src/literatureMetadata.mjs";
 import { assertDevCloudDeploymentBoundary } from "./deploymentBoundary.mjs";
 import {
   createOrganizationRepository,
@@ -766,6 +772,60 @@ function executeLibraryMutation(
   };
 }
 
+function createLiteratureProjectionVerifier(config, customVerifier) {
+  if (customVerifier) return customVerifier;
+  const projection = config.intuechoLiteratureProjection;
+  if (!projection || [
+    projection.apiUrl,
+    projection.audience,
+    projection.clientId,
+    projection.clientSecret,
+    projection.scope,
+    projection.tokenUrl
+  ].some((value) => typeof value !== "string" || !value.trim())) return null;
+  return new IntuechoLiteratureClient(projection);
+}
+
+async function verifyLiteratureProjection(verifier, value) {
+  let reference;
+  try {
+    reference = normalizeLiteratureProjectionReference(value);
+  } catch (error) {
+    if (error instanceof LiteratureMetadataValidationError) {
+      throw new LibraryStorageError("literature_metadata_invalid", "Literature metadata is invalid.");
+    }
+    throw error;
+  }
+  if (!verifier) {
+    throw new LibraryStorageError(
+      "literature_projection_verifier_unavailable",
+      "Literature projection verification is unavailable.",
+      503
+    );
+  }
+  let literature;
+  try {
+    literature = normalizeLiteratureMetadata(await verifier.verifyProjection(reference));
+  } catch (error) {
+    if (error?.code === "literature_projection_not_confirmed") {
+      throw new LibraryStorageError(error.code, "Literature projection is not confirmed.", 409);
+    }
+    throw new LibraryStorageError(
+      "intuecho_literature_unavailable",
+      "Literature projection verification is unavailable.",
+      503
+    );
+  }
+  if (literature.literatureId !== reference.literatureId || literature.revision !== reference.revision) {
+    throw new LibraryStorageError(
+      "literature_projection_verification_mismatch",
+      "Literature projection verification did not match the requested revision.",
+      503
+    );
+  }
+  return literature;
+}
+
 function writeOrganizationError(request, response, error) {
   if (error instanceof OrganizationRepositoryError) {
     writeJson(request, response, error.statusCode, {
@@ -960,6 +1020,10 @@ export function createDevCloudRequestHandler(customConfig = {}) {
   });
   libraryStorageRepository.purgeExpired?.();
   libraryStorageRepository.reconcileObjects?.();
+  const literatureProjectionVerifier = createLiteratureProjectionVerifier(
+    config,
+    customConfig.literatureProjectionVerifier
+  );
   const collectionRepository =
     customConfig.collectionRepository ?? createCollectionRepository(database, { now: customConfig.now });
   const organizationRepository =
@@ -2945,7 +3009,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         if (Object.prototype.hasOwnProperty.call(body, "fileName")) changes.fileName = body.fileName;
         if (Object.prototype.hasOwnProperty.call(body, "folderId")) changes.folderId = body.folderId;
         if (Object.prototype.hasOwnProperty.call(body, "title")) changes.title = body.title;
-        if (Object.prototype.hasOwnProperty.call(body, "literature")) changes.literature = body.literature;
+        if (Object.prototype.hasOwnProperty.call(body, "literature")) {
+          changes.literature = await verifyLiteratureProjection(literatureProjectionVerifier, body.literature);
+        }
         changes.expectedRevision = body.expectedRevision;
         writeJson(request, response, 200, executeLibraryMutation(
           request,

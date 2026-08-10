@@ -85,6 +85,14 @@ export const defaultConfig = {
   mineruToken: process.env.MINERU_TOKEN,
   grobidEndpoint: process.env.GROBID_ENDPOINT ?? "http://127.0.0.1:8070",
   intuechoApiEndpoint: process.env.INTUECHO_API_ENDPOINT,
+  intuechoLiteratureProjection: {
+    apiUrl: process.env.LITEASY_INTUECHO_LITERATURE_API_URL ?? process.env.INTUECHO_API_ENDPOINT,
+    audience: process.env.LITEASY_IDP_LITERATURE_SERVICE_AUDIENCE ?? "intuecho-internal",
+    clientId: process.env.LITEASY_IDP_LITERATURE_SERVICE_CLIENT_ID,
+    clientSecret: process.env.LITEASY_IDP_LITERATURE_SERVICE_CLIENT_SECRET,
+    scope: process.env.LITEASY_IDP_LITERATURE_SERVICE_SCOPE ?? "literature:verify",
+    tokenUrl: process.env.LITEASY_IDP_TOKEN_URL
+  },
   // Deployment-owned secret. It is never returned to or accepted from a desktop client.
   // OpenAlex requires a key for every API request as of 2026-02-13.
   openAlexApiKey: process.env.OPENALEX_API_KEY,
