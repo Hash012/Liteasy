@@ -10,6 +10,8 @@ import { createThinReadingDocument } from "../app/features/thin-reading/thinRead
 import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
 import { makeVisualizationArtifactFixture } from "./fixtures/visualizationArtifactFixtures";
+import { parseVisualizationArtifact } from "../app/features/visualization/visualizationArtifact.schema";
+import type { VisualizationArtifactV1 } from "../app/features/visualization/visualizationArtifact.types";
 
 const artifactTypes: ArtifactType[] = [
   "comparison_table",
@@ -163,8 +165,10 @@ describe("artifact document export", () => {
         }
       }
     });
-    const generated = makeVisualizationArtifactFixture();
-    const sourceFigure = makeVisualizationArtifactFixture({ modality: "source_figure" });
+    const generated = parseVisualizationArtifact(makeVisualizationArtifactFixture()) as VisualizationArtifactV1;
+    const sourceFigure = parseVisualizationArtifact(
+      makeVisualizationArtifactFixture({ modality: "source_figure" })
+    ) as VisualizationArtifactV1;
     const root = document.nodes[document.rootNodeId];
     const v2Document = {
       ...document,
@@ -186,7 +190,6 @@ describe("artifact document export", () => {
               spec: {
                 modality: "source_figure",
                 payload: {
-                  modality: "source_figure",
                   sourceFigureId: "figure-3",
                   paperId: "paper-attention",
                   page: 3,
@@ -214,7 +217,7 @@ describe("artifact document export", () => {
     expect(markdown).toContain("输入编码");
     expect(markdown).toContain("evidence-attention-self-attention");
     expect(markdown).toContain("论文原图");
-    expect(markdown).toContain("figure-fixture");
+    expect(markdown).not.toContain("figure-fixture");
     expect(markdown).toContain("第 3 页");
     expect(markdown).toContain("0.1");
     expect(markdown).toContain("0.2");
@@ -225,6 +228,119 @@ describe("artifact document export", () => {
     expect(markdown).not.toContain("rendererId");
     expect(markdown).not.toContain("providerRouteId");
     expect(markdown).not.toContain("costPolicyVersion");
+  });
+
+  test("escapes v2 structured metadata and keeps evidence IDs scoped to their fields", () => {
+    const base = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...base,
+      rootSeed: {
+        ...base.rootSeed,
+        summary: "Unrelated evidence-one and __LITEASY_EVIDENCE_0__ must stay private.",
+        evidence: {
+          ...base.rootSeed.evidence,
+          paperEvidenceSpans: [{
+            confidence: 1,
+            id: "evidence-one",
+            page: 3,
+            paperId: "paper-attention",
+            quote: "Unrelated source prose."
+          }]
+        }
+      }
+    });
+    const root = document.nodes[document.rootNodeId];
+    const visual = parseVisualizationArtifact({
+      ...makeVisualizationArtifactFixture(),
+      accessibility: { summary: "<script>summary()</script>", objectReadingOrder: ["start"] },
+      evidenceBindings: [{ claimId: "claim-one", confidence: "direct", evidenceIds: ["evidence-one-more"] }],
+      semanticObjects: [{ objectId: "object-script", kind: "<script>kind()</script>", label: "<script>label()</script>", objectPath: ["start"], evidenceClaimIds: ["claim-one"], selectable: true }]
+    }) as VisualizationArtifactV1;
+    const markdown = createArtifactMarkdown({
+      artifactId: document.artifactId,
+      answer: "<script>answer()</script> [link](javascript:alert(1)) `code`",
+      thinReadingDocument: {
+        ...document,
+        nodes: { ...document.nodes, [root.id]: { ...root, visualizations: [visual] } }
+      },
+      title: "V2 injection",
+      type: "thin_reading"
+    });
+
+    expect(markdown).toContain("evidence-one-more");
+    expect(markdown).not.toContain("evidence-one and");
+    expect(markdown).toContain("__LITEASY_EVIDENCE_0__");
+    expect(markdown).not.toContain("<script>");
+    expect(markdown).not.toContain("</script>");
+    expect(markdown).not.toContain("[link]");
+    expect(markdown).not.toContain("`code`");
+  });
+
+  test("exports only uniquely bound recommended source figures with their actual paper", () => {
+    const base = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...base,
+      rootSeed: {
+        ...base.rootSeed,
+        evidence: {
+          ...base.rootSeed.evidence,
+          paperEvidenceSpans: [
+            { confidence: 1, id: "evidence-paper-a", page: 3, paperId: "paper-a", quote: "A" },
+            { confidence: 1, id: "evidence-paper-b", page: 4, paperId: "paper-b", quote: "B" }
+          ],
+          recommendedFigures: [
+            { evidenceIds: ["evidence-paper-a"], figureId: "figure-a", reason: "A" },
+            { evidenceIds: ["evidence-paper-b"], figureId: "figure-b", reason: "B" },
+            { evidenceIds: ["evidence-paper-a", "evidence-paper-b"], figureId: "figure-ambiguous", reason: "ambiguous" }
+          ]
+        }
+      }
+    });
+    const markdown = createArtifactMarkdown({
+      artifactId: document.artifactId,
+      figures: [
+        { alt: "figure a", dataUrl: "data:image/png;base64,a", id: "figure-a", page: 3, sourcePath: "/a.pdf" },
+        { alt: "figure b", dataUrl: "data:image/png;base64,b", id: "figure-b", page: 4, sourcePath: "/b.pdf" },
+        { alt: "ambiguous", dataUrl: "data:image/png;base64,c", id: "figure-ambiguous", page: 9, sourcePath: "/both.pdf" },
+        { alt: "unrecommended", dataUrl: "data:image/png;base64,d", id: "figure-unrecommended", page: 3, sourcePath: "/a.pdf" }
+      ],
+      papers: [{ id: "paper-a", title: "Paper A" }, { id: "paper-b", title: "Paper B" }],
+      thinReadingDocument: document,
+      title: "Multi paper",
+      type: "thin_reading"
+    });
+
+    expect(markdown).toContain("图：figure-a");
+    expect(markdown).toContain("来源：paper-a · 第 3 页");
+    expect(markdown).toContain("图：figure-b");
+    expect(markdown).toContain("来源：paper-b · 第 4 页");
+    expect(markdown).not.toContain("figure-ambiguous");
+    expect(markdown).not.toContain("figure-unrecommended");
+  });
+
+  test("fails closed when a recommendation contains an unbound evidence ID", () => {
+    const base = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...base,
+      rootSeed: {
+        ...base.rootSeed,
+        evidence: {
+          ...base.rootSeed.evidence,
+          paperEvidenceSpans: [{ confidence: 1, id: "e-1", page: 3, paperId: "paper-a", quote: "A" }],
+          recommendedFigures: [{ evidenceIds: ["e-1", "e-missing"], figureId: "figure-a", reason: "partial" }]
+        }
+      }
+    });
+    const markdown = createArtifactMarkdown({
+      artifactId: document.artifactId,
+      figures: [{ alt: "figure a", dataUrl: "data:image/png;base64,a", id: "figure-a", page: 3, sourcePath: "/a.pdf" }],
+      thinReadingDocument: document,
+      title: "Partial binding",
+      type: "thin_reading"
+    });
+
+    expect(markdown).not.toContain("figure-a");
+    expect(markdown).not.toContain("来源：paper-a");
   });
 
   test("creates a native payload without triggering a browser download", () => {

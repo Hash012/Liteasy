@@ -12,9 +12,40 @@ async function mountThinReadingMultimodalFixture(page: Page, authorized = true) 
   }, authorized);
 }
 
+async function mountThinReadingBrowserFixture(page: Page, options: Record<string, boolean> = {}) {
+  await page.goto("/");
+  await page.evaluate(async (fixtureOptions) => {
+    // Match the production app root so full-page layout baselines retain its viewport height.
+    document.body.innerHTML = '<div id="root"></div>';
+    const fixtureModule = await import("/src/tests/fixtures/visualizationFixtures.ts");
+    fixtureModule.mountThinReadingBrowserFixture(
+      document.getElementById("root"),
+      fixtureOptions
+    );
+  }, options);
+}
+
+async function mountOcrBrowserFixture(page: Page) {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="ocr-browser-fixture-root"></div>';
+    const fixtureModule = await import("/src/tests/fixtures/visualizationFixtures.ts");
+    fixtureModule.mountOcrBrowserFixture(document.getElementById("ocr-browser-fixture-root"));
+  });
+}
+
+async function mountReaderEvidenceBrowserFixture(page: Page) {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="reader-evidence-browser-fixture-root"></div>';
+    const fixtureModule = await import("/src/tests/fixtures/visualizationFixtures.ts");
+    fixtureModule.mountReaderEvidenceBrowserFixture(document.getElementById("reader-evidence-browser-fixture-root"));
+  });
+}
+
 test("keeps thin-reading prose and evidence markers readable on desktop", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-fixture");
+  await mountThinReadingBrowserFixture(page);
   const summary = page.getByTestId("thin-reading-summary");
   const evidenceMarker = page.locator(".thin-reading__summary-sentence > sup").first();
   await expect(summary).toBeVisible();
@@ -34,7 +65,7 @@ test("keeps thin-reading prose and evidence markers readable on desktop", async 
 
 test("keeps the community recommendation rail visible without a configured source on a narrow viewport", async ({ page }) => {
   await page.setViewportSize({ height: 844, width: 390 });
-  await page.goto("/?thin-reading-fixture");
+  await mountThinReadingBrowserFixture(page);
   const summary = page.getByTestId("thin-reading-summary");
   await expect(summary).toBeVisible();
   await expect(page.getByRole("button", { name: "深入了解实验" })).toBeVisible();
@@ -47,7 +78,7 @@ test("keeps the community recommendation rail visible without a configured sourc
 
 test("keeps generation progress visible and prevents duplicate branch starts", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-progress-fixture");
+  await mountThinReadingBrowserFixture(page, { generationProgress: true });
 
   await expect(page.getByText("核验薄读证据", { exact: true })).toBeVisible();
   await expect(page.getByText("正在核验句级证据映射", { exact: true })).toBeVisible();
@@ -59,7 +90,7 @@ test("keeps generation progress visible and prevents duplicate branch starts", a
 
 test("opens deepen and annotation controls for a selected summary passage", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-fixture");
+  await mountThinReadingBrowserFixture(page);
   const summary = page.getByTestId("thin-reading-summary");
   await summary.evaluate((element) => {
     const textNode = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
@@ -83,7 +114,7 @@ test("opens deepen and annotation controls for a selected summary passage", asyn
 
 test("keeps mobile selection actions visible and saves an annotation", async ({ page }) => {
   await page.setViewportSize({ height: 844, width: 390 });
-  await page.goto("/?thin-reading-fixture");
+  await mountThinReadingBrowserFixture(page);
   const summary = page.getByTestId("thin-reading-summary");
 
   await summary.evaluate((element) => {
@@ -116,14 +147,14 @@ test("keeps mobile selection actions visible and saves an annotation", async ({ 
 
 test("renders the community recommendation empty state for the local thin-reading fixture", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-fixture");
+  await mountThinReadingBrowserFixture(page);
   await expect(page.locator(".thin-reading__intuecho")).toHaveCount(1);
   await expect(page.getByText("连接 Intuecho 社区后显示共享批注推荐", { exact: true })).toBeVisible();
 });
 
 test("switches thin-reading graph forms and reclaims the collapsed recommendation column", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-fixture");
+  await mountThinReadingBrowserFixture(page);
 
   await expect(page.getByText("Graph View", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "收起 Intuecho 推荐栏" }).click();
@@ -152,7 +183,7 @@ test("switches thin-reading graph forms and reclaims the collapsed recommendatio
 
 test("keeps deep mind-map branches in columns and copies a dragged subtree into a split pane", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-mindmap-fixture");
+  await mountThinReadingBrowserFixture(page, { deepMindMap: true });
   await page.getByRole("button", { name: "思维导图" }).click();
 
   const depthZero = page.locator('[data-mindmap-depth="0"]').first();
@@ -177,7 +208,7 @@ test("keeps deep mind-map branches in columns and copies a dragged subtree into 
 
 test("keeps external source markers selectable for annotation but not deeper reading", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-external-fixture");
+  await mountThinReadingBrowserFixture(page, { external: true });
   const source = page.getByRole("link", {
     exact: true,
     name: "打开外部来源：Highly accurate protein structure prediction with AlphaFold"
@@ -211,7 +242,7 @@ test("keeps external source markers selectable for annotation but not deeper rea
 
 test("loads the bundled OCR language data in the browser and extracts a scanned PDF", async ({ page }) => {
   test.setTimeout(120_000);
-  await page.goto("/?thin-reading-ocr-fixture");
+  await mountOcrBrowserFixture(page);
   const fixture = page.getByTestId("ocr-browser-fixture");
 
   await expect(fixture).toContainText("Liteasy scanned evidence OCR must preserve this sentence.", {
@@ -242,26 +273,33 @@ test.describe("thin-reading multimodal integration", () => {
         const overlap = (a: typeof visual, b: typeof visual) => Boolean(a && b &&
           a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom);
         return {
-          ordered: Boolean(visual && proseRegion && source && visual.top <= proseRegion.top && proseRegion.top <= source.top),
+          ordered: Boolean(visual && proseRegion && source && visual.bottom <= proseRegion.top && proseRegion.bottom <= source.top),
           overlaps: overlap(visual, proseRegion) || overlap(proseRegion, source) || overlap(visual, source),
           regions
         };
       });
       expect(geometry.ordered).toBe(true);
       expect(geometry.overlaps).toBe(false);
+      await expect(visuals.locator('[data-testid="visualization-artifact-stage"]')).toHaveCount(1);
+      await expect(sourceFigures.locator(".thin-reading__figure-embed")).toHaveCount(2);
 
       const toggle = page.getByRole("switch", { name: "多模态" });
       await expect(toggle).toBeChecked();
       await toggle.click();
       await expect(toggle).not.toBeChecked();
 
-      const wholeFigure = page.getByRole("button", { name: "深入整图" });
+      const firstSourceFigure = sourceFigures.locator(".thin-reading__figure-embed").first();
+      const wholeFigure = firstSourceFigure.getByRole("button", { name: "深入整图" });
       await expect(wholeFigure).toBeVisible();
       await wholeFigure.click();
-      const regionTrigger = page.getByRole("button", { name: "选择区域" });
+      const regionTrigger = firstSourceFigure.getByRole("button", { name: "选择区域" });
       await regionTrigger.click();
       const regionForm = page.getByLabel("区域坐标");
       await expect(regionForm).toBeVisible();
+      await page.getByRole("spinbutton", { name: "x" }).fill("10");
+      await page.getByRole("spinbutton", { name: "y" }).fill("20");
+      await page.getByRole("spinbutton", { name: "width" }).fill("30");
+      await page.getByRole("spinbutton", { name: "height" }).fill("40");
       const regionAction = page.getByRole("button", { name: "深入此区域" });
       await regionAction.focus();
       await page.keyboard.press("Enter");
@@ -270,6 +308,29 @@ test.describe("thin-reading multimodal integration", () => {
       const objectAction = page.getByRole("button", { name: "深入 Start" });
       await expect(objectAction).toBeVisible();
       await objectAction.click();
+      await expect.poll(async () => page.evaluate(() => (
+        (window as unknown as { __liteasyThinReadingTargets?: unknown[] }).__liteasyThinReadingTargets?.length ?? 0
+      ))).toBe(3);
+      const sources = await page.evaluate(() => (
+        (window as unknown as { __liteasyThinReadingTargets?: Array<{ kind: string; target: Record<string, unknown> }> }).__liteasyThinReadingTargets ?? []
+      ));
+      expect(sources[0]).toEqual({
+        kind: "visualization_target",
+        target: { evidenceIds: ["evidence-attention-self-attention"], kind: "source_figure", nodeId: expect.any(String), sourceFigureId: "figure-a" }
+      });
+      expect(sources[1]).toEqual(expect.objectContaining({
+        kind: "visualization_target",
+        target: expect.objectContaining({ evidenceIds: ["evidence-attention-self-attention"], kind: "source_region", nodeId: expect.any(String), sourceFigureId: "figure-a", sourcePixelSize: { height: 1, width: 1 } })
+      }));
+      const region = sources[1]?.target.bbox as { height: number; width: number; x: number; y: number };
+      expect(region.x).toBeCloseTo(0.1);
+      expect(region.y).toBeCloseTo(0.2);
+      expect(region.width).toBeCloseTo(0.3);
+      expect(region.height).toBeCloseTo(0.4);
+      expect(sources[2]).toEqual({
+        kind: "visualization_target",
+        target: { artifactId: "viz-fixture", evidenceClaimIds: ["thin-reading-claim-attention-core"], kind: "generated_object", nodeId: expect.any(String), objectId: "start", objectPath: ["start"] }
+      });
       await testInfo.attach(`thin-reading-multimodal-${viewport.name}`, {
         body: await page.screenshot({ fullPage: true }),
         contentType: "image/png"
@@ -290,7 +351,9 @@ test.describe("thin-reading multimodal integration", () => {
 test("keeps a real PDF evidence overlay aligned after zooming", async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-reader-evidence-fixture");
+  await mountReaderEvidenceBrowserFixture(page);
+  await expect(page.getByRole("main", { name: "PDF evidence browser fixture" })).toBeVisible();
+  await expect(page.locator('.pdf-reader[data-pdf-source^="http"]')).toBeVisible();
   const evidence = page.getByLabel(/Agent 引用证据高亮：第 1 页/).first();
   const canvas = page.getByLabel("PDF.js 页面画布 1", { exact: true });
   await expect(evidence).toBeVisible({ timeout: 90_000 });
@@ -321,7 +384,9 @@ test("keeps a real PDF evidence overlay aligned after zooming", async ({ page })
 test("anchors the PDF selection menu to the real selected text", async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?thin-reading-reader-evidence-fixture");
+  await mountReaderEvidenceBrowserFixture(page);
+  await expect(page.getByRole("main", { name: "PDF evidence browser fixture" })).toBeVisible();
+  await expect(page.locator('.pdf-reader[data-pdf-source^="http"]')).toBeVisible();
   const textLayer = page.locator(".pdf-text-layer").first();
   await expect.poll(async () => textLayer.evaluate((element) => element.textContent?.trim().length ?? 0), {
     timeout: 90_000

@@ -14,8 +14,9 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: "npx vite --host 127.0.0.1 --port 1425",
+        command: "npx vite --host 127.0.0.1 --port 1425 --strictPort",
         url: "http://127.0.0.1:1425",
-        reuseExistingServer: true
+        // A fixed port may belong to another checkout; never silently reuse it.
+        reuseExistingServer: false
       }
 });
