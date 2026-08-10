@@ -3,6 +3,10 @@ import sourceFigureManifest from "../visualization/skills/source-figure/skill.js
 import sourceFigureInstructions from "../visualization/skills/source-figure/instructions.md?raw";
 import semanticGraphManifest from "../visualization/skills/semantic-graph/skill.json";
 import semanticGraphInstructions from "../visualization/skills/semantic-graph/instructions.md?raw";
+import circuitManifest from "../visualization/skills/circuit/skill.json";
+import circuitInstructions from "../visualization/skills/circuit/instructions.md?raw";
+import physicsDiagramManifest from "../visualization/skills/physics-diagram/skill.json";
+import physicsDiagramInstructions from "../visualization/skills/physics-diagram/instructions.md?raw";
 import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
@@ -134,6 +138,22 @@ registerBuiltinSkill(semanticGraph, async () => ({
   manifest: semanticGraph,
   instructions: semanticGraphInstructions,
   validatorIds: semanticGraph.validatorIds
+}));
+
+const circuit = parseManifest(circuitManifest);
+registerBuiltinSkill(circuit, async () => ({
+  fallbackModalities: circuit.fallbackModalities,
+  manifest: circuit,
+  instructions: circuitInstructions,
+  validatorIds: circuit.validatorIds
+}));
+
+const physicsDiagram = parseManifest(physicsDiagramManifest);
+registerBuiltinSkill(physicsDiagram, async () => ({
+  fallbackModalities: physicsDiagram.fallbackModalities,
+  manifest: physicsDiagram,
+  instructions: physicsDiagramInstructions,
+  validatorIds: physicsDiagram.validatorIds
 }));
 
 const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);

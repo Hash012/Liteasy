@@ -1,0 +1,16 @@
+{
+  "costClass": "low",
+  "evidenceRequirements": ["components, wires, parameters, and measurements require evidence claims"],
+  "fallbackModalities": ["source_figure"],
+  "id": "circuit",
+  "integrityRules": ["typed circuit spec only", "wire endpoints must reference known ports", "KCL/KVL checks do not infer missing values"],
+  "kernelId": "circuit-v1",
+  "modality": "circuit",
+  "outputSchemaId": "liteasy.visualization/circuit/v1",
+  "remote": false,
+  "rendererId": "circuit-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["trusted safe SVG renderer", "controlled circuit symbols"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

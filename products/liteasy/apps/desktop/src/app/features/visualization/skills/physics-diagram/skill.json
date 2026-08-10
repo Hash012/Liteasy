@@ -1,0 +1,16 @@
+{
+  "costClass": "low",
+  "evidenceRequirements": ["objects, vectors, rays, constraints, and annotations require evidence claims"],
+  "fallbackModalities": ["source_figure"],
+  "id": "physics-diagram",
+  "integrityRules": ["typed physics_diagram spec only", "vectors must have finite direction and compatible units"],
+  "kernelId": "physics-diagram-v1",
+  "modality": "physics_diagram",
+  "outputSchemaId": "liteasy.visualization/physics-diagram/v1",
+  "remote": false,
+  "rendererId": "physics-diagram-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["trusted safe SVG renderer", "controlled physics symbols"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

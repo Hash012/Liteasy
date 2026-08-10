@@ -10,6 +10,9 @@ const ArtifactLibraryBrowserFixture = import.meta.env.DEV
 const SemanticGraphBrowserFixture = import.meta.env.DEV
   ? lazy(() => import("./tests/fixtures/semanticGraphBrowserFixture"))
   : null;
+const ScienceDiagramBrowserFixture = import.meta.env.DEV
+  ? lazy(() => import("./tests/fixtures/scienceDiagramBrowserFixture"))
+  : null;
 
 export default function App() {
   const fixture = import.meta.env.DEV ? window.location.search : "";
@@ -31,6 +34,13 @@ export default function App() {
     return (
       <Suspense fallback={null}>
         <SemanticGraphBrowserFixture />
+      </Suspense>
+    );
+  }
+  if (fixture === "?science-diagram-fixture" && ScienceDiagramBrowserFixture) {
+    return (
+      <Suspense fallback={null}>
+        <ScienceDiagramBrowserFixture />
       </Suspense>
     );
   }

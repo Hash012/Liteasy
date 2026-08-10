@@ -60,6 +60,17 @@ test("loads the disabled semantic graph package without enabling generated catal
     .toEqual([]);
 });
 
+test("loads disabled circuit and physics diagram packages without generated catalog access", async () => {
+  await expect(loadBuiltinSkill("circuit")).resolves.toMatchObject({
+    manifest: expect.objectContaining({ id: "circuit", modality: "circuit", rendererId: "circuit-svg" })
+  });
+  await expect(loadBuiltinSkill("physics-diagram")).resolves.toMatchObject({
+    manifest: expect.objectContaining({ id: "physics-diagram", modality: "physics_diagram", rendererId: "physics-diagram-svg" })
+  });
+  expect(getVisualizationBuiltinCatalog().entries.filter(({ enabled, generated }) => enabled && generated))
+    .toEqual([]);
+});
+
 test("matches every enabled shared catalog entry to a local built-in package", () => {
   const summaries = getBuiltinSkillSummary();
   const catalog = getVisualizationBuiltinCatalog();
