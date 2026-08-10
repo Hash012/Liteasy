@@ -47,6 +47,24 @@
       "generated": true,
       "modality": "geometry_3d",
       "skillId": "geometry-3d"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "physics_process",
+      "skillId": "physics-process"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "reaction_process",
+      "skillId": "reaction-process"
+    },
+    {
+      "enabled": true,
+      "generated": true,
+      "modality": "raster_illustration",
+      "skillId": "raster-illustration"
     }
   ],
   "version": "liteasy.visualization-builtins/v1"
