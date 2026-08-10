@@ -354,6 +354,113 @@ test("streams library PDFs through private staging and applies the security scan
   assert.deepEqual(fs.readdirSync(path.join(objectDirectory, ".staging")), []);
 });
 
+test("rejects a reused upload idempotency key when PDF content changes", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "changed-upload-user";
+  const scopeId = `user:${sessionId}`;
+  const headers = {
+    "content-type": "application/pdf",
+    "x-idempotency-key": "changed-upload-content-1",
+    "x-liteasy-expected-revision": "0",
+    "x-liteasy-file-name": encodeURIComponent("Changed upload.pdf"),
+    "x-liteasy-scope-id": scopeId,
+    "x-liteasy-scope-type": "user",
+    "x-liteasy-session-id": sessionId
+  };
+  const first = await invokeHandler({
+    body: Buffer.from("%PDF-1.7\nFirst upload body\n%%EOF"),
+    handler,
+    headers,
+    method: "POST",
+    url: "/v1/library/documents/upload"
+  });
+  const conflictingReplay = await invokeHandler({
+    body: Buffer.from("%PDF-1.7\nChanged upload body\n%%EOF"),
+    handler,
+    headers,
+    method: "POST",
+    url: "/v1/library/documents/upload"
+  });
+
+  assert.equal(first.statusCode, 200, JSON.stringify(first.json));
+  assert.equal(conflictingReplay.statusCode, 409, JSON.stringify(conflictingReplay.json));
+  assert.equal(conflictingReplay.json.code, "idempotency_key_reused");
+
+  const tree = await invokeHandler({
+    body: JSON.stringify({ scopeId, scopeType: "user", sessionId }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/tree"
+  });
+  assert.equal(tree.statusCode, 200, JSON.stringify(tree.json));
+  assert.equal(tree.json.tree.entries.length, 1);
+  assert.equal(tree.json.tree.entries[0].contentHash, first.json.document.contentHash);
+  assert.equal(tree.json.tree.revision, 1);
+});
+
+test("rejects a reused attachment idempotency key when PDF content changes", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "changed-attachment-user";
+  const scopeId = `user:${sessionId}`;
+  const created = await invokeHandler({
+    body: JSON.stringify({
+      expectedRevision: 0,
+      idempotencyKey: "changed-attachment-metadata-1",
+      scopeId,
+      scopeType: "user",
+      sessionId,
+      title: "Attachment target"
+    }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/entries/metadata"
+  });
+  assert.equal(created.statusCode, 200, JSON.stringify(created.json));
+
+  const headers = {
+    "content-type": "application/pdf",
+    "x-idempotency-key": "changed-attachment-content-1",
+    "x-liteasy-document-id": created.json.entry.documentId,
+    "x-liteasy-expected-revision": String(created.json.revision),
+    "x-liteasy-file-name": encodeURIComponent("Attachment target.pdf"),
+    "x-liteasy-scope-id": scopeId,
+    "x-liteasy-scope-type": "user",
+    "x-liteasy-session-id": sessionId
+  };
+  const first = await invokeHandler({
+    body: Buffer.from("%PDF-1.7\nFirst attachment body\n%%EOF"),
+    handler,
+    headers,
+    method: "POST",
+    url: "/v1/library/entries/attach-pdf"
+  });
+  const conflictingReplay = await invokeHandler({
+    body: Buffer.from("%PDF-1.7\nChanged attachment body\n%%EOF"),
+    handler,
+    headers,
+    method: "POST",
+    url: "/v1/library/entries/attach-pdf"
+  });
+
+  assert.equal(first.statusCode, 200, JSON.stringify(first.json));
+  assert.equal(conflictingReplay.statusCode, 409, JSON.stringify(conflictingReplay.json));
+  assert.equal(conflictingReplay.json.code, "idempotency_key_reused");
+
+  const tree = await invokeHandler({
+    body: JSON.stringify({ scopeId, scopeType: "user", sessionId }),
+    handler,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/tree"
+  });
+  assert.equal(tree.statusCode, 200, JSON.stringify(tree.json));
+  assert.equal(tree.json.tree.entries.length, 1);
+  assert.equal(tree.json.tree.entries[0].contentHash, first.json.entry.contentHash);
+  assert.equal(tree.json.tree.revision, 2);
+});
+
 test("rejects unsafe PDF markers before committing a library object", async () => {
   const objectDirectory = path.join(process.env.LITEASY_DEV_CLOUD_DATA_DIR, "unsafe-objects");
   const response = await invokeHandler({
@@ -417,6 +524,77 @@ test("renames a metadata-only library entry through the versioned mutation API",
   assert.equal(updated.json.document.title, "After rename");
   assert.ok(updated.json.revision > created.json.revision);
 });
+
+test("replays a normalized library request across authentication and key transports", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "normalized-mutation-user";
+  const requestBody = {
+    expectedRevision: 0,
+    name: "Research",
+    scopeId: `user:${sessionId}`,
+    scopeType: "user"
+  };
+  const first = await invokeHandler({
+    body: JSON.stringify({
+      ...requestBody,
+      idempotencyKey: "folder-normalized-1",
+      sessionId
+    }),
+    handler,
+    headers: {
+      authorization: `Bearer ${sessionId}`,
+      "content-type": "application/json"
+    },
+    method: "POST",
+    url: "/v1/library/folders/create"
+  });
+  const replay = await invokeHandler({
+    body: JSON.stringify(requestBody),
+    handler,
+    headers: {
+      authorization: `Bearer ${sessionId}`,
+      "content-type": "application/json",
+      "x-idempotency-key": "folder-normalized-1"
+    },
+    method: "POST",
+    url: "/v1/library/folders/create"
+  });
+
+  assert.equal(first.statusCode, 200, JSON.stringify(first.json));
+  assert.equal(first.json.replayed, false);
+  assert.equal(replay.statusCode, 200, JSON.stringify(replay.json));
+  assert.equal(replay.json.replayed, true);
+  assert.equal(replay.json.folder.folderId, first.json.folder.folderId);
+  assert.equal(replay.json.revision, first.json.revision);
+});
+
+for (const [label, expectedRevision] of [
+  ["boolean", false],
+  ["array", []],
+  ["whitespace string", " "],
+  ["noncanonical decimal string", "00"]
+]) {
+  test(`rejects ${label} library revisions at the HTTP boundary`, async () => {
+    const sessionId = `invalid-revision-${label.replaceAll(" ", "-")}`;
+    const response = await invokeHandler({
+      body: JSON.stringify({
+        expectedRevision,
+        idempotencyKey: `invalid-revision-${label.replaceAll(" ", "-")}-1`,
+        name: "Must not be created",
+        scopeId: `user:${sessionId}`,
+        scopeType: "user",
+        sessionId
+      }),
+      handler: createDevCloudRequestHandler(),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      url: "/v1/library/folders/create"
+    });
+
+    assert.equal(response.statusCode, 400, JSON.stringify(response.json));
+    assert.equal(response.json.code, "invalid_library_revision");
+  });
+}
 
 test("persists literature through an idempotent library metadata update", async () => {
   const handler = createDevCloudRequestHandler();
@@ -4049,6 +4227,8 @@ test("reuses a recent persistent candidate without presenting it as a new live d
 });
 
 test("accepts privacy-safe metadata sync and rejects local paths", async () => {
+  const handler = createDevCloudRequestHandler();
+  await enablePersonalization(handler);
   const response = await invokeHandler({
     method: "POST",
     headers: {
@@ -4075,6 +4255,7 @@ test("accepts privacy-safe metadata sync and rejects local paths", async () => {
       sessionId: "test-session-1",
       workspaceRevision: 0
     }),
+    handler,
     url: "/v1/documents/metadata-sync"
   });
 
@@ -4212,6 +4393,21 @@ test("runs an organization lifecycle through authenticated RBAC endpoints", asyn
   assert.equal(createdAnnotation.json.revision, 1);
   assert.equal(createdAnnotation.json.uploadedBy, testOwnerKey("organization-owner"));
   const annotationId = createdAnnotation.json.annotationId;
+  const conflictingAnnotationReplay = await invokeAs(
+    "organization-owner",
+    "/v1/org/annotations/create",
+    {
+      body: {
+        ...createdAnnotation.json.body,
+        note: "Changed under a reused key"
+      },
+      documentId,
+      idempotencyKey: "team-annotation-create-1",
+      organizationId
+    }
+  );
+  assert.equal(conflictingAnnotationReplay.statusCode, 409);
+  assert.equal(conflictingAnnotationReplay.json.code, "idempotency_key_reused");
   const listedAnnotations = await invokeAs(
     "organization-member",
     "/v1/org/annotations/list",
@@ -4219,6 +4415,7 @@ test("runs an organization lifecycle through authenticated RBAC endpoints", asyn
   );
   assert.equal(listedAnnotations.statusCode, 200);
   assert.equal(listedAnnotations.json.annotations[0].annotationId, annotationId);
+  assert.equal(listedAnnotations.json.annotations[0].body.note, "Initial note");
   const updatedAnnotation = await invokeAs(
     "organization-owner",
     "/v1/org/annotations/update",

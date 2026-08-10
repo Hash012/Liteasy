@@ -57,7 +57,8 @@ test("organization library audits are transactional and idempotent", () => {
           { resourceId: value.document.documentId }
         );
         return value;
-      }
+      },
+      { expectedRevision: 0, fileName: "Paper.pdf", organizationId }
     );
 
     assert.equal(execute().replayed, false);
