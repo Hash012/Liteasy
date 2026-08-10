@@ -2406,7 +2406,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
       try {
         const snapshot = personalizationRepository.recordSignal(body.sessionId, body.signal);
-        clearRecommendationCacheForSession(body.sessionId);
+        if (snapshot.enabled) {
+          clearRecommendationCacheForSession(body.sessionId);
+        }
         writeJson(request, response, 200, snapshot);
       } catch (error) {
         if (error instanceof PersonalizationValidationError) {

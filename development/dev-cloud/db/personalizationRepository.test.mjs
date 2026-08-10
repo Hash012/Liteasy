@@ -16,14 +16,32 @@ function setup() {
   return { database, personalization, tags, works };
 }
 
+test("new accounts require explicit opt-in before behavior collection", () => {
+  const { database, personalization } = setup();
+  const ownerKey = "user:explicit-opt-in";
+
+  assert.equal(personalization.get(ownerKey).enabled, false);
+  assert.deepEqual(personalization.recordSignal(ownerKey, {
+    kind: "paper_opened",
+    title: "Private retrieval topic"
+  }).tags, []);
+  assert.equal(
+    database.prepare("SELECT count(*) AS count FROM personalization_terms WHERE owner_key = ?")
+      .get(ownerKey).count,
+    0
+  );
+});
+
 test("recordSignal paper_opened bumps the work's indexed tags into the user profile", () => {
   const { personalization, tags, works } = setup();
+  const ownerKey = "user:u1";
   const work = works.resolveWork([{ kind: "doi", value: "10.1/profile-tag" }], {
     title: "ColBERT Dense Retrieval"
   });
   tags.indexWork(work.work.id, { title: work.work.title });
+  personalization.setEnabled(ownerKey, true);
 
-  const snapshot = personalization.recordSignal("user:u1", {
+  const snapshot = personalization.recordSignal(ownerKey, {
     kind: "paper_opened",
     title: work.work.title,
     workId: work.work.id
@@ -38,17 +56,19 @@ test("recordSignal paper_opened bumps the work's indexed tags into the user prof
 
 test("profile/get exposes top tags ordered by weight and evidence", () => {
   const { personalization, tags, works } = setup();
+  const ownerKey = "user:u2";
   const work = works.resolveWork([{ kind: "doi", value: "10.1/expose" }], {
     title: "Transformer Attention Mechanism"
   });
   tags.indexWork(work.work.id, { title: work.work.title });
-  personalization.recordSignal("user:u2", {
+  personalization.setEnabled(ownerKey, true);
+  personalization.recordSignal(ownerKey, {
     kind: "recommendation_saved",
     title: work.work.title,
     workId: work.work.id
   });
 
-  const snapshot = personalization.get("user:u2");
+  const snapshot = personalization.get(ownerKey);
   assert.ok(Array.isArray(snapshot.tags));
   assert.ok(snapshot.tags.length > 0);
   // saved weight (1) > opened weight (0.15)
@@ -57,16 +77,18 @@ test("profile/get exposes top tags ordered by weight and evidence", () => {
 
 test("repeated signals increment evidence_count and weight", () => {
   const { personalization, tags, works } = setup();
+  const ownerKey = "user:u3";
   const work = works.resolveWork([{ kind: "doi", value: "10.1/repeat" }], {
     title: "ColBERT Retrieval"
   });
   tags.indexWork(work.work.id, { title: work.work.title });
-  personalization.recordSignal("user:u3", {
+  personalization.setEnabled(ownerKey, true);
+  personalization.recordSignal(ownerKey, {
     kind: "paper_opened",
     title: work.work.title,
     workId: work.work.id
   });
-  const second = personalization.recordSignal("user:u3", {
+  const second = personalization.recordSignal(ownerKey, {
     kind: "paper_opened",
     title: work.work.title,
     workId: work.work.id
@@ -78,16 +100,18 @@ test("repeated signals increment evidence_count and weight", () => {
 
 test("clear profile removes user tags and terms", () => {
   const { personalization, tags, works } = setup();
+  const ownerKey = "user:u4";
   const work = works.resolveWork([{ kind: "doi", value: "10.1/clear" }], {
     title: "ColBERT Retrieval"
   });
   tags.indexWork(work.work.id, { title: work.work.title });
-  personalization.recordSignal("user:u4", {
+  personalization.setEnabled(ownerKey, true);
+  personalization.recordSignal(ownerKey, {
     kind: "paper_opened",
     title: work.work.title,
     workId: work.work.id
   });
-  const cleared = personalization.clear("user:u4");
+  const cleared = personalization.clear(ownerKey);
   assert.deepEqual(cleared.tags, []);
   assert.equal(cleared.assistantSummary, undefined);
 });
@@ -96,6 +120,7 @@ test("clear removes every personalization surface, disables collection, and inva
   const { database, personalization } = setup();
   const ownerKey = "user:privacy-clear";
   const timestamp = "2026-08-06T00:00:00.000Z";
+  personalization.setEnabled(ownerKey, true);
   personalization.save(ownerKey, { disciplines: [], stage: "博士研究生" });
   personalization.recordSignal(ownerKey, {
     kind: "paper_opened",
@@ -159,7 +184,9 @@ test("clear removes every personalization surface, disables collection, and inva
 
 test("signal without workId still extracts tags from title (backward compatible)", () => {
   const { personalization } = setup();
-  const snapshot = personalization.recordSignal("user:u5", {
+  const ownerKey = "user:u5";
+  personalization.setEnabled(ownerKey, true);
+  const snapshot = personalization.recordSignal(ownerKey, {
     kind: "paper_opened",
     title: "神经信息检索方法"
   });
@@ -169,12 +196,14 @@ test("signal without workId still extracts tags from title (backward compatible)
 
 test("recordSignal rejects invalid workId silently by ignoring it", () => {
   const { personalization, tags, works } = setup();
+  const ownerKey = "user:u6";
   const work = works.resolveWork([{ kind: "doi", value: "10.1/badid" }], {
     title: "ColBERT Retrieval"
   });
   tags.indexWork(work.work.id, { title: work.work.title });
+  personalization.setEnabled(ownerKey, true);
   // workId with illegal chars is ignored; title terms still recorded
-  const snapshot = personalization.recordSignal("user:u6", {
+  const snapshot = personalization.recordSignal(ownerKey, {
     kind: "paper_opened",
     title: "ColBERT Retrieval",
     workId: "bad id with spaces"
@@ -187,8 +216,10 @@ test("recordSignal rejects invalid workId silently by ignoring it", () => {
 
 test("recordSignal rejects missing title for paper_opened", () => {
   const { personalization } = setup();
+  const ownerKey = "user:u7";
+  personalization.setEnabled(ownerKey, true);
   assert.throws(
-    () => personalization.recordSignal("user:u7", { kind: "paper_opened", title: "   " }),
+    () => personalization.recordSignal(ownerKey, { kind: "paper_opened", title: "   " }),
     (error) => error instanceof PersonalizationValidationError
   );
 });

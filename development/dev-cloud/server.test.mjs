@@ -183,6 +183,18 @@ async function invokeHandler({ body, handler, handlerOptions, headers = {}, meth
   };
 }
 
+async function enablePersonalization(handler, sessionId = "test-session-1") {
+  const response = await invokeHandler({
+    body: JSON.stringify({ enabled: true, sessionId }),
+    handler,
+    headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+    method: "POST",
+    url: "/v1/personalization/settings/update"
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json.enabled, true);
+}
+
 test("allows browser CORS preflight from the desktop dev server", async () => {
   const response = await invokeHandler({
     method: "OPTIONS",
@@ -1088,6 +1100,7 @@ test("persists profile signals and clears every account personalization artifact
   const getResponse = await invokeProfile("/v1/profile/get", {});
   assert.deepEqual(getResponse.json.profile, saveResponse.json.profile);
 
+  await enablePersonalization(handler, sessionId);
   const signalResponse = await invokeProfile("/v1/personalization/signal", {
     signal: { kind: "paper_opened", title: "神经信息检索方法" }
   });
@@ -1146,6 +1159,48 @@ test("persists profile signals and clears every account personalization artifact
   assert.equal(database.prepare("SELECT COUNT(*) AS count FROM recommendation_suppressions WHERE owner_key = ?")
     .get(ownerKey).count, 0);
   database.close();
+});
+
+test("requires an explicit settings update before collecting personalization signals", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "test-session-opt-in";
+  const ownerKey = testOwnerKey(sessionId);
+  const cacheScope = {
+    personalizationVersion: 0,
+    selectionKey: "selection-before-opt-in",
+    sessionId: ownerKey,
+    sortMode: "relevance",
+    workspaceKey: "workspace-before-opt-in"
+  };
+  const invokeProfile = (url, body) => invokeHandler({
+    body: JSON.stringify({ sessionId, ...body }),
+    handler,
+    headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+    method: "POST",
+    url
+  });
+
+  const initial = await invokeProfile("/v1/personalization/settings", {});
+  assert.equal(initial.statusCode, 200);
+  assert.equal(initial.json.enabled, false);
+
+  putRecommendationCache(cacheScope, [{ id: "cached-before-opt-in" }]);
+  const ignored = await invokeProfile("/v1/personalization/signal", {
+    signal: { kind: "paper_opened", title: "Private retrieval topic" }
+  });
+  assert.equal(ignored.statusCode, 200);
+  assert.deepEqual(ignored.json.tags, []);
+  assert.equal(getRecommendationCache(cacheScope).cacheHit, true);
+
+  const enabled = await invokeProfile("/v1/personalization/settings/update", { enabled: true });
+  assert.equal(enabled.statusCode, 200);
+  assert.equal(enabled.json.enabled, true);
+
+  const collected = await invokeProfile("/v1/personalization/signal", {
+    signal: { kind: "paper_opened", title: "Private retrieval topic" }
+  });
+  assert.equal(collected.statusCode, 200);
+  assert.ok(collected.json.tags.length > 0);
 });
 
 test("normalizes traceable OpenAlex works for external thin-reading research", async () => {
@@ -3119,6 +3174,7 @@ test("completes an implicit recommendation profile after behavior personalizatio
       status: 200
     })
   });
+  await enablePersonalization(handler);
   const signalResponse = await invokeHandler({
     body: JSON.stringify({
       sessionId: "test-session-1",
@@ -4555,6 +4611,7 @@ test("profile/get exposes reading-derived tags and signal with workId links them
     url: `/v1/works/${workId}/index`
   });
 
+  await enablePersonalization(handler);
   // Open the paper: signal carries workId so the work's tags land in the profile.
   const signal = await invokeHandler({
     body: JSON.stringify({
@@ -4582,6 +4639,7 @@ test("profile/get exposes reading-derived tags and signal with workId links them
 
 test("signal with invalid workId still records title-derived tags", async () => {
   const handler = createDevCloudRequestHandler();
+  await enablePersonalization(handler);
   const signal = await invokeHandler({
     body: JSON.stringify({
       sessionId: "test-session-1",
@@ -4616,6 +4674,7 @@ test("tag-driven recommendation surfaces candidates with surfacing tag provenanc
     searchExternalKnowledge: stubSearch
   });
 
+  await enablePersonalization(handler);
   // Give the user reading-derived tags.
   await invokeHandler({
     body: JSON.stringify({
