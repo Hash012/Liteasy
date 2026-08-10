@@ -1295,6 +1295,7 @@ export function AppShell({
     libraryPaperChildren,
     localLibraryError,
     localLibrarySnapshot,
+    literatureHydration: workspaceSelection.model.literatureHydration,
     libraryRootPath: localLibrarySnapshot?.rootPath ?? null,
     loadLegacyLibraryRoots: isPaperCacheAvailable()
       ? listLegacyLocalLibraryRoots

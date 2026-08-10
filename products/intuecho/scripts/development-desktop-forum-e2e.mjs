@@ -139,7 +139,7 @@ const parentAnnotation = await request(forumBaseUrl, `/v1/annotations/${encodeUR
   sessionId: webSession.sessionId
 });
 assert(parentAnnotation.annotation?.targets?.length > 0, "synced parent annotation did not retain a literature target");
-const persistedLiterature = parentAnnotation.annotation.targets[0]?.literature;
+const persistedLiterature = parentAnnotation.annotation.targets[0]?.literature?.literatureRecord;
 assert(persistedLiterature?.provenance?.mode === "manual", "persisted annotation did not hydrate manual literature provenance");
 assert(
   persistedLiterature.identifiers?.every((identifier) => identifier.source === "manual"),

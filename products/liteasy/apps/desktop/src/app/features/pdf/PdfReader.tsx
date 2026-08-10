@@ -89,6 +89,7 @@ type PdfReaderProps = {
   allowServerPdfParsing?: boolean;
   /** Where the structured citation parser lives; its snapshot is what thin reading reads back. */
   externalKnowledgeEndpoint?: string;
+  loadLiteratureHints?: typeof collectPdfLiteratureHints;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   pdfBackground?: string;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
@@ -1060,6 +1061,7 @@ function PdfThumbnail({ active, activePaper, pageNumber, pdfDocument }: PdfThumb
 export function PdfReader({
   allowServerPdfParsing = false,
   externalKnowledgeEndpoint = "",
+  loadLiteratureHints = collectPdfLiteratureHints,
   loadPdfSource,
   pdfBackground = "#ffffff",
   onPaperAnnotated,
@@ -1461,19 +1463,29 @@ export function PdfReader({
       const annotation = recovery.annotations.find((candidate) => candidate.id === item.annotationId);
       if (!annotation || annotation.revision !== item.revision ||
         restartOperation(annotation) !== item.operation) continue;
-      const attemptKey = `${item.queueKey}:${item.revision}:${item.operation}`;
-      if (replayedPublicationKeysRef.current.has(attemptKey)) continue;
-      replayedPublicationKeysRef.current.add(attemptKey);
-      publicationIntentsRef.current.set(
-        annotation.id,
-        item.operation === "retract" ? "private" : "public"
-      );
-      void applyPublication(annotation, item.operation, true);
+      queueRestartPublication(annotation, item.operation, item.queueKey);
     }
+  }
+
+  function queueRestartPublication(
+    annotation: PdfAnnotationV2,
+    operation: "publish" | "update" | "retract",
+    queueKey = annotation.publication.pendingCreateOperation?.queueKey ??
+      `${annotation.paperIdentity.paperId}:${annotation.id}`
+  ) {
+    const attemptKey = `${queueKey}:${annotation.revision}:${operation}`;
+    if (replayedPublicationKeysRef.current.has(attemptKey)) return;
+    replayedPublicationKeysRef.current.add(attemptKey);
+    publicationIntentsRef.current.set(annotation.id, operation === "retract" ? "private" : "public");
+    void applyPublication(annotation, operation, true, attemptKey);
   }
 
   function restartOperation(annotation: PdfAnnotationV2) {
     if (annotation.publication.state === "pending_create") return "publish" as const;
+    if (
+      annotation.publication.state === "failed" &&
+      annotation.publication.pendingCreateOperation
+    ) return annotation.publication.desiredVisibility === "public" ? "publish" as const : "retract" as const;
     if (annotation.publication.state === "pending_update") return "update" as const;
     if (annotation.publication.state === "pending_retract") return "retract" as const;
     return undefined;
@@ -1482,7 +1494,8 @@ export function PdfReader({
   async function applyPublication(
     annotation: PdfAnnotationV2,
     operation: "publish" | "update" | "retract",
-    restartReplay = false
+    restartReplay = false,
+    restartAttemptKey?: string
   ): Promise<PdfAnnotationPublication | undefined> {
     if (!activePaper || !onChangeAnnotationPublication) {
       const publication: PdfAnnotationPublication = {
@@ -1499,8 +1512,19 @@ export function PdfReader({
     const expectedIntent = operation === "retract" ? "private" : "public";
     const hints = operation === "retract"
       ? undefined
-      : await collectPdfLiteratureHints(activePaper, pdfDocument, pageTexts[1]);
+      : await loadLiteratureHints(activePaper, pdfDocument, pageTexts[1]);
     if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return;
+    if (restartReplay) {
+      const current = annotationsRef.current.find((item) => item.id === annotation.id);
+      const currentOperation = current ? restartOperation(current) : undefined;
+      if (!current || current.revision !== annotation.revision || currentOperation !== operation) {
+        if (restartAttemptKey) replayedPublicationKeysRef.current.delete(restartAttemptKey);
+        if (current && currentOperation) {
+          queueMicrotask(() => queueRestartPublication(current, currentOperation));
+        }
+        return;
+      }
+    }
     let transport: PublicationTransport | undefined;
     try {
       const promise = Promise.resolve(onChangeAnnotationPublication({
@@ -1909,6 +1933,15 @@ export function PdfReader({
                   <div aria-live="polite" className="pdf-status">
                     {status}
                   </div>
+                  {activePaper?.literature ? (
+                    <div
+                      aria-label="文献身份来源"
+                      className="pdf-status"
+                      role="status"
+                    >
+                      文献身份：{activePaper.literature.provenance.mode === "manual" ? "手动录入" : "公共来源"}
+                    </div>
+                  ) : null}
                   <label className="pdf-annotation-auto-public-toggle">
                     <input
                       checked={autoPublicAnnotations}

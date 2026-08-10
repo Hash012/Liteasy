@@ -581,7 +581,12 @@ describe("usePdfAnnotationPublicationController", () => {
       annotation: annotation(), operation: "publish", paper: currentPaper
     }));
 
-    expect(first).toEqual({ desiredVisibility: "public", lastError: error, state: "failed" });
+    expect(first).toMatchObject({
+      desiredVisibility: "public",
+      lastError: error,
+      pendingCreateOperation: operations[0],
+      state: "failed"
+    });
     expect(retry).toEqual(first);
     expect(operations[0]).toEqual(operations[1]);
   });
@@ -834,13 +839,71 @@ describe("usePdfAnnotationPublicationController", () => {
     });
 
     await expect(publishing).resolves.toMatchObject({ state: "failed" });
-    await expect(retracting).resolves.toEqual({
+    await expect(retracting).resolves.toMatchObject({
       desiredVisibility: "private",
       lastError: "撤回未完成，论坛发布状态未知。论坛发布请求失败，请稍后重试。",
+      pendingCreateOperation: operations[0],
       state: "failed"
     });
     expect(apply).toHaveBeenCalledTimes(2);
     expect(operations[1]).toEqual(operations[0]);
+  });
+
+  test("replays a restart-durable exact create before retracting after controller restart", async () => {
+    const exactCreate: Extract<ForumAnnotationPublicationOperation, { operation: "upsert" }> = {
+      annotationId: "annotation-1",
+      body: "Exact pre-crash body",
+      literatureId: "literature-before-crash",
+      operation: "upsert",
+      queueKey: "paper-1:annotation-1",
+      revision: 6,
+      sourcePassage: {
+        anchorHash: "pdf:paper-1:2:pre-crash",
+        excerpt: "Exact pre-crash excerpt",
+        page: 2,
+        rects: [{ height: 0.1, left: 0.2, top: 0.3, width: 0.4 }]
+      },
+      updatedAt: "2026-08-09T00:00:03.000Z"
+    };
+    const operations: ForumAnnotationPublicationOperation[] = [];
+    const apply = vi.fn().mockImplementation(async ([operation]: ForumAnnotationPublicationOperation[]) => {
+      operations.push(operation);
+      return { results: [receipt(operation, {
+        remoteAnnotationId: "created-before-restart",
+        remoteRevision: operation.operation === "retract" ? 8 : 7
+      })] };
+    });
+    const currentPaper = paper({ literature: literature() });
+    const context = setup({ applyAnnotationPublications: apply, initialPapers: [currentPaper] });
+    const restartAnnotation = annotation({
+      publication: {
+        desiredVisibility: "private",
+        lastError: "撤回未完成，论坛发布状态未知。",
+        pendingCreateOperation: exactCreate,
+        state: "pending_retract"
+      } as unknown as PdfAnnotationV2["publication"],
+      revision: 7
+    });
+
+    const result = await context.result.current.actions.changePublication({
+      annotation: restartAnnotation,
+      operation: "retract",
+      paper: currentPaper,
+      restartReplay: true
+    });
+
+    expect(result).toMatchObject({
+      desiredVisibility: "private",
+      remoteAnnotationId: "created-before-restart",
+      state: "not_published"
+    });
+    expect(operations).toHaveLength(2);
+    expect(operations[0]).toEqual(exactCreate);
+    expect(operations[1]).toMatchObject({
+      operation: "retract",
+      remoteAnnotationId: "created-before-restart",
+      revision: 7
+    });
   });
 
   test("settles queued retract as not published after a definitive preflight failure", async () => {

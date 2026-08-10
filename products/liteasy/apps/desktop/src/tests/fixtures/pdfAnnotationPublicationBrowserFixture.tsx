@@ -139,11 +139,6 @@ function PdfAnnotationPublicationBrowserFixture({ mode }: { mode: FixtureMode })
             onSubmitManual={controller.actions.submitManual}
           />
         ) : null}
-        {paper.literature ? (
-          <output data-testid="literature-provenance" hidden={mode !== "manual"}>
-            {paper.literature.provenance.mode === "manual" ? "手动录入" : "公共来源"}
-          </output>
-        ) : null}
       </main>
     </FluentProvider>
   );

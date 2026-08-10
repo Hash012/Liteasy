@@ -93,6 +93,7 @@ import {
 } from "../organization/organizationStoragePolicy";
 import { useCloudLibraryTree } from "./useCloudLibraryTree";
 import "./library.css";
+import type { LiteratureHydrationState } from "../paper-identity/literature.types";
 
 export type LibraryPaperChildItem = {
   id: string;
@@ -110,6 +111,7 @@ type LibraryPaneProps = {
   cloudTreeRevision?: number;
   importJobs: Record<string, ImportJob>;
   localLibrarySnapshot: LocalLibrarySnapshot | null;
+  literatureHydration?: LiteratureHydrationState;
   localLibraryError?: string | null;
   loadLegacyLibraryRoots?: () => Promise<string[]>;
   organizationId?: string;
@@ -149,6 +151,24 @@ type LibraryPaneProps = {
   onToggleLock: () => void;
   onToggleSelection: (paperId: string) => void;
 };
+
+export function LiteratureHydrationStatus({
+  hydration
+}: {
+  hydration?: LiteratureHydrationState;
+}) {
+  if (hydration?.status !== "recoverable_error") return null;
+  return (
+    <div
+      aria-label="文献身份恢复状态"
+      aria-live="polite"
+      className="library-resource-action-message"
+      role="status"
+    >
+      {hydration.issues.length} 篇文献的身份信息暂时无法恢复；本地文献与其他身份信息仍可使用。
+    </div>
+  );
+}
 
 type ExplorerEntry = {
   bodyAvailable: boolean;
@@ -368,6 +388,7 @@ export function LibraryPane({
   cloudTreeRevision,
   localLibrarySnapshot,
   localLibraryError,
+  literatureHydration,
   loadLegacyLibraryRoots,
   onAddDroppedPdfFiles,
   onClearRecommendations,
@@ -1078,6 +1099,7 @@ export function LibraryPane({
           onToggle={() => toggleSection("local")}
           title="本地文献库"
         />
+        <LiteratureHydrationStatus hydration={literatureHydration} />
         <input
           accept=".pdf,application/pdf"
           hidden

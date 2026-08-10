@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import { AppShell } from "../app/layout/AppShell";
+import { literatureMetadataRepository } from "../app/features/paper-identity/literatureMetadataRepository";
 
 const localLibrarySnapshot = {
   entries: [
@@ -108,6 +109,25 @@ test("hydrates the resource tree only from the disk snapshot", async () => {
   expect(within(library).getByRole("button", { name: "Paper" })).toBeEnabled();
   expect(screen.queryByText("Survey of Vector Database Management Systems")).not.toBeInTheDocument();
   expect(screen.queryByText("ColBERT: Efficient and Effective Passage Search")).not.toBeInTheDocument();
+});
+
+test("surfaces recoverable literature hydration failures in the local library UI", async () => {
+  const user = userEvent.setup();
+  vi.spyOn(literatureMetadataRepository, "load").mockImplementation(async (paperId) => {
+    if (paperId === "local-paper-1") throw new Error("文献元数据文件不是有效 JSON");
+    return undefined;
+  });
+  render(
+    <AppShell
+      initialPapers={[]}
+      localLibraryLoader={async () => localLibrarySnapshot}
+    />
+  );
+
+  await enterLocalWorkbench(user);
+
+  expect(await screen.findByRole("status", { name: "文献身份恢复状态" }))
+    .toHaveTextContent("1 篇文献的身份信息暂时无法恢复");
 });
 
 test("opens login from a locked cloud region without replacing the local tree", async () => {

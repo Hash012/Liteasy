@@ -262,6 +262,85 @@ test("recovers pending retract with its original revision and stable queue key",
   }]);
 });
 
+test("recovers an unknown create outcome with its exact durable upsert", () => {
+  const pendingCreateOperation = {
+    annotationId: "annotation-unknown-create",
+    body: "Exact body before response loss",
+    literatureId: "literature-original",
+    operation: "upsert" as const,
+    queueKey: "paper-1:annotation-unknown-create",
+    revision: 6,
+    sourcePassage: {
+      anchorHash: "pdf:paper-1:1:original",
+      excerpt: "Exact excerpt before response loss",
+      page: 1,
+      rects: [{ height: 3, left: 1, top: 2, width: 4 }]
+    },
+    updatedAt: "2026-08-10T01:00:00.000Z"
+  };
+  const recovered = recoverPdfAnnotationPrivateState({
+    annotations: [{
+      ...annotation("annotation-unknown-create"),
+      publication: {
+        desiredVisibility: "public",
+        lastError: "论坛发布响应丢失。",
+        pendingCreateOperation,
+        state: "failed"
+      },
+      revision: 6
+    }],
+    autoPublic: false,
+    version: 2
+  });
+
+  expect(recovered.annotations[0].publication.pendingCreateOperation).toEqual(pendingCreateOperation);
+  expect(recovered.replayItems).toEqual([{
+    annotationId: "annotation-unknown-create",
+    operation: "publish",
+    queueKey: pendingCreateOperation.queueKey,
+    revision: pendingCreateOperation.revision
+  }]);
+});
+
+test("restarts a requested retract after an unknown create outcome", () => {
+  const pendingCreateOperation = {
+    annotationId: "annotation-unknown-create",
+    body: "Exact body before response loss",
+    literatureId: "literature-original",
+    operation: "upsert" as const,
+    queueKey: "paper-1:annotation-unknown-create",
+    revision: 6,
+    sourcePassage: {
+      anchorHash: "pdf:paper-1:1:original",
+      excerpt: "Exact excerpt before response loss",
+      page: 1,
+      rects: [{ height: 3, left: 1, top: 2, width: 4 }]
+    },
+    updatedAt: "2026-08-10T01:00:00.000Z"
+  };
+  const recovered = recoverPdfAnnotationPrivateState({
+    annotations: [{
+      ...annotation("annotation-unknown-create"),
+      publication: {
+        desiredVisibility: "private",
+        lastError: "撤回未完成，论坛发布状态未知。",
+        pendingCreateOperation,
+        state: "failed"
+      },
+      revision: 7
+    }],
+    autoPublic: false,
+    version: 2
+  });
+
+  expect(recovered.replayItems).toEqual([{
+    annotationId: "annotation-unknown-create",
+    operation: "retract",
+    queueKey: pendingCreateOperation.queueKey,
+    revision: 7
+  }]);
+});
+
 test("keeps a local annotation when one restart queue item is corrupt and continues valid replay", () => {
   const corrupt = {
     ...annotation("annotation-corrupt"),
@@ -300,6 +379,56 @@ test("keeps a local annotation when one restart queue item is corrupt and contin
     annotationId: "annotation-valid",
     operation: "publish",
     queueKey: "paper-1:annotation-valid",
+    revision: 4
+  }]);
+});
+
+test("retains a base-valid annotation with corrupt revision and continues sibling replay", () => {
+  const corruptRevision = {
+    ...annotation("annotation-corrupt-revision"),
+    publication: {
+      desiredVisibility: "public",
+      remoteAnnotationId: "remote-corrupt-revision",
+      remoteRevision: 3,
+      state: "pending_update"
+    },
+    revision: "not-a-revision"
+  };
+  const valid = {
+    ...annotation("annotation-valid-sibling"),
+    publication: { desiredVisibility: "public" as const, state: "pending_create" as const },
+    revision: 4
+  };
+
+  const recovered = recoverPdfAnnotationPrivateState({
+    annotations: [corruptRevision, valid],
+    autoPublic: false,
+    version: 2
+  });
+
+  expect(recovered.annotations.map((item) => item.id)).toEqual([
+    "annotation-corrupt-revision",
+    "annotation-valid-sibling"
+  ]);
+  expect(recovered.annotations[0]).toMatchObject({
+    excerpt: "annotation-corrupt-revision",
+    publication: {
+      desiredVisibility: "private",
+      lastError: expect.stringContaining("修订号损坏"),
+      remoteAnnotationId: "remote-corrupt-revision",
+      remoteRevision: 3,
+      state: "failed"
+    },
+    revision: 1
+  });
+  expect(recovered.issues).toContainEqual({
+    annotationId: "annotation-corrupt-revision",
+    message: "PDF 批注修订号损坏，已保留本地内容并停止论坛重放。"
+  });
+  expect(recovered.replayItems).toEqual([{
+    annotationId: "annotation-valid-sibling",
+    operation: "publish",
+    queueKey: "paper-1:annotation-valid-sibling",
     revision: 4
   }]);
 });

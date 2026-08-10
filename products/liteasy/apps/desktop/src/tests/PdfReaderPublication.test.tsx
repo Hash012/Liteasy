@@ -212,6 +212,148 @@ test.each([
   })));
 });
 
+test("replays a restart-durable unknown create outcome through the reader", async () => {
+  const pendingCreateOperation = {
+    annotationId: "annotation-1",
+    body: "Exact body before restart",
+    literatureId: "literature-before-restart",
+    operation: "upsert" as const,
+    queueKey: "paper-publication:annotation-1",
+    revision: 6,
+    sourcePassage: {
+      anchorHash: "pdf:paper-publication:1:before-restart",
+      excerpt: "Publication evidence",
+      page: 1,
+      rects: [{ height: 2, left: 20, top: 20, width: 30 }]
+    },
+    updatedAt: "2026-08-10T00:00:00.000Z"
+  };
+  const stored = {
+    ...publicationAnnotation({
+      desiredVisibility: "public",
+      lastError: "论坛发布响应丢失。",
+      pendingCreateOperation,
+      state: "failed"
+    }),
+    revision: 6
+  };
+  const onChange = vi.fn(async () => ({
+    desiredVisibility: "public" as const,
+    remoteAnnotationId: "remote-recovered",
+    remoteRevision: 2,
+    state: "published" as const
+  }));
+
+  renderStoredAnnotation(stored, onChange);
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+    annotation: expect.objectContaining({
+      publication: expect.objectContaining({ pendingCreateOperation }),
+      revision: 6
+    }),
+    operation: "publish",
+    restartReplay: true
+  })));
+});
+
+test("restarts a requested retract after an unknown create outcome through the reader", async () => {
+  const pendingCreateOperation = {
+    annotationId: "annotation-1",
+    body: "Exact body before restart",
+    literatureId: "literature-before-restart",
+    operation: "upsert" as const,
+    queueKey: "paper-publication:annotation-1",
+    revision: 6,
+    sourcePassage: {
+      anchorHash: "pdf:paper-publication:1:before-restart",
+      excerpt: "Publication evidence",
+      page: 1,
+      rects: [{ height: 2, left: 20, top: 20, width: 30 }]
+    },
+    updatedAt: "2026-08-10T00:00:00.000Z"
+  };
+  const stored = {
+    ...publicationAnnotation({
+      desiredVisibility: "private",
+      lastError: "撤回未完成，论坛发布状态未知。",
+      pendingCreateOperation,
+      state: "failed"
+    }),
+    revision: 7
+  };
+  const onChange = vi.fn(async () => ({
+    desiredVisibility: "private" as const,
+    remoteAnnotationId: "remote-recovered",
+    remoteRevision: 3,
+    state: "not_published" as const
+  }));
+
+  renderStoredAnnotation(stored, onChange);
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+    annotation: expect.objectContaining({
+      publication: expect.objectContaining({ pendingCreateOperation }),
+      revision: 7
+    }),
+    operation: "retract",
+    restartReplay: true
+  })));
+});
+
+test("re-reads a restart replay revision after hint collection and sends only the current pending edit", async () => {
+  const stored = {
+    ...publicationAnnotation({
+      desiredVisibility: "public",
+      remoteAnnotationId: "remote-restart",
+      remoteRevision: 4,
+      state: "pending_update"
+    }),
+    revision: 8
+  };
+  const onChange = vi.fn(async () => ({
+    desiredVisibility: "public" as const,
+    remoteAnnotationId: "remote-restart",
+    remoteRevision: 5,
+    state: "published" as const
+  }));
+  let finishHints!: (value: Awaited<ReturnType<typeof collectPdfLiteratureHints>>) => void;
+  const loadLiteratureHints = vi.fn()
+    .mockImplementationOnce(() => new Promise<Awaited<ReturnType<typeof collectPdfLiteratureHints>>>((resolve) => {
+      finishHints = resolve;
+    }))
+    .mockResolvedValue({ identifiers: [{ kind: "doi", value: "10.1000/reader" }] });
+
+  savePdfAnnotations(pdfAnnotationStorageKey(paper), [stored]);
+  render(
+    <PdfReader
+      loadLiteratureHints={loadLiteratureHints}
+      onChangeAnnotationPublication={onChange}
+      selectedPapers={[paper]}
+      zoom={100}
+    />
+  );
+  await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
+    target: { value: "Edited during restart hint collection" }
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存笔记" }));
+  finishHints({ identifiers: [{ kind: "doi", value: "10.1000/reader" }] });
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+  expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+    annotation: expect.objectContaining({
+      note: "Edited during restart hint collection",
+      revision: 9
+    }),
+    operation: "update",
+    restartReplay: true
+  }));
+  expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({
+    annotation: expect.objectContaining({ revision: 8 })
+  }));
+});
+
 test("gives same-excerpt publication checkboxes unique names and announces each status", () => {
   const note = publicationAnnotation();
   const highlight: PdfAnnotationV2 = {

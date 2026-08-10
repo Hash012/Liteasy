@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LocalLibrarySnapshot } from "../features/library/localLibrary.types";
 import { literatureMetadataRepository as defaultLiteratureMetadataRepository } from "../features/paper-identity/literatureMetadataRepository";
-import type { LiteratureRecord } from "../features/paper-identity/literature.types";
+import type {
+  LiteratureHydrationState,
+  LiteratureRecord
+} from "../features/paper-identity/literature.types";
 import { buildSelectedDocumentSetSnapshot } from "../features/selection/selectionSnapshot";
 import type { SelectedDocumentSetSnapshot } from "../features/selection/selection.types";
 import type { createWorkspaceStore } from "../features/workspace/workspace.store";
@@ -9,9 +12,7 @@ import type { WorkspaceState } from "../features/workspace/workspace.types";
 import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
 
 export type WorkspaceSelectionModel = {
-  literatureHydration:
-    | { status: "idle" | "loading" | "ready" }
-    | { issues: Array<{ message: string; paperId: string }>; status: "recoverable_error" };
+  literatureHydration: LiteratureHydrationState;
   selectedDocumentSet: SelectedDocumentSetSnapshot;
   workspaceLabel: string;
   workspaceState: WorkspaceState;

@@ -57,6 +57,10 @@ export type LiteratureSnapshot = {
   version: 1;
 };
 
+export type LiteratureHydrationState =
+  | { status: "idle" | "loading" | "ready" }
+  | { issues: Array<{ message: string; paperId: string }>; status: "recoverable_error" };
+
 export type LiteratureResolveInput = {
   hints?: {
     authors?: string[];

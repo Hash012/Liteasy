@@ -98,7 +98,7 @@ for (const viewport of [
     await page.getByLabel("年份").fill("2026");
     await page.getByRole("button", { name: "确认文献信息" }).click();
     await expect(page.getByText("已公开到论坛")).toBeVisible();
-    await expect(page.getByTestId("literature-provenance")).toHaveText("手动录入");
+    await expect(page.getByRole("status", { name: "文献身份来源" })).toHaveText("文献身份：手动录入");
     await expectUsableLayout(page);
   });
 }

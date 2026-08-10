@@ -25,6 +25,7 @@ import type { LocalLibrarySnapshot } from "../features/library/localLibrary.type
 import type { RecommendationItem, RecommendationStatus } from "../features/recommendations/recommendation.types";
 import type { UserTag } from "../features/profile/academicProfileClient";
 import type { Paper, WorkspaceSourceType } from "../features/workspace/workspace.types";
+import type { LiteratureHydrationState } from "../features/paper-identity/literature.types";
 import type { SettingsState, UpdateSettingCommand } from "../features/settings/settings.types";
 import type {
   ArtifactCatalogLoadState,
@@ -58,6 +59,7 @@ export type LeftPaneProps = {
   loadLegacyLibraryRoots?: () => Promise<string[]>;
   localLibraryError?: string | null;
   localLibrarySnapshot: LocalLibrarySnapshot | null;
+  literatureHydration?: LiteratureHydrationState;
   onBackupLibrary?: (destinationDirectory: string) => Promise<string>;
   onChangeLibraryRoot?: (nextRootPath: string) => Promise<void>;
   onOpenLibraryInFileManager?: () => Promise<void>;
@@ -186,6 +188,7 @@ export function LeftPane({
   loadLegacyLibraryRoots,
   localLibraryError,
   localLibrarySnapshot,
+  literatureHydration,
   onBackupLibrary,
   onChangeLibraryRoot,
   onOpenLibraryInFileManager,
@@ -388,6 +391,7 @@ export function LeftPane({
             loadLegacyLibraryRoots={loadLegacyLibraryRoots}
             localLibraryError={localLibraryError}
             localLibrarySnapshot={localLibrarySnapshot}
+            literatureHydration={literatureHydration}
             paperChildren={libraryPaperChildren}
             onAddExternalPdf={onAddExternalPdf}
             onAddDroppedPdfFiles={onAddDroppedPdfFiles}

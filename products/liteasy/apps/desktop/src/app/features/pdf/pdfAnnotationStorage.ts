@@ -1,5 +1,6 @@
 import type { PaperIdentity } from "../paper-identity/paperIdentity";
 import { resolveLocalAccountKey } from "../library/localAccountKey";
+import type { ForumAnnotationPublicationOperation } from "../forum/forum.types";
 
 export type PdfAnnotationKind = "highlight" | "underline" | "note";
 export type PdfHighlightColor = "yellow" | "red" | "blue" | "green" | "pink";
@@ -19,6 +20,7 @@ export type PdfAnnotationRect = {
 export type PdfAnnotationPublication = {
   desiredVisibility: "private" | "public";
   lastError?: string;
+  pendingCreateOperation?: Extract<ForumAnnotationPublicationOperation, { operation: "upsert" }>;
   remoteAnnotationId?: string;
   remoteRevision?: number;
   state:
@@ -164,14 +166,38 @@ const publicationStates = new Set<PdfAnnotationPublication["state"]>([
   "failed"
 ]);
 
+function isPendingCreateOperation(
+  value: unknown
+): value is NonNullable<PdfAnnotationPublication["pendingCreateOperation"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Partial<NonNullable<PdfAnnotationPublication["pendingCreateOperation"]>>;
+  const sourcePassage = candidate.sourcePassage;
+  return candidate.operation === "upsert" &&
+    typeof candidate.annotationId === "string" && candidate.annotationId.length > 0 &&
+    typeof candidate.body === "string" && typeof candidate.literatureId === "string" &&
+    candidate.literatureId.length > 0 && typeof candidate.queueKey === "string" &&
+    candidate.queueKey.length > 0 && typeof candidate.revision === "number" &&
+    Number.isInteger(candidate.revision) && candidate.revision > 0 &&
+    typeof candidate.updatedAt === "string" && Number.isFinite(Date.parse(candidate.updatedAt)) &&
+    Boolean(sourcePassage) && typeof sourcePassage === "object" &&
+    typeof sourcePassage.anchorHash === "string" && sourcePassage.anchorHash.length > 0 &&
+    typeof sourcePassage.excerpt === "string" &&
+    (sourcePassage.page === undefined || (Number.isInteger(sourcePassage.page) && sourcePassage.page > 0)) &&
+    Array.isArray(sourcePassage.rects) && sourcePassage.rects.every(isAnnotationRect);
+}
+
 function isPublication(value: unknown): value is PdfAnnotationPublication {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<PdfAnnotationPublication>;
   const hasRemoteAnnotation = typeof candidate.remoteAnnotationId === "string" && candidate.remoteAnnotationId.trim().length > 0;
   const hasFailureExplanation = typeof candidate.lastError === "string" && candidate.lastError.trim().length > 0;
+  const hasPendingCreate = isPendingCreateOperation(candidate.pendingCreateOperation);
   const remoteRequired = candidate.state === "published" || candidate.state === "pending_update" ||
-    candidate.state === "pending_retract" ||
+    (candidate.state === "pending_retract" && !hasPendingCreate) ||
     (candidate.desiredVisibility === "private" && candidate.state === "failed" && !hasFailureExplanation);
+  const pendingCreateCoherent = candidate.pendingCreateOperation === undefined ||
+    (hasPendingCreate && (candidate.state === "failed" || candidate.state === "pending_retract") &&
+      !hasRemoteAnnotation);
   const visibilityCoherent = candidate.state === "failed" ||
     (candidate.desiredVisibility === "private"
       ? candidate.state === "not_published" || candidate.state === "pending_retract"
@@ -179,6 +205,7 @@ function isPublication(value: unknown): value is PdfAnnotationPublication {
   return (candidate.desiredVisibility === "private" || candidate.desiredVisibility === "public") &&
     typeof candidate.state === "string" && publicationStates.has(candidate.state as PdfAnnotationPublication["state"]) &&
     (candidate.lastError === undefined || typeof candidate.lastError === "string") &&
+    pendingCreateCoherent &&
     (candidate.remoteAnnotationId === undefined || hasRemoteAnnotation) &&
     (!remoteRequired || hasRemoteAnnotation) && visibilityCoherent &&
     (candidate.remoteRevision === undefined ||
@@ -204,8 +231,14 @@ function hasAnnotationFields(value: unknown) {
 function isAnnotation(value: unknown): value is PdfAnnotationV2 {
   if (!hasAnnotationFields(value)) return false;
   const candidate = value as Partial<PdfAnnotation>;
-  return typeof candidate.revision === "number" && Number.isInteger(candidate.revision) && candidate.revision > 0 &&
-    isPublication(candidate.publication);
+  if (typeof candidate.revision !== "number" || !Number.isInteger(candidate.revision) || candidate.revision <= 0 ||
+    !isPublication(candidate.publication)) return false;
+  const pendingCreate = candidate.publication.pendingCreateOperation;
+  return !pendingCreate || (
+    pendingCreate.annotationId === candidate.id &&
+    pendingCreate.queueKey === `${candidate.paperIdentity!.paperId}:${candidate.id}` &&
+    pendingCreate.revision <= candidate.revision
+  );
 }
 
 function isVersionOneAnnotation(value: unknown): value is PdfAnnotationV1 {
@@ -393,6 +426,9 @@ export function normalizePdfAnnotationPrivateState(
 }
 
 function restartOperation(annotation: PdfAnnotationV2) {
+  if (annotation.publication.state === "failed" && annotation.publication.pendingCreateOperation) {
+    return annotation.publication.desiredVisibility === "public" ? "publish" as const : "retract" as const;
+  }
   if (annotation.publication.state === "pending_create") return "publish" as const;
   if (annotation.publication.state === "pending_update") return "update" as const;
   if (annotation.publication.state === "pending_retract") return "retract" as const;
@@ -421,10 +457,8 @@ export function recoverPdfAnnotationPrivateState(
       continue;
     }
     const damaged = value as PdfAnnotation;
-    if (typeof damaged.revision !== "number" || !Number.isInteger(damaged.revision) || damaged.revision <= 0) {
-      issues.push({ annotationId: damaged.id, message: "PDF 批注修订号损坏，无法安全恢复。" });
-      continue;
-    }
+    const revisionValid = typeof damaged.revision === "number" && Number.isInteger(damaged.revision) &&
+      damaged.revision > 0;
     const publicationCandidate = damaged.publication as Partial<PdfAnnotationPublication> | undefined;
     const desiredVisibility = publicationCandidate?.desiredVisibility === "public" ? "public" : "private";
     const remoteAnnotationId = typeof publicationCandidate?.remoteAnnotationId === "string" &&
@@ -439,15 +473,22 @@ export function recoverPdfAnnotationPrivateState(
     annotations.push({
       ...base,
       publication: {
-        desiredVisibility,
-        lastError: "重启恢复队列项损坏，请检查后重试。",
+        desiredVisibility: revisionValid ? desiredVisibility : "private",
+        lastError: revisionValid
+          ? "重启恢复队列项损坏，请检查后重试。"
+          : "PDF 批注修订号损坏；本地内容已保留，论坛状态需检查。",
         ...(remoteAnnotationId ? { remoteAnnotationId } : {}),
         ...(remoteRevision ? { remoteRevision } : {}),
         state: "failed"
       },
-      revision: damaged.revision
+      revision: revisionValid ? damaged.revision! : 1
     } as PdfAnnotationV2);
-    issues.push({ annotationId: damaged.id, message: "PDF 批注恢复队列项损坏，已保留本地批注。" });
+    issues.push({
+      annotationId: damaged.id,
+      message: revisionValid
+        ? "PDF 批注恢复队列项损坏，已保留本地批注。"
+        : "PDF 批注修订号损坏，已保留本地内容并停止论坛重放。"
+    });
   }
 
   return {
