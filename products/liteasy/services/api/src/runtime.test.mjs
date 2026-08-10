@@ -109,6 +109,13 @@ test("wires visualization dependencies while preserving injection", async () => 
   const visualizationRepository = { capability() {} };
   const visualizationProviderGateway = { generateStructured() {} };
   const visualizationArtifactCompilerRegistry = { availableModalities() { return ["test"]; } };
+  const visualizationGenerationRepository = {};
+  let recoveryScheduled = false;
+  const visualizationOrchestrationWorker = {
+    abort() {}, close() {}, drainOne() {}, recover() {}, schedule() {},
+    scheduleRecovery() { recoveryScheduled = true; }
+  };
+  const thinReadingVisualizationSourceResolver = {};
   const runtime = await startCloudRuntime({ recommendation: {
     endpoint: "https://api.crossref.org/works", mailto: "test@example.com", timeoutMs: 1000
   } }, {
@@ -120,12 +127,19 @@ test("wires visualization dependencies while preserving injection", async () => 
       async repairPendingWorkflows() { return { repaired: 0, scanned: 0 }; }
     },
     pool,
+    thinReadingVisualizationSourceResolver,
     visualizationArtifactCompilerRegistry,
+    visualizationGenerationRepository,
+    visualizationOrchestrationWorker,
     visualizationProviderGateway,
     visualizationRepository
   });
   assert.equal(runtime.visualizationRepository, visualizationRepository);
   assert.equal(runtime.visualizationArtifactCompilerRegistry, visualizationArtifactCompilerRegistry);
+  assert.equal(runtime.visualizationGenerationRepository, visualizationGenerationRepository);
+  assert.equal(runtime.visualizationOrchestrationWorker, visualizationOrchestrationWorker);
+  assert.equal(runtime.visualizationOrchestrationService.worker, visualizationOrchestrationWorker);
+  assert.equal(recoveryScheduled, true);
   assert.equal(runtime.visualizationProviderGateway, visualizationProviderGateway);
   assert.equal(runtime.visualizationService.repository, visualizationRepository);
   await runtime.close();

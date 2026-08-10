@@ -224,6 +224,35 @@ export class VisualizationService {
     }
   }
 
+  async publishedArtifacts(subjectId, artifactIds) {
+    try {
+      const stored = await this.repository.getPublishedArtifacts(subjectId, artifactIds);
+      const bodies = [];
+      for (const artifact of stored) {
+        const validation = await this.validateArtifact({
+          artifact,
+          modality: artifact.modality,
+          phase: "publication"
+        });
+        if (validation?.outcome !== "pass") {
+          throw new VisualizationServiceError("visualization_validation_failed", 422);
+        }
+        bodies.push(artifact.body);
+      }
+      return bodies;
+    } catch (error) {
+      throw publicError(error);
+    }
+  }
+
+  async rollbackGeneratedReservation(subjectId, reservationId, error, context = {}) {
+    try {
+      await rollback(this.repository, subjectId, reservationId, error, context.traceId);
+    } catch (rollbackError) {
+      throw publicError(rollbackError);
+    }
+  }
+
   async generate(subjectId, input, context = {}) {
     throwIfAborted(context.signal);
     const providerRequest = input.providerRequest ?? {};

@@ -31,9 +31,13 @@ import { VisualizationProviderGateway } from "./visualizationProviderGateway.mjs
 import { EnvironmentVisualizationSecretStore } from "./visualizationSecretStore.mjs";
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
 import { VisualizationArtifactCompilerRegistry } from "./visualizationArtifactCompiler.mjs";
+import { PostgresVisualizationGenerationRepository } from "./visualizationGenerationRepository.mjs";
+import { VisualizationOrchestrationService } from "./visualizationOrchestrationService.mjs";
+import { VisualizationOrchestrationWorker } from "./visualizationOrchestrationWorker.mjs";
 import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
 import { VisualizationService } from "./visualizationService.mjs";
 import { productionVisualizationProviderAdapters } from "./visualizationStructuredProviderAdapter.mjs";
+import { ThinReadingVisualizationSourceResolver } from "./thinReadingVisualizationSource.mjs";
 
 export async function startCloudRuntime(config, dependencies = {}) {
   const pool = dependencies.pool ?? createPostgresPool(config.database);
@@ -95,6 +99,25 @@ export async function startCloudRuntime(config, dependencies = {}) {
     repository: visualizationRepository,
     validateArtifact: dependencies.visualizationArtifactValidator ?? validateVisualizationArtifact
   });
+  const visualizationGenerationRepository = dependencies.visualizationGenerationRepository ??
+    new PostgresVisualizationGenerationRepository(pool);
+  const thinReadingVisualizationSourceResolver = dependencies.thinReadingVisualizationSourceResolver ??
+    new ThinReadingVisualizationSourceResolver({ agentArtifactRepository, pool });
+  const visualizationOrchestrationWorker = dependencies.visualizationOrchestrationWorker ??
+    new VisualizationOrchestrationWorker({
+      compilerRegistry: visualizationArtifactCompilerRegistry,
+      generationRepository: visualizationGenerationRepository,
+      sourceResolver: thinReadingVisualizationSourceResolver,
+      visualizationService
+    });
+  const visualizationOrchestrationService = dependencies.visualizationOrchestrationService ??
+    new VisualizationOrchestrationService({
+      compilerRegistry: visualizationArtifactCompilerRegistry,
+      generationRepository: visualizationGenerationRepository,
+      sourceResolver: thinReadingVisualizationSourceResolver,
+      visualizationService,
+      worker: visualizationOrchestrationWorker
+    });
   const organizationGovernanceRepository = dependencies.organizationGovernanceRepository ??
     new PostgresOrganizationGovernanceRepository(pool);
   const organizationPolicyRepository = dependencies.organizationPolicyRepository ??
@@ -159,10 +182,17 @@ export async function startCloudRuntime(config, dependencies = {}) {
     const identity = await identityReadinessCheck(config.identity);
     const storageWorkflows = await pdfUploadService.repairPendingWorkflows();
     const pdfSecurity = await pdfUploadService.assertNoUnverifiedObjects();
+    visualizationOrchestrationWorker.scheduleRecovery?.();
     return {
       accountLifecycleService,
       agentArtifactRepository,
-      close: async () => pool.end(),
+      close: async () => {
+        try {
+          await visualizationOrchestrationService.close?.();
+        } finally {
+          await pool.end();
+        }
+      },
       identityVerifier,
       externalKnowledgeService,
       libraryRepository,
@@ -178,6 +208,9 @@ export async function startCloudRuntime(config, dependencies = {}) {
       recommendationService,
       teamAnnotationRepository,
       visualizationArtifactCompilerRegistry,
+      visualizationGenerationRepository,
+      visualizationOrchestrationService,
+      visualizationOrchestrationWorker,
       visualizationProviderGateway,
       visualizationRepository,
       visualizationService,
@@ -192,6 +225,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       })
     };
   } catch (error) {
+    await Promise.resolve(visualizationOrchestrationService.close?.()).catch(() => {});
     await pool.end().catch(() => {});
     throw error;
   }

@@ -924,3 +924,25 @@ test("publication locks and rechecks governance before atomically saving and set
   assert.ok(calls.indexOf(calls.find((sql) => sql.startsWith("INSERT INTO visualization_artifacts"))) <
     calls.indexOf(calls.find((sql) => sql.startsWith("UPDATE visualization_quota_reservations"))));
 });
+
+test("reloads published artifacts by subject in requested order and fails closed on missing rows", async () => {
+  const rows = [
+    { artifact_id: "artifact-2", body: { artifactId: "artifact-2" }, modality: "semantic_graph", state: "ready" },
+    { artifact_id: "artifact-1", body: { artifactId: "artifact-1" }, modality: "semantic_graph", state: "ready" }
+  ];
+  const repository = new PostgresVisualizationRepository({
+    async query(sql, values) {
+      assert.match(sql, /subject_id = \$1 AND artifact_id = ANY/);
+      assert.deepEqual(values, ["user-1", ["artifact-1", "artifact-2"]]);
+      return { rows };
+    }
+  });
+  const artifacts = await repository.getPublishedArtifacts("user-1", ["artifact-1", "artifact-2"]);
+  assert.deepEqual(artifacts.map(({ artifactId }) => artifactId), ["artifact-1", "artifact-2"]);
+
+  const missing = new PostgresVisualizationRepository({ async query() { return { rows: rows.slice(0, 1) }; } });
+  await assert.rejects(
+    () => missing.getPublishedArtifacts("user-1", ["artifact-1", "artifact-2"]),
+    /visualization_artifact_not_found/
+  );
+});

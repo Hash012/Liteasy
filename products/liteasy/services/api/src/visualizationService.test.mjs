@@ -149,6 +149,36 @@ test("account capability exposes only the fail-closed desktop projection", async
   });
 });
 
+test("reloads and strictly validates subject-bound published artifact bodies", async () => {
+  const artifact = {
+    artifactId: "artifact_1",
+    body: { artifactId: "artifact_1", artifactVersion: "liteasy.visualization/v1" },
+    contentHash: null,
+    evidenceHash: "a".repeat(64),
+    modality: "semantic_graph",
+    nodeId: "node_1",
+    specHash: "b".repeat(64),
+    state: "ready"
+  };
+  const instance = serviceHarness({ repository: {
+    async getPublishedArtifacts(subjectId, artifactIds) {
+      instance.calls.push(["getPublishedArtifacts", subjectId, artifactIds]);
+      return [artifact];
+    }
+  } });
+  assert.deepEqual(await instance.service.publishedArtifacts("user_1", ["artifact_1"]), [artifact.body]);
+  assert.deepEqual(instance.calls.map(([name]) => name), ["getPublishedArtifacts", "validateArtifact"]);
+
+  const invalid = serviceHarness({
+    repository: { async getPublishedArtifacts() { return [artifact]; } },
+    validateArtifact: async () => ({ outcome: "fail" })
+  });
+  await assert.rejects(
+    () => invalid.service.publishedArtifacts("user_1", ["artifact_1"]),
+    /visualization_validation_failed/
+  );
+});
+
 test("an unauthorized account cannot persist an enabled preference", async () => {
   const instance = serviceHarness({ repository: {
     async capability() { return { allowed: false }; },

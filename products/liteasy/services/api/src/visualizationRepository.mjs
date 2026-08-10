@@ -1308,6 +1308,32 @@ export class PostgresVisualizationRepository {
     return { recorded: true, units: 0 };
   }
 
+  async getPublishedArtifacts(subject, artifactIdsInput) {
+    const id = subjectId(subject);
+    if (!Array.isArray(artifactIdsInput) || artifactIdsInput.length < 1 || artifactIdsInput.length > 2) {
+      throw new VisualizationRepositoryError("visualization_result_artifacts_invalid");
+    }
+    const artifactIds = artifactIdsInput.map((artifactId) => {
+      if (typeof artifactId !== "string" || !/^[A-Za-z0-9._:-]{1,160}$/.test(artifactId)) {
+        throw new VisualizationRepositoryError("visualization_result_artifacts_invalid");
+      }
+      return artifactId;
+    });
+    if (new Set(artifactIds).size !== artifactIds.length) {
+      throw new VisualizationRepositoryError("visualization_result_artifacts_invalid");
+    }
+    const result = await this.pool.query(`
+      SELECT * FROM visualization_artifacts
+       WHERE subject_id = $1 AND artifact_id = ANY($2::text[])
+         AND state IN ('ready','degraded')
+    `, [id, artifactIds]);
+    const byId = new Map(result.rows.map((row) => [row.artifact_id, artifactView(row)]));
+    if (artifactIds.some((artifactId) => !byId.has(artifactId))) {
+      throw new VisualizationRepositoryError("visualization_artifact_not_found", 404);
+    }
+    return artifactIds.map((artifactId) => byId.get(artifactId));
+  }
+
   async findReusableArtifact(subject, input) {
     const id = subjectId(subject);
     const documentId = cacheField(input, "documentId");
