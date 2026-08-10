@@ -145,6 +145,30 @@ test("wires visualization dependencies while preserving injection", async () => 
   await runtime.close();
 });
 
+test("wires production static science compilers behind explicit generated catalog entries", async () => {
+  const pool = poolWithReadiness();
+  const runtime = await startCloudRuntime({ recommendation: {
+    endpoint: "https://api.crossref.org/works", mailto: "test@example.com", timeoutMs: 1000
+  } }, {
+    identityReadinessCheck: async () => ({ discovery: true, jwks: true }),
+    identityVerifier: {},
+    objectStore: { async assertSecurityConfiguration() { return { privateAccess: true }; } },
+    pdfUploadService: {
+      async assertNoUnverifiedObjects() { return { unverified: 0 }; },
+      async repairPendingWorkflows() { return { repaired: 0, scanned: 0 }; }
+    },
+    pool,
+    visualizationBuiltinCatalog: {
+      entries: [{ enabled: true, generated: true, modality: "semantic_graph", skillId: "semantic-graph" }],
+      version: "liteasy.visualization-builtins/v1"
+    },
+    visualizationProviderGateway: { generateStructured() {} },
+    visualizationRepository: { capability() {} }
+  });
+  assert.deepEqual(runtime.visualizationArtifactCompilerRegistry.availableModalities(), ["semantic_graph"]);
+  await runtime.close();
+});
+
 test("constructs visualization gateway with the validated hostname policy and secret store", async () => {
   const pool = poolWithReadiness();
   let options;

@@ -32,6 +32,7 @@ import { VisualizationProviderGateway } from "./visualizationProviderGateway.mjs
 import { EnvironmentVisualizationSecretStore } from "./visualizationSecretStore.mjs";
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
 import { VisualizationArtifactCompilerRegistry } from "./visualizationArtifactCompiler.mjs";
+import { productionStaticScienceVisualizationCompilers } from "./staticScienceVisualizationCompilers.mjs";
 import { PostgresVisualizationGenerationRepository } from "./visualizationGenerationRepository.mjs";
 import { VisualizationOrchestrationService } from "./visualizationOrchestrationService.mjs";
 import { VisualizationOrchestrationWorker } from "./visualizationOrchestrationWorker.mjs";
@@ -71,7 +72,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const visualizationArtifactCompilerRegistry = dependencies.visualizationArtifactCompilerRegistry ??
     new VisualizationArtifactCompilerRegistry({
       catalog: dependencies.visualizationBuiltinCatalog,
-      compilers: dependencies.visualizationArtifactCompilers ?? {},
+      compilers: dependencies.visualizationArtifactCompilers ?? productionStaticScienceVisualizationCompilers,
       validateArtifact: dependencies.visualizationArtifactValidator ?? validateVisualizationArtifact
     });
   const visualizationProviderAdapters = dependencies.visualizationProviderAdapters ??

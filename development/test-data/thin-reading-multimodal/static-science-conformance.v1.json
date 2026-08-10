@@ -1,0 +1,154 @@
+{
+  "version": "liteasy.static-science-conformance/v1",
+  "source": {
+    "evidence": [
+      { "id": "evidence-1", "kind": "paper", "quote": "Bounded static science evidence." }
+    ],
+    "intent": {
+      "candidateModalities": ["semantic_graph", "circuit", "physics_diagram", "biology_structure"],
+      "purpose": "explain_structure"
+    },
+    "nodeId": "node-1"
+  },
+  "modalities": {
+    "semantic_graph": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["start", "end"], "summary": "Input precedes output." },
+        "evidenceBindings": [{ "claimId": "claim-1", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "none", "parameterIds": [], "selectableObjectIds": ["start", "end"] },
+        "semanticObjects": [
+          { "objectId": "start", "kind": "step", "label": "Input", "objectPath": ["start"], "evidenceClaimIds": ["claim-1"], "selectable": true },
+          { "objectId": "end", "kind": "step", "label": "Output", "objectPath": ["end"], "evidenceClaimIds": ["claim-1"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "semantic_graph",
+          "payload": {
+            "subtype": "flowchart",
+            "nodes": [
+              { "id": "start", "kind": "step", "label": "Input", "objectPath": ["start"], "evidenceClaimIds": ["claim-1"] },
+              { "id": "end", "kind": "step", "label": "Output", "objectPath": ["end"], "evidenceClaimIds": ["claim-1"] }
+            ],
+            "edges": [{ "id": "edge-1", "from": "start", "to": "end", "kind": "precedes", "evidenceClaimIds": ["claim-1"] }],
+            "groups": [],
+            "hierarchy": [],
+            "timeOrder": [],
+            "claims": [{ "id": "claim-1", "text": "Input precedes output.", "evidenceIds": ["evidence-1"] }]
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "semantic_graph_cycle",
+          "patch": {
+            "spec": {
+              "payload": {
+                "edges": [
+                  { "id": "edge-1", "from": "start", "to": "end", "kind": "precedes", "evidenceClaimIds": ["claim-1"] },
+                  { "id": "edge-2", "from": "end", "to": "start", "kind": "precedes", "evidenceClaimIds": ["claim-1"] }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "circuit": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["battery", "resistor", "wire-1", "wire-2"], "summary": "Battery connects to a resistor." },
+        "evidenceBindings": [{ "claimId": "claim-circuit", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "none", "parameterIds": [], "selectableObjectIds": ["battery", "resistor", "wire-1", "wire-2"] },
+        "semanticObjects": [
+          { "objectId": "battery", "kind": "voltage_source", "label": "battery", "objectPath": ["battery"], "evidenceClaimIds": ["claim-circuit"], "selectable": true },
+          { "objectId": "resistor", "kind": "resistor", "label": "resistor", "objectPath": ["resistor"], "evidenceClaimIds": ["claim-circuit"], "selectable": true },
+          { "objectId": "wire-1", "kind": "wire", "label": "wire-1", "objectPath": ["wire-1"], "evidenceClaimIds": ["claim-circuit"], "selectable": true },
+          { "objectId": "wire-2", "kind": "wire", "label": "wire-2", "objectPath": ["wire-2"], "evidenceClaimIds": ["claim-circuit"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "circuit",
+          "payload": {
+            "components": [
+              { "id": "battery", "kind": "voltage_source", "position": [120, 190], "ports": [{ "id": "battery-pos", "name": "+", "position": [120, 120] }, { "id": "battery-neg", "name": "-", "position": [120, 260] }], "evidenceClaimIds": ["claim-circuit"] },
+              { "id": "resistor", "kind": "resistor", "position": [360, 190], "ports": [{ "id": "resistor-in", "name": "in", "position": [360, 120] }, { "id": "resistor-out", "name": "out", "position": [360, 260] }], "evidenceClaimIds": ["claim-circuit"] }
+            ],
+            "wires": [
+              { "id": "wire-1", "from": "battery-pos", "to": "resistor-in", "evidenceClaimIds": ["claim-circuit"] },
+              { "id": "wire-2", "from": "resistor-out", "to": "battery-neg", "evidenceClaimIds": ["claim-circuit"] }
+            ],
+            "networks": [{ "id": "loop", "memberIds": ["battery-pos", "resistor-in", "resistor-out", "battery-neg"] }],
+            "parameters": [{ "id": "ohms-law", "value": 10, "unit": "V/A", "evidenceClaimIds": ["claim-circuit"] }],
+            "measurementPoints": [{ "id": "junction", "nodeId": "battery-pos", "evidenceClaimIds": ["claim-circuit"] }],
+            "currents": [{ "nodeId": "junction", "values": [2, 1, 1] }],
+            "voltages": [{ "componentId": "battery", "value": 10, "unit": "V" }]
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "circuit_port_unknown",
+          "patch": { "spec": { "payload": { "wires": [{ "id": "wire-1", "from": "missing", "to": "resistor-in", "evidenceClaimIds": ["claim-circuit"] }] } } }
+        }
+      }
+    },
+    "physics_diagram": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["projectile", "gravity"], "summary": "Projectile has a gravity vector." },
+        "evidenceBindings": [{ "claimId": "claim-physics", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "none", "parameterIds": [], "selectableObjectIds": ["projectile", "gravity"] },
+        "semanticObjects": [
+          { "objectId": "projectile", "kind": "mass", "label": "projectile", "objectPath": ["projectile"], "evidenceClaimIds": ["claim-physics"], "selectable": true },
+          { "objectId": "gravity", "kind": "vector", "label": "gravity", "objectPath": ["projectile", "gravity"], "evidenceClaimIds": ["claim-physics"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "physics_diagram",
+          "payload": {
+            "objects": [{ "id": "projectile", "kind": "mass", "position": [180, 180], "label": "projectile", "evidenceClaimIds": ["claim-physics"] }],
+            "vectors": [{ "id": "gravity", "objectId": "projectile", "direction": [0, 1], "magnitude": 9.8, "unit": "N", "evidenceClaimIds": ["claim-physics"] }],
+            "rays": [],
+            "constraints": [{ "id": "constraint-ground", "kind": "ground_reference", "objectIds": ["projectile"], "evidenceClaimIds": ["claim-physics"] }],
+            "annotations": [{ "id": "label-trajectory", "text": "Projectile is under gravity.", "objectId": "projectile", "evidenceClaimIds": ["claim-physics"] }]
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "physics_dimension_mismatch",
+          "patch": { "spec": { "payload": { "vectors": [{ "id": "gravity", "objectId": "projectile", "direction": [0, 1], "magnitude": 9.8, "unit": "kg", "evidenceClaimIds": ["claim-physics"] }] } } }
+        }
+      }
+    },
+    "biology_structure": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["neuron", "soma", "axon", "synapse", "connection-1"], "summary": "Neuron structures and one connection." },
+        "evidenceBindings": [{ "claimId": "claim-biology", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "none", "parameterIds": [], "selectableObjectIds": ["neuron", "soma", "axon", "synapse", "connection-1"] },
+        "semanticObjects": [
+          { "objectId": "neuron", "kind": "liteasy:neuron", "label": "neuron", "objectPath": ["neuron"], "evidenceClaimIds": ["claim-biology"], "selectable": true },
+          { "objectId": "soma", "kind": "liteasy:soma", "label": "soma", "objectPath": ["neuron", "soma"], "evidenceClaimIds": ["claim-biology"], "selectable": true },
+          { "objectId": "axon", "kind": "liteasy:axon", "label": "axon", "objectPath": ["neuron", "axon"], "evidenceClaimIds": ["claim-biology"], "selectable": true },
+          { "objectId": "synapse", "kind": "liteasy:synapse", "label": "synapse", "objectPath": ["axon", "synapse"], "evidenceClaimIds": ["claim-biology"], "selectable": true },
+          { "objectId": "connection-1", "kind": "neural_connection", "label": "connection-1", "objectPath": ["soma", "axon"], "evidenceClaimIds": ["claim-biology"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "biology_structure",
+          "payload": {
+            "ontologyVersion": "liteasy-neuro/v1",
+            "structures": [
+              { "id": "neuron", "ontologyId": "liteasy:neuron", "label": "neuron", "evidenceClaimIds": ["claim-biology"] },
+              { "id": "soma", "ontologyId": "liteasy:soma", "label": "soma", "parentId": "neuron", "evidenceClaimIds": ["claim-biology"] },
+              { "id": "axon", "ontologyId": "liteasy:axon", "label": "axon", "parentId": "neuron", "evidenceClaimIds": ["claim-biology"] },
+              { "id": "synapse", "ontologyId": "liteasy:synapse", "label": "synapse", "parentId": "axon", "evidenceClaimIds": ["claim-biology"] }
+            ],
+            "regions": [{ "id": "region-synapse", "structureId": "synapse", "label": "synapse region", "evidenceClaimIds": ["claim-biology"] }],
+            "connections": [{ "id": "connection-1", "from": "soma", "to": "axon", "label": "connection-1", "evidenceClaimIds": ["claim-biology"] }]
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "biology_ontology_unknown",
+          "patch": { "spec": { "payload": { "structures": [{ "id": "soma", "ontologyId": "unimplemented:cell-x", "label": "soma", "parentId": "neuron", "evidenceClaimIds": ["claim-biology"] }] } } }
+        }
+      }
+    }
+  }
+}
