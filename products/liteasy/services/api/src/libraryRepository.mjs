@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { authorizeLibraryScope } from "./libraryAuthorization.mjs";
 import { withPostgresTransaction } from "./postgres.mjs";
 import {
   LiteratureMetadataValidationError,
@@ -19,6 +20,27 @@ function validateScope(scope) {
     throw new LibraryRepositoryError("library_scope_invalid");
   }
   return scope;
+}
+
+function desktopIdentity(actorId) {
+  return { audience: "liteasy-desktop", subject: actorId };
+}
+
+async function authorizeLibraryMutationScopes(client, actorId, checks) {
+  const ordered = [...checks].sort((left, right) => {
+    const leftKey = `${left.scope.scopeType}:${left.scope.scopeId}:${left.capability}`;
+    const rightKey = `${right.scope.scopeType}:${right.scope.scopeId}:${right.capability}`;
+    return leftKey.localeCompare(rightKey, "en-US");
+  });
+  for (const check of ordered) {
+    await authorizeLibraryScope(
+      client,
+      desktopIdentity(actorId),
+      check.scope,
+      check.capability,
+      { lock: true }
+    );
+  }
 }
 
 function nodeName(value, label = "name") {
@@ -617,6 +639,13 @@ export class PostgresLibraryRepository {
       ...input,
       sourceScope: { scopeId: sourceScope.scopeId, scopeType: sourceScope.scopeType }
     }, "copy_library_entry", async (client) => {
+      await authorizeLibraryMutationScopes(client, input.actorId, [
+        {
+          capability: sourceScope.scopeType === "organization" ? "export" : "read",
+          scope: sourceScope
+        },
+        { capability: "upload", scope: targetScope }
+      ]);
       const source = await requireEntry(client, sourceScope, documentId, "active");
       if (source.availability !== "available") {
         throw new LibraryRepositoryError("library_document_not_available", 409);
@@ -791,6 +820,9 @@ export class PostgresLibraryRepository {
           return { kind: "workflow", workflow };
         }
 
+        await authorizeLibraryMutationScopes(client, input.actorId, [
+          { capability: "upload", scope }
+        ]);
         await lockScopeRevision(client, scope, expected);
         await assertQuota(client, scope, staged.byteLength);
         await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`storage:${staged.contentHash}`]);
@@ -968,6 +1000,9 @@ export class PostgresLibraryRepository {
           return { kind: "workflow", workflow };
         }
 
+        await authorizeLibraryMutationScopes(client, input.actorId, [
+          { capability: "upload", scope }
+        ]);
         await lockScopeRevision(client, scope, expected);
         const entry = await requireEntry(client, scope, documentId, "active");
         if (entry.entry_kind !== "metadata_only") {

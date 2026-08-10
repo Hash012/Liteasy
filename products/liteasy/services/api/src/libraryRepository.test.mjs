@@ -183,3 +183,109 @@ test("rejects a client-supplied literature snapshot in metadata-only creation", 
   ), /literature_projection_verification_required/);
   assert.equal(connections, 0);
 });
+
+function transactionPool(query) {
+  const client = {
+    async query(sql, values = []) {
+      if (/^(BEGIN|COMMIT|ROLLBACK)/.test(sql)) return { rows: [] };
+      return query(sql, values);
+    },
+    release() {}
+  };
+  return { async connect() { return client; } };
+}
+
+test("rechecks organization upload permission after staging and before database preparation", async () => {
+  let reachedStorageMutation = false;
+  const repository = new PostgresLibraryRepository(transactionPool(async (sql) => {
+    if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("FROM storage_publish_workflows")) return { rows: [] };
+    if (sql.includes("FROM organizations")) {
+      return { rows: [{ organization_status: "active", owner_subject: "owner_1" }] };
+    }
+    if (sql.includes("FROM organization_members")) {
+      return { rows: [{ member_role: "member", member_status: "active" }] };
+    }
+    if (sql.includes("FROM organization_storage_policies")) {
+      return { rows: [{ export_policy: "disabled", upload_policy: "owner_admins" }] };
+    }
+    if (sql.includes("INSERT INTO library_scope_revisions")) return { rows: [] };
+    if (sql.includes("SELECT revision FROM library_scope_revisions")) return { rows: [{ revision: "0" }] };
+    if (sql.includes("SELECT limit_bytes FROM storage_quotas")) return { rows: [{ limit_bytes: "1024" }] };
+    if (sql.includes("SUM(logical_bytes)")) return { rows: [{ used_bytes: "0" }] };
+    if (sql.includes("FROM storage_objects")) return { rows: [] };
+    if (sql.includes("INSERT INTO storage_objects")) {
+      reachedStorageMutation = true;
+      throw new Error("storage mutation reached without commit authorization");
+    }
+    throw new Error(`unexpected query: ${sql}`);
+  }));
+
+  await assert.rejects(
+    () => repository.preparePdfUpload(
+      { scopeId: "org_1", scopeType: "organization" },
+      {
+        actorId: "user_1",
+        expectedRevision: 0,
+        fileName: "Paper.pdf",
+        finalKey: `documents/objects/aa/${"a".repeat(64)}`,
+        idempotencyKey: "upload-recheck-0001",
+        traceId: "trace_upload_recheck"
+      },
+      {
+        byteLength: 12,
+        contentHash: "a".repeat(64),
+        securityScan: {
+          contentHash: "a".repeat(64),
+          scannedAt: "2026-08-11T00:00:00.000Z",
+          scanner: "clamav",
+          version: "1.4.3"
+        },
+        storageKey: "documents/.staging/upload-recheck"
+      }
+    ),
+    (error) => error.code === "organization_upload_forbidden"
+  );
+  assert.equal(reachedStorageMutation, false);
+});
+
+test("rechecks source export permission before a cross-scope copy mutation", async () => {
+  let reachedSourceLookup = false;
+  const repository = new PostgresLibraryRepository(transactionPool(async (sql) => {
+    if (sql.includes("pg_advisory_xact_lock")) return { rows: [] };
+    if (sql.includes("FROM idempotency_records")) return { rows: [] };
+    if (sql.includes("INSERT INTO library_scope_revisions")) return { rows: [] };
+    if (sql.includes("SELECT revision FROM library_scope_revisions")) return { rows: [{ revision: "0" }] };
+    if (sql.includes("FROM organizations")) {
+      return { rows: [{ organization_status: "active", owner_subject: "owner_1" }] };
+    }
+    if (sql.includes("FROM organization_members")) {
+      return { rows: [{ member_role: "member", member_status: "active" }] };
+    }
+    if (sql.includes("FROM organization_storage_policies")) {
+      return { rows: [{ export_policy: "disabled", upload_policy: "all_members" }] };
+    }
+    if (sql.includes("SELECT entry.*")) {
+      reachedSourceLookup = true;
+      throw new Error("source lookup reached without commit authorization");
+    }
+    throw new Error(`unexpected query: ${sql}`);
+  }));
+
+  await assert.rejects(
+    () => repository.copyEntry(
+      { scopeId: "org_source", scopeType: "organization" },
+      { scopeId: "user_1", scopeType: "user" },
+      {
+        actorId: "user_1",
+        documentId: "document_1",
+        expectedRevision: 0,
+        idempotencyKey: "copy-recheck-0001",
+        traceId: "trace_copy_recheck"
+      }
+    ),
+    (error) => error.code === "organization_export_forbidden"
+  );
+  assert.equal(reachedSourceLookup, false);
+});

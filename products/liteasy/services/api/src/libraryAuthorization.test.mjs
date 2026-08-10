@@ -74,3 +74,47 @@ test("does not grant platform roles implicit organization access", async () => {
     /organization_not_available/
   );
 });
+
+test("locks organization authorization rows and evaluates the current upload policy", async () => {
+  const queries = [];
+  const queryable = {
+    async query(sql, values) {
+      queries.push({ sql, values });
+      if (sql.includes("LEFT JOIN organization_members")) {
+        return { rows: [{
+          export_policy: "disabled",
+          member_role: "member",
+          member_status: "active",
+          organization_status: "active",
+          owner_subject: "owner_1",
+          upload_policy: "all_members"
+        }] };
+      }
+      if (sql.includes("FROM organizations")) {
+        return { rows: [{ organization_status: "active", owner_subject: "owner_1" }] };
+      }
+      if (sql.includes("FROM organization_members")) {
+        return { rows: [{ member_role: "member", member_status: "active" }] };
+      }
+      if (sql.includes("FROM organization_storage_policies")) {
+        return { rows: [{ export_policy: "disabled", upload_policy: "owner_admins" }] };
+      }
+      throw new Error(`unexpected query: ${sql}`);
+    }
+  };
+  const scope = { scopeId: "org_1", scopeType: "organization" };
+
+  assert.equal((await authorizeLibraryScope(queryable, identity, scope, "upload")).role, "member");
+  await assert.rejects(
+    () => authorizeLibraryScope(queryable, identity, scope, "upload", { lock: true }),
+    /organization_upload_forbidden/
+  );
+
+  const lockedQueries = queries.filter(({ sql }) => sql.includes("FOR SHARE"));
+  assert.equal(lockedQueries.length, 3);
+  assert.deepEqual(lockedQueries.map(({ values }) => values), [
+    ["org_1"],
+    ["org_1", "user_1"],
+    ["org_1"]
+  ]);
+});
