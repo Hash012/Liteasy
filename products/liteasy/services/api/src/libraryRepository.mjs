@@ -340,6 +340,7 @@ export class PostgresLibraryRepository {
     const name = nodeName(input.name);
     const parentFolderId = optionalText(input.parentFolderId, 200) ?? null;
     return this.#mutation(scope, input, "create_library_folder", async (client) => {
+      await requireActiveTargetFolder(client, scope, parentFolderId);
       const folderId = `folder_${randomUUID()}`;
       const result = await client.query(`
         INSERT INTO library_folders(
@@ -366,6 +367,7 @@ export class PostgresLibraryRepository {
       ...(optionalText(input.sourceId, 500) ? { sourceId: optionalText(input.sourceId, 500) } : {})
     };
     return this.#mutation(scope, input, "create_metadata_entry", async (client) => {
+      await requireActiveTargetFolder(client, scope, folderId);
       const documentId = `document_${randomUUID()}`;
       const result = await client.query(`
         INSERT INTO library_entries(
@@ -824,6 +826,7 @@ export class PostgresLibraryRepository {
           { capability: "upload", scope }
         ]);
         await lockScopeRevision(client, scope, expected);
+        await requireActiveTargetFolder(client, scope, input.folderId ?? null);
         await assertQuota(client, scope, staged.byteLength);
         await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`storage:${staged.contentHash}`]);
         const existingObject = await client.query(
@@ -1144,21 +1147,29 @@ export class PostgresLibraryRepository {
         UPDATE library_entries SET availability = 'available', updated_at = now()
         WHERE document_id = $1
       `, [workflow.document_id]);
+      const response = {
+        ...workflow.response_body,
+        revision: await bumpScopeRevision(client, {
+          scopeId: workflow.scope_id,
+          scopeType: workflow.scope_type
+        })
+      };
       await this.#recordCompletedMutation(client, {
         actorId: workflow.actor_id,
         hash: workflow.request_hash,
         idempotencyKey: workflow.idempotency_key,
         operation: workflow.operation,
-        response: workflow.response_body,
+        response,
         scope: { scopeId: workflow.scope_id, scopeType: workflow.scope_type },
         traceId
       });
       await client.query(`
         UPDATE storage_publish_workflows
-           SET state = 'completed', error_code = NULL, updated_at = now()
+           SET state = 'completed', response_body = $2::jsonb,
+               error_code = NULL, updated_at = now()
          WHERE workflow_id = $1
-      `, [workflow.workflow_id]);
-      return workflow.response_body;
+      `, [workflow.workflow_id, JSON.stringify(response)]);
+      return response;
     }, { isolation: "READ COMMITTED" });
   }
 

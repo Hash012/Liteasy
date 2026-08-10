@@ -81,7 +81,7 @@ git commit -m "fix: recheck library authorization at commit"
 - Consumes: `requireActiveTargetFolder(client, scope, folderId)` and `bumpScopeRevision(client, scope)`.
 - Produces: all folder/entry creation paths reject trashed parents; `completePdfUpload(workflow, traceId)` returns and persists the revision that makes a pending entry available.
 
-- [ ] **Step 1: Write failing parent-state and repair-revision tests**
+- [x] **Step 1: Write failing parent-state and repair-revision tests**
 
 Add repository tests that make `requireFolder` return `status: "trashed"` for `createFolder`, `createMetadataEntry`, and `preparePdfUpload`. Attachment already locks an active metadata entry, so a folder-subtree trash makes that entry ineligible. Add a completion test where the workflow response has revision `4` and the transaction bump returns `5`; assert the returned/idempotency response revision is `5`.
 
@@ -90,23 +90,23 @@ await assert.rejects(() => repository.createFolder(scope, input), /library_folde
 assert.equal(completed.revision, 5);
 ```
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run: `npm test -- --test-name-pattern='trashed parent|visible upload revision' src/libraryRepository.test.mjs src/pdfUploadService.test.mjs`
 
 Expected: FAIL because create/upload paths skip the active-parent check and completion reuses the preparation revision.
 
-- [ ] **Step 3: Enforce active parents and bump visibility revisions**
+- [x] **Step 3: Enforce active parents and bump visibility revisions**
 
 Call `requireActiveTargetFolder` immediately before each insert/update that places an active node. In `completePdfUpload`, bump the workflow scope revision after the entry becomes available, replace `response_body.revision`, write that final response to idempotency/audit state, and persist the updated workflow response before commit.
 
-- [ ] **Step 4: Run focused library and upload tests**
+- [x] **Step 4: Run focused library and upload tests**
 
 Run: `npm test -- src/libraryRepository.test.mjs src/pdfUploadService.test.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add products/liteasy/services/api/src/libraryRepository.mjs products/liteasy/services/api/src/libraryRepository.test.mjs products/liteasy/services/api/src/pdfUploadService.test.mjs
