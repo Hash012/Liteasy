@@ -243,8 +243,22 @@ Expected: integration tests PASS with zero skipped PostgreSQL tests; API unit su
 
 ### Task 3: Real Publication And Provider Accounting Transactions
 
+> **Execution amendment (2026-08-10):** Running the existing dedicated command
+> with Node `v20.20.1` reproduced a false-positive gate: `node --test
+> src/visualizationPostgres.integration.test.mjs` emitted only one passing
+> file-level wrapper and executed none of the module's declared subtests.
+> `node src/visualizationPostgres.integration.test.mjs` executed the same
+> `node:test` declarations (and correctly reported both opt-in tests skipped
+> without `LITEASY_TEST_DATABASE_URL`), while `npm test` discovery executed its
+> complete suite. Authorize `products/liteasy/services/api/package.json` to
+> replace only the dedicated command with `node
+> src/visualizationPostgres.integration.test.mjs`; this preserves explicit
+> opt-in skip reporting and makes the wrapper fail when the real PostgreSQL
+> assertions fail.
+
 **Files:**
 - Modify: `products/liteasy/services/api/src/visualizationPostgres.integration.test.mjs`
+- Modify: `products/liteasy/services/api/package.json`
 
 **Interfaces:**
 - Consumes: the real entitlement, route, policy, and reservation fixtures from Task 2.
