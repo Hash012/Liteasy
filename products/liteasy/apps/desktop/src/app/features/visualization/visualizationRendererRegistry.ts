@@ -44,6 +44,10 @@ const staticModalityChain = {
   function_plot: {
     kernelId: "function-plot-v1",
     rendererId: "function-plot-svg"
+  },
+  geometry_2d: {
+    kernelId: "geometry-2d-v1",
+    rendererId: "geometry-2d-svg"
   }
 } as const satisfies Partial<Record<VisualizationModality, { kernelId: string; rendererId: string }>>;
 
@@ -148,6 +152,7 @@ for (const [modality, registration] of Object.entries(staticModalityChain)) {
       if (modality === "circuit") return (await import("./renderers/circuitRenderer")).circuitVisualizationRenderer;
       if (modality === "physics_diagram") return (await import("./renderers/physicsDiagramRenderer")).physicsDiagramVisualizationRenderer;
       if (modality === "function_plot") return (await import("./renderers/functionPlotRenderer")).functionPlotVisualizationRenderer;
+      if (modality === "geometry_2d") return (await import("./renderers/geometry2dRenderer")).geometry2dVisualizationRenderer;
       return (await import("./renderers/biologyStructureRenderer")).biologyStructureVisualizationRenderer;
     }
   });

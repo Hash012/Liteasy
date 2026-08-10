@@ -19,6 +19,9 @@ const BiologyStructureBrowserFixture = import.meta.env.DEV
 const FunctionPlotBrowserFixture = import.meta.env.DEV
   ? lazy(() => import("./tests/fixtures/functionPlotBrowserFixture"))
   : null;
+const Geometry2DBrowserFixture = import.meta.env.DEV
+  ? lazy(() => import("./tests/fixtures/geometry2dBrowserFixture"))
+  : null;
 
 export default function App() {
   const fixture = import.meta.env.DEV ? window.location.search : "";
@@ -61,6 +64,13 @@ export default function App() {
     return (
       <Suspense fallback={null}>
         <FunctionPlotBrowserFixture />
+      </Suspense>
+    );
+  }
+  if (fixture === "?geometry-2d-fixture" && Geometry2DBrowserFixture) {
+    return (
+      <Suspense fallback={null}>
+        <Geometry2DBrowserFixture />
       </Suspense>
     );
   }

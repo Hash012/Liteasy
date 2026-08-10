@@ -11,6 +11,8 @@ import biologyStructureManifest from "../visualization/skills/biology-structure/
 import biologyStructureInstructions from "../visualization/skills/biology-structure/instructions.md?raw";
 import functionPlotManifest from "../visualization/skills/function-plot/skill.json";
 import functionPlotInstructions from "../visualization/skills/function-plot/instructions.md?raw";
+import geometry2dManifest from "../visualization/skills/geometry-2d/skill.json";
+import geometry2dInstructions from "../visualization/skills/geometry-2d/instructions.md?raw";
 import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
@@ -174,6 +176,14 @@ registerBuiltinSkill(functionPlot, async () => ({
   manifest: functionPlot,
   instructions: functionPlotInstructions,
   validatorIds: functionPlot.validatorIds
+}));
+
+const geometry2d = parseManifest(geometry2dManifest);
+registerBuiltinSkill(geometry2d, async () => ({
+  fallbackModalities: geometry2d.fallbackModalities,
+  manifest: geometry2d,
+  instructions: geometry2dInstructions,
+  validatorIds: geometry2d.validatorIds
 }));
 
 const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);
