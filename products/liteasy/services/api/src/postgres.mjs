@@ -10,7 +10,7 @@ export function createPostgresPool(databaseConfig, PoolType = Pool) {
     max: 20,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
-    ssl: {
+    ssl: databaseConfig.sslMode === "disable" ? false : {
       rejectUnauthorized: databaseConfig.sslMode !== "require"
     }
   });

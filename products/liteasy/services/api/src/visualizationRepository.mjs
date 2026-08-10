@@ -1039,8 +1039,10 @@ export class PostgresVisualizationRepository {
       `, [id, ianaTimezone(policy.timezone ?? "UTC")]);
       const active = await client.query("SELECT COUNT(*) AS active_count FROM visualization_quota_reservations WHERE subject_id = $1 AND state = 'reserved' AND expires_at > now()", [id]);
       if (Number(usage.rows[0]?.daily_used ?? usage.rows[0]?.used_units ?? 0) + reservedUnits > Number(policy.daily_units)
-        || Number(usage.rows[0]?.monthly_used ?? 0) + reservedUnits > Number(policy.monthly_units)
-        || Number(active.rows[0]?.active_count ?? 0) >= Number(policy.max_concurrency)) throw new Error("visualization_quota_exceeded");
+        || Number(usage.rows[0]?.monthly_used ?? 0) + reservedUnits > Number(policy.monthly_units)) throw new Error("visualization_quota_exceeded");
+      if (Number(active.rows[0]?.active_count ?? 0) >= Number(policy.max_concurrency)) {
+        throw new VisualizationRepositoryError("visualization_concurrency_exceeded", 429);
+      }
       const reservationId = input.reservationId ?? `vizres_${randomUUID()}`;
       const ttlMs = input.ttlMs ?? 120000;
       if (!Number.isSafeInteger(ttlMs) || ttlMs < 1000 || ttlMs > 900000) throw new VisualizationRepositoryError("visualization_reservation_ttl_invalid");
@@ -1054,7 +1056,7 @@ export class PostgresVisualizationRepository {
       const response = { reservation: reservationView(reservation) };
       await client.query("INSERT INTO idempotency_records(actor_id,operation,idempotency_key,request_hash,response_status,response_body,expires_at) VALUES ($1,$2,$3,$4,201,$5::jsonb,now()+interval '1 day')", [id, "visualization-reserve", idempotencyKey, hash, JSON.stringify(response)]);
       return { replayed: false, ...response };
-    });
+    }, { isolation: "READ COMMITTED" });
   }
 
   async #expireReservations(client, id, traceId) {
