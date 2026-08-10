@@ -91,7 +91,30 @@ test("runtime verification requires the exact immutable migration set", async ()
   );
 });
 
-test("production migration head includes the visualization control plane", () => {
+test("production migration set includes the visualization control plane through current head", () => {
   const migrations = readMigrations();
-  assert.equal(migrations.at(-1)?.name, "022_visualization_cost_policy_lifecycle.sql");
+  assert.deepEqual(migrations.map((migration) => migration.name), [
+    "001_filesystem_storage.sql",
+    "002_filesystem_invariants.sql",
+    "003_organization_and_node_names.sql",
+    "004_library_provenance.sql",
+    "005_storage_publish_workflows.sql",
+    "006_library_trash_transactions.sql",
+    "007_storage_gc_invariants.sql",
+    "008_publish_workflow_retention.sql",
+    "009_governance_and_personalization.sql",
+    "010_team_annotations.sql",
+    "011_organization_membership_governance.sql",
+    "012_recommendation_business_api.sql",
+    "013_platform_administration.sql",
+    "014_account_lifecycle.sql",
+    "015_admin_storage_quotas.sql",
+    "016_admin_control_plane.sql",
+    "017_external_retrieval_connectors.sql",
+    "018_pdf_security_scan_proofs.sql",
+    "019_agent_artifacts.sql",
+    "020_visualization_control_plane.sql",
+    "021_visualization_final_review.sql",
+    "022_visualization_cost_policy_lifecycle.sql"
+  ]);
 });

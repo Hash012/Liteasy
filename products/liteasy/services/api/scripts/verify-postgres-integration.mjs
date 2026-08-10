@@ -33,9 +33,13 @@ const migrationPool = migrationConnectionString === connectionString
   ? pool
   : new Pool({ connectionString: migrationConnectionString, max: 1, ssl: false });
 try {
-  const migrated = await migratePostgres(migrationPool, {
-    ...(migrationConnectionString === connectionString ? {} : { applicationRole: parsed.username })
-  });
+  if (migrationConnectionString === connectionString) {
+    throw new Error("integration_migration_role_required");
+  }
+  await migrationPool.query("DROP SCHEMA IF EXISTS public CASCADE");
+  await migrationPool.query("CREATE SCHEMA public");
+  await migrationPool.query("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
+  const migrated = await migratePostgres(migrationPool, { applicationRole: parsed.username });
   assert.deepEqual(migrated.applied, [
     "001_filesystem_storage.sql",
     "002_filesystem_invariants.sql",
@@ -55,7 +59,10 @@ try {
     "016_admin_control_plane.sql",
     "017_external_retrieval_connectors.sql",
     "018_pdf_security_scan_proofs.sql",
-    "019_agent_artifacts.sql"
+    "019_agent_artifacts.sql",
+    "020_visualization_control_plane.sql",
+    "021_visualization_final_review.sql",
+    "022_visualization_cost_policy_lifecycle.sql"
   ]);
   if (migrationPool !== pool) {
     await assert.rejects(
@@ -1401,6 +1408,10 @@ try {
     deletedScopeRevisions: 1,
     deletedStorageQuotas: 1,
     deletedTeamAnnotations: 1,
+    deletedVisualizationArtifacts: 0,
+    deletedVisualizationEntitlements: 0,
+    deletedVisualizationPreferences: 0,
+    deletedVisualizationQuotaPolicies: 0,
     revokedPlatformRoles: 1,
     revokedSupportGrants: 1
   });
@@ -1533,7 +1544,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
-    migrations: migrated.applied.length,
+    migrations: 22,
     revision: 12,
     verified: true
   })}\n`);

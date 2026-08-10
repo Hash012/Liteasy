@@ -113,6 +113,16 @@ organization owner/admin checks, audit immutability, edited-history cleanup, and
 account deletion. It must never be
 pointed at the development or production database.
 
+The isolated Liteasy PostgreSQL suite can be run without placing credentials on the
+command line:
+
+```bash
+node deployment/local/verify-liteasy-postgres-integration.mjs
+```
+
+The wrapper only targets and resets `liteasy_test`; it must never be pointed at the
+development or production database.
+
 The current Compose foundation contains databases, Keycloak, and identity-management.
 Intuecho API/Web browser acceptance is run as local host processes on parameterized
 development endpoints; it is not yet a production image rollout. The verified
