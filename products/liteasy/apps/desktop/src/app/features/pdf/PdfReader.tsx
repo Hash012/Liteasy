@@ -1778,7 +1778,7 @@ export function PdfReader({
       if (retracted?.state === "not_published") remove();
       return;
     }
-    if (!annotation.publication.remoteAnnotationId) {
+    if (!annotation.publication.remoteAnnotationId && !annotation.publication.pendingCreateOperation) {
       remove();
       return;
     }

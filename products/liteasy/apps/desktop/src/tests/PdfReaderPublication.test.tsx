@@ -465,6 +465,99 @@ test("deletes a published local annotation only after retract is confirmed", asy
   await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
 });
 
+test("recovers an unknown failed create before deleting the local annotation", async () => {
+  const durableCreate = {
+    annotationId: "annotation-1",
+    body: "Initial note",
+    literatureId: "literature-unknown-create",
+    operation: "upsert" as const,
+    queueKey: "paper-publication:annotation-1",
+    revision: 2,
+    sourcePassage: {
+      anchorHash: "pdf:paper-publication:1:unknown-create",
+      excerpt: "Publication evidence",
+      page: 1,
+      rects: [{ height: 2, left: 20, top: 20, width: 30 }]
+    },
+    updatedAt: "2026-08-10T00:00:01.000Z"
+  };
+  const onChange = vi.fn(async ({ operation }: { operation: string }) => operation === "publish" ? {
+    desiredVisibility: "public" as const,
+    lastError: "create receipt missing",
+    pendingCreateOperation: durableCreate,
+    state: "failed" as const
+  } : {
+    desiredVisibility: "private" as const,
+    remoteAnnotationId: "remote-recovered-during-delete",
+    remoteRevision: 3,
+    state: "not_published" as const
+  });
+  renderStoredAnnotation(publicationAnnotation(), onChange);
+
+  await userEvent.click(publicationToggle());
+  expect(await screen.findByText(/create receipt missing/u)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+  expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    annotation: expect.objectContaining({
+      publication: expect.objectContaining({
+        desiredVisibility: "private",
+        pendingCreateOperation: durableCreate,
+        state: "pending_retract"
+      })
+    }),
+    operation: "retract"
+  }));
+  await waitFor(() => expect(screen.queryByText("Publication evidence")).not.toBeInTheDocument());
+});
+
+test("retains an unknown failed create when deletion recovery cannot confirm retract", async () => {
+  const durableCreate = {
+    annotationId: "annotation-1",
+    body: "Initial note",
+    literatureId: "literature-unknown-create",
+    operation: "upsert" as const,
+    queueKey: "paper-publication:annotation-1",
+    revision: 2,
+    sourcePassage: {
+      anchorHash: "pdf:paper-publication:1:unknown-create",
+      excerpt: "Publication evidence",
+      page: 1,
+      rects: [{ height: 2, left: 20, top: 20, width: 30 }]
+    },
+    updatedAt: "2026-08-10T00:00:01.000Z"
+  };
+  const onChange = vi.fn(async ({ operation }: { operation: string }) => operation === "publish" ? {
+    desiredVisibility: "public" as const,
+    lastError: "create receipt missing",
+    pendingCreateOperation: durableCreate,
+    state: "failed" as const
+  } : {
+    desiredVisibility: "private" as const,
+    lastError: "撤回未完成，论坛发布状态未知。recovery unavailable",
+    pendingCreateOperation: durableCreate,
+    state: "failed" as const
+  });
+  renderStoredAnnotation(publicationAnnotation(), onChange);
+
+  await userEvent.click(publicationToggle());
+  expect(await screen.findByText(/create receipt missing/u)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  await userEvent.click(screen.getByRole("button", { name: "删除" }));
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+  expect(screen.getByText("Publication evidence")).toBeInTheDocument();
+  expect(await screen.findByText(/recovery unavailable/u)).toBeInTheDocument();
+  expect(onChange).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    annotation: expect.objectContaining({
+      publication: expect.objectContaining({ pendingCreateOperation: durableCreate })
+    }),
+    operation: "retract"
+  }));
+});
+
 test("cancels a queued create before it starts", () => {
   const onChange = renderStoredAnnotation(publicationAnnotation());
   const toggle = publicationToggle();

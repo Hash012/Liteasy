@@ -5,7 +5,9 @@ const forumBaseUrl = process.env.INTUECHO_API_ENDPOINT ?? "http://127.0.0.1:4040
 
 async function request(baseUrl, path, { body, method, sessionId } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined
+      ? undefined
+      : JSON.stringify(body, (key, current) => key === "literatureRecord" ? undefined : current),
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       ...(sessionId ? { Authorization: `Bearer ${sessionId}` } : {})
