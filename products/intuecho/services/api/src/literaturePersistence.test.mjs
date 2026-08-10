@@ -175,7 +175,7 @@ test("SQLite does not merge aggregate preprint and publication records with matc
   }
 });
 
-test("SQLite rejects fingerprint-only confirmation and conflicting bibliography for a stable identifier", async () => {
+test("SQLite rejects fingerprint-only candidates and conflicting bibliography for a stable identifier", async () => {
   const db = new Database(":memory:");
   try {
     const repository = new SqliteAnnotationCommunityRepository(db);
@@ -183,13 +183,31 @@ test("SQLite rejects fingerprint-only confirmation and conflicting bibliography 
       candidateKey: `openalex:title_authors_year_hash:sha256:${"a".repeat(64)}`,
       identifiers: [{ kind: "title_authors_year_hash", source: "public_registry", value: `sha256:${"a".repeat(64)}` }],
       provider: "openalex"
-    })), /LITERATURE_IDENTITY_REQUIRED/);
+    })), /LITERATURE_CANDIDATE_NOT_FOUND/);
 
     await repository.confirmRefetchedLiterature(owner, candidate());
     await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
       title: "A Conflicting Work",
       year: 2024
     })), /LITERATURE_IDENTITY_CONFLICT/);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite rejects a compatibility alias as the provider primary identifier", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const fingerprint = `sha256:${"b".repeat(64)}`;
+    await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: `openalex:title_authors_year_hash:${fingerprint}`,
+      identifiers: [
+        { kind: "title_authors_year_hash", source: "public_registry", value: fingerprint },
+        { kind: "openalex_id", source: "public_registry", value: "W123" }
+      ],
+      provider: "openalex"
+    })), /LITERATURE_CANDIDATE_NOT_FOUND/);
   } finally {
     db.close();
   }
@@ -535,6 +553,19 @@ test("PostgreSQL confirmation stores one identifier owner and one provider claim
     revision: 1
   }]);
   assert.equal(harness.versions[0].changedBy, "literature_resolver");
+});
+
+test("PostgreSQL rejects a compatibility alias as the provider primary identifier", async () => {
+  const harness = postgresHarness();
+  const fingerprint = `sha256:${"b".repeat(64)}`;
+  await assert.rejects(() => harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: `openalex:title_authors_year_hash:${fingerprint}`,
+    identifiers: [
+      { kind: "title_authors_year_hash", source: "public_registry", value: fingerprint },
+      { kind: "openalex_id", source: "public_registry", value: "W123" }
+    ],
+    provider: "openalex"
+  })), /LITERATURE_CANDIDATE_NOT_FOUND/);
 });
 
 test("PostgreSQL reuses one version when two aggregate providers independently confirm the same bibliography", async () => {

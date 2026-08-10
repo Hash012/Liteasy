@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  isCandidateLiteratureAliasKind,
+  isConfirmableLiteratureIdentifierKind,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
   titleAuthorsYearFingerprint
 } from "./literatureIdentity.mjs";
+
+test("classifies confirmable external identifiers separately from candidate aliases", () => {
+  for (const kind of ["doi", "arxiv_id", "semantic_scholar_id", "openalex_id"]) {
+    assert.equal(isConfirmableLiteratureIdentifierKind(kind), true);
+    assert.equal(isCandidateLiteratureAliasKind(kind), false);
+  }
+  assert.equal(isConfirmableLiteratureIdentifierKind("title_authors_year_hash"), false);
+  assert.equal(isCandidateLiteratureAliasKind("title_authors_year_hash"), true);
+  assert.equal(isConfirmableLiteratureIdentifierKind("unknown"), false);
+  assert.equal(isCandidateLiteratureAliasKind("unknown"), false);
+});
 
 test("normalizes DOI, arXiv, Semantic Scholar and OpenAlex identifiers", () => {
   assert.equal(normalizeLiteratureIdentifier("doi", "https://doi.org/10.1000/ABC."), "10.1000/abc");

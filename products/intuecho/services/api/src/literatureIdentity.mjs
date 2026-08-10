@@ -30,6 +30,13 @@ const publicationDocumentTypes = new Set([
 ]);
 const literatureRelationDirections = new Set(["from_current", "to_current"]);
 const literatureRelationTypes = new Set(["is_preprint_of", "translation_of", "version_of"]);
+const confirmableLiteratureIdentifierKinds = new Set([
+  "doi",
+  "arxiv_id",
+  "semantic_scholar_id",
+  "openalex_id"
+]);
+const candidateLiteratureAliasKinds = new Set(["title_authors_year_hash"]);
 
 const preprintDocumentTypes = new Set([
   "posted-content",
@@ -93,6 +100,14 @@ function requiredIdentity(value) {
   const normalized = String(value ?? "").trim();
   if (!normalized) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_REQUIRED");
   return normalized;
+}
+
+export function isConfirmableLiteratureIdentifierKind(kind) {
+  return confirmableLiteratureIdentifierKinds.has(kind);
+}
+
+export function isCandidateLiteratureAliasKind(kind) {
+  return candidateLiteratureAliasKinds.has(kind);
 }
 
 export function normalizeLiteratureIdentifier(kind, value) {

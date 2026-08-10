@@ -144,6 +144,98 @@ test("normalizes lowercase OpenAlex queries before repository lookup", async () 
   assert.equal(result.candidate.candidateKey, "intuecho:literature-openalex");
 });
 
+test("keeps a fingerprint alias match to a confirmed record ambiguous", async () => {
+  const fingerprint = `sha256:${"a".repeat(64)}`;
+  const resolver = createLiteratureResolver({
+    providers: [],
+    repository: repository({
+      async findLiteratureByIdentifiers(identifiers) {
+        assert.deepEqual(identifiers, [{ kind: "title_authors_year_hash", value: fingerprint }]);
+        return {
+          authors: ["Ada Lovelace"],
+          identifiers: [
+            publicIdentifier("doi", "10.1000/confirmed"),
+            publicIdentifier("title_authors_year_hash", fingerprint)
+          ],
+          literatureId: "literature-confirmed",
+          provenance: {
+            confirmedAt: "2026-08-09T00:00:00.000Z",
+            mode: "public_registry",
+            provider: "crossref"
+          },
+          revision: 1,
+          status: "confirmed",
+          title: "Confirmed Literature",
+          year: 2026
+        };
+      }
+    })
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: {
+      authors: ["Ada Lovelace"],
+      identifiers: [{ kind: "title_authors_year_hash", value: fingerprint }],
+      title: "Confirmed Literature",
+      year: 2026
+    },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "ambiguous");
+  assert.deepEqual(result.candidates.map((item) => item.candidateKey), ["intuecho:literature-confirmed"]);
+});
+
+test("does not treat a provider fingerprint alias as exact evidence", async () => {
+  const fingerprint = `sha256:${"b".repeat(64)}`;
+  const matched = candidate({
+    candidateKey: "crossref:doi:10.1000/provider-match",
+    identifiers: [
+      publicIdentifier("doi", "10.1000/provider-match"),
+      publicIdentifier("title_authors_year_hash", fingerprint)
+    ],
+    provider: "crossref",
+    title: "Provider Match"
+  });
+  const resolver = createLiteratureResolver({
+    providers: [provider("crossref", { search: async () => [matched] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: {
+      authors: ["A. Author"],
+      identifiers: [{ kind: "title_authors_year_hash", value: fingerprint }],
+      title: "Provider Match",
+      year: 2026
+    },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "ambiguous");
+  assert.deepEqual(result.candidates.map((item) => item.candidateKey), [matched.candidateKey]);
+});
+
+test("rejects a provider candidate whose primary identifier is only a compatibility alias", async () => {
+  const fingerprint = `sha256:${"c".repeat(64)}`;
+  const resolver = createLiteratureResolver({
+    providers: [provider("crossref", { search: async () => [candidate({
+      candidateKey: `crossref:title_authors_year_hash:${fingerprint}`,
+      identifiers: [publicIdentifier("title_authors_year_hash", fingerprint)],
+      provider: "crossref",
+      title: "Alias-only Provider Record"
+    })] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { title: "Alias-only Provider Record" },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.deepEqual(result, { candidates: [], status: "not_found", unavailableProviders: [] });
+});
+
 test("deduplicates Crossref and OpenAlex candidates only through their shared stable identifier", async () => {
   const resolver = createLiteratureResolver({
     providers: [

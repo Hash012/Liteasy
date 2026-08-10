@@ -3,6 +3,7 @@ import { withTransaction } from "./postgres.mjs";
 import { AnnotationCommunityError, desktopAnnotationPublicationDigest, localSemanticSimilarity } from "./annotationCommunitySqlite.mjs";
 import {
   hasCrossVersionIdentifierConflict,
+  isConfirmableLiteratureIdentifierKind,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
@@ -84,7 +85,7 @@ export class PostgresAnnotationCommunityRepository {
       throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
     }
     const primary = record.identifiers[0];
-    if (!primary || primary.source !== "public_registry") {
+    if (!primary || !isConfirmableLiteratureIdentifierKind(primary.kind) || primary.source !== "public_registry") {
       throw new AnnotationCommunityError("LITERATURE_CANDIDATE_NOT_FOUND", 404);
     }
     const expectedKey = `${provider}:${primary.kind}:${normalizeIdentity(primary.kind, primary.value)}`;
@@ -104,6 +105,7 @@ export class PostgresAnnotationCommunityRepository {
       const candidateRecord = candidate?.record;
       const primary = candidateRecord?.identifiers?.[0];
       if (!confirmedLiteratureProviders.has(candidate?.provider) || !candidate?.candidateKey || !primary ||
+        !isConfirmableLiteratureIdentifierKind(primary.kind) ||
         primary.source !== "public_registry" || candidateRecord.identifiers.some((identifier) => identifier.source !== "public_registry")) {
         throw new AnnotationCommunityError("LITERATURE_CONFIRMATION_INVALID");
       }
@@ -122,7 +124,7 @@ export class PostgresAnnotationCommunityRepository {
       title: record.title,
       year: record.year
     };
-    if (input.identifiers.length === 0 || input.identifiers.every((identifier) => identifier.kind === "title_authors_year_hash")) {
+    if (!input.identifiers.some((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))) {
       throw new AnnotationCommunityError("LITERATURE_IDENTITY_REQUIRED");
     }
     const normalized = [...new Map(input.identifiers.map((identifier) => {

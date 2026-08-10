@@ -1,12 +1,13 @@
 import {
   hasCrossVersionIdentifierConflict,
+  isCandidateLiteratureAliasKind,
+  isConfirmableLiteratureIdentifierKind,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
   sameLiteratureVersionBibliography
 } from "./literatureIdentity.mjs";
 
 const MAX_CANDIDATES = 10;
-const stableKinds = new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]);
 const primaryRegistryProviders = new Set(["crossref", "arxiv"]);
 const aggregateRegistryProviders = new Set(["openalex", "semantic_scholar"]);
 
@@ -24,7 +25,8 @@ function normalizedIdentifierKey(identifier) {
 }
 
 function normalizedIdentifier(identifier) {
-  if (!identifier?.kind || !stableKinds.has(identifier.kind)) return null;
+  if (!identifier?.kind || (!isConfirmableLiteratureIdentifierKind(identifier.kind) &&
+    !isCandidateLiteratureAliasKind(identifier.kind))) return null;
   try {
     return { kind: identifier.kind, value: normalizeLiteratureIdentifier(identifier.kind, identifier.value) };
   } catch {
@@ -72,7 +74,8 @@ function externalCandidate(value, providerName) {
   const record = displayRecord(value.record);
   const relations = normalizeLiteratureRelations(value.relations);
   const primary = record?.identifiers[0];
-  if (!record || !primary || primary.source !== "public_registry" || hasCrossVersionIdentifierConflict(record)) return null;
+  if (!record || !primary || !isConfirmableLiteratureIdentifierKind(primary.kind) ||
+    primary.source !== "public_registry" || hasCrossVersionIdentifierConflict(record)) return null;
   const expectedKey = `${providerName}:${primary.kind}:${primary.value}`;
   if (value.candidateKey !== expectedKey) return null;
   let recordUrl = null;
@@ -173,7 +176,7 @@ function requestedLimit(input) {
   return Math.max(1, Math.min(Number.isInteger(requested) ? requested : MAX_CANDIDATES, MAX_CANDIDATES));
 }
 
-function requestedStableIdentifiers(input) {
+function requestedLiteratureIdentifiers(input) {
   const identifiers = [];
   for (const identifier of input?.hints?.identifiers ?? []) {
     const normalized = normalizedIdentifier(identifier);
@@ -192,10 +195,6 @@ function requestedStableIdentifiers(input) {
     if (normalized) identifiers.push(normalized);
   }
   return [...new Map(identifiers.map((identifier) => [`${identifier.kind}:${identifier.value}`, identifier])).values()];
-}
-
-function requestedStableKeys(input) {
-  return new Set(requestedStableIdentifiers(input).map((identifier) => `${identifier.kind}:${identifier.value}`));
 }
 
 function normalizeText(value) {
@@ -223,9 +222,9 @@ function identityRelevantCandidate(input, candidate, requestedKeys) {
   return Boolean(requestedTitle && normalizeText(candidate.record.title) === requestedTitle);
 }
 
-function exactCandidate(input, candidates) {
-  const requested = requestedStableKeys(input);
-  const byIdentifier = candidates.filter((candidate) => [...identityKeys(candidate)].some((key) => requested.has(key)));
+function exactCandidate(candidates, requestedConfirmableKeys) {
+  const byIdentifier = candidates.filter((candidate) =>
+    [...identityKeys(candidate)].some((key) => requestedConfirmableKeys.has(key)));
   if (byIdentifier.length === 1) return byIdentifier[0];
   return null;
 }
@@ -297,12 +296,18 @@ export function createLiteratureResolver({ providers, repository }) {
     async resolve(owner, input) {
       const limit = requestedLimit(input);
       const query = input?.query ?? input?.hints?.title ?? input?.hints?.identifiers?.[0]?.value ?? "";
-      const requestedIdentifiers = requestedStableIdentifiers(input);
+      const requestedIdentifiers = requestedLiteratureIdentifiers(input);
       const requestedKeys = new Set(requestedIdentifiers.map((identifier) => `${identifier.kind}:${identifier.value}`));
+      const requestedConfirmableKeys = new Set(requestedIdentifiers
+        .filter((identifier) => isConfirmableLiteratureIdentifierKind(identifier.kind))
+        .map((identifier) => `${identifier.kind}:${identifier.value}`));
+      let identifiedCandidate = null;
       if (requestedIdentifiers.length > 0) {
         const identified = await repository.findLiteratureByIdentifiers(requestedIdentifiers);
-        const exact = internalCandidate(identified);
-        if (exact) return { candidate: exact, confirmationMode: "candidate", status: "exact", unavailableProviders: [] };
+        identifiedCandidate = internalCandidate(identified);
+        if (identifiedCandidate && attestsRequestedIdentity(identifiedCandidate, requestedConfirmableKeys)) {
+          return { candidate: identifiedCandidate, confirmationMode: "candidate", status: "exact", unavailableProviders: [] };
+        }
       }
       const stored = await repository.searchStoredLiterature(query, limit);
       const capability = isPdfIdentityPurpose(input) ? "resolveIdentity" : "search";
@@ -316,6 +321,7 @@ export function createLiteratureResolver({ providers, repository }) {
         ? (Array.isArray(result.value) ? result.value.map((candidate) => externalCandidate(candidate, selectedProviders[index].name)).filter(Boolean) : [])
         : []);
       const admittedCandidates = [
+        ...(identifiedCandidate ? [identifiedCandidate] : []),
         ...(Array.isArray(stored) ? stored.map(internalCandidate).filter(Boolean) : []),
         ...providerCandidates
       ].filter((candidate) => identityRelevantCandidate(input, candidate, requestedKeys));
@@ -323,7 +329,7 @@ export function createLiteratureResolver({ providers, repository }) {
         return { candidates: admittedCandidates.slice(0, limit), status: "conflict", unavailableProviders };
       }
       const candidates = rankAndDeduplicate(admittedCandidates, requestedKeys).slice(0, limit);
-      const exact = exactCandidate(input, candidates);
+      const exact = exactCandidate(candidates, requestedConfirmableKeys);
       if (exact && (exact.provider === "intuecho" || primaryRegistryProviders.has(exact.provider))) {
         return { candidate: exact, confirmationMode: "candidate", status: "exact", unavailableProviders };
       }
