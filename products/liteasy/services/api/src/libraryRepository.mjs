@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { withPostgresTransaction } from "./postgres.mjs";
-import { LiteratureMetadataValidationError, normalizeLiteratureMetadata } from "./literatureMetadata.mjs";
+import {
+  LiteratureMetadataValidationError,
+  normalizeLiteratureMetadata,
+  normalizeLiteratureProjectionReference
+} from "./literatureMetadata.mjs";
 
 export class LibraryRepositoryError extends Error {
   constructor(code, status = 400) {
@@ -258,8 +262,9 @@ function translateConstraint(error) {
 }
 
 export class PostgresLibraryRepository {
-  constructor(pool) {
+  constructor(pool, { literatureProjectionVerifier } = {}) {
     this.pool = pool;
+    this.literatureProjectionVerifier = literatureProjectionVerifier;
   }
 
   async getTree(scopeInput, status = "active") {
@@ -355,13 +360,23 @@ export class PostgresLibraryRepository {
     const documentId = requiredId(input.documentId, "document");
     let literature;
     try {
-      literature = Object.hasOwn(input, "literature")
-        ? normalizeLiteratureMetadata(input.literature)
-        : undefined;
+      if (Object.hasOwn(input, "literature")) {
+        const reference = normalizeLiteratureProjectionReference(input.literature);
+        if (!this.literatureProjectionVerifier) {
+          throw new LibraryRepositoryError("literature_projection_verifier_unavailable", 503);
+        }
+        literature = normalizeLiteratureMetadata(
+          await this.literatureProjectionVerifier.verifyProjection(reference)
+        );
+        if (literature.literatureId !== reference.literatureId || literature.revision !== reference.revision) {
+          throw new LibraryRepositoryError("literature_projection_verification_mismatch", 503);
+        }
+      }
     } catch (error) {
       if (error instanceof LiteratureMetadataValidationError) {
         throw new LibraryRepositoryError(error.code);
       }
+      if (error?.code && error?.status) throw new LibraryRepositoryError(error.code, error.status);
       throw error;
     }
     return this.#mutation(scope, input, "update_library_entry", async (client) => {
@@ -371,6 +386,19 @@ export class PostgresLibraryRepository {
         : current.folder_id;
       await requireActiveTargetFolder(client, scope, folderId);
       if (literature) {
+        await client.query(`
+          INSERT INTO literature_record_projections(literature_id, revision, snapshot)
+          VALUES ($1, $2, $3::jsonb)
+          ON CONFLICT (literature_id, revision) DO NOTHING
+        `, [literature.literatureId, literature.revision, JSON.stringify(literature)]);
+        const projection = await client.query(`
+          SELECT snapshot = $3::jsonb AS matches
+            FROM literature_record_projections
+           WHERE literature_id = $1 AND revision = $2
+        `, [literature.literatureId, literature.revision, JSON.stringify(literature)]);
+        if (!projection.rows[0]?.matches) {
+          throw new LibraryRepositoryError("literature_projection_revision_conflict", 409);
+        }
         await client.query(`
           UPDATE library_entries
              SET metadata = jsonb_set(metadata, '{literature}', $2::jsonb, true),

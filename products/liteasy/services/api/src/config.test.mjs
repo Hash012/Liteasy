@@ -20,6 +20,8 @@ function validEnv(overrides = {}) {
     LITEASY_IDP_DISCOVERY_URL: "https://identity.internal/.well-known/openid-configuration",
     LITEASY_IDP_INTROSPECTION_URL: "https://identity.internal/oauth2/introspect",
     LITEASY_IDP_INTUECHO_SERVICE_CLIENT_ID: "intuecho-organization-service",
+    LITEASY_IDP_LITERATURE_SERVICE_CLIENT_ID: "liteasy-literature-projection",
+    LITEASY_IDP_LITERATURE_SERVICE_CLIENT_SECRET: "literature-service-secret",
     LITEASY_IDP_ISSUER: "https://identity.internal",
     LITEASY_IDP_JWKS_URL: "https://identity.internal/.well-known/jwks.json",
     LITEASY_IDP_MANAGEMENT_CLIENT_ID: "liteasy-account-lifecycle",
@@ -28,6 +30,7 @@ function validEnv(overrides = {}) {
     LITEASY_IDP_REVOCATION_URL: "https://identity.internal/oauth2/revoke",
     LITEASY_IDP_TOKEN_URL: "https://identity.internal/oauth2/token",
     LITEASY_INTUECHO_ADMIN_API_URL: "https://forum-api.internal",
+    LITEASY_INTUECHO_LITERATURE_API_URL: "https://forum-literature-api.internal",
     LITEASY_MIGRATION_DATABASE_URL: "postgresql://liteasy_migrator:secret@db.internal/liteasy",
     LITEASY_PDF_SCANNER_SECRET: "scanner-deployment-secret",
     LITEASY_PDF_SCANNER_URL: "https://scanner.internal/v1/pdf:scan",
@@ -116,6 +119,8 @@ test("fails closed without production storage and identity requirements", () => 
     "LITEASY_IDP_DISCOVERY_URL",
     "LITEASY_IDP_INTROSPECTION_URL",
     "LITEASY_IDP_INTUECHO_SERVICE_CLIENT_ID",
+    "LITEASY_IDP_LITERATURE_SERVICE_CLIENT_ID",
+    "LITEASY_IDP_LITERATURE_SERVICE_CLIENT_SECRET",
     "LITEASY_IDP_ISSUER",
     "LITEASY_IDP_JWKS_URL",
     "LITEASY_IDP_MANAGEMENT_CLIENT_ID",
@@ -124,6 +129,7 @@ test("fails closed without production storage and identity requirements", () => 
     "LITEASY_IDP_REVOCATION_URL",
     "LITEASY_IDP_TOKEN_URL",
     "LITEASY_INTUECHO_ADMIN_API_URL",
+    "LITEASY_INTUECHO_LITERATURE_API_URL",
     "LITEASY_PDF_SCANNER_SECRET",
     "LITEASY_PDF_SCANNER_URL",
     "LITEASY_RECOMMENDATION_CONTACT_EMAIL",
@@ -154,6 +160,9 @@ test("requires separate confidential service, desktop, admin, and management cli
   })), /dedicated confidential client/);
   assert.throws(() => loadCloudConfig(validEnv({
     LITEASY_IDP_INTUECHO_SERVICE_CLIENT_ID: "liteasy-account-lifecycle"
+  })), /dedicated confidential client/);
+  assert.throws(() => loadCloudConfig(validEnv({
+    LITEASY_IDP_LITERATURE_SERVICE_CLIENT_ID: "intuecho-organization-service"
   })), /dedicated confidential client/);
 });
 
@@ -206,6 +215,7 @@ test("allows loopback services only under the explicit test environment", () => 
     LITEASY_IDP_REVOCATION_URL: "http://127.0.0.1:9001/revoke",
     LITEASY_IDP_TOKEN_URL: "http://127.0.0.1:9001/token",
     LITEASY_INTUECHO_ADMIN_API_URL: "http://127.0.0.1:4040",
+    LITEASY_INTUECHO_LITERATURE_API_URL: "http://127.0.0.1:4040",
     LITEASY_PDF_SCANNER_URL: "http://127.0.0.1:3310/v1/pdf:scan",
     LITEASY_S3_ENDPOINT: "http://127.0.0.1:9000",
     NODE_ENV: "test"

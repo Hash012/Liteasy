@@ -4,6 +4,7 @@ import { PostgresAgentArtifactRepository } from "./agentArtifactRepository.mjs";
 import { createIdentityVerifier, verifyIdentityProviderReadiness } from "./identityVerifier.mjs";
 import { IdentityAdminClient } from "./identityAdminClient.mjs";
 import { IntuechoLifecycleClient } from "./intuechoLifecycleClient.mjs";
+import { IntuechoLiteratureClient } from "./intuechoLiteratureClient.mjs";
 import { CrossrefRecommendationProvider } from "./crossrefRecommendationProvider.mjs";
 import { createExternalRetrievalConnectors } from "./externalRetrievalConnectors.mjs";
 import {
@@ -35,6 +36,12 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const identityAdminClient = dependencies.identityAdminClient ?? new IdentityAdminClient(config.identity);
   const intuechoLifecycleClient = dependencies.intuechoLifecycleClient ??
     new IntuechoLifecycleClient(config.intuecho);
+  const literatureProjectionVerifier = dependencies.literatureProjectionVerifier ??
+    (config.intuecho?.literatureProjection
+      ? new IntuechoLiteratureClient(config.intuecho.literatureProjection, {
+          fetchImpl: dependencies.intuechoLiteratureFetch
+        })
+      : undefined);
   const accountLifecycleRepository = dependencies.accountLifecycleRepository ??
     new PostgresAccountLifecycleRepository(pool);
   const agentArtifactRepository = dependencies.agentArtifactRepository ??
@@ -44,7 +51,9 @@ export async function startCloudRuntime(config, dependencies = {}) {
     identityAdminClient,
     intuechoLifecycleClient
   );
-  const libraryRepository = dependencies.libraryRepository ?? new PostgresLibraryRepository(pool);
+  const libraryRepository = dependencies.libraryRepository ?? new PostgresLibraryRepository(pool, {
+    literatureProjectionVerifier
+  });
   const organizationGovernanceRepository = dependencies.organizationGovernanceRepository ??
     new PostgresOrganizationGovernanceRepository(pool);
   const organizationPolicyRepository = dependencies.organizationPolicyRepository ??
@@ -116,6 +125,7 @@ export async function startCloudRuntime(config, dependencies = {}) {
       identityVerifier,
       externalKnowledgeService,
       libraryRepository,
+      literatureProjectionVerifier,
       modelProxyService,
       objectStore,
       organizationGovernanceRepository,

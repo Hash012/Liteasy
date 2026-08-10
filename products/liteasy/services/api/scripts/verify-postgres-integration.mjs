@@ -55,7 +55,8 @@ try {
     "016_admin_control_plane.sql",
     "017_external_retrieval_connectors.sql",
     "018_pdf_security_scan_proofs.sql",
-    "019_agent_artifacts.sql"
+    "019_agent_artifacts.sql",
+    "024_literature_projections.sql"
   ]);
   if (migrationPool !== pool) {
     await assert.rejects(
