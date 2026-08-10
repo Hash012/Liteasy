@@ -10,13 +10,30 @@ export type LiteratureIdentifierKind =
   | ConfirmableLiteratureIdentifierKind
   | CandidateLiteratureAliasKind;
 
+export type LiteratureIdentifierRole = "confirmable" | "candidate_alias";
+
 export type LiteratureSource = "public_registry" | "manual" | "inferred" | "metadata";
 
 export type LiteratureIdentifier = {
   kind: LiteratureIdentifierKind;
+  role?: LiteratureIdentifierRole;
   source: LiteratureSource;
   value: string;
 };
+
+export type ConfirmedLiteratureIdentifier =
+  | {
+      kind: ConfirmableLiteratureIdentifierKind;
+      role: "confirmable";
+      source: "public_registry";
+      value: string;
+    }
+  | {
+      kind: CandidateLiteratureAliasKind;
+      role: "candidate_alias";
+      source: "metadata";
+      value: string;
+    };
 
 export type LiteratureProvider =
   | "intuecho"
@@ -49,7 +66,7 @@ export type LiteratureCandidate = {
 };
 
 export type LiteratureRecord = LiteratureDisplayRecord & {
-  identifiers: Array<LiteratureIdentifier & { source: "public_registry" }>;
+  identifiers: ConfirmedLiteratureIdentifier[];
   literatureId: string;
   provenance: {
     confirmedAt: string;

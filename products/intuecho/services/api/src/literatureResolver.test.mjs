@@ -105,7 +105,7 @@ test("normalizes DOI URL queries before internal lookup even when providers are 
         provider: "intuecho",
         record: {
           authors: ["Ada Lovelace"],
-          identifiers: [publicIdentifier("doi", "10.1000/verified")],
+          identifiers: [{ ...publicIdentifier("doi", "10.1000/verified"), role: "confirmable" }],
           title: "Confirmed DOI Record",
           year: 1843
         }
@@ -273,6 +273,7 @@ test("marks two independently corroborated aggregate candidates as exact", async
       provider("openalex", {
         search: async () => [candidate({
           candidateKey: "openalex:openalex_id:W123",
+          documentType: "article",
           identifiers: [
             publicIdentifier("openalex_id", "W123"),
             publicIdentifier("doi", "10.1000/shared")
@@ -283,6 +284,7 @@ test("marks two independently corroborated aggregate candidates as exact", async
       provider("semantic_scholar", {
         search: async () => [candidate({
           candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+          documentType: "publication",
           identifiers: [
             publicIdentifier("semantic_scholar_id", "corpus:456"),
             publicIdentifier("doi", "10.1000/shared")
@@ -314,6 +316,7 @@ test("marks an aggregate candidate corroborated by an independent primary regist
       provider("openalex", {
         search: async () => [candidate({
           candidateKey: "openalex:openalex_id:W321",
+          documentType: "article",
           identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W321" }],
           provider: "openalex",
           title: "Independent Source Agreement"
@@ -322,6 +325,7 @@ test("marks an aggregate candidate corroborated by an independent primary regist
       provider("crossref", {
         search: async () => [candidate({
           candidateKey: "crossref:doi:10.1000/independent",
+          documentType: "journal-article",
           identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/independent" }],
           provider: "crossref",
           title: "Independent Source Agreement"
@@ -343,6 +347,39 @@ test("marks an aggregate candidate corroborated by an independent primary regist
   assert.equal(result.status, "exact");
   assert.equal(result.confirmationMode, "corroborated");
   assert.equal(result.candidate.provider, "crossref");
+});
+
+test("keeps matching providers ambiguous when either source lacks a version class", async () => {
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("openalex", {
+        search: async () => [candidate({
+          candidateKey: "openalex:openalex_id:W322",
+          identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W322" }],
+          provider: "openalex",
+          title: "Unknown Version Agreement"
+        })]
+      }),
+      provider("crossref", {
+        search: async () => [candidate({
+          candidateKey: "crossref:doi:10.1000/unknown-version",
+          documentType: "journal-article",
+          identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/unknown-version" }],
+          provider: "crossref",
+          title: "Unknown Version Agreement"
+        })]
+      })
+    ],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { authors: ["A. Author"], title: "Unknown Version Agreement", year: 2026 },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "ambiguous");
+  assert.equal(result.candidates.length, 2);
 });
 
 test("rejects an aggregate publication candidate that collapses arXiv and DOI versions", async () => {
@@ -706,6 +743,7 @@ test("re-fetches an external candidate and never accepts the client record", asy
 test("re-fetches an independent aggregate source before corroborated confirmation", async () => {
   const selected = candidate({
     candidateKey: "openalex:openalex_id:W123",
+    documentType: "article",
     identifiers: [
       publicIdentifier("openalex_id", "W123"),
       publicIdentifier("doi", "10.1000/shared")
@@ -714,6 +752,7 @@ test("re-fetches an independent aggregate source before corroborated confirmatio
   });
   const corroborating = candidate({
     candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+    documentType: "publication",
     identifiers: [
       publicIdentifier("semantic_scholar_id", "corpus:456"),
       publicIdentifier("doi", "10.1000/shared")
@@ -748,12 +787,14 @@ test("re-fetches an independent aggregate source before corroborated confirmatio
 test("re-fetches an aggregate source when a primary registry candidate was corroborated", async () => {
   const selected = candidate({
     candidateKey: "crossref:doi:10.1000/independent",
+    documentType: "journal-article",
     identifiers: [publicIdentifier("doi", "10.1000/independent")],
     provider: "crossref",
     title: "Independent Source Agreement"
   });
   const corroborating = candidate({
     candidateKey: "openalex:openalex_id:W321",
+    documentType: "article",
     identifiers: [publicIdentifier("openalex_id", "W321")],
     provider: "openalex",
     title: "Independent Source Agreement"

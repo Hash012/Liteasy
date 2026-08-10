@@ -403,7 +403,7 @@ export function initializeAnnotationCommunitySqlite(db) {
   for (const row of db.prepare("SELECT * FROM literature_records_v2").all()) {
     if (db.prepare("SELECT 1 FROM literature_record_versions_v2 WHERE literature_id = ? AND revision = ?").get(row.id, row.revision)) continue;
     const identifiers = row.confirmation_status === "confirmed"
-      ? db.prepare("SELECT identifier_kind AS kind, 'public_registry' AS source, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? ORDER BY identifier_kind, normalized_value").all(row.id)
+      ? db.prepare("SELECT identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? ORDER BY identifier_kind, normalized_value").all(row.id)
       : db.prepare("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities_v2 WHERE literature_id = ? ORDER BY identity_kind, identity_value").all(row.id);
     const snapshot = {
       authors: parseJson(row.authors_json, []),
@@ -870,7 +870,7 @@ export class SqliteAnnotationCommunityRepository {
     const row = providedRow ?? this.db.prepare("SELECT * FROM literature_records_v2 WHERE id = ?").get(id);
     if (!row) return null;
     const identifiers = row.confirmation_status === "confirmed"
-      ? this.db.prepare("SELECT identifier_kind AS kind, 'public_registry' AS source, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? ORDER BY identifier_kind, normalized_value").all(id)
+      ? this.db.prepare("SELECT identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? ORDER BY identifier_kind, normalized_value").all(id)
       : this.db.prepare("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities_v2 WHERE literature_id = ? ORDER BY identity_kind, identity_value").all(id);
     if (row.confirmation_status !== "confirmed") {
       return {

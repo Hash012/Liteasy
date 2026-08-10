@@ -125,12 +125,52 @@ export const literatureIdentifierKindSchema = z.union([
   candidateLiteratureAliasKindSchema
 ]);
 
-export const literatureSourceSchema = z.enum(["public_registry", "manual", "inferred"]);
+export const literatureIdentifierRoleSchema = z.enum(["confirmable", "candidate_alias"]);
+
+export const literatureSourceSchema = z.enum(["public_registry", "manual", "inferred", "metadata"]);
+
+function expectedLiteratureIdentifierRole(kind) {
+  return kind === "title_authors_year_hash" ? "candidate_alias" : "confirmable";
+}
 
 export const literatureIdentifierSchema = z.object({
   kind: literatureIdentifierKindSchema,
+  role: literatureIdentifierRoleSchema.optional(),
   source: literatureSourceSchema,
   value: z.string().trim().min(1).max(1000)
+}).superRefine((value, context) => {
+  if (value.role && value.role !== expectedLiteratureIdentifierRole(value.kind)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["role"],
+      message: "文献标识角色与标识类型不一致。"
+    });
+  }
+});
+
+const confirmedLiteratureIdentifierSchema = literatureIdentifierSchema.superRefine((value, context) => {
+  const role = expectedLiteratureIdentifierRole(value.kind);
+  if (role === "confirmable" && value.source !== "public_registry") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["source"],
+      message: "可确认标识必须来自公共注册来源。"
+    });
+  }
+  if (role === "candidate_alias" && value.source !== "metadata" && value.source !== "public_registry") {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["source"],
+      message: "候选别名只能作为元数据兼容信息。"
+    });
+  }
+}).transform((value) => {
+  const role = expectedLiteratureIdentifierRole(value.kind);
+  return {
+    ...value,
+    role,
+    source: role === "candidate_alias" ? "metadata" : "public_registry"
+  };
 });
 
 const literatureDisplaySchema = z.object({
@@ -163,9 +203,7 @@ export const literatureCandidateSchema = z.object({
 
 export const literatureRecordSchema = z.object({
   ...literatureDisplaySchema.shape,
-  identifiers: z.array(literatureIdentifierSchema.extend({
-    source: z.literal("public_registry")
-  })).min(1).max(20),
+  identifiers: z.array(confirmedLiteratureIdentifierSchema).min(1).max(20),
   literatureId: z.string().trim().min(1).max(200),
   provenance: z.object({
     confirmedAt: z.string().datetime(),
@@ -175,7 +213,7 @@ export const literatureRecordSchema = z.object({
   revision: z.number().int().positive(),
   status: z.literal("confirmed")
 }).superRefine((value, context) => {
-  if (value.identifiers.every((identifier) => identifier.kind === "title_authors_year_hash")) {
+  if (value.identifiers.every((identifier) => identifier.role === "candidate_alias")) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["identifiers"],

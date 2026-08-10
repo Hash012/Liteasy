@@ -72,6 +72,30 @@ test("accepts confirmed OpenAlex records with a revision", () => {
     title: "A Paper"
   });
   assert.equal(parsed.identifiers[0].source, "public_registry");
+  assert.equal(parsed.identifiers[0].role, "confirmable");
+});
+
+test("normalizes compatibility aliases without presenting them as registry identifiers", () => {
+  const parsed = literatureRecordSchema.parse({
+    authors: ["A. Author"],
+    identifiers: [
+      { kind: "doi", source: "public_registry", value: "10.1000/test" },
+      { kind: "title_authors_year_hash", source: "public_registry", value: `sha256:${"a".repeat(64)}` }
+    ],
+    literatureId: "literature_1",
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" },
+    revision: 1,
+    status: "confirmed",
+    title: "A Paper"
+  });
+  assert.deepEqual(parsed.identifiers.map(({ kind, role, source }) => ({ kind, role, source })), [
+    { kind: "doi", role: "confirmable", source: "public_registry" },
+    { kind: "title_authors_year_hash", role: "candidate_alias", source: "metadata" }
+  ]);
+  assert.equal(literatureRecordSchema.safeParse({
+    ...parsed,
+    identifiers: [{ kind: "doi", role: "candidate_alias", source: "public_registry", value: "10.1000/test" }]
+  }).success, false);
 });
 
 test("rejects unverified record provenance and fingerprint-only formal records", () => {

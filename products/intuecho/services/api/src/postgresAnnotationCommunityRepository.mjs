@@ -533,7 +533,7 @@ export class PostgresAnnotationCommunityRepository {
     const row = result.rows[0];
     if (!row) return null;
     const identities = row.confirmation_status === "confirmed"
-      ? await client.query("SELECT identifier_kind AS kind, 'public_registry' AS source, normalized_value AS value FROM literature_identifiers WHERE literature_id = $1 ORDER BY identifier_kind, normalized_value", [id])
+      ? await client.query("SELECT identifier_kind AS kind, identifier_role AS role, CASE identifier_role WHEN 'candidate_alias' THEN 'metadata' ELSE 'public_registry' END AS source, normalized_value AS value FROM literature_identifiers WHERE literature_id = $1 ORDER BY identifier_kind, normalized_value", [id])
       : await client.query("SELECT identity_kind AS kind, identity_source AS source, identity_value AS value FROM literature_identities WHERE literature_id = $1 ORDER BY identity_kind, identity_value", [id]);
     if (row.confirmation_status !== "confirmed") {
       return {

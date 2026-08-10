@@ -6,7 +6,7 @@ import type { LiteratureRecord } from "../app/features/paper-identity/literature
 function fixtureLiterature(): LiteratureRecord {
   return {
     authors: ["Ada Lovelace"],
-    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/manual" }],
+    identifiers: [{ kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/manual" }],
     literatureId: "literature-1",
     provenance: {
       confirmedAt: "2026-08-09T10:00:00.000Z",

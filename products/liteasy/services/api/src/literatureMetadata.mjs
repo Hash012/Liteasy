@@ -5,6 +5,7 @@ const identifierKinds = new Set([
   "openalex_id",
   "title_authors_year_hash"
 ]);
+const identifierRoles = new Set(["confirmable", "candidate_alias"]);
 const providers = new Set(["intuecho", "openalex", "crossref", "arxiv", "semantic_scholar"]);
 
 export class LiteratureMetadataValidationError extends Error {
@@ -75,6 +76,10 @@ export function normalizeLiteratureIdentifier(kind, value) {
   invalid();
 }
 
+function literatureIdentifierRole(kind) {
+  return kind === "title_authors_year_hash" ? "candidate_alias" : "confirmable";
+}
+
 export function normalizeLiteratureMetadata(value) {
   const record = plainObject(value, new Set([
     "authors", "documentType", "identifiers", "literatureId", "provenance", "revision", "status", "title", "year"
@@ -85,15 +90,20 @@ export function normalizeLiteratureMetadata(value) {
   if (provenance.mode !== "public_registry" || record.status !== "confirmed" || !Number.isSafeInteger(record.revision) || record.revision < 1) invalid();
   if (provenance.provider !== undefined && !providers.has(provenance.provider)) invalid();
   const normalizedIdentifiers = record.identifiers.map((value) => {
-    const identifier = plainObject(value, new Set(["kind", "source", "value"]));
-    if (!identifierKinds.has(identifier.kind) || identifier.source !== "public_registry") invalid();
+    const identifier = plainObject(value, new Set(["kind", "role", "source", "value"]));
+    if (!identifierKinds.has(identifier.kind)) invalid();
+    const role = literatureIdentifierRole(identifier.kind);
+    if (identifier.role !== undefined && (!identifierRoles.has(identifier.role) || identifier.role !== role)) invalid();
+    if (role === "confirmable" && identifier.source !== "public_registry") invalid();
+    if (role === "candidate_alias" && identifier.source !== "metadata" && identifier.source !== "public_registry") invalid();
     return {
       kind: identifier.kind,
-      source: identifier.source,
+      role,
+      source: role === "candidate_alias" ? "metadata" : "public_registry",
       value: normalizeLiteratureIdentifier(identifier.kind, text(identifier.value, 1000))
     };
   });
-  if (normalizedIdentifiers.every((identifier) => identifier.kind === "title_authors_year_hash")) invalid();
+  if (normalizedIdentifiers.every((identifier) => identifier.role === "candidate_alias")) invalid();
   if (record.year !== undefined && (!Number.isInteger(record.year) || record.year < 1000 || record.year > 9999)) invalid();
   const normalizedDocumentType = optionalText(record.documentType, 100);
   return {

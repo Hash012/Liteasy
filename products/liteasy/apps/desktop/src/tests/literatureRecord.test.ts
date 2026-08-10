@@ -15,6 +15,7 @@ function fixtureLiterature(
     authors: ["Ada Lovelace", "Grace Hopper"],
     identifiers: [{
       kind: "doi",
+      role: "confirmable",
       source: "public_registry",
       value: "10.1000/example"
     }],
@@ -41,7 +42,7 @@ describe("literatureRecord", () => {
 
     expect(snapshot).toEqual({
       literature: expect.objectContaining({
-        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/example" }],
+        identifiers: [{ kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/example" }],
         provenance: {
           confirmedAt: "2026-08-09T10:00:00.000Z",
           mode: "public_registry",
@@ -54,10 +55,39 @@ describe("literatureRecord", () => {
     });
   });
 
+  test("upgrades a compatibility snapshot that predates explicit identifier roles", () => {
+    const snapshot = normalizeLiteratureSnapshot({
+      literature: {
+        ...fixtureLiterature(),
+        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/example" }]
+      },
+      version: 1
+    });
+
+    expect(snapshot.literature.identifiers[0]).toMatchObject({
+      kind: "doi",
+      role: "confirmable",
+      source: "public_registry"
+    });
+  });
+
   test.each([
     null,
     { literature: fixtureLiterature(), version: 2 },
     { literature: fixtureLiterature({ identifiers: [] }), version: 1 },
+    {
+      literature: {
+        ...fixtureLiterature(),
+        identifiers: [{
+          kind: "doi",
+          role: "confirmable",
+          source: "public_registry",
+          unexpected: true,
+          value: "10.1000/unexpected"
+        }]
+      },
+      version: 1
+    },
     {
       literature: fixtureLiterature({
         identifiers: [{ kind: "doi", source: "manual", value: "10.1000/mismatch" }]

@@ -12,13 +12,30 @@ export type LiteratureIdentifierKind =
   | ConfirmableLiteratureIdentifierKind
   | CandidateLiteratureAliasKind;
 
-export type LiteratureSource = "public_registry" | "manual" | "inferred";
+export type LiteratureIdentifierRole = "confirmable" | "candidate_alias";
+
+export type LiteratureSource = "public_registry" | "manual" | "inferred" | "metadata";
 
 export type LiteratureIdentifier = {
   kind: LiteratureIdentifierKind;
+  role?: LiteratureIdentifierRole;
   source: LiteratureSource;
   value: string;
 };
+
+export type ConfirmedLiteratureIdentifier =
+  | {
+      kind: ConfirmableLiteratureIdentifierKind;
+      role: "confirmable";
+      source: "public_registry";
+      value: string;
+    }
+  | {
+      kind: CandidateLiteratureAliasKind;
+      role: "candidate_alias";
+      source: "metadata";
+      value: string;
+    };
 
 export type LiteratureCandidate = {
   candidateKey: string;
@@ -42,7 +59,7 @@ export type LiteratureCandidate = {
 export type LiteratureRecord = {
   authors: string[];
   documentType?: string;
-  identifiers: LiteratureIdentifier[];
+  identifiers: ConfirmedLiteratureIdentifier[];
   literatureId: string;
   provenance: {
     confirmedAt: string;
@@ -240,6 +257,7 @@ export type UpdateReplyPublication =
 export declare const confirmableLiteratureIdentifierKindSchema: z.ZodType<ConfirmableLiteratureIdentifierKind>;
 export declare const candidateLiteratureAliasKindSchema: z.ZodType<CandidateLiteratureAliasKind>;
 export declare const literatureIdentifierKindSchema: z.ZodType<LiteratureIdentifierKind>;
+export declare const literatureIdentifierRoleSchema: z.ZodType<LiteratureIdentifierRole>;
 export declare const literatureSourceSchema: z.ZodType<LiteratureSource>;
 export declare const literatureIdentifierSchema: z.ZodType<LiteratureIdentifier>;
 export declare const literatureCandidateSchema: z.ZodType<LiteratureCandidate>;

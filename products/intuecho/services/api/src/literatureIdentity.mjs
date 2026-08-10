@@ -74,7 +74,7 @@ export function sameLiteratureVersionBibliography(left, right) {
   if (!sameLiteratureBibliography(left, right)) return false;
   const leftVersion = literatureVersionClass(left);
   const rightVersion = literatureVersionClass(right);
-  if (leftVersion && rightVersion && leftVersion !== rightVersion) return false;
+  if (!leftVersion || !rightVersion || leftVersion !== rightVersion) return false;
   const identifiers = [...(left?.identifiers ?? []), ...(right?.identifiers ?? [])];
   return !hasCrossVersionIdentifierConflict({
     documentType: leftVersion === "publication" || rightVersion === "publication"

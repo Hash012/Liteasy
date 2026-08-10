@@ -13,7 +13,7 @@ const conformance = JSON.parse(readFileSync(new URL(
 
 export const confirmedLiterature = {
   authors: ["Ada Lovelace"],
-  identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/liteasy" }],
+  identifiers: [{ kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/liteasy" }],
   literatureId: "lit_01J00000000000000000000000",
   provenance: {
     confirmedAt: "2026-08-09T00:00:00.000Z",
@@ -66,6 +66,21 @@ test("accepts a public-registry record without importing Intuecho contracts", ()
 
   assert.equal(record.provenance.provider, "openalex");
   assert.equal(record.identifiers[0].source, "public_registry");
+  assert.equal(record.identifiers[0].role, "confirmable");
+});
+
+test("upgrades old confirmed snapshots with explicit identifier roles", () => {
+  const record = normalizeLiteratureMetadata({
+    ...confirmedLiterature,
+    identifiers: [
+      { kind: "doi", source: "public_registry", value: "10.1000/liteasy" },
+      { kind: "title_authors_year_hash", source: "public_registry", value: `sha256:${"b".repeat(64)}` }
+    ]
+  });
+  assert.deepEqual(record.identifiers.map(({ kind, role, source }) => ({ kind, role, source })), [
+    { kind: "doi", role: "confirmable", source: "public_registry" },
+    { kind: "title_authors_year_hash", role: "candidate_alias", source: "metadata" }
+  ]);
 });
 
 test("conforms to the shared stable identifier fixtures without importing Intuecho", () => {

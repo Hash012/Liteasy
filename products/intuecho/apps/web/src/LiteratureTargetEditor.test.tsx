@@ -29,7 +29,7 @@ const candidate = {
 
 const confirmed = {
   ...candidate.record,
-  identifiers: [{ ...candidate.record.identifiers[0] }],
+  identifiers: [{ ...candidate.record.identifiers[0], role: "confirmable" as const }],
   literatureId: "literature-1",
   provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const },
   revision: 1,

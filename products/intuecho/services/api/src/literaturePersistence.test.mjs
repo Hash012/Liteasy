@@ -32,6 +32,12 @@ test("SQLite reuses one confirmed literature id across owners and separates iden
     assert.equal(second.literatureId, first.literatureId);
     assert.equal(first.status, "confirmed");
     assert.equal(first.revision, 1);
+    assert.deepEqual(first.identifiers, [{
+      kind: "doi",
+      role: "confirmable",
+      source: "public_registry",
+      value: "10.1000/verified"
+    }]);
     assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
     assert.deepEqual(db.prepare("SELECT id, identifier_kind, normalized_value FROM literature_identifiers_v2").all(), [
       { id: db.prepare("SELECT id FROM literature_identifiers_v2").get().id, identifier_kind: "doi", normalized_value: "10.1000/verified" }
@@ -149,6 +155,7 @@ test("SQLite stores independently corroborated aggregate claims in one confirmat
     const record = await repository.confirmRefetchedLiterature(owner, {
       ...candidate({
         candidateKey: "openalex:openalex_id:W123",
+        documentType: "article",
         identifiers: [
           { kind: "openalex_id", source: "public_registry", value: "W123" },
           { kind: "doi", source: "public_registry", value: "10.1000/shared" }
@@ -157,6 +164,7 @@ test("SQLite stores independently corroborated aggregate claims in one confirmat
       }),
       corroborations: [candidate({
         candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+        documentType: "publication",
         identifiers: [
           { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" },
           { kind: "doi", source: "public_registry", value: "10.1000/shared" }
@@ -737,6 +745,7 @@ test("PostgreSQL stores independently corroborated aggregate claims in one confi
   const record = await harness.repository.confirmRefetchedLiterature(owner, {
     ...candidate({
       candidateKey: "openalex:openalex_id:W123",
+      documentType: "article",
       identifiers: [
         { kind: "openalex_id", source: "public_registry", value: "W123" },
         { kind: "doi", source: "public_registry", value: "10.1000/shared" }
@@ -745,6 +754,7 @@ test("PostgreSQL stores independently corroborated aggregate claims in one confi
     }),
     corroborations: [candidate({
       candidateKey: "semantic_scholar:semantic_scholar_id:corpus:456",
+      documentType: "publication",
       identifiers: [
         { kind: "semantic_scholar_id", source: "public_registry", value: "corpus:456" },
         { kind: "doi", source: "public_registry", value: "10.1000/shared" }

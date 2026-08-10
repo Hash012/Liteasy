@@ -97,6 +97,7 @@ const legacyCandidate = {
 
 const confirmedLiterature = {
   ...legacyCandidate.record,
+  identifiers: [{ ...legacyCandidate.record.identifiers[0], role: "confirmable" as const }],
   literatureId: "literature-parent",
   provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const }
   , revision: 1, status: "confirmed" as const

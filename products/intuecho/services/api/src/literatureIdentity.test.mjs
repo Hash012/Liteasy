@@ -5,6 +5,7 @@ import {
   isConfirmableLiteratureIdentifierKind,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
+  sameLiteratureVersionBibliography,
   titleAuthorsYearFingerprint
 } from "./literatureIdentity.mjs";
 
@@ -68,4 +69,22 @@ test("does not create a fingerprint from title-only data", () => {
     () => titleAuthorsYearFingerprint({ authors: ["A. Author"], title: "A Title" }),
     (error) => error instanceof LiteratureIdentityConflictError && error.code === "LITERATURE_IDENTITY_REQUIRED"
   );
+});
+
+test("requires both sources to identify the same version class before bibliography corroboration", () => {
+  const record = {
+    authors: ["A. Author"],
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/versioned" }],
+    title: "A Versioned Work",
+    year: 2026
+  };
+  assert.equal(sameLiteratureVersionBibliography(
+    { ...record, documentType: "journal-article" },
+    { ...record, documentType: "article" }
+  ), true);
+  assert.equal(sameLiteratureVersionBibliography(
+    { ...record, documentType: "journal-article" },
+    record
+  ), false);
+  assert.equal(sameLiteratureVersionBibliography(record, record), false);
 });

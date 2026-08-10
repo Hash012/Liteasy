@@ -40,7 +40,7 @@ const candidate: LiteratureCandidate = {
 
 const confirmed: LiteratureRecord = {
   authors: candidate.record.authors,
-  identifiers: candidate.record.identifiers,
+  identifiers: [{ kind: "doi", role: "confirmable", source: "public_registry", value: "10.1000/a-paper" }],
   literatureId: "literature-1",
   provenance: {
     confirmedAt: "2026-08-09T00:00:00.000Z",

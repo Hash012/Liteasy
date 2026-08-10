@@ -10,17 +10,37 @@ import type {
   LiteratureSnapshot
 } from "./literature.types";
 
-const literatureIdentifierSchema = z.object({
+const confirmableLiteratureIdentifierSchema = z.object({
   kind: z.enum([
     "doi",
     "arxiv_id",
     "semantic_scholar_id",
-    "openalex_id",
-    "title_authors_year_hash"
+    "openalex_id"
   ]),
+  role: z.literal("confirmable").optional(),
   source: z.literal("public_registry"),
   value: z.string().trim().min(1).max(1000)
-}).strict();
+}).strict().transform((identifier) => {
+  return {
+    ...identifier,
+    role: "confirmable" as const,
+    source: "public_registry" as const
+  };
+});
+const candidateLiteratureAliasSchema = z.object({
+  kind: z.literal("title_authors_year_hash"),
+  role: z.literal("candidate_alias").optional(),
+  source: z.enum(["metadata", "public_registry"]),
+  value: z.string().trim().min(1).max(1000)
+}).strict().transform((identifier) => ({
+  ...identifier,
+  role: "candidate_alias" as const,
+  source: "metadata" as const
+}));
+const literatureIdentifierSchema = z.union([
+  confirmableLiteratureIdentifierSchema,
+  candidateLiteratureAliasSchema
+]);
 const literatureRecordSchema = z.object({
   authors: z.array(z.string().trim().min(1).max(300)).max(200),
   documentType: z.string().trim().min(1).max(100).optional(),
@@ -36,7 +56,7 @@ const literatureRecordSchema = z.object({
   title: z.string().trim().min(1).max(1000),
   year: z.number().int().min(1000).max(9999).optional()
 }).strict().superRefine((record, context) => {
-  if (record.identifiers.every((identifier) => identifier.kind === "title_authors_year_hash")) {
+  if (record.identifiers.every((identifier) => identifier.role === "candidate_alias")) {
     context.addIssue({
       code: "custom",
       message: "正式文献必须包含来源确认的稳定标识。",
