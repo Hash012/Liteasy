@@ -37,6 +37,15 @@ Task 5 adds fail-closed deep-dive targets for generated semantic objects, whole 
 
 - Real-provider smoke still requires deployment-admin route and account configuration.
 
+## Pointer Overlay Fix
+
+Fresh exact-HEAD verification exposed that pointer selection rendered an unpositioned span. A regression test now checks the normalized visible rectangle, and the overlay renders bounded percentage geometry over the source image.
+
+```text
+RED: SourceFigureSelectionOverlay pointer rectangle test could not find a positioned test target.
+GREEN: SourceFigureSelectionOverlay.test.tsx passed 2/2.
+```
+
 ## Finding-Driven Compatibility
 
 `thinReading.types.ts`, `thinReadingProjection.ts`, `useArtifactActions.ts`, `artifactTaskRecovery.ts`, `thinReadingVersioning.ts`, and one external-knowledge fallback guard in `generateAssistantAnswer.ts` are included because the new `visualization_target` branch source must compile, persist, recover, and generate through the existing reader pipeline. Existing unrelated user edits remain unstaged.
