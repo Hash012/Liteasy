@@ -4,15 +4,18 @@
 
 **Goal:** Implement production paths for semantic graphs, circuits and physics diagrams, and biology/neural structures with deterministic trusted renderers, domain validators, accessibility projections, and visual regression fixtures.
 
-**Architecture:** Each modality owns a bounded kernel, a validator adapter, and a renderer that consumes only the parsed `VisualizationSpecV1`. The shared visualization runtime performs evidence and safety gates before a renderer is loaded. SVG output is constructed through an internal escaped scene builder with stable IDs; React Flow and Canvas are projections of the same validated scene metadata, never alternate sources of scientific facts.
+**Architecture:** Each modality owns a bounded kernel, a validator adapter, and a renderer that consumes only the parsed `VisualizationSpecV1`. The Liteasy API compiler is the authoritative publication boundary: it accepts only allowlisted structured proposals, runs server-side evidence and domain hard gates, and publishes the canonical artifact consumed by the desktop renderer. Desktop kernels repeat deterministic checks needed for rendering and revalidation but do not replace the server hard gates. SVG output is constructed through an internal escaped scene builder with stable IDs; React Flow and Canvas are projections of the same validated scene metadata, never alternate sources of scientific facts. The shared built-in catalog is the final release switch, and a modality is available only when the catalog, service compiler, and complete desktop chain agree.
 
-**Tech Stack:** TypeScript 5.8, Zod 4, React 18, Fluent UI 9, SVG, Canvas 2D, React Testing Library, Playwright, Vitest.
+**Tech Stack:** TypeScript 5.8, Zod 4, React 18, Fluent UI 9, SVG, Canvas 2D, Node.js 20, AJV 8, React Testing Library, Playwright, Vitest, Node test runner.
 
 ## Global Constraints
 
 - Preserve `layout -> controllers -> features -> shared types / clients` and keep all modality code under `features/visualization/`.
+- Treat `visualizationArtifact.types.ts`, `visualizationArtifact.schema.ts`, and the generated shared JSON Schema as the canonical v1 contract. Plan snippets are illustrative and must not introduce semantic-graph aliases such as `relation`, `factual`, a top-level `direction`, or `timeline` where the merged semantic-graph payload uses `kind`, `evidenceClaimIds`, `hierarchy`, and `timeOrder`.
 - Models provide typed specs only; no SVG strings, HTML, scripts, event handlers, external URLs, or unbounded layout values enter a renderer.
 - Every factual node, edge, component, vector, structure, and label has an evidence binding; layout-only relations are explicitly marked non-factual.
+- Server compiler descriptors must run modality-specific hard validators before publication. Desktop-only validation is insufficient because the desktop consumes server-validated artifacts.
+- Keep all generated static catalog entries disabled until Tasks 1-5 pass and Task 6 verifies the complete server/client chain. Merely registering a local Skill or renderer must not advertise the modality.
 - Hard validator failure omits the artifact; advisory diagnostics never publish unsupported scientific claims.
 - Rendering is deterministic for the same spec, kernel version, renderer version, and seed.
 - Keep the user-facing surface minimal; implementation, ontology, validator, and source details belong to accessibility projections or admin diagnostics.
@@ -75,7 +78,7 @@ export function createSafeSvgScene(input: Omit<SvgSceneV1, "svg">): SvgSceneV1 {
 }
 ```
 
-Use numeric bounds, allowlisted attributes, no XML declarations, no stylesheets, no fragments, no event attributes, and stable object IDs. `stableLayoutGraph` uses seeded ordering plus deterministic topological layering and returns diagnostics when a graph cannot be laid out without overlap.
+Use numeric bounds, allowlisted attributes, no XML declarations, no stylesheets, no fragments, no event attributes, and stable object IDs. `layoutStableGraph` uses seeded ordering plus deterministic topological layering and returns diagnostics when a graph cannot be laid out without overlap.
 
 - [ ] **Step 4: Run tests and commit**
 
@@ -94,6 +97,7 @@ git commit -m "feat: add safe deterministic science scenes"
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/kernels/semanticGraphKernel.ts`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/renderers/semanticGraphRenderer.tsx`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/semantic-graph/skill.json`
+- Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/semantic-graph/instructions.md`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/semantic-graph/fixtures/flowchart.json`
 - Test: `products/liteasy/apps/desktop/src/tests/semanticGraphKernel.test.ts`
 - Test: `products/liteasy/apps/desktop/src/tests/semanticGraphRenderer.test.tsx`
@@ -107,12 +111,22 @@ git commit -m "feat: add safe deterministic science scenes"
 
 ```ts
 const validFlowchartFixture = {
-  modality: "semantic_graph", subtype: "flowchart", direction: "down",
-  nodes: [{ id: "start", label: "输入", kind: "step" }, { id: "end", label: "输出", kind: "step" }],
-  edges: [{ id: "edge-1", from: "start", to: "end", relation: "sequence", factual: true }],
-  groups: [], timeline: []
-} as const;
-test("rejects a cycle in a flowchart", () => expect(() => validateSemanticGraph({ ...validFlowchartFixture, edges: [{ id: "e1", from: "start", to: "end", relation: "sequence", factual: true }, { id: "e2", from: "end", to: "start", relation: "sequence", factual: true }] })).toThrow("semantic_graph_cycle"));
+  subtype: "flowchart",
+  nodes: [
+    { id: "start", label: "输入", kind: "step", objectPath: ["start"], evidenceClaimIds: ["claim-1"] },
+    { id: "end", label: "输出", kind: "step", objectPath: ["end"], evidenceClaimIds: ["claim-1"] }
+  ],
+  edges: [{ id: "edge-1", from: "start", to: "end", kind: "precedes", evidenceClaimIds: ["claim-1"] }],
+  groups: [], hierarchy: [], timeOrder: [],
+  claims: [{ id: "claim-1", text: "输入先于输出", evidenceIds: ["evidence-1"] }]
+} as const satisfies SemanticGraphSpecV1;
+test("rejects a cycle in a flowchart", () => expect(() => validateSemanticGraph({
+  ...validFlowchartFixture,
+  edges: [
+    { id: "e1", from: "start", to: "end", kind: "precedes", evidenceClaimIds: ["claim-1"] },
+    { id: "e2", from: "end", to: "start", kind: "precedes", evidenceClaimIds: ["claim-1"] }
+  ]
+})).toThrow("semantic_graph_cycle"));
 test("renders selectable objects with accessible reading order", () => { const artifact = renderSemanticGraph(validFlowchartFixture, { evidenceBindings: [], semanticObjects: [] }); expect(artifact.svg).toContain('role="img"'); expect(artifact.selectableObjectIds).toEqual(["start", "end"]); });
 ```
 
@@ -124,7 +138,7 @@ Expected: FAIL because the kernel and renderer do not exist.
 
 - [ ] **Step 3: Implement graph invariants and stable layout**
 
-Enforce unique IDs, bounded node/edge/group counts, valid endpoints, subtype-specific rules (tree for mindmap, DAG for flowchart/causal graph, monotonic timestamps for timeline), and factual edges with at least one claim binding. Return a normalized scene with semantic object paths and collision diagnostics; organization edges must have `factual: false`.
+Enforce unique IDs, bounded node/edge/group counts, valid endpoints, subtype-specific rules (tree for mindmap, DAG for flowchart/causal graph, and an exact `timeOrder` permutation for timelines), and factual edges with at least one claim binding. Return a normalized scene with semantic object paths and collision diagnostics; organization edges use `kind: "layout"` and must not carry unsupported factual claims.
 
 - [ ] **Step 4: Implement trusted SVG plus observation-only React interactions**
 
@@ -149,7 +163,9 @@ git commit -m "feat: render evidence-bound semantic graphs"
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/renderers/circuitRenderer.tsx`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/renderers/physicsDiagramRenderer.tsx`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/circuit/skill.json`
+- Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/circuit/instructions.md`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/physics-diagram/skill.json`
+- Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/physics-diagram/instructions.md`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/circuit/fixtures/ohms-law.json`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/physics-diagram/fixtures/projectile.json`
 - Test: `products/liteasy/apps/desktop/src/tests/circuitKernel.test.ts`
@@ -200,6 +216,7 @@ git commit -m "feat: add circuit and physics diagrams"
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/kernels/biologyStructureKernel.ts`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/renderers/biologyStructureRenderer.tsx`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/biology-structure/skill.json`
+- Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/biology-structure/instructions.md`
 - Create: `products/liteasy/apps/desktop/src/app/features/visualization/skills/biology-structure/fixtures/neural-connection.json`
 - Test: `products/liteasy/apps/desktop/src/tests/biologyStructureKernel.test.ts`
 - Test: `products/liteasy/apps/desktop/src/tests/biologyStructureRenderer.test.tsx`
@@ -226,7 +243,7 @@ Expected: FAIL because the biology modules do not exist.
 
 - [ ] **Step 3: Implement offline ontology, structure bounds, and connection invariants**
 
-Require known ontology IDs, unique parent paths, valid connection endpoints, direction labels where supplied, confidence values, and a hard evidence binding for every factual relation. Reject unsupported fine-grained reconstruction instead of guessing it.
+Require known ontology IDs, unique parent paths, valid connection endpoints, direction labels where supplied, and a hard evidence binding for every factual relation. Evidence confidence is read from the artifact's `EvidenceBindingV1`, not invented as an extra biology-spec field. Reject unsupported fine-grained reconstruction instead of guessing it.
 
 - [ ] **Step 4: Implement layered SVG/Canvas projection and accessibility**
 
@@ -241,35 +258,128 @@ git add products/liteasy/apps/desktop/src/app/features/visualization/kernels/bio
 git commit -m "feat: render evidence-bound biology structures"
 ```
 
-### Task 5: Static Renderer Registration And Cross-Modality Gate
+### Task 5: Authoritative Static Science Compilers
 
 **Files:**
-- Modify: `products/liteasy/apps/desktop/src/app/features/visualization/visualizationRendererRegistry.ts`
-- Modify: `products/liteasy/apps/desktop/src/app/features/visualization/visualizationValidatorRegistry.ts`
-- Create: `products/liteasy/apps/desktop/src/tests/staticScienceReleaseGate.test.ts`
+- Create: `development/test-data/thin-reading-multimodal/static-science-conformance.v1.json`
+- Create: `products/liteasy/services/api/src/staticScienceVisualizationCompilers.mjs`
+- Create: `products/liteasy/services/api/src/staticScienceVisualizationCompilers.test.mjs`
+- Modify: `products/liteasy/services/api/src/runtime.mjs`
+- Modify: `products/liteasy/services/api/src/runtime.test.mjs`
 
 **Interfaces:**
-- Consumes: all four kernels/renderers and Skill manifests from Tasks 2–4.
-- Produces: complete availability for `semantic_graph`, `circuit`, `physics_diagram`, and `biology_structure` only when every chain element is registered.
+- Consumes: the canonical shared artifact JSON Schema, the four Skill implementation IDs from Tasks 2-4, structured provider proposals, and the immutable `VisualizationArtifactCompilerRegistry` from Phase 3.
+- Produces: `productionStaticScienceVisualizationCompilers`, strict proposal schemas, and authoritative server hard validators for `semantic_graph`, `circuit`, `physics_diagram`, and `biology_structure`.
 
-- [ ] **Step 1: Write the registration gate test**
+- [ ] **Step 1: Add cross-runtime conformance fixtures and failing compiler tests**
+
+The versioned conformance fixture contains, for every static modality, one valid proposal and focused invalid proposals for schema drift, missing evidence, unsupported references, topology/domain failure, and resource overflow. Desktop kernel tests and API compiler tests must read the same fixture and agree on pass/fail plus the stable diagnostic code.
+
+```js
+test("rejects a schema-valid proposal that fails a static domain hard gate", async () => {
+  const registry = staticScienceRegistry();
+  await assert.rejects(
+    () => registry.compile(semanticGraphCycleInput),
+    /visualization_hard_validation_failed/
+  );
+});
+
+test("provides a production compiler for every static catalog candidate", () => {
+  assert.deepEqual(
+    Object.keys(productionStaticScienceVisualizationCompilers).sort(),
+    ["biology_structure", "circuit", "physics_diagram", "semantic_graph"]
+  );
+});
+```
+
+- [ ] **Step 2: Run the service tests and verify red**
+
+Run: `cd products/liteasy/services/api && node --test src/staticScienceVisualizationCompilers.test.mjs src/runtime.test.mjs`
+
+Expected: FAIL because production descriptors and runtime wiring do not exist.
+
+- [ ] **Step 3: Implement strict descriptors and server hard validators**
+
+Each immutable descriptor supplies the exact Skill/Kernel/Renderer versions, a closed proposal schema derived from the canonical v1 contract, and at least one modality-specific hard validator. The validators independently enforce the evidence and domain invariants from Tasks 2-4; they must not trust desktop validation or provider-supplied validation reports. `runtime.mjs` passes `productionStaticScienceVisualizationCompilers` by default while preserving explicit dependency injection in tests.
+
+The production shared catalog remains unchanged in this task, so descriptors can be tested with an explicit test catalog without advertising a generated modality. A hard-gate failure rolls back the reservation and publishes no artifact; the existing reader source-figure lane remains the safe fallback. Tests must prove the failure does not create a ready artifact or a second provider charge.
+
+- [ ] **Step 4: Run focused API and desktop conformance tests**
+
+Run:
+
+```bash
+cd products/liteasy/services/api && node --test src/staticScienceVisualizationCompilers.test.mjs src/visualizationArtifactCompiler.test.mjs src/runtime.test.mjs
+cd products/liteasy/apps/desktop && npm test -- src/tests/semanticGraphKernel.test.ts src/tests/circuitKernel.test.ts src/tests/physicsDiagramKernel.test.ts src/tests/biologyStructureKernel.test.ts
+```
+
+Expected: PASS with identical fixture decisions across runtimes and no generated modality advertised by the production catalog.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add development/test-data/thin-reading-multimodal/static-science-conformance.v1.json products/liteasy/services/api/src/staticScienceVisualizationCompilers.mjs products/liteasy/services/api/src/staticScienceVisualizationCompilers.test.mjs products/liteasy/services/api/src/runtime.mjs products/liteasy/services/api/src/runtime.test.mjs
+git commit -m "feat: validate static science artifacts on server"
+```
+
+### Task 6: Catalog Registration And Cross-Runtime Release Gate
+
+**Files:**
+- Modify: `products/liteasy/packages/shared/visualizationBuiltins.v1.json`
+- Modify: `products/liteasy/apps/desktop/src/app/features/skills/builtinSkillRegistry.ts`
+- Modify: `products/liteasy/apps/desktop/src/app/features/visualization/visualizationRendererRegistry.ts`
+- Modify: `products/liteasy/apps/desktop/src/app/features/visualization/visualizationValidatorRegistry.ts`
+- Modify: `products/liteasy/apps/desktop/src/tests/builtinSkillRegistry.test.ts`
+- Create: `products/liteasy/apps/desktop/src/tests/staticScienceFallback.test.ts`
+- Create: `products/liteasy/apps/desktop/src/tests/staticScienceReleaseGate.test.ts`
+- Create: `products/liteasy/services/api/src/staticScienceReleaseGate.test.mjs`
+
+**Interfaces:**
+- Consumes: all four Skill packages, kernels, renderers, validators, browser fixtures, server compiler descriptors, and the shared built-in catalog.
+- Produces: fail-closed availability for `semantic_graph`, `circuit`, `physics_diagram`, and `biology_structure`, with exact agreement between the enabled catalog, server compiler registry, and complete desktop implementation chain.
+
+- [ ] **Step 1: Write fail-closed availability tests before changing the catalog**
 
 ```ts
-test("advertises only modalities with skill, kernel, validators, renderer, and fixture", () => {
-  expect(getAvailableVisualizationModalities()).toEqual(expect.arrayContaining(["semantic_graph", "circuit", "physics_diagram", "biology_structure"]));
+test("does not advertise a locally complete modality while its catalog entry is disabled", () => {
+  expect(getAvailableVisualizationModalities()).not.toContain("semantic_graph");
+  expect(getUnavailableReasons().semantic_graph).toBe("catalog_disabled");
+});
+
+test("advertises every enabled static modality only with its complete chain", () => {
+  expect(getAvailableVisualizationModalities()).toEqual(
+    expect.arrayContaining(["semantic_graph", "circuit", "physics_diagram", "biology_structure"])
+  );
   expect(getUnavailableReasons()).not.toHaveProperty("semantic_graph");
 });
 ```
 
-- [ ] **Step 2: Run red, wire registrations, then verify**
+The API release test loads the same production catalog and asserts that every `enabled && generated` static entry has a compiler descriptor with matching `skillId`, implementation versions, proposal schema, and hard validators. It also asserts that no service compiler or locally registered renderer can make a catalog-disabled modality available.
 
-Run: `cd products/liteasy/apps/desktop && npm test -- src/tests/staticScienceReleaseGate.test.ts`
+`staticScienceFallback.test.ts` runs each Skill's declared `source_figure` fallback through the existing workflow harness. It proves that an invalid generated proposal cannot be published, the fallback carries only source-bound claims, and a missing or invalid source figure ends as omitted rather than displaying a partial generated artifact.
 
-Expected initially FAIL, then PASS after registrations are loaded from built-in manifests and all hard validators are present.
+- [ ] **Step 2: Make desktop availability catalog-aware and wire lazy registrations**
 
-- [ ] **Step 3: Commit**
+Register all four Skill manifests, kernels, hard validators, and lazy renderer loaders. `getAvailableVisualizationModalities()` returns only the intersection of enabled catalog entries and complete local chains. `getUnavailableReasons()` reports stable internal reason codes for missing catalog, Skill, kernel, validator, renderer, fixture, or runtime support; these codes are diagnostics and not permanent user-facing copy.
+
+Add the four generated entries to the shared catalog with `enabled: false` first. Run the component, conformance, fallback, accessibility, and browser visual tests from Tasks 1-5. Only after they pass may the same focused change flip those four entries to `enabled: true`.
+
+- [ ] **Step 3: Run the static release gates**
+
+Run:
 
 ```bash
-git add products/liteasy/apps/desktop/src/app/features/visualization/visualizationRendererRegistry.ts products/liteasy/apps/desktop/src/app/features/visualization/visualizationValidatorRegistry.ts products/liteasy/apps/desktop/src/tests/staticScienceReleaseGate.test.ts
-git commit -m "feat: enable static science modalities"
+cd products/liteasy/services/api && node --test src/staticScienceVisualizationCompilers.test.mjs src/staticScienceReleaseGate.test.mjs src/visualizationArtifactCompiler.test.mjs src/runtime.test.mjs
+cd products/liteasy/apps/desktop && npm test -- src/tests/builtinSkillRegistry.test.ts src/tests/staticScienceFallback.test.ts src/tests/staticScienceReleaseGate.test.ts src/tests/safeSvgScene.test.ts src/tests/stableLayout.test.ts src/tests/semanticGraphKernel.test.ts src/tests/semanticGraphRenderer.test.tsx src/tests/circuitKernel.test.ts src/tests/physicsDiagramKernel.test.ts src/tests/circuitRenderer.test.tsx src/tests/biologyStructureKernel.test.ts src/tests/biologyStructureRenderer.test.tsx
+npx playwright test src/tests/browser/semanticGraph.browser.spec.ts src/tests/browser/scienceDiagram.browser.spec.ts src/tests/browser/biologyStructure.browser.spec.ts
+npm run build
+```
+
+Expected: all checks pass; the server and desktop advertise exactly the four enabled static modalities; repeated desktop/mobile renders are nonblank and deterministic; source-figure fallback fixtures pass; no catalog-disabled modality appears.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add products/liteasy/packages/shared/visualizationBuiltins.v1.json products/liteasy/apps/desktop/src/app/features/skills/builtinSkillRegistry.ts products/liteasy/apps/desktop/src/app/features/visualization/visualizationRendererRegistry.ts products/liteasy/apps/desktop/src/app/features/visualization/visualizationValidatorRegistry.ts products/liteasy/apps/desktop/src/tests/builtinSkillRegistry.test.ts products/liteasy/apps/desktop/src/tests/staticScienceFallback.test.ts products/liteasy/apps/desktop/src/tests/staticScienceReleaseGate.test.ts products/liteasy/services/api/src/staticScienceReleaseGate.test.mjs
+git commit -m "feat: enable verified static science modalities"
 ```
