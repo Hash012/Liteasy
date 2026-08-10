@@ -56,6 +56,10 @@ const staticModalityChain = {
   physics_process: {
     kernelId: "physics-process-v1",
     rendererId: "physics-process-svg"
+  },
+  reaction_process: {
+    kernelId: "reaction-process-v1",
+    rendererId: "reaction-process-svg"
   }
 } as const satisfies Partial<Record<VisualizationModality, { kernelId: string; rendererId: string }>>;
 
@@ -163,6 +167,7 @@ for (const [modality, registration] of Object.entries(staticModalityChain)) {
       if (modality === "geometry_2d") return (await import("./renderers/geometry2dRenderer")).geometry2dVisualizationRenderer;
       if (modality === "geometry_3d") return (await import("./renderers/geometry3dRenderer")).geometry3dVisualizationRenderer;
       if (modality === "physics_process") return (await import("./renderers/physicsProcessRenderer")).physicsProcessVisualizationRenderer;
+      if (modality === "reaction_process") return (await import("./renderers/reactionProcessRenderer")).reactionProcessVisualizationRenderer;
       return (await import("./renderers/biologyStructureRenderer")).biologyStructureVisualizationRenderer;
     }
   });

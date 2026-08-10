@@ -28,6 +28,9 @@ const Geometry3DBrowserFixture = import.meta.env.DEV
 const PhysicsProcessBrowserFixture = import.meta.env.DEV
   ? lazy(() => import("./tests/fixtures/physicsProcessBrowserFixture"))
   : null;
+const ReactionProcessBrowserFixture = import.meta.env.DEV
+  ? lazy(() => import("./tests/fixtures/reactionProcessBrowserFixture"))
+  : null;
 
 export default function App() {
   const fixture = import.meta.env.DEV ? window.location.search : "";
@@ -91,6 +94,13 @@ export default function App() {
     return (
       <Suspense fallback={null}>
         <PhysicsProcessBrowserFixture />
+      </Suspense>
+    );
+  }
+  if (fixture === "?reaction-process-fixture" && ReactionProcessBrowserFixture) {
+    return (
+      <Suspense fallback={null}>
+        <ReactionProcessBrowserFixture />
       </Suspense>
     );
   }
