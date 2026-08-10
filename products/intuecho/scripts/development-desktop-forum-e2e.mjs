@@ -88,29 +88,28 @@ const feed = await request(
 );
 assert(feed.posts?.some((post) => post.id === published.postId), "desktop contextual feed did not return the published post");
 
-const paperIdentity = {
-  id: "doi:10.1145/3397271.3401075",
-  kind: "doi",
-  source: "metadata",
-  value: "10.1145/3397271.3401075"
-};
-const confirmedLiterature = await request(forumBaseUrl, "/v1/literature:confirm", {
+const sourceDoi = "10.1145/3397271.3401075";
+const resolvedLiterature = await request(forumBaseUrl, "/v1/literature:resolve", {
   body: {
-    mode: "manual",
-    record: {
-      authors: ["Omar Khattab", "Matei Zaharia"],
-      documentType: "conference_paper",
-      identifiers: [{ kind: "doi", source: "manual", value: paperIdentity.value }],
-      title: "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT",
-      year: 2020
-    }
+    hints: { identifiers: [{ kind: "doi", value: sourceDoi }] },
+    purpose: "liteasy_pdf_annotation",
+    query: sourceDoi
   },
   sessionId: desktopSession.sessionId
 });
-assert(confirmedLiterature.literature?.provenance?.mode === "manual", "manual literature record provenance was not persisted");
+assert(resolvedLiterature.candidate?.candidateKey, "source registry did not return an exact literature candidate");
+const confirmedLiterature = await request(forumBaseUrl, "/v1/literature:confirm", {
+  body: {
+    candidateKey: resolvedLiterature.candidate.candidateKey,
+    mode: "candidate"
+  },
+  sessionId: desktopSession.sessionId
+});
+assert(confirmedLiterature.literature?.status === "confirmed", "source-confirmed literature status was not persisted");
+assert(confirmedLiterature.literature?.provenance?.mode === "public_registry", "source-confirmed literature provenance was not persisted");
 assert(
-  confirmedLiterature.literature.identifiers?.every((identifier) => identifier.source === "manual"),
-  "manual literature identifier provenance was not persisted"
+  confirmedLiterature.literature.identifiers?.every((identifier) => identifier.source === "public_registry"),
+  "source-confirmed literature identifier provenance was not persisted"
 );
 const literatureId = confirmedLiterature.literature.literatureId;
 const firstUpdatedAt = new Date().toISOString();
@@ -142,10 +141,10 @@ const parentAnnotation = await request(forumBaseUrl, `/v1/annotations/${encodeUR
 });
 assert(parentAnnotation.annotation?.targets?.length > 0, "synced parent annotation did not retain a literature target");
 const persistedLiterature = parentAnnotation.annotation.targets[0]?.literature?.literatureRecord;
-assert(persistedLiterature?.provenance?.mode === "manual", "persisted annotation did not hydrate manual literature provenance");
+assert(persistedLiterature?.provenance?.mode === "public_registry", "persisted annotation did not hydrate source-confirmed literature provenance");
 assert(
-  persistedLiterature.identifiers?.every((identifier) => identifier.source === "manual"),
-  "persisted annotation did not hydrate manual identifier provenance"
+  persistedLiterature.identifiers?.every((identifier) => identifier.source === "public_registry"),
+  "persisted annotation did not hydrate source-confirmed identifier provenance"
 );
 
 const secondAnnotation = await request(forumBaseUrl, "/v1/pdf-annotations:sync", {
@@ -224,7 +223,7 @@ const restoredProjection = await request(forumBaseUrl, `/v1/replies/${encodeURIC
 assert(restoredProjection.reply?.derivedAnnotationState === "published", "reply projection restore did not publish remote state");
 
 const recommendations = await request(forumBaseUrl, "/v1/thin-reading/recommendations:query", {
-  body: { scope: { kind: "document", paperIdentity } },
+  body: { scope: { kind: "document", literatureId } },
   sessionId: desktopSession.sessionId
 });
 assert(

@@ -11,53 +11,46 @@ import {
   updateReplyPublicationSchema
 } from "@intuecho/contracts";
 
-test("requires a stable manual identity or title-author-year", () => {
-  const base = { authors: [], identifiers: [], title: "Unindexed Work" };
-  assert.equal(literatureConfirmInputSchema.safeParse({ mode: "manual", record: base }).success, false);
+test("accepts only candidate confirmation keys", () => {
+  assert.equal(literatureConfirmInputSchema.safeParse({ mode: "candidate", candidateKey: "crossref:doi:10.1000/test" }).success, true);
   assert.equal(literatureConfirmInputSchema.safeParse({
     mode: "manual",
-    record: { ...base, authors: ["Ada Lovelace"], year: 1843 }
-  }).success, true);
+    record: { authors: ["Ada Lovelace"], identifiers: [], title: "Unindexed Work", year: 1843 }
+  }).success, false);
 });
 
-test("accepts OpenAlex and preserves manual provenance", () => {
+test("accepts confirmed OpenAlex records with a revision", () => {
   const parsed = literatureRecordSchema.parse({
     authors: ["A. Author"],
-    identifiers: [{ kind: "openalex_id", source: "manual", value: "W123" }],
+    identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W123" }],
     literatureId: "literature_1",
-    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "openalex" },
+    revision: 1,
+    status: "confirmed",
     title: "A Paper"
   });
-  assert.equal(parsed.identifiers[0].source, "manual");
+  assert.equal(parsed.identifiers[0].source, "public_registry");
 });
 
-test("keeps record identifier sources aligned with its confirmation provenance", () => {
+test("rejects unverified record provenance and fingerprint-only formal records", () => {
   const record = {
     authors: ["A. Author"],
     identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/test" }],
     literatureId: "literature_1",
-    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" },
+    revision: 1,
+    status: "confirmed",
     title: "A Paper"
   };
-  assert.equal(literatureRecordSchema.safeParse(record).success, false);
+  assert.equal(literatureRecordSchema.safeParse(record).success, true);
   assert.equal(literatureRecordSchema.safeParse({
     ...record,
     identifiers: [{ kind: "doi", source: "manual", value: "10.1000/test" }]
-  }).success, true);
-});
-
-test("does not let manual confirmation claim provider data", () => {
-  const record = {
-    authors: ["Ada Lovelace"],
-    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/test" }],
-    title: "Unindexed Work",
-    year: 1843
-  };
-  assert.equal(literatureConfirmInputSchema.safeParse({ mode: "manual", record }).success, false);
-  assert.equal(literatureConfirmInputSchema.safeParse({
-    mode: "manual",
-    record: { ...record, identifiers: [{ kind: "doi", source: "manual", value: "10.1000/test" }] }
-  }).success, true);
+  }).success, false);
+  assert.equal(literatureRecordSchema.safeParse({
+    ...record,
+    identifiers: [{ kind: "title_authors_year_hash", source: "public_registry", value: `sha256:${"a".repeat(64)}` }]
+  }).success, false);
 });
 
 test("keeps confirmation modes and legacy identities within their source boundaries", () => {
@@ -93,13 +86,24 @@ test("bounds PDF hints without accepting PDF content", () => {
   }).success, true);
   assert.equal(literatureResolveInputSchema.safeParse({ pdfBytes: "base64" }).success, false);
   assert.equal(literatureResolveInputSchema.safeParse({
+    hints: { identifiers: [{ kind: "pmlr", value: "v306" }] },
+    purpose: "liteasy_pdf_annotation"
+  }).success, false);
+  assert.equal(literatureResolveInputSchema.safeParse({
     pdfBytes: "base64",
     purpose: "liteasy_pdf_annotation",
     query: "10.1000/test"
   }).success, false);
+  assert.equal(literatureResolveInputSchema.safeParse({
+    hints: {
+      pmlr: { source: "pmlr", volume: 306, year: 2026 },
+      title: "HelioX"
+    },
+    purpose: "liteasy_pdf_annotation"
+  }).success, true);
 });
 
-test("accepts confirmed references but retains legacy annotation targets", () => {
+test("accepts confirmed references and rejects legacy annotation target writes", () => {
   assert.equal(annotationTargetSchema.safeParse({
     kind: "whole_document",
     literature: { literatureId: "literature_1" }
@@ -110,7 +114,7 @@ test("accepts confirmed references but retains legacy annotation targets", () =>
       identity: { id: "doi:10.1000/test", kind: "doi", source: "metadata", value: "10.1000/test" },
       metadata: { authors: ["A. Author"], title: "A Paper", year: 2026 }
     }
-  }).success, true);
+  }).success, false);
   assert.equal(annotationTargetSchema.safeParse({
     kind: "whole_document",
     literature: { literatureId: "literature_1", title: "Replacement metadata" }

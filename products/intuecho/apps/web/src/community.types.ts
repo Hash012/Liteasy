@@ -22,7 +22,7 @@ export type {
 
 export type PaperIdentity = {
   id: string;
-  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "title_authors_year_hash";
+  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "title_authors_year_hash";
   source: "inferred" | "metadata";
   value: string;
 };
@@ -139,6 +139,7 @@ export type PlazaFilters = {
   educationStage?: string;
   institution?: string;
   limit?: number;
+  literatureId?: string;
   literatureIdentityKind?: PaperIdentity["kind"];
   literatureIdentityValue?: string;
   query?: string;

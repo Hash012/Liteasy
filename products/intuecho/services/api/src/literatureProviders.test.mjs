@@ -30,6 +30,21 @@ function provider(namedProviders, name) {
   return selected;
 }
 
+test("declares identity provider capabilities and exposes confirmation re-fetch", () => {
+  const providers = createLiteratureProviders({
+    openAlexApiKey: "server-only-openalex",
+    semanticScholarApiKey: "server-only-semantic-scholar"
+  }, {
+    fetchImpl: async () => jsonResponse({})
+  });
+
+  for (const adapter of providers) {
+    assert.deepEqual(adapter.capabilities, ["resolveIdentity", "search", "refetchForConfirmation"]);
+    assert.ok(Object.isFrozen(adapter.capabilities));
+    assert.equal(typeof adapter.refetchForConfirmation, "function");
+  }
+});
+
 test("projects an exact Crossref DOI lookup into a normalized public candidate", async () => {
   const providers = createLiteratureProviders({
     crossrefEndpoint: "https://catalog.example.test/works"
@@ -221,8 +236,7 @@ test("projects Semantic Scholar search and exact re-fetch records with canonical
       documentType: "publication",
       identifiers: [
         { kind: "semantic_scholar_id", source: "public_registry", value: "semantic-123" },
-        { kind: "doi", source: "public_registry", value: "10.1000/semantic" },
-        { kind: "arxiv_id", source: "public_registry", value: "2401.01234" }
+        { kind: "doi", source: "public_registry", value: "10.1000/semantic" }
       ],
       title: "Semantic Work",
       year: 2025

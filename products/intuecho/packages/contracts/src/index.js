@@ -37,7 +37,7 @@ export const createFeedbackSchema = z.object({ kind: z.enum(["bug", "idea", "exp
 
 export const paperIdentitySchema = z.object({
   id: z.string().trim().min(1).max(1200),
-  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "title_authors_year_hash"]),
+  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]),
   source: z.enum(["inferred", "metadata"]),
   value: z.string().trim().min(1).max(1000)
 });
@@ -80,7 +80,7 @@ export const communityAnnotationBatchSchema = z.object({
 export const communityRecommendationQuerySchema = z.object({
   scope: z.object({
     kind: z.enum(["document", "section", "selected_passage"]),
-    paperIdentity: paperIdentitySchema,
+    literatureId: z.string().trim().min(1).max(200),
     sectionKey: z.string().trim().min(1).max(500).optional(),
     evidenceIds: z.array(z.string().trim().min(1).max(500)).max(100).optional(),
     externalSourceIds: z.array(z.string().trim().min(1).max(500)).max(100).optional()
@@ -142,42 +142,25 @@ export const literatureCandidateSchema = z.object({
   recordUrl: z.string().url().refine((value) => new URL(value).protocol === "https:").optional()
 });
 
-const manualLiteratureIdentifierSchema = z.object({
-  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id"]),
-  source: z.literal("manual"),
-  value: z.string().trim().min(1).max(1000)
-}).strict();
-
-export const manualLiteratureInputSchema = z.object({
-  authors: z.array(z.string().trim().min(1).max(300)).max(200),
-  documentType: z.string().trim().min(1).max(100).optional(),
-  identifiers: z.array(manualLiteratureIdentifierSchema).max(20),
-  title: z.string().trim().min(1).max(1000),
-  year: z.number().int().min(1000).max(9999).optional()
-}).strict().superRefine((value, context) => {
-  if (value.identifiers.length === 0 && (value.authors.length === 0 || !value.year)) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "手动文献需要稳定标识，或完整的标题、作者和年份。"
-    });
-  }
-});
-
 export const literatureRecordSchema = z.object({
   ...literatureDisplaySchema.shape,
-  identifiers: z.array(literatureIdentifierSchema).min(1).max(20),
+  identifiers: z.array(literatureIdentifierSchema.extend({
+    source: z.literal("public_registry")
+  })).min(1).max(20),
   literatureId: z.string().trim().min(1).max(200),
   provenance: z.object({
     confirmedAt: z.string().datetime(),
-    mode: z.enum(["public_registry", "manual"]),
+    mode: z.literal("public_registry"),
     provider: literatureProviderSchema.optional()
-  })
+  }),
+  revision: z.number().int().positive(),
+  status: z.literal("confirmed")
 }).superRefine((value, context) => {
-  if (value.identifiers.some((identifier) => identifier.source !== value.provenance.mode)) {
+  if (value.identifiers.every((identifier) => identifier.kind === "title_authors_year_hash")) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["identifiers"],
-      message: "文献标识来源必须与确认来源一致。"
+      message: "正式文献必须至少包含一个经过来源确认的稳定标识。"
     });
   }
 });
@@ -188,6 +171,11 @@ const literatureResolveHintsSchema = z.object({
     kind: literatureIdentifierKindSchema,
     value: z.string().trim().min(1).max(1000)
   }).strict()).max(20).optional(),
+  pmlr: z.object({
+    source: z.literal("pmlr"),
+    volume: z.number().int().positive().max(9999),
+    year: z.number().int().min(1000).max(9999)
+  }).strict().optional(),
   title: z.string().trim().min(1).max(1000).optional(),
   year: z.number().int().min(1000).max(9999).optional()
 }).strict();
@@ -200,7 +188,7 @@ export const literatureResolveInputSchema = z.object({
 }).strict().superRefine((value, context) => {
   const hints = value.hints;
   const hasUsableHint = Boolean(
-    hints?.title || hints?.year || hints?.authors?.length || hints?.identifiers?.length
+    hints?.title || hints?.year || hints?.authors?.length || hints?.identifiers?.length || hints?.pmlr
   );
   if (!value.query && !hasUsableHint) {
     context.addIssue({
@@ -210,16 +198,34 @@ export const literatureResolveInputSchema = z.object({
   }
 });
 
-export const literatureConfirmInputSchema = z.discriminatedUnion("mode", [
-  z.object({
-    candidateKey: z.string().trim().min(1).max(1000),
-    mode: z.literal("candidate")
-  }).strict(),
-  z.object({
-    mode: z.literal("manual"),
-    record: manualLiteratureInputSchema
-  }).strict()
+export const literatureConfirmInputSchema = z.object({
+  candidateKey: z.string().trim().min(1).max(1000),
+  mode: z.literal("candidate")
+}).strict();
+
+export const literatureProjectionVerificationSchema = z.object({
+  literatureId: z.string().trim().min(1).max(200),
+  revision: z.number().int().positive()
+}).strict();
+
+export const literatureRelationTypeSchema = z.enum([
+  "is_preprint_of",
+  "version_of",
+  "translation_of"
 ]);
+
+export const literatureRelationSchema = z.object({
+  createdAt: z.string().datetime(),
+  evidence: z.record(z.string(), z.unknown()),
+  fromLiteratureId: z.string().trim().min(1).max(200),
+  provider: literatureProviderSchema,
+  relationType: literatureRelationTypeSchema,
+  toLiteratureId: z.string().trim().min(1).max(200),
+  verificationStatus: z.literal("confirmed")
+}).strict().refine((value) => value.fromLiteratureId !== value.toLiteratureId, {
+  message: "文献版本关系不能指向自身。",
+  path: ["toLiteratureId"]
+});
 
 export const literatureMetadataSchema = z.object({
   authors: z.array(z.string().trim().min(1).max(300)).max(200).default([]),
@@ -242,10 +248,10 @@ export const literatureReferenceSchema = z.union([
   legacyLiteratureReferenceSchema
 ]);
 
-const sourceEvidenceSchema = z.object({
+const confirmedSourceEvidenceSchema = z.object({
   anchorHash: z.string().trim().min(8).max(500),
   excerpt: z.string().trim().min(1).max(4000),
-  literature: literatureReferenceSchema,
+  literature: confirmedLiteratureReferenceSchema,
   page: z.number().int().positive().optional(),
   rects: z.array(rectangleSchema).max(200).default([])
 });
@@ -253,9 +259,9 @@ const sourceEvidenceSchema = z.object({
 export const annotationTargetSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("whole_document"),
-    literature: literatureReferenceSchema
+    literature: confirmedLiteratureReferenceSchema
   }),
-  sourceEvidenceSchema.extend({ kind: z.literal("source_passage") }),
+  confirmedSourceEvidenceSchema.extend({ kind: z.literal("source_passage") }),
   z.object({
     derivedContent: z.object({
       artifactId: z.string().trim().min(1).max(200),
@@ -263,9 +269,9 @@ export const annotationTargetSchema = z.discriminatedUnion("kind", [
       nodeId: z.string().trim().min(1).max(200).optional(),
       version: z.string().trim().min(1).max(200)
     }),
-    evidence: z.array(sourceEvidenceSchema).min(1).max(100),
+    evidence: z.array(confirmedSourceEvidenceSchema).min(1).max(100),
     kind: z.literal("derived_passage"),
-    literature: literatureReferenceSchema
+    literature: confirmedLiteratureReferenceSchema
   })
 ]);
 

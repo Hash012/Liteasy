@@ -1,19 +1,5 @@
 import { createHash } from "node:crypto";
 
-const canonicalKindOrder = [
-  "doi",
-  "arxiv_id",
-  "semantic_scholar_id",
-  "openalex_id",
-  "title_authors_year_hash"
-];
-
-const literatureSourceTransitions = Object.freeze({
-  legacy_metadata: new Set(["manual", "public_registry"]),
-  manual: new Set(["manual", "public_registry"]),
-  public_registry: new Set(["public_registry"])
-});
-
 export class LiteratureIdentityConflictError extends Error {
   constructor(code) {
     super(code);
@@ -22,13 +8,52 @@ export class LiteratureIdentityConflictError extends Error {
   }
 }
 
-export function canTransitionLiteratureSource(currentSource, nextSource) {
-  return literatureSourceTransitions[currentSource]?.has(nextSource) ?? false;
-}
-
 function normalizeBibliographicText(value) {
   return String(value ?? "").normalize("NFKC").toLocaleLowerCase("en-US")
     .replace(/[\p{P}\p{S}\s]+/gu, " ").trim();
+}
+
+function normalizeBibliographicAuthor(value) {
+  const source = String(value ?? "").normalize("NFKC");
+  const parts = source.split(",").map((part) => part.trim()).filter(Boolean);
+  return normalizeBibliographicText(parts.length === 2 ? `${parts[1]} ${parts[0]}` : source);
+}
+
+export function normalizeLiteratureBibliography(input) {
+  const title = normalizeBibliographicText(input?.title);
+  const authors = Array.isArray(input?.authors)
+    ? [...new Set(input.authors.map(normalizeBibliographicAuthor).filter(Boolean))].sort()
+    : [];
+  const year = Number.isInteger(input?.year) ? input.year : undefined;
+  return { authors, title, ...(year === undefined ? {} : { year }) };
+}
+
+export function sameLiteratureBibliography(left, right) {
+  const leftNormalized = normalizeLiteratureBibliography(left);
+  const rightNormalized = normalizeLiteratureBibliography(right);
+  return Boolean(leftNormalized.title && leftNormalized.authors.length > 0 && leftNormalized.year !== undefined &&
+    leftNormalized.title === rightNormalized.title &&
+    leftNormalized.year === rightNormalized.year &&
+    JSON.stringify(leftNormalized.authors) === JSON.stringify(rightNormalized.authors));
+}
+
+export function hasCrossVersionIdentifierConflict(record) {
+  const documentType = String(record?.documentType ?? "").trim().toLocaleLowerCase("en-US");
+  const publicationTypes = new Set([
+    "article",
+    "book-chapter",
+    "conference-paper",
+    "conference_paper",
+    "journal-article",
+    "proceedings-article",
+    "publication"
+  ]);
+  if (!publicationTypes.has(documentType)) return false;
+  const identifiers = Array.isArray(record?.identifiers) ? record.identifiers : [];
+  const hasArxiv = identifiers.some((identifier) => identifier.kind === "arxiv_id");
+  const hasFormalDoi = identifiers.some((identifier) => identifier.kind === "doi" &&
+    !normalizeLiteratureIdentifier("doi", identifier.value).startsWith("10.48550/arxiv."));
+  return hasArxiv && hasFormalDoi;
 }
 
 function requiredIdentity(value) {
@@ -71,7 +96,9 @@ export function normalizeLiteratureIdentifier(kind, value) {
 
 export function titleAuthorsYearFingerprint(input) {
   const title = normalizeBibliographicText(input?.title);
-  const authors = Array.isArray(input?.authors) ? input.authors.map(normalizeBibliographicText) : [];
+  const authors = Array.isArray(input?.authors)
+    ? [...new Set(input.authors.map(normalizeBibliographicAuthor).filter(Boolean))].sort()
+    : [];
   const year = input?.year;
   if (!title || authors.length === 0 || authors.some((author) => !author) || !Number.isInteger(year)) {
     throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_REQUIRED");
@@ -80,26 +107,6 @@ export function titleAuthorsYearFingerprint(input) {
   return `sha256:${digest}`;
 }
 
-export function canonicalLiteratureKey(record) {
-  const identifiers = Array.isArray(record?.identifiers) ? record.identifiers : [];
-  for (const kind of canonicalKindOrder) {
-    const identifier = identifiers.find((item) => item.kind === kind);
-    if (identifier) return `${kind}:${normalizeLiteratureIdentifier(kind, identifier.value)}`;
-  }
-  throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_REQUIRED");
-}
-
-export function mergeLiteratureRecords(records) {
-  const owners = new Map();
-  for (const record of records) {
-    for (const identifier of record.identifiers) {
-      const key = `${identifier.kind}:${normalizeLiteratureIdentifier(identifier.kind, identifier.value)}`;
-      const owner = owners.get(key);
-      if (owner && owner !== record.literatureId) {
-        throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
-      }
-      owners.set(key, record.literatureId);
-    }
-  }
-  return Object.freeze(records.map((record) => Object.freeze(record)));
+export function isLegacyTitleAuthorsYearHash(value) {
+  return typeof value === "string" && /^[a-f0-9]{8}$/i.test(value.trim());
 }

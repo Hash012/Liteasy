@@ -10,11 +10,11 @@ function publicIdentifier(kind, value) {
   return { kind, source: "public_registry", value };
 }
 
-function candidate({ candidateKey, identifiers, provider, title = "A Paper", authors = ["A. Author"], year = 2026 }) {
+function candidate({ candidateKey, identifiers, provider, title = "A Paper", authors = ["A. Author"], documentType, year = 2026 }) {
   return {
     candidateKey,
     provider,
-    record: { authors, identifiers, title, year }
+    record: { authors, ...(documentType ? { documentType } : {}), identifiers, title, year }
   };
 }
 
@@ -24,9 +24,6 @@ function provider(name, { fetchCandidate, search = async () => [] } = {}) {
 
 function repository(overrides = {}) {
   return {
-    async confirmLiterature(_owner, input) {
-      return { source: "manual", title: input.record.title };
-    },
     async confirmRefetchedLiterature(_owner, verifiedCandidate) {
       return { source: "refetched", title: verifiedCandidate.record.title };
     },
@@ -57,9 +54,11 @@ test("prefers an internal confirmed record over matching provider candidates", a
       async searchStoredLiterature() {
         return [{
           authors: ["A. Author"],
-          identifiers: [{ kind: "doi", source: "manual", value: "10.1000/shared" }],
+          identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/shared" }],
           literatureId: "literature_internal",
-          provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+          provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+          revision: 1,
+          status: "confirmed",
           title: "Confirmed Title",
           year: 2026
         }];
@@ -79,11 +78,12 @@ test("normalizes DOI URL queries before internal lookup even when providers are 
   const db = new Database(":memory:");
   const literatureRepository = new SqliteAnnotationCommunityRepository(db);
   try {
-    const stored = await literatureRepository.confirmLiterature(user, {
-      mode: "manual",
+    const stored = await literatureRepository.confirmRefetchedLiterature(user, {
+      candidateKey: "crossref:doi:10.1000/verified",
+      provider: "crossref",
       record: {
         authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/verified" }],
+        identifiers: [publicIdentifier("doi", "10.1000/verified")],
         title: "Confirmed DOI Record",
         year: 1843
       }
@@ -104,7 +104,7 @@ test("normalizes DOI URL queries before internal lookup even when providers are 
         provider: "intuecho",
         record: {
           authors: ["Ada Lovelace"],
-          identifiers: [{ kind: "doi", source: "manual", value: "10.1000/verified" }],
+          identifiers: [publicIdentifier("doi", "10.1000/verified")],
           title: "Confirmed DOI Record",
           year: 1843
         }
@@ -125,9 +125,11 @@ test("normalizes lowercase OpenAlex queries before repository lookup", async () 
         assert.deepEqual(identifiers, [{ kind: "openalex_id", value: "W123" }]);
         return {
           authors: ["A. Author"],
-          identifiers: [{ kind: "openalex_id", source: "manual", value: "W123" }],
+          identifiers: [publicIdentifier("openalex_id", "W123")],
           literatureId: "literature-openalex",
-          provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+          provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "openalex" },
+          revision: 1,
+          status: "confirmed",
           title: "Stored OpenAlex Work"
         };
       }
@@ -167,10 +169,11 @@ test("deduplicates Crossref and OpenAlex candidates only through their shared st
   const result = await resolver.resolve(user, { purpose: "forum_compose", query: "10.1000/shared" });
 
   assert.equal(result.status, "exact");
-  assert.deepEqual(result.candidate.record.identifiers.map((item) => item.kind).sort(), ["doi", "openalex_id"]);
+  assert.equal(result.candidate.provider, "crossref");
+  assert.deepEqual(result.candidate.record.identifiers.map((item) => item.kind), ["doi"]);
 });
 
-test("binds a shared-DOI exact result to the provider that attests the requested arXiv id", async () => {
+test("rejects an aggregate publication candidate that collapses arXiv and DOI versions", async () => {
   const semanticCandidate = candidate({
     candidateKey: "semantic_scholar:semantic_scholar_id:semantic-123",
     identifiers: [
@@ -178,10 +181,10 @@ test("binds a shared-DOI exact result to the provider that attests the requested
       publicIdentifier("doi", "10.1000/shared"),
       publicIdentifier("arxiv_id", "2401.01234")
     ],
+    documentType: "publication",
     provider: "semantic_scholar",
     title: "Shared Work"
   });
-  let confirmed;
   const resolver = createLiteratureResolver({
     providers: [
       provider("openalex", {
@@ -203,21 +206,50 @@ test("binds a shared-DOI exact result to the provider that attests the requested
         search: async () => [semanticCandidate]
       })
     ],
-    repository: repository({
-      async confirmRefetchedLiterature(_owner, verifiedCandidate) {
-        confirmed = verifiedCandidate;
-        return verifiedCandidate.record;
-      }
-    })
+    repository: repository()
   });
 
   const resolved = await resolver.resolve(user, { purpose: "forum_compose", query: "arXiv:2401.01234v2" });
 
-  assert.equal(resolved.status, "exact");
-  assert.equal(resolved.candidate.candidateKey, semanticCandidate.candidateKey);
-  assert.deepEqual(resolved.candidate.record.identifiers, semanticCandidate.record.identifiers);
-  await resolver.confirm(user, { candidateKey: resolved.candidate.candidateKey, mode: "candidate" });
-  assert.deepEqual(confirmed.record.identifiers, semanticCandidate.record.identifiers);
+  assert.equal(resolved.status, "ambiguous");
+  assert.deepEqual(resolved.candidates.map((item) => item.candidateKey), ["openalex:openalex_id:W123"]);
+  await assert.rejects(
+    () => resolver.confirm(user, { candidateKey: semanticCandidate.candidateKey, mode: "candidate" }),
+    /LITERATURE_CANDIDATE_NOT_FOUND/
+  );
+});
+
+test("does not manufacture a unique stable-identifier match from conflicting provider records", async () => {
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("crossref", { search: async () => [candidate({
+        candidateKey: "crossref:doi:10.1000/conflict",
+        identifiers: [publicIdentifier("doi", "10.1000/conflict")],
+        provider: "crossref",
+        title: "Verified Title",
+        year: 2026
+      })] }),
+      provider("openalex", { search: async () => [candidate({
+        candidateKey: "openalex:openalex_id:W999",
+        identifiers: [
+          publicIdentifier("openalex_id", "W999"),
+          publicIdentifier("doi", "10.1000/conflict")
+        ],
+        provider: "openalex",
+        title: "Spoofed Different Work",
+        year: 2024
+      })] })
+    ],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { identifiers: [{ kind: "doi", value: "10.1000/conflict" }] },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "conflict");
+  assert.equal(result.candidates.length, 2);
 });
 
 test("honors limit one for internal search, provider aggregation, and final candidates", async () => {
@@ -296,6 +328,113 @@ test("does not merge a preprint and publication from title similarity alone", as
     "arxiv:arxiv_id:2401.01234",
     "crossref:doi:10.1000/published"
   ]);
+});
+
+test("auto-confirms only one complete title-year-author-set match regardless of author order", async () => {
+  const exact = candidate({
+    authors: ["Hopper, Grace", "Ada Lovelace"],
+    candidateKey: "crossref:doi:10.1000/exact",
+    identifiers: [publicIdentifier("doi", "10.1000/exact")],
+    provider: "crossref",
+    title: "Exact Identity",
+    year: 2026
+  });
+  const resolver = createLiteratureResolver({
+    providers: [provider("crossref", { search: async () => [exact] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: {
+      authors: ["Ada Lovelace", "Grace Hopper"],
+      title: "Exact Identity",
+      year: 2026
+    },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "exact");
+  assert.equal(result.candidate.candidateKey, exact.candidateKey);
+});
+
+test("keeps partial authors and multiple complete matches ambiguous", async () => {
+  const resolver = createLiteratureResolver({
+    providers: [provider("crossref", { search: async () => [
+      candidate({
+        authors: ["Ada Lovelace"],
+        candidateKey: "crossref:doi:10.1000/partial",
+        identifiers: [publicIdentifier("doi", "10.1000/partial")],
+        provider: "crossref",
+        title: "Shared Identity"
+      }),
+      candidate({
+        authors: ["Grace Hopper", "Ada Lovelace"],
+        candidateKey: "crossref:doi:10.1000/full",
+        identifiers: [publicIdentifier("doi", "10.1000/full")],
+        provider: "crossref",
+        title: "Shared Identity"
+      }),
+      candidate({
+        authors: ["Ada Lovelace", "Grace Hopper"],
+        candidateKey: "crossref:doi:10.1000/full-duplicate",
+        identifiers: [publicIdentifier("doi", "10.1000/full-duplicate")],
+        provider: "crossref",
+        title: "Shared Identity"
+      })
+    ] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { authors: ["Ada Lovelace", "Grace Hopper"], title: "Shared Identity", year: 2026 },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "ambiguous");
+  assert.equal(result.candidates.length, 3);
+});
+
+test("rejects unrelated broad provider hits from PDF identity candidates", async () => {
+  const resolver = createLiteratureResolver({
+    providers: [provider("crossref", { search: async () => [candidate({
+      authors: ["Unrelated Author"],
+      candidateKey: "crossref:doi:10.1000/unrelated",
+      identifiers: [publicIdentifier("doi", "10.1000/unrelated")],
+      provider: "crossref",
+      title: "An Unrelated Paper",
+      year: 2024
+    })] })],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: { authors: ["Ada Lovelace"], title: "HelioX", year: 2026 },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.deepEqual(result, { candidates: [], status: "not_found", unavailableProviders: [] });
+});
+
+test("selects providers by adapter capability for identity and forum search", async () => {
+  let calls = 0;
+  const searchOnly = {
+    capabilities: Object.freeze(["search"]),
+    name: "crossref",
+    async search() {
+      calls += 1;
+      return [];
+    }
+  };
+  const resolver = createLiteratureResolver({ providers: [searchOnly], repository: repository() });
+
+  await resolver.resolve(user, {
+    hints: { authors: ["Ada Lovelace"], title: "A Paper", year: 2026 },
+    purpose: "liteasy_pdf_annotation"
+  });
+  assert.equal(calls, 0);
+
+  await resolver.resolve(user, { purpose: "forum_compose", query: "A Paper" });
+  assert.equal(calls, 1);
 });
 
 test("reports partial provider failure without exposing provider error details", async () => {
@@ -387,9 +526,11 @@ test("reloads internal candidates by literature id before confirming", async () 
         assert.equal(literatureId, "literature_existing");
         return {
           authors: ["A. Author"],
-          identifiers: [{ kind: "doi", source: "manual", value: "10.1000/existing" }],
+          identifiers: [publicIdentifier("doi", "10.1000/existing")],
           literatureId,
-          provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+          provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+          revision: 1,
+          status: "confirmed",
           title: "Existing Confirmed Record",
           year: 2026
         };
@@ -407,18 +548,11 @@ test("reloads internal candidates by literature id before confirming", async () 
   assert.equal(result.title, "Existing Confirmed Record");
 });
 
-test("forwards manual confirmation through the manual-only repository boundary", async () => {
+test("rejects manual confirmation without a provider candidate key", async () => {
   const resolver = createLiteratureResolver({ providers: [], repository: repository() });
 
-  const result = await resolver.confirm(user, {
-    mode: "manual",
-    record: {
-      authors: ["M. Author"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
-      title: "Manual Record",
-      year: 2026
-    }
-  });
-
-  assert.deepEqual(result, { source: "manual", title: "Manual Record" });
+  await assert.rejects(
+    () => resolver.confirm(user, { mode: "manual", record: { title: "Manual Record" } }),
+    /LITERATURE_CANDIDATE_NOT_FOUND/
+  );
 });

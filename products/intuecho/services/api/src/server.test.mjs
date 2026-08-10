@@ -52,6 +52,14 @@ function insertFixture(db) {
     .run("post-1", "topic-1", "work-1", "证据边界", "一条真实测试帖子。", "author-1", "作者甲", "A", 2, "source", "sha256:source", 1, 0, "2026-01-01T00:00:00.000Z");
   db.prepare("INSERT INTO comments (id, post_id, body, author_id, author_name, author_initials, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .run("comment-1", "post-1", "一条测试讨论。", "author-2", "作者乙", "B", "2026-01-01T01:00:00.000Z");
+  const now = "2026-08-09T00:00:00.000Z";
+  db.prepare(`INSERT INTO literature_records_v2(id, title, authors_json, publication_year, document_type, record_source, source_provider, confirmed_at, revision, identity_status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'public_registry', 'crossref', ?, 1, 'confirmed', ?, ?)`)
+    .run("literature-1", "A Reliable Paper", JSON.stringify(["Author"]), 2025, "journal_article", now, now, now);
+  db.prepare("INSERT INTO literature_identifiers_v2(literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, 'doi', ?, 0, ?)")
+    .run("literature-1", "10.1000/reliable", now);
+  db.prepare("INSERT INTO literature_identity_claims_v2(id, literature_id, provider, provider_record_id, verification_status, evidence_json, observed_at, created_at) VALUES (?, ?, 'crossref', ?, 'confirmed', '{}', ?, ?)")
+    .run("claim-fixture-1", "literature-1", "10.1000/reliable", now, now);
 }
 
 async function withApp(run, {
@@ -95,9 +103,11 @@ function literatureResolver(overrides = {}) {
     async confirm(owner, input) {
       return {
         authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: input.mode === "manual" ? "manual" : "public_registry", value: "10.1000/reliable" }],
+        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/reliable" }],
         literatureId: "literature-1",
-        provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: input.mode === "manual" ? "manual" : "public_registry" },
+        provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+        revision: 1,
+        status: "confirmed",
         title: `Confirmed for ${owner.id}`
       };
     },
@@ -152,19 +162,12 @@ test("literature routes accept authenticated Web and desktop audiences while rej
     const confirmed = await app.inject({
       headers: desktopHeader,
       method: "POST",
-      payload: {
-        mode: "manual",
-        record: {
-          authors: ["Ada Lovelace"],
-          identifiers: [{ kind: "doi", source: "manual", value: "10.1000/reliable" }],
-          title: "Reliable manual record"
-        }
-      },
+      payload: { candidateKey: "crossref:doi:10.1000/reliable", mode: "candidate" },
       url: "/v1/literature:confirm"
     });
     assert.equal(confirmed.statusCode, 200, confirmed.body);
-    assert.equal(confirmed.json().literature.provenance.mode, "manual");
-    assert.equal(confirmed.json().literature.identifiers[0].source, "manual");
+    assert.equal(confirmed.json().literature.provenance.mode, "public_registry");
+    assert.equal(confirmed.json().literature.status, "confirmed");
   }, { literatureResolver: literatureResolver() });
 });
 
@@ -249,10 +252,7 @@ function annotationPayload(overrides = {}) {
       anchorHash: "sha256:source",
       excerpt: "source evidence",
       kind: "source_passage",
-      literature: {
-        identity,
-        metadata: { authors: ["Author"], documentType: "journal_article", title: "A Reliable Paper", year: 2025 }
-      },
+      literature: { literatureId: "literature-1" },
       page: 2,
       rects: []
     }],
@@ -284,10 +284,10 @@ function insertConfirmedPublicationLiterature(db, literatureId = "literature-pub
   const now = "2026-08-09T00:00:00.000Z";
   db.prepare(`INSERT INTO literature_records_v2(
     id, title, authors_json, publication_year, document_type, record_source,
-    source_provider, confirmed_at, revision, created_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, 'manual', NULL, ?, 1, ?, ?)`)
+    source_provider, confirmed_at, revision, identity_status, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, 'public_registry', 'crossref', ?, 1, 'confirmed', ?, ?)`)
     .run(literatureId, "Server Confirmed Publication Literature", JSON.stringify(["Confirmed Author"]), 2026, "journal_article", now, now, now);
-  db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, 'doi', ?, 'manual', ?)")
+  db.prepare("INSERT INTO literature_identifiers_v2(literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, 'doi', ?, 0, ?)")
     .run(literatureId, "10.1000/confirmed-publication", now);
   return literatureId;
 }
@@ -308,10 +308,10 @@ function postgresPublicationHarness({ missingLiteratureIds = [] } = {}) {
       if (normalized.startsWith("SELECT * FROM literature_records")) {
         if (missingLiterature.has(values[0])) return { rows: [] };
         const now = new Date("2026-08-09T00:00:00.000Z");
-        return { rows: [{ authors: ["Confirmed Author"], confirmed_at: now, created_at: now, document_type: "journal_article", id: values[0], publication_year: 2026, record_source: "manual", revision: 1, source_provider: null, title: "Confirmed Literature", updated_at: now }] };
+        return { rows: [{ authors: ["Confirmed Author"], confirmed_at: now, created_at: now, document_type: "journal_article", id: values[0], identity_status: "confirmed", publication_year: 2026, record_source: "public_registry", revision: 1, source_provider: "crossref", title: "Confirmed Literature", updated_at: now }] };
       }
       if (normalized.startsWith("SELECT 1 FROM literature_records")) return { rows: [{ exists: 1 }] };
-      if (normalized.startsWith("SELECT identity_kind AS kind")) return { rows: [] };
+      if (normalized.startsWith("SELECT identifier_kind AS kind")) return { rows: [{ kind: "doi", source: "public_registry", value: "10.1000/confirmed-publication" }] };
       if (normalized.startsWith("SELECT education_stage")) return { rows: [] };
       if (normalized.startsWith("SELECT institution_name AS name")) return { rows: [] };
       if (normalized.startsWith("INSERT INTO annotations(")) {
@@ -360,20 +360,7 @@ function postgresPublicationHarness({ missingLiteratureIds = [] } = {}) {
 }
 
 function annotationV2Payload(overrides = {}) {
-  const literature = {
-    identity: {
-      id: "doi:10.1000/reliable",
-      kind: "doi",
-      source: "metadata",
-      value: "10.1000/reliable"
-    },
-    metadata: {
-      authors: ["Author"],
-      documentType: "journal_article",
-      title: "A Reliable Paper",
-      year: 2025
-    }
-  };
+  const literature = { literatureId: "literature-1" };
   return {
     body: "这条批注解释了证据边界。",
     shareToPlaza: true,
@@ -392,55 +379,27 @@ test("a new runtime database contains no demo or fixture content", async () => {
   }, { fixture: false });
 });
 
-test("persists manual literature provenance, immutable corrections, and identity conflicts", async () => {
+test("exposes only source-refetched confirmation and keeps versions append-only", async () => {
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);
   const owner = { id: "literature-owner", name: "Ada Lovelace", initials: "AL" };
-  const first = await repository.confirmLiterature(owner, {
-    mode: "manual",
+  assert.equal(repository.confirmLiterature, undefined);
+  const first = await repository.confirmRefetchedLiterature(owner, {
+    candidateKey: "crossref:doi:10.1000/confirmed",
+    provider: "crossref",
     record: {
       authors: ["Ada Lovelace"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
-      title: "Manual Record",
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/confirmed" }],
+      title: "Confirmed Record",
       year: 1843
     }
   });
-  assert.equal(first.provenance.mode, "manual");
+  assert.equal(first.provenance.mode, "public_registry");
   assert.equal((await repository.findLiteratureByIdentifiers(first.identifiers)).literatureId, first.literatureId);
   assert.equal((await repository.findLiteratureById(first.literatureId)).literatureId, first.literatureId);
-  const concurrent = await Promise.all([
-    repository.confirmLiterature(owner, {
-      mode: "manual",
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
-        title: "Manual Record",
-        year: 1843
-      }
-    }),
-    repository.confirmLiterature(owner, {
-      mode: "manual",
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
-        title: "Manual Record",
-        year: 1843
-      }
-    })
-  ]);
-  assert.deepEqual(concurrent.map((item) => item.literatureId), [first.literatureId, first.literatureId]);
-  await repository.confirmLiterature(owner, {
-    mode: "manual",
-    record: {
-      authors: ["Ada Lovelace"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
-      title: "Corrected Manual Record",
-      year: 1843
-    }
-  });
   const version = db.prepare("SELECT revision, snapshot_json FROM literature_record_versions_v2 WHERE literature_id = ? AND revision = 1").get(first.literatureId);
   assert.equal(version.revision, 1);
-  assert.equal(JSON.parse(version.snapshot_json).title, "Manual Record");
+  assert.equal(JSON.parse(version.snapshot_json).title, "Confirmed Record");
   assert.throws(
     () => db.prepare("UPDATE literature_record_versions_v2 SET changed_by = ? WHERE literature_id = ? AND revision = 1").run("tampered", first.literatureId),
     /literature_record_version_is_append_only/
@@ -450,67 +409,14 @@ test("persists manual literature provenance, immutable corrections, and identity
     /literature_record_version_is_append_only/
   );
 
-  const second = await repository.confirmLiterature(owner, {
-    mode: "manual",
-    record: {
-      authors: ["Grace Hopper"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/other" }],
-      title: "Other Record",
-      year: 1952
-    }
-  });
-  await assert.rejects(
-    () => repository.confirmLiterature(owner, {
-      mode: "manual",
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [
-          { kind: "doi", source: "manual", value: "10.1000/manual" },
-          { kind: "doi", source: "manual", value: "10.1000/other" }
-        ],
-        title: "Conflict",
-        year: 1843
-      }
-    }),
-    (error) => error?.code === "LITERATURE_IDENTITY_CONFLICT"
-  );
-  const firstAfterConflict = await repository.findLiteratureByIdentifiers(first.identifiers);
-  assert.equal(firstAfterConflict.title, "Corrected Manual Record");
-  assert.equal(firstAfterConflict.provenance.mode, "manual");
-  assert.equal(firstAfterConflict.identifiers.every((identifier) => identifier.source === "manual"), true);
-  assert.equal(literatureRecordSchema.safeParse(firstAfterConflict).success, true);
-  assert.equal((await repository.findLiteratureByIdentifiers(second.identifiers)).literatureId, second.literatureId);
+  assert.equal(literatureRecordSchema.safeParse(first).success, true);
   db.close();
 });
 
-test("separates manual confirmation from refetched candidates and resolves canonical targets", async () => {
+test("accepts only valid refetched candidates and resolves canonical targets", async () => {
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);
   const owner = { id: "candidate-owner", name: "Ada Lovelace", initials: "AL" };
-  await assert.rejects(
-    () => repository.confirmLiterature(owner, {
-      mode: "candidate",
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/spoof" }],
-        title: "Spoofed Candidate",
-        year: 1843
-      }
-    }),
-    (error) => error?.code === "LITERATURE_CONFIRMATION_INVALID"
-  );
-  await assert.rejects(
-    () => repository.confirmLiterature(owner, {
-      mode: "public_registry",
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/spoof" }],
-        title: "Spoofed Candidate",
-        year: 1843
-      }
-    }),
-    (error) => error?.code === "LITERATURE_CONFIRMATION_INVALID"
-  );
   await assert.rejects(
     () => repository.confirmRefetchedLiterature(owner, {
       candidateKey: "candidate_1",
@@ -551,11 +457,12 @@ test("hydrates canonical literature display metadata on annotation reads and tit
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);
   const owner = { id: "hydration-owner", name: "Hydration Owner", initials: "HO" };
-  const literature = await repository.confirmLiterature(owner, {
-    mode: "manual",
+  const literature = await repository.confirmRefetchedLiterature(owner, {
+    candidateKey: "crossref:doi:10.1000/hydrated",
+    provider: "crossref",
     record: {
       authors: ["Canonical Author"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/hydrated" }],
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/hydrated" }],
       title: "Durable Canonical Title",
       year: 2026
     }
@@ -581,57 +488,17 @@ test("hydrates canonical literature display metadata on annotation reads and tit
   db.close();
 });
 
-test("reuses legacy normalized DOI values and preserves untouched legacy provenance", async () => {
+test("keeps legacy identity storage read-only and removes manual confirmation", async () => {
   const db = new Database(":memory:");
   const repository = new SqliteAnnotationCommunityRepository(db);
-  db.prepare("INSERT INTO literature_records_v2(id, title, authors_json, record_source, revision, created_at, updated_at) VALUES (?, ?, ?, 'legacy_metadata', 1, ?, ?)")
-    .run("legacy-record", "Legacy DOI", JSON.stringify(["A. Author"]), "2026-08-09T00:00:00.000Z", "2026-08-09T00:00:00.000Z");
-  db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, 'doi', ?, 'metadata', ?)")
-    .run("legacy-record", "https://doi.org/10.1000/legacy", "2026-08-09T00:00:00.000Z");
-  assert.equal(await repository.findLiteratureByIdentifiers([{ kind: "doi", value: "10.1000/legacy" }]), null);
-  assert.equal(await repository.findLiteratureById("legacy-record"), null);
-  const untouched = await repository.searchStoredLiterature("Legacy DOI", 10);
-  assert.deepEqual(untouched, []);
-  assert.equal(db.prepare("SELECT identity_source FROM literature_identities_v2 WHERE literature_id = ?").get("legacy-record").identity_source, "metadata");
-  const confirmed = await repository.confirmLiterature({ id: "legacy-owner" }, {
-    mode: "manual",
-    record: {
-      authors: ["A. Author"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/legacy" }],
-      title: "Corrected Legacy DOI"
-    }
-  });
-  assert.equal(confirmed.provenance.mode, "manual");
-  assert.equal(confirmed.literatureId, "legacy-record");
-  assert.equal(confirmed.identifiers.every((identifier) => identifier.source === "manual"), true);
-  assert.equal(db.prepare("SELECT identity_source FROM literature_identities_v2 WHERE literature_id = ?").get("legacy-record").identity_source, "manual");
+  assert.equal(repository.confirmLiterature, undefined);
+  assert.throws(() => db.prepare("INSERT INTO literature_identities_v2(literature_id, identity_kind, identity_value, identity_source, created_at) VALUES (?, 'doi', ?, 'metadata', ?)")
+    .run("legacy-record", "10.1000/legacy", "2026-08-09T00:00:00.000Z"), /legacy_literature_identity_is_read_only/);
   db.close();
 });
 
-test("legacy annotation routes cannot overwrite canonical literature metadata", async () => {
+test("legacy annotation routes reject metadata identity writes", async () => {
   await withApp(async (app, db) => {
-    const repository = new SqliteAnnotationCommunityRepository(db);
-    const owner = { id: "literature-owner", initials: "LO", name: "Literature Owner" };
-    const verified = await repository.confirmRefetchedLiterature(owner, {
-      candidateKey: "crossref:doi:10.1000/route-verified",
-      provider: "crossref",
-      record: {
-        authors: ["Verified Author"],
-        identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/route-verified" }],
-        title: "Verified Route Literature",
-        year: 2026
-      }
-    });
-    const manual = await repository.confirmLiterature(owner, {
-      mode: "manual",
-      record: {
-        authors: ["Manual Author"],
-        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/route-manual" }],
-        title: "Manual Route Literature",
-        year: 2025
-      }
-    });
-
     const created = await app.inject({
       headers: userHeader,
       method: "POST",
@@ -646,7 +513,7 @@ test("legacy annotation routes cannot overwrite canonical literature metadata", 
       }),
       url: "/v1/annotations"
     });
-    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(created.statusCode, 400, created.body);
 
     const synced = await app.inject({
       headers: desktopHeader,
@@ -668,17 +535,10 @@ test("legacy annotation routes cannot overwrite canonical literature metadata", 
           updatedAt: "2026-08-09T01:00:00.000Z"
         }]
       },
-      url: "/v1/pdf-annotations:sync"
+      url: "/v1/thin-reading/annotations:sync"
     });
-    assert.equal(synced.statusCode, 200, synced.body);
-
-    assert.equal((await repository.findLiteratureById(verified.literatureId)).title, "Verified Route Literature");
-    assert.equal((await repository.findLiteratureById(manual.literatureId)).title, "Manual Route Literature");
-    assert.deepEqual(db.prepare("SELECT record_source, revision FROM literature_records_v2 WHERE id = ?").get(manual.literatureId), {
-      record_source: "manual",
-      revision: 1
-    });
-    assert.deepEqual(db.prepare("SELECT record_source, revision FROM literature_records_v2 WHERE id = ?").get(verified.literatureId), {
+    assert.equal(synced.statusCode, 400, synced.body);
+    assert.deepEqual(db.prepare("SELECT record_source, revision FROM literature_records_v2 WHERE id = ?").get("literature-1"), {
       record_source: "public_registry",
       revision: 1
     });
@@ -857,45 +717,10 @@ test("SQLite rolls back an entire desktop publication batch after a late databas
   db.close();
 });
 
-test("acquires PostgreSQL literature identity locks in canonical key order", async () => {
-  const lockKeys = [];
-  const row = {
-    authors: [],
-    confirmed_at: new Date("2026-08-09T00:00:00.000Z"),
-    created_at: new Date("2026-08-09T00:00:00.000Z"),
-    document_type: null,
-    id: "literature_lock_order",
-    record_source: "manual",
-    revision: 1,
-    source_provider: null,
-    title: "Lock order",
-    updated_at: new Date("2026-08-09T00:00:00.000Z"),
-    publication_year: null
-  };
-  const client = {
-    async query(sql, values = []) {
-      if (sql.includes("pg_advisory_xact_lock")) lockKeys.push(values[0]);
-      if (sql.startsWith("SELECT * FROM literature_records")) return { rows: [row] };
-      if (sql.startsWith("SELECT identity_kind AS kind")) return { rows: [] };
-      if (sql.includes("SELECT literature_id FROM literature_identities")) return { rows: [] };
-      return { rows: [] };
-    },
-    release() {}
-  };
-  const pool = { async connect() { return client; } };
-  const repository = new PostgresAnnotationCommunityRepository(pool);
-  await repository.confirmLiterature({ id: "lock-owner" }, {
-    mode: "manual",
-    record: {
-      authors: ["Lock Owner"],
-      identifiers: [
-        { kind: "doi", source: "manual", value: "10.1000/z" },
-        { kind: "arxiv_id", source: "manual", value: "2401.0001" }
-      ],
-      title: "Lock order"
-    }
-  });
-  assert.deepEqual(lockKeys, ["arxiv_id:2401.0001", "doi:10.1000/z"]);
+test("PostgreSQL repository does not expose a manual confirmation method", () => {
+  const repository = new PostgresAnnotationCommunityRepository({});
+  assert.equal(repository.confirmLiterature, undefined);
+  assert.equal(typeof repository.confirmRefetchedLiterature, "function");
 });
 
 test("replays PostgreSQL desktop publications when updated timestamps identify the same instant", async () => {
@@ -989,12 +814,13 @@ test("does not serialize untouched PostgreSQL legacy rows as canonical literatur
     document_type: null,
     id: "legacy-postgres",
     publication_year: 2020,
-    record_source: "legacy_metadata"
+    record_source: "legacy_metadata",
+    identity_status: "legacy_unverified"
   };
   const pool = {
     async query(sql) {
-      if (sql.includes("identity_kind = ANY")) {
-        return { rows: [{ identity_kind: "doi", identity_value: "https://doi.org/10.1000/legacy", literature_id: "legacy-postgres" }] };
+      if (sql.includes("identifier_kind = ANY")) {
+        return { rows: [{ identifier_kind: "doi", normalized_value: "10.1000/legacy", literature_id: "legacy-postgres" }] };
       }
       if (sql.startsWith("SELECT * FROM literature_records")) return { rows: [legacyRow] };
       throw new Error(`unexpected query: ${sql}`);
@@ -1230,7 +1056,7 @@ test("desktop annotation handoffs carry stable literature targets without a topi
       url: `/v1/annotation-handoffs/${handoffId}/consume`
     });
     assert.equal(consumed.statusCode, 200, consumed.body);
-    assert.equal(consumed.json().draft.targets[0].literature.identity.value, "10.1000/reliable");
+    assert.equal(consumed.json().draft.targets[0].literature.literatureId, "literature-1");
     assert.equal(consumed.json().draft.topicId, undefined);
     assert.equal(consumed.json().replayed, false);
 
@@ -1243,7 +1069,7 @@ test("community annotation sync is idempotent per user and recommendations use e
   await withApp(async (app, db) => {
     const first = await app.inject({
       method: "POST",
-      url: "/v1/pdf-annotations:sync",
+      url: "/v1/thin-reading/annotations:sync",
       headers: desktopHeader,
       payload: { annotations: [annotationPayload()] }
     });
@@ -1253,7 +1079,7 @@ test("community annotation sync is idempotent per user and recommendations use e
 
     const updated = await app.inject({
       method: "POST",
-      url: "/v1/pdf-annotations:sync",
+      url: "/v1/thin-reading/annotations:sync",
       headers: desktopHeader,
       payload: { annotations: [annotationPayload({ body: "更新后的公开批注。", updatedAt: "2026-08-07T02:00:00.000Z" })] }
     });
@@ -1277,18 +1103,13 @@ test("community annotation sync is idempotent per user and recommendations use e
       payload: {
         scope: {
           kind: "document",
-          paperIdentity: {
-            id: "doi:10.1000/reliable",
-            kind: "doi",
-            source: "metadata",
-            value: "10.1000/reliable"
-          }
+          literatureId: "literature-1"
         }
       }
     });
     assert.equal(recommendations.statusCode, 200);
     assert.equal(recommendations.json().recommendations.length, 2);
-    assert.ok(recommendations.json().recommendations.every((item) => item.paperIdentity.id === "doi:10.1000/reliable"));
+    assert.ok(recommendations.json().recommendations.every((item) => item.literatureId === "literature-1"));
 
     const unrelated = await app.inject({
       method: "POST",
@@ -1297,12 +1118,7 @@ test("community annotation sync is idempotent per user and recommendations use e
       payload: {
         scope: {
           kind: "document",
-          paperIdentity: {
-            id: "doi:10.1000/other",
-            kind: "doi",
-            source: "metadata",
-            value: "10.1000/other"
-          }
+          literatureId: "literature-other"
         }
       }
     });

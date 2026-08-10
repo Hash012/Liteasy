@@ -4,434 +4,247 @@ import Database from "better-sqlite3";
 import { SqliteAnnotationCommunityRepository } from "./annotationCommunitySqlite.mjs";
 import { PostgresAnnotationCommunityRepository } from "./postgresAnnotationCommunityRepository.mjs";
 
-const owner = { id: "literature-owner", initials: "LO", name: "Literature Owner" };
+const owner = { id: "literature-owner" };
 
-function publicCandidate(overrides = {}) {
+function candidate({
+  candidateKey = "crossref:doi:10.1000/verified",
+  identifiers = [{ kind: "doi", source: "public_registry", value: "10.1000/verified" }],
+  provider = "crossref",
+  documentType,
+  title = "Verified Registry Title",
+  year = 2026
+} = {}) {
   return {
-    candidateKey: "crossref:doi:10.1000/verified",
-    provider: "crossref",
-    record: {
-      authors: ["Verified Author"],
-      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/verified" }],
-      title: "Verified Registry Title",
-      year: 2026,
-      ...overrides
-    }
+    candidateKey,
+    provider,
+    record: { authors: ["Verified Author"], ...(documentType ? { documentType } : {}), identifiers, title, year },
+    recordUrl: "https://registry.example.test/record"
   };
 }
 
-function manualConfirmation(overrides = {}) {
-  return {
-    mode: "manual",
-    record: {
-      authors: ["Manual Author"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/verified" }],
-      title: "Manual Replacement Title",
-      year: 2025,
-      ...overrides
-    }
-  };
-}
+test("SQLite reuses one confirmed literature id across owners and separates identifiers from claims", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const first = await repository.confirmRefetchedLiterature(owner, candidate());
+    const second = await repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate());
 
-function postgresLiteratureHarness({ identities, record }) {
-  const records = new Map([[record.id, { ...record }]]);
-  const identityRows = identities.map((identity) => ({ literature_id: record.id, ...identity }));
+    assert.equal(second.literatureId, first.literatureId);
+    assert.equal(first.status, "confirmed");
+    assert.equal(first.revision, 1);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
+    assert.deepEqual(db.prepare("SELECT identifier_kind, normalized_value FROM literature_identifiers_v2").all(), [
+      { identifier_kind: "doi", normalized_value: "10.1000/verified" }
+    ]);
+    assert.deepEqual(db.prepare("SELECT literature_id, provider, provider_record_id, verification_status FROM literature_identity_claims_v2").all(), [{
+      literature_id: first.literatureId,
+      provider: "crossref",
+      provider_record_id: "10.1000/verified",
+      verification_status: "confirmed"
+    }]);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite rejects fingerprint-only confirmation and conflicting bibliography for a stable identifier", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: `openalex:title_authors_year_hash:sha256:${"a".repeat(64)}`,
+      identifiers: [{ kind: "title_authors_year_hash", source: "public_registry", value: `sha256:${"a".repeat(64)}` }],
+      provider: "openalex"
+    })), /LITERATURE_IDENTITY_REQUIRED/);
+
+    await repository.confirmRefetchedLiterature(owner, candidate());
+    await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
+      title: "A Conflicting Work",
+      year: 2024
+    })), /LITERATURE_IDENTITY_CONFLICT/);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite binds a provider record id to one literature even when its external identifiers change", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const first = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W123",
+      identifiers: [
+        { kind: "openalex_id", source: "public_registry", value: "W123" },
+        { kind: "doi", source: "public_registry", value: "10.1000/first" }
+      ],
+      provider: "openalex"
+    }));
+    const refreshed = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W123",
+      identifiers: [
+        { kind: "openalex_id", source: "public_registry", value: "W123" },
+        { kind: "doi", source: "public_registry", value: "10.1000/corrected" }
+      ],
+      provider: "openalex"
+    }));
+
+    assert.equal(refreshed.literatureId, first.literatureId);
+    assert.equal(refreshed.revision, 2);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2").get().count, 1);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2 WHERE literature_id = ?").get(first.literatureId).count, 3);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite keeps preprint and publication identities separate and returns evidenced relations", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const preprint = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "arxiv:arxiv_id:2401.01234",
+      identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+      provider: "arxiv"
+    }));
+    const publication = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "crossref:doi:10.1000/publication",
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/publication" }]
+    }));
+    await repository.confirmLiteratureRelation({
+      evidence: { recordUrl: "https://registry.example.test/relation" },
+      fromLiteratureId: preprint.literatureId,
+      provider: "crossref",
+      relationType: "is_preprint_of",
+      toLiteratureId: publication.literatureId
+    });
+
+    assert.notEqual(preprint.literatureId, publication.literatureId);
+    const relations = await repository.findLiteratureRelations(preprint.literatureId);
+    assert.equal(relations.length, 1);
+    assert.match(relations[0].createdAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.deepEqual({ ...relations[0], createdAt: "timestamp" }, {
+      createdAt: "timestamp",
+      evidence: { recordUrl: "https://registry.example.test/relation" },
+      fromLiteratureId: preprint.literatureId,
+      provider: "crossref",
+      relationType: "is_preprint_of",
+      toLiteratureId: publication.literatureId,
+      verificationStatus: "confirmed"
+    });
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite rejects one formal publication record that binds both publication DOI and arXiv identifiers", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    await assert.rejects(() => repository.confirmRefetchedLiterature(owner, candidate({
+      identifiers: [
+        { kind: "semantic_scholar_id", source: "public_registry", value: "semantic-123" },
+        { kind: "doi", source: "public_registry", value: "10.1000/publication" },
+        { kind: "arxiv_id", source: "public_registry", value: "2401.01234" }
+      ],
+      candidateKey: "semantic_scholar:semantic_scholar_id:semantic-123",
+      provider: "semantic_scholar",
+      documentType: "publication"
+    })), /LITERATURE_IDENTITY_CONFLICT/);
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite projection verification requires the exact confirmed revision", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const record = await repository.confirmRefetchedLiterature(owner, candidate());
+    assert.equal((await repository.verifyLiteratureProjection(record.literatureId, 1))?.literatureId, record.literatureId);
+    assert.equal(await repository.verifyLiteratureProjection(record.literatureId, 2), null);
+    assert.equal(await repository.verifyLiteratureProjection("missing", 1), null);
+  } finally {
+    db.close();
+  }
+});
+
+function postgresHarness() {
+  const records = new Map();
+  const identifiers = [];
+  const claims = [];
   const versions = [];
-  const queries = [];
   const client = {
     async query(sql, values = []) {
-      const normalized = sql.trim();
-      queries.push({ sql: normalized, values });
-      if (normalized.startsWith("BEGIN ") || normalized === "COMMIT" || normalized === "ROLLBACK") return { rows: [] };
-      if (normalized.includes("pg_advisory_xact_lock")) return { rows: [] };
-      if (normalized.startsWith("SELECT literature_id, identity_kind, identity_value FROM literature_identities")) {
-        return { rows: identityRows.filter((identity) => values[0].includes(identity.identity_kind)).map((identity) => ({ ...identity })) };
+      const query = sql.trim();
+      if (query.startsWith("BEGIN ") || query === "COMMIT" || query === "ROLLBACK" || query.includes("pg_advisory_xact_lock")) return { rows: [] };
+      if (query.startsWith("SELECT literature_id, identifier_kind, normalized_value FROM literature_identifiers")) {
+        return { rows: identifiers.filter((item) => values[0].includes(item.identifier_kind)) };
       }
-      if (normalized.startsWith("SELECT literature_id FROM literature_identities")) {
-        return { rows: identityRows.filter((identity) => values[0].includes(identity.literature_id)).map((identity) => ({ literature_id: identity.literature_id })) };
+      if (query.startsWith("SELECT literature_id FROM literature_identifiers")) {
+        return { rows: identifiers.filter((item) => values[0].includes(item.literature_id)).map((item) => ({ literature_id: item.literature_id })) };
       }
-      if (normalized.startsWith("SELECT * FROM literature_records WHERE id = $1")) {
-        const selected = records.get(values[0]);
-        return { rows: selected ? [{ ...selected }] : [] };
+      if (query.startsWith("SELECT literature_id FROM literature_identity_claims")) {
+        return { rows: claims.filter((item) => item.provider === values[0] && item.provider_record_id === values[1]) };
       }
-      if (normalized.startsWith("SELECT identity_kind AS kind")) {
-        return {
-          rows: identityRows.filter((identity) => identity.literature_id === values[0]).map((identity) => ({
-            kind: identity.identity_kind,
-            source: identity.identity_source,
-            value: identity.identity_value
-          })).sort((left, right) => `${left.kind}:${left.value}`.localeCompare(`${right.kind}:${right.value}`))
-        };
+      if (query.startsWith("SELECT * FROM literature_records WHERE id = $1")) {
+        const record = records.get(values[0]);
+        return { rows: record ? [{ ...record }] : [] };
       }
-      if (normalized.startsWith("SELECT 1 FROM literature_identities")) {
-        return { rows: identityRows.some((identity) => identity.literature_id === values[0] && identity.identity_source !== values[1]) ? [{ exists: 1 }] : [] };
-      }
-      if (normalized.startsWith("INSERT INTO literature_record_versions")) {
-        if (!versions.some((version) => version.literatureId === values[1] && version.revision === Number(values[2]))) {
-          versions.push({
-            changedBy: values[4],
-            literatureId: values[1],
-            revision: Number(values[2]),
-            snapshot: JSON.parse(values[3])
-          });
-        }
-        return { rows: [] };
-      }
-      if (normalized.startsWith("UPDATE literature_records SET title")) {
-        const current = records.get(values[0]);
+      if (query.startsWith("INSERT INTO literature_records(")) {
+        const now = values[6];
         records.set(values[0], {
-          ...current,
-          authors: JSON.parse(values[2]),
-          confirmed_at: values[7],
-          document_type: values[4],
-          publication_year: values[3],
-          record_source: values[5],
-          revision: Number(values[8]),
-          source_provider: values[6],
-          title: values[1],
-          updated_at: values[9]
+          authors: JSON.parse(values[2]), confirmed_at: now, document_type: values[4], id: values[0],
+          identity_status: "confirmed", publication_year: values[3], record_source: "public_registry",
+          revision: 1, source_provider: values[5], title: values[1], updated_at: now
         });
         return { rows: [] };
       }
-      if (normalized.startsWith("UPDATE literature_identities SET identity_source")) {
-        for (const identity of identityRows) {
-          if (identity.literature_id === values[1]) identity.identity_source = values[0];
+      if (query.startsWith("SELECT identifier_kind AS kind")) {
+        return { rows: identifiers.filter((item) => item.literature_id === values[0]).map((item) => ({ kind: item.identifier_kind, source: "public_registry", value: item.normalized_value })) };
+      }
+      if (query.startsWith("INSERT INTO literature_identifiers")) {
+        if (!identifiers.some((item) => item.identifier_kind === values[1] && item.normalized_value === values[2])) {
+          identifiers.push({ literature_id: values[0], identifier_kind: values[1], normalized_value: values[2] });
         }
         return { rows: [] };
       }
-      if (normalized.startsWith("INSERT INTO literature_identities")) {
-        if (!identityRows.some((identity) => identity.identity_kind === values[1] && identity.identity_value === values[2])) {
-          identityRows.push({
-            identity_kind: values[1],
-            identity_source: values[3],
-            identity_value: values[2],
-            literature_id: values[0]
-          });
+      if (query.startsWith("INSERT INTO literature_identity_claims")) {
+        if (!claims.some((item) => item.provider === values[2] && item.provider_record_id === values[3])) {
+          claims.push({ literature_id: values[1], provider: values[2], provider_record_id: values[3] });
         }
         return { rows: [] };
       }
-      throw new Error(`unexpected PostgreSQL literature query: ${normalized}`);
+      if (query.startsWith("INSERT INTO literature_record_versions")) {
+        versions.push({
+          literatureId: values[1],
+          revision: query.includes("VALUES ($1, $2, 1") ? 1 : Number(values[2])
+        });
+        return { rows: [] };
+      }
+      throw new Error(`unexpected PostgreSQL literature query: ${query}`);
     },
     release() {}
   };
-  const pool = {
-    async connect() { return client; },
-    async query(sql, values) { return client.query(sql, values); }
-  };
-  return {
-    identities: identityRows,
-    queries,
-    records,
-    repository: new PostgresAnnotationCommunityRepository(pool),
-    versions
-  };
+  const pool = { async connect() { return client; }, async query(sql, values) { return client.query(sql, values); } };
+  return { claims, identifiers, records, repository: new PostgresAnnotationCommunityRepository(pool), versions };
 }
 
-function postgresRecord(overrides = {}) {
-  const now = new Date("2026-08-09T00:00:00.000Z");
-  return {
-    authors: ["Verified Author"],
-    confirmed_at: now,
-    created_at: now,
-    document_type: null,
-    id: "literature-postgres",
-    publication_year: 2026,
-    record_source: "public_registry",
-    revision: 1,
-    source_provider: "crossref",
-    title: "Verified Registry Title",
-    updated_at: now,
-    ...overrides
-  };
-}
+test("PostgreSQL confirmation stores one identifier owner and one provider claim", async () => {
+  const harness = postgresHarness();
+  const record = await harness.repository.confirmRefetchedLiterature(owner, candidate());
 
-test("manual confirmation cannot downgrade a provider-verified SQLite record", async () => {
-  const db = new Database(":memory:");
-  try {
-    const repository = new SqliteAnnotationCommunityRepository(db);
-    const verified = await repository.confirmRefetchedLiterature(owner, publicCandidate());
-    const result = await repository.confirmLiterature(owner, manualConfirmation({
-      identifiers: [
-        { kind: "doi", source: "manual", value: "10.1000/verified" },
-        { kind: "arxiv_id", source: "manual", value: "2401.01234" }
-      ]
-    }));
-
-    assert.equal(result.literatureId, verified.literatureId);
-    assert.equal(result.title, "Verified Registry Title");
-    assert.equal(result.provenance.mode, "public_registry");
-    assert.deepEqual(result.identifiers, [{ kind: "doi", source: "public_registry", value: "10.1000/verified" }]);
-    assert.equal(db.prepare("SELECT revision FROM literature_records_v2 WHERE id = ?").get(verified.literatureId).revision, 1);
-  } finally {
-    db.close();
-  }
-});
-
-test("manual confirmation cannot downgrade a provider-verified PostgreSQL record", async () => {
-  const instance = postgresLiteratureHarness({
-    identities: [{ identity_kind: "doi", identity_source: "public_registry", identity_value: "10.1000/verified" }],
-    record: postgresRecord()
-  });
-
-  const result = await instance.repository.confirmLiterature(owner, manualConfirmation({
-    identifiers: [
-      { kind: "doi", source: "manual", value: "10.1000/verified" },
-      { kind: "arxiv_id", source: "manual", value: "2401.01234" }
-    ]
-  }));
-
-  assert.equal(result.title, "Verified Registry Title");
-  assert.equal(result.provenance.mode, "public_registry");
-  assert.deepEqual(result.identifiers, [{ kind: "doi", source: "public_registry", value: "10.1000/verified" }]);
-  assert.equal(instance.records.get("literature-postgres").revision, 1);
-  assert.equal(instance.queries.some((query) => query.sql.startsWith("UPDATE literature_records")), false);
-});
-
-test("SQLite versions an identity-only correction before inserting the alias", async () => {
-  const db = new Database(":memory:");
-  try {
-    const repository = new SqliteAnnotationCommunityRepository(db);
-    const initial = await repository.confirmLiterature(owner, manualConfirmation({
-      authors: ["Manual Author"],
-      title: "Manual Record",
-      year: 2025
-    }));
-    const corrected = await repository.confirmLiterature(owner, manualConfirmation({
-      authors: ["Manual Author"],
-      identifiers: [
-        { kind: "doi", source: "manual", value: "10.1000/verified" },
-        { kind: "arxiv_id", source: "manual", value: "2401.01234" }
-      ],
-      title: "Manual Record",
-      year: 2025
-    }));
-
-    assert.equal(db.prepare("SELECT revision FROM literature_records_v2 WHERE id = ?").get(initial.literatureId).revision, 2);
-    const snapshot = JSON.parse(db.prepare("SELECT snapshot_json FROM literature_record_versions_v2 WHERE literature_id = ? AND revision = 1").get(initial.literatureId).snapshot_json);
-    assert.deepEqual(snapshot.identifiers.map((identifier) => identifier.kind), ["doi"]);
-    assert.deepEqual(corrected.identifiers.map((identifier) => identifier.kind), ["arxiv_id", "doi"]);
-  } finally {
-    db.close();
-  }
-});
-
-test("PostgreSQL versions an identity-only correction before inserting the alias", async () => {
-  const instance = postgresLiteratureHarness({
-    identities: [{ identity_kind: "doi", identity_source: "manual", identity_value: "10.1000/verified" }],
-    record: postgresRecord({
-      authors: ["Manual Author"],
-      publication_year: 2025,
-      record_source: "manual",
-      source_provider: null,
-      title: "Manual Record"
-    })
-  });
-
-  const corrected = await instance.repository.confirmLiterature(owner, manualConfirmation({
-    authors: ["Manual Author"],
-    identifiers: [
-      { kind: "doi", source: "manual", value: "10.1000/verified" },
-      { kind: "arxiv_id", source: "manual", value: "2401.01234" }
-    ],
-    title: "Manual Record",
-    year: 2025
-  }));
-
-  assert.equal(instance.records.get("literature-postgres").revision, 2);
-  assert.deepEqual(instance.versions[0].snapshot.identifiers.map((identifier) => identifier.kind), ["doi"]);
-  assert.deepEqual(corrected.identifiers.map((identifier) => identifier.kind), ["arxiv_id", "doi"]);
-});
-
-test("PostgreSQL snapshots legacy metadata without false manual provenance", async () => {
-  const instance = postgresLiteratureHarness({
-    identities: [{ identity_kind: "doi", identity_source: "metadata", identity_value: "10.1000/verified" }],
-    record: postgresRecord({
-      confirmed_at: null,
-      record_source: "legacy_metadata",
-      source_provider: null,
-      title: "Legacy Metadata Title"
-    })
-  });
-
-  await instance.repository.confirmLiterature(owner, manualConfirmation());
-
-  assert.equal(instance.versions.length, 1);
-  assert.equal(instance.versions[0].snapshot.recordSource, "legacy_metadata");
-  assert.equal("provenance" in instance.versions[0].snapshot, false);
-  assert.equal(instance.versions[0].snapshot.identifiers[0].source, "metadata");
-});
-
-test("SQLite versions supported legacy metadata updates", async () => {
-  const db = new Database(":memory:");
-  try {
-    const repository = new SqliteAnnotationCommunityRepository(db);
-    const author = { id: "legacy-owner", initials: "LO", name: "Legacy Owner" };
-    const annotation = (title, updatedAt) => ({
-      annotationId: "legacy-annotation",
-      body: "Legacy annotation body.",
-      createdAt: "2026-08-09T01:00:00.000Z",
-      queueKey: "legacy-queue",
-      targets: [{
-        kind: "whole_document",
-        literature: {
-          identity: { id: "doi:10.1000/legacy-update", kind: "doi", source: "metadata", value: "10.1000/legacy-update" },
-          metadata: { authors: ["Legacy Author"], title, year: 2020 }
-        }
-      }],
-      updatedAt
-    });
-
-    repository.syncDesktopAnnotations(author, [annotation("Original Legacy Title", "2026-08-09T01:00:00.000Z")]);
-    repository.syncDesktopAnnotations(author, [annotation("Corrected Legacy Title", "2026-08-09T02:00:00.000Z")]);
-
-    const row = db.prepare("SELECT id, revision, title FROM literature_records_v2 WHERE title = ?").get("Corrected Legacy Title");
-    assert.equal(row.revision, 2);
-    const snapshot = JSON.parse(db.prepare("SELECT snapshot_json FROM literature_record_versions_v2 WHERE literature_id = ? AND revision = 1").get(row.id).snapshot_json);
-    assert.equal(snapshot.recordSource, "legacy_metadata");
-    assert.equal(snapshot.title, "Original Legacy Title");
-  } finally {
-    db.close();
-  }
-});
-
-test("PostgreSQL legacy sync does not update matched canonical metadata", async () => {
-  const queries = [];
-  const canonical = postgresRecord();
-  const client = {
-    async query(sql, values = []) {
-      const normalized = sql.trim();
-      queries.push({ sql: normalized, values });
-      if (normalized.startsWith("BEGIN ") || normalized === "COMMIT" || normalized === "ROLLBACK") return { rows: [] };
-      if (normalized.includes("pg_advisory_xact_lock")) return { rows: [] };
-      if (normalized.includes("account_deletion_jobs")) return { rows: [] };
-      if (normalized.startsWith("SELECT * FROM desktop_annotation_syncs")) return { rows: [] };
-      if (normalized.startsWith("SELECT education_stage") || normalized.startsWith("SELECT institution_name AS name")) return { rows: [] };
-      if (normalized.startsWith("SELECT literature_id, identity_kind, identity_value FROM literature_identities")) {
-        return { rows: [{ identity_kind: "doi", identity_value: "10.1000/verified", literature_id: canonical.id }] };
-      }
-      if (normalized.startsWith("SELECT literature_id FROM literature_identities")) return { rows: [{ literature_id: canonical.id }] };
-      if (normalized.startsWith("SELECT * FROM literature_records")) return { rows: [canonical] };
-      if (normalized.startsWith("SELECT identity_kind AS kind")) {
-        return { rows: [{ kind: "doi", source: "public_registry", value: "10.1000/verified" }] };
-      }
-      if (normalized.startsWith("SELECT tags.id AS tag_id")) return { rows: [] };
-      return { rows: [] };
-    },
-    release() {}
-  };
-  const repository = new PostgresAnnotationCommunityRepository({ async connect() { return client; } });
-
-  const [result] = await repository.syncDesktopAnnotations({ id: "legacy-owner", initials: "LO", name: "Legacy Owner" }, [{
-    annotationId: "legacy-annotation",
-    body: "Legacy annotation body.",
-    createdAt: "2026-08-09T01:00:00.000Z",
-    queueKey: "legacy-queue",
-    targets: [{
-      kind: "whole_document",
-      literature: {
-        identity: { id: "doi:10.1000/verified", kind: "doi", source: "metadata", value: "10.1000/verified" },
-        metadata: { authors: ["Spoofed Author"], title: "Spoofed Canonical Title", year: 1900 }
-      }
-    }],
-    updatedAt: "2026-08-09T01:00:00.000Z"
+  assert.equal(record.status, "confirmed");
+  assert.equal(record.revision, 1);
+  assert.equal(harness.records.size, 1);
+  assert.deepEqual(harness.identifiers, [{
+    identifier_kind: "doi",
+    literature_id: record.literatureId,
+    normalized_value: "10.1000/verified"
   }]);
-
-  assert.equal(result.status, "synced");
-  assert.equal(queries.some((query) => query.sql.startsWith("UPDATE literature_records SET title")), false);
-});
-
-test("PostgreSQL legacy sync locks lifecycle and sorted queues while preserving result order", async () => {
-  const events = [];
-  const client = {
-    async query(sql, values = []) {
-      const normalized = sql.trim();
-      if (normalized.startsWith("BEGIN ") || normalized === "COMMIT" || normalized === "ROLLBACK") return { rows: [] };
-      if (normalized.includes("pg_advisory_xact_lock")) {
-        events.push(`lock:${values[0]}`);
-        return { rows: [] };
-      }
-      if (normalized.includes("account_deletion_jobs")) {
-        events.push("tombstone");
-        return { rows: [] };
-      }
-      if (normalized.startsWith("SELECT * FROM desktop_annotation_syncs")) {
-        events.push(`sync:${values[1]}`);
-        return {
-          rows: [{
-            annotation_id: `remote-${values[1]}`,
-            source_updated_at: new Date("2026-08-09T02:00:00.000Z")
-          }]
-        };
-      }
-      throw new Error(`unexpected PostgreSQL legacy lifecycle query: ${normalized}`);
-    },
-    release() {}
-  };
-  const repository = new PostgresAnnotationCommunityRepository({ async connect() { return client; } });
-  const items = [
-    {
-      annotationId: "legacy-b",
-      body: "Legacy B",
-      createdAt: "2026-08-09T01:00:00.000Z",
-      queueKey: "queue-b",
-      targets: [],
-      updatedAt: "2026-08-09T01:00:00.000Z"
-    },
-    {
-      annotationId: "legacy-a",
-      body: "Legacy A",
-      createdAt: "2026-08-09T01:00:00.000Z",
-      queueKey: "queue-a",
-      targets: [],
-      updatedAt: "2026-08-09T01:00:00.000Z"
-    }
-  ];
-
-  const results = await repository.syncDesktopAnnotations({ id: "legacy-owner", initials: "LO", name: "Legacy Owner" }, items);
-
-  assert.deepEqual(results.map((result) => result.queueKey), ["queue-b", "queue-a"]);
-  assert.deepEqual(events, [
-    "lock:intuecho-account-deletion:legacy-owner",
-    "tombstone",
-    "lock:desktop-publication:legacy-owner:queue-a",
-    "lock:desktop-publication:legacy-owner:queue-b",
-    "sync:queue-b",
-    "sync:queue-a"
-  ]);
-});
-
-test("PostgreSQL legacy sync rejects a deleted owner without touching sync rows", async () => {
-  let touchedSyncRows = false;
-  const client = {
-    async query(sql) {
-      const normalized = sql.trim();
-      if (normalized.startsWith("BEGIN ") || normalized === "COMMIT" || normalized === "ROLLBACK") return { rows: [] };
-      if (normalized.includes("pg_advisory_xact_lock")) return { rows: [] };
-      if (normalized.includes("account_deletion_jobs")) return { rows: [{ exists: 1 }] };
-      if (normalized.includes("desktop_annotation_syncs")) {
-        touchedSyncRows = true;
-        return { rows: [] };
-      }
-      return { rows: [] };
-    },
-    release() {}
-  };
-  const repository = new PostgresAnnotationCommunityRepository({ async connect() { return client; } });
-  const items = [{
-    annotationId: "legacy-deleted",
-    body: "Must not be written.",
-    createdAt: "2026-08-09T01:00:00.000Z",
-    queueKey: "deleted-queue",
-    targets: [],
-    updatedAt: "2026-08-09T01:00:00.000Z"
-  }];
-
-  const results = await repository.syncDesktopAnnotations({ id: "deleted-owner", initials: "DO", name: "Deleted Owner" }, items);
-
-  assert.deepEqual(results, [{
-    annotationId: "legacy-deleted",
-    error: "ANNOTATION_PUBLICATION_OWNER_DELETED",
-    queueKey: "deleted-queue"
+  assert.deepEqual(harness.claims, [{
+    literature_id: record.literatureId,
+    provider: "crossref",
+    provider_record_id: "10.1000/verified"
   }]);
-  assert.equal(touchedSyncRows, false);
+  assert.deepEqual(harness.versions, [{ literatureId: record.literatureId, revision: 1 }]);
 });

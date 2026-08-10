@@ -1,0 +1,65 @@
+{
+  "providerCapabilities": [
+    "resolveIdentity",
+    "search",
+    "fetchRelations",
+    "locateFullText",
+    "generateCandidates",
+    "refetchForConfirmation"
+  ],
+  "identifiers": [
+    {
+      "expected": "10.1000/abc",
+      "inputs": ["https://doi.org/10.1000/ABC.", "doi: 10.1000/ABC"],
+      "kind": "doi"
+    },
+    {
+      "expected": "2401.01234",
+      "inputs": ["arXiv:2401.01234v2", "https://arxiv.org/pdf/2401.01234v2.pdf"],
+      "kind": "arxiv_id"
+    },
+    {
+      "expected": "corpus:123",
+      "inputs": ["CorpusID: 123", "corpus:123"],
+      "kind": "semantic_scholar_id"
+    },
+    {
+      "expected": "W123",
+      "inputs": ["w123", "https://openalex.org/W123"],
+      "kind": "openalex_id"
+    }
+  ],
+  "fingerprints": [
+    {
+      "expected": "sha256:b9224d03b956914b25d78ac1c350a64951226cbca35bb9d6575d4aa3624da19f",
+      "input": {
+        "authors": [" Ada Lovelace ", "Alan Turing"],
+        "title": "A Study: Identity!",
+        "year": 2026
+      }
+    },
+    {
+      "expected": "sha256:b9224d03b956914b25d78ac1c350a64951226cbca35bb9d6575d4aa3624da19f",
+      "input": {
+        "authors": ["Turing, Alan", "Lovelace, Ada"],
+        "title": "A Study: Identity!",
+        "year": 2026
+      }
+    },
+    {
+      "expected": "sha256:e0d34a56302415a327a085494da564666baf76a065545a9856f26c9d7975f9c3",
+      "input": {
+        "authors": ["Junfeng Lu", "Zijie Yu", "Shaoyang Cui", "Gan He", "Ruiqin Xiong", "Kai Du", "Tiejun Huang"],
+        "title": "HelioX: A GPU-Native Framework for Simulation and Training of Biophysically Detailed Networks",
+        "year": 2026
+      }
+    }
+  ],
+  "legacyTitleAuthorYearHashes": ["0a1b2c3d", "deadbeef"],
+  "pmlrHints": [
+    {
+      "expected": { "source": "pmlr", "volume": 306, "year": 2026 },
+      "input": "Proceedings of ICML. PMLR 306, 2026."
+    }
+  ]
+}

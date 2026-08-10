@@ -31,7 +31,9 @@ const confirmed = {
   ...candidate.record,
   identifiers: [{ ...candidate.record.identifiers[0] }],
   literatureId: "literature-1",
-  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const }
+  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const },
+  revision: 1,
+  status: "confirmed" as const
 };
 
 function renderEditor(onChange = vi.fn(), targets: AnnotationTarget[] = []) {
@@ -105,7 +107,7 @@ describe("LiteratureTargetEditor", () => {
     expect(await screen.findByText(/没有找到/)).toBeVisible();
     first.resolve({ status: "exact", candidate, unavailableProviders: [] });
     await new Promise((resolve) => window.setTimeout(resolve, 50));
-    expect(screen.getByRole("button", { name: "手动添加文献" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "手动添加文献" })).not.toBeInTheDocument();
     expect(confirmLiterature).not.toHaveBeenCalled();
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -148,7 +150,7 @@ describe("LiteratureTargetEditor", () => {
     confirm.resolve({ literature: confirmed });
     await new Promise((resolve) => window.setTimeout(resolve, 50));
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "手动添加文献" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "手动添加文献" })).not.toBeInTheDocument();
   });
 
   test("keeps the newest candidate when two confirmations complete out of order", async () => {
@@ -209,53 +211,30 @@ describe("LiteratureTargetEditor", () => {
     await waitFor(() => expect(resolveLiterature).toHaveBeenCalledWith({ purpose: "forum_compose", query: "abc" }));
   });
 
-  test("allows manual fallback only after not found and enforces minimum metadata", async () => {
+  test("keeps not-found literature unresolved without exposing a manual formal-record path", async () => {
     const user = userEvent.setup();
     resolveLiterature.mockResolvedValue({ status: "not_found", candidates: [], unavailableProviders: [] });
-    confirmLiterature.mockResolvedValue({ literature: { ...confirmed, literatureId: "manual-1", provenance: { confirmedAt: confirmed.provenance.confirmedAt, mode: "manual" }, identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }] } });
     const { onChange } = renderEditor();
     const query = screen.getByRole("combobox", { name: "检索关联文献" });
     await user.type(query, "unknown");
     await user.click(screen.getByRole("button", { name: "检索" }));
     expect(await screen.findByText(/没有找到/)).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "手动添加文献" }));
-    await user.click(screen.getByRole("button", { name: "确认文献" }));
-    expect(screen.getByLabelText("手动文献标题")).toBeVisible();
-    await user.type(screen.getByLabelText("手动文献标题"), "Manual Paper");
-    await user.type(screen.getByLabelText("手动文献 DOI"), "10.1000/manual");
-    await user.click(screen.getByRole("button", { name: "确认文献" }));
-    await waitFor(() => expect(confirmLiterature).toHaveBeenCalledWith(expect.objectContaining({ mode: "manual", record: expect.objectContaining({ title: "Manual Paper" }) })));
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith([{ kind: "whole_document", literature: { literatureId: "manual-1" } }]));
+    expect(screen.queryByRole("button", { name: "手动添加文献" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("手动文献标题")).not.toBeInTheDocument();
+    expect(confirmLiterature).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
   });
 
-  test("confirms manual literature with authors and year when no identifier is known", async () => {
+  test("does not turn title, authors, and year into a formal literature record", async () => {
     const user = userEvent.setup();
     resolveLiterature.mockResolvedValue({ status: "not_found", candidates: [], unavailableProviders: [] });
-    confirmLiterature.mockResolvedValue({ literature: {
-      ...confirmed,
-      literatureId: "manual-authors-year",
-      provenance: { confirmedAt: confirmed.provenance.confirmedAt, mode: "manual" },
-      identifiers: [{ kind: "title_authors_year_hash", source: "manual", value: "manual-paper|author-one|2025" }]
-    }});
     renderEditor();
 
     await user.type(screen.getByRole("combobox", { name: "检索关联文献" }), "Unlisted Manual Paper");
     await user.click(screen.getByRole("button", { name: "检索" }));
-    await user.click(await screen.findByRole("button", { name: "手动添加文献" }));
-    await user.type(screen.getByLabelText("手动文献标题"), "Manual Paper Without ID");
-    await user.type(screen.getByLabelText("手动文献作者"), "Author One; Author Two");
-    await user.type(screen.getByLabelText("手动文献年份"), "2025");
-    await user.click(screen.getByRole("button", { name: "确认文献" }));
-
-    await waitFor(() => expect(confirmLiterature).toHaveBeenCalledWith({
-      mode: "manual",
-      record: {
-        authors: ["Author One", "Author Two"],
-        identifiers: [],
-        title: "Manual Paper Without ID",
-        year: 2025
-      }
-    }));
+    expect(await screen.findByText(/没有找到/)).toBeVisible();
+    expect(screen.queryByLabelText("手动文献作者")).not.toBeInTheDocument();
+    expect(confirmLiterature).not.toHaveBeenCalled();
   });
 
   test("supports source-passage details, multiple records, and removal", async () => {

@@ -7,7 +7,8 @@ function config() {
     allowedOrigins: ["http://web.test"],
     database: { sslMode: "require" },
     environment: "test",
-    identity: { issuer: "http://identity.test", webClientId: "intuecho-web" }
+    identity: { issuer: "http://identity.test", webClientId: "intuecho-web" },
+    literatureProjection: { audience: "intuecho-internal", clientId: "liteasy-literature-service" }
   };
 }
 
@@ -76,6 +77,11 @@ function runtime(overrides = {}) {
       },
       async resolve(owner) {
         return { status: "exact", candidate: { candidateKey: "crossref:doi:10.1000/reliable", provider: "crossref", record: { authors: [], identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/reliable" }], title: `Reliable for ${owner.id}` } }, unavailableProviders: [] };
+      },
+      async verifyProjection(literatureId, revision) {
+        return literatureId === "literature-verified" && revision === 3
+          ? { authors: ["A. Author"], identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/verified" }], literatureId, provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "crossref" }, revision, status: "confirmed", title: "Verified Literature" }
+          : null;
       },
       ...overrides.literatureResolver
     },
@@ -152,6 +158,45 @@ test("uses each authenticated audience for literature resolution and keeps provi
   }
 });
 
+test("protects authoritative literature projection verification with the dedicated service client", async () => {
+  const instance = runtime();
+  instance.identityVerifier.verifyAuthorizationHeader = async (header, audience) => ({
+    audience,
+    clientId: header === "Bearer service-token" ? "liteasy-literature-service" : "different-service",
+    subject: "service-subject",
+    token: header.slice("Bearer ".length)
+  });
+  const app = await createProductionIntuechoApp(instance, config());
+  try {
+    const verified = await app.inject({
+      headers: { authorization: "Bearer service-token" },
+      method: "POST",
+      payload: { literatureId: "literature-verified", revision: 3 },
+      url: "/v1/internal/literature:verify"
+    });
+    assert.equal(verified.statusCode, 200, verified.body);
+    assert.equal(verified.json().literature.literatureId, "literature-verified");
+
+    const stale = await app.inject({
+      headers: { authorization: "Bearer service-token" },
+      method: "POST",
+      payload: { literatureId: "literature-verified", revision: 2 },
+      url: "/v1/internal/literature:verify"
+    });
+    assert.equal(stale.statusCode, 409, stale.body);
+
+    const forbidden = await app.inject({
+      headers: { authorization: "Bearer other-token" },
+      method: "POST",
+      payload: { literatureId: "literature-verified", revision: 3 },
+      url: "/v1/internal/literature:verify"
+    });
+    assert.equal(forbidden.statusCode, 403, forbidden.body);
+  } finally {
+    await app.close();
+  }
+});
+
 test("keeps public reads anonymous and exposes only public identity client metadata", async () => {
   const instance = runtime();
   const app = await createProductionIntuechoApp(instance, config());
@@ -166,6 +211,31 @@ test("keeps public reads anonymous and exposes only public identity client metad
       clientId: "intuecho-web",
       issuer: "http://identity.test"
     });
+  } finally {
+    await app.close();
+  }
+});
+
+test("accepts a stable OpenAlex identity at the public forum filter boundary", async () => {
+  let observedFilters;
+  const instance = runtime({
+    annotationCommunityRepository: {
+      async plaza(_viewer, filters) {
+        observedFilters = filters;
+        return [];
+      }
+    }
+  });
+  const app = await createProductionIntuechoApp(instance, config());
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/plaza?literatureIdentityKind=openalex_id&literatureIdentityValue=W123"
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(observedFilters.literatureIdentityKind, "openalex_id");
+    assert.equal(observedFilters.literatureIdentityValue, "W123");
   } finally {
     await app.close();
   }
@@ -225,10 +295,7 @@ test("isolates desktop integration routes from Web draft consumption by audience
 test("uses the desktop audience for topic-free annotation handoff and Web audience for consumption", async () => {
   const instance = runtime();
   const app = await createProductionIntuechoApp(instance, config());
-  const literature = {
-    identity: { id: "doi:10.1000/reliable", kind: "doi", source: "metadata", value: "10.1000/reliable" },
-    metadata: { authors: ["Author"], title: "Reliable Paper", year: 2025 }
-  };
+  const literature = { literatureId: "literature-reliable" };
   try {
     const created = await app.inject({
       headers: { authorization: "Bearer desktop-token" },
@@ -285,7 +352,7 @@ test("routes desktop publication operations through the desktop audience and rep
   }
 });
 
-test("keeps the legacy desktop annotation payload readable during publication rollout", async () => {
+test("rejects the legacy desktop annotation write payload", async () => {
   const instance = runtime();
   const app = await createProductionIntuechoApp(instance, config());
   try {
@@ -305,9 +372,9 @@ test("keeps the legacy desktop annotation payload readable during publication ro
       },
       url: "/v1/pdf-annotations:sync"
     });
-    assert.equal(response.statusCode, 200, response.body);
-    assert.equal(response.json().results[0].status, "synced");
-    assert.equal(instance.calls.some((item) => item.syncDesktopAnnotations), true);
+    assert.equal(response.statusCode, 400, response.body);
+    assert.equal(response.json().code, "INVALID_ANNOTATIONS");
+    assert.equal(instance.calls.some((item) => item.syncDesktopAnnotations), false);
   } finally {
     await app.close();
   }

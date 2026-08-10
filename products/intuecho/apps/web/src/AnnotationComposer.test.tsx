@@ -49,14 +49,19 @@ const publicParent: CommunityAnnotation = {
   targets: [{
     kind: "whole_document",
     literature: {
-      identity: { id: "doi:10.1000/parent", kind: "doi", source: "metadata", value: "10.1000/parent" },
+      identity: {
+        id: "doi:10.1000/parent",
+        kind: "doi",
+        source: "metadata",
+        value: "10.1000/parent"
+      },
       metadata: {
         authors: ["A. Author"],
         title: "Inherited Literature",
         year: 2026
       }
     }
-  }],
+  }] as unknown as CommunityAnnotation["targets"],
   updatedAt: "2026-08-09T00:00:00.000Z",
   viewerCanModerate: false,
   viewerIsAuthor: false,
@@ -94,6 +99,7 @@ const confirmedLiterature = {
   ...legacyCandidate.record,
   literatureId: "literature-parent",
   provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const }
+  , revision: 1, status: "confirmed" as const
 };
 
 function deferred<T>() {

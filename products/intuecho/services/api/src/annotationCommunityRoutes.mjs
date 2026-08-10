@@ -30,7 +30,8 @@ function plazaFilters(query = {}) {
   const sort = query.sort === "recommended" ? "recommended" : "latest";
   const literatureIdentityKind = String(query.literatureIdentityKind ?? "");
   const literatureIdentityValue = String(query.literatureIdentityValue ?? "").trim();
-  if (literatureIdentityValue && !new Set(["doi", "arxiv_id", "semantic_scholar_id", "title_authors_year_hash"]).has(literatureIdentityKind)) {
+  const literatureId = String(query.literatureId ?? "").trim();
+  if (literatureIdentityValue && !new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]).has(literatureIdentityKind)) {
     throw new AnnotationCommunityError("INVALID_LITERATURE_FILTER");
   }
   return {
@@ -38,6 +39,7 @@ function plazaFilters(query = {}) {
     educationStage: String(query.educationStage ?? "").trim(),
     institution: String(query.institution ?? "").trim(),
     limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 30,
+    literatureId: literatureId.slice(0, 200),
     literatureIdentityKind,
     literatureIdentityValue,
     query: String(query.query ?? "").trim(),
@@ -124,8 +126,6 @@ export function registerAnnotationCommunityRoutes(app, repository, {
       if (publication.success) {
         return { results: await repository.applyDesktopAnnotationPublications(viewer, publication.data.operations) };
       }
-      const legacy = desktopCommunityAnnotationBatchSchema.safeParse(request.body);
-      if (legacy.success) return { results: await repository.syncDesktopAnnotations(viewer, legacy.data.annotations) };
       throw new AnnotationCommunityError("INVALID_ANNOTATIONS");
     }));
 

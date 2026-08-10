@@ -146,7 +146,8 @@ export function AnnotationApp() {
     const params = new URLSearchParams(window.location.search);
     const kind = params.get("literatureIdentityKind") as PaperIdentity["kind"] | null;
     return {
-      ...(kind && new Set(["doi", "arxiv_id", "semantic_scholar_id", "title_authors_year_hash"]).has(kind) ? { literatureIdentityKind: kind } : {}),
+      ...(params.get("literatureId") ? { literatureId: params.get("literatureId")! } : {}),
+      ...(kind && new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]).has(kind) ? { literatureIdentityKind: kind } : {}),
       ...(params.get("literatureIdentityValue") ? { literatureIdentityValue: params.get("literatureIdentityValue")! } : {}),
       sort: "recommended"
     };
@@ -442,7 +443,7 @@ function AnnotationDetail({ annotationId, onCompose, onConversation, refresh, se
 function TargetChip({ target }: { target: AnnotationReadTarget }) {
   const title = "literatureRecord" in target.literature && target.literature.literatureRecord
     ? target.literature.literatureRecord.title
-    : "metadata" in target.literature ? target.literature.metadata.title : `文献 ${target.literature.literatureId}`;
+    : `文献 ${target.literature.literatureId}`;
   return <div className="target-chip">
     <Library20Regular />
     <span><strong>{title}</strong><small>{target.kind === "whole_document" ? "整篇文献" : target.kind === "source_passage" ? `${target.page ? `第 ${target.page} 页 · ` : ""}${target.excerpt}` : `薄读内容 · ${target.derivedContent.excerpt}`}</small></span>

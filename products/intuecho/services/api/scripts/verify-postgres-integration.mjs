@@ -126,10 +126,11 @@ try {
     "012_desktop_annotation_publications.sql",
     "013_desktop_annotation_publication_digest.sql",
     "014_correct_legacy_literature_snapshots.sql",
-    "015_reply_projection_lifecycle.sql"
+    "015_reply_projection_lifecycle.sql",
+    "016_source_confirmed_literature_identity.sql"
   ];
   assert.equal(migrated.applied.every((name) => expectedMigrations.includes(name)), true);
-  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 15, current: true });
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 15, current: false });
   const historicalLiteratureId = `migration-014-historical-${randomUUID()}`;
   const historicalVersionId = `migration-014-historical-version-${randomUUID()}`;
   const manualLiteratureId = `migration-014-manual-${randomUUID()}`;
@@ -279,6 +280,11 @@ try {
     await migrationPool.end();
     process.exit(0);
   }
+  const sourceConfirmedMigration = await migrateIntuecho(migrationPool, {
+    applicationRole: application.username
+  });
+  assert.deepEqual(sourceConfirmedMigration.applied, ["016_source_confirmed_literature_identity.sql"]);
+  assert.deepEqual(await verifyIntuechoMigrations(pool), { count: 16, current: true });
   await migrationPool.query(`
     DO $$
     DECLARE tables text;
@@ -301,10 +307,10 @@ try {
   const provenanceColumns = await migrationPool.query(`
     SELECT column_name FROM information_schema.columns
      WHERE table_schema = 'public' AND table_name = 'literature_records'
-       AND column_name IN ('record_source', 'source_provider', 'confirmed_at', 'revision')
+       AND column_name IN ('record_source', 'source_provider', 'confirmed_at', 'revision', 'identity_status')
      ORDER BY column_name
   `);
-  assert.deepEqual(provenanceColumns.rows.map((row) => row.column_name), ["confirmed_at", "record_source", "revision", "source_provider"]);
+  assert.deepEqual(provenanceColumns.rows.map((row) => row.column_name), ["confirmed_at", "identity_status", "record_source", "revision", "source_provider"]);
   const versionTrigger = await migrationPool.query(`
     SELECT 1 FROM pg_trigger
      WHERE tgname = 'literature_record_versions_append_only'
@@ -340,8 +346,8 @@ try {
     /literature_records_record_source_check/
   );
   await assert.rejects(
-    () => migrationPool.query("INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source) VALUES ('migration-provenance-record', 'invalid', 'invalid', 'manual')"),
-    /literature_identities_identity_kind_check/
+    () => migrationPool.query("INSERT INTO literature_identities(literature_id, identity_kind, identity_value, identity_source) VALUES ('migration-provenance-record', 'doi', '10.1000/read-only', 'manual')"),
+    /legacy_literature_identity_is_read_only/
   );
   await assert.rejects(
     () => migrationPool.query("UPDATE literature_record_versions SET changed_by = 'tampered' WHERE id = 'migration-provenance-version'"),
@@ -501,62 +507,45 @@ try {
     }
   });
   const literatureOwner = { id: "literature-integration-owner", initials: "LO", name: "Literature Owner" };
-  const manualLiterature = await annotations.confirmLiterature(literatureOwner, {
-    mode: "manual",
+  const confirmedLiteratureCandidate = {
+    candidateKey: "crossref:doi:10.1000/integration-confirmed",
+    provider: "crossref",
     record: {
       authors: ["Ada Lovelace"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
-      title: "Integration Manual Literature",
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" }],
+      title: "Integration Confirmed Literature",
       year: 1843
     }
-  });
-  assert.equal(manualLiterature.provenance.mode, "manual");
+  };
+  const confirmedLiterature = await annotations.confirmRefetchedLiterature(
+    literatureOwner,
+    confirmedLiteratureCandidate
+  );
+  assert.equal(confirmedLiterature.status, "confirmed");
+  assert.equal(confirmedLiterature.provenance.mode, "public_registry");
   const concurrentLiterature = await Promise.all([
-    annotations.confirmLiterature(literatureOwner, {
-      mode: "manual",
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
-        title: "Integration Manual Literature",
-        year: 1843
-      }
-    }),
-    annotations.confirmLiterature(literatureOwner, {
-      mode: "manual",
-      record: {
-        authors: ["Ada Lovelace"],
-        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
-        title: "Integration Manual Literature",
-        year: 1843
-      }
-    })
+    annotations.confirmRefetchedLiterature(literatureOwner, confirmedLiteratureCandidate),
+    annotations.confirmRefetchedLiterature({ id: "literature-integration-second-owner" }, confirmedLiteratureCandidate)
   ]);
-  assert.deepEqual(concurrentLiterature.map((item) => item.literatureId), [manualLiterature.literatureId, manualLiterature.literatureId]);
-  await annotations.confirmLiterature(literatureOwner, {
-    mode: "manual",
-    record: {
-      authors: ["Ada Lovelace"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-manual" }],
-      title: "Corrected Integration Literature",
-      year: 1843
-    }
-  });
-  const manualVersion = await pool.query("SELECT snapshot ->> 'title' AS title FROM literature_record_versions WHERE literature_id = $1 AND revision = 1", [manualLiterature.literatureId]);
-  assert.equal(manualVersion.rows[0].title, "Integration Manual Literature");
-  const identityCorrectedLiterature = await annotations.confirmLiterature(literatureOwner, {
-    mode: "manual",
+  assert.deepEqual(concurrentLiterature.map((item) => item.literatureId), [
+    confirmedLiterature.literatureId,
+    confirmedLiterature.literatureId
+  ]);
+  const identityCorrectedLiterature = await annotations.confirmRefetchedLiterature(literatureOwner, {
+    candidateKey: confirmedLiteratureCandidate.candidateKey,
+    provider: "crossref",
     record: {
       authors: ["Ada Lovelace"],
       identifiers: [
-        { kind: "doi", source: "manual", value: "10.1000/integration-manual" },
-        { kind: "openalex_id", source: "manual", value: "w424242" }
+        { kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" },
+        { kind: "openalex_id", source: "public_registry", value: "w424242" }
       ],
-      title: "Corrected Integration Literature",
+      title: "Integration Confirmed Literature",
       year: 1843
     }
   });
   assert.deepEqual(identityCorrectedLiterature.identifiers.map((identifier) => `${identifier.kind}:${identifier.value}`), [
-    "doi:10.1000/integration-manual",
+    "doi:10.1000/integration-confirmed",
     "openalex_id:W424242"
   ]);
   const identityCorrectionState = await pool.query(`
@@ -565,30 +554,32 @@ try {
       version.snapshot -> 'identifiers' AS prior_identifiers
       FROM literature_records AS record
       JOIN literature_record_versions AS version
-        ON version.literature_id = record.id AND version.revision = 2
+        ON version.literature_id = record.id AND version.revision = 1
      WHERE record.id = $1
-  `, [manualLiterature.literatureId]);
-  assert.equal(Number(identityCorrectionState.rows[0].revision), 3);
+  `, [confirmedLiterature.literatureId]);
+  assert.equal(Number(identityCorrectionState.rows[0].revision), 2);
   assert.deepEqual(identityCorrectionState.rows[0].prior_identifiers, [
-    { kind: "doi", source: "manual", value: "10.1000/integration-manual" }
+    { kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" }
   ]);
-  const secondLiterature = await annotations.confirmLiterature(literatureOwner, {
-    mode: "manual",
+  const secondLiterature = await annotations.confirmRefetchedLiterature(literatureOwner, {
+    candidateKey: "crossref:doi:10.1000/integration-other",
+    provider: "crossref",
     record: {
       authors: ["Grace Hopper"],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/integration-other" }],
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/integration-other" }],
       title: "Integration Other Literature",
       year: 1952
     }
   });
   await assert.rejects(
-    () => annotations.confirmLiterature(literatureOwner, {
-      mode: "manual",
+    () => annotations.confirmRefetchedLiterature(literatureOwner, {
+      candidateKey: confirmedLiteratureCandidate.candidateKey,
+      provider: "crossref",
       record: {
         authors: ["Ada Lovelace"],
         identifiers: [
-          { kind: "doi", source: "manual", value: "10.1000/integration-manual" },
-          { kind: "doi", source: "manual", value: "10.1000/integration-other" }
+          { kind: "doi", source: "public_registry", value: "10.1000/integration-confirmed" },
+          { kind: "doi", source: "public_registry", value: "10.1000/integration-other" }
         ],
         title: "Integration Conflict",
         year: 1843
@@ -597,87 +588,6 @@ try {
     /LITERATURE_IDENTITY_CONFLICT/
   );
   assert.equal((await annotations.findLiteratureByIdentifiers(secondLiterature.identifiers)).literatureId, secondLiterature.literatureId);
-  const verifiedLiterature = await annotations.confirmRefetchedLiterature(literatureOwner, {
-    candidateKey: "crossref:doi:10.1000/integration-verified",
-    provider: "crossref",
-    record: {
-      authors: ["Verified Integration Author"],
-      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/integration-verified" }],
-      title: "Verified Integration Literature",
-      year: 2026
-    }
-  });
-  const downgradeAttempt = await annotations.confirmLiterature(literatureOwner, {
-    mode: "manual",
-    record: {
-      authors: ["Spoofed Manual Author"],
-      identifiers: [
-        { kind: "doi", source: "manual", value: "10.1000/integration-verified" },
-        { kind: "arxiv_id", source: "manual", value: "2401.09999" }
-      ],
-      title: "Spoofed Manual Literature",
-      year: 1900
-    }
-  });
-  assert.equal(downgradeAttempt.title, "Verified Integration Literature");
-  assert.equal(downgradeAttempt.provenance.mode, "public_registry");
-  assert.deepEqual(downgradeAttempt.identifiers, verifiedLiterature.identifiers);
-  const protectedLegacySync = await annotations.syncDesktopAnnotations(literatureOwner, [
-    {
-      annotationId: "legacy-protect-verified",
-      body: "Legacy payload cannot rewrite verified literature.",
-      createdAt: "2026-08-09T00:10:00.000Z",
-      queueKey: "legacy-protect-verified",
-      targets: [{
-        kind: "whole_document",
-        literature: {
-          identity: { id: "doi:10.1000/integration-verified", kind: "doi", source: "metadata", value: "10.1000/integration-verified" },
-          metadata: { authors: ["Spoofed Legacy Author"], title: "Spoofed Verified Legacy Title", year: 1901 }
-        }
-      }],
-      updatedAt: "2026-08-09T00:10:00.000Z"
-    },
-    {
-      annotationId: "legacy-protect-manual",
-      body: "Legacy payload cannot rewrite manual canonical literature.",
-      createdAt: "2026-08-09T00:11:00.000Z",
-      queueKey: "legacy-protect-manual",
-      targets: [{
-        kind: "whole_document",
-        literature: {
-          identity: { id: "doi:10.1000/integration-manual", kind: "doi", source: "metadata", value: "10.1000/integration-manual" },
-          metadata: { authors: ["Spoofed Legacy Author"], title: "Spoofed Manual Legacy Title", year: 1902 }
-        }
-      }],
-      updatedAt: "2026-08-09T00:11:00.000Z"
-    }
-  ]);
-  assert.deepEqual(protectedLegacySync.map((result) => result.status), ["synced", "synced"]);
-  const protectedCanonicalRows = await pool.query(`
-    SELECT id, record_source, revision, title
-      FROM literature_records
-     WHERE id = ANY($1::text[])
-     ORDER BY id
-  `, [[manualLiterature.literatureId, verifiedLiterature.literatureId]]);
-  assert.deepEqual(protectedCanonicalRows.rows.map((row) => ({
-    id: row.id,
-    recordSource: row.record_source,
-    revision: Number(row.revision),
-    title: row.title
-  })), [
-    {
-      id: manualLiterature.literatureId,
-      recordSource: "manual",
-      revision: 3,
-      title: "Corrected Integration Literature"
-    },
-    {
-      id: verifiedLiterature.literatureId,
-      recordSource: "public_registry",
-      revision: 1,
-      title: "Verified Integration Literature"
-    }
-  ].sort((left, right) => left.id.localeCompare(right.id)));
   const userOne = { id: "user-1", initials: "同名", name: "同名研究者" };
   const userTwo = { id: "user-2", initials: "证据", name: "证据复核者" };
   assert.deepEqual(await annotations.updateProfile(userOne.id, {
@@ -688,20 +598,7 @@ try {
     institutions: [{ name: "证据研究院" }],
     revision: 1
   });
-  const literature = {
-    identity: {
-      id: "doi:10.1000/annotation-integration",
-      kind: "doi",
-      source: "metadata",
-      value: "10.1000/annotation-integration"
-    },
-    metadata: {
-      authors: ["Evidence Team"],
-      documentType: "journal_article",
-      title: "Annotation Evidence Boundaries",
-      year: 2026
-    }
-  };
+  const literature = { literatureId: confirmedLiterature.literatureId };
   const wholeDocument = { kind: "whole_document", literature };
   const sourcePassage = {
     anchorHash: "sha256:postgres-source-evidence",
@@ -752,7 +649,7 @@ try {
   assert.equal(publicAnnotation.tags.some((tag) =>
     tag.name === "证据分类" && tag.origin === "platform" && tag.state === "active"
   ), true);
-  const canonicalReference = { literatureId: manualLiterature.literatureId };
+  const canonicalReference = { literatureId: confirmedLiterature.literatureId };
   const canonicalRead = await annotations.createAnnotation(literatureOwner, {
     body: "Canonical display data is hydrated only at the read boundary.",
     shareToPlaza: true,
@@ -775,13 +672,13 @@ try {
     }],
     visibility: "public"
   });
-  assert.equal(canonicalRead.targets[0].literature.literatureRecord.title, "Corrected Integration Literature");
-  assert.equal(canonicalRead.targets[0].evidence[0].literature.literatureRecord.title, "Corrected Integration Literature");
+  assert.equal(canonicalRead.targets[0].literature.literatureRecord.title, "Integration Confirmed Literature");
+  assert.equal(canonicalRead.targets[0].evidence[0].literature.literatureRecord.title, "Integration Confirmed Literature");
   const storedCanonicalTarget = await pool.query("SELECT target FROM annotation_targets WHERE annotation_id = $1", [canonicalRead.id]);
   const storedCanonicalEvidence = await pool.query("SELECT evidence FROM annotation_target_evidence WHERE target_id = (SELECT id FROM annotation_targets WHERE annotation_id = $1)", [canonicalRead.id]);
   assert.equal(storedCanonicalTarget.rows[0].target.literature.literatureRecord, undefined);
   assert.equal(storedCanonicalEvidence.rows[0].evidence.literature.literatureRecord, undefined);
-  const titleSearch = await annotations.plaza(userOne, { query: "Corrected Integration Literature" });
+  const titleSearch = await annotations.plaza(userOne, { query: "Integration Confirmed Literature" });
   assert.equal(titleSearch.some((annotation) => annotation.id === canonicalRead.id), true);
   await annotations.updateAnnotation(publicAnnotation.id, userOne, {
     body: `${sharedBody} 编辑后保留历史版本。`
@@ -1506,7 +1403,7 @@ try {
   const publicationOperation = {
     annotationId: "desktop-publication-1",
     body: "来自桌面端、只引用已确认文献的公开批注。",
-    literatureId: manualLiterature.literatureId,
+    literatureId: confirmedLiterature.literatureId,
     operation: "upsert",
     queueKey: "desktop-publication-queue-1",
     revision: 1,
@@ -1592,9 +1489,9 @@ try {
   const publicationRow = await pool.query("SELECT visibility, share_to_plaza FROM annotations WHERE id = $1", [publicationCreated.remoteAnnotationId]);
   assert.deepEqual(publicationRow.rows[0], { share_to_plaza: false, visibility: "private" });
   const publicationTarget = await pool.query("SELECT literature_id, target FROM annotation_targets WHERE annotation_id = $1", [publicationCreated.remoteAnnotationId]);
-  assert.equal(publicationTarget.rows[0].literature_id, manualLiterature.literatureId);
-  assert.deepEqual(publicationTarget.rows[0].target.literature, { literatureId: manualLiterature.literatureId });
-  assert.equal((await pool.query("SELECT title FROM literature_records WHERE id = $1", [manualLiterature.literatureId])).rows[0].title, "Corrected Integration Literature");
+  assert.equal(publicationTarget.rows[0].literature_id, confirmedLiterature.literatureId);
+  assert.deepEqual(publicationTarget.rows[0].target.literature, { literatureId: confirmedLiterature.literatureId });
+  assert.equal((await pool.query("SELECT title FROM literature_records WHERE id = $1", [confirmedLiterature.literatureId])).rows[0].title, "Integration Confirmed Literature");
   const [publishedDeletionPublication] = await annotations.applyDesktopAnnotationPublications(userOne, [{
     ...publicationOperation,
     annotationId: "desktop-publication-account-deletion",
@@ -1767,7 +1664,7 @@ try {
     body: "Compatibility sync must serialize with account deletion.",
     createdAt: "2026-08-09T07:10:00.000Z",
     queueKey: "legacy-sync-deletion-race",
-    targets: [{ kind: "whole_document", literature: { literatureId: manualLiterature.literatureId } }],
+    targets: [{ kind: "whole_document", literature: { literatureId: confirmedLiterature.literatureId } }],
     updatedAt: "2026-08-09T07:10:00.000Z"
   };
   const legacyRaceDeletionInput = {

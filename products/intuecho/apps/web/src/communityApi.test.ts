@@ -47,6 +47,8 @@ const confirmed: LiteratureRecord = {
     mode: "public_registry",
     provider: candidate.provider
   },
+  revision: 1,
+  status: "confirmed",
   title: candidate.record.title
 };
 

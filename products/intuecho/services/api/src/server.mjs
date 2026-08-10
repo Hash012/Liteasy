@@ -16,6 +16,7 @@ import {
   updateDraftSchema
 } from "@intuecho/contracts";
 import { createIdentityVerifier, IdentityVerificationError } from "./identityVerifier.mjs";
+import { loadDevelopmentLiteratureProviderConfig } from "./developmentLiteratureProviderConfig.mjs";
 import {
   assertIntuechoDevelopmentBoundary,
   prepareIntuechoDatabasePath,
@@ -88,8 +89,10 @@ export async function createIntuechoApp({
   authorizeOrganizationInvitation,
   authorizeOrganizationVisibility,
   listOrganizations,
+  literatureProviderConfig = loadDevelopmentLiteratureProviderConfig(),
   literatureRateLimiter,
   literatureResolver,
+  literatureServiceIdentityVerifier = createIdentityVerifier({ expectedAudience: "intuecho-internal" }),
   databasePath,
   desktopIdentityVerifier = createIdentityVerifier({ expectedAudience: "liteasy-desktop" }),
   desktopOrigins = (process.env.INTUECHO_DESKTOP_ORIGINS ?? "http://127.0.0.1:1420,http://localhost:1420,tauri://localhost,http://tauri.localhost")
@@ -105,6 +108,7 @@ export async function createIntuechoApp({
   await app.register(cors, { origin: [webOrigin, ...desktopOrigins] });
   app.decorateRequest("intuechoAdmin", null);
   app.decorateRequest("intuechoDesktopUser", null);
+  app.decorateRequest("intuechoLiteratureService", null);
   app.decorateRequest("intuechoUser", null);
   app.addHook("preHandler", async (request, reply) => {
     const authorization = request.headers.authorization;
@@ -114,7 +118,9 @@ export async function createIntuechoApp({
       return reply.code(401).send({ error: "INVALID_AUTHORIZATION", message: "登录凭据格式无效。", traceId: request.id });
     }
     try {
-      if (request.url.startsWith("/v1/admin/")) {
+      if (request.url.split("?", 1)[0] === "/v1/internal/literature:verify") {
+        request.intuechoLiteratureService = await literatureServiceIdentityVerifier(match[1]);
+      } else if (request.url.startsWith("/v1/admin/")) {
         request.intuechoAdmin = await adminIdentityVerifier(match[1]);
       } else if (isLiteratureRequest(request)) {
         try {
@@ -201,7 +207,7 @@ export async function createIntuechoApp({
     listOrganizations
   });
   const configuredLiteratureResolver = literatureResolver ?? createLiteratureResolver({
-    providers: createLiteratureProviders({}, { fetchImpl: globalThis.fetch }),
+    providers: createLiteratureProviders(literatureProviderConfig, { fetchImpl: globalThis.fetch }),
     repository: annotationCommunity
   });
   registerAnnotationCommunityRoutes(app, annotationCommunity, {
@@ -214,6 +220,11 @@ export async function createIntuechoApp({
     currentUser: (request) => request.intuechoUser ?? request.intuechoDesktopUser ?? null,
     rateLimiter: literatureRateLimiter ?? createLiteratureRateLimiter(),
     requireDesktopUser,
+    requireService: (request, reply) => {
+      if (request.intuechoLiteratureService) return request.intuechoLiteratureService;
+      reply.code(401).send({ error: "LITERATURE_SERVICE_AUTH_REQUIRED", traceId: request.id });
+      return null;
+    },
     requireUser,
     resolver: configuredLiteratureResolver
   });
@@ -275,79 +286,6 @@ export async function createIntuechoApp({
       if (!work || work.topic_id !== value.topicId) return "WORK_NOT_FOUND";
     }
     return null;
-  }
-
-  function annotationIdentity(item) {
-    return item.paperIdentity?.primary ?? item.scope.paperIdentity?.primary;
-  }
-
-  function syncCommunityAnnotations(user, items) {
-    const now = new Date().toISOString();
-    const upsert = db.prepare(`
-      INSERT INTO community_annotations(
-        id, owner_id, source_annotation_id, queue_key, paper_identity_kind,
-        paper_identity_value, scope_kind, scope_json, body, excerpt,
-        source_created_at, source_updated_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(owner_id, queue_key) DO UPDATE SET
-        source_annotation_id = excluded.source_annotation_id,
-        paper_identity_kind = excluded.paper_identity_kind,
-        paper_identity_value = excluded.paper_identity_value,
-        scope_kind = excluded.scope_kind,
-        scope_json = excluded.scope_json,
-        body = excluded.body,
-        excerpt = excluded.excerpt,
-        source_updated_at = excluded.source_updated_at,
-        updated_at = excluded.updated_at
-      WHERE excluded.source_updated_at >= community_annotations.source_updated_at
-    `);
-    return db.transaction(() => items.map((item) => {
-      const identity = annotationIdentity(item);
-      const prior = db.prepare("SELECT id FROM community_annotations WHERE owner_id = ? AND queue_key = ?")
-        .get(user.id, item.queueKey);
-      const id = prior?.id ?? `annotation-${randomUUID()}`;
-      upsert.run(
-        id, user.id, item.annotationId, item.queueKey, identity.kind, identity.value,
-        item.scope.kind, JSON.stringify(item.scope), item.body, item.excerpt,
-        item.createdAt, item.updatedAt, now, now
-      );
-      return {
-        annotationId: item.annotationId,
-        intuechoAnnotationId: id,
-        queueKey: item.queueKey,
-        status: "synced",
-        syncedAt: now
-      };
-    }))();
-  }
-
-  function communityRecommendations(scope) {
-    const rows = db.prepare(`
-      SELECT id, body, excerpt, paper_identity_kind, paper_identity_value, scope_kind, scope_json
-      FROM community_annotations
-      WHERE paper_identity_kind = ? AND paper_identity_value = ?
-      ORDER BY updated_at DESC, id
-      LIMIT 20
-    `).all(scope.paperIdentity.kind, scope.paperIdentity.value);
-    return rows.map((row) => {
-      const storedScope = JSON.parse(row.scope_json);
-      const exactSection = scope.kind === "section" && storedScope.kind === "section" &&
-        scope.sectionKey && storedScope.sectionKey === scope.sectionKey;
-      const exactPassage = scope.kind === "selected_passage" && storedScope.kind === "selected_passage";
-      return {
-        compatibility: exactSection ? 1 : exactPassage ? 0.9 : 0.7,
-        id: row.id,
-        note: row.body || row.excerpt,
-        paperIdentity: {
-          id: `${row.paper_identity_kind}:${row.paper_identity_value}`,
-          kind: row.paper_identity_kind,
-          source: "metadata",
-          value: row.paper_identity_value
-        },
-        relationship: exactSection ? "同一章节的社区批注" : exactPassage ? "同一文献选段的社区批注" : "同一文献的社区批注",
-        source: "intuecho_community"
-      };
-    });
   }
 
   app.get("/health", async () => ({ ok: true, service: "intuecho-api" }));

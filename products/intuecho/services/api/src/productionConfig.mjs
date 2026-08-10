@@ -86,11 +86,15 @@ export function loadIntuechoProductionConfig(env = process.env) {
   const apiClientId = clientId(env, "INTUECHO_IDP_CLIENT_ID");
   const webClientId = clientId(env, "INTUECHO_IDP_WEB_CLIENT_ID");
   const organizationServiceClientId = clientId(env, "INTUECHO_ORGANIZATION_SERVICE_CLIENT_ID");
+  const liteasyLiteratureServiceClientId = clientId(env, "INTUECHO_LITEASY_LITERATURE_SERVICE_CLIENT_ID");
   if (apiClientId === webClientId) {
     throw new Error("intuecho_config_invalid: API and public Web identity clients must be distinct");
   }
   if (new Set([apiClientId, webClientId]).has(organizationServiceClientId)) {
     throw new Error("intuecho_config_invalid: organization service identity client must be distinct");
+  }
+  if (new Set([apiClientId, webClientId, organizationServiceClientId]).has(liteasyLiteratureServiceClientId)) {
+    throw new Error("intuecho_config_invalid: literature projection service identity client must be distinct");
   }
   return Object.freeze({
     adminApiUrl: parseUrl(required(env, "INTUECHO_ADMIN_API_URL"), "INTUECHO_ADMIN_API_URL", environment),
@@ -115,6 +119,10 @@ export function loadIntuechoProductionConfig(env = process.env) {
       openAlexEndpoint: parseUrl(env.INTUECHO_OPENALEX_ENDPOINT ?? "https://api.openalex.org/works", "INTUECHO_OPENALEX_ENDPOINT", environment),
       semanticScholarApiKey: env.INTUECHO_SEMANTIC_SCHOLAR_API_KEY?.trim() || null,
       semanticScholarEndpoint: parseUrl(env.INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT ?? "https://api.semanticscholar.org/graph/v1/paper", "INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT", environment)
+    }),
+    literatureProjection: Object.freeze({
+      audience: "intuecho-internal",
+      clientId: liteasyLiteratureServiceClientId
     }),
     organizationAuthorization: Object.freeze({
       apiUrl: parseUrl(required(env, "INTUECHO_ORGANIZATION_API_URL"), "INTUECHO_ORGANIZATION_API_URL", environment),

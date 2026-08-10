@@ -2,6 +2,11 @@ import { normalizeLiteratureIdentifier } from "./literatureIdentity.mjs";
 
 const MAX_CANDIDATES = 10;
 const PROVIDER_TIMEOUT_MS = 3_000;
+const IDENTITY_PROVIDER_CAPABILITIES = Object.freeze([
+  "resolveIdentity",
+  "search",
+  "refetchForConfirmation"
+]);
 
 export class LiteratureProviderError extends Error {
   constructor(code = "LITERATURE_PROVIDER_UNAVAILABLE") {
@@ -197,10 +202,13 @@ function semanticScholarCandidate(paper) {
   const arxivId = publicIdentifier("arxiv_id", paper?.externalIds?.ArXiv);
   const title = bibliographicTitle(paper?.title);
   if (!semanticScholarId || !title) return null;
+  const isPublication = Boolean(nonEmptyString(paper?.venue, 300));
   return candidate({
     authors: bibliographicAuthors((paper.authors ?? []).map((author) => author?.name)),
-    documentType: paper.venue ? "publication" : undefined,
-    identifiers: uniqueIdentifiers([semanticScholarId, doi, arxivId]),
+    documentType: isPublication ? "publication" : arxivId ? "preprint" : undefined,
+    identifiers: uniqueIdentifiers(isPublication
+      ? [semanticScholarId, doi]
+      : [semanticScholarId, arxivId, doi?.value.startsWith("10.48550/arxiv.") ? doi : null]),
     provider: "semantic_scholar",
     recordUrl: httpsUrl(paper.url, `https://www.semanticscholar.org/paper/${encodeURIComponent(semanticScholarId.value)}`),
     title,
@@ -249,25 +257,30 @@ function createCrossrefProvider(endpoint, transport) {
     const projected = body ? crossrefCandidate(body.message) : null;
     return projected ? [projected] : [];
   }
+  async function fetchCandidate(candidateKey) {
+    const doi = parseCandidateKey(candidateKey, "crossref", "doi");
+    if (!doi) return null;
+    return (await byDoi(doi)).find((item) => item.candidateKey === candidateKey) ?? null;
+  }
+  async function search(input) {
+    const doi = normalizedDoi(input);
+    if (doi) return byDoi(doi);
+    const query = searchText(input);
+    if (!query) return [];
+    const url = new URL(endpoint);
+    url.searchParams.set("query.bibliographic", query);
+    url.searchParams.set("rows", String(requestedLimit(input)));
+    const body = await transport(url);
+    return (Array.isArray(body?.message?.items) ? body.message.items : [])
+      .map(crossrefCandidate).filter(Boolean).slice(0, requestedLimit(input));
+  }
   return Object.freeze({
+    capabilities: IDENTITY_PROVIDER_CAPABILITIES,
+    fetchCandidate,
     name: "crossref",
-    async fetchCandidate(candidateKey) {
-      const doi = parseCandidateKey(candidateKey, "crossref", "doi");
-      if (!doi) return null;
-      return (await byDoi(doi)).find((item) => item.candidateKey === candidateKey) ?? null;
-    },
-    async search(input) {
-      const doi = normalizedDoi(input);
-      if (doi) return byDoi(doi);
-      const query = searchText(input);
-      if (!query) return [];
-      const url = new URL(endpoint);
-      url.searchParams.set("query.bibliographic", query);
-      url.searchParams.set("rows", String(requestedLimit(input)));
-      const body = await transport(url);
-      return (Array.isArray(body?.message?.items) ? body.message.items : [])
-        .map(crossrefCandidate).filter(Boolean).slice(0, requestedLimit(input));
-    }
+    refetchForConfirmation: fetchCandidate,
+    resolveIdentity: search,
+    search
   });
 }
 
@@ -278,28 +291,33 @@ function createOpenAlexProvider(endpoint, apiKey, transport) {
     const body = await transport(url, { allowNotFound: true });
     return body ? openAlexCandidate(body) : null;
   }
-  return Object.freeze({
-    name: "openalex",
-    async fetchCandidate(candidateKey) {
-      const id = parseCandidateKey(candidateKey, "openalex", "openalex_id");
-      if (!id) return null;
-      const projected = await byId(id);
-      return projected?.candidateKey === candidateKey ? projected : null;
-    },
-    async search(input) {
-      const url = new URL(endpoint);
-      url.searchParams.set("api_key", apiKey);
-      const doi = normalizedDoi(input);
-      if (doi) url.searchParams.set("filter", `doi:${doi}`);
-      else {
-        const query = searchText(input);
-        if (!query) return [];
-        url.searchParams.set("search", query);
-      }
-      url.searchParams.set("per-page", String(requestedLimit(input)));
-      const body = await transport(url);
-      return (Array.isArray(body?.results) ? body.results : []).map(openAlexCandidate).filter(Boolean).slice(0, requestedLimit(input));
+  async function fetchCandidate(candidateKey) {
+    const id = parseCandidateKey(candidateKey, "openalex", "openalex_id");
+    if (!id) return null;
+    const projected = await byId(id);
+    return projected?.candidateKey === candidateKey ? projected : null;
+  }
+  async function search(input) {
+    const url = new URL(endpoint);
+    url.searchParams.set("api_key", apiKey);
+    const doi = normalizedDoi(input);
+    if (doi) url.searchParams.set("filter", `doi:${doi}`);
+    else {
+      const query = searchText(input);
+      if (!query) return [];
+      url.searchParams.set("search", query);
     }
+    url.searchParams.set("per-page", String(requestedLimit(input)));
+    const body = await transport(url);
+    return (Array.isArray(body?.results) ? body.results : []).map(openAlexCandidate).filter(Boolean).slice(0, requestedLimit(input));
+  }
+  return Object.freeze({
+    capabilities: IDENTITY_PROVIDER_CAPABILITIES,
+    fetchCandidate,
+    name: "openalex",
+    refetchForConfirmation: fetchCandidate,
+    resolveIdentity: search,
+    search
   });
 }
 
@@ -309,23 +327,28 @@ function createArxivProvider(endpoint, transport) {
     for (const [name, value] of Object.entries(searchParams)) url.searchParams.set(name, value);
     return arxivCandidates(await transport(url, { responseType: "text" }));
   }
-  return Object.freeze({
-    name: "arxiv",
-    async fetchCandidate(candidateKey) {
-      const id = parseCandidateKey(candidateKey, "arxiv", "arxiv_id");
-      if (!id) return null;
-      return (await requestEntries({ id_list: id, max_results: "1" })).find((item) => item.candidateKey === candidateKey) ?? null;
-    },
-    async search(input) {
-      const hinted = Array.isArray(input?.hints?.identifiers) ? input.hints.identifiers.find((item) => item?.kind === "arxiv_id")?.value : null;
-      const searchQuery = hinted ?? searchText(input);
-      if (!searchQuery) return [];
-      const arxivId = publicIdentifier("arxiv_id", searchQuery);
-      if (hinted || /^(?:arxiv:\s*)?\d{4}\.\d{4,5}(?:v\d+)?$/i.test(String(searchQuery).trim())) {
-        return requestEntries({ id_list: arxivId?.value ?? searchQuery, max_results: "1" });
-      }
-      return (await requestEntries({ max_results: String(requestedLimit(input)), search_query: `all:${searchQuery}` })).slice(0, requestedLimit(input));
+  async function fetchCandidate(candidateKey) {
+    const id = parseCandidateKey(candidateKey, "arxiv", "arxiv_id");
+    if (!id) return null;
+    return (await requestEntries({ id_list: id, max_results: "1" })).find((item) => item.candidateKey === candidateKey) ?? null;
+  }
+  async function search(input) {
+    const hinted = Array.isArray(input?.hints?.identifiers) ? input.hints.identifiers.find((item) => item?.kind === "arxiv_id")?.value : null;
+    const searchQuery = hinted ?? searchText(input);
+    if (!searchQuery) return [];
+    const arxivId = publicIdentifier("arxiv_id", searchQuery);
+    if (hinted || /^(?:arxiv:\s*)?\d{4}\.\d{4,5}(?:v\d+)?$/i.test(String(searchQuery).trim())) {
+      return requestEntries({ id_list: arxivId?.value ?? searchQuery, max_results: "1" });
     }
+    return (await requestEntries({ max_results: String(requestedLimit(input)), search_query: `all:${searchQuery}` })).slice(0, requestedLimit(input));
+  }
+  return Object.freeze({
+    capabilities: IDENTITY_PROVIDER_CAPABILITIES,
+    fetchCandidate,
+    name: "arxiv",
+    refetchForConfirmation: fetchCandidate,
+    resolveIdentity: search,
+    search
   });
 }
 
@@ -335,25 +358,30 @@ function createSemanticScholarProvider(endpoint, apiKey, transport) {
     const body = await transport(withPath(endpoint, id), { allowNotFound: true, headers });
     return body ? semanticScholarCandidate(body) : null;
   }
+  async function fetchCandidate(candidateKey) {
+    const id = parseCandidateKey(candidateKey, "semantic_scholar", "semantic_scholar_id");
+    if (!id) return null;
+    const projected = await byId(id);
+    return projected?.candidateKey === candidateKey ? projected : null;
+  }
+  async function search(input) {
+    const url = withPath(endpoint, "search");
+    const doi = normalizedDoi(input);
+    const query = doi ? `DOI:${doi}` : searchText(input);
+    if (!query) return [];
+    url.searchParams.set("limit", String(requestedLimit(input)));
+    url.searchParams.set("query", query);
+    url.searchParams.set("fields", "paperId,title,authors,year,externalIds,url,venue");
+    const body = await transport(url, { headers });
+    return (Array.isArray(body?.data) ? body.data : []).map(semanticScholarCandidate).filter(Boolean).slice(0, requestedLimit(input));
+  }
   return Object.freeze({
+    capabilities: IDENTITY_PROVIDER_CAPABILITIES,
+    fetchCandidate,
     name: "semantic_scholar",
-    async fetchCandidate(candidateKey) {
-      const id = parseCandidateKey(candidateKey, "semantic_scholar", "semantic_scholar_id");
-      if (!id) return null;
-      const projected = await byId(id);
-      return projected?.candidateKey === candidateKey ? projected : null;
-    },
-    async search(input) {
-      const url = withPath(endpoint, "search");
-      const doi = normalizedDoi(input);
-      const query = doi ? `DOI:${doi}` : searchText(input);
-      if (!query) return [];
-      url.searchParams.set("limit", String(requestedLimit(input)));
-      url.searchParams.set("query", query);
-      url.searchParams.set("fields", "paperId,title,authors,year,externalIds,url,venue");
-      const body = await transport(url, { headers });
-      return (Array.isArray(body?.data) ? body.data : []).map(semanticScholarCandidate).filter(Boolean).slice(0, requestedLimit(input));
-    }
+    refetchForConfirmation: fetchCandidate,
+    resolveIdentity: search,
+    search
   });
 }
 

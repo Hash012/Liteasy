@@ -1,7 +1,12 @@
-import { normalizeLiteratureIdentifier } from "./literatureIdentity.mjs";
+import {
+  hasCrossVersionIdentifierConflict,
+  normalizeLiteratureIdentifier,
+  sameLiteratureBibliography
+} from "./literatureIdentity.mjs";
 
 const MAX_CANDIDATES = 10;
 const stableKinds = new Set(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]);
+const primaryRegistryProviders = new Set(["crossref", "arxiv"]);
 
 export class LiteratureResolverError extends Error {
   constructor(code) {
@@ -64,7 +69,7 @@ function externalCandidate(value, providerName) {
   }
   const record = displayRecord(value.record);
   const primary = record?.identifiers[0];
-  if (!record || !primary || primary.source !== "public_registry") return null;
+  if (!record || !primary || primary.source !== "public_registry" || hasCrossVersionIdentifierConflict(record)) return null;
   const expectedKey = `${providerName}:${primary.kind}:${primary.value}`;
   if (value.candidateKey !== expectedKey) return null;
   let recordUrl = null;
@@ -91,6 +96,19 @@ function sharesIdentity(left, right) {
   return [...identityKeys(right)].some((key) => leftKeys.has(key));
 }
 
+function bibliographiesDoNotConflict(left, right) {
+  if (left.provider === "intuecho" || right.provider === "intuecho") return true;
+  const leftTitle = normalizeText(left.record.title);
+  const rightTitle = normalizeText(right.record.title);
+  if (leftTitle && rightTitle && leftTitle !== rightTitle) return false;
+  if (left.record.year !== undefined && right.record.year !== undefined && left.record.year !== right.record.year) return false;
+  const leftAuthors = left.record.authors.map(normalizeText).filter(Boolean).sort();
+  const rightAuthors = right.record.authors.map(normalizeText).filter(Boolean).sort();
+  return leftAuthors.length === 0 || rightAuthors.length === 0 || (
+    leftAuthors.length === rightAuthors.length && leftAuthors.every((author, index) => author === rightAuthors[index])
+  );
+}
+
 function attestsRequestedIdentity(candidate, requestedKeys) {
   return [...identityKeys(candidate)].some((key) => requestedKeys.has(key));
 }
@@ -101,13 +119,18 @@ function selectRepresentative(left, right, requestedKeys) {
   if (leftAttests !== rightAttests) return rightAttests ? right : left;
   if (left.provider === "intuecho") return left;
   if (right.provider === "intuecho") return right;
+  const leftPrimary = primaryRegistryProviders.has(left.provider);
+  const rightPrimary = primaryRegistryProviders.has(right.provider);
+  if (leftPrimary !== rightPrimary) return rightPrimary ? right : left;
   return left;
 }
 
 function rankAndDeduplicate(candidates, requestedKeys) {
   const ranked = [];
   for (const candidate of candidates) {
-    const matching = ranked.map((existing, index) => sharesIdentity(existing, candidate) ? index : -1).filter((index) => index >= 0);
+    const matching = ranked.map((existing, index) => sharesIdentity(existing, candidate) && bibliographiesDoNotConflict(existing, candidate)
+      ? index
+      : -1).filter((index) => index >= 0);
     if (matching.length === 0) {
       ranked.push(candidate);
       continue;
@@ -123,6 +146,21 @@ function rankAndDeduplicate(candidates, requestedKeys) {
     ranked.splice(0, ranked.length, ...retained);
   }
   return ranked;
+}
+
+function hasIdentityConflict(candidates) {
+  return candidates.some((candidate, index) => candidates.slice(index + 1).some((other) =>
+    sharesIdentity(candidate, other) && !bibliographiesDoNotConflict(candidate, other)));
+}
+
+function hasIndependentAggregateSupport(candidate, candidates) {
+  const providers = new Set(candidates
+    .filter((other) => other.provider !== "intuecho" &&
+      !primaryRegistryProviders.has(other.provider) &&
+      sharesIdentity(candidate, other) &&
+      bibliographiesDoNotConflict(candidate, other))
+    .map((other) => other.provider));
+  return providers.size >= 2;
 }
 
 function requestedLimit(input) {
@@ -159,19 +197,33 @@ function normalizeText(value) {
   return String(value ?? "").normalize("NFKC").toLocaleLowerCase("en-US").replace(/[\p{P}\p{S}\s]+/gu, " ").trim();
 }
 
-function matchesHighConfidenceHints(candidate, hints) {
-  if (!hints?.title || !hints?.year || !Array.isArray(hints.authors) || hints.authors.length === 0) return false;
-  if (normalizeText(candidate.record.title) !== normalizeText(hints.title) || candidate.record.year !== hints.year) return false;
-  const expectedAuthors = hints.authors.map(normalizeText).filter(Boolean);
-  const actualAuthors = candidate.record.authors.map(normalizeText).filter(Boolean);
-  return expectedAuthors.length > 0 && expectedAuthors.length === actualAuthors.length && expectedAuthors.every((author, index) => author === actualAuthors[index]);
+function isPdfIdentityPurpose(input) {
+  return input?.purpose === "liteasy_pdf_annotation";
+}
+
+function providerSupports(provider, capability, fallbackMethod) {
+  if (Array.isArray(provider?.capabilities)) return provider.capabilities.includes(capability);
+  return typeof provider?.[fallbackMethod] === "function";
+}
+
+function providerOperation(provider, capability) {
+  if (capability === "resolveIdentity") return provider.resolveIdentity ?? provider.search;
+  return provider.search;
+}
+
+function identityRelevantCandidate(input, candidate, requestedKeys) {
+  if (!isPdfIdentityPurpose(input)) return true;
+  if (requestedKeys.size > 0) return attestsRequestedIdentity(candidate, requestedKeys);
+  const requestedTitle = normalizeText(input?.hints?.title);
+  return Boolean(requestedTitle && normalizeText(candidate.record.title) === requestedTitle);
 }
 
 function exactCandidate(input, candidates) {
   const requested = requestedStableKeys(input);
   const byIdentifier = candidates.filter((candidate) => [...identityKeys(candidate)].some((key) => requested.has(key)));
-  if (byIdentifier.length > 0) return byIdentifier[0];
-  const highConfidence = candidates.filter((candidate) => matchesHighConfidenceHints(candidate, input?.hints));
+  if (byIdentifier.length === 1) return byIdentifier[0];
+  if (byIdentifier.length > 1) return null;
+  const highConfidence = candidates.filter((candidate) => sameLiteratureBibliography(candidate.record, input?.hints));
   return highConfidence.length === 1 ? highConfidence[0] : null;
 }
 
@@ -206,26 +258,37 @@ export function createLiteratureResolver({ providers, repository }) {
         if (exact) return { candidate: exact, status: "exact", unavailableProviders: [] };
       }
       const stored = await repository.searchStoredLiterature(query, limit);
-      const external = await Promise.allSettled(configuredProviders.map((provider) => provider.search(input)));
-      const unavailableProviders = external.flatMap((result, index) => result.status === "rejected" ? [configuredProviders[index].name] : []);
+      const capability = isPdfIdentityPurpose(input) ? "resolveIdentity" : "search";
+      const selectedProviders = configuredProviders.filter((provider) => providerSupports(provider, capability, "search"));
+      const external = await Promise.allSettled(selectedProviders.map((provider) => {
+        const operation = providerOperation(provider, capability);
+        return operation.call(provider, input);
+      }));
+      const unavailableProviders = external.flatMap((result, index) => result.status === "rejected" ? [selectedProviders[index].name] : []);
       const providerCandidates = external.flatMap((result, index) => result.status === "fulfilled"
-        ? (Array.isArray(result.value) ? result.value.map((candidate) => externalCandidate(candidate, configuredProviders[index].name)).filter(Boolean) : [])
+        ? (Array.isArray(result.value) ? result.value.map((candidate) => externalCandidate(candidate, selectedProviders[index].name)).filter(Boolean) : [])
         : []);
-      const candidates = rankAndDeduplicate([
+      const admittedCandidates = [
         ...(Array.isArray(stored) ? stored.map(internalCandidate).filter(Boolean) : []),
         ...providerCandidates
-      ], requestedKeys).slice(0, limit);
+      ].filter((candidate) => identityRelevantCandidate(input, candidate, requestedKeys));
+      if (hasIdentityConflict(admittedCandidates)) {
+        return { candidates: admittedCandidates.slice(0, limit), status: "conflict", unavailableProviders };
+      }
+      const candidates = rankAndDeduplicate(admittedCandidates, requestedKeys).slice(0, limit);
       const exact = exactCandidate(input, candidates);
-      if (exact) return { candidate: exact, status: "exact", unavailableProviders };
+      if (exact && (exact.provider === "intuecho" || primaryRegistryProviders.has(exact.provider) ||
+        hasIndependentAggregateSupport(exact, admittedCandidates))) {
+        return { candidate: exact, status: "exact", unavailableProviders };
+      }
       if (candidates.length) return { candidates, status: "ambiguous", unavailableProviders };
-      if (configuredProviders.length > 0 && external.every((result) => result.status === "rejected")) {
+      if (selectedProviders.length > 0 && external.every((result) => result.status === "rejected")) {
         return { retryable: true, status: "unavailable", unavailableProviders };
       }
       return { candidates: [], status: "not_found", unavailableProviders };
     },
 
     async confirm(owner, input) {
-      if (input?.mode === "manual") return repository.confirmLiterature(owner, input);
       const parts = candidateKeyParts(input?.candidateKey);
       if (!parts) throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
       if (parts.provider === "intuecho") {
@@ -233,13 +296,15 @@ export function createLiteratureResolver({ providers, repository }) {
         if (!stored) throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
         return stored;
       }
-      const provider = configuredProviders.find((item) => item.name === parts.provider);
-      if (!provider || typeof provider.fetchCandidate !== "function") {
+      const provider = configuredProviders.find((item) => item.name === parts.provider &&
+        providerSupports(item, "refetchForConfirmation", "fetchCandidate"));
+      const refetch = provider?.refetchForConfirmation ?? provider?.fetchCandidate;
+      if (!provider || typeof refetch !== "function") {
         throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
       }
       let verified;
       try {
-        verified = await provider.fetchCandidate(input.candidateKey);
+        verified = await refetch.call(provider, input.candidateKey);
       } catch {
         throw new LiteratureResolverError("LITERATURE_PROVIDER_UNAVAILABLE");
       }
@@ -250,8 +315,17 @@ export function createLiteratureResolver({ providers, repository }) {
       return repository.confirmRefetchedLiterature(owner, {
         candidateKey: candidate.candidateKey,
         provider: candidate.provider,
-        record: candidate.record
+        record: candidate.record,
+        ...(candidate.recordUrl ? { recordUrl: candidate.recordUrl } : {})
       });
+    },
+
+    async verifyProjection(literatureId, revision) {
+      return repository.verifyLiteratureProjection(literatureId, revision);
+    },
+
+    async relations(literatureId) {
+      return repository.findLiteratureRelations(literatureId);
     }
   });
 }

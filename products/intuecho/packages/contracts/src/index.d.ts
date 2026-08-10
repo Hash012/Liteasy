@@ -28,18 +28,6 @@ export type LiteratureCandidate = {
   recordUrl?: string;
 };
 
-export type ManualLiteratureInput = {
-  authors: string[];
-  documentType?: string;
-  identifiers: Array<{
-    kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id";
-    source: "manual";
-    value: string;
-  }>;
-  title: string;
-  year?: number;
-};
-
 export type LiteratureRecord = {
   authors: string[];
   documentType?: string;
@@ -47,9 +35,11 @@ export type LiteratureRecord = {
   literatureId: string;
   provenance: {
     confirmedAt: string;
-    mode: "public_registry" | "manual";
+    mode: "public_registry";
     provider?: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar";
   };
+  revision: number;
+  status: "confirmed";
   title: string;
   year?: number;
 };
@@ -58,6 +48,11 @@ export type LiteratureResolveInput = {
   hints?: {
     authors?: string[];
     identifiers?: Array<{ kind: LiteratureIdentifierKind; value: string }>;
+    pmlr?: {
+      source: "pmlr";
+      volume: number;
+      year: number;
+    };
     title?: string;
     year?: number;
   };
@@ -73,18 +68,31 @@ export type LiteratureProviderAvailability = {
 export type LiteratureResolveResult =
   | ({ candidate: LiteratureCandidate; status: "exact" } & LiteratureProviderAvailability)
   | ({ candidates: LiteratureCandidate[]; status: "ambiguous" } & LiteratureProviderAvailability)
+  | ({ candidates: LiteratureCandidate[]; status: "conflict" } & LiteratureProviderAvailability)
   | ({ candidates: []; status: "not_found" } & LiteratureProviderAvailability)
   | ({ retryable: true; status: "unavailable" } & LiteratureProviderAvailability);
 
-export type LiteratureConfirmInput =
-  | { candidateKey: string; mode: "candidate" }
-  | { mode: "manual"; record: ManualLiteratureInput };
+export type LiteratureConfirmInput = { candidateKey: string; mode: "candidate" };
+
+export type LiteratureProjectionVerification = { literatureId: string; revision: number };
+
+export type LiteratureRelationType = "is_preprint_of" | "version_of" | "translation_of";
+
+export type LiteratureRelation = {
+  createdAt: string;
+  evidence: Record<string, unknown>;
+  fromLiteratureId: string;
+  provider: "intuecho" | "openalex" | "crossref" | "arxiv" | "semantic_scholar";
+  relationType: LiteratureRelationType;
+  toLiteratureId: string;
+  verificationStatus: "confirmed";
+};
 
 export type ConfirmedLiteratureReference = { literatureId: string };
 
 export type PaperIdentity = {
   id: string;
-  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "title_authors_year_hash";
+  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "title_authors_year_hash";
   source: "inferred" | "metadata";
   value: string;
 };
@@ -116,7 +124,7 @@ export type SourcePassage = {
 };
 
 export type SourceEvidence = SourcePassage & {
-  literature: LiteratureReference;
+  literature: ConfirmedLiteratureReference;
 };
 
 export type SourcePassageInput = Omit<SourcePassage, "rects"> & {
@@ -124,11 +132,11 @@ export type SourcePassageInput = Omit<SourcePassage, "rects"> & {
 };
 
 export type SourceEvidenceInput = SourcePassageInput & {
-  literature: LiteratureReference;
+  literature: ConfirmedLiteratureReference;
 };
 
 export type AnnotationTarget =
-  | { kind: "whole_document"; literature: LiteratureReference }
+  | { kind: "whole_document"; literature: ConfirmedLiteratureReference }
   | ({ kind: "source_passage" } & SourceEvidence)
   | {
       derivedContent: {
@@ -139,11 +147,11 @@ export type AnnotationTarget =
       };
       evidence: SourceEvidence[];
       kind: "derived_passage";
-      literature: LiteratureReference;
+      literature: ConfirmedLiteratureReference;
     };
 
 export type AnnotationTargetInput =
-  | { kind: "whole_document"; literature: LiteratureReference }
+  | { kind: "whole_document"; literature: ConfirmedLiteratureReference }
   | ({ kind: "source_passage" } & SourceEvidenceInput)
   | {
       derivedContent: {
@@ -154,7 +162,7 @@ export type AnnotationTargetInput =
       };
       evidence: SourceEvidenceInput[];
       kind: "derived_passage";
-      literature: LiteratureReference;
+      literature: ConfirmedLiteratureReference;
     };
 
 export type DesktopAnnotationPublicationOperation =
@@ -211,10 +219,12 @@ export declare const literatureIdentifierKindSchema: z.ZodType<LiteratureIdentif
 export declare const literatureSourceSchema: z.ZodType<LiteratureSource>;
 export declare const literatureIdentifierSchema: z.ZodType<LiteratureIdentifier>;
 export declare const literatureCandidateSchema: z.ZodType<LiteratureCandidate>;
-export declare const manualLiteratureInputSchema: z.ZodType<ManualLiteratureInput>;
 export declare const literatureRecordSchema: z.ZodType<LiteratureRecord>;
 export declare const literatureResolveInputSchema: z.ZodType<LiteratureResolveInput>;
 export declare const literatureConfirmInputSchema: z.ZodType<LiteratureConfirmInput>;
+export declare const literatureProjectionVerificationSchema: z.ZodType<LiteratureProjectionVerification>;
+export declare const literatureRelationTypeSchema: z.ZodType<LiteratureRelationType>;
+export declare const literatureRelationSchema: z.ZodType<LiteratureRelation>;
 export declare const confirmedLiteratureReferenceSchema: z.ZodType<ConfirmedLiteratureReference>;
 export declare const literatureReferenceSchema: z.ZodType<LiteratureReference>;
 export declare const annotationTargetSchema: z.ZodType<AnnotationTarget>;

@@ -89,7 +89,6 @@ function errorMessage(code) {
     INVALID_ANNOTATIONS: "公开批注数据不符合要求。",
     INVALID_HANDOFF: "Liteasy 草稿交接数据不符合要求。",
     INVALID_LITERATURE_QUERY: "文献检索请求不符合要求。",
-    INVALID_MANUAL_LITERATURE: "手动文献记录不符合要求。",
     INVALID_RECOMMENDATION_SCOPE: "社区推荐范围不符合要求。",
     INVALID_CITATION: "这份草稿没有可用的原文上下文。",
     INVALID_ACCOUNT_LIFECYCLE: "账号生命周期请求不符合要求。",
@@ -104,6 +103,7 @@ function errorMessage(code) {
     LITERATURE_CANDIDATE_NOT_FOUND: "找不到可确认的文献候选项。",
     LITERATURE_IDENTITY_CONFLICT: "文献标识与已有记录冲突。",
     LITERATURE_PROVIDER_UNAVAILABLE: "文献提供方暂时不可用，请稍后重试。",
+    LITERATURE_PROJECTION_NOT_CONFIRMED: "文献投影版本未确认或已过期。",
     LITERATURE_RATE_LIMITED: "文献检索请求过于频繁，请稍后重试。",
     mfa_required: "此管理操作需要多因素认证。",
     NOT_POST_AUTHOR: "只能撤回自己的公开内容。",
@@ -130,6 +130,7 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   });
   app.decorateRequest("intuechoAdmin", null);
   app.decorateRequest("intuechoDesktopUser", null);
+  app.decorateRequest("intuechoLiteratureService", null);
   app.decorateRequest("intuechoUser", null);
 
   app.addHook("onSend", async (_request, reply, payload) => {
@@ -141,6 +142,17 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   app.addHook("preHandler", async (request) => {
     const authorization = request.headers.authorization;
     if (!authorization) return;
+    if (request.url.split("?", 1)[0] === "/v1/internal/literature:verify") {
+      const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+        authorization,
+        config.literatureProjection.audience
+      );
+      if (identity.clientId !== config.literatureProjection.clientId) {
+        throw new ProductionIdentityError("literature_service_forbidden", 403);
+      }
+      request.intuechoLiteratureService = identity;
+      return;
+    }
     if (request.url.startsWith("/v1/admin/")) {
       const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
         authorization,
@@ -237,6 +249,10 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
     currentUser: (request) => request.intuechoUser ?? request.intuechoDesktopUser ?? null,
     rateLimiter: runtime.literatureRateLimiter ?? createLiteratureRateLimiter(),
     requireDesktopUser,
+    requireService: (request) => {
+      if (!request.intuechoLiteratureService) throw new ProductionIdentityError("authentication_required");
+      return request.intuechoLiteratureService;
+    },
     requireUser,
     resolver: runtime.literatureResolver
   });
