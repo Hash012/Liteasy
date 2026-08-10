@@ -13,6 +13,7 @@ import {
   persistPdfByteStream,
   purgeLocalLibraryTrashItem,
   readLocalLibraryPdf,
+  trashLocalMetadataEntry,
   trashLocalLibraryResource
 } from "../features/library/libraryFileSystemClient";
 import { sanitizeExternalPdfFileName } from "../features/library/externalPdfDownload";
@@ -156,13 +157,15 @@ export function useLibraryResourceTransferController(input: Input) {
         }
       }
 
+      const createdMetadataEntryIds: string[] = [];
       async function copyEntryToLocal(entrySource: LibraryResourceEntrySource, folderPath: string) {
         if (entrySource.area === "local") {
           if (!entrySource.entry.path) {
-            await addMetadataOnlyLibraryEntry({
+            const result = await addMetadataOnlyLibraryEntry({
               sourceId: entrySource.entry.id,
               title: entrySource.entry.title
             });
+            if (result.created) createdMetadataEntryIds.push(result.documentId);
             return;
           }
           const bytes = await readLocalLibraryPdf(entrySource.entry.path);
@@ -176,12 +179,13 @@ export function useLibraryResourceTransferController(input: Input) {
           return;
         }
         if (entrySource.entry.entryKind === "metadata_only") {
-          await addMetadataOnlyLibraryEntry({
+          const result = await addMetadataOnlyLibraryEntry({
             doi: entrySource.entry.doi,
             externalUrl: entrySource.entry.externalUrl,
             sourceId: entrySource.entry.sourceId ?? entrySource.entry.documentId,
             title: entrySource.entry.title
           });
+          if (result.created) createdMetadataEntryIds.push(result.documentId);
           return;
         }
         const stream = await client.downloadDocumentStream(
@@ -215,6 +219,7 @@ export function useLibraryResourceTransferController(input: Input) {
         try {
           await copyLocalTree(source.tree, parentPath);
         } catch (error) {
+          let cleanupComplete = true;
           if (createdRootPath) {
             try {
               const trashed = await trashLocalLibraryResource(createdRootPath);
@@ -222,9 +227,21 @@ export function useLibraryResourceTransferController(input: Input) {
                 entry.originalRelativePath.endsWith(source.tree.name)
               );
               if (createdTrash) await purgeLocalLibraryTrashItem(createdTrash.trashId);
+              else cleanupComplete = false;
             } catch {
-              throw new Error(`目录复制失败且清理未完成：${error instanceof Error ? error.message : String(error)}`);
+              cleanupComplete = false;
             }
+          }
+          for (const documentId of createdMetadataEntryIds.reverse()) {
+            try {
+              const trashed = await trashLocalMetadataEntry(documentId);
+              await purgeLocalLibraryTrashItem(trashed.trashId);
+            } catch {
+              cleanupComplete = false;
+            }
+          }
+          if (!cleanupComplete) {
+            throw new Error(`目录复制失败且清理未完成：${error instanceof Error ? error.message : String(error)}`);
           }
           throw error;
         }

@@ -184,6 +184,7 @@ type ExplorerFolder = {
   label: string;
   localPath?: string;
   sourceFolder?: LibraryResourceFolderOrigin;
+  unfilteredFolder?: ExplorerFolder;
   virtual?: boolean;
 };
 
@@ -318,7 +319,7 @@ function filterTree(tree: ExplorerTree, query: string): ExplorerTree {
     const children = filterFolders(folder.children);
     const entries = folder.entries.filter((entry) => entry.label.toLocaleLowerCase().includes(query));
     return folder.label.toLocaleLowerCase().includes(query) || children.length > 0 || entries.length > 0
-      ? [{ ...folder, children, entries }]
+      ? [{ ...folder, children, entries, unfilteredFolder: folder }]
       : [];
   });
   return {
@@ -346,8 +347,12 @@ function folderTransferTree(folder: ExplorerFolder): LibraryResourceFolderTree {
 }
 
 function folderTransferSource(folder: ExplorerFolder): LibraryResourceFolderSource | null {
+  const sourceFolder = folder.unfilteredFolder ?? folder;
   return folder.sourceFolder
-    ? { ...folder.sourceFolder, tree: folderTransferTree(folder) } as LibraryResourceFolderSource
+    ? {
+        ...folder.sourceFolder,
+        tree: folderTransferTree(sourceFolder)
+      } as LibraryResourceFolderSource
     : null;
 }
 

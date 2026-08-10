@@ -917,12 +917,13 @@ export function createCloudRequestHandler(runtime, config) {
           "liteasy-desktop"
         );
         const body = await readJsonBody(request);
+        const accessCapability = url.pathname.endsWith("/authorize") ? "read" : "export";
         const mode = url.pathname.endsWith("/export") ? "export" : "download";
         const scope = await authorizeLibraryScope(
           runtime.pool,
           identity,
           body,
-          mode === "export" ? "export" : "read"
+          accessCapability
         );
         const document = await runtime.libraryRepository.getDownloadablePdf(scope, body.documentId);
         const auditAction = url.pathname.endsWith("/authorize")

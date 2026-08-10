@@ -66,7 +66,8 @@ import { createExternalKnowledgeRunRepository } from "./db/externalKnowledgeRunR
 import { createGrobidParseCacheRepository } from "./db/grobidParseCacheRepository.mjs";
 import {
   createLibraryStorageRepository,
-  LibraryStorageError
+  LibraryStorageError,
+  parseLibraryRevision
 } from "./db/libraryStorageRepository.mjs";
 import { IntuechoLiteratureClient } from "../../products/liteasy/services/api/src/intuechoLiteratureClient.mjs";
 import {
@@ -733,6 +734,15 @@ function libraryMutationKey(request, body = {}) {
       : "";
 }
 
+function libraryMutationRequest(body = {}) {
+  const {
+    idempotencyKey: _idempotencyKey,
+    sessionId: _sessionId,
+    ...requestInput
+  } = body;
+  return requestInput;
+}
+
 function executeLibraryMutation(
   request,
   repository,
@@ -741,14 +751,7 @@ function executeLibraryMutation(
   operationKind,
   operation
 ) {
-  const expectedRevision = Number(body.expectedRevision);
-  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
-    throw new LibraryStorageError(
-      "invalid_library_revision",
-      "A valid expected library revision is required."
-    );
-  }
-  const { sessionId: _sessionId, ...requestInput } = body;
+  parseLibraryRevision(body.expectedRevision);
   const result = repository.runIdempotent(
     scope.actorId,
     libraryMutationKey(request, body),
@@ -763,7 +766,7 @@ function executeLibraryMutation(
       }
       return value;
     },
-    requestInput
+    libraryMutationRequest(body)
   );
   return {
     ...result.value,
@@ -2470,7 +2473,9 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
       try {
         const snapshot = personalizationRepository.recordSignal(body.sessionId, body.signal);
-        clearRecommendationCacheForSession(body.sessionId);
+        if (snapshot.enabled) {
+          clearRecommendationCacheForSession(body.sessionId);
+        }
         writeJson(request, response, 200, snapshot);
       } catch (error) {
         if (error instanceof PersonalizationValidationError) {
@@ -2839,7 +2844,8 @@ export function createDevCloudRequestHandler(customConfig = {}) {
                   canModerate: canManageOrganizationLibrary(scope),
                   expectedRevision: body.expectedRevision,
                   organizationId: scope.scopeId
-                })
+                }),
+          libraryMutationRequest(body)
         );
         writeJson(request, response, 200, { ...result.value, replayed: result.replayed });
       } catch (error) {
@@ -3061,19 +3067,29 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
       try {
         await validateLibraryPdfSecurity(staged, customConfig);
+        const mutationBody = {
+          ...authBody,
+          byteLength: staged.byteLength,
+          contentHash: staged.contentHash,
+          duplicateAction: request.headers["x-liteasy-duplicate-action"],
+          fileName,
+          folderId: request.headers["x-liteasy-folder-id"],
+          scopeId: scope.scopeId,
+          scopeType: scope.scopeType
+        };
         const payload = executeLibraryMutation(
           request,
           libraryStorageRepository,
           scope,
-          authBody,
+          mutationBody,
           "upload_library_document",
           () => libraryStorageRepository.uploadStagedDocument({
-            byteLength: staged.byteLength,
-            contentHash: staged.contentHash,
-            duplicateAction: request.headers["x-liteasy-duplicate-action"],
-            expectedRevision: authBody.expectedRevision,
-            fileName,
-            folderId: request.headers["x-liteasy-folder-id"],
+            byteLength: mutationBody.byteLength,
+            contentHash: mutationBody.contentHash,
+            duplicateAction: mutationBody.duplicateAction,
+            expectedRevision: mutationBody.expectedRevision,
+            fileName: mutationBody.fileName,
+            folderId: mutationBody.folderId,
             scopeId: scope.scopeId,
             scopeType: scope.scopeType,
             stagedPath: staged.stagedPath,
@@ -3137,19 +3153,28 @@ export function createDevCloudRequestHandler(customConfig = {}) {
       }
       try {
         await validateLibraryPdfSecurity(staged, customConfig);
+        const mutationBody = {
+          ...authBody,
+          byteLength: staged.byteLength,
+          contentHash: staged.contentHash,
+          documentId: authBody.documentId,
+          fileName,
+          scopeId: scope.scopeId,
+          scopeType: scope.scopeType
+        };
         writeJson(request, response, 200, executeLibraryMutation(
           request,
           libraryStorageRepository,
           scope,
-          authBody,
+          mutationBody,
           "attach_library_entry_pdf",
           () => ({
             entry: libraryStorageRepository.attachMetadataEntryStagedPdf({
-              byteLength: staged.byteLength,
-              contentHash: staged.contentHash,
-              documentId: authBody.documentId,
-              expectedRevision: authBody.expectedRevision,
-              fileName,
+              byteLength: mutationBody.byteLength,
+              contentHash: mutationBody.contentHash,
+              documentId: mutationBody.documentId,
+              expectedRevision: mutationBody.expectedRevision,
+              fileName: mutationBody.fileName,
               scopeId: scope.scopeId,
               scopeType: scope.scopeType,
               stagedPath: staged.stagedPath,

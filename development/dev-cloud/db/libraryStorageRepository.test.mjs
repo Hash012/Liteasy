@@ -32,6 +32,20 @@ function createHarness(start = new Date("2026-08-02T00:00:00.000Z")) {
   };
 }
 
+function withRevision(harness, scopeType, scopeId, input = {}) {
+  return {
+    ...input,
+    expectedRevision: harness.repository.getRevision(scopeType, scopeId)
+  };
+}
+
+function assertInvalidRevision(operation) {
+  assert.throws(
+    operation,
+    (error) => error instanceof LibraryStorageError && error.code === "invalid_library_revision"
+  );
+}
+
 const pdf = Buffer.from("%PDF-1.7\nLiteasy storage fixture\n%%EOF");
 const confirmedLiterature = {
   authors: ["Ada Lovelace"],
@@ -53,6 +67,7 @@ test("logical copies consume quota twice while the physical object is deduplicat
   try {
     harness.repository.setQuota("user", "user:alice", pdf.length * 3);
     const first = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Paper.pdf",
       scopeId: "user:alice",
@@ -60,6 +75,7 @@ test("logical copies consume quota twice while the physical object is deduplicat
       uploadedBy: "user:alice"
     });
     const prompt = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Paper.pdf",
       scopeId: "user:alice",
@@ -70,6 +86,7 @@ test("logical copies consume quota twice while the physical object is deduplicat
     assert.deepEqual(prompt.duplicates.map((item) => item.documentId), [first.document.documentId]);
 
     const second = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       duplicateAction: "save_copy",
       fileName: "Paper.pdf",
@@ -94,6 +111,7 @@ test("trash keeps logical quota and hides team annotations until restore", () =>
   const harness = createHarness();
   try {
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "organization", "org-1"),
       bytes: pdf,
       fileName: "Shared.pdf",
       scopeId: "org-1",
@@ -109,18 +127,26 @@ test("trash keeps logical quota and hides team annotations until restore", () =>
     });
     assert.equal(harness.repository.listTeamAnnotations("org-1", upload.document.documentId).length, 1);
 
-    const trashed = harness.repository.trashDocument(upload.document.documentId, {
-      scopeId: "org-1",
-      scopeType: "organization"
-    });
+    const trashed = harness.repository.trashDocument(
+      upload.document.documentId,
+      {
+        scopeId: "org-1",
+        scopeType: "organization"
+      },
+      withRevision(harness, "organization", "org-1")
+    );
     assert.equal(trashed.status, "trashed");
     assert.equal(harness.repository.getQuota("organization", "org-1").usedBytes, pdf.length);
     assert.deepEqual(harness.repository.listTeamAnnotations("org-1", upload.document.documentId), []);
 
-    harness.repository.restoreDocument(upload.document.documentId, {
-      scopeId: "org-1",
-      scopeType: "organization"
-    });
+    harness.repository.restoreDocument(
+      upload.document.documentId,
+      {
+        scopeId: "org-1",
+        scopeType: "organization"
+      },
+      withRevision(harness, "organization", "org-1")
+    );
     assert.equal(
       harness.repository.listTeamAnnotations("org-1", upload.document.documentId)[0].annotationId,
       annotation.annotationId
@@ -134,6 +160,7 @@ test("team annotation writes share library revision and idempotency boundaries",
   const harness = createHarness();
   try {
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "organization", "org-annotations"),
       bytes: pdf,
       fileName: "Shared.pdf",
       scopeId: "org-annotations",
@@ -141,11 +168,14 @@ test("team annotation writes share library revision and idempotency boundaries",
       uploadedBy: "member-1"
     });
     const expectedRevision = harness.repository.getRevision("organization", "org-annotations");
-    const createAnnotation = () => harness.repository.uploadTeamAnnotation({
+    const requestInput = {
       body: { comment: "reviewed" },
       documentId: upload.document.documentId,
       expectedRevision,
-      organizationId: "org-annotations",
+      organizationId: "org-annotations"
+    };
+    const createAnnotation = () => harness.repository.uploadTeamAnnotation({
+      ...requestInput,
       uploadedBy: "member-1"
     });
 
@@ -153,13 +183,15 @@ test("team annotation writes share library revision and idempotency boundaries",
       "member-1",
       "annotation-op-1",
       "upload_team_annotation",
-      createAnnotation
+      createAnnotation,
+      requestInput
     );
     const replay = harness.repository.runIdempotent(
       "member-1",
       "annotation-op-1",
       "upload_team_annotation",
-      createAnnotation
+      createAnnotation,
+      requestInput
     );
 
     assert.equal(first.replayed, false);
@@ -186,16 +218,21 @@ test("expired trash releases the logical copy and removes an unreferenced object
   const harness = createHarness();
   try {
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Disposable.pdf",
       scopeId: "user:alice",
       scopeType: "user",
       uploadedBy: "user:alice"
     });
-    harness.repository.trashDocument(upload.document.documentId, {
-      scopeId: "user:alice",
-      scopeType: "user"
-    });
+    harness.repository.trashDocument(
+      upload.document.documentId,
+      {
+        scopeId: "user:alice",
+        scopeType: "user"
+      },
+      withRevision(harness, "user", "user:alice")
+    );
     harness.advance(30 * 24 * 60 * 60 * 1000 + 1);
     assert.deepEqual(harness.repository.purgeExpired(), { purgedCount: 1 });
     assert.equal(harness.repository.getQuota("user", "user:alice").usedBytes, 0);
@@ -210,6 +247,7 @@ test("quota is enforced against logical bytes, including duplicate copies", () =
   try {
     harness.repository.setQuota("user", "user:alice", pdf.length);
     harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Paper.pdf",
       scopeId: "user:alice",
@@ -218,6 +256,7 @@ test("quota is enforced against logical bytes, including duplicate copies", () =
     });
     assert.throws(
       () => harness.repository.uploadDocument({
+        ...withRevision(harness, "user", "user:alice"),
         bytes: pdf,
         duplicateAction: "save_copy",
         fileName: "Paper.pdf",
@@ -238,6 +277,7 @@ test("a failed database mutation removes its staged and newly committed object",
     harness.repository.setQuota("user", "user:alice", 0);
     assert.throws(
       () => harness.repository.uploadDocument({
+        ...withRevision(harness, "user", "user:alice"),
         bytes: pdf,
         fileName: "Rejected.pdf",
         scopeId: "user:alice",
@@ -267,6 +307,7 @@ test("an object publish failure leaves no visible document or database reference
     ), { recursive: true });
 
     assert.throws(() => harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Publish failure.pdf",
       scopeId: "user:alice",
@@ -291,6 +332,7 @@ test("an attachment publish failure preserves the metadata-only entry", () => {
   const harness = createHarness();
   try {
     const metadata = harness.repository.createMetadataEntry({
+      ...withRevision(harness, "user", "user:alice"),
       scopeId: "user:alice",
       scopeType: "user",
       title: "Metadata survives"
@@ -304,6 +346,7 @@ test("an attachment publish failure preserves the metadata-only entry", () => {
     ), { recursive: true });
 
     assert.throws(() => harness.repository.attachMetadataEntryPdf({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       documentId: metadata.documentId,
       fileName: "Metadata survives.pdf",
@@ -326,6 +369,7 @@ test("object reconciliation removes old staging and orphan files and repairs ref
   const harness = createHarness();
   try {
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Durable.pdf",
       scopeId: "user:alice",
@@ -373,6 +417,7 @@ test("object reconciliation reports referenced bytes that are missing", () => {
   const harness = createHarness();
   try {
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Missing.pdf",
       scopeId: "user:alice",
@@ -397,6 +442,7 @@ test("object reconciliation detects same-length content corruption", () => {
   const harness = createHarness();
   try {
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Corrupt.pdf",
       scopeId: "user:alice",
@@ -424,6 +470,7 @@ test("object reconciliation commits a validated stage left after the database tr
   const harness = createHarness();
   try {
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Recoverable.pdf",
       scopeId: "user:alice",
@@ -457,6 +504,7 @@ test("attaching a PDF upgrades metadata in place and creates a durable object re
   const harness = createHarness();
   try {
     const metadata = harness.repository.createMetadataEntry({
+      ...withRevision(harness, "user", "user:alice"),
       doi: "10.1000/liteasy",
       metadata: { authors: ["Ada"] },
       scopeId: "user:alice",
@@ -491,6 +539,7 @@ test("metadata-only entries can be renamed without becoming PDF documents", () =
   const harness = createHarness();
   try {
     const metadata = harness.repository.createMetadataEntry({
+      ...withRevision(harness, "user", "user:alice"),
       scopeId: "user:alice",
       scopeType: "user",
       title: "Before rename"
@@ -641,6 +690,7 @@ test("idempotency replays the stored response and rejects cross-operation key re
   const harness = createHarness();
   try {
     let calls = 0;
+    const requestInput = { expectedRevision: 0, name: "Research" };
     const create = () => {
       calls += 1;
       return {
@@ -657,13 +707,15 @@ test("idempotency replays the stored response and rejects cross-operation key re
       "user:alice",
       "operation-1",
       "create_folder",
-      create
+      create,
+      requestInput
     );
     const replay = harness.repository.runIdempotent(
       "user:alice",
       "operation-1",
       "create_folder",
-      create
+      create,
+      requestInput
     );
     assert.equal(calls, 1);
     assert.equal(first.replayed, false);
@@ -674,10 +726,71 @@ test("idempotency replays the stored response and rejects cross-operation key re
         "user:alice",
         "operation-1",
         "trash_folder",
-        () => ({})
+        () => ({}),
+        requestInput
       ),
       (error) => error instanceof LibraryStorageError && error.code === "idempotency_key_reused"
     );
+  } finally {
+    harness.close();
+  }
+});
+
+test("idempotency requires a verifiable request and rejects legacy null-hash replays", () => {
+  const harness = createHarness();
+  try {
+    let calls = 0;
+    assert.throws(
+      () => harness.repository.runIdempotent(
+        "user:alice",
+        "short",
+        "create_folder",
+        () => {
+          calls += 1;
+          return { ok: true };
+        },
+        { expectedRevision: 0, name: "Research" }
+      ),
+      (error) => error instanceof LibraryStorageError && error.code === "invalid_idempotency_key"
+    );
+    assert.throws(
+      () => harness.repository.runIdempotent(
+        "user:alice",
+        "operation-missing-request",
+        "create_folder",
+        () => {
+          calls += 1;
+          return { ok: true };
+        }
+      ),
+      (error) => error instanceof LibraryStorageError && error.code === "invalid_idempotency_request"
+    );
+
+    harness.database.prepare(`
+      INSERT INTO library_idempotency_keys (
+        actor_key, operation_key, operation_kind, request_hash, response_json, created_at
+      ) VALUES (?, ?, ?, NULL, ?, ?)
+    `).run(
+      "user:alice",
+      "operation-legacy-null-hash",
+      "create_folder",
+      JSON.stringify({ ok: true }),
+      "2026-08-10T00:00:00.000Z"
+    );
+    assert.throws(
+      () => harness.repository.runIdempotent(
+        "user:alice",
+        "operation-legacy-null-hash",
+        "create_folder",
+        () => {
+          calls += 1;
+          return { ok: false };
+        },
+        { expectedRevision: 0, name: "Research" }
+      ),
+      (error) => error instanceof LibraryStorageError && error.code === "idempotency_key_reused"
+    );
+    assert.equal(calls, 0);
   } finally {
     harness.close();
   }
@@ -711,16 +824,177 @@ test("every tree mutation detects a stale scope revision", () => {
   }
 });
 
+for (const [label, expectedRevision] of [
+  ["missing", undefined],
+  ["null", null],
+  ["empty string", ""],
+  ["boolean", false],
+  ["array", []],
+  ["whitespace string", " "],
+  ["noncanonical decimal string", "00"],
+  ["negative", -1],
+  ["non-integer", 0.5]
+]) {
+  test(`tree mutations reject ${label} scope revisions`, () => {
+    const harness = createHarness();
+    try {
+      const revisionInput = expectedRevision === undefined ? {} : { expectedRevision };
+      assertInvalidRevision(() => harness.repository.createFolder({
+        ...revisionInput,
+        createdBy: "user:alice",
+        name: "Invalid revision",
+        scopeId: "user:alice",
+        scopeType: "user"
+      }));
+      assert.equal(harness.repository.getRevision("user", "user:alice"), 0);
+      assert.deepEqual(harness.repository.getTree("user", "user:alice").folders, []);
+    } finally {
+      harness.close();
+    }
+  });
+}
+
+test("tree mutations accept canonical decimal revision strings", () => {
+  const harness = createHarness();
+  try {
+    const folder = harness.repository.createFolder({
+      createdBy: "user:alice",
+      expectedRevision: "0",
+      name: "Canonical revision",
+      scopeId: "user:alice",
+      scopeType: "user"
+    });
+    const renamed = harness.repository.updateFolder(
+      folder.folderId,
+      { scopeId: "user:alice", scopeType: "user" },
+      { expectedRevision: "1", name: "Canonical revision updated" }
+    );
+
+    assert.equal(renamed.name, "Canonical revision updated");
+    assert.equal(harness.repository.getRevision("user", "user:alice"), 2);
+  } finally {
+    harness.close();
+  }
+});
+
+test("every tree mutation family rejects a missing revision before changing state", () => {
+  const harness = createHarness();
+  const userScope = { scopeId: "user:alice", scopeType: "user" };
+  const organizationScope = { scopeId: "org-revisions", scopeType: "organization" };
+  try {
+    const root = harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
+      createdBy: "user:alice",
+      name: "Root",
+      ...userScope
+    });
+    const child = harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
+      createdBy: "user:alice",
+      name: "Child",
+      parentFolderId: root.folderId,
+      ...userScope
+    });
+    const document = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
+      bytes: pdf,
+      fileName: "Existing.pdf",
+      folderId: child.folderId,
+      ...userScope,
+      uploadedBy: "user:alice"
+    }).document;
+    const trashedEntry = harness.repository.createMetadataEntry({
+      ...withRevision(harness, "user", "user:alice"),
+      ...userScope,
+      title: "Trashed metadata"
+    });
+    harness.repository.trashEntry(
+      trashedEntry.documentId,
+      userScope,
+      withRevision(harness, "user", "user:alice")
+    );
+    const organizationDocument = harness.repository.uploadDocument({
+      ...withRevision(harness, "organization", "org-revisions"),
+      bytes: pdf,
+      fileName: "Shared.pdf",
+      ...organizationScope,
+      uploadedBy: "member-1"
+    }).document;
+    const annotation = harness.repository.uploadTeamAnnotation({
+      body: { comment: "existing" },
+      documentId: organizationDocument.documentId,
+      expectedRevision: harness.repository.getRevision("organization", "org-revisions"),
+      organizationId: "org-revisions",
+      uploadedBy: "member-1"
+    });
+    const userRevision = harness.repository.getRevision("user", "user:alice");
+    const organizationRevision = harness.repository.getRevision("organization", "org-revisions");
+
+    const operations = [
+      () => harness.repository.uploadDocument({
+        bytes: pdf,
+        fileName: "Missing revision.pdf",
+        ...userScope,
+        uploadedBy: "user:alice"
+      }),
+      () => harness.repository.createMetadataEntry({
+        ...userScope,
+        title: "Missing revision metadata"
+      }),
+      () => harness.repository.updateFolder(child.folderId, userScope, { parentFolderId: null }),
+      () => harness.repository.trashEntry(document.documentId, userScope),
+      () => harness.repository.restoreEntry(trashedEntry.documentId, userScope),
+      () => harness.repository.purgeEntry(trashedEntry.documentId, userScope),
+      () => harness.repository.emptyTrash("user", "user:alice"),
+      () => harness.repository.uploadTeamAnnotation({
+        body: { comment: "missing revision" },
+        documentId: organizationDocument.documentId,
+        organizationId: "org-revisions",
+        uploadedBy: "member-1"
+      }),
+      () => harness.repository.withdrawTeamAnnotation({
+        actorId: "member-1",
+        annotationId: annotation.annotationId,
+        canModerate: false,
+        organizationId: "org-revisions"
+      })
+    ];
+
+    for (const operation of operations) assertInvalidRevision(operation);
+
+    assert.equal(harness.repository.getRevision("user", "user:alice"), userRevision);
+    assert.equal(
+      harness.repository.getRevision("organization", "org-revisions"),
+      organizationRevision
+    );
+    assert.equal(
+      harness.repository.getTree("user", "user:alice").folders
+        .find((folder) => folder.folderId === child.folderId)?.parentFolderId,
+      root.folderId
+    );
+    assert.equal(harness.repository.getTree("user", "user:alice").entries.length, 1);
+    assert.equal(harness.repository.getTree("user", "user:alice", "trashed").entries.length, 1);
+    assert.equal(
+      harness.repository.listTeamAnnotations("org-revisions", organizationDocument.documentId).length,
+      1
+    );
+  } finally {
+    harness.close();
+  }
+});
+
 test("folder trash restores a complete subtree and resolves a root name conflict", () => {
   const harness = createHarness();
   try {
     const root = harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
       createdBy: "user:alice",
       name: "Topic",
       scopeId: "user:alice",
       scopeType: "user"
     });
     const child = harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
       createdBy: "user:alice",
       name: "Sources",
       parentFolderId: root.folderId,
@@ -728,6 +1002,7 @@ test("folder trash restores a complete subtree and resolves a root name conflict
       scopeType: "user"
     });
     const upload = harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Nested.pdf",
       folderId: child.folderId,
@@ -735,20 +1010,23 @@ test("folder trash restores a complete subtree and resolves a root name conflict
       scopeType: "user",
       uploadedBy: "user:alice"
     });
-    harness.repository.trashFolder(root.folderId, {
-      scopeId: "user:alice",
-      scopeType: "user"
-    });
+    harness.repository.trashFolder(
+      root.folderId,
+      { scopeId: "user:alice", scopeType: "user" },
+      withRevision(harness, "user", "user:alice")
+    );
     harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
       createdBy: "user:alice",
       name: "Topic",
       scopeId: "user:alice",
       scopeType: "user"
     });
-    const restored = harness.repository.restoreFolder(root.folderId, {
-      scopeId: "user:alice",
-      scopeType: "user"
-    });
+    const restored = harness.repository.restoreFolder(
+      root.folderId,
+      { scopeId: "user:alice", scopeType: "user" },
+      withRevision(harness, "user", "user:alice")
+    );
     assert.equal(restored.name, "Topic (2)");
     assert.equal(
       harness.repository.authorizeDocument(upload.document.documentId, {
@@ -767,12 +1045,14 @@ test("empty trash removes the whole scope in one revision", () => {
   const harness = createHarness();
   try {
     const folder = harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
       createdBy: "user:alice",
       name: "Discarded",
       scopeId: "user:alice",
       scopeType: "user"
     });
     harness.repository.uploadDocument({
+      ...withRevision(harness, "user", "user:alice"),
       bytes: pdf,
       fileName: "Nested.pdf",
       folderId: folder.folderId,
@@ -781,18 +1061,21 @@ test("empty trash removes the whole scope in one revision", () => {
       uploadedBy: "user:alice"
     });
     const metadata = harness.repository.createMetadataEntry({
+      ...withRevision(harness, "user", "user:alice"),
       scopeId: "user:alice",
       scopeType: "user",
       title: "Metadata"
     });
-    harness.repository.trashFolder(folder.folderId, {
-      scopeId: "user:alice",
-      scopeType: "user"
-    });
-    harness.repository.trashEntry(metadata.documentId, {
-      scopeId: "user:alice",
-      scopeType: "user"
-    });
+    harness.repository.trashFolder(
+      folder.folderId,
+      { scopeId: "user:alice", scopeType: "user" },
+      withRevision(harness, "user", "user:alice")
+    );
+    harness.repository.trashEntry(
+      metadata.documentId,
+      { scopeId: "user:alice", scopeType: "user" },
+      withRevision(harness, "user", "user:alice")
+    );
     const revision = harness.repository.getRevision("user", "user:alice");
 
     const result = harness.repository.emptyTrash("user", "user:alice", {
@@ -813,6 +1096,7 @@ test("folders reject cross-scope parents and descendant cycles", () => {
   const harness = createHarness();
   try {
     const userRoot = harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
       createdBy: "user:alice",
       name: "User root",
       scopeId: "user:alice",
@@ -820,6 +1104,7 @@ test("folders reject cross-scope parents and descendant cycles", () => {
     });
     assert.throws(
       () => harness.repository.createFolder({
+        ...withRevision(harness, "organization", "org-1"),
         createdBy: "org:owner",
         name: "Invalid child",
         parentFolderId: userRoot.folderId,
@@ -829,6 +1114,7 @@ test("folders reject cross-scope parents and descendant cycles", () => {
       (error) => error instanceof LibraryStorageError && error.code === "library_folder_forbidden"
     );
     const child = harness.repository.createFolder({
+      ...withRevision(harness, "user", "user:alice"),
       createdBy: "user:alice",
       name: "Child",
       parentFolderId: userRoot.folderId,
@@ -839,7 +1125,7 @@ test("folders reject cross-scope parents and descendant cycles", () => {
       () => harness.repository.updateFolder(userRoot.folderId, {
         scopeId: "user:alice",
         scopeType: "user"
-      }, { parentFolderId: child.folderId }),
+      }, withRevision(harness, "user", "user:alice", { parentFolderId: child.folderId })),
       (error) => error instanceof LibraryStorageError && error.code === "invalid_folder_parent"
     );
   } finally {

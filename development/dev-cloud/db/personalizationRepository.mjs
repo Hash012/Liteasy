@@ -248,7 +248,7 @@ export function createPersonalizationRepository(database) {
     }));
     return {
       assistantSummary: buildAssistantSummary(terms),
-      enabled: findSetting.get(ownerKey)?.enabled !== 0,
+      enabled: findSetting.get(ownerKey)?.enabled === 1,
       personalizationVersion: state?.version ?? 0,
       profile,
       suppressedRecommendationIds: listSuppressions

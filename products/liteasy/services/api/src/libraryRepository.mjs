@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { authorizeLibraryScope } from "./libraryAuthorization.mjs";
 import { withPostgresTransaction } from "./postgres.mjs";
 import {
   LiteratureMetadataValidationError,
@@ -19,6 +20,27 @@ function validateScope(scope) {
     throw new LibraryRepositoryError("library_scope_invalid");
   }
   return scope;
+}
+
+function desktopIdentity(actorId) {
+  return { audience: "liteasy-desktop", subject: actorId };
+}
+
+async function authorizeLibraryMutationScopes(client, actorId, checks) {
+  const ordered = [...checks].sort((left, right) => {
+    const leftKey = `${left.scope.scopeType}:${left.scope.scopeId}:${left.capability}`;
+    const rightKey = `${right.scope.scopeType}:${right.scope.scopeId}:${right.capability}`;
+    return leftKey.localeCompare(rightKey, "en-US");
+  });
+  for (const check of ordered) {
+    await authorizeLibraryScope(
+      client,
+      desktopIdentity(actorId),
+      check.scope,
+      check.capability,
+      { lock: true }
+    );
+  }
 }
 
 function nodeName(value, label = "name") {
@@ -318,6 +340,7 @@ export class PostgresLibraryRepository {
     const name = nodeName(input.name);
     const parentFolderId = optionalText(input.parentFolderId, 200) ?? null;
     return this.#mutation(scope, input, "create_library_folder", async (client) => {
+      await requireActiveTargetFolder(client, scope, parentFolderId);
       const folderId = `folder_${randomUUID()}`;
       const result = await client.query(`
         INSERT INTO library_folders(
@@ -344,6 +367,7 @@ export class PostgresLibraryRepository {
       ...(optionalText(input.sourceId, 500) ? { sourceId: optionalText(input.sourceId, 500) } : {})
     };
     return this.#mutation(scope, input, "create_metadata_entry", async (client) => {
+      await requireActiveTargetFolder(client, scope, folderId);
       const documentId = `document_${randomUUID()}`;
       const result = await client.query(`
         INSERT INTO library_entries(
@@ -617,6 +641,13 @@ export class PostgresLibraryRepository {
       ...input,
       sourceScope: { scopeId: sourceScope.scopeId, scopeType: sourceScope.scopeType }
     }, "copy_library_entry", async (client) => {
+      await authorizeLibraryMutationScopes(client, input.actorId, [
+        {
+          capability: sourceScope.scopeType === "organization" ? "export" : "read",
+          scope: sourceScope
+        },
+        { capability: "upload", scope: targetScope }
+      ]);
       const source = await requireEntry(client, sourceScope, documentId, "active");
       if (source.availability !== "available") {
         throw new LibraryRepositoryError("library_document_not_available", 409);
@@ -791,7 +822,11 @@ export class PostgresLibraryRepository {
           return { kind: "workflow", workflow };
         }
 
+        await authorizeLibraryMutationScopes(client, input.actorId, [
+          { capability: "upload", scope }
+        ]);
         await lockScopeRevision(client, scope, expected);
+        await requireActiveTargetFolder(client, scope, input.folderId ?? null);
         await assertQuota(client, scope, staged.byteLength);
         await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`storage:${staged.contentHash}`]);
         const existingObject = await client.query(
@@ -968,6 +1003,9 @@ export class PostgresLibraryRepository {
           return { kind: "workflow", workflow };
         }
 
+        await authorizeLibraryMutationScopes(client, input.actorId, [
+          { capability: "upload", scope }
+        ]);
         await lockScopeRevision(client, scope, expected);
         const entry = await requireEntry(client, scope, documentId, "active");
         if (entry.entry_kind !== "metadata_only") {
@@ -1109,21 +1147,29 @@ export class PostgresLibraryRepository {
         UPDATE library_entries SET availability = 'available', updated_at = now()
         WHERE document_id = $1
       `, [workflow.document_id]);
+      const response = {
+        ...workflow.response_body,
+        revision: await bumpScopeRevision(client, {
+          scopeId: workflow.scope_id,
+          scopeType: workflow.scope_type
+        })
+      };
       await this.#recordCompletedMutation(client, {
         actorId: workflow.actor_id,
         hash: workflow.request_hash,
         idempotencyKey: workflow.idempotency_key,
         operation: workflow.operation,
-        response: workflow.response_body,
+        response,
         scope: { scopeId: workflow.scope_id, scopeType: workflow.scope_type },
         traceId
       });
       await client.query(`
         UPDATE storage_publish_workflows
-           SET state = 'completed', error_code = NULL, updated_at = now()
+           SET state = 'completed', response_body = $2::jsonb,
+               error_code = NULL, updated_at = now()
          WHERE workflow_id = $1
-      `, [workflow.workflow_id]);
-      return workflow.response_body;
+      `, [workflow.workflow_id, JSON.stringify(response)]);
+      return response;
     }, { isolation: "READ COMMITTED" });
   }
 
@@ -1305,6 +1351,26 @@ export class PostgresLibraryRepository {
       }
       return result.rows;
     });
+  }
+
+  async listReferencedStagingKeys(keys) {
+    if (!Array.isArray(keys) || keys.length > 1000 ||
+      keys.some((key) => typeof key !== "string" || !key || key.length > 2000)) {
+      throw new LibraryRepositoryError("storage_staging_keys_invalid");
+    }
+    const uniqueKeys = [...new Set(keys)];
+    if (uniqueKeys.length === 0) return [];
+    const result = await this.pool.query(`
+      SELECT staging_key
+        FROM storage_publish_workflows
+       WHERE staging_key = ANY($1::text[]) AND state <> 'completed'
+      UNION
+      SELECT staging_key
+        FROM storage_objects
+       WHERE staging_key = ANY($1::text[]) AND staging_key IS NOT NULL
+    `, [uniqueKeys]);
+    const referenced = new Set(result.rows.map((row) => row.staging_key));
+    return uniqueKeys.filter((key) => referenced.has(key));
   }
 
   async completeObjectGarbageCollection(contentHash) {

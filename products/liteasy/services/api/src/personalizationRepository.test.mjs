@@ -8,7 +8,7 @@ test("returns a default privacy state without creating account data", async () =
     async query(sql) { queries.push(sql); return { rows: [] }; }
   });
   assert.deepEqual(await repository.get("user_1"), {
-    enabled: true,
+    enabled: false,
     personalizationVersion: 0,
     profile: { disciplines: [], profileVersion: 0, stage: "未设置" },
     tags: []

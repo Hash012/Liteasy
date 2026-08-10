@@ -1277,27 +1277,29 @@ test("returns not found when a document id is absent from the authorized scope",
   assert.equal(instance.calls.some((call) => call.storageKey), false);
 });
 
-test("enforces organization export policy before looking up the document", async () => {
-  const instance = runtime();
-  instance.pool.query = async () => ({ rows: [{
-    export_policy: "disabled",
-    member_role: "member",
-    member_status: "active",
-    organization_status: "active",
-    owner_subject: "owner_1",
-    upload_policy: "owner_admins"
-  }] });
-  const handler = createCloudRequestHandler(instance, {
-    allowedOrigins: [], database: { sslMode: "verify-full" }, environment: "production", s3: { region: "test" }
-  });
-  const result = response();
-  await handler(request("POST", "/v1/library/documents/export", {
-    documentId: "document_1", scopeId: "organization_1", scopeType: "organization"
-  }), result);
+test("enforces organization export policy before every PDF byte stream lookup", async () => {
+  for (const route of ["download", "export"]) {
+    const instance = runtime();
+    instance.pool.query = async () => ({ rows: [{
+      export_policy: "disabled",
+      member_role: "member",
+      member_status: "active",
+      organization_status: "active",
+      owner_subject: "owner_1",
+      upload_policy: "owner_admins"
+    }] });
+    const handler = createCloudRequestHandler(instance, {
+      allowedOrigins: [], database: { sslMode: "verify-full" }, environment: "production", s3: { region: "test" }
+    });
+    const result = response();
+    await handler(request("POST", `/v1/library/documents/${route}`, {
+      documentId: "document_1", scopeId: "organization_1", scopeType: "organization"
+    }), result);
 
-  assert.equal(result.status, 403);
-  assert.equal(jsonBody(result).code, "organization_export_forbidden");
-  assert.equal(instance.calls.some((call) => call.documentId), false);
+    assert.equal(result.status, 403);
+    assert.equal(jsonBody(result).code, "organization_export_forbidden");
+    assert.equal(instance.calls.some((call) => call.documentId), false);
+  }
 });
 
 test("streams verified PDF bytes with inline and attachment response modes", async () => {

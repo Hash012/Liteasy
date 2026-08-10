@@ -11,6 +11,13 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 
+#[cfg(windows)]
+use std::os::windows::{ffi::OsStrExt, fs::MetadataExt};
+#[cfg(windows)]
+use windows_sys::Win32::Storage::FileSystem::{
+    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+};
+
 use crate::user_paper_store::paper_artifact_directory_name;
 
 const LEGACY_INDEX_FILE_NAME: &str = ".liteasy-library-index.json";
@@ -162,6 +169,19 @@ pub struct LocalLibrarySnapshot {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AddMetadataOnlyLibraryEntryResult {
+    pub created: bool,
+    pub document_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashLocalMetadataEntryResult {
+    pub trash_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DuplicateLocalPdf {
     pub content_hash: String,
     pub existing_document_ids: Vec<String>,
@@ -295,11 +315,13 @@ enum LocalLibraryWatchSignal {
         paths: Vec<PathBuf>,
     },
     Error(String),
+    FullValidation,
 }
 
 #[derive(Default)]
 struct LocalLibraryWatchBatch {
     external_deletion: bool,
+    full_validation: bool,
     paths: Vec<PathBuf>,
     watcher_errors: Vec<String>,
 }
@@ -315,6 +337,7 @@ impl LocalLibraryWatchBatch {
                 self.paths.extend(paths);
             }
             LocalLibraryWatchSignal::Error(error) => self.watcher_errors.push(error),
+            LocalLibraryWatchSignal::FullValidation => self.full_validation = true,
         }
     }
 
@@ -334,8 +357,31 @@ struct LocalOperationEcho {
 
 #[derive(Default)]
 pub struct LocalLibraryWatchState {
+    index_transaction: Mutex<()>,
     operation_echoes: Mutex<Vec<LocalOperationEcho>>,
+    rescan_sender: Mutex<Option<mpsc::Sender<LocalLibraryWatchSignal>>>,
     watcher: Mutex<Option<RecommendedWatcher>>,
+}
+
+impl LocalLibraryWatchState {
+    fn run_index_transaction<T, F>(&self, operation: F) -> Result<T, String>
+    where
+        F: FnOnce() -> Result<T, String>,
+    {
+        let _guard = self
+            .index_transaction
+            .lock()
+            .map_err(|_| "本地文献库索引事务状态不可用。".to_string())?;
+        operation()
+    }
+}
+
+fn with_local_library_index_transaction<T, F>(app: &AppHandle, operation: F) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String>,
+{
+    let state: State<'_, LocalLibraryWatchState> = app.state();
+    state.run_index_transaction(operation)
 }
 
 fn unix_timestamp_ms() -> u128 {
@@ -634,6 +680,50 @@ fn internal_directory(root: &Path) -> PathBuf {
     root.join(INTERNAL_DIRECTORY_NAME)
 }
 
+fn metadata_is_link_like(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    }
+    #[cfg(not(windows))]
+    false
+}
+
+fn ensure_managed_directory(root: &Path, relative: &Path, label: &str) -> Result<PathBuf, String> {
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return Err(format!("{label}包含无效路径分量。"));
+        };
+        let next = current.join(name);
+        match fs::symlink_metadata(&next) {
+            Ok(metadata) => {
+                if metadata_is_link_like(&metadata) || !metadata.is_dir() {
+                    return Err(format!(
+                        "{label}不能经过符号链接、目录联接或其他非普通目录。"
+                    ));
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(&next).map_err(|error| format!("无法创建{label}：{error}"))?;
+            }
+            Err(error) => return Err(format!("无法检查{label}：{error}")),
+        }
+        let canonical = next
+            .canonicalize()
+            .map_err(|error| format!("无法访问{label}：{error}"))?;
+        if !canonical.starts_with(root) {
+            return Err(format!("{label}越过了本地文献库边界。"));
+        }
+        current = canonical;
+    }
+    Ok(current)
+}
+
 fn index_path(root: &Path) -> PathBuf {
     internal_directory(root)
         .join(INDEX_DIRECTORY_NAME)
@@ -704,13 +794,15 @@ pub(crate) fn artifacts_directory(root: &Path) -> PathBuf {
 }
 
 fn migrate_legacy_layout(root: &Path) -> Result<(), String> {
-    let internal = internal_directory(root);
-    fs::create_dir_all(&internal).map_err(|error| format!("无法创建本地库管理目录：{error}"))?;
-    let index_directory = internal.join(INDEX_DIRECTORY_NAME);
-    fs::create_dir_all(&index_directory)
-        .map_err(|error| format!("无法创建本地库索引目录：{error}"))?;
+    let internal =
+        ensure_managed_directory(root, Path::new(INTERNAL_DIRECTORY_NAME), "本地库管理目录")?;
+    let index_directory = ensure_managed_directory(
+        root,
+        &Path::new(INTERNAL_DIRECTORY_NAME).join(INDEX_DIRECTORY_NAME),
+        "本地库索引目录",
+    )?;
 
-    let next_index = index_path(root);
+    let next_index = index_directory.join(INDEX_FILE_NAME);
     let legacy_indexes = [
         internal.join(INDEX_FILE_NAME),
         root.join(LEGACY_INDEX_FILE_NAME),
@@ -729,6 +821,12 @@ fn migrate_legacy_layout(root: &Path) -> Result<(), String> {
 
     let legacy_artifacts = root.join(ARTIFACTS_DIRECTORY_NAME);
     let next_artifacts = artifacts_directory(root);
+    if fs::symlink_metadata(&legacy_artifacts)
+        .map(|metadata| metadata_is_link_like(&metadata))
+        .unwrap_or(false)
+    {
+        return Err("旧文献伴生数据目录不能是符号链接或目录联接。".to_string());
+    }
     if legacy_artifacts.is_dir() && !next_artifacts.exists() {
         if fs::rename(&legacy_artifacts, &next_artifacts).is_err() {
             copy_directory(&legacy_artifacts, &next_artifacts)
@@ -737,14 +835,31 @@ fn migrate_legacy_layout(root: &Path) -> Result<(), String> {
                 .map_err(|error| format!("无法清理旧文献伴生数据：{error}"))?;
         }
     }
-    fs::create_dir_all(next_artifacts)
-        .map_err(|error| format!("无法创建文献伴生数据目录：{error}"))?;
-    fs::create_dir_all(metadata_entries_directory(root))
-        .map_err(|error| format!("无法创建仅元数据条目目录：{error}"))?;
-    fs::create_dir_all(import_staging_directory(root))
-        .map_err(|error| format!("无法创建 PDF 导入暂存目录：{error}"))?;
-    fs::create_dir_all(trash_directory(root))
-        .map_err(|error| format!("无法创建本地回收站：{error}"))?;
+    ensure_managed_directory(
+        root,
+        &Path::new(INTERNAL_DIRECTORY_NAME).join(ARTIFACTS_DIRECTORY_NAME),
+        "文献伴生数据目录",
+    )?;
+    ensure_managed_directory(
+        root,
+        &Path::new(INTERNAL_DIRECTORY_NAME).join(METADATA_ENTRIES_DIRECTORY_NAME),
+        "仅元数据条目目录",
+    )?;
+    ensure_managed_directory(
+        root,
+        &Path::new(INTERNAL_DIRECTORY_NAME).join(IMPORT_STAGING_DIRECTORY_NAME),
+        "PDF 导入暂存目录",
+    )?;
+    ensure_managed_directory(
+        root,
+        &Path::new(INTERNAL_DIRECTORY_NAME).join(TRASH_DIRECTORY_NAME),
+        "本地回收站",
+    )?;
+    ensure_managed_directory(
+        root,
+        &Path::new(INTERNAL_DIRECTORY_NAME).join(TRASH_OPERATION_DIRECTORY_NAME),
+        "回收站事务目录",
+    )?;
     Ok(())
 }
 
@@ -1209,6 +1324,17 @@ fn migrate_index_metadata_entries(
 }
 
 fn write_bytes_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_bytes_atomically_with_publisher(path, bytes, publish_atomic_file)
+}
+
+fn write_bytes_atomically_with_publisher<F>(
+    path: &Path,
+    bytes: &[u8],
+    publisher: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&Path, &Path) -> std::io::Result<()>,
+{
     let parent = path
         .parent()
         .ok_or_else(|| "目标文件缺少父目录。".to_string())?;
@@ -1228,17 +1354,43 @@ fn write_bytes_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .and_then(|_| temporary.sync_all())
         .map_err(|error| format!("无法写入临时文件：{error}"))?;
 
-    #[cfg(windows)]
-    if path.exists() {
-        fs::remove_file(path).map_err(|error| format!("无法替换旧文件：{error}"))?;
-    }
-    let result =
-        fs::rename(&temporary_path, path).map_err(|error| format!("无法发布文件：{error}"));
+    let result = publisher(&temporary_path, path).map_err(|error| format!("无法发布文件：{error}"));
     if result.is_err() && temporary_path.exists() {
         let _ = fs::remove_file(temporary_path);
     }
     result?;
     sync_parent_directory(path)
+}
+
+#[cfg(not(windows))]
+fn publish_atomic_file(temporary_path: &Path, path: &Path) -> std::io::Result<()> {
+    fs::rename(temporary_path, path)
+}
+
+#[cfg(windows)]
+fn publish_atomic_file(temporary_path: &Path, path: &Path) -> std::io::Result<()> {
+    let temporary_wide = temporary_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let path_wide = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let result = unsafe {
+        MoveFileExW(
+            temporary_wide.as_ptr(),
+            path_wide.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 fn collect_library_paths(
@@ -1352,10 +1504,11 @@ fn directory_size(directory: &Path) -> Result<u64, String> {
 #[tauri::command]
 pub fn load_local_library_snapshot(app: AppHandle) -> Result<LocalLibrarySnapshot, String> {
     let root = library_root(&app)?;
-    scan_local_library_root(&root)
+    with_local_library_index_transaction(&app, || scan_local_library_root(&root))
 }
 
 fn scan_local_library_root(root: &Path) -> Result<LocalLibrarySnapshot, String> {
+    migrate_legacy_layout(root)?;
     recover_trash_operations(root)?;
     purge_expired_trash(&root)?;
     purge_expired_import_sessions_at(root, unix_timestamp())?;
@@ -1566,6 +1719,7 @@ fn scan_local_library_paths(
     root: &Path,
     affected_paths: &[PathBuf],
 ) -> Result<LocalLibrarySnapshot, String> {
+    migrate_legacy_layout(root)?;
     recover_trash_operations(root)?;
     purge_expired_trash(root)?;
     if affected_paths.is_empty() {
@@ -1691,33 +1845,49 @@ pub fn add_metadata_only_library_entry(
     doi: Option<String>,
     external_url: Option<String>,
     source_id: Option<String>,
-) -> Result<LocalLibrarySnapshot, String> {
+) -> Result<AddMetadataOnlyLibraryEntryResult, String> {
+    let root = library_root(&app)?;
+    with_local_library_index_transaction(&app, || {
+        add_metadata_only_entry_at_root(&root, title, doi, external_url, source_id)
+    })
+}
+
+fn add_metadata_only_entry_at_root(
+    root: &Path,
+    title: String,
+    doi: Option<String>,
+    external_url: Option<String>,
+    source_id: Option<String>,
+) -> Result<AddMetadataOnlyLibraryEntryResult, String> {
     let title = title.trim().to_string();
     if title.is_empty() {
         return Err("条目标题不能为空。".to_string());
     }
     let doi = non_empty(doi);
     let external_url = non_empty(external_url);
-    let root = library_root(&app)?;
-    let mut index = read_index(&root)?;
+    let mut index = read_index(root)?;
     let id = metadata_only_entry_id(doi.as_deref(), external_url.as_deref(), &title);
-    if !index.metadata_only.iter().any(|entry| entry.id == id) {
+    let created = !index.metadata_only.iter().any(|entry| entry.id == id);
+    if created {
         let entry = MetadataOnlyEntry {
             doi,
             external_url,
-            id,
+            id: id.clone(),
             source_id: non_empty(source_id),
             title,
         };
-        write_metadata_entry(&root, &entry)?;
+        write_metadata_entry(root, &entry)?;
         index.metadata_only.push(entry.clone());
         index.revision = index.revision.saturating_add(1).max(1);
-        if let Err(error) = write_index(&root, &index) {
-            let _ = fs::remove_file(metadata_entry_path(&root, &entry.id)?);
+        if let Err(error) = write_index(root, &index) {
+            let _ = fs::remove_file(metadata_entry_path(root, &entry.id)?);
             return Err(error);
         }
     }
-    load_local_library_snapshot(app)
+    Ok(AddMetadataOnlyLibraryEntryResult {
+        created,
+        document_id: id,
+    })
 }
 
 fn resolve_import_directory(
@@ -2414,7 +2584,7 @@ pub fn trash_local_library_resource(
     let root = library_root(&app)?;
     let source = trash_resource_at_root(&root, &source_path)?;
     let _ = register_local_operation(&app, &[source]);
-    scan_local_library_root(&root)
+    with_local_library_index_transaction(&app, || scan_local_library_root(&root))
 }
 
 fn trash_resource_at_root(root: &Path, source_path: &str) -> Result<PathBuf, String> {
@@ -2522,18 +2692,25 @@ fn trash_resource_at_root(root: &Path, source_path: &str) -> Result<PathBuf, Str
 pub fn trash_local_metadata_entry(
     app: AppHandle,
     document_id: String,
-) -> Result<LocalLibrarySnapshot, String> {
+) -> Result<TrashLocalMetadataEntryResult, String> {
     let root = library_root(&app)?;
-    let mut index = read_index(&root)?;
+    with_local_library_index_transaction(&app, || {
+        let trash_id = trash_metadata_entry_at_root(&root, &document_id)?;
+        Ok(TrashLocalMetadataEntryResult { trash_id })
+    })
+}
+
+fn trash_metadata_entry_at_root(root: &Path, document_id: &str) -> Result<String, String> {
+    let mut index = read_index(root)?;
     let position = index
         .metadata_only
         .iter()
         .position(|entry| entry.id == document_id)
         .ok_or_else(|| "找不到仅元数据条目。".to_string())?;
     let entry = index.metadata_only.remove(position);
-    let library_marker = ensure_library_marker(&root)?;
+    let library_marker = ensure_library_marker(root)?;
     let trash_id = next_trash_id(&entry.id);
-    let transaction = trash_transaction_directory(&root, &trash_id)?;
+    let transaction = trash_transaction_directory(root, &trash_id)?;
     let trashed_at = unix_timestamp();
     let manifest = LocalTrashManifest {
         artifact_references: Vec::new(),
@@ -2561,7 +2738,7 @@ pub fn trash_local_metadata_entry(
         operation: "trash".to_string(),
         base_revision: index.revision,
         target_revision: index.revision.saturating_add(1).max(1),
-        trash_ids: vec![trash_id],
+        trash_ids: vec![trash_id.clone()],
         restore_target_relative: None,
         payload_relative_path: None,
         artifact_names: Vec::new(),
@@ -2574,10 +2751,10 @@ pub fn trash_local_metadata_entry(
         let _ = fs::remove_dir_all(&transaction);
         return Err(error);
     }
-    let metadata_path = metadata_entry_path(&root, &entry.id)?;
+    let metadata_path = metadata_entry_path(root, &entry.id)?;
     if let Err(error) = fs::rename(&metadata_path, transaction.join("metadata-entry.json")) {
         return Err(rollback_trash_error(
-            &root,
+            root,
             &transaction,
             &operation,
             format!("无法将仅元数据条目移入回收站：{error}"),
@@ -2585,16 +2762,16 @@ pub fn trash_local_metadata_entry(
     }
     record_committed_trash_operation(&mut index, &transaction_id);
     index.revision = index.revision.saturating_add(1).max(1);
-    if let Err(error) = write_index(&root, &index) {
+    if let Err(error) = write_index(root, &index) {
         return Err(rollback_trash_error(
-            &root,
+            root,
             &transaction,
             &operation,
             format!("索引更新失败，仅元数据删除未提交：{error}"),
         ));
     }
-    finalize_committed_trash(&root, &transaction, &operation)?;
-    load_local_library_snapshot(app)
+    finalize_committed_trash(root, &transaction, &operation)?;
+    Ok(trash_id)
 }
 
 fn unique_restore_target(requested: &Path) -> Result<PathBuf, String> {
@@ -3230,7 +3407,7 @@ pub fn restore_local_library_trash_item(
     if let Some(target) = restored {
         let _ = register_local_operation(&app, &[target]);
     }
-    scan_local_library_root(&root)
+    with_local_library_index_transaction(&app, || scan_local_library_root(&root))
 }
 
 fn restore_trash_at_root(root: &Path, trash_id: &str) -> Result<Option<PathBuf>, String> {
@@ -3306,11 +3483,13 @@ fn restore_trash_at_root(root: &Path, trash_id: &str) -> Result<Option<PathBuf>,
         return Ok(None);
     }
 
-    let requested = root.join(manifest_relative_path(&manifest.original_relative_path)?);
-    let parent = requested
-        .parent()
+    let requested_relative = manifest_relative_path(&manifest.original_relative_path)?;
+    let file_name = requested_relative
+        .file_name()
         .ok_or_else(|| "原始恢复路径无效。".to_string())?;
-    fs::create_dir_all(parent).map_err(|error| format!("无法重建原始目录：{error}"))?;
+    let parent_relative = requested_relative.parent().unwrap_or_else(|| Path::new(""));
+    let (parent, _) = ensure_relative_folder(root, parent_relative)?;
+    let requested = parent.join(file_name);
     let target = unique_restore_target(&requested)?;
     let payload_name = manifest
         .payload_relative_path
@@ -3584,6 +3763,7 @@ pub fn restart_local_library_watcher(app: &AppHandle) -> Result<(), String> {
     let root = library_root(app)?;
     let state: State<'_, LocalLibraryWatchState> = app.state();
     let (sender, receiver) = mpsc::channel::<LocalLibraryWatchSignal>();
+    let watch_sender = sender.clone();
     let mut watcher =
         notify::recommended_watcher(move |result: notify::Result<notify::Event>| match result {
             Ok(event) => {
@@ -3594,14 +3774,14 @@ pub fn restart_local_library_watcher(app: &AppHandle) -> Result<(), String> {
                     .filter(|path| watched_path_is_relevant(path))
                     .collect::<Vec<_>>();
                 if !relevant.is_empty() {
-                    let _ = sender.send(LocalLibraryWatchSignal::Change {
+                    let _ = watch_sender.send(LocalLibraryWatchSignal::Change {
                         external_deletion,
                         paths: relevant,
                     });
                 }
             }
             Err(error) => {
-                let _ = sender.send(LocalLibraryWatchSignal::Error(error.to_string()));
+                let _ = watch_sender.send(LocalLibraryWatchSignal::Error(error.to_string()));
             }
         })
         .map_err(|error| format!("无法启动本地文献库监听：{error}"))?;
@@ -3645,21 +3825,23 @@ pub fn restart_local_library_watcher(app: &AppHandle) -> Result<(), String> {
                     eprintln!("Unable to match local operation echo: {error}");
                     None
                 });
-            let incremental = batch.watcher_errors.is_empty();
-            let scan_result = if incremental {
-                scan_local_library_paths(&root, &paths).map(|snapshot| (snapshot, false))
-            } else {
-                scan_local_library_root(&root).map(|snapshot| (snapshot, true))
-            };
-            let scan_result = scan_result.or_else(|incremental_error| {
-                if incremental {
-                    eprintln!(
-                        "Incremental local library scan fell back to full validation: {incremental_error}"
-                    );
-                    scan_local_library_root(&root).map(|snapshot| (snapshot, true))
+            let scan_result = with_local_library_index_transaction(&event_app, || {
+                let incremental = !batch.full_validation && batch.watcher_errors.is_empty();
+                let scan_result = if incremental {
+                    scan_local_library_paths(&root, &paths).map(|snapshot| (snapshot, false))
                 } else {
-                    Err(incremental_error)
-                }
+                    scan_local_library_root(&root).map(|snapshot| (snapshot, true))
+                };
+                scan_result.or_else(|incremental_error| {
+                    if incremental {
+                        eprintln!(
+                            "Incremental local library scan fell back to full validation: {incremental_error}"
+                        );
+                        scan_local_library_root(&root).map(|snapshot| (snapshot, true))
+                    } else {
+                        Err(incremental_error)
+                    }
+                })
             });
             match scan_result {
                 Ok((snapshot, full_rescan)) => {
@@ -3695,12 +3877,52 @@ pub fn restart_local_library_watcher(app: &AppHandle) -> Result<(), String> {
         }
     });
 
+    let mut rescan_sender = state
+        .rescan_sender
+        .lock()
+        .map_err(|_| "本地文献库完整校验状态不可用。".to_string())?;
+    *rescan_sender = Some(sender);
+    drop(rescan_sender);
+
     let mut active = state
         .watcher
         .lock()
         .map_err(|_| "本地文献库监听状态不可用。".to_string())?;
     *active = Some(watcher);
     Ok(())
+}
+
+fn request_full_local_library_validation(app: &AppHandle) -> Result<(), String> {
+    let state: State<'_, LocalLibraryWatchState> = app.state();
+    let sender = state
+        .rescan_sender
+        .lock()
+        .map_err(|_| "本地文献库完整校验状态不可用。".to_string())?
+        .clone()
+        .ok_or_else(|| "本地文献库监听尚未启动。".to_string())?;
+    sender
+        .send(LocalLibraryWatchSignal::FullValidation)
+        .map_err(|_| "无法请求本地文献库完整校验。".to_string())
+}
+
+pub fn resume_local_library_watcher(app: &AppHandle) {
+    let result =
+        restart_local_library_watcher(app).and_then(|_| request_full_local_library_validation(app));
+    if let Err(error) = result {
+        let trace_id = format!(
+            "trace_{}",
+            &hash_text(&format!("watch-resume:{}", unix_timestamp()))[..24]
+        );
+        eprintln!("Local library watcher resume failed ({trace_id}): {error}");
+        let _ = app.emit(
+            "local-library-watch-error",
+            LocalLibraryWatchErrorEvent {
+                code: "local_library_watch_failed".to_string(),
+                message: "本地文献库监听恢复失败，请重试。".to_string(),
+                trace_id,
+            },
+        );
+    }
 }
 
 pub fn start_local_library_watcher(app: AppHandle) {
@@ -3724,26 +3946,31 @@ pub fn start_local_library_watcher(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{
-        append_pdf_import_chunk, artifacts_directory, directory_contains_name, echo_paths_overlap,
-        ensure_library_marker, ensure_relative_folder, export_library_backup_at_root,
-        import_staging_directory, index_path, legacy_account_namespace, metadata_entries_directory,
-        metadata_entry_path, metadata_only_entry_id, migrate_legacy_layout, non_empty,
-        paper_artifact_directory_name, prepare_legacy_root_selection, prepare_library_migration,
-        purge_expired_import_sessions_at, purge_expired_trash_at,
-        purge_trash_items_with_index_writer, read_index, read_trash_manifest,
-        record_committed_trash_operation, recover_trash_operations, resolve_import_directory,
-        restore_legacy_library_marker, restore_trash_at_root, scan_local_library_paths,
-        scan_local_library_root, stage_trash_operation, trash_directory, trash_operation_directory,
-        trash_resource_at_root, trash_transaction_directory, unique_restore_target_with_case_rule,
-        verified_tree_manifest, write_index, write_metadata_entry, write_trash_manifest,
-        write_trash_operation_marker, LocalLibraryIndex, LocalLibraryWatchBatch,
-        LocalLibraryWatchSignal, LocalTrashManifest, MetadataOnlyEntry, TrashOperationMarker,
-        ARTIFACTS_DIRECTORY_NAME, INTERNAL_DIRECTORY_NAME, LEGACY_PROFILE_MARKER_FILE_NAME,
-        LIBRARY_MARKER_FILE_NAME,
+        add_metadata_only_entry_at_root, append_pdf_import_chunk, artifacts_directory,
+        directory_contains_name, echo_paths_overlap, ensure_library_marker, ensure_relative_folder,
+        export_library_backup_at_root, import_staging_directory, index_path,
+        legacy_account_namespace, metadata_entries_directory, metadata_entry_path,
+        metadata_only_entry_id, migrate_legacy_layout, non_empty, paper_artifact_directory_name,
+        prepare_legacy_root_selection, prepare_library_migration, purge_expired_import_sessions_at,
+        purge_expired_trash_at, purge_trash_items_with_index_writer, read_index,
+        read_trash_manifest, record_committed_trash_operation, recover_trash_operations,
+        resolve_import_directory, restore_legacy_library_marker, restore_trash_at_root,
+        scan_local_library_paths, scan_local_library_root, stage_trash_operation, trash_directory,
+        trash_metadata_entry_at_root, trash_operation_directory, trash_resource_at_root,
+        trash_transaction_directory, unique_restore_target_with_case_rule, verified_tree_manifest,
+        write_bytes_atomically_with_publisher, write_index, write_metadata_entry,
+        write_trash_manifest, write_trash_operation_marker, LocalLibraryIndex,
+        LocalLibraryWatchBatch, LocalLibraryWatchSignal, LocalLibraryWatchState,
+        LocalTrashManifest, MetadataOnlyEntry, TrashOperationMarker, ARTIFACTS_DIRECTORY_NAME,
+        INTERNAL_DIRECTORY_NAME, LEGACY_PROFILE_MARKER_FILE_NAME, LIBRARY_MARKER_FILE_NAME,
     };
+    use std::cell::Cell;
     use std::collections::HashSet;
     use std::fs;
     use std::path::Path;
+    use std::sync::{mpsc, Arc};
+    use std::thread;
+    use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temporary_directory(name: &str) -> std::path::PathBuf {
@@ -3762,6 +3989,141 @@ mod tests {
         migrate_legacy_layout(&root).unwrap();
         ensure_library_marker(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn keeps_existing_file_until_atomic_publish() {
+        let root = temporary_directory("atomic-publish");
+        let path = root.join("state.json");
+        fs::write(&path, b"old").unwrap();
+        let observed_existing = Cell::new(false);
+
+        write_bytes_atomically_with_publisher(&path, b"new", |temporary, destination| {
+            assert_eq!(fs::read(destination).unwrap(), b"old");
+            observed_existing.set(true);
+            fs::remove_file(destination)?;
+            fs::rename(temporary, destination)
+        })
+        .unwrap();
+
+        assert!(observed_existing.get());
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn serializes_watcher_and_command_index_transactions() {
+        let state = Arc::new(LocalLibraryWatchState::default());
+        let (first_entered_sender, first_entered_receiver) = mpsc::channel();
+        let (release_first_sender, release_first_receiver) = mpsc::channel();
+        let first_state = Arc::clone(&state);
+        let first = thread::spawn(move || {
+            first_state
+                .run_index_transaction(|| {
+                    first_entered_sender.send(()).unwrap();
+                    release_first_receiver.recv().unwrap();
+                    Ok(())
+                })
+                .unwrap();
+        });
+        first_entered_receiver.recv().unwrap();
+
+        let (second_attempting_sender, second_attempting_receiver) = mpsc::channel();
+        let (second_entered_sender, second_entered_receiver) = mpsc::channel();
+        let second_state = Arc::clone(&state);
+        let second = thread::spawn(move || {
+            second_attempting_sender.send(()).unwrap();
+            second_state
+                .run_index_transaction(|| {
+                    second_entered_sender.send(()).unwrap();
+                    Ok(())
+                })
+                .unwrap();
+        });
+        second_attempting_receiver.recv().unwrap();
+
+        assert!(second_entered_receiver
+            .recv_timeout(Duration::from_millis(50))
+            .is_err());
+        release_first_sender.send(()).unwrap();
+        second_entered_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap();
+        first.join().unwrap();
+        second.join().unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_symbolic_linked_internal_directory_without_writing_outside() {
+        use std::os::unix::fs::symlink;
+
+        let root = temporary_directory("linked-internal-root");
+        let outside = temporary_directory("linked-internal-outside");
+        symlink(&outside, root.join(INTERNAL_DIRECTORY_NAME)).unwrap();
+
+        let error = migrate_legacy_layout(&root).unwrap_err();
+
+        assert!(
+            error.contains("符号链接") || error.contains("目录联接"),
+            "unexpected managed directory error: {error}"
+        );
+        assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+        fs::remove_file(root.join(INTERNAL_DIRECTORY_NAME)).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scan_rejects_an_internal_directory_replaced_by_a_symbolic_link() {
+        use std::os::unix::fs::symlink;
+
+        let root = initialized_library("scan-linked-internal-root");
+        let outside = temporary_directory("scan-linked-internal-outside");
+        fs::remove_dir_all(root.join(INTERNAL_DIRECTORY_NAME)).unwrap();
+        symlink(&outside, root.join(INTERNAL_DIRECTORY_NAME)).unwrap();
+
+        let error = match scan_local_library_root(&root) {
+            Ok(_) => panic!("scan followed the linked internal directory"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error.contains("符号链接") || error.contains("目录联接"),
+            "unexpected scan error: {error}"
+        );
+        assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+        fs::remove_file(root.join(INTERNAL_DIRECTORY_NAME)).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restore_rejects_a_symbolic_linked_original_parent() {
+        use std::os::unix::fs::symlink;
+
+        let root = initialized_library("restore-linked-parent");
+        let outside = temporary_directory("restore-linked-parent-outside");
+        fs::create_dir(root.join("Research")).unwrap();
+        let source = root.join("Research/paper.pdf");
+        fs::write(&source, b"%PDF-1.7\nbody").unwrap();
+        scan_local_library_root(&root).unwrap();
+        trash_resource_at_root(&root, &source.to_string_lossy()).unwrap();
+        fs::remove_dir(root.join("Research")).unwrap();
+        symlink(&outside, root.join("Research")).unwrap();
+        let trash_id = super::list_trash_entries(&root).unwrap()[0]
+            .trash_id
+            .clone();
+
+        let error = restore_trash_at_root(&root, &trash_id).unwrap_err();
+
+        assert!(error.contains("冲突") || error.contains("符号链接"));
+        assert!(!outside.join("paper.pdf").exists());
+        fs::remove_file(root.join("Research")).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]
@@ -4053,6 +4415,43 @@ mod tests {
     }
 
     #[test]
+    fn metadata_mutations_report_exact_created_and_trashed_resources() {
+        let root = initialized_library("metadata-mutation-results");
+        let first = add_metadata_only_entry_at_root(
+            &root,
+            "Paper".to_string(),
+            Some("10.1000/test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+        let second = add_metadata_only_entry_at_root(
+            &root,
+            "Paper".to_string(),
+            Some("10.1000/test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(first.created);
+        assert!(!second.created);
+        assert_eq!(first.document_id, second.document_id);
+        assert_eq!(read_index(&root).unwrap().metadata_only.len(), 1);
+
+        let trash_id = trash_metadata_entry_at_root(&root, &first.document_id).unwrap();
+        let manifest =
+            read_trash_manifest(&trash_directory(&root).join(&trash_id).join("manifest.json"))
+                .unwrap();
+        assert_eq!(
+            manifest.document_id.as_deref(),
+            Some(first.document_id.as_str())
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn refuses_to_rebuild_from_a_corrupt_metadata_entry() {
         let root = initialized_library("metadata-entry-corruption");
         fs::write(
@@ -4183,6 +4582,11 @@ mod tests {
         assert!(batch.external_deletion);
         assert_eq!(batch.normalized_paths(), vec![second, first]);
         assert_eq!(batch.watcher_errors, vec!["overflow"]);
+
+        let mut resume_batch = LocalLibraryWatchBatch::default();
+        resume_batch.merge(LocalLibraryWatchSignal::FullValidation);
+        assert!(resume_batch.full_validation);
+        assert!(resume_batch.watcher_errors.is_empty());
         fs::remove_dir_all(root).unwrap();
     }
 

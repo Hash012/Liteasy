@@ -20,6 +20,21 @@ export class LibraryStorageError extends Error {
   }
 }
 
+export function parseLibraryRevision(value) {
+  const revision = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^(0|[1-9]\d*)$/.test(value)
+      ? Number(value)
+      : Number.NaN;
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new LibraryStorageError(
+      "invalid_library_revision",
+      "A valid expected library revision is required."
+    );
+  }
+  return revision;
+}
+
 function normalizeText(value) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 }
@@ -260,10 +275,9 @@ export function createLibraryStorageRepository(database, options = {}) {
   }
 
   function assertRevision(scope, expectedRevision) {
-    if (expectedRevision === undefined || expectedRevision === null) return;
-    const expected = Number(expectedRevision);
+    const expected = parseLibraryRevision(expectedRevision);
     const actual = currentRevision(scope.scopeType, scope.scopeId);
-    if (!Number.isSafeInteger(expected) || expected !== actual) {
+    if (expected !== actual) {
       throw new LibraryStorageError(
         "library_revision_conflict",
         "The library changed. Refresh and retry the operation.",
@@ -597,15 +611,34 @@ export function createLibraryStorageRepository(database, options = {}) {
       const actorKey = normalizeText(actorKeyInput);
       const operationKey = normalizeText(operationKeyInput);
       const operationKind = normalizeText(operationKindInput);
-      const requestHash = requestInput === undefined
-        ? null
-        : createHash("sha256").update(JSON.stringify(requestInput)).digest("hex");
-      if (!actorKey || !/^[A-Za-z0-9:._-]{1,220}$/.test(operationKey) || !operationKind) {
+      if (!actorKey || !/^[A-Za-z0-9:._-]{8,200}$/.test(operationKey) || !operationKind) {
         throw new LibraryStorageError(
           "invalid_idempotency_key",
           "A valid idempotency key is required."
         );
       }
+      if (requestInput === undefined) {
+        throw new LibraryStorageError(
+          "invalid_idempotency_request",
+          "An idempotent request payload is required."
+        );
+      }
+      let serializedRequest;
+      try {
+        serializedRequest = JSON.stringify(requestInput);
+      } catch {
+        throw new LibraryStorageError(
+          "invalid_idempotency_request",
+          "An idempotent request payload is required."
+        );
+      }
+      if (serializedRequest === undefined) {
+        throw new LibraryStorageError(
+          "invalid_idempotency_request",
+          "An idempotent request payload is required."
+        );
+      }
+      const requestHash = createHash("sha256").update(serializedRequest).digest("hex");
       const existing = idempotencyByKey.get(actorKey, operationKey);
       if (existing) {
         if (existing.operation_kind !== operationKind) {
@@ -615,7 +648,7 @@ export function createLibraryStorageRepository(database, options = {}) {
             409
           );
         }
-        if (existing.request_hash && existing.request_hash !== requestHash) {
+        if (existing.request_hash !== requestHash) {
           throw new LibraryStorageError(
             "idempotency_key_reused",
             "The idempotency key was already used for another request.",

@@ -162,7 +162,11 @@ test("updates a storage quota with optimistic revision and an audit in one trans
         updated_by: "admin_1"
       }] };
     }
-    if (sql.includes("SUM(logical_bytes)")) return { rows: [{ used_bytes: "524288" }] };
+    if (sql.includes("SUM(logical_bytes)")) {
+      return { rows: [{
+        used_bytes: sql.includes("status = 'active'") ? "524288" : "786432"
+      }] };
+    }
     return { rows: [] };
   });
   const repository = new PostgresPlatformAdminRepository(harness.pool, { environment: "production" });
@@ -186,7 +190,7 @@ test("updates a storage quota with optimistic revision and an audit in one trans
     scopeType: "user",
     updatedAt: updatedAt.toISOString(),
     updatedBy: "admin_1",
-    usedBytes: 524288
+    usedBytes: 786432
   });
   const audit = harness.calls.find((call) => call.sql.includes("INSERT INTO audit_events"));
   assert.equal(audit.values[3], "storage_quota_updated");
@@ -233,6 +237,30 @@ test("rejects stale quota revisions and deleted user targets", async () => {
   }, { scopeId: "deleted_user", scopeType: "user" }), /quota_scope_not_found/);
 });
 
+test("reports trashed library entries as used quota", async () => {
+  const repository = new PostgresPlatformAdminRepository({
+    async query(sql) {
+      if (sql.includes("FROM account_status_projections")) return { rows: [] };
+      if (sql.includes("SELECT quota.limit_bytes")) {
+        return { rows: [{
+          limit_bytes: "1048576",
+          revision: "2",
+          updated_at: new Date("2026-08-11T00:00:00.000Z"),
+          updated_by: "admin_1",
+          used_bytes: sql.includes("status = 'active'") ? "524288" : "786432"
+        }] };
+      }
+      throw new Error(`unexpected query: ${sql}`);
+    }
+  }, { environment: "production" });
+
+  const result = await repository.getQuota({
+    roles: ["platform_admin"], subjectId: "admin_1"
+  }, { scopeId: "user_1", scopeType: "user" });
+
+  assert.equal(result.quota.usedBytes, 786432);
+});
+
 test("lists bounded governance metadata without reading document content", async () => {
   const timestamp = new Date("2026-08-07T03:00:00.000Z");
   const queries = [];
@@ -249,7 +277,7 @@ test("lists bounded governance metadata without reading document content", async
         revision: "4",
         status: "active",
         updated_at: timestamp,
-        used_bytes: "1048576"
+        used_bytes: /FROM library_entries[\s\S]*status = 'active'/.test(sql) ? "1048576" : "1572864"
       }] };
       if (sql.includes("FROM platform_role_grants")) return { rows: [roleRow({
         activated_at: timestamp,
@@ -283,7 +311,7 @@ test("lists bounded governance metadata without reading document content", async
     roles: ["platform_admin"], subjectId: "admin_1"
   });
   assert.equal(result.organizations[0].memberCount, 3);
-  assert.equal(result.organizations[0].usedBytes, 1048576);
+  assert.equal(result.organizations[0].usedBytes, 1572864);
   assert.equal(result.roleGrants[0].grantId, "rolegrant_1");
   assert.equal(result.supportGrants[0].documentId, "document_1");
   assert.equal(result.accountStatuses[0].subjectId, "user_1");
@@ -322,7 +350,7 @@ test("suspends an organization with optimistic revision and audit in one transac
       revision: "3",
       status: "suspended",
       updated_at: timestamp,
-      used_bytes: "1048576"
+      used_bytes: /FROM library_entries[\s\S]*status = 'active'/.test(sql) ? "1048576" : "1572864"
     }] };
     return { rows: [] };
   });
@@ -342,7 +370,7 @@ test("suspends an organization with optimistic revision and audit in one transac
   assert.equal(result.organization.revision, 3);
   assert.equal(result.organization.limitBytes, 2097152);
   assert.equal(result.organization.memberCount, 4);
-  assert.equal(result.organization.usedBytes, 1048576);
+  assert.equal(result.organization.usedBytes, 1572864);
   const audit = harness.calls.find((call) => call.sql.includes("INSERT INTO audit_events"));
   assert.equal(audit.values[3], "organization_status_updated");
   assert.equal(audit.values[6], "organization");

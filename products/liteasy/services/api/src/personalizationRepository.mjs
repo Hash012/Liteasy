@@ -147,7 +147,7 @@ async function snapshot(client, subject) {
     weight: Number(row.weight)
   }));
   const result = {
-    enabled: stateRow?.enabled ?? true,
+    enabled: stateRow?.enabled ?? false,
     personalizationVersion: Number(stateRow?.version ?? 0),
     profile: {
       disciplines: profileRow?.disciplines ?? [],

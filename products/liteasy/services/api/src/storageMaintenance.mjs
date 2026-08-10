@@ -1,3 +1,8 @@
+export function storageMaintenanceHasFailures(result) {
+  return (result?.failedObjects?.length ?? 0) > 0 ||
+    (result?.failedStagingObjects?.length ?? 0) > 0;
+}
+
 export class StorageMaintenanceService {
   constructor(repository, objectStore, personalizationRepository, externalKnowledgeRepository) {
     this.repository = repository;
@@ -6,7 +11,12 @@ export class StorageMaintenanceService {
     this.externalKnowledgeRepository = externalKnowledgeRepository;
   }
 
-  async run({ limit = 100 } = {}) {
+  async run({ limit = 100, now = new Date(), stagingRetentionHours = 24 } = {}) {
+    const currentTime = now instanceof Date ? now : new Date(now);
+    if (!Number.isFinite(currentTime.getTime()) ||
+      !Number.isFinite(stagingRetentionHours) || stagingRetentionHours <= 0) {
+      throw new Error("storage_maintenance_retention_invalid");
+    }
     const trash = await this.repository.purgeExpiredTrash();
     const expired = this.personalizationRepository
       ? await this.personalizationRepository.purgeExpiredCaches(limit)
@@ -18,6 +28,24 @@ export class StorageMaintenanceService {
     const retrieval = this.externalKnowledgeRepository
       ? await this.externalKnowledgeRepository.purgeExpiredRetrievalData(limit)
       : { pdfGrants: 0, retrievalCacheEntries: 0 };
+    const staging = await this.objectStore.listStagingObjects({
+      before: new Date(currentTime.getTime() - stagingRetentionHours * 60 * 60 * 1000),
+      limit
+    });
+    const referencedStagingKeys = new Set(await this.repository.listReferencedStagingKeys(
+      staging.map((object) => object.storageKey)
+    ));
+    const failedStagingObjects = [];
+    let removedStagingObjects = 0;
+    for (const object of staging) {
+      if (referencedStagingKeys.has(object.storageKey)) continue;
+      try {
+        await this.objectStore.deleteKey(object.storageKey);
+        removedStagingObjects += 1;
+      } catch {
+        failedStagingObjects.push(object.storageKey);
+      }
+    }
     const candidates = await this.repository.claimUnreferencedObjects(limit);
     const failures = [];
     let removedObjects = 0;
@@ -32,6 +60,7 @@ export class StorageMaintenanceService {
     }
     return {
       failedObjects: failures,
+      failedStagingObjects,
       purgedIdempotencyRecords: expired.idempotencyRecords,
       purgedExternalPdfGrants: retrieval.pdfGrants,
       purgedExternalRetrievalCacheEntries: retrieval.retrievalCacheEntries,
@@ -39,7 +68,9 @@ export class StorageMaintenanceService {
       purgedRecommendationCandidates: expired.recommendationCandidates,
       purgedTrashNodes: trash.purgedCount,
       removedObjects,
-      scannedObjects: candidates.length
+      removedStagingObjects,
+      scannedObjects: candidates.length,
+      scannedStagingObjects: staging.length
     };
   }
 }
