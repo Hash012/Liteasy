@@ -16,13 +16,13 @@ const anchors: PageGraphAnchorView[] = [
   {
     anchorId: "anchor-1",
     kind: "method",
-    label: "self-attention",
+    text: "self-attention",
     rects: [{ height: 18, left: 180, top: 200, width: 120 }]
   },
   {
     anchorId: "anchor-2",
     kind: "dataset",
-    label: "WMT 2014",
+    text: "WMT 2014",
     rects: [{ height: 18, left: 420, top: 520, width: 96 }]
   }
 ];
@@ -71,11 +71,12 @@ test("keeps every visible anchor in its own place in the text and draws its rela
   const { container } = renderLayer();
 
   expect(container.querySelector(".association-layer")).toHaveAttribute("data-hidden-papers", "0");
-  const chips = Array.from(container.querySelectorAll<HTMLElement>(".association-anchor__chip"));
-  expect(chips.map((chip) => chip.textContent)).toEqual(["self-attention", "WMT 2014"]);
-  // The chip sits at the anchor's measured rectangle, not at a centre the layer invented.
-  expect(chips[0]!.style.left).toBe("180px");
-  expect(chips[0]!.style.top).toBe("209px");
+  const targets = Array.from(container.querySelectorAll<HTMLElement>(".association-anchor__target"));
+  expect(targets).toHaveLength(2);
+  expect(container.querySelectorAll(".association-anchor__window")).toHaveLength(2);
+  // The target sits at the anchor's measured rectangle, not at a centre the layer invented.
+  expect(targets[0]!.style.left).toBe("180px");
+  expect(targets[0]!.style.top).toBe("200px");
   expect(container.querySelectorAll(".association-node")).toHaveLength(3);
   expect(container.querySelectorAll(".association-edge.is-primary.is-ink")).toHaveLength(3);
 });

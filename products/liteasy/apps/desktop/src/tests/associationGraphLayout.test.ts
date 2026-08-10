@@ -38,7 +38,7 @@ function source(
 
 function input(overrides: Partial<PageGraphInput> = {}): PageGraphInput {
   return {
-    anchors: [{ anchorId: "a1", rect: { height: 16, left: 300, top: 400, width: 120 } }],
+    anchors: [{ anchorId: "a1", rects: [{ height: 16, left: 300, top: 400, width: 120 }] }],
     documentHeight: 2400,
     frameWidth: 900,
     sourcesByAnchor: {},
@@ -48,6 +48,19 @@ function input(overrides: Partial<PageGraphInput> = {}): PageGraphInput {
 
 const distanceToAnchor = (node: { left: number; top: number }, left = 360, top = 408) =>
   Math.hypot(node.left - left, node.top - top);
+
+function nodeDoesNotOverlapRect(
+  node: { isDot: boolean; left: number; top: number },
+  rect: { height: number; left: number; top: number; width: number }
+) {
+  const half = node.isDot
+    ? { horizontal: pageGraphDotSize / 2, vertical: pageGraphDotSize / 2 }
+    : { horizontal: pageGraphNodeWidth / 2, vertical: pageGraphNodeHeight / 2 };
+  return node.left + half.horizontal <= rect.left ||
+    node.left - half.horizontal >= rect.left + rect.width ||
+    node.top + half.vertical <= rect.top ||
+    node.top - half.vertical >= rect.top + rect.height;
+}
 
 test("places the more relevant paper nearer its anchor and leaves confidence out of distance", () => {
   const graph = layoutAssociationPageGraph(input({
@@ -78,8 +91,8 @@ test("merges a paper shared by two anchors into one node with one edge per ancho
   const shared = { canonicalPaperId: "openalex:W42", confidence: 0.6 };
   const graph = layoutAssociationPageGraph(input({
     anchors: [
-      { anchorId: "a1", rect: { height: 16, left: 200, top: 300, width: 90 } },
-      { anchorId: "a2", rect: { height: 16, left: 500, top: 900, width: 90 } }
+      { anchorId: "a1", rects: [{ height: 16, left: 200, top: 300, width: 90 }] },
+      { anchorId: "a2", rects: [{ height: 16, left: 500, top: 900, width: 90 }] }
     ],
     sourcesByAnchor: {
       a1: [source("W42a", 0.9, shared), source("W7", 0.8)],
@@ -146,7 +159,7 @@ test("keeps a dense 24-anchor candidate search deterministic and hard-gated", ()
   const denseInput = input({
     anchors: Array.from({ length: 24 }, (_, index) => ({
       anchorId: `anchor-${String(index).padStart(2, "0")}`,
-      rect: { height: 16, left: 520, top: 100 + index * 125, width: 100 }
+      rects: [{ height: 16, left: 520, top: 100 + index * 125, width: 100 }]
     })),
     documentHeight: 3200,
     frameWidth: 1200,
@@ -183,7 +196,7 @@ test("enforces global search budgets on a supported eight-anchor 24-paper mobile
   const denseInput = input({
     anchors: Array.from({ length: 8 }, (_, index) => ({
       anchorId: `mobile-anchor-${String(index).padStart(2, "0")}`,
-      rect: { height: 16, left: 500, top: 80 + index * 145, width: 100 }
+      rects: [{ height: 16, left: 500, top: 80 + index * 145, width: 100 }]
     })),
     documentHeight: 1200,
     frameWidth: 1100,
@@ -220,9 +233,9 @@ test("enforces global search budgets on a supported eight-anchor 24-paper mobile
 test("keeps every node inside the frame and clear of the others", () => {
   const graph = layoutAssociationPageGraph(input({
     anchors: [
-      { anchorId: "a1", rect: { height: 16, left: 180, top: 260, width: 120 } },
-      { anchorId: "a2", rect: { height: 16, left: 620, top: 420, width: 120 } },
-      { anchorId: "a3", rect: { height: 16, left: 320, top: 700, width: 120 } }
+      { anchorId: "a1", rects: [{ height: 16, left: 180, top: 260, width: 120 }] },
+      { anchorId: "a2", rects: [{ height: 16, left: 620, top: 420, width: 120 }] },
+      { anchorId: "a3", rects: [{ height: 16, left: 320, top: 700, width: 120 }] }
     ],
     sourcesByAnchor: {
       a1: Array.from({ length: 6 }, (_, index) => source(`A${index}`, 1 - index / 12)),
@@ -253,8 +266,14 @@ test("keeps every node inside the frame and clear of the others", () => {
   }
 });
 
-test("never parks a node on an anchor or its label", () => {
-  const anchor = { anchorId: "a1", labelWidth: 180, rect: { height: 18, left: 300, top: 400, width: 140 } };
+test("never parks a node on any wrapped source-text rectangle", () => {
+  const anchor = {
+    anchorId: "a1",
+    rects: [
+      { height: 18, left: 300, top: 400, width: 140 },
+      { height: 18, left: 300, top: 426, width: 96 }
+    ]
+  };
   const graph = layoutAssociationPageGraph(input({
     anchors: [anchor],
     sourcesByAnchor: {
@@ -262,29 +281,18 @@ test("never parks a node on an anchor or its label", () => {
     }
   }));
 
-  const chip = {
-    bottom: anchor.rect.top + anchor.rect.height / 2 + 15,
-    left: anchor.rect.left - 6,
-    right: anchor.rect.left - 6 + anchor.labelWidth,
-    top: anchor.rect.top + anchor.rect.height / 2 - 15
-  };
   for (const node of graph.nodes) {
-    const half = node.isDot
-      ? { horizontal: pageGraphDotSize / 2, vertical: pageGraphDotSize / 2 }
-      : { horizontal: pageGraphNodeWidth / 2, vertical: pageGraphNodeHeight / 2 };
-    const clear = node.left + half.horizontal <= chip.left ||
-      node.left - half.horizontal >= chip.right ||
-      node.top + half.vertical <= chip.top ||
-      node.top - half.vertical >= chip.bottom;
-    expect(clear).toBe(true);
+    for (const rect of anchor.rects) {
+      expect(nodeDoesNotOverlapRect(node, rect)).toBe(true);
+    }
   }
 });
 
 test("is deterministic for identical input", () => {
   const build = () => layoutAssociationPageGraph(input({
     anchors: [
-      { anchorId: "a1", rect: { height: 16, left: 180, top: 260, width: 120 } },
-      { anchorId: "a2", rect: { height: 16, left: 620, top: 420, width: 120 } }
+      { anchorId: "a1", rects: [{ height: 16, left: 180, top: 260, width: 120 }] },
+      { anchorId: "a2", rects: [{ height: 16, left: 620, top: 420, width: 120 }] }
     ],
     sourcesByAnchor: {
       a1: Array.from({ length: 8 }, (_, index) => source(`A${index}`, 1 - index / 12)),
@@ -297,7 +305,7 @@ test("is deterministic for identical input", () => {
 
 test("keeps a dense primary fan in one side sector with zero primary crossings", () => {
   const graph = layoutConstrainedAssociationPageGraph(input({
-    anchors: [{ anchorId: "a1", rect: { height: 18, left: 500, top: 430, width: 120 } }],
+    anchors: [{ anchorId: "a1", rects: [{ height: 18, left: 500, top: 430, width: 120 }] }],
     documentHeight: 1000,
     frameWidth: 1200,
     sourcesByAnchor: {
@@ -331,8 +339,8 @@ test("keeps a dense primary fan in one side sector with zero primary crossings",
 test("assigns adjacent dense anchors deterministically without crossing primary fans", () => {
   const graph = layoutConstrainedAssociationPageGraph(input({
     anchors: [
-      { anchorId: "a1", rect: { height: 18, left: 500, top: 280, width: 120 } },
-      { anchorId: "a2", rect: { height: 18, left: 500, top: 680, width: 120 } }
+      { anchorId: "a1", rects: [{ height: 18, left: 500, top: 280, width: 120 }] },
+      { anchorId: "a2", rects: [{ height: 18, left: 500, top: 680, width: 120 }] }
     ],
     documentHeight: 1100,
     frameWidth: 1200,
@@ -374,28 +382,23 @@ test("coordinates crossing endpoints without trading away the narrow canvas stre
     anchors: [
       {
         anchorId: "anchor-self-attention",
-        labelWidth: 124,
-        rect: { height: 21, left: 161.75, top: 163.375, width: 100.25 }
+        rects: [{ height: 21, left: 161.75, top: 163.375, width: 100.25 }]
       },
       {
         anchorId: "anchor-WMT-2014",
-        labelWidth: 82,
-        rect: { height: 21, left: 66.75, top: 199.84375, width: 88.84375 }
+        rects: [{ height: 21, left: 66.75, top: 199.84375, width: 88.84375 }]
       },
       {
         anchorId: "anchor-BLEU",
-        labelWidth: 54,
-        rect: { height: 21, left: 279.09375, top: 199.84375, width: 49.609375 }
+        rects: [{ height: 21, left: 279.09375, top: 199.84375, width: 49.609375 }]
       },
       {
         anchorId: "anchor-label-smoothing",
-        labelWidth: 131,
-        rect: { height: 21, left: 123.75, top: 247.3125, width: 121.90625 }
+        rects: [{ height: 21, left: 123.75, top: 247.3125, width: 121.90625 }]
       },
       {
         anchorId: "anchor-positional-encoding",
-        labelWidth: 159,
-        rect: { height: 21, left: 24, top: 283.78125, width: 149.34375 }
+        rects: [{ height: 21, left: 24, top: 283.78125, width: 149.34375 }]
       }
     ],
     documentHeight: 1080,
@@ -448,8 +451,8 @@ test("coordinates crossing endpoints without trading away the narrow canvas stre
 test("uses all page-wide paper relations as springs across primary owner groups", () => {
   const relationInput = input({
     anchors: [
-      { anchorId: "a1", rect: { height: 16, left: 180, top: 350, width: 100 } },
-      { anchorId: "a2", rect: { height: 16, left: 820, top: 650, width: 100 } }
+      { anchorId: "a1", rects: [{ height: 16, left: 180, top: 350, width: 100 }] },
+      { anchorId: "a2", rects: [{ height: 16, left: 820, top: 650, width: 100 }] }
     ],
     documentHeight: 1100,
     frameWidth: 1200,
@@ -484,8 +487,8 @@ test("uses all page-wide paper relations as springs across primary owner groups"
 test("is deterministic for identical constrained input", () => {
   const constrainedInput = input({
     anchors: [
-      { anchorId: "a1", rect: { height: 16, left: 250, top: 300, width: 100 } },
-      { anchorId: "a2", rect: { height: 16, left: 250, top: 700, width: 100 } }
+      { anchorId: "a1", rects: [{ height: 16, left: 250, top: 300, width: 100 }] },
+      { anchorId: "a2", rects: [{ height: 16, left: 250, top: 700, width: 100 }] }
     ],
     documentHeight: 1200,
     frameWidth: 1000,
@@ -501,7 +504,7 @@ test("is deterministic for identical constrained input", () => {
 
 test("returns an anchor-only hard-safe graph when even one paper cannot fit", () => {
   const impossible = input({
-    anchors: [{ anchorId: "a1", rect: { height: 18, left: 70, top: 60, width: 80 } }],
+    anchors: [{ anchorId: "a1", rects: [{ height: 18, left: 70, top: 60, width: 80 }] }],
     documentHeight: 110,
     frameWidth: 140,
     sourcesByAnchor: {
@@ -526,8 +529,8 @@ test("returns an anchor-only hard-safe graph when even one paper cannot fit", ()
 test("degrades an infeasible dense graph to one high-value paper per anchor", () => {
   const dense = input({
     anchors: [
-      { anchorId: "a1", rect: { height: 18, left: 160, top: 110, width: 80 } },
-      { anchorId: "a2", rect: { height: 18, left: 160, top: 330, width: 80 } }
+      { anchorId: "a1", rects: [{ height: 18, left: 160, top: 110, width: 80 }] },
+      { anchorId: "a2", rects: [{ height: 18, left: 160, top: 330, width: 80 }] }
     ],
     documentHeight: 500,
     frameWidth: 400,

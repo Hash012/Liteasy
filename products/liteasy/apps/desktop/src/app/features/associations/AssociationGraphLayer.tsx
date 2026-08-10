@@ -2,6 +2,7 @@ import { Button } from "@fluentui/react-components";
 import { AddRegular, DismissRegular, OpenRegular } from "@fluentui/react-icons";
 import {
   useEffect,
+  useId,
   useMemo,
   useState,
   type CSSProperties,
@@ -52,7 +53,7 @@ export type PageGraphAnchorView = {
   anchorId: string;
   /** Free-form kind, used only to colour the mark. Each host names its own kinds. */
   kind: string;
-  label: string;
+  text: string;
   quality?: ThinReadingAnchorQuality;
   /** Every measured rectangle of the anchor's text, so the highlight follows a wrapped line. */
   rects: readonly AnchorRect[];
@@ -117,19 +118,6 @@ function edgeClassName(
   }`;
 }
 
-/**
- * How wide the anchor's chip will be, so the layout can keep nodes off it. Measured in the same
- * 12px/700 face the chip uses: full-width glyphs take about 12.5px, Latin about 7, plus padding.
- * The cap matches the chip's `max-width` in app.css.
- */
-function estimateChipWidth(label: string, frameWidth: number) {
-  let width = 26;
-  for (const character of label) {
-    width += /[⺀-鿿＀-￯]/u.test(character) ? 12.5 : 7;
-  }
-  return Math.min(width, 320, Math.max(120, frameWidth * 0.46));
-}
-
 /** Beside the node, flipped to the other side when the preferred one would leave the frame. */
 function hoverCardCentre(nodeLeft: number, frameWidth: number) {
   const offset = pageGraphNodeWidth / 2 + 12 + hoverCardWidth / 2;
@@ -154,6 +142,7 @@ export function AssociationGraphLayer({
   paperEdges = [],
   sourcesByAnchor
 }: AssociationGraphLayerProps) {
+  const scrimMaskId = useId();
   const [focusedEdgeId, setFocusedEdgeId] = useState<string | null>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
@@ -190,8 +179,7 @@ export function AssociationGraphLayer({
       .filter((anchor) => anchor.rects.length > 0)
       .map((anchor) => ({
         anchorId: anchor.anchorId,
-        labelWidth: estimateChipWidth(anchor.label, frameWidth),
-        rect: anchor.rects[0]
+        rects: anchor.rects
       })),
     documentHeight,
     frameWidth,
@@ -223,7 +211,7 @@ export function AssociationGraphLayer({
       if (!anchor || !rect) return [];
       return [{
         anchorId,
-        anchorLabel: anchor.label,
+        anchorText: anchor.text,
         anchorLeft: rect.left + rect.width / 2,
         anchorTop: rect.top + rect.height / 2,
         node,
@@ -245,7 +233,7 @@ export function AssociationGraphLayer({
     const distance = Math.hypot(edge.nodeLeft - edge.anchorLeft, edge.nodeTop - edge.anchorTop);
     const presentation = associationAnchorEdgePresentation(node.source.confidenceBasis);
     return [{
-      accessibleLabel: `${anchor.label} 与 ${node.source.title}：${presentation.label}`,
+      accessibleLabel: `${anchor.text} 与 ${node.source.title}：${presentation.label}`,
       active: activePaperKey === edge.paperKey || hover?.node.paperKey === edge.paperKey,
       className: `is-primary ${presentation.className}`,
       dimmed: dimmed([edge.anchorId]),
@@ -293,7 +281,7 @@ export function AssociationGraphLayer({
     ).d;
     const presentation = associationAnchorEdgePresentation(edge.node.source.confidenceBasis);
     return {
-      accessibleLabel: `次级关联：${edge.paperKey} 与 ${edge.anchorLabel}`,
+      accessibleLabel: `次级关联：${edge.paperKey} 与 ${edge.anchorText}`,
       active: true,
       className: `is-secondary ${presentation.className}`,
       dimmed: false,
@@ -381,13 +369,42 @@ export function AssociationGraphLayer({
       data-soft-variants={graph.searchDiagnostics.softVariantsEvaluated}
       style={{ height: documentHeight }}
     >
-      <div
+      <svg
         className="association-layer__scrim"
         data-association-blank="true"
+        height={documentHeight}
+        viewBox={`0 0 ${Math.max(1, frameWidth)} ${Math.max(1, documentHeight)}`}
+        width={frameWidth}
         onClick={(event) => {
-          if ((event.target as HTMLElement).dataset.associationBlank === "true") onClose();
+          if (event.target === event.currentTarget ||
+            (event.target as HTMLElement).dataset.associationBlank === "true") onClose();
         }}
-      />
+      >
+        <defs>
+          <mask id={scrimMaskId}>
+            <rect className="association-layer__scrim-base" height="100%" width="100%" />
+            {anchors.flatMap((anchor) => anchor.rects.map((rect, index) => (
+              <rect
+                className="association-layer__scrim-window"
+                data-association-blank="true"
+                height={rect.height}
+                key={`${anchor.anchorId}:${index}`}
+                rx="3"
+                width={rect.width}
+                x={rect.left}
+                y={rect.top}
+              />
+            )))}
+          </mask>
+        </defs>
+        <rect
+          className="association-layer__scrim-fill"
+          data-association-blank="true"
+          height="100%"
+          mask={`url(#${scrimMaskId})`}
+          width="100%"
+        />
+      </svg>
 
       <svg
         aria-label="页级关联边"
@@ -533,7 +550,6 @@ export function AssociationGraphLayer({
         const isDimmed = dimmed([anchor.anchorId]);
         const first = anchor.rects[0];
         if (!first) return null;
-        const hiddenCount = graph.hiddenCountByAnchor[anchor.anchorId] ?? 0;
         return (
           <div
             className={`association-anchor${isDimmed ? " is-dimmed" : ""}${
@@ -541,12 +557,10 @@ export function AssociationGraphLayer({
             }`}
             key={anchor.anchorId}
           >
-            {/* Continuation lines only. The first line is covered by the chip, which carries the
-                anchor's own words — the dimmed page cannot supply legible glyphs of its own. */}
-            {anchor.rects.slice(1).map((rect, index) => (
+            {anchor.rects.map((rect, index) => (
               <span
                 aria-hidden="true"
-                className={`association-anchor__mark is-${anchor.kind}`}
+                className={`association-anchor__window is-${anchor.kind}${focusedAnchorId === anchor.anchorId ? " is-focused" : ""}`}
                 key={index}
                 style={{
                   height: rect.height,
@@ -557,20 +571,16 @@ export function AssociationGraphLayer({
               />
             ))}
             <button
-              aria-label={`锚点：${anchor.label}${
+              aria-label={`锚点：${anchor.text}${
                 focusedAnchorId === anchor.anchorId ? "，已聚焦，再次点击取消" : "，点击只看它的关联"
               }`}
               aria-pressed={focusedAnchorId === anchor.anchorId}
-              className="association-anchor__chip"
+              className="association-anchor__target"
               onClick={() => onFocusAnchor(focusedAnchorId === anchor.anchorId ? null : anchor.anchorId)}
-              // Wide enough to cover the dim text it stands for, so the anchor reads as staying
-              // exactly where it was rather than as a second copy floating beside it.
-              style={{ left: first.left, minWidth: first.width + 12, top: first.top + first.height / 2 }}
+              style={{ height: first.height, left: first.left, top: first.top, width: first.width }}
+              title={anchor.text}
               type="button"
-            >
-              {anchor.label}
-              {hiddenCount > 0 ? <em>+{hiddenCount}</em> : null}
-            </button>
+            />
           </div>
         );
       })}

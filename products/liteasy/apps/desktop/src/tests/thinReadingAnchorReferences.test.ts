@@ -14,7 +14,6 @@ const anchor: ThinReadingAnchor = {
   id: "anchor-1",
   importance: 0.9,
   kind: "method",
-  label: "Late interaction",
   searchQuery: "late interaction retrieval",
   start: 0,
   summarySentenceId: "sentence-1",

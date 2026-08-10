@@ -15,10 +15,12 @@ import type {
   ThinReadingGenerationAudit,
   ThinReadingNode,
   ThinReadingNodeEvidence,
+  ThinReadingNodeSeed,
   ThinReadingNodeSource,
   ThinReadingRecommendationPaperEdge,
   ThinReadingRecommendationScope,
-  ThinReadingSummarySentence
+  ThinReadingSummarySentence,
+  ThinReadingSupportMode
 } from "./thinReading.types";
 import {
   freezePaperIdentity,
@@ -50,6 +52,115 @@ export function resolveThinReadingClosureState(input: {
   // The next interaction at depth three retrieves external sources. Flag the
   // preceding internal level so readers understand the transition before it occurs.
   return input.depth >= 2 ? "near_boundary" : "inside_paper";
+}
+
+export function resolveThinReadingSentenceSupportMode(
+  sentence: Pick<ThinReadingSummarySentence, "evidenceIds" | "externalKnowledge" | "supportMode">
+): ThinReadingSupportMode {
+  if (sentence.evidenceIds.length > 0 && sentence.externalKnowledge.length > 0) {
+    return "paper_and_external";
+  }
+  if (sentence.evidenceIds.length > 0) return "paper";
+  if (sentence.externalKnowledge.length > 0) return "external_only";
+  return sentence.supportMode === "ai_interpretation" ? "ai_interpretation" : "paper";
+}
+
+const thinReadingExternalFallbackRoutes = new Set(["challenge", "context", "support"]);
+const thinReadingExternalFallbackReasons = new Set([
+  "all_routes_failed",
+  "no_trusted_sources",
+  "verification_exhausted"
+]);
+
+function isValidFallbackRoute(value: unknown) {
+  return typeof value === "string" && thinReadingExternalFallbackRoutes.has(value);
+}
+
+function assertValidAiInterpretationFallbackAudit(audit: ThinReadingGenerationAudit["externalFallback"]) {
+  if (!audit) {
+    throw new Error("AI 理解节点缺少外部检索兜底审计。");
+  }
+  if (
+    !Array.isArray(audit.attemptedRoutes) ||
+    !audit.attemptedRoutes.every(isValidFallbackRoute) ||
+    !Array.isArray(audit.completedRoutes) ||
+    !audit.completedRoutes.every(isValidFallbackRoute) ||
+    !thinReadingExternalFallbackReasons.has(audit.reason) ||
+    !Number.isInteger(audit.carriedSourceCount) ||
+    audit.carriedSourceCount < 0 ||
+    audit.trustedSourceCount !== 0
+  ) {
+    throw new Error("AI 理解节点外部检索兜底审计无效。");
+  }
+}
+
+function assertAiInterpretationEvidenceIsolated(evidence: ThinReadingNodeEvidence) {
+  if (
+    (evidence.externalSources?.length ?? 0) > 0 ||
+    (evidence.paperEvidenceSpans?.length ?? 0) > 0 ||
+    (evidence.anchors?.length ?? 0) > 0 ||
+    (evidence.recommendedFigures?.length ?? 0) > 0 ||
+    (evidence.recommendationPaperEdges?.length ?? 0) > 0 ||
+    Boolean(evidence.mermaid?.trim()) ||
+    Boolean(evidence.interactiveDemo)
+  ) {
+    throw new Error("AI 理解节点不得携带论文或外部来源证据。");
+  }
+  if (evidence.claims?.some((claim) => claim.evidenceIds.length > 0)) {
+    throw new Error("AI 理解节点 claims 不得携带证据 ID。");
+  }
+  const summarySentences = evidence.summarySentences ?? [];
+  if (
+    summarySentences.length === 0 ||
+    summarySentences.some((sentence) => (
+      sentence.evidenceIds.length > 0 ||
+      sentence.externalKnowledge.length > 0 ||
+      sentence.status !== "unsupported" ||
+      sentence.supportMode !== "ai_interpretation"
+    ))
+  ) {
+    throw new Error("AI 理解节点句级来源状态必须全部为 unsupported/ai_interpretation。");
+  }
+}
+
+export function resolveThinReadingSupportMode(input: {
+  evidence: Pick<ThinReadingNodeEvidence,
+    "externalKnowledge" | "generationAudit" | "paperEvidence" | "summarySentences">;
+  supportMode?: ThinReadingSupportMode;
+}): ThinReadingSupportMode {
+  const hasPaper = input.evidence.paperEvidence.length > 0 ||
+    Boolean(input.evidence.summarySentences?.some((sentence) => sentence.evidenceIds.length > 0));
+  const hasExternal = input.evidence.externalKnowledge.length > 0 ||
+    Boolean(input.evidence.summarySentences?.some((sentence) => sentence.externalKnowledge.length > 0));
+  const inferred = hasPaper && hasExternal
+    ? "paper_and_external"
+    : hasExternal
+      ? "external_only"
+      : "paper";
+  if (input.supportMode === "ai_interpretation") {
+    if (hasPaper || hasExternal) {
+      throw new Error("薄读支持模式与正文来源不一致：AI 理解不能携带论文或外部引用。");
+    }
+    if (!input.evidence.generationAudit?.externalFallback) {
+      throw new Error("AI 理解节点缺少外部检索兜底审计。");
+    }
+    assertValidAiInterpretationFallbackAudit(input.evidence.generationAudit.externalFallback);
+    if (input.evidence.generationAudit.aiInterpretationReview?.verdict !== "pass") {
+      throw new Error("AI 理解节点缺少通过的 AI 独立理解审阅。");
+    }
+    assertAiInterpretationEvidenceIsolated(input.evidence as ThinReadingNodeEvidence);
+    return "ai_interpretation";
+  }
+  if (input.supportMode && input.supportMode !== inferred) {
+    throw new Error("薄读支持模式与正文来源不一致。");
+  }
+  return input.supportMode ?? inferred;
+}
+
+function assertAiInterpretationSeedBoundary(seed: ThinReadingNodeSeed) {
+  if (seed.supportMode === "ai_interpretation" && seed.withinPaperClosure !== false) {
+    throw new Error("AI 理解节点必须越出论文闭包。");
+  }
 }
 
 export type CreateThinReadingAnnotationInput = {
@@ -137,10 +248,17 @@ function freezeSummarySentence(sentence: ThinReadingSummarySentence): ThinReadin
 
 function freezeAnchor(anchor: ThinReadingAnchor): ThinReadingAnchor {
   return Object.freeze({
-    ...anchor,
+    end: anchor.end,
     evidenceIds: Object.freeze([...anchor.evidenceIds]),
     externalSourceIds: Object.freeze([...anchor.externalSourceIds]),
-    quality: anchor.quality ? Object.freeze({ ...anchor.quality }) : undefined
+    id: anchor.id,
+    importance: anchor.importance,
+    kind: anchor.kind,
+    quality: anchor.quality ? Object.freeze({ ...anchor.quality }) : undefined,
+    searchQuery: anchor.searchQuery,
+    start: anchor.start,
+    summarySentenceId: anchor.summarySentenceId,
+    text: anchor.text
   });
 }
 
@@ -153,10 +271,38 @@ function freezeRecommendationPaperEdge(
   });
 }
 
+function freezeAiInterpretationReview(
+  review: NonNullable<ThinReadingGenerationAudit["aiInterpretationReview"]>
+) {
+  return Object.freeze({
+    reason: review.reason,
+    unsafeSentenceIds: Object.freeze([...review.unsafeSentenceIds]),
+    verdict: review.verdict
+  });
+}
+
+function freezeExternalFallbackAudit(
+  audit: NonNullable<ThinReadingGenerationAudit["externalFallback"]>
+) {
+  return Object.freeze({
+    attemptedRoutes: Object.freeze([...audit.attemptedRoutes]),
+    carriedSourceCount: audit.carriedSourceCount,
+    completedRoutes: Object.freeze([...audit.completedRoutes]),
+    reason: audit.reason,
+    trustedSourceCount: audit.trustedSourceCount
+  });
+}
+
 function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGenerationAudit {
   return Object.freeze({
+    aiInterpretationReview: audit.aiInterpretationReview
+      ? freezeAiInterpretationReview(audit.aiInterpretationReview)
+      : undefined,
     contextManagement: audit.contextManagement
       ? Object.freeze({ ...audit.contextManagement })
+      : undefined,
+    externalFallback: audit.externalFallback
+      ? freezeExternalFallbackAudit(audit.externalFallback)
       : undefined,
     interpretationPlan: audit.interpretationPlan
       ? Object.freeze({
@@ -195,6 +341,9 @@ function freezeGenerationAudit(audit: ThinReadingGenerationAudit): ThinReadingGe
     evidenceReview: audit.evidenceReview
       ? Object.freeze({
           ...audit.evidenceReview,
+          rootOrientation: audit.evidenceReview.rootOrientation
+            ? Object.freeze({ ...audit.evidenceReview.rootOrientation })
+            : audit.evidenceReview.rootOrientation,
           unsupportedSentenceIds: Object.freeze([...audit.evidenceReview.unsupportedSentenceIds])
         })
       : undefined,
@@ -285,6 +434,17 @@ function freezeDocument(document: ThinReadingDocument): ThinReadingDocument {
     ...document,
     annotationSettings: Object.freeze({ ...document.annotationSettings }),
     annotations: Object.freeze(document.annotations.map(freezeAnnotation)),
+    literatureRecords: document.literatureRecords
+      ? Object.freeze(Object.fromEntries(Object.entries(document.literatureRecords).map(([paperId, literature]) => [
+          paperId,
+          Object.freeze({
+            ...literature,
+            authors: Object.freeze([...literature.authors]),
+            identifiers: Object.freeze(literature.identifiers.map((identifier) => Object.freeze({ ...identifier }))),
+            provenance: Object.freeze({ ...literature.provenance })
+          })
+        ]))) as ThinReadingDocument["literatureRecords"]
+      : undefined,
     paperIdentities: document.paperIdentities
       ? Object.freeze(
           Object.fromEntries(
@@ -327,10 +487,16 @@ function createRootTitle(papers: string[], targetLanguage: string): string {
 export function createThinReadingDocument(
   input: CreateThinReadingDocumentInput
 ): ThinReadingDocument {
+  assertAiInterpretationSeedBoundary(input.rootSeed);
   const papers = [...input.papers];
   const paperIds = papers.map((paper) => paper.id);
   const paperTitles = papers.map((paper) => paper.title);
   const paperIdentities = resolvePaperIdentityMap(papers);
+  const literatureRecords = Object.fromEntries(
+    papers.flatMap((paper) => paper.literature?.status === "confirmed"
+      ? [[paper.id, paper.literature] as const]
+      : [])
+  );
   const primaryPaperId = paperIds[0];
   const rootNodeId = `thin-reading-root-${stableHash(
     [input.artifactId, input.targetLanguage, ...papers.flatMap((paper) => [paper.id, paper.title])].join("\u0000")
@@ -351,12 +517,17 @@ export function createThinReadingDocument(
     paperType: input.rootSeed.paperType,
     recommendationScope: {
       kind: "whole_paper",
+      literatureId: primaryPaperId ? literatureRecords[primaryPaperId]?.literatureId : undefined,
       paperId: primaryPaperId,
       paperIdentity: primaryPaperId ? paperIdentities[primaryPaperId] : undefined
     },
     recommendations: retainCommunityRecommendations(input.rootSeed.recommendations),
     source: { kind: "root_overview" },
     summary: input.rootSeed.summary,
+    supportMode: resolveThinReadingSupportMode({
+      evidence: input.rootSeed.evidence,
+      supportMode: input.rootSeed.supportMode
+    }),
     title: rootTitle,
     withinPaperClosure: input.rootSeed.withinPaperClosure
   };
@@ -365,6 +536,7 @@ export function createThinReadingDocument(
     annotationSettings: { autoPublic: false },
     annotations: [],
     artifactId: input.artifactId,
+    literatureRecords: Object.keys(literatureRecords).length > 0 ? literatureRecords : undefined,
     paperIdentities,
     paperIds,
     title: rootNode.title,
@@ -383,14 +555,16 @@ function recommendationScopeForSource(
 ): ThinReadingRecommendationScope {
   const paperId = document.paperIds[0];
   const paperIdentity = paperId ? document.paperIdentities?.[paperId] : undefined;
+  const literatureId = paperId ? document.literatureRecords?.[paperId]?.literatureId : undefined;
   if (source.kind === "omitted_section") {
-    return { kind: "section", paperId, paperIdentity, sectionKey: source.sectionKey };
+    return { kind: "section", literatureId, paperId, paperIdentity, sectionKey: source.sectionKey };
   }
   return {
     kind: "selected_passage",
     ...(source.evidenceIds ? { evidenceIds: [...source.evidenceIds] } : {}),
     ...(source.externalSourceIds ? { externalSourceIds: [...source.externalSourceIds] } : {}),
     excerpt: source.excerpt,
+    literatureId,
     paperId,
     paperIdentity
   };
@@ -419,6 +593,7 @@ export function advanceThinReadingDocument(
   if (existingChild) {
     return freezeDocument({ ...document, activeNodeId: childId });
   }
+  assertAiInterpretationSeedBoundary(input.seed);
   const source = input.source;
 
   const child: ThinReadingNode = {
@@ -439,6 +614,10 @@ export function advanceThinReadingDocument(
     recommendations: retainCommunityRecommendations(input.seed.recommendations),
     source,
     summary: input.seed.summary,
+    supportMode: resolveThinReadingSupportMode({
+      evidence: input.seed.evidence,
+      supportMode: input.seed.supportMode
+    }),
     title: input.title,
     withinPaperClosure: input.seed.withinPaperClosure
   };

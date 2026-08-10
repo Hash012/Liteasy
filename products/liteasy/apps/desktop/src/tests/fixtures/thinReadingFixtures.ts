@@ -126,7 +126,6 @@ export function createThinReadingAnchorGraphFixture(): CreateThinReadingDocument
       id: `anchor-${text.replace(/\s+/gu, "-")}`,
       importance,
       kind: text === "self-attention" ? "method" : "concept",
-      label: text,
       quality: {
         citationProvenance: text === "self-attention" || text === "WMT 2014" ? 1 : 0,
         evidenceAttention: Math.max(0.35, importance - 0.08),
@@ -286,7 +285,6 @@ export function createThinReadingMaximumDensityAnchorGraphFixture(): CreateThinR
       id: `maximum-density-anchor-${anchorIndex + 1}`,
       importance: 0.98 - anchorIndex * 0.04,
       kind: definition.kind,
-      label: definition.label,
       quality: {
         citationProvenance: anchorIndex % 3 === 0 ? 1 : 0.6,
         evidenceAttention: 0.96 - anchorIndex * 0.035,

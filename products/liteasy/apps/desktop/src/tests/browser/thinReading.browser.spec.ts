@@ -17,6 +17,18 @@ async function mountPageRecommendationGraphFixture(
   }, variant);
 }
 
+async function mountThinReadingSupportModeFixture(page: Page) {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="thin-reading-support-mode-fixture"></div>';
+    const fixtureModuleUrl = "/src/tests/fixtures/thinReadingSupportModeBrowserFixture.tsx";
+    const fixtureModule = await import(fixtureModuleUrl);
+    await fixtureModule.mountThinReadingSupportModeBrowserFixture(
+      document.getElementById("thin-reading-support-mode-fixture")
+    );
+  });
+}
+
 async function openPageRecommendationGraph(page: Page) {
   const recommendations = page.getByRole("button", { name: "相关推荐" });
   await expect(recommendations).toHaveAttribute("aria-pressed", "false");
@@ -26,6 +38,12 @@ async function openPageRecommendationGraph(page: Page) {
   await recommendations.click();
   await expect(page.getByRole("region", { exact: true, name: "页级关联图" })).toBeVisible();
   return recommendations;
+}
+
+async function sourceAnchorRectCount(page: Page) {
+  return page.locator(".thin-reading__anchor[data-anchor-id]").evaluateAll((anchors) =>
+    anchors.reduce((count, anchor) => count + anchor.getClientRects().length, 0)
+  );
 }
 
 async function graphGeometry(page: Page) {
@@ -115,15 +133,23 @@ async function graphGeometry(page: Page) {
       }
     }
     const realAnchors = [...document.querySelectorAll<HTMLElement>(".thin-reading__anchor[data-anchor-id]")];
-    const graphChips = [...document.querySelectorAll<HTMLElement>(".association-anchor__chip")];
-    const anchorObstructions = boxes.reduce((count, box) => count + graphChips.filter((chip) =>
-      overlap(box, chip.getBoundingClientRect())).length, 0);
-    const anchorDrift = Math.max(0, ...graphChips.map((chip, index) => {
+    const sourceTextRects = realAnchors.flatMap((anchor) => [...anchor.getClientRects()]);
+    const wrappedAnchorObstructions = boxes.reduce((count, box) => count + sourceTextRects.filter((rect) =>
+      overlap(box, {
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top
+      })).length, 0);
+    const graphTargets = [...document.querySelectorAll<HTMLElement>(".association-anchor__target")];
+    const anchorObstructions = boxes.reduce((count, box) => count + graphTargets.filter((target) =>
+      overlap(box, target.getBoundingClientRect())).length, 0);
+    const anchorDrift = Math.max(0, ...graphTargets.map((target, index) => {
       const original = realAnchors[index]?.getClientRects()[0];
       if (!original) return Number.POSITIVE_INFINITY;
-      const chipRect = chip.getBoundingClientRect();
-      return Math.hypot(chipRect.left - original.left,
-        chipRect.top + chipRect.height / 2 - (original.top + original.height / 2));
+      const targetRect = target.getBoundingClientRect();
+      return Math.hypot(targetRect.left - original.left,
+        targetRect.top + targetRect.height / 2 - (original.top + original.height / 2));
     }));
     const graphElement = document.querySelector<HTMLElement>(".association-layer")!;
     const graph = graphElement.getBoundingClientRect();
@@ -144,6 +170,7 @@ async function graphGeometry(page: Page) {
     return {
       anchorDrift,
       anchorObstructions,
+      wrappedAnchorObstructions,
       candidateHard: [
         graphElement.dataset.candidateCrossings,
         graphElement.dataset.candidateSameSide,
@@ -186,6 +213,47 @@ async function graphInkPixelCount(graph: Locator) {
   }
   return nonTransparentInkPixels;
 }
+
+test.describe("AI interpretation support mode", () => {
+  for (const viewport of [
+    { height: 900, name: "desktop", width: 1440 },
+    { height: 844, name: "mobile", width: 390 }
+  ] as const) {
+    test(`keeps disclosure and prose distinct on ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize({ height: viewport.height, width: viewport.width });
+      await mountThinReadingSupportModeFixture(page);
+
+      const root = page.locator(".thin-reading.is-support-ai-interpretation");
+      const notice = page.getByRole("note", { name: "无文献依据：AI 独立理解" });
+      const heading = page.locator(".thin-reading__article h2");
+      const summary = page.getByTestId("thin-reading-summary");
+      await expect(notice).toBeVisible();
+      await expect(heading).toBeVisible();
+      await expect(summary).toBeVisible();
+      await expect(root).toHaveCSS("background-color", "rgb(255, 243, 241)");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+      const overlapCount = await root.evaluate((element) => {
+        const selectors = [
+          ".thin-reading__ai-interpretation-notice",
+          ".thin-reading__article h2",
+          "[data-testid='thin-reading-summary']"
+        ];
+        const rectangles = selectors.map((selector) =>
+          element.querySelector<HTMLElement>(selector)!.getBoundingClientRect()
+        );
+        const overlaps = (left: DOMRect, right: DOMRect) =>
+          left.left < right.right && left.right > right.left && left.top < right.bottom && left.bottom > right.top;
+        return rectangles.reduce((count, rectangle, index) => count + rectangles.slice(index + 1)
+          .filter((other) => overlaps(rectangle, other)).length, 0);
+      });
+      expect(overlapCount).toBe(0);
+      await expect(page).toHaveScreenshot(`thin-reading-ai-interpretation-${viewport.name}.png`, {
+        fullPage: true
+      });
+    });
+  }
+});
 
 test("keeps thin-reading prose and evidence markers readable on desktop", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
@@ -475,7 +543,14 @@ test.describe("page recommendation graph", () => {
     const recommendations = await openPageRecommendationGraph(page);
     const graph = page.getByRole("region", { exact: true, name: "页级关联图" });
 
-    await expect(graph.locator(".association-anchor__chip")).toHaveCount(5);
+    await expect(graph.locator(".association-anchor__chip")).toHaveCount(0);
+    await expect(graph.locator(".association-anchor__target")).toHaveCount(5);
+    await expect(graph.locator(".association-layer__scrim-window")).toHaveCount(
+      await sourceAnchorRectCount(page)
+    );
+    expect(await page.locator(".thin-reading__article").evaluate((element) =>
+      getComputedStyle(element).opacity
+    )).toBe("1");
     await expect(graph.locator(".association-node")).toHaveCount(10);
     await expect(graph.locator(".association-node.is-crossing")).toHaveCount(1);
     await expect(graph.locator(".association-node.is-crossing")).not.toHaveClass(/is-dot/u);
@@ -496,6 +571,7 @@ test.describe("page recommendation graph", () => {
     expect(geometry).toEqual({
       anchorDrift: expect.any(Number),
       anchorObstructions: 0,
+      wrappedAnchorObstructions: 0,
       layoutPrimaryCrossings: 0,
       layoutHard: "0/0/0/0/0",
       candidateHard: "0/0/0/0/0",
@@ -558,10 +634,17 @@ test.describe("page recommendation graph", () => {
       await page.setViewportSize({ height: viewport.height, width: viewport.width });
       await mountPageRecommendationGraphFixture(page);
       await openPageRecommendationGraph(page);
+      const graph = page.getByRole("region", { exact: true, name: "页级关联图" });
+      await expect(graph.locator(".association-anchor__chip")).toHaveCount(0);
+      await expect(graph.locator(".association-anchor__target")).toHaveCount(5);
+      await expect(graph.locator(".association-layer__scrim-window")).toHaveCount(
+        await sourceAnchorRectCount(page)
+      );
       const geometry = await graphGeometry(page);
       expect(geometry).toEqual({
         anchorDrift: expect.any(Number),
         anchorObstructions: 0,
+        wrappedAnchorObstructions: 0,
         layoutPrimaryCrossings: 0,
         layoutHard: "0/0/0/0/0",
         candidateHard: "0/0/0/0/0",
@@ -642,7 +725,11 @@ test.describe("page recommendation graph", () => {
       const elapsed = await page.evaluate((start) => performance.now() - start, startedAt);
 
       expect(elapsed).toBeLessThan(1_500);
-      await expect(graph.locator(".association-anchor__chip")).toHaveCount(8);
+      await expect(graph.locator(".association-anchor__chip")).toHaveCount(0);
+      await expect(graph.locator(".association-anchor__target")).toHaveCount(8);
+      await expect(graph.locator(".association-layer__scrim-window")).toHaveCount(
+        await sourceAnchorRectCount(page)
+      );
       await expect(graph.locator(".association-node")).toHaveCount(24);
       await expect(graph.locator(".association-node.is-crossing")).toHaveCount(1);
       await expect(graph.locator('.association-edge.is-paper-relation.is-hit[role="img"]')).toHaveCount(3);
@@ -653,6 +740,7 @@ test.describe("page recommendation graph", () => {
       const geometry = await graphGeometry(page);
       expect(geometry).toMatchObject({
         anchorObstructions: 0,
+        wrappedAnchorObstructions: 0,
         layoutHard: "0/0/0/0/0",
         layoutPrimaryCrossings: 0,
         layoutSameSideViolations: 0,
@@ -673,6 +761,10 @@ test.describe("page recommendation graph", () => {
       expect(repairNodes).toBeLessThanOrEqual(48);
       expect(await graphInkPixelCount(graph)).toBeGreaterThan(100);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await expect(graph.locator(".association-anchor__target")).toHaveCount(8);
+      await expect(graph.locator(".association-layer__scrim-window")).toHaveCount(
+        await sourceAnchorRectCount(page)
+      );
 
       const compactNodes = graph.locator(".association-node.is-dot");
       for (let index = 0; index < await compactNodes.count(); index += 1) {

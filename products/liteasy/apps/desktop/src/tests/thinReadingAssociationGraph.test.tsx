@@ -52,6 +52,29 @@ function renderArtifact(options: { strictMode?: boolean } = {}) {
   return render(options.strictMode ? <StrictMode>{tab}</StrictMode> : tab);
 }
 
+function createExactTextFixture() {
+  const fixture = createThinReadingAnchorGraphFixture();
+  const exactText = "不同表示子空间中并行建模";
+  const sentence = fixture.rootSeed.evidence.summarySentences![0]!;
+  const sentenceText = sentence.text.replace("self-attention", exactText);
+  const firstAnchor = fixture.rootSeed.evidence.anchors![0]!;
+  const start = sentenceText.indexOf(exactText);
+  return {
+    ...fixture,
+    rootSeed: {
+      ...fixture.rootSeed,
+      evidence: {
+        ...fixture.rootSeed.evidence,
+        anchors: [
+          { ...firstAnchor, end: start + exactText.length, id: "anchor-exact-text", searchQuery: exactText, start, text: exactText },
+          ...fixture.rootSeed.evidence.anchors!.slice(1)
+        ],
+        summarySentences: [{ ...sentence, text: sentenceText }, ...fixture.rootSeed.evidence.summarySentences!.slice(1)]
+      }
+    }
+  };
+}
+
 test("cycles one related-recommendations button through article, marks, graph, and article", () => {
   const { container } = renderArtifact();
   const button = screen.getByRole("button", { name: "相关推荐" });
@@ -80,7 +103,10 @@ test("cycles one related-recommendations button through article, marks, graph, a
   fireEvent.click(button);
 
   expect(container.querySelector(".association-layer")).not.toBeNull();
-  expect(container.querySelectorAll(".association-anchor__chip")).toHaveLength(5);
+  expect(container.querySelectorAll(".association-anchor__chip")).toHaveLength(0);
+  expect(container.querySelectorAll(".association-anchor__target")).toHaveLength(5);
+  expect(container.querySelectorAll(".association-anchor__window")).toHaveLength(5);
+  expect(container.querySelector(".association-layer__scrim mask")).not.toBeNull();
   // Ten distinct papers, one reached from two anchors: resting view still has one primary edge each.
   expect(container.querySelectorAll(".association-node")).toHaveLength(10);
   expect(container.querySelectorAll(".association-edge.is-primary.is-ink")).toHaveLength(10);
@@ -103,8 +129,33 @@ test("a concept in the prose opens the graph focused on itself", () => {
   expect(container.querySelector(".association-layer")).not.toBeNull();
   expect(screen.getByText("聚焦概念")).toBeVisible();
   expect(screen.getByText("正在聚焦「self-attention」及其关联文献")).toBeVisible();
+  expect(screen.getByRole("button", {
+    name: "锚点：self-attention，已聚焦，再次点击取消"
+  })).toBeVisible();
   // The other four anchors stay on the page, quietened rather than removed.
   expect(container.querySelectorAll(".association-anchor.is-dimmed")).toHaveLength(4);
+});
+
+test("preserves exact long anchor text in focused graph state and target accessibility", () => {
+  const fixture = createExactTextFixture();
+  const { container } = render(
+    <ThinReadingTab
+      artifactId={fixture.artifactId}
+      document={createThinReadingDocument(fixture)}
+      onUpdateDocument={vi.fn()}
+      papers={[...fixture.papers]}
+    />
+  );
+  const exactText = "不同表示子空间中并行建模";
+  const recommendations = screen.getByRole("button", { name: "相关推荐" });
+  fireEvent.click(recommendations);
+  fireEvent.click(screen.getByRole("button", { name: `查看“${exactText}”关联论文` }));
+
+  expect(screen.getByText(`正在聚焦「${exactText}」及其关联文献`)).toBeVisible();
+  expect(screen.getByRole("button", {
+    name: `锚点：${exactText}，已聚焦，再次点击取消`
+  })).toHaveAttribute("title", exactText);
+  expect(container.querySelectorAll(".association-anchor__chip")).toHaveLength(0);
 });
 
 test("Enter and Space open a keyboard-reachable concept directly in its focused graph", () => {

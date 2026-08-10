@@ -48,9 +48,7 @@ export type AnchorRect = {
 
 export type PageGraphAnchorInput = {
   anchorId: string;
-  /** Width of the anchor's label chip, so nodes are kept off the one thing that must stay legible. */
-  labelWidth?: number;
-  rect: AnchorRect;
+  rects: readonly AnchorRect[];
 };
 
 export type PageGraphInput = {
@@ -205,6 +203,10 @@ export function pageGraphPaperKey(source: ThinReadingExternalSource) {
   return source.canonicalPaperId ?? source.doi ?? source.id;
 }
 
+function primaryAnchorRect(anchor: PageGraphAnchorInput): AnchorRect {
+  return anchor.rects[0] ?? { height: 0, left: 0, top: 0, width: 0 };
+}
+
 function anchorCentre(rect: AnchorRect) {
   return { left: rect.left + rect.width / 2, top: rect.top + rect.height / 2 };
 }
@@ -236,27 +238,16 @@ function overlaps(candidate: OccupiedBox, placed: OccupiedBox) {
 }
 
 /**
- * The anchor's own text and its label chip, which nothing may sit on: covering the anchor would
- * hide the very thing every edge on the page points at.
+ * Every wrapped source-text rectangle is an obstacle: covering any line would hide the thing every
+ * edge on the page points at.
  */
 function anchorObstacles(anchor: PageGraphAnchorInput): OccupiedBox[] {
-  const { rect } = anchor;
-  const centreTop = rect.top + rect.height / 2;
-  const chipWidth = Math.max(rect.width, anchor.labelWidth ?? 0);
-  return [
-    {
-      halfHeight: Math.max(rect.height, 22) / 2,
-      halfWidth: rect.width / 2,
-      left: rect.left + rect.width / 2,
-      top: centreTop
-    },
-    {
-      halfHeight: 15,
-      halfWidth: chipWidth / 2,
-      left: rect.left - 6 + chipWidth / 2,
-      top: centreTop
-    }
-  ];
+  return anchor.rects.map((rect) => ({
+    halfHeight: Math.max(rect.height, 22) / 2,
+    halfWidth: rect.width / 2,
+    left: rect.left + rect.width / 2,
+    top: rect.top + rect.height / 2
+  }));
 }
 
 export function layoutAssociationPageGraph({
@@ -291,7 +282,7 @@ export function layoutAssociationPageGraph({
     }
     if (visible.length === 0) continue;
 
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const highest = visible[0].relevance;
     const lowest = visible[visible.length - 1].relevance;
     const spread = highest - lowest;
@@ -369,7 +360,7 @@ export function layoutAssociationPageGraph({
   }
 
   const anchorCentreById = new Map(
-    anchors.map((anchor) => [anchor.anchorId, anchorCentre(anchor.rect)] as const)
+    anchors.map((anchor) => [anchor.anchorId, anchorCentre(primaryAnchorRect(anchor))] as const)
   );
   const horizontalLimit = pageGraphNodeWidth / 2 + 10;
   const verticalLimit = pageGraphNodeHeight / 2 + 8;
@@ -444,7 +435,7 @@ function geometryInput(
   const nodeByKey = new Map(graph.nodes.map((node) => [node.paperKey, node] as const));
   return {
     anchors: input.anchors.map((anchor) => {
-      const centre = anchorCentre(anchor.rect);
+      const centre = anchorCentre(primaryAnchorRect(anchor));
       return {
         anchorId: anchor.anchorId,
         ...centre,
@@ -497,7 +488,7 @@ function primaryCrossingPaperKeys(input: PageGraphInput, graph: PageGraph) {
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
     if (!anchor) return [];
-    return createAssociationExactPath(anchorCentre(anchor.rect), node, 0.52).segments.map((segment) => ({
+    return createAssociationExactPath(anchorCentre(primaryAnchorRect(anchor)), node, 0.52).segments.map((segment) => ({
       ...segment,
       paperKey: node.paperKey
     }));
@@ -562,7 +553,7 @@ function hardViolationPaperKeys(
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
     if (!anchorId || !anchor) return [];
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const side = sideByAnchor.get(anchorId);
     if (side && !pointIsInSideSector(centre, node, side)) result.add(node.paperKey);
     return [{ anchorId, end: node, paperKey: node.paperKey, start: centre }];
@@ -587,7 +578,7 @@ function stressByPaperKey(input: PageGraphInput, graph: PageGraph) {
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
     if (!anchor) return [node.paperKey, 0] as const;
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const ideal = nearRadius + (1 - node.relevance) * radiusSpread;
     return [node.paperKey, 3 * (Math.hypot(node.left - centre.left, node.top - centre.top) - ideal) ** 2 /
       ideal ** 2] as const;
@@ -617,7 +608,7 @@ function softRepairPaperKeys(
   const segments = graph.nodes.flatMap((node) => {
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
-    return anchor ? [{ end: node, paperKeys: [node.paperKey], start: anchorCentre(anchor.rect) }] : [];
+    return anchor ? [{ end: node, paperKeys: [node.paperKey], start: anchorCentre(primaryAnchorRect(anchor)) }] : [];
   });
   for (const edge of input.paperEdges ?? []) {
     const source = nodeByKey.get(edge.sourcePaperKey);
@@ -677,7 +668,7 @@ function expandRepairConstraintClosure(
       const neighboursSelectedAnchor = anchor && [...selectedAnchorIds].some((selectedAnchorId) => {
         const selectedAnchor = anchorById.get(selectedAnchorId);
         return selectedAnchor && Math.abs(
-          anchorCentre(anchor.rect).top - anchorCentre(selectedAnchor.rect).top
+        anchorCentre(primaryAnchorRect(anchor)).top - anchorCentre(primaryAnchorRect(selectedAnchor)).top
         ) <= pageGraphNodeHeight * 2 + nodeGap;
       });
       if (selectedAnchorIds.has(anchorId) || neighboursSelectedAnchor) {
@@ -720,7 +711,7 @@ function sideAssignments(input: PageGraphInput, baseline: PageGraph) {
   }
   const ordered = [...input.anchors]
     .filter((anchor) => (nodesByAnchor.get(anchor.anchorId)?.length ?? 0) > 0)
-    .sort((left, right) => left.rect.top - right.rect.top || left.anchorId.localeCompare(right.anchorId));
+    .sort((left, right) => primaryAnchorRect(left).top - primaryAnchorRect(right).top || left.anchorId.localeCompare(right.anchorId));
   if (ordered.length === 0) return new Map<string, AssociationSide>();
 
   type State = { cost: number; path: AssociationSide[] };
@@ -729,7 +720,7 @@ function sideAssignments(input: PageGraphInput, baseline: PageGraph) {
     right: { cost: 0, path: [] }
   };
   ordered.forEach((anchor, index) => {
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const count = nodesByAnchor.get(anchor.anchorId)!.length;
     const local = (side: AssociationSide) => {
       const room = side === "left" ? centre.left : input.frameWidth - centre.left;
@@ -749,7 +740,7 @@ function sideAssignments(input: PageGraphInput, baseline: PageGraph) {
       return;
     }
     const previousAnchor = ordered[index - 1]!;
-    const verticalGap = Math.abs(anchorCentre(previousAnchor.rect).top - centre.top);
+    const verticalGap = Math.abs(anchorCentre(primaryAnchorRect(previousAnchor)).top - centre.top);
     const transitionPenalty = verticalGap < 360 ? 90 : 20;
     const next = {} as Record<AssociationSide, State>;
     for (const side of ["left", "right"] as const) {
@@ -882,7 +873,7 @@ function candidateGraph(
     nodes = initialGraph.nodes.map((node) => ({ ...node }));
   } else {
     const forceNodes: ForceNode[] = input.anchors.map((anchor) => {
-      const centre = anchorCentre(anchor.rect);
+      const centre = anchorCentre(primaryAnchorRect(anchor));
       return { anchorId: anchor.anchorId, fx: centre.left, fy: centre.top, id: `anchor:${anchor.anchorId}`,
         isAnchor: true, x: centre.left, y: centre.top };
     });
@@ -1181,7 +1172,7 @@ function candidateGraph(
         const anchor = anchorId ? anchorById.get(anchorId) : undefined;
         const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
         if (nodeIndex < 0 || !repairNode || !anchor || !side) continue;
-        const centre = anchorCentre(anchor.rect);
+        const centre = anchorCentre(primaryAnchorRect(anchor));
         const ideal = nearRadius + (1 - repairNode.relevance) * radiusSpread;
         let evaluatedForNode = 0;
 
@@ -1308,7 +1299,7 @@ function candidateGraph(
       const anchor = anchorId ? anchorById.get(anchorId) : undefined;
       const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
       if (nodeIndex < 0 || !anchor || !side) continue;
-      const centre = anchorCentre(anchor.rect);
+      const centre = anchorCentre(primaryAnchorRect(anchor));
       const ideal = nearRadius + (1 - repairNode.relevance) * radiusSpread;
       let bestNodes = nodes;
       let bestQuality = quality;

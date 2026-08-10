@@ -3,6 +3,7 @@ import type {
   PaperIdentityCandidate,
   PaperIdentityInput
 } from "../paper-identity/paperIdentity";
+import type { LiteratureRecord } from "../paper-identity/literature.types";
 
 export type ThinReadingPaper = PaperIdentityInput;
 
@@ -40,13 +41,14 @@ export type ThinReadingNodeSource =
 export type ThinReadingBranchSource = Exclude<ThinReadingNodeSource, { kind: "root_overview" }>;
 
 export type ThinReadingRecommendationScope =
-  | { kind: "whole_paper"; paperId?: string; paperIdentity?: PaperIdentity }
-  | { kind: "section"; paperId?: string; paperIdentity?: PaperIdentity; sectionKey: string }
+  | { kind: "whole_paper"; literatureId?: string; paperId?: string; paperIdentity?: PaperIdentity }
+  | { kind: "section"; literatureId?: string; paperId?: string; paperIdentity?: PaperIdentity; sectionKey: string }
   | {
       kind: "selected_passage";
       evidenceIds?: readonly string[];
       externalSourceIds?: readonly string[];
       excerpt: string;
+      literatureId?: string;
       paperId?: string;
       paperIdentity?: PaperIdentity;
     };
@@ -219,11 +221,37 @@ export type ThinReadingClaim = {
   text: string;
 };
 
+export type ThinReadingSupportMode =
+  | "paper"
+  | "paper_and_external"
+  | "external_only"
+  | "ai_interpretation";
+
+export type ThinReadingExternalFallbackReason =
+  | "all_routes_failed"
+  | "no_trusted_sources"
+  | "verification_exhausted";
+
+export type ThinReadingExternalFallbackAudit = {
+  attemptedRoutes: readonly ("challenge" | "context" | "support")[];
+  carriedSourceCount: number;
+  completedRoutes: readonly ("challenge" | "context" | "support")[];
+  reason: ThinReadingExternalFallbackReason;
+  trustedSourceCount: 0;
+};
+
+export type ThinReadingAiInterpretationReviewAudit = {
+  reason: string;
+  unsafeSentenceIds: readonly string[];
+  verdict: "pass";
+};
+
 export type ThinReadingSummarySentence = {
   evidenceIds: readonly string[];
   externalKnowledge: readonly string[];
   id: string;
   status: ThinReadingClaimStatus;
+  supportMode?: ThinReadingSupportMode;
   text: string;
 };
 
@@ -257,7 +285,6 @@ export type ThinReadingAnchor = {
   id: string;
   importance: number;
   kind: ThinReadingAnchorKind;
-  label: string;
   quality?: ThinReadingAnchorQuality;
   searchQuery: string;
   start: number;
@@ -278,7 +305,9 @@ export type ThinReadingRecommendationPaperEdge = {
 // This is deliberately attached to the generated node rather than the transient Agent run.
 // A reader reopening an artifact must be able to inspect how its evidence boundary was chosen.
 export type ThinReadingGenerationAudit = {
+  aiInterpretationReview?: ThinReadingAiInterpretationReviewAudit;
   contextManagement?: ThinReadingContextAudit;
+  externalFallback?: ThinReadingExternalFallbackAudit;
   interpretationPlan?: ThinReadingInterpretationPlan;
   evidenceLoop?: {
     rounds: readonly {
@@ -315,6 +344,16 @@ export type ThinReadingGenerationAudit = {
       verdict: ThinReadingPropositionVerdict;
     }[];
     reason: string;
+    rootOrientation?: {
+      coreIdea: "covered" | "missing";
+      fieldPosition: "covered" | "evidence_unavailable" | "missing";
+      paperPanorama: "covered" | "missing";
+      paperType: ThinReadingPaperType;
+      paperTypeVerdict: "ambiguous" | "mismatch" | "supported";
+      reason: string;
+      retentionVerdict: "focused" | "unfocused";
+      verdict: "pass" | "fail";
+    } | null;
     unsupportedSentenceIds: readonly string[];
     verdict: "pass";
   };
@@ -355,6 +394,7 @@ export type ThinReadingNodeSeed = {
   paperType?: ThinReadingPaperType;
   recommendations: readonly ThinReadingIntuechoRecommendation[];
   summary: string;
+  supportMode?: ThinReadingSupportMode;
   withinPaperClosure: boolean;
 };
 
@@ -401,6 +441,7 @@ export type ThinReadingNode = {
   recommendations: readonly ThinReadingIntuechoRecommendation[];
   source: ThinReadingNodeSource;
   summary: string;
+  supportMode?: ThinReadingSupportMode;
   title: string;
   withinPaperClosure: boolean;
 };
@@ -439,6 +480,7 @@ export type ThinReadingDocument = {
   annotationSettings: ThinReadingAnnotationSettings;
   annotations: readonly ThinReadingAnnotation[];
   artifactId: string;
+  literatureRecords?: Readonly<Record<string, LiteratureRecord>>;
   paperIdentities?: Readonly<Record<string, PaperIdentity>>;
   paperIds: readonly string[];
   title: string;

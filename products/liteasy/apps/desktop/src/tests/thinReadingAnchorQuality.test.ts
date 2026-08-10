@@ -22,7 +22,6 @@ function anchor(input: Partial<ThinReadingAnchor> & Pick<ThinReadingAnchor, "id"
     externalSourceIds: [],
     importance: 0.8,
     kind: "concept",
-    label: input.id,
     searchQuery: input.id,
     start: 0,
     text: input.id,

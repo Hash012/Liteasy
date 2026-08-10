@@ -1,15 +1,21 @@
 import { describe, expect, test } from "vitest";
 import {
   buildThinReadingAgentPrompt,
+  buildThinReadingAiInterpretationReviewPrompt,
   buildThinReadingEvidenceObservationPrompt,
   buildThinReadingEvidencePlanPrompt,
   buildThinReadingEvidenceReviewPrompt,
+  parseThinReadingAiInterpretationReview,
   parseThinReadingEvidenceObservation,
   parseThinReadingEvidencePlan,
   parseThinReadingEvidenceReview,
   parseThinReadingModelSeed,
   resolveThinReadingOmittedSections,
-  thinReadingEvidenceReviewJsonSchema
+  thinReadingEvidenceObservationJsonSchema,
+  thinReadingEvidencePlanJsonSchema,
+  thinReadingEvidenceReviewJsonSchema,
+  thinReadingAiInterpretationReviewSchema,
+  thinReadingAiInterpretationReviewJsonSchema
 } from "../app/features/thin-reading/thinReadingAgent";
 import { classifyThinReadingPaper } from "../app/features/thin-reading/thinReadingPromptRegistry";
 import type { PreparedMultiPaperAnalysis } from "../app/features/paper-analysis/analysis.types";
@@ -70,6 +76,34 @@ const prepared: PreparedMultiPaperAnalysis = {
   }
 };
 
+const aiInterpretationOutput = JSON.stringify({
+  anchors: [],
+  claims: [],
+  externalKnowledge: [],
+  interactiveDemo: null,
+  mermaid: "",
+  omittedSections: [],
+  paperEvidence: [],
+  paperType: "experimental",
+  recommendations: [],
+  recommendedFigures: [],
+  summary: "一种可能的理解是，系统会在保留细粒度交互的同时尝试压缩计算路径。",
+  summarySentences: [{
+    evidenceIds: [],
+    externalKnowledge: [],
+    status: "unsupported",
+    text: "一种可能的理解是，系统会在保留细粒度交互的同时尝试压缩计算路径。"
+  }],
+  withinPaperClosure: false
+});
+
+function aiInterpretationOutputWith(overrides: Record<string, unknown>) {
+  return JSON.stringify({
+    ...JSON.parse(aiInterpretationOutput) as Record<string, unknown>,
+    ...overrides
+  });
+}
+
 describe("thinReadingAgent", () => {
   test("classifies paper type from title and evidence for prompt guidance", () => {
     expect(classifyThinReadingPaper({
@@ -117,6 +151,91 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("核心思想、论文全景、领域位置");
     expect(prompt).toContain("全景不是章节目录");
     expect(prompt).toContain("领域位置证据不足");
+    expect(prompt).toContain("先选证据，再写句子");
+    expect(prompt).toContain("evidence ID 不是主题标签");
+    expect(prompt).toContain("主体、关系、对象、条件和范围");
+  });
+
+  test("builds a source-free prompt for orchestration-authorized AI interpretation", () => {
+    const prompt = buildThinReadingAgentPrompt({
+      context: {
+        ...context,
+        ancestorSummaries: [{ summary: "父层摘要不得进入 AI 独立理解提示。", title: "父层" }],
+        availableFigures: [{ id: "figure-hidden", page: 2, title: "隐藏图" }],
+        externalSources: [{
+          abstract: "不应进入 AI 独立理解提示的外部摘要。",
+          authors: ["A. Author"],
+          id: "openalex:W-hidden",
+          provider: "openalex",
+          relation: "related",
+          relevance: 0.8,
+          retrievalQuery: "hidden external source",
+          sourceId: "W-hidden",
+          sourceRecordUrl: "https://openalex.org/W-hidden",
+          title: "Hidden External Source",
+          url: "https://openalex.org/W-hidden",
+          year: 2025
+        }],
+        parentClaims: [{
+          evidenceIds: ["evidence-parent-hidden"],
+          id: "claim-parent-hidden",
+          status: "grounded",
+          text: "父层关键判断不得进入 AI 独立理解提示。"
+        }],
+        parentEvidenceSpans: [{
+          chunkId: "paper:hidden",
+          confidence: 0.9,
+          id: "evidence-parent-hidden",
+          page: 2,
+          paperId: "paper-survey",
+          quote: "父层证据不得进入 AI 独立理解提示。"
+        }],
+        parentSummary: "父层正文不得进入 AI 独立理解提示。",
+        prompt: "请只给出一个不引用来源的概念解释。"
+      },
+      prepared,
+      privateBriefs: "私有 evidence brief 不得进入 AI 独立理解提示。",
+      supportMode: "ai_interpretation"
+    });
+
+    expect(prompt).toContain("用户提示词：\"请只给出一个不引用来源的概念解释。\"");
+    expect(prompt).toContain('"summarySentences": [{"text": "summary sentence", "evidenceIds": [], "externalKnowledge": [], "status": "unsupported"}]');
+    expect(prompt).toContain("本轮已由编排器授权为 AI 独立理解：论文内外均没有可用于支持正文的来源。");
+    expect(prompt).toContain("正文只能表达概念分析、推理、假设和可能性，不得声称论文、研究、实验或外部资料支持任何句子。");
+    expect(prompt).toContain("paperEvidence、externalKnowledge、claims、anchors、recommendedFigures 必须为空数组；mermaid 必须为空字符串；interactiveDemo 必须为 null。");
+    expect(prompt).toContain("summarySentences 必须完整覆盖 summary；每句 evidenceIds=[]、externalKnowledge=[]、status=\"unsupported\"。");
+    expect(prompt).toContain("withinPaperClosure 必须为 false。只返回 JSON。");
+    expect(prompt).not.toContain(prepared.evidencePrompt);
+    expect(prompt).not.toContain("父层正文不得进入 AI 独立理解提示。");
+    expect(prompt).not.toContain("父层关键判断不得进入 AI 独立理解提示。");
+    expect(prompt).not.toContain("父层证据不得进入 AI 独立理解提示。");
+    expect(prompt).not.toContain("Hidden External Source");
+    expect(prompt).not.toContain("figure-hidden");
+    expect(prompt).not.toContain("私有 evidence brief 不得进入 AI 独立理解提示。");
+  });
+
+  test("does not inject selected source text into an AI interpretation prompt", () => {
+    const prompt = buildThinReadingAgentPrompt({
+      context: {
+        ...context,
+        prompt: "原始用户问题：请比较这两个概念。",
+        source: {
+          evidenceIds: ["evidence-parent-secret"],
+          externalSourceIds: ["openalex:W-parent-secret"],
+          excerpt: "父节点论文正文：该方法依赖 evidence-parent-secret 与外部来源的专有结论。",
+          kind: "selected_text",
+          prompt: "来源补充资料：开放论文原文和检索摘要不得注入独立理解。"
+        }
+      },
+      prepared,
+      supportMode: "ai_interpretation"
+    });
+
+    expect(prompt).toContain("原始用户问题：请比较这两个概念。");
+    expect(prompt).not.toContain("父节点论文正文");
+    expect(prompt).not.toContain("evidence-parent-secret");
+    expect(prompt).not.toContain("openalex:W-parent-secret");
+    expect(prompt).not.toContain("来源补充资料");
   });
 
   test("maps an agent anchor onto an exact span of the thin-reading sentence", () => {
@@ -125,7 +244,6 @@ describe("thinReadingAgent", () => {
       anchors: [{
         importance: 0.9,
         kind: "mechanism",
-        label: "分类框架",
         searchQuery: "vector database taxonomy survey",
         summarySentenceIndex: 0,
         text: "taxonomy"
@@ -153,10 +271,61 @@ describe("thinReadingAgent", () => {
       evidenceIds: ["evidence-survey-taxonomy"],
       externalSourceIds: [],
       kind: "mechanism",
-      label: "分类框架",
       start: summary.indexOf("taxonomy"),
       text: "taxonomy"
     })]);
+  });
+
+  test("builds label-free anchors from exact summary text", () => {
+    const summary = "系统通过不同表示子空间并行建模关系，并在多个任务上验证效果。";
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      anchors: [{
+        importance: 0.9,
+        kind: "mechanism",
+        searchQuery: "multi-head attention representation subspaces",
+        summarySentenceIndex: 0,
+        text: "不同表示子空间"
+      }],
+      claims: [],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "systems",
+      summary,
+      summarySentences: [{
+        evidenceIds: ["evidence-survey-taxonomy"],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), { analysis: prepared, targetLanguage: "zh-CN" });
+
+    expect(seed.evidence.anchors?.[0]).toEqual(expect.objectContaining({ text: "不同表示子空间" }));
+    expect(seed.evidence.anchors?.[0]).not.toHaveProperty("label");
+  });
+
+  test("normalizes only legacy anchor labels before strict parsing", () => {
+    const summary = "系统通过不同表示子空间并行建模关系，并在多个任务上验证效果。";
+    const base = {
+      anchors: [{
+        importance: 0.9,
+        kind: "mechanism",
+        label: "多头注意力",
+        searchQuery: "multi-head attention representation subspaces",
+        summarySentenceIndex: 0,
+        text: "不同表示子空间"
+      }],
+      claims: [], externalKnowledge: [], omittedSections: [], paperEvidence: ["evidence-survey-taxonomy"],
+      paperType: "systems", summary,
+      summarySentences: [{ evidenceIds: ["evidence-survey-taxonomy"], externalKnowledge: [], status: "grounded", text: summary }],
+      withinPaperClosure: true
+    };
+    const seed = parseThinReadingModelSeed(JSON.stringify(base), { analysis: prepared, targetLanguage: "zh-CN" });
+    expect(seed.evidence.anchors?.[0]).not.toHaveProperty("label");
+    const labelFree = parseThinReadingModelSeed(JSON.stringify({ ...base, anchors: [{ ...base.anchors[0], label: undefined }] }), { analysis: prepared, targetLanguage: "zh-CN" });
+    expect(seed.evidence.anchors?.[0]?.id).toBe(labelFree.evidence.anchors?.[0]?.id);
+    expect(() => parseThinReadingModelSeed(JSON.stringify({ ...base, anchors: [{ ...base.anchors[0], unexpected: true }] }), { analysis: prepared, targetLanguage: "zh-CN" })).toThrow();
   });
 
   test("can quarantine an invalid optional anchor without changing the grounded body", () => {
@@ -166,14 +335,12 @@ describe("thinReadingAgent", () => {
       anchors: [{
         importance: 0.9,
         kind: "mechanism",
-        label: "数据结构优化",
         searchQuery: "CoreNEURON data structure optimization",
         summarySentenceIndex: 0,
         text: "通用数据结构"
       }, {
         importance: 0.8,
         kind: "mechanism",
-        label: "优化机制",
         searchQuery: "CoreNEURON memory optimization",
         summarySentenceIndex: 0,
         text: "数据结构优化"
@@ -200,7 +367,7 @@ describe("thinReadingAgent", () => {
 
     expect(seed.summary).toBe(summary);
     expect(seed.evidence.anchors).toEqual([
-      expect.objectContaining({ label: "数据结构优化", text: "通用数据结构" })
+      expect.objectContaining({ text: "通用数据结构" })
     ]);
     expect(anchorIssues).toEqual([
       "薄读锚点必须逐字对应且只出现一次于摘要句中：数据结构优化。"
@@ -214,7 +381,6 @@ describe("thinReadingAgent", () => {
       anchors: [{
         importance: 0.9,
         kind: "algorithm",
-        label: "分类算法",
         searchQuery: "vector database taxonomy survey",
         summarySentenceIndex: 0,
         text: "taxonomy"
@@ -302,12 +468,12 @@ describe("thinReadingAgent", () => {
     expect(parseThinReadingModelSeed(JSON.stringify({
       ...baseOutput,
       claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "得分从 0.34 提升到 0.39。" }],
-      summary: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。",
+      summary: "该方法在目标数据集上的检索效果明显改善（得分从 0.34 提升到 0.39，原文报告增幅为 14.7%）。",
       summarySentences: [{
         evidenceIds: [numericEvidence.id],
         externalKnowledge: [],
         status: "grounded",
-        text: "该方法在目标数据集上的得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。"
+        text: "该方法在目标数据集上的检索效果明显改善（得分从 0.34 提升到 0.39，原文报告增幅为 14.7%）。"
       }]
     }), {
       analysis: numericAnalysis,
@@ -316,10 +482,48 @@ describe("thinReadingAgent", () => {
       targetLanguage: "zh-CN"
     }).summary).toContain("14.7%");
 
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "检索效果明显改善。" }],
+      summary: "该方法在目标数据集上的检索效果明显改善，得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标数据集上的检索效果明显改善，得分从 0.34 提升到 0.39，原文报告增幅为 14.7%。"
+      }]
+    }), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("定性解释（定量数字）");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify({
+      ...baseOutput,
+      claims: [{ evidenceIds: [numericEvidence.id], status: "grounded", text: "目标评测数据集上的检索得分最终提升到 0.39。" }],
+      summary: "该方法在目标评测数据集上的检索得分最终提升到 0.39，整体结果得到改善。",
+      summarySentences: [{
+        evidenceIds: [numericEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: "该方法在目标评测数据集上的检索得分最终提升到 0.39，整体结果得到改善。"
+      }]
+    }), {
+      analysis: numericAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("截断了原文的定量区间或前后对比（0.34、0.39）");
+
     expect(buildThinReadingAgentPrompt({
       context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
       prepared: numericAnalysis
-    })).toContain("按原文断言拆成最小命题");
+    })).toEqual(expect.stringContaining("按原文断言拆成最小命题"));
+    expect(buildThinReadingAgentPrompt({
+      context: { ...context, depth: 1, source: { kind: "selected_text", excerpt: "性能提升" } },
+      prepared: numericAnalysis
+    })).toContain("明显改善（得分从 0.34 提升到 0.39，增幅 14.7%）");
   });
 
   test("requires 4096 only for the sentence that summarizes its source assertion", () => {
@@ -377,6 +581,54 @@ describe("thinReadingAgent", () => {
       requireNumericFidelity: true,
       targetLanguage: "en-US"
     }).summary).toContain("4096");
+  });
+
+  test("does not force an unrelated number from a single compound evidence sentence", () => {
+    const mixedAssertionEvidence = {
+      ...prepared.evidence[0],
+      id: "evidence-time-and-compatibility",
+      quote: "Simulation time covers 25 ms in the benchmark, while CoreNEURON remains binary compatible with NEURON.",
+      summary: "基准仿真时间覆盖 25 ms，同时 CoreNEURON 与 NEURON 保持二进制兼容。",
+      terms: ["simulation time", "binary compatibility"]
+    };
+    const mixedAssertionAnalysis = {
+      ...prepared,
+      evidence: [mixedAssertionEvidence],
+      evidencePrompt: `[${mixedAssertionEvidence.id}] ${mixedAssertionEvidence.quote}`
+    };
+    const output = (text: string) => ({
+      claims: [{ evidenceIds: [mixedAssertionEvidence.id], status: "grounded", text }],
+      externalKnowledge: [],
+      omittedSections: [],
+      paperEvidence: [mixedAssertionEvidence.id],
+      paperType: "systems",
+      summary: text,
+      summarySentences: [{
+        evidenceIds: [mixedAssertionEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text
+      }],
+      withinPaperClosure: true
+    });
+
+    expect(parseThinReadingModelSeed(JSON.stringify(output(
+      "CoreNEURON 与 NEURON 保持二进制兼容，因此结果可以按相同表示进行比较。"
+    )), {
+      analysis: mixedAssertionAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    }).summary).not.toContain("25");
+
+    expect(() => parseThinReadingModelSeed(JSON.stringify(output(
+      "该基准使用固定的仿真时间窗口来比较 CoreNEURON 与 NEURON 的运行结果。"
+    )), {
+      analysis: mixedAssertionAnalysis,
+      requireExplicitTraceability: true,
+      requireNumericFidelity: true,
+      targetLanguage: "zh-CN"
+    })).toThrow("概括了包含数值的论文断言（25）");
   });
 
   test("keeps formula bounds only when a branch sentence explains the constraint", () => {
@@ -612,6 +864,26 @@ describe("thinReadingAgent", () => {
     })).toThrow("不可用的 evidence ID");
   });
 
+  test("keeps provider evidence-loop schemas aligned with local validation limits", () => {
+    expect(thinReadingEvidencePlanJsonSchema).toMatchObject({
+      properties: {
+        focus: { maxItems: 5, minItems: 1 },
+        pageRequests: { maxItems: 3 },
+        searchQueries: { maxItems: 3 },
+        selectedEvidenceIds: { maxItems: 12, minItems: 1 }
+      }
+    });
+    expect(thinReadingEvidenceObservationJsonSchema).toMatchObject({
+      properties: {
+        focus: { maxItems: 3 },
+        pageRequests: { maxItems: 2 },
+        reason: { maxLength: 420, minLength: 8 },
+        searchQueries: { maxItems: 2 },
+        selectedEvidenceIds: { maxItems: 8 }
+      }
+    });
+  });
+
   test("bounds the second-round evidence observation decision to the original allowlist", () => {
     const firstPlan = parseThinReadingEvidencePlan({
       allowedEvidenceIds: ["evidence-survey-taxonomy"],
@@ -684,7 +956,7 @@ describe("thinReadingAgent", () => {
       }],
       withinPaperClosure: true
     }), { analysis: prepared, requireExplicitTraceability: true, targetLanguage: "zh-CN" });
-    const prompt = buildThinReadingEvidenceReviewPrompt({ node, prepared });
+    const prompt = buildThinReadingEvidenceReviewPrompt({ node, prepared, rootOverview: true });
     const sentenceId = node.evidence.summarySentences[0].id;
     expect(prompt).toContain("证据复核 Agent");
     expect(prompt).toContain(sentenceId);
@@ -694,6 +966,16 @@ describe("thinReadingAgent", () => {
     expect(prompt).toContain("判断语义蕴含");
     expect(prompt).toContain("正文作保守弱化仍可判 supported");
     expect(prompt).toContain("正文必须与生成和检索过程隔离");
+    expect(prompt).toContain(`<sentence id="${sentenceId}">`);
+    expect(prompt).toContain("bound_paper_evidence");
+    expect(prompt).toContain("This survey presents a taxonomy of vector database systems.");
+    expect(prompt).toContain("只能使用同一 <sentence> 内绑定的证据");
+    expect(prompt).toContain("修辞性过渡本身不是事实命题");
+    expect(prompt).toContain("root_orientation_review_required=true");
+    expect(prompt).toContain("核心思想、论文全景、领域位置");
+    expect(prompt).toContain("evidence_unavailable");
+    expect(prompt).not.toContain("reason 只写 8-420");
+    expect(prompt).not.toContain("论文内证据矩阵");
     expect(parseThinReadingEvidenceReview({
       output: JSON.stringify({
         propositionVerdicts: [{
@@ -742,6 +1024,63 @@ describe("thinReadingAgent", () => {
       }),
       sentenceIds: [sentenceId, "thin-reading-sentence-unreviewed"]
     })).toThrow("没有逐句覆盖正文");
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "句子有直接证据，但首页方向审计字段缺失。",
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requireRootOrientation: true,
+      sentenceIds: [sentenceId]
+    })).toThrow("缺少首页方向审计");
+
+    const rootReview = parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "正文命题有直接证据，首页建立了综述的组织主轴。",
+        rootOrientation: {
+          coreIdea: "covered",
+          fieldPosition: "evidence_unavailable",
+          paperPanorama: "covered",
+          paperType: "survey",
+          paperTypeVerdict: "supported",
+          reason: "总述给出分类框架和知识地图；当前证据没有足够的领域位置材料。",
+          retentionVerdict: "focused",
+          verdict: "pass"
+        },
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requireRootOrientation: true,
+      sentenceIds: [sentenceId]
+    });
+    expect(rootReview.rootOrientation).toMatchObject({
+      fieldPosition: "evidence_unavailable",
+      verdict: "pass"
+    });
+
+    expect(() => parseThinReadingEvidenceReview({
+      output: JSON.stringify({
+        propositionVerdicts: [{ proposition: "taxonomy 组织知识地图", sentenceId, verdict: "supported" }],
+        reason: "首页方向审计自相矛盾。",
+        rootOrientation: {
+          coreIdea: "missing",
+          fieldPosition: "covered",
+          paperPanorama: "covered",
+          paperType: "survey",
+          paperTypeVerdict: "supported",
+          reason: "核心思想缺失时不应通过首页方向门。",
+          retentionVerdict: "focused",
+          verdict: "pass"
+        },
+        unsupportedSentenceIds: [],
+        verdict: "pass"
+      }),
+      requireRootOrientation: true,
+      sentenceIds: [sentenceId]
+    })).toThrow("首页方向审计返回矛盾");
   });
 
   test("normalizes evidence-review diagnostics without weakening its verdict contract", () => {
@@ -797,8 +1136,91 @@ describe("thinReadingAgent", () => {
     expect(missingReason.reason).toBe("所有正文句均通过证据复核。");
     expect(invalidReasonType.reason).toBe("所有正文句均通过证据复核。");
     expect(thinReadingEvidenceReviewJsonSchema).toMatchObject({
-      properties: { reason: { type: "string" } }
+      properties: {
+        reason: { type: "string" },
+        rootOrientation: expect.any(Object)
+      }
     });
+  });
+
+  test("reviews AI interpretation for disguised sourcing and empirical claims", () => {
+    const prompt = buildThinReadingAiInterpretationReviewPrompt({
+      sentences: [{
+        evidenceIds: [],
+        externalKnowledge: [],
+        id: "sentence-ai-1",
+        status: "unsupported",
+        supportMode: "ai_interpretation",
+        text: "一种可能的理解是，这个机制优先保留局部交互。"
+      }]
+    });
+    expect(prompt).toContain("AI 独立理解质量审阅 Agent");
+    expect(prompt).toContain("sentence-ai-1");
+    expect(prompt).toContain("来源归因");
+    expect(prompt).toContain("精确经验数据");
+    expect(prompt).toContain("谨慎的概念推理");
+    expect(prompt).toContain("不确定性措辞");
+
+    expect(parseThinReadingAiInterpretationReview(JSON.stringify({
+      reason: "句子保持为明确的不确定性推理，没有伪造来源。",
+      unsafeSentenceIds: [],
+      verdict: "pass"
+    }), ["sentence-ai-1"])).toEqual({
+      reason: "句子保持为明确的不确定性推理，没有伪造来源。",
+      unsafeSentenceIds: [],
+      verdict: "pass"
+    });
+  });
+
+  test("rejects invalid AI interpretation review verdict and sentence ID combinations", () => {
+    expect(() => parseThinReadingAiInterpretationReview(JSON.stringify({
+      reason: "该句伪装成已有来源支持的结论。",
+      unsafeSentenceIds: ["unknown-sentence"],
+      verdict: "fail"
+    }), ["sentence-ai-1"])).toThrow("不存在的 summary sentence ID");
+    expect(() => parseThinReadingAiInterpretationReview(JSON.stringify({
+      reason: "通过结论不能同时标记不安全句子。",
+      unsafeSentenceIds: ["sentence-ai-1"],
+      verdict: "pass"
+    }), ["sentence-ai-1"])).toThrow("pass 时 unsafeSentenceIds 必须为空");
+    expect(() => parseThinReadingAiInterpretationReview(JSON.stringify({
+      reason: "失败结论需要指出至少一个不安全句子。",
+      unsafeSentenceIds: [],
+      verdict: "fail"
+    }), ["sentence-ai-1"])).toThrow("fail 时 unsafeSentenceIds 至少包含一个");
+  });
+
+  test("normalizes AI interpretation review IDs and keeps its strict schema aligned", () => {
+    expect(parseThinReadingAiInterpretationReview(JSON.stringify({
+      reason: "该句虚构了 2024 年的命名发现。",
+      unsafeSentenceIds: ["sentence-ai-1", "sentence-ai-1"],
+      verdict: "fail"
+    }), ["sentence-ai-1"])).toEqual({
+      reason: "该句虚构了 2024 年的命名发现。",
+      unsafeSentenceIds: ["sentence-ai-1"],
+      verdict: "fail"
+    });
+    expect(thinReadingAiInterpretationReviewJsonSchema).toMatchObject({
+      additionalProperties: false,
+      properties: {
+        reason: { type: "string" },
+        unsafeSentenceIds: { type: "array" },
+        verdict: { enum: ["fail", "pass"], type: "string" }
+      },
+      required: ["reason", "unsafeSentenceIds", "verdict"]
+    });
+    expect(thinReadingAiInterpretationReviewSchema.safeParse({
+      extra: true,
+      reason: "Zod schema 也必须拒绝额外字段。",
+      unsafeSentenceIds: [],
+      verdict: "pass"
+    }).success).toBe(false);
+    expect(() => parseThinReadingAiInterpretationReview(JSON.stringify({
+      extra: true,
+      reason: "额外字段必须被严格契约拒绝。",
+      unsafeSentenceIds: [],
+      verdict: "pass"
+    }), ["sentence-ai-1"])).toThrow("返回格式无效");
   });
 
   test("keeps parent semantic context while hiding transient evidence identifiers", () => {
@@ -1171,7 +1593,7 @@ describe("thinReadingAgent", () => {
     expect(seed.evidence.summarySentences).toHaveLength(2);
   });
 
-  test("rejects a Chinese gloss that reverses a key term from the current evidence", () => {
+  test("normalizes a Chinese gloss that reverses a key term from the current evidence", () => {
     const reversedOutput = (summary: string) => JSON.stringify({
       externalKnowledge: [],
       claims: [],
@@ -1188,18 +1610,61 @@ describe("thinReadingAgent", () => {
       }],
       withinPaperClosure: true
     });
-    expect(() => parseThinReadingModelSeed(reversedOutput(
+    expect(parseThinReadingModelSeed(reversedOutput(
       "这篇综述以分类法（taxonomy）组织向量数据库系统的知识地图。"
     ), {
       analysisEvidence: prepared.evidence,
       targetLanguage: "zh-CN"
-    })).toThrow("不得反向写为“中文（taxonomy）”");
-    expect(() => parseThinReadingModelSeed(reversedOutput(
+    }).summary).toContain("以taxonomy（分类法）组织");
+    expect(parseThinReadingModelSeed(reversedOutput(
       "这篇综述以“分类法”（taxonomy）组织向量数据库系统的知识地图。"
     ), {
       analysisEvidence: prepared.evidence,
       targetLanguage: "zh-CN"
-    })).toThrow("不得反向写为“中文（taxonomy）”");
+    }).summary).toContain("以taxonomy（分类法）组织");
+  });
+
+  test("deterministically normalizes an unambiguous requested terminology pair", () => {
+    const lateInteractionEvidence = {
+      ...prepared.evidence[0],
+      quote: "ColBERT uses late interaction with MaxSim.",
+      summary: "ColBERT 使用 late interaction 和 MaxSim。",
+      terms: ["late interaction", "MaxSim"]
+    };
+    const reversedTerm = "后期交互（late interaction）";
+    const summary = `ColBERT 使用${reversedTerm}连接查询和文档词元，并通过 MaxSim 保留细粒度匹配信号。`;
+    const seed = parseThinReadingModelSeed(JSON.stringify({
+      anchors: [{
+        importance: 0.9,
+        kind: "mechanism",
+        searchQuery: "ColBERT late interaction MaxSim",
+        summarySentenceIndex: 0,
+        text: reversedTerm
+      }],
+      externalKnowledge: [],
+      claims: [{ evidenceIds: [lateInteractionEvidence.id], status: "grounded", text: summary }],
+      omittedSections: [],
+      paperEvidence: [lateInteractionEvidence.id],
+      paperType: "experimental",
+      recommendations: [],
+      summary,
+      summarySentences: [{
+        evidenceIds: [lateInteractionEvidence.id],
+        externalKnowledge: [],
+        status: "grounded",
+        text: summary
+      }],
+      withinPaperClosure: true
+    }), {
+      analysisEvidence: [lateInteractionEvidence],
+      requiredChineseTerminology: [{ original: "late interaction", translation: "后期交互" }],
+      targetLanguage: "zh-CN"
+    });
+
+    expect(seed.summary).toContain("late interaction（后期交互）");
+    expect(seed.evidence.claims[0].text).toContain("late interaction（后期交互）");
+    expect(seed.evidence.summarySentences?.[0].text).toContain("late interaction（后期交互）");
+    expect(seed.evidence.anchors?.[0].text).toBe("late interaction（后期交互）");
   });
 
   test("requires an explicitly requested Chinese terminology pair in a selected branch", () => {
@@ -1460,6 +1925,258 @@ describe("thinReadingAgent", () => {
       summary: "这段总述长度足够，但没有任何论文内证据或外部知识来源标记。",
       withinPaperClosure: true
     }))).toThrow("缺少论文内证据或外部知识来源标记");
+  });
+
+  test("accepts source-free prose only with orchestration-owned AI interpretation authorization", () => {
+    const seed = parseThinReadingModelSeed(aiInterpretationOutput, {
+      requireExplicitTraceability: true,
+      supportMode: "ai_interpretation",
+      targetLanguage: "zh-CN"
+    });
+
+    expect(seed.supportMode).toBe("ai_interpretation");
+    expect(seed.evidence.summarySentences?.[0]).toMatchObject({
+      evidenceIds: [],
+      externalKnowledge: [],
+      status: "unsupported",
+      supportMode: "ai_interpretation"
+    });
+    expect(seed.evidence).toMatchObject({
+      externalSources: [],
+      paperEvidence: [],
+      paperEvidenceSpans: []
+    });
+  });
+
+  test("keeps required Chinese terminology validation active for AI interpretation", () => {
+    expect(() => parseThinReadingModelSeed(aiInterpretationOutput, {
+      requiredChineseTerminology: [{
+        original: "late interaction",
+        translation: "后期交互"
+      }],
+      supportMode: "ai_interpretation",
+      targetLanguage: "zh-CN"
+    })).toThrow("中文选区明确要求保留“late interaction（后期交互）”");
+  });
+
+  test("requires an explicit AI interpretation sentence map without an optional traceability flag", () => {
+    expect(() => parseThinReadingModelSeed(aiInterpretationOutputWith({ summarySentences: [] }), {
+      supportMode: "ai_interpretation"
+    })).toThrow("summarySentences 必须显式覆盖正文");
+  });
+
+  test("requires AI interpretation sentence maps to cover the complete summary without an optional traceability flag", () => {
+    const summary = "一种可能的理解是，系统会压缩计算路径。另一种可能是它会保留细粒度交互。";
+    expect(() => parseThinReadingModelSeed(aiInterpretationOutputWith({
+      summary,
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: [],
+        status: "unsupported",
+        text: "一种可能的理解是，系统会压缩计算路径。"
+      }]
+    }), {
+      supportMode: "ai_interpretation"
+    })).toThrow("必须完整覆盖 100% 的正文");
+  });
+
+  test.each(["grounded", "weak"] as const)("normalizes source-free AI interpretation %s sentence statuses without an optional traceability flag", (status) => {
+    const seed = parseThinReadingModelSeed(aiInterpretationOutputWith({
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: [],
+        status,
+        text: "一种可能的理解是，系统会在保留细粒度交互的同时尝试压缩计算路径。"
+      }]
+    }), {
+      supportMode: "ai_interpretation"
+    });
+
+    expect(seed.supportMode).toBe("ai_interpretation");
+    expect(seed.evidence.summarySentences?.[0]).toMatchObject({
+      status: "unsupported",
+      supportMode: "ai_interpretation"
+    });
+  });
+
+  test("continues to reject source-free prose without AI interpretation authorization", () => {
+    expect(() => parseThinReadingModelSeed(aiInterpretationOutput, {
+      requireExplicitTraceability: true
+    })).toThrow("缺少论文内证据或外部知识来源标记");
+  });
+
+  test.each([
+    [
+      "a paper evidence ID",
+      () => aiInterpretationOutputWith({ paperEvidence: ["evidence-invented"] }),
+      "薄读 Agent AI 理解隔离失败：paperEvidence 必须为空数组。"
+    ],
+    [
+      "an external source ID",
+      () => aiInterpretationOutputWith({ externalKnowledge: ["openalex:W-invented"] }),
+      "薄读 Agent AI 理解隔离失败：externalKnowledge 必须为空数组。"
+    ],
+    [
+      "a claim evidence ID",
+      () => aiInterpretationOutputWith({
+        claims: [{
+          evidenceIds: ["evidence-invented"],
+          status: "grounded",
+          text: "这个无来源断言错误地携带了论文证据。"
+        }]
+      }),
+      "薄读 Agent AI 理解隔离失败：claims.evidenceIds 必须为空数组。"
+    ],
+    [
+      "a sentence evidence ID",
+      () => aiInterpretationOutputWith({
+        summarySentences: [{
+          evidenceIds: ["evidence-invented"],
+          externalKnowledge: [],
+          status: "grounded",
+          text: "一种可能的理解是，系统会在保留细粒度交互的同时尝试压缩计算路径。"
+        }]
+      }),
+      "薄读 Agent AI 理解隔离失败：summarySentences.evidenceIds 必须为空数组。"
+    ],
+    [
+      "a sentence external source ID",
+      () => aiInterpretationOutputWith({
+        summarySentences: [{
+          evidenceIds: [],
+          externalKnowledge: ["openalex:W-invented"],
+          status: "weak",
+          text: "一种可能的理解是，系统会在保留细粒度交互的同时尝试压缩计算路径。"
+        }]
+      }),
+      "薄读 Agent AI 理解隔离失败：summarySentences.externalKnowledge 必须为空数组。"
+    ],
+    [
+      "a source URL",
+      () => {
+        const summary = "一种可能的理解是，系统会在保留细粒度交互的同时尝试压缩计算路径：https://example.com。";
+        return aiInterpretationOutputWith({
+          summary,
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: [],
+            status: "unsupported",
+            text: summary
+          }]
+        });
+      },
+      "薄读 Agent AI 理解隔离失败：正文不得包含来源 URL。"
+    ],
+    [
+      "a citation marker",
+      () => {
+        const summary = "一种可能的理解是，系统会在保留细粒度交互的同时尝试压缩计算路径[1]。";
+        return aiInterpretationOutputWith({
+          summary,
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: [],
+            status: "unsupported",
+            text: summary
+          }]
+        });
+      },
+      "薄读 Agent AI 理解隔离失败：正文不得包含引文标记或年份。"
+    ],
+    [
+      "a source attribution",
+      () => {
+        const summary = "一项研究显示，系统会在保留细粒度交互的同时尝试压缩计算路径。";
+        return aiInterpretationOutputWith({
+          summary,
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: [],
+            status: "unsupported",
+            text: summary
+          }]
+        });
+      },
+      "薄读 Agent AI 理解隔离失败：正文不得将内容归因于论文、研究、实验或外部资料。"
+    ],
+    [
+      "an evidence ID in prose",
+      () => {
+        const summary = "一种可能的理解是，evidence-parent-secret 只是一个不应出现在正文中的内部标记。";
+        return aiInterpretationOutputWith({
+          summary,
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: [],
+            status: "unsupported",
+            text: summary
+          }]
+        });
+      },
+      "薄读 Agent AI 理解隔离失败：正文句 summarySentences[0] 不得包含 evidence ID、external source ID 或检索过程。"
+    ],
+    [
+      "a bare external source ID in prose",
+      () => {
+        const summary = "一种可能的理解是，openalex:W-parent-secret 只是一个不应出现在正文中的内部标记。";
+        return aiInterpretationOutputWith({
+          summary,
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: [],
+            status: "unsupported",
+            text: summary
+          }]
+        });
+      },
+      "薄读 Agent AI 理解隔离失败：正文句 summarySentences[0] 不得包含 evidence ID、external source ID 或检索过程。"
+    ],
+    [
+      "a non-empty anchor",
+      () => aiInterpretationOutputWith({
+        anchors: [{
+          importance: 0.8,
+          kind: "concept",
+          searchQuery: "system interaction compression",
+          summarySentenceIndex: 0,
+          text: "系统"
+        }]
+      }),
+      "薄读 Agent AI 理解隔离失败：anchors 必须为空数组。"
+    ],
+    [
+      "a recommended figure",
+      () => aiInterpretationOutputWith({
+        recommendedFigures: [{
+          evidenceIds: ["evidence-invented"],
+          figureId: "figure-invented",
+          reason: "这个图不应出现在无来源理解中。"
+        }]
+      }),
+      "薄读 Agent AI 理解隔离失败：recommendedFigures 必须为空数组。"
+    ],
+    [
+      "Mermaid output",
+      () => aiInterpretationOutputWith({ mermaid: "flowchart TD\n  A --> B" }),
+      "薄读 Agent AI 理解隔离失败：mermaid 必须为空字符串。"
+    ],
+    [
+      "an interactive demo",
+      () => aiInterpretationOutputWith({
+        interactiveDemo: {
+          description: "这个交互演示不应出现在无来源理解中。",
+          html: `<div>${"x".repeat(80)}</div>`,
+          kind: "html",
+          title: "交互演示"
+        }
+      }),
+      "薄读 Agent AI 理解隔离失败：interactiveDemo 必须为 null。"
+    ]
+  ])("rejects AI interpretation output containing %s", (_case, createOutput, expectedError) => {
+    expect(() => parseThinReadingModelSeed(createOutput(), {
+      requireExplicitTraceability: true,
+      supportMode: "ai_interpretation"
+    })).toThrow(expectedError);
   });
 
   test("rejects paperEvidence that is outside the available evidence matrix", () => {
