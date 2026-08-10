@@ -1,0 +1,16 @@
+{
+  "costClass": "medium",
+  "evidenceRequirements": ["initial state, parameters, equations, events, and invariants must cite evidence claims"],
+  "fallbackModalities": ["physics_diagram", "source_figure"],
+  "id": "physics-process",
+  "integrityRules": ["typed physics_process spec only", "bounded frame count", "no generated scripts or animation DOM"],
+  "kernelId": "physics-process-v1",
+  "modality": "physics_process",
+  "outputSchemaId": "liteasy.visualization/physics-process/v1",
+  "remote": false,
+  "rendererId": "physics-process-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["trusted local timeline renderer", "observation-only play, pause, step, and scrub controls"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

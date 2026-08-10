@@ -15,6 +15,8 @@ import geometry2dManifest from "../visualization/skills/geometry-2d/skill.json";
 import geometry2dInstructions from "../visualization/skills/geometry-2d/instructions.md?raw";
 import geometry3dManifest from "../visualization/skills/geometry-3d/skill.json";
 import geometry3dInstructions from "../visualization/skills/geometry-3d/instructions.md?raw";
+import physicsProcessManifest from "../visualization/skills/physics-process/skill.json";
+import physicsProcessInstructions from "../visualization/skills/physics-process/instructions.md?raw";
 import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
@@ -194,6 +196,14 @@ registerBuiltinSkill(geometry3d, async () => ({
   manifest: geometry3d,
   instructions: geometry3dInstructions,
   validatorIds: geometry3d.validatorIds
+}));
+
+const physicsProcess = parseManifest(physicsProcessManifest);
+registerBuiltinSkill(physicsProcess, async () => ({
+  fallbackModalities: physicsProcess.fallbackModalities,
+  manifest: physicsProcess,
+  instructions: physicsProcessInstructions,
+  validatorIds: physicsProcess.validatorIds
 }));
 
 const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);
