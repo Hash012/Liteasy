@@ -1,5 +1,7 @@
 # Literature Identity Architecture Implementation Plan
 
+**Current status (2026-08-11):** 本计划记录实施顺序，不再作为当前状态清单。主链已经实现；当前状态、确认规则和剩余外部验证以 `docs/superpowers/specs/2026-08-10-source-confirmed-literature-identity-design.md` 与 `docs/engineering/2026-08-11-development-progress-ledger.md` 为准。历史 checklist 未回填不表示功能仍待实现。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task with verification checkpoints.
 
 **Goal:** 修复 HelioX 文献身份识别，并建立共享身份规范/provider 能力、隔离身份确认/外部检索/推荐策略的最小实现。
@@ -59,7 +61,7 @@
 - [ ] **Step 2: Add failing tests for `Family, Given; Family, Given` and multilingual delimiters**
 - [ ] **Step 3: Add failing request assertion that first-page body and `contentHash` are absent**
 - [ ] **Step 4: Implement parsing, PMLR hint extraction, and request boundary filtering**
-- [ ] **Step 5: Add manual-confirmation prefill from extracted metadata**
+- [ ] **Step 5: Prefill candidate search from extracted metadata without creating a manual formal record**
 - [ ] **Step 6: Run focused Desktop tests**
 
 ### Task 3: Canonical Identity And Legacy Compatibility
