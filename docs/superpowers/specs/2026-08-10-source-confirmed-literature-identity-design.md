@@ -3,6 +3,26 @@
 **日期：** 2026-08-10
 **状态：** 已确认设计，待实现
 
+## 后续确认的权威实施约束
+
+本节记录设计确认后的实施决定；若与下文早期表述冲突，以本节为准。
+
+1. 每个完成来源确认的具体文献版本获得平台唯一、稳定、不透明的 `literatureId`。同一版本被不同用户上传时共用 `literatureId`，但各自保有不同的 `documentId`、文件、目录、权限和私人数据。
+2. 预印本与正式发表版必须使用不同的 `literatureId`，仅通过有证据的 `is_preprint_of` 关系连接；关系不自动合并批注、页码、引用指标或全文权限。
+3. `unresolved`、`candidate`、`ambiguous`、`conflict` 是解析过程或本地状态，不创建新的正式公共文献记录。正式新记录只能以 `confirmed` 状态写入。旧 `manual`/`legacy_metadata` 记录仅作只读兼容或标记为 `legacy_unverified`，不得无证据升级。
+4. 人工题名、作者、年份以及新的 SHA-256 题名作者年份指纹只能帮助检索候选或充当兼容别名，不能独立创建可引用的正式文献，也不能成为 `confirmed` 的唯一依据。
+5. 稳定标识与来源证据必须分开保存：`literature_identifiers` 绑定 `literatureId`，并对 `(identifier_kind, normalized_value)` 施加全局唯一约束；`literature_identity_claims` 保存 `provider`、`provider_record_id`、`verification_status`、`evidence` 和 `observed_at`。因此同一个 DOI 只能属于一个 `literatureId`，而 Crossref、OpenAlex、Semantic Scholar 可以分别为它提供证据。
+6. 一级原始注册来源（Crossref DOI、arXiv，以及未来 PubMed）在来源内 ID 可精确唯一回查且题录无冲突时可以确认。二级聚合来源（OpenAlex、Semantic Scholar）必须获得两个独立来源的一致证据，或由用户明确选择候选后由服务端重新抓取且不存在冲突，才能确认。
+7. Intuecho 内部独立 literature 模块暂时承担平台文献身份权威，不新增第三个服务；其接口保持可抽离。Liteasy 与 Intuecho 不共享数据库、连接池或凭据，只共享 `literatureId` 和 API 契约。
+8. Liteasy 保存用户/组织文献库数据以及 confirmed `LiteratureRecord` 的只读投影。Intuecho 不得获知 Liteasy 中的收藏、阅读或上传关系，除非用户主动发布社区内容。
+9. Liteasy API 不信任 Desktop 上传的确认快照。云文献写入或更新时，Liteasy API 必须通过受保护的 Intuecho 服务端接口核验 `literatureId + revision` 后再保存投影；已有投影允许离线读取。纯本地 Liteasy 文件可以保存已确认快照。
+10. `contentHash` 只用于文件去重和缓存，不能作为跨用户身份。
+11. 新链路覆盖并验证后，删除 Desktop 八位 FNV 指纹生成/主身份写路径、`manual` 正式文献创建的 UI/contract/repository 写路径、仅以 `primary.kind != local_paper_id` 判断可同步的旧门槛，以及无调用者的重复确认/schema 分支。旧值只读识别必须保留。
+12. 删除前必须证明调用已迁移、旧数据可读、迁移可在空库和已有库执行、专项回归通过，且生产构建不再引用目标代码。
+13. `development/dev-cloud works` 仍被标签、索引和推荐使用，不得误删，也不得成为正式引用身份真源。
+14. OpenAlex 标识必须在 Desktop、Intuecho contracts、Liteasy API 和社区同步之间使用一致契约。
+15. PostgreSQL 使用新的不可变迁移，不修改旧迁移；SQLite 开发实现与 PostgreSQL 正式实现保持行为一致。
+
 ## 目标
 
 陌生 PDF 在成为正式论文记录前，必须完成公开来源确认。系统保留预印本、正式发表版和其他版本的独立身份，并通过可审计关系连接它们；题名、作者和年份只用于检索候选，不直接产生可引用的正式身份。
@@ -99,23 +119,28 @@ provider 超时或部分不可用不能放宽门槛。候选排序分数只用�
 
 人工输入可以帮助检索，但“用户填了题名作者年份”本身不等于来源确认；没有来源回查结果时，记录保持 `ambiguous` 或 `unresolved`。
 
-## 外部别名模型
+## 外部标识与来源证据模型
 
-每个确认版本保存多个来源别名，而不是覆盖一个 canonical 字段：
+每个确认版本保存多个稳定标识，而不是覆盖一个 canonical 字段。标识所有权与 provider 观察证据分别建模：
 
 ```text
-literature_identity(
+literature_identifier(
+  literature_id,
+  identifier_kind,
+  normalized_value
+)
+
+literature_identity_claim(
   literature_id,
   provider,
-  identifier_kind,
-  normalized_value,
+  provider_record_id,
   verification_status,
   evidence_json,
   observed_at
 )
 ```
 
-`provider + normalized_value` 在产品服务内唯一。旧的八位题名作者年份值只能作为只读兼容别名；新指纹统一使用 `sha256:<64 lowercase hex>`。身份规范化必须在 Desktop、Liteasy API 和 Intuecho 中保持一致。
+`literature_identifiers(identifier_kind, normalized_value)` 在平台身份权威内全局唯一；`literature_identity_claims(provider, provider_record_id)` 也必须全局唯一地绑定到一个 `literatureId`。不同 provider 可以分别为同一版本留下 claim，但同一来源记录不能横跨多个正式文献。旧的八位题名作者年份值只能作为只读兼容别名；新指纹统一使用 `sha256:<64 lowercase hex>`，且只能用于候选或兼容查询。身份规范化必须在 Desktop、Liteasy API 和 Intuecho 中保持一致。
 
 内部 `literatureId` 是不透明 ID，不由 DOI 或题录拼接生成。主展示标识可以按 DOI、arXiv、OpenAlex、Semantic Scholar、题录指纹的优先级选择，但主展示标识变化不能改变 `literatureId`。
 
