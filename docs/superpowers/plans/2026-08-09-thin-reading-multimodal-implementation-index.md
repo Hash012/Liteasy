@@ -18,6 +18,16 @@ Status: complete as of 2026-08-10.
 
 This records local integration readiness, not production deployment acceptance. Generated modalities remain disabled until the applicable Plans 4-6 Skill, Kernel, Validator, Renderer, accessibility, fallback, fixture, visual, and release gates pass.
 
+### Phase 3 - Reader Orchestration
+
+Status: in progress as of 2026-08-10; Tasks 1-3 of the orchestration closure are complete.
+
+- `ecfe70e`: canonical cross-runtime artifact schema and strict API publication validation.
+- `d5095e6`: durable generation request state machine, lease recovery, cancellation, and account deletion coverage.
+- `1ce9395`: subject-bound v2 intent/evidence resolution and atomic multi-source publication.
+- Current gate: API full suite passed; PostgreSQL applied 23 migrations and passed 3/3 visualization integration tests with 0 skipped.
+- Remaining boundary: provider adapter/compiler, leased orchestrator, public account routes, desktop composition, browser/recovery gate, and final review. Phase 3 is not complete and no generated modality is enabled.
+
 ## Why This Is A Plan Suite
 
 The specification spans six subsystems with different ownership and verification commands. A single linear patch would mix PostgreSQL transactions, Agent contracts, React rendering, scientific kernels, WebGL, provider integration, and release evaluation. The suite keeps each review boundary coherent while preserving one shared contract.

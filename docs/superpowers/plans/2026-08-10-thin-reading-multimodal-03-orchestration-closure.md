@@ -40,7 +40,7 @@
 - Consumes: existing Zod `VisualizationArtifactV1` rules and fixtures.
 - Produces: `visualizationArtifactSchema`, committed JSON Schema, `validateVisualizationArtifact()` with structural and cross-field hard gates.
 
-- [ ] **Step 1: Add failing cross-runtime conformance cases**
+- [x] **Step 1: Add failing cross-runtime conformance cases**
 
 Add API cases that currently pass the shallow envelope but must fail:
 
@@ -74,7 +74,7 @@ node --test src/visualizationArtifactValidator.test.mjs src/visualizationArtifac
 
 Expected: FAIL because schema conformance test/module and strict validation do not exist.
 
-- [ ] **Step 2: Export the desktop schema and generate shared JSON**
+- [x] **Step 2: Export the desktop schema and generate shared JSON**
 
 Export `visualizationArtifactSchema` instead of keeping `artifactSchema` private. The TypeScript generator runs through the already-installed `vite-node`, imports `z` and the schema, and calls:
 
@@ -87,7 +87,7 @@ const schema = z.toJSONSchema(visualizationArtifactSchema, {
 
 It writes stable two-space JSON with `$id: "liteasy.visualization/v1"` to the shared path. Add `"schema:visualization": "vite-node scripts/write-visualization-artifact-schema.ts"` to desktop scripts and run it before `tsc` in `build`, so schema drift fails before bundling.
 
-- [ ] **Step 3: Implement strict API validation**
+- [x] **Step 3: Implement strict API validation**
 
 Add `ajv` version `^8.17.1`. Import `Ajv2020` from `ajv/dist/2020.js` and compile the shared schema once at module load with `new Ajv2020({ allErrors: false, strict: true })`. After structural validation, enforce rules not representable by JSON Schema refinements:
 
@@ -104,7 +104,7 @@ if (artifact.validation?.outcome === "fail" ||
 
 Retain provider-result validation as a separate bounded contract; never treat provider text as a published artifact.
 
-- [ ] **Step 4: Add byte-level schema conformance**
+- [x] **Step 4: Add byte-level schema conformance**
 
 The desktop test regenerates JSON in memory and equals the committed file. API tests load the same file and accept the checked-in valid fixture while rejecting all malicious variants. Run:
 
@@ -118,7 +118,7 @@ node --test src/visualizationArtifactValidator.test.mjs src/visualizationArtifac
 
 Expected: PASS; `git diff --check` is clean and a second schema generation produces no diff.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add products/liteasy/apps/desktop/src/app/features/visualization/visualizationArtifact.schema.ts products/liteasy/apps/desktop/scripts/write-visualization-artifact-schema.ts products/liteasy/apps/desktop/package.json products/liteasy/apps/desktop/src/tests/visualizationArtifactSchema.test.ts products/liteasy/packages/shared/visualizationArtifact.v1.schema.json products/liteasy/services/api/package.json products/liteasy/services/api/package-lock.json products/liteasy/services/api/src/visualizationArtifactValidator.mjs products/liteasy/services/api/src/visualizationArtifactValidator.test.mjs products/liteasy/services/api/src/visualizationArtifactSchemaConformance.test.mjs
@@ -141,7 +141,7 @@ git commit -m "feat: share strict visualization artifact schema"
 - Produces: `PostgresVisualizationGenerationRepository.create()`, `get()`, `claimNext()`, `requestCancel()`, `markSucceeded()`, `markTerminal()`, `requeueExpired()`.
 - States: `queued | running | cancel_requested | succeeded | cancelled | omitted | failed`.
 
-- [ ] **Step 1: Write failing state and replay tests**
+- [x] **Step 1: Write failing state and replay tests**
 
 ```js
 test("creates and replays one subject-bound request", async () => {
@@ -165,7 +165,7 @@ test("a cancellation wins before a late success", async () => {
 
 Run and confirm missing module failure.
 
-- [ ] **Step 2: Add migration 023**
+- [x] **Step 2: Add migration 023**
 
 Create `visualization_generation_requests` with `(subject_id, request_id)` primary key; artifact ID/revision, node ID, 64-character request/intent hashes, requested count `1..2`, state check, cancellation idempotency key/hash and timestamp, terminal reason, JSON result artifact ID array, lease owner/expiry, attempts `0..3`, trace ID, and timestamps. Add a partial claim index on `(state, lease_expires_at, created_at)` for `queued/running/cancel_requested`.
 
@@ -173,7 +173,7 @@ Create `visualization_artifact_sources` keyed by `(subject_id, artifact_id, docu
 
 Advance the PostgreSQL integration script's exact immutable migration list and final count from `022`/`22` to `023`/`23`; the Phase 3 final gate must still begin from a reset schema and apply every migration.
 
-- [ ] **Step 3: Implement locked transitions**
+- [x] **Step 3: Implement locked transitions**
 
 Every mutation uses `withPostgresTransaction()` and `SELECT ... FOR UPDATE`. `create()` stores a canonical request hash and replays only an exact match. `requestCancel()` stores the cancellation hash, returns the same projection for an exact replay, and rejects reuse of the same key with different cancellation data. `claimNext()` uses `FOR UPDATE SKIP LOCKED`, sets a 30-second lease, increments attempts, and never claims `cancel_requested`. Terminal methods reject terminal-state changes. `requeueExpired()` changes only expired `running` rows with no terminal provider invocation; expired rows with a terminal invocation are atomically marked `failed/provider_result_recovery_required`, preventing a duplicate provider call.
 
@@ -189,11 +189,11 @@ Public projection is exactly:
 }
 ```
 
-- [ ] **Step 4: Extend account deletion**
+- [x] **Step 4: Extend account deletion**
 
 Delete generation requests and mutable artifact-source rows before deleting visualization artifacts. Preserve append-only usage, provider-cost, and audit ledgers under the existing retention policy. Add `deletedVisualizationGenerationRequests` and `deletedVisualizationArtifactSources` to the account lifecycle result and assert their exact counts in repository/service tests.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 cd products/liteasy/services/api
@@ -218,7 +218,7 @@ git commit -m "feat: persist visualization generation requests"
 - Produces: `PostgresAgentArtifactRepository.get(subjectId, artifactId)` and `resolveThinReadingVisualizationSource({ artifactId, nodeId, subjectId })`.
 - Source result: `{ artifactRevision, documents, evidence, intent, intentHash, locale, nodeId }`.
 
-- [ ] **Step 1: Write failing subject/revision/evidence tests**
+- [x] **Step 1: Write failing subject/revision/evidence tests**
 
 Cover: cross-subject artifact lookup returns not found; v1 document rejected; missing/omitted intent rejected; requested node mismatch rejected; intent evidence absent from node spans/external sources rejected; expired external grant rejected; source hash mismatch rejected; stale artifact revision detected before publication.
 
@@ -230,7 +230,7 @@ node --test src/agentArtifactRepository.test.mjs src/thinReadingVisualizationSou
 
 Expected: FAIL because `get()` and resolver do not exist.
 
-- [ ] **Step 2: Add strict artifact lookup**
+- [x] **Step 2: Add strict artifact lookup**
 
 `get()` executes:
 
@@ -241,7 +241,7 @@ SELECT body, revision FROM agent_artifacts
 
 It returns `{ artifact: artifact(row.body), revision: Number(row.revision) }` or throws `agent_artifact_not_found` with status 404.
 
-- [ ] **Step 3: Resolve bounded authoritative evidence**
+- [x] **Step 3: Resolve bounded authoritative evidence**
 
 Require `artifactType === "thin_reading"`, document version `liteasy.thin-reading/v2`, exact artifact/node IDs, accepted intent, `1..256` evidence IDs, and requested count compatible with `intent.requestedBy`.
 
@@ -249,11 +249,11 @@ Paper evidence comes only from `paperEvidenceSpans` entries whose IDs are reques
 
 Compute `intentHash` from canonical JSON containing artifact revision, node ID, normalized intent, evidence IDs and source identity hashes.
 
-- [ ] **Step 4: Publish multiple authorized sources atomically**
+- [x] **Step 4: Publish multiple authorized sources atomically**
 
 Change `VisualizationService.submit()` to accept `documents: [{ documentId, sourceIdentityHash, isPrimary }]`. Authorize every unique document before repository publication. `publish()` locks/rechecks all sources, writes the primary `document_id` to the existing artifact row, inserts all rows into `visualization_artifact_sources`, and only then settles the reservation. Retain read-only compatibility for internal callers that still supply one `document` by normalizing it to a one-element array.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 node --test src/agentArtifactRepository.test.mjs src/thinReadingVisualizationSource.test.mjs src/visualizationRepository.test.mjs src/visualizationService.test.mjs
