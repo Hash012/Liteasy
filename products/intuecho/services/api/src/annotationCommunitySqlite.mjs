@@ -338,7 +338,8 @@ export function initializeAnnotationCommunitySqlite(db) {
                   NULLIF(json_extract(claim.evidence_json, '$.candidateKey'), '') IS NOT NULL
                   OR json_extract(claim.evidence_json, '$.confirmationBasis') IN (
                     'user_selected_refetch',
-                    'independent_aggregate_bibliography'
+                    'independent_aggregate_bibliography',
+                    'independent_provider_bibliography'
                   )
                 )
            )
@@ -550,13 +551,13 @@ export class SqliteAnnotationCommunityRepository {
         `).get(candidate.provider, providerRecordId));
       const matched = new Set(identityMatches);
       for (const existingClaim of existingClaims) if (existingClaim) matched.add(existingClaim.literature_id);
-      const aggregateBibliographyMatches = new Set();
+      const providerBibliographyMatches = new Set();
       for (const candidate of evidenceCandidates) {
-        for (const literatureId of this.#independentAggregateBibliographyMatches(input, candidate.provider)) {
-          aggregateBibliographyMatches.add(literatureId);
+        for (const literatureId of this.#independentProviderBibliographyMatches(input, candidate.provider)) {
+          providerBibliographyMatches.add(literatureId);
         }
       }
-      for (const literatureId of aggregateBibliographyMatches) {
+      for (const literatureId of providerBibliographyMatches) {
         matched.add(literatureId);
       }
       if (matched.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
@@ -598,8 +599,8 @@ export class SqliteAnnotationCommunityRepository {
         const relations = normalizeLiteratureRelations(candidate.relations);
         const claimEvidence = {
           candidateKey: candidate.candidateKey,
-          confirmationBasis: evidenceCandidates.length > 1 || aggregateBibliographyMatches.size > 0
-            ? "independent_aggregate_bibliography"
+          confirmationBasis: evidenceCandidates.length > 1 || providerBibliographyMatches.size > 0
+            ? "independent_provider_bibliography"
             : aggregateLiteratureProviders.has(candidate.provider)
               ? "user_selected_refetch"
               : "primary_registry_refetch",
@@ -974,19 +975,19 @@ export class SqliteAnnotationCommunityRepository {
     return literatureIds;
   }
 
-  #independentAggregateBibliographyMatches(input, provider) {
-    if (!aggregateLiteratureProviders.has(provider) || !Number.isInteger(input.year)) return new Set();
+  #independentProviderBibliographyMatches(input, provider) {
+    if (!confirmedLiteratureProviders.has(provider) || !Number.isInteger(input.year)) return new Set();
     const rows = this.db.prepare(`
       SELECT DISTINCT identifier.literature_id
         FROM literature_identity_claims_v2 claim
         JOIN literature_identifiers_v2 identifier ON identifier.id = claim.identifier_id
         JOIN literature_records_v2 literature ON literature.id = identifier.literature_id
-       WHERE claim.provider IN ('openalex', 'semantic_scholar')
-         AND claim.provider <> ?
+       WHERE claim.provider <> ?
+         AND (? IN ('openalex', 'semantic_scholar') OR claim.provider IN ('openalex', 'semantic_scholar'))
          AND literature.confirmation_status = 'confirmed'
          AND literature.publication_year = ?
        ORDER BY identifier.literature_id
-    `).all(provider, input.year);
+    `).all(provider, provider, input.year);
     return new Set(rows
       .map((row) => this.#literatureRecord(row.literature_id))
       .filter((record) => record && sameLiteratureVersionBibliography(input, record))

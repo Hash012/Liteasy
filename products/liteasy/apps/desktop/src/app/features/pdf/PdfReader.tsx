@@ -48,7 +48,11 @@ import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
 import type { TeamAnnotation } from "../organization/teamAnnotationClient";
 import { LiteratureVersionRelations } from "../forum/LiteratureVersionRelations";
-import type { LiteratureRelationsResult } from "../paper-identity/literature.types";
+import type {
+  LiteratureRecord,
+  LiteratureRelation,
+  LiteratureRelationsResult
+} from "../paper-identity/literature.types";
 
 ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -94,6 +98,7 @@ type PdfReaderProps = {
   loadLiteratureHints?: typeof collectPdfLiteratureHints;
   loadLiteratureRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
+  onOpenLiteratureVersion?: (literature: LiteratureRecord, relation: LiteratureRelation) => void | Promise<void>;
   pdfBackground?: string;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
   selectedPapers: Paper[];
@@ -1067,6 +1072,7 @@ export function PdfReader({
   loadLiteratureHints = collectPdfLiteratureHints,
   loadLiteratureRelations,
   loadPdfSource,
+  onOpenLiteratureVersion,
   pdfBackground = "#ffffff",
   onPaperAnnotated,
   selectedPapers,
@@ -1974,8 +1980,9 @@ export function PdfReader({
                         文献身份：公共来源
                       </div>
                       <LiteratureVersionRelations
-                        literatureId={activePaper.literature.literatureId}
+                        currentLiterature={activePaper.literature}
                         loadRelations={loadLiteratureRelations}
+                        onOpenVersion={onOpenLiteratureVersion}
                       />
                     </>
                   ) : null}

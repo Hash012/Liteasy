@@ -110,6 +110,8 @@ import type { PdfEvidenceTarget } from "../features/pdf/PdfReader";
 import type { Paper } from "../features/workspace/workspace.types";
 import { cloneWorkspaceState } from "../features/workspace/workspaceStateHelpers";
 import { literatureMetadataRepository } from "../features/paper-identity/literatureMetadataRepository";
+import type { LiteratureRecord, LiteratureRelation } from "../features/paper-identity/literature.types";
+import { literatureVersionOpenTarget } from "../features/forum/literatureVersioning";
 import { canManageOrganizationLibrary } from "../features/organization/organizationStoragePolicy";
 import { useForumController } from "../features/forum/useForumController";
 import type { UIDslActionRef, UIDslDocument } from "../features/generative-ui/generativeUi.types";
@@ -1210,6 +1212,21 @@ export function AppShell({
     setActiveVisualizationId(null);
   }
 
+  function openLiteratureVersion(literature: LiteratureRecord, relation: LiteratureRelation) {
+    const target = literatureVersionOpenTarget(literature, workspaceState.papers, relation.evidence);
+    if (target.kind === "local") {
+      openPaperInReader(target.paperId);
+      return;
+    }
+    if (target.kind === "unavailable") {
+      throw new Error("该关联版本尚无可打开的本地文件或来源链接。");
+    }
+    const sourceWindow = window.open("about:blank", "_blank");
+    if (!sourceWindow) throw new Error("浏览器阻止了来源页面，请允许打开新窗口后重试。");
+    sourceWindow.opener = null;
+    sourceWindow.location.replace(target.url);
+  }
+
   function openPaperResource(paperId: string, kind: PaperResourceKind) {
     const resources = getPaperMineruResources(paperId);
     if (!resources || (kind === "figures" ? resources.figures.length === 0 : kind === "multimodal" ? resources.textChunks.length === 0 && resources.figures.length === 0 : resources.textChunks.length === 0)) {
@@ -1775,6 +1792,7 @@ export function AppShell({
         loadLiteratureRelations={forum.client.literatureRelations}
         onAddExternalPdfToLibrary={workspaceActions.addExternalPdfToLibrary}
         onOpenExternalFullText={externalPapers.openExternalFullTextInReader}
+        onOpenLiteratureVersion={openLiteratureVersion}
         onPaperAnnotated={
           isPaperCacheAvailable() ? externalPapers.promoteCachedPaperToLibrary : undefined
         }

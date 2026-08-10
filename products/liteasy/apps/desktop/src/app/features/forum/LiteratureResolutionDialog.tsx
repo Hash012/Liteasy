@@ -9,6 +9,12 @@ import {
 } from "@fluentui/react-components";
 import type { LiteratureDialogModel } from "./literatureResolution.types";
 import type { LiteratureIdentifierKind } from "../paper-identity/literature.types";
+import {
+  candidateVersionLabel,
+  groupLiteratureCandidates,
+  literatureProviderLabel,
+  relationEvidenceLabel
+} from "./literatureVersioning";
 
 type LiteratureResolutionDialogProps = {
   model: LiteratureDialogModel;
@@ -52,31 +58,51 @@ export function LiteratureResolutionDialog({
             ) : null}
 
             {model.kind === "candidates" ? (
-              <div>
-                {model.candidates.map((candidate) => {
-                  const primaryIdentifier = candidate.record.identifiers[0];
-                  const byline = [
-                    candidate.record.authors.join("、"),
-                    candidate.record.year ? String(candidate.record.year) : ""
-                  ].filter(Boolean).join(" · ");
-                  return (
-                    <div className="profile-archive-card" key={candidate.candidateKey}>
-                      <div className="profile-dialog-title">{candidate.record.title}</div>
-                      {byline ? <div>{byline}</div> : null}
-                      {primaryIdentifier ? (
-                        <div>{identifierLabels[primaryIdentifier.kind]} {primaryIdentifier.value}</div>
-                      ) : null}
-                      <Button
-                        appearance="secondary"
-                        aria-label={`选择 ${candidate.record.title}`}
-                        disabled={model.pending}
-                        onClick={() => onSelectCandidate(candidate.candidateKey)}
-                      >
-                        选择
-                      </Button>
-                    </div>
-                  );
-                })}
+              <div className="literature-candidate-groups">
+                {groupLiteratureCandidates(model.candidates).map((group, groupIndex) => (
+                  <section
+                    aria-label={group.versioned ? `文献版本组 ${groupIndex + 1}` : undefined}
+                    className={group.versioned ? "literature-candidate-group" : undefined}
+                    key={group.id}
+                    role={group.versioned ? "group" : undefined}
+                  >
+                    {group.versioned ? (
+                      <div className="literature-candidate-group-title">版本组 {groupIndex + 1}</div>
+                    ) : null}
+                    {group.candidates.map((candidate) => {
+                      const primaryIdentifier = candidate.record.identifiers[0];
+                      const relation = candidate.relations?.[0];
+                      const byline = [
+                        candidate.record.authors.join("、"),
+                        candidate.record.year ? String(candidate.record.year) : ""
+                      ].filter(Boolean).join(" · ");
+                      return (
+                        <div className="profile-archive-card literature-candidate-card" key={candidate.candidateKey}>
+                          <div className="profile-dialog-title">{candidate.record.title}</div>
+                          {group.versioned || relation ? (
+                            <div className="literature-candidate-version">{candidateVersionLabel(candidate)}</div>
+                          ) : null}
+                          {byline ? <div>{byline}</div> : null}
+                          {primaryIdentifier ? (
+                            <div>{identifierLabels[primaryIdentifier.kind]} {primaryIdentifier.value}</div>
+                          ) : null}
+                          <div className="literature-candidate-source">
+                            来源：{literatureProviderLabel(candidate.provider)}
+                            {relation ? ` · 证据：${relationEvidenceLabel(relation.evidence)}` : ""}
+                          </div>
+                          <Button
+                            appearance="secondary"
+                            aria-label={`选择 ${candidate.record.title}${group.versioned ? `（${literatureProviderLabel(candidate.provider)}）` : ""}`}
+                            disabled={model.pending}
+                            onClick={() => onSelectCandidate(candidate.candidateKey)}
+                          >
+                            选择
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </section>
+                ))}
               </div>
             ) : null}
 

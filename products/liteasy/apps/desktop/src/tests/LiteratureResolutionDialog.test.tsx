@@ -85,6 +85,44 @@ describe("LiteratureResolutionDialog", () => {
     expect(callbacks.onSelectCandidate).toHaveBeenCalledWith("candidate:doi:10.1000/test");
   });
 
+  test("groups preprint and publication candidates connected by provider evidence", () => {
+    render(<LiteratureResolutionDialog {...actions()} model={{
+      ...candidatesModel,
+      candidates: [{
+        candidateKey: "arxiv:arxiv_id:2401.01234",
+        provider: "arxiv",
+        record: {
+          authors: ["Ada Lovelace"],
+          documentType: "preprint",
+          identifiers: [{ kind: "arxiv_id", source: "public_registry", value: "2401.01234" }],
+          title: "A Versioned Paper",
+          year: 2025
+        },
+        relations: [{
+          direction: "from_current",
+          evidence: { sourceField: "arxiv:doi" },
+          relationType: "is_preprint_of",
+          targetIdentifier: { kind: "doi", value: "10.1000/published" }
+        }]
+      }, {
+        candidateKey: "crossref:doi:10.1000/published",
+        provider: "crossref",
+        record: {
+          authors: ["Ada Lovelace"],
+          documentType: "journal-article",
+          identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/published" }],
+          title: "A Versioned Paper",
+          year: 2026
+        }
+      }]
+    }} />);
+
+    expect(screen.getByRole("group", { name: "文献版本组 1" })).toBeInTheDocument();
+    expect(screen.getByText("预印本，关联正式发表版")).toBeInTheDocument();
+    expect(screen.getByText("来源：arXiv · 证据：arxiv:doi")).toBeInTheDocument();
+    expect(screen.getByText("来源：Crossref")).toBeInTheDocument();
+  });
+
   test("shows retry without exposing manual entry when providers are unavailable", async () => {
     const callbacks = actions();
     const user = userEvent.setup();

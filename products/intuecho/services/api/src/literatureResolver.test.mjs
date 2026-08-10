@@ -308,6 +308,43 @@ test("marks two independently corroborated aggregate candidates as exact", async
   assert.equal(result.candidate.provider, "openalex");
 });
 
+test("marks an aggregate candidate corroborated by an independent primary registry as exact", async () => {
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("openalex", {
+        search: async () => [candidate({
+          candidateKey: "openalex:openalex_id:W321",
+          identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W321" }],
+          provider: "openalex",
+          title: "Independent Source Agreement"
+        })]
+      }),
+      provider("crossref", {
+        search: async () => [candidate({
+          candidateKey: "crossref:doi:10.1000/independent",
+          identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/independent" }],
+          provider: "crossref",
+          title: "Independent Source Agreement"
+        })]
+      })
+    ],
+    repository: repository()
+  });
+
+  const result = await resolver.resolve(user, {
+    hints: {
+      authors: ["A. Author"],
+      title: "Independent Source Agreement",
+      year: 2026
+    },
+    purpose: "liteasy_pdf_annotation"
+  });
+
+  assert.equal(result.status, "exact");
+  assert.equal(result.confirmationMode, "corroborated");
+  assert.equal(result.candidate.provider, "crossref");
+});
+
 test("rejects an aggregate publication candidate that collapses arXiv and DOI versions", async () => {
   const semanticCandidate = candidate({
     candidateKey: "semantic_scholar:semantic_scholar_id:semantic-123",
@@ -688,6 +725,44 @@ test("re-fetches an independent aggregate source before corroborated confirmatio
     providers: [
       provider("openalex", { fetchCandidate: async () => selected }),
       provider("semantic_scholar", {
+        fetchCandidate: async (candidateKey) => candidateKey === corroborating.candidateKey ? corroborating : null,
+        search: async () => [corroborating]
+      })
+    ],
+    repository: repository({
+      async confirmRefetchedLiterature(_owner, verifiedCandidate) {
+        confirmedCandidate = verifiedCandidate;
+        return { source: "refetched", title: verifiedCandidate.record.title };
+      }
+    })
+  });
+
+  await resolver.confirm(user, {
+    candidateKey: selected.candidateKey,
+    mode: "corroborated"
+  });
+
+  assert.deepEqual(confirmedCandidate.corroborations, [corroborating]);
+});
+
+test("re-fetches an aggregate source when a primary registry candidate was corroborated", async () => {
+  const selected = candidate({
+    candidateKey: "crossref:doi:10.1000/independent",
+    identifiers: [publicIdentifier("doi", "10.1000/independent")],
+    provider: "crossref",
+    title: "Independent Source Agreement"
+  });
+  const corroborating = candidate({
+    candidateKey: "openalex:openalex_id:W321",
+    identifiers: [publicIdentifier("openalex_id", "W321")],
+    provider: "openalex",
+    title: "Independent Source Agreement"
+  });
+  let confirmedCandidate;
+  const resolver = createLiteratureResolver({
+    providers: [
+      provider("crossref", { fetchCandidate: async () => selected }),
+      provider("openalex", {
         fetchCandidate: async (candidateKey) => candidateKey === corroborating.candidateKey ? corroborating : null,
         search: async () => [corroborating]
       })

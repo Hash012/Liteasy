@@ -4026,7 +4026,7 @@ body {
 .literature-version-relations {
   border-bottom: 1px solid var(--line-1);
   display: grid;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 10px;
 }
 
@@ -4041,6 +4041,24 @@ body {
   font-size: 12px;
 }
 
+.literature-version-heading,
+.literature-version-state,
+.literature-citation-export,
+.literature-citation-actions {
+  align-items: center;
+  display: flex;
+}
+
+.literature-version-heading,
+.literature-version-state,
+.literature-citation-export {
+  justify-content: space-between;
+}
+
+.literature-version-error {
+  color: #b42318;
+}
+
 .literature-version-relation span {
   overflow-wrap: anywhere;
 }
@@ -4048,6 +4066,50 @@ body {
 .literature-version-identifier {
   color: var(--ink-3);
   font-size: 11px;
+}
+
+.literature-version-evidence,
+.literature-version-action-message,
+.literature-candidate-source,
+.literature-candidate-version {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.literature-citation-export {
+  gap: 6px;
+}
+
+.literature-citation-export select {
+  min-width: 0;
+  width: 100%;
+}
+
+.literature-citation-actions {
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.literature-candidate-groups,
+.literature-candidate-group {
+  display: grid;
+  gap: 8px;
+}
+
+.literature-candidate-group {
+  border-left: 2px solid var(--accent-1);
+  padding-left: 8px;
+}
+
+.literature-candidate-group-title {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.literature-candidate-card {
+  display: grid;
+  gap: 5px;
 }
 
 .pdf-public-annotation-status {

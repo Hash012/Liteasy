@@ -160,11 +160,13 @@ function hasIdentityConflict(candidates) {
     sharesIdentity(candidate, other) && !bibliographiesDoNotConflict(candidate, other)));
 }
 
-function corroboratedAggregateCandidate(candidates, requestedKeys) {
-  const aggregateCandidates = candidates.filter((candidate) => aggregateRegistryProviders.has(candidate.provider));
-  for (const [index, candidate] of aggregateCandidates.entries()) {
-    for (const other of aggregateCandidates.slice(index + 1)) {
-      if (candidate.provider === other.provider || !sameLiteratureVersionBibliography(candidate.record, other.record)) continue;
+function corroboratedExternalCandidate(candidates, requestedKeys) {
+  const externalCandidates = candidates.filter((candidate) => candidate.provider !== "intuecho");
+  for (const [index, candidate] of externalCandidates.entries()) {
+    for (const other of externalCandidates.slice(index + 1)) {
+      if (candidate.provider === other.provider ||
+        (!aggregateRegistryProviders.has(candidate.provider) && !aggregateRegistryProviders.has(other.provider)) ||
+        !sameLiteratureVersionBibliography(candidate.record, other.record)) continue;
       return selectRepresentative(candidate, other, requestedKeys);
     }
   }
@@ -333,7 +335,7 @@ export function createLiteratureResolver({ providers, repository }) {
       if (exact && (exact.provider === "intuecho" || primaryRegistryProviders.has(exact.provider))) {
         return { candidate: exact, confirmationMode: "candidate", status: "exact", unavailableProviders };
       }
-      const corroborated = corroboratedAggregateCandidate(admittedCandidates, requestedKeys);
+      const corroborated = corroboratedExternalCandidate(admittedCandidates, requestedKeys);
       if (corroborated) {
         return { candidate: corroborated, confirmationMode: "corroborated", status: "exact", unavailableProviders };
       }
@@ -368,7 +370,7 @@ export function createLiteratureResolver({ providers, repository }) {
       if (!candidate || candidate.candidateKey !== input.candidateKey) {
         throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
       }
-      const corroborations = aggregateRegistryProviders.has(candidate.provider)
+      const corroborations = input.mode === "corroborated" || aggregateRegistryProviders.has(candidate.provider)
         ? await refetchCrossSourceCandidates(candidate, configuredProviders)
         : [];
       if (input.mode === "corroborated" && corroborations.length === 0) {

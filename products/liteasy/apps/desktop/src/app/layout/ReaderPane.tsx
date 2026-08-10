@@ -14,7 +14,11 @@ import type { PdfAnnotation, PdfAnnotationPublication } from "../features/pdf/pd
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
-import type { LiteratureRelationsResult } from "../features/paper-identity/literature.types";
+import type {
+  LiteratureRecord,
+  LiteratureRelation,
+  LiteratureRelationsResult
+} from "../features/paper-identity/literature.types";
 import type { MineruFigure } from "../features/import/import.types";
 import type { TeamAnnotation } from "../features/organization/teamAnnotationClient";
 import type { VisualizationTabData } from "../features/visualization/visualization.types";
@@ -45,6 +49,7 @@ type ReaderPaneProps = {
   canModerateOrganizationAnnotations?: boolean;
   onAddExternalPdfToLibrary?: (input: { bytes: Uint8Array; fileName: string; title: string }) => Promise<void>;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
+  onOpenLiteratureVersion?: (literature: LiteratureRecord, relation: LiteratureRelation) => void | Promise<void>;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
   onPromoteExternalPaperToLibrary?: (source: ThinReadingExternalSource) => Promise<void>;
   onArtifactDynamicAction?: (action: UIDslActionRef) => void;
@@ -111,6 +116,7 @@ export function ReaderPane({
   canModerateOrganizationAnnotations,
   onAddExternalPdfToLibrary,
   onOpenExternalFullText,
+  onOpenLiteratureVersion,
   onPaperAnnotated,
   onPromoteExternalPaperToLibrary,
   onArtifactDynamicAction,
@@ -204,6 +210,7 @@ export function ReaderPane({
             loadPdfSource={loadPdfSource}
             loadLiteratureRelations={loadLiteratureRelations}
             loadOrganizationAnnotations={loadOrganizationAnnotations}
+            onOpenLiteratureVersion={onOpenLiteratureVersion}
             organizationAnnotationActorId={organizationAnnotationActorId}
             canModerateOrganizationAnnotations={canModerateOrganizationAnnotations}
             pdfBackground={pdfBackground}

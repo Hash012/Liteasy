@@ -141,12 +141,10 @@ export class PostgresAnnotationCommunityRepository {
       for (const { candidate, providerRecordId } of providerRecords) {
         lockOrder.push({ kind: `provider:${candidate.provider}`, value: providerRecordId });
       }
-      if (evidenceCandidates.some((candidate) => aggregateLiteratureProviders.has(candidate.provider))) {
-        try {
-          lockOrder.push({ kind: "aggregate-bibliography", value: titleAuthorsYearFingerprint(input) });
-        } catch {
-          // Incomplete bibliographies cannot participate in independent-source reuse.
-        }
+      try {
+        lockOrder.push({ kind: "provider-bibliography", value: titleAuthorsYearFingerprint(input) });
+      } catch {
+        // Incomplete bibliographies cannot participate in independent-source reuse.
       }
       for (const identifier of lockOrder) {
         await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`${identifier.kind}:${identifier.value}`]);
@@ -164,13 +162,13 @@ export class PostgresAnnotationCommunityRepository {
       }
       const matched = new Set(identityMatches);
       for (const claimResult of claimResults) if (claimResult.rows[0]) matched.add(claimResult.rows[0].literature_id);
-      const aggregateBibliographyMatches = new Set();
+      const providerBibliographyMatches = new Set();
       for (const candidate of evidenceCandidates) {
-        for (const literatureId of await this.#independentAggregateBibliographyMatches(input, candidate.provider, client)) {
-          aggregateBibliographyMatches.add(literatureId);
+        for (const literatureId of await this.#independentProviderBibliographyMatches(input, candidate.provider, client)) {
+          providerBibliographyMatches.add(literatureId);
         }
       }
-      for (const literatureId of aggregateBibliographyMatches) {
+      for (const literatureId of providerBibliographyMatches) {
         matched.add(literatureId);
       }
       if (matched.size > 1) throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_CONFLICT");
@@ -210,8 +208,8 @@ export class PostgresAnnotationCommunityRepository {
         const relations = normalizeLiteratureRelations(candidate.relations);
         const claimEvidence = {
           candidateKey: candidate.candidateKey,
-          confirmationBasis: evidenceCandidates.length > 1 || aggregateBibliographyMatches.size > 0
-            ? "independent_aggregate_bibliography"
+          confirmationBasis: evidenceCandidates.length > 1 || providerBibliographyMatches.size > 0
+            ? "independent_provider_bibliography"
             : aggregateLiteratureProviders.has(candidate.provider)
               ? "user_selected_refetch"
               : "primary_registry_refetch",
@@ -650,19 +648,19 @@ export class PostgresAnnotationCommunityRepository {
     return literatureIds;
   }
 
-  async #independentAggregateBibliographyMatches(input, provider, client = this.pool) {
-    if (!aggregateLiteratureProviders.has(provider) || !Number.isInteger(input.year)) return new Set();
+  async #independentProviderBibliographyMatches(input, provider, client = this.pool) {
+    if (!confirmedLiteratureProviders.has(provider) || !Number.isInteger(input.year)) return new Set();
     const result = await client.query(`
       SELECT DISTINCT identifier.literature_id
         FROM literature_identity_claims claim
         JOIN literature_identifiers identifier ON identifier.id = claim.identifier_id
         JOIN literature_records literature ON literature.id = identifier.literature_id
-       WHERE claim.provider = ANY($1::text[])
-         AND claim.provider <> $2
+       WHERE claim.provider <> $1
+         AND ($1 = ANY($2::text[]) OR claim.provider = ANY($2::text[]))
          AND literature.confirmation_status = 'confirmed'
          AND literature.publication_year = $3
        ORDER BY identifier.literature_id
-    `, [[...aggregateLiteratureProviders], provider, input.year]);
+    `, [provider, [...aggregateLiteratureProviders], input.year]);
     const matches = [];
     for (const row of result.rows) {
       const record = await this.#literatureRecord(row.literature_id, client);

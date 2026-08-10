@@ -1,13 +1,30 @@
-import { useEffect, useState } from "react";
+import { Button, Select } from "@fluentui/react-components";
+import {
+  ArrowClockwiseRegular,
+  CopyRegular,
+  DocumentArrowDownRegular,
+  OpenRegular
+} from "@fluentui/react-icons";
+import { useEffect, useMemo, useState } from "react";
 import type {
   LiteratureIdentifier,
+  LiteratureRecord,
   LiteratureRelationsResult,
   LiteratureVersionRelation
 } from "../paper-identity/literature.types";
+import {
+  formatLiteratureBibtex,
+  formatLiteratureCitation,
+  literatureProviderLabel,
+  preferredCitationLiterature,
+  relationEvidenceLabel
+} from "./literatureVersioning";
 
 type LiteratureVersionRelationsProps = {
-  literatureId: string;
+  copyText?: (value: string) => Promise<void>;
+  currentLiterature: LiteratureRecord;
   loadRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
+  onOpenVersion?: (literature: LiteratureRecord, relation: LiteratureVersionRelation["relation"]) => void | Promise<void>;
 };
 
 const identifierLabels: Record<LiteratureIdentifier["kind"], string> = {
@@ -36,44 +53,159 @@ function preferredIdentifier(identifiers: LiteratureIdentifier[]) {
     ?? identifiers[0];
 }
 
+async function defaultCopyText(value: string) {
+  if (!navigator.clipboard?.writeText) throw new Error("当前环境无法写入剪贴板。");
+  await navigator.clipboard.writeText(value);
+}
+
 export function LiteratureVersionRelations({
-  literatureId,
-  loadRelations
+  copyText = defaultCopyText,
+  currentLiterature,
+  loadRelations,
+  onOpenVersion
 }: LiteratureVersionRelationsProps) {
+  const [reloadKey, setReloadKey] = useState(0);
   const [result, setResult] = useState<LiteratureRelationsResult | null>(null);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [citationLiteratureId, setCitationLiteratureId] = useState(currentLiterature.literatureId);
+  const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
     if (!loadRelations) return;
     let active = true;
     setResult(null);
-    void loadRelations(literatureId).then((value) => {
-      if (active && value.literatureId === literatureId) setResult(value);
+    setLoadState("loading");
+    setActionMessage("");
+    void loadRelations(currentLiterature.literatureId).then((value) => {
+      if (!active || value.literatureId !== currentLiterature.literatureId) return;
+      setResult(value);
+      setCitationLiteratureId(preferredCitationLiterature(currentLiterature, value.versions).literatureId);
+      setLoadState("ready");
     }).catch(() => {
-      if (active) setResult(null);
+      if (active) setLoadState("error");
     });
     return () => {
       active = false;
     };
-  }, [literatureId, loadRelations]);
+  }, [currentLiterature, loadRelations, reloadKey]);
 
-  if (!loadRelations || !result?.versions.length) return null;
+  const citationOptions = useMemo(() => {
+    const options = [
+      { label: "当前版本", record: currentLiterature },
+      ...(result?.versions.map((version) => ({
+        label: relationLabel(version),
+        record: version.literature
+      })) ?? [])
+    ];
+    return [...new Map(options.map((option) => [option.record.literatureId, option])).values()];
+  }, [currentLiterature, result]);
+  const citationLiterature = citationOptions.find((option) => option.record.literatureId === citationLiteratureId)?.record
+    ?? currentLiterature;
+
+  if (!loadRelations) return null;
+
+  async function copyCitation(format: "citation" | "bibtex") {
+    setActionMessage("");
+    try {
+      await copyText(format === "bibtex"
+        ? formatLiteratureBibtex(citationLiterature)
+        : formatLiteratureCitation(citationLiterature));
+      setActionMessage(format === "bibtex" ? "BibTeX 已复制" : "引用已复制");
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "引用复制失败，请重试。");
+    }
+  }
 
   return (
     <section aria-label="关联文献版本" className="literature-version-relations">
-      {result.versions.map((version) => {
+      {loadState === "loading" ? (
+        <div className="literature-version-state" role="status">正在加载版本关系</div>
+      ) : null}
+      {loadState === "error" ? (
+        <div className="literature-version-state literature-version-error" role="status">
+          <span>版本关系加载失败</span>
+          <Button
+            appearance="subtle"
+            aria-label="重试加载版本关系"
+            icon={<ArrowClockwiseRegular />}
+            onClick={() => setReloadKey((current) => current + 1)}
+            size="small"
+            title="重试加载版本关系"
+          />
+        </div>
+      ) : null}
+      {loadState === "ready" && result?.versions.length === 0 ? (
+        <div className="literature-version-state">暂无已确认的关联版本</div>
+      ) : null}
+      {result?.versions.map((version) => {
         const identifier = preferredIdentifier(version.literature.identifiers);
         return (
           <article className="literature-version-relation" key={`${version.relation.relationType}:${version.literature.literatureId}`}>
-            <strong>{relationLabel(version)}</strong>
+            <div className="literature-version-heading">
+              <strong>{relationLabel(version)}</strong>
+              {onOpenVersion ? (
+                <Button
+                  appearance="subtle"
+                  aria-label={`打开 ${version.literature.title}`}
+                  icon={<OpenRegular />}
+                  onClick={() => void Promise.resolve(onOpenVersion(version.literature, version.relation)).catch((error) => {
+                    setActionMessage(error instanceof Error ? error.message : "关联版本打开失败。");
+                  })}
+                  size="small"
+                  title={`打开 ${version.literature.title}`}
+                />
+              ) : null}
+            </div>
             <span>{version.literature.title}</span>
             {identifier ? (
               <span className="literature-version-identifier">
                 {identifierLabels[identifier.kind]} {identifier.value}
               </span>
             ) : null}
+            <span className="literature-version-evidence">
+              来源：{literatureProviderLabel(version.relation.provider)} · 已确认
+            </span>
+            <span className="literature-version-evidence">
+              证据：{relationEvidenceLabel(version.relation.evidence)}
+            </span>
           </article>
         );
       })}
+      {loadState === "ready" ? (
+        <div className="literature-citation-export">
+          <Select
+            aria-label="引用版本"
+            onChange={(event) => setCitationLiteratureId(event.target.value)}
+            size="small"
+            value={citationLiterature.literatureId}
+          >
+            {citationOptions.map((option) => (
+              <option key={option.record.literatureId} value={option.record.literatureId}>
+                {option.label} · {option.record.title}
+              </option>
+            ))}
+          </Select>
+          <div className="literature-citation-actions">
+            <Button
+              appearance="subtle"
+              aria-label="复制引用"
+              icon={<CopyRegular />}
+              onClick={() => void copyCitation("citation")}
+              size="small"
+              title="复制引用"
+            />
+            <Button
+              appearance="subtle"
+              aria-label="复制 BibTeX"
+              icon={<DocumentArrowDownRegular />}
+              onClick={() => void copyCitation("bibtex")}
+              size="small"
+              title="复制 BibTeX"
+            />
+          </div>
+        </div>
+      ) : null}
+      {actionMessage ? <div aria-live="polite" className="literature-version-action-message">{actionMessage}</div> : null}
     </section>
   );
 }

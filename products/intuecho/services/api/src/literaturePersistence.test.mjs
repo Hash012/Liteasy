@@ -76,7 +76,32 @@ test("SQLite reuses one version when two aggregate providers independently confi
     assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identifiers_v2").get().count, 2);
     assert.equal(db.prepare("SELECT count(*) AS count FROM literature_identity_claims_v2").get().count, 2);
     const claim = db.prepare("SELECT evidence_json FROM literature_identity_claims_v2 WHERE provider = 'semantic_scholar'").get();
-    assert.equal(JSON.parse(claim.evidence_json).confirmationBasis, "independent_aggregate_bibliography");
+    assert.equal(JSON.parse(claim.evidence_json).confirmationBasis, "independent_provider_bibliography");
+  } finally {
+    db.close();
+  }
+});
+
+test("SQLite reuses one version when primary and aggregate providers independently confirm the same bibliography", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const openAlex = await repository.confirmRefetchedLiterature(owner, candidate({
+      candidateKey: "openalex:openalex_id:W321",
+      documentType: "article",
+      identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W321" }],
+      provider: "openalex"
+    }));
+    const crossref = await repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+      candidateKey: "crossref:doi:10.1000/independent",
+      documentType: "journal-article",
+      identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/independent" }],
+      provider: "crossref"
+    }));
+
+    assert.equal(crossref.literatureId, openAlex.literatureId);
+    assert.equal(db.prepare("SELECT count(*) AS count FROM literature_records_v2").get().count, 1);
+    assert.equal(JSON.parse(db.prepare("SELECT evidence_json FROM literature_identity_claims_v2 WHERE provider = 'crossref'").get().evidence_json).confirmationBasis, "independent_provider_bibliography");
   } finally {
     db.close();
   }
@@ -435,7 +460,8 @@ function postgresHarness() {
       }
       if (query.startsWith("SELECT DISTINCT identifier.literature_id")) {
         return {
-          rows: claims.filter((claim) => values[0].includes(claim.provider) && claim.provider !== values[1])
+          rows: claims.filter((claim) => claim.provider !== values[0] &&
+            (values[1].includes(values[0]) || values[1].includes(claim.provider)))
             .filter((claim) => records.get(claim.literature_id)?.publication_year === values[2])
             .map((claim) => ({ literature_id: claim.literature_id }))
         };
@@ -632,6 +658,26 @@ test("PostgreSQL reuses one version when two aggregate providers independently c
   assert.equal(harness.records.size, 1);
   assert.equal(harness.identifiers.length, 2);
   assert.equal(harness.claims.length, 2);
+});
+
+test("PostgreSQL reuses one version when primary and aggregate providers independently confirm the same bibliography", async () => {
+  const harness = postgresHarness();
+  const openAlex = await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    candidateKey: "openalex:openalex_id:W321",
+    documentType: "article",
+    identifiers: [{ kind: "openalex_id", source: "public_registry", value: "W321" }],
+    provider: "openalex"
+  }));
+  const crossref = await harness.repository.confirmRefetchedLiterature({ id: "another-owner" }, candidate({
+    candidateKey: "crossref:doi:10.1000/independent",
+    documentType: "journal-article",
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/independent" }],
+    provider: "crossref"
+  }));
+
+  assert.equal(crossref.literatureId, openAlex.literatureId);
+  assert.equal(harness.records.size, 1);
+  assert.equal(harness.claims.find((claim) => claim.provider === "crossref").evidence.confirmationBasis, "independent_provider_bibliography");
 });
 
 test("PostgreSQL does not merge aggregate preprint and publication records with matching bibliography", async () => {
