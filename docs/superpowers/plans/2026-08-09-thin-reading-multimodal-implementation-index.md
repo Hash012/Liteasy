@@ -36,12 +36,26 @@ Status: complete as of 2026-08-10; Tasks 1-8 of the orchestration closure are co
 
 ### Phase 4 - Static Science Renderers
 
-Status: not started as of 2026-08-11; the post-merge implementation audit found only the shared v1 contracts and runtime foundation, not any Phase 4 kernel, renderer, generated Skill, modality validator, conformance fixture, or browser visual gate.
+Status: complete on branch `feat/thin-reading-multimodal-phase4-static` as of 2026-08-11.
 
-- Do not count schema branches or generic artifact fixtures as a completed static modality.
-- The Phase 4 plan was corrected after the audit to include authoritative API compiler descriptors and server domain hard validators. Desktop validation alone cannot authorize publication.
-- Static modality availability is the intersection of an enabled shared catalog entry, a matching server compiler, and a complete desktop Skill/Kernel/Validator/Renderer/fixture chain.
-- The production catalog still enables only `source_figure`; no generated modality is enabled before the corrected Phase 4 release gate passes.
+- Static modalities implemented and gated: `semantic_graph`, `circuit`, `physics_diagram`, `biology_structure`.
+- Commits: `b47fa54`, `582f909`, `6ddea4a`, `0d69a6e`, `7305466`, `0f61a89`, `74f9026`.
+- Final gate before enabling: API compiler/runtime tests passed; desktop static modality tests passed; browser visual tests passed; desktop production build passed with generated schema and production asset verification.
+- The shared production catalog enables the four generated static modalities only after the service compiler registry and complete desktop Skill/Kernel/Validator/Renderer/fixture chains agree.
+
+### Phase 5 - Interactive Math Renderers
+
+Status: not started as of 2026-08-11.
+
+- The Phase 5 plan has been corrected to include authoritative API compiler descriptors, server domain hard validators, cross-runtime conformance fixtures, and a shared catalog gate for `function_plot`, `geometry_2d`, and `geometry_3d`.
+- Desktop math availability must be the intersection of an enabled catalog entry, matching API compiler, complete desktop Skill/Kernel/Validator/Renderer/fallback chain, and runtime checks for worker/WebGL capability.
+
+### Phase 6 - Process, Raster, And Release
+
+Status: not started as of 2026-08-11.
+
+- The Phase 6 plan has been corrected to include authoritative API compiler descriptors, server domain hard validators, cross-runtime conformance fixtures, and a shared catalog gate for `physics_process`, `reaction_process`, and `raster_illustration`.
+- Final completion still requires the cross-modality release command, PostgreSQL/API/admin/desktop/Playwright/build gates, and real-provider smoke execution when configured or an explicit `skipped_configuration` record when not configured.
 
 ## Why This Is A Plan Suite
 
@@ -58,9 +72,9 @@ The specification spans six subsystems with different ownership and verification
 4. `2026-08-09-thin-reading-multimodal-04-static-science-renderers.md`
    - Semantic graphs, circuits, physics diagrams, biology structures, deterministic SVG, accessibility projections, authoritative service compilers, and the shared catalog gate.
 5. `2026-08-09-thin-reading-multimodal-05-interactive-math-renderers.md`
-   - Function plots, 2D geometry, lazy Three.js 3D geometry, bounded interactions and worker execution.
+   - Function plots, 2D geometry, lazy Three.js 3D geometry, bounded interactions, worker execution, authoritative service compilers, and the shared catalog gate.
 6. `2026-08-09-thin-reading-multimodal-06-process-raster-release.md`
-   - Physics and chemistry processes, raster generation, route evaluation, benchmark gates, real-provider smoke verification.
+   - Physics and chemistry processes, raster generation, authoritative service compilers, route evaluation, benchmark gates, shared catalog gate, and real-provider smoke verification.
 
 ## Cross-Plan Release Rule
 
@@ -78,8 +92,8 @@ The current checkout contains user changes in thin-reading and association files
 | 02 | API repository/service/server; admin capability UI | API `npm test`; admin `npm test`, `npm run build`; desktop capability tests |
 | 03 | thin-reading migration, layout, deep dive | desktop thin-reading tests, Playwright, `npm run build` |
 | 04 | four static modality kernels/renderers; API compiler/domain validators; catalog consistency | API compiler/runtime tests; desktop modality tests; browser screenshots; `npm run build` |
-| 05 | function/2D/3D kernels and interaction | desktop tests, WebGL pixel tests, `npm run build` |
-| 06 | process/raster/evaluation/benchmarks | all affected suites, production asset checks, real-provider smoke test |
+| 05 | function/2D/3D kernels and interaction; API compiler/domain validators; catalog consistency | API compiler tests; desktop tests; WebGL pixel tests; `npm run build` |
+| 06 | process/raster/evaluation/benchmarks; API compiler/domain validators; catalog consistency | all affected suites, production asset checks, real-provider smoke test |
 
 ## Requirement Coverage Check
 
@@ -89,6 +103,6 @@ The current checkout contains user changes in thin-reading and association files
 | `platform_admin` provider/API configuration, user entitlement, modality allowlist, weighted daily/monthly/concurrency quota, audit, idempotency, rollback, and separate provider-cost ledger | 02 |
 | Typed built-in Skills with no remote runtime dependency, one repair, hard/advisory validators, fallback, lazy loading, and Agent Core integration | 01 |
 | Flowchart, mindmap, causal/timeline graph, circuit, physics diagram, biology/neural structure, authoritative compilation, deterministic SVG/Canvas, keyboard and accessibility projection | 04 |
-| Function plot, 2D geometry, lazy interactive 3D geometry, bounded AST/evaluator, worker isolation, WebGL checks, and 2D fallback | 05 |
-| Physics animation, chemistry balancing/animation, raster provider route, image/OCR/source checks, reduced motion, offline read-only, revalidation, and release evaluation | 06 |
+| Function plot, 2D geometry, lazy interactive 3D geometry, bounded AST/evaluator, worker isolation, WebGL checks, 2D fallback, authoritative service compilers, and catalog release gate | 05 |
+| Physics animation, chemistry balancing/animation, raster provider route, image/OCR/source checks, reduced motion, offline read-only, revalidation, authoritative service compilers, catalog release gate, and release evaluation | 06 |
 | Necessary-generation recall and unnecessary-generation rate gates, plus real-provider smoke test that can explicitly be skipped without configuration | 06 |
