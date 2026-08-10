@@ -4,6 +4,7 @@ import test from "node:test";
 import { withPostgresTransaction } from "./postgres.mjs";
 import { createVisualizationTestPool, cleanupVisualizationTestSubject } from "./testSupport/visualizationTestPool.mjs";
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
+import { canonicalVisualizationArtifact } from "./visualizationArtifactTestFixture.mjs";
 import { PostgresVisualizationRepository } from "./visualizationRepository.mjs";
 
 const connectionString = process.env.LITEASY_TEST_DATABASE_URL;
@@ -93,13 +94,29 @@ async function cleanupPublicationDocument(pool, documentId, sourceHash) {
 }
 
 function publicationArtifact(suffix, modality = "semantic_graph") {
+  const artifactId = `viz-publication-artifact-${suffix}`;
+  const nodeId = `viz-publication-node-${suffix}`;
+  const spec = modality === "circuit"
+    ? {
+        modality,
+        payload: {
+          components: [],
+          currents: [],
+          measurementPoints: [],
+          networks: [],
+          parameters: [],
+          voltages: [],
+          wires: []
+        }
+      }
+    : canonicalVisualizationArtifact().spec;
   return {
-    artifactId: `viz-publication-artifact-${suffix}`,
-    body: { artifactVersion: "liteasy.visualization/v1", sourceIdentityHash: `source-${suffix}` },
+    artifactId,
+    body: canonicalVisualizationArtifact({ artifactId, modality, nodeId, spec }),
     contentHash: null,
     evidenceHash: createHash("sha256").update(`evidence-${suffix}`).digest("hex"),
     modality,
-    nodeId: `viz-publication-node-${suffix}`,
+    nodeId,
     specHash: createHash("sha256").update(`spec-${suffix}`).digest("hex"),
     state: "ready"
   };
@@ -535,7 +552,12 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
     assert.equal(publicationLedgerRows.rows[0].count, 1);
 
     await assertRejectedPublication("modality", async ({ artifact, input }) => {
-      artifact.modality = "circuit";
+      Object.assign(artifact, publicationArtifact(`${suffix}-modality-invalid`, "circuit"), {
+        artifactId: artifact.artifactId,
+        nodeId: artifact.nodeId
+      });
+      artifact.body.artifactId = artifact.artifactId;
+      artifact.body.nodeId = artifact.nodeId;
       input.validation = publicationValidation(artifact);
     });
     await assertRejectedPublication("expired", async ({ reserved }) => {

@@ -182,7 +182,7 @@ const visualizationSpecSchema = z.discriminatedUnion("modality", [
   z.object({ modality: z.literal("source_figure"), payload: sourceFigureSchema }).strict()
 ]);
 
-const artifactSchema = z.object({
+export const visualizationArtifactSchema = z.object({
   artifactId: stableIdSchema,
   artifactVersion: z.literal("liteasy.visualization/v1"),
   modality: modalitySchema,
@@ -213,8 +213,35 @@ const artifactSchema = z.object({
   }
 });
 
+function completeTupleBounds(value: unknown): void {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach(completeTupleBounds);
+    return;
+  }
+  const schema = value as Record<string, unknown>;
+  const prefixItems = schema.prefixItems;
+  if (Array.isArray(prefixItems)) {
+    schema.minItems ??= prefixItems.length;
+    if (schema.items === undefined) {
+      schema.items = false;
+      schema.maxItems ??= prefixItems.length;
+    }
+  }
+  Object.values(schema).forEach(completeTupleBounds);
+}
+
+export function createVisualizationArtifactJsonSchema(): Record<string, unknown> {
+  const schema = z.toJSONSchema(visualizationArtifactSchema, {
+    target: "draft-2020-12",
+    unrepresentable: "any"
+  }) as Record<string, unknown>;
+  completeTupleBounds(schema);
+  return { $id: "liteasy.visualization/v1", ...schema };
+}
+
 export function parseVisualizationArtifact(value: unknown): VisualizationArtifactV1 {
-  const result = artifactSchema.safeParse(value);
+  const result = visualizationArtifactSchema.safeParse(value);
   if (!result.success) throw new Error("visualization_artifact_invalid");
   return result.data as VisualizationArtifactV1;
 }

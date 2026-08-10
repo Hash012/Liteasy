@@ -1,8 +1,22 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { parseVisualizationArtifact } from "../app/features/visualization/visualizationArtifact.schema";
+import {
+  createVisualizationArtifactJsonSchema,
+  parseVisualizationArtifact,
+} from "../app/features/visualization/visualizationArtifact.schema";
 import { makeVisualizationArtifactFixture } from "./fixtures/visualizationArtifactFixtures";
 
 describe("visualization artifact schema", () => {
+  test("matches the committed cross-runtime JSON schema byte for byte", async () => {
+    const committed = await readFile(resolve(
+      process.cwd(),
+      "../../packages/shared/visualizationArtifact.v1.schema.json"
+    ), "utf8");
+    const generated = `${JSON.stringify(createVisualizationArtifactJsonSchema(), null, 2)}\n`;
+    expect(generated).toBe(committed);
+  });
+
   test("rejects a modality/spec mismatch and executable fields", () => {
     expect(() => parseVisualizationArtifact({
       artifactId: "viz-1",
