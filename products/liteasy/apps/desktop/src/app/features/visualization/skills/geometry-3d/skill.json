@@ -1,0 +1,16 @@
+{
+  "costClass": "medium",
+  "evidenceRequirements": ["all 3D objects, constraints, sections, and labels must cite evidence claims"],
+  "fallbackModalities": ["geometry_2d", "source_figure"],
+  "id": "geometry-3d",
+  "integrityRules": ["typed geometry_3d spec only", "no generated shaders or DOM", "reject degenerate meshes and unsafe camera bounds"],
+  "kernelId": "geometry-3d-v1",
+  "modality": "geometry_3d",
+  "outputSchemaId": "liteasy.visualization/geometry-3d/v1",
+  "remote": false,
+  "rendererId": "geometry-3d-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "styleLock": ["trusted local projection renderer", "observation-only rotate, pan, zoom, section selection"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

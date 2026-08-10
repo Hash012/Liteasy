@@ -21,6 +21,7 @@
     "test:thin-reading-external-live": "node scripts/thin-reading-external-knowledge-live-eval.mjs",
     "test:thin-reading-ocr-offline": "node scripts/thin-reading-ocr-offline-eval.mjs",
     "test:thin-reading-openalex-live": "node scripts/thin-reading-openalex-live-eval.mjs",
+    "test:multimodal-release": "vitest run src/tests/staticScienceConformance.test.ts src/tests/interactiveMathConformance.test.ts src/tests/processRasterConformance.test.ts src/tests/staticScienceReleaseGate.test.ts src/tests/interactiveMathReleaseGate.test.ts src/tests/processRasterReleaseGate.test.ts src/tests/multimodalEvaluation.test.ts src/tests/visualizationPerformance.test.ts src/tests/multimodalReleaseGate.test.ts src/tests/builtinSkillRegistry.test.ts src/tests/visualizationRendererRegistry.test.ts",
     "tauri": "tauri"
   },
   "dependencies": {

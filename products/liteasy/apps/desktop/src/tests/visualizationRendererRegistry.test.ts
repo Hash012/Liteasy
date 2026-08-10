@@ -2,6 +2,7 @@ import { expect, test, vi } from "vitest";
 import { registerBuiltinSkill } from "../app/features/skills/builtinSkillRegistry";
 import {
   getAvailableVisualizationModalities,
+  getUnavailableVisualizationModalityReasons,
   loadVisualizationRenderer,
   registerVisualizationRenderer
 } from "../app/features/visualization/visualizationRendererRegistry";
@@ -11,12 +12,12 @@ const renderer: VisualizationRenderer = {
   id: "source-figure",
   modality: "source_figure",
   render: () => undefined,
-  version: "1"
+  version: "1.0.0"
 };
 
 test("does not load renderer chunks while enumerating capabilities", async () => {
   const load = vi.fn(async () => renderer);
-  registerVisualizationRenderer({ id: "source-figure", load, modality: "source_figure", version: "1" });
+  registerVisualizationRenderer({ id: "source-figure", load, modality: "source_figure", version: "1.0.0" });
   expect(getAvailableVisualizationModalities()).toContain("source_figure");
   expect(load).not.toHaveBeenCalled();
   await loadVisualizationRenderer("source-figure");
@@ -30,7 +31,7 @@ test("excludes a skill when its validator or renderer chain is incomplete", () =
     fallbackModalities: [],
     id: "test-incomplete-renderer-chain",
     integrityRules: [],
-    modality: "semantic_graph",
+    modality: "function_plot",
     outputSchemaId: "test",
     remote: false,
     rendererId: "missing-renderer",
@@ -46,7 +47,7 @@ test("excludes a skill when its validator or renderer chain is incomplete", () =
       fallbackModalities: [],
       id: "test-incomplete-renderer-chain",
       integrityRules: [],
-      modality: "semantic_graph",
+      modality: "function_plot",
       outputSchemaId: "test",
       remote: false,
       rendererId: "missing-renderer",
@@ -57,7 +58,12 @@ test("excludes a skill when its validator or renderer chain is incomplete", () =
     }
   }));
 
-  expect(getAvailableVisualizationModalities()).not.toContain("semantic_graph");
+  const catalog = {
+    entries: [{ enabled: true, generated: true, modality: "function_plot" as const, skillId: "test-incomplete-renderer-chain" }],
+    version: "liteasy.visualization-builtins/v1" as const
+  };
+  expect(getAvailableVisualizationModalities(catalog)).not.toContain("function_plot");
+  expect(getUnavailableVisualizationModalityReasons(catalog).function_plot).toBe("renderer_missing");
 });
 
 test("retries a renderer load after a transient failure", async () => {

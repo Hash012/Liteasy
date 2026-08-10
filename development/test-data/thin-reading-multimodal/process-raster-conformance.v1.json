@@ -1,0 +1,105 @@
+{
+  "version": "liteasy.process-raster-conformance/v1",
+  "source": {
+    "evidence": [
+      { "id": "evidence-1", "kind": "paper", "quote": "Bounded process and raster evidence." }
+    ],
+    "intent": {
+      "candidateModalities": ["physics_process", "reaction_process", "raster_illustration"],
+      "purpose": "explain_process"
+    },
+    "nodeId": "node-1"
+  },
+  "modalities": {
+    "physics_process": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["trajectory"], "summary": "Physics process over two seconds." },
+        "evidenceBindings": [{ "claimId": "claim-process", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "timeline", "parameterIds": ["g"], "selectableObjectIds": ["trajectory"] },
+        "semanticObjects": [{ "objectId": "trajectory", "kind": "trajectory", "label": "trajectory", "objectPath": ["trajectory"], "evidenceClaimIds": ["claim-process"], "selectable": true }],
+        "spec": {
+          "modality": "physics_process",
+          "payload": {
+            "duration": 2,
+            "frameRate": 30,
+            "initialState": { "x": 0, "y": 0, "vx": 10, "vy": 10 },
+            "parameters": [{ "id": "g", "value": 9.8, "unit": "m/s^2", "min": 9, "max": 10, "evidenceClaimIds": ["claim-process"] }],
+            "equations": [
+              { "id": "x", "expression": "x + vx * dt", "evidenceClaimIds": ["claim-process"] },
+              { "id": "y", "expression": "y + vy * dt - 0.5 * g * dt^2", "evidenceClaimIds": ["claim-process"] }
+            ],
+            "events": [],
+            "invariants": [{ "id": "finite-y", "expression": "y >= 0", "evidenceClaimIds": ["claim-process"] }],
+            "errorTolerance": 0.01,
+            "evidenceBindings": ["claim-process"],
+            "seed": "seed-1"
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "physics_process_frame_limit",
+          "patch": { "spec": { "payload": { "duration": 10, "frameRate": 30 } } }
+        }
+      }
+    },
+    "reaction_process": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["ch4", "o2", "co2", "h2o", "overall"], "summary": "CH4 + 2O2 -> CO2 + 2H2O" },
+        "evidenceBindings": [{ "claimId": "claim-process", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "stepwise", "parameterIds": [], "selectableObjectIds": ["ch4", "o2", "co2", "h2o", "overall"] },
+        "semanticObjects": [
+          { "objectId": "ch4", "kind": "chemical_species", "label": "CH4", "objectPath": ["ch4"], "evidenceClaimIds": ["claim-process"], "selectable": true },
+          { "objectId": "o2", "kind": "chemical_species", "label": "O2", "objectPath": ["o2"], "evidenceClaimIds": ["claim-process"], "selectable": true },
+          { "objectId": "co2", "kind": "chemical_species", "label": "CO2", "objectPath": ["co2"], "evidenceClaimIds": ["claim-process"], "selectable": true },
+          { "objectId": "h2o", "kind": "chemical_species", "label": "H2O", "objectPath": ["h2o"], "evidenceClaimIds": ["claim-process"], "selectable": true },
+          { "objectId": "overall", "kind": "reaction_step", "label": "overall", "objectPath": ["overall"], "evidenceClaimIds": ["claim-process"], "selectable": true }
+        ],
+        "spec": {
+          "modality": "reaction_process",
+          "payload": {
+            "species": [
+              { "id": "ch4", "formula": "CH4", "state": "g", "evidenceClaimIds": ["claim-process"] },
+              { "id": "o2", "formula": "O2", "state": "g", "evidenceClaimIds": ["claim-process"] },
+              { "id": "co2", "formula": "CO2", "state": "g", "evidenceClaimIds": ["claim-process"] },
+              { "id": "h2o", "formula": "H2O", "state": "l", "evidenceClaimIds": ["claim-process"] }
+            ],
+            "steps": [{ "id": "overall", "reactants": [{ "speciesId": "ch4", "coefficient": 1 }, { "speciesId": "o2", "coefficient": 2 }], "products": [{ "speciesId": "co2", "coefficient": 1 }, { "speciesId": "h2o", "coefficient": 2 }], "evidenceClaimIds": ["claim-process"] }],
+            "conditions": [],
+            "atomMap": []
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "reaction_conservation_failed",
+          "patch": { "spec": { "payload": { "steps": [{ "id": "overall", "reactants": [{ "speciesId": "ch4", "coefficient": 1 }], "products": [{ "speciesId": "co2", "coefficient": 1 }], "evidenceClaimIds": ["claim-process"] }] } } }
+        }
+      }
+    },
+    "raster_illustration": {
+      "valid": {
+        "accessibility": { "objectReadingOrder": ["label-1"], "summary": "simple labelled diagram" },
+        "evidenceBindings": [{ "claimId": "claim-process", "confidence": "direct", "evidenceIds": ["evidence-1"] }],
+        "interaction": { "pan": true, "zoom": true, "rotate": false, "playback": "none", "parameterIds": [], "selectableObjectIds": ["label-1"] },
+        "semanticObjects": [{ "objectId": "label-1", "kind": "raster_label", "label": "cell", "objectPath": ["label-1"], "evidenceClaimIds": ["claim-process"], "selectable": true }],
+        "spec": {
+          "modality": "raster_illustration",
+          "payload": {
+            "visualSchema": "simple labelled diagram",
+            "composition": { "width": 512, "height": 512, "aspectRatio": 1 },
+            "labels": [{ "id": "label-1", "text": "cell", "evidenceClaimIds": ["claim-process"] }],
+            "styleLock": { "palette": ["#ffffff", "#111827"], "typography": "system", "prohibitDecorativeClaims": true },
+            "evidenceClaimIds": ["claim-process"]
+          }
+        }
+      },
+      "invalid": {
+        "domain": {
+          "diagnosticCode": "raster_evidence_missing",
+          "patch": { "spec": { "payload": { "labels": [{ "id": "label-1", "text": "cell", "evidenceClaimIds": [] }] } } }
+        }
+      }
+    }
+  }
+}

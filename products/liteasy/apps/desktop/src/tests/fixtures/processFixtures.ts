@@ -1,0 +1,17 @@
+import type { PhysicsProcessSpecV1 } from "../../app/features/visualization/visualizationArtifact.types";
+
+export const projectileProcessFixture = {
+  duration: 2,
+  errorTolerance: 0.01,
+  events: [],
+  evidenceBindings: ["claim-projectile"],
+  equations: [
+    { evidenceClaimIds: ["claim-projectile"], id: "x", expression: "x + vx * dt" },
+    { evidenceClaimIds: ["claim-projectile"], id: "y", expression: "y + vy * dt - 0.5 * g * dt^2" }
+  ],
+  frameRate: 30,
+  initialState: { vx: 10, vy: 10, x: 0, y: 0 },
+  invariants: [{ evidenceClaimIds: ["claim-projectile"], id: "finite-y", expression: "y >= 0" }],
+  parameters: [{ evidenceClaimIds: ["claim-projectile"], id: "g", max: 10, min: 9, unit: "m/s^2", value: 9.8 }],
+  seed: "seed-1"
+} as const satisfies PhysicsProcessSpecV1;

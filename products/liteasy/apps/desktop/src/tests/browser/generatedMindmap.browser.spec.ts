@@ -1,8 +1,19 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function mountGeneratedMindMapFixture(page: Page) {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    document.body.innerHTML = '<div id="generated-mindmap-fixture"></div>';
+    const fixtureModule = await import("/src/tests/fixtures/generatedMindmapBrowserFixture.tsx");
+    await fixtureModule.mountGeneratedMindMapBrowserFixture(
+      document.getElementById("generated-mindmap-fixture")
+    );
+  });
+}
 
 test("renders generated QVLA mind maps with hybrid columns, KaTeX, and split comparison", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
-  await page.goto("/?generated-mindmap-fixture");
+  await mountGeneratedMindMapFixture(page);
 
   const root = page.locator('[data-generated-mindmap-depth="0"]').first();
   const section = page.locator('[data-generated-mindmap-depth="1"]').first();
