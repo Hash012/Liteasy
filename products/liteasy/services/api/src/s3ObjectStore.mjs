@@ -10,6 +10,7 @@ import {
   GetObjectLockConfigurationCommand,
   GetPublicAccessBlockCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   S3Client
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
@@ -190,6 +191,45 @@ export class S3ObjectStore {
       mediaType: response.ContentType ?? "application/octet-stream",
       metadata: response.Metadata ?? {}
     };
+  }
+
+  async listStagingObjects({ before, limit = 100 } = {}) {
+    const cutoff = before instanceof Date ? before : new Date(before);
+    if (!Number.isFinite(cutoff.getTime())) throw new Error("storage_staging_cutoff_invalid");
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+      throw new Error("storage_maintenance_limit_invalid");
+    }
+    const prefix = `${this.prefix}/.staging/`;
+    const objects = [];
+    let continuationToken;
+    let remaining = limit;
+    while (remaining > 0) {
+      const response = await this.client.send(new ListObjectsV2Command({
+        Bucket: this.bucket,
+        ContinuationToken: continuationToken,
+        MaxKeys: remaining,
+        Prefix: prefix
+      }));
+      const contents = (response.Contents ?? []).slice(0, remaining);
+      remaining -= contents.length;
+      for (const object of contents) {
+        const lastModified = object.LastModified instanceof Date
+          ? object.LastModified
+          : new Date(object.LastModified);
+        if (typeof object.Key !== "string" || !object.Key.startsWith(prefix) ||
+          !Number.isFinite(lastModified.getTime()) || lastModified >= cutoff) {
+          continue;
+        }
+        objects.push({ lastModified: lastModified.toISOString(), storageKey: object.Key });
+      }
+      if (!response.IsTruncated || remaining === 0) break;
+      if (typeof response.NextContinuationToken !== "string" ||
+        response.NextContinuationToken === continuationToken) {
+        throw new Error("storage_staging_pagination_invalid");
+      }
+      continuationToken = response.NextContinuationToken;
+    }
+    return objects;
   }
 
   async deleteKey(storageKey) {

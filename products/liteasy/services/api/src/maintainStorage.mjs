@@ -5,7 +5,7 @@ import { createPostgresPool, verifyPostgresReadiness } from "./postgres.mjs";
 import { S3ObjectStore } from "./s3ObjectStore.mjs";
 import { PdfUploadService } from "./pdfUploadService.mjs";
 import { HttpsPdfSecurityScanner } from "./pdfSecurityScanner.mjs";
-import { StorageMaintenanceService } from "./storageMaintenance.mjs";
+import { StorageMaintenanceService, storageMaintenanceHasFailures } from "./storageMaintenance.mjs";
 import { PostgresPersonalizationRepository } from "./personalizationRepository.mjs";
 import { PostgresExternalKnowledgeRepository } from "./externalKnowledgeService.mjs";
 
@@ -30,7 +30,7 @@ try {
     new PostgresExternalKnowledgeRepository(pool)
   ).run();
   process.stdout.write(`${JSON.stringify({ ...result, pdfSecurity })}\n`);
-  if (result.failedObjects.length > 0 || pdfSecurity.failures.length > 0 || pdfSecurity.remaining > 0) {
+  if (storageMaintenanceHasFailures(result) || pdfSecurity.failures.length > 0 || pdfSecurity.remaining > 0) {
     throw new Error("storage_maintenance_incomplete");
   }
 } finally {

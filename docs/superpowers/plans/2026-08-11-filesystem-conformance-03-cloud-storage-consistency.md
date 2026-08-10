@@ -169,7 +169,7 @@ git commit -m "fix: count cloud trash toward storage quota"
 - Produces: `PostgresLibraryRepository.listReferencedStagingKeys(keys) -> string[]` covering non-completed workflows and `storage_objects.staging_key`.
 - Consumes: `StorageMaintenanceService.run({ limit, stagingRetentionHours = 24 })`.
 
-- [ ] **Step 1: Write failing pagination, reference, and coordinator tests**
+- [x] **Step 1: Write failing pagination, reference, and coordinator tests**
 
 Test that S3 listing uses the `${prefix}/.staging/` prefix, follows continuation tokens only until the bounded limit, and returns only objects older than `before`. Test that maintenance deletes old unreferenced keys, preserves referenced keys, and reports failed staging deletions without preventing formal-object garbage collection.
 
@@ -178,23 +178,23 @@ assert.deepEqual(result.removedStagingObjects, 1);
 assert.deepEqual(deleted, ["documents/.staging/orphan"]);
 ```
 
-- [ ] **Step 2: Run staging cleanup tests and verify RED**
+- [x] **Step 2: Run staging cleanup tests and verify RED**
 
 Run: `npm test -- --test-name-pattern='staging' src/s3ObjectStore.test.mjs src/libraryRepository.test.mjs src/storageMaintenance.test.mjs`
 
 Expected: FAIL because S3 staging enumeration and maintenance coordination do not exist.
 
-- [ ] **Step 3: Implement bounded staging cleanup**
+- [x] **Step 3: Implement bounded staging cleanup**
 
 Import `ListObjectsV2Command`, validate limit and cutoff, enumerate under the staging prefix, and stop at the requested bound. Query PostgreSQL for keys referenced by `storage_publish_workflows` whose state is not `completed` or by `storage_objects.staging_key`; delete only the remaining candidates. Return `failedStagingObjects`, `removedStagingObjects`, and `scannedStagingObjects` in maintenance output.
 
-- [ ] **Step 4: Run storage tests**
+- [x] **Step 4: Run storage tests**
 
 Run: `npm test -- src/s3ObjectStore.test.mjs src/libraryRepository.test.mjs src/storageMaintenance.test.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ```bash
 git add products/liteasy/services/api/src/s3ObjectStore.mjs products/liteasy/services/api/src/s3ObjectStore.test.mjs products/liteasy/services/api/src/libraryRepository.mjs products/liteasy/services/api/src/libraryRepository.test.mjs products/liteasy/services/api/src/storageMaintenance.mjs products/liteasy/services/api/src/storageMaintenance.test.mjs

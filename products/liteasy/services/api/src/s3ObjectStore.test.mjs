@@ -118,3 +118,56 @@ test("publishes by content hash, verifies the result, and removes staging", asyn
   assert.equal(result.storageKey, `documents/objects/aa/${hash}`);
   assert.deepEqual(calls, ["HeadObjectCommand", "CopyObjectCommand", "HeadObjectCommand", "DeleteObjectCommand"]);
 });
+
+test("lists a bounded set of staging objects older than the retention cutoff", async () => {
+  const calls = [];
+  const client = {
+    async send(command) {
+      calls.push({ input: command.input, name: command.constructor.name });
+      if (!command.input.ContinuationToken) {
+        return {
+          Contents: [
+            { Key: "documents/.staging/old-1", LastModified: new Date("2026-08-09T00:00:00.000Z") },
+            { Key: "documents/.staging/new", LastModified: new Date("2026-08-11T00:00:00.000Z") }
+          ],
+          IsTruncated: true,
+          NextContinuationToken: "page-2"
+        };
+      }
+      return {
+        Contents: [
+          { Key: "documents/.staging/old-2", LastModified: new Date("2026-08-08T00:00:00.000Z") }
+        ],
+        IsTruncated: false
+      };
+    }
+  };
+  const store = new S3ObjectStore(config(), { client });
+
+  assert.deepEqual(await store.listStagingObjects({
+    before: new Date("2026-08-10T00:00:00.000Z"),
+    limit: 3
+  }), [
+    { lastModified: "2026-08-09T00:00:00.000Z", storageKey: "documents/.staging/old-1" },
+    { lastModified: "2026-08-08T00:00:00.000Z", storageKey: "documents/.staging/old-2" }
+  ]);
+  assert.deepEqual(calls.map(({ input, name }) => ({
+    continuationToken: input.ContinuationToken,
+    maxKeys: input.MaxKeys,
+    name,
+    prefix: input.Prefix
+  })), [
+    {
+      continuationToken: undefined,
+      maxKeys: 3,
+      name: "ListObjectsV2Command",
+      prefix: "documents/.staging/"
+    },
+    {
+      continuationToken: "page-2",
+      maxKeys: 1,
+      name: "ListObjectsV2Command",
+      prefix: "documents/.staging/"
+    }
+  ]);
+});

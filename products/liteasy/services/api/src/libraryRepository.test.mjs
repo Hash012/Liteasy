@@ -444,3 +444,32 @@ test("increments the scope revision when a repaired upload becomes visible", asy
   assert.equal(result.revision, 5);
   assert.equal(persistedResponses[0].revision, 5);
 });
+
+test("finds staging keys still referenced by recoverable database state", async () => {
+  const queries = [];
+  const repository = new PostgresLibraryRepository({
+    async query(sql, values) {
+      queries.push({ sql, values });
+      return { rows: [
+        { staging_key: "documents/.staging/workflow" },
+        { staging_key: "documents/.staging/object" }
+      ] };
+    }
+  });
+
+  assert.deepEqual(await repository.listReferencedStagingKeys([
+    "documents/.staging/workflow",
+    "documents/.staging/object",
+    "documents/.staging/orphan"
+  ]), [
+    "documents/.staging/workflow",
+    "documents/.staging/object"
+  ]);
+  assert.deepEqual(queries[0].values, [[
+    "documents/.staging/workflow",
+    "documents/.staging/object",
+    "documents/.staging/orphan"
+  ]]);
+  assert.match(queries[0].sql, /state <> 'completed'/);
+  assert.match(queries[0].sql, /FROM storage_objects/);
+});

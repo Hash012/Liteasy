@@ -1353,6 +1353,26 @@ export class PostgresLibraryRepository {
     });
   }
 
+  async listReferencedStagingKeys(keys) {
+    if (!Array.isArray(keys) || keys.length > 1000 ||
+      keys.some((key) => typeof key !== "string" || !key || key.length > 2000)) {
+      throw new LibraryRepositoryError("storage_staging_keys_invalid");
+    }
+    const uniqueKeys = [...new Set(keys)];
+    if (uniqueKeys.length === 0) return [];
+    const result = await this.pool.query(`
+      SELECT staging_key
+        FROM storage_publish_workflows
+       WHERE staging_key = ANY($1::text[]) AND state <> 'completed'
+      UNION
+      SELECT staging_key
+        FROM storage_objects
+       WHERE staging_key = ANY($1::text[]) AND staging_key IS NOT NULL
+    `, [uniqueKeys]);
+    const referenced = new Set(result.rows.map((row) => row.staging_key));
+    return uniqueKeys.filter((key) => referenced.has(key));
+  }
+
   async completeObjectGarbageCollection(contentHash) {
     if (!/^[a-f0-9]{64}$/.test(contentHash)) throw new LibraryRepositoryError("storage_content_hash_invalid");
     const result = await this.pool.query(`
