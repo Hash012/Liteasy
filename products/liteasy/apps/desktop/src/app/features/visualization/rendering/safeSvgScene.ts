@@ -6,7 +6,9 @@ const minSceneHeight = 120;
 const maxSceneHeight = 1200;
 const idPattern = /^[A-Za-z][A-Za-z0-9_-]{0,119}$/;
 
-type SafeSvgSceneInput = Omit<SvgSceneV1, "svg">;
+type SafeSvgSceneInput = Omit<SvgSceneV1, "svg"> & {
+  description?: string;
+};
 
 function assertFiniteNumber(value: number, code: string): void {
   if (!Number.isFinite(value)) throw new Error(code);
@@ -87,7 +89,7 @@ export function createSafeSvgScene(input: SafeSvgSceneInput): SvgSceneV1 {
   const nodes = [...input.nodes].sort((a, b) => a.id.localeCompare(b.id));
   const edges = [...input.edges].sort((a, b) => a.id.localeCompare(b.id));
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
-  const summary = nodes.map((node) => node.label).join(", ").slice(0, 400);
+  const summary = (input.description ?? nodes.map((node) => node.label).join(", ")).slice(0, 400);
   const svg = [
     `<svg viewBox="0 0 ${numericAttribute(input.width)} ${numericAttribute(input.height)}" width="${numericAttribute(input.width)}" height="${numericAttribute(input.height)}" role="img" aria-labelledby="scene-title scene-desc" xmlns="http://www.w3.org/2000/svg">`,
     `<title id="scene-title">Liteasy visualization scene</title>`,
@@ -98,5 +100,5 @@ export function createSafeSvgScene(input: SafeSvgSceneInput): SvgSceneV1 {
     `</svg>`
   ].join("");
 
-  return { ...input, nodes, edges, svg };
+  return { width: input.width, height: input.height, nodes, edges, svg };
 }

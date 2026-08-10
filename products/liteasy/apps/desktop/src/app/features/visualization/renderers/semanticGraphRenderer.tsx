@@ -36,6 +36,7 @@ export function renderSemanticGraph(spec: SemanticGraphSpecV1, context: Semantic
   const result = validateSemanticGraph(spec);
   assertEvidenceBindings(result, context.evidenceBindings);
   const scene = createSafeSvgScene({
+    description: result.semanticObjects.map((object) => object.label).join(", "),
     edges: result.layout.edges,
     height: result.layout.height,
     nodes: result.layout.nodes,
@@ -59,7 +60,6 @@ export function SemanticGraphRenderer({ rendered }: { rendered: SemanticGraphRen
         aria-label={summary}
         className="visualization-semantic-graph__svg"
         dangerouslySetInnerHTML={{ __html: rendered.svg }}
-        role="img"
       />
       <div aria-label="语义图对象" className="visualization-semantic-graph__objects">
         {rendered.semanticObjects.map((object) => (
