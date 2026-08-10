@@ -1,4 +1,9 @@
 import type { VisualizationArtifactV1, SemanticObjectV1 } from "../../app/features/visualization/visualizationArtifact.types";
+import React, { useState } from "react";
+import { createRoot } from "react-dom/client";
+import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { ThinReadingTab } from "../../app/features/thin-reading/ThinReadingTab";
+import { propsWithVisualAndFigure, unauthorizedProps } from "./thinReadingVisualProps";
 
 export const artifactWithSelectedObject: VisualizationArtifactV1 = {
   artifactId: "viz-deep-dive",
@@ -33,3 +38,31 @@ export const unknownObject: SemanticObjectV1 = {
   evidenceClaimIds: ["claim-missing"],
   selectable: true
 };
+
+export function mountThinReadingMultimodalFixture(container: HTMLElement | null, authorized = true) {
+  if (!container) throw new Error("Thin-reading multimodal fixture container is missing.");
+  const initial = authorized ? propsWithVisualAndFigure : unauthorizedProps;
+  const browserInitial = {
+    ...initial,
+    figures: initial.figures?.map((figure) => ({
+      ...figure,
+      dataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    }))
+  };
+  function Fixture() {
+    const [enabled, setEnabled] = useState(Boolean(browserInitial.visualizationCapability?.enabled));
+    const capability = browserInitial.visualizationCapability
+      ? { ...initial.visualizationCapability, enabled }
+      : browserInitial.visualizationCapability;
+    return React.createElement(
+      FluentProvider,
+      { theme: webLightTheme },
+      React.createElement(ThinReadingTab, {
+        ...browserInitial,
+        onToggleVisualization: setEnabled,
+        visualizationCapability: capability
+      })
+    );
+  }
+  createRoot(container).render(React.createElement(Fixture));
+}

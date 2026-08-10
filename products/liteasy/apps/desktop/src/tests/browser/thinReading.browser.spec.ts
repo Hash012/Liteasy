@@ -1,4 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function mountThinReadingMultimodalFixture(page: Page, authorized = true) {
+  await page.goto("/");
+  await page.evaluate(async (isAuthorized) => {
+    document.body.innerHTML = '<div id="thin-reading-multimodal-fixture"></div>';
+    const fixtureModule = await import("/src/tests/fixtures/visualizationFixtures.ts");
+    fixtureModule.mountThinReadingMultimodalFixture(
+      document.getElementById("thin-reading-multimodal-fixture"),
+      isAuthorized
+    );
+  }, authorized);
+}
 
 test("keeps thin-reading prose and evidence markers readable on desktop", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
@@ -206,6 +218,73 @@ test("loads the bundled OCR language data in the browser and extracts a scanned 
     timeout: 90_000
   });
   await expect(fixture).not.toContainText("OCR failed:");
+});
+
+test.describe("thin-reading multimodal integration", () => {
+  for (const viewport of [
+    { height: 900, name: "desktop", width: 1440 },
+    { height: 844, name: "mobile", width: 390 }
+  ]) {
+    test(`keeps visual, prose, and source figure regions ordered on ${viewport.name}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ height: viewport.height, width: viewport.width });
+      await mountThinReadingMultimodalFixture(page);
+      const visuals = page.getByTestId("thin-reading-visuals");
+      const prose = page.getByTestId("thin-reading-prose");
+      const sourceFigures = page.getByTestId("thin-reading-source-figures");
+      await expect(visuals).toBeVisible();
+      await expect(prose).toBeVisible();
+      await expect(sourceFigures).toBeVisible();
+      const geometry = await page.evaluate(() => {
+        const regions = ["thin-reading-visuals", "thin-reading-prose", "thin-reading-source-figures"]
+          .map((testId) => document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.getBoundingClientRect())
+          .map((rect) => rect ? { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top } : null);
+        const [visual, proseRegion, source] = regions;
+        const overlap = (a: typeof visual, b: typeof visual) => Boolean(a && b &&
+          a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom);
+        return {
+          ordered: Boolean(visual && proseRegion && source && visual.top <= proseRegion.top && proseRegion.top <= source.top),
+          overlaps: overlap(visual, proseRegion) || overlap(proseRegion, source) || overlap(visual, source),
+          regions
+        };
+      });
+      expect(geometry.ordered).toBe(true);
+      expect(geometry.overlaps).toBe(false);
+
+      const toggle = page.getByRole("switch", { name: "多模态" });
+      await expect(toggle).toBeChecked();
+      await toggle.click();
+      await expect(toggle).not.toBeChecked();
+
+      const wholeFigure = page.getByRole("button", { name: "深入整图" });
+      await expect(wholeFigure).toBeVisible();
+      await wholeFigure.click();
+      const regionTrigger = page.getByRole("button", { name: "选择区域" });
+      await regionTrigger.click();
+      const regionForm = page.getByLabel("区域坐标");
+      await expect(regionForm).toBeVisible();
+      const regionAction = page.getByRole("button", { name: "深入此区域" });
+      await regionAction.focus();
+      await page.keyboard.press("Enter");
+      await expect(regionForm).not.toBeVisible();
+
+      const objectAction = page.getByRole("button", { name: "深入 Start" });
+      await expect(objectAction).toBeVisible();
+      await objectAction.click();
+      await testInfo.attach(`thin-reading-multimodal-${viewport.name}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png"
+      });
+    });
+  }
+
+  test("fails closed for an unauthorized multimodal capability", async ({ page }) => {
+    await page.setViewportSize({ height: 844, width: 390 });
+    await mountThinReadingMultimodalFixture(page, false);
+    const toggle = page.getByRole("switch", { name: "多模态" });
+    await expect(toggle).toBeDisabled();
+    await expect(toggle).not.toBeChecked();
+    await expect(page.getByTestId("thin-reading-source-figures")).toBeVisible();
+  });
 });
 
 test("keeps a real PDF evidence overlay aligned after zooming", async ({ page }) => {

@@ -1,4 +1,6 @@
 import type { ArtifactOutlineNode, ArtifactTab, ArtifactType } from "./artifact.types";
+import type { VisualizationArtifactV1 } from "../visualization/visualizationArtifact.types";
+import type { MineruFigure } from "../import/import.types";
 
 export type ArtifactDocumentFormat = "html" | "markdown" | "pdf";
 
@@ -26,6 +28,65 @@ function removeInternalEvidenceIds(value: string) {
   return value
     .replace(internalEvidenceIdPattern, "")
     .replace(/[ \t]+([，。；：,.!?])/g, "$1");
+}
+
+function visualizationToMarkdown(visualizations: readonly VisualizationArtifactV1[]) {
+  if (!visualizations.length) return { markdown: "", evidenceIds: [] as string[] };
+  const lines: string[] = ["## 生成可视化", ""];
+  const evidenceIds = new Set<string>();
+  visualizations.forEach((artifact, index) => {
+    const source = artifact.modality === "source_figure" && artifact.spec.modality === "source_figure"
+      ? artifact.spec.payload
+      : undefined;
+    const summary = artifact.accessibility.summary.trim();
+    lines.push(`### ${source ? "论文原图" : "生成可视化"}${summary ? `：${cleanExportText(summary)}` : ""}`, "");
+    if (!source) {
+      lines.push(`- 类型：${artifact.modality}`);
+      artifact.semanticObjects.forEach((object) => {
+        const ids = object.evidenceClaimIds.flatMap((claimId) =>
+          artifact.evidenceBindings.find((binding) => binding.claimId === claimId)?.evidenceIds ?? []
+        );
+        ids.forEach((id) => evidenceIds.add(id));
+        lines.push(`- 对象：${cleanExportText(object.label)}（${cleanExportText(object.kind)}，${object.objectId}）${ids.length ? `；证据：${ids.join("、")}` : ""}`);
+      });
+    } else {
+      lines.push(`- 图：${cleanExportText(source.sourceFigureId)}`);
+      lines.push(`- 来源：${cleanExportText(source.paperId)} · 第 ${source.page} 页`);
+      lines.push(`- 图注：${cleanExportText(source.caption)}`);
+      if (source.regions.length) {
+        lines.push("", "| 区域 | x | y | width | height | 证据 IDs |", "| --- | ---: | ---: | ---: | ---: | --- |");
+        source.regions.forEach((region) => {
+          region.evidenceIds.forEach((id) => evidenceIds.add(id));
+          const { x, y, width, height } = region.bbox;
+          lines.push(`| ${cleanExportText(region.id)} | ${x} | ${y} | ${width} | ${height} | ${region.evidenceIds.join("、")} |`);
+        });
+      }
+    }
+    if (index < visualizations.length - 1) lines.push("");
+  });
+  return { markdown: lines.join("\n"), evidenceIds: [...evidenceIds] };
+}
+
+function sourceFiguresToMarkdown(figures: readonly MineruFigure[], tab: ArtifactTab, document: NonNullable<ArtifactTab["thinReadingDocument"]>) {
+  if (!figures.length) return { markdown: "", evidenceIds: [] as string[] };
+  const recommendations = Object.values(document.nodes).flatMap((node) => node.evidence.recommendedFigures ?? []);
+  const lines = ["## 论文原图", ""];
+  const evidenceIds = new Set<string>();
+  figures.forEach((figure, index) => {
+    const recommendation = recommendations.find((item) => item.figureId === figure.id);
+    const paper = tab.papers?.[0];
+    const caption = figure.analysis?.title ?? figure.alt;
+    lines.push(`### ${cleanExportText(caption)}`, "");
+    lines.push(`- 图：${cleanExportText(figure.id)}`);
+    lines.push(`- 来源：${cleanExportText(paper?.id ?? paper?.title ?? "当前论文")} · 第 ${figure.page} 页`);
+    lines.push(`- 图注：${cleanExportText(caption)}`);
+    if (recommendation?.evidenceIds.length) {
+      recommendation.evidenceIds.forEach((id: string) => evidenceIds.add(id));
+      lines.push(`- 证据 IDs：${recommendation.evidenceIds.join("、")}`);
+    }
+    if (index < figures.length - 1) lines.push("");
+  });
+  return { markdown: lines.join("\n"), evidenceIds: [...evidenceIds] };
 }
 
 function safeFileStem(value: string) {
@@ -61,7 +122,7 @@ function outlineToMarkdown(nodes: readonly ArtifactOutlineNode[]) {
 
 function thinReadingToMarkdown(tab: ArtifactTab) {
   const document = tab.thinReadingDocument;
-  if (!document) return "薄读内容缺失。";
+  if (!document) return { markdown: "薄读内容缺失。", evidenceIds: [] as string[] };
   const lines: string[] = [];
   const visited = new Set<string>();
   const visit = (nodeId: string) => {
@@ -90,7 +151,15 @@ function thinReadingToMarkdown(tab: ArtifactTab) {
   };
   visit(document.rootNodeId);
   Object.keys(document.nodes).forEach(visit);
-  return lines.join("\n").trim();
+  if (document.version === "liteasy.thin-reading/v2") {
+    const visuals = Object.values(document.nodes).flatMap((node) => node.visualizations);
+    const visual = visualizationToMarkdown(visuals);
+    if (visual.markdown) lines.push("", visual.markdown);
+    const sourceFigures = sourceFiguresToMarkdown(tab.figures ?? [], tab, document);
+    if (sourceFigures.markdown) lines.push("", sourceFigures.markdown);
+    return { markdown: lines.join("\n").trim(), evidenceIds: [...visual.evidenceIds, ...sourceFigures.evidenceIds] };
+  }
+  return { markdown: lines.join("\n").trim(), evidenceIds: [] };
 }
 
 export function createArtifactMarkdown(tab: ArtifactTab) {
@@ -107,9 +176,12 @@ export function createArtifactMarkdown(tab: ArtifactTab) {
   }
   lines.push("");
 
+  let preserveEvidenceIds: readonly string[] = [];
   if (tab.type === "thin_reading") {
-    lines.push(thinReadingToMarkdown(tab));
+    const thinReadingMarkdown = thinReadingToMarkdown(tab);
+    lines.push(thinReadingMarkdown.markdown);
     if (tab.answer?.trim()) lines.push("", "## Agent 分析", "", cleanExportText(tab.answer));
+    preserveEvidenceIds = thinReadingMarkdown.evidenceIds;
   } else {
     const outline = tab.outlineNodes?.length
       ? outlineToMarkdown(tab.outlineNodes)
@@ -127,7 +199,16 @@ export function createArtifactMarkdown(tab: ArtifactTab) {
       lines.push(`${index + 1}. **${evidence.paperTitle} · 第 ${evidence.page} 页**`, `   > ${evidence.quote}`, "");
     });
   }
-  return `${removeInternalEvidenceIds(lines.join("\n").trim())}\n`;
+  let markdown = lines.join("\n");
+  const protectedIds = preserveEvidenceIds.map((id, index) => [`__LITEASY_EVIDENCE_${index}__`, id] as const);
+  protectedIds.forEach(([token, id]) => {
+    markdown = markdown.split(id).join(token);
+  });
+  markdown = removeInternalEvidenceIds(markdown);
+  protectedIds.forEach(([token, id]) => {
+    markdown = markdown.split(token).join(id);
+  });
+  return `${markdown.trim()}\n`;
 }
 
 function escapeHtml(value: string) {

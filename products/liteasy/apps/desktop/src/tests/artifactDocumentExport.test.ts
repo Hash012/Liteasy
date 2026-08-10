@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   artifactMarkdownToHtml,
   createArtifactHtml,
@@ -7,6 +7,9 @@ import {
 import type { ArtifactTab, ArtifactType } from "../app/features/artifacts/artifact.types";
 import { createThinReadingFixture } from "./fixtures/thinReadingFixtures";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
+import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
+import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
+import { makeVisualizationArtifactFixture } from "./fixtures/visualizationArtifactFixtures";
 
 const artifactTypes: ArtifactType[] = [
   "comparison_table",
@@ -43,6 +46,10 @@ function createTab(type: ArtifactType): ArtifactTab {
 }
 
 describe("artifact document export", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test.each(artifactTypes)("creates portable Markdown and HTML for %s", (type) => {
     const tab = createTab(type);
     const markdown = createArtifactMarkdown(tab);
@@ -90,5 +97,167 @@ describe("artifact document export", () => {
     expect(markdown).toContain("## Agent 分析");
     expect(markdown).toContain("补充 Agent 结论。");
     expect(markdown).not.toContain("evidence-private-123");
+  });
+
+  test("exports legacy v1 diagrams for read-only thin-reading artifacts", () => {
+    const document = parseThinReadingDocument(v1Fixture);
+    const markdown = createArtifactMarkdown({
+      artifactId: document.artifactId,
+      thinReadingDocument: document,
+      title: "Legacy thin reading",
+      type: "thin_reading"
+    });
+
+    expect(markdown).toContain("```mermaid");
+    expect(markdown).toContain("flowchart LR");
+    expect(markdown).toContain("```html");
+    expect(markdown).toContain("Legacy demo");
+  });
+
+  test("omits executable legacy fields from new v2 thin-reading exports", () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          interactiveDemo: {
+            description: "Executable HTML should not be persisted into v2.",
+            html: "<section><script>window.location='https://attacker.example'</script></section>",
+            kind: "html",
+            title: "V2 unsafe demo"
+          },
+          mermaid: "flowchart LR\nUnsafe-->Demo"
+        }
+      }
+    });
+    const markdown = createArtifactMarkdown({
+      artifactId: document.artifactId,
+      thinReadingDocument: document,
+      title: "New thin reading",
+      type: "thin_reading"
+    });
+
+    expect(markdown).not.toContain("Unsafe-->Demo");
+    expect(markdown).not.toContain("V2 unsafe demo");
+    expect(markdown).not.toContain("<script>");
+  });
+
+  test("exports v2 visual semantics and source attribution without executable markup", () => {
+    const base = createThinReadingFixture();
+    const document = createThinReadingDocument({
+      ...base,
+      rootSeed: {
+        ...base.rootSeed,
+        evidence: {
+          ...base.rootSeed.evidence,
+          recommendedFigures: [{ evidenceIds: ["evidence-attention-self-attention"], figureId: "figure-fixture", reason: "方法图解" }],
+          interactiveDemo: {
+            description: "Must never be exported as executable HTML.",
+            html: "<script>alert('unsafe')</script>",
+            kind: "html",
+            title: "Internal demo"
+          },
+          mermaid: "flowchart LR\ninternal-->renderer"
+        }
+      }
+    });
+    const generated = makeVisualizationArtifactFixture();
+    const sourceFigure = makeVisualizationArtifactFixture({ modality: "source_figure" });
+    const root = document.nodes[document.rootNodeId];
+    const v2Document = {
+      ...document,
+      nodes: {
+        ...document.nodes,
+        [root.id]: {
+          ...root,
+          visualizations: [
+            {
+              ...generated,
+              artifactId: "generated-v2",
+              accessibility: { summary: "生成可视化：展示方法流程。", objectReadingOrder: ["start"] },
+              semanticObjects: [{ objectId: "start", kind: "process", label: "输入编码", objectPath: ["start"], evidenceClaimIds: ["claim-1"], selectable: true }],
+              evidenceBindings: [{ claimId: "claim-1", evidenceIds: ["evidence-attention-self-attention"], confidence: "direct" }]
+            },
+            {
+              ...sourceFigure,
+              artifactId: "source-v2",
+              spec: {
+                modality: "source_figure",
+                payload: {
+                  modality: "source_figure",
+                  sourceFigureId: "figure-3",
+                  paperId: "paper-attention",
+                  page: 3,
+                  caption: "论文原图：模型架构",
+                  imageRef: "https://cdn.example/raw-generated.png",
+                  regions: [{ id: "region-a", bbox: { x: 0.1, y: 0.2, width: 0.4, height: 0.3 }, evidenceIds: ["evidence-attention-self-attention"] }],
+                  extraction: { method: "fixture", confidence: 1 }
+                }
+              }
+            }
+          ]
+        }
+      }
+    };
+    const markdown = createArtifactMarkdown({
+      artifactId: "artifact-thin-reading-v2",
+      figures: [{ alt: "模型架构", dataUrl: "data:image/png;base64,fixture", id: "figure-fixture", page: 3, sourcePath: "/fixture.pdf" }],
+      papers: [{ id: "paper-attention", title: "Attention Is All You Need" }],
+      thinReadingDocument: v2Document,
+      title: "V2 multimodal reading",
+      type: "thin_reading"
+    });
+
+    expect(markdown).toContain("生成可视化");
+    expect(markdown).toContain("输入编码");
+    expect(markdown).toContain("evidence-attention-self-attention");
+    expect(markdown).toContain("论文原图");
+    expect(markdown).toContain("figure-fixture");
+    expect(markdown).toContain("第 3 页");
+    expect(markdown).toContain("0.1");
+    expect(markdown).toContain("0.2");
+    expect(markdown).not.toContain("<script");
+    expect(markdown).not.toContain("```html");
+    expect(markdown).not.toContain("flowchart LR");
+    expect(markdown).not.toContain("raw-generated.png");
+    expect(markdown).not.toContain("rendererId");
+    expect(markdown).not.toContain("providerRouteId");
+    expect(markdown).not.toContain("costPolicyVersion");
+  });
+
+  test("creates a native payload without triggering a browser download", () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+
+    const payload = createArtifactExportPayload(createTab("thin_reading"), "markdown");
+
+    expect(payload).toEqual(expect.objectContaining({
+      artifactId: "artifact-thin_reading",
+      contentEncoding: "utf8",
+      fileName: "thin_reading 导出样例.md",
+      format: "markdown",
+      title: "thin_reading 导出样例"
+    }));
+    expect(payload.content).toContain("Agent 分析");
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  test("encodes generated PDF bytes as base64 in the export payload", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      fillRect: vi.fn(),
+      fillStyle: "#fff",
+      fillText: vi.fn(),
+      font: "",
+      measureText: (value: string) => ({ width: value.length * 10 })
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL")
+      .mockReturnValue("data:image/jpeg;base64,/9j/");
+
+    const payload = createArtifactExportPayload(createTab("mindmap"), "pdf");
+
+    expect(payload.contentEncoding).toBe("base64");
+    expect(payload.fileName).toBe("mindmap 导出样例.pdf");
+    expect(atob(payload.content).slice(0, 8)).toBe("%PDF-1.7");
   });
 });
