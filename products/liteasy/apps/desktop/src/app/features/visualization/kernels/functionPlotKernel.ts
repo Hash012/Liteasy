@@ -56,10 +56,10 @@ export function validateFunctionPlot(spec: FunctionPlotSpecV1): void {
   }
 
   const variables = [spec.variable, ...parameterIds];
-  parseBoundedExpression(spec.expression, { variables });
+  parseFunctionExpression(spec.expression, variables);
   for (const curve of spec.auxiliaryCurves) {
     if (curve.evidenceClaimIds.length === 0) throw new Error("function_plot_evidence_missing");
-    parseBoundedExpression(curve.expression, { variables });
+    parseFunctionExpression(curve.expression, variables);
   }
 
   const keyPointIds = new Set<string>();
@@ -70,6 +70,14 @@ export function validateFunctionPlot(spec: FunctionPlotSpecV1): void {
       throw new Error("function_plot_key_point_invalid");
     }
     if (point.evidenceClaimIds.length === 0) throw new Error("function_plot_evidence_missing");
+  }
+}
+
+function parseFunctionExpression(expression: string, variables: readonly string[]) {
+  try {
+    return parseBoundedExpression(expression, { variables });
+  } catch {
+    throw new Error("function_plot_expression_forbidden");
   }
 }
 

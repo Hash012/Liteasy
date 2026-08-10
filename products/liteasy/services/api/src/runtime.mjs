@@ -33,6 +33,7 @@ import { EnvironmentVisualizationSecretStore } from "./visualizationSecretStore.
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
 import { VisualizationArtifactCompilerRegistry } from "./visualizationArtifactCompiler.mjs";
 import { productionStaticScienceVisualizationCompilers } from "./staticScienceVisualizationCompilers.mjs";
+import { productionInteractiveMathVisualizationCompilers } from "./interactiveMathVisualizationCompilers.mjs";
 import { PostgresVisualizationGenerationRepository } from "./visualizationGenerationRepository.mjs";
 import { VisualizationOrchestrationService } from "./visualizationOrchestrationService.mjs";
 import { VisualizationOrchestrationWorker } from "./visualizationOrchestrationWorker.mjs";
@@ -72,7 +73,10 @@ export async function startCloudRuntime(config, dependencies = {}) {
   const visualizationArtifactCompilerRegistry = dependencies.visualizationArtifactCompilerRegistry ??
     new VisualizationArtifactCompilerRegistry({
       catalog: dependencies.visualizationBuiltinCatalog,
-      compilers: dependencies.visualizationArtifactCompilers ?? productionStaticScienceVisualizationCompilers,
+      compilers: dependencies.visualizationArtifactCompilers ?? {
+        ...productionStaticScienceVisualizationCompilers,
+        ...productionInteractiveMathVisualizationCompilers
+      },
       validateArtifact: dependencies.visualizationArtifactValidator ?? validateVisualizationArtifact
     });
   const visualizationProviderAdapters = dependencies.visualizationProviderAdapters ??
