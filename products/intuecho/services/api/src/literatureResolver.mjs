@@ -2,7 +2,6 @@ import {
   hasCrossVersionIdentifierConflict,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
-  sameLiteratureBibliography,
   sameLiteratureVersionBibliography
 } from "./literatureIdentity.mjs";
 
@@ -228,9 +227,7 @@ function exactCandidate(input, candidates) {
   const requested = requestedStableKeys(input);
   const byIdentifier = candidates.filter((candidate) => [...identityKeys(candidate)].some((key) => requested.has(key)));
   if (byIdentifier.length === 1) return byIdentifier[0];
-  if (byIdentifier.length > 1) return null;
-  const highConfidence = candidates.filter((candidate) => sameLiteratureBibliography(candidate.record, input?.hints));
-  return highConfidence.length === 1 ? highConfidence[0] : null;
+  return null;
 }
 
 function candidateKeyParts(candidateKey) {

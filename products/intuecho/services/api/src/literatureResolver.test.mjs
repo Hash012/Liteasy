@@ -373,7 +373,7 @@ test("does not merge a preprint and publication from title similarity alone", as
   ]);
 });
 
-test("auto-confirms only one complete title-year-author-set match regardless of author order", async () => {
+test("keeps one complete title-year-author-set match ambiguous without a requested stable identifier", async () => {
   const exact = candidate({
     authors: ["Hopper, Grace", "Ada Lovelace"],
     candidateKey: "crossref:doi:10.1000/exact",
@@ -396,8 +396,8 @@ test("auto-confirms only one complete title-year-author-set match regardless of 
     purpose: "liteasy_pdf_annotation"
   });
 
-  assert.equal(result.status, "exact");
-  assert.equal(result.candidate.candidateKey, exact.candidateKey);
+  assert.equal(result.status, "ambiguous");
+  assert.deepEqual(result.candidates.map((item) => item.candidateKey), [exact.candidateKey]);
 });
 
 test("keeps partial authors and multiple complete matches ambiguous", async () => {
