@@ -1,0 +1,15 @@
+{
+  "costClass": "high",
+  "evidenceRequirements": ["visual schema, labels, and style lock must cite evidence claims"],
+  "fallbackModalities": ["source_figure"],
+  "id": "raster-illustration",
+  "modality": "raster_illustration",
+  "outputSchemaId": "liteasy.visualization/raster-illustration/v1",
+  "remote": false,
+  "rendererId": "raster-illustration-svg",
+  "runtimeVersion": "liteasy.visualization-runtime/v1",
+  "integrityRules": ["typed raster_illustration spec only", "provider bytes normalized by service", "no external image references"],
+  "styleLock": ["trusted local distinction from source figures", "evidence-bound labels"],
+  "validatorIds": ["schema-identity", "evidence-claims", "stable-object-ids", "interaction-allowlist", "resource-limits", "accessibility-reading-order"],
+  "version": "1.0.0"
+}

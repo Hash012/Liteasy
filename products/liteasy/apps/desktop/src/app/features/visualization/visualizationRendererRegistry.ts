@@ -60,8 +60,11 @@ const staticModalityChain = {
   reaction_process: {
     kernelId: "reaction-process-v1",
     rendererId: "reaction-process-svg"
+  },
+  raster_illustration: {
+    rendererId: "raster-illustration-svg"
   }
-} as const satisfies Partial<Record<VisualizationModality, { kernelId: string; rendererId: string }>>;
+} as const satisfies Partial<Record<VisualizationModality, { kernelId?: string; rendererId: string }>>;
 
 export type VisualizationBuiltinCatalogV1 = ReturnType<typeof getVisualizationBuiltinCatalog>;
 export type VisualizationUnavailableReason =
@@ -154,7 +157,7 @@ export function getAvailableVisualizationModalities(
 }
 
 for (const [modality, registration] of Object.entries(staticModalityChain)) {
-  registerVisualizationKernel({ id: registration.kernelId, version: "1.0.0" });
+  if (registration.kernelId) registerVisualizationKernel({ id: registration.kernelId, version: "1.0.0" });
   registerVisualizationRenderer({
     id: registration.rendererId,
     modality: modality as VisualizationModality,
@@ -168,6 +171,7 @@ for (const [modality, registration] of Object.entries(staticModalityChain)) {
       if (modality === "geometry_3d") return (await import("./renderers/geometry3dRenderer")).geometry3dVisualizationRenderer;
       if (modality === "physics_process") return (await import("./renderers/physicsProcessRenderer")).physicsProcessVisualizationRenderer;
       if (modality === "reaction_process") return (await import("./renderers/reactionProcessRenderer")).reactionProcessVisualizationRenderer;
+      if (modality === "raster_illustration") return (await import("./renderers/rasterIllustrationRenderer")).rasterIllustrationVisualizationRenderer;
       return (await import("./renderers/biologyStructureRenderer")).biologyStructureVisualizationRenderer;
     }
   });

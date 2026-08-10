@@ -19,6 +19,8 @@ import physicsProcessManifest from "../visualization/skills/physics-process/skil
 import physicsProcessInstructions from "../visualization/skills/physics-process/instructions.md?raw";
 import reactionProcessManifest from "../visualization/skills/reaction-process/skill.json";
 import reactionProcessInstructions from "../visualization/skills/reaction-process/instructions.md?raw";
+import rasterIllustrationManifest from "../visualization/skills/raster-illustration/skill.json";
+import rasterIllustrationInstructions from "../visualization/skills/raster-illustration/instructions.md?raw";
 import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
@@ -214,6 +216,14 @@ registerBuiltinSkill(reactionProcess, async () => ({
   manifest: reactionProcess,
   instructions: reactionProcessInstructions,
   validatorIds: reactionProcess.validatorIds
+}));
+
+const rasterIllustration = parseManifest(rasterIllustrationManifest);
+registerBuiltinSkill(rasterIllustration, async () => ({
+  fallbackModalities: rasterIllustration.fallbackModalities,
+  manifest: rasterIllustration,
+  instructions: rasterIllustrationInstructions,
+  validatorIds: rasterIllustration.validatorIds
 }));
 
 const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);
