@@ -6,6 +6,7 @@ import type {
   ThinReadingNodeV2
 } from "./thinReading.types";
 import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.types";
+import { isDeepDiveTargetBoundToNode } from "./thinReadingDeepDiveTarget";
 
 const v1DocumentVersion = "liteasy.thin-reading/v1";
 const v2DocumentVersion = "liteasy.thin-reading/v2";
@@ -587,9 +588,11 @@ function isPersistedThinReadingDocument(
       return false;
     }
     const source = node.source;
-    if (!isPersistedThinReadingNodeSource(source) || source.kind !== "selected_text") {
-      return true;
+    if (!isPersistedThinReadingNodeSource(source)) return false;
+    if (source.kind === "visualization_target") {
+      return isDeepDiveTargetBoundToNode(source.target as DeepDiveTargetV1, parent as unknown as ThinReadingNodeV2);
     }
+    if (source.kind !== "selected_text") return true;
     const selectedEvidenceIds = source.evidenceIds;
     const parentEvidence = isRecord(parent.evidence) && isStringArray(parent.evidence.paperEvidence)
       ? new Set(parent.evidence.paperEvidence)

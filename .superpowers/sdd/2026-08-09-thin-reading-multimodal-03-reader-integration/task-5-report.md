@@ -49,3 +49,22 @@ GREEN: SourceFigureSelectionOverlay.test.tsx passed 2/2.
 ## Finding-Driven Compatibility
 
 `thinReading.types.ts`, `thinReadingProjection.ts`, `useArtifactActions.ts`, `artifactTaskRecovery.ts`, `thinReadingVersioning.ts`, and one external-knowledge fallback guard in `generateAssistantAnswer.ts` are included because the new `visualization_target` branch source must compile, persist, recover, and generate through the existing reader pipeline. Existing unrelated user edits remain unstaged.
+
+## Review Fix Round 1
+
+All five Important findings are addressed in a separate follow-up change.
+
+- Source-region input uses the loaded native image rectangle and intrinsic pixel dimensions. The visible selection rectangle is positioned against the same image content box, including centered letterboxed images.
+- Generated-object targets require a currently passing visualization artifact and exact selected object path and claim IDs; every claim must belong to both the artifact and active node.
+- Only agent-recommended, evidence-bound source figures expose deep-dive controls. Fallback figures remain static, and branch generation independently verifies the exact recommendation binding.
+- Persisted v2 documents and interrupted-task recovery now reject stale generated objects, stale figures, mismatched claims, and invalid regions through the same parent-node binding validator.
+- V1 branching saves a complete v2 `AgentArtifactResult` before creating the local clone or invoking recursive generation. A save failure leaves no clone and starts no Agent run.
+
+### Test-first Evidence
+
+- RED: new regression cases failed for stale persistence/recovery, fallback source controls, native image geometry, injected claims, and v1 clone durability.
+- GREEN: `npm test -- src/tests/thinReadingDeepDiveTarget.test.ts src/tests/SourceFigureSelectionOverlay.test.tsx src/tests/thinReadingDeepDiveComposition.test.tsx src/tests/thinReadingProjection.test.ts src/tests/useArtifactActions.test.ts src/tests/thinReadingVersioning.test.ts src/tests/artifactTaskRecovery.test.ts` passed, 84/84.
+- `npm run build` passed, including TypeScript and production-asset verification.
+- `git diff --check` passed.
+
+Real provider smoke remains unavailable without deployment-admin route and account configuration.

@@ -1,4 +1,3 @@
-import type { MineruFigure } from "../import/import.types";
 import type {
   DeepDiveTargetV1,
   NormalizedBoundingBox,
@@ -6,11 +5,16 @@ import type {
   SourceFigureRefV1,
   VisualizationArtifactV1
 } from "../visualization/visualizationArtifact.types";
+import type { ThinReadingNode } from "./thinReading.types";
 
 type DisplayRect = { left: number; top: number; width: number; height: number };
 type DragCoordinates = { startX: number; startY: number; endX: number; endY: number };
 
 const MIN_REGION_SIZE = 0.01;
+
+function equalStringArrays(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
 
 export function describeDeepDiveTarget(target: DeepDiveTargetV1): string {
   if (target.kind === "generated_object") {
@@ -159,12 +163,34 @@ export function createSourceRegionTarget(input: {
   };
 }
 
-export function sourceFigurePixelSize(figure: MineruFigure): { width: number; height: number } {
-  if (typeof Image === "undefined") return { width: 1, height: 1 };
-  const image = new Image();
-  image.src = figure.dataUrl;
-  return {
-    height: image.naturalHeight > 0 ? image.naturalHeight : 1,
-    width: image.naturalWidth > 0 ? image.naturalWidth : 1
-  };
+export function isDeepDiveTargetBoundToNode(target: DeepDiveTargetV1, node: ThinReadingNode) {
+  if (target.nodeId !== node.id) return false;
+  if (target.kind === "generated_object") {
+    if (!("visualizations" in node)) return false;
+    const artifact = node.visualizations.find((item) => item.artifactId === target.artifactId);
+    const object = artifact?.semanticObjects.find((item) => item.objectId === target.objectId);
+    if (!artifact || artifact.validation.outcome !== "pass" || !object?.selectable ||
+        !equalStringArrays(object.objectPath, target.objectPath) ||
+        !equalStringArrays(object.evidenceClaimIds, target.evidenceClaimIds) ||
+        !("claims" in artifact.spec.payload)) {
+      return false;
+    }
+    const artifactClaims = new Set(artifact.spec.payload.claims.map((claim) => claim.id));
+    const nodeClaims = new Set((node.evidence.claims ?? []).map((claim) => claim.id));
+    return target.evidenceClaimIds.length > 0 && target.evidenceClaimIds.every((claimId) => (
+      artifactClaims.has(claimId) && nodeClaims.has(claimId)
+    ));
+  }
+  const recommendation = node.evidence.recommendedFigures?.find((item) => item.figureId === target.sourceFigureId);
+  if (!recommendation || recommendation.evidenceIds.length === 0 ||
+      !equalStringArrays(recommendation.evidenceIds, target.evidenceIds)) {
+    return false;
+  }
+  if (target.kind === "source_figure") return true;
+  const { bbox, sourcePixelSize } = target;
+  return [bbox.x, bbox.y, bbox.width, bbox.height, sourcePixelSize.width, sourcePixelSize.height]
+    .every((value) => Number.isFinite(value)) &&
+    bbox.x >= 0 && bbox.y >= 0 && bbox.width >= MIN_REGION_SIZE && bbox.height >= MIN_REGION_SIZE &&
+    bbox.x + bbox.width <= 1 && bbox.y + bbox.height <= 1 &&
+    sourcePixelSize.width > 0 && sourcePixelSize.height > 0;
 }

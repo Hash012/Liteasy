@@ -14,6 +14,7 @@ import { useArtifactActions } from "../app/features/artifacts/useArtifactActions
 import type { AgentRun } from "../app/features/agent-api/agentApi.types";
 import type { MineruFigure } from "../app/features/import/import.types";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
+import { artifactWithSelectedObject } from "./fixtures/visualizationFixtures";
 
 function createMindmapArtifact(verificationStatus: "fail" | "pass" = "pass") {
   const verification = {
@@ -197,6 +198,7 @@ function renderArtifactActions(options: {
   locked?: boolean;
   modelAccessAvailable?: boolean;
   mineruFiguresByPaperId?: Record<string, MineruFigure[]>;
+  saveArtifactResult?: (document: { artifactId: string }) => Promise<string>;
   selectedPapers?: Paper[];
 } = {}) {
   const artifactStore = createArtifactStore();
@@ -225,9 +227,9 @@ function renderArtifactActions(options: {
     return queuedPapers.length > 0 ? "started" : "idle";
   });
   const runAgentAnalysis = vi.fn(async () => createCompletedAgentRun());
-  const saveArtifactResult = vi.fn(async (document: { artifactId: string }) =>
+  const saveArtifactResult = vi.fn(options.saveArtifactResult ?? (async (document: { artifactId: string }) =>
     `development/test-data/agent-results/${document.artifactId}.json`
-  );
+  ));
   const deleteArtifactResult = vi.fn(async () => undefined);
 
   const hook = renderHook(() =>
@@ -608,6 +610,86 @@ describe("useArtifactActions", () => {
     );
   });
 
+  test("rejects an injected generated-object claim that differs from the selected semantic object", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const root = document.nodes[document.rootNodeId];
+    const injectedClaim = {
+      evidenceIds: ["evidence-attention-self-attention"],
+      id: "claim-injected",
+      status: "grounded" as const,
+      text: "A different claim that is still present on the parent."
+    };
+    const visualization = {
+      ...artifactWithSelectedObject,
+      nodeId: root.id,
+      spec: {
+        ...artifactWithSelectedObject.spec,
+        payload: {
+          ...artifactWithSelectedObject.spec.payload,
+          claims: [...artifactWithSelectedObject.spec.payload.claims, injectedClaim]
+        }
+      }
+    };
+    const currentDocument = {
+      ...document,
+      nodes: {
+        ...document.nodes,
+        [root.id]: {
+          ...root,
+          evidence: { ...root.evidence, claims: [...(root.evidence.claims ?? []), injectedClaim] },
+          visualizations: [visualization]
+        }
+      }
+    };
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({ imported: true, selectedPapers: papers });
+    artifactStore.upsertTab({ artifactId: currentDocument.artifactId, papers, thinReadingDocument: currentDocument, title: "薄读", type: "thin_reading" });
+
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: currentDocument.artifactId,
+      document: currentDocument,
+      source: {
+        kind: "visualization_target",
+        target: {
+          artifactId: visualization.artifactId,
+          evidenceClaimIds: ["claim-injected"],
+          kind: "generated_object",
+          nodeId: root.id,
+          objectId: "object-1",
+          objectPath: ["object-1"]
+        }
+      }
+    })).rejects.toThrow();
+
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+  });
+
+  test("rejects a source figure that is not recommended by the active node", async () => {
+    const fixture = createThinReadingFixture();
+    const document = createThinReadingDocument(fixture);
+    const papers = fixture.papers.map((item) => ({ id: item.id, title: item.title }));
+    const { artifactStore, result, runAgentAnalysis } = renderArtifactActions({
+      imported: true,
+      mineruFiguresByPaperId: {
+        "paper-attention": [{ id: "unbound-figure", alt: "Unbound", dataUrl: "data:image/png;base64,fixture", page: 1, sourcePath: "paper.pdf" }]
+      },
+      selectedPapers: papers
+    });
+    artifactStore.upsertTab({ artifactId: document.artifactId, papers, thinReadingDocument: document, title: "薄读", type: "thin_reading" });
+
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: {
+        kind: "visualization_target",
+        target: { evidenceIds: ["evidence-attention-self-attention"], kind: "source_figure", nodeId: document.rootNodeId, sourceFigureId: "unbound-figure" }
+      }
+    })).rejects.toThrow();
+
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+  });
+
   test("clones a read-only v1 thin-reading artifact before branch generation", async () => {
     vi.setSystemTime(new Date("2026-08-09T03:04:05.000Z"));
     const document = parseThinReadingDocument(v1Fixture);
@@ -671,6 +753,34 @@ describe("useArtifactActions", () => {
         })
       })
     );
+  });
+
+  test("does not create or branch through a v1 clone when saving the clone fails", async () => {
+    const document = parseThinReadingDocument(v1Fixture);
+    const sourcePaper: Paper = { id: "paper-1", sourcePath: "fixtures/paper-1.pdf", title: "Paper one" };
+    const { artifactStore, result, runAgentAnalysis, saveArtifactResult } = renderArtifactActions({
+      imported: true,
+      saveArtifactResult: async () => { throw new Error("clone save failed"); },
+      selectedPapers: [sourcePaper]
+    });
+    artifactStore.upsertTab({
+      artifactId: document.artifactId,
+      createdAt: "2026-08-01T00:00:00.000Z",
+      papers: [{ id: sourcePaper.id, title: sourcePaper.title }],
+      thinReadingDocument: document,
+      title: "Legacy thin reading",
+      type: "thin_reading"
+    });
+
+    await expect(result.current.generateThinReadingBranch({
+      artifactId: document.artifactId,
+      document,
+      source: { kind: "omitted_section", label: "Methods", sectionKey: "methods" }
+    })).rejects.toThrow();
+
+    expect(saveArtifactResult).toHaveBeenCalledTimes(1);
+    expect(runAgentAnalysis).not.toHaveBeenCalled();
+    expect(artifactStore.getCatalog().filter((tab) => tab.artifactId !== document.artifactId)).toEqual([]);
   });
 
   test("rejects a second thin-reading branch request while the artifact already has an active task", async () => {

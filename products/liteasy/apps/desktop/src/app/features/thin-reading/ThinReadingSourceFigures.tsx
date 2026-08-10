@@ -1,7 +1,6 @@
 import type { MineruFigure } from "../import/import.types";
 import type { DeepDiveTargetV1 } from "../visualization/visualizationArtifact.types";
 import { SourceFigureSelectionOverlay } from "./SourceFigureSelectionOverlay";
-import { sourceFigurePixelSize } from "./thinReadingDeepDiveTarget";
 
 export type ThinReadingSourceFigure = {
   evidenceIds: readonly string[];
@@ -38,13 +37,12 @@ export function ThinReadingSourceFigures({
           {figures.map(({ evidenceIds, figure, reason, recommendedBy }) => (
             <figure className="thin-reading__figure-embed" key={figure.id}>
               <div className="thin-reading__figure-media">
-                {nodeId && onSelectTarget ? (
+                {nodeId && onSelectTarget && evidenceIds.length > 0 && recommendedBy === "agent" ? (
                   <SourceFigureSelectionOverlay
                     evidenceIds={evidenceIds}
                     figure={figure}
                     nodeId={nodeId}
                     onSelect={onSelectTarget}
-                    sourcePixelSize={sourceFigurePixelSize(figure)}
                   />
                 ) : (
                   <img alt={figure.analysis?.title ?? figure.alt} loading="lazy" src={figure.dataUrl} />

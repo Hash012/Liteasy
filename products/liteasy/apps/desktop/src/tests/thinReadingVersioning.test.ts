@@ -32,6 +32,25 @@ test("clones v1 into a new v2 artifact before deepening", () => {
   });
 });
 
+test("rejects a persisted deep-dive child whose source figure is no longer recommended by its parent", () => {
+  const document = cloneThinReadingV1AsV2(v1Fixture, { artifactId: "thin-copy-target", createdAt: now });
+  const next = advanceThinReadingDocument(document, {
+    ...branchInput,
+    parentNodeId: document.rootNodeId,
+    source: {
+      kind: "visualization_target",
+      target: {
+        evidenceIds: ["evidence-1"],
+        kind: "source_figure",
+        nodeId: document.rootNodeId,
+        sourceFigureId: "stale-figure"
+      }
+    }
+  });
+
+  expect(() => parseThinReadingDocument(next)).toThrow("thin_reading_document_invalid");
+});
+
 test("rejects v2 documents that retain executable legacy evidence or malformed visualizations", () => {
   const next = cloneThinReadingV1AsV2(v1Fixture, { artifactId: "thin-copy-2", createdAt: now });
   const root = next.nodes[next.rootNodeId];

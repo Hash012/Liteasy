@@ -1,5 +1,6 @@
 import type { ArtifactTask } from "./artifact.types";
 import { findThinReadingChildBySource } from "../thin-reading/thinReadingProjection";
+import { isDeepDiveTargetBoundToNode } from "../thin-reading/thinReadingDeepDiveTarget";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
@@ -145,20 +146,9 @@ export function validateThinReadingBranchRecoverySnapshot(
       : { valid: false, reason: "原未覆盖模块已不在父页面的可深入列表中。" };
   }
   if (snapshot.source.kind === "visualization_target") {
-    if (snapshot.source.target.nodeId !== parent.id) {
-      return { valid: false, reason: "原视觉对象已不在当前父节点。" };
-    }
-    const evidenceIds = new Set([
-      ...parent.evidence.paperEvidence,
-      ...(parent.evidence.paperEvidenceSpans ?? []).map((span) => span.id),
-      ...(parent.evidence.claims ?? []).map((claim) => claim.id)
-    ]);
-    const targetEvidenceIds = snapshot.source.target.kind === "generated_object"
-      ? snapshot.source.target.evidenceClaimIds
-      : snapshot.source.target.evidenceIds;
-    return targetEvidenceIds.length > 0 && targetEvidenceIds.every((id) => evidenceIds.has(id))
+    return isDeepDiveTargetBoundToNode(snapshot.source.target, parent)
       ? { valid: true }
-      : { valid: false, reason: "原视觉对象证据已变化。" };
+      : { valid: false, reason: "原视觉对象已变化。" };
   }
   const evidenceIds = new Set([...parent.evidence.paperEvidence, ...(parent.evidence.paperEvidenceSpans ?? []).map((span) => span.id)]);
   if ((snapshot.source.evidenceIds ?? []).some((id) => !evidenceIds.has(id))) {

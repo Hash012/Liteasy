@@ -12,7 +12,7 @@ type Drag = {
   endY: number;
 };
 
-function dragRectangleStyle(drag: Drag): CSSProperties {
+function dragRectangleStyle(drag: Drag, containerRect: DOMRect): CSSProperties {
   const { displayRect } = drag;
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
   const startX = clamp(Math.min(drag.startX, drag.endX), displayRect.left, displayRect.left + displayRect.width);
@@ -22,12 +22,12 @@ function dragRectangleStyle(drag: Drag): CSSProperties {
   return {
     background: "rgba(75, 159, 232, 0.16)",
     border: "2px solid #4b9fe8",
-    height: `${((endY - startY) / displayRect.height) * 100}%`,
-    left: `${((startX - displayRect.left) / displayRect.width) * 100}%`,
+    height: `${endY - startY}px`,
+    left: `${startX - containerRect.left}px`,
     pointerEvents: "none",
     position: "absolute",
-    top: `${((startY - displayRect.top) / displayRect.height) * 100}%`,
-    width: `${((endX - startX) / displayRect.width) * 100}%`
+    top: `${startY - containerRect.top}px`,
+    width: `${endX - startX}px`
   };
 }
 
@@ -36,17 +36,18 @@ export function SourceFigureSelectionOverlay(props: {
   figure: MineruFigure;
   nodeId: string;
   onSelect: (target: DeepDiveTargetV1) => void;
-  sourcePixelSize: { width: number; height: number };
 }) {
-  const { evidenceIds, figure, nodeId, onSelect, sourcePixelSize } = props;
-  const imageRef = useRef<HTMLDivElement>(null);
+  const { evidenceIds, figure, nodeId, onSelect } = props;
+  const imageRef = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [sourcePixelSize, setSourcePixelSize] = useState<{ width: number; height: number } | null>(null);
   const [regionOpen, setRegionOpen] = useState(false);
   const [region, setRegion] = useState({ x: 0, y: 0, width: 100, height: 100 });
   const wholeFigure = () => onSelect(createSourceFigureTarget({ evidenceIds, nodeId, sourceFigureId: figure.id }));
   const submitRegion = () => {
     const element = imageRef.current;
-    if (!element) return;
+    if (!element || !sourcePixelSize) return;
     const rect = element.getBoundingClientRect();
     try {
       onSelect(createSourceRegionTarget({
@@ -67,7 +68,7 @@ export function SourceFigureSelectionOverlay(props: {
       // Invalid or unavailable geometry is deliberately ignored; no branch is generated.
     }
   };
-  const pointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+  const pointerDown = (event: React.PointerEvent<HTMLImageElement>) => {
     const rect = imageRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return;
     setDrag({
@@ -79,15 +80,15 @@ export function SourceFigureSelectionOverlay(props: {
     });
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
-  const pointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+  const pointerMove = (event: React.PointerEvent<HTMLImageElement>) => {
     if (!drag) return;
     setDrag({ ...drag, endX: event.clientX, endY: event.clientY });
   };
-  const pointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+  const pointerUp = (event: React.PointerEvent<HTMLImageElement>) => {
     if (!drag) return;
     const rect = imageRef.current?.getBoundingClientRect();
     setDrag(null);
-    if (!rect) return;
+    if (!rect || !sourcePixelSize) return;
     try {
       onSelect(createSourceRegionTarget({ displayRect: rect, drag: { ...drag, endX: event.clientX, endY: event.clientY }, evidenceIds, figureId: figure.id, nodeId, sourcePixelSize }));
     } catch {
@@ -98,22 +99,29 @@ export function SourceFigureSelectionOverlay(props: {
     <div
       className="thin-reading__figure-selection-image"
       data-testid="source-figure-selection-image"
-      onPointerDown={pointerDown}
-      onPointerMove={pointerMove}
-      onPointerUp={pointerUp}
-      ref={imageRef}
-      role="img"
+      ref={containerRef}
       style={{ position: "relative", touchAction: "none" }}
-      tabIndex={0}
-      aria-label={figure.analysis?.title ?? figure.alt}
     >
-      <img alt={figure.analysis?.title ?? figure.alt} src={figure.dataUrl} />
-      {drag ? (
+      <img
+        alt={figure.analysis?.title ?? figure.alt}
+        onLoad={(event) => {
+          const image = event.currentTarget;
+          setSourcePixelSize(image.naturalWidth > 0 && image.naturalHeight > 0
+            ? { height: image.naturalHeight, width: image.naturalWidth }
+            : null);
+        }}
+        onPointerDown={pointerDown}
+        onPointerMove={pointerMove}
+        onPointerUp={pointerUp}
+        ref={imageRef}
+        src={figure.dataUrl}
+      />
+      {drag && containerRef.current ? (
         <span
           aria-hidden="true"
           className="thin-reading__figure-selection-rect"
           data-testid="source-figure-selection-rect"
-          style={dragRectangleStyle(drag)}
+          style={dragRectangleStyle(drag, containerRef.current.getBoundingClientRect())}
         />
       ) : null}
     </div>

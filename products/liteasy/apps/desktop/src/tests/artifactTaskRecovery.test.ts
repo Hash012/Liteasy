@@ -185,6 +185,30 @@ describe("artifactTaskRecovery", () => {
     expect(validateThinReadingBranchRecoverySnapshot(snapshot, document)).toEqual({ valid: true });
   });
 
+  test("fails closed when a recovered source figure is no longer recommended by its parent", () => {
+    const document = createDocument();
+    const snapshot = createThinReadingBranchRecoverySnapshot({
+      artifactId: document.artifactId,
+      document,
+      parentNodeId: document.rootNodeId,
+      primaryPaperId: "paper-1",
+      source: {
+        kind: "visualization_target",
+        target: {
+          evidenceIds: ["evidence-1"],
+          kind: "source_figure",
+          nodeId: document.rootNodeId,
+          sourceFigureId: "stale-figure"
+        }
+      }
+    });
+
+    expect(validateThinReadingBranchRecoverySnapshot(snapshot, document)).toEqual({
+      valid: false,
+      reason: "原视觉对象已变化。"
+    });
+  });
+
   test("rejects a recovery snapshot whose quick command and output type disagree", () => {
     const document = createDocument();
 

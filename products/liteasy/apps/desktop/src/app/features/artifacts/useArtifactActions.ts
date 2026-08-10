@@ -50,7 +50,7 @@ import {
   resolveArtifactFailureCode
 } from "./artifactFailurePresentation";
 import { resolveThinReadingTargetLanguage } from "../thin-reading/thinReadingAgent";
-import { describeDeepDiveTarget } from "../thin-reading/thinReadingDeepDiveTarget";
+import { describeDeepDiveTarget, isDeepDiveTargetBoundToNode } from "../thin-reading/thinReadingDeepDiveTarget";
 import type {
   ThinReadingBranchSource,
   ThinReadingDocument,
@@ -354,29 +354,8 @@ function isValidThinReadingVisualizationTarget(
   target: DeepDiveTargetV1,
   figures: readonly MineruFigure[]
 ) {
-  if (target.nodeId !== node.id) return false;
-  const paperEvidenceIds = new Set([
-    ...node.evidence.paperEvidence,
-    ...(node.evidence.paperEvidenceSpans ?? []).map((span) => span.id)
-  ]);
-  if (target.kind === "generated_object") {
-    if (document.version !== "liteasy.thin-reading/v2") return false;
-    const artifact = (node as import("../thin-reading/thinReading.types").ThinReadingNodeV2).visualizations.find((item) => item.artifactId === target.artifactId);
-    const object = artifact?.semanticObjects.find((item) => item.objectId === target.objectId);
-    const claims = new Set((artifact?.spec.payload && "claims" in artifact.spec.payload) ? artifact.spec.payload.claims.map((claim) => claim.id) : []);
-    return Boolean(object?.selectable) && JSON.stringify(object?.objectPath) === JSON.stringify(target.objectPath) &&
-      target.evidenceClaimIds.length > 0 && target.evidenceClaimIds.every((id) => claims.has(id)) &&
-      target.evidenceClaimIds.every((id) => node.evidence.claims?.some((claim) => claim.id === id));
-  }
-  if (target.evidenceIds.length === 0 || target.evidenceIds.some((id) => !paperEvidenceIds.has(id))) return false;
-  const figure = figures.find((candidate) => candidate.id === target.sourceFigureId);
-  if (!figure) return false;
-  if (target.kind === "source_region") {
-    const { bbox, sourcePixelSize } = target;
-    return sourcePixelSize.width > 0 && sourcePixelSize.height > 0 && bbox.x >= 0 && bbox.y >= 0 &&
-      bbox.width > 0 && bbox.height > 0 && bbox.x + bbox.width <= 1 && bbox.y + bbox.height <= 1;
-  }
-  return true;
+  if (document.version === "liteasy.thin-reading/v1" || !isDeepDiveTargetBoundToNode(target, node)) return false;
+  return target.kind === "generated_object" || figures.some((candidate) => candidate.id === target.sourceFigureId);
 }
 
 function thinReadingAncestorSummaries(
@@ -1192,22 +1171,33 @@ export function useArtifactActions({
   }: GenerateThinReadingBranchInput) {
     if (document.version === "liteasy.thin-reading/v1") {
       const cloneArtifactId = `${artifactId}-v2-${Date.now().toString(36)}`;
+      const cloneCreatedAt = new Date().toISOString();
       const clone = cloneThinReadingV1AsV2(document, {
         artifactId: cloneArtifactId,
-        createdAt: new Date().toISOString()
+        createdAt: cloneCreatedAt
       });
       const existingV1 = artifactStore.getOpenTabs().find((tab) => tab.artifactId === artifactId) ??
         artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
       if (!existingV1 || existingV1.type !== "thin_reading") {
         throw new Error("找不到可继续深入的薄读产物。");
       }
-      artifactStore.upsertTab({
+      const cloneEntry = {
         ...existingV1,
         artifactId: cloneArtifactId,
-        createdAt: new Date().toISOString(),
+        createdAt: cloneCreatedAt,
         thinReadingDocument: clone,
         title: `${existingV1.title}（副本）`
-      });
+      };
+      const resultPath = await artifactResultClient.save(createThinReadingResultDocument({
+        createdAt: cloneCreatedAt,
+        document: clone,
+        existing: cloneEntry,
+        figures: existingV1.figures,
+        mineruTextChunks: existingV1.mineruTextChunks,
+        papers: existingV1.papers ?? [],
+        uiDsl: existingV1.uiDsl
+      }));
+      artifactStore.upsertTab({ ...cloneEntry, resultPath });
       syncArtifacts();
       return generateThinReadingBranch({ artifactId: cloneArtifactId, document: clone, source });
     }
