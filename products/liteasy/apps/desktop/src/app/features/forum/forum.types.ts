@@ -1,6 +1,7 @@
 import type {
   LiteratureConfirmInput,
   LiteratureRecord,
+  LiteratureRelationsResult,
   LiteratureResolveInput,
   LiteratureResolveResult
 } from "../paper-identity/literature.types";
@@ -79,6 +80,7 @@ export type ForumLiteratureResolveInput = LiteratureResolveInput;
 export type ForumLiteratureResolveResult = LiteratureResolveResult;
 export type ForumLiteratureConfirmInput = LiteratureConfirmInput;
 export type ForumLiteratureConfirmResult = { literature: LiteratureRecord };
+export type ForumLiteratureRelationsResult = LiteratureRelationsResult;
 
 type ForumAnnotationPublicationOperationBase = {
   annotationId: string;

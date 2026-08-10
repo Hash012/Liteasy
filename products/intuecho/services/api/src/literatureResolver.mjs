@@ -389,7 +389,19 @@ export function createLiteratureResolver({ providers, repository }) {
     },
 
     async relations(literatureId) {
-      return repository.findLiteratureRelations(literatureId);
+      const current = await repository.findLiteratureById(literatureId);
+      if (!current) throw new LiteratureResolverError("LITERATURE_CANDIDATE_NOT_FOUND");
+      const relations = await repository.findLiteratureRelations(literatureId);
+      const versions = [];
+      for (const relation of relations) {
+        const direction = relation.fromLiteratureId === literatureId ? "from_current" : "to_current";
+        const relatedLiteratureId = direction === "from_current"
+          ? relation.toLiteratureId
+          : relation.fromLiteratureId;
+        const literature = await repository.findLiteratureById(relatedLiteratureId);
+        if (literature) versions.push({ direction, literature, relation });
+      }
+      return { literatureId, versions };
     }
   });
 }

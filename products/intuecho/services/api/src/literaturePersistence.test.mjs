@@ -213,6 +213,26 @@ test("SQLite rejects a compatibility alias as the provider primary identifier", 
   }
 });
 
+test("SQLite stores confirmable identifiers and candidate aliases with explicit roles", async () => {
+  const db = new Database(":memory:");
+  try {
+    const repository = new SqliteAnnotationCommunityRepository(db);
+    const fingerprint = `sha256:${"d".repeat(64)}`;
+    await repository.confirmRefetchedLiterature(owner, candidate({
+      identifiers: [
+        { kind: "doi", source: "public_registry", value: "10.1000/verified" },
+        { kind: "title_authors_year_hash", source: "public_registry", value: fingerprint }
+      ]
+    }));
+    assert.deepEqual(db.prepare("SELECT identifier_kind, identifier_role FROM literature_identifiers_v2 ORDER BY identifier_kind").all(), [
+      { identifier_kind: "doi", identifier_role: "confirmable" },
+      { identifier_kind: "title_authors_year_hash", identifier_role: "candidate_alias" }
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
 test("SQLite binds a provider record id to one literature even when its external identifiers change", async () => {
   const db = new Database(":memory:");
   try {
@@ -462,8 +482,14 @@ function postgresHarness() {
       }
       if (query.startsWith("SELECT identity_kind AS kind")) return { rows: [] };
       if (query.startsWith("INSERT INTO literature_identifiers")) {
-        if (!identifiers.some((item) => item.identifier_kind === values[2] && item.normalized_value === values[3])) {
-          identifiers.push({ id: values[0], literature_id: values[1], identifier_kind: values[2], normalized_value: values[3] });
+        if (!identifiers.some((item) => item.identifier_kind === values[2] && item.normalized_value === values[4])) {
+          identifiers.push({
+            id: values[0],
+            identifier_kind: values[2],
+            identifier_role: values[3],
+            literature_id: values[1],
+            normalized_value: values[4]
+          });
         }
         return { rows: [] };
       }
@@ -532,6 +558,7 @@ test("PostgreSQL confirmation stores one identifier owner and one provider claim
   assert.equal(harness.records.size, 1);
   assert.deepEqual(harness.identifiers.map(({ id: _id, ...identifier }) => identifier), [{
     identifier_kind: "doi",
+    identifier_role: "confirmable",
     literature_id: record.literatureId,
     normalized_value: "10.1000/verified"
   }]);
@@ -566,6 +593,24 @@ test("PostgreSQL rejects a compatibility alias as the provider primary identifie
     ],
     provider: "openalex"
   })), /LITERATURE_CANDIDATE_NOT_FOUND/);
+});
+
+test("PostgreSQL stores confirmable identifiers and candidate aliases with explicit roles", async () => {
+  const harness = postgresHarness();
+  const fingerprint = `sha256:${"d".repeat(64)}`;
+  await harness.repository.confirmRefetchedLiterature(owner, candidate({
+    identifiers: [
+      { kind: "doi", source: "public_registry", value: "10.1000/verified" },
+      { kind: "title_authors_year_hash", source: "public_registry", value: fingerprint }
+    ]
+  }));
+  assert.deepEqual(harness.identifiers.map((identifier) => ({
+    kind: identifier.identifier_kind,
+    role: identifier.identifier_role
+  })).sort((left, right) => left.kind.localeCompare(right.kind)), [
+    { kind: "doi", role: "confirmable" },
+    { kind: "title_authors_year_hash", role: "candidate_alias" }
+  ]);
 });
 
 test("PostgreSQL reuses one version when two aggregate providers independently confirm the same bibliography", async () => {

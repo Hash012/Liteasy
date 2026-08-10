@@ -158,24 +158,21 @@ export async function createIntuechoApp({
 
   function isDesktopIntegrationRequest(request) {
     const pathname = request.url.split("?", 1)[0];
+    if (isLiteratureRequest(request)) return true;
     return request.method === "POST" && new Set([
       "/v1/integrations/desktop/draft-handoffs",
       "/v1/integrations/desktop/annotation-handoffs",
       "/v1/pdf-annotations:sync",
       "/v1/thin-reading/annotations:sync",
       "/v1/thin-reading/recommendations:query",
-      "/v1/integrations/desktop/works:resolve",
-      "/v1/literature:resolve",
-      "/v1/literature:confirm"
+      "/v1/integrations/desktop/works:resolve"
     ]).has(pathname);
   }
 
   function isLiteratureRequest(request) {
     const pathname = request.url.split("?", 1)[0];
-    return request.method === "POST" && new Set([
-      "/v1/literature:resolve",
-      "/v1/literature:confirm"
-    ]).has(pathname);
+    if (request.method === "GET") return /^\/v1\/literature\/[^/]+\/relations$/.test(pathname);
+    return request.method === "POST" && new Set(["/v1/literature:resolve", "/v1/literature:confirm"]).has(pathname);
   }
 
   function requireDesktopUser(request, reply) {

@@ -81,7 +81,11 @@ export function registerLiteratureRoutes(app, {
   app.get("/v1/literature/:literatureId/relations", async (request, reply) => {
     const user = routeUser(request, reply, { currentUser, requireUser });
     if (!user) return;
-    return { relations: await resolver.relations(request.params.literatureId) };
+    try {
+      return await resolver.relations(request.params.literatureId);
+    } catch (error) {
+      throw normalizedError(error);
+    }
   });
   if (requireService) {
     app.post("/v1/internal/literature::verify", async (request, reply) => {

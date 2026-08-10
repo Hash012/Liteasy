@@ -109,12 +109,20 @@ export const annotationVisibilitySchema = z.enum([
   "public"
 ]);
 
-export const literatureIdentifierKindSchema = z.enum([
+export const confirmableLiteratureIdentifierKindSchema = z.enum([
   "doi",
   "arxiv_id",
   "semantic_scholar_id",
-  "openalex_id",
+  "openalex_id"
+]);
+
+export const candidateLiteratureAliasKindSchema = z.enum([
   "title_authors_year_hash"
+]);
+
+export const literatureIdentifierKindSchema = z.union([
+  confirmableLiteratureIdentifierKindSchema,
+  candidateLiteratureAliasKindSchema
 ]);
 
 export const literatureSourceSchema = z.enum(["public_registry", "manual", "inferred"]);
@@ -237,6 +245,15 @@ export const literatureRelationSchema = z.object({
   message: "文献版本关系不能指向自身。",
   path: ["toLiteratureId"]
 });
+
+export const literatureRelationsResultSchema = z.object({
+  literatureId: z.string().trim().min(1).max(200),
+  versions: z.array(z.object({
+    direction: z.enum(["from_current", "to_current"]),
+    literature: literatureRecordSchema,
+    relation: literatureRelationSchema
+  }).strict()).max(100)
+}).strict();
 
 export const literatureMetadataSchema = z.object({
   authors: z.array(z.string().trim().min(1).max(300)).max(200).default([]),

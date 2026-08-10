@@ -803,3 +803,49 @@ test("rejects manual confirmation without a provider candidate key", async () =>
     /LITERATURE_CANDIDATE_NOT_FOUND/
   );
 });
+
+test("projects related confirmed versions with direction relative to the current literature", async () => {
+  const current = {
+    authors: ["A. Author"],
+    identifiers: [publicIdentifier("arxiv_id", "2401.01234")],
+    literatureId: "literature-preprint",
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "arxiv" },
+    revision: 1,
+    status: "confirmed",
+    title: "Preprint Version",
+    year: 2026
+  };
+  const publication = {
+    ...current,
+    identifiers: [publicIdentifier("doi", "10.1000/publication")],
+    literatureId: "literature-publication",
+    provenance: { ...current.provenance, provider: "crossref" },
+    title: "Published Version"
+  };
+  const relation = {
+    createdAt: "2026-08-09T00:00:00.000Z",
+    evidence: { recordUrl: "https://registry.example.test/relation" },
+    fromLiteratureId: current.literatureId,
+    provider: "crossref",
+    relationType: "is_preprint_of",
+    toLiteratureId: publication.literatureId,
+    verificationStatus: "confirmed"
+  };
+  const resolver = createLiteratureResolver({
+    providers: [],
+    repository: repository({
+      async findLiteratureById(literatureId) {
+        return literatureId === current.literatureId ? current : literatureId === publication.literatureId ? publication : null;
+      },
+      async findLiteratureRelations(literatureId) {
+        assert.equal(literatureId, current.literatureId);
+        return [relation];
+      }
+    })
+  });
+
+  assert.deepEqual(await resolver.relations(current.literatureId), {
+    literatureId: current.literatureId,
+    versions: [{ direction: "from_current", literature: publication, relation }]
+  });
+});

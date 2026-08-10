@@ -1772,6 +1772,7 @@ export function AppShell({
         externalKnowledgeEndpoint={externalKnowledgeEndpoint}
         layoutCollapsed={paneLayout.collapsed}
         loadPdfSource={externalPapers.loadPdfSource}
+        loadLiteratureRelations={forum.client.literatureRelations}
         onAddExternalPdfToLibrary={workspaceActions.addExternalPdfToLibrary}
         onOpenExternalFullText={externalPapers.openExternalFullTextInReader}
         onPaperAnnotated={

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   hasCrossVersionIdentifierConflict,
   isConfirmableLiteratureIdentifierKind,
+  literatureIdentifierRole,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
@@ -119,7 +120,7 @@ export function initializeAnnotationCommunitySqlite(db) {
     CREATE TABLE IF NOT EXISTS desktop_annotation_handoffs_v2 (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, consumed_at TEXT);
     CREATE TABLE IF NOT EXISTS literature_identities_v2 (literature_id TEXT NOT NULL, identity_kind TEXT NOT NULL CHECK(identity_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'title_authors_year_hash')), identity_value TEXT NOT NULL, identity_source TEXT NOT NULL CHECK(identity_source IN ('inferred', 'metadata', 'public_registry', 'manual')), created_at TEXT NOT NULL, PRIMARY KEY(literature_id, identity_kind, identity_value), UNIQUE(identity_kind, identity_value));
     CREATE TABLE IF NOT EXISTS literature_record_versions_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, revision INTEGER NOT NULL CHECK(revision > 0), snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json) AND json_type(snapshot_json) = 'object'), changed_by TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(literature_id, revision));
-    CREATE TABLE IF NOT EXISTS literature_identifiers_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, identifier_kind TEXT NOT NULL CHECK(identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'title_authors_year_hash')), normalized_value TEXT NOT NULL, is_legacy_alias INTEGER NOT NULL DEFAULT 0 CHECK(is_legacy_alias IN (0, 1)), created_at TEXT NOT NULL, UNIQUE(literature_id, identifier_kind, normalized_value), UNIQUE(identifier_kind, normalized_value));
+    CREATE TABLE IF NOT EXISTS literature_identifiers_v2 (id TEXT PRIMARY KEY, literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, identifier_kind TEXT NOT NULL CHECK(identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'title_authors_year_hash')), identifier_role TEXT NOT NULL CHECK(identifier_role IN ('confirmable', 'candidate_alias')) CHECK((identifier_kind = 'title_authors_year_hash' AND identifier_role = 'candidate_alias') OR (identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id') AND identifier_role = 'confirmable')), normalized_value TEXT NOT NULL, is_legacy_alias INTEGER NOT NULL DEFAULT 0 CHECK(is_legacy_alias IN (0, 1)), created_at TEXT NOT NULL, UNIQUE(literature_id, identifier_kind, normalized_value), UNIQUE(identifier_kind, normalized_value));
     CREATE TABLE IF NOT EXISTS literature_identity_claims_v2 (id TEXT PRIMARY KEY, identifier_id TEXT NOT NULL REFERENCES literature_identifiers_v2(id) ON DELETE CASCADE, provider TEXT NOT NULL CHECK(provider IN ('crossref', 'arxiv', 'openalex', 'semantic_scholar')), provider_record_id TEXT NOT NULL, verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'), evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'), observed_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(provider, provider_record_id));
     CREATE TABLE IF NOT EXISTS literature_relations_v2 (id TEXT PRIMARY KEY, from_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, to_literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE, relation_type TEXT NOT NULL CHECK(relation_type IN ('is_preprint_of', 'version_of', 'translation_of')), provider TEXT NOT NULL CHECK(provider IN ('intuecho', 'crossref', 'arxiv', 'openalex', 'semantic_scholar')), verification_status TEXT NOT NULL CHECK(verification_status = 'confirmed'), evidence_json TEXT NOT NULL CHECK(json_valid(evidence_json) AND json_type(evidence_json) = 'object'), created_at TEXT NOT NULL, CHECK(from_literature_id <> to_literature_id), UNIQUE(from_literature_id, to_literature_id, relation_type));
     CREATE INDEX IF NOT EXISTS literature_relations_v2_from_idx ON literature_relations_v2(from_literature_id, relation_type, to_literature_id);
@@ -236,31 +237,51 @@ export function initializeAnnotationCommunitySqlite(db) {
       throw new LiteratureIdentityConflictError("LITERATURE_IDENTIFIER_MIGRATION_CONFLICT");
     }
     const identifierId = `literature_identifier_${createHash("sha256").update(`${identity.literature_id}:${identity.identity_kind}:${value}`).digest("hex").slice(0, 32)}`;
-    db.prepare("INSERT OR IGNORE INTO literature_identifiers_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(identifierId, identity.literature_id, identity.identity_kind, value, identity.identity_kind === "title_authors_year_hash" && !/^sha256:[a-f0-9]{64}$/.test(value) ? 1 : 0, identity.created_at);
+    const isLegacyAlias = identity.identity_kind === "title_authors_year_hash" && !/^sha256:[a-f0-9]{64}$/.test(value) ? 1 : 0;
+    if (identifierColumns.has("identifier_role")) {
+      db.prepare("INSERT OR IGNORE INTO literature_identifiers_v2(id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(identifierId, identity.literature_id, identity.identity_kind, literatureIdentifierRole(identity.identity_kind), value, isLegacyAlias, identity.created_at);
+    } else {
+      db.prepare("INSERT OR IGNORE INTO literature_identifiers_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(identifierId, identity.literature_id, identity.identity_kind, value, isLegacyAlias, identity.created_at);
+    }
   }
   const claimColumns = new Set(db.prepare("PRAGMA table_info(literature_identity_claims_v2)").all().map((column) => column.name));
   const identifierIdIsPrimaryKey = db.prepare("PRAGMA table_info(literature_identifiers_v2)").all()
     .some((column) => column.name === "id" && column.pk === 1);
-  if (!identifierIdIsPrimaryKey || !claimColumns.has("identifier_id")) {
+  const identifierRoleIsPresent = db.prepare("PRAGMA table_info(literature_identifiers_v2)").all()
+    .some((column) => column.name === "identifier_role");
+  const rebuildIdentifiers = !identifierIdIsPrimaryKey || !identifierRoleIsPresent;
+  if (rebuildIdentifiers || !claimColumns.has("identifier_id")) {
     db.transaction(() => {
-      const identifierTable = identifierIdIsPrimaryKey ? "literature_identifiers_v2" : "literature_identifiers_aligned_v2";
-      if (!identifierIdIsPrimaryKey) {
+      const identifierTable = rebuildIdentifiers ? "literature_identifiers_aligned_v2" : "literature_identifiers_v2";
+      if (rebuildIdentifiers) {
         db.exec(`
           CREATE TABLE literature_identifiers_aligned_v2 (
             id TEXT PRIMARY KEY,
             literature_id TEXT NOT NULL REFERENCES literature_records_v2(id) ON DELETE CASCADE,
             identifier_kind TEXT NOT NULL CHECK(identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id', 'title_authors_year_hash')),
+            identifier_role TEXT NOT NULL CHECK(identifier_role IN ('confirmable', 'candidate_alias')),
             normalized_value TEXT NOT NULL,
             is_legacy_alias INTEGER NOT NULL DEFAULT 0 CHECK(is_legacy_alias IN (0, 1)),
             created_at TEXT NOT NULL,
+            CHECK((identifier_kind = 'title_authors_year_hash' AND identifier_role = 'candidate_alias') OR (identifier_kind IN ('doi', 'arxiv_id', 'semantic_scholar_id', 'openalex_id') AND identifier_role = 'confirmable')),
             UNIQUE(literature_id, identifier_kind, normalized_value),
             UNIQUE(identifier_kind, normalized_value)
           );
-          INSERT INTO literature_identifiers_aligned_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at)
-          SELECT id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at
-            FROM literature_identifiers_v2;
         `);
+        const insertIdentifier = db.prepare("INSERT INTO literature_identifiers_aligned_v2(id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        for (const identifier of db.prepare("SELECT * FROM literature_identifiers_v2 ORDER BY literature_id, identifier_kind, normalized_value").all()) {
+          insertIdentifier.run(
+            identifier.id,
+            identifier.literature_id,
+            identifier.identifier_kind,
+            literatureIdentifierRole(identifier.identifier_kind),
+            identifier.normalized_value,
+            identifier.is_legacy_alias,
+            identifier.created_at
+          );
+        }
       }
       db.exec(`
       CREATE TABLE literature_identity_claims_aligned_v2 (
@@ -286,7 +307,7 @@ export function initializeAnnotationCommunitySqlite(db) {
           .run(claim.id, identifierId, claim.provider, claim.provider_record_id, claim.verification_status, claim.evidence_json, claim.observed_at, claim.created_at);
       }
       db.exec("DROP TABLE literature_identity_claims_v2");
-      if (!identifierIdIsPrimaryKey) {
+      if (rebuildIdentifiers) {
         db.exec("DROP TABLE literature_identifiers_v2");
         db.exec("ALTER TABLE literature_identifiers_aligned_v2 RENAME TO literature_identifiers_v2");
       }
@@ -567,8 +588,8 @@ export class SqliteAnnotationCommunityRepository {
         }
       }
       for (const identifier of normalized) {
-        this.db.prepare("INSERT OR IGNORE INTO literature_identifiers_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, ?, ?, 0, ?)")
-          .run(`literature_identifier_${randomUUID()}`, literatureId, identifier.kind, identifier.value, now);
+        this.db.prepare("INSERT OR IGNORE INTO literature_identifiers_v2(id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)")
+          .run(`literature_identifier_${randomUUID()}`, literatureId, identifier.kind, literatureIdentifierRole(identifier.kind), identifier.value, now);
       }
       const storedIdentifiers = this.db.prepare("SELECT id, identifier_kind AS kind, normalized_value AS value FROM literature_identifiers_v2 WHERE literature_id = ? ORDER BY identifier_kind, normalized_value").all(literatureId);
       for (const { candidate, providerRecordId } of providerRecords) {

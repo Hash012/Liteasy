@@ -86,6 +86,22 @@ describe("forum client", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://forum.test/v1/plaza?limit=3&literatureId=lit_01J00000000000000000000000&sort=recommended", expect.objectContaining({ headers: {} }));
   });
 
+  test("loads authenticated related literature versions", async () => {
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({ literatureId: "literature-preprint", versions: [] }),
+      ok: true,
+      status: 200
+    }));
+    const client = createForumClient({ apiBaseUrl: "http://forum.test", fetchImpl: fetchMock as unknown as typeof fetch, sessionId: "desktop-token" });
+
+    await client.literatureRelations("literature-preprint");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://forum.test/v1/literature/literature-preprint/relations",
+      expect.objectContaining({ headers: { Authorization: "Bearer desktop-token" } })
+    );
+  });
+
   test("includes annotation text in the one-time handoff", async () => {
     const fetchMock = vi.fn(async () => ({
       json: async () => ({ expiresAt: "2026-08-07T01:05:00.000Z", handoffId: "handoff-1" }),

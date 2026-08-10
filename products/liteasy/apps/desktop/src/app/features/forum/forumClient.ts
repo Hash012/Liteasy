@@ -7,6 +7,7 @@ import type {
   ForumFeedQuery,
   ForumLiteratureConfirmInput,
   ForumLiteratureConfirmResult,
+  ForumLiteratureRelationsResult,
   ForumLiteratureResolveInput,
   ForumLiteratureResolveResult,
   ForumPost
@@ -37,9 +38,9 @@ export function createForumClient({
     return required && currentSessionId ? { Authorization: `Bearer ${currentSessionId}` } : {};
   }
 
-  async function request<T>(path: string): Promise<T> {
+  async function request<T>(path: string, authenticationRequired = false): Promise<T> {
     const response = await fetchImpl(joinUrl(apiBaseUrl, path), {
-      headers: authenticationHeaders(false)
+      headers: authenticationHeaders(authenticationRequired)
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -204,6 +205,11 @@ export function createForumClient({
         }))
       }));
     },
+    literatureRelations: (literatureId: string) =>
+      request<ForumLiteratureRelationsResult>(
+        `/v1/literature/${encodeURIComponent(literatureId)}/relations`,
+        true
+      ),
     resolveLiterature: (input: ForumLiteratureResolveInput) =>
       postJson<ForumLiteratureResolveResult>("/v1/literature:resolve", input)
   };

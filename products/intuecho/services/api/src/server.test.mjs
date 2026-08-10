@@ -56,7 +56,7 @@ function insertFixture(db) {
   db.prepare(`INSERT INTO literature_records_v2(id, title, authors_json, publication_year, version_kind, record_source, source_provider, confirmed_at, revision, confirmation_status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 'public_registry', 'crossref', ?, 1, 'confirmed', ?, ?)`)
     .run("literature-1", "A Reliable Paper", JSON.stringify(["Author"]), 2025, "journal_article", now, now, now);
-  db.prepare("INSERT INTO literature_identifiers_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, 'doi', ?, 0, ?)")
+  db.prepare("INSERT INTO literature_identifiers_v2(id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, 'doi', 'confirmable', ?, 0, ?)")
     .run("identifier-fixture-1", "literature-1", "10.1000/reliable", now);
   db.prepare("INSERT INTO literature_identity_claims_v2(id, identifier_id, provider, provider_record_id, verification_status, evidence_json, observed_at, created_at) VALUES (?, ?, 'crossref', ?, 'confirmed', '{}', ?, ?)")
     .run("claim-fixture-1", "identifier-fixture-1", "10.1000/reliable", now, now);
@@ -126,6 +126,9 @@ function literatureResolver(overrides = {}) {
         unavailableProviders: []
       };
     },
+    async relations(literatureId) {
+      return { literatureId, versions: [] };
+    },
     ...overrides
   };
 }
@@ -168,6 +171,14 @@ test("literature routes accept authenticated Web and desktop audiences while rej
     assert.equal(confirmed.statusCode, 200, confirmed.body);
     assert.equal(confirmed.json().literature.provenance.mode, "public_registry");
     assert.equal(confirmed.json().literature.status, "confirmed");
+
+    const relations = await app.inject({
+      headers: desktopHeader,
+      method: "GET",
+      url: "/v1/literature/literature-1/relations"
+    });
+    assert.equal(relations.statusCode, 200, relations.body);
+    assert.deepEqual(relations.json(), { literatureId: "literature-1", versions: [] });
   }, { literatureResolver: literatureResolver() });
 });
 
@@ -287,7 +298,7 @@ function insertConfirmedPublicationLiterature(db, literatureId = "literature-pub
     source_provider, confirmed_at, revision, confirmation_status, created_at, updated_at
   ) VALUES (?, ?, ?, ?, ?, 'public_registry', 'crossref', ?, 1, 'confirmed', ?, ?)`)
     .run(literatureId, "Server Confirmed Publication Literature", JSON.stringify(["Confirmed Author"]), 2026, "journal_article", now, now, now);
-  db.prepare("INSERT INTO literature_identifiers_v2(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, 'doi', ?, 0, ?)")
+  db.prepare("INSERT INTO literature_identifiers_v2(id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at) VALUES (?, ?, 'doi', 'confirmable', ?, 0, ?)")
     .run(`identifier-${literatureId}`, literatureId, "10.1000/confirmed-publication", now);
   return literatureId;
 }

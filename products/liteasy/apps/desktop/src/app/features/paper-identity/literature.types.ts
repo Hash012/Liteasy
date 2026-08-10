@@ -1,9 +1,14 @@
-export type LiteratureIdentifierKind =
+export type ConfirmableLiteratureIdentifierKind =
   | "doi"
   | "arxiv_id"
   | "semantic_scholar_id"
-  | "openalex_id"
-  | "title_authors_year_hash";
+  | "openalex_id";
+
+export type CandidateLiteratureAliasKind = "title_authors_year_hash";
+
+export type LiteratureIdentifierKind =
+  | ConfirmableLiteratureIdentifierKind
+  | CandidateLiteratureAliasKind;
 
 export type LiteratureSource = "public_registry" | "manual" | "inferred" | "metadata";
 
@@ -28,10 +33,18 @@ export type LiteratureDisplayRecord = {
   year?: number;
 };
 
+export type LiteratureCandidateRelation = {
+  direction: "from_current" | "to_current";
+  evidence: Record<string, unknown>;
+  relationType: "is_preprint_of" | "version_of" | "translation_of";
+  targetIdentifier: { kind: LiteratureIdentifierKind; value: string };
+};
+
 export type LiteratureCandidate = {
   candidateKey: string;
   provider: LiteratureProvider;
   record: LiteratureDisplayRecord;
+  relations?: LiteratureCandidateRelation[];
   recordUrl?: string;
 };
 
@@ -103,3 +116,26 @@ export type LiteratureResolveResult =
   | ({ retryable: true; status: "unavailable" } & LiteratureProviderAvailability);
 
 export type LiteratureConfirmInput = { candidateKey: string; mode: "candidate" | "corroborated" };
+
+export type LiteratureRelationType = "is_preprint_of" | "version_of" | "translation_of";
+
+export type LiteratureRelation = {
+  createdAt: string;
+  evidence: Record<string, unknown>;
+  fromLiteratureId: string;
+  provider: LiteratureProvider;
+  relationType: LiteratureRelationType;
+  toLiteratureId: string;
+  verificationStatus: "confirmed";
+};
+
+export type LiteratureVersionRelation = {
+  direction: "from_current" | "to_current";
+  literature: LiteratureRecord;
+  relation: LiteratureRelation;
+};
+
+export type LiteratureRelationsResult = {
+  literatureId: string;
+  versions: LiteratureVersionRelation[];
+};

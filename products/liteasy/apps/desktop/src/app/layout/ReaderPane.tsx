@@ -14,6 +14,7 @@ import type { PdfAnnotation, PdfAnnotationPublication } from "../features/pdf/pd
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
+import type { LiteratureRelationsResult } from "../features/paper-identity/literature.types";
 import type { MineruFigure } from "../features/import/import.types";
 import type { TeamAnnotation } from "../features/organization/teamAnnotationClient";
 import type { VisualizationTabData } from "../features/visualization/visualization.types";
@@ -39,6 +40,7 @@ type ReaderPaneProps = {
   layoutCollapsed?: PaneCollapseState;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   loadOrganizationAnnotations?: (paper: Paper) => Promise<TeamAnnotation[]>;
+  loadLiteratureRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
   organizationAnnotationActorId?: string;
   canModerateOrganizationAnnotations?: boolean;
   onAddExternalPdfToLibrary?: (input: { bytes: Uint8Array; fileName: string; title: string }) => Promise<void>;
@@ -104,6 +106,7 @@ export function ReaderPane({
   layoutCollapsed = defaultLayoutCollapsed,
   loadPdfSource,
   loadOrganizationAnnotations,
+  loadLiteratureRelations,
   organizationAnnotationActorId,
   canModerateOrganizationAnnotations,
   onAddExternalPdfToLibrary,
@@ -199,6 +202,7 @@ export function ReaderPane({
             allowServerPdfParsing={allowServerPdfParsing}
             externalKnowledgeEndpoint={externalKnowledgeEndpoint}
             loadPdfSource={loadPdfSource}
+            loadLiteratureRelations={loadLiteratureRelations}
             loadOrganizationAnnotations={loadOrganizationAnnotations}
             organizationAnnotationActorId={organizationAnnotationActorId}
             canModerateOrganizationAnnotations={canModerateOrganizationAnnotations}

@@ -1,11 +1,16 @@
 import type { z } from "zod";
 
-export type LiteratureIdentifierKind =
+export type ConfirmableLiteratureIdentifierKind =
   | "doi"
   | "arxiv_id"
   | "semantic_scholar_id"
-  | "openalex_id"
-  | "title_authors_year_hash";
+  | "openalex_id";
+
+export type CandidateLiteratureAliasKind = "title_authors_year_hash";
+
+export type LiteratureIdentifierKind =
+  | ConfirmableLiteratureIdentifierKind
+  | CandidateLiteratureAliasKind;
 
 export type LiteratureSource = "public_registry" | "manual" | "inferred";
 
@@ -92,6 +97,17 @@ export type LiteratureRelation = {
   relationType: LiteratureRelationType;
   toLiteratureId: string;
   verificationStatus: "confirmed";
+};
+
+export type LiteratureVersionRelation = {
+  direction: "from_current" | "to_current";
+  literature: LiteratureRecord;
+  relation: LiteratureRelation;
+};
+
+export type LiteratureRelationsResult = {
+  literatureId: string;
+  versions: LiteratureVersionRelation[];
 };
 
 export type ConfirmedLiteratureReference = { literatureId: string };
@@ -221,6 +237,8 @@ export type UpdateReplyPublication =
   | { published: false }
   | { published: true; tags: string[]; targets: AnnotationTarget[] };
 
+export declare const confirmableLiteratureIdentifierKindSchema: z.ZodType<ConfirmableLiteratureIdentifierKind>;
+export declare const candidateLiteratureAliasKindSchema: z.ZodType<CandidateLiteratureAliasKind>;
 export declare const literatureIdentifierKindSchema: z.ZodType<LiteratureIdentifierKind>;
 export declare const literatureSourceSchema: z.ZodType<LiteratureSource>;
 export declare const literatureIdentifierSchema: z.ZodType<LiteratureIdentifier>;
@@ -231,6 +249,7 @@ export declare const literatureConfirmInputSchema: z.ZodType<LiteratureConfirmIn
 export declare const literatureProjectionVerificationSchema: z.ZodType<LiteratureProjectionVerification>;
 export declare const literatureRelationTypeSchema: z.ZodType<LiteratureRelationType>;
 export declare const literatureRelationSchema: z.ZodType<LiteratureRelation>;
+export declare const literatureRelationsResultSchema: z.ZodType<LiteratureRelationsResult>;
 export declare const confirmedLiteratureReferenceSchema: z.ZodType<ConfirmedLiteratureReference>;
 export declare const literatureReferenceSchema: z.ZodType<LiteratureReference>;
 export declare const annotationTargetSchema: z.ZodType<AnnotationTarget>;

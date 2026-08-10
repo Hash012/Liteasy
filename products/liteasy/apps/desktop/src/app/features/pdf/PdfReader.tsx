@@ -47,6 +47,8 @@ import { resolvePdfSelectionMenuPosition } from "./pdfSelectionPosition";
 import { usePdfCitationParsing } from "./usePdfCitationParsing";
 import { usePdfFulltextStore } from "./usePdfFulltextStore";
 import type { TeamAnnotation } from "../organization/teamAnnotationClient";
+import { LiteratureVersionRelations } from "../forum/LiteratureVersionRelations";
+import type { LiteratureRelationsResult } from "../paper-identity/literature.types";
 
 ensureReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -90,6 +92,7 @@ type PdfReaderProps = {
   /** Where the structured citation parser lives; its snapshot is what thin reading reads back. */
   externalKnowledgeEndpoint?: string;
   loadLiteratureHints?: typeof collectPdfLiteratureHints;
+  loadLiteratureRelations?: (literatureId: string) => Promise<LiteratureRelationsResult>;
   loadPdfSource?: (sourcePath: string) => Promise<Uint8Array>;
   pdfBackground?: string;
   onPaperAnnotated?: (paperId: string) => Promise<void>;
@@ -1062,6 +1065,7 @@ export function PdfReader({
   allowServerPdfParsing = false,
   externalKnowledgeEndpoint = "",
   loadLiteratureHints = collectPdfLiteratureHints,
+  loadLiteratureRelations,
   loadPdfSource,
   pdfBackground = "#ffffff",
   onPaperAnnotated,
@@ -1961,13 +1965,19 @@ export function PdfReader({
                     {status}
                   </div>
                   {activePaper?.literature ? (
-                    <div
-                      aria-label="文献身份来源"
-                      className="pdf-status"
-                      role="status"
-                    >
-                      文献身份：公共来源
-                    </div>
+                    <>
+                      <div
+                        aria-label="文献身份来源"
+                        className="pdf-status"
+                        role="status"
+                      >
+                        文献身份：公共来源
+                      </div>
+                      <LiteratureVersionRelations
+                        literatureId={activePaper.literature.literatureId}
+                        loadRelations={loadLiteratureRelations}
+                      />
+                    </>
                   ) : null}
                   <label className="pdf-annotation-auto-public-toggle">
                     <input

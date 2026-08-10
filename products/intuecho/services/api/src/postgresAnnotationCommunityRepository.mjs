@@ -4,6 +4,7 @@ import { AnnotationCommunityError, desktopAnnotationPublicationDigest, localSema
 import {
   hasCrossVersionIdentifierConflict,
   isConfirmableLiteratureIdentifierKind,
+  literatureIdentifierRole,
   LiteratureIdentityConflictError,
   normalizeLiteratureIdentifier,
   normalizeLiteratureRelations,
@@ -200,7 +201,7 @@ export class PostgresAnnotationCommunityRepository {
         }
       }
       for (const identifier of normalized) {
-        await client.query("INSERT INTO literature_identifiers(id, literature_id, identifier_kind, normalized_value, is_legacy_alias, created_at) VALUES ($1, $2, $3, $4, false, $5) ON CONFLICT (literature_id, identifier_kind, normalized_value) DO NOTHING", [`literature_identifier_${randomUUID()}`, literatureId, identifier.kind, identifier.value, now]);
+        await client.query("INSERT INTO literature_identifiers(id, literature_id, identifier_kind, identifier_role, normalized_value, is_legacy_alias, created_at) VALUES ($1, $2, $3, $4, $5, false, $6) ON CONFLICT (literature_id, identifier_kind, normalized_value) DO NOTHING", [`literature_identifier_${randomUUID()}`, literatureId, identifier.kind, literatureIdentifierRole(identifier.kind), identifier.value, now]);
       }
       const identifierResult = await client.query("SELECT id, identifier_kind AS kind, normalized_value AS value FROM literature_identifiers WHERE literature_id = $1 ORDER BY identifier_kind, normalized_value", [literatureId]);
       for (const { candidate, providerRecordId } of providerRecords) {

@@ -2,14 +2,55 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   annotationTargetSchema,
+  candidateLiteratureAliasKindSchema,
+  confirmableLiteratureIdentifierKindSchema,
   createReplySchema,
   desktopAnnotationPublicationBatchSchema,
   literatureCandidateSchema,
   literatureConfirmInputSchema,
   literatureRecordSchema,
+  literatureRelationsResultSchema,
   literatureResolveInputSchema,
   updateReplyPublicationSchema
 } from "@intuecho/contracts";
+
+test("separates confirmable identifier kinds from candidate aliases", () => {
+  for (const kind of ["doi", "arxiv_id", "openalex_id", "semantic_scholar_id"]) {
+    assert.equal(confirmableLiteratureIdentifierKindSchema.safeParse(kind).success, true);
+    assert.equal(candidateLiteratureAliasKindSchema.safeParse(kind).success, false);
+  }
+  assert.equal(confirmableLiteratureIdentifierKindSchema.safeParse("title_authors_year_hash").success, false);
+  assert.equal(candidateLiteratureAliasKindSchema.safeParse("title_authors_year_hash").success, true);
+});
+
+test("validates related confirmed literature versions for user-side consumption", () => {
+  const literature = {
+    authors: ["A. Author"],
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/publication" }],
+    literatureId: "literature-publication",
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+    revision: 1,
+    status: "confirmed",
+    title: "Published Version",
+    year: 2026
+  };
+  assert.equal(literatureRelationsResultSchema.safeParse({
+    literatureId: "literature-preprint",
+    versions: [{
+      direction: "from_current",
+      literature,
+      relation: {
+        createdAt: "2026-08-09T00:00:00.000Z",
+        evidence: { recordUrl: "https://registry.example.test/relation" },
+        fromLiteratureId: "literature-preprint",
+        provider: "crossref",
+        relationType: "is_preprint_of",
+        toLiteratureId: "literature-publication",
+        verificationStatus: "confirmed"
+      }
+    }]
+  }).success, true);
+});
 
 test("accepts only source-confirmed candidate modes", () => {
   assert.equal(literatureConfirmInputSchema.safeParse({ mode: "candidate", candidateKey: "crossref:doi:10.1000/test" }).success, true);

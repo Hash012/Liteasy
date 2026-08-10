@@ -4023,6 +4023,33 @@ body {
   line-height: 1.5;
 }
 
+.literature-version-relations {
+  border-bottom: 1px solid var(--line-1);
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.literature-version-relation {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.literature-version-relation strong {
+  color: var(--ink-1);
+  font-size: 12px;
+}
+
+.literature-version-relation span {
+  overflow-wrap: anywhere;
+}
+
+.literature-version-identifier {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
 .pdf-public-annotation-status {
   align-items: center;
   background: #fff4e8;

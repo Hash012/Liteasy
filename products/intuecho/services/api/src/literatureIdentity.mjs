@@ -110,6 +110,12 @@ export function isCandidateLiteratureAliasKind(kind) {
   return candidateLiteratureAliasKinds.has(kind);
 }
 
+export function literatureIdentifierRole(kind) {
+  if (isConfirmableLiteratureIdentifierKind(kind)) return "confirmable";
+  if (isCandidateLiteratureAliasKind(kind)) return "candidate_alias";
+  throw new LiteratureIdentityConflictError("LITERATURE_IDENTITY_REQUIRED");
+}
+
 export function normalizeLiteratureIdentifier(kind, value) {
   const normalized = requiredIdentity(value);
   if (kind === "doi") {

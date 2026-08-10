@@ -24,7 +24,8 @@ test("loads ordered immutable forum migrations", () => {
     "015_reply_projection_lifecycle.sql",
     "016_source_confirmed_literature_identity.sql",
     "017_constrain_legacy_aggregate_confirmation.sql",
-    "018_align_literature_identity_model.sql"
+    "018_align_literature_identity_model.sql",
+    "019_classify_literature_identifiers.sql"
   ]);
   assert.match(migrations[0].checksum, /^[a-f0-9]{64}$/);
   assert.match(migrations[0].sql, /CREATE TABLE moderation_audit/);
@@ -61,6 +62,8 @@ test("loads ordered immutable forum migrations", () => {
   assert.match(migrations[16].sql, /confirmationBasis/);
   assert.match(migrations[17].sql, /RENAME COLUMN document_type TO version_kind/);
   assert.match(migrations[17].sql, /ADD COLUMN identifier_id/);
+  assert.match(migrations[18].sql, /ADD COLUMN identifier_role/);
+  assert.match(migrations[18].sql, /candidate_alias/);
 });
 
 test("readiness rejects missing, changed and unknown migrations", async () => {
@@ -71,7 +74,7 @@ test("readiness rejects missing, changed and unknown migrations", async () => {
   }));
   assert.deepEqual(await verifyIntuechoMigrations({
     async query() { return { rows }; }
-  }), { count: 18, current: true });
+  }), { count: 19, current: true });
   await assert.rejects(
     () => verifyIntuechoMigrations({
       async query() { return { rows: [
@@ -110,8 +113,9 @@ test("upgrades SQLite literature provenance schema with snapshots and guarded co
   const literatureColumns = new Set(db.prepare("PRAGMA table_info(literature_records_v2)").all().map((column) => column.name));
   assert.ok(literatureColumns.has("version_kind"));
   assert.ok(literatureColumns.has("confirmation_status"));
-  assert.deepEqual(db.prepare("SELECT identifier_kind, normalized_value, is_legacy_alias FROM literature_identifiers_v2 WHERE literature_id = 'legacy'").all(), [{
+  assert.deepEqual(db.prepare("SELECT identifier_kind, identifier_role, normalized_value, is_legacy_alias FROM literature_identifiers_v2 WHERE literature_id = 'legacy'").all(), [{
     identifier_kind: "doi",
+    identifier_role: "confirmable",
     is_legacy_alias: 0,
     normalized_value: "10.1000/legacy"
   }]);
@@ -144,6 +148,10 @@ test("initializes the source-confirmed SQLite schema on an empty database", () =
   assert.deepEqual(claimColumns, ["id", "identifier_id", "provider", "provider_record_id", "verification_status", "evidence_json", "observed_at", "created_at"]);
   const identifierColumns = db.prepare("PRAGMA table_info(literature_identifiers_v2)").all();
   assert.equal(identifierColumns.find((column) => column.name === "id")?.pk, 1);
+  assert.ok(identifierColumns.some((column) => column.name === "identifier_role"));
+  const identifierTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'literature_identifiers_v2'").get().sql;
+  assert.match(identifierTableSql, /identifier_role/);
+  assert.match(identifierTableSql, /candidate_alias/);
   db.close();
 });
 
