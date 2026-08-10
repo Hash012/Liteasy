@@ -20,7 +20,7 @@ This records local integration readiness, not production deployment acceptance. 
 
 ### Phase 3 - Reader Orchestration
 
-Status: in progress as of 2026-08-10; Tasks 1-6 of the orchestration closure are complete.
+Status: in progress as of 2026-08-10; Tasks 1-7 of the orchestration closure are complete.
 
 - `ecfe70e`: canonical cross-runtime artifact schema and strict API publication validation.
 - `d5095e6`: durable generation request state machine, lease recovery, cancellation, and account deletion coverage.
@@ -28,8 +28,9 @@ Status: in progress as of 2026-08-10; Tasks 1-6 of the orchestration closure are
 - `1da62e3`: allowlisted structured provider adapter, immutable server compiler registry, and shared disabled-by-default production catalog.
 - `93cda38`: durable leased orchestration, cancellation races, partial success, strict result reload, and startup recovery.
 - `fde8041`: authenticated account request routes with strict bodies and preserved confidential service boundaries.
+- `c4b2064`: account-scoped desktop request client, reload recovery, strict persistence, and logout disposal composition.
 - Current gate: API full suite passed; PostgreSQL applied 23 migrations and passed 3/3 visualization integration tests with 0 skipped.
-- Remaining boundary: desktop composition, browser/recovery gate, and final review. Phase 3 is not complete and no generated modality is enabled.
+- Remaining boundary: Task 8 PostgreSQL/browser/recovery gate and final review. Phase 3 is not complete and no generated modality is enabled.
 
 ## Why This Is A Plan Suite
 

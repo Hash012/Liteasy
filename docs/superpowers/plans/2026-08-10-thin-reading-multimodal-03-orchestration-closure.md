@@ -453,11 +453,11 @@ git commit -m "feat: expose account visualization requests"
 - Produces: `VisualizationOrchestrationClient.startAndWait(request)`, `.resumeAndWait(request, signal)`, `.pending()`, and `.cancel(input)` satisfying existing controller callbacks and reload recovery.
 - Consumes: account endpoint, access-token provider, `AbortSignal`, strict artifact parser.
 
-- [ ] **Step 1: Write failing client tests**
+- [x] **Step 1: Write failing client tests**
 
 Cover authenticated start, 202 polling at server-provided `retryAfterMs` clamped to `250..2000`, terminal success parsing, stable omitted/failure mapping, abort during wait, best-effort cancel, 401 fail-closed, malformed artifacts, and no request after capability denial. Store tests cover endpoint/subject isolation, strict parsing, exact replay coordinates, terminal cleanup, and stale-entry expiry.
 
-- [ ] **Step 2: Implement the client**
+- [x] **Step 2: Implement the client**
 
 ```ts
 export type VisualizationOrchestrationClient = {
@@ -482,7 +482,7 @@ export type VisualizationOrchestrationClient = {
 
 The cancel URL uses only `requestId`; its body has exactly one `idempotencyKey` field whose value is `${requestId}:cancel:${reason}`. It uses a separate one-second timeout signal because local polling is aborted first. Omitted responses throw a typed public-code error. Map `capability_unauthorized` to `capability_unavailable`, `quota_exhausted` to `quota_unavailable`, `stale_artifact` or `cancelled` to `stale_request`, `evidence_invalid` or `validation_failed` to `result_invalid`, and `provider_unavailable` to `service_unavailable`; preserve `preference_disabled` and `modality_unavailable`, and map `internal_failure` to `generation_failed`. Provider/internal details never enter the UI.
 
-- [ ] **Step 3: Compose through controllers**
+- [x] **Step 3: Compose through controllers**
 
 Create the subject-scoped client in `useCloudAccountController` beside capability/preference clients and expose stable generation, cancellation, pending-list, and resume callbacks. `AppShell` passes them to `useArtifactWorkflowController`; it contains no workflow logic.
 
@@ -490,7 +490,7 @@ Refactor the thin-reading visualization controller so new and resumed requests s
 
 Expose a workflow disposal action and invoke it before logout or account replacement clears the session/capability, ensuring active and recovered requests receive best-effort remote cancellation. Keep optional injection only for unit tests; production composition always supplies the real client callbacks when an authenticated cloud session exists.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ```bash
 npm test -- src/tests/visualizationOrchestrationClient.test.ts src/tests/visualizationPendingRequestStore.test.ts src/tests/useArtifactWorkflowController.test.ts src/tests/useCloudAccountController.test.ts src/tests/AppShell.test.tsx src/tests/useThinReadingVisualizationController.test.ts
