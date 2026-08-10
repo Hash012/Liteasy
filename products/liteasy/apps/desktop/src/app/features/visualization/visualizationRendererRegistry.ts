@@ -40,6 +40,10 @@ const staticModalityChain = {
   semantic_graph: {
     kernelId: "semantic-graph-v1",
     rendererId: "semantic-graph-svg"
+  },
+  function_plot: {
+    kernelId: "function-plot-v1",
+    rendererId: "function-plot-svg"
   }
 } as const satisfies Partial<Record<VisualizationModality, { kernelId: string; rendererId: string }>>;
 
@@ -143,6 +147,7 @@ for (const [modality, registration] of Object.entries(staticModalityChain)) {
       if (modality === "semantic_graph") return (await import("./renderers/semanticGraphRenderer")).semanticGraphVisualizationRenderer;
       if (modality === "circuit") return (await import("./renderers/circuitRenderer")).circuitVisualizationRenderer;
       if (modality === "physics_diagram") return (await import("./renderers/physicsDiagramRenderer")).physicsDiagramVisualizationRenderer;
+      if (modality === "function_plot") return (await import("./renderers/functionPlotRenderer")).functionPlotVisualizationRenderer;
       return (await import("./renderers/biologyStructureRenderer")).biologyStructureVisualizationRenderer;
     }
   });
