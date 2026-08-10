@@ -22,6 +22,9 @@ const FunctionPlotBrowserFixture = import.meta.env.DEV
 const Geometry2DBrowserFixture = import.meta.env.DEV
   ? lazy(() => import("./tests/fixtures/geometry2dBrowserFixture"))
   : null;
+const Geometry3DBrowserFixture = import.meta.env.DEV
+  ? lazy(() => import("./tests/fixtures/geometry3dBrowserFixture"))
+  : null;
 
 export default function App() {
   const fixture = import.meta.env.DEV ? window.location.search : "";
@@ -71,6 +74,13 @@ export default function App() {
     return (
       <Suspense fallback={null}>
         <Geometry2DBrowserFixture />
+      </Suspense>
+    );
+  }
+  if (fixture === "?geometry-3d-fixture" && Geometry3DBrowserFixture) {
+    return (
+      <Suspense fallback={null}>
+        <Geometry3DBrowserFixture />
       </Suspense>
     );
   }

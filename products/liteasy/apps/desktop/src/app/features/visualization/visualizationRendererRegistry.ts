@@ -48,6 +48,10 @@ const staticModalityChain = {
   geometry_2d: {
     kernelId: "geometry-2d-v1",
     rendererId: "geometry-2d-svg"
+  },
+  geometry_3d: {
+    kernelId: "geometry-3d-v1",
+    rendererId: "geometry-3d-svg"
   }
 } as const satisfies Partial<Record<VisualizationModality, { kernelId: string; rendererId: string }>>;
 
@@ -153,6 +157,7 @@ for (const [modality, registration] of Object.entries(staticModalityChain)) {
       if (modality === "physics_diagram") return (await import("./renderers/physicsDiagramRenderer")).physicsDiagramVisualizationRenderer;
       if (modality === "function_plot") return (await import("./renderers/functionPlotRenderer")).functionPlotVisualizationRenderer;
       if (modality === "geometry_2d") return (await import("./renderers/geometry2dRenderer")).geometry2dVisualizationRenderer;
+      if (modality === "geometry_3d") return (await import("./renderers/geometry3dRenderer")).geometry3dVisualizationRenderer;
       return (await import("./renderers/biologyStructureRenderer")).biologyStructureVisualizationRenderer;
     }
   });

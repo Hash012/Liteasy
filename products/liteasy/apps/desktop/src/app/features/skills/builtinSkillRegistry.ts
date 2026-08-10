@@ -13,6 +13,8 @@ import functionPlotManifest from "../visualization/skills/function-plot/skill.js
 import functionPlotInstructions from "../visualization/skills/function-plot/instructions.md?raw";
 import geometry2dManifest from "../visualization/skills/geometry-2d/skill.json";
 import geometry2dInstructions from "../visualization/skills/geometry-2d/instructions.md?raw";
+import geometry3dManifest from "../visualization/skills/geometry-3d/skill.json";
+import geometry3dInstructions from "../visualization/skills/geometry-3d/instructions.md?raw";
 import sharedBuiltinCatalog from "../../../../../../packages/shared/visualizationBuiltins.v1.json";
 import type {
   BuiltinSkillLoader,
@@ -184,6 +186,14 @@ registerBuiltinSkill(geometry2d, async () => ({
   manifest: geometry2d,
   instructions: geometry2dInstructions,
   validatorIds: geometry2d.validatorIds
+}));
+
+const geometry3d = parseManifest(geometry3dManifest);
+registerBuiltinSkill(geometry3d, async () => ({
+  fallbackModalities: geometry3d.fallbackModalities,
+  manifest: geometry3d,
+  instructions: geometry3dInstructions,
+  validatorIds: geometry3d.validatorIds
 }));
 
 const builtinCatalog = builtinCatalogSchema.parse(sharedBuiltinCatalog);
