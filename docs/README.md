@@ -17,7 +17,6 @@
 早期 Phase 1–4 的 demo 验收指南、过期交接和待办已移入 `archive/`，只用于追溯当时状态，不能作为当前功能或运行方式依据。
 
 当前仓库结构、验证覆盖和生产缺口见 [仓库结构与能力审计](qa/2026-08-08-repository-structure-and-capability-audit.md)。
-当前主线已合并能力、分支研判和剩余发布边界见 [2026-08-11 主线开发进展总账](engineering/2026-08-11-development-progress-ledger.md)。
 
 ## 使用与检查
 

@@ -1,7 +1,7 @@
 # 来源确认的文献身份与版本关系设计
 
 **日期：** 2026-08-10
-**状态：** 主链已实现并完成本地门禁；真实外部 provider、目标 PostgreSQL 环境与生产部署验收待完成
+**状态：** 已确认设计，待实现
 
 ## 后续确认的权威实施约束
 
@@ -29,20 +29,11 @@
 
 正式 `literatureId` 才能用于引用、社区批注同步、跨用户检索和推荐。未确认文件可以保存在用户本地，但只能处于待确认状态。
 
-## 当前实施状态
+## 当前实现与目标差距
 
-2026-08-11 的主线实现已完成以下纵向链路：
+当前 Liteasy/Intuecho 已有 `literatureId + literature_identities`、provider 候选、重新抓取确认和人工确认流程。当前人工流程允许只凭题名、作者、年份生成 `title_authors_year_hash` 正式记录，且所有 provider 都按同一确认能力处理。正式服务没有预印本/正式版关系表。
 
-- Intuecho 作为文献身份权威，正式新记录只写入 `confirmed`；旧 `manual`/`legacy_metadata` 读取为 `legacy_unverified`。
-- `literature_identifiers`、`literature_identity_claims` 和 `literature_relations` 已在 SQLite 与 PostgreSQL 模型中分离，稳定标识和 provider record 均有全局唯一所有权约束。
-- Crossref/arXiv 可在精确回查无冲突时自动确认；OpenAlex/Semantic Scholar 采用保守策略，必须由用户明确选择后由服务端重新抓取。第二个独立聚合来源随后以完整题录确认同一版本时复用已有 `literatureId`，但预印本与正式发表类型冲突时保持分离。
-- Desktop 已删除人工正式创建入口和八位 FNV 主身份写路径；SHA-256 题录指纹只作候选/兼容别名，公开批注、引用和社区同步只接受 confirmed `literatureId`。
-- Liteasy API 通过受保护的 Intuecho 服务端接口核验 `literatureId + revision`，再保存用户/组织文献树中的只读投影；两个服务不共享数据库、连接池或凭据。
-- PostgreSQL 不可变迁移为 Intuecho `016_source_confirmed_literature_identity.sql`、纠正旧聚合来源无证据确认的 `017_constrain_legacy_aggregate_confirmation.sql`，以及 Liteasy `024_literature_projections.sql`；开发 SQLite 保持同构行为。
-
-版本关系的表、仓库写入方法和查询路由已经存在，并覆盖 `is_preprint_of`、`version_of`、`translation_of` 的持久化规则。可信 provider 关系发现或经审核的用户确认写入编排尚未接通，因此当前不能宣称“预印本关系端到端自动建立”；没有证据时必须保持两个独立 `literatureId`，不得猜测关系。
-
-`development/dev-cloud` 仍保留被标签、索引和推荐使用的 `works + work_identifiers` 模型。它不属于正式 Liteasy/Intuecho 文献持久化边界，也不能成为正式引用身份真源。
+`development/dev-cloud` 另有早期 `works + work_identifiers` 模型，包含 `is_preprint_of` 等关系，但它不属于正式 Liteasy/Intuecho 文献持久化边界，不能作为生产身份真源。
 
 ## 实施约束
 
