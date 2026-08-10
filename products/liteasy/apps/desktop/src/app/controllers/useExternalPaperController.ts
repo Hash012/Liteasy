@@ -26,6 +26,7 @@ import {
 import { createCloudLibraryStorageClient } from "../features/library/cloudLibraryStorageClient";
 import type { ThinReadingExternalSource } from "../features/thin-reading/thinReading.types";
 import type { ModelTransport } from "../features/models/modelHttpClient";
+import { normalizeLiteratureRecord } from "../features/paper-identity/literatureRecord";
 
 type UseExternalPaperControllerInput = {
   addExternalPdfToLibrary: (input: {
@@ -141,6 +142,10 @@ export function useExternalPaperController({
       { scopeId: input.scopeId, scopeType: input.scopeType },
       input.documentId
     );
+    const literatureValue = opened.authorization.document.metadata?.literature;
+    const literature = literatureValue === undefined
+      ? undefined
+      : normalizeLiteratureRecord(literatureValue);
     const paper = buildCachedReaderPaper({
       cachePath: opened.cachePath,
       contentHash: opened.authorization.document.contentHash,
@@ -150,6 +155,7 @@ export function useExternalPaperController({
         scopeId: input.scopeId,
         scopeType: input.scopeType
       },
+      ...(literature ? { literature } : {}),
       sourceId: `cloud:${input.scopeType}:${input.scopeId}:${input.documentId}`,
       title: input.title
     });

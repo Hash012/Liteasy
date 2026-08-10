@@ -49,11 +49,13 @@ function renderStoredAnnotation(
     desiredVisibility: operation === "retract" ? "private" as const : "public" as const,
     ...(operation === "retract" ? {} : { remoteAnnotationId: "remote-1", remoteRevision: 2 }),
     state: operation === "retract" ? "not_published" as const : "published" as const
-  }))
+  })),
+  loadLiteratureHints?: typeof collectPdfLiteratureHints
 ) {
   savePdfAnnotations(pdfAnnotationStorageKey(paper), [annotation]);
   render(
     <PdfReader
+      loadLiteratureHints={loadLiteratureHints}
       onChangeAnnotationPublication={onChangeAnnotationPublication}
       selectedPapers={[paper]}
       zoom={100}
@@ -176,6 +178,83 @@ test("publishes one annotation from its visibility checkbox and exposes pending 
     state: "published"
   });
   expect(await screen.findByText("已公开到论坛")).toBeInTheDocument();
+});
+
+test("requeues a current publish revision when note editing races literature hint collection", async () => {
+  let finishHints!: (value: Awaited<ReturnType<typeof collectPdfLiteratureHints>>) => void;
+  const loadLiteratureHints = vi.fn()
+    .mockImplementationOnce(() => new Promise<Awaited<ReturnType<typeof collectPdfLiteratureHints>>>((resolve) => {
+      finishHints = resolve;
+    }))
+    .mockResolvedValue({ identifiers: [{ kind: "doi", value: "10.1000/reader" }] });
+  const onChange = vi.fn(async ({ annotation, operation }: {
+    annotation: PdfAnnotationV2;
+    operation: string;
+  }) => ({
+    desiredVisibility: "public" as const,
+    remoteAnnotationId: "remote-publish-race",
+    remoteRevision: annotation.revision,
+    state: operation === "retract" ? "not_published" as const : "published" as const
+  }));
+  renderStoredAnnotation(publicationAnnotation(), onChange, loadLiteratureHints);
+
+  await userEvent.click(publicationToggle());
+  await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
+    target: { value: "Edited during publish hint collection" }
+  });
+  await userEvent.click(screen.getByRole("button", { name: "保存笔记" }));
+  finishHints({ identifiers: [{ kind: "doi", value: "10.1000/reader" }] });
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+  expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+    annotation: expect.objectContaining({
+      note: "Edited during publish hint collection",
+      revision: 3
+    }),
+    operation: "publish"
+  }));
+});
+
+test("requeues the latest update revision when a second edit races hint collection", async () => {
+  let finishFirstHints!: (value: Awaited<ReturnType<typeof collectPdfLiteratureHints>>) => void;
+  const loadLiteratureHints = vi.fn()
+    .mockImplementationOnce(() => new Promise<Awaited<ReturnType<typeof collectPdfLiteratureHints>>>((resolve) => {
+      finishFirstHints = resolve;
+    }))
+    .mockResolvedValue({ identifiers: [{ kind: "doi", value: "10.1000/reader" }] });
+  const onChange = vi.fn(async ({ annotation }: { annotation: PdfAnnotationV2 }) => ({
+    desiredVisibility: "public" as const,
+    remoteAnnotationId: "remote-update-race",
+    remoteRevision: annotation.revision,
+    state: "published" as const
+  }));
+  renderStoredAnnotation(publicationAnnotation({
+    desiredVisibility: "public",
+    remoteAnnotationId: "remote-update-race",
+    remoteRevision: 3,
+    state: "published"
+  }), onChange, loadLiteratureHints);
+
+  await userEvent.click(await screen.findByRole("button", { name: /编辑批注/u }));
+  fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
+    target: { value: "First edit" }
+  });
+  await userEvent.click(screen.getByRole("button", { name: "保存笔记" }));
+  await waitFor(() => expect(loadLiteratureHints).toHaveBeenCalledTimes(1));
+  await userEvent.click(screen.getByRole("button", { name: /编辑批注/u }));
+  fireEvent.change(screen.getByRole("textbox", { name: "补充批注笔记" }), {
+    target: { value: "Second edit wins" }
+  });
+  await userEvent.click(screen.getByRole("button", { name: "保存笔记" }));
+  finishFirstHints({ identifiers: [{ kind: "doi", value: "10.1000/reader" }] });
+
+  await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+  expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+    annotation: expect.objectContaining({ note: "Second edit wins", revision: 3 }),
+    operation: "update"
+  }));
 });
 
 test.each([

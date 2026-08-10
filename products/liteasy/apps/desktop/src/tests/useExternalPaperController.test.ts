@@ -4,7 +4,10 @@ import { useExternalPaperController } from "../app/controllers/useExternalPaperC
 
 const contentHash = "a".repeat(64);
 
-function createHarness(exportDocument: ReturnType<typeof vi.fn>) {
+function createHarness(
+  exportDocument: ReturnType<typeof vi.fn>,
+  literature?: unknown
+) {
   const addExternalPdfToLibrary = vi.fn(async () => undefined);
   const promoteCachedPdf = vi.fn(async () => "/library/paper.pdf");
   const refreshLocalLibrary = vi.fn(async () => undefined);
@@ -12,7 +15,10 @@ function createHarness(exportDocument: ReturnType<typeof vi.fn>) {
     exportDocument,
     openDocument: vi.fn(async () => ({
       authorization: {
-        document: { contentHash },
+        document: {
+          contentHash,
+          ...(literature === undefined ? {} : { metadata: { literature } })
+        },
         expiresAt: "2026-08-07T00:05:00.000Z",
         revision: 7,
         serverNow: "2026-08-07T00:00:00.000Z"
@@ -114,4 +120,49 @@ test("keeps the authorized cloud document reference on the opened reader paper",
     scopeId: "organization-1",
     scopeType: "organization"
   });
+});
+
+test("hydrates canonical cloud literature onto the cached reader paper and reuses it on reopen", async () => {
+  const literature = {
+    authors: ["Ada Lovelace"],
+    identifiers: [{ kind: "doi", source: "manual", value: "10.1000/cloud" }],
+    literatureId: "literature:cloud",
+    provenance: { confirmedAt: "2026-08-07T00:00:00.000Z", mode: "manual" },
+    title: "Cloud Literature",
+    year: 2026
+  };
+  const harness = createHarness(vi.fn(), literature);
+  let first;
+  let second;
+  await act(async () => {
+    first = await harness.result.result.current.openCloudDocumentInReader({
+      documentId: "document-1",
+      scopeId: "user-1",
+      scopeType: "user",
+      title: "Cloud Literature"
+    });
+    second = await harness.result.result.current.openCloudDocumentInReader({
+      documentId: "document-1",
+      scopeId: "user-1",
+      scopeType: "user",
+      title: "Cloud Literature"
+    });
+  });
+
+  expect(first!.literature).toEqual(literature);
+  expect(second!.literature).toEqual(literature);
+});
+
+test("rejects malformed cloud literature metadata instead of attaching it", async () => {
+  const harness = createHarness(vi.fn(), {
+    literatureId: "untrusted",
+    title: "Missing identifiers"
+  });
+
+  await expect(act(async () => harness.result.result.current.openCloudDocumentInReader({
+    documentId: "document-1",
+    scopeId: "user-1",
+    scopeType: "user",
+    title: "Malformed Cloud Paper"
+  }))).rejects.toThrow("文献元数据");
 });

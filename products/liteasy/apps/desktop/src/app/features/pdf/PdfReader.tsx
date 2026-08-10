@@ -1491,6 +1491,15 @@ export function PdfReader({
     return undefined;
   }
 
+  function pendingPublicationOperation(annotation: PdfAnnotationV2) {
+    if (annotation.publication.state === "pending_create") return "publish" as const;
+    if (annotation.publication.state === "pending_update") return "update" as const;
+    if (annotation.publication.state === "pending_retract") return "retract" as const;
+    if (annotation.publication.state === "failed" &&
+      annotation.publication.desiredVisibility === "private") return "retract" as const;
+    return undefined;
+  }
+
   async function applyPublication(
     annotation: PdfAnnotationV2,
     operation: "publish" | "update" | "retract",
@@ -1513,9 +1522,25 @@ export function PdfReader({
     const hints = operation === "retract"
       ? undefined
       : await loadLiteratureHints(activePaper, pdfDocument, pageTexts[1]);
-    if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent) return;
+    const current = annotationsRef.current.find((item) => item.id === annotation.id);
+    const currentOperation = current
+      ? (restartReplay ? restartOperation(current) : pendingPublicationOperation(current))
+      : undefined;
+    if (publicationIntentsRef.current.get(annotation.id) !== expectedIntent ||
+      !current || current.revision !== annotation.revision || currentOperation !== operation) {
+      if (restartReplay) {
+        const restartCurrentOperation = current ? restartOperation(current) : undefined;
+        if (restartAttemptKey) replayedPublicationKeysRef.current.delete(restartAttemptKey);
+        if (current && restartCurrentOperation) {
+          queueMicrotask(() => queueRestartPublication(current, restartCurrentOperation));
+        }
+      } else if (current && currentOperation &&
+        publicationIntentsRef.current.get(annotation.id) === (currentOperation === "retract" ? "private" : "public")) {
+        queueMicrotask(() => void applyPublication(current, currentOperation));
+      }
+      return;
+    }
     if (restartReplay) {
-      const current = annotationsRef.current.find((item) => item.id === annotation.id);
       const currentOperation = current ? restartOperation(current) : undefined;
       if (!current || current.revision !== annotation.revision || currentOperation !== operation) {
         if (restartAttemptKey) replayedPublicationKeysRef.current.delete(restartAttemptKey);
@@ -1528,7 +1553,7 @@ export function PdfReader({
     let transport: PublicationTransport | undefined;
     try {
       const promise = Promise.resolve(onChangeAnnotationPublication({
-        annotation,
+        annotation: current,
         ...(hints ? { literatureHints: hints } : {}),
         operation,
         paper: activePaper,
@@ -1774,6 +1799,7 @@ export function PdfReader({
         updatedAt: new Date().toISOString()
       });
       setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
+      await Promise.resolve();
       const retracted = await applyPublication(pending, "retract");
       if (retracted?.state === "not_published") remove();
       return;
@@ -1792,6 +1818,7 @@ export function PdfReader({
     });
     setCurrentAnnotations((current) => current.map((item) => item.id === annotation.id ? pending : item));
     setActiveAnnotationId(null);
+    await Promise.resolve();
     const retracted = await applyPublication(pending, "retract");
     if (retracted?.state === "not_published") remove();
   }
