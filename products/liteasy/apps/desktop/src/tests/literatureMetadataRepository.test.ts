@@ -6,12 +6,15 @@ import type { LiteratureRecord } from "../app/features/paper-identity/literature
 function fixtureLiterature(): LiteratureRecord {
   return {
     authors: ["Ada Lovelace"],
-    identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/manual" }],
     literatureId: "literature-1",
     provenance: {
       confirmedAt: "2026-08-09T10:00:00.000Z",
-      mode: "manual"
+      mode: "public_registry",
+      provider: "crossref"
     },
+    revision: 1,
+    status: "confirmed",
     title: "A Manually Confirmed Paper",
     year: 2026
   };
@@ -52,6 +55,27 @@ describe("literatureMetadataRepository", () => {
   test("returns undefined only when no authoritative snapshot exists", async () => {
     loadArtifact.mockResolvedValue(undefined);
 
+    await expect(repository.load("paper-1")).resolves.toBeUndefined();
+  });
+
+  test("reads old manual snapshots as legacy-unverified without making them publishable", async () => {
+    loadArtifact.mockResolvedValue({
+      literature: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/legacy" }],
+        literatureId: "legacy-literature-1",
+        provenance: { confirmedAt: "2026-08-09T10:00:00.000Z", mode: "manual" },
+        title: "Legacy local record",
+        year: 2026
+      },
+      version: 1
+    });
+
+    await expect(repository.loadCompatible("paper-1")).resolves.toMatchObject({
+      literatureId: "legacy-literature-1",
+      recordSource: "manual",
+      status: "legacy_unverified"
+    });
     await expect(repository.load("paper-1")).resolves.toBeUndefined();
   });
 

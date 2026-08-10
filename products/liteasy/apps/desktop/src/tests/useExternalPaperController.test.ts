@@ -125,9 +125,11 @@ test("keeps the authorized cloud document reference on the opened reader paper",
 test("hydrates canonical cloud literature onto the cached reader paper and reuses it on reopen", async () => {
   const literature = {
     authors: ["Ada Lovelace"],
-    identifiers: [{ kind: "doi", source: "manual", value: "10.1000/cloud" }],
-    literatureId: "literature:cloud",
-    provenance: { confirmedAt: "2026-08-07T00:00:00.000Z", mode: "manual" },
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/cloud" }],
+    literatureId: "literature_cloud",
+    provenance: { confirmedAt: "2026-08-07T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+    revision: 1,
+    status: "confirmed",
     title: "Cloud Literature",
     year: 2026
   };

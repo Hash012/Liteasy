@@ -1,87 +1,69 @@
-import { describe, expect, test, vi } from "vitest";
-import { resolvePaperIdentity } from "../app/features/paper-identity/paperIdentity";
+import { describe, expect, test } from "vitest";
 import {
-  listPdfAnnotationPendingPublicItems,
-  syncPdfAnnotationPendingItems
+  createRetractOperation,
+  createUpsertOperation
 } from "../app/features/pdf/pdfAnnotationIntuechoSync";
-import type { PdfAnnotation } from "../app/features/pdf/pdfAnnotationStorage";
+import type { PdfAnnotationV2 } from "../app/features/pdf/pdfAnnotationStorage";
+import type { LiteratureRecord } from "../app/features/paper-identity/literature.types";
 
-function annotation(input: Partial<PdfAnnotation> = {}): PdfAnnotation {
+function annotation(input: Partial<PdfAnnotationV2> = {}): PdfAnnotationV2 {
   return {
     createdAt: "2026-07-28T00:00:00.000Z",
     excerpt: "The selected PDF passage.",
     id: "pdf-annotation-1",
-    kind: "note",
     page: 3,
-    paperIdentity: resolvePaperIdentity({
-      doi: "10.1000/example",
-      id: "paper-1",
-      title: "A syncable paper"
-    }),
+    paperIdentity: {
+      candidates: [],
+      paperId: "paper-1",
+      primary: { id: "local_paper_id:paper-1", kind: "local_paper_id", source: "local", value: "paper-1" },
+      title: "A paper"
+    },
+    revision: 2,
     rects: [{ height: 2, left: 12, top: 18, width: 36 }],
-    text: "注释",
     updatedAt: "2026-07-28T00:00:00.000Z",
-    visibility: "pending_public",
     ...input
   };
 }
 
+const literature: LiteratureRecord = {
+  authors: ["Author"],
+  identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/example" }],
+  literatureId: "lit_01J00000000000000000000000",
+  provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+  revision: 1,
+  status: "confirmed",
+  title: "A paper",
+  year: 2026
+};
+
 describe("pdf annotation Intuecho sync", () => {
-  test("preserves concrete PDF passage scope and uses the note as shared content", () => {
-    const [item] = listPdfAnnotationPendingPublicItems([annotation({ note: "A reader's interpretation." })]);
+  test("publishes only a confirmed literatureId and a SHA-256 passage anchor", () => {
+    const operation = createUpsertOperation(annotation({ note: "A reader's interpretation." }), literature);
 
-    expect(item).toMatchObject({
+    expect(operation).toMatchObject({
       body: "A reader's interpretation.",
-      paperIdentity: { primary: { kind: "doi", value: "10.1000/example" } },
-      scope: { kind: "pdf_passage", page: 3, rects: [{ height: 2, left: 12, top: 18, width: 36 }] }
+      literatureId: literature.literatureId,
+      operation: "upsert",
+      revision: 2,
+      sourcePassage: { page: 3, rects: [{ height: 2, left: 12, top: 18, width: 36 }] }
     });
+    expect(operation.sourcePassage.anchorHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(operation).not.toHaveProperty("paperIdentity");
+    expect(operation).not.toHaveProperty("literature");
   });
 
-  test("does not send local-only paper annotations to the community endpoint", async () => {
-    const items = listPdfAnnotationPendingPublicItems([annotation({
-      paperIdentity: resolvePaperIdentity({ id: "local-paper", title: "Local only" })
-    })]);
-    const transport = vi.fn();
-
-    const [result] = await syncPdfAnnotationPendingItems({
-      endpoint: "https://intuecho.example.com/community",
-      items,
-      transport
+  test("retracts only a previously published remote annotation", () => {
+    expect(createRetractOperation(annotation({
+      publication: {
+        remoteAnnotationId: "annotation-remote-1",
+        sourceRevision: 1,
+        state: "published",
+        syncedAt: "2026-08-10T00:00:00.000Z"
+      }
+    }))).toMatchObject({
+      operation: "retract",
+      remoteAnnotationId: "annotation-remote-1",
+      revision: 2
     });
-
-    expect(transport).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ status: "failed", error: expect.stringContaining("仅本地文献身份") });
-  });
-
-  test("accepts a verified receipt only for the matching queue item", async () => {
-    const [item] = listPdfAnnotationPendingPublicItems([annotation()]);
-    const transport = vi.fn(async (request) => {
-      expect(request.url).toBe("https://intuecho.example.com/community/v1/pdf-annotations:sync");
-      expect(JSON.parse(request.body)).toMatchObject({ annotations: [expect.objectContaining({ queueKey: item.queueKey })] });
-      return {
-        json: async () => ({ results: [{
-          annotationId: item.annotationId,
-          intuechoAnnotationId: "intuecho-pdf-1",
-          queueKey: item.queueKey,
-          status: "synced",
-          syncedAt: "2026-07-28T01:00:00.000Z"
-        }] }),
-        ok: true,
-        status: 200
-      };
-    });
-
-    await expect(syncPdfAnnotationPendingItems({
-      endpoint: "https://intuecho.example.com/community/?preview=true#annotations",
-      items: [item],
-      sessionId: "desktop-token",
-      transport
-    })).resolves.toEqual([{
-      annotationId: item.annotationId,
-      intuechoAnnotationId: "intuecho-pdf-1",
-      queueKey: item.queueKey,
-      status: "synced",
-      syncedAt: "2026-07-28T01:00:00.000Z"
-    }]);
   });
 });

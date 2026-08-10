@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Button,
   Dialog,
@@ -7,23 +6,15 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
-  Field,
-  Input,
-  Select,
-  Textarea
 } from "@fluentui/react-components";
 import type { LiteratureDialogModel } from "./literatureResolution.types";
-import type {
-  LiteratureIdentifierKind,
-  ManualLiteratureInput
-} from "../paper-identity/literature.types";
+import type { LiteratureIdentifierKind } from "../paper-identity/literature.types";
 
 type LiteratureResolutionDialogProps = {
   model: LiteratureDialogModel;
   onCancel: () => void;
   onRetry: () => void;
   onSelectCandidate: (candidateKey: string) => void;
-  onSubmitManual: (record: ManualLiteratureInput) => void;
 };
 
 const identifierLabels: Record<LiteratureIdentifierKind, string> = {
@@ -34,44 +25,12 @@ const identifierLabels: Record<LiteratureIdentifierKind, string> = {
   title_authors_year_hash: "题名作者年份"
 };
 
-type ManualIdentifierKind = Exclude<LiteratureIdentifierKind, "title_authors_year_hash">;
-
-function parseAuthors(value: string) {
-  return value.split(/\s*(?:;|；|、|\n)\s*/).map((author) => author.trim()).filter(Boolean);
-}
-
 export function LiteratureResolutionDialog({
   model,
   onCancel,
   onRetry,
-  onSelectCandidate,
-  onSubmitManual
+  onSelectCandidate
 }: LiteratureResolutionDialogProps) {
-  const [authors, setAuthors] = useState("");
-  const [identifierKind, setIdentifierKind] = useState<ManualIdentifierKind>("doi");
-  const [identifierValue, setIdentifierValue] = useState("");
-  const [title, setTitle] = useState("");
-  const [year, setYear] = useState("");
-  const parsedAuthors = parseAuthors(authors);
-  const parsedYear = /^\d{4}$/.test(year) ? Number(year) : undefined;
-  const canSubmitManual = Boolean(title.trim()) && (
-    Boolean(identifierValue.trim()) || (parsedAuthors.length > 0 && parsedYear !== undefined)
-  );
-
-  function submitManual() {
-    if (!canSubmitManual) return;
-    onSubmitManual({
-      authors: parsedAuthors,
-      identifiers: identifierValue.trim() ? [{
-        kind: identifierKind,
-        source: "manual",
-        value: identifierValue.trim()
-      }] : [],
-      title: title.trim(),
-      ...(parsedYear !== undefined ? { year: parsedYear } : {})
-    });
-  }
-
   return (
     <Dialog
       modalType="modal"
@@ -135,56 +94,12 @@ export function LiteratureResolutionDialog({
           </div>
             ) : null}
 
-            {model.kind === "manual" ? (
-          <div className="profile-archive-card">
-            <Field label="文献标题" required>
-              <Input
-                aria-label="文献标题"
-                disabled={model.pending}
-                onChange={(_, data) => setTitle(data.value)}
-                value={title}
-              />
-            </Field>
-            <Field label="作者">
-              <Textarea
-                aria-label="作者"
-                disabled={model.pending}
-                onChange={(_, data) => setAuthors(data.value)}
-                value={authors}
-              />
-            </Field>
-            <Field label="年份">
-              <Input
-                aria-label="年份"
-                disabled={model.pending}
-                inputMode="numeric"
-                maxLength={4}
-                onChange={(_, data) => setYear(data.value.replace(/\D/g, ""))}
-                value={year}
-              />
-            </Field>
-            <Field label="外部标识类型">
-              <Select
-                aria-label="外部标识类型"
-                disabled={model.pending}
-                onChange={(_, data) => setIdentifierKind(data.value as ManualIdentifierKind)}
-                value={identifierKind}
-              >
-                <option value="doi">DOI</option>
-                <option value="arxiv_id">arXiv</option>
-                <option value="semantic_scholar_id">Semantic Scholar</option>
-                <option value="openalex_id">OpenAlex</option>
-              </Select>
-            </Field>
-            <Field label="外部标识">
-              <Input
-                aria-label="外部标识"
-                disabled={model.pending}
-                onChange={(_, data) => setIdentifierValue(data.value)}
-                value={identifierValue}
-              />
-            </Field>
-          </div>
+            {model.kind === "unresolved" || model.kind === "conflict" ? (
+              <div className="profile-archive-card">
+                <div className="profile-dialog-title">
+                  {model.kind === "conflict" ? "来源信息存在冲突" : "文献身份尚未确认"}
+                </div>
+              </div>
             ) : null}
 
             {model.message ? (
@@ -199,14 +114,9 @@ export function LiteratureResolutionDialog({
             >
               取消公开
             </Button>
-            {model.kind === "unavailable" ? (
+            {model.kind === "unavailable" || model.kind === "unresolved" || model.kind === "conflict" ? (
               <Button appearance="primary" disabled={model.pending} onClick={onRetry}>
                 重试检索
-              </Button>
-            ) : null}
-            {model.kind === "manual" ? (
-              <Button appearance="primary" disabled={model.pending || !canSubmitManual} onClick={submitManual}>
-                确认文献信息
               </Button>
             ) : null}
           </DialogActions>

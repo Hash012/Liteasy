@@ -1,5 +1,5 @@
 import { freezePaperIdentity } from "../paper-identity/paperIdentity";
-import type { PaperIdentity } from "../paper-identity/paperIdentity";
+import { sha256Hex } from "../paper-identity/paperIdentity";
 import type { ForumAnnotationTarget, ForumLiteratureReference } from "../forum/forum.types";
 import type {
   ThinReadingAnnotation,
@@ -18,6 +18,7 @@ export type ThinReadingIntuechoAnnotationQueueItem = {
   body: string;
   createdAt: string;
   excerpt: string;
+  hasConfirmedLiterature: boolean;
   nodeId: string;
   paperId?: string;
   queueKey: string;
@@ -60,15 +61,6 @@ export type ThinReadingIntuechoSyncTransport = (
   input: { body: string; headers: Record<string, string>; method: "POST"; url: string }
 ) => Promise<{ json: () => Promise<unknown>; ok: boolean; status: number }>;
 
-function stableHash(value: string) {
-  let hash = 2166136261;
-  for (const character of value) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
 function failedResults(items: readonly ThinReadingIntuechoAnnotationQueueItem[], error: string) {
   return Object.freeze(items.map((item) => Object.freeze({
     annotationId: item.annotationId,
@@ -78,12 +70,22 @@ function failedResults(items: readonly ThinReadingIntuechoAnnotationQueueItem[],
   })));
 }
 
-const LOCAL_IDENTITY_SYNC_ERROR = "该批注仍为仅本地文献身份，补全 DOI、arXiv、Semantic Scholar 或题名作者年份信息后才能同步到 Intuecho。";
+const LOCAL_IDENTITY_SYNC_ERROR = "该文献尚未完成来源确认，不能同步到 Intuecho。";
 
 function isCommunitySyncableItem(item: ThinReadingIntuechoAnnotationQueueItem) {
-  return item.scope.paperIdentity?.primary.kind !== undefined &&
-    item.scope.paperIdentity.primary.kind !== "local_paper_id" &&
-    item.targets.length > 0;
+  return item.hasConfirmedLiterature && item.targets.length > 0;
+}
+
+function wireAnnotation(item: ThinReadingIntuechoAnnotationQueueItem) {
+  return {
+    annotationId: item.annotationId,
+    body: item.body,
+    createdAt: item.createdAt,
+    queueKey: item.queueKey,
+    status: item.status,
+    targets: item.targets,
+    updatedAt: item.updatedAt
+  };
 }
 
 function mergeResultsInInputOrder(input: {
@@ -175,7 +177,7 @@ export function createHttpIntuechoSyncAdapter(input: {
         return Object.freeze([]);
       }
       const syncableItems = items.filter(isCommunitySyncableItem);
-      const localOnlyItems = items.filter((item) => item.scope.paperIdentity?.primary.kind === undefined || item.scope.paperIdentity.primary.kind === "local_paper_id");
+      const localOnlyItems = items.filter((item) => !item.hasConfirmedLiterature);
       const missingEvidenceItems = items.filter((item) => !localOnlyItems.includes(item) && item.targets.length === 0);
       const localOnlyResults = failedResults(localOnlyItems, LOCAL_IDENTITY_SYNC_ERROR);
       const missingEvidenceResults = failedResults(missingEvidenceItems, "薄读生成内容缺少可核验的原文证据映射，不能公开同步到 Intuecho。");
@@ -195,7 +197,7 @@ export function createHttpIntuechoSyncAdapter(input: {
           results: [...rejectedResults, ...failedResults(syncableItems, "请先登录 Liteasy 再同步公开批注。")]
         });
       }
-      const idempotencyKey = `thin-reading-sync-${stableHash(
+      const idempotencyKey = `thin-reading-sync-${sha256Hex(
         syncableItems.map((item) => `${item.queueKey}\u0000${item.updatedAt}`).join("\u0001")
       )}`;
       const transport = input.transport ?? (async (request) => {
@@ -208,7 +210,7 @@ export function createHttpIntuechoSyncAdapter(input: {
       });
       try {
         const response = await transport({
-          body: JSON.stringify({ annotations: syncableItems }),
+          body: JSON.stringify({ annotations: syncableItems.map(wireAnnotation) }),
           headers: {
             Authorization: `Bearer ${input.sessionId}`,
             "content-type": "application/json",
@@ -267,12 +269,14 @@ function queueItemForAnnotation(
   }
   const scope = freezeScope(node.recommendationScope);
   const targets = communityTargets(document, annotation, scope);
+  const hasConfirmedLiterature = Boolean(scope.paperId && document.literatureRecords?.[scope.paperId]);
   return Object.freeze({
     annotationId: annotation.id,
     artifactId: document.artifactId,
     body: annotation.body,
     createdAt: annotation.createdAt,
     excerpt: annotation.excerpt,
+    hasConfirmedLiterature,
     nodeId: annotation.nodeId,
     paperId: scope.paperId,
     queueKey: `${document.artifactId}:${annotation.id}`,
@@ -285,18 +289,8 @@ function queueItemForAnnotation(
   });
 }
 
-function forumLiterature(identity: PaperIdentity | undefined): ForumLiteratureReference | null {
-  const primary = identity?.primary;
-  if (!identity || !primary || primary.kind === "local_paper_id") return null;
-  return {
-    identity: {
-      id: primary.id,
-      kind: primary.kind,
-      source: primary.source === "metadata" ? "metadata" : "inferred",
-      value: primary.value
-    },
-    metadata: { authors: [], title: identity.title }
-  };
+function forumLiterature(literatureId: string | undefined): ForumLiteratureReference | null {
+  return literatureId ? { literatureId } : null;
 }
 
 function communityTargets(
@@ -304,14 +298,16 @@ function communityTargets(
   annotation: ThinReadingAnnotation,
   scope: ThinReadingRecommendationScope
 ): ForumAnnotationTarget[] {
-  const literature = forumLiterature(scope.paperIdentity);
+  const literature = forumLiterature(
+    scope.paperId ? document.literatureRecords?.[scope.paperId]?.literatureId : undefined
+  );
   if (!literature) return [];
   if (scope.kind === "whole_paper") return [{ kind: "whole_document", literature }];
   const node = document.nodes[annotation.nodeId];
   const selectedIds = scope.kind === "selected_passage" ? new Set(scope.evidenceIds ?? []) : null;
   const spans = (node?.evidence.paperEvidenceSpans ?? []).filter((span) => !selectedIds || selectedIds.size === 0 || selectedIds.has(span.id));
   const evidence = spans.flatMap((span) => {
-    const evidenceLiterature = forumLiterature(document.paperIdentities?.[span.paperId]);
+    const evidenceLiterature = forumLiterature(document.literatureRecords?.[span.paperId]?.literatureId);
     return evidenceLiterature ? [{
       anchorHash: `evidence:${span.id}`,
       excerpt: span.quote,

@@ -24,6 +24,8 @@ function literature(overrides: Partial<LiteratureRecord> = {}): LiteratureRecord
       mode: "public_registry",
       provider: "crossref"
     },
+    revision: 1,
+    status: "confirmed",
     title: "A Test Paper",
     year: 2026,
     ...overrides
@@ -391,7 +393,9 @@ describe("usePdfAnnotationPublicationController", () => {
     let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
     act(() => {
       pending = context.result.current.actions.changePublication({
-        annotation: annotation(), operation: "publish", paper: paper()
+        annotation: annotation(),
+        operation: "publish",
+        paper: paper()
       });
     });
 
@@ -417,7 +421,10 @@ describe("usePdfAnnotationPublicationController", () => {
     let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
     act(() => {
       pending = context.result.current.actions.changePublication({
-        annotation: annotation(), operation: "publish", paper: paper()
+        annotation: annotation(),
+        literatureHints: { authors: ["Ada Lovelace"], title: "A Test Paper", year: 2026 },
+        operation: "publish",
+        paper: paper()
       });
     });
 
@@ -484,37 +491,23 @@ describe("usePdfAnnotationPublicationController", () => {
     expect(context.resolveLiterature).toHaveBeenCalledTimes(2);
   });
 
-  test("opens manual fallback only for not-found and confirms author-year input as manual", async () => {
-    const manual = literature({
-      identifiers: [{ kind: "title_authors_year_hash", source: "manual", value: "hash-1" }],
-      provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" }
-    });
+  test("keeps not-found metadata unresolved instead of creating a formal manual record", async () => {
     const context = setup({
-      confirmLiterature: vi.fn().mockResolvedValue({ literature: manual }),
       resolveLiterature: vi.fn().mockResolvedValue({ candidates: [], status: "not_found", unavailableProviders: [] })
     });
     let pending!: Promise<ReturnType<typeof annotation>["publication"]>;
     act(() => {
       pending = context.result.current.actions.changePublication({
-        annotation: annotation(), operation: "publish", paper: paper()
+        annotation: annotation(),
+        literatureHints: { authors: ["Ada Lovelace"], title: "A Test Paper", year: 2026 },
+        operation: "publish",
+        paper: paper()
       });
     });
-    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("manual"));
-
-    act(() => context.result.current.actions.submitManual({
-      authors: ["Ada Lovelace"],
-      identifiers: [],
-      title: "A Test Paper",
-      year: 2026
-    }));
-
-    let publication!: ReturnType<typeof annotation>["publication"];
-    await act(async () => { publication = await pending; });
-    expect(publication).toMatchObject({ state: "published" });
-    expect(context.confirmLiterature).toHaveBeenCalledWith({
-      mode: "manual",
-      record: { authors: ["Ada Lovelace"], identifiers: [], title: "A Test Paper", year: 2026 }
-    });
+    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("unresolved"));
+    expect(context.confirmLiterature).not.toHaveBeenCalled();
+    act(() => context.result.current.actions.cancelResolution());
+    await expect(pending).resolves.toEqual({ desiredVisibility: "private", state: "not_published" });
   });
 
   test("cancels identity resolution without an error state", async () => {
@@ -527,7 +520,7 @@ describe("usePdfAnnotationPublicationController", () => {
         annotation: annotation(), operation: "publish", paper: paper()
       });
     });
-    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("manual"));
+    await waitFor(() => expect(context.result.current.model.literatureDialog?.kind).toBe("unresolved"));
 
     act(() => context.result.current.actions.cancelResolution());
 

@@ -277,6 +277,7 @@ function isPaperIdentityKind(value: unknown): value is PaperIdentityCandidate["k
   return value === "doi" ||
     value === "arxiv_id" ||
     value === "semantic_scholar_id" ||
+    value === "openalex_id" ||
     value === "title_authors_year_hash" ||
     value === "local_paper_id";
 }

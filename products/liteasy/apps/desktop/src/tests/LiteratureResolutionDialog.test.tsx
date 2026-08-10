@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { LiteratureResolutionDialog } from "../app/features/forum/LiteratureResolutionDialog";
@@ -8,8 +8,7 @@ function actions() {
   return {
     onCancel: vi.fn(),
     onRetry: vi.fn(),
-    onSelectCandidate: vi.fn(),
-    onSubmitManual: vi.fn()
+    onSelectCandidate: vi.fn()
   };
 }
 
@@ -99,83 +98,6 @@ describe("LiteratureResolutionDialog", () => {
     expect(screen.queryByLabelText("文献标题")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "重试检索" }));
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1);
-  });
-
-  test("submits manual title plus authors and year without claiming verification", () => {
-    const callbacks = actions();
-    render(<LiteratureResolutionDialog {...callbacks} model={{
-      kind: "manual",
-      pending: false,
-      unavailableProviders: []
-    }} />);
-
-    const dialog = screen.getByRole("dialog", { name: "确认文献身份" });
-    expect(within(dialog).queryByText(/已验证/)).not.toBeInTheDocument();
-    const submit = within(dialog).getByRole("button", { name: "确认文献信息" });
-    fireEvent.change(within(dialog).getByLabelText("文献标题"), {
-      target: { value: "Manual Paper" }
-    });
-    fireEvent.change(within(dialog).getByLabelText("作者"), {
-      target: { value: "Ada Lovelace; Grace Hopper" }
-    });
-    fireEvent.change(within(dialog).getByLabelText("年份"), {
-      target: { value: "2025" }
-    });
-    fireEvent.click(submit);
-
-    expect(callbacks.onSubmitManual).toHaveBeenCalledWith({
-      authors: ["Ada Lovelace", "Grace Hopper"],
-      identifiers: [],
-      title: "Manual Paper",
-      year: 2025
-    });
-  });
-
-  test("accepts a title and external identifier without author-year metadata", () => {
-    const callbacks = actions();
-    render(<LiteratureResolutionDialog {...callbacks} model={{
-      kind: "manual",
-      pending: false,
-      unavailableProviders: []
-    }} />);
-
-    const dialog = screen.getByRole("dialog", { name: "确认文献身份" });
-    const submit = within(dialog).getByRole("button", { name: "确认文献信息" });
-    fireEvent.change(within(dialog).getByLabelText("文献标题"), {
-      target: { value: "Manual DOI Paper" }
-    });
-    fireEvent.change(within(dialog).getByLabelText("外部标识类型"), {
-      target: { value: "doi" }
-    });
-    fireEvent.change(within(dialog).getByLabelText("外部标识"), {
-      target: { value: "10.1000/manual" }
-    });
-    fireEvent.click(submit);
-
-    expect(callbacks.onSubmitManual).toHaveBeenCalledWith({
-      authors: [],
-      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/manual" }],
-      title: "Manual DOI Paper"
-    });
-  });
-
-  test("requires title and one supported identity path", () => {
-    const callbacks = actions();
-    render(<LiteratureResolutionDialog {...callbacks} model={{
-      kind: "manual",
-      pending: false,
-      unavailableProviders: []
-    }} />);
-
-    const submit = screen.getByRole("button", { name: "确认文献信息" });
-    expect(submit).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("文献标题"), {
-      target: { value: "Incomplete Paper" }
-    });
-    fireEvent.change(screen.getByLabelText("作者"), {
-      target: { value: "Ada Lovelace" }
-    });
-    expect(submit).toBeDisabled();
   });
 
   test("forwards cancel and disables resolution actions while pending", async () => {

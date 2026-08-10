@@ -132,10 +132,12 @@ test("surfaces corrupt literature as recoverable and continues hydrating valid p
   const load = vi.fn(async (paperId: string) => {
     if (paperId === "corrupt-paper") throw new Error("文献元数据文件不是有效 JSON");
     return {
-      authors: [],
-      identifiers: [],
+      authors: ["Verified Author"],
+      identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/valid" }],
       literatureId: "literature_valid",
-      provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "manual" as const },
+      provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const },
+      revision: 1,
+      status: "confirmed" as const,
       title: "Valid paper"
     };
   });
@@ -164,9 +166,11 @@ test("does not merge a late literature result into a newly opened library", asyn
   const load = vi.fn((paperId: string) => paperId === "old-paper"
     ? new Promise<{
         authors: string[];
-        identifiers: [];
+        identifiers: Array<{ kind: "doi"; source: "public_registry"; value: string }>;
         literatureId: string;
-        provenance: { confirmedAt: string; mode: "manual" };
+        provenance: { confirmedAt: string; mode: "public_registry"; provider: "crossref" };
+        revision: number;
+        status: "confirmed";
         title: string;
       } | undefined>((resolve) => { resolveFirst = resolve; })
     : Promise.resolve(undefined));
@@ -184,9 +188,11 @@ test("does not merge a late literature result into a newly opened library", asyn
   rerender({ paperId: "new-paper", rootPath: "/new" });
   resolveFirst({
     authors: [],
-    identifiers: [],
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/old" }],
     literatureId: "literature_old",
-    provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "manual" },
+    provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+    revision: 1,
+    status: "confirmed",
     title: "Old"
   });
 

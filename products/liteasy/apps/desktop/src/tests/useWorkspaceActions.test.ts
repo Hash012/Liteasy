@@ -457,7 +457,7 @@ describe("useWorkspaceActions", () => {
 
     expect(workspaceStore.getState().papers).toEqual([
       expect.objectContaining({
-        arxivId: "1706.03762v5",
+        arxivId: "1706.03762",
         doi: "10.48550/arxiv.1706.03762",
         id: paper.id
       })

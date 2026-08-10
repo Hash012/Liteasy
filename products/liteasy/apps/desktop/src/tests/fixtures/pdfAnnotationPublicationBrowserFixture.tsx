@@ -3,16 +3,12 @@ import { createRoot } from "react-dom/client";
 import { useMemo, useRef, useState } from "react";
 import { usePdfAnnotationPublicationController } from "../../app/controllers/usePdfAnnotationPublicationController";
 import { LiteratureResolutionDialog } from "../../app/features/forum/LiteratureResolutionDialog";
-import type {
-  ForumAnnotationPublicationOperation,
-  ForumLiteratureConfirmInput
-} from "../../app/features/forum/forum.types";
+import type { ForumAnnotationPublicationOperation } from "../../app/features/forum/forum.types";
+import type { LiteratureConfirmInput } from "../../app/features/paper-identity/literature.types";
 import type { LiteratureRecord } from "../../app/features/paper-identity/literature.types";
 import { PdfReader } from "../../app/features/pdf/PdfReader";
 import { createWorkspaceStore } from "../../app/features/workspace/workspace.store";
 import type { Paper } from "../../app/features/workspace/workspace.types";
-
-type FixtureMode = "candidate" | "manual";
 
 const initialPaper: Paper = {
   doi: "10.1145/3397271.3401075",
@@ -33,27 +29,13 @@ const candidateLiterature: LiteratureRecord = {
     mode: "public_registry",
     provider: "crossref"
   },
+  revision: 1,
+  status: "confirmed",
   title: "ColBERT",
   year: 2020
 };
 
-function manualLiterature(input: Extract<ForumLiteratureConfirmInput, { mode: "manual" }>): LiteratureRecord {
-  return {
-    ...input.record,
-    identifiers: input.record.identifiers.length > 0 ? input.record.identifiers : [{
-      kind: "title_authors_year_hash",
-      source: "manual",
-      value: "manual-browser-fixture"
-    }],
-    literatureId: "literature-manual",
-    provenance: {
-      confirmedAt: "2026-08-10T00:00:00.000Z",
-      mode: "manual"
-    }
-  };
-}
-
-function PdfAnnotationPublicationBrowserFixture({ mode }: { mode: FixtureMode }) {
+function PdfAnnotationPublicationBrowserFixture() {
   const [paper, setPaper] = useState(initialPaper);
   const literatureRef = useRef<LiteratureRecord>();
   const remoteRevisionRef = useRef(0);
@@ -84,19 +66,12 @@ function PdfAnnotationPublicationBrowserFixture({ mode }: { mode: FixtureMode })
         })
       };
     },
-    async confirmLiterature(input: ForumLiteratureConfirmInput) {
-      const literature = input.mode === "candidate"
-        ? candidateLiterature
-        : manualLiterature(input);
-      literatureRef.current = literature;
-      return { literature };
+    async confirmLiterature(_input: LiteratureConfirmInput) {
+      literatureRef.current = candidateLiterature;
+      return { literature: candidateLiterature };
     },
     async resolveLiterature() {
-      return mode === "manual" ? {
-        candidates: [] as [],
-        status: "not_found" as const,
-        unavailableProviders: []
-      } : {
+      return {
         candidates: [{
           candidateKey: "candidate-colbert",
           provider: "crossref" as const,
@@ -106,7 +81,7 @@ function PdfAnnotationPublicationBrowserFixture({ mode }: { mode: FixtureMode })
         unavailableProviders: []
       };
     }
-  }), [mode]);
+  }), []);
   const controller = usePdfAnnotationPublicationController({
     forumClient,
     literatureMetadataRepository: {
@@ -136,7 +111,6 @@ function PdfAnnotationPublicationBrowserFixture({ mode }: { mode: FixtureMode })
             onCancel={controller.actions.cancelResolution}
             onRetry={controller.actions.retryResolution}
             onSelectCandidate={controller.actions.selectCandidate}
-            onSubmitManual={controller.actions.submitManual}
           />
         ) : null}
       </main>
@@ -145,10 +119,9 @@ function PdfAnnotationPublicationBrowserFixture({ mode }: { mode: FixtureMode })
 }
 
 export async function mountPdfAnnotationPublicationBrowserFixture(
-  container: HTMLElement | null,
-  mode: FixtureMode
+  container: HTMLElement | null
 ) {
   if (!container) throw new Error("PDF annotation publication fixture container is missing");
   window.localStorage.clear();
-  createRoot(container).render(<PdfAnnotationPublicationBrowserFixture mode={mode} />);
+  createRoot(container).render(<PdfAnnotationPublicationBrowserFixture />);
 }

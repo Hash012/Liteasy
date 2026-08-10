@@ -18,9 +18,8 @@ export type LiteratureDialogModel =
       candidate: LiteratureCandidate;
       kind: "confirming";
     })
-  | (LiteratureDialogBase & {
-      kind: "manual";
-    })
+  | (LiteratureDialogBase & { kind: "conflict" })
+  | (LiteratureDialogBase & { kind: "unresolved" })
   | (LiteratureDialogBase & {
       kind: "resolving";
     })

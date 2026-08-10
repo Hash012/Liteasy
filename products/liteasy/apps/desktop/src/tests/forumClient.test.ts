@@ -15,10 +15,7 @@ function context(): ForumContext {
       anchorHash: "sha256:source",
       excerpt: "一段选文",
       kind: "source_passage",
-      literature: {
-        identity,
-        metadata: { authors: ["Author"], title: "Reliable Paper", year: 2025 }
-      },
+      literature: { literatureId: "lit_01J00000000000000000000000" },
       page: 7,
       rects: []
     }]
@@ -84,9 +81,9 @@ describe("forum client", () => {
     }));
     const client = createForumClient({ apiBaseUrl: "http://forum.test", fetchImpl: fetchMock as unknown as typeof fetch, sessionId: "desktop-token" });
 
-    await client.feed({ paperIdentity: identity });
+    await client.feed({ literatureId: "lit_01J00000000000000000000000" });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://forum.test/v1/plaza?limit=3&literatureIdentityKind=doi&literatureIdentityValue=10.1000%2Freliable&sort=recommended", expect.objectContaining({ headers: {} }));
+    expect(fetchMock).toHaveBeenCalledWith("http://forum.test/v1/plaza?limit=3&literatureId=lit_01J00000000000000000000000&sort=recommended", expect.objectContaining({ headers: {} }));
   });
 
   test("includes annotation text in the one-time handoff", async () => {

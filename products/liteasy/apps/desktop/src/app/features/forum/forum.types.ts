@@ -7,19 +7,13 @@ import type {
 
 export type ForumPaperIdentity = {
   id: string;
-  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "title_authors_year_hash";
+  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "title_authors_year_hash";
   source: "inferred" | "metadata";
   value: string;
 };
 
 export type ForumLiteratureReference = {
-  identity: ForumPaperIdentity;
-  metadata: {
-    authors: string[];
-    documentType?: string;
-    title: string;
-    year?: number;
-  };
+  literatureId: string;
 };
 
 export type ForumAnnotationTarget =
@@ -66,7 +60,7 @@ export type ForumDraftUpdate = {
 
 export type ForumFeedQuery = {
   anchorHash?: string;
-  paperIdentity: ForumPaperIdentity;
+  literatureId: string;
 };
 
 export type ForumPost = {

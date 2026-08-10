@@ -1167,6 +1167,9 @@ export function useArtifactActions({
     }
     const scopedDocument: ThinReadingDocument = {
       ...document,
+      literatureRecords: document.literatureRecords?.[primaryPaperId]
+        ? { [primaryPaperId]: document.literatureRecords[primaryPaperId] }
+        : undefined,
       paperIds: [primaryPaperId],
       paperIdentities: document.paperIdentities?.[primaryPaperId]
         ? { [primaryPaperId]: document.paperIdentities[primaryPaperId] }

@@ -1991,7 +1991,6 @@ export function AppShell({
           }}
           onRetryLiteratureResolution={pdfAnnotationPublication.actions.retryResolution}
           onSelectLiteratureCandidate={pdfAnnotationPublication.actions.selectCandidate}
-          onSubmitManualLiterature={pdfAnnotationPublication.actions.submitManual}
           onSelectOrganization={organizationShell.actions.selectOrganization}
           organizationDialogOpen={organizationDialogOpen}
           loginDialogOpen={loginDialogOpen}

@@ -8,8 +8,7 @@ import type { LiteratureDialogModel } from "../features/forum/literatureResoluti
 import type {
   LiteratureCandidate,
   LiteratureRecord,
-  LiteratureResolveResult,
-  ManualLiteratureInput
+  LiteratureResolveResult
 } from "../features/paper-identity/literature.types";
 import {
   confirmPdfAnnotationPublication,
@@ -173,19 +172,16 @@ function boundedHints(
   const year = Number.isInteger(hints.year) && hints.year! >= 1000 && hints.year! <= 9999
     ? hints.year
     : undefined;
+  const pmlr = hints.pmlr && Number.isInteger(hints.pmlr.volume) && Number.isInteger(hints.pmlr.year)
+    ? { source: "pmlr" as const, volume: hints.pmlr.volume, year: hints.pmlr.year }
+    : undefined;
   return {
     ...(authors?.length ? { authors } : {}),
     ...(identifiers?.length ? { identifiers } : {}),
+    ...(pmlr ? { pmlr } : {}),
     ...(title ? { title } : {}),
     ...(year ? { year } : {})
   };
-}
-
-function validManualRecord(record: ManualLiteratureInput) {
-  return Boolean(record.title.trim()) && (
-    record.identifiers.some((identifier) => identifier.value.trim()) ||
-    (record.authors.some((author) => author.trim()) && Number.isInteger(record.year))
-  );
 }
 
 export function usePdfAnnotationPublicationController({
@@ -271,9 +267,19 @@ export function usePdfAnnotationPublicationController({
       showCandidates(active, result.candidates, result.unavailableProviders);
       return;
     }
+    if (result.status === "conflict") {
+      setLiteratureDialog({
+        kind: "conflict",
+        message: "来源返回的稳定标识与题录互相冲突，当前文件不能公开。",
+        pending: false,
+        unavailableProviders: result.unavailableProviders
+      });
+      return;
+    }
     if (result.status === "not_found") {
       setLiteratureDialog({
-        kind: "manual",
+        kind: "unresolved",
+        message: "尚未找到可由公开来源确认的文献版本。",
         pending: false,
         unavailableProviders: result.unavailableProviders
       });
@@ -492,28 +498,9 @@ export function usePdfAnnotationPublicationController({
     if (active) void confirmCandidate(active, candidateKey);
   }
 
-  function submitManual(record: ManualLiteratureInput) {
-    const active = activeResolutionRef.current;
-    if (!active || active.pending || literatureDialog?.kind !== "manual" || !validManualRecord(record)) return;
-    active.pending = true;
-    setLiteratureDialog((current) => current ? { ...current, message: undefined, pending: true } : current);
-    void forumClientRef.current.confirmLiterature({ mode: "manual", record })
-      .then(({ literature }) => finishResolution(active, literature))
-      .catch((error) => {
-        if (!isActive(active)) return;
-        active.pending = false;
-        setLiteratureDialog({
-          kind: "manual",
-          message: errorMessage(error, "手工文献信息确认失败，请重试。"),
-          pending: false,
-          unavailableProviders: active.unavailableProviders
-        });
-      });
-  }
-
   function retryResolution() {
     const active = activeResolutionRef.current;
-    if (active && literatureDialog?.kind === "unavailable") void attemptResolution(active);
+    if (active && new Set(["conflict", "unavailable", "unresolved"]).has(literatureDialog?.kind ?? "")) void attemptResolution(active);
   }
 
   function cancelResolution() {
@@ -526,8 +513,7 @@ export function usePdfAnnotationPublicationController({
       cancelResolution,
       changePublication,
       retryResolution,
-      selectCandidate,
-      submitManual
+      selectCandidate
     },
     model: { literatureDialog }
   };

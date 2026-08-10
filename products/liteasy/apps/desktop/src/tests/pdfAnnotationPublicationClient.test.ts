@@ -16,6 +16,8 @@ const literature: LiteratureRecord = {
     mode: "public_registry",
     provider: "crossref"
   },
+  revision: 1,
+  status: "confirmed",
   title: "Publication Paper",
   year: 2026
 };
@@ -53,7 +55,7 @@ describe("PDF annotation publication operations", () => {
       queueKey: "paper-1:annotation-local-1",
       revision: 3,
       sourcePassage: {
-        anchorHash: expect.stringMatching(/^pdf:paper-1:4:[0-9a-f]{8}$/),
+        anchorHash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
         excerpt: "The selected PDF excerpt.",
         page: 4,
         rects: [{ height: 2, left: 10, top: 12, width: 40 }]

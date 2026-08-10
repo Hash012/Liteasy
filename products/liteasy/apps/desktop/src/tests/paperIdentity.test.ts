@@ -10,7 +10,7 @@ describe("paperIdentity", () => {
     expect(inferPaperIdentityMetadataFromPdfText(
       "Preprint arXiv: 1706.03762v5. DOI: https://doi.org/10.48550/arXiv.1706.03762"
     )).toEqual({
-      arxivId: "1706.03762v5",
+      arxivId: "1706.03762",
       doi: "10.48550/arxiv.1706.03762"
     });
     expect(inferPaperIdentityMetadataFromPdfText("The experiment ran in 2020.12345 seconds.")).toEqual({});
@@ -45,7 +45,7 @@ describe("paperIdentity", () => {
       title: "Arxiv Paper"
     }).primary).toMatchObject({
       kind: "arxiv_id",
-      value: "2402.01234v2"
+      value: "2402.01234"
     });
 
     expect(resolvePaperIdentity({
@@ -91,7 +91,7 @@ describe("paperIdentity", () => {
     }).primary).toMatchObject({
       kind: "arxiv_id",
       source: "inferred",
-      value: "2401.11111v1"
+      value: "2401.11111"
     });
   });
 

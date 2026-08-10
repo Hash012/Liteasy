@@ -3,8 +3,8 @@ import {
   loadUserPaperArtifact,
   saveUserPaperArtifact
 } from "../library/userPaperArtifactClient";
-import { normalizeLiteratureSnapshot } from "./literatureRecord";
-import type { LiteratureRecord, LiteratureSnapshot } from "./literature.types";
+import { normalizeLiteratureSnapshot, normalizeReadableLiteratureSnapshot } from "./literatureRecord";
+import type { LiteratureRecord, LiteratureSnapshot, ReadableLiteratureRecord } from "./literature.types";
 
 type LiteratureMetadataRepositoryDependencies = {
   isAvailable?: () => boolean;
@@ -29,6 +29,10 @@ export function createLiteratureMetadataRepository(
 ) {
   return {
     async load(paperId: string): Promise<LiteratureRecord | undefined> {
+      const literature = await this.loadCompatible(paperId);
+      return literature?.status === "confirmed" ? literature : undefined;
+    },
+    async loadCompatible(paperId: string): Promise<ReadableLiteratureRecord | undefined> {
       if (dependencies.isAvailable && !dependencies.isAvailable()) {
         throw new Error("本地文献元数据存储不可用。");
       }
@@ -39,7 +43,7 @@ export function createLiteratureMetadataRepository(
       if (snapshot === undefined) {
         return undefined;
       }
-      return normalizeLiteratureSnapshot(snapshot).literature;
+      return normalizeReadableLiteratureSnapshot(snapshot).literature;
     },
     async save(paperId: string, literature: LiteratureRecord): Promise<void> {
       if (dependencies.isAvailable && !dependencies.isAvailable()) {

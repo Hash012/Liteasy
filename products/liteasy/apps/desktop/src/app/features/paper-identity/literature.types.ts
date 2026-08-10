@@ -5,7 +5,7 @@ export type LiteratureIdentifierKind =
   | "openalex_id"
   | "title_authors_year_hash";
 
-export type LiteratureSource = "public_registry" | "manual" | "inferred";
+export type LiteratureSource = "public_registry" | "manual" | "inferred" | "metadata";
 
 export type LiteratureIdentifier = {
   kind: LiteratureIdentifierKind;
@@ -35,25 +35,38 @@ export type LiteratureCandidate = {
   recordUrl?: string;
 };
 
-export type ManualLiteratureInput = LiteratureDisplayRecord & {
-  identifiers: Array<{
-    kind: Exclude<LiteratureIdentifierKind, "title_authors_year_hash">;
-    source: "manual";
-    value: string;
-  }>;
-};
-
 export type LiteratureRecord = LiteratureDisplayRecord & {
+  identifiers: Array<LiteratureIdentifier & { source: "public_registry" }>;
   literatureId: string;
   provenance: {
     confirmedAt: string;
-    mode: "public_registry" | "manual";
+    mode: "public_registry";
     provider?: LiteratureProvider;
   };
+  revision: number;
+  status: "confirmed";
 };
+
+export type LegacyLiteratureRecord = LiteratureDisplayRecord & {
+  identifiers: Array<{
+    kind: LiteratureIdentifierKind;
+    source: "inferred" | "manual" | "metadata";
+    value: string;
+  }>;
+  literatureId: string;
+  recordSource: "legacy_metadata" | "manual";
+  status: "legacy_unverified";
+};
+
+export type ReadableLiteratureRecord = LiteratureRecord | LegacyLiteratureRecord;
 
 export type LiteratureSnapshot = {
   literature: LiteratureRecord;
+  version: 1;
+};
+
+export type ReadableLiteratureSnapshot = {
+  literature: ReadableLiteratureRecord;
   version: 1;
 };
 
@@ -65,6 +78,11 @@ export type LiteratureResolveInput = {
   hints?: {
     authors?: string[];
     identifiers?: Array<{ kind: LiteratureIdentifierKind; value: string }>;
+    pmlr?: {
+      source: "pmlr";
+      volume: number;
+      year: number;
+    };
     title?: string;
     year?: number;
   };
@@ -80,9 +98,8 @@ type LiteratureProviderAvailability = {
 export type LiteratureResolveResult =
   | ({ candidate: LiteratureCandidate; status: "exact" } & LiteratureProviderAvailability)
   | ({ candidates: LiteratureCandidate[]; status: "ambiguous" } & LiteratureProviderAvailability)
+  | ({ candidates: LiteratureCandidate[]; status: "conflict" } & LiteratureProviderAvailability)
   | ({ candidates: []; status: "not_found" } & LiteratureProviderAvailability)
   | ({ retryable: true; status: "unavailable" } & LiteratureProviderAvailability);
 
-export type LiteratureConfirmInput =
-  | { candidateKey: string; mode: "candidate" }
-  | { mode: "manual"; record: ManualLiteratureInput };
+export type LiteratureConfirmInput = { candidateKey: string; mode: "candidate" };

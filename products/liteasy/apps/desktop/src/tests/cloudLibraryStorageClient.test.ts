@@ -2,11 +2,13 @@ import { vi } from "vitest";
 import { storeAccountSession } from "../app/features/account/accountSessionStorage";
 import { createCloudLibraryStorageClient } from "../app/features/library/cloudLibraryStorageClient";
 
-const manualLiterature = {
+const confirmedLiterature = {
   authors: ["Ada Lovelace"],
-  identifiers: [{ kind: "doi" as const, source: "manual" as const, value: "10.1000/liteasy" }],
-  literatureId: "literature:doi:10.1000/liteasy",
-  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" as const },
+  identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/liteasy" }],
+  literatureId: "lit_01J00000000000000000000000",
+  provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const },
+  revision: 1,
+  status: "confirmed" as const,
   title: "Cloud Literature Metadata",
   year: 2026
 };
@@ -238,7 +240,7 @@ test("reads and updates organization storage policy with revision and idempotenc
 
 test("updates cloud literature with revision and idempotency metadata", async () => {
   const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-    document: { documentId: "document-1", metadata: { literature: manualLiterature } },
+    document: { documentId: "document-1", metadata: { literature: confirmedLiterature } },
     revision: 5
   }), {
     headers: { "Content-Type": "application/json" },
@@ -253,7 +255,7 @@ test("updates cloud literature with revision and idempotency metadata", async ()
     { scopeId: "user:alice", scopeType: "user" },
     "document-1",
     4,
-    manualLiterature
+    confirmedLiterature
   );
 
   expect(result.revision).toBe(5);
@@ -263,7 +265,10 @@ test("updates cloud literature with revision and idempotency metadata", async ()
   expect(body).toMatchObject({
     documentId: "document-1",
     expectedRevision: 4,
-    literature: manualLiterature,
+    literature: {
+      literatureId: confirmedLiterature.literatureId,
+      revision: confirmedLiterature.revision
+    },
     scopeId: "user:alice",
     scopeType: "user",
     sessionId: "ltsy_session"

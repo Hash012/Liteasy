@@ -482,7 +482,15 @@ export function createCloudLibraryStorageClient({
       return post<{ document: CloudLibraryEntry; revision: number }>(
         "/v1/library/documents/update",
         scope,
-        { documentId, expectedRevision, idempotencyKey: createIdempotencyKey(), literature }
+        {
+          documentId,
+          expectedRevision,
+          idempotencyKey: createIdempotencyKey(),
+          literature: {
+            literatureId: literature.literatureId,
+            revision: literature.revision
+          }
+        }
       );
     },
 

@@ -16,7 +16,6 @@ import { ClearProfileConfirmDialog } from "../features/profile/ClearProfileConfi
 import type { AcademicProfile } from "../features/profile/profile.types";
 import { LiteratureResolutionDialog } from "../features/forum/LiteratureResolutionDialog";
 import type { LiteratureDialogModel } from "../features/forum/literatureResolution.types";
-import type { ManualLiteratureInput } from "../features/paper-identity/literature.types";
 
 export type AppDialogsProps = {
   academicProfile: AcademicProfile;
@@ -59,7 +58,6 @@ export type AppDialogsProps = {
   onLeaveOrganization: () => void;
   onRetryLiteratureResolution?: () => void;
   onSelectLiteratureCandidate?: (candidateKey: string) => void;
-  onSubmitManualLiterature?: (record: ManualLiteratureInput) => void;
   onExportProfile: () => void;
   onOpenSharedLibrary: (summary: OrganizationSummary) => void;
   onSelectOrganization: (organizationId: string) => void;
@@ -105,7 +103,6 @@ export function AppDialogs({
   onLeaveOrganization,
   onRetryLiteratureResolution,
   onSelectLiteratureCandidate,
-  onSubmitManualLiterature,
   onExportProfile,
   onOpenSharedLibrary,
   onSelectOrganization,
@@ -120,7 +117,6 @@ export function AppDialogs({
           onCancel={onCancelLiteratureResolution ?? (() => undefined)}
           onRetry={onRetryLiteratureResolution ?? (() => undefined)}
           onSelectCandidate={onSelectLiteratureCandidate ?? (() => undefined)}
-          onSubmitManual={onSubmitManualLiterature ?? (() => undefined)}
         />
       ) : null}
       {loginDialogOpen ? (

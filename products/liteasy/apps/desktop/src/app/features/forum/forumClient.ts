@@ -179,8 +179,7 @@ export function createForumClient({
     feed(query: ForumFeedQuery) {
       const params = new URLSearchParams({
         limit: "3",
-        literatureIdentityKind: query.paperIdentity.kind,
-        literatureIdentityValue: query.paperIdentity.value,
+        literatureId: query.literatureId,
         sort: "recommended"
       });
       return request<{ annotations: Array<{

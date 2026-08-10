@@ -1966,7 +1966,7 @@ export function PdfReader({
                       className="pdf-status"
                       role="status"
                     >
-                      文献身份：{activePaper.literature.provenance.mode === "manual" ? "手动录入" : "公共来源"}
+                      文献身份：公共来源
                     </div>
                   ) : null}
                   <label className="pdf-annotation-auto-public-toggle">

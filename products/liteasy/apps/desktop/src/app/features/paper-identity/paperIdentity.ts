@@ -5,6 +5,7 @@ export type PaperIdentityKind =
   | "doi"
   | "arxiv_id"
   | "semantic_scholar_id"
+  | "openalex_id"
   | "title_authors_year_hash"
   | "local_paper_id";
 
@@ -38,6 +39,7 @@ export function paperIdentityFromLiterature(
     "doi",
     "arxiv_id",
     "semantic_scholar_id",
+    "openalex_id",
     "title_authors_year_hash"
   ];
   const candidates: PaperIdentityCandidate[] = literature.identifiers
@@ -86,21 +88,126 @@ const identityPriority: readonly PaperIdentityKind[] = Object.freeze([
   "doi",
   "arxiv_id",
   "semantic_scholar_id",
+  "openalex_id",
   "title_authors_year_hash",
   "local_paper_id"
 ]);
 
-function stableHash(value: string): string {
-  let hash = 2166136261;
-  for (const character of value) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
+const sha256RoundConstants = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+];
+
+function rotateRight(value: number, amount: number): number {
+  return (value >>> amount) | (value << (32 - amount));
+}
+
+export function sha256Hex(value: string): string {
+  const source = new TextEncoder().encode(value);
+  const paddedLength = Math.ceil((source.length + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(source);
+  padded[source.length] = 0x80;
+  new DataView(padded.buffer).setUint32(paddedLength - 4, source.length * 8);
+  let h0 = 0x6a09e667; let h1 = 0xbb67ae85; let h2 = 0x3c6ef372; let h3 = 0xa54ff53a;
+  let h4 = 0x510e527f; let h5 = 0x9b05688c; let h6 = 0x1f83d9ab; let h7 = 0x5be0cd19;
+  const words = new Uint32Array(64);
+  const view = new DataView(padded.buffer);
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let index = 0; index < 16; index++) words[index] = view.getUint32(offset + index * 4);
+    for (let index = 16; index < 64; index++) {
+      const w15 = words[index - 15];
+      const w2 = words[index - 2];
+      const s0 = rotateRight(w15, 7) ^ rotateRight(w15, 18) ^ (w15 >>> 3);
+      const s1 = rotateRight(w2, 17) ^ rotateRight(w2, 19) ^ (w2 >>> 10);
+      words[index] = (words[index - 16] + s0 + words[index - 7] + s1) >>> 0;
+    }
+    let a = h0; let b = h1; let c = h2; let d = h3;
+    let e = h4; let f = h5; let g = h6; let h = h7;
+    for (let index = 0; index < 64; index++) {
+      const s1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+      const choose = (e & f) ^ (~e & g);
+      const temp1 = (h + s1 + choose + sha256RoundConstants[index] + words[index]) >>> 0;
+      const s0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+      const majority = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (s0 + majority) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
   }
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map((part) => part.toString(16).padStart(8, "0")).join("");
 }
 
 function compact(value: unknown) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function normalizeBibliographicText(value: unknown): string {
+  return String(value ?? "").normalize("NFKC").toLocaleLowerCase("en-US")
+    .replace(/[\p{P}\p{S}\s]+/gu, " ").trim();
+}
+
+function normalizeBibliographicAuthor(value: unknown): string {
+  const source = String(value ?? "").normalize("NFKC");
+  const parts = source.split(",").map((part) => part.trim()).filter(Boolean);
+  return normalizeBibliographicText(parts.length === 2 ? `${parts[1]} ${parts[0]}` : source);
+}
+
+export function normalizeLiteratureIdentifier(kind: string, value: unknown): string {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  if (kind === "doi") {
+    return normalized
+      .replace(/^(?:https?:\/\/)?(?:dx\.)?doi\.org\//i, "")
+      .replace(/^doi:\s*/i, "")
+      .replace(/[.,;:]+$/, "")
+      .toLocaleLowerCase("en-US");
+  }
+  if (kind === "arxiv_id") {
+    return normalized
+      .replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//i, "")
+      .replace(/^arxiv:\s*/i, "")
+      .replace(/\.pdf$/i, "")
+      .replace(/v\d+$/i, "")
+      .toLocaleLowerCase("en-US");
+  }
+  if (kind === "semantic_scholar_id") {
+    return normalized
+      .replace(/^corpusid\s*:\s*/i, "corpus:")
+      .replace(/\s*:\s*/g, ":")
+      .toLocaleLowerCase("en-US");
+  }
+  if (kind === "openalex_id") {
+    const workId = normalized.replace(/^https?:\/\/(?:www\.)?openalex\.org\//i, "");
+    return /^w\d+$/i.test(workId) ? workId.toUpperCase() : "";
+  }
+  return normalized.toLocaleLowerCase("en-US");
+}
+
+export function isLegacyTitleAuthorsYearHash(value: unknown): boolean {
+  return typeof value === "string" && /^[a-f0-9]{8}$/i.test(value.trim());
+}
+
+export function titleAuthorsYearFingerprint(input: {
+  authors?: readonly unknown[];
+  title?: unknown;
+  year?: unknown;
+}): string {
+  const title = normalizeBibliographicText(input.title);
+  const authors = Array.isArray(input.authors)
+    ? [...new Set(input.authors.map(normalizeBibliographicAuthor).filter(Boolean))].sort()
+    : [];
+  const year = input.year;
+  if (!title || authors.length === 0 || authors.some((author) => !author) || !Number.isInteger(year)) return "";
+  return `sha256:${sha256Hex(JSON.stringify({ authors, title, year }))}`;
 }
 
 function normalizeDoi(value: unknown) {
@@ -109,9 +216,7 @@ function normalizeDoi(value: unknown) {
     return "";
   }
   const match = text.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+/i);
-  return (match?.[0] ?? "")
-    .replace(/[.,;:\]\s]+$/g, "")
-    .toLowerCase();
+  return normalizeLiteratureIdentifier("doi", match?.[0] ?? "");
 }
 
 function normalizeArxivId(value: unknown) {
@@ -122,9 +227,7 @@ function normalizeArxivId(value: unknown) {
   const match = text.match(
     /(?:arxiv[:/\s]+|abs\/|pdf\/)?([a-z-]+(?:\.[A-Z]{2})?\/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)/i
   );
-  return (match?.[1] ?? "")
-    .replace(/\.pdf$/i, "")
-    .toLowerCase();
+  return normalizeLiteratureIdentifier("arxiv_id", match?.[1] ?? "");
 }
 
 function normalizeSemanticScholarId(value: unknown) {
@@ -134,11 +237,11 @@ function normalizeSemanticScholarId(value: unknown) {
   }
   const corpusId = text.match(/(?:CorpusID|corpus id)[:\s]+(\d+)/i)?.[1];
   if (corpusId) {
-    return `corpus:${corpusId}`;
+    return normalizeLiteratureIdentifier("semantic_scholar_id", `corpus:${corpusId}`);
   }
   const paperId = text.match(/(?:semanticscholar\.org\/paper\/[^/\s]+\/|paper\/)([a-f0-9]{40})/i)?.[1] ??
     text.match(/^[a-f0-9]{40}$/i)?.[0];
-  return paperId ? paperId.toLowerCase() : "";
+  return normalizeLiteratureIdentifier("semantic_scholar_id", paperId ?? "");
 }
 
 function normalizeTitle(value: string) {
@@ -203,20 +306,6 @@ function firstByKind(
   return candidates.find((candidate) => candidate.kind === kind);
 }
 
-function titleAuthorsYearHash(input: PaperIdentityInput) {
-  const authors = normalizeAuthors(input.authors ?? input.metadata?.authors);
-  const year = normalizeYear(input.year ?? input.metadata?.year);
-  const title = normalizeTitle(input.title);
-  if (!title || authors.length === 0 || !year) {
-    return "";
-  }
-  const authorKey = authors
-    .map((author) => normalizeTitle(author))
-    .filter(Boolean)
-    .join("|");
-  return authorKey ? stableHash(`${title}\u0000${authorKey}\u0000${year}`) : "";
-}
-
 export function resolvePaperIdentity(input: PaperIdentityInput): PaperIdentity {
   if (input.literature) {
     return paperIdentityFromLiterature(input, input.literature);
@@ -246,7 +335,11 @@ export function resolvePaperIdentity(input: PaperIdentityInput): PaperIdentity {
   addCandidate(
     candidates,
     "title_authors_year_hash",
-    titleAuthorsYearHash(input),
+    titleAuthorsYearFingerprint({
+      authors: normalizeAuthors(input.authors ?? input.metadata?.authors),
+      title: input.title,
+      year: Number(normalizeYear(input.year ?? input.metadata?.year)) || undefined
+    }),
     "metadata"
   );
   addCandidate(candidates, "local_paper_id", input.id, "local");

@@ -1,16 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function mountFixture(page: Page, mode: "candidate" | "manual") {
+async function mountFixture(page: Page) {
   await page.goto("/");
-  await page.evaluate(async (fixtureMode) => {
+  await page.evaluate(async () => {
     document.body.innerHTML = '<div id="pdf-annotation-publication-fixture"></div>';
     const fixtureModuleUrl = "/src/tests/fixtures/pdfAnnotationPublicationBrowserFixture.tsx";
     const fixtureModule = await import(fixtureModuleUrl);
     await fixtureModule.mountPdfAnnotationPublicationBrowserFixture(
-      document.getElementById("pdf-annotation-publication-fixture"),
-      fixtureMode
+      document.getElementById("pdf-annotation-publication-fixture")
     );
-  }, mode);
+  });
   await expect(page.getByRole("region", { name: "PDF 阅读器" })).toBeVisible();
   await expect(page.locator(".pdf-text-layer").first()).toBeVisible();
 }
@@ -64,7 +63,7 @@ for (const viewport of [
 ]) {
   test(`direct annotation publication remains usable at ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
-    await mountFixture(page, "candidate");
+    await mountFixture(page);
     await selectFixtureText(page, "Late interaction evidence");
     await page.getByRole("button", { name: "注释" }).click();
     await page.getByRole("checkbox", { name: /Late interaction evidence/u }).click();
@@ -84,21 +83,5 @@ for (const viewport of [
       fullPage: true,
       path: `test-results/pdf-annotation-publication-${viewport.name}.png`
     });
-  });
-
-  test(`manual literature fallback remains usable at ${viewport.name}`, async ({ page }) => {
-    await page.setViewportSize(viewport);
-    await mountFixture(page, "manual");
-    await selectFixtureText(page, "Manual identity evidence");
-    await page.getByRole("button", { name: "注释" }).click();
-    await page.getByRole("checkbox", { name: /Manual identity evidence/u }).click();
-    await expect(page.getByLabel("文献标题")).toBeVisible();
-    await page.getByLabel("文献标题").fill("Manually Identified Paper");
-    await page.getByLabel("作者").fill("Ada Lovelace; Grace Hopper");
-    await page.getByLabel("年份").fill("2026");
-    await page.getByRole("button", { name: "确认文献信息" }).click();
-    await expect(page.getByText("已公开到论坛")).toBeVisible();
-    await expect(page.getByRole("status", { name: "文献身份来源" })).toHaveText("文献身份：手动录入");
-    await expectUsableLayout(page);
   });
 }

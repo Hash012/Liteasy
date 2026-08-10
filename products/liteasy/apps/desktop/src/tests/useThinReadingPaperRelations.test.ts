@@ -82,7 +82,6 @@ function denseNode() {
       id: `anchor-${anchorIndex + 1}`,
       importance: 0.8,
       kind: "concept" as const,
-      label: `Anchor ${anchorIndex + 1}`,
       searchQuery: "query",
       start: anchorIndex,
       summarySentenceId: "summary-1",
