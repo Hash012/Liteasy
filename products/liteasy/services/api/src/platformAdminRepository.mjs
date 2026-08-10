@@ -601,7 +601,7 @@ export class PostgresPlatformAdminRepository {
     await this.#requireQuotaScope(this.pool, scope);
     const result = await this.pool.query(`
       SELECT quota.limit_bytes, quota.revision, quota.updated_at, quota.updated_by,
-             COALESCE(SUM(entry.logical_bytes) FILTER (WHERE entry.status = 'active'), 0) AS used_bytes
+             COALESCE(SUM(entry.logical_bytes), 0) AS used_bytes
         FROM (VALUES ($1::text, $2::text)) AS target(scope_type, scope_id)
         LEFT JOIN storage_quotas quota
           ON quota.scope_type = target.scope_type AND quota.scope_id = target.scope_id
@@ -634,7 +634,6 @@ export class PostgresPlatformAdminRepository {
             SELECT COALESCE(sum(logical_bytes), 0) AS used_bytes
               FROM library_entries
              WHERE scope_type = 'organization' AND scope_id = organization.organization_id
-               AND status = 'active'
           ) entry ON true
          ORDER BY organization.created_at DESC, organization.organization_id
          LIMIT 500
@@ -735,7 +734,6 @@ export class PostgresPlatformAdminRepository {
               SELECT COALESCE(sum(logical_bytes), 0) AS used_bytes
                 FROM library_entries
                WHERE scope_type = 'organization' AND scope_id = organization.organization_id
-                 AND status = 'active'
             ) entry ON true
            WHERE organization.organization_id = $1
         `, [organizationId]);
@@ -785,7 +783,7 @@ export class PostgresPlatformAdminRepository {
         const usage = await client.query(`
           SELECT COALESCE(SUM(logical_bytes), 0) AS used_bytes
             FROM library_entries
-           WHERE scope_type = $1 AND scope_id = $2 AND status = 'active'
+           WHERE scope_type = $1 AND scope_id = $2
         `, [scope.scopeType, scope.scopeId]);
         const quota = mapQuota({
           ...changed.rows[0],

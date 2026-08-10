@@ -123,7 +123,7 @@ git commit -m "fix: preserve cloud tree state invariants"
 - Consumes: `library_entries.logical_bytes`, whose active and trashed rows both occupy logical quota.
 - Produces: `getQuota`, `listGovernance`, organization status projections, and `setQuota` responses that report all non-purged logical bytes.
 
-- [ ] **Step 1: Write a failing quota SQL behavior test**
+- [x] **Step 1: Write a failing quota SQL behavior test**
 
 Capture every administrative usage query and assert none filters `library_entries.status = 'active'`; keep literal used-byte fixtures so the test checks the repository boundary rather than recomputing SQL behavior.
 
@@ -131,23 +131,23 @@ Capture every administrative usage query and assert none filters `library_entrie
 assert.equal(usageQueries.every((sql) => !/status\s*=\s*'active'/i.test(sql)), true);
 ```
 
-- [ ] **Step 2: Run the quota tests and verify RED**
+- [x] **Step 2: Run the quota tests and verify RED**
 
 Run: `npm test -- --test-name-pattern='quota|governance' src/platformAdminRepository.test.mjs`
 
 Expected: FAIL because administrative projections exclude trashed entries.
 
-- [ ] **Step 3: Remove active-only filters from administrative usage projections**
+- [x] **Step 3: Remove active-only filters from administrative usage projections**
 
 Keep scope filters and aggregation intact; only remove status predicates so purged rows disappear naturally while active and trashed rows remain counted.
 
-- [ ] **Step 4: Run platform admin tests**
+- [x] **Step 4: Run platform admin tests**
 
 Run: `npm test -- src/platformAdminRepository.test.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```bash
 git add products/liteasy/services/api/src/platformAdminRepository.mjs products/liteasy/services/api/src/platformAdminRepository.test.mjs
