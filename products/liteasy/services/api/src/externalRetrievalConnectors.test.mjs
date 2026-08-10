@@ -79,3 +79,103 @@ test("rejects a connector whose stored endpoint does not match its fixed protoco
     sourceId: "source_bad"
   }, { limit: 1, query: "test" }), /external_retrieval_source_invalid/);
 });
+
+test("relation connectors resolve a pure Crossref paper through its DOI", async () => {
+  const calls = [];
+  const connectors = createExternalRetrievalConnectors(config, {
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return String(url).includes("openalex.org")
+        ? jsonResponse({ results: [{
+            doi: "https://doi.org/10.1000/CROSSREF",
+            id: "https://openalex.org/W900",
+            referenced_works: []
+          }] })
+        : jsonResponse({
+            externalIds: { DOI: "10.1000/CROSSREF" },
+            paperId: "S900",
+            references: []
+          });
+    }
+  });
+  const paper = {
+    aliases: ["doi:10.1000/crossref", "crossref:10.1000/crossref"],
+    doi: "10.1000/crossref",
+    id: "crossref-row",
+    provider: "crossref",
+    sourceId: "10.1000/crossref"
+  };
+
+  const openAlex = await connectors.relations({
+    baseUrl: retrievalConnectorEndpoints.openalex,
+    connectorType: "openalex"
+  }, { papers: [paper] });
+  const semanticScholar = await connectors.relations({
+    baseUrl: retrievalConnectorEndpoints.semantic_scholar,
+    connectorType: "semantic_scholar"
+  }, { papers: [paper] });
+
+  assert.match(calls[0], /filter=doi%3A10\.1000%2Fcrossref/u);
+  assert.match(calls[1], /paper\/DOI%3A10\.1000%2Fcrossref/u);
+  assert.equal(openAlex.records[0].id, "openalex:W900");
+  assert.equal(openAlex.records[0].doi, "doi:10.1000/crossref");
+  assert.equal(semanticScholar[0].id, "semantic_scholar:S900");
+  assert.equal(semanticScholar[0].doi, "doi:10.1000/crossref");
+});
+
+test("Semantic Scholar relations resolve a DOI present only in canonical aliases", async () => {
+  const calls = [];
+  const connectors = createExternalRetrievalConnectors(config, {
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return jsonResponse({
+        externalIds: { DOI: "10.1000/CANONICAL-ONLY" },
+        paperId: "S-CANONICAL",
+        references: []
+      });
+    }
+  });
+
+  const result = await connectors.relations({
+    baseUrl: retrievalConnectorEndpoints.semantic_scholar,
+    connectorType: "semantic_scholar"
+  }, { papers: [{
+    aliases: ["crossref:10.1000/canonical-only", "doi:10.1000/canonical-only"],
+    id: "paper-canonical",
+    provider: "crossref",
+    sourceId: "10.1000/canonical-only"
+  }] });
+
+  assert.match(calls[0], /paper\/DOI%3A10\.1000%2Fcanonical-only/u);
+  assert.equal(result[0].id, "semantic_scholar:S-CANONICAL");
+});
+
+test("OpenAlex relations retain graph-ID records when the DOI filter fails", async () => {
+  const connectors = createExternalRetrievalConnectors(config, {
+    fetchImpl: async (url) => {
+      if (String(url).includes("filter=doi%3A")) throw new Error("DOI filter unavailable");
+      return jsonResponse({ results: [{
+        doi: "https://doi.org/10.1000/PARTIAL",
+        id: "https://openalex.org/W901",
+        referenced_works: []
+      }] });
+    }
+  });
+
+  const result = await connectors.relations({
+    baseUrl: retrievalConnectorEndpoints.openalex,
+    connectorType: "openalex"
+  }, { papers: [{
+    aliases: ["openalex:W901", "doi:10.1000/partial"],
+    doi: "10.1000/partial",
+    id: "openalex-row",
+    provider: "openalex",
+    sourceId: "W901"
+  }] });
+
+  assert.deepEqual(result.records.map((record) => record.id), ["openalex:W901"]);
+  assert.deepEqual(result.warnings, [
+    "openalex_co_cited_unavailable",
+    "openalex_paper_relations_partial"
+  ]);
+});

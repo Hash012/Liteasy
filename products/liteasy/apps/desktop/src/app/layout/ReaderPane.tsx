@@ -5,8 +5,12 @@ import liteasyLogoUrl from "../../assets/liteasyclaw-logo.jpg";
 import { ArtifactTabs } from "../features/artifacts/ArtifactTabs";
 import type { ArtifactTask, ArtifactTab, ArtifactType } from "../features/artifacts/artifact.types";
 import type { UIDslActionRef } from "../features/generative-ui/generativeUi.types";
-import { PdfReader, type PdfEvidenceTarget, type PdfForumSelection } from "../features/pdf/PdfReader";
-import type { PdfAnnotation } from "../features/pdf/pdfAnnotationStorage";
+import {
+  PdfReader,
+  type PdfAnnotationPublicationChange,
+  type PdfEvidenceTarget
+} from "../features/pdf/PdfReader";
+import type { PdfAnnotation, PdfAnnotationPublication } from "../features/pdf/pdfAnnotationStorage";
 import type { ReaderConversationContext } from "../features/assistant/assistantContext.types";
 import type { Paper } from "../features/workspace/workspace.types";
 import type { ForumFeedQuery, ForumPost } from "../features/forum/forum.types";
@@ -45,7 +49,7 @@ type ReaderPaneProps = {
   onOpenEvidence?: (request: Omit<PdfEvidenceTarget, "requestId">) => void;
   onOpenVisualization?: (data: VisualizationTabData) => void;
   onLoadForumFeed?: (query: ForumFeedQuery) => Promise<ForumPost[]>;
-  onPostToForum?: (selection: PdfForumSelection) => Promise<void>;
+  onChangeAnnotationPublication?: (input: PdfAnnotationPublicationChange) => Promise<PdfAnnotationPublication>;
   onDeleteOrganizationAnnotation?: (input: { annotation: TeamAnnotation; paper: Paper }) => Promise<void>;
   onShareAnnotationToOrganization?: (input: {
     annotation: PdfAnnotation;
@@ -56,7 +60,6 @@ type ReaderPaneProps = {
     note: string;
     paper: Paper;
   }) => Promise<TeamAnnotation>;
-  onSyncAnnotationToForum?: (input: { annotation: PdfAnnotation; paper: Paper }) => Promise<{ intuechoAnnotationId: string }>;
   onGenerateThinReadingBranch?: (input: {
     artifactId: string;
     document: ThinReadingDocument;
@@ -111,11 +114,10 @@ export function ReaderPane({
   onOpenEvidence,
   onOpenVisualization,
   onLoadForumFeed,
-  onPostToForum,
+  onChangeAnnotationPublication,
   onDeleteOrganizationAnnotation,
   onShareAnnotationToOrganization,
   onUpdateOrganizationAnnotation,
-  onSyncAnnotationToForum,
   onGenerateThinReadingBranch,
   onSyncThinReadingAnnotations,
   onAddReaderContextToConversation,
@@ -203,11 +205,10 @@ export function ReaderPane({
             pdfBackground={pdfBackground}
             onPaperAnnotated={onPaperAnnotated}
             onAddSelectionToConversation={onAddReaderContextToConversation}
-            onPostToForum={onPostToForum}
+            onChangeAnnotationPublication={onChangeAnnotationPublication}
             onDeleteOrganizationAnnotation={onDeleteOrganizationAnnotation}
             onShareAnnotationToOrganization={onShareAnnotationToOrganization}
             onUpdateOrganizationAnnotation={onUpdateOrganizationAnnotation}
-            onSyncAnnotationToForum={onSyncAnnotationToForum}
             selectedPapers={selectedPapers}
             targetEvidence={targetEvidence}
             zoom={zoom}

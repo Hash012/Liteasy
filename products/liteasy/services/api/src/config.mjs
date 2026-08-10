@@ -250,6 +250,18 @@ export function loadCloudConfig(env = process.env) {
     "LITEASY_IDP_VISUALIZATION_SERVICE_CLIENT_ID",
     [identityClientId, desktopClientId, adminClientId, managementClientId, intuechoServiceClientId]
   );
+  const literatureServiceClientId = requireConfidentialClientId(
+    env,
+    "LITEASY_IDP_LITERATURE_SERVICE_CLIENT_ID",
+    [
+      identityClientId,
+      desktopClientId,
+      adminClientId,
+      managementClientId,
+      intuechoServiceClientId,
+      visualizationServiceClientId
+    ]
+  );
   const modelProviders = Object.fromEntries(
     ["openai", "deepseek"].flatMap((provider) => {
       const configured = optionalModelProvider(env, provider, environment);
@@ -282,7 +294,15 @@ export function loadCloudConfig(env = process.env) {
       visualizationServiceClientId
     }),
     intuecho: Object.freeze({
-      adminApiUrl: requireHttpUrl(env, "LITEASY_INTUECHO_ADMIN_API_URL", environment)
+      adminApiUrl: requireHttpUrl(env, "LITEASY_INTUECHO_ADMIN_API_URL", environment),
+      literatureProjection: Object.freeze({
+        apiUrl: requireHttpUrl(env, "LITEASY_INTUECHO_LITERATURE_API_URL", environment),
+        audience: "intuecho-internal",
+        clientId: literatureServiceClientId,
+        clientSecret: required(env, "LITEASY_IDP_LITERATURE_SERVICE_CLIENT_SECRET"),
+        scope: "literature:verify",
+        tokenUrl: requireHttpUrl(env, "LITEASY_IDP_TOKEN_URL", environment)
+      })
     }),
     models: Object.freeze({
       providers: Object.freeze(modelProviders),

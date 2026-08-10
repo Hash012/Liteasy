@@ -45,7 +45,83 @@ function edge(
   };
 }
 
+function densePageInput() {
+  const anchors = Array.from({ length: 8 }, (_, anchorIndex) => ({
+    anchorId: `anchor-${anchorIndex + 1}`
+  }));
+  const sourcesByAnchor = Object.fromEntries(anchors.map((anchor, anchorIndex) => [
+    anchor.anchorId,
+    Array.from({ length: 4 }, (_, sourceIndex) => {
+      const paperIndex = anchorIndex * 4 + sourceIndex + 1;
+      if (paperIndex === 32) {
+        return source("crossref-duplicate", {
+          doi: "10.1000/shared-five",
+          provider: "crossref",
+          sourceId: "10.1000/shared-five"
+        });
+      }
+      const graphId = `W${String(paperIndex).padStart(3, "0")}`;
+      return source(`source-${graphId}`, {
+        canonicalPaperId: `openalex:${graphId}`,
+        ...(paperIndex === 5 ? { doi: "10.1000/shared-five" } : {}),
+        ...(paperIndex === 31 ? { relevance: 1 } : {}),
+        sourceId: graphId
+      });
+    })
+  ]));
+  return { anchors, sourcesByAnchor };
+}
+
 describe("projectAssociationPageGraph", () => {
+  test("selects 24 alias-unioned components by anchor coverage and paper value", () => {
+    const input = densePageInput();
+    const graph = projectAssociationPageGraph({
+      ...input,
+      paperEdges: [
+        edge("openalex:W001", "openalex:W002"),
+        edge("doi:10.1000/shared-five", "openalex:W006"),
+        edge("openalex:W001", "openalex:W030"),
+        edge("openalex:W030", "openalex:W031")
+      ]
+    });
+
+    expect(graph.paperNodes).toHaveLength(24);
+    expect(graph.hiddenPaperCount).toBe(7);
+    for (const anchor of input.anchors) {
+      expect(graph.paperNodes.some((paper) => paper.anchorIds.includes(anchor.anchorId))).toBe(true);
+    }
+    expect(graph.paperNodes.map((node) => node.paperKey)).toContain("openalex:W031");
+    expect(graph.paperNodes.find((node) => node.paperKey === "openalex:W005")?.anchorIds)
+      .toEqual(["anchor-2", "anchor-8"]);
+    expect(graph.paperEdges.map((relation) => [relation.sourcePaperKey, relation.targetPaperKey]))
+      .toEqual([
+        ["openalex:W001", "openalex:W002"],
+        ["openalex:W005", "openalex:W006"]
+      ]);
+  });
+
+  test("keeps the shared paper budget when anchor coverage alone exceeds 24", () => {
+    const anchors = Array.from({ length: 25 }, (_, index) => ({
+      anchorId: `anchor-${String(index + 1).padStart(2, "0")}`,
+      quality: { score: 1 - index * 0.01 }
+    }));
+    const graph = projectAssociationPageGraph({
+      anchors,
+      paperEdges: [],
+      sourcesByAnchor: Object.fromEntries(anchors.map((anchor, index) => [
+        anchor.anchorId,
+        [source(`source-${index + 1}`, {
+          canonicalPaperId: `openalex:W${String(index + 1).padStart(3, "0")}`
+        })]
+      ]))
+    });
+
+    expect(graph.paperNodes).toHaveLength(24);
+    expect(graph.hiddenPaperCount).toBe(1);
+    expect(graph.paperNodes.some((paper) => paper.anchorIds.includes("anchor-01"))).toBe(true);
+    expect(graph.paperNodes.some((paper) => paper.anchorIds.includes("anchor-25"))).toBe(false);
+  });
+
   test("keeps verified relations across different anchor owners", () => {
     const graph = projectAssociationPageGraph({
       anchors: [{ anchorId: "anchor-a" }, { anchorId: "anchor-b" }],

@@ -2394,6 +2394,7 @@ dependencies = [
  "tauri-build",
  "url",
  "webbrowser",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

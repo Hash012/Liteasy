@@ -1,5 +1,11 @@
 import { Button, Tooltip } from "@fluentui/react-components";
-import { BookRegular, PeopleRegular, PersonRegular, SettingsRegular } from "@fluentui/react-icons";
+import {
+  BookRegular,
+  FolderOpenRegular,
+  PeopleRegular,
+  PersonRegular,
+  SettingsRegular
+} from "@fluentui/react-icons";
 import type { ReactElement } from "react";
 import type { LeftRailView } from "./useLeftRailNavigation";
 
@@ -12,6 +18,7 @@ type ActivityBarProps = {
 
 const activityItems: Array<{ icon: ReactElement; label: string; view: LeftRailView }> = [
   { icon: <BookRegular />, label: "文献库", view: "library" },
+  { icon: <FolderOpenRegular />, label: "产物库", view: "artifact-library" },
   { icon: <PeopleRegular />, label: "组织", view: "organization" },
   { icon: <PersonRegular />, label: "个人中心", view: "profile" },
   { icon: <SettingsRegular />, label: "设置", view: "settings" }

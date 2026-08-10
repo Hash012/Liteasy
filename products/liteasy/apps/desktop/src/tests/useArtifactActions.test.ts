@@ -1745,8 +1745,9 @@ describe("useArtifactActions", () => {
       });
     });
 
+    let outcome;
     await act(async () => {
-      await actions.result.current.deleteArtifact("artifact-saved");
+      outcome = await actions.result.current.deleteArtifact("artifact-saved");
     });
 
     expect(actions.onArtifactCatalogChanged).toHaveBeenLastCalledWith([
@@ -1755,6 +1756,10 @@ describe("useArtifactActions", () => {
     expect(actions.onAnalysisHint).toHaveBeenLastCalledWith(
       "删除多模态产物失败：disk busy"
     );
+    expect(outcome).toEqual({
+      message: "删除多模态产物失败：disk busy",
+      status: "error"
+    });
   });
 
   test("regenerates from the persisted source-paper set and saves provenance", async () => {

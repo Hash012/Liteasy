@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { pageGraphPaperKey } from "../associations/associationGraphLayout";
+import { projectAssociationPageGraph } from "../associations/associationGraphProjection";
 import {
   createThinReadingPaperRelationsClient,
   normalizeThinReadingPaperRelationEdges,
@@ -8,7 +8,6 @@ import {
 } from "./thinReadingPaperRelationsClient";
 import type {
   ThinReadingDocument,
-  ThinReadingExternalSource,
   ThinReadingRecommendationPaperEdge
 } from "./thinReading.types";
 
@@ -21,20 +20,22 @@ type UseThinReadingPaperRelationsInput = {
   transport?: ThinReadingPaperRelationsTransport;
 };
 
-function listAnchorSources(node: UseThinReadingPaperRelationsInput["node"]) {
+function projectNodePapers(node: UseThinReadingPaperRelationsInput["node"]) {
   const sourceById = new Map(
     (node.evidence.externalSources ?? []).map((source) => [source.id, source])
   );
-  const sourceByPaperKey = new Map<string, ThinReadingExternalSource>();
-  for (const sourceId of (node.evidence.anchors ?? []).flatMap((anchor) => anchor.externalSourceIds)) {
-    const source = sourceById.get(sourceId);
-    if (!source) continue;
-    const paperKey = pageGraphPaperKey(source);
-    if (paperKey && !sourceByPaperKey.has(paperKey)) sourceByPaperKey.set(paperKey, source);
-  }
-  return [...sourceByPaperKey.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, source]) => source);
+  const anchors = node.evidence.anchors ?? [];
+  return projectAssociationPageGraph({
+    anchors: anchors.map((anchor) => ({ anchorId: anchor.id, quality: anchor.quality })),
+    paperEdges: node.evidence.recommendationPaperEdges ?? [],
+    sourcesByAnchor: Object.fromEntries(anchors.map((anchor) => [
+      anchor.id,
+      anchor.externalSourceIds.flatMap((sourceId) => {
+        const source = sourceById.get(sourceId);
+        return source ? [source] : [];
+      })
+    ]))
+  }).paperNodes;
 }
 
 function edgeSnapshot(edges: readonly ThinReadingRecommendationPaperEdge[]) {
@@ -44,8 +45,9 @@ function edgeSnapshot(edges: readonly ThinReadingRecommendationPaperEdge[]) {
 type RelationAttemptStatus = "failed" | "in_flight" | "succeeded";
 
 export function useThinReadingPaperRelations(input: UseThinReadingPaperRelationsInput) {
-  const pageSources = listAnchorSources(input.node);
-  const paperKeys = pageSources.map(pageGraphPaperKey);
+  const projectedPapers = projectNodePapers(input.node);
+  const pageSources = projectedPapers.map((paper) => paper.source);
+  const paperKeys = projectedPapers.map((paper) => paper.paperKey);
   const requestKey = JSON.stringify([input.artifactId, input.node.id, paperKeys]);
   const persistedEdges = input.node.evidence.recommendationPaperEdges ?? [];
   const persistedSnapshot = edgeSnapshot(persistedEdges);
@@ -82,7 +84,7 @@ export function useThinReadingPaperRelations(input: UseThinReadingPaperRelations
     }
 
     const controller = new AbortController();
-    const requestedPaperKeys = new Set(paperKeys.slice(0, 24));
+    const requestedPaperKeys = new Set(paperKeys);
     setLoading(true);
     setWarnings([]);
     queueMicrotask(() => {
@@ -94,6 +96,7 @@ export function useThinReadingPaperRelations(input: UseThinReadingPaperRelations
       })({
         artifactId: input.artifactId,
         papers: requestSources,
+        paperKeys,
         signal: controller.signal
       }).then((result) => {
         if (controller.signal.aborted) return;

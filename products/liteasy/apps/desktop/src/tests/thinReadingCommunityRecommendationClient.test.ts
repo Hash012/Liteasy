@@ -15,6 +15,7 @@ const communityIdentity = {
 const communityScope: ThinReadingRecommendationScope = {
   evidenceIds: ["evidence-attention"],
   kind: "selected_passage",
+  literatureId: "literature-attention",
   paperId: "paper-attention",
   paperIdentity: {
     candidates: [communityIdentity],
@@ -40,18 +41,14 @@ describe("thinReadingCommunityRecommendationClient", () => {
 
     await expect(client({
       kind: "whole_paper",
+      literatureId: "literature-attention",
       paperId: "paper-attention",
       paperIdentity: communityScope.paperIdentity
     })).resolves.toEqual([]);
     expect(JSON.parse(transport.mock.calls[0][0].body)).toEqual({
       scope: {
         kind: "document",
-        paperIdentity: {
-          id: "doi:10.48550/arxiv.1706.03762",
-          kind: "doi",
-          source: "metadata",
-          value: "10.48550/arxiv.1706.03762"
-        }
+        literatureId: "literature-attention"
       }
     });
   });
@@ -63,7 +60,7 @@ describe("thinReadingCommunityRecommendationClient", () => {
           compatibility: 0.82,
           id: "community-recommendation-1",
           note: "社区批注讨论 self-attention 的并行化影响。",
-          paperIdentity: communityIdentity,
+          literatureId: "literature-attention",
           relationship: "方法与问题设定",
           source: "intuecho_community"
         }]
@@ -92,12 +89,7 @@ describe("thinReadingCommunityRecommendationClient", () => {
         evidenceIds: ["evidence-attention"],
         externalSourceIds: [],
         kind: "selected_passage",
-        paperIdentity: {
-          id: "doi:10.48550/arxiv.1706.03762",
-          kind: "doi",
-          source: "metadata",
-          value: "10.48550/arxiv.1706.03762"
-        }
+        literatureId: "literature-attention"
       }
     });
   });
@@ -122,7 +114,7 @@ describe("thinReadingCommunityRecommendationClient", () => {
             compatibility: 0.82,
             id: "wrong-source",
             note: "不应显示。",
-            paperIdentity: communityIdentity,
+            literatureId: "other-literature",
             relationship: "关联",
             source: "local_agent_lead"
           }]
@@ -133,7 +125,7 @@ describe("thinReadingCommunityRecommendationClient", () => {
     });
 
     expect(hasThinReadingCommunityIdentity(localScope)).toBe(false);
-    await expect(client(localScope)).rejects.toThrow("当前文献只有本地身份");
+    await expect(client(localScope)).rejects.toThrow("尚未完成来源确认");
     await expect(client(communityScope)).rejects.toThrow("响应无效或不属于当前文献");
   });
 });

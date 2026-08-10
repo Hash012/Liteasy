@@ -120,6 +120,10 @@ export type ArtifactCatalogLoadState = {
   status: "error" | "idle" | "loading" | "ready";
 };
 
+export type ArtifactMutationOutcome =
+  | { message: string; status: "error" }
+  | { message: string; status: "success" };
+
 export type ArtifactPaperRef = {
   arxivId?: string;
   authors?: readonly string[] | string;

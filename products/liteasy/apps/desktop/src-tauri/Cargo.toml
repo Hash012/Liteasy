@@ -20,6 +20,9 @@ rfd = "0.15"
 url = "2.5.8"
 webbrowser = { version = "1.2.4", features = ["hardened"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

@@ -1,37 +1,44 @@
+import type {
+  AnnotationTarget as ContractAnnotationTarget,
+  LiteratureReference as ContractLiteratureReference,
+  LiteratureCandidate,
+  LiteratureConfirmInput,
+  LiteratureRecord,
+  LiteratureResolveInput,
+  LiteratureResolveResult,
+  UpdateReplyPublicationInput
+} from "@intuecho/contracts";
+
+export type {
+  AnnotationTarget as ContractAnnotationTarget,
+  LiteratureReference as ContractLiteratureReference,
+  LiteratureCandidate,
+  LiteratureConfirmInput,
+  LiteratureRecord,
+  LiteratureResolveInput,
+  LiteratureResolveResult,
+  UpdateReplyPublicationInput
+} from "@intuecho/contracts";
+
 export type PaperIdentity = {
   id: string;
-  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "title_authors_year_hash";
+  kind: "doi" | "arxiv_id" | "semantic_scholar_id" | "openalex_id" | "title_authors_year_hash";
   source: "inferred" | "metadata";
   value: string;
 };
 
-export type LiteratureReference = {
-  identity: PaperIdentity;
-  metadata: {
-    authors: string[];
-    documentType?: string;
-    title: string;
-    year?: number;
-  };
-};
-
-export type SourceEvidence = {
-  anchorHash: string;
-  excerpt: string;
-  literature: LiteratureReference;
-  page?: number;
-  rects: Array<Record<string, unknown>>;
-};
-
-export type AnnotationTarget =
-  | { kind: "whole_document"; literature: LiteratureReference }
-  | ({ kind: "source_passage" } & SourceEvidence)
-  | {
-      derivedContent: { artifactId: string; excerpt: string; nodeId?: string; version: string };
-      evidence: SourceEvidence[];
-      kind: "derived_passage";
-      literature: LiteratureReference;
-    };
+export type LiteratureReference = ContractLiteratureReference;
+export type AnnotationTarget = ContractAnnotationTarget;
+type LiteratureReadReference<T> = T & { literatureRecord?: LiteratureRecord };
+type AnnotationReadEvidence<T> = T extends { literature: infer Reference }
+  ? Omit<T, "literature"> & { literature: LiteratureReadReference<Reference> }
+  : T;
+type AnnotationReadProjection<T> = T extends { literature: infer Reference }
+  ? Omit<T, "evidence" | "literature"> &
+      { literature: LiteratureReadReference<Reference> } &
+      (T extends { evidence: Array<infer Evidence> } ? { evidence: Array<AnnotationReadEvidence<Evidence>> } : {})
+  : T;
+export type AnnotationReadTarget = AnnotationReadProjection<ContractAnnotationTarget>;
 
 export type AnnotationVisibility = "private" | "organization" | "mutual_followers" | "public";
 
@@ -55,7 +62,7 @@ export type CommunityAnnotation = {
   revision: number;
   shareToPlaza: boolean;
   tags: Array<{ confidence: number | null; name: string; origin: "platform" | "user"; state: "active" | "appealed" | "upheld" }>;
-  targets: AnnotationTarget[];
+  targets: AnnotationReadTarget[];
   updatedAt: string;
   viewerCanModerate: boolean;
   viewerIsAuthor: boolean;
@@ -92,6 +99,7 @@ export type CommunityReply = {
   body: string;
   createdAt: string;
   derivedAnnotationId: string | null;
+  derivedAnnotationState: "none" | "published" | "withdrawn";
   id: string;
   parentAnnotationId: string;
   revision: number;
@@ -119,16 +127,19 @@ export type ConversationSummary = {
 
 export type CreateReplyInput = {
   body: string;
-  shareToPlaza: boolean;
+  publishAsAnnotation: boolean;
   tags: string[];
   targets: AnnotationTarget[];
 };
+
+export type ReplyPublicationInput = UpdateReplyPublicationInput;
 
 export type PlazaFilters = {
   documentType?: string;
   educationStage?: string;
   institution?: string;
   limit?: number;
+  literatureId?: string;
   literatureIdentityKind?: PaperIdentity["kind"];
   literatureIdentityValue?: string;
   query?: string;

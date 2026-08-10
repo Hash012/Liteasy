@@ -20,6 +20,7 @@ function environment(overrides = {}) {
     INTUECHO_IDP_JWKS_URL: "http://identity.test/jwks",
     INTUECHO_IDP_TOKEN_URL: "http://identity.test/token",
     INTUECHO_IDP_WEB_CLIENT_ID: "intuecho-web",
+    INTUECHO_LITEASY_LITERATURE_SERVICE_CLIENT_ID: "liteasy-literature-service",
     INTUECHO_MIGRATION_DATABASE_URL: "postgresql://intuecho_migrator:secret@postgres.test/intuecho",
     INTUECHO_ORGANIZATION_API_URL: "http://liteasy.test",
     INTUECHO_ORGANIZATION_SERVICE_CLIENT_ID: "intuecho-organization-service",
@@ -35,6 +36,7 @@ test("loads a separate PostgreSQL, IdP and administration boundary", () => {
   assert.equal(config.identity.webClientId, "intuecho-web");
   assert.equal(config.organizationAuthorization.audience, "liteasy-internal");
   assert.equal(config.organizationAuthorization.clientId, "intuecho-organization-service");
+  assert.equal(config.literatureProjection.clientId, "liteasy-literature-service");
   assert.deepEqual(publicIntuechoIdentityConfig(config), {
     audience: "intuecho-web",
     authorizationFlow: "authorization_code_pkce",
@@ -42,6 +44,22 @@ test("loads a separate PostgreSQL, IdP and administration boundary", () => {
     issuer: "http://identity.test"
   });
   assert.equal(loadIntuechoMigrationConfig(environment()).applicationRole, "intuecho_app");
+});
+
+test("keeps optional literature provider keys in the runtime-only configuration", () => {
+  const config = loadIntuechoProductionConfig(environment({
+    INTUECHO_OPENALEX_API_KEY: "openalex-secret",
+    INTUECHO_SEMANTIC_SCHOLAR_API_KEY: "semantic-scholar-secret"
+  }));
+  assert.deepEqual(config.literatureProviders, {
+    arxivEndpoint: "https://export.arxiv.org/api/query",
+    crossrefEndpoint: "https://api.crossref.org/works",
+    openAlexApiKey: "openalex-secret",
+    openAlexEndpoint: "https://api.openalex.org/works",
+    semanticScholarApiKey: "semantic-scholar-secret",
+    semanticScholarEndpoint: "https://api.semanticscholar.org/graph/v1/paper"
+  });
+  assert.equal(JSON.stringify(publicIntuechoIdentityConfig(config)).includes("secret"), false);
 });
 
 test("requires HTTPS and non-loopback services outside tests", () => {
@@ -69,6 +87,10 @@ test("rejects wildcard origins and shared database or identity roles", () => {
   );
   assert.throws(
     () => loadIntuechoProductionConfig(environment({ INTUECHO_ORGANIZATION_SERVICE_CLIENT_ID: "intuecho-api" })),
+    /must be distinct/
+  );
+  assert.throws(
+    () => loadIntuechoProductionConfig(environment({ INTUECHO_LITEASY_LITERATURE_SERVICE_CLIENT_ID: "intuecho-organization-service" })),
     /must be distinct/
   );
   assert.throws(

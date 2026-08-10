@@ -3,7 +3,7 @@ import type { AssistantMode } from "./assistant.types";
 import { getDefaultModelForProvider } from "../models/modelPolicy";
 import { createModelGatewayFromSettings } from "../models/modelRuntime";
 import { createHttpModelAuditClient, type ModelAuditTransport } from "../models/modelAuditClient";
-import type { ModelTransport } from "../models/modelHttpClient";
+import type { ModelTransport, ModelTransportResponse } from "../models/modelHttpClient";
 import type { RetrievalChunk } from "../retrieval/retrieval.types";
 import type { SettingsState } from "../settings/settings.types";
 import type { Paper } from "../workspace/workspace.types";
@@ -22,13 +22,16 @@ import type { PreparedMultiPaperAnalysis } from "../paper-analysis/analysis.type
 import type { ModelGenerationResult } from "../models/modelGateway";
 import {
   buildThinReadingAgentPrompt,
+  buildThinReadingAiInterpretationReviewPrompt,
   buildThinReadingEvidenceObservationPrompt,
   buildThinReadingEvidencePlanPrompt,
   buildThinReadingEvidenceReviewPrompt,
   type ThinReadingEvidenceObservation,
   type ThinReadingEvidencePlan,
   type ThinReadingEvidenceReview,
+  type ThinReadingAiInterpretationReview,
   type RequiredChineseTerminology,
+  parseThinReadingAiInterpretationReview,
   parseThinReadingEvidenceObservation,
   parseThinReadingEvidencePlan,
   parseThinReadingEvidenceReview,
@@ -37,9 +40,12 @@ import {
   thinReadingEvidenceObservationJsonSchema,
   thinReadingEvidencePlanJsonSchema,
   thinReadingEvidenceReviewJsonSchema,
+  thinReadingAiInterpretationReviewJsonSchema,
   thinReadingModelOutputJsonSchema
 } from "../thin-reading/thinReadingAgent";
 import type {
+  ThinReadingExternalFallbackAudit,
+  ThinReadingExternalFallbackReason,
   ThinReadingGenerationContext,
   ThinReadingGenerationAudit,
   ThinReadingExternalSource,
@@ -56,6 +62,8 @@ import {
   type ThinReadingExternalPdfTransport
 } from "../thin-reading/thinReadingExternalFullTextClient";
 import { executeThinReadingEvidenceToolPlan } from "../thin-reading/thinReadingEvidenceTools";
+import mermaid from "mermaid";
+import { autoRepairMermaid, buildMermaidRepairInstruction } from "../mermaid/mermaidRepair";
 import {
   compactThinReadingContext,
   planThinReadingWorkload
@@ -124,6 +132,26 @@ type ThinReadingGenerationResult = {
   rootSeed: ThinReadingNodeSeed;
 };
 
+async function validateOrRepairThinReadingMermaid(seed: ThinReadingNodeSeed) {
+  const code = seed.evidence.mermaid?.trim();
+  if (!code) return seed;
+  try {
+    await mermaid.parse(code, { suppressErrors: true });
+    return seed;
+  } catch (error) {
+    const diagnostic = error instanceof Error
+      ? error.message.replace(/\s+/g, " ").slice(0, 420)
+      : "Mermaid 无法解析图形。";
+    const repaired = autoRepairMermaid(code);
+    try {
+      await mermaid.parse(repaired, { suppressErrors: true });
+      return { ...seed, evidence: { ...seed.evidence, mermaid: repaired } };
+    } catch {
+      throw new Error(`Mermaid 图形未通过语法质量门。${buildMermaidRepairInstruction(code, diagnostic)}`);
+    }
+  }
+}
+
 type ThinReadingExternalRecoveryInput = {
   failedSourceIds: readonly string[];
   node: ThinReadingNodeSeed;
@@ -135,6 +163,87 @@ type ThinReadingExternalRecoveryResult = {
   sources: readonly ThinReadingExternalSource[];
   status: "available" | "empty" | "unavailable";
 };
+
+type ThinReadingExternalAcquisitionResult =
+  | { kind: "sources"; sources: readonly ThinReadingExternalSource[] }
+  | {
+      audit: ThinReadingExternalFallbackAudit;
+      kind: "unavailable";
+      reason: ThinReadingExternalFallbackReason;
+    };
+
+class ThinReadingExternalRouteUnavailableError extends Error {
+  constructor() {
+    super("Thin-reading external route unavailable");
+    this.name = "ThinReadingExternalRouteUnavailableError";
+  }
+}
+
+class ThinReadingAiInterpretationReviewRequestError extends Error {
+  constructor(readonly originalError: unknown) {
+    super("Thin-reading AI interpretation review request failed");
+    this.name = "ThinReadingAiInterpretationReviewRequestError";
+  }
+}
+
+class ThinReadingExternalRecoveryRequestError extends Error {
+  constructor(readonly originalError: unknown) {
+    super("Thin-reading external recovery request failed");
+    this.name = "ThinReadingExternalRecoveryRequestError";
+  }
+}
+
+function isAbortError(error: unknown) {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "name" in error &&
+    error.name === "AbortError"
+  );
+}
+
+const thinReadingExternalNetworkFailureMessages = new Set([
+  "Failed to fetch",
+  "NetworkError when attempting to fetch resource.",
+  "Load failed",
+  "fetch failed"
+]);
+
+function isThinReadingExternalNetworkUnavailable(error: unknown) {
+  return error instanceof Error && thinReadingExternalNetworkFailureMessages.has(error.message);
+}
+
+function createThinReadingExternalRouteTransport(
+  transport?: ThinReadingExternalKnowledgeTransport
+): ThinReadingExternalKnowledgeTransport {
+  const routeTransport = transport ?? (async (request): Promise<ModelTransportResponse> => fetch(
+    request.url,
+    {
+      body: request.body,
+      headers: request.headers,
+      method: request.method,
+      signal: request.signal
+    }
+  ));
+  return async (request) => {
+    let response: ModelTransportResponse;
+    try {
+      response = await routeTransport(request);
+    } catch (error) {
+      if (request.signal?.aborted || isAbortError(error)) {
+        throw error;
+      }
+      if (isThinReadingExternalNetworkUnavailable(error)) {
+        throw new ThinReadingExternalRouteUnavailableError();
+      }
+      throw error;
+    }
+    if (!response.ok) {
+      throw new ThinReadingExternalRouteUnavailableError();
+    }
+    return response;
+  };
+}
 
 // Up to twelve bounded chunks fit comfortably in the reader prompt. Planning below
 // that point adds two serial model calls without reducing context pressure.
@@ -203,9 +312,7 @@ function buildThinReadingAuxiliaryRetryPrompt(input: {
 }
 
 function requiresThinReadingExternalKnowledge(context: ThinReadingGenerationContext) {
-  return Boolean(context.externalSources?.length) && (
-    context.interpretationPlan?.externalKnowledgeNeeded ?? context.source.kind !== "root_overview"
-  );
+  return context.interpretationPlan?.externalKnowledgeNeeded ?? context.source.kind !== "root_overview";
 }
 
 type AnalysisSubtask = {
@@ -240,6 +347,41 @@ function scopeThinReadingEvidence(
     evidence,
     evidencePrompt: formatSubtaskEvidence(evidence),
     paperClaims: prepared.paperClaims.filter((claim) => claim.evidenceIds.some((id) => selectedIds.has(id)))
+  };
+}
+
+function withoutThinReadingEvidence(
+  prepared: PreparedMultiPaperAnalysis
+): PreparedMultiPaperAnalysis {
+  return {
+    ...prepared,
+    citations: [],
+    evidence: [],
+    evidencePrompt: "",
+    paperClaims: []
+  };
+}
+
+function buildAiInterpretationContext(
+  context: ThinReadingGenerationContext
+): ThinReadingGenerationContext {
+  return {
+    ...context,
+    ancestorSummaries: [],
+    availableFigures: [],
+    externalSources: [],
+    parentClaims: [],
+    parentEvidenceSpans: [],
+    parentSummary: undefined,
+    selectedExternalSources: [],
+    source: context.source.kind === "selected_text"
+      ? {
+          ...context.source,
+          evidenceIds: undefined,
+          excerpt: "",
+          externalSourceIds: undefined
+        }
+      : context.source
   };
 }
 
@@ -469,6 +611,12 @@ function thinReadingSourceText(context: ThinReadingGenerationContext) {
     return [context.source.label, context.source.sectionKey, context.prompt].filter(Boolean).join(" ");
   }
   return context.prompt ?? "";
+}
+
+function canUseThinReadingAiInterpretationFallback(context: ThinReadingGenerationContext) {
+  return context.parentWithinPaperClosure === false ||
+    Boolean(context.source.kind === "selected_text" && context.source.externalSourceIds?.length) ||
+    externalResearchIntent.test(thinReadingSourceText(context));
 }
 
 export function planThinReadingInterpretation(input: {
@@ -886,6 +1034,7 @@ function buildThinReadingRepairPrompt(input: {
   invalidOutput: string;
   requireExternalKnowledge: boolean;
   reason: string;
+  supportMode?: "ai_interpretation";
   targetedEvidenceRepair?: {
     node: ThinReadingNodeSeed;
     prepared: PreparedMultiPaperAnalysis;
@@ -924,10 +1073,11 @@ function buildThinReadingRepairPrompt(input: {
     input.reason,
     "</quality_gate_reason>",
     "修复要求：",
-    ...(isAnchorRepair ? [
+    ...(input.supportMode === "ai_interpretation" ? [
+      "该输出处于无文献依据的 AI 独立理解档。删除来源归因、引用、精确经验数据和命名研究发现；保留明确标记为可能性、假设或概念推理的内容。所有证据与来源字段必须保持为空。"
+    ] : isAnchorRepair ? [
       "- 本轮只修复 anchors；summary、summarySentences、claims、paperEvidence、externalKnowledge、omittedSections 和正文证据映射必须逐字保持不变。",
       "- anchors[].text 是正文高亮 span，必须从 summarySentences[summarySentenceIndex].text 逐字复制一个只出现一次的连续片段，不能概括、改写或翻译。",
-      "- anchors[].label 才是概括性名称；例如正文是“通用数据结构”时，text 可为“通用数据结构”，label 可为“数据结构优化”，不能反过来。",
       "- 不得为了适配 anchor 修改正文；找不到唯一精确片段时删除该 anchor。",
       "- 逐条重新校验所有 anchors。",
       "- anchors[].kind 只能逐字使用 claim、concept、contribution、limitation、mechanism、method、result 之一；机制使用 mechanism，论文的独特增量使用 contribution。"
@@ -974,7 +1124,10 @@ function buildThinReadingRepairPrompt(input: {
     input.invalidOutput.slice(0, 8000),
     "</invalid_output>",
     "最终修复检查清单：",
-    ...(isAnchorRepair ? [
+    ...(input.supportMode === "ai_interpretation" ? [
+      "- 所有正文句保持为明确标记的不确定性推理；不得伪造来源、引用、精确经验数据或命名研究发现。",
+      "- paperEvidence、externalKnowledge、claims[].evidenceIds、anchors、recommendedFigures、mermaid 和 interactiveDemo 必须保持为空。"
+    ] : isAnchorRepair ? [
       "- 只修复 anchors；正文、句级证据映射和 claims 必须逐字不变。",
       "- 每个 anchor.text 在目标句中逐字、连续且只出现一次；kind 只使用允许枚举。"
     ] : targetedRepair ? [
@@ -1217,6 +1370,38 @@ async function reviewThinReadingEvidence(input: {
   }
 }
 
+async function reviewThinReadingAiInterpretation(input: {
+  gateway: ReturnType<typeof createModelGatewayFromSettings>;
+  model: string;
+  node: ThinReadingNodeSeed;
+  onProgress?: GenerateAssistantAnswerInput["onProgress"];
+  provider: string;
+  signal?: AbortSignal;
+}): Promise<ThinReadingAiInterpretationReview> {
+  const sentences = input.node.evidence.summarySentences ?? [];
+  input.onProgress?.({
+    phase: "reviewing_ai_interpretation",
+    progress: 73,
+    summary: "正在检查 AI 独立理解的来源归因与事实边界"
+  });
+  const generation = await input.gateway.generateAnswer({
+    model: input.model,
+    outputFormat: {
+      name: "liteasy_thin_reading_ai_interpretation_review",
+      schema: thinReadingAiInterpretationReviewJsonSchema,
+      strict: true
+    },
+    prompt: buildThinReadingAiInterpretationReviewPrompt({ sentences }),
+    provider: input.provider,
+    requireLive: true,
+    signal: input.signal
+  });
+  return parseThinReadingAiInterpretationReview(
+    generation.answer,
+    sentences.map((sentence) => sentence.id)
+  );
+}
+
 function canFallbackFromExternalThinReadingEvidence(context: ThinReadingGenerationContext) {
   if (context.parentWithinPaperClosure === false) {
     return false;
@@ -1271,32 +1456,6 @@ function externalRecoveryQuery(input: {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 500);
-}
-
-function buildExternalEvidenceBoundarySeed(input: {
-  context: ThinReadingGenerationContext;
-  status: ThinReadingExternalRecoveryResult["status"];
-}): ThinReadingNodeSeed {
-  const isChinese = input.context.targetLanguage.trim().toLowerCase().startsWith("zh");
-  const summary = isChinese
-    ? input.status === "unavailable"
-      ? "当前选区已接近论文原文闭包。本轮无法完成论文外文献检索，因此不对原文之外的命题作推断。"
-      : "当前选区已接近论文原文闭包。本轮未找到能直接支持所问论文外命题的可追溯文献，因此不作超出原文的推断。"
-    : input.status === "unavailable"
-      ? "This selection is near the paper-text closure. External literature retrieval was unavailable, so no claim beyond the paper is inferred."
-      : "This selection is near the paper-text closure. No traceable external source directly supports the requested beyond-paper claim, so no extrapolation is made.";
-  return {
-    closureState: "near_boundary",
-    evidence: {
-      externalKnowledge: [],
-      externalSources: [],
-      paperEvidence: []
-    },
-    omittedSections: [],
-    recommendations: [],
-    summary,
-    withinPaperClosure: true
-  };
 }
 
 function removeUnsupportedExternalSentences(input: {
@@ -1401,7 +1560,7 @@ async function generateThinReadingWithQualityRepair(input: {
   provider: string;
   retryExternalSources?: (input: ThinReadingExternalRecoveryInput) => Promise<ThinReadingExternalRecoveryResult>;
   signal?: AbortSignal;
-  externalSourcesPromise?: Promise<readonly ThinReadingExternalSource[] | undefined>;
+  externalSourcesPromise?: Promise<ThinReadingExternalAcquisitionResult>;
 }): Promise<{
   evidenceLoop?: ThinReadingGenerationAudit["evidenceLoop"];
   evidencePlan?: ThinReadingEvidencePlan;
@@ -1411,6 +1570,9 @@ async function generateThinReadingWithQualityRepair(input: {
   qualityGate: ThinReadingGenerationResult["qualityGate"];
   rootSeed: ThinReadingNodeSeed;
 }> {
+  const requestedOutput = "requestedOutput" in input.context.source
+    ? input.context.source.requestedOutput
+    : undefined;
   const workload = planThinReadingWorkload({
     depth: input.context.depth,
     evidenceCharacters: input.prepared.evidence.reduce((total, evidence) => (
@@ -1421,12 +1583,46 @@ async function generateThinReadingWithQualityRepair(input: {
       input.context.externalSources?.length ?? 0,
       input.context.interpretationPlan?.externalKnowledgeNeeded ? 1 : 0
     ),
-    figureCount: input.context.availableFigures?.length
+    figureCount: input.context.availableFigures?.length,
+    requestedOutput
   });
   const compacted = compactThinReadingContext(input.context, workload.contextBudgetTokens);
   const context = compacted.context;
-  const requiredChineseTerminology = extractRequiredChineseTerminology(context);
-  const firstEvidencePlan = await planThinReadingEvidence({ ...input, context, workload });
+  const acquisition = input.externalSourcesPromise
+    ? await input.externalSourcesPromise
+    : { kind: "sources" as const, sources: context.externalSources ?? [] };
+  const aiInterpretationFallbackAllowed = canUseThinReadingAiInterpretationFallback(context);
+  const carriedGenerationSources = mergeThinReadingExternalSources(
+    context.externalSources,
+    context.selectedExternalSources
+  );
+  let supportMode: "ai_interpretation" | undefined = acquisition.kind === "unavailable" &&
+    aiInterpretationFallbackAllowed
+    ? "ai_interpretation"
+    : undefined;
+  let externalFallbackAudit = acquisition.kind === "unavailable" ? acquisition.audit : undefined;
+  if (supportMode === "ai_interpretation") {
+    const remainingTrustedSources = prioritizeThinReadingGenerationSources({
+      context,
+      sources: carriedGenerationSources
+    });
+    if (!requiresThinReadingExternalKnowledge(context) || remainingTrustedSources.length > 0) {
+      throw new Error("AI 独立理解降级未满足外部知识需求与空来源约束。");
+    }
+  }
+  let generationContext = supportMode === "ai_interpretation"
+    ? buildAiInterpretationContext(context)
+    : {
+        ...context,
+        externalSources: acquisition.kind === "sources" ? acquisition.sources : carriedGenerationSources
+      };
+  const requiresExternalKnowledgeForCurrentContext = () => !supportMode &&
+    requiresThinReadingExternalKnowledge(generationContext) &&
+    (generationContext.externalSources?.length ?? 0) > 0;
+  let requiredChineseTerminology = extractRequiredChineseTerminology(generationContext);
+  const firstEvidencePlan = supportMode
+    ? undefined
+    : await planThinReadingEvidence({ ...input, context: generationContext, workload });
   const firstEvidenceToolResult = firstEvidencePlan
     ? executeThinReadingEvidenceToolPlan({ plan: firstEvidencePlan, prepared: input.prepared })
     : undefined;
@@ -1545,15 +1741,6 @@ async function generateThinReadingWithQualityRepair(input: {
         ]
       }
     : undefined;
-  const resolvedExternalSources = input.externalSourcesPromise
-    ? await input.externalSourcesPromise
-    : undefined;
-  let generationContext = input.externalSourcesPromise
-    ? {
-        ...context,
-        ...(resolvedExternalSources ? { externalSources: resolvedExternalSources } : {})
-      }
-    : input.context;
   const deterministicEvidenceIds = input.prepared.evidence
     .slice(0, maximumEvidenceAcrossPlanningRounds)
     .map((evidence) => evidence.id);
@@ -1562,27 +1749,35 @@ async function generateThinReadingWithQualityRepair(input: {
     : input.prepared.evidence.length > maximumEvidenceAcrossPlanningRounds
       ? scopeThinReadingEvidence(input.prepared, deterministicEvidenceIds)
       : input.prepared;
-  const privateBriefs = await runThinReadingResponsibilitySubagents({
-    context: generationContext,
-    gateway: input.gateway,
-    model: input.model,
-    onSubtaskDelta: input.onSubtaskDelta,
-    prepared: plannedEvidence,
-    provider: input.provider,
-    signal: input.signal,
-    workload
-  });
+  let generationPrepared = supportMode === "ai_interpretation"
+    ? withoutThinReadingEvidence(plannedEvidence)
+    : plannedEvidence;
+  const privateBriefs = supportMode
+    ? undefined
+    : await runThinReadingResponsibilitySubagents({
+        context: generationContext,
+        gateway: input.gateway,
+        model: input.model,
+        onSubtaskDelta: input.onSubtaskDelta,
+        prepared: generationPrepared,
+        provider: input.provider,
+        signal: input.signal,
+        workload
+      });
   let basePrompt = buildThinReadingAgentPrompt({
     context: generationContext,
-    prepared: plannedEvidence,
-    privateBriefs
+    prepared: generationPrepared,
+    privateBriefs,
+    supportMode
   });
   const repairReasons: string[] = [];
   let prompt = basePrompt;
   let targetedEvidenceRepair: Parameters<typeof buildThinReadingRepairPrompt>[0]["targetedEvidenceRepair"];
+  let aiInterpretationReview: ThinReadingGenerationAudit["aiInterpretationReview"];
   let deterministicRepairApplied = false;
   let externalRecoveryApplied = false;
-  const maximumAttempts = generationContext.source.kind === "root_overview" ? 3 : 2;
+  let verificationExhaustionTransitionApplied = false;
+  let maximumAttempts = generationContext.source.kind === "root_overview" ? 3 : 2;
   for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
     const generation = await input.gateway.generateAnswer({
       model: input.model,
@@ -1600,34 +1795,74 @@ async function generateThinReadingWithQualityRepair(input: {
     try {
       const invalidAnchorReasons: string[] = [];
       let parsedRootSeed = parseThinReadingModelSeed(generation.answer, {
-        analysis: plannedEvidence,
-        analysisEvidence: plannedEvidence.evidence,
-        ancestorSummaries: context.ancestorSummaries,
-        availableFigureIds: context.availableFigures?.map((figure) => figure.id),
-        coverageEvidence: input.prepared.evidence,
+        analysis: generationPrepared,
+        analysisEvidence: generationPrepared.evidence,
+        ancestorSummaries: generationContext.ancestorSummaries,
+        availableFigureIds: generationContext.availableFigures?.map((figure) => figure.id),
+        coverageEvidence: generationPrepared.evidence,
         externalSources: generationContext.externalSources,
         invalidAnchorPolicy: attempt > 1 ? "drop" : "reject",
         onInvalidAnchor: (reason) => invalidAnchorReasons.push(reason),
-        requireExternalKnowledge: requiresThinReadingExternalKnowledge(generationContext),
+        requireExternalKnowledge: supportMode
+          ? false
+          : requiresExternalKnowledgeForCurrentContext(),
         requireExplicitTraceability: true,
-        requireNumericFidelity: true,
+        requireNumericFidelity: supportMode ? false : true,
         requiredChineseTerminology,
+        requestedOutput,
         source: generationContext.source,
-        targetLanguage: context.targetLanguage
+        supportMode,
+        targetLanguage: generationContext.targetLanguage
       });
       repairReasons.push(
         ...invalidAnchorReasons.map((reason) => `已隔离无效薄读锚点：${reason}`)
       );
-      let evidenceReview = await reviewThinReadingEvidence({
-        gateway: input.gateway,
-        model: input.model,
-        node: parsedRootSeed,
-        onProgress: input.onProgress,
-        prepared: plannedEvidence,
-        provider: input.provider,
-        rootOverview: generationContext.source.kind === "root_overview",
-        signal: input.signal
-      });
+      parsedRootSeed = await validateOrRepairThinReadingMermaid(parsedRootSeed);
+      if (supportMode === "ai_interpretation") {
+        parsedRootSeed = {
+          ...parsedRootSeed,
+          closureState: "outside_paper"
+        };
+      }
+      let evidenceReview: ThinReadingEvidenceReview | undefined;
+      if (supportMode === "ai_interpretation") {
+        let interpretationReview: ThinReadingAiInterpretationReview;
+        try {
+          interpretationReview = await reviewThinReadingAiInterpretation({
+            gateway: input.gateway,
+            model: input.model,
+            node: parsedRootSeed,
+            onProgress: input.onProgress,
+            provider: input.provider,
+            signal: input.signal
+          });
+        } catch (error) {
+          throw new ThinReadingAiInterpretationReviewRequestError(error);
+        }
+        if (interpretationReview.verdict === "fail") {
+          const sentenceIds = interpretationReview.unsafeSentenceIds.join("；");
+          const reviewReason = interpretationReview.reason.replace(/\s+/g, " ").trim().slice(0, 420);
+          throw new Error(
+            `AI 独立理解质量审阅未通过：句子 ${sentenceIds}。${reviewReason}`
+          );
+        }
+        aiInterpretationReview = {
+          reason: interpretationReview.reason,
+          unsafeSentenceIds: [...interpretationReview.unsafeSentenceIds],
+          verdict: "pass"
+        };
+      } else {
+        evidenceReview = await reviewThinReadingEvidence({
+          gateway: input.gateway,
+          model: input.model,
+          node: parsedRootSeed,
+          onProgress: input.onProgress,
+          prepared: generationPrepared,
+          provider: input.provider,
+          rootOverview: generationContext.source.kind === "root_overview",
+          signal: input.signal
+        });
+      }
       if (evidenceReview?.verdict === "fail") {
         const deterministicRepair = canFallbackFromExternalThinReadingEvidence(generationContext)
           ? removeUnsupportedExternalSentences({ node: parsedRootSeed, review: evidenceReview })
@@ -1659,33 +1894,45 @@ async function generateThinReadingWithQualityRepair(input: {
         });
         if (failedSourceIds.length > 0 && !canFallbackFromExternalThinReadingEvidence(generationContext)) {
           externalRecoveryApplied = true;
-          const recovery = canReplaceUnsupportedExternalSource(generationContext) && input.retryExternalSources
-            ? await input.retryExternalSources({
-              failedSourceIds,
-              node: parsedRootSeed,
-              review: evidenceReview
-            })
-            : { sources: [], status: "empty" as const };
+          let focusedRecoveryAttempted = false;
+          let recovery: ThinReadingExternalRecoveryResult;
+          try {
+            if (canReplaceUnsupportedExternalSource(generationContext) && input.retryExternalSources) {
+              focusedRecoveryAttempted = true;
+              recovery = await input.retryExternalSources({
+                failedSourceIds,
+                node: parsedRootSeed,
+                review: evidenceReview
+              });
+            } else {
+              recovery = { sources: [], status: "empty" };
+            }
+          } catch (error) {
+            throw new ThinReadingExternalRecoveryRequestError(error);
+          }
           const replacementSources = recovery.sources.filter((source) => !failedSourceIds.includes(source.id));
-          if (replacementSources.length > 0) {
-            const retainedSources = (generationContext.externalSources ?? []).filter((source) => (
-              !failedSourceIds.includes(source.id)
-            ));
-            generationContext = {
-              ...generationContext,
-              externalSources: prioritizeThinReadingGenerationSources({
-                context: generationContext,
-                sources: mergeThinReadingExternalSources(retainedSources, replacementSources)
-              })
-            };
+          const carriedSourceCount = generationContext.externalSources?.length ?? 0;
+          const retainedSources = (generationContext.externalSources ?? []).filter((source) => (
+            !failedSourceIds.includes(source.id)
+          ));
+          const replacementSourceIds = new Set(replacementSources.map((source) => source.id));
+          const trustedSources = prioritizeThinReadingGenerationSources({
+            context: generationContext,
+            sources: mergeThinReadingExternalSources(retainedSources, replacementSources)
+          });
+          generationContext = {
+            ...generationContext,
+            externalSources: trustedSources
+          };
+          if (trustedSources.some((source) => replacementSourceIds.has(source.id))) {
             basePrompt = buildThinReadingAgentPrompt({
               context: generationContext,
-              prepared: plannedEvidence,
+              prepared: generationPrepared,
               privateBriefs
             });
             targetedEvidenceRepair = {
               node: parsedRootSeed,
-              prepared: plannedEvidence,
+              prepared: generationPrepared,
               review: evidenceReview
             };
             repairReasons.push(
@@ -1694,66 +1941,72 @@ async function generateThinReadingWithQualityRepair(input: {
             prompt = buildThinReadingRepairPrompt({
               basePrompt,
               invalidOutput: generation.answer,
-              requireExternalKnowledge: requiresThinReadingExternalKnowledge(generationContext),
+              requireExternalKnowledge: requiresExternalKnowledgeForCurrentContext(),
               reason: "失败的纯外部来源已从本轮白名单移除，并已补入新的可追溯候选。只修复失败句，使用新的 source ID 建立直接支持。",
               targetedEvidenceRepair
             });
             continue;
           }
-          const qualityGate = {
-            attempts: attempt,
-            repaired: true,
-            repairReasons: [
-              ...repairReasons,
-              recovery.status === "unavailable"
-                ? "外部文献定向检索不可用，已返回论文闭包边界。"
-                : "未找到可直接支持失败外部命题的新来源，已返回论文闭包边界。"
-            ].map((reason) => reason.slice(0, 600))
-          } as const;
-          const boundarySeed = buildExternalEvidenceBoundarySeed({
-            context: generationContext,
-            status: recovery.status
-          });
-          const rootSeed: ThinReadingNodeSeed = {
-            ...boundarySeed,
-            evidence: {
-              ...boundarySeed.evidence,
-              generationAudit: {
-                contextManagement: compacted.audit,
-                ...(context.interpretationPlan ? {
-                  interpretationPlan: {
-                    ...context.interpretationPlan,
-                    discourseMoves: [...context.interpretationPlan.discourseMoves],
-                    learningGoals: [...(context.interpretationPlan.learningGoals ?? [])]
-                  }
-                } : {}),
-                ...(evidenceLoop ? { evidenceLoop } : {}),
-                ...(evidencePlan ? {
-                  evidencePlan: {
-                    focus: [...evidencePlan.focus],
-                    selectedEvidenceIds: [...evidencePlan.selectedEvidenceIds]
-                  }
-                } : {}),
-                model: { id: input.model, provider: input.provider },
-                qualityGate,
-                workload,
-                version: "liteasy.thin-reading-agent/v2"
-              }
+          if (trustedSources.length > 0) {
+            const retainedSeed = removeUnsupportedExternalSentences({
+              node: parsedRootSeed,
+              review: evidenceReview
+            });
+            if (retainedSeed) {
+              parsedRootSeed = retainedSeed;
+              deterministicRepairApplied = true;
+              repairReasons.push(
+                `已删除无直接支持的外部来源句并保留可信来源：${failedSourceIds.join("；")}。`
+              );
+              evidenceReview = {
+                propositionVerdicts: evidenceReview.propositionVerdicts.filter((item) =>
+                  item.verdict === "supported"
+                ),
+                reason: `已确定性移除 ${evidenceReview.unsupportedSentenceIds.length} 个未通过句；保留句沿用本轮复核中的 supported 判定。`,
+                rootOrientation: evidenceReview.rootOrientation,
+                unsupportedSentenceIds: [],
+                verdict: "pass"
+              };
             }
-          };
-          return {
-            evidenceLoop,
-            evidencePlan,
-            generation,
-            qualityGate,
-            rootSeed
-          };
+          } else if (
+            focusedRecoveryAttempted &&
+            !verificationExhaustionTransitionApplied &&
+            aiInterpretationFallbackAllowed &&
+            requiresThinReadingExternalKnowledge(generationContext) &&
+            (recovery.status === "empty" || recovery.status === "unavailable")
+          ) {
+            verificationExhaustionTransitionApplied = true;
+            supportMode = "ai_interpretation";
+            externalFallbackAudit = {
+              attemptedRoutes: ["support"],
+              carriedSourceCount,
+              completedRoutes: recovery.status === "empty" ? ["support"] : [],
+              reason: "verification_exhausted",
+              trustedSourceCount: 0
+            };
+            generationContext = buildAiInterpretationContext(context);
+            generationPrepared = withoutThinReadingEvidence(plannedEvidence);
+            requiredChineseTerminology = extractRequiredChineseTerminology(generationContext);
+            basePrompt = buildThinReadingAgentPrompt({
+              context: generationContext,
+              prepared: generationPrepared,
+              supportMode
+            });
+            prompt = basePrompt;
+            targetedEvidenceRepair = undefined;
+            deterministicRepairApplied = false;
+            externalRecoveryApplied = false;
+            repairReasons.length = 0;
+            maximumAttempts = Math.max(maximumAttempts, attempt + 2);
+            continue;
+          }
         }
       }
       if (
         evidenceReview?.verdict === "fail" &&
         attempt === 2 &&
-        generationContext.source.kind !== "root_overview"
+        generationContext.source.kind !== "root_overview" &&
+        (requestedOutput ?? "explanation") === "explanation"
       ) {
         const failedReview = evidenceReview;
         const deterministicRepair = removeUnsupportedReviewedSentences({
@@ -1789,7 +2042,7 @@ async function generateThinReadingWithQualityRepair(input: {
       }
       if (
         generationContext.source.kind === "root_overview" &&
-        evidenceReview.rootOrientation?.verdict === "fail"
+        evidenceReview?.rootOrientation?.verdict === "fail"
       ) {
         const orientation = evidenceReview.rootOrientation;
         throw new Error(
@@ -1809,7 +2062,14 @@ async function generateThinReadingWithQualityRepair(input: {
         evidenceIds: call.evidenceIds.filter((id) => persistedEvidenceIds.has(id))
       }));
       const generationAudit: ThinReadingGenerationAudit = {
+        ...(supportMode === "ai_interpretation" && aiInterpretationReview ? {
+          aiInterpretationReview: {
+            ...aiInterpretationReview,
+            unsafeSentenceIds: [...aiInterpretationReview.unsafeSentenceIds]
+          }
+        } : {}),
         contextManagement: compacted.audit,
+        ...(externalFallbackAudit ? { externalFallback: externalFallbackAudit } : {}),
         ...(context.interpretationPlan ? {
           interpretationPlan: {
             ...context.interpretationPlan,
@@ -1817,14 +2077,14 @@ async function generateThinReadingWithQualityRepair(input: {
             learningGoals: [...(context.interpretationPlan.learningGoals ?? [])]
           }
         } : {}),
-        ...(evidenceLoop ? { evidenceLoop } : {}),
-        ...(evidencePlan ? {
+        ...(!supportMode && evidenceLoop ? { evidenceLoop } : {}),
+        ...(!supportMode && evidencePlan ? {
           evidencePlan: {
             focus: [...evidencePlan.focus],
             selectedEvidenceIds: [...evidencePlan.selectedEvidenceIds]
           }
         } : {}),
-        ...(evidenceReview ? {
+        ...(!supportMode && evidenceReview ? {
           evidenceReview: {
             ...(evidenceReview.propositionVerdicts ? {
               propositionVerdicts: evidenceReview.propositionVerdicts.map((item) => ({ ...item }))
@@ -1837,7 +2097,7 @@ async function generateThinReadingWithQualityRepair(input: {
             verdict: "pass"
           }
         } : {}),
-        ...(evidenceToolCalls ? { evidenceToolCalls } : {}),
+        ...(!supportMode && evidenceToolCalls ? { evidenceToolCalls } : {}),
         model: { id: input.model, provider: input.provider },
         qualityGate,
         workload,
@@ -1851,22 +2111,34 @@ async function generateThinReadingWithQualityRepair(input: {
         }
       };
       return {
-        evidenceLoop,
-        evidencePlan,
-        evidenceToolCalls,
-        evidenceReview,
+        evidenceLoop: supportMode ? undefined : evidenceLoop,
+        evidencePlan: supportMode ? undefined : evidencePlan,
+        evidenceToolCalls: supportMode ? undefined : evidenceToolCalls,
+        evidenceReview: supportMode ? undefined : evidenceReview,
         generation,
         qualityGate,
         rootSeed
       };
     } catch (error) {
+      if (error instanceof ThinReadingExternalRecoveryRequestError) {
+        throw error.originalError;
+      }
+      if (error instanceof ThinReadingAiInterpretationReviewRequestError) {
+        throw error.originalError;
+      }
       const reason = error instanceof Error ? error.message : String(error);
       repairReasons.push(reason);
       const canRunThirdRootEvidenceRepair = attempt === 2 &&
         maximumAttempts === 3 &&
         Boolean(targetedEvidenceRepair) &&
         reason.startsWith("薄读证据复核未通过");
-      if (attempt === maximumAttempts || (attempt === 2 && !canRunThirdRootEvidenceRepair)) {
+      const canRunVerificationExhaustionRepair = verificationExhaustionTransitionApplied &&
+        supportMode === "ai_interpretation" &&
+        attempt < maximumAttempts;
+      if (
+        attempt === maximumAttempts ||
+        (attempt === 2 && !canRunThirdRootEvidenceRepair && !canRunVerificationExhaustionRepair)
+      ) {
         throw new Error(`薄读 Agent 结构质量门连续失败：${reason}`);
       }
       input.onProgress?.({
@@ -1877,8 +2149,11 @@ async function generateThinReadingWithQualityRepair(input: {
       prompt = buildThinReadingRepairPrompt({
         basePrompt,
         invalidOutput: generation.answer,
-        requireExternalKnowledge: requiresThinReadingExternalKnowledge(generationContext),
+        requireExternalKnowledge: supportMode
+          ? false
+          : requiresExternalKnowledgeForCurrentContext(),
         reason,
+        supportMode,
         targetedEvidenceRepair
       });
     }
@@ -1978,84 +2253,100 @@ export async function generateAssistantAnswer({
       thinReadingClosurePolicy
     );
     const externalSourcesPromise = shouldRetrieveExternalKnowledge
-      ? (async (): Promise<readonly ThinReadingExternalSource[]> => {
+      ? (async (): Promise<ThinReadingExternalAcquisitionResult> => {
       onProgress?.({
         phase: "retrieving_external_knowledge",
         progress: 46,
         summary: "正在检索可追溯的外部文献来源"
       });
-      let externalKnowledge;
-      try {
-        const externalKnowledgeClient = createThinReadingExternalKnowledgeClient({
-          endpoint: activeEndpoint,
-          transport: thinReadingExternalKnowledgeTransport
-        });
-        const queryPlan = buildThinReadingExternalQueryPlan(context);
-        const retrievalResults = await Promise.allSettled(queryPlan.map((item) => (
-          externalKnowledgeClient({
-            artifactId: context.artifactId,
-            intent: item.intent,
-            limit: item.intent === "support" ? thinReadingExternalCandidateLimit : 12,
-            query: item.query,
-            signal,
-            targetPaperIdentity: item.intent === "support" ? context.primaryPaperIdentity : undefined,
-            targetPaperTitle: context.primaryPaperTitle
-          })
-        )));
-        if (signal?.aborted) {
-          throw new DOMException("The operation was aborted", "AbortError");
-        }
-        const completedRetrievals = retrievalResults.flatMap((result) => (
-          result.status === "fulfilled" ? [result.value] : []
-        ));
-        if (completedRetrievals.length === 0) {
-          const firstFailure = retrievalResults.find((result) => result.status === "rejected");
-          throw firstFailure?.status === "rejected"
-            ? firstFailure.reason
-            : new Error("外部文献多路检索未返回结果。");
-        }
-        externalKnowledge = {
-          retrievals: completedRetrievals.flatMap((result) => result.retrieval ? [result.retrieval] : []),
-          sources: mergeThinReadingExternalSources(...completedRetrievals.map((result) => result.sources))
-        };
-        if (retrievalResults.some((result) => result.status === "rejected")) {
-          onProgress?.({
-            phase: "retrieving_external_knowledge",
-            progress: 52,
-            summary: "部分检索路径暂不可用，正在使用其余可追溯来源"
-          });
-        }
-      } catch (error) {
-        if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
-          throw error;
-        }
-        if (carriedExternalSources.length === 0) {
-          throw error;
-        }
-        externalKnowledge = { sources: [] };
+      const queryPlan = buildThinReadingExternalQueryPlan(context);
+      let attemptedRoutes: ThinReadingExternalFallbackAudit["attemptedRoutes"] = [];
+      let completedRoutes: ThinReadingExternalFallbackAudit["completedRoutes"] = [];
+      let retrievedSources: readonly ThinReadingExternalSource[] = [];
+      let unexpectedRetrievalFailure: { reason: unknown } | undefined;
+      const externalKnowledgeClient = createThinReadingExternalKnowledgeClient({
+        endpoint: activeEndpoint,
+        transport: createThinReadingExternalRouteTransport(thinReadingExternalKnowledgeTransport)
+      });
+      attemptedRoutes = queryPlan.map((item) => item.intent);
+      const retrievalResults = await Promise.allSettled(queryPlan.map((item) => (
+        externalKnowledgeClient({
+          artifactId: context.artifactId,
+          intent: item.intent,
+          limit: item.intent === "support" ? thinReadingExternalCandidateLimit : 12,
+          query: item.query,
+          signal,
+          targetPaperIdentity: item.intent === "support" ? context.primaryPaperIdentity : undefined,
+          targetPaperTitle: context.primaryPaperTitle
+        })
+      )));
+      if (signal?.aborted) {
+        throw new DOMException("The operation was aborted", "AbortError");
+      }
+      const abortedRetrieval = retrievalResults.find((result) => (
+        result.status === "rejected" &&
+        result.reason instanceof Error &&
+        result.reason.name === "AbortError"
+      ));
+      if (abortedRetrieval?.status === "rejected") {
+        throw abortedRetrieval.reason;
+      }
+      const unexpectedFailure = retrievalResults.find((result) => (
+        result.status === "rejected" &&
+        !(result.reason instanceof ThinReadingExternalRouteUnavailableError)
+      ));
+      if (unexpectedFailure?.status === "rejected") {
+        unexpectedRetrievalFailure = { reason: unexpectedFailure.reason };
+      }
+      completedRoutes = retrievalResults.flatMap((result, index) => (
+        result.status === "fulfilled" ? [queryPlan[index].intent] : []
+      ));
+      const completedRetrievals = retrievalResults.flatMap((result) => (
+        result.status === "fulfilled" ? [result.value] : []
+      ));
+      retrievedSources = mergeThinReadingExternalSources(
+        ...completedRetrievals.map((result) => result.sources)
+      );
+      if (retrievalResults.some((result) => result.status === "rejected")) {
         onProgress?.({
           phase: "retrieving_external_knowledge",
           progress: 52,
-          summary: "联网检索暂不可用，正在复用已验证的外部文献"
+          summary: "部分检索路径暂不可用，正在使用其余可追溯来源"
         });
       }
-      if (externalKnowledge.retrievals?.some((retrieval) => retrieval.reused)) {
+      if (completedRetrievals.some((result) => result.retrieval?.reused)) {
         onProgress?.({
           phase: "retrieving_external_knowledge",
           progress: 52,
           summary: "正在复用已验证的外部文献来源"
         });
       }
-      const retrievedSources = mergeThinReadingExternalSources(
+      const mergedSources = mergeThinReadingExternalSources(
         carriedExternalSources,
-        externalKnowledge.sources
+        retrievedSources
       );
       let externalSources = prioritizeThinReadingGenerationSources({
         context,
-        sources: retrievedSources
+        sources: mergedSources
       });
       if (externalSources.length === 0) {
-        throw new Error("论文内证据不足且未检索到可信、可追溯的外部文献，本次薄读生成已停止。");
+        if (unexpectedRetrievalFailure) {
+          throw unexpectedRetrievalFailure.reason;
+        }
+        const reason: ThinReadingExternalFallbackReason = completedRoutes.length > 0
+          ? "no_trusted_sources"
+          : "all_routes_failed";
+        return {
+          audit: {
+            attemptedRoutes,
+            carriedSourceCount: carriedExternalSources.length,
+            completedRoutes,
+            reason,
+            trustedSourceCount: 0
+          },
+          kind: "unavailable",
+          reason
+        };
       }
       if (shouldAcquireThinReadingFullText(context) && externalSources.some((source) => source.fullTextUrl)) {
         onProgress?.({
@@ -2070,9 +2361,9 @@ export async function generateAssistantAnswer({
           transport: thinReadingExternalPdfTransport
         });
       }
-      return externalSources;
+      return { kind: "sources", sources: externalSources };
       })()
-      : Promise.resolve(carriedExternalSources.length > 0 ? carriedExternalSources : undefined);
+      : Promise.resolve({ kind: "sources" as const, sources: carriedExternalSources });
     const retryExternalSources = shouldRetrieveExternalKnowledge
       ? async (recovery: ThinReadingExternalRecoveryInput): Promise<ThinReadingExternalRecoveryResult> => {
         onProgress?.({
@@ -2083,7 +2374,7 @@ export async function generateAssistantAnswer({
         try {
           const externalKnowledgeClient = createThinReadingExternalKnowledgeClient({
             endpoint: activeEndpoint,
-            transport: thinReadingExternalKnowledgeTransport
+            transport: createThinReadingExternalRouteTransport(thinReadingExternalKnowledgeTransport)
           });
           const result = await externalKnowledgeClient({
             artifactId: context.artifactId,
@@ -2103,6 +2394,9 @@ export async function generateAssistantAnswer({
             return { sources: [], status: "empty" };
           }
           sources = prioritizeThinReadingGenerationSources({ context, sources });
+          if (sources.length === 0) {
+            return { sources: [], status: "empty" };
+          }
           if (shouldAcquireThinReadingFullText(context) && sources.some((source) => source.fullTextUrl)) {
             sources = await enrichThinReadingSourcesWithFullText({
               endpoint: activeEndpoint,
@@ -2113,14 +2407,13 @@ export async function generateAssistantAnswer({
           }
           return { sources, status: "available" };
         } catch (error) {
-          if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+          if (signal?.aborted || isAbortError(error)) {
             throw error;
           }
-          return {
-            reason: error instanceof Error ? error.message : String(error),
-            sources: [],
-            status: "unavailable"
-          };
+          if (error instanceof ThinReadingExternalRouteUnavailableError) {
+            return { sources: [], status: "unavailable" };
+          }
+          throw error;
         }
       }
       : undefined;

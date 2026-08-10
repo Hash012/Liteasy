@@ -13,11 +13,25 @@ import {
 } from "../app/features/thin-reading/thinReadingIntuechoSyncQueue";
 
 function createSyncableFixture() {
+  const source = createThinReadingFixture();
   return {
-    ...createThinReadingFixture(),
+    ...source,
     papers: [{
-      ...createThinReadingFixture().papers[0],
-      doi: "10.48550/arxiv.1706.03762"
+      ...source.papers[0],
+      literature: {
+        authors: ["Ashish Vaswani"],
+        identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.48550/arxiv.1706.03762" }],
+        literatureId: "lit_01J00000000000000000000000",
+        provenance: {
+          confirmedAt: "2026-08-10T00:00:00.000Z",
+          mode: "public_registry" as const,
+          provider: "crossref" as const
+        },
+        revision: 1,
+        status: "confirmed" as const,
+        title: source.papers[0].title,
+        year: 2017
+      }
     }]
   };
 }
@@ -67,7 +81,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
         kind: "node_summary"
       })
     });
-    expect(queue[0].scope.paperIdentity?.primary.kind).toBe("local_paper_id");
+    expect(queue[0].hasConfirmedLiterature).toBe(false);
   });
 
   test("keeps the local adapter in waiting state instead of pretending remote sync succeeded", async () => {
@@ -192,7 +206,14 @@ describe("thinReadingIntuechoSyncQueue", () => {
       method: "POST",
       url: "https://intuecho.example.com/v1/thin-reading/annotations:sync"
     }));
-    expect(JSON.parse(transport.mock.calls[0][0].body)).toEqual({ annotations: queue });
+    const sent = JSON.parse(transport.mock.calls[0][0].body);
+    expect(sent.annotations).toEqual([expect.objectContaining({
+      annotationId: queue[0].annotationId,
+      targets: [expect.objectContaining({ literature: { literatureId: "lit_01J00000000000000000000000" } })]
+    })]);
+    expect(sent.annotations[0]).not.toHaveProperty("scope");
+    expect(sent.annotations[0]).not.toHaveProperty("paperIdentity");
+    expect(sent.annotations[0]).not.toHaveProperty("hasConfirmedLiterature");
   });
 
   test("does not export local-only identities to the remote community", async () => {
@@ -212,7 +233,7 @@ describe("thinReadingIntuechoSyncQueue", () => {
 
     expect(transport).not.toHaveBeenCalled();
     expect(results).toEqual([
-      expect.objectContaining({ error: expect.stringContaining("仅本地文献身份"), status: "failed" })
+      expect.objectContaining({ error: expect.stringContaining("尚未完成来源确认"), status: "failed" })
     ]);
   });
 
@@ -251,9 +272,11 @@ describe("thinReadingIntuechoSyncQueue", () => {
       transport
     }).syncPendingAnnotations([localItem, stableItem]);
 
-    expect(JSON.parse(transport.mock.calls[0][0].body)).toEqual({ annotations: [stableItem] });
+    expect(JSON.parse(transport.mock.calls[0][0].body)).toEqual({
+      annotations: [expect.objectContaining({ annotationId: stableItem.annotationId, targets: stableItem.targets })]
+    });
     expect(results).toEqual([
-      expect.objectContaining({ annotationId: localItem.annotationId, error: expect.stringContaining("仅本地文献身份"), status: "failed" }),
+      expect.objectContaining({ annotationId: localItem.annotationId, error: expect.stringContaining("尚未完成来源确认"), status: "failed" }),
       expect.objectContaining({ annotationId: stableItem.annotationId, intuechoAnnotationId: "intuecho-remote-stable", status: "synced" })
     ]);
   });

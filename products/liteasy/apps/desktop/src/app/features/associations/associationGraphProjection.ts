@@ -4,6 +4,7 @@ import type {
 } from "../thin-reading/thinReading.types";
 
 export type AssociationPageGraphProjection = {
+  hiddenPaperCount: number;
   paperEdges: readonly {
     directed: boolean;
     kind: ThinReadingRecommendationPaperEdge["kind"];
@@ -21,6 +22,8 @@ export type AssociationPageGraphProjection = {
   primaryAnchorEdges: readonly { anchorId: string; paperKey: string }[];
 };
 
+export const maximumAssociationPageGraphPapers = 24;
+
 type ProjectionAnchor = {
   anchorId: string;
   quality?: { score: number };
@@ -30,6 +33,12 @@ type OwnershipCandidate = {
   anchorId: string;
   anchorQuality: number;
   source: ThinReadingExternalSource;
+};
+
+type ProjectedPaperCandidate = {
+  candidateByAnchorId: ReadonlyMap<string, OwnershipCandidate>;
+  node: AssociationPageGraphProjection["paperNodes"][number];
+  primary: OwnershipCandidate;
 };
 
 const confidenceBasisRank: Record<NonNullable<ThinReadingExternalSource["confidenceBasis"]>, number> = {
@@ -51,6 +60,48 @@ function compareOwnership(left: OwnershipCandidate, right: OwnershipCandidate) {
     left.source.sourceId.localeCompare(right.source.sourceId) ||
     (left.source.canonicalPaperId ?? "").localeCompare(right.source.canonicalPaperId ?? "") ||
     (left.source.doi ?? "").localeCompare(right.source.doi ?? "");
+}
+
+function compareProjectedPaperValue(left: ProjectedPaperCandidate, right: ProjectedPaperCandidate) {
+  return compareOwnership(left.primary, right.primary) ||
+    left.node.paperKey.localeCompare(right.node.paperKey);
+}
+
+function selectAssociationPaperNodes(
+  values: readonly ProjectedPaperCandidate[],
+  anchors: readonly ProjectionAnchor[]
+) {
+  const anchorOrder = anchors.map((anchor, index) => ({ anchor, index }))
+    .sort((left, right) =>
+      (right.anchor.quality?.score ?? 0) - (left.anchor.quality?.score ?? 0) ||
+      left.index - right.index ||
+      left.anchor.anchorId.localeCompare(right.anchor.anchorId));
+  const selectedPaperKeys = new Set<string>();
+
+  for (const { anchor } of anchorOrder) {
+    if (selectedPaperKeys.size >= maximumAssociationPageGraphPapers) break;
+    const alreadyCovered = values.some(({ node }) =>
+      selectedPaperKeys.has(node.paperKey) && node.anchorIds.includes(anchor.anchorId));
+    if (alreadyCovered) continue;
+    const best = values.filter(({ node }) =>
+      !selectedPaperKeys.has(node.paperKey) && node.anchorIds.includes(anchor.anchorId))
+      .sort((left, right) => {
+        const leftCandidate = left.candidateByAnchorId.get(anchor.anchorId)!;
+        const rightCandidate = right.candidateByAnchorId.get(anchor.anchorId)!;
+        return compareOwnership(leftCandidate, rightCandidate) ||
+          left.node.paperKey.localeCompare(right.node.paperKey);
+      })[0];
+    if (best) selectedPaperKeys.add(best.node.paperKey);
+  }
+
+  for (const value of [...values].sort(compareProjectedPaperValue)) {
+    if (selectedPaperKeys.size >= maximumAssociationPageGraphPapers) break;
+    selectedPaperKeys.add(value.node.paperKey);
+  }
+
+  return values.filter(({ node }) => selectedPaperKeys.has(node.paperKey))
+    .map(({ node }) => node)
+    .sort((left, right) => left.paperKey.localeCompare(right.paperKey));
 }
 
 function normalizedText(value: string) {
@@ -85,10 +136,13 @@ function providerSourceAlias(source: ThinReadingExternalSource) {
   const sourceId = normalizedText(source.sourceId);
   if (!sourceId) return "";
   if (provider === "openalex") {
-    return normalizedIdentity(`openalex:${sourceId}`);
+    return normalizedIdentity(sourceId);
   }
   if (provider === "semantic_scholar") {
-    return normalizedIdentity(`semantic_scholar:${sourceId}`);
+    const normalized = normalizedIdentity(sourceId);
+    return normalized.startsWith("semantic_scholar:")
+      ? normalized
+      : normalizedIdentity(`semantic_scholar:${sourceId}`);
   }
   return `${provider}:${sourceId.toLowerCase()}`;
 }
@@ -211,7 +265,7 @@ export function projectAssociationPageGraph({
       : preferredComponentKey(component.records),
     component
   ] as const));
-  const paperNodes = [...componentByPaperKey.entries()]
+  const allPaperCandidates = [...componentByPaperKey.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([paperKey, component]) => {
       const candidatesByAnchor = new Map<string, OwnershipCandidate>();
@@ -225,13 +279,19 @@ export function projectAssociationPageGraph({
       const primary = candidates[0]!;
       const anchorIds = [...candidatesByAnchor.keys()].sort();
       return {
-        anchorIds,
-        paperKey,
-        primaryAnchorId: primary.anchorId,
-        secondaryAnchorIds: anchorIds.filter((anchorId) => anchorId !== primary.anchorId),
-        source: primary.source
+        candidateByAnchorId: candidatesByAnchor,
+        node: {
+          anchorIds,
+          paperKey,
+          primaryAnchorId: primary.anchorId,
+          secondaryAnchorIds: anchorIds.filter((anchorId) => anchorId !== primary.anchorId),
+          source: primary.source
+        },
+        primary
       };
     });
+  const paperNodes = selectAssociationPaperNodes(allPaperCandidates, anchors);
+  const visiblePaperKeys = new Set(paperNodes.map((node) => node.paperKey));
 
   const paperKeysByAlias = new Map<string, Set<string>>();
   for (const [paperKey, component] of componentByPaperKey) {
@@ -253,7 +313,8 @@ export function projectAssociationPageGraph({
   for (const edge of paperEdges) {
     const sourcePaperKey = paperKeyByAlias.get(normalizedIdentity(edge.sourcePaperId));
     const targetPaperKey = paperKeyByAlias.get(normalizedIdentity(edge.targetPaperId));
-    if (!sourcePaperKey || !targetPaperKey || sourcePaperKey === targetPaperKey) continue;
+    if (!sourcePaperKey || !targetPaperKey || sourcePaperKey === targetPaperKey ||
+      !visiblePaperKeys.has(sourcePaperKey) || !visiblePaperKeys.has(targetPaperKey)) continue;
     const endpoints = edge.directed
       ? [sourcePaperKey, targetPaperKey]
       : [sourcePaperKey, targetPaperKey].sort();
@@ -270,6 +331,7 @@ export function projectAssociationPageGraph({
   }
 
   return {
+    hiddenPaperCount: allPaperCandidates.length - paperNodes.length,
     paperEdges: [...paperEdgeByKey.values()].sort((left, right) =>
       relationKey(left).localeCompare(relationKey(right))),
     paperNodes,

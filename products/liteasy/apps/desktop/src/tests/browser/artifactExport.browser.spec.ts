@@ -14,6 +14,7 @@ test("downloads generated artifacts as Markdown, HTML, and internally generated 
   const markdownPath = await markdownDownload.path();
   expect(markdownPath).not.toBeNull();
   expect(await readFile(markdownPath!, "utf8")).toContain("QVLA 使用动作空间敏感度");
+  await expect(page.getByText("文档已导出，由浏览器下载设置管理。")).toBeVisible();
 
   await page.getByRole("button", { name: "导出为文档" }).click();
   const htmlDownloadPromise = page.waitForEvent("download");
@@ -25,6 +26,7 @@ test("downloads generated artifacts as Markdown, HTML, and internally generated 
   const html = await readFile(htmlPath!, "utf8");
   expect(html).toContain("<!doctype html>");
   expect(html).toContain("QVLA 思维导图");
+  await expect(page.getByText("文档已导出，由浏览器下载设置管理。")).toBeVisible();
 
   await page.getByRole("button", { name: "导出为文档" }).click();
   const pdfDownloadPromise = page.waitForEvent("download");
@@ -34,4 +36,5 @@ test("downloads generated artifacts as Markdown, HTML, and internally generated 
   const pdfPath = await pdfDownload.path();
   expect(pdfPath).not.toBeNull();
   expect((await readFile(pdfPath!)).subarray(0, 8).toString()).toBe("%PDF-1.7");
+  await expect(page.getByText("文档已导出，由浏览器下载设置管理。")).toBeVisible();
 });

@@ -66,6 +66,103 @@ test("relations keeps only verified edges whose endpoints are requested", async 
   assert.match(saved[0].cacheKey, /^relations:/);
 });
 
+test("relations maps DOI-resolved graph records back onto a mixed Crossref and OpenAlex page", async () => {
+  const attempted = [];
+  const service = new ExternalKnowledgeService({
+    connectors: {
+      relations: async (configured, input) => {
+        attempted.push({ connectorType: configured.connectorType, papers: input.papers });
+        return configured.connectorType === "openalex" ? [{
+          doi: "doi:10.1000/crossref-target",
+          evidenceRecordUrl: "https://openalex.org/W20",
+          id: "openalex:W20",
+          provider: "openalex",
+          referencedPaperIds: []
+        }, {
+          doi: "doi:10.1000/openalex-source",
+          evidenceRecordUrl: "https://openalex.org/W10",
+          id: "openalex:W10",
+          provider: "openalex",
+          referencedPaperIds: ["openalex:W20"]
+        }] : [];
+      }
+    },
+    downloader: {},
+    repository: {
+      async listEnabledSources() { return [
+        { baseUrl: "https://api.openalex.org/works", connectorType: "openalex", revision: 1, sourceId: "openalex" },
+        { baseUrl: "https://api.semanticscholar.org/graph/v1/paper/search", connectorType: "semantic_scholar", revision: 1, sourceId: "s2" }
+      ]; },
+      async loadRetrievalCache() { return null; },
+      async saveRetrievalCache() {}
+    }
+  });
+
+  const result = await service.relations({ subjectId: "user" }, {
+    artifactId: "mixed-page",
+    papers: [{
+      doi: "10.1000/crossref-target",
+      id: "crossref-target",
+      provider: "crossref",
+      sourceId: "10.1000/crossref-target"
+    }, {
+      doi: "10.1000/openalex-source",
+      id: "openalex-source",
+      provider: "openalex",
+      sourceId: "W10"
+    }]
+  });
+
+  assert.deepEqual(attempted.map((attempt) => attempt.connectorType), ["openalex", "semantic_scholar"]);
+  assert.deepEqual(result.edges, [{
+    directed: true,
+    evidenceRecordUrls: ["https://openalex.org/W10"],
+    kind: "direct_citation",
+    provider: "openalex",
+    sourcePaperId: "openalex-source",
+    strength: 1,
+    targetPaperId: "crossref-target"
+  }]);
+});
+
+test("relations warns once for an unmappable paper while preserving mapped DOI relations", async () => {
+  const service = new ExternalKnowledgeService({
+    connectors: { relations: async () => [{
+      doi: "10.1000/a",
+      evidenceRecordUrl: "https://openalex.org/W1",
+      id: "openalex:W1",
+      provider: "openalex",
+      referencedPaperIds: ["openalex:W2"]
+    }, {
+      doi: "10.1000/b",
+      evidenceRecordUrl: "https://openalex.org/W2",
+      id: "openalex:W2",
+      provider: "openalex",
+      referencedPaperIds: []
+    }] },
+    downloader: {},
+    repository: {
+      async listEnabledSources() { return [
+        { baseUrl: "https://api.openalex.org/works", connectorType: "openalex", revision: 1, sourceId: "openalex" }
+      ]; },
+      async loadRetrievalCache() { return null; },
+      async saveRetrievalCache() {}
+    }
+  });
+
+  const result = await service.relations({ subjectId: "user" }, {
+    artifactId: "partial-map",
+    papers: [
+      { doi: "10.1000/a", id: "paper-a", provider: "crossref", sourceId: "10.1000/a" },
+      { doi: "10.1000/b", id: "paper-b", provider: "crossref", sourceId: "10.1000/b" },
+      { id: "paper-local", provider: "arxiv", sourceId: "local-only" }
+    ]
+  });
+
+  assert.deepEqual(result.edges.map((edge) => [edge.sourcePaperId, edge.targetPaperId]), [["paper-a", "paper-b"]]);
+  assert.deepEqual(result.warnings, ["paper_relation_paper_identity_unavailable"]);
+});
+
 test("relations rejects more than 24 papers before connector retrieval", async () => {
   let called = false;
   const service = new ExternalKnowledgeService({

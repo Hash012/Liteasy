@@ -86,11 +86,15 @@ export function loadIntuechoProductionConfig(env = process.env) {
   const apiClientId = clientId(env, "INTUECHO_IDP_CLIENT_ID");
   const webClientId = clientId(env, "INTUECHO_IDP_WEB_CLIENT_ID");
   const organizationServiceClientId = clientId(env, "INTUECHO_ORGANIZATION_SERVICE_CLIENT_ID");
+  const liteasyLiteratureServiceClientId = clientId(env, "INTUECHO_LITEASY_LITERATURE_SERVICE_CLIENT_ID");
   if (apiClientId === webClientId) {
     throw new Error("intuecho_config_invalid: API and public Web identity clients must be distinct");
   }
   if (new Set([apiClientId, webClientId]).has(organizationServiceClientId)) {
     throw new Error("intuecho_config_invalid: organization service identity client must be distinct");
+  }
+  if (new Set([apiClientId, webClientId, organizationServiceClientId]).has(liteasyLiteratureServiceClientId)) {
+    throw new Error("intuecho_config_invalid: literature projection service identity client must be distinct");
   }
   return Object.freeze({
     adminApiUrl: parseUrl(required(env, "INTUECHO_ADMIN_API_URL"), "INTUECHO_ADMIN_API_URL", environment),
@@ -107,6 +111,18 @@ export function loadIntuechoProductionConfig(env = process.env) {
       jwksUrl: parseUrl(required(env, "INTUECHO_IDP_JWKS_URL"), "INTUECHO_IDP_JWKS_URL", environment),
       tokenUrl: parseUrl(required(env, "INTUECHO_IDP_TOKEN_URL"), "INTUECHO_IDP_TOKEN_URL", environment),
       webClientId
+    }),
+    literatureProviders: Object.freeze({
+      arxivEndpoint: parseUrl(env.INTUECHO_ARXIV_ENDPOINT ?? "https://export.arxiv.org/api/query", "INTUECHO_ARXIV_ENDPOINT", environment),
+      crossrefEndpoint: parseUrl(env.INTUECHO_CROSSREF_ENDPOINT ?? "https://api.crossref.org/works", "INTUECHO_CROSSREF_ENDPOINT", environment),
+      openAlexApiKey: env.INTUECHO_OPENALEX_API_KEY?.trim() || null,
+      openAlexEndpoint: parseUrl(env.INTUECHO_OPENALEX_ENDPOINT ?? "https://api.openalex.org/works", "INTUECHO_OPENALEX_ENDPOINT", environment),
+      semanticScholarApiKey: env.INTUECHO_SEMANTIC_SCHOLAR_API_KEY?.trim() || null,
+      semanticScholarEndpoint: parseUrl(env.INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT ?? "https://api.semanticscholar.org/graph/v1/paper", "INTUECHO_SEMANTIC_SCHOLAR_ENDPOINT", environment)
+    }),
+    literatureProjection: Object.freeze({
+      audience: "intuecho-internal",
+      clientId: liteasyLiteratureServiceClientId
     }),
     organizationAuthorization: Object.freeze({
       apiUrl: parseUrl(required(env, "INTUECHO_ORGANIZATION_API_URL"), "INTUECHO_ORGANIZATION_API_URL", environment),

@@ -5,6 +5,8 @@ import { createIntuechoPool, verifyIntuechoPostgres } from "./postgres.mjs";
 import { PostgresForumRepository } from "./postgresForumRepository.mjs";
 import { PostgresAnnotationCommunityRepository } from "./postgresAnnotationCommunityRepository.mjs";
 import { OrganizationAuthorizationClient } from "./organizationAuthorizationClient.mjs";
+import { createLiteratureProviders } from "./literatureProviders.mjs";
+import { createLiteratureResolver } from "./literatureResolver.mjs";
 import {
   createProductionIdentityVerifier,
   verifyIntuechoIdentityReadiness
@@ -25,9 +27,15 @@ export async function startIntuechoProductionRuntime(config, dependencies = {}) 
     new PostgresAnnotationCommunityRepository(pool, {
       authorizeOrganizationAccess: (input) => organizationAuthorizer.authorizeAccess(input),
       authorizeOrganizationInvitation: (input) => organizationAuthorizer.authorizeInvitation(input),
-      authorizeOrganizationVisibility: (input) => organizationAuthorizer.authorizeVisibility(input),
-      listOrganizations: (userId) => organizationAuthorizer.listMemberships(userId)
-    });
+    authorizeOrganizationVisibility: (input) => organizationAuthorizer.authorizeVisibility(input),
+    listOrganizations: (userId) => organizationAuthorizer.listMemberships(userId)
+  });
+  const literatureResolver = dependencies.literatureResolver ?? createLiteratureResolver({
+    providers: createLiteratureProviders(config.literatureProviders, {
+      fetchImpl: dependencies.literatureFetch ?? globalThis.fetch
+    }),
+    repository: dependencies.literatureRepository ?? annotationCommunityRepository
+  });
   const accountLifecycleRepository = dependencies.accountLifecycleRepository ??
     new PostgresAccountLifecycleRepository(pool);
   try {
@@ -42,6 +50,7 @@ export async function startIntuechoProductionRuntime(config, dependencies = {}) 
       adminAuthorizer,
       annotationCommunityRepository,
       identityVerifier,
+      literatureResolver,
       organizationAuthorizer,
       pool,
       readiness: Object.freeze({ administration, identity, migrations, postgres }),

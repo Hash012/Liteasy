@@ -3,6 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { getLibraryObjectDir } from "./dataPaths.mjs";
 import { assertDevCloudDeploymentBoundary } from "../deploymentBoundary.mjs";
+import {
+  LiteratureMetadataValidationError,
+  normalizeLiteratureMetadata
+} from "../../../products/liteasy/services/api/src/literatureMetadata.mjs";
 
 const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
 const defaultUserQuotaBytes = 2 * 1024 * 1024 * 1024;
@@ -18,6 +22,17 @@ export class LibraryStorageError extends Error {
 
 function normalizeText(value) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function normalizedLiterature(value) {
+  try {
+    return normalizeLiteratureMetadata(value);
+  } catch (error) {
+    if (error instanceof LiteratureMetadataValidationError) {
+      throw new LibraryStorageError(error.code, "Literature metadata is invalid.");
+    }
+    throw error;
+  }
 }
 
 function normalizeScope(scopeType, scopeId) {
@@ -558,10 +573,13 @@ export function createLibraryStorageRepository(database, options = {}) {
         throw error;
       }
     },
-    runIdempotent(actorKeyInput, operationKeyInput, operationKindInput, operation) {
+    runIdempotent(actorKeyInput, operationKeyInput, operationKindInput, operation, requestInput) {
       const actorKey = normalizeText(actorKeyInput);
       const operationKey = normalizeText(operationKeyInput);
       const operationKind = normalizeText(operationKindInput);
+      const requestHash = requestInput === undefined
+        ? null
+        : createHash("sha256").update(JSON.stringify(requestInput)).digest("hex");
       if (!actorKey || !/^[A-Za-z0-9:._-]{1,220}$/.test(operationKey) || !operationKind) {
         throw new LibraryStorageError(
           "invalid_idempotency_key",
@@ -577,6 +595,13 @@ export function createLibraryStorageRepository(database, options = {}) {
             409
           );
         }
+        if (existing.request_hash && existing.request_hash !== requestHash) {
+          throw new LibraryStorageError(
+            "idempotency_key_reused",
+            "The idempotency key was already used for another request.",
+            409
+          );
+        }
         return { replayed: true, value: JSON.parse(existing.response_json) };
       }
       let value;
@@ -584,9 +609,16 @@ export function createLibraryStorageRepository(database, options = {}) {
         value = operation();
         database.prepare(`
           INSERT INTO library_idempotency_keys (
-            actor_key, operation_key, operation_kind, response_json, created_at
-          ) VALUES (?, ?, ?, ?, ?)
-        `).run(actorKey, operationKey, operationKind, JSON.stringify(value), now().toISOString());
+            actor_key, operation_key, operation_kind, request_hash, response_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `).run(
+          actorKey,
+          operationKey,
+          operationKind,
+          requestHash,
+          JSON.stringify(value),
+          now().toISOString()
+        );
       })();
       return { replayed: false, value };
     },
@@ -1104,13 +1136,24 @@ export function createLibraryStorageRepository(database, options = {}) {
       if (!title) {
         throw new LibraryStorageError("invalid_metadata_entry", "A title is required.");
       }
+      const metadata = JSON.parse(row.metadata_json ?? "{}");
+      if (Object.prototype.hasOwnProperty.call(changes, "literature")) {
+        metadata.literature = normalizedLiterature(changes.literature);
+      }
       try {
         database.transaction(() => {
           database.prepare(`
             UPDATE library_metadata_entries
-            SET folder_id = ?, title = ?, normalized_title = ?, updated_at = ?
+            SET folder_id = ?, title = ?, normalized_title = ?, metadata_json = ?, updated_at = ?
             WHERE document_id = ?
-          `).run(folderId, title, normalizedName(title), now().toISOString(), documentId);
+          `).run(
+            folderId,
+            title,
+            normalizedName(title),
+            JSON.stringify(metadata),
+            now().toISOString(),
+            documentId
+          );
           bumpRevision(scope.scopeType, scope.scopeId);
         })();
       } catch (error) {
@@ -1149,12 +1192,23 @@ export function createLibraryStorageRepository(database, options = {}) {
         requestedName,
         new Set(names.map((entry) => entry.normalized_file_name))
       );
+      const metadata = JSON.parse(row.metadata_json ?? "{}");
+      if (Object.prototype.hasOwnProperty.call(changes, "literature")) {
+        metadata.literature = normalizedLiterature(changes.literature);
+      }
       database.transaction(() => {
         database.prepare(`
           UPDATE library_documents
-          SET folder_id = ?, file_name = ?, normalized_file_name = ?, updated_at = ?
+          SET folder_id = ?, file_name = ?, normalized_file_name = ?, metadata_json = ?, updated_at = ?
           WHERE document_id = ?
-        `).run(folderId, fileName, normalizedName(fileName), now().toISOString(), documentId);
+        `).run(
+          folderId,
+          fileName,
+          normalizedName(fileName),
+          JSON.stringify(metadata),
+          now().toISOString(),
+          documentId
+        );
         bumpRevision(scope.scopeType, scope.scopeId);
       })();
       return publicDocument(requireDocument(documentId, scope));

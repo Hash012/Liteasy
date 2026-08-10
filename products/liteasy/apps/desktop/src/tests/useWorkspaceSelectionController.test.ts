@@ -1,5 +1,5 @@
-import { renderHook } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { expect, test, vi } from "vitest";
 import { useWorkspaceSelectionController } from "../app/controllers/useWorkspaceSelectionController";
 import { createWorkspaceStore } from "../app/features/workspace/workspace.store";
 
@@ -93,4 +93,112 @@ test("opens local library snapshots and exposes the workspace label", () => {
     rootPath: "/tmp/LiteasyLibrary",
     type: "local_library"
   });
+});
+
+test("hydrates matching paper literature without blocking missing records", async () => {
+  const workspaceStore = createWorkspaceStore();
+  const load = vi.fn(async (paperId: string) => paperId === "local-paper-1" ? {
+    authors: ["Ada Lovelace"],
+    identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/hydrated" }],
+    literatureId: "literature_1",
+    provenance: {
+      confirmedAt: "2026-08-10T00:00:00.000Z",
+      mode: "public_registry" as const,
+      provider: "crossref" as const
+    },
+    title: "Hydrated paper",
+    year: 2026
+  } : undefined);
+
+  const { result } = renderHook(() => useWorkspaceSelectionController({
+    literatureMetadataRepository: { load },
+    localLibrarySnapshot: {
+      entries: [{ id: "local-paper-1", path: "/library/one.pdf", title: "One" },
+        { id: "local-paper-2", path: "/library/two.pdf", title: "Two" }],
+      rootPath: "/library"
+    },
+    workspaceStore
+  }));
+
+  await waitFor(() => expect(workspaceStore.getState().papers[0].literature?.literatureId)
+    .toBe("literature_1"));
+  expect(workspaceStore.getState().papers[1].literature).toBeUndefined();
+  expect(result.current.model.literatureHydration).toEqual({ status: "ready" });
+  expect(load).toHaveBeenCalledTimes(2);
+});
+
+test("surfaces corrupt literature as recoverable and continues hydrating valid papers", async () => {
+  const workspaceStore = createWorkspaceStore();
+  const load = vi.fn(async (paperId: string) => {
+    if (paperId === "corrupt-paper") throw new Error("文献元数据文件不是有效 JSON");
+    return {
+      authors: ["Verified Author"],
+      identifiers: [{ kind: "doi" as const, source: "public_registry" as const, value: "10.1000/valid" }],
+      literatureId: "literature_valid",
+      provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "public_registry" as const, provider: "crossref" as const },
+      revision: 1,
+      status: "confirmed" as const,
+      title: "Valid paper"
+    };
+  });
+
+  const { result } = renderHook(() => useWorkspaceSelectionController({
+    literatureMetadataRepository: { load },
+    localLibrarySnapshot: {
+      entries: [{ id: "corrupt-paper", title: "Corrupt" }, { id: "valid-paper", title: "Valid" }],
+      rootPath: "/library"
+    },
+    workspaceStore
+  }));
+
+  await waitFor(() => expect(result.current.model.literatureHydration.status)
+    .toBe("recoverable_error"));
+  expect(result.current.model.literatureHydration).toMatchObject({
+    issues: [{ paperId: "corrupt-paper", message: "文献元数据文件不是有效 JSON" }]
+  });
+  expect(workspaceStore.getState().papers.find((paper) => paper.id === "valid-paper")?.literature)
+    .toMatchObject({ literatureId: "literature_valid" });
+});
+
+test("does not merge a late literature result into a newly opened library", async () => {
+  const workspaceStore = createWorkspaceStore();
+  let resolveFirst!: (value: Awaited<ReturnType<typeof load>>) => void;
+  const load = vi.fn((paperId: string) => paperId === "old-paper"
+    ? new Promise<{
+        authors: string[];
+        identifiers: Array<{ kind: "doi"; source: "public_registry"; value: string }>;
+        literatureId: string;
+        provenance: { confirmedAt: string; mode: "public_registry"; provider: "crossref" };
+        revision: number;
+        status: "confirmed";
+        title: string;
+      } | undefined>((resolve) => { resolveFirst = resolve; })
+    : Promise.resolve(undefined));
+  const { rerender } = renderHook(
+    ({ paperId, rootPath }: { paperId: string; rootPath: string }) =>
+      useWorkspaceSelectionController({
+        literatureMetadataRepository: { load },
+        localLibrarySnapshot: { entries: [{ id: paperId, title: paperId }], rootPath },
+        workspaceStore
+      }),
+    { initialProps: { paperId: "old-paper", rootPath: "/old" } }
+  );
+
+  await waitFor(() => expect(load).toHaveBeenCalledWith("old-paper"));
+  rerender({ paperId: "new-paper", rootPath: "/new" });
+  resolveFirst({
+    authors: [],
+    identifiers: [{ kind: "doi", source: "public_registry", value: "10.1000/old" }],
+    literatureId: "literature_old",
+    provenance: { confirmedAt: "2026-08-10T00:00:00.000Z", mode: "public_registry", provider: "crossref" },
+    revision: 1,
+    status: "confirmed",
+    title: "Old"
+  });
+
+  await waitFor(() => expect(load).toHaveBeenCalledWith("new-paper"));
+  expect(workspaceStore.getState().papers).toEqual([
+    expect.objectContaining({ id: "new-paper" })
+  ]);
+  expect(workspaceStore.getState().papers[0]).not.toHaveProperty("literature");
 });

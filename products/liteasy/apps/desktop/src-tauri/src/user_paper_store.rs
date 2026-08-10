@@ -15,7 +15,13 @@ fn artifact_kind_is_allowed(kind: &str) -> bool {
         // "fulltext" belongs in the library, never the cache: OCR is not reproducible, and
         // every anchor and highlight is positioned against these text offsets. Re-extracting
         // after a cache wipe would drift them all at once.
-        "annotations" | "anchor-graph" | "anchors" | "citations" | "fulltext" | "reader-state"
+        "annotations"
+            | "anchor-graph"
+            | "anchors"
+            | "bibliographic-identity"
+            | "citations"
+            | "fulltext"
+            | "reader-state"
     )
 }
 
@@ -135,6 +141,15 @@ fn write_json_atomically(path: &PathBuf, serialized: &[u8]) -> Result<(), String
     save_result
 }
 
+fn decode_user_paper_artifact(serialized: &[u8]) -> Result<Option<Value>, String> {
+    let value: Value = serde_json::from_slice(serialized)
+        .map_err(|error| format!("用户阅读产物格式损坏：{error}"))?;
+    if value.is_null() {
+        return Err("用户阅读产物格式损坏：不能保存 JSON null。".to_string());
+    }
+    Ok(Some(value))
+}
+
 #[tauri::command]
 pub fn load_user_paper_artifact(
     app: AppHandle,
@@ -151,9 +166,7 @@ pub fn load_user_paper_artifact(
         return Err("用户阅读产物超过大小限制。".to_string());
     }
     let serialized = fs::read(&path).map_err(|error| format!("无法读取用户阅读产物：{error}"))?;
-    serde_json::from_slice(&serialized)
-        .map(Some)
-        .map_err(|error| format!("用户阅读产物格式损坏：{error}"))
+    decode_user_paper_artifact(&serialized)
 }
 
 #[tauri::command]
@@ -174,7 +187,10 @@ pub fn save_user_paper_artifact(
 
 #[cfg(test)]
 mod tests {
-    use super::{artifact_kind_is_allowed, paper_artifact_directory_name, write_json_atomically};
+    use super::{
+        artifact_kind_is_allowed, decode_user_paper_artifact, paper_artifact_directory_name,
+        write_json_atomically,
+    };
     use serde_json::json;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -194,6 +210,7 @@ mod tests {
     fn only_allows_known_user_artifact_kinds() {
         assert!(artifact_kind_is_allowed("annotations"));
         assert!(artifact_kind_is_allowed("anchor-graph"));
+        assert!(artifact_kind_is_allowed("bibliographic-identity"));
         assert!(artifact_kind_is_allowed("citations"));
         assert!(!artifact_kind_is_allowed("../../outside"));
     }
@@ -237,5 +254,10 @@ mod tests {
         assert_eq!(siblings.len(), 1);
 
         fs::remove_dir_all(root).expect("remove temporary artifact directory");
+    }
+
+    #[test]
+    fn rejects_null_user_paper_artifacts_as_corrupt() {
+        assert!(decode_user_paper_artifact(b"null").is_err());
     }
 }

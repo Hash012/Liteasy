@@ -27,6 +27,10 @@ test("limits pointer capture to interactive exact hit paths", () => {
   expect(styleRule(".association-edge.is-hit")?.style.getPropertyValue("pointer-events")).toBe("stroke");
 });
 
+test("suppresses the native SVG focus rectangle on interactive edges", () => {
+  expect(styleRule(".association-edge.is-hit:focus")?.style.getPropertyValue("outline")).toBe("none");
+});
+
 test("uses graphite rather than author green for canonical registry nodes", () => {
   const canonical = styleRule('.association-node[data-basis="canonical_registry"]');
   const author = styleRule('.association-node[data-basis="author_citation"]');
@@ -60,8 +64,8 @@ test("disables all recommendation graph transitions when reduced motion is reque
 
   expect(transitionlessSelectors).toEqual(expect.arrayContaining([
     ".association-edge",
-    ".association-anchor__mark",
-    ".association-anchor__chip",
+    ".association-anchor__window",
+    ".association-anchor__target",
     ".association-node",
     ".association-node.is-dot > *"
   ]));

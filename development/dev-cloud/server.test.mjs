@@ -406,6 +406,118 @@ test("renames a metadata-only library entry through the versioned mutation API",
   assert.ok(updated.json.revision > created.json.revision);
 });
 
+test("persists literature through an idempotent library metadata update", async () => {
+  const handler = createDevCloudRequestHandler();
+  const sessionId = "literature-route-user";
+  const scope = { scopeId: `user:${sessionId}`, scopeType: "user", sessionId };
+  const created = await invokeHandler({
+    body: JSON.stringify({
+      ...scope,
+      expectedRevision: 0,
+      idempotencyKey: "literature-create-1",
+      title: "Cloud Literature Metadata"
+    }),
+    handler,
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/entries/metadata"
+  });
+  const literature = {
+    authors: ["Ada Lovelace"],
+    identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
+    literatureId: "literature:doi:10.1000/liteasy",
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+    title: "Cloud Literature Metadata",
+    year: 2026
+  };
+  const updateBody = {
+    ...scope,
+    documentId: created.json.entry.documentId,
+    expectedRevision: created.json.revision,
+    idempotencyKey: "literature-update-1",
+    literature
+  };
+
+  const updated = await invokeHandler({
+    body: JSON.stringify(updateBody),
+    handler,
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/update"
+  });
+  const replay = await invokeHandler({
+    body: JSON.stringify(updateBody),
+    handler,
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/update"
+  });
+
+  assert.equal(updated.statusCode, 200, JSON.stringify(updated.json));
+  assert.deepEqual(updated.json.document.metadata.literature, literature);
+  assert.equal(replay.statusCode, 200, JSON.stringify(replay.json));
+  assert.equal(replay.json.replayed, true);
+  assert.equal(replay.json.revision, updated.json.revision);
+  const conflictingReplay = await invokeHandler({
+    body: JSON.stringify({
+      ...updateBody,
+      literature: { ...literature, title: "Different literature" }
+    }),
+    handler,
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/update"
+  });
+  assert.equal(conflictingReplay.statusCode, 409);
+  assert.equal(conflictingReplay.json.code, "idempotency_key_reused");
+  assert.equal(conflictingReplay.json.revision, undefined);
+});
+
+test("fails closed when an organization member attempts a literature update", async () => {
+  const alias = "literature-member";
+  const token = ensureTestSession(alias);
+  const actorId = `user:${alias}`;
+  const database = createDatabase();
+  const timestamp = new Date().toISOString();
+  database.prepare(`
+    INSERT INTO organizations(
+      organization_id, name, normalized_name, owner_key, shared_library_name,
+      status, created_at, updated_at
+    ) VALUES (?, 'Literature Org', 'literature org', 'user:owner', 'Library', 'active', ?, ?)
+  `).run("organization-literature", timestamp, timestamp);
+  database.prepare(`
+    INSERT INTO organization_members(
+      organization_id, owner_key, display_name, role, status, created_at, updated_at
+    ) VALUES (?, ?, 'Member', 'member', 'active', ?, ?)
+  `).run("organization-literature", actorId, timestamp, timestamp);
+  database.close();
+  const handler = createDevCloudRequestHandler();
+
+  const response = await invokeHandler({
+    body: JSON.stringify({
+      documentId: "document-missing",
+      expectedRevision: 0,
+      idempotencyKey: "literature-org-member-1",
+      literature: {
+        authors: ["Ada Lovelace"],
+        identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
+        literatureId: "literature:doi:10.1000/liteasy",
+        provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+        title: "Cloud Literature Metadata"
+      },
+      scopeId: "organization-literature",
+      scopeType: "organization"
+    }),
+    handler,
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    method: "POST",
+    url: "/v1/library/documents/update"
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json.code, "organization_library_manage_forbidden");
+});
+
 test("never accepts a browser-owned OpenAlex key at the cloud boundary", async () => {
   let requestedUrl = "";
   const response = await invokeHandler({

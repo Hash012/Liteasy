@@ -58,6 +58,7 @@ test("deletes private forum state and anonymizes public authors in one transacti
   assert.equal(result.result.deletedCommunityAnnotations, 1);
   assert.equal(result.result.deletedNonPublicAnnotations, 2);
   assert.equal(result.result.deletedDesktopDraftHandoffs, 1);
+  assert.equal(result.result.deletedAnnotationPublications, 1);
   assert.equal(instance.calls.some((call) => call.sql.includes("author_name = '已注销用户'")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("UPDATE annotation_versions SET changed_by")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("UPDATE annotation_reply_versions SET changed_by")), true);
@@ -70,6 +71,11 @@ test("deletes private forum state and anonymizes public authors in one transacti
   assert.equal(instance.calls.some((call) => call.sql.includes("INSERT INTO account_lifecycle_audit")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("DELETE FROM community_annotations")), true);
   assert.equal(instance.calls.some((call) => call.sql.startsWith("DELETE FROM desktop_draft_handoffs")), true);
+  assert.equal(instance.calls.some((call) => call.sql.startsWith("DELETE FROM desktop_annotation_publications")), true);
+  assert.equal(
+    instance.calls.find((call) => call.sql.includes("WITH RECURSIVE deletion_tree")).sql.includes("annotation_replies"),
+    true
+  );
   assert.deepEqual(
     instance.calls.filter((call) => call.sql === "DELETE FROM annotations WHERE id = $1").map((call) => call.values[0]),
     ["annotation-child", "annotation-root"]

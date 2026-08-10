@@ -135,6 +135,10 @@ function runtime() {
       },
       async createFolder(scope, input) { calls.push({ input, scope }); return { folder: { folderId: "folder_1" }, revision: 1 }; },
       async createMetadataEntry() { throw new Error("not used"); },
+      async updateEntry(scope, input) {
+        calls.push({ libraryEntryUpdate: input, scope });
+        return { document: { documentId: input.documentId, metadata: { literature: input.literature } }, revision: 2 };
+      },
       async getDownloadablePdf(scope, documentId) {
         calls.push({ documentId, scope });
         if (typeof documentId !== "string" || !documentId) {
@@ -147,6 +151,8 @@ function runtime() {
           documentId,
           fileName: "paper.pdf",
           mediaType: "application/pdf",
+          metadata: {},
+          revision: 3,
           storageKey: "private/objects/aa/hash"
         };
       },
@@ -1231,6 +1237,7 @@ test("authorizes a document by scope-bound id without exposing or opening its ob
   const authorization = jsonBody(result);
   assert.equal(authorization.document.documentId, "document_1");
   assert.equal(authorization.document.contentHash, "a".repeat(64));
+  assert.equal(authorization.revision, 3);
   assert.match(authorization.serverNow, /^\d{4}-\d{2}-\d{2}T/);
   assert.ok(Date.parse(authorization.expiresAt) > Date.parse(authorization.serverNow));
   assert.equal(instance.calls.some((call) => call.storageKey), false);
@@ -1704,4 +1711,67 @@ test("creates Intuecho invitation cards through Liteasy authority without trusti
   assert.equal(call.inviteFromIntuecho.actorSubject, "admin_1");
   assert.match(call.inviteFromIntuecho.traceId, /^trace_/);
   assert.equal(instance.calls.some((item) => item.audience === "liteasy-desktop"), false);
+});
+
+test("forwards literature metadata through the managed library mutation boundary", async () => {
+  const instance = runtime();
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+  const literature = {
+    authors: ["Ada Lovelace"],
+    identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
+    literatureId: "literature:doi:10.1000/liteasy",
+    provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+    title: "Cloud Literature Metadata",
+    year: 2026
+  };
+
+  await handler(request("POST", "/v1/library/documents/update", {
+    documentId: "document_1",
+    expectedRevision: 1,
+    idempotencyKey: "literature-route-1",
+    literature,
+    scopeType: "user"
+  }), result);
+
+  assert.equal(result.status, 200);
+  const call = instance.calls.find((item) => item.libraryEntryUpdate);
+  assert.deepEqual(call.libraryEntryUpdate.literature, literature);
+  assert.equal(call.libraryEntryUpdate.actorId, "user_1");
+  assert.deepEqual(call.scope, {
+    actorId: "user_1", role: "owner", scopeId: "user_1", scopeType: "user"
+  });
+});
+
+test("rejects organization literature writes from a member before repository access", async () => {
+  const instance = runtime();
+  instance.pool.query = async () => ({ rows: [{
+    export_policy: "all_members",
+    member_role: "member",
+    member_status: "active",
+    organization_status: "active",
+    owner_subject: "owner_1",
+    upload_policy: "all_members"
+  }] });
+  const handler = createCloudRequestHandler(instance, internalConfig());
+  const result = response();
+
+  await handler(request("POST", "/v1/library/documents/update", {
+    documentId: "document_1",
+    expectedRevision: 1,
+    idempotencyKey: "literature-org-member-1",
+    literature: {
+      authors: ["Ada Lovelace"],
+      identifiers: [{ kind: "doi", source: "manual", value: "10.1000/liteasy" }],
+      literatureId: "literature:doi:10.1000/liteasy",
+      provenance: { confirmedAt: "2026-08-09T00:00:00.000Z", mode: "manual" },
+      title: "Cloud Literature Metadata"
+    },
+    scopeId: "organization_1",
+    scopeType: "organization"
+  }), result);
+
+  assert.equal(result.status, 403);
+  assert.equal(jsonBody(result).code, "organization_manage_forbidden");
+  assert.equal(instance.calls.some((item) => item.libraryEntryUpdate), false);
 });

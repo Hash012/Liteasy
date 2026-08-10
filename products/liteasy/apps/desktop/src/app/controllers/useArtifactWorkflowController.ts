@@ -7,6 +7,7 @@ import {
 } from "./useThinReadingVisualizationController";
 import type {
   ArtifactCatalogLoadState,
+  ArtifactMutationOutcome,
   ArtifactRegenerationRequest,
   ArtifactTask,
   ArtifactTab,
@@ -123,7 +124,7 @@ type ArtifactWorkflowActions = {
     reason: ThinReadingVisualizationCancellationReason
   ) => Promise<void>;
   closeArtifactTab: (artifactId: string) => void;
-  deleteArtifact: (artifactId: string) => Promise<string>;
+  deleteArtifact: (artifactId: string) => Promise<ArtifactMutationOutcome>;
   disposeThinReadingVisualizations: () => void;
   generateThinReadingBranch: (input: {
     artifactId: string;
@@ -134,7 +135,10 @@ type ArtifactWorkflowActions = {
   openSkillDocument: (entry: AgentCoreCatalogEntry) => void;
   openArtifact: (artifactId: string) => string;
   reloadArtifactCatalog: () => Promise<void>;
-  renameArtifact: (artifactId: string, requestedName: string) => Promise<string>;
+  renameArtifact: (
+    artifactId: string,
+    requestedName: string
+  ) => Promise<ArtifactMutationOutcome>;
   regenerateArtifact: (request: ArtifactRegenerationRequest) => string;
   retryInterruptedThinReadingBranch: (taskId: string) => Promise<void>;
   startAnalysis: (artifactType: ArtifactType) => string;
@@ -405,21 +409,27 @@ export function useArtifactWorkflowController({
       renameArtifact: async (artifactId, requestedName) => {
         const current = artifactStore.getCatalog().find((tab) => tab.artifactId === artifactId);
         if (!current || current.type === "skill_doc") {
-          return "找不到可重命名的已保存多模态产物。";
+          return {
+            message: "找不到可重命名的已保存多模态产物。",
+            status: "error"
+          };
         }
         try {
           const renamed = await artifactResultClient.rename(artifactId, requestedName);
           if (!artifactStore.renameCatalogEntry(artifactId, renamed.title)) {
-            return "产物已改名，但当前列表未找到对应条目；刷新文献库后即可看到。";
+            return {
+              message: "产物已改名，但当前列表未找到对应条目；刷新文献库后即可看到。",
+              status: "error"
+            };
           }
           artifactActions.syncArtifacts();
           const message = `已重命名多模态产物：${renamed.title}`;
           onAnalysisHint(message);
-          return message;
+          return { message, status: "success" };
         } catch (error) {
           const message = `重命名多模态产物失败：${error instanceof Error ? error.message : String(error)}`;
           onAnalysisHint(message);
-          return message;
+          return { message, status: "error" };
         }
       },
       openSkillDocument: artifactActions.openSkillDocument,

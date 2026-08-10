@@ -7,6 +7,28 @@ import {
 } from "../app/features/assistant/generateAssistantAnswer";
 import { createAgentCoreSession } from "../app/features/agent-core/agentCoreSession";
 import { createSettingsStore } from "../app/features/settings/settings.store";
+import { afterEach, vi } from "vitest";
+
+let thinReadingExternalKnowledgeClientConstructionError: Error | undefined;
+
+vi.mock("../app/features/thin-reading/thinReadingExternalKnowledgeClient", async () => {
+  const actual = await vi.importActual<typeof import("../app/features/thin-reading/thinReadingExternalKnowledgeClient")>(
+    "../app/features/thin-reading/thinReadingExternalKnowledgeClient"
+  );
+  return {
+    ...actual,
+    createThinReadingExternalKnowledgeClient: (...args: Parameters<typeof actual.createThinReadingExternalKnowledgeClient>) => {
+      if (thinReadingExternalKnowledgeClientConstructionError) {
+        throw thinReadingExternalKnowledgeClientConstructionError;
+      }
+      return actual.createThinReadingExternalKnowledgeClient(...args);
+    }
+  };
+});
+
+afterEach(() => {
+  thinReadingExternalKnowledgeClientConstructionError = undefined;
+});
 
 const liveModelTransport = async () => ({
   json: async () => ({
@@ -79,6 +101,298 @@ function passingEvidenceReview(prompt: string) {
     rootOrientation: evidenceReviewRootOrientation(prompt),
     unsupportedSentenceIds: [],
     verdict: "pass" as const
+  };
+}
+
+function aiInterpretationAnswer(summary: string) {
+  return {
+    anchors: [],
+    claims: [],
+    externalKnowledge: [],
+    omittedSections: [],
+    paperEvidence: [],
+    paperType: "unknown",
+    recommendations: [],
+    recommendedFigures: [],
+    summary,
+    summarySentences: [{
+      evidenceIds: [],
+      externalKnowledge: [],
+      status: "unsupported",
+      text: summary
+    }],
+    withinPaperClosure: false
+  };
+}
+
+function paperInterpretationAnswer(summary: string, evidenceId: string) {
+  return {
+    anchors: [],
+    claims: [],
+    externalKnowledge: [],
+    omittedSections: [],
+    paperEvidence: [evidenceId],
+    paperType: "experimental",
+    recommendedFigures: [],
+    summary,
+    summarySentences: [{
+      evidenceIds: [evidenceId],
+      externalKnowledge: [],
+      status: "grounded",
+      text: summary
+    }],
+    withinPaperClosure: true
+  };
+}
+
+function generateAiInterpretationFallbackForTest(input: {
+  modelTransport: NonNullable<Parameters<typeof generateAssistantAnswer>[0]["modelTransport"]>;
+  signal?: AbortSignal;
+  thinReadingContext?: NonNullable<Parameters<typeof generateAssistantAnswer>[0]["thinReadingContext"]>;
+  thinReadingExternalKnowledgeTransport?: NonNullable<Parameters<typeof generateAssistantAnswer>[0]["thinReadingExternalKnowledgeTransport"]>;
+}) {
+  const store = createSettingsStore();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  return generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: input.modelTransport,
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    signal: input.signal,
+    thinReadingContext: input.thinReadingContext ?? {
+      artifactId: "artifact-thin-ai-review-boundary",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: input.thinReadingExternalKnowledgeTransport ?? (async () => ({
+      json: async () => ({ provider: "openalex", query: "query", sources: [], status: "empty" }),
+      ok: true,
+      status: 200
+    }))
+  });
+}
+
+function generateFocusedRecoveryBoundaryForTest(
+  focusedResult: "abort" | "http_unavailable" | "malformed" | "transport_unavailable" | "unknown" | "untrusted"
+) {
+  const store = createSettingsStore();
+  const aiBodyPrompts: string[] = [];
+  const abortError = new DOMException("focused recovery cancelled", "AbortError");
+  const unknownError = new Error("focused recovery response reader failed");
+  let externalRequests = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const unsupportedSource = {
+    abstract: "A study about a neighboring retrieval topic.",
+    authors: ["A. Author"],
+    id: "openalex:W1",
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: "https://openalex.org/W1",
+    sourceId: "W1",
+    title: "Adjacent Retrieval Topic",
+    url: "https://openalex.org/W1",
+    year: 2025
+  };
+  const untrustedReplacement = {
+    abstract: "",
+    arxivId: "2508.00009",
+    authors: ["A. Author"],
+    id: "arxiv:2508.00009",
+    provider: "arxiv" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: "https://arxiv.org/abs/2508.00009",
+    sourceId: "2508.00009",
+    title: "Metadata-only Follow-up Retrieval Candidate",
+    url: "https://arxiv.org/abs/2508.00009",
+    year: 2025
+  };
+  const result = generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        const sentenceLine = prompt.split("\n").find((line) => line.includes("external=openalex:W1"));
+        const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
+              reason: "该来源只涉及相邻主题，不能直接支持所问外部命题。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
+              unsupportedSentenceIds: [sentenceId],
+              verdict: "fail"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该句是明确披露的概念推理，没有来源归因或精确经验数据。",
+              unsafeSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("AI 独立理解")) {
+        aiBodyPrompts.push(prompt);
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer(
+              "一种可能的理解是，后续工作可以探索更高效的细粒度交互机制。"
+            )),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [unsupportedSource.id],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [unsupportedSource.id],
+              status: "weak",
+              text: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: `artifact-focused-recovery-${focusedResult}`,
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "selected_text", excerpt: "论文外的后续研究" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRequests += 1;
+      if (externalRequests === 4) {
+        if (focusedResult === "abort") {
+          throw abortError;
+        }
+        if (focusedResult === "transport_unavailable") {
+          throw new TypeError("Failed to fetch");
+        }
+        if (focusedResult === "http_unavailable") {
+          return { json: async () => ({}), ok: false, status: 503 };
+        }
+        if (focusedResult === "unknown") {
+          return {
+            json: async () => { throw unknownError; },
+            ok: true,
+            status: 200
+          };
+        }
+        if (focusedResult === "malformed") {
+          return {
+            json: async () => ({ provider: "openalex", sources: "malformed", status: "available" }),
+            ok: true,
+            status: 200
+          };
+        }
+        return {
+          json: async () => ({
+            provider: "openalex",
+            query: "external",
+            sources: [untrustedReplacement],
+            status: "available"
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          provider: "openalex",
+          query: "external",
+          sources: [unsupportedSource],
+          status: "available"
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  return {
+    abortError,
+    aiBodyPrompts,
+    externalRequestCount: () => externalRequests,
+    result,
+    unknownError
   };
 }
 
@@ -510,6 +824,7 @@ test("rejects non-http model endpoints before thin-reading generation", async ()
 test("stops live thin-reading before the model call when PDF text evidence is unavailable", async () => {
   const store = createSettingsStore();
   const modelTransport = vi.fn();
+  const thinReadingExternalKnowledgeTransport = vi.fn();
   store.apply({
     intent: "update_setting",
     target: "models.cloud_proxy_endpoint",
@@ -523,10 +838,12 @@ test("stops live thin-reading before the model call when PDF text evidence is un
     modelTransport,
     question: "生成薄读",
     selectedPapers: [{ id: "scan-1", title: "扫描版论文" }],
-    settings: store.getState()
+    settings: store.getState(),
+    thinReadingExternalKnowledgeTransport
   })).rejects.toThrow("《扫描版论文》没有可用的本地文本索引");
 
   expect(modelTransport).not.toHaveBeenCalled();
+  expect(thinReadingExternalKnowledgeTransport).not.toHaveBeenCalled();
 });
 
 test("retrieves external literature only for a concrete interpretation gap or beyond-paper request", () => {
@@ -689,7 +1006,6 @@ test("parses thin-reading structured output from a live model request", async ()
             anchors: [{
               importance: 0.9,
               kind: "method",
-              label: "Late interaction",
               searchQuery: "late interaction passage retrieval",
               summarySentenceIndex: 0,
               text: "MaxSim late interaction"
@@ -861,7 +1177,6 @@ test("persists ranked anchor quality when every per-anchor search fails", async 
             anchors: [{
               importance: 0.8,
               kind: "concept",
-              label: "MaxSim",
               searchQuery: "MaxSim late interaction",
               summarySentenceIndex: 0,
               text: "MaxSim late interaction"
@@ -1895,7 +2210,6 @@ test("accepts a DeepSeek mechanism anchor without entering structured-output rep
             anchors: [{
               importance: 0.95,
               kind: "mechanism",
-              label: "核心调度机制",
               searchQuery: "dendritic hierarchical scheduling parallel Hines solve",
               summarySentenceIndex: 0,
               text: "dendritic hierarchical scheduling（树突分层调度）"
@@ -1947,8 +2261,12 @@ test("accepts a DeepSeek mechanism anchor without entering structured-output rep
     repairReasons: []
   });
   expect(result.thinReading?.rootSeed.evidence.anchors).toEqual([
-    expect.objectContaining({ kind: "mechanism", label: "核心调度机制" })
+    expect.objectContaining({
+      kind: "mechanism",
+      text: "dendritic hierarchical scheduling（树突分层调度）"
+    })
   ]);
+  expect(result.thinReading?.rootSeed.evidence.anchors?.[0]).not.toHaveProperty("label");
 });
 
 test("repairs only invalid anchor spans and quarantines a repeated failure without losing the body", async () => {
@@ -2001,28 +2319,24 @@ test("repairs only invalid anchor spans and quarantines a repeated failure witho
             anchors: [{
               importance: 0.95,
               kind: "concept",
-              label: "核心库",
               searchQuery: "CoreNEURON library design",
               summarySentenceIndex: 0,
               text: "CoreNEURON"
             }, {
               importance: 0.8,
               kind: "mechanism",
-              label: "工作流模式",
               searchQuery: "CoreNEURON online offline mode",
               summarySentenceIndex: 1,
               text: "在线和离线两种执行工作流"
             }, {
               importance: 0.9,
               kind: "result",
-              label: "性能提升",
               searchQuery: "CoreNEURON memory time reduction",
               summarySentenceIndex: 2,
               text: "内存与时间开销下降"
             }, {
               importance: 0.75,
               kind: "mechanism",
-              label: "优化机制",
               searchQuery: "CoreNEURON data structure optimization",
               summarySentenceIndex: 3,
               text: "数据结构优化"
@@ -2064,7 +2378,7 @@ test("repairs only invalid anchor spans and quarantines a repeated failure witho
   expect(prompts).toHaveLength(2);
   expect(prompts[1]).toContain("本轮只修复 anchors");
   expect(prompts[1]).toContain("text 是正文高亮 span");
-  expect(prompts[1]).toContain("label 才是概括性名称");
+  expect(prompts[1]).not.toContain("anchors[].label");
   expect(result.thinReading?.rootSeed.summary).toContain("通用数据结构");
   expect(result.thinReading?.rootSeed.evidence.anchors).toHaveLength(3);
   expect(result.thinReading?.rootSeed.evidence.anchors?.some((anchor) => (
@@ -2268,14 +2582,12 @@ test("quarantines paper sentences that remain partially supported after targeted
             anchors: [{
               importance: 0.9,
               kind: "concept",
-              label: "CoreNEURON",
               searchQuery: "CoreNEURON",
               summarySentenceIndex: 0,
               text: "CoreNEURON"
             }, {
               importance: 0.7,
               kind: "result",
-              label: "性能提升",
               searchQuery: "CoreNEURON performance",
               summarySentenceIndex: 1,
               text: "提升性能"
@@ -2639,6 +2951,7 @@ test("moves a deep paper-bounded branch to traceable external sources at the clo
     retrievalIntents: ["support", "challenge", "context"],
     url: "https://openalex.org/W42"
   });
+  expect(result.thinReading?.rootSeed.supportMode).toBe("external_only");
   expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
 });
 
@@ -2910,8 +3223,9 @@ test("replaces one unsupported required external source with a focused retrieval
   expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 2, repaired: true });
 });
 
-test("returns a closure boundary when a required external claim has no replacement evidence", async () => {
+test("regenerates unsupported required external claims as disclosed AI interpretation after recovery is exhausted", async () => {
   const store = createSettingsStore();
+  let aiInterpretationPrompt = "";
   let externalRequests = 0;
   store.apply({
     intent: "update_setting",
@@ -2952,8 +3266,9 @@ test("returns a closure boundary when a required external claim has no replaceme
     },
     mode: "qa",
     modelTransport: async (request) => {
-      const prompt = String(JSON.parse(request.body).prompt);
-      if (prompt.includes("薄读的证据复核 Agent")) {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
         const sentenceLine = prompt.split("\n").find((line) => line.includes("external=openalex:W1"));
         const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
         return {
@@ -2965,6 +3280,33 @@ test("returns a closure boundary when a required external claim has no replaceme
               unsupportedSentenceIds: [sentenceId],
               verdict: "fail"
             }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该句明确标记为一种可能的概念解释，未声称来自文献或研究。",
+              unsafeSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("AI 独立理解")) {
+        aiInterpretationPrompt = prompt;
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer(
+              "一种可能的理解是，后续工作可以探索更高效的细粒度交互机制。"
+            )),
             execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
           }),
           ok: true,
@@ -3011,7 +3353,9 @@ test("returns a closure boundary when a required external claim has no replaceme
     thinReadingExternalKnowledgeTransport: async () => {
       externalRequests += 1;
       return {
-        json: async () => ({ provider: "openalex", query: "external", sources: [unsupportedSource], status: "available" }),
+        json: async () => externalRequests === 4
+          ? ({ provider: "openalex", query: "external", sources: [], status: "empty" })
+          : ({ provider: "openalex", query: "external", sources: [unsupportedSource], status: "available" }),
         ok: true,
         status: 200
       };
@@ -3019,10 +3363,416 @@ test("returns a closure boundary when a required external claim has no replaceme
   });
 
   expect(externalRequests).toBe(4);
-  expect(result.thinReading?.rootSeed.summary).toContain("未找到能直接支持");
-  expect(result.thinReading?.rootSeed.closureState).toBe("near_boundary");
-  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(true);
+  expect(aiInterpretationPrompt).toContain("AI 独立理解");
+  expect(aiInterpretationPrompt).not.toContain("初始外部线索");
+  expect(aiInterpretationPrompt).not.toContain("该来源只涉及相邻主题");
+  expect(aiInterpretationPrompt).not.toContain("openalex:W1");
+  expect(aiInterpretationPrompt).not.toContain("Adjacent Retrieval Topic");
+  expect(result.thinReading?.rootSeed.supportMode).toBe("ai_interpretation");
+  expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
+  expect(result.thinReading?.rootSeed.closureState).toBe("outside_paper");
+  expect(result.thinReading?.rootSeed.summary).not.toContain("初始外部线索");
   expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual([]);
+  expect(result.thinReading?.rootSeed.evidence.externalSources).toEqual([]);
+  expect(result.thinReading?.rootSeed.evidence.paperEvidence).toEqual([]);
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.externalFallback).toEqual({
+    attemptedRoutes: ["support"],
+    carriedSourceCount: 1,
+    completedRoutes: ["support"],
+    reason: "verification_exhausted",
+    trustedSourceCount: 0
+  });
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.aiInterpretationReview).toEqual({
+    reason: "该句明确标记为一种可能的概念解释，未声称来自文献或研究。",
+    unsafeSentenceIds: [],
+    verdict: "pass"
+  });
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidenceLoop");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidencePlan");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidenceReview");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidenceToolCalls");
+});
+
+test("limits AI interpretation repair to two body attempts after later verification exhaustion", async () => {
+  const store = createSettingsStore();
+  const aiBodyPrompts: string[] = [];
+  let normalBodyCalls = 0;
+  let aiReviewCalls = 0;
+  let externalRequests = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const unsupportedSource = {
+    abstract: "A study about a neighboring retrieval topic.",
+    authors: ["A. Author"],
+    id: "openalex:W1",
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: "https://openalex.org/W1",
+    sourceId: "W1",
+    title: "Adjacent Retrieval Topic",
+    url: "https://openalex.org/W1",
+    year: 2025
+  };
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        const sentenceLine = prompt.split("\n").find((line) => line.includes(`external=${unsupportedSource.id}`));
+        const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
+              reason: "该来源只涉及相邻主题，不能直接支持所问外部命题。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
+              unsupportedSentenceIds: [sentenceId],
+              verdict: "fail"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        aiReviewCalls += 1;
+        const sentenceId = prompt.match(/<sentence id="([^"]+)">/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiReviewCalls === 1
+              ? {
+                  reason: "该句需要更明确地标记为概念假设。",
+                  unsafeSentenceIds: [sentenceId],
+                  verdict: "fail"
+                }
+              : {
+                  reason: "修复后只保留明确标记的可能性推理。",
+                  unsafeSentenceIds: [],
+                  verdict: "pass"
+                }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("AI 独立理解")) {
+        aiBodyPrompts.push(prompt);
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer(
+              aiBodyPrompts.length === 1
+                ? "可以设想，另一种交互机制可能会改变检索效率与表达能力之间的权衡。"
+                : "一种可能的理解是，另一种交互机制或许会改变检索效率与表达能力的权衡。"
+            )),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      normalBodyCalls += 1;
+      if (normalBodyCalls === 1) {
+        return {
+          json: async () => ({
+            answer: "not-json",
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [unsupportedSource.id],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [unsupportedSource.id],
+              status: "weak",
+              text: "初始外部线索只涉及相邻主题，不足以直接支持这个论文外命题。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-ai-later-verification-exhaustion",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "selected_text", excerpt: "论文外的后续研究" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRequests += 1;
+      return {
+        json: async () => externalRequests === 4
+          ? ({ provider: "openalex", query: "external", sources: [], status: "empty" })
+          : ({ provider: "openalex", query: "external", sources: [unsupportedSource], status: "available" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalRequests).toBe(4);
+  expect(normalBodyCalls).toBe(2);
+  expect(aiReviewCalls).toBe(2);
+  expect(aiBodyPrompts).toHaveLength(2);
+  expect(aiBodyPrompts.join("\n")).not.toContain("初始外部线索");
+  expect(aiBodyPrompts.join("\n")).not.toContain("openalex:W1");
+  expect(aiBodyPrompts.join("\n")).not.toContain("Adjacent Retrieval Topic");
+  expect(result.thinReading?.rootSeed.supportMode).toBe("ai_interpretation");
+  expect(result.thinReading?.rootSeed.summary).not.toContain("初始外部线索");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.externalFallback).toMatchObject({
+    attemptedRoutes: ["support"],
+    reason: "verification_exhausted",
+    trustedSourceCount: 0
+  });
+});
+
+test("propagates malformed focused recovery schema without authorizing AI interpretation", async () => {
+  const run = generateFocusedRecoveryBoundaryForTest("malformed");
+
+  await expect(run.result).rejects.toThrow("外部文献检索返回格式无效");
+  expect(run.externalRequestCount()).toBe(4);
+  expect(run.aiBodyPrompts).toEqual([]);
+});
+
+test.each(["transport_unavailable", "http_unavailable"] as const)(
+  "authorizes verification exhaustion for focused recovery %s without retaining error text",
+  async (focusedResult) => {
+    const run = generateFocusedRecoveryBoundaryForTest(focusedResult);
+    const result = await run.result;
+    const fallbackAudit = result.thinReading?.rootSeed.evidence.generationAudit?.externalFallback;
+
+    expect(run.externalRequestCount()).toBe(4);
+    expect(run.aiBodyPrompts).toHaveLength(1);
+    expect(fallbackAudit).toEqual({
+      attemptedRoutes: ["support"],
+      carriedSourceCount: 1,
+      completedRoutes: [],
+      reason: "verification_exhausted",
+      trustedSourceCount: 0
+    });
+    expect(JSON.stringify(fallbackAudit)).not.toContain("focused recovery transport outage");
+  }
+);
+
+test.each(["abort", "unknown"] as const)(
+  "propagates focused recovery %s failure by identity without authorizing AI interpretation",
+  async (focusedResult) => {
+    const run = generateFocusedRecoveryBoundaryForTest(focusedResult);
+    const expectedError = focusedResult === "abort" ? run.abortError : run.unknownError;
+
+    await expect(run.result).rejects.toBe(expectedError);
+    expect(run.externalRequestCount()).toBe(4);
+    expect(run.aiBodyPrompts).toEqual([]);
+  }
+);
+
+test("regenerates as AI interpretation when focused recovery candidates are all untrusted", async () => {
+  const run = generateFocusedRecoveryBoundaryForTest("untrusted");
+  const result = await run.result;
+
+  expect(run.externalRequestCount()).toBe(4);
+  expect(run.aiBodyPrompts).toHaveLength(1);
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    closureState: "outside_paper",
+    supportMode: "ai_interpretation",
+    evidence: {
+      externalKnowledge: [],
+      externalSources: [],
+      generationAudit: {
+        externalFallback: {
+          attemptedRoutes: ["support"],
+          completedRoutes: ["support"],
+          reason: "verification_exhausted",
+          trustedSourceCount: 0
+        }
+      }
+    }
+  });
+});
+
+test("keeps a surviving trustworthy external source when another source fails review and recovery is empty", async () => {
+  const store = createSettingsStore();
+  let externalRequests = 0;
+  let generationAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const externalSource = (id: string, title: string, abstract: string) => ({
+    abstract,
+    authors: ["A. Author"],
+    id: `openalex:${id}`,
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.8,
+    retrievalQuery: "follow-up retrieval",
+    sourceRecordUrl: `https://openalex.org/${id}`,
+    sourceId: id,
+    title,
+    url: `https://openalex.org/${id}`,
+    year: 2025
+  });
+  const rejectedSource = externalSource(
+    "W1",
+    "Adjacent Retrieval Topic",
+    "A study about a neighboring retrieval topic."
+  );
+  const survivingSource = externalSource(
+    "W2",
+    "Efficient Multi-vector Retrieval",
+    "This follow-up study directly supports a more efficient multi-vector retrieval method."
+  );
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        const rejectedLine = prompt.split("\n").find((line) => line.includes("external=openalex:W1"));
+        const rejectedSentenceId = rejectedLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt, [rejectedSentenceId]),
+              reason: "W1 只涉及相邻主题；W2 的摘要直接支持其绑定句。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
+              unsupportedSentenceIds: [rejectedSentenceId],
+              verdict: "fail"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationAttempts += 1;
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [rejectedSource.id, survivingSource.id],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "相邻主题线索不足以支持具体改进。后续研究直接支持更高效的多向量检索。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [rejectedSource.id],
+              status: "weak",
+              text: "相邻主题线索不足以支持具体改进。"
+            }, {
+              evidenceIds: [],
+              externalKnowledge: [survivingSource.id],
+              status: "weak",
+              text: "后续研究直接支持更高效的多向量检索。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-external-surviving-source",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "selected_text", excerpt: "论文外的后续研究" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRequests += 1;
+      return {
+        json: async () => externalRequests === 4
+          ? ({ provider: "openalex", query: "external", sources: [], status: "empty" })
+          : ({
+              provider: "openalex",
+              query: "external",
+              sources: [rejectedSource, survivingSource],
+              status: "available"
+            }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalRequests).toBe(4);
+  expect(generationAttempts).toBe(1);
+  expect(result.thinReading?.rootSeed.supportMode).toBe("external_only");
+  expect(result.thinReading?.rootSeed.summary).toBe("后续研究直接支持更高效的多向量检索。");
+  expect(result.thinReading?.rootSeed.evidence.externalKnowledge).toEqual([survivingSource.id]);
+  expect(result.thinReading?.rootSeed.evidence.externalSources).toEqual([
+    expect.objectContaining({ id: survivingSource.id })
+  ]);
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("externalFallback");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("aiInterpretationReview");
 });
 
 test("keeps a selected canonical external source available when a follow-up lookup is empty", async () => {
@@ -3136,19 +3886,170 @@ test("keeps a selected canonical external source available when a follow-up look
   expect(modelPrompt).toContain(selectedSource.id);
   expect(modelPrompt).toContain(selectedSource.title);
   expect(result.thinReading?.rootSeed.evidence.externalSources).toEqual([selectedSource]);
+  expect(result.thinReading?.rootSeed.supportMode).toBe("external_only");
   expect(result.thinReading?.rootSeed.withinPaperClosure).toBe(false);
 });
 
-test("stops beyond-paper generation when external retrieval returns no sources", async () => {
+test("does not authorize verification exhaustion when an explicitly selected external source fails review", async () => {
   const store = createSettingsStore();
-  let modelCalls = 0;
+  const aiBodyPrompts: string[] = [];
+  let externalRequests = 0;
+  let generationAttempts = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  const selectedSource = {
+    abstract: "An already verified follow-up study.",
+    authors: ["A. Author"],
+    id: "openalex:W42",
+    provider: "openalex" as const,
+    relation: "related" as const,
+    relevance: 0.86,
+    retrievalQuery: "ColBERT follow-up",
+    sourceRecordUrl: "https://openalex.org/W42",
+    sourceId: "W42",
+    title: "Efficient Multi-vector Retrieval",
+    url: "https://openalex.org/W42",
+    year: 2025
+  };
+
+  const result = generateAssistantAnswer({
+    artifactType: "thin_reading",
+    auditTransport: async () => ({
+      json: async () => ({ audit: { model: "auditor", rationale: "pass", score: 0.9, verdict: "pass" } }),
+      ok: true,
+      status: 200
+    }),
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 2,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT uses MaxSim.",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        const sentenceLine = prompt.split("\n").find((line) => line.includes(`external=${selectedSource.id}`));
+        const sentenceId = sentenceLine?.match(/id=(thin-reading-sentence-[^;]+)/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              propositionVerdicts: evidenceReviewPropositions(prompt, [sentenceId]),
+              reason: "显式选择来源的摘要不能直接支持该句。",
+              rootOrientation: evidenceReviewRootOrientation(prompt),
+              unsupportedSentenceIds: [sentenceId],
+              verdict: "fail"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该句保持明确披露的概念推理边界。",
+              unsafeSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("AI 独立理解")) {
+        aiBodyPrompts.push(prompt);
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer(
+              "一种可能的理解是，后续工作可以探索更高效的细粒度交互机制。"
+            )),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationAttempts += 1;
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [selectedSource.id],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary: "这条显式选择的后续研究线索不能直接支持当前具体命题。",
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [selectedSource.id],
+              status: "weak",
+              text: "这条显式选择的后续研究线索不能直接支持当前具体命题。"
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-selected-external-review-fail",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      selectedExternalSources: [selectedSource],
+      source: {
+        externalSourceIds: [selectedSource.id],
+        excerpt: selectedSource.title,
+        kind: "selected_text"
+      },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRequests += 1;
+      return {
+        json: async () => ({ provider: "openalex", query: "ColBERT follow-up", sources: [], status: "empty" }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  await expect(result).rejects.toThrow("薄读 Agent 结构质量门连续失败");
+  expect(externalRequests).toBe(3);
+  expect(generationAttempts).toBe(2);
+  expect(aiBodyPrompts).toEqual([]);
+});
+
+test("generates AI interpretation when external retrieval returns no sources", async () => {
+  const store = createSettingsStore();
+  let generationPrompt = "";
   store.apply({
     intent: "update_setting",
     target: "models.cloud_proxy_endpoint",
     value: "https://liteasy.example.com/model-proxy"
   });
 
-  await expect(generateAssistantAnswer({
+  const result = await generateAssistantAnswer({
     artifactType: "thin_reading",
     importedChunksByPaperId: {
       "demo-1": [{
@@ -3161,9 +4062,32 @@ test("stops beyond-paper generation when external retrieval returns no sources",
       }]
     },
     mode: "qa",
-    modelTransport: async () => {
-      modelCalls += 1;
-      throw new Error("model should not be called");
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该句保持为明确的可能性推理，没有伪造来源或精确经验数据。",
+              unsafeSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationPrompt = prompt;
+      return {
+        json: async () => ({
+          answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，后续研究可以检验更细粒度的交互机制。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
     },
     question: "继续深入",
     selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
@@ -3183,8 +4107,976 @@ test("stops beyond-paper generation when external retrieval returns no sources",
       ok: true,
       status: 200
     })
-  })).rejects.toThrow("未检索到可信、可追溯的外部文献");
-  expect(modelCalls).toBe(0);
+  });
+
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    supportMode: "ai_interpretation",
+    withinPaperClosure: false,
+    evidence: {
+      externalKnowledge: [],
+      externalSources: [],
+      generationAudit: {
+        aiInterpretationReview: {
+          reason: "该句保持为明确的可能性推理，没有伪造来源或精确经验数据。",
+          unsafeSentenceIds: [],
+          verdict: "pass"
+        },
+        externalFallback: {
+          reason: "no_trusted_sources",
+          trustedSourceCount: 0
+        }
+      },
+      paperEvidence: [],
+      summarySentences: [expect.objectContaining({
+        evidenceIds: [],
+        externalKnowledge: [],
+        status: "unsupported",
+        supportMode: "ai_interpretation"
+      })]
+    }
+  });
+  expect(generationPrompt).toContain("AI 独立理解");
+  expect(generationPrompt).not.toContain("ColBERT uses MaxSim.");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidenceLoop");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidencePlan");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidenceReview");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("evidenceToolCalls");
+});
+
+test("generates AI interpretation when all three external routes fail", async () => {
+  const store = createSettingsStore();
+  let externalRequests = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const prompt = String(JSON.parse(request.body).prompt);
+      return {
+        json: async () => ({
+          answer: JSON.stringify(prompt.includes("AI 独立理解质量审阅 Agent")
+            ? {
+                reason: "该句是明确标记的概念推理。",
+                unsafeSentenceIds: [],
+                verdict: "pass"
+              }
+            : aiInterpretationAnswer("一种可能性是，替代交互形式会改变检索效率与表达能力的权衡。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-failed-external",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      externalRequests += 1;
+      throw new TypeError("Failed to fetch");
+    }
+  });
+
+  expect(externalRequests).toBe(3);
+  const fallbackAudit = result.thinReading?.rootSeed.evidence.generationAudit?.externalFallback;
+  expect(fallbackAudit).toEqual({
+    attemptedRoutes: ["support", "challenge", "context"],
+    carriedSourceCount: 0,
+    completedRoutes: [],
+    reason: "all_routes_failed",
+    trustedSourceCount: 0
+  });
+  expect(JSON.stringify(fallbackAudit)).not.toContain("temporary external outage");
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    supportMode: "ai_interpretation",
+    evidence: {
+      generationAudit: {
+        externalFallback: {
+          attemptedRoutes: expect.arrayContaining(["support", "challenge", "context"]),
+          reason: "all_routes_failed",
+          trustedSourceCount: 0
+        }
+      }
+    }
+  });
+});
+
+test("keeps paper-internal gaps off the AI interpretation path when external retrieval is unavailable", async () => {
+  const store = createSettingsStore();
+  const aiBodyPrompts: string[] = [];
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify(passingEvidenceReview(prompt)),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该句保持为明确的可能性推理，没有伪造来源或精确经验数据。",
+              unsafeSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("AI 独立理解")) {
+        aiBodyPrompts.push(prompt);
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，细粒度交互机制决定了检索权衡。")),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const evidenceId = prompt.match(/可用 evidence ID：([^\n]+)/)?.[1]?.split(",")[0]?.trim() ?? "evidence-1";
+      return {
+        json: async () => ({
+          answer: JSON.stringify(paperInterpretationAnswer("ColBERT 使用 MaxSim 来保留细粒度匹配信号。", evidenceId)),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "为什么需要这样做？",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-internal-gap",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: true,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      prompt: "为什么需要这样做？",
+      source: { kind: "omitted_section", label: "动机", sectionKey: "motivation" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      throw new TypeError("Failed to fetch");
+    }
+  });
+
+  expect(aiBodyPrompts).toEqual([]);
+  expect(result.thinReading?.rootSeed.supportMode).toBe("paper");
+  expect(result.thinReading?.rootSeed.evidence.generationAudit?.externalFallback).toEqual({
+    attemptedRoutes: ["support", "challenge", "context"],
+    carriedSourceCount: 0,
+    completedRoutes: [],
+    reason: "all_routes_failed",
+    trustedSourceCount: 0
+  });
+});
+
+test("propagates non-network external transport failures without authorizing AI interpretation", async () => {
+  const store = createSettingsStore();
+  const aiBodyPrompts: string[] = [];
+  const transportError = new Error("programming bug in external transport");
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify(passingEvidenceReview(prompt)),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该句明确标记为一种概念可能性，没有来源归因。",
+              unsafeSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("AI 独立理解")) {
+        aiBodyPrompts.push(prompt);
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，后续工作可以探索更高效的细粒度交互机制。")),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const evidenceId = prompt.match(/可用 evidence ID：([^\n]+)/)?.[1]?.split(",")[0]?.trim() ?? "evidence-1";
+      return {
+        json: async () => ({
+          answer: JSON.stringify(paperInterpretationAnswer("ColBERT 使用 MaxSim 来保留细粒度匹配信号。", evidenceId)),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-external-transport-bug",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      throw transportError;
+    }
+  })).rejects.toBe(transportError);
+
+  expect(aiBodyPrompts).toEqual([]);
+});
+
+test("propagates external knowledge client construction failures without authorizing AI interpretation", async () => {
+  const store = createSettingsStore();
+  const aiBodyPrompts: string[] = [];
+  const constructionError = new Error("external knowledge client construction bug");
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+  thinReadingExternalKnowledgeClientConstructionError = constructionError;
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim late interaction.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify(passingEvidenceReview(prompt)),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify({
+              reason: "该句保持为明确的概念可能性，没有伪造来源或精确经验数据。",
+              unsafeSentenceIds: [],
+              verdict: "pass"
+            }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      if (prompt.includes("AI 独立理解")) {
+        aiBodyPrompts.push(prompt);
+        return {
+          json: async () => ({
+            answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，后续工作可以探索更高效的细粒度交互机制。")),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，后续工作可以探索更高效的细粒度交互机制。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续了解论文外的后续研究",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-external-construction-bug",
+      depth: 3,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      primaryPaperTitle: "ColBERT",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    }
+  })).rejects.toBe(constructionError);
+
+  expect(aiBodyPrompts).toEqual([]);
+});
+
+test("keeps a trusted fulfilled source when another external route returns malformed schema", async () => {
+  const trustedSource = {
+    abstract: "A traceable study of efficient multi-vector retrieval with reviewable details.",
+    authors: ["A. Author"],
+    id: "openalex:W71",
+    provider: "openalex" as const,
+    relation: "topic_search" as const,
+    relevance: 0.88,
+    retrievalQuery: "multi-vector retrieval",
+    sourceId: "W71",
+    sourceRecordUrl: "https://openalex.org/W71",
+    title: "Efficient Multi-vector Retrieval Study",
+    url: "https://openalex.org/W71",
+    year: 2025
+  };
+  let externalRequests = 0;
+  let generationPrompt = "";
+
+  const result = await generateAiInterpretationFallbackForTest({
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify(passingEvidenceReview(body.prompt)),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationPrompt = body.prompt;
+      const summary = "这项可信研究探讨更高效的多向量检索，并为继续分析交互机制提供可追溯线索。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [trustedSource.id],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [trustedSource.id],
+              status: "weak",
+              text: summary
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      const requestNumber = ++externalRequests;
+      if (requestNumber === 1) {
+        return {
+          json: async () => ({ provider: "openalex", sources: "malformed", status: "available" }),
+          ok: true,
+          status: 200
+        };
+      }
+      return {
+        json: async () => ({
+          provider: "openalex",
+          query: "multi-vector retrieval",
+          sources: requestNumber === 2 ? [trustedSource] : [],
+          status: requestNumber === 2 ? "available" : "empty"
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalRequests).toBe(3);
+  expect(generationPrompt).not.toContain("本轮已由编排器授权为 AI 独立理解");
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    supportMode: "external_only",
+    evidence: {
+      externalSources: [expect.objectContaining({ id: trustedSource.id })]
+    }
+  });
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("externalFallback");
+});
+
+test("keeps a trusted carried source when another external route returns malformed schema", async () => {
+  const carriedSource = {
+    abstract: "An already verified follow-up study with reviewable multi-vector retrieval details.",
+    authors: ["B. Author"],
+    id: "openalex:W72",
+    provider: "openalex" as const,
+    relation: "related" as const,
+    relevance: 0.9,
+    retrievalQuery: "ColBERT follow-up",
+    sourceId: "W72",
+    sourceRecordUrl: "https://openalex.org/W72",
+    title: "Verified Multi-vector Retrieval Follow-up",
+    url: "https://openalex.org/W72",
+    year: 2025
+  };
+  let externalRequests = 0;
+
+  const result = await generateAiInterpretationFallbackForTest({
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      if (body.outputFormat?.name === "liteasy_thin_reading_evidence_review") {
+        return {
+          json: async () => ({
+            answer: JSON.stringify(passingEvidenceReview(body.prompt)),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      const summary = "这条已验证的后续研究线索聚焦多向量检索，并为继续分析交互机制提供可追溯依据。";
+      return {
+        json: async () => ({
+          answer: JSON.stringify({
+            claims: [],
+            externalKnowledge: [carriedSource.id],
+            omittedSections: [],
+            paperEvidence: [],
+            paperType: "experimental",
+            recommendations: [],
+            summary,
+            summarySentences: [{
+              evidenceIds: [],
+              externalKnowledge: [carriedSource.id],
+              status: "weak",
+              text: summary
+            }],
+            withinPaperClosure: false
+          }),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    thinReadingContext: {
+      artifactId: "artifact-thin-carried-malformed-route",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      selectedExternalSources: [carriedSource],
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      const requestNumber = ++externalRequests;
+      return {
+        json: async () => requestNumber === 1
+          ? { provider: "openalex", sources: "malformed", status: "available" }
+          : { provider: "openalex", query: "follow-up", sources: [], status: "empty" },
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  expect(externalRequests).toBe(3);
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    supportMode: "external_only",
+    evidence: {
+      externalSources: [expect.objectContaining({ id: carriedSource.id })]
+    }
+  });
+  expect(result.thinReading?.rootSeed.evidence.generationAudit).not.toHaveProperty("externalFallback");
+});
+
+test("propagates malformed external route schema without authorizing AI interpretation", async () => {
+  const modelTransport = vi.fn();
+
+  await expect(generateAiInterpretationFallbackForTest({
+    modelTransport,
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({ provider: "openalex", query: "query", sources: "malformed", status: "available" }),
+      ok: true,
+      status: 200
+    })
+  })).rejects.toThrow("外部文献检索返回格式无效");
+
+  expect(modelTransport).not.toHaveBeenCalled();
+});
+
+test("allows AI interpretation when an untrusted carried source is filtered out", async () => {
+  const retractedSource = {
+    abstract: "A retracted source that must never be treated as trusted evidence.",
+    authors: ["A. Author"],
+    id: "openalex:W99",
+    isRetracted: true,
+    provider: "openalex" as const,
+    relation: "related" as const,
+    relevance: 0.91,
+    retrievalQuery: "ColBERT follow-up",
+    sourceId: "W99",
+    sourceRecordUrl: "https://openalex.org/W99",
+    title: "Retracted Multi-vector Retrieval Study",
+    url: "https://openalex.org/W99",
+    year: 2024
+  };
+  const result = await generateAiInterpretationFallbackForTest({
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string } };
+      return {
+        json: async () => ({
+          answer: JSON.stringify(body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review"
+            ? {
+                reason: "该句只表达明确标记的概念可能性。",
+                unsafeSentenceIds: [],
+                verdict: "pass"
+              }
+            : aiInterpretationAnswer("一种可能的理解是，替代交互机制或许会改变检索效率与表达能力的权衡。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    thinReadingContext: {
+      artifactId: "artifact-thin-retracted-carried",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      selectedExternalSources: [retractedSource],
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    }
+  });
+
+  expect(result.thinReading?.rootSeed).toMatchObject({
+    supportMode: "ai_interpretation",
+    evidence: {
+      externalSources: [],
+      generationAudit: {
+        externalFallback: {
+          carriedSourceCount: 1,
+          reason: "no_trusted_sources",
+          trustedSourceCount: 0
+        }
+      }
+    }
+  });
+});
+
+test("propagates AI interpretation review transport failure without regenerating the body", async () => {
+  let generationCalls = 0;
+  const reviewError = new Error("AI interpretation review transport failed");
+
+  const result = generateAiInterpretationFallbackForTest({
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string } };
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        throw reviewError;
+      }
+      generationCalls += 1;
+      return {
+        json: async () => ({
+          answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，替代交互机制或许会改变检索效率与表达能力的权衡。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  await expect(result).rejects.toBe(reviewError);
+  await expect(result).rejects.not.toThrow("薄读 Agent 结构质量门连续失败");
+  expect(generationCalls).toBe(1);
+});
+
+test("propagates AI interpretation review AbortError without regenerating the body", async () => {
+  let generationCalls = 0;
+  const abortError = new DOMException("review cancelled", "AbortError");
+
+  const result = generateAiInterpretationFallbackForTest({
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string } };
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        throw abortError;
+      }
+      generationCalls += 1;
+      return {
+        json: async () => ({
+          answer: JSON.stringify(aiInterpretationAnswer("一种可能的理解是，替代交互机制或许会改变检索效率与表达能力的权衡。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  await expect(result).rejects.toBe(abortError);
+  expect(generationCalls).toBe(1);
+});
+
+test("propagates malformed AI interpretation review output without regenerating the body", async () => {
+  let generationCalls = 0;
+
+  const result = generateAiInterpretationFallbackForTest({
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string } };
+      const isReview = body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review";
+      if (!isReview) generationCalls += 1;
+      return {
+        json: async () => ({
+          answer: isReview
+            ? "not-json"
+            : JSON.stringify(aiInterpretationAnswer("一种可能的理解是，替代交互机制或许会改变检索效率与表达能力的权衡。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    }
+  });
+
+  await expect(result).rejects.toThrow("AI 独立理解质量审阅返回格式无效");
+  await expect(result).rejects.not.toThrow("薄读 Agent 结构质量门连续失败");
+  expect(generationCalls).toBe(1);
+});
+
+test("repairs a failed AI interpretation review and reviews the repaired output again", async () => {
+  const store = createSettingsStore();
+  const generationPrompts: string[] = [];
+  let reviewCalls = 0;
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const result = await generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      if (body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review") {
+        reviewCalls += 1;
+        const sentenceId = prompt.match(/<sentence id="([^"]+)">/)?.[1] ?? "";
+        return {
+          json: async () => ({
+            answer: JSON.stringify(reviewCalls === 1
+              ? {
+                  reason: "该句需要更明确地标记为概念假设。",
+                  unsafeSentenceIds: [sentenceId],
+                  verdict: "fail"
+                }
+              : {
+                  reason: "修复后只保留明确标记的可能性推理。",
+                  unsafeSentenceIds: [],
+                  verdict: "pass"
+                }),
+            execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+          }),
+          ok: true,
+          status: 200
+        };
+      }
+      generationPrompts.push(prompt);
+      return {
+        json: async () => ({
+          answer: JSON.stringify(aiInterpretationAnswer(
+            generationPrompts.length === 1
+              ? "可以设想，另一种交互机制可能会改变检索效率与表达能力之间的权衡。"
+              : "一种可能的理解是，另一种交互机制或许会改变检索权衡。"
+          )),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-ai-review-repair",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({ provider: "openalex", query: "query", sources: [], status: "empty" }),
+      ok: true,
+      status: 200
+    })
+  });
+
+  expect(reviewCalls).toBe(2);
+  expect(generationPrompts).toHaveLength(2);
+  expect(generationPrompts[1]).toContain("该输出处于无文献依据的 AI 独立理解档");
+  expect(generationPrompts[1]).toContain("所有证据与来源字段必须保持为空");
+  expect(result.thinReading?.qualityGate).toMatchObject({ attempts: 2, repaired: true });
+});
+
+test("rejects an AI interpretation that fails review after the repair budget", async () => {
+  const store = createSettingsStore();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport: async (request) => {
+      const body = JSON.parse(request.body) as { outputFormat?: { name?: string }; prompt: string };
+      const prompt = String(body.prompt);
+      const sentenceId = prompt.match(/<sentence id="([^"]+)">/)?.[1] ?? "";
+      return {
+        json: async () => ({
+          answer: JSON.stringify(body.outputFormat?.name === "liteasy_thin_reading_ai_interpretation_review"
+            ? {
+                reason: "仍包含未标记的经验事实。",
+                unsafeSentenceIds: [sentenceId],
+                verdict: "fail"
+              }
+            : aiInterpretationAnswer("一种可能的理解是，替代交互机制或许会改变检索效率与表达能力之间的权衡。")),
+          execution: { backend: "dev_cloud", mode: "live", provider: "openai" }
+        }),
+        ok: true,
+        status: 200
+      };
+    },
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-ai-review-fail",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({ provider: "openalex", query: "query", sources: [], status: "empty" }),
+      ok: true,
+      status: 200
+    })
+  })).rejects.toThrow("薄读 Agent 结构质量门连续失败：AI 独立理解质量审阅未通过");
+});
+
+test("propagates external retrieval cancellation without calling AI generation", async () => {
+  const store = createSettingsStore();
+  const controller = new AbortController();
+  const modelTransport = vi.fn();
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  const generation = generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport,
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    signal: controller.signal,
+    thinReadingContext: {
+      artifactId: "artifact-thin-ai-abort",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => {
+      controller.abort();
+      throw new DOMException("cancelled", "AbortError");
+    }
+  });
+
+  await expect(generation).rejects.toMatchObject({ name: "AbortError" });
+  expect(modelTransport).not.toHaveBeenCalled();
+});
+
+test("propagates model transport failure after AI interpretation authorization", async () => {
+  const store = createSettingsStore();
+  const modelTransport = vi.fn(async () => {
+    throw new Error("model transport failed after fallback authorization");
+  });
+  store.apply({
+    intent: "update_setting",
+    target: "models.cloud_proxy_endpoint",
+    value: "https://liteasy.example.com/model-proxy"
+  });
+
+  await expect(generateAssistantAnswer({
+    artifactType: "thin_reading",
+    importedChunksByPaperId: {
+      "demo-1": [{
+        page: 1,
+        paperId: "demo-1",
+        paperTitle: "ColBERT",
+        snippet: "ColBERT uses MaxSim.",
+        summary: "ColBERT 使用 MaxSim。",
+        tags: ["MaxSim"]
+      }]
+    },
+    mode: "qa",
+    modelTransport,
+    question: "继续深入",
+    selectedPapers: [{ id: "demo-1", title: "ColBERT" }],
+    settings: store.getState(),
+    thinReadingContext: {
+      artifactId: "artifact-thin-ai-model-failure",
+      depth: 1,
+      paperIds: ["demo-1"],
+      parentWithinPaperClosure: false,
+      primaryPaperId: "demo-1",
+      source: { kind: "omitted_section", label: "后续研究", sectionKey: "follow_up" },
+      targetLanguage: "zh-CN"
+    },
+    thinReadingExternalKnowledgeTransport: async () => ({
+      json: async () => ({ provider: "openalex", query: "query", sources: [], status: "empty" }),
+      ok: true,
+      status: 200
+    })
+  })).rejects.toThrow("model transport failed after fallback authorization");
+  expect(modelTransport).toHaveBeenCalledTimes(1);
 });
 
 test("runs at most two responsibility Subagents for a genuinely large thin-reading load", async () => {

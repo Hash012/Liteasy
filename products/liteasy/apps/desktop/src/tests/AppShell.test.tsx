@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import { AppShell } from "../app/layout/AppShell";
+import { literatureMetadataRepository } from "../app/features/paper-identity/literatureMetadataRepository";
 
 const localLibrarySnapshot = {
   entries: [
@@ -74,6 +75,25 @@ test("composes the four independent resource regions in their designed order", a
   ]);
 });
 
+test("opens the independent artifact library without replacing the center artifact surface", async () => {
+  const user = userEvent.setup();
+  render(
+    <AppShell
+      initialPapers={[]}
+      localLibraryLoader={async () => localLibrarySnapshot}
+    />
+  );
+  await enterLocalWorkbench(user);
+
+  await user.click(screen.getByRole("button", { name: "产物库" }));
+
+  expect(screen.getByRole("region", { name: "产物库" })).toBeInTheDocument();
+  expect(screen.getByText("登录后查看账号中保存的产物")).toBeInTheDocument();
+  await user.click(screen.getByRole("tab", { name: "已导出" }));
+  expect(screen.getByText("暂无导出记录")).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "多模态产物区域" })).not.toBeInTheDocument();
+});
+
 test("hydrates the resource tree only from the disk snapshot", async () => {
   const user = userEvent.setup();
   render(
@@ -89,6 +109,25 @@ test("hydrates the resource tree only from the disk snapshot", async () => {
   expect(within(library).getByRole("button", { name: "Paper" })).toBeEnabled();
   expect(screen.queryByText("Survey of Vector Database Management Systems")).not.toBeInTheDocument();
   expect(screen.queryByText("ColBERT: Efficient and Effective Passage Search")).not.toBeInTheDocument();
+});
+
+test("surfaces recoverable literature hydration failures in the local library UI", async () => {
+  const user = userEvent.setup();
+  vi.spyOn(literatureMetadataRepository, "load").mockImplementation(async (paperId) => {
+    if (paperId === "local-paper-1") throw new Error("文献元数据文件不是有效 JSON");
+    return undefined;
+  });
+  render(
+    <AppShell
+      initialPapers={[]}
+      localLibraryLoader={async () => localLibrarySnapshot}
+    />
+  );
+
+  await enterLocalWorkbench(user);
+
+  expect(await screen.findByRole("status", { name: "文献身份恢复状态" }))
+    .toHaveTextContent("1 篇文献的身份信息暂时无法恢复");
 });
 
 test("opens login from a locked cloud region without replacing the local tree", async () => {
@@ -128,4 +167,23 @@ test("renders an empty library without injecting sample documents", async () => 
   const library = screen.getByRole("region", { name: "本地文献库" });
   expect(within(library).getByText("本地文献库为空")).toBeInTheDocument();
   expect(within(library).queryAllByRole("button", { name: /\.pdf$/i })).toHaveLength(0);
+});
+
+test("wires the PDF reader to direct per-annotation publication controls", async () => {
+  const user = userEvent.setup();
+  render(
+    <AppShell
+      initialPapers={[]}
+      localLibraryLoader={async () => localLibrarySnapshot}
+    />
+  );
+  await enterLocalWorkbench(user);
+  const library = screen.getByRole("region", { name: "本地文献库" });
+  await user.click(within(library).getByRole("button", { name: "展开Research" }));
+  await user.click(within(library).getByRole("button", { name: "Paper" }));
+  await user.click(await screen.findByRole("menuitem", { name: "打开" }));
+
+  expect(await screen.findByRole("checkbox", { name: "新批注自动公开到论坛" })).not.toBeChecked();
+  expect(screen.queryByRole("button", { name: "发到论坛" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "立即同步" })).not.toBeInTheDocument();
 });

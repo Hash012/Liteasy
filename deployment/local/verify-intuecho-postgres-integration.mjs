@@ -17,7 +17,7 @@ function postgresUrl(role, password) {
 }
 
 const result = spawnSync(process.execPath, ["services/api/scripts/verify-postgres-integration.mjs"], {
-  cwd: path.join(repositoryRoot, "Intuecho"),
+  cwd: path.join(repositoryRoot, "products", "intuecho"),
   env: {
     ...process.env,
     INTUECHO_TEST_DATABASE_URL: postgresUrl("intuecho_app", values.INTUECHO_DB_APP_PASSWORD),

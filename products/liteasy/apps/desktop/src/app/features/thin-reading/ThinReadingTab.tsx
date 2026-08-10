@@ -7,7 +7,8 @@ import {
   ChevronRightRegular,
   LightbulbRegular,
   LinkRegular,
-  TextBulletListTreeRegular
+  TextBulletListTreeRegular,
+  WarningRegular
 } from "@fluentui/react-icons";
 import {
   addThinReadingAnnotation,
@@ -15,6 +16,7 @@ import {
   findThinReadingChildBySource,
   listThinReadingBranchOptions,
   resolveThinReadingClosureState,
+  resolveThinReadingSupportMode,
   setThinReadingAnnotationPublic,
   setThinReadingAutoPublic,
   updateThinReadingAnnotation
@@ -36,8 +38,7 @@ import {
 } from "./useThinReadingCommunityRecommendations";
 import { useThinReadingPaperRelations } from "./useThinReadingPaperRelations";
 import type { ThinReadingPaperRelationsTransport } from "./thinReadingPaperRelationsClient";
-import type { ForumFeedQuery, ForumPaperIdentity, ForumPost } from "../forum/forum.types";
-import { resolvePaperIdentity } from "../paper-identity/paperIdentity";
+import type { ForumFeedQuery, ForumPost } from "../forum/forum.types";
 import type {
   ThinReadingAnnotationTarget,
   ThinReadingAnchor,
@@ -374,32 +375,50 @@ export function ThinReadingTab({
     transport: paperRelationsTransport
   });
   const labels = getThinReadingUiCopy(document.targetLanguage);
+  const locale = document.targetLanguage.trim().toLowerCase().startsWith("en") ? "en" : "zh";
+  const supportMode = resolveThinReadingSupportMode(activeNode);
+  const supportModeLabels = locale === "zh"
+    ? {
+        ai_interpretation: "AI 独立理解",
+        external_only: "仅外部支持",
+        paper: "论文内支持",
+        paper_and_external: "论文 + 外部支持"
+      }
+    : {
+        ai_interpretation: "AI interpretation",
+        external_only: "External sources only",
+        paper: "Paper-supported",
+        paper_and_external: "Paper + external sources"
+      };
+  const aiInterpretationLabels = locale === "zh"
+    ? {
+        disclosure: "本段必须超出论文范围，但外部检索未获得可信来源。以下正文没有论文内或外部文献依据，仅代表 AI 的独立理解，请勿视为论文结论或事实依据。",
+        title: "无文献依据：AI 独立理解"
+      }
+    : {
+        disclosure: "This passage must go beyond the paper, but external retrieval found no trustworthy source. The following text has no basis in the paper or external literature and represents only the AI's independent interpretation. Do not treat it as the paper's conclusion or as factual evidence.",
+        title: "No literature basis: AI interpretation"
+      };
   const generationInProgress = generating || Boolean(generationProgress);
   const paperTitle = useMemo(
     () => papers.find((paper) => document.paperIds.includes(paper.id))?.title ?? labels.untitledPaper,
     [document.paperIds, labels.untitledPaper, papers]
   );
   const linkedPaper = papers.find((paper) => document.paperIds.includes(paper.id));
-  const forumPaperIdentity = linkedPaper ? resolvePaperIdentity(linkedPaper).primary : null;
-  const stableForumPaperIdentity = forumPaperIdentity?.kind === "local_paper_id" ? null : forumPaperIdentity;
+  const forumLiteratureId = linkedPaper
+    ? document.literatureRecords?.[linkedPaper.id]?.literatureId
+    : undefined;
 
   useEffect(() => {
     let active = true;
     if (!onLoadForumFeed) return undefined;
-    if (!stableForumPaperIdentity) {
+    if (!forumLiteratureId) {
       setForumPosts([]);
       setForumState("unmapped");
       return undefined;
     }
     setForumState("loading");
-    void onLoadForumFeed({
-      paperIdentity: {
-        id: stableForumPaperIdentity.id,
-        kind: stableForumPaperIdentity.kind as ForumPaperIdentity["kind"],
-        source: stableForumPaperIdentity.source === "metadata" ? "metadata" : "inferred",
-        value: stableForumPaperIdentity.value
-      }
-    }).then((posts) => {
+    void onLoadForumFeed({ literatureId: forumLiteratureId }).then((posts) => {
       if (active) {
         setForumPosts(posts);
         setForumState("ready");
@@ -408,7 +427,7 @@ export function ThinReadingTab({
     return () => {
       active = false;
     };
-  }, [activeNode.id, forumRefresh, onLoadForumFeed, stableForumPaperIdentity?.id]);
+  }, [activeNode.id, forumLiteratureId, forumRefresh, onLoadForumFeed]);
 
   useEffect(() => {
     function refreshForumFeed() {
@@ -919,7 +938,7 @@ export function ThinReadingTab({
   const graphAnchorViews = useMemo<PageGraphAnchorView[]>(() => anchors.flatMap((anchor) => {
     const rects = anchorMeasurement.rectsByAnchorId[anchor.id];
     return rects && rects.length > 0
-      ? [{ anchorId: anchor.id, kind: anchor.kind, label: anchor.label, quality: anchor.quality, rects }]
+      ? [{ anchorId: anchor.id, kind: anchor.kind, quality: anchor.quality, rects, text: anchor.text }]
       : [];
   }), [anchorMeasurement, anchors]);
   const graphSourceCount = useMemo(
@@ -938,7 +957,7 @@ export function ThinReadingTab({
     ? `正在阅读「${activeSource.title}」`
       : associationGraphOpen
       ? activeAnchor
-        ? `正在聚焦「${activeAnchor.label}」及其关联文献`
+        ? `正在聚焦「${activeAnchor.text}」及其关联文献`
         : "页级文献关联已展开"
       : anchors.length === 0
         // A disabled control has to say why, or it reads as broken rather than as empty.
@@ -966,7 +985,11 @@ export function ThinReadingTab({
 
   return (
     <main
-      className={`thin-reading ${closureState === "outside_paper" ? "is-external" : ""} ${closureState === "near_boundary" ? "is-near-boundary" : ""} ${intuechoCollapsed ? "is-intuecho-collapsed" : ""}`}
+      className={`thin-reading is-support-${supportMode.replace(/_/gu, "-")}${
+        closureState === "outside_paper" ? " is-external" : ""
+      }${closureState === "near_boundary" ? " is-near-boundary" : ""}${
+        intuechoCollapsed ? " is-intuecho-collapsed" : ""
+      }`}
       aria-label={labels.page}
     >
       <header className="thin-reading__topbar">
@@ -1127,10 +1150,24 @@ export function ThinReadingTab({
       >
         <article className="thin-reading__article" data-testid="thin-reading-node">
           {paperTypeLabel ? <div className="thin-reading__article-meta">{paperTypeLabel}</div> : null}
+          <div className="thin-reading__support-mode">{supportModeLabels[supportMode]}</div>
           {closureState === "near_boundary" ? (
             <section className="thin-reading__near-boundary" aria-label={labels.nearBoundary}>
               <strong>{labels.nearBoundary}</strong>
               <span>{labels.nearBoundaryReason}</span>
+            </section>
+          ) : null}
+          {supportMode === "ai_interpretation" ? (
+            <section
+              aria-label={aiInterpretationLabels.title}
+              className="thin-reading__ai-interpretation-notice"
+              role="note"
+            >
+              <WarningRegular aria-hidden="true" />
+              <span>
+                <strong>{aiInterpretationLabels.title}</strong>
+                <span>{aiInterpretationLabels.disclosure}</span>
+              </span>
             </section>
           ) : null}
           <h2>{activeNode.title}</h2>
@@ -1162,7 +1199,7 @@ export function ThinReadingTab({
                         {splitThinReadingSummaryTextByAnchors({ anchors, sentence }).map((segment, segmentIndex) => (
                           segment.anchor ? (
                             <mark
-                              aria-label={marksVisible ? `查看“${segment.anchor.label}”关联论文` : undefined}
+                              aria-label={marksVisible ? `查看“${segment.anchor.text}”关联论文` : undefined}
                               aria-pressed={marksVisible ? activeAnchor?.id === segment.anchor.id : undefined}
                               className={`thin-reading__anchor${marksVisible ? "" : " is-hidden"}${activeAnchor?.id === segment.anchor.id ? " is-active" : ""}`}
                               data-anchor-id={segment.anchor.id}
@@ -1179,7 +1216,7 @@ export function ThinReadingTab({
                               role={marksVisible ? "button" : undefined}
                               tabIndex={marksVisible ? 0 : -1}
                               title={marksVisible
-                                ? `${segment.anchor.label} · ${Math.round(segment.anchor.importance * 100)}%`
+                                ? `${segment.anchor.text} · ${Math.round(segment.anchor.importance * 100)}%`
                                 : undefined}
                             >
                               {segment.text}
@@ -1415,7 +1452,7 @@ export function ThinReadingTab({
                 {forumPosts.map((post) => (
                   <a
                     className="thin-reading__forum-post"
-                    href={`${import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174"}/?literatureIdentityKind=${encodeURIComponent(stableForumPaperIdentity?.kind ?? "")}&literatureIdentityValue=${encodeURIComponent(stableForumPaperIdentity?.value ?? "")}`}
+                    href={`${import.meta.env.VITE_FORUM_WEB_URL ?? "http://127.0.0.1:5174"}/?literatureId=${encodeURIComponent(forumLiteratureId ?? "")}`}
                     key={post.id}
                     rel="noreferrer"
                     target="_blank"

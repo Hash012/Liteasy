@@ -4,11 +4,12 @@ export type UserPaperArtifactKind =
   | "anchor-graph"
   | "anchors"
   | "annotations"
+  | "bibliographic-identity"
   | "citations"
   | "fulltext"
   | "reader-state";
 
-function canUseTauriUserPaperStore() {
+export function isUserPaperArtifactStoreAvailable() {
   return typeof window !== "undefined" &&
     typeof (window as Window & { __TAURI_INTERNALS__?: { invoke?: unknown } })
       .__TAURI_INTERNALS__?.invoke === "function";
@@ -18,7 +19,7 @@ export async function loadUserPaperArtifact<T>(input: {
   artifactKind: UserPaperArtifactKind;
   paperId: string;
 }): Promise<T | undefined> {
-  if (!canUseTauriUserPaperStore() || !input.paperId.trim()) {
+  if (!isUserPaperArtifactStoreAvailable() || !input.paperId.trim()) {
     return undefined;
   }
   const snapshot = await invoke<T | null>("load_user_paper_artifact", {
@@ -32,7 +33,7 @@ export async function saveUserPaperArtifact(input: {
   paperId: string;
   snapshot: unknown;
 }) {
-  if (!canUseTauriUserPaperStore() || !input.paperId.trim()) {
+  if (!isUserPaperArtifactStoreAvailable() || !input.paperId.trim()) {
     return;
   }
   await invoke("save_user_paper_artifact", {

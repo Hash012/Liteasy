@@ -1,7 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import {
-  desktopCommunityAnnotationBatchSchema,
   communityRecommendationQuerySchema,
   contextualDraftSchema,
   createFeedbackSchema,
@@ -19,6 +18,8 @@ import {
 } from "./productionIdentity.mjs";
 import { publicIntuechoIdentityConfig } from "./productionConfig.mjs";
 import { registerAnnotationCommunityRoutes } from "./annotationCommunityRoutes.mjs";
+import { createLiteratureRateLimiter } from "./literatureRateLimiter.mjs";
+import { LiteratureRouteError, registerLiteratureRoutes } from "./literatureRoutes.mjs";
 
 function user(request) {
   return request.intuechoUser ?? null;
@@ -48,7 +49,17 @@ function isDesktopIntegrationRequest(request) {
     "/v1/pdf-annotations:sync",
     "/v1/thin-reading/annotations:sync",
     "/v1/thin-reading/recommendations:query",
-    "/v1/integrations/desktop/works:resolve"
+    "/v1/integrations/desktop/works:resolve",
+    "/v1/literature:resolve",
+    "/v1/literature:confirm"
+  ]).has(pathname);
+}
+
+function isLiteratureRequest(request) {
+  const pathname = request.url.split("?", 1)[0];
+  return request.method === "POST" && new Set([
+    "/v1/literature:resolve",
+    "/v1/literature:confirm"
   ]).has(pathname);
 }
 
@@ -77,6 +88,7 @@ function errorMessage(code) {
     HANDOFF_NOT_FOUND: "找不到这次 Liteasy 草稿交接。",
     INVALID_ANNOTATIONS: "公开批注数据不符合要求。",
     INVALID_HANDOFF: "Liteasy 草稿交接数据不符合要求。",
+    INVALID_LITERATURE_QUERY: "文献检索请求不符合要求。",
     INVALID_RECOMMENDATION_SCOPE: "社区推荐范围不符合要求。",
     INVALID_CITATION: "这份草稿没有可用的原文上下文。",
     INVALID_ACCOUNT_LIFECYCLE: "账号生命周期请求不符合要求。",
@@ -88,6 +100,11 @@ function errorMessage(code) {
     INVALID_POST: "发布请求不符合要求。",
     INVALID_SIGNAL: "请选择有效的评价。",
     INVALID_TOPIC: "主题名称或说明不符合要求。",
+    LITERATURE_CANDIDATE_NOT_FOUND: "找不到可确认的文献候选项。",
+    LITERATURE_IDENTITY_CONFLICT: "文献标识与已有记录冲突。",
+    LITERATURE_PROVIDER_UNAVAILABLE: "文献提供方暂时不可用，请稍后重试。",
+    LITERATURE_PROJECTION_NOT_CONFIRMED: "文献投影版本未确认或已过期。",
+    LITERATURE_RATE_LIMITED: "文献检索请求过于频繁，请稍后重试。",
     mfa_required: "此管理操作需要多因素认证。",
     NOT_POST_AUTHOR: "只能撤回自己的公开内容。",
     platform_admin_required: "需要平台管理员权限。",
@@ -101,7 +118,7 @@ function errorMessage(code) {
 }
 
 function knownError(error) {
-  return error instanceof ForumRepositoryError || error instanceof ProductionIdentityError;
+  return error instanceof ForumRepositoryError || error instanceof LiteratureRouteError || error instanceof ProductionIdentityError;
 }
 
 export async function createProductionIntuechoApp(runtime, config, { logger = false } = {}) {
@@ -113,6 +130,7 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   });
   app.decorateRequest("intuechoAdmin", null);
   app.decorateRequest("intuechoDesktopUser", null);
+  app.decorateRequest("intuechoLiteratureService", null);
   app.decorateRequest("intuechoUser", null);
 
   app.addHook("onSend", async (_request, reply, payload) => {
@@ -124,6 +142,17 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   app.addHook("preHandler", async (request) => {
     const authorization = request.headers.authorization;
     if (!authorization) return;
+    if (request.url.split("?", 1)[0] === "/v1/internal/literature:verify") {
+      const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+        authorization,
+        config.literatureProjection.audience
+      );
+      if (identity.clientId !== config.literatureProjection.clientId) {
+        throw new ProductionIdentityError("literature_service_forbidden", 403);
+      }
+      request.intuechoLiteratureService = identity;
+      return;
+    }
     if (request.url.startsWith("/v1/admin/")) {
       const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
         authorization,
@@ -132,6 +161,35 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
       await runtime.adminAuthorizer.assertPlatformAdmin(identity);
       request.intuechoAdmin = identity;
       return;
+    }
+    if (isLiteratureRequest(request)) {
+      try {
+        const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+          authorization,
+          "liteasy-desktop"
+        );
+        request.intuechoDesktopUser = Object.freeze({
+          id: identity.subject,
+          initials: initialsFor(identity.name),
+          name: identity.name
+        });
+        return;
+      } catch (desktopError) {
+        try {
+          const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
+            authorization,
+            "intuecho-web"
+          );
+          request.intuechoUser = Object.freeze({
+            id: identity.subject,
+            initials: initialsFor(identity.name),
+            name: identity.name
+          });
+          return;
+        } catch {
+          throw desktopError;
+        }
+      }
     }
     if (isDesktopIntegrationRequest(request)) {
       const identity = await runtime.identityVerifier.verifyAuthorizationHeader(
@@ -187,6 +245,17 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
       requireUser
     });
   }
+  registerLiteratureRoutes(app, {
+    currentUser: (request) => request.intuechoUser ?? request.intuechoDesktopUser ?? null,
+    rateLimiter: runtime.literatureRateLimiter ?? createLiteratureRateLimiter(),
+    requireDesktopUser,
+    requireService: (request) => {
+      if (!request.intuechoLiteratureService) throw new ProductionIdentityError("authentication_required");
+      return request.intuechoLiteratureService;
+    },
+    requireUser,
+    resolver: runtime.literatureResolver
+  });
 
   app.post("/v1/integrations/desktop/draft-handoffs", async (request, reply) => {
     const current = requireDesktopUser(request);
@@ -195,17 +264,6 @@ export async function createProductionIntuechoApp(runtime, config, { logger = fa
   });
   app.post("/v1/draft-handoffs/:handoffId/consume", async (request) =>
     runtime.repository.consumeDraftHandoff(request.params.handoffId, requireUser(request).id));
-  for (const route of ["/v1/pdf-annotations:sync", "/v1/thin-reading/annotations:sync"]) {
-    app.post(route, async (request) => {
-      const value = validated(desktopCommunityAnnotationBatchSchema, request.body, "INVALID_ANNOTATIONS");
-      return {
-        results: await runtime.annotationCommunityRepository.syncDesktopAnnotations(
-          requireDesktopUser(request),
-          value.annotations
-        )
-      };
-    });
-  }
   app.post("/v1/thin-reading/recommendations:query", async (request) => {
     const value = validated(
       communityRecommendationQuerySchema,

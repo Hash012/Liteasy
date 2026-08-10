@@ -16,13 +16,13 @@ const anchors: PageGraphAnchorView[] = [
   {
     anchorId: "anchor-1",
     kind: "method",
-    label: "self-attention",
+    text: "self-attention",
     rects: [{ height: 18, left: 180, top: 200, width: 120 }]
   },
   {
     anchorId: "anchor-2",
     kind: "dataset",
-    label: "WMT 2014",
+    text: "WMT 2014",
     rects: [{ height: 18, left: 420, top: 520, width: 96 }]
   }
 ];
@@ -70,11 +70,13 @@ function renderLayer(overrides: Partial<Parameters<typeof AssociationGraphLayer>
 test("keeps every visible anchor in its own place in the text and draws its related work around it", () => {
   const { container } = renderLayer();
 
-  const chips = Array.from(container.querySelectorAll<HTMLElement>(".association-anchor__chip"));
-  expect(chips.map((chip) => chip.textContent)).toEqual(["self-attention", "WMT 2014"]);
-  // The chip sits at the anchor's measured rectangle, not at a centre the layer invented.
-  expect(chips[0]!.style.left).toBe("180px");
-  expect(chips[0]!.style.top).toBe("209px");
+  expect(container.querySelector(".association-layer")).toHaveAttribute("data-hidden-papers", "0");
+  const targets = Array.from(container.querySelectorAll<HTMLElement>(".association-anchor__target"));
+  expect(targets).toHaveLength(2);
+  expect(container.querySelectorAll(".association-anchor__window")).toHaveLength(2);
+  // The target sits at the anchor's measured rectangle, not at a centre the layer invented.
+  expect(targets[0]!.style.left).toBe("180px");
+  expect(targets[0]!.style.top).toBe("200px");
   expect(container.querySelectorAll(".association-node")).toHaveLength(3);
   expect(container.querySelectorAll(".association-edge.is-primary.is-ink")).toHaveLength(3);
 });
@@ -278,6 +280,28 @@ test("renders page-wide paper relations beneath anchor ink with an exact final h
     .toHaveAttribute("marker-end", "url(#association-direct-citation-end)");
   expect(screen.getByRole("img", { name: /直接引用.*Related paper W1.*Related paper W3/u }))
     .toBeInTheDocument();
+});
+
+test("keeps the full primary hit path on the quality-gated endpoint segment", () => {
+  const { container } = renderLayer({
+    sourcesByAnchor: {
+      "anchor-1": [source("W1")],
+      "anchor-2": [source("W3")]
+    }
+  });
+
+  const paths = container.querySelectorAll<SVGPathElement>(
+    '.association-edge.is-primary.is-hit[data-edge-layer="edge-hit"]'
+  );
+  expect(paths.length).toBeGreaterThan(0);
+  for (const path of paths) {
+    const coordinates = path.getAttribute("d")?.match(/-?\d+(?:\.\d+)?/gu)?.map(Number) ?? [];
+    expect(coordinates).toHaveLength(6);
+    const [startX, startY, controlX, controlY, endX, endY] = coordinates;
+    const crossProduct = (controlX! - startX!) * (endY! - startY!) -
+      (controlY! - startY!) * (endX! - startX!);
+    expect(Math.abs(crossProduct)).toBeLessThan(0.000001);
+  }
 });
 
 test("exposes one keyboard-reachable logical primary edge and focuses all its visual strokes", () => {

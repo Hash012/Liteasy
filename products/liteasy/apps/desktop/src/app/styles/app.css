@@ -3316,7 +3316,14 @@ body {
 .association-layer__scrim {
   position: absolute;
   inset: 0;
-  background: var(--association-scrim, rgba(232, 238, 245, 0.72));
+  display: block;
+  pointer-events: auto;
+}
+
+.association-layer__scrim-base { fill: #ffffff; }
+.association-layer__scrim-window { fill: #000000; }
+.association-layer__scrim-fill {
+  fill: var(--association-scrim, rgba(232, 238, 245, 0.72));
   pointer-events: auto;
 }
 
@@ -3410,78 +3417,54 @@ body {
   pointer-events: stroke;
 }
 
+.association-edge.is-hit:focus {
+  outline: none;
+}
+
 .association-edge__direction {
   fill: #ad6256;
 }
 
 /* The anchor stays exactly where the text put it. This is the mark redrawn above the dimmed
    page, because `opacity` on the page list makes a stacking context its children cannot escape. */
-.association-anchor__mark {
+.association-anchor__window {
   position: absolute;
   z-index: 1;
   border-radius: 3px;
-  background: rgba(27, 102, 179, 0.16);
-  box-shadow: inset 0 -2px 0 rgba(27, 102, 179, 0.85);
+  border: 1px solid rgba(27, 102, 179, 0.38);
+  box-shadow: inset 0 -2px 0 rgba(27, 102, 179, 0.6);
   pointer-events: none;
-  transition: opacity 140ms ease;
+  transition: border-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
 }
 
-.association-anchor__mark.is-claim,
-.association-anchor__mark.is-limitation {
+.association-anchor__window.is-claim,
+.association-anchor__window.is-limitation {
   background: rgba(181, 75, 45, 0.14);
   box-shadow: inset 0 -2px 0 rgba(181, 75, 45, 0.7);
 }
 
-.association-anchor__chip {
+.association-anchor__target {
   position: absolute;
   z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: min(320px, 46%);
-  padding: 4px 9px;
-  border: 1px solid rgba(27, 102, 179, 0.7);
-  border-radius: 999px;
-  background: #e9f3ff;
-  box-shadow: 0 4px 12px rgba(24, 34, 47, 0.12);
-  color: #15599c;
+  appearance: none;
+  background: transparent;
+  border: 0;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.3;
+  margin: 0;
+  padding: 0;
   pointer-events: auto;
-  text-align: left;
-  transform: translate(-6px, -50%);
-  transition: background 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: box-shadow 140ms ease, opacity 140ms ease;
 }
 
-.association-anchor__chip em {
-  flex: 0 0 auto;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: rgba(27, 102, 179, 0.16);
-  font-size: 10px;
-  font-style: normal;
-}
-
-.association-anchor__chip:hover,
-.association-anchor__chip:focus-visible {
-  background: #d6e9ff;
+.association-anchor__target:hover,
+.association-anchor__target:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(27, 102, 179, 0.2), 0 4px 12px rgba(24, 34, 47, 0.12);
+  box-shadow: inset 0 0 0 2px rgba(27, 102, 179, 0.55);
 }
 
-.association-anchor.is-focused .association-anchor__chip {
+.association-anchor__window.is-focused {
   border-color: var(--accent-1);
-  background: var(--accent-1);
-  color: #ffffff;
-}
-
-.association-anchor.is-focused .association-anchor__chip em {
-  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 -2px 0 var(--accent-1), 0 0 0 1px rgba(27, 102, 179, 0.26);
 }
 
 .association-anchor.is-dimmed {
@@ -5646,8 +5629,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .association-edge,
-  .association-anchor__mark,
-  .association-anchor__chip,
+  .association-anchor__window,
+  .association-anchor__target,
   .association-node,
   .association-node.is-dot > * {
     transition: none !important;

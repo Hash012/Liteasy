@@ -61,11 +61,42 @@
 .thin-reading__body.is-graph-dimmed { min-height: clamp(960px, 120vh, 1200px); }
 .thin-reading.is-external .thin-reading__body { --association-scrim: rgba(247, 241, 232, .78); }
 .thin-reading.is-near-boundary .thin-reading__body { --association-scrim: rgba(245, 248, 241, .78); }
+.thin-reading.is-support-paper-and-external { background: #f3f7f3; }
+.thin-reading.is-support-external-only { background: #f7f1e8; }
+.thin-reading.is-support-ai-interpretation {
+  --thin-line: #e4cbc6;
+  background: #fff3f1;
+}
+.thin-reading__support-mode {
+  color: #526568;
+  font-size: 11px;
+  font-weight: 650;
+}
+.thin-reading__ai-interpretation-notice {
+  align-items: start;
+  border-left: 3px solid #b76055;
+  color: #713c36;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  margin: 16px 0 22px;
+  max-width: 42em;
+  padding: 10px 0 10px 12px;
+}
+.thin-reading__ai-interpretation-notice > span { display: grid; gap: 3px; min-width: 0; }
+.thin-reading__ai-interpretation-notice strong { font-size: 12px; }
+.thin-reading__ai-interpretation-notice span span {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.thin-reading.is-support-ai-interpretation .thin-reading__body {
+  --association-scrim: rgba(255, 243, 241, .8);
+}
 
-/* With the graph open the prose recedes and the anchors are redrawn bright on top of it. Dimming
-   rather than covering keeps the shape of the paragraph the reader was in. */
+/* The graph scrim supplies the single dimming layer; source text remains fully opaque beneath it. */
 .thin-reading__body.is-graph-dimmed > .thin-reading__article,
-.thin-reading__body.is-graph-dimmed > .thin-reading__intuecho { filter: saturate(.7); opacity: .3; transition: opacity 180ms ease, filter 180ms ease; }
+.thin-reading__body.is-graph-dimmed > .thin-reading__intuecho { filter: none; opacity: 1; }
 .thin-reading__body.is-marks-hidden .thin-reading__anchor,
 .thin-reading__anchor.is-hidden { background: transparent; color: inherit; cursor: inherit; pointer-events: none; text-decoration: none; }
 .thin-reading.is-intuecho-collapsed .thin-reading__body { grid-template-columns: minmax(0, 780px); justify-content: center; max-width: 900px; padding-left: 18px; padding-right: 18px; }

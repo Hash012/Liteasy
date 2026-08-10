@@ -91,7 +91,7 @@ test("runtime verification requires the exact immutable migration set", async ()
   );
 });
 
-test("production migration set includes the visualization control plane through current head", () => {
+test("production migration set includes visualization and literature projections through current head", () => {
   const migrations = readMigrations();
   assert.deepEqual(migrations.map((migration) => migration.name), [
     "001_filesystem_storage.sql",
@@ -116,6 +116,7 @@ test("production migration set includes the visualization control plane through 
     "020_visualization_control_plane.sql",
     "021_visualization_final_review.sql",
     "022_visualization_cost_policy_lifecycle.sql",
-    "023_visualization_generation_requests.sql"
+    "023_visualization_generation_requests.sql",
+    "024_literature_projections.sql"
   ]);
 });

@@ -27,6 +27,11 @@ import type { ThinReadingVisualizationStatus } from "./artifact.types";
 import { AgentLiveWorkPanel } from "../agent-work/AgentLiveWorkPanel";
 import { ArtifactExportMenu } from "./ArtifactExportMenu";
 import { presentArtifactFailure } from "./artifactFailurePresentation";
+import { exportArtifactDocument } from "./artifactDocumentExport";
+import type {
+  ArtifactDocumentFormat,
+  ArtifactExportOutcome
+} from "./artifactExport.types";
 
 type ArtifactTabsProps = {
   activeArtifactId?: string | null;
@@ -42,6 +47,10 @@ type ArtifactTabsProps = {
   onActivateArtifact?: (artifactId: string) => void;
   onDynamicAction?: (action: UIDslActionRef) => void;
   onDeleteArtifact?: (artifactId: string) => string | void | Promise<string | void>;
+  onExportArtifact?: (
+    tab: ArtifactTab,
+    format: ArtifactDocumentFormat
+  ) => Promise<ArtifactExportOutcome>;
   onOpenEvidence?: (request: ArtifactEvidenceOpenRequest) => void;
   onOpenVisualization?: (data: VisualizationTabData) => void;
   onOpenExternalFullText?: (source: ThinReadingExternalSource) => Promise<void>;
@@ -183,6 +192,22 @@ export function ArtifactTabs({
   onActivateArtifact,
   onDynamicAction,
   onDeleteArtifact,
+  onExportArtifact = async (tab, format) => {
+    await exportArtifactDocument(tab, format);
+    return {
+      record: {
+        artifactId: tab.artifactId,
+        exportedAt: new Date().toISOString(),
+        fileName: `${tab.title}.${format === "markdown" ? "md" : format}`,
+        format,
+        id: `browser-export-${Date.now()}`,
+        location: "browser",
+        status: "browser_managed",
+        title: tab.title
+      },
+      status: "saved"
+    };
+  },
   onGenerateThinReadingBranch,
   onOpenEvidence,
   onOpenVisualization,
@@ -280,7 +305,12 @@ export function ArtifactTabs({
         artifactId={activeTab.artifactId}
         developerDiagnostics={developerDiagnostics}
         document={document}
-        headerAction={<ArtifactExportMenu tab={{ ...activeTab, thinReadingDocument: document }} />}
+        headerAction={(
+          <ArtifactExportMenu
+            onExport={onExportArtifact}
+            tab={{ ...activeTab, thinReadingDocument: document }}
+          />
+        )}
         intuechoEndpoint={intuechoEndpoint}
         intuechoSessionId={intuechoSessionId}
         generationProgress={activeThinReadingTask?.status === "running" ? {
@@ -336,7 +366,7 @@ export function ArtifactTabs({
               {taskStatusLabels[activeTask.status]}
             </span>
           )}
-          {activeTab ? <ArtifactExportMenu tab={activeTab} /> : null}
+          {activeTab ? <ArtifactExportMenu onExport={onExportArtifact} tab={activeTab} /> : null}
         </div>
       </div>
 

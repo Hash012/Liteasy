@@ -7,6 +7,8 @@ import {
   createThinReadingDocument,
   listThinReadingBranchOptions,
   resolveThinReadingClosureState,
+  resolveThinReadingSentenceSupportMode,
+  resolveThinReadingSupportMode,
   updateThinReadingAnnotation
 } from "../app/features/thin-reading/thinReadingProjection";
 import type { ThinReadingNodeSeed } from "../app/features/thin-reading/thinReading.types";
@@ -35,7 +37,232 @@ function seed(overrides: Partial<ThinReadingNodeSeed> = {}): ThinReadingNodeSeed
   };
 }
 
+function aiSeed(overrides: Partial<ThinReadingNodeSeed> = {}): ThinReadingNodeSeed {
+  return {
+    evidence: {
+      anchors: [],
+      claims: [],
+      externalKnowledge: [],
+      externalSources: [],
+      generationAudit: {
+        aiInterpretationReview: {
+          reason: "AI 独立理解审阅通过。",
+          unsafeSentenceIds: [],
+          verdict: "pass"
+        },
+        externalFallback: {
+          attemptedRoutes: ["support"],
+          carriedSourceCount: 0,
+          completedRoutes: [],
+          reason: "verification_exhausted",
+          trustedSourceCount: 0
+        },
+        model: { id: "test-model", provider: "test" },
+        qualityGate: { attempts: 1, repaired: false, repairReasons: [] },
+        version: "liteasy.thin-reading-agent/v2"
+      },
+      interactiveDemo: undefined,
+      mermaid: "",
+      paperEvidence: [],
+      paperEvidenceSpans: [],
+      recommendedFigures: [],
+      summarySentences: [{
+        evidenceIds: [],
+        externalKnowledge: [],
+        id: "sentence-1",
+        status: "unsupported",
+        supportMode: "ai_interpretation",
+        text: "AI 的一种可能理解是，MaxSim 保留了细粒度匹配信号。"
+      }]
+    },
+    omittedSections: [],
+    recommendations: [],
+    summary: "AI 的一种可能理解是，MaxSim 保留了细粒度匹配信号。",
+    supportMode: "ai_interpretation",
+    withinPaperClosure: false,
+    ...overrides
+  };
+}
+
 describe("thinReadingProjection", () => {
+  test("resolves sentence support modes from sentence-level sources", () => {
+    expect(resolveThinReadingSentenceSupportMode({
+      evidenceIds: ["evidence-1"],
+      externalKnowledge: ["openalex:W1"]
+    })).toBe("paper_and_external");
+    expect(resolveThinReadingSentenceSupportMode({
+      evidenceIds: ["evidence-1"],
+      externalKnowledge: []
+    })).toBe("paper");
+    expect(resolveThinReadingSentenceSupportMode({
+      evidenceIds: [],
+      externalKnowledge: ["openalex:W1"]
+    })).toBe("external_only");
+    expect(resolveThinReadingSentenceSupportMode({
+      evidenceIds: [],
+      externalKnowledge: [],
+      supportMode: "ai_interpretation"
+    })).toBe("ai_interpretation");
+  });
+
+  test("resolves four support modes without treating a legacy empty node as AI interpretation", () => {
+    expect(resolveThinReadingSupportMode({
+      evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] }
+    })).toBe("paper");
+    expect(resolveThinReadingSupportMode({
+      evidence: { externalKnowledge: ["openalex:W1"], paperEvidence: ["evidence-1"] }
+    })).toBe("paper_and_external");
+    expect(resolveThinReadingSupportMode({
+      evidence: { externalKnowledge: ["openalex:W1"], paperEvidence: [] }
+    })).toBe("external_only");
+    expect(resolveThinReadingSupportMode({
+      evidence: { externalKnowledge: [], paperEvidence: [] }
+    })).toBe("paper");
+    expect(resolveThinReadingSupportMode({
+      evidence: aiSeed().evidence,
+      supportMode: "ai_interpretation"
+    })).toBe("ai_interpretation");
+  });
+
+  test("persists explicit support modes on root and child nodes", () => {
+    const root = createThinReadingDocument({
+      artifactId: "artifact-support-mode",
+      papers: [{ id: "paper-1", title: "Paper" }],
+      rootSeed: seed({ supportMode: "paper" }),
+      targetLanguage: "zh-CN"
+    });
+    const child = advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: seed({
+        evidence: { externalKnowledge: ["openalex:W1"], paperEvidence: [] },
+        supportMode: "external_only",
+        withinPaperClosure: false
+      }),
+      source: { kind: "omitted_section", label: "后续", sectionKey: "follow_up" },
+      title: "后续"
+    });
+
+    expect(root.nodes[root.rootNodeId].supportMode).toBe("paper");
+    expect(child.nodes[child.activeNodeId].supportMode).toBe("external_only");
+  });
+
+  test("rejects AI interpretation declarations that conflict with evidence or lack fallback audit", () => {
+    expect(() => resolveThinReadingSupportMode({
+      evidence: { externalKnowledge: [], paperEvidence: ["evidence-1"] },
+      supportMode: "ai_interpretation"
+    })).toThrow("薄读支持模式与正文来源不一致");
+    expect(() => resolveThinReadingSupportMode({
+      evidence: { externalKnowledge: ["openalex:W1"], paperEvidence: [] },
+      supportMode: "ai_interpretation"
+    })).toThrow("薄读支持模式与正文来源不一致");
+    expect(() => createThinReadingDocument({
+      artifactId: "artifact-ai-without-audit",
+      papers: [{ id: "paper-1", title: "Paper" }],
+      rootSeed: seed({
+        evidence: { externalKnowledge: [], paperEvidence: [] },
+        supportMode: "ai_interpretation",
+        withinPaperClosure: false
+      }),
+      targetLanguage: "zh-CN"
+    })).toThrow("AI 理解节点缺少外部检索兜底审计");
+  });
+
+  test("rejects contaminated AI interpretation seeds on root and child persistence", () => {
+    expect(() => createThinReadingDocument({
+      artifactId: "artifact-ai-root-contaminated",
+      papers: [{ id: "paper-1", title: "Paper" }],
+      rootSeed: aiSeed({
+        evidence: {
+          ...aiSeed().evidence,
+          paperEvidence: ["evidence-1"]
+        }
+      }),
+      targetLanguage: "zh-CN"
+    })).toThrow("AI 理解不能携带论文或外部引用");
+
+    const root = createThinReadingDocument({
+      artifactId: "artifact-ai-child-contaminated-base",
+      papers: [{ id: "paper-1", title: "Paper" }],
+      rootSeed: seed(),
+      targetLanguage: "zh-CN"
+    });
+
+    expect(() => advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: aiSeed({ withinPaperClosure: true }),
+      source: { kind: "omitted_section", label: "后续", sectionKey: "follow_up" },
+      title: "后续"
+    })).toThrow("AI 理解节点必须越出论文闭包");
+  });
+
+  test("persists and freezes valid AI interpretation seeds on root and child nodes", () => {
+    const root = createThinReadingDocument({
+      artifactId: "artifact-ai-valid-root",
+      papers: [{ id: "paper-1", title: "Paper" }],
+      rootSeed: aiSeed(),
+      targetLanguage: "zh-CN"
+    });
+    const child = advanceThinReadingDocument(root, {
+      parentNodeId: root.rootNodeId,
+      seed: aiSeed(),
+      source: { kind: "omitted_section", label: "后续", sectionKey: "follow_up" },
+      title: "后续"
+    });
+
+    expect(root.nodes[root.rootNodeId]).toMatchObject({
+      supportMode: "ai_interpretation",
+      withinPaperClosure: false,
+      evidence: {
+        anchors: [],
+        externalKnowledge: [],
+        externalSources: [],
+        generationAudit: {
+          aiInterpretationReview: {
+            reason: "AI 独立理解审阅通过。",
+            unsafeSentenceIds: [],
+            verdict: "pass"
+          },
+          externalFallback: {
+            attemptedRoutes: ["support"],
+            completedRoutes: [],
+            reason: "verification_exhausted",
+            trustedSourceCount: 0
+          }
+        },
+        mermaid: "",
+        paperEvidence: [],
+        paperEvidenceSpans: [],
+        recommendedFigures: [],
+        summarySentences: [expect.objectContaining({
+          evidenceIds: [],
+          externalKnowledge: [],
+          status: "unsupported",
+          supportMode: "ai_interpretation"
+        })]
+      }
+    });
+    expect(child.nodes[child.activeNodeId]).toMatchObject({
+      supportMode: "ai_interpretation",
+      withinPaperClosure: false,
+      evidence: {
+        externalKnowledge: [],
+        externalSources: [],
+        paperEvidence: [],
+        recommendedFigures: [],
+        summarySentences: [expect.objectContaining({
+          evidenceIds: [],
+          externalKnowledge: [],
+          status: "unsupported",
+          supportMode: "ai_interpretation"
+        })]
+      }
+    });
+    expect(Object.isFrozen(root.nodes[root.rootNodeId].evidence.externalSources)).toBe(true);
+    expect(Object.isFrozen(child.nodes[child.activeNodeId].evidence.externalSources)).toBe(true);
+    expect(Object.isFrozen(child.nodes[child.activeNodeId].evidence.generationAudit?.externalFallback)).toBe(true);
+    expect(Object.isFrozen(child.nodes[child.activeNodeId].evidence.summarySentences)).toBe(true);
+  });
+
   test("distinguishes a near-boundary internal level from a real external level", () => {
     expect(resolveThinReadingClosureState({ depth: 0, withinPaperClosure: true })).toBe("inside_paper");
     expect(resolveThinReadingClosureState({ depth: 2, withinPaperClosure: true })).toBe("near_boundary");
@@ -154,7 +381,6 @@ describe("thinReadingProjection", () => {
             id: "anchor-1",
             importance: 0.9,
             kind: "method",
-            label: "MaxSim",
             quality: {
               citationProvenance: 1,
               evidenceAttention: 0.5,
@@ -224,7 +450,7 @@ describe("thinReadingProjection", () => {
             start: 0,
             summarySentenceId: "sentence-1",
             text: "MaxSim"
-          }],
+          } as unknown as ThinReadingNodeSeed["evidence"]["anchors"][number]],
           externalKnowledge: [],
           paperEvidence: ["evidence-1"]
         }
@@ -234,11 +460,22 @@ describe("thinReadingProjection", () => {
     const root = document.nodes[document.rootNodeId];
 
     expect(root.evidence.anchors?.[0]?.quality).toBeUndefined();
+    expect(root.evidence.anchors?.[0]).not.toHaveProperty("label");
+    expect(root.evidence.anchors?.[0]).toEqual(expect.objectContaining({
+      id: "anchor-1",
+      externalSourceIds: [],
+      text: "MaxSim"
+    }));
     expect(root.evidence.recommendationPaperEdges).toBeUndefined();
   });
 
   test("persists and freezes the evidence-planning quality audit on root and branch nodes", () => {
     const audit = {
+      aiInterpretationReview: {
+        reason: "最终正文保持明确披露的概念推理边界。",
+        unsafeSentenceIds: [],
+        verdict: "pass" as const
+      },
       evidenceLoop: {
         rounds: [{
           focus: ["核心结论"],
@@ -283,6 +520,8 @@ describe("thinReadingProjection", () => {
 
     expect(rootAudit).toEqual(audit);
     expect(branchAudit).toEqual(audit);
+    expect(Object.isFrozen(branchAudit?.aiInterpretationReview)).toBe(true);
+    expect(Object.isFrozen(branchAudit?.aiInterpretationReview?.unsafeSentenceIds)).toBe(true);
     expect(Object.isFrozen(branchAudit?.qualityGate.repairReasons)).toBe(true);
     expect(Object.isFrozen(branchAudit?.evidencePlan?.selectedEvidenceIds)).toBe(true);
     expect(Object.isFrozen(branchAudit?.interpretationPlan?.learningGoals)).toBe(true);

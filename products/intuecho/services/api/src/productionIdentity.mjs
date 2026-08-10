@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const allowedAudiences = new Set(["intuecho-web", "liteasy-admin", "liteasy-desktop"]);
+const allowedAudiences = new Set(["intuecho-internal", "intuecho-web", "liteasy-admin", "liteasy-desktop"]);
 
 export class ProductionIdentityError extends Error {
   constructor(code, status = 401) {
@@ -136,6 +136,9 @@ export function createProductionIdentityVerifier(config, dependencies = {}) {
         audience: expectedAudience,
         authTime: Number(verified.payload.auth_time),
         authenticationMethods: stringArray(verified.payload.amr),
+        clientId: typeof active.client_id === "string"
+          ? active.client_id
+          : typeof verified.payload.client_id === "string" ? verified.payload.client_id : null,
         name,
         sessionId: typeof verified.payload.sid === "string" ? verified.payload.sid : null,
         subject: verified.payload.sub,

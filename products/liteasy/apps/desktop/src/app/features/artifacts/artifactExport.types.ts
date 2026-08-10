@@ -33,3 +33,5 @@ export type ArtifactExportRecord = ArtifactExportRecordBase & (
 export type ArtifactExportOutcome =
   | { status: "cancelled" }
   | { record: ArtifactExportRecord; status: "saved" };
+
+export type ArtifactExportHistoryStatus = "error" | "idle" | "loading" | "ready";

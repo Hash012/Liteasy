@@ -3,6 +3,10 @@ import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 
 const css = readFileSync(resolve(process.cwd(), "src/app/styles/app.css"), "utf8");
+const artifactLibraryCss = readFileSync(
+  resolve(process.cwd(), "src/app/features/artifacts/artifactLibrary.css"),
+  "utf8"
+);
 const thinReadingCss = readFileSync(
   resolve(process.cwd(), "src/app/features/thin-reading/thinReading.css"),
   "utf8"
@@ -86,6 +90,16 @@ describe("layout style contract", () => {
     expect(generatedButtonBlock).toContain('background: var(--button-background);');
     expect(generatedButtonBlock).toContain('color: var(--button-color);');
     expect(generatedButtonBlock).toContain('font-weight: var(--button-font-weight);');
+  });
+
+  test("keeps artifact export paths and actions contained at narrow widths", () => {
+    expect(artifactLibraryCss).toMatch(
+      /\.artifact-library-meta,[\s\S]*\.artifact-library-path,[\s\S]*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;/u
+    );
+    expect(artifactLibraryCss).toMatch(/\.artifact-library-path\s*\{[^}]*max-width:\s*100%;/u);
+    expect(artifactLibraryCss).toMatch(
+      /@media\s*\(max-width:\s*560px\)[\s\S]*\.artifact-library-export-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/u
+    );
   });
 
   test("reserves stable vertical room for the expanded page recommendation graph", () => {

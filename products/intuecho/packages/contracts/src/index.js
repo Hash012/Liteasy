@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 const tagSchema = z.string().trim().min(1).max(32);
+const rectangleSchema = z.object({
+  height: z.number().finite(),
+  left: z.number().finite(),
+  top: z.number().finite(),
+  width: z.number().finite()
+}).strict();
 
 export const contextualDraftSchema = z.object({
   topicId: z.string().min(1),
@@ -31,14 +37,14 @@ export const createFeedbackSchema = z.object({ kind: z.enum(["bug", "idea", "exp
 
 export const paperIdentitySchema = z.object({
   id: z.string().trim().min(1).max(1200),
-  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "title_authors_year_hash"]),
+  kind: z.enum(["doi", "arxiv_id", "semantic_scholar_id", "openalex_id", "title_authors_year_hash"]),
   source: z.enum(["inferred", "metadata"]),
   value: z.string().trim().min(1).max(1000)
 });
 
 const scopedPaperIdentitySchema = z.object({ primary: paperIdentitySchema }).optional();
 const annotationScopeSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("pdf_passage"), page: z.number().int().positive(), paperIdentity: scopedPaperIdentitySchema, rects: z.array(z.record(z.unknown())).max(200) }),
+  z.object({ kind: z.literal("pdf_passage"), page: z.number().int().positive(), paperIdentity: scopedPaperIdentitySchema, rects: z.array(rectangleSchema).max(200) }),
   z.object({ kind: z.literal("document"), paperIdentity: scopedPaperIdentitySchema }),
   z.object({ kind: z.literal("section"), paperIdentity: scopedPaperIdentitySchema, sectionKey: z.string().trim().min(1).max(500) }),
   z.object({
@@ -74,7 +80,7 @@ export const communityAnnotationBatchSchema = z.object({
 export const communityRecommendationQuerySchema = z.object({
   scope: z.object({
     kind: z.enum(["document", "section", "selected_passage"]),
-    paperIdentity: paperIdentitySchema,
+    literatureId: z.string().trim().min(1).max(200),
     sectionKey: z.string().trim().min(1).max(500).optional(),
     evidenceIds: z.array(z.string().trim().min(1).max(500)).max(100).optional(),
     externalSourceIds: z.array(z.string().trim().min(1).max(500)).max(100).optional()
@@ -103,6 +109,124 @@ export const annotationVisibilitySchema = z.enum([
   "public"
 ]);
 
+export const literatureIdentifierKindSchema = z.enum([
+  "doi",
+  "arxiv_id",
+  "semantic_scholar_id",
+  "openalex_id",
+  "title_authors_year_hash"
+]);
+
+export const literatureSourceSchema = z.enum(["public_registry", "manual", "inferred"]);
+
+export const literatureIdentifierSchema = z.object({
+  kind: literatureIdentifierKindSchema,
+  source: literatureSourceSchema,
+  value: z.string().trim().min(1).max(1000)
+});
+
+const literatureDisplaySchema = z.object({
+  authors: z.array(z.string().trim().min(1).max(300)).max(200),
+  documentType: z.string().trim().min(1).max(100).optional(),
+  identifiers: z.array(literatureIdentifierSchema).max(20),
+  title: z.string().trim().min(1).max(1000),
+  year: z.number().int().min(1000).max(9999).optional()
+});
+
+const literatureProviderSchema = z.enum(["intuecho", "openalex", "crossref", "arxiv", "semantic_scholar"]);
+
+export const literatureCandidateSchema = z.object({
+  candidateKey: z.string().trim().min(1).max(1000),
+  provider: literatureProviderSchema,
+  record: literatureDisplaySchema,
+  recordUrl: z.string().url().refine((value) => new URL(value).protocol === "https:").optional()
+});
+
+export const literatureRecordSchema = z.object({
+  ...literatureDisplaySchema.shape,
+  identifiers: z.array(literatureIdentifierSchema.extend({
+    source: z.literal("public_registry")
+  })).min(1).max(20),
+  literatureId: z.string().trim().min(1).max(200),
+  provenance: z.object({
+    confirmedAt: z.string().datetime(),
+    mode: z.literal("public_registry"),
+    provider: literatureProviderSchema.optional()
+  }),
+  revision: z.number().int().positive(),
+  status: z.literal("confirmed")
+}).superRefine((value, context) => {
+  if (value.identifiers.every((identifier) => identifier.kind === "title_authors_year_hash")) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["identifiers"],
+      message: "正式文献必须至少包含一个经过来源确认的稳定标识。"
+    });
+  }
+});
+
+const literatureResolveHintsSchema = z.object({
+  authors: z.array(z.string().trim().min(1).max(300)).max(200).optional(),
+  identifiers: z.array(z.object({
+    kind: literatureIdentifierKindSchema,
+    value: z.string().trim().min(1).max(1000)
+  }).strict()).max(20).optional(),
+  pmlr: z.object({
+    source: z.literal("pmlr"),
+    volume: z.number().int().positive().max(9999),
+    year: z.number().int().min(1000).max(9999)
+  }).strict().optional(),
+  title: z.string().trim().min(1).max(1000).optional(),
+  year: z.number().int().min(1000).max(9999).optional()
+}).strict();
+
+export const literatureResolveInputSchema = z.object({
+  hints: literatureResolveHintsSchema.optional(),
+  limit: z.number().int().min(1).max(10).optional(),
+  purpose: z.enum(["forum_compose", "liteasy_pdf_annotation"]),
+  query: z.string().trim().min(1).max(1000).optional()
+}).strict().superRefine((value, context) => {
+  const hints = value.hints;
+  const hasUsableHint = Boolean(
+    hints?.title || hints?.year || hints?.authors?.length || hints?.identifiers?.length || hints?.pmlr
+  );
+  if (!value.query && !hasUsableHint) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "文献检索需要查询文本或至少一个书目提示。"
+    });
+  }
+});
+
+export const literatureConfirmInputSchema = z.object({
+  candidateKey: z.string().trim().min(1).max(1000),
+  mode: z.literal("candidate")
+}).strict();
+
+export const literatureProjectionVerificationSchema = z.object({
+  literatureId: z.string().trim().min(1).max(200),
+  revision: z.number().int().positive()
+}).strict();
+
+export const literatureRelationTypeSchema = z.enum([
+  "is_preprint_of",
+  "version_of",
+  "translation_of"
+]);
+
+export const literatureRelationSchema = z.object({
+  createdAt: z.string().datetime(),
+  evidence: z.record(z.string(), z.unknown()),
+  fromLiteratureId: z.string().trim().min(1).max(200),
+  provider: literatureProviderSchema,
+  relationType: literatureRelationTypeSchema,
+  toLiteratureId: z.string().trim().min(1).max(200),
+  verificationStatus: z.literal("confirmed")
+}).strict().refine((value) => value.fromLiteratureId !== value.toLiteratureId, {
+  message: "文献版本关系不能指向自身。",
+  path: ["toLiteratureId"]
+});
+
 export const literatureMetadataSchema = z.object({
   authors: z.array(z.string().trim().min(1).max(300)).max(200).default([]),
   documentType: z.string().trim().min(1).max(100).optional(),
@@ -110,25 +234,34 @@ export const literatureMetadataSchema = z.object({
   year: z.number().int().min(1000).max(9999).optional()
 });
 
-export const literatureReferenceSchema = z.object({
+const legacyLiteratureReferenceSchema = z.object({
   identity: paperIdentitySchema,
   metadata: literatureMetadataSchema
-});
+}).strict();
 
-const sourceEvidenceSchema = z.object({
+export const confirmedLiteratureReferenceSchema = z.object({
+  literatureId: z.string().trim().min(1).max(200)
+}).strict();
+
+export const literatureReferenceSchema = z.union([
+  confirmedLiteratureReferenceSchema,
+  legacyLiteratureReferenceSchema
+]);
+
+const confirmedSourceEvidenceSchema = z.object({
   anchorHash: z.string().trim().min(8).max(500),
   excerpt: z.string().trim().min(1).max(4000),
-  literature: literatureReferenceSchema,
+  literature: confirmedLiteratureReferenceSchema,
   page: z.number().int().positive().optional(),
-  rects: z.array(z.record(z.unknown())).max(200).default([])
+  rects: z.array(rectangleSchema).max(200).default([])
 });
 
 export const annotationTargetSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("whole_document"),
-    literature: literatureReferenceSchema
+    literature: confirmedLiteratureReferenceSchema
   }),
-  sourceEvidenceSchema.extend({ kind: z.literal("source_passage") }),
+  confirmedSourceEvidenceSchema.extend({ kind: z.literal("source_passage") }),
   z.object({
     derivedContent: z.object({
       artifactId: z.string().trim().min(1).max(200),
@@ -136,9 +269,9 @@ export const annotationTargetSchema = z.discriminatedUnion("kind", [
       nodeId: z.string().trim().min(1).max(200).optional(),
       version: z.string().trim().min(1).max(200)
     }),
-    evidence: z.array(sourceEvidenceSchema).min(1).max(100),
+    evidence: z.array(confirmedSourceEvidenceSchema).min(1).max(100),
     kind: z.literal("derived_passage"),
-    literature: literatureReferenceSchema
+    literature: confirmedLiteratureReferenceSchema
   })
 ]);
 
@@ -181,18 +314,30 @@ export const academicProfileSchema = z.object({
 
 export const createReplySchema = z.object({
   body: z.string().trim().min(1).max(8000),
-  shareToPlaza: z.boolean().default(true),
+  publishAsAnnotation: z.boolean().default(false),
   tags: annotationTagsSchema,
   targets: z.array(annotationTargetSchema).max(100).default([])
 }).superRefine((value, context) => {
-  if (value.shareToPlaza && value.targets.length === 0) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["targets"], message: "只有关联文献的回复才能同时发布为批注。" });
+  if (value.publishAsAnnotation && value.targets.length === 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["targets"], message: "独立批注必须关联文献。" });
+  }
+  if (!value.publishAsAnnotation && value.targets.length > 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["targets"], message: "普通回复不保存独立批注目标。" });
   }
 });
 
 export const updateReplySchema = z.object({
   body: z.string().trim().min(1).max(8000)
 });
+
+export const updateReplyPublicationSchema = z.discriminatedUnion("published", [
+  z.object({ published: z.literal(false) }),
+  z.object({
+    published: z.literal(true),
+    tags: annotationTagsSchema,
+    targets: z.array(annotationTargetSchema).min(1).max(100)
+  })
+]);
 
 export const followUserSchema = z.object({
   targetUserId: z.string().trim().min(1).max(200)
@@ -270,3 +415,36 @@ export const desktopCommunityAnnotationSchema = z.object({
 export const desktopCommunityAnnotationBatchSchema = z.object({
   annotations: z.array(desktopCommunityAnnotationSchema).min(1).max(100)
 });
+
+const desktopPublicationOperationSchema = z.object({
+  annotationId: z.string().trim().min(1).max(200),
+  queueKey: z.string().trim().min(1).max(500),
+  revision: z.number().int().positive(),
+  updatedAt: z.string().datetime()
+});
+
+const desktopPublicationSourcePassageSchema = z.object({
+  anchorHash: z.string().trim().min(8).max(500),
+  excerpt: z.string().trim().min(1).max(4000),
+  page: z.number().int().positive().optional(),
+  rects: z.array(rectangleSchema).max(200).default([])
+}).strict();
+
+const desktopPublicationUpsertSchema = desktopPublicationOperationSchema.extend({
+  body: z.string().trim().min(1).max(8000),
+  literatureId: z.string().trim().min(1).max(200),
+  operation: z.literal("upsert"),
+  sourcePassage: desktopPublicationSourcePassageSchema
+}).strict();
+
+const desktopPublicationRetractSchema = desktopPublicationOperationSchema.extend({
+  operation: z.literal("retract"),
+  remoteAnnotationId: z.string().trim().min(1).max(200)
+}).strict();
+
+export const desktopAnnotationPublicationBatchSchema = z.object({
+  operations: z.array(z.discriminatedUnion("operation", [
+    desktopPublicationUpsertSchema,
+    desktopPublicationRetractSchema
+  ])).min(1).max(100)
+}).strict();

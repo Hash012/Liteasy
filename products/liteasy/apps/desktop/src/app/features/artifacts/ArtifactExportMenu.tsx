@@ -13,29 +13,33 @@ import {
   DocumentTextRegular
 } from "@fluentui/react-icons";
 import { useState } from "react";
-import {
-  exportArtifactDocument,
-  type ArtifactDocumentFormat
-} from "./artifactDocumentExport";
+import type {
+  ArtifactDocumentFormat,
+  ArtifactExportOutcome
+} from "./artifactExport.types";
 import type { ArtifactTab } from "./artifact.types";
 
 type ArtifactExportMenuProps = {
+  onExport: (
+    tab: ArtifactTab,
+    format: ArtifactDocumentFormat
+  ) => Promise<ArtifactExportOutcome>;
   tab: ArtifactTab;
 };
 
-const successMessages: Record<ArtifactDocumentFormat, string> = {
-  html: "HTML 文档已导出。",
-  markdown: "Markdown 文档已导出。",
-  pdf: "PDF 文档已导出。"
-};
-
-export function ArtifactExportMenu({ tab }: ArtifactExportMenuProps) {
+export function ArtifactExportMenu({ onExport, tab }: ArtifactExportMenuProps) {
   const [message, setMessage] = useState("");
 
   async function runExport(format: ArtifactDocumentFormat) {
     try {
-      await exportArtifactDocument(tab, format);
-      setMessage(successMessages[format]);
+      const outcome = await onExport(tab, format);
+      if (outcome.status === "cancelled") {
+        setMessage("");
+      } else if (outcome.record.location === "desktop") {
+        setMessage(`已导出到 ${outcome.record.path}`);
+      } else {
+        setMessage("文档已导出，由浏览器下载设置管理。");
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "导出失败，请重试。");
     }

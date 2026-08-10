@@ -282,15 +282,32 @@ function relationCached(value, papers) {
 
 function deriveRelations(papers, records) {
   const requested = new Map(papers.flatMap((paper) => paper.aliases.map((alias) => [alias.toLowerCase(), paper])));
-  const normalizedRecords = records.filter((record) => record && typeof record.id === "string" &&
-    ["openalex", "semantic_scholar"].includes(record.provider) && validEvidenceUrl(record.evidenceRecordUrl) &&
-    record.id.toLowerCase().startsWith(`${record.provider}:`) && requested.has(normalizeRelationIdentity(record.id).toLowerCase())).map((record) => ({
+  const normalizedRecords = records.flatMap((record) => {
+    if (!record || typeof record.id !== "string" ||
+      !["openalex", "semantic_scholar"].includes(record.provider) ||
+      !record.id.toLowerCase().startsWith(`${record.provider}:`)) return [];
+    const evidenceRecordUrl = validEvidenceUrl(record.evidenceRecordUrl);
+    if (!evidenceRecordUrl) return [];
+    const aliases = [record.id, record.canonicalPaperId, record.doi,
+      record.sourceId ? `${record.provider}:${record.sourceId}` : null]
+      .map(normalizeRelationIdentity).filter(Boolean);
+    const owners = new Map(aliases.flatMap((alias) => {
+      const owner = requested.get(alias.toLowerCase());
+      return owner ? [[owner.id, owner]] : [];
+    }));
+    if (owners.size !== 1) return [];
+    return [{
       ...record,
-      owner: requested.get(normalizeRelationIdentity(record.id).toLowerCase()),
-      evidenceRecordUrl: validEvidenceUrl(record.evidenceRecordUrl),
+      aliases,
+      owner: [...owners.values()][0],
+      evidenceRecordUrl,
       referencedPaperIds: Array.isArray(record.referencedPaperIds) ? record.referencedPaperIds.filter((id) => typeof id === "string").map(normalizeRelationIdentity).filter(Boolean) : [],
       citingPaperIds: Array.isArray(record.citingPaperIds) ? record.citingPaperIds.filter((id) => typeof id === "string").map(normalizeRelationIdentity).filter(Boolean) : []
-    }));
+    }];
+  });
+  for (const record of normalizedRecords) {
+    for (const alias of record.aliases) requested.set(alias.toLowerCase(), record.owner);
+  }
   const edges = [];
   const add = (source, target, kind, strength, evidenceRecordUrls, provider, directed) => {
     if (!source || !target || source.id === target.id) return;
@@ -548,12 +565,12 @@ export class ExternalKnowledgeService {
     throwIfAborted(signal);
     const relationSources = configuredSources.filter((source) => ["openalex", "semantic_scholar"].includes(source.connectorType));
     if (relationSources.length === 0) throw new ExternalRetrievalError("external_retrieval_unavailable", 503);
-    const configuredConnectors = new Set(relationSources.map((source) => source.connectorType));
-    if (input.retrievalPapers.some((paper) => !["openalex", "semantic_scholar"].includes(paper.provider) || !configuredConnectors.has(paper.provider))) {
-      throw new ExternalRetrievalError("external_retrieval_source_invalid", 503);
-    }
-    const requestedProviders = new Set(input.retrievalPapers.map((paper) => paper.provider));
-    const requestedSources = relationSources.filter((source) => requestedProviders.has(source.connectorType));
+    const supportsSource = (paper, connectorType) => paper.aliases.some((alias) =>
+      alias.startsWith(`${connectorType}:`) || alias.startsWith("doi:"));
+    const requestedSources = relationSources.filter((source) =>
+      input.retrievalPapers.some((paper) => supportsSource(paper, source.connectorType)));
+    const hasUnmappedPaper = input.papers.some((paper) => !paper.aliases.some((alias) =>
+      alias.startsWith("openalex:") || alias.startsWith("semantic_scholar:") || alias.startsWith("doi:")));
     const cacheKey = relationCacheKey(input, requestedSources);
     const cached = relationCached(await this.repository.loadRetrievalCache(principal.subjectId, cacheKey), input.papers);
     throwIfAborted(signal);
@@ -570,6 +587,7 @@ export class ExternalKnowledgeService {
     const fulfilled = attempts.filter((result) => result.status === "fulfilled").map((result) => result.value);
     const records = fulfilled.flatMap((value) => Array.isArray(value) ? value : (value?.records ?? []));
     const warnings = [...new Set([
+      ...(hasUnmappedPaper ? ["paper_relation_paper_identity_unavailable"] : []),
       ...(attempts.some((result) => result.status === "rejected") ? ["paper_relation_provider_unavailable"] : []),
       ...fulfilled.flatMap((value) => Array.isArray(value?.warnings) ? value.warnings : [])
         .filter((warning) => typeof warning === "string" && warning.length <= 120)

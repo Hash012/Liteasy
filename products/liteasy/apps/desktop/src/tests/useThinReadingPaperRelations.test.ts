@@ -7,6 +7,7 @@ import { useThinReadingPaperRelations } from "../app/features/thin-reading/useTh
 import { ThinReadingTab } from "../app/features/thin-reading/ThinReadingTab";
 import { createThinReadingDocument } from "../app/features/thin-reading/thinReadingProjection";
 import type {
+  ThinReadingExternalSource,
   ThinReadingNode,
   ThinReadingRecommendationPaperEdge
 } from "../app/features/thin-reading/thinReading.types";
@@ -41,6 +42,58 @@ function nodeWithEdges(edges: readonly ThinReadingRecommendationPaperEdge[] = [e
   };
 }
 
+function denseNode() {
+  const base = nodeWithEdges([]);
+  const externalSources: ThinReadingExternalSource[] = [];
+  const anchors = Array.from({ length: 8 }, (_, anchorIndex) => {
+    const externalSourceIds = Array.from({ length: 4 }, (_, sourceIndex) => {
+      const paperIndex = anchorIndex * 4 + sourceIndex + 1;
+      const graphId = `W${String(paperIndex).padStart(3, "0")}`;
+      const id = paperIndex === 32 ? "crossref-duplicate" : `source-${graphId}`;
+      externalSources.push({
+        abstract: "Abstract",
+        authors: ["Author"],
+        ...(paperIndex === 32
+          ? { doi: "10.1000/shared-five", provider: "crossref" as const, sourceId: "10.1000/shared-five" }
+          : {
+              canonicalPaperId: `openalex:${graphId}`,
+              ...(paperIndex === 5 ? { doi: "10.1000/shared-five" } : {}),
+              provider: "openalex" as const,
+              sourceId: graphId
+            }),
+        id,
+        relation: "topic_search",
+        relevance: 0.8,
+        retrievalQuery: "query",
+        sourceRecordUrl: paperIndex === 32
+          ? "https://api.crossref.org/works/10.1000%2Fshared-five"
+          : `https://openalex.org/${graphId}`,
+        title: id,
+        url: paperIndex === 32
+          ? "https://doi.org/10.1000/shared-five"
+          : `https://openalex.org/${graphId}`
+      });
+      return id;
+    });
+    return {
+      end: anchorIndex + 1,
+      evidenceIds: [],
+      externalSourceIds,
+      id: `anchor-${anchorIndex + 1}`,
+      importance: 0.8,
+      kind: "concept" as const,
+      searchQuery: "query",
+      start: anchorIndex,
+      summarySentenceId: "summary-1",
+      text: `Anchor ${anchorIndex + 1}`
+    };
+  });
+  return {
+    ...base,
+    evidence: { ...base.evidence, anchors, externalSources, recommendationPaperEdges: [] }
+  };
+}
+
 function transport(payload: unknown): ThinReadingPaperRelationsTransport {
   return vi.fn(async () => ({ json: async () => payload, ok: true, status: 200 }));
 }
@@ -70,6 +123,31 @@ afterEach(() => {
 });
 
 describe("useThinReadingPaperRelations", () => {
+  test("requests exactly the 24 alias-merged paper components visible in the graph", async () => {
+    let requestedPaperIds: string[] = [];
+    const relationTransport: ThinReadingPaperRelationsTransport = vi.fn(async (request) => {
+      const body = JSON.parse(request.body) as { papers: Array<{ id: string }> };
+      requestedPaperIds = body.papers.map((paper) => paper.id);
+      return successfulResponse({ edges: [], warnings: [] });
+    });
+
+    renderHook(() => useThinReadingPaperRelations({
+      artifactId: "artifact-dense",
+      enabled: true,
+      endpoint: "https://api.example",
+      node: denseNode(),
+      onPersist: vi.fn(),
+      transport: relationTransport
+    }));
+
+    await waitFor(() => expect(relationTransport).toHaveBeenCalledTimes(1));
+    expect(requestedPaperIds).toEqual([
+      ...Array.from({ length: 23 }, (_, index) =>
+        `openalex:W${String(index + 1).padStart(3, "0")}`),
+      "openalex:W025"
+    ]);
+  });
+
   test("completes one request for a stable key under React StrictMode", async () => {
     const relationTransport = transport({ edges: [addedEdge], warnings: [] });
     const onPersist = vi.fn();

@@ -12,8 +12,11 @@ import {
   createThinReadingDocument,
   setThinReadingAutoPublic
 } from "../app/features/thin-reading/thinReadingProjection";
-import type { ThinReadingNodeSeed } from "../app/features/thin-reading/thinReading.types";
-import type { ThinReadingDocument } from "../app/features/thin-reading/thinReading.types";
+import type {
+  ThinReadingDocument,
+  ThinReadingNodeSeed,
+  ThinReadingSupportMode
+} from "../app/features/thin-reading/thinReading.types";
 import type { ThinReadingCommunityRecommendationState } from "../app/features/thin-reading/useThinReadingCommunityRecommendations";
 import { parseThinReadingDocument } from "../app/features/thin-reading/thinReadingVersioning";
 import { v1Fixture } from "./fixtures/thinReadingVersionFixtures";
@@ -22,6 +25,126 @@ import { ThinReadingVisualizationRegion } from "../app/features/thin-reading/Thi
 
 function makeDocument(): ThinReadingDocument {
   return createThinReadingDocument(createThinReadingFixture());
+}
+
+function makeSupportModeDocument(supportMode: ThinReadingSupportMode): ThinReadingDocument {
+  const fixture = createThinReadingFixture();
+  const externalSource = {
+    abstract: "A traceable follow-up study.",
+    authors: ["A. Author"],
+    id: "openalex:W42",
+    provider: "openalex",
+    relation: "related" as const,
+    relevance: 0.85,
+    retrievalQuery: "follow-up",
+    sourceId: "W42",
+    sourceRecordUrl: "https://openalex.org/W42",
+    title: "A Follow-up Study",
+    url: "https://openalex.org/W42",
+    year: 2025
+  };
+  if (supportMode === "paper") {
+    return createThinReadingDocument({
+      ...fixture,
+      rootSeed: { ...fixture.rootSeed, supportMode }
+    });
+  }
+  if (supportMode === "paper_and_external") {
+    const text = "论文提出 self-attention，后续研究扩展了该方向。";
+    return createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          ...fixture.rootSeed.evidence,
+          externalKnowledge: [externalSource.id],
+          externalSources: [externalSource],
+          summarySentences: [{
+            evidenceIds: ["evidence-attention-self-attention"],
+            externalKnowledge: [externalSource.id],
+            id: "sentence-paper-and-external",
+            status: "weak",
+            supportMode,
+            text
+          }]
+        },
+        summary: text,
+        supportMode
+      }
+    });
+  }
+  if (supportMode === "external_only") {
+    const text = "后续研究从外部可追溯来源扩展了该方向。";
+    return createThinReadingDocument({
+      ...fixture,
+      rootSeed: {
+        ...fixture.rootSeed,
+        evidence: {
+          claims: [],
+          externalKnowledge: [externalSource.id],
+          externalSources: [externalSource],
+          paperEvidence: [],
+          paperEvidenceSpans: [],
+          summarySentences: [{
+            evidenceIds: [],
+            externalKnowledge: [externalSource.id],
+            id: "sentence-external-only",
+            status: "weak",
+            supportMode,
+            text
+          }]
+        },
+        summary: text,
+        supportMode,
+        withinPaperClosure: false
+      }
+    });
+  }
+  const text = "在没有可信外部来源时，这里仅给出 AI 对跨论文问题的独立理解。";
+  return createThinReadingDocument({
+    ...fixture,
+    rootSeed: {
+      ...fixture.rootSeed,
+      evidence: {
+        anchors: [],
+        claims: [],
+        externalKnowledge: [],
+        externalSources: [],
+        generationAudit: {
+          aiInterpretationReview: {
+            reason: "正文没有冒充论文或外部来源结论。",
+            unsafeSentenceIds: [],
+            verdict: "pass"
+          },
+          externalFallback: {
+            attemptedRoutes: ["support", "context", "challenge"],
+            carriedSourceCount: 0,
+            completedRoutes: ["support", "context", "challenge"],
+            reason: "no_trusted_sources",
+            trustedSourceCount: 0
+          },
+          model: { id: "fixture-model", provider: "fixture" },
+          qualityGate: { attempts: 1, repaired: false, repairReasons: [] },
+          version: "liteasy.thin-reading-agent/v2"
+        },
+        paperEvidence: [],
+        paperEvidenceSpans: [],
+        summarySentences: [{
+          evidenceIds: [],
+          externalKnowledge: [],
+          id: "sentence-ai-interpretation",
+          status: "unsupported",
+          supportMode,
+          text
+        }]
+      },
+      omittedSections: [],
+      recommendations: [],
+      summary: text,
+      supportMode,
+      withinPaperClosure: false
+    }
+  });
 }
 
 function renderTab(
@@ -58,13 +181,8 @@ function readyCommunityRecommendationState(): ThinReadingCommunityRecommendation
     recommendations: [{
       compatibility: 0.82,
       id: "community-recommendation-1",
+      literatureId: "literature-attention",
       note: "社区成员讨论了 self-attention 对并行化的影响。",
-      paperIdentity: {
-        id: "doi:10.48550/arxiv.1706.03762",
-        kind: "doi",
-        source: "metadata",
-        value: "10.48550/arxiv.1706.03762"
-      },
       relationship: "方法与问题设定",
       source: "intuecho_community"
     }],
@@ -104,6 +222,69 @@ describe("ThinReadingTab", () => {
     expect(screen.getByTestId("thin-reading-visuals")).toHaveTextContent("未生成");
   });
 
+  test("renders the persisted support mode as the only support class and localized label", () => {
+    const cases = [
+      ["paper", "论文内支持"],
+      ["paper_and_external", "论文 + 外部支持"],
+      ["external_only", "仅外部支持"],
+      ["ai_interpretation", "AI 独立理解"]
+    ] as const;
+
+    for (const [supportMode, label] of cases) {
+      const { container, unmount } = renderTab(makeSupportModeDocument(supportMode));
+      const root = container.querySelector(".thin-reading");
+      expect(screen.getByText(label, { selector: ".thin-reading__support-mode" })).toBeInTheDocument();
+      expect([...root!.classList].filter((className) => className.startsWith("is-support-")))
+        .toEqual([`is-support-${supportMode.replace(/_/gu, "-")}`]);
+      unmount();
+    }
+  });
+
+  test("discloses source-free AI interpretation and keeps its selected-text source ungrounded", async () => {
+    const document = makeSupportModeDocument("ai_interpretation");
+    const onGenerateBranch = vi.fn(async () => undefined);
+    const { container } = render(
+      <ThinReadingTab
+        artifactId={document.artifactId}
+        document={document}
+        onGenerateBranch={onGenerateBranch}
+        onUpdateDocument={vi.fn()}
+        papers={createThinReadingFixture().papers}
+      />
+    );
+
+    expect(container.querySelector(".thin-reading.is-support-ai-interpretation")).not.toBeNull();
+    expect(screen.getByRole("note", { name: "无文献依据：AI 独立理解" })).toHaveTextContent(
+      "本段必须超出论文范围，但外部检索未获得可信来源。以下正文没有论文内或外部文献依据，仅代表 AI 的独立理解，请勿视为论文结论或事实依据。"
+    );
+    expect(container.querySelector(".thin-reading__summary-marker")).toBeNull();
+    expect(screen.queryByRole("link", { name: /打开外部来源/ })).not.toBeInTheDocument();
+
+    const summary = screen.getByTestId("thin-reading-summary");
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      toString: () => "AI 对跨论文问题的独立理解",
+      getRangeAt: () => ({
+        commonAncestorContainer: summary,
+        getBoundingClientRect: () => ({ bottom: 120, left: 80, right: 180, top: 100 })
+      }) as Range
+    } as unknown as Selection);
+    fireEvent.mouseUp(summary);
+    fireEvent.click(screen.getByRole("button", { name: "深入" }));
+
+    await waitFor(() => expect(onGenerateBranch).toHaveBeenCalledWith({
+      artifactId: document.artifactId,
+      document,
+      source: {
+        excerpt: "AI 对跨论文问题的独立理解",
+        kind: "selected_text"
+      }
+    }));
+    const source = onGenerateBranch.mock.calls[0]?.[0].source;
+    expect(source).not.toHaveProperty("evidenceIds");
+    expect(source).not.toHaveProperty("externalSourceIds");
+  });
+
   test("keeps a desktop selection popover inside the visible viewport", () => {
     expect(resolveThinReadingSelectionPopoverPosition({
       bottom: 520,
@@ -140,7 +321,6 @@ describe("ThinReadingTab", () => {
         id: "anchor-late-interaction",
         importance: 0.9,
         kind: "method",
-        label: "Late interaction",
         searchQuery: "late interaction retrieval",
         start: 0,
         summarySentenceId: "sentence-1",

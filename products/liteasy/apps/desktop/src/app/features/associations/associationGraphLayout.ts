@@ -17,6 +17,7 @@ import {
   type AssociationLayoutQuality,
   type AssociationSide
 } from "./associationGraphGeometry";
+import { createAssociationExactPath } from "./associationExactPath";
 import type {
   ThinReadingExternalSource,
   ThinReadingRecommendationPaperEdge
@@ -47,9 +48,7 @@ export type AnchorRect = {
 
 export type PageGraphAnchorInput = {
   anchorId: string;
-  /** Width of the anchor's label chip, so nodes are kept off the one thing that must stay legible. */
-  labelWidth?: number;
-  rect: AnchorRect;
+  rects: readonly AnchorRect[];
 };
 
 export type PageGraphInput = {
@@ -114,7 +113,7 @@ export type PageGraphPaperEdge = PageGraphPaperRelation & {
 export type ConstrainedPageGraph = PageGraph & {
   baselineQuality: AssociationLayoutQuality;
   candidateQuality: AssociationLayoutQuality;
-  layoutSource: "baseline" | "constrained";
+  layoutSource: "baseline" | "constrained" | "degraded";
   paperEdges: readonly PageGraphPaperEdge[];
   quality: AssociationLayoutQuality;
   searchDiagnostics: AssociationLayoutSearchDiagnostics;
@@ -150,16 +149,42 @@ const dotThreshold = 0.34;
 const relaxationStep = 26;
 const relaxationRounds = 24;
 const maximumRepairRounds = 5;
+const maximumInitialSlotCandidateEvaluations = 35_000;
+const maximumRepairCandidateEvaluations = 5_000;
+const maximumRepairNodesVisited = 48;
+const maximumCrossingRepairBeamWidth = 6;
+const maximumCrossingRepairCandidatesPerExpansion = 96;
+const initialExplorationBudget = Math.floor(maximumInitialSlotCandidateEvaluations * 0.3);
+const initialBeamRefinementBudget = Math.floor(maximumInitialSlotCandidateEvaluations * 0.3);
 
 const initialRelativeAngles = Array.from({ length: 23 }, (_, index) => (index - 11) * 5)
   .sort((left, right) => Math.abs(left) - Math.abs(right) || left - right)
   .map((degrees) => degrees * Math.PI / 180);
 const initialRadiusOffsets = Array.from({ length: 61 }, (_, index) => index * 8);
-const repairCoarseRelativeAngles = Array.from({ length: 23 }, (_, index) => (index - 11) * 5)
-  .sort((left, right) => Math.abs(left) - Math.abs(right) || left - right)
-  .map((degrees) => degrees * Math.PI / 180);
+const maximumInitialCandidatesPerNode = initialRelativeAngles.length * initialRadiusOffsets.length;
+const initialPolarOffsets = Array.from({ length: maximumInitialCandidatesPerNode }, (_, index) => ({
+  radiusOffset: initialRadiusOffsets[index % initialRadiusOffsets.length]!,
+  relativeAngle: initialRelativeAngles[index % initialRelativeAngles.length]!
+}));
 const repairCoarseRadiusOffsets = Array.from({ length: 31 }, (_, index) => index * 16);
-const repairFineRadiusOffsets = [-8, 8];
+const repairCoarsePolarOffsets = Array.from({
+  length: initialRelativeAngles.length * repairCoarseRadiusOffsets.length
+}, (_, index) => ({
+  radiusOffset: repairCoarseRadiusOffsets[index % repairCoarseRadiusOffsets.length]!,
+  relativeAngle: initialRelativeAngles[index % initialRelativeAngles.length]!
+}));
+const repairFineRadiusOffsets = [-40, -20, 20, 40];
+const maximumRepairFineSeeds = 1;
+const maximumRefinementSeeds = 4;
+
+function initialSearchBudgetIsExhausted(diagnostics: AssociationLayoutSearchDiagnostics) {
+  return diagnostics.initialSlotCandidateEvaluations >= maximumInitialSlotCandidateEvaluations;
+}
+
+function repairSearchBudgetIsExhausted(diagnostics: AssociationLayoutSearchDiagnostics) {
+  return diagnostics.repairCandidateEvaluations >= maximumRepairCandidateEvaluations ||
+    diagnostics.repairNodesVisited >= maximumRepairNodesVisited;
+}
 
 /**
  * Fan directions, in degrees, biased away from straight up and down.
@@ -176,6 +201,10 @@ const clamp = (value: number, minimum: number, maximum: number) =>
 /** The identity used to merge the same work retrieved for different anchors. */
 export function pageGraphPaperKey(source: ThinReadingExternalSource) {
   return source.canonicalPaperId ?? source.doi ?? source.id;
+}
+
+function primaryAnchorRect(anchor: PageGraphAnchorInput): AnchorRect {
+  return anchor.rects[0] ?? { height: 0, left: 0, top: 0, width: 0 };
 }
 
 function anchorCentre(rect: AnchorRect) {
@@ -209,27 +238,16 @@ function overlaps(candidate: OccupiedBox, placed: OccupiedBox) {
 }
 
 /**
- * The anchor's own text and its label chip, which nothing may sit on: covering the anchor would
- * hide the very thing every edge on the page points at.
+ * Every wrapped source-text rectangle is an obstacle: covering any line would hide the thing every
+ * edge on the page points at.
  */
 function anchorObstacles(anchor: PageGraphAnchorInput): OccupiedBox[] {
-  const { rect } = anchor;
-  const centreTop = rect.top + rect.height / 2;
-  const chipWidth = Math.max(rect.width, anchor.labelWidth ?? 0);
-  return [
-    {
-      halfHeight: Math.max(rect.height, 22) / 2,
-      halfWidth: rect.width / 2,
-      left: rect.left + rect.width / 2,
-      top: centreTop
-    },
-    {
-      halfHeight: 15,
-      halfWidth: chipWidth / 2,
-      left: rect.left - 6 + chipWidth / 2,
-      top: centreTop
-    }
-  ];
+  return anchor.rects.map((rect) => ({
+    halfHeight: Math.max(rect.height, 22) / 2,
+    halfWidth: rect.width / 2,
+    left: rect.left + rect.width / 2,
+    top: rect.top + rect.height / 2
+  }));
 }
 
 export function layoutAssociationPageGraph({
@@ -264,7 +282,7 @@ export function layoutAssociationPageGraph({
     }
     if (visible.length === 0) continue;
 
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const highest = visible[0].relevance;
     const lowest = visible[visible.length - 1].relevance;
     const spread = highest - lowest;
@@ -342,7 +360,7 @@ export function layoutAssociationPageGraph({
   }
 
   const anchorCentreById = new Map(
-    anchors.map((anchor) => [anchor.anchorId, anchorCentre(anchor.rect)] as const)
+    anchors.map((anchor) => [anchor.anchorId, anchorCentre(primaryAnchorRect(anchor))] as const)
   );
   const horizontalLimit = pageGraphNodeWidth / 2 + 10;
   const verticalLimit = pageGraphNodeHeight / 2 + 8;
@@ -417,7 +435,7 @@ function geometryInput(
   const nodeByKey = new Map(graph.nodes.map((node) => [node.paperKey, node] as const));
   return {
     anchors: input.anchors.map((anchor) => {
-      const centre = anchorCentre(anchor.rect);
+      const centre = anchorCentre(primaryAnchorRect(anchor));
       return {
         anchorId: anchor.anchorId,
         ...centre,
@@ -462,6 +480,30 @@ export function evaluateAssociationLayout(input: PageGraphInput, graph: PageGrap
 function hardViolationCount(quality: AssociationLayoutQuality) {
   return quality.primaryEdgeCrossings + quality.sameSideViolations + quality.nodeOverlaps +
     quality.anchorObstructions + quality.overflowCount;
+}
+
+function primaryCrossingPaperKeys(input: PageGraphInput, graph: PageGraph) {
+  const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
+  const segments = graph.nodes.flatMap((node) => {
+    const anchorId = node.anchorIds[0];
+    const anchor = anchorId ? anchorById.get(anchorId) : undefined;
+    if (!anchor) return [];
+    return createAssociationExactPath(anchorCentre(primaryAnchorRect(anchor)), node, 0.52).segments.map((segment) => ({
+      ...segment,
+      paperKey: node.paperKey
+    }));
+  });
+  const result = new Set<string>();
+  for (let leftIndex = 0; leftIndex < segments.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < segments.length; rightIndex += 1) {
+      const left = segments[leftIndex]!;
+      const right = segments[rightIndex]!;
+      if (!segmentsCross(left, right)) continue;
+      result.add(left.paperKey);
+      result.add(right.paperKey);
+    }
+  }
+  return result;
 }
 
 /** Returns only nodes that can affect a current hard violation. */
@@ -511,7 +553,7 @@ function hardViolationPaperKeys(
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
     if (!anchorId || !anchor) return [];
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const side = sideByAnchor.get(anchorId);
     if (side && !pointIsInSideSector(centre, node, side)) result.add(node.paperKey);
     return [{ anchorId, end: node, paperKey: node.paperKey, start: centre }];
@@ -536,7 +578,7 @@ function stressByPaperKey(input: PageGraphInput, graph: PageGraph) {
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
     if (!anchor) return [node.paperKey, 0] as const;
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const ideal = nearRadius + (1 - node.relevance) * radiusSpread;
     return [node.paperKey, 3 * (Math.hypot(node.left - centre.left, node.top - centre.top) - ideal) ** 2 /
       ideal ** 2] as const;
@@ -566,7 +608,7 @@ function softRepairPaperKeys(
   const segments = graph.nodes.flatMap((node) => {
     const anchorId = node.anchorIds[0];
     const anchor = anchorId ? anchorById.get(anchorId) : undefined;
-    return anchor ? [{ end: node, paperKeys: [node.paperKey], start: anchorCentre(anchor.rect) }] : [];
+    return anchor ? [{ end: node, paperKeys: [node.paperKey], start: anchorCentre(primaryAnchorRect(anchor)) }] : [];
   });
   for (const edge of input.paperEdges ?? []) {
     const source = nodeByKey.get(edge.sourcePaperKey);
@@ -626,7 +668,7 @@ function expandRepairConstraintClosure(
       const neighboursSelectedAnchor = anchor && [...selectedAnchorIds].some((selectedAnchorId) => {
         const selectedAnchor = anchorById.get(selectedAnchorId);
         return selectedAnchor && Math.abs(
-          anchorCentre(anchor.rect).top - anchorCentre(selectedAnchor.rect).top
+        anchorCentre(primaryAnchorRect(anchor)).top - anchorCentre(primaryAnchorRect(selectedAnchor)).top
         ) <= pageGraphNodeHeight * 2 + nodeGap;
       });
       if (selectedAnchorIds.has(anchorId) || neighboursSelectedAnchor) {
@@ -669,7 +711,7 @@ function sideAssignments(input: PageGraphInput, baseline: PageGraph) {
   }
   const ordered = [...input.anchors]
     .filter((anchor) => (nodesByAnchor.get(anchor.anchorId)?.length ?? 0) > 0)
-    .sort((left, right) => left.rect.top - right.rect.top || left.anchorId.localeCompare(right.anchorId));
+    .sort((left, right) => primaryAnchorRect(left).top - primaryAnchorRect(right).top || left.anchorId.localeCompare(right.anchorId));
   if (ordered.length === 0) return new Map<string, AssociationSide>();
 
   type State = { cost: number; path: AssociationSide[] };
@@ -678,7 +720,7 @@ function sideAssignments(input: PageGraphInput, baseline: PageGraph) {
     right: { cost: 0, path: [] }
   };
   ordered.forEach((anchor, index) => {
-    const centre = anchorCentre(anchor.rect);
+    const centre = anchorCentre(primaryAnchorRect(anchor));
     const count = nodesByAnchor.get(anchor.anchorId)!.length;
     const local = (side: AssociationSide) => {
       const room = side === "left" ? centre.left : input.frameWidth - centre.left;
@@ -698,7 +740,7 @@ function sideAssignments(input: PageGraphInput, baseline: PageGraph) {
       return;
     }
     const previousAnchor = ordered[index - 1]!;
-    const verticalGap = Math.abs(anchorCentre(previousAnchor.rect).top - centre.top);
+    const verticalGap = Math.abs(anchorCentre(primaryAnchorRect(previousAnchor)).top - centre.top);
     const transitionPenalty = verticalGap < 360 ? 90 : 20;
     const next = {} as Record<AssociationSide, State>;
     for (const side of ["left", "right"] as const) {
@@ -817,201 +859,218 @@ function projectToSector(
 
 function candidateGraph(
   input: PageGraphInput,
-  baseline: PageGraph,
-  baselineQuality: AssociationLayoutQuality,
+  initialGraph: PageGraph,
+  comparisonBaselineQuality: AssociationLayoutQuality,
   sideByAnchor: ReadonlyMap<string, AssociationSide>,
   diagnostics: AssociationLayoutSearchDiagnostics,
-  repairMode: "none" | "soft"
+  repairMode: "none" | "soft",
+  maximumInitialCandidatesPerNode: number,
+  comparisonBaselineGraph: PageGraph = initialGraph
 ): PageGraph {
   const anchorById = new Map(input.anchors.map((anchor) => [anchor.anchorId, anchor] as const));
-  const forceNodes: ForceNode[] = input.anchors.map((anchor) => {
-    const centre = anchorCentre(anchor.rect);
-    return { anchorId: anchor.anchorId, fx: centre.left, fy: centre.top, id: `anchor:${anchor.anchorId}`,
-      isAnchor: true, x: centre.left, y: centre.top };
-  });
-  const forceNodeByPaperKey = new Map<string, ForceNode>();
-  const grouped = new Map<string, PageGraphNode[]>();
-  for (const node of baseline.nodes) {
-    const anchorId = node.anchorIds[0];
-    if (anchorId) grouped.set(anchorId, [...(grouped.get(anchorId) ?? []), node]);
-  }
-  for (const [anchorId, nodes] of grouped) {
-    const anchor = anchorById.get(anchorId);
-    const side = sideByAnchor.get(anchorId);
-    if (!anchor || !side) continue;
-    const ordered = [...nodes].sort((left, right) => right.relevance - left.relevance ||
-      left.paperKey.localeCompare(right.paperKey));
-    ordered.forEach((graphNode) => {
-      const forceNode: ForceNode = {
-        id: `paper:${graphNode.paperKey}`,
-        isAnchor: false,
-        paperKey: graphNode.paperKey,
-        x: graphNode.left,
-        y: graphNode.top
+  let nodes: PageGraphNode[];
+  if (repairMode === "soft") {
+    nodes = initialGraph.nodes.map((node) => ({ ...node }));
+  } else {
+    const forceNodes: ForceNode[] = input.anchors.map((anchor) => {
+      const centre = anchorCentre(primaryAnchorRect(anchor));
+      return { anchorId: anchor.anchorId, fx: centre.left, fy: centre.top, id: `anchor:${anchor.anchorId}`,
+        isAnchor: true, x: centre.left, y: centre.top };
+    });
+    const forceNodeByPaperKey = new Map<string, ForceNode>();
+    const grouped = new Map<string, PageGraphNode[]>();
+    for (const node of initialGraph.nodes) {
+      const anchorId = node.anchorIds[0];
+      if (anchorId) grouped.set(anchorId, [...(grouped.get(anchorId) ?? []), node]);
+    }
+    for (const [anchorId, nodes] of grouped) {
+      const anchor = anchorById.get(anchorId);
+      const side = sideByAnchor.get(anchorId);
+      if (!anchor || !side) continue;
+      const ordered = [...nodes].sort((left, right) => right.relevance - left.relevance ||
+        left.paperKey.localeCompare(right.paperKey));
+      ordered.forEach((graphNode) => {
+        const forceNode: ForceNode = {
+          id: `paper:${graphNode.paperKey}`,
+          isAnchor: false,
+          paperKey: graphNode.paperKey,
+          x: graphNode.left,
+          y: graphNode.top
+        };
+        forceNodes.push(forceNode);
+        forceNodeByPaperKey.set(graphNode.paperKey, forceNode);
+      });
+    }
+    const forceNodeById = new Map(forceNodes.map((node) => [node.id, node] as const));
+    const forceLinks: ForceLink[] = [];
+    for (const graphNode of initialGraph.nodes) {
+      const anchorId = graphNode.anchorIds[0];
+      if (!anchorId || !forceNodeByPaperKey.has(graphNode.paperKey)) continue;
+      forceLinks.push({
+        distance: nearRadius + (1 - graphNode.relevance) * radiusSpread,
+        source: `anchor:${anchorId}`,
+        strength: 0.86,
+        target: `paper:${graphNode.paperKey}`
+      });
+    }
+    for (const edge of input.paperEdges ?? []) {
+      if (!forceNodeByPaperKey.has(edge.sourcePaperKey) || !forceNodeByPaperKey.has(edge.targetPaperKey)) continue;
+      forceLinks.push({
+        distance: 108 + (1 - clamp(edge.strength, 0, 1)) * 172,
+        source: `paper:${edge.sourcePaperKey}`,
+        strength: 0.12 + clamp(edge.strength, 0, 1) * 0.2,
+        target: `paper:${edge.targetPaperKey}`
+      });
+    }
+    const simulation = forceSimulation(forceNodes)
+      .randomSource(stableRandom(forceNodes.map((node) => node.id).sort().join("\u0000")))
+      .alpha(0.7)
+      .alphaDecay(0.055)
+      .velocityDecay(0.46)
+      .force("charge", forceManyBody<ForceNode>().strength((node) => node.isAnchor ? 0 : -12))
+      .force("collision", forceCollide<ForceNode>().radius((node) =>
+        node.isAnchor ? 30 : pageGraphNodeHeight / 2 + 5).iterations(2))
+      .force("links", forceLink<ForceNode, ForceLink>(forceLinks)
+        .id((node) => node.id)
+        .distance((link) => link.distance)
+        .strength((link) => link.strength))
+      .stop();
+    for (let tick = 0; tick < 72; tick += 1) {
+      simulation.tick();
+      for (const graphNode of initialGraph.nodes) {
+        const anchorId = graphNode.anchorIds[0];
+        const anchor = anchorId ? forceNodeById.get(`anchor:${anchorId}`) : undefined;
+        const node = forceNodeByPaperKey.get(graphNode.paperKey);
+        const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
+        if (anchor && node && side) projectToSector(node, anchor, side, input);
+      }
+    }
+
+    // Circular collision forces are intentionally only a first pass. Cards are rectangles, so each
+    // one snaps to the nearest exact legal polar slot while retaining the force result as a tie-break.
+    const collisionOrder = [...initialGraph.nodes].sort((left, right) =>
+      right.relevance - left.relevance || left.paperKey.localeCompare(right.paperKey));
+    const rectangleAt = (_graphNode: PageGraphNode, left: number, top: number) => {
+      const halfWidth = pageGraphNodeWidth / 2;
+      const halfHeight = pageGraphNodeHeight / 2;
+      return {
+        bottom: top + halfHeight,
+        left: left - halfWidth,
+        right: left + halfWidth,
+        top: top - halfHeight
       };
-      forceNodes.push(forceNode);
-      forceNodeByPaperKey.set(graphNode.paperKey, forceNode);
-    });
-  }
-  const forceNodeById = new Map(forceNodes.map((node) => [node.id, node] as const));
-  const forceLinks: ForceLink[] = [];
-  for (const graphNode of baseline.nodes) {
-    const anchorId = graphNode.anchorIds[0];
-    if (!anchorId || !forceNodeByPaperKey.has(graphNode.paperKey)) continue;
-    forceLinks.push({
-      distance: nearRadius + (1 - graphNode.relevance) * radiusSpread,
-      source: `anchor:${anchorId}`,
-      strength: 0.86,
-      target: `paper:${graphNode.paperKey}`
-    });
-  }
-  for (const edge of input.paperEdges ?? []) {
-    if (!forceNodeByPaperKey.has(edge.sourcePaperKey) || !forceNodeByPaperKey.has(edge.targetPaperKey)) continue;
-    forceLinks.push({
-      distance: 108 + (1 - clamp(edge.strength, 0, 1)) * 172,
-      source: `paper:${edge.sourcePaperKey}`,
-      strength: 0.12 + clamp(edge.strength, 0, 1) * 0.2,
-      target: `paper:${edge.targetPaperKey}`
-    });
-  }
-  const simulation = forceSimulation(forceNodes)
-    .randomSource(stableRandom(forceNodes.map((node) => node.id).sort().join("\u0000")))
-    .alpha(0.7)
-    .alphaDecay(0.055)
-    .velocityDecay(0.46)
-    .force("charge", forceManyBody<ForceNode>().strength((node) => node.isAnchor ? 0 : -12))
-    .force("collision", forceCollide<ForceNode>().radius((node) =>
-      node.isAnchor ? 30 : pageGraphNodeHeight / 2 + 5).iterations(2))
-    .force("links", forceLink<ForceNode, ForceLink>(forceLinks)
-      .id((node) => node.id)
-      .distance((link) => link.distance)
-      .strength((link) => link.strength))
-    .stop();
-  for (let tick = 0; tick < 72; tick += 1) {
-    simulation.tick();
-    for (const graphNode of baseline.nodes) {
+    };
+    const placedRectangles = input.anchors.flatMap(anchorObstacles).map((obstacle) => ({
+      bottom: obstacle.top + obstacle.halfHeight,
+      left: obstacle.left - obstacle.halfWidth,
+      right: obstacle.left + obstacle.halfWidth,
+      top: obstacle.top - obstacle.halfHeight
+    }));
+    const intersects = (left: ReturnType<typeof rectangleAt>, right: ReturnType<typeof rectangleAt>) =>
+      left.left < right.right + nodeGap && left.right > right.left - nodeGap &&
+      left.top < right.bottom + nodeGap && left.bottom > right.top - nodeGap;
+    const relationsByPaperKey = new Map<string, PageGraphPaperRelation[]>();
+    for (const relation of input.paperEdges ?? []) {
+      relationsByPaperKey.set(relation.sourcePaperKey, [
+        ...(relationsByPaperKey.get(relation.sourcePaperKey) ?? []),
+        relation
+      ]);
+      relationsByPaperKey.set(relation.targetPaperKey, [
+        ...(relationsByPaperKey.get(relation.targetPaperKey) ?? []),
+        relation
+      ]);
+    }
+    for (const graphNode of collisionOrder) {
+      if (initialSearchBudgetIsExhausted(diagnostics)) break;
       const anchorId = graphNode.anchorIds[0];
       const anchor = anchorId ? forceNodeById.get(`anchor:${anchorId}`) : undefined;
       const node = forceNodeByPaperKey.get(graphNode.paperKey);
       const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
-      if (anchor && node && side) projectToSector(node, anchor, side, input);
-    }
-  }
-
-  // Circular collision forces are intentionally only a first pass. Cards are rectangles, so each
-  // one snaps to the nearest exact legal polar slot while retaining the force result as a tie-break.
-  const collisionOrder = [...baseline.nodes].sort((left, right) =>
-    right.relevance - left.relevance || left.paperKey.localeCompare(right.paperKey));
-  const rectangleAt = (_graphNode: PageGraphNode, left: number, top: number) => {
-    const halfWidth = pageGraphNodeWidth / 2;
-    const halfHeight = pageGraphNodeHeight / 2;
-    return {
-      bottom: top + halfHeight,
-      left: left - halfWidth,
-      right: left + halfWidth,
-      top: top - halfHeight
-    };
-  };
-  const placedRectangles = input.anchors.flatMap(anchorObstacles).map((obstacle) => ({
-    bottom: obstacle.top + obstacle.halfHeight,
-    left: obstacle.left - obstacle.halfWidth,
-    right: obstacle.left + obstacle.halfWidth,
-    top: obstacle.top - obstacle.halfHeight
-  }));
-  const intersects = (left: ReturnType<typeof rectangleAt>, right: ReturnType<typeof rectangleAt>) =>
-    left.left < right.right + nodeGap && left.right > right.left - nodeGap &&
-    left.top < right.bottom + nodeGap && left.bottom > right.top - nodeGap;
-  const relationsByPaperKey = new Map<string, PageGraphPaperRelation[]>();
-  for (const relation of input.paperEdges ?? []) {
-    relationsByPaperKey.set(relation.sourcePaperKey, [
-      ...(relationsByPaperKey.get(relation.sourcePaperKey) ?? []),
-      relation
-    ]);
-    relationsByPaperKey.set(relation.targetPaperKey, [
-      ...(relationsByPaperKey.get(relation.targetPaperKey) ?? []),
-      relation
-    ]);
-  }
-  for (const graphNode of collisionOrder) {
-    const anchorId = graphNode.anchorIds[0];
-    const anchor = anchorId ? forceNodeById.get(`anchor:${anchorId}`) : undefined;
-    const node = forceNodeByPaperKey.get(graphNode.paperKey);
-    const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
-    if (!anchor || !node || !side) continue;
-    const forceLeft = node.x!;
-    const forceTop = node.y!;
-    const ideal = nearRadius + (1 - graphNode.relevance) * radiusSpread;
-    const seenCandidates = new Set<string>();
-    const evaluateSlot = (relativeAngle: number, radius: number) => {
-      const signature = `${relativeAngle.toFixed(6)}:${radius.toFixed(3)}`;
-      if (seenCandidates.has(signature) || radius < 96 ||
-          Math.abs(relativeAngle) > associationSectorAngle + 1e-9) return undefined;
-      seenCandidates.add(signature);
-      diagnostics.initialSlotCandidateEvaluations += 1;
-      const angle = (side === "right" ? 0 : Math.PI) + relativeAngle;
-      const left = anchor.x! + Math.cos(angle) * radius;
-      const top = anchor.y! + Math.sin(angle) * radius;
-      const rectangle = rectangleAt(graphNode, left, top);
-      const radialStress = ((radius - ideal) / ideal) ** 2;
-      const forceDistance = Math.hypot(left - forceLeft, top - forceTop);
-      const relationStress = (relationsByPaperKey.get(graphNode.paperKey) ?? []).reduce((sum, relation) => {
-        const otherKey = relation.sourcePaperKey === graphNode.paperKey
-          ? relation.targetPaperKey
-          : relation.sourcePaperKey;
-        const other = forceNodeByPaperKey.get(otherKey);
-        if (!other) return sum;
-        const relationIdeal = 108 + (1 - clamp(relation.strength, 0, 1)) * 172;
-        const distance = Math.hypot(left - other.x!, top - other.y!);
-        return sum + ((distance - relationIdeal) / relationIdeal) ** 2;
-      }, 0);
-      const insideFrame = left - pageGraphNodeWidth / 2 >= frameInsetHorizontal &&
-        left + pageGraphNodeWidth / 2 <= input.frameWidth - frameInsetHorizontal &&
-        top - pageGraphNodeHeight / 2 >= frameInsetVertical &&
-        top + pageGraphNodeHeight / 2 <= input.documentHeight - frameInsetVertical;
-      return {
-        collisionCount: placedRectangles.filter((placed) => intersects(rectangle, placed)).length,
-        forceDistance,
-        insideFrame,
-        left,
-        radialStress,
-        radius,
-        rectangle,
-        relativeAngle,
-        score: radialStress * 3 + relationStress + forceDistance * 1e-6,
-        top
+      if (!anchor || !node || !side) continue;
+      const forceLeft = node.x!;
+      const forceTop = node.y!;
+      const ideal = nearRadius + (1 - graphNode.relevance) * radiusSpread;
+      const seenCandidates = new Set<string>();
+      const evaluateSlot = (relativeAngle: number, radius: number) => {
+        const signature = `${relativeAngle.toFixed(6)}:${radius.toFixed(3)}`;
+        if (seenCandidates.has(signature) || radius < 96 ||
+            Math.abs(relativeAngle) > associationSectorAngle + 1e-9) return undefined;
+        seenCandidates.add(signature);
+        diagnostics.initialSlotCandidateEvaluations += 1;
+        const angle = (side === "right" ? 0 : Math.PI) + relativeAngle;
+        const left = anchor.x! + Math.cos(angle) * radius;
+        const top = anchor.y! + Math.sin(angle) * radius;
+        const rectangle = rectangleAt(graphNode, left, top);
+        const radialStress = ((radius - ideal) / ideal) ** 2;
+        const forceDistance = Math.hypot(left - forceLeft, top - forceTop);
+        const relationStress = (relationsByPaperKey.get(graphNode.paperKey) ?? []).reduce((sum, relation) => {
+          const otherKey = relation.sourcePaperKey === graphNode.paperKey
+            ? relation.targetPaperKey
+            : relation.sourcePaperKey;
+          const other = forceNodeByPaperKey.get(otherKey);
+          if (!other) return sum;
+          const relationIdeal = 108 + (1 - clamp(relation.strength, 0, 1)) * 172;
+          const distance = Math.hypot(left - other.x!, top - other.y!);
+          return sum + ((distance - relationIdeal) / relationIdeal) ** 2;
+        }, 0);
+        const insideFrame = left - pageGraphNodeWidth / 2 >= frameInsetHorizontal &&
+          left + pageGraphNodeWidth / 2 <= input.frameWidth - frameInsetHorizontal &&
+          top - pageGraphNodeHeight / 2 >= frameInsetVertical &&
+          top + pageGraphNodeHeight / 2 <= input.documentHeight - frameInsetVertical;
+        return {
+          collisionCount: placedRectangles.filter((placed) => intersects(rectangle, placed)).length,
+          forceDistance,
+          insideFrame,
+          left,
+          radialStress,
+          radius,
+          rectangle,
+          relativeAngle,
+          score: radialStress * 3 + relationStress + forceDistance * 1e-6,
+          top
+        };
       };
-    };
-    const candidates = initialRelativeAngles.flatMap((relativeAngle) =>
-      initialRadiusOffsets.flatMap((radiusOffset) =>
-        evaluateSlot(relativeAngle, ideal + radiusOffset) ?? []));
-    candidates.sort((left, right) => Number(right.insideFrame) - Number(left.insideFrame) ||
-      left.collisionCount - right.collisionCount || left.score - right.score ||
-      left.radialStress - right.radialStress || left.forceDistance - right.forceDistance ||
-      left.top - right.top || left.left - right.left);
-    const legalCandidates = candidates.filter((candidate) =>
-      candidate.insideFrame && candidate.collisionCount === 0);
-    const selected = legalCandidates[0];
-    if (selected) {
-      node.x = selected.left;
-      node.y = selected.top;
-      placedRectangles.push(selected.rectangle);
-    } else {
-      placedRectangles.push(rectangleAt(graphNode, node.x!, node.y!));
+      const candidates: NonNullable<ReturnType<typeof evaluateSlot>>[] = [];
+      const initialEvaluationsAtNodeStart = diagnostics.initialSlotCandidateEvaluations;
+      for (const { radiusOffset, relativeAngle } of initialPolarOffsets) {
+        if (diagnostics.initialSlotCandidateEvaluations >=
+            maximumInitialSlotCandidateEvaluations ||
+            diagnostics.initialSlotCandidateEvaluations - initialEvaluationsAtNodeStart >=
+            maximumInitialCandidatesPerNode) break;
+        const candidate = evaluateSlot(relativeAngle, ideal + radiusOffset);
+        if (candidate) candidates.push(candidate);
+      }
+      const compareSlotCandidates = (left: typeof candidates[number], right: typeof candidates[number]) =>
+        Number(right.insideFrame) - Number(left.insideFrame) ||
+        left.collisionCount - right.collisionCount || left.score - right.score ||
+        left.radialStress - right.radialStress || left.forceDistance - right.forceDistance ||
+        left.top - right.top || left.left - right.left;
+      candidates.sort(compareSlotCandidates);
+      const legalCandidates = candidates.filter((candidate) =>
+        candidate.insideFrame && candidate.collisionCount === 0);
+      const selected = legalCandidates[0];
+      if (selected) {
+        node.x = selected.left;
+        node.y = selected.top;
+        placedRectangles.push(selected.rectangle);
+      } else {
+        placedRectangles.push(rectangleAt(graphNode, node.x!, node.y!));
+      }
     }
-  }
 
-  let nodes = baseline.nodes.map((node) => {
-    const forceNode = forceNodeByPaperKey.get(node.paperKey);
-    return forceNode ? { ...node, left: forceNode.x!, top: forceNode.y! } : node;
-  });
+    nodes = initialGraph.nodes.map((node) => {
+      const forceNode = forceNodeByPaperKey.get(node.paperKey);
+      return forceNode ? { ...node, left: forceNode.x!, top: forceNode.y! } : node;
+    });
+  }
   const graphFromNodes = (nextNodes: readonly PageGraphNode[]): PageGraph => {
     const nodeByKey = new Map(nextNodes.map((node) => [node.paperKey, node] as const));
     return {
-      edges: baseline.edges.map((edge) => {
+      edges: initialGraph.edges.map((edge) => {
         const node = nodeByKey.get(edge.paperKey);
         return node ? { ...edge, nodeLeft: node.left, nodeTop: node.top } : edge;
       }),
-      hiddenCountByAnchor: baseline.hiddenCountByAnchor,
+      hiddenCountByAnchor: initialGraph.hiddenCountByAnchor,
       nodes: nextNodes
     };
   };
@@ -1027,39 +1086,230 @@ function candidateGraph(
     left.sameSideViolations - right.sameSideViolations ||
     left.primaryEdgeCrossings - right.primaryEdgeCrossings ||
     hardViolationCount(left) - hardViolationCount(right) ||
+    Number(left.weightedCrossings > comparisonBaselineQuality.weightedCrossings) -
+      Number(right.weightedCrossings > comparisonBaselineQuality.weightedCrossings) ||
+    Number(left.weightedStress > comparisonBaselineQuality.weightedStress + 1e-9) -
+      Number(right.weightedStress > comparisonBaselineQuality.weightedStress + 1e-9) ||
+    Math.max(0, left.weightedCrossings - comparisonBaselineQuality.weightedCrossings) -
+      Math.max(0, right.weightedCrossings - comparisonBaselineQuality.weightedCrossings) ||
+    Math.max(0, left.weightedStress - comparisonBaselineQuality.weightedStress) -
+      Math.max(0, right.weightedStress - comparisonBaselineQuality.weightedStress) ||
     left.weightedCrossings - right.weightedCrossings ||
     left.weightedStress - right.weightedStress;
+
+  const nonCrossingHardViolations = (candidateQuality: AssociationLayoutQuality) =>
+    candidateQuality.overflowCount + candidateQuality.nodeOverlaps +
+    candidateQuality.anchorObstructions + candidateQuality.sameSideViolations;
+  const crossingBeamApplies = repairMode !== "none" && nonCrossingHardViolations(quality) === 0 &&
+    quality.primaryEdgeCrossings > 0;
+
+  if (crossingBeamApplies) {
+    type CrossingRepairState = {
+      graph: PageGraph;
+      nodes: PageGraphNode[];
+      quality: AssociationLayoutQuality;
+      signature: string;
+    };
+    const stateSignature = (stateNodes: readonly PageGraphNode[]) => [...stateNodes]
+      .sort((left, right) => left.paperKey.localeCompare(right.paperKey))
+      .map((node) => `${node.paperKey}:${node.left.toFixed(3)}:${node.top.toFixed(3)}`)
+      .join("|");
+    const gateVector = (state: CrossingRepairState) => {
+      const candidateQuality = state.quality;
+      return [
+        hardViolationCount(candidateQuality),
+        candidateQuality.primaryEdgeCrossings,
+        Number(candidateQuality.weightedCrossings > comparisonBaselineQuality.weightedCrossings),
+        Math.max(0, candidateQuality.weightedCrossings - comparisonBaselineQuality.weightedCrossings),
+        Number(candidateQuality.weightedStress > comparisonBaselineQuality.weightedStress + 1e-9),
+        Math.max(0, candidateQuality.weightedStress - comparisonBaselineQuality.weightedStress),
+        candidateQuality.weightedCrossings,
+        candidateQuality.weightedStress
+      ];
+    };
+    const compareStates = (left: CrossingRepairState, right: CrossingRepairState) => {
+      const leftVector = gateVector(left);
+      const rightVector = gateVector(right);
+      for (let index = 0; index < leftVector.length; index += 1) {
+        const difference = leftVector[index]! - rightVector[index]!;
+        if (difference !== 0) return difference;
+      }
+      return left.signature.localeCompare(right.signature);
+    };
+    const dominates = (left: CrossingRepairState, right: CrossingRepairState) => {
+      const leftVector = gateVector(left);
+      const rightVector = gateVector(right);
+      return leftVector.every((value, index) => value <= rightVector[index]!) &&
+        leftVector.some((value, index) => value < rightVector[index]!);
+    };
+    const initialState: CrossingRepairState = {
+      graph,
+      nodes,
+      quality,
+      signature: stateSignature(nodes)
+    };
+    let beam = [initialState];
+    let bestState = initialState;
+    let acceptedState: CrossingRepairState | undefined;
+    let greedyHandoffState: CrossingRepairState | undefined;
+
+    crossingBeamSearch:
+    for (let depth = 0; depth < maximumRepairRounds; depth += 1) {
+      if (repairSearchBudgetIsExhausted(diagnostics)) break;
+      diagnostics.repairRounds += 1;
+      const nextStates: CrossingRepairState[] = [...beam];
+      const expansionTasks = beam.flatMap((state) =>
+        [...primaryCrossingPaperKeys(input, state.graph)].sort().map((paperKey) => ({ paperKey, state })))
+        .slice(0, maximumRepairNodesVisited - diagnostics.repairNodesVisited);
+      if (expansionTasks.length === 0) break;
+
+      for (const { paperKey, state } of expansionTasks) {
+        if (repairSearchBudgetIsExhausted(diagnostics)) break crossingBeamSearch;
+        diagnostics.repairNodesVisited += 1;
+        const nodeIndex = state.nodes.findIndex((node) => node.paperKey === paperKey);
+        const repairNode = state.nodes[nodeIndex];
+        const anchorId = repairNode?.anchorIds[0];
+        const anchor = anchorId ? anchorById.get(anchorId) : undefined;
+        const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
+        if (nodeIndex < 0 || !repairNode || !anchor || !side) continue;
+        const centre = anchorCentre(primaryAnchorRect(anchor));
+        const ideal = nearRadius + (1 - repairNode.relevance) * radiusSpread;
+        let evaluatedForNode = 0;
+
+        for (const { radiusOffset, relativeAngle } of repairCoarsePolarOffsets) {
+          if (evaluatedForNode >= maximumCrossingRepairCandidatesPerExpansion ||
+              diagnostics.repairCandidateEvaluations >= maximumRepairCandidateEvaluations) break;
+          const radius = ideal + radiusOffset;
+          const angle = (side === "right" ? 0 : Math.PI) + relativeAngle;
+          const candidateNode = {
+            ...repairNode,
+            left: centre.left + Math.cos(angle) * radius,
+            top: centre.top + Math.sin(angle) * radius
+          };
+          if (candidateNode.left - pageGraphNodeWidth / 2 < frameInsetHorizontal ||
+              candidateNode.left + pageGraphNodeWidth / 2 > input.frameWidth - frameInsetHorizontal ||
+              candidateNode.top - pageGraphNodeHeight / 2 < frameInsetVertical ||
+              candidateNode.top + pageGraphNodeHeight / 2 > input.documentHeight - frameInsetVertical) {
+            continue;
+          }
+          evaluatedForNode += 1;
+          diagnostics.repairCandidateEvaluations += 1;
+          const candidateNodes = [...state.nodes];
+          candidateNodes[nodeIndex] = candidateNode;
+          const candidateGraph = graphFromNodes(candidateNodes);
+          const candidateQuality = evaluateAssociationLayout(input, candidateGraph);
+          const candidateState: CrossingRepairState = {
+            graph: candidateGraph,
+            nodes: candidateNodes,
+            quality: candidateQuality,
+            signature: stateSignature(candidateNodes)
+          };
+          if (candidateIsAccepted(candidateQuality, comparisonBaselineQuality)) {
+            acceptedState = candidateState;
+            break crossingBeamSearch;
+          }
+          nextStates.push(candidateState);
+        }
+      }
+
+      const stateBySignature = new Map<string, CrossingRepairState>();
+      for (const state of nextStates.sort(compareStates)) {
+        if (!stateBySignature.has(state.signature)) stateBySignature.set(state.signature, state);
+      }
+      const uniqueStates = [...stateBySignature.values()];
+      greedyHandoffState = uniqueStates.filter((state) =>
+        state.quality.primaryEdgeCrossings === 0 && nonCrossingHardViolations(state.quality) > 0 &&
+        state.quality.weightedCrossings <= comparisonBaselineQuality.weightedCrossings &&
+        state.quality.weightedStress <= comparisonBaselineQuality.weightedStress + 1e-9)
+        .sort((left, right) =>
+          nonCrossingHardViolations(left.quality) - nonCrossingHardViolations(right.quality) ||
+          compareStates(left, right))[0];
+      if (greedyHandoffState) break;
+      const paretoStates = uniqueStates.filter((candidate) =>
+        !uniqueStates.some((other) => other !== candidate && dominates(other, candidate)))
+        .sort(compareStates);
+      const crossingLevels = new Set<number>();
+      const diverseStates = paretoStates.filter((state) => {
+        const crossings = state.quality.primaryEdgeCrossings;
+        if (crossingLevels.has(crossings)) return false;
+        crossingLevels.add(crossings);
+        return true;
+      });
+      beam = [...diverseStates, ...paretoStates.filter((state) => !diverseStates.includes(state))]
+        .slice(0, maximumCrossingRepairBeamWidth)
+        .sort(compareStates);
+      if (beam.length === 0) break;
+      if (compareStates(beam[0]!, bestState) < 0) bestState = beam[0]!;
+    }
+
+    const selectedState = acceptedState ?? greedyHandoffState ?? bestState;
+    nodes = selectedState.nodes;
+    graph = selectedState.graph;
+    quality = selectedState.quality;
+  }
 
   // Greedy rectangle placement can leave one late node without a legal slot on a dense line of
   // adjacent anchors. A deterministic local repair lets every node try the same sector lattice
   // against the completed graph, accepting only an objectively better measured layout.
-  for (let round = 0; repairMode !== "none" && round < maximumRepairRounds; round += 1) {
-    const violatingPaperKeys = hardViolationPaperKeys(input, graph, sideByAnchor);
-    if (repairMode === "soft") {
-      softRepairPaperKeys(input, graph, baseline, quality, baselineQuality)
+  repairRounds:
+  for (let round = 0; (!crossingBeamApplies || nonCrossingHardViolations(quality) > 0) &&
+      repairMode !== "none" &&
+      round < maximumRepairRounds; round += 1) {
+    if (repairSearchBudgetIsExhausted(diagnostics)) break;
+    const directViolationPaperKeys = hardViolationPaperKeys(input, graph, sideByAnchor);
+    const violatingPaperKeys = new Set(directViolationPaperKeys);
+    if (repairMode === "soft" && directViolationPaperKeys.size === 0) {
+      softRepairPaperKeys(
+        input,
+        graph,
+        comparisonBaselineGraph,
+        quality,
+        comparisonBaselineQuality
+      )
         .forEach((paperKey) => violatingPaperKeys.add(paperKey));
       expandRepairConstraintClosure(input, graph, violatingPaperKeys);
     }
     if (violatingPaperKeys.size === 0) break;
     diagnostics.repairRounds += 1;
     let roundImproved = false;
+    const proposals: Array<{
+      node: PageGraphNode;
+      paperKey: string;
+      quality: AssociationLayoutQuality;
+    }> = [];
     const repairOrder = nodes.filter((node) => violatingPaperKeys.has(node.paperKey))
       .sort((left, right) =>
+      Number(directViolationPaperKeys.has(right.paperKey)) -
+        Number(directViolationPaperKeys.has(left.paperKey)) ||
       Number(right.isDot) - Number(left.isDot) || left.relevance - right.relevance ||
-      left.paperKey.localeCompare(right.paperKey));
-    for (const repairNode of repairOrder) {
+      left.paperKey.localeCompare(right.paperKey))
+      .slice(0, maximumRepairNodesVisited - diagnostics.repairNodesVisited);
+    for (const [repairIndex, repairNode] of repairOrder.entries()) {
+      const remainingRepairNodes = repairOrder.length - repairIndex;
+      const remainingRepairBudget = maximumRepairCandidateEvaluations -
+        diagnostics.repairCandidateEvaluations;
+      const nodeCandidateBudget = Math.max(0, Math.floor(
+        (remainingRepairBudget - remainingRepairNodes) / Math.max(1, remainingRepairNodes)
+      ));
+      const nodeCandidateLimit = diagnostics.repairCandidateEvaluations + nodeCandidateBudget;
+      if (nodeCandidateBudget === 0 || diagnostics.repairNodesVisited >= maximumRepairNodesVisited) break;
       diagnostics.repairNodesVisited += 1;
       const nodeIndex = nodes.findIndex((node) => node.paperKey === repairNode.paperKey);
       const anchorId = repairNode.anchorIds[0];
       const anchor = anchorId ? anchorById.get(anchorId) : undefined;
       const side = anchorId ? sideByAnchor.get(anchorId) : undefined;
       if (nodeIndex < 0 || !anchor || !side) continue;
-      const centre = anchorCentre(anchor.rect);
+      const centre = anchorCentre(primaryAnchorRect(anchor));
       const ideal = nearRadius + (1 - repairNode.relevance) * radiusSpread;
       let bestNodes = nodes;
-      let bestGraph = graph;
       let bestQuality = quality;
       const seenCandidates = new Set<string>();
+      const evaluatedRepairCandidates: Array<{
+        candidateNodes: PageGraphNode[];
+        candidateQuality: AssociationLayoutQuality;
+        radius: number;
+        relativeAngle: number;
+      }> = [];
       const evaluateRepairSlot = (relativeAngle: number, radius: number) => {
         const signature = `${relativeAngle.toFixed(6)}:${radius.toFixed(3)}`;
         if (seenCandidates.has(signature) || radius < 96 ||
@@ -1083,33 +1333,55 @@ function candidateGraph(
         const candidateGraph = graphFromNodes(candidateNodes);
         const candidateQuality = evaluateAssociationLayout(input, candidateGraph);
         const candidate = { candidateGraph, candidateNodes, candidateQuality, radius, relativeAngle };
+        evaluatedRepairCandidates.push(candidate);
         if (compareQuality(candidateQuality, bestQuality) < 0) {
           bestNodes = candidateNodes;
-          bestGraph = candidateGraph;
           bestQuality = candidateQuality;
         }
         return candidate;
       };
-      const activeRepairAngles = repairCoarseRelativeAngles;
-      const activeRepairRadii = repairCoarseRadiusOffsets;
-      const coarseCandidates = activeRepairAngles.flatMap((relativeAngle) =>
-        activeRepairRadii.flatMap((radiusOffset) =>
-          evaluateRepairSlot(relativeAngle, ideal + radiusOffset) ?? []));
-      coarseCandidates.sort((left, right) => compareQuality(left.candidateQuality, right.candidateQuality) ||
-        left.radius - right.radius || left.relativeAngle - right.relativeAngle);
-      const seedByAngle = new Map<number, typeof coarseCandidates[number]>();
-      for (const candidate of coarseCandidates) {
-        if (!seedByAngle.has(candidate.relativeAngle)) seedByAngle.set(candidate.relativeAngle, candidate);
+      repairCandidateSearch:
+      for (const { radiusOffset, relativeAngle } of repairCoarsePolarOffsets) {
+        if (diagnostics.repairCandidateEvaluations >= nodeCandidateLimit ||
+            diagnostics.repairCandidateEvaluations >=
+              maximumRepairCandidateEvaluations) break repairCandidateSearch;
+        const candidate = evaluateRepairSlot(relativeAngle, ideal + radiusOffset);
       }
-      for (const seed of seedByAngle.values()) {
+      evaluatedRepairCandidates.sort((left, right) =>
+        compareQuality(left.candidateQuality, right.candidateQuality) ||
+        left.radius - right.radius || left.relativeAngle - right.relativeAngle);
+      for (const seed of evaluatedRepairCandidates.slice(0, maximumRepairFineSeeds)) {
         for (const radiusOffset of repairFineRadiusOffsets) {
+          if (diagnostics.repairCandidateEvaluations >= nodeCandidateLimit ||
+              diagnostics.repairCandidateEvaluations >=
+              maximumRepairCandidateEvaluations) break;
           evaluateRepairSlot(seed.relativeAngle, seed.radius + radiusOffset);
         }
       }
-      nodes = bestNodes;
-      graph = bestGraph;
-      if (compareQuality(bestQuality, quality) < 0) roundImproved = true;
-      quality = bestQuality;
+      const proposedNode = bestNodes[nodeIndex];
+      if (proposedNode && compareQuality(bestQuality, quality) < 0) {
+        proposals.push({ node: proposedNode, paperKey: repairNode.paperKey, quality: bestQuality });
+      }
+      if (diagnostics.repairCandidateEvaluations >= maximumRepairCandidateEvaluations) break;
+    }
+    proposals.sort((left, right) => compareQuality(left.quality, right.quality) ||
+      left.paperKey.localeCompare(right.paperKey) || left.node.top - right.node.top ||
+      left.node.left - right.node.left);
+    for (const proposal of proposals) {
+      if (diagnostics.repairCandidateEvaluations >= maximumRepairCandidateEvaluations) break;
+      const nodeIndex = nodes.findIndex((node) => node.paperKey === proposal.paperKey);
+      if (nodeIndex < 0) continue;
+      diagnostics.repairCandidateEvaluations += 1;
+      const candidateNodes = [...nodes];
+      candidateNodes[nodeIndex] = proposal.node;
+      const candidateGraph = graphFromNodes(candidateNodes);
+      const candidateQuality = evaluateAssociationLayout(input, candidateGraph);
+      if (compareQuality(candidateQuality, quality) < 0) {
+        nodes = candidateNodes;
+        graph = candidateGraph;
+        quality = candidateQuality;
+        roundImproved = true;
+      }
     }
     if (!roundImproved) break;
   }
@@ -1164,7 +1436,7 @@ function candidateIsAccepted(candidate: AssociationLayoutQuality, baseline: Asso
     candidate.weightedStress <= baseline.weightedStress + 1e-9;
 }
 
-export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): ConstrainedPageGraph {
+function layoutConstrainedAssociationPageGraphAttempt(input: PageGraphInput): ConstrainedPageGraph {
   const searchDiagnostics: AssociationLayoutSearchDiagnostics = {
     initialSlotCandidateEvaluations: 0,
     repairCandidateEvaluations: 0,
@@ -1185,17 +1457,29 @@ export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): Co
     (anchorValueById.get(right) ?? 0) - (anchorValueById.get(left) ?? 0) ||
     left.localeCompare(right));
   const sideVariants = createAssociationSideVariants(preferredSides, anchorPriority);
+  const nodeCount = Math.max(1, baseline.nodes.length);
+  const explorationCandidatesPerNode = Math.max(1, Math.floor(
+    initialExplorationBudget / Math.max(1, sideVariants.length) / nodeCount
+  ));
   const candidates: Array<{
     graph: PageGraph;
     quality: AssociationLayoutQuality;
     sides: ReadonlyMap<string, AssociationSide>;
   }> = [];
   for (const sides of sideVariants) {
+    if (initialSearchBudgetIsExhausted(searchDiagnostics)) break;
     searchDiagnostics.sideVariantsEvaluated += 1;
-    const graph = candidateGraph(input, baseline, baselineQuality, sides, searchDiagnostics, "none");
+    const graph = candidateGraph(
+      input,
+      baseline,
+      baselineQuality,
+      sides,
+      searchDiagnostics,
+      "none",
+      explorationCandidatesPerNode
+    );
     const quality = evaluateAssociationLayout(input, graph);
     candidates.push({ graph, quality, sides });
-    if (candidateIsAccepted(quality, baselineQuality)) break;
   }
   const compareCandidate = (left: typeof candidates[number], right: typeof candidates[number]) => {
       const hardViolations = (quality: AssociationLayoutQuality) => quality.primaryEdgeCrossings +
@@ -1217,9 +1501,9 @@ export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): Co
       left.quality.weightedCrossings - right.quality.weightedCrossings ||
       left.quality.weightedStress - right.quality.weightedStress;
     };
-  const distinctSideCandidates = (limit: number) => {
+  const distinctSideCandidates = (orderedCandidates: readonly typeof candidates[number][], limit: number) => {
     const signatures = new Set<string>();
-    return candidates.filter((candidate) => {
+    return orderedCandidates.filter((candidate) => {
       const signature = sideVariantSignature(candidate.sides);
       if (signatures.has(signature)) return false;
       signatures.add(signature);
@@ -1227,13 +1511,101 @@ export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): Co
     }).slice(0, limit);
   };
   candidates.sort(compareCandidate);
-  if (!candidates.some((candidate) => candidateIsAccepted(candidate.quality, baselineQuality))) {
-    for (const { sides } of distinctSideCandidates(2)) {
+  const refinedCandidates: typeof candidates = [];
+  if (!candidates.some((candidate) => candidateIsAccepted(candidate.quality, baselineQuality)) &&
+      !initialSearchBudgetIsExhausted(searchDiagnostics)) {
+    const domainFeasibleCandidate = [...candidates].sort((left, right) =>
+      Number(right.quality.sameSideViolations === 0) - Number(left.quality.sameSideViolations === 0) ||
+      left.quality.primaryEdgeCrossings - right.quality.primaryEdgeCrossings ||
+      hardViolationCount(left.quality) - hardViolationCount(right.quality) ||
+      sideVariantSignature(left.sides).localeCompare(sideVariantSignature(right.sides)))[0];
+    const refinementSeeds = distinctSideCandidates([
+      ...candidates.slice(0, 3),
+      ...(domainFeasibleCandidate ? [domainFeasibleCandidate] : [])
+    ], maximumRefinementSeeds);
+    const refinementCandidatesPerNode = Math.min(
+      maximumInitialCandidatesPerNode,
+      Math.floor(
+        Math.min(
+          initialBeamRefinementBudget,
+          maximumInitialSlotCandidateEvaluations - searchDiagnostics.initialSlotCandidateEvaluations
+        ) /
+          Math.max(1, refinementSeeds.length) / nodeCount
+      )
+    );
+    if (refinementCandidatesPerNode > 0) {
+      for (const refinementSeed of refinementSeeds) {
+        const graph = candidateGraph(
+          input,
+          baseline,
+          baselineQuality,
+          refinementSeed.sides,
+          searchDiagnostics,
+          "none",
+          refinementCandidatesPerNode
+        );
+        refinedCandidates.push({
+          graph,
+          quality: evaluateAssociationLayout(input, graph),
+          sides: refinementSeed.sides
+        });
+      }
+      candidates.push(...refinedCandidates);
+      candidates.sort(compareCandidate);
+    }
+  }
+  if (!candidates.some((candidate) => candidateIsAccepted(candidate.quality, baselineQuality)) &&
+      refinedCandidates.length > 0 && !initialSearchBudgetIsExhausted(searchDiagnostics)) {
+    const finalRefinementSeed = [...refinedCandidates].sort(compareCandidate)[0]!;
+    const finalRefinementCandidatesPerNode = Math.min(
+      maximumInitialCandidatesPerNode,
+      Math.floor(
+        (maximumInitialSlotCandidateEvaluations - searchDiagnostics.initialSlotCandidateEvaluations) /
+          nodeCount
+      )
+    );
+    if (finalRefinementCandidatesPerNode > 0) {
+      const graph = candidateGraph(
+        input,
+        baseline,
+        baselineQuality,
+        finalRefinementSeed.sides,
+        searchDiagnostics,
+        "none",
+        finalRefinementCandidatesPerNode
+      );
+      const finalRefinementCandidate = {
+        graph,
+        quality: evaluateAssociationLayout(input, graph),
+        sides: finalRefinementSeed.sides
+      };
+      refinedCandidates.push(finalRefinementCandidate);
+      candidates.push(finalRefinementCandidate);
+      candidates.sort(compareCandidate);
+    }
+  }
+  if (!candidates.some((candidate) => candidateIsAccepted(candidate.quality, baselineQuality)) &&
+      !repairSearchBudgetIsExhausted(searchDiagnostics)) {
+    const repairSeeds = refinedCandidates.length > 0
+      ? [...refinedCandidates].sort(compareCandidate).slice(0, 2)
+      : distinctSideCandidates(candidates, 2);
+    for (const { graph: initialGraph, sides } of repairSeeds) {
+      if (repairSearchBudgetIsExhausted(searchDiagnostics)) break;
       searchDiagnostics.softVariantsEvaluated += 1;
-      const graph = candidateGraph(input, baseline, baselineQuality, sides, searchDiagnostics, "soft");
+      const graph = candidateGraph(
+        input,
+        initialGraph,
+        baselineQuality,
+        sides,
+        searchDiagnostics,
+        "soft",
+        0,
+        baseline
+      );
       const quality = evaluateAssociationLayout(input, graph);
       candidates.push({ graph, quality, sides });
       if (candidateIsAccepted(quality, baselineQuality)) break;
+      if (repairSearchBudgetIsExhausted(searchDiagnostics)) break;
     }
     candidates.sort(compareCandidate);
   }
@@ -1249,5 +1621,83 @@ export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): Co
     paperEdges: projectedPaperEdges(input, graph),
     quality: accepted ? candidateQuality : baselineQuality,
     searchDiagnostics
+  };
+}
+
+function compareCoverageSources(left: ThinReadingExternalSource, right: ThinReadingExternalSource) {
+  return right.relevance - left.relevance ||
+    (right.confidence ?? 0.3) - (left.confidence ?? 0.3) ||
+    left.id.localeCompare(right.id) ||
+    left.provider.localeCompare(right.provider) ||
+    left.sourceId.localeCompare(right.sourceId);
+}
+
+function graphPaperKey(input: PageGraphInput, source: ThinReadingExternalSource) {
+  return input.paperKeyBySource?.get(source) ?? pageGraphPaperKey(source);
+}
+
+function coveragePageGraphInput(input: PageGraphInput) {
+  const sourcesByAnchor = Object.fromEntries(Object.entries(input.sourcesByAnchor).map(
+    ([anchorId, sources]) => [anchorId, [...sources].sort(compareCoverageSources).slice(0, 1)]
+  ));
+  const selectedSources = Object.values(sourcesByAnchor).flat();
+  const selectedPaperKeys = new Set(selectedSources.map((source) => graphPaperKey(input, source)));
+  const paperKeyBySource = new Map(selectedSources.map((source) => [
+    source,
+    graphPaperKey(input, source)
+  ] as const));
+  return {
+    ...input,
+    multiAnchorPaperKeys: new Set([...(input.multiAnchorPaperKeys ?? [])]
+      .filter((paperKey) => selectedPaperKeys.has(paperKey))),
+    paperEdges: (input.paperEdges ?? []).filter((edge) =>
+      selectedPaperKeys.has(edge.sourcePaperKey) && selectedPaperKeys.has(edge.targetPaperKey)),
+    paperKeyBySource,
+    sourcesByAnchor
+  } satisfies PageGraphInput;
+}
+
+function hiddenCountByAnchor(input: PageGraphInput, graph: PageGraph) {
+  const visiblePaperKeys = new Set(graph.nodes.map((node) => node.paperKey));
+  return Object.fromEntries(Object.entries(input.sourcesByAnchor).flatMap(([anchorId, sources]) => {
+    const hidden = sources.filter((source) =>
+      !visiblePaperKeys.has(graphPaperKey(input, source))).length;
+    return hidden > 0 ? [[anchorId, hidden]] : [];
+  }));
+}
+
+export function layoutConstrainedAssociationPageGraph(input: PageGraphInput): ConstrainedPageGraph {
+  const full = layoutConstrainedAssociationPageGraphAttempt(input);
+  if (hardViolationCount(full.quality) === 0) return full;
+
+  const coverageInput = coveragePageGraphInput(input);
+  const fullSourceCount = Object.values(input.sourcesByAnchor)
+    .reduce((count, sources) => count + sources.length, 0);
+  const coverageSourceCount = Object.values(coverageInput.sourcesByAnchor)
+    .reduce((count, sources) => count + sources.length, 0);
+  if (coverageSourceCount < fullSourceCount) {
+    const coverage = layoutConstrainedAssociationPageGraphAttempt(coverageInput);
+    if (hardViolationCount(coverage.quality) === 0) {
+      return {
+        ...coverage,
+        hiddenCountByAnchor: hiddenCountByAnchor(input, coverage),
+        layoutSource: "degraded"
+      };
+    }
+  }
+
+  const graph: PageGraph = {
+    edges: [],
+    hiddenCountByAnchor: hiddenCountByAnchor(input, { edges: [], hiddenCountByAnchor: {}, nodes: [] }),
+    nodes: []
+  };
+  return {
+    ...graph,
+    baselineQuality: full.baselineQuality,
+    candidateQuality: full.candidateQuality,
+    layoutSource: "degraded",
+    paperEdges: [],
+    quality: evaluateAssociationLayout(input, graph),
+    searchDiagnostics: full.searchDiagnostics
   };
 }

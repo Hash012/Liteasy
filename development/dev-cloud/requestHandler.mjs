@@ -742,6 +742,7 @@ function executeLibraryMutation(
       "A valid expected library revision is required."
     );
   }
+  const { sessionId: _sessionId, ...requestInput } = body;
   const result = repository.runIdempotent(
     scope.actorId,
     libraryMutationKey(request, body),
@@ -755,7 +756,8 @@ function executeLibraryMutation(
         });
       }
       return value;
-    }
+    },
+    requestInput
   );
   return {
     ...result.value,
@@ -2943,6 +2945,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         if (Object.prototype.hasOwnProperty.call(body, "fileName")) changes.fileName = body.fileName;
         if (Object.prototype.hasOwnProperty.call(body, "folderId")) changes.folderId = body.folderId;
         if (Object.prototype.hasOwnProperty.call(body, "title")) changes.title = body.title;
+        if (Object.prototype.hasOwnProperty.call(body, "literature")) changes.literature = body.literature;
         changes.expectedRevision = body.expectedRevision;
         writeJson(request, response, 200, executeLibraryMutation(
           request,
@@ -3195,6 +3198,7 @@ export function createDevCloudRequestHandler(customConfig = {}) {
         writeJson(request, response, 200, {
           document,
           expiresAt: new Date(serverNow.getTime() + 5 * 60 * 1000).toISOString(),
+          revision: libraryStorageRepository.getRevision(scope.scopeType, scope.scopeId),
           serverNow: serverNow.toISOString()
         });
       } catch (error) {

@@ -15,10 +15,7 @@ function context(): ForumContext {
       anchorHash: "sha256:source",
       excerpt: "一段选文",
       kind: "source_passage",
-      literature: {
-        identity,
-        metadata: { authors: ["Author"], title: "Reliable Paper", year: 2025 }
-      },
+      literature: { literatureId: "lit_01J00000000000000000000000" },
       page: 7,
       rects: []
     }]
@@ -26,6 +23,35 @@ function context(): ForumContext {
 }
 
 describe("forum client", () => {
+  test("resolves and confirms literature with late-bound authentication", async () => {
+    let sessionId = "session-1";
+    const fetchMock = vi.fn(async (url: string) => ({
+      json: async () => url.endsWith(":resolve")
+        ? { candidates: [], status: "not_found", unavailableProviders: [] }
+        : { literature: { literatureId: "literature-1", title: "Paper" } },
+      ok: true,
+      status: 200
+    }));
+    const client = createForumClient({
+      apiBaseUrl: "http://forum.test",
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      getSessionId: () => sessionId
+    });
+
+    await client.resolveLiterature({ purpose: "liteasy_pdf_annotation", query: "Paper" });
+    sessionId = "session-2";
+    await client.confirmLiterature({ candidateKey: "candidate-1", mode: "candidate" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://forum.test/v1/literature:resolve", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer session-1", "Content-Type": "application/json" }),
+      method: "POST"
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://forum.test/v1/literature:confirm", expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer session-2", "Content-Type": "application/json" }),
+      method: "POST"
+    }));
+  });
+
   test("creates an annotation handoff without a topic or server work mapping", async () => {
     const fetchMock = vi.fn(async () => ({
       json: async () => ({ expiresAt: "2026-08-07T01:05:00.000Z", handoffId: "handoff-1" }),
@@ -55,9 +81,9 @@ describe("forum client", () => {
     }));
     const client = createForumClient({ apiBaseUrl: "http://forum.test", fetchImpl: fetchMock as unknown as typeof fetch, sessionId: "desktop-token" });
 
-    await client.feed({ paperIdentity: identity });
+    await client.feed({ literatureId: "lit_01J00000000000000000000000" });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://forum.test/v1/plaza?limit=3&literatureIdentityKind=doi&literatureIdentityValue=10.1000%2Freliable&sort=recommended", expect.objectContaining({ headers: {} }));
+    expect(fetchMock).toHaveBeenCalledWith("http://forum.test/v1/plaza?limit=3&literatureId=lit_01J00000000000000000000000&sort=recommended", expect.objectContaining({ headers: {} }));
   });
 
   test("includes annotation text in the one-time handoff", async () => {

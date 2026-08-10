@@ -50,7 +50,8 @@ try {
     "020_visualization_control_plane.sql",
     "021_visualization_final_review.sql",
     "022_visualization_cost_policy_lifecycle.sql",
-    "023_visualization_generation_requests.sql"
+    "023_visualization_generation_requests.sql",
+    "024_literature_projections.sql"
   ]);
   await assert.rejects(
     () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),
@@ -1565,7 +1566,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     auditEvents: verifiedAudit.rows[0].count,
     accountDeletion: true,
-    migrations: 23,
+    migrations: 24,
     revision: 12,
     verified: true
   })}\n`);

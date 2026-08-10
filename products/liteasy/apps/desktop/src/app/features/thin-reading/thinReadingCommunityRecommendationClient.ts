@@ -1,12 +1,11 @@
 import type { ModelTransportResponse } from "../models/modelHttpClient";
-import type { PaperIdentityCandidate, PaperIdentityKind } from "../paper-identity/paperIdentity";
 import type { ThinReadingRecommendationScope } from "./thinReading.types";
 
 export type ThinReadingCommunityRecommendation = {
   compatibility: number;
   id: string;
   note: string;
-  paperIdentity: PaperIdentityCandidate;
+  literatureId: string;
   relationship: string;
   source: "intuecho_community";
 };
@@ -26,14 +25,6 @@ type CommunityRecommendationPayload = {
   recommendations: ThinReadingCommunityRecommendation[];
 };
 
-const paperIdentityKinds = new Set<PaperIdentityKind>([
-  "doi",
-  "arxiv_id",
-  "semantic_scholar_id",
-  "title_authors_year_hash",
-  "local_paper_id"
-]);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -50,32 +41,19 @@ function communityRecommendationUrl(endpoint: string) {
   return url.toString();
 }
 
-function isPaperIdentityCandidate(value: unknown): value is PaperIdentityCandidate {
-  return isRecord(value) && typeof value.id === "string" &&
-    typeof value.kind === "string" && paperIdentityKinds.has(value.kind as PaperIdentityKind) &&
-    (value.source === "inferred" || value.source === "local" || value.source === "metadata") &&
-    typeof value.value === "string" && value.value.trim().length > 0;
-}
-
 function isCommunityRecommendation(
   value: unknown,
-  expectedIdentity: PaperIdentityCandidate
+  literatureId: string
 ): value is ThinReadingCommunityRecommendation {
   return isRecord(value) && typeof value.id === "string" && value.id.trim().length > 0 &&
     typeof value.relationship === "string" && value.relationship.trim().length > 0 &&
     typeof value.note === "string" && value.note.trim().length > 0 &&
     typeof value.compatibility === "number" && Number.isFinite(value.compatibility) &&
     value.compatibility >= 0 && value.compatibility <= 1 &&
-    value.source === "intuecho_community" && isPaperIdentityCandidate(value.paperIdentity) &&
-    value.paperIdentity.kind === expectedIdentity.kind && value.paperIdentity.value === expectedIdentity.value;
+    value.source === "intuecho_community" && value.literatureId === literatureId;
 }
 
-function communityIdentity(scope: ThinReadingRecommendationScope) {
-  const primary = scope.paperIdentity?.primary;
-  return primary && primary.kind !== "local_paper_id" ? primary : undefined;
-}
-
-function communityScopePayload(scope: ThinReadingRecommendationScope, paperIdentity: PaperIdentityCandidate) {
+function communityScopePayload(scope: ThinReadingRecommendationScope, literatureId: string) {
   return {
     ...(scope.kind === "section" ? { sectionKey: scope.sectionKey } : {}),
     ...(scope.kind === "selected_passage" ? {
@@ -83,12 +61,7 @@ function communityScopePayload(scope: ThinReadingRecommendationScope, paperIdent
       externalSourceIds: scope.externalSourceIds ?? []
     } : {}),
     kind: scope.kind === "whole_paper" ? "document" : scope.kind,
-    paperIdentity: {
-      id: paperIdentity.id,
-      kind: paperIdentity.kind,
-      source: paperIdentity.source,
-      value: paperIdentity.value
-    }
+    literatureId
   };
 }
 
@@ -103,7 +76,7 @@ async function defaultTransport(
 }
 
 export function hasThinReadingCommunityIdentity(scope: ThinReadingRecommendationScope) {
-  return Boolean(communityIdentity(scope));
+  return Boolean(scope.literatureId?.trim());
 }
 
 export function createThinReadingCommunityRecommendationClient(input: {
@@ -114,15 +87,15 @@ export function createThinReadingCommunityRecommendationClient(input: {
   const transport = input.transport ?? defaultTransport;
 
   return async (scope: ThinReadingRecommendationScope): Promise<readonly ThinReadingCommunityRecommendation[]> => {
-    const paperIdentity = communityIdentity(scope);
-    if (!paperIdentity) {
-      throw new Error("当前文献只有本地身份，无法读取 Intuecho 社区推荐。");
+    const literatureId = scope.literatureId?.trim();
+    if (!literatureId) {
+      throw new Error("当前文献尚未完成来源确认，无法读取 Intuecho 社区推荐。");
     }
     if (!input.sessionId) {
       throw new Error("请先登录 Liteasy 再读取 Intuecho 社区推荐。");
     }
     const response = await transport({
-      body: JSON.stringify({ scope: communityScopePayload(scope, paperIdentity) }),
+      body: JSON.stringify({ scope: communityScopePayload(scope, literatureId) }),
       headers: { Authorization: `Bearer ${input.sessionId}`, "content-type": "application/json" },
       method: "POST",
       url: communityRecommendationUrl(input.endpoint)
@@ -132,14 +105,14 @@ export function createThinReadingCommunityRecommendationClient(input: {
     }
     const payload = await response.json();
     if (!isRecord(payload) || !Array.isArray(payload.recommendations) ||
-      !payload.recommendations.every((item) => isCommunityRecommendation(item, paperIdentity))) {
+      !payload.recommendations.every((item) => isCommunityRecommendation(item, literatureId))) {
       throw new Error("Intuecho 社区推荐响应无效或不属于当前文献。");
     }
     return Object.freeze(payload.recommendations.map((recommendation) => Object.freeze({
       compatibility: recommendation.compatibility,
       id: recommendation.id,
       note: recommendation.note,
-      paperIdentity: Object.freeze({ ...recommendation.paperIdentity }),
+      literatureId: recommendation.literatureId,
       relationship: recommendation.relationship,
       source: "intuecho_community" as const
     })));
