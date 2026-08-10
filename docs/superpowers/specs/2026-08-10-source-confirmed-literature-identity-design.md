@@ -15,6 +15,41 @@
 
 `development/dev-cloud` 另有早期 `works + work_identifiers` 模型，包含 `is_preprint_of` 等关系，但它不属于正式 Liteasy/Intuecho 文献持久化边界，不能作为生产身份真源。
 
+## 实施约束
+
+### 简洁性优先
+
+实现以现有 Intuecho literature resolver、provider adapters、`literature_records` 和 `literature_identities` 为主线，不新增第三套身份服务、不提取跨产品运行时公共包，也不让 Liteasy API、Intuecho API 或 `development/dev-cloud` 共享数据库和凭据。
+
+来源等级、确认状态和版本关系必须各有一个明确真源。Desktop 只负责提取有限线索、展示候选和持久化确认结果；Intuecho 负责 provider 编排、确认策略和正式文献关系。Liteasy API 只保存并校验 Liteasy 自身文献树中的确认投影，不重复执行外部身份裁决。
+
+不为了兼容旧版本长期保留两条可写业务路径。兼容代码只允许读取旧数据并投影到新契约，不能继续创建旧格式身份。
+
+### 旧代码删除标准
+
+下列旧行为在新链路覆盖并通过迁移验证后删除，而不是继续隐藏在分支中：
+
+- Desktop 生成并优先使用八位 FNV 题名作者年份身份的写入路径；只保留旧值识别和只读别名查询；
+- 仅凭人工题名、作者、年份直接创建正式 `manual` 文献的 UI、contract 分支和 repository 写入路径；人工输入改为候选检索线索；
+- 允许未确认 `PaperIdentity` 绕过 `LiteratureRecord` 进入引用、公开批注或社区同步的旧判断；
+- 被新来源等级策略完整替代、且没有其他调用者的 provider 确认分支和重复 schema。
+
+删除前必须逐项证明：调用点已迁移、旧数据仍可读取、不可变迁移可在空库和已有库执行、专项回归覆盖旧记录、生产构建不再引用目标代码。无法满足这些条件的代码不能以“看似旧”为由删除，应先收敛为有截止条件的只读兼容适配器。
+
+`development/dev-cloud works` 当前仍被标签、索引和推荐开发链路使用，不默认视为死代码。本轮只阻止它成为正式引用身份真源；是否删除或合并必须另行完成调用和数据审计，避免把身份改造扩大成无关重构。
+
+### 快速交付策略
+
+在不降低确认标准和迁移安全性的前提下，采用最短纵向主链：
+
+1. 先用共享 conformance fixture 和 contract tests 固定来源等级、正式状态、版本关系及旧数据只读规则；
+2. 复用现有四个 provider adapters，在 resolver 内增加分级裁决和重新抓取证据，不重写传输层；
+3. 用一份新的 Intuecho 不可变迁移增加确认状态、身份验证证据和版本关系，优先扩展现有表而非复制表；
+4. 收紧 Desktop 发布门槛并删除已被替代的人工正式确认和旧指纹写入路径；
+5. 先运行受影响窄测试快速反馈，再运行 Intuecho、Desktop、Liteasy API 完整测试及 Desktop 构建。
+
+可独立的 contract、repository、resolver 和 Desktop 适配工作可以并行推进，但数据库契约与状态语义必须先固定。不得通过跳过失败隔离、迁移复验、旧数据兼容测试或完整构建来换取速度。
+
 ## 身份分层
 
 ```text
