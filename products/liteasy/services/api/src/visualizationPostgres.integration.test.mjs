@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import { withPostgresTransaction } from "./postgres.mjs";
+import { PostgresAccountLifecycleRepository } from "./accountLifecycleRepository.mjs";
 import { createVisualizationTestPool, cleanupVisualizationTestSubject } from "./testSupport/visualizationTestPool.mjs";
 import { validateVisualizationArtifact } from "./visualizationArtifactValidator.mjs";
 import { canonicalVisualizationArtifact } from "./visualizationArtifactTestFixture.mjs";
@@ -470,6 +471,7 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
     updatedBy: adminId
   };
   let documentFixture;
+  let secondaryDocumentFixture;
 
   function publishInput(reserved, artifact, access = documentFixture.access, document = documentFixture.document) {
     return {
@@ -529,6 +531,7 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
     });
     await repository.saveProviderRoute(routeInput);
     documentFixture = await insertPublicationDocument(pool, subjectId, suffix);
+    secondaryDocumentFixture = await insertPublicationDocument(pool, subjectId, `${suffix}-secondary`);
 
     const settledReservation = await reserveFor("settlement");
     const settledArtifact = publicationArtifact(`${suffix}-settlement`);
@@ -551,6 +554,36 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
        WHERE subject_id = $1 AND reservation_id = $2 AND event_type = 'settled'
     `, [subjectId, settledReservation.reservationId]);
     assert.equal(publicationLedgerRows.rows[0].count, 1);
+
+    const multiSourceReservation = await reserveFor("multi-source");
+    const multiSourceArtifact = publicationArtifact(`${suffix}-multi-source`);
+    await repository.publish(subjectId, {
+      ...publishInput(multiSourceReservation, multiSourceArtifact),
+      access: undefined,
+      document: undefined,
+      documents: [
+        {
+          ...documentFixture.document,
+          access: documentFixture.access,
+          isPrimary: true
+        },
+        {
+          ...secondaryDocumentFixture.document,
+          access: secondaryDocumentFixture.access,
+          isPrimary: false
+        }
+      ]
+    });
+    const multiSourceRows = await pool.query(`
+      SELECT document_id, is_primary
+        FROM visualization_artifact_sources
+       WHERE subject_id = $1 AND artifact_id = $2
+       ORDER BY document_id
+    `, [subjectId, multiSourceArtifact.artifactId]);
+    assert.deepEqual(multiSourceRows.rows, [
+      { document_id: secondaryDocumentFixture.document.documentId, is_primary: false },
+      { document_id: documentFixture.document.documentId, is_primary: true }
+    ].sort((left, right) => left.document_id.localeCompare(right.document_id)));
 
     await assertRejectedPublication("modality", async ({ artifact, input }) => {
       Object.assign(artifact, publicationArtifact(`${suffix}-modality-invalid`, "circuit"), {
@@ -705,10 +738,51 @@ async function verifyPublicationAndProviderAccountingTransactions(pool) {
       user_settlement_rows: 0,
       user_rollback_rows: 1
     });
+
+    const deletionRequest = {
+      artifactId: multiSourceArtifact.artifactId,
+      artifactRevision: 1,
+      intentHash: createHash("sha256").update(`delete-intent-${suffix}`).digest("hex"),
+      nodeId: multiSourceArtifact.nodeId,
+      requestId: `viz-generation-delete-${suffix}`,
+      requestedArtifactCount: 1,
+      traceId: `trace-generation-delete-${suffix}`
+    };
+    await new PostgresVisualizationGenerationRepository(pool).create(subjectId, deletionRequest);
+    const lifecycle = new PostgresAccountLifecycleRepository(pool);
+    await lifecycle.beginDeletion({
+      actorId: adminId,
+      reason: "Approved visualization PostgreSQL integration deletion",
+      subjectId
+    });
+    const purge = await lifecycle.purgeLiteasyData({
+      actorId: adminId,
+      reason: "Approved visualization PostgreSQL integration deletion",
+      subjectId,
+      traceId: `trace-visualization-delete-${suffix}`
+    });
+    assert.equal(purge.result.deletedVisualizationGenerationRequests, 1);
+    assert.equal(purge.result.deletedVisualizationArtifactSources, 3);
+    assert.equal((await pool.query(
+      "SELECT count(*)::integer AS count FROM visualization_generation_requests WHERE subject_id = $1",
+      [subjectId]
+    )).rows[0].count, 0);
+    assert.equal((await pool.query(
+      "SELECT count(*)::integer AS count FROM visualization_artifact_sources WHERE subject_id = $1",
+      [subjectId]
+    )).rows[0].count, 0);
   } finally {
     if (documentFixture) {
       await cleanupPublicationDocument(pool, documentFixture.document.documentId, documentFixture.sourceHash);
     }
+    if (secondaryDocumentFixture) {
+      await cleanupPublicationDocument(
+        pool,
+        secondaryDocumentFixture.document.documentId,
+        secondaryDocumentFixture.sourceHash
+      );
+    }
+    await pool.query("DELETE FROM account_deletion_jobs WHERE subject_id = $1", [subjectId]);
     await cleanupMutableVisualizationState(pool, { adminId, routeId, subjectId });
   }
 }
@@ -727,6 +801,7 @@ async function verifyGenerationRequestTransactions(pool) {
   };
   let currentTime = new Date("2026-08-10T04:00:00.000Z");
   const repository = new PostgresVisualizationGenerationRepository(pool, { now: () => currentTime });
+  const otherSubjectId = `${subjectId}-other`;
   try {
     const created = await repository.create(subjectId, request);
     assert.equal(created.status, "queued");
@@ -736,7 +811,7 @@ async function verifyGenerationRequestTransactions(pool) {
       /visualization_request_id_reused/
     );
     await assert.rejects(
-      () => repository.get(`${subjectId}-other`, request.requestId),
+      () => repository.get(otherSubjectId, request.requestId),
       /visualization_request_not_found/
     );
 
@@ -754,6 +829,75 @@ async function verifyGenerationRequestTransactions(pool) {
     const cancelled = await repository.markTerminal(subjectId, request.requestId, "cancelled", "cancelled");
     assert.equal(cancelled.status, "cancelled");
     assert.deepEqual(await repository.requestCancel(subjectId, request.requestId, cancelKey), cancelled);
+
+    const replayRequest = { ...request, requestId: `${request.requestId}-replay` };
+    const [firstReplay, secondReplay] = await Promise.all([
+      repository.create(subjectId, replayRequest),
+      repository.create(subjectId, replayRequest)
+    ]);
+    assert.deepEqual(firstReplay, secondReplay);
+    assert.equal(firstReplay.status, "queued");
+    await repository.markTerminal(subjectId, replayRequest.requestId, "omitted", "modality_unavailable");
+
+    const isolatedRequest = {
+      ...request,
+      nodeId: `${request.nodeId}-isolated`,
+      requestId: `${request.requestId}-isolated`
+    };
+    const isolated = await repository.create(otherSubjectId, isolatedRequest);
+    assert.equal(isolated.status, "queued");
+    await assert.rejects(
+      () => repository.get(subjectId, isolatedRequest.requestId),
+      /visualization_request_not_found/
+    );
+    await repository.markTerminal(otherSubjectId, isolatedRequest.requestId, "failed", "internal_failure");
+
+    const lockedRequest = { ...request, requestId: `${request.requestId}-skip-a` };
+    const skippableRequest = { ...request, requestId: `${request.requestId}-skip-b` };
+    await repository.create(subjectId, lockedRequest);
+    await repository.create(subjectId, skippableRequest);
+    const lockClient = await pool.connect();
+    try {
+      await lockClient.query("BEGIN");
+      await lockClient.query(`
+        SELECT 1 FROM visualization_generation_requests
+         WHERE subject_id = $1 AND request_id = $2
+         FOR UPDATE
+      `, [subjectId, lockedRequest.requestId]);
+      const skippedClaim = await repository.claimNext(`viz-generation-skip-worker-${suffix}`);
+      assert.equal(skippedClaim.requestId, skippableRequest.requestId);
+      await lockClient.query("COMMIT");
+    } catch (error) {
+      try { await lockClient.query("ROLLBACK"); } catch { /* preserve assertion failure */ }
+      throw error;
+    } finally {
+      lockClient.release();
+    }
+    const lockedClaim = await repository.claimNext(`viz-generation-lock-worker-${suffix}`);
+    assert.equal(lockedClaim.requestId, lockedRequest.requestId);
+    assert.equal(await repository.claimNext(`viz-generation-empty-worker-${suffix}`), null);
+    await repository.markTerminal(subjectId, lockedRequest.requestId, "failed", "internal_failure");
+    await repository.markTerminal(subjectId, skippableRequest.requestId, "failed", "internal_failure");
+
+    const raceRequest = { ...request, requestId: `${request.requestId}-race` };
+    await repository.create(subjectId, raceRequest);
+    assert.equal((await repository.claimNext(`viz-generation-race-worker-${suffix}`)).requestId, raceRequest.requestId);
+    const raceResults = await Promise.allSettled([
+      repository.requestCancel(subjectId, raceRequest.requestId, `viz-generation-race-cancel-${suffix}`),
+      repository.markSucceeded(subjectId, raceRequest.requestId, [`viz-race-result-${suffix}`])
+    ]);
+    assert.equal(raceResults.filter(({ status }) => status === "fulfilled").length, 1);
+    assert.equal(raceResults.filter(({ status }) => status === "rejected").length, 1);
+    const raceState = await repository.get(subjectId, raceRequest.requestId);
+    if (raceState.status === "cancel_requested") {
+      await repository.markTerminal(subjectId, raceRequest.requestId, "cancelled", "cancelled");
+    } else {
+      assert.equal(raceState.status, "succeeded");
+      assert.deepEqual(
+        await repository.markSucceeded(subjectId, raceRequest.requestId, [`viz-race-result-${suffix}`]),
+        raceState
+      );
+    }
 
     const recoveryRequest = { ...request, requestId: `${request.requestId}-recovery` };
     await repository.create(subjectId, recoveryRequest);
@@ -774,7 +918,10 @@ async function verifyGenerationRequestTransactions(pool) {
       /visualization_request_terminal/
     );
   } finally {
-    await pool.query("DELETE FROM visualization_generation_requests WHERE subject_id = $1", [subjectId]);
+    await pool.query(
+      "DELETE FROM visualization_generation_requests WHERE subject_id = ANY($1::text[])",
+      [[subjectId, otherSubjectId]]
+    );
   }
 }
 
