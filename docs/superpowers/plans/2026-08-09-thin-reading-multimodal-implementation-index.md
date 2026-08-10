@@ -12,8 +12,8 @@ Status: complete as of 2026-08-10.
 
 - PostgreSQL gate: 22 migrations verified; visualization integration 2 passed, 0 failed, 0 skipped.
 - API: 262 passed, with 2 opt-in PostgreSQL tests skipped outside the dedicated gate.
-- Admin: 17/17 tests passed; production build emitted 3 assets.
-- Desktop: 1484 tests passed, with 4 configuration-dependent skips; production build emitted 129 assets.
+- Admin: `cd products/liteasy/apps/admin && npm test` 17/17 passed, 0 failed; `npm run build` exit 0, 3 assets.
+- Desktop: `cd products/liteasy/apps/desktop && npm test` (loopback permitted) exit 0, 240 files passed / 2 config skips and 1484 tests passed / 4 config skips / 0 failed; `npm run build` exit 0, 4944 modules transformed and 129 assets verified (existing chunk-size warning only).
 - Final review: 0 Critical and 0 Important findings after commit `53dffdd`.
 
 This records local integration readiness, not production deployment acceptance. Generated modalities remain disabled until the applicable Plans 4-6 Skill, Kernel, Validator, Renderer, accessibility, fallback, fixture, visual, and release gates pass.
