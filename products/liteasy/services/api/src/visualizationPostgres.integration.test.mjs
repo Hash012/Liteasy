@@ -381,6 +381,9 @@ async function verifyGovernanceTransactions(pool) {
       ttlMs: 1000
     });
     currentTime = new Date(referenceTime.getTime() + 1000);
+    const capabilityAfterExpiry = await repository.capability(subjectId);
+    assert.equal(capabilityAfterExpiry.quota.dailyUsedUnits, 0);
+    assert.equal(capabilityAfterExpiry.quota.monthlyUsedUnits, 0);
     const afterExpiry = await repository.reserve(
       subjectId,
       reservation(`reserve-after-expiry-${suffix}`, routeId, suffix)

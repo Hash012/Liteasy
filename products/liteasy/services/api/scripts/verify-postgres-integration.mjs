@@ -12,34 +12,21 @@ import { PostgresPersonalizationRepository } from "../src/personalizationReposit
 import { PostgresPlatformAdminRepository } from "../src/platformAdminRepository.mjs";
 import { PostgresRecommendationRepository } from "../src/recommendationRepository.mjs";
 import { PostgresTeamAnnotationRepository } from "../src/teamAnnotationRepository.mjs";
+import { validatePostgresIntegrationDatabases } from "./postgresIntegrationGuard.mjs";
 
 const connectionString = process.env.LITEASY_TEST_DATABASE_URL;
 if (!connectionString) throw new Error("LITEASY_TEST_DATABASE_URL is required");
 const migrationConnectionString = process.env.LITEASY_TEST_MIGRATION_DATABASE_URL || connectionString;
-const parsed = new URL(connectionString);
-const migrationParsed = new URL(migrationConnectionString);
-if (
-  !new Set(["127.0.0.1", "::1", "localhost"]).has(parsed.hostname) ||
-  !new Set(["127.0.0.1", "::1", "localhost"]).has(migrationParsed.hostname) ||
-  !parsed.pathname.endsWith("_test") ||
-  migrationParsed.pathname !== parsed.pathname
-) {
-  throw new Error("integration_database_forbidden: use a loopback database whose name ends in _test");
-}
+const database = validatePostgresIntegrationDatabases(connectionString, migrationConnectionString);
 
 const { Pool } = pg;
-const pool = new Pool({ connectionString, max: 4, ssl: false });
-const migrationPool = migrationConnectionString === connectionString
-  ? pool
-  : new Pool({ connectionString: migrationConnectionString, max: 1, ssl: false });
+const pool = new Pool({ ...database.application, max: 4, ssl: false });
+const migrationPool = new Pool({ ...database.migration, max: 1, ssl: false });
 try {
-  if (migrationConnectionString === connectionString) {
-    throw new Error("integration_migration_role_required");
-  }
   await migrationPool.query("DROP SCHEMA IF EXISTS public CASCADE");
   await migrationPool.query("CREATE SCHEMA public");
   await migrationPool.query("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
-  const migrated = await migratePostgres(migrationPool, { applicationRole: parsed.username });
+  const migrated = await migratePostgres(migrationPool, { applicationRole: database.application.user });
   assert.deepEqual(migrated.applied, [
     "001_filesystem_storage.sql",
     "002_filesystem_invariants.sql",
@@ -64,12 +51,10 @@ try {
     "021_visualization_final_review.sql",
     "022_visualization_cost_policy_lifecycle.sql"
   ]);
-  if (migrationPool !== pool) {
-    await assert.rejects(
-      () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),
-      /permission denied/
-    );
-  }
+  await assert.rejects(
+    () => pool.query("CREATE TABLE app_role_must_not_create(id text)"),
+    /permission denied/
+  );
 
   await pool.query(`
     INSERT INTO storage_quotas(scope_type, scope_id, limit_bytes, updated_by)

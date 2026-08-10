@@ -709,7 +709,13 @@ test("capability fails closed without both quota policy and a usable route", asy
     { allowed: true, allowed_modalities: ["semantic_graph"], preference_enabled: true, quota_subject_id: "user-1", route_available: false }
   ];
   const repository = new PostgresVisualizationRepository({
-    async query() { return { rows: [rows.shift()] }; }
+    async query() { return { rows: [rows.shift()] }; },
+    async connect() {
+      return {
+        async query() { return { rows: [] }; },
+        release() {}
+      };
+    }
   });
   for (const expected of ["missing policy", "missing route"]) {
     const capability = await repository.capability(subject);

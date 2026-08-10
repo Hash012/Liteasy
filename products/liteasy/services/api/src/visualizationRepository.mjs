@@ -605,6 +605,10 @@ export class PostgresVisualizationRepository {
   async capability(subject) {
     const id = subjectId(subject);
     const currentTime = this.now();
+    await withPostgresTransaction(this.pool, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`visualization-reserve:${id}`]);
+      await this.#expireReservations(client, id, `trace_capability_expiry_${randomUUID()}`, currentTime);
+    }, { isolation: "READ COMMITTED" });
     const result = await this.pool.query(`
       SELECT e.*, p.enabled AS preference_enabled, p.revision AS preference_revision,
              q.subject_id AS quota_subject_id, q.daily_units, q.monthly_units,
