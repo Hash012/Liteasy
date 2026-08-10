@@ -20,7 +20,7 @@ This records local integration readiness, not production deployment acceptance. 
 
 ### Phase 3 - Reader Orchestration
 
-Status: in progress as of 2026-08-10; Tasks 1-7 of the orchestration closure are complete.
+Status: complete as of 2026-08-10; Tasks 1-8 of the orchestration closure are complete.
 
 - `ecfe70e`: canonical cross-runtime artifact schema and strict API publication validation.
 - `d5095e6`: durable generation request state machine, lease recovery, cancellation, and account deletion coverage.
@@ -29,8 +29,10 @@ Status: in progress as of 2026-08-10; Tasks 1-7 of the orchestration closure are
 - `93cda38`: durable leased orchestration, cancellation races, partial success, strict result reload, and startup recovery.
 - `fde8041`: authenticated account request routes with strict bodies and preserved confidential service boundaries.
 - `c4b2064`: account-scoped desktop request client, reload recovery, strict persistence, and logout disposal composition.
-- Current gate: API full suite passed; PostgreSQL applied 23 migrations and passed 3/3 visualization integration tests with 0 skipped.
-- Remaining boundary: Task 8 PostgreSQL/browser/recovery gate and final review. Phase 3 is not complete and no generated modality is enabled.
+- `911f24d`: PostgreSQL request-state concurrency, multi-source publication, account deletion, and public HTTP browser orchestration coverage.
+- Final gate: PostgreSQL applied 23 migrations and passed 3/3 visualization integration tests with 0 skipped; API 338 tests (335 passed, 3 opt-in PostgreSQL skips); admin 17/17 tests and build asset verification; desktop 242 files (1508 passed, 4 config skips) and production build (4947 modules, 129 assets); existing thin-reading browser suite 18/18; orchestration browser suite 8/8.
+- Final review: current-session coordinator review found no Critical or Important findings. Independent-agent review was intentionally not run because this session disabled Superpowers and new subagent delegation.
+- Phase 3 is complete, but generated modalities remain disabled until Plans 4-6 satisfy their Skill, Kernel, Validator, Renderer, accessibility, fallback, fixture, visual, and release gates. Real-provider smoke remains assigned to Phase 6.
 
 ## Why This Is A Plan Suite
 
