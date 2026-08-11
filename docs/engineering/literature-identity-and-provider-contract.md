@@ -14,11 +14,11 @@ Liteasy API 与 Intuecho API 必须继续使用各自的数据库、连接池、
 | 类型 | 规范 |
 | --- | --- |
 | DOI | 移除 DOI URL 或 `doi:` 前缀、尾部引用标点，转小写 |
-| arXiv | 移除 URL、`arXiv:`、`.pdf` 和版本后缀 `vN`，转小写 |
+| arXiv | 移除 URL、`arXiv:` 和 `.pdf`，保留版本后缀 `vN`，转小写；只有带版本号的值可以确认具体版本 |
 | Semantic Scholar | `CorpusID: 123` 规范为 `corpus:123`；其他 ID 去空白并转小写 |
 | OpenAlex | 只接受 work ID `W<digits>` 或对应 URL，规范为大写 |
 | 题名作者年份 | `sha256:<64 lowercase hex>` |
-| PMLR | 不是稳定标识；只允许 `{source: "pmlr", volume, year}` 提示 |
+| PMLR | 已发布官方卷中的论文使用 `v<volume>/<slug>`；只有卷级 BibTeX 审计证据完整时可以确认 |
 
 题名、作者和年份身份使用以下规范：
 
@@ -36,6 +36,8 @@ PDF `contentHash` 只用于本地文件去重，不能成为跨用户文献身�
 
 确认新记录时生成规范 SHA-256。遇到旧记录时，只有题名、年份和完整作者集合唯一一致才可复用原 `literatureId` 并附加 SHA-256 别名。多个相同书目记录、哈希命中但书目冲突或部分作者匹配都必须返回歧义/冲突，不能静默合并。
 
+题名作者年份 SHA-256 是可多归属的候选别名，不拥有文献身份，也不受跨记录全局唯一约束。DOI、带版本号的 arXiv ID、OpenAlex ID 等 `confirmable` 标识仍保持全局唯一。历史无版本 arXiv 值标记为只读 legacy alias；仅依赖该值的旧记录降级为 `legacy_unverified`，重新抓取到明确 `vN` 前不得用于正式引用或同步。
+
 ## Provider 能力
 
 Provider 按能力选择，不要求每个来源实现全部能力：
@@ -49,7 +51,7 @@ Provider 按能力选择，不要求每个来源实现全部能力：
 | `generateCandidates` | 为推荐生成高召回候选 |
 | `refetchForConfirmation` | 根据 provider 候选键重新抓取并验证记录 |
 
-当前 Crossref、arXiv、OpenAlex 和 Semantic Scholar 身份适配器声明
+当前 Crossref、arXiv、OpenAlex、Semantic Scholar、OpenReview、DBLP 和 PMLR 身份适配器声明
 `resolveIdentity`、`search`、`refetchForConfirmation`。未声明的关系、全文和推荐能力不能被推断存在。
 
 所有 provider 调用必须有超时、逐 provider 失败隔离和来源记录。外部候选确认必须调用 `refetchForConfirmation`；客户端提交的候选题录不能直接持久化。
@@ -72,7 +74,7 @@ Provider 按能力选择，不要求每个来源实现全部能力：
 - 官方公开仓库 `https://github.com/mlresearch/v306` 存在，描述为 ICML 2026 Proceedings，但当前只有模板 README 和 GitHub 工作流目录，没有论文 BibTeX、PDF 或可查询目录。
 - 模板说明未来正式数据应包含论文 BibTeX 与 PDF；在这些数据实际发布且协议稳定前，网页或仓库模板不能伪装成正式 provider。
 
-因此当前只从 PDF 提取 `PMLR 306, 2026` 有限提示并预填人工确认，不产生 PMLR identifier、候选成功或自动确认。未来官方目录发布后，可在不改变持久化策略的前提下新增具备 `resolveIdentity` 和 `refetchForConfirmation` 的适配器。
+因此 `PMLR 306, 2026` 仍只作为有限提示并预填人工确认，不产生 PMLR identifier、候选成功或自动确认。对于已经正式发布且存在官方卷级 `bibliography.bib` 的卷，PMLR provider 可以按 `pmlr_id` 精确回查；确认时必须重新抓取卷文件、唯一命中 citation key，并保存文件 SHA-256、卷号、entry key 和正式论文 URL。未发布卷和缺少完整审计证据的记录不能进入确认事务。
 
 ## 配置与秘密边界
 
